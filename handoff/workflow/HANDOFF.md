@@ -11,7 +11,8 @@ Updated 2026-10-14 21:26 UTC.
 - #92 MERGED 21:43 (contactors K default with K|Q rule; highlighted proposal dashed
   2 px, never solid).
 - #100 MERGED 21:55 (blocks live in project, libraries are copy sources; tags allocated,
-  properties/texts substituted, parts proposed). No open PR of mine.
+  properties/texts substituted, parts proposed).
+- OPEN: #106 (n of m per section), head 9f5e0fb, with design reviewer. Subscribed.
 - Criteria for #80 sent to WS-01, WS-03, WS-08, WS-05, WS-11; recheck their heads.
 - Integration lead is now session_01FiLvRBKEcNNHbQEGhYyL1S ("Catch up and resume the
   build"). Design PRs go to the design reviewer session_01NLERJkVHpsVcABrarTR3CF.
