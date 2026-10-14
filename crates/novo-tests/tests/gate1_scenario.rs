@@ -854,7 +854,9 @@ fn gap_assign_parts_from_the_catalog() {
     let dir = tempfile::tempdir().unwrap();
     let (mut flow, page) = new_flow(&library, dir.path());
     build(&mut flow, page, true);
-    assert_eq!(novo_parts::missing_parts(flow.project()).len(), 5);
+    // Five devices and the four -X1 terminals, which -X1's part covers once
+    // it has one.
+    assert_eq!(novo_parts::missing_parts(flow.project()).len(), 5 + 4);
 
     let catalog = novo_parts::Catalog::starter();
     let devices: Vec<DeviceId> = flow.project().devices().map(|d| d.id).collect();

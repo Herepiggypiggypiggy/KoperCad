@@ -47,3 +47,9 @@
 2026-10-14 19:16 UTC #51 CHANGES NEEDED (checker passed moved code); adopted reviewer A's commit-based check-mechanical-merge.sh, fixed merge-main.sh (fbd323c). Merged #48 (935959c) and #47 (7379d42, READY from A and design). #49 main merge pushed (b930144, checker OK) for confirmation. New PRs: #53 Gate 1 integration (draft), #54 cables, #55 reports, #56 CLI/Python. Added main reviewer C for #54-#56.
 2026-10-14 19:22 UTC Merged #50 (6ec72c4, B READY f72ab36 after coordinator's example rename) and #31 (aef622a, A READY 92e1d01; combined check main+#49+#31 452 pass). #51 merged main (d530475) and is the priority review: #49 and #38 conflict on rows again. #38 READY from A and design on b4de5e3; main merge 62f7c59 (merge-main.sh + check-mechanical OK) in local checks. Fixer opened #57 (tester gaps #30/#36, pe-fix, Round 8) and found F3: place_terminals inserted terminals backwards on the far half of a long wire (fixed in #57).
 2026-10-14 19:35 UTC Merged #57 (537a3de), #51 (79101ef; evidence comment), #52 (6018f4f), #38 (3b8fb8e; mechanical carry-over, 524 pass), #54 (efac4d4; mechanical, combined run main+#38+#49+#54+#56 568 pass). Policy: worker PRs get reviewers B AND C; any CHANGES NEEDED blocks. Opened #58 (merge-main keeps main's crate list) and #59 (xref example rename).
+
+## 2026-10-14 20:05 UTC (coordinator session_01DZ68tTULUv7Uhe8ecKbC47)
+- Merged #55 (WS-13 reports, B+C READY, mechanical check OK, 452 tests pass) and #64. 28 PRs merged today.
+- #53: A's command-field data-loss finding fixed at 84eff50; design reviewer still CHANGES NEEDED on 3 items, sent to the Gate 1 worker with suggested fixes.
+- #65 (WS-28) opened; its `art` light-feature request routed to the fixer as a separate novo-editor PR (reviewer A).
+- MAIN-HANDOFF §0 refreshed; stale "re-add deps by hand" line removed (#61 handles it).

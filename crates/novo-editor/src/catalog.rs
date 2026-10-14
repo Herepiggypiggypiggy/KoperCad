@@ -257,13 +257,28 @@ impl Catalog {
         if words.len() >= 2 && looks_like_device(words[0]) {
             let code = words.remove(0);
             parent = Some(normalize_parent(code));
+        } else if let [.., last] = words[..]
+            && words.len() >= 2
+            && looks_like_device(last)
+            && !self.is_symbol_word(last)
+        {
+            // Verb before noun (DESIGN.md §4): `no K1`, `coil K1`.
+            words.pop();
+            parent = Some(normalize_parent(last));
         }
         let mut scored: Vec<(i64, Match)> = Vec::new();
         for symbol in self.library.iter() {
             let Some((score, hint)) = self.score(symbol, &words) else {
                 continue;
             };
-            if parent.is_some() && !matches!(classify(symbol), SymbolClass::Child { .. }) {
+            // A device's own symbols: its main function (`coil K1` when
+            // -K1 has no coil yet) and its contacts.
+            if parent.is_some()
+                && !matches!(
+                    classify(symbol),
+                    SymbolClass::Child { .. } | SymbolClass::Main { .. }
+                )
+            {
                 continue;
             }
             scored.push((
@@ -278,6 +293,16 @@ impl Catalog {
         }
         scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.symbol.cmp(&b.1.symbol)));
         scored.into_iter().map(|(_, m)| m).collect()
+    }
+
+    /// Whether a typed word is a short name of a symbol (`m3`), so it is
+    /// not read as a device code.
+    fn is_symbol_word(&self, word: &str) -> bool {
+        MNEMONICS.iter().any(|(m, _)| *m == word)
+            || self
+                .library
+                .iter()
+                .any(|s| s.aliases.iter().any(|a| a.eq_ignore_ascii_case(word)))
     }
 
     fn score(&self, symbol: &Symbol, words: &[&str]) -> Option<(i64, String)> {
@@ -443,8 +468,31 @@ mod tests {
         assert_eq!(hits[0].parent.as_deref(), Some("-K1"));
         assert!(hits.iter().all(|h| matches!(
             classify(catalog.get(&h.symbol).unwrap()),
-            SymbolClass::Child { .. }
+            SymbolClass::Child { .. } | SymbolClass::Main { .. }
         )));
+    }
+
+    #[test]
+    fn verb_before_device_names_the_parent() {
+        let catalog = Catalog::builtin();
+        for (query, symbol) in [
+            ("coil K1", "iec/coils/relay"),
+            ("no K1", "iec/contacts/no"),
+            ("nc -k1", "iec/contacts/nc"),
+            ("K1 coil", "iec/coils/relay"),
+        ] {
+            let hit = &catalog.search(query)[0];
+            assert_eq!(hit.symbol, symbol, "{query}");
+            assert_eq!(hit.parent.as_deref(), Some("-K1"), "{query}");
+        }
+        // A symbol's short name is not a device code.
+        assert!(
+            catalog
+                .search("motor m3")
+                .iter()
+                .all(|h| h.parent.is_none())
+        );
+        assert!(catalog.search("no m3").iter().all(|h| h.parent.is_none()));
     }
 
     #[test]

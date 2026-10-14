@@ -24,7 +24,9 @@ use crate::naming::{Numbering, child_pin_names, complete_tag, new_device_tag, pa
 /// What a placement attaches to, beyond the symbol itself.
 #[derive(Debug, Clone, Default)]
 pub struct PlaceOptions {
-    /// Parent device of a child symbol (an auxiliary contact of `-K1`).
+    /// The device a symbol belongs to: the parent of a child symbol (an
+    /// auxiliary contact of `-K1`) or the device whose main function is
+    /// placed (`coil K1`).
     /// Untyped aspects come from the page's structure. A tag that names no
     /// device yet creates it (scripts); the editor refuses that with a
     /// notice instead.
@@ -66,8 +68,21 @@ pub fn place(
     let (bridges, pass_through) = model_groups(symbol);
     let role = match classify(symbol) {
         SymbolClass::Main { letter } => {
-            let tag = new_device_tag(tx.project(), page, letter, options.numbering);
-            let device = tx.add_device(tag, symbol.name.clone())?;
+            let device = match &options.parent {
+                // `coil K1`: the main function of that device, created when
+                // it does not exist yet.
+                Some(tag) => {
+                    let tag = complete_tag(tx.project(), page, tag);
+                    match tx.project().devices_by_tag(&tag).first() {
+                        Some(&d) => d,
+                        None => tx.add_device(tag, symbol.name.clone())?,
+                    }
+                }
+                None => {
+                    let tag = new_device_tag(tx.project(), page, letter, options.numbering);
+                    tx.add_device(tag, symbol.name.clone())?
+                }
+            };
             SymbolRole::Device { device, main: true }
         }
         SymbolClass::Child { letter } => {
