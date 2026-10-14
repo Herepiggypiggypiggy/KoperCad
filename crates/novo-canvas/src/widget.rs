@@ -21,7 +21,7 @@
 use crate::geom::Aabb;
 use crate::grid::{Grid, GridStyle};
 use crate::render::{self, CanvasRenderer, FrameData, GpuCanvas, KeyedMesh, TargetConfig};
-use crate::scene::{BoxMode, ItemId, Scene};
+use crate::scene::{BoxMode, Hit, ItemId, Scene};
 use crate::selection::{SelectOp, Selection};
 use crate::shape::{Primitive, Shape};
 use crate::snap::{self, SnapKind, SnapSettings, Snapped};
@@ -129,6 +129,8 @@ pub struct CanvasStyle {
     pub grid_major: Color,
     pub selection: Highlight,
     pub hover: Highlight,
+    /// Items related to the selection (what a coil switches, a net).
+    pub related: Highlight,
     pub band_window: Color,
     pub band_crossing: Color,
     pub snap_marker: Color,
@@ -142,6 +144,11 @@ impl Default for CanvasStyle {
             grid_major: Color::rgb(160, 168, 180),
             selection: Highlight::selection(),
             hover: Highlight::hover(),
+            related: Highlight {
+                color: Color::rgb(0, 170, 160),
+                extra_width: 2.5,
+                fill_alpha: 40,
+            },
             band_window: Color::rgb(40, 110, 230),
             band_crossing: Color::rgb(30, 160, 80),
             snap_marker: Color::rgb(230, 60, 160),
@@ -234,8 +241,11 @@ pub struct CanvasView {
     mesh_cache: tessellate::ItemMeshCache,
     scene_mesh: Option<Arc<SceneMesh>>,
     highlight: Option<Arc<KeyedMesh>>,
-    highlight_source: (u64, u64),
+    highlight_source: (u64, u64, u64),
+    related: Vec<ItemId>,
+    related_revision: u64,
     hovered: Option<ItemId>,
+    hovered_hit: Option<Hit>,
     band: Option<Vec2>,
     right_drag: Option<RightDrag>,
     fit_pending: bool,
@@ -260,6 +270,8 @@ pub struct CanvasOutput {
     /// Cursor in world units without snapping.
     pub cursor_raw: Option<Vec2>,
     pub hovered: Option<ItemId>,
+    /// The pick under the cursor, including which label when text is nearest.
+    pub hit: Option<Hit>,
     pub selection_changed: bool,
     /// World position of a primary click, after snapping.
     pub clicked: Option<Snapped>,
@@ -295,7 +307,10 @@ impl CanvasView {
             mesh_cache: tessellate::ItemMeshCache::default(),
             scene_mesh: None,
             highlight: None,
-            highlight_source: (0, u64::MAX),
+            highlight_source: (0, u64::MAX, 0),
+            related: Vec::new(),
+            related_revision: 0,
+            hovered_hit: None,
             hovered: None,
             band: None,
             right_drag: None,
@@ -341,6 +356,21 @@ impl CanvasView {
         self.hovered
     }
 
+    /// Highlights items related to the selection, such as the contacts a
+    /// selected coil switches. The app fills this from a model query each
+    /// time the selection changes; it is drawn under the selection.
+    pub fn set_related(&mut self, ids: impl IntoIterator<Item = ItemId>) {
+        let ids: Vec<ItemId> = ids.into_iter().collect();
+        if ids != self.related {
+            self.related = ids;
+            self.related_revision += 1;
+        }
+    }
+
+    pub fn related(&self) -> &[ItemId] {
+        &self.related
+    }
+
     pub fn stats(&self) -> FrameStats {
         self.stats
     }
@@ -374,12 +404,12 @@ impl CanvasView {
         let cursor = cursor_raw
             .map(|w| snap::snap(scene, &self.viewport, Some(&self.grid), &self.snap, w, &[]));
 
-        self.hovered = match cursor_raw {
-            Some(w) if self.interaction.hover && self.band.is_none() => {
-                scene.pick(w, tol, self.viewport.zoom).map(|h| h.id)
-            }
+        let hit = match cursor_raw {
+            Some(w) if self.band.is_none() => scene.pick(w, tol, self.viewport.zoom),
             _ => None,
         };
+        self.hovered_hit = hit.filter(|_| self.interaction.hover);
+        self.hovered = self.hovered_hit.map(|h| h.id);
 
         let mut selection_changed = false;
         let mut clicked = None;
@@ -465,6 +495,7 @@ impl CanvasView {
             cursor,
             cursor_raw,
             hovered: self.hovered,
+            hit,
             selection_changed,
             clicked,
             context_click: context_click.then_some(cursor).flatten(),
@@ -611,12 +642,24 @@ impl CanvasView {
             tessellate_ms: tess_ms.or(self.stats.tessellate_ms),
         };
 
-        // Selection highlight, cached on (scene, selection) revisions.
-        let source = (scene.revision(), self.selection.revision());
-        if self.selection.is_empty() {
+        // Selection and related highlights, cached on their revisions.
+        let source = (
+            scene.revision(),
+            self.selection.revision(),
+            self.related_revision,
+        );
+        if self.selection.is_empty() && self.related.is_empty() {
             self.highlight = None;
         } else if self.highlight.is_none() || self.highlight_source != source {
             let mut mesh = Mesh::default();
+            for id in &self.related {
+                if !self.selection.contains(*id)
+                    && let Some(item) = scene.get(*id)
+                {
+                    self.tessellator
+                        .item_highlighted(&mut mesh, item, &self.style.related);
+                }
+            }
             for id in self.selection.ids() {
                 if let Some(item) = scene.get(*id) {
                     self.tessellator
@@ -624,7 +667,9 @@ impl CanvasView {
                 }
             }
             self.highlight = Some(Arc::new(KeyedMesh {
-                key: source.0.wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ source.1,
+                key: (source.0.wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ source.1)
+                    .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+                    ^ source.2,
                 mesh,
             }));
         }
@@ -635,12 +680,25 @@ impl CanvasView {
         self.grid_mesh(&mut under);
 
         let mut over = Mesh::default();
-        if let Some(id) = self.hovered
-            && !self.selection.contains(id)
-            && let Some(item) = scene.get(id)
+        if let Some(hit) = self.hovered_hit
+            && let Some(item) = scene.get(hit.id)
         {
-            self.tessellator
-                .item_highlighted(&mut over, item, &self.style.hover);
+            match hit.label.and_then(|i| item.labels.get(i)) {
+                // Hovering text outlines just that text, so a tag reads as
+                // its own object.
+                Some(label) => {
+                    let outline = Primitive::stroked(
+                        Shape::polyline(label.corners().to_vec(), true),
+                        Stroke::screen(1.5, self.style.hover.color),
+                    );
+                    self.tessellator.primitive(&mut over, &outline);
+                }
+                None if !self.selection.contains(hit.id) => {
+                    self.tessellator
+                        .item_highlighted(&mut over, item, &self.style.hover);
+                }
+                None => {}
+            }
         }
         if let (Some(start), Some(end)) = (self.band, cursor_raw) {
             let color = match BoxMode::from_drag(start, end) {
@@ -896,6 +954,30 @@ mod tests {
         // The page followed the pointer by the full 50 points.
         let moved_world = (center - view.viewport.center).x * view.viewport.zoom;
         assert!((moved_world - 50.0).abs() < 1e-3, "{moved_world}");
+    }
+
+    #[test]
+    fn related_items_are_highlighted() {
+        let (_ctx, mut view, scene) = setup();
+        let mut build = |view: &mut CanvasView| drop(view.build_frame(1.0, &scene, None, None));
+        assert!(view.highlight.is_none());
+        view.set_related([ItemId(1)]);
+        let rev = view.related_revision;
+        view.set_related([ItemId(1)]);
+        assert_eq!(view.related_revision, rev, "unchanged sets keep the cache");
+        build(&mut view);
+        let key = view.highlight.as_ref().map(|h| h.key);
+        assert!(
+            view.highlight
+                .as_ref()
+                .is_some_and(|h| !h.mesh.indices.is_empty())
+        );
+        view.set_related([]);
+        build(&mut view);
+        assert!(view.highlight.is_none());
+        view.set_related([ItemId(1)]);
+        build(&mut view);
+        assert_ne!(view.highlight.as_ref().map(|h| h.key), key);
     }
 
     #[test]
