@@ -83,10 +83,10 @@ fn coil_shows_contact_image_and_contacts_show_the_coil() {
     let x = XrefIndex::build(f.doc.project(), &FromKey);
     assert_eq!(
         x.label(f.k1_coil).unwrap().lines,
-        ["NO 13-14 /2.2", "NC 21-22 /2.8", "NO 33-34 /3.4"]
+        ["NO 13-14 2.2", "NC 21-22 2.8", "NO 33-34 3.4"]
     );
     for c in f.k1_contacts {
-        assert_eq!(x.label(c).unwrap().lines, ["/2.5"]);
+        assert_eq!(x.label(c).unwrap().lines, ["2.5"]);
     }
     assert_eq!(x.labels_on_page(f.pages[1]).len(), 3);
     assert!(x.labels_on_page(f.pages[0]).is_empty());
@@ -101,7 +101,7 @@ fn moving_a_contact_updates_the_coil_at_once() {
         .get(f.doc.project(), &FromKey)
         .label(f.k1_coil)
         .unwrap();
-    assert!(before.lines.contains(&"NO 33-34 /3.4".to_owned()));
+    assert!(before.lines.contains(&"NO 33-34 3.4".to_owned()));
 
     let moved = f.k1_contacts[2];
     f.doc
@@ -113,7 +113,7 @@ fn moving_a_contact_updates_the_coil_at_once() {
         .get(f.doc.project(), &FromKey)
         .label(f.k1_coil)
         .unwrap();
-    assert!(after.lines.contains(&"NO 33-34 /3.10".to_owned()));
+    assert!(after.lines.contains(&"NO 33-34 3.10".to_owned()));
 
     f.doc.undo().unwrap();
     let undone = live
@@ -199,7 +199,7 @@ fn selecting_the_coil_highlights_its_contacts_on_the_page() {
     assert_eq!(h.on_page, [c1, c2]);
     assert_eq!(h.off_page.len(), 1);
     assert_eq!(h.off_page[0].symbol, c3);
-    assert_eq!(h.status_text(), "-K1 elsewhere: NO 33-34 /3.4");
+    assert_eq!(h.status_text(), "-K1 elsewhere: NO 33-34 3.4");
 
     // Selecting the device from the project tree while page 3 is shown.
     let h = x.highlight_device(f.k1, f.pages[2]);
@@ -219,7 +219,7 @@ fn renaming_the_device_carries_every_reference() {
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].1.len(), 4);
     assert_eq!(x.highlight(f.k1_coil).name, "-K10");
-    assert_eq!(x.label(f.k1_contacts[0]).unwrap().lines, ["/2.5"]);
+    assert_eq!(x.label(f.k1_contacts[0]).unwrap().lines, ["2.5"]);
 }
 
 #[test]
@@ -363,12 +363,12 @@ fn link_a_lone_contact_to_a_coil() {
     let names: Vec<&str> = sym.pins.iter().map(|p| p.name.as_str()).collect();
     assert_eq!(names, ["43", "44"]);
     let x = XrefIndex::build(p, &FromKey);
-    assert_eq!(x.label(lone).unwrap().lines, ["/2.5"]);
+    assert_eq!(x.label(lone).unwrap().lines, ["2.5"]);
     assert!(
         x.label(f.k1_coil)
             .unwrap()
             .lines
-            .contains(&"NO 43-44 /1.1".to_owned())
+            .contains(&"NO 43-44 1.1".to_owned())
     );
     assert!(x.issues().is_empty());
 
@@ -432,8 +432,8 @@ fn link_interruption_points() {
     doc.execute(link_command(doc.project(), &FromKey, a, b).unwrap())
         .unwrap();
     let x = XrefIndex::build(doc.project(), &FromKey);
-    assert_eq!(x.label(a).unwrap().lines, ["/2.1"]);
-    assert_eq!(x.label(b).unwrap().lines, ["/1.10"]);
+    assert_eq!(x.label(a).unwrap().lines, ["2.1"]);
+    assert_eq!(x.label(b).unwrap().lines, ["1.10"]);
     assert_eq!(
         x.partners(b).iter().map(|r| r.symbol).collect::<Vec<_>>(),
         [a]
@@ -526,7 +526,7 @@ fn builtin_library_drives_the_contact_image() {
     let x = XrefIndex::build(doc.project(), &lib);
     assert_eq!(
         x.label(k1_coil).unwrap().lines,
-        ["main 1-2 3-4 5-6 /1.3", "NC 21-22 /1.5"]
+        ["main 1-2 3-4 5-6 1.3", "NC 21-22 1.5"]
     );
     let image = x.contact_image(x.reference(k1_coil).unwrap().device().unwrap());
     assert_eq!(image[0].kind, ContactKind::Power);
@@ -593,13 +593,13 @@ fn structure_prefix_only_when_it_differs() {
     let x = XrefIndex::build(doc.project(), &FromKey);
     assert_eq!(
         x.label(coil_sym).unwrap().lines,
-        ["NO 13-14 /2.1", "NC 21-22 =A2/3.1"]
+        ["NO 13-14 2.1", "NC 21-22 =A2/3.1"]
     );
-    assert_eq!(x.label(near).unwrap().lines, ["/1.1"]);
+    assert_eq!(x.label(near).unwrap().lines, ["1.1"]);
     assert_eq!(x.label(far).unwrap().lines, ["=A1/1.1"]);
     assert_eq!(
         x.highlight(coil_sym).status_text(),
-        "=A1-K1 elsewhere: NO 13-14 /2.1, NC 21-22 =A2/3.1"
+        "=A1-K1 elsewhere: NO 13-14 2.1, NC 21-22 =A2/3.1"
     );
 }
 

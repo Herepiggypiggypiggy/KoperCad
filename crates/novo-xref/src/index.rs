@@ -51,12 +51,12 @@ impl Reference {
         }
     }
 
-    /// The location as reference text: `/3.4`.
+    /// The location as reference text: `3.4`.
     pub fn target(&self) -> String {
-        format!("/{}", self.location)
+        self.location.to_string()
     }
 
-    /// The location as read from a page with structure `reader`: `/3.4`,
+    /// The location as read from a page with structure `reader`: `3.4`,
     /// or `=A2/3.4` when this symbol's page has a different structure.
     pub fn target_from(&self, reader: &str) -> String {
         if self.structure.is_empty() || self.structure == reader {
@@ -66,7 +66,7 @@ impl Reference {
         }
     }
 
-    /// One row of a contact image or reference list: `NO 13-14 /3.4`.
+    /// One row of a contact image or reference list: `NO 13-14 3.4`.
     pub fn row(&self) -> String {
         self.row_from("")
     }
@@ -99,7 +99,7 @@ impl Highlight {
         self.on_page.is_empty() && self.off_page.is_empty()
     }
 
-    /// Status bar text: `-K1 elsewhere: NO 13-14 /3.4, NC 21-22 /5.2`.
+    /// Status bar text: `-K1 elsewhere: NO 13-14 3.4, NC 21-22 5.2`.
     /// Empty when nothing is off the page.
     pub fn status_text(&self) -> String {
         if self.off_page.is_empty() {
@@ -424,7 +424,7 @@ impl XrefIndex {
     }
 
     /// The cross-reference text drawn next to a symbol: a coil's contact
-    /// image, the coil location next to a contact (`/3.4`), the partner
+    /// image, the coil location next to a contact (`3.4`), the partner
     /// locations next to an interruption point. `None` when there is
     /// nothing to show.
     pub fn label(&self, symbol: SymbolId) -> Option<Label> {

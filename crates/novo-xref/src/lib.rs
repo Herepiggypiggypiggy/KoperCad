@@ -7,7 +7,7 @@
 //! [`XrefIndex`] (or let [`LiveXref`] do it) and every reference is current.
 //!
 //! - [`XrefIndex::label`]: text drawn next to a symbol. A coil shows its
-//!   contact image (`NO 13-14 /3.4`), a contact the coil location (`/2.5`),
+//!   contact image (`NO 13-14 3.4`), a contact the coil location (`2.5`),
 //!   an interruption point its partners.
 //! - [`Navigator`]: G jumps coil to contact and back, Shift+G lists every
 //!   occurrence ([`XrefIndex::all_references`]), Alt+Left/Right walk the
@@ -25,7 +25,7 @@
 //! - [`XrefIndex::issues`]: contacts without a coil, more contacts drawn
 //!   than the device has, lone interruption points (for WS-14).
 //!
-//! References read `page.column` (`/3.4`), prefixed with the target page's
+//! References read `page.column` (`3.4`), prefixed with the target page's
 //! structure when it differs from the reader's page (`=A2/3.4`).
 //! Locations and reading order come from the model
 //! ([`Project::location_of`](novo_core::Project::location_of),
@@ -52,8 +52,8 @@
 //! })?.0;
 //!
 //! let xref = XrefIndex::build(doc.project(), &FromKey);
-//! assert_eq!(xref.label(coil).unwrap().lines, ["NO 13-14 /3.4"]);
-//! assert_eq!(xref.label(contact).unwrap().lines, ["/2.5"]);
+//! assert_eq!(xref.label(coil).unwrap().lines, ["NO 13-14 3.4"]);
+//! assert_eq!(xref.label(contact).unwrap().lines, ["2.5"]);
 //! # Ok::<(), novo_core::ModelError>(())
 //! ```
 
