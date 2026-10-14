@@ -224,6 +224,9 @@ pub struct Scene {
     by_id: HashMap<ItemId, u32>,
     index: GridIndex,
     max_screen_half_width: f32,
+    /// Tallest label ever inserted (not lowered on removal), so a view can
+    /// skip text entirely when even that would be too small to read.
+    max_label_height: f32,
     revision: u64,
 }
 
@@ -250,6 +253,7 @@ impl Scene {
             by_id: HashMap::new(),
             index: GridIndex::new(cell),
             max_screen_half_width: 0.0,
+            max_label_height: 0.0,
             revision: next_revision(),
         }
     }
@@ -309,6 +313,9 @@ impl Scene {
         self.remove(id);
         let bounds = item.index_bounds();
         self.max_screen_half_width = self.max_screen_half_width.max(item.screen_half_width());
+        for l in &item.labels {
+            self.max_label_height = self.max_label_height.max(l.height);
+        }
         let slot = match self.free.pop() {
             Some(s) => s,
             None => {
@@ -343,7 +350,14 @@ impl Scene {
         self.by_id.clear();
         self.index = GridIndex::new(self.index.cell);
         self.max_screen_half_width = 0.0;
+        self.max_label_height = 0.0;
         self.revision = next_revision();
+    }
+
+    /// At least the height of the tallest label in the scene, in world
+    /// units (it may overestimate after removals, never underestimate).
+    pub fn max_label_height(&self) -> f32 {
+        self.max_label_height
     }
 
     /// All items in storage order.
@@ -614,6 +628,24 @@ mod tests {
         assert!(s.remove(ItemId(1)).is_some());
         assert!(s.is_empty());
         assert!(s.pick(Vec2::new(105.0, 0.0), 1.0, 1.0).is_none());
+    }
+
+    #[test]
+    fn tallest_label_is_tracked_until_cleared() {
+        let mut s = Scene::new();
+        assert_eq!(s.max_label_height(), 0.0);
+        s.insert(ItemId(1), line_item(Vec2::ZERO, Vec2::X));
+        assert_eq!(s.max_label_height(), 0.0);
+        let labelled =
+            |h| line_item(Vec2::ZERO, Vec2::X).with_label(crate::Label::new(Vec2::ZERO, "-K1", h));
+        s.insert(ItemId(2), labelled(2.5));
+        s.insert(ItemId(3), labelled(5.0));
+        assert_eq!(s.max_label_height(), 5.0);
+        // Never underestimates: removal keeps the old maximum.
+        s.remove(ItemId(3));
+        assert_eq!(s.max_label_height(), 5.0);
+        s.clear();
+        assert_eq!(s.max_label_height(), 0.0);
     }
 
     #[test]

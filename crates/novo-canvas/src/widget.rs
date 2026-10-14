@@ -260,6 +260,10 @@ pub struct CanvasView {
     pub wheel_zoom_step: f32,
     /// Labels smaller than this many screen points are not drawn.
     pub min_label_size: f32,
+    /// At most this many labels are drawn per frame, the largest first;
+    /// text costs CPU time per glyph, and a page dense enough to exceed it
+    /// is too small to read anyway.
+    pub label_budget: usize,
     /// Keep the drawing on whole device pixels ([`Viewport::snap_to_pixels`]).
     pub pixel_snap: bool,
     /// Proposals, problems, overrides and changes drawn over the drawing.
@@ -333,6 +337,7 @@ impl CanvasView {
             pick_tolerance: 5.0,
             wheel_zoom_step: 1.2,
             min_label_size: 4.0,
+            label_budget: 3000,
             pixel_snap: true,
             marks: Marks::default(),
             tessellator: Tessellator::default(),
@@ -428,7 +433,6 @@ impl CanvasView {
         }
         let to_local = |p: egui::Pos2| Vec2::new(p.x - rect.min.x, p.y - rect.min.y);
         let hover_local = response.hover_pos().map(to_local);
-
         let context_click = self.handle_navigation(ui, &response, hover_local, scene);
 
         let tol = self.viewport.screen_to_world_len(self.pick_tolerance);
@@ -524,7 +528,6 @@ impl CanvasView {
                 ui.visuals().error_fg_color,
             );
         }
-
         let hovered_marks = self.paint_marks(ui, rect, scene, hover_local);
 
         CanvasOutput {
@@ -902,15 +905,34 @@ impl CanvasView {
         // Above this size glyphs get expensive to rasterise and the label
         // fills the screen anyway.
         const MAX_SIZE: f32 = 512.0;
-        const MAX_LABELS: usize = 20_000;
-        let painter = ui.painter_at(rect);
         let zoom = self.viewport.zoom;
-        let mut drawn = 0;
+        // Zoomed out past reading even the tallest text: nothing to visit.
+        if scene.max_label_height() * zoom < self.min_label_size {
+            return;
+        }
+        let painter = ui.painter_at(rect);
+        // Collect what is readable first, so a dense page draws its largest
+        // text within the budget instead of whichever labels come first.
+        let mut todo: Vec<(f32, ItemId, usize)> = Vec::new();
         for id in scene.query(&self.viewport.visible_world()) {
             let Some(item) = scene.get(id) else { continue };
             if item.labels.is_empty() || !scene.layer(item.layer).is_some_and(|l| l.visible) {
                 continue;
             }
+            for (i, l) in item.labels.iter().enumerate() {
+                let size = l.height * zoom;
+                if size >= self.min_label_size && size <= MAX_SIZE && !l.text.is_empty() {
+                    todo.push((size, id, i));
+                }
+            }
+        }
+        if todo.len() > self.label_budget {
+            todo.select_nth_unstable_by(self.label_budget, |a, b| b.0.total_cmp(&a.0));
+            todo.truncate(self.label_budget);
+        }
+        for (size, id, i) in todo {
+            let Some(item) = scene.get(id) else { continue };
+            let l = &item.labels[i];
             let highlight = if self.selection.contains(id) {
                 Some(self.style.selection.color)
             } else if self.hovered == Some(id) {
@@ -918,32 +940,22 @@ impl CanvasView {
             } else {
                 None
             };
-            for l in &item.labels {
-                let size = l.height * zoom;
-                if size < self.min_label_size || size > MAX_SIZE || l.text.is_empty() {
-                    continue;
-                }
-                // Quantise sizes (12 steps per octave) so continuous zooming
-                // does not rasterise a new font size every frame.
-                let size = 2f32.powf((size.log2() * 12.0).round() / 12.0);
-                let [r, g, b, a] = highlight.unwrap_or(l.color).0;
-                let color = egui::Color32::from_rgba_unmultiplied(r, g, b, a);
-                let galley =
-                    painter.layout_no_wrap(l.text.clone(), egui::FontId::proportional(size), color);
-                let f = l.anchor.fractions();
-                let offset = egui::vec2(f.x * galley.size().x, f.y * galley.size().y);
-                let s = self.viewport.world_to_screen(l.pos);
-                let anchor = rect.min + egui::vec2(s.x, s.y);
-                let rot = egui::emath::Rot2::from_angle(l.rotation);
-                painter.add(
-                    egui::epaint::TextShape::new(anchor - rot * offset, galley, color)
-                        .with_angle(l.rotation),
-                );
-                drawn += 1;
-                if drawn >= MAX_LABELS {
-                    return;
-                }
-            }
+            // Quantise sizes (12 steps per octave) so continuous zooming
+            // does not rasterise a new font size every frame.
+            let size = 2f32.powf((size.log2() * 12.0).round() / 12.0);
+            let [r, g, b, a] = highlight.unwrap_or(l.color).0;
+            let color = egui::Color32::from_rgba_unmultiplied(r, g, b, a);
+            let galley =
+                painter.layout_no_wrap(l.text.clone(), egui::FontId::proportional(size), color);
+            let f = l.anchor.fractions();
+            let offset = egui::vec2(f.x * galley.size().x, f.y * galley.size().y);
+            let s = self.viewport.world_to_screen(l.pos);
+            let anchor = rect.min + egui::vec2(s.x, s.y);
+            let rot = egui::emath::Rot2::from_angle(l.rotation);
+            painter.add(
+                egui::epaint::TextShape::new(anchor - rot * offset, galley, color)
+                    .with_angle(l.rotation),
+            );
         }
     }
 
