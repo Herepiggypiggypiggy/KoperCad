@@ -1577,8 +1577,10 @@ dependencies = [
  "novo-app",
  "novo-canvas",
  "novo-core",
+ "novo-parts",
  "novo-storage",
  "novo-symbols",
+ "novo-terminals",
  "novo-workflow",
  "serde_json",
  "tempfile",
@@ -1600,6 +1602,15 @@ dependencies = [
  "novo-core",
  "novo-symbols",
  "novo-tests",
+]
+
+[[package]]
+name = "novo-xref"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-symbols",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
