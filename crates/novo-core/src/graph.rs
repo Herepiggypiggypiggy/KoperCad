@@ -10,8 +10,10 @@
 //! - interruption points with the same name.
 //!
 //! Contacts never join nets: whether a contact conducts is simulation state.
-//! Potential definition points label the nets they touch, and a potential
-//! carries on through switched poles (`SymbolInstance::pass_through`), so the
+//! A potential is defined on a net by a potential definition point
+//! (`SymbolRole::PotentialFeed`), a wire with `Wire::potential`, or a
+//! terminal named like a supply potential (`-X4:PE` defines `PE`). A
+//! potential carries on through switched poles (`SymbolInstance::pass_through`), so the
 //! wire after a contactor or breaker still reads `L1`.
 
 use std::collections::{BTreeMap, HashMap};
@@ -297,6 +299,31 @@ impl Netlist {
                     let net = by_endpoint[&endpoints[node]].0 as usize;
                     nets[net].defined.push(potential);
                 }
+            }
+        }
+        // Wires with a potential define it on their net.
+        for wire in project.wires() {
+            if let Some(potential) = wire.potential {
+                let net = by_endpoint[&wire.from].0 as usize;
+                nets[net].defined.push(potential);
+            }
+        }
+        // A terminal named like a supply potential (`-X4:PE`) defines it.
+        let supply: HashMap<&str, Vec<PotentialId>> = project
+            .potentials()
+            .filter(|p| p.kind.is_supply())
+            .fold(HashMap::new(), |mut by_name, p| {
+                by_name.entry(p.name.as_str()).or_default().push(p.id);
+                by_name
+            });
+        for terminal in project.terminals() {
+            if let (Some(potentials), Some(nodes)) = (
+                supply.get(terminal.name.as_str()),
+                by_terminal.get(&terminal.id),
+            ) && let Some(&node) = nodes.first()
+            {
+                let net = by_endpoint[&endpoints[node]].0 as usize;
+                nets[net].defined.extend(potentials);
             }
         }
         let feeds: BTreeMap<PotentialId, Vec<usize>> =

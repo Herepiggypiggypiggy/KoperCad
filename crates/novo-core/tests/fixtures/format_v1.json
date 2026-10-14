@@ -363,6 +363,7 @@
       "number": "101",
       "color": "BK",
       "cross_section_mm2": 2.5,
+      "potential": 8,
       "properties": {
         "twisted": false
       }

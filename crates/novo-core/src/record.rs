@@ -87,6 +87,7 @@ impl Record {
                 for end in r.ends() {
                     out.push(endpoint_owner(end));
                 }
+                out.extend(r.potential.map(AnyId::from));
             }
             Record::Terminal(r) => out.push(r.strip.into()),
             Record::Cable(r) => {

@@ -153,6 +153,7 @@ fn build() -> Project {
             w.number = Some("101".into());
             w.color = Some("BK".into());
             w.cross_section_mm2 = Some(2.5);
+            w.potential = Some(l1);
             w.properties.insert("twisted".into(), Value::Bool(false));
         })?;
         tx.connect(Endpoint::junction(junction), Endpoint::pin(contact, 0))?;

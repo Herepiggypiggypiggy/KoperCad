@@ -9,12 +9,12 @@
 use serde::{Deserialize, Serialize};
 
 use crate::entity::{
-    CableCore, DeviceKind, Endpoint, PageFormat, PageKind, Pin, PotentialKind, ProjectInfo,
-    SymbolKey, SymbolRole, Value,
+    CableCore, DeviceKind, Endpoint, PageFormat, PageKind, Pin, PotentialKind, PotentialSpec,
+    ProjectInfo, SymbolKey, SymbolRole, Value,
 };
 use crate::error::Result;
 use crate::geom::{Placement, Point};
-use crate::id::{AnyId, CableId, DeviceId, PageId, PartId, SymbolId, WireId};
+use crate::id::{AnyId, CableId, DeviceId, PageId, PartId, PotentialId, SymbolId, WireId};
 use crate::record::Record;
 use crate::tag::DeviceTag;
 use crate::tx::Tx;
@@ -86,6 +86,18 @@ pub enum Command {
     SetWireNumber {
         wire: WireId,
         number: Option<String>,
+    },
+    /// Sets or clears the potential one wire defines.
+    SetWirePotential {
+        wire: WireId,
+        potential: Option<PotentialId>,
+    },
+    /// Assigns potentials to wires in order, by name, creating missing
+    /// ones; see [`Tx::assign_potentials`]. Use
+    /// [`PotentialSet::specs`](crate::PotentialSet::specs) for L1/L2/L3/N/PE.
+    AssignPotentials {
+        wires: Vec<WireId>,
+        potentials: Vec<PotentialSpec>,
     },
     AddPotential {
         name: String,
@@ -162,6 +174,9 @@ impl Command {
             Command::SplitWire { .. } => "Branch wire".into(),
             Command::SetWireNumber { .. } => "Number wire".into(),
             Command::AddPotential { .. } => "Add potential".into(),
+            Command::SetWirePotential { .. } | Command::AssignPotentials { .. } => {
+                "Assign potential".into()
+            }
             Command::AddTerminal { .. } => "Add terminal".into(),
             Command::AddCable { .. } => "Add cable".into(),
             Command::AssignCore { .. } => "Assign cable core".into(),
@@ -255,6 +270,14 @@ impl Tx<'_> {
             Command::SetWireNumber { wire, number } => {
                 self.update::<crate::Wire>(wire, |w| w.number = number)?;
                 return Ok(Vec::new());
+            }
+            Command::SetWirePotential { wire, potential } => {
+                self.set_wire_potential(wire, potential)?;
+                return Ok(Vec::new());
+            }
+            Command::AssignPotentials { wires, potentials } => {
+                let created = self.assign_potentials(&wires, potentials)?;
+                return Ok(created.into_iter().map(AnyId::from).collect());
             }
             Command::AddPotential {
                 name,

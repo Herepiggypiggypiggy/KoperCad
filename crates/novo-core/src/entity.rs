@@ -423,6 +423,10 @@ pub struct Wire {
     /// Cross-section in mm².
     #[serde(default)]
     pub cross_section_mm2: Option<f64>,
+    /// A potential this wire defines on its net, like a potential definition
+    /// point: select three wires and assign L1, L2, L3.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub potential: Option<PotentialId>,
     #[serde(default)]
     pub properties: Properties,
 }
@@ -439,6 +443,7 @@ impl Wire {
             number: None,
             color: None,
             cross_section_mm2: None,
+            potential: None,
             properties: Properties::new(),
         }
     }
@@ -457,10 +462,104 @@ pub enum PotentialKind {
     Neutral,
     /// Protective earth.
     ProtectiveEarth,
+    /// Combined protective earth and neutral (TN-C).
+    Pen,
     DcPositive,
     DcNegative,
     #[default]
     Signal,
+}
+
+impl PotentialKind {
+    /// Supply potentials: everything but `Signal`. A terminal named like a
+    /// supply potential (`-X4:PE`, `-X1:N`) defines it on its net.
+    pub fn is_supply(self) -> bool {
+        self != PotentialKind::Signal
+    }
+}
+
+/// A potential by name, kind and voltage, for assigning potentials without
+/// looking up ids first: an existing potential with the same name is
+/// reused, otherwise one is created.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PotentialSpec {
+    pub name: String,
+    #[serde(default)]
+    pub kind: PotentialKind,
+    #[serde(default)]
+    pub voltage: Option<f64>,
+}
+
+impl PotentialSpec {
+    pub fn new(name: impl Into<String>, kind: PotentialKind, voltage: Option<f64>) -> Self {
+        PotentialSpec {
+            name: name.into(),
+            kind,
+            voltage,
+        }
+    }
+}
+
+/// Common sets of supply potentials, in the order wires are usually drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum PotentialSet {
+    /// L1, L2, L3, then N and PE as asked (TN-S: both; TN-C: use `pen`).
+    ThreePhase {
+        /// Line-to-line voltage, e.g. 400.
+        voltage: f64,
+        #[serde(default)]
+        neutral: bool,
+        #[serde(default)]
+        pe: bool,
+        /// A combined PEN conductor instead of separate N and PE.
+        #[serde(default)]
+        pen: bool,
+    },
+    /// L, N, PE.
+    SinglePhase { voltage: f64 },
+    /// L+ and L- (e.g. 24 V control voltage).
+    Dc { voltage: f64 },
+}
+
+impl PotentialSet {
+    pub fn specs(self) -> Vec<PotentialSpec> {
+        use PotentialKind::*;
+        let spec = PotentialSpec::new;
+        match self {
+            PotentialSet::ThreePhase {
+                voltage,
+                neutral,
+                pe,
+                pen,
+            } => {
+                let mut specs: Vec<PotentialSpec> = ["L1", "L2", "L3"]
+                    .into_iter()
+                    .map(|name| spec(name, Line, Some(voltage)))
+                    .collect();
+                if pen {
+                    specs.push(spec("PEN", Pen, None));
+                } else {
+                    if neutral {
+                        specs.push(spec("N", Neutral, None));
+                    }
+                    if pe {
+                        specs.push(spec("PE", ProtectiveEarth, None));
+                    }
+                }
+                specs
+            }
+            PotentialSet::SinglePhase { voltage } => vec![
+                spec("L", Line, Some(voltage)),
+                spec("N", Neutral, None),
+                spec("PE", ProtectiveEarth, None),
+            ],
+            PotentialSet::Dc { voltage } => vec![
+                spec("L+", DcPositive, Some(voltage)),
+                spec("L-", DcNegative, None),
+            ],
+        }
+    }
 }
 
 /// A named potential (`L1`, `N`, `PE`, `24V`, `0V`).
