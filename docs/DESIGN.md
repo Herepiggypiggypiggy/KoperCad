@@ -42,6 +42,7 @@ The user manipulates five kinds of things. Everything else is derived.
 | --- | --- | --- |
 | Wire routes and corners | Routed once when a connection is made, then stored | Automatic; `tidy` re-routes on request |
 | Junction dots and T-junctions | Where stored routes meet | Automatic; a dot can be dragged |
+| Connections between placed pins | Where a placed or moved symbol's pins land | Automatic when pins touch or a pin lands on a connection. Free pins that face each other at a distance are proposed: drawn as proposals in the placement preview, so the click is informed, and still there after the drop for Enter or Tab. Moving a symbol never makes a connection the preview did not show |
 | Potentials (L1, L2, L3, N, PE, 24 V) | The declared source, flowing through conductors, contacts and terminals | Automatic. Recognising PE, N and PEN by name (`X4:PE`) is a visible, switchable rule; one conductor can be overridden |
 | Cross references and contact images | Which device a contact belongs to | Automatic |
 | Terminals and cables | Connections that cross a location boundary (`+CAB1` to `+FIELD`) | Proposed |
@@ -162,6 +163,36 @@ breadcrumb and the outline filter, not as a separate place.
 the project's rules as sentences with inline choices: "Devices are numbered
 [per letter code ▾]". Esc returns.
 
+**Page frame.** Every page is drawn and printed in a frame, chosen by a rule
+("Pages use [A3 landscape, company frame ▾]"), never per page by hand. The
+frame carries:
+- a numbered column grid (ten columns on A3 by default, set by the frame),
+  which is what references point at;
+- a title block: project, page title, page n of m, the page's `=function`
+  and `+location`, revision letter and date, drawn by and checked by.
+
+References read `page.column` (`3.4`), with the structure prefix only when
+it differs from the reader's page (`=A2/3.4`). Revision fields come from the
+project's revisions, which also drive Changes mode and the pinned-flow
+freeze (§8). Owners: WS-03 draws the frame (`PageScene::frame`), WS-10 owns
+the reference format, and the frame choice is a rule like any other.
+
+**Start-up.** The app opens the last project where it was left: same page
+and zoom, nothing selected. There is no start screen to click through. With
+no project open (first run, or after Ctrl+W) the canvas area shows New
+project, Open, Open example and Recent; it is the only time the canvas is
+empty. New projects are saved to `<Documents>\NovoElectric\<name>.novo`,
+with Documents resolved through the known-folder lookup because company PCs
+redirect it to OneDrive. Nothing is written outside the user's profile, and
+nothing needs admin rights.
+
+**Language.** Every command word, parameter and label has an English name
+and per-language aliases, Dutch first (`voeding 400V 32A` and
+`supply 400V 32A` both work; `alles accepteren` is `accept all`). Both
+always match, whatever the UI language, so a colleague's habit still works.
+Device tags, IEC letter codes, units and potential names (L1, PE) are never
+translated.
+
 ## 4. Commands
 
 Every command lives in these places, in this order of preference. Nothing
@@ -188,6 +219,11 @@ lives only in a menu, and nothing opens a modal dialog in the drawing loop.
    guess first. On empty canvas, "repeat last tool" first.
 4. **Keys** (below). Letter keys act only while the drawing has focus.
 5. **The inspector** for properties of the selection.
+
+**Pin or body.** Pins win over the symbol body within 6 screen pixels of a
+pin, at every zoom. Hovering there shows the pin as the connect target (a
+steel-blue ring and the connect cursor) before the press, so a drag that
+starts there connects and a drag anywhere else on the symbol moves it.
 
 **Selection.** A click selects a device. A double-click on its text selects
 the text and edits it. Alt+click selects the deepest item under the
@@ -234,7 +270,13 @@ clear the selection.
 There are no keys for corners, T-pieces, terminals, cables or potentials,
 because the user does not place those. "Repeat last tool" is the first item
 of the context menu on empty canvas and the first row of an empty command
-surface.
+surface; it has no key, so Enter always means accept.
+
+Keys match the logical character, not the physical position, so `?`,
+Ctrl+Z and Ctrl+Y work on Dutch, German (QWERTZ) and US layouts alike.
+While the drawing has focus it consumes Tab as "next proposal" instead of
+letting focus move into the inspector; inside a focused field, Tab moves
+between fields as usual.
 
 ## 5. Marks on the drawing
 
@@ -269,15 +311,41 @@ A supply and three pumps:
 | Step | What the user does | Actions | Typed |
 | --- | --- | --- | --- |
 | 1. Start | Ctrl+N, name, Enter. The structure board opens with the template's `=A1 Supply`, `=A2 Loads`, `+CAB1`, `+FIELD`; "Add page" under `=A1`. | 4 | name |
-| 2. Supply | `supply 400V 32A`, Enter, click. Incoming terminals, main switch and PE bar, with "3~ 400 V + N + PE" declared at the source. | 4 | `supply 400V 32A` |
-| 3. Three feeders | `dol 4kW x3`, Enter, click. Three tagged feeders with parts sized. | 3 | `dol 4kW x3` |
-| 4. Field devices | Ctrl+5, select the three motors, set `+FIELD` once in the inspector. | 4 | `+FIELD` |
-| 5. Terminals and cables | `accept all` shows "9 terminals on -X1, 3 cables -W1..3"; Enter. | 3 | `accept all` |
+| 2. Supply † | `supply 400V 32A`, Enter, click. Incoming terminals, main switch and PE bar, with "3~ 400 V + N + PE" declared at the source. | 4 | `supply 400V 32A` |
+| 3. Three feeders † | `dol 4kW x3`, Enter, click. Three tagged feeders with parts sized. | 3 | `dol 4kW x3` |
+| 4. Field devices † | Ctrl+5, select the three motors, set `+FIELD` once in the inspector. | 4 | `+FIELD` |
+| 5. Terminals and cables † | `accept all` shows "9 terminals on -X1, 3 cables -W1..3"; Enter. | 3 | `accept all` |
 | 6. Control by hand | Place two push buttons and a lamp, connect five pins. | 14 | `pb`, `lamp` |
-| 7. Parts left over | Issues shows "2 devices without a part"; select both in Devices, pick the part once. | 4 | part search |
-| 8. Cabinet | Ctrl+2, `place all`, review the preview, Enter. Rails that would overflow are warned about first. | 3 | `place all` |
+| 7. Parts left over † | Issues shows "2 devices without a part"; select both in Devices, pick the part once. | 4 | part search |
+| 8. Cabinet † | Ctrl+2, `place all`, review the preview, Enter. Rails that would overflow are warned about first. | 3 | `place all` |
 | 9. Output | `export pdf`, Enter. Export is never blocked; its summary lists remaining warnings. | 2 | `export pdf` |
 | **Total** | | **41** | |
+
+† Needs something §10 puts after Gate 1: blocks (steps 2 and 3), the
+Devices drawer (4), terminal proposals in the editor (5), the parts
+database (7) or the Cabinet canvas (8). Review Gate 1 work against the Gate
+1 benchmark below, not against these steps. In Gate 1 the supply is
+declared by hand (3 actions, see supporting journeys).
+
+### The first five minutes
+
+Someone who has never seen NovoElectric, with no manual, gets to a
+connected circuit and finds a command without a menu bar:
+
+| Step | What they see and do | Actions | Typed |
+| --- | --- | --- | --- |
+| 1. Launch | The canvas area shows New project, Open, Open example and Recent. Click New project, type a name, Enter. | 2 | name |
+| 2. Structure | The board's hint reads "Add a page under a function". Click Add page. | 1 | |
+| 3. First symbol | The empty page reads "Press I or Space to place a symbol · ? for keys". I, type `contactor`, Enter, click. | 3 | `contactor` |
+| 4. Second symbol | The dock hint reads "Click to place another · Esc stop"; click once more (tools are sticky). | 1 | |
+| 5. Connect | Hovering a pin shows the connect ring and the dock hint "Drag from a pin to connect"; drag. | 1 | |
+| 6. Keys | ? shows the shortcut overlay; ? or Esc closes it. | 2 | |
+| 7. A command | Ctrl+K: the empty surface lists every command by group. Pick Export PDF. | 2 | |
+| **Total** | | **12** | |
+
+Every hint names the next action and its key, sits next to where the eye
+already is (the page, the dock, the hovered pin), and stops showing once it
+has been followed three times. "Show hints again" is in the command surface.
 
 ### Gate 1 benchmark
 
@@ -357,6 +425,9 @@ user has edited:
 | Menu | Menu bar; empty command surface | **No menu bar**; the empty command surface is the menu |
 | Command line | Permanent; on demand | **On demand**, at the top or at the pointer |
 | Tab | Orientation; next proposal | **Next proposal**; R and X orient |
+| Facing pins at a distance | Connect on placement; propose; ignore | **Propose**, in the placement preview; touching pins connect |
+| Command language | English only; translated words; aliases | **Aliases**: English and Dutch words both match; tags and IEC codes never translate |
+| Start-up | Start screen; last project | **Last project**, where it was left; the empty canvas offers New, Open, Example and Recent |
 
 ## 9. What we leave behind
 
@@ -370,6 +441,8 @@ user has edited:
 | Corner and T-piece symbols | EPLAN | Drawing artefacts of connectivity, not intent |
 | Linking cross references by hand | EPLAN | References follow ownership |
 | Assigning potentials wire by wire | EPLAN | The source declares it once |
+| Autoconnect at any distance, without warning | EPLAN | Connections the user never saw; facing pins are proposed in the preview |
+| Start screens and tips of the day | Most CAD | A click between the user and their project; hints sit where the next action is |
 | Tabbed property dialogs | Windows CAD | Relations first, then search |
 | Update, build and check runs | EPLAN | Everything is live; problems are marked in place |
 | File/Edit/View menu bar | Windows applications | A second, worse index of commands |
@@ -401,6 +474,8 @@ Model additions for WS-02:
 | Command surface with nouns, verbs and pickable rows | Cabinet canvas |
 | Numbering rule, F2 rename, renumber | Drawer tabs beyond Terminals |
 | Problem marks, Issues list, F8 | Terminal proposals in the editor (WS-11 derives them already) |
+| Page frame with column grid, `page.column` references | Dutch command aliases |
+| Start-up, first-run hints, `?` overlay | Revision fields filled from revisions |
 | | Part proposals (needs the WS-07 parts database) |
 
 ## 11. Principles and review checklist
@@ -438,6 +513,10 @@ Checklist for every UI pull request:
   are named by role, so a light set can be added without touching screens.
 - How much of the structure board is a form and how much is drawing?
 - Should blocks live in the project, a shared company library, or both?
+- The inspector flips sides when the selection is under it, which is the
+  one place the window moves under the eye. Would a fixed right-hand
+  inspector that turns compact or translucent over the selection be
+  calmer? Decide in a real build.
 
 ## Appendix: EPLAN symptoms and where they are answered
 
@@ -456,6 +535,7 @@ Checklist for every UI pull request:
 | T-pieces cannot be rotated; scattered shortcuts | §2 no connection pieces |
 | Cross references hard to link | §2 references follow ownership |
 | No reliable shortcut to all references | Shift+G |
+| Autoconnect surprises | §2 facing pins are proposed in the preview |
 | Search cannot find a device by exact name | §4 exact tag jumps, all locations listed |
 | Selecting a relay does not highlight what it switches | §6 select to light up, Relations |
 | Insert centre hunt for common parts | §4 command surface, favourites, blocks |
