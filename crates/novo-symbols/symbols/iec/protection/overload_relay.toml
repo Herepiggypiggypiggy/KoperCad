@@ -6,6 +6,8 @@ standard = "IEC 60617"
 category = "protection"
 function = "protection.overload"
 keywords = ["overload", "thermal relay", "bimetal", "ol"]
+aliases = ["ol"]
+favorite = true
 
 connections = [
   { id = "1", at = [0, 0], dir = "up" },

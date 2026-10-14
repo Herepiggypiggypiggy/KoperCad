@@ -63,6 +63,13 @@ pub struct Symbol {
     /// Search words for the symbol picker and command palette.
     #[serde(default)]
     pub keywords: Vec<String>,
+    /// Short names the command palette matches exactly, such as `no`, `coil`
+    /// or `mcb3`. Unique within a library.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<String>,
+    /// Offered in the palette before anything is typed.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub favorite: bool,
     /// Electrical connection points, in their default order.
     pub connections: Vec<Connection>,
     /// Where texts such as the device tag are placed.
@@ -427,4 +434,8 @@ impl Bounds {
             self.max[i] = self.max[i].max(v);
         }
     }
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }

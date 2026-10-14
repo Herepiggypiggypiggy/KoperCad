@@ -113,6 +113,15 @@ pub fn validate(symbol: &Symbol) -> Vec<Issue> {
     if symbol.function.trim().is_empty() {
         fail("function is empty".into());
     }
+    for (i, alias) in symbol.aliases.iter().enumerate() {
+        if !valid_alias(alias) {
+            fail(format!(
+                "alias '{alias}' must be 1 to {MAX_ALIAS_LEN} characters of a-z, 0-9, '_' or '-'"
+            ));
+        } else if symbol.aliases[..i].contains(alias) {
+            fail(format!("alias '{alias}' is listed twice"));
+        }
+    }
     if symbol.graphics.is_empty() {
         fail("symbol has no graphics".into());
     }
@@ -408,4 +417,15 @@ fn check_groups(
             }
         }
     }
+}
+
+/// Longest alias the validator accepts; aliases are typed, so keep them short.
+pub const MAX_ALIAS_LEN: usize = 12;
+
+fn valid_alias(alias: &str) -> bool {
+    !alias.is_empty()
+        && alias.len() <= MAX_ALIAS_LEN
+        && alias
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-')
 }

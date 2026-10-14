@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "earth"
 function = "earth"
 keywords = ["earth", "ground", "gnd"]
+aliases = ["gnd"]
 
 connections = [
   { id = "1", at = [0, 0], dir = "up" },
