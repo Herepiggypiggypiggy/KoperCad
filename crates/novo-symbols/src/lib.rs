@@ -19,6 +19,6 @@ pub use library::{Library, LoadError};
 pub use svg::{SvgOptions, to_svg};
 pub use symbol::{
     ALWAYS_CLOSED, Align, Anchor, Behavior, Connection, Direction, FORMAT_VERSION, GRID, Graphic,
-    PASS_THROUGH, Point, Stroke, Symbol,
+    PASS_THROUGH, PassThrough, Point, Stroke, Symbol,
 };
 pub use validate::{ANCHOR_ROLES, BEHAVIOR_KINDS, Issue, behavior_keys, validate};
