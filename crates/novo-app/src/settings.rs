@@ -12,6 +12,8 @@ pub struct Settings {
     /// Whether the outline takes space beside the canvas. `None` pins it
     /// on wide windows only (docs/DESIGN.md §3).
     pub outline_pinned: Option<bool>,
+    /// The project open when the app last ran, reopened on start.
+    pub last_open: Option<PathBuf>,
     /// Most recently used project files, newest first.
     pub recent_projects: Vec<PathBuf>,
     /// Ids of recently run actions, newest first; the palette lists them first.

@@ -48,10 +48,10 @@ const PIN_OUTLINE_FROM: f32 = 1700.0;
 /// Pages listed under "Recent" in the outline.
 const MAX_RECENT_PAGES: usize = 5;
 
-/// An action that throws away the open project, so it first asks about
-/// unsaved changes.
+/// An action that replaces or closes the open project. Nothing asks first:
+/// the backend keeps the work (docs/DESIGN.md: no save prompts).
 #[derive(Clone, Debug, PartialEq, Eq)]
-enum Discarding {
+enum Leaving {
     New,
     Open,
     OpenPath(PathBuf),
@@ -67,11 +67,7 @@ pub struct NovoApp {
     current_page: Option<PageId>,
     palette: Palette,
     messages: Vec<Message>,
-    /// Waiting for the user to answer "save changes?" before doing this.
-    unsaved_prompt: Option<Discarding>,
     show_about: bool,
-    /// Set once the user has agreed to quit, so the next close request passes.
-    quitting: bool,
     window_title: String,
     /// Opened on the first frame, so errors show in the window.
     open_on_start: Option<PathBuf>,
@@ -93,6 +89,8 @@ pub struct NovoApp {
     window_width: f32,
 }
 
+/// How soon after a change a saved project is written to its file.
+const WRITE_DELAY: Duration = Duration::from_millis(500);
 /// How long to wait before retrying a failed autosave.
 const AUTOSAVE_RETRY: Duration = Duration::from_secs(30);
 
@@ -123,9 +121,7 @@ impl NovoApp {
             current_page: None,
             palette: Palette::default(),
             messages: Vec::new(),
-            unsaved_prompt: None,
             show_about: false,
-            quitting: false,
             window_title: String::new(),
             open_on_start: None,
             started: false,
@@ -228,16 +224,16 @@ impl NovoApp {
             self.settings.remember_action(action.id());
         }
         match action {
-            Action::NewProject => self.discard_then(ctx, Discarding::New),
-            Action::OpenProject => self.discard_then(ctx, Discarding::Open),
+            Action::NewProject => self.leave_then(ctx, Leaving::New),
+            Action::OpenProject => self.leave_then(ctx, Leaving::Open),
             Action::SaveProject => {
                 self.save();
             }
             Action::SaveProjectAs => {
                 self.save_as();
             }
-            Action::CloseProject => self.discard_then(ctx, Discarding::Close),
-            Action::Quit => self.discard_then(ctx, Discarding::Quit),
+            Action::CloseProject => self.leave_then(ctx, Leaving::Close),
+            Action::Quit => self.leave_then(ctx, Leaving::Quit),
             Action::Undo => self.undo_redo(false),
             Action::Redo => self.undo_redo(true),
             Action::ZoomToFit => self.canvas.zoom_to_fit(),
@@ -279,18 +275,10 @@ impl NovoApp {
     // ------------------------------------------------------------------
     // Project lifecycle
 
-    fn discard_then(&mut self, ctx: &egui::Context, next: Discarding) {
-        if self.is_dirty() {
-            self.unsaved_prompt = Some(next);
-        } else {
-            self.finish_discarding(ctx, next);
-        }
-    }
-
-    fn finish_discarding(&mut self, ctx: &egui::Context, next: Discarding) {
+    fn leave_then(&mut self, ctx: &egui::Context, next: Leaving) {
         match next {
-            Discarding::New => self.new_project(),
-            Discarding::Open => {
+            Leaving::New => self.new_project(),
+            Leaving::Open => {
                 let dialog = rfd::FileDialog::new()
                     .set_title("Open project")
                     .add_filter("NovoElectric project", &[PROJECT_EXTENSION]);
@@ -298,10 +286,9 @@ impl NovoApp {
                     self.open_path(&path);
                 }
             }
-            Discarding::OpenPath(path) => self.open_path(&path),
-            Discarding::Close => self.close_project(),
-            Discarding::Quit => {
-                self.quitting = true;
+            Leaving::OpenPath(path) => self.open_path(&path),
+            Leaving::Close => self.close_project(),
+            Leaving::Quit => {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
         }
@@ -322,12 +309,16 @@ impl NovoApp {
     fn open_path(&mut self, path: &Path) {
         match self.backend.open(path) {
             Ok(report) => {
-                self.project_path = Some(path.to_owned());
                 self.current_page = None;
                 self.canvas.document_replaced();
                 self.fix_current_page();
-                self.settings.remember_recent(path);
-                self.message(Level::Info, format!("Opened {}", path.display()));
+                if self.backend.is_untitled() {
+                    self.project_path = None;
+                } else {
+                    self.project_path = Some(path.to_owned());
+                    self.settings.remember_recent(path);
+                    self.message(Level::Info, format!("Opened {}", path.display()));
+                }
                 if let Some(aside) = report.set_aside {
                     self.message(
                         Level::Warning,
@@ -376,7 +367,7 @@ impl NovoApp {
         if let Some(path) = self.open_on_start.take() {
             self.open_path(&path);
         } else if !self.restore_untitled()
-            && let Some(last) = self.settings.recent_projects.first().cloned()
+            && let Some(last) = self.settings.last_open.clone()
             && last.is_file()
         {
             self.open_path(&last);
@@ -411,8 +402,10 @@ impl NovoApp {
     fn close_project(&mut self) {
         if let Err(e) = self.backend.close() {
             self.message(
-                Level::Warning,
-                format!("The project did not close cleanly: {e}"),
+                Level::Error,
+                format!(
+                    "Could not write the project before closing it: {e}. The work is kept and offered back when you open it again."
+                ),
             );
         }
         self.project_path = None;
@@ -424,6 +417,10 @@ impl NovoApp {
     /// time for the next one even when nothing else repaints.
     fn tick(&mut self, ctx: &egui::Context) {
         let now = Instant::now();
+        // A saved project is written to its file shortly after each change.
+        if self.project_path.is_some() && self.is_dirty() {
+            self.next_tick = self.next_tick.min(now + WRITE_DELAY);
+        }
         if now < self.next_tick {
             ctx.request_repaint_after(self.next_tick - now);
             return;
@@ -432,14 +429,14 @@ impl NovoApp {
             Ok(next) => {
                 if self.autosave_failing {
                     self.autosave_failing = false;
-                    self.message(Level::Info, "Autosave works again");
+                    self.message(Level::Info, "Saving works again");
                 }
                 next
             }
             Err(e) => {
                 if !self.autosave_failing {
                     self.autosave_failing = true;
-                    self.message(Level::Warning, format!("Autosave failed: {e}"));
+                    self.message(Level::Warning, format!("Could not save the project: {e}"));
                 }
                 Some(AUTOSAVE_RETRY)
             }
@@ -498,7 +495,7 @@ impl NovoApp {
         }
         self.fix_current_page();
         self.tick(&ctx);
-        self.handle_close_request(&ctx);
+        self.settings.last_open = self.backend.file();
         self.update_title(&ctx);
 
         let mut picked: Vec<Action> = Vec::new();
@@ -558,7 +555,6 @@ impl NovoApp {
             }
         }
         self.recovery_dialog(&ctx);
-        self.unsaved_dialog(&ctx);
         self.about_dialog(&ctx);
 
         for action in picked {
@@ -578,10 +574,7 @@ impl NovoApp {
     }
 
     fn modal_open(&self) -> bool {
-        self.palette.is_open()
-            || self.unsaved_prompt.is_some()
-            || self.show_about
-            || self.backend.recovery_offer().is_some()
+        self.palette.is_open() || self.show_about || self.backend.recovery_offer().is_some()
     }
 
     /// Takes the key presses that trigger enabled actions, leaving the rest
@@ -607,20 +600,9 @@ impl NovoApp {
         fired
     }
 
-    fn handle_close_request(&mut self, ctx: &egui::Context) {
-        let requested = ctx.input(|i| i.viewport().close_requested());
-        if requested && !self.quitting && self.is_dirty() {
-            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-            self.unsaved_prompt = Some(Discarding::Quit);
-        }
-    }
-
     fn update_title(&mut self, ctx: &egui::Context) {
         let title = match self.project_name() {
-            Some(name) => {
-                let dirty = if self.is_dirty() { "*" } else { "" };
-                format!("{name}{dirty} - {APP_NAME}")
-            }
+            Some(name) => format!("{name} - {APP_NAME}"),
             None => APP_NAME.to_owned(),
         };
         if title != self.window_title {
@@ -654,8 +636,10 @@ impl NovoApp {
             ""
         } else if self.project_path.is_none() {
             "Not saved yet"
+        } else if self.autosave_failing {
+            "Not saved"
         } else if self.is_dirty() {
-            "Unsaved changes"
+            "Saving"
         } else {
             "Saved"
         }
@@ -675,9 +659,7 @@ impl NovoApp {
             ] {
                 let selected = action == Action::ShowSchematic;
                 let response = ui
-                    .add_enabled_ui(self.is_enabled(action), |ui| {
-                        segment(ui, label, selected)
-                    })
+                    .add_enabled_ui(self.is_enabled(action), |ui| segment(ui, label, selected))
                     .inner;
                 let response = if action == Action::ShowCabinet {
                     response.on_disabled_hover_text("The cabinet canvas comes later")
@@ -718,7 +700,7 @@ impl NovoApp {
                 for path in self.settings.recent_projects.clone() {
                     if ui.button(path.display().to_string()).clicked() {
                         let ctx = ui.ctx().clone();
-                        self.discard_then(&ctx, Discarding::OpenPath(path));
+                        self.leave_then(&ctx, Leaving::OpenPath(path));
                     }
                 }
             });
@@ -897,6 +879,20 @@ impl NovoApp {
                 for a in [Action::NewProject, Action::OpenProject] {
                     self.action_button(ui, a, picked);
                 }
+                let unsaved = self.backend.unsaved_projects();
+                if !unsaved.is_empty() {
+                    ui.add_space(16.0);
+                    ui.small("UNSAVED");
+                    for (path, changed) in unsaved {
+                        let row = ui.add(
+                            egui::Button::new(format!("Untitled, {}", ago(changed))).frame(false),
+                        );
+                        if row.clicked() {
+                            let ctx = ui.ctx().clone();
+                            self.leave_then(&ctx, Leaving::OpenPath(path));
+                        }
+                    }
+                }
                 let recent = self.settings.recent_projects.clone();
                 if !recent.is_empty() {
                     ui.add_space(16.0);
@@ -911,7 +907,7 @@ impl NovoApp {
                             .on_hover_text(path.display().to_string());
                         if row.clicked() {
                             let ctx = ui.ctx().clone();
-                            self.discard_then(&ctx, Discarding::OpenPath(path));
+                            self.leave_then(&ctx, Leaving::OpenPath(path));
                         }
                     }
                 }
@@ -1005,37 +1001,6 @@ impl NovoApp {
     // ------------------------------------------------------------------
     // Dialogs
 
-    fn unsaved_dialog(&mut self, ctx: &egui::Context) {
-        let Some(next) = self.unsaved_prompt.clone() else {
-            return;
-        };
-        let name = self.project_name().unwrap_or_default();
-        let mut answer = None;
-        let modal = egui::Modal::new(egui::Id::new("unsaved_changes")).show(ctx, |ui| {
-            ui.set_width(340.0);
-            ui.heading("Unsaved changes");
-            ui.label(format!("Save the changes to \"{name}\" first?"));
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                if primary_button(ui, "Save").clicked() {
-                    answer = Some(UnsavedAnswer::Save);
-                }
-                if ui.button("Don't save").clicked() {
-                    answer = Some(UnsavedAnswer::Discard);
-                }
-                if ui.button("Cancel").clicked() {
-                    answer = Some(UnsavedAnswer::Cancel);
-                }
-            });
-        });
-        if answer.is_none() && modal.should_close() {
-            answer = Some(UnsavedAnswer::Cancel);
-        }
-        if let Some(answer) = answer {
-            self.answer_unsaved(ctx, next, answer);
-        }
-    }
-
     /// Asks whether to restore the unsaved work a crash left behind. The
     /// project as last saved stays shown until the user answers.
     fn recovery_dialog(&mut self, ctx: &egui::Context) {
@@ -1093,19 +1058,6 @@ impl NovoApp {
         }
     }
 
-    fn answer_unsaved(&mut self, ctx: &egui::Context, next: Discarding, answer: UnsavedAnswer) {
-        self.unsaved_prompt = None;
-        match answer {
-            UnsavedAnswer::Save => {
-                if self.save() {
-                    self.finish_discarding(ctx, next);
-                }
-            }
-            UnsavedAnswer::Discard => self.finish_discarding(ctx, next),
-            UnsavedAnswer::Cancel => {}
-        }
-    }
-
     fn about_dialog(&mut self, ctx: &egui::Context) {
         if !self.show_about {
             return;
@@ -1122,13 +1074,6 @@ impl NovoApp {
             self.show_about = false;
         }
     }
-}
-
-#[derive(Clone, Copy, Debug)]
-enum UnsavedAnswer {
-    Save,
-    Discard,
-    Cancel,
 }
 
 impl eframe::App for NovoApp {
@@ -1316,38 +1261,21 @@ mod tests {
     }
 
     #[test]
-    fn closing_a_dirty_project_asks_first() {
+    fn closing_a_changed_project_does_not_ask() {
         let ctx = themed_ctx();
         let mut app = app_with(DirtyBackend::default());
         app.run(&ctx, Action::NewProject);
+        assert!(app.is_dirty());
         app.run(&ctx, Action::CloseProject);
-        assert_eq!(app.unsaved_prompt, Some(Discarding::Close));
-        assert!(app.is_open());
-
-        app.answer_unsaved(&ctx, Discarding::Close, UnsavedAnswer::Cancel);
-        assert!(app.is_open());
-
-        app.run(&ctx, Action::CloseProject);
-        app.answer_unsaved(&ctx, Discarding::Close, UnsavedAnswer::Discard);
         assert!(!app.is_open());
-        assert!(app.unsaved_prompt.is_none());
-    }
-
-    #[test]
-    fn closing_a_clean_project_does_not_ask() {
-        let ctx = themed_ctx();
-        let mut app = app_with(MemoryBackend::default());
-        app.run(&ctx, Action::NewProject);
-        app.run(&ctx, Action::CloseProject);
-        assert!(app.unsaved_prompt.is_none());
-        assert!(!app.is_open());
+        assert!(!app.modal_open());
     }
 
     #[test]
     fn placeholder_open_reports_an_error() {
         let ctx = themed_ctx();
         let mut app = app_with(MemoryBackend::default());
-        app.finish_discarding(&ctx, Discarding::OpenPath(PathBuf::from("x.novo")));
+        app.leave_then(&ctx, Leaving::OpenPath(PathBuf::from("x.novo")));
         assert_eq!(app.messages().last().map(|m| m.level), Some(Level::Error));
         assert!(!app.is_open());
     }
@@ -1497,7 +1425,7 @@ mod tests {
         assert_eq!(page_count(&app), 3);
         assert!(app.is_dirty(), "restored work still needs a save");
         frame(&ctx, &mut app, Default::default());
-        assert_eq!(app.window_title, "Plant* - NovoElectric");
+        assert_eq!(app.window_title, "Plant - NovoElectric");
     }
 
     #[test]
@@ -1647,21 +1575,21 @@ mod tests {
         assert!(app.save_to(Path::new("plant.novo")));
         assert_eq!(app.saved_state(), "Saved");
         app.run(&ctx, Action::Undo);
-        assert_eq!(app.saved_state(), "Unsaved changes");
+        assert_eq!(app.saved_state(), "Saving");
     }
 
     #[test]
     fn start_up_reopens_the_last_project() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("plant.novo");
-        let ctx = egui::Context::default();
+        let ctx = themed_ctx();
         let mut first = storage_app();
         first.run(&ctx, Action::NewProject);
         assert!(first.save_to(&path));
         first.run(&ctx, Action::CloseProject);
 
         let mut next = app_with(StorageBackend::default());
-        next.settings = first.settings().clone();
+        next.settings.last_open = Some(path.clone());
         frame(&ctx, &mut next, Default::default());
         assert_eq!(next.project_path, Some(path));
 
@@ -1677,7 +1605,7 @@ mod tests {
     fn commands_run_through_the_window_reach_storage() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("plant.novo");
-        let ctx = egui::Context::default();
+        let ctx = themed_ctx();
         let mut app = storage_app();
         let add = || Command::AddPage {
             name: "2".into(),
