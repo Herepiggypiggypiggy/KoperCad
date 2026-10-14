@@ -77,7 +77,7 @@ impl<'a> PartAllocator<'a> {
 /// The part is copied into the project once, or reused if the project
 /// already has it. Returns `None` if there is nothing to change.
 ///
-/// A terminal block (letter code `X`) given to a terminal strip becomes the
+/// A terminal block ([`is_terminal_block`]) given to a terminal strip becomes the
 /// strip's part for the terminal kind it suits ([`terminal_kind_of`]), so
 /// every terminal of that kind is built with it and the bill of materials
 /// orders one per terminal. It never lands in the strip device's own part
@@ -96,13 +96,15 @@ pub fn assign_part(
         let Some(current) = project.device(device) else {
             continue;
         };
-        if current.kind == DeviceKind::TerminalStrip && part.fits("X") {
+        if current.kind == DeviceKind::TerminalStrip && is_terminal_block(part) {
             let kind = terminal_kind_of(part);
             if novo_terminals::strip_style(project, device, kind).part != Some(part_id) {
                 commands.push(Command::SetProperty {
                     target: device.into(),
                     key: novo_terminals::strip_part_key(kind),
-                    value: Some(Value::Int(i64::try_from(part_id.raw()).unwrap_or(i64::MAX))),
+                    value: Some(Value::Int(
+                        i64::try_from(part_id.raw()).expect("part ids fit in i64"),
+                    )),
                 });
                 changed += 1;
             }
@@ -131,6 +133,18 @@ pub fn assign_part(
         label: format!("Assign {part} to {}", count(changed, "device")),
         commands,
     })
+}
+
+/// Whether a catalog part is a terminal block: letter code `X` and
+/// connection points (`connections` in its technical data). End covers,
+/// end brackets, markers and other strip accessories are coded `X` too but
+/// connect nothing, so they stay in the strip device's own part list.
+pub fn is_terminal_block(part: &CatalogPart) -> bool {
+    part.fits("X")
+        && part
+            .data
+            .get("connections")
+            .is_some_and(|v| !matches!(v, Value::Int(0)))
 }
 
 /// The terminal kind a terminal block is for: a protective conductor block
@@ -402,6 +416,30 @@ pub fn suggest_for_device<'c>(
         hits = catalog.search(query, limit);
     }
     hits
+}
+
+/// Terminal blocks for a terminal, best first: blocks for its kind (a PE
+/// block for a PE terminal) before the others, each group in the catalog's
+/// order, narrowed by `query` when given.
+pub fn suggest_for_terminal<'c>(
+    catalog: &'c Catalog,
+    project: &Project,
+    terminal: TerminalId,
+    query: &str,
+    limit: usize,
+) -> Vec<&'c CatalogPart> {
+    let Some(terminal) = project.terminal(terminal) else {
+        return Vec::new();
+    };
+    let mut blocks: Vec<&CatalogPart> = catalog
+        .suggest("X", query, usize::MAX)
+        .into_iter()
+        .filter(|p| is_terminal_block(p))
+        .collect();
+    // A stable sort keeps the catalog's ranking within each group.
+    blocks.sort_by_key(|p| terminal_kind_of(p) != terminal.kind);
+    blocks.truncate(limit);
+    blocks
 }
 
 /// The project part's catalog entry (by manufacturer and order number).
