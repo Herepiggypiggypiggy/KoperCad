@@ -22,13 +22,14 @@ Sections 6 and 11 below are the 17:17 snapshot; this section supersedes them.
 - **In progress (coordinator helper agents, not yet PRs):** WS-09 PDF export (`claude/ws09-pdf-export`, crate novo-pdf; Gate 1 needs PDF) and WS-14 design checks (`claude/ws14-design-checks`, crate novo-checks; feeds the issue pill).
 - **Crate-row conflicts:** every new crate adds a row after `novo-symbols` in CLAUDE.md and Cargo.toml, so each merge makes the next PR conflict. Resolution is always "keep both rows"; send the merge sha to the reviewer.
 - **Next for Gate 1:** after #38 and #46 merge, WS-01 hosts `SchematicView` (#38) in the Workbench, wires #29's palette/keymap, #30 terminals and #31 xref; WS-09 PDF; then the tester drives the scenario through `NovoApp::execute`.
+- **Going public (owner's request):** no secrets anywhere in history (gitleaks + regex over all branches, PR refs, comments). Personal paths/ids were scrubbed from current files (#52), but the owner's Windows user name and an EPLAN folder name remain in older commits (#44 d3bd761 and earlier). Owner decides: accept that, or start a fresh repository from current main. Visibility is switched by the owner in Settings (no tool here can).
 - **Traps:** worktrees sharing one CARGO_TARGET_DIR run stale test binaries (false green): one target dir per worktree. Disk is ~40 GB: build with CARGO_INCREMENTAL=0 and debug info off, delete target dirs when done.
 
 ## 1. What this is
 NovoElectric is a local-first electrical CAD program in Rust: egui/eframe 0.36, wgpu, SQLite, with PyO3 as the scripting layer.
 - Repository: `Herepiggypiggypiggy/NovoElectric`, default branch `main`.
 - Roadmap: the Claude Doc https://claude.ai/code/artifact/8ff48512-c76a-4566-8937-166b4b128d2e, summarised in `docs/ROADMAP.md`.
-- Owner: Tadjiro (user_015gECXX3mZNSyeFMTnseTZT). He works in the project thread "coordination" and is often away.
+- Owner: Tadjiro. They work in the project thread "coordination" and is often away.
 
 ## 2. Owner's standing instructions (hard rules)
 1. **No admin rights, ever.** Everything must install, run, update and be scripted as a standard Windows user: per-user install, HKCU and %LOCALAPPDATA% only.
