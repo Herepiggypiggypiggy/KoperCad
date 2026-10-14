@@ -4,7 +4,8 @@
 use std::collections::HashMap;
 
 use novo_core::{
-    AnyId, DeviceId, Location, PageId, Project, SymbolId, SymbolRole, Value, natural_cmp,
+    AnyId, DeviceId, Location, Match, Page, PageId, Project, SymbolId, SymbolRole, Value,
+    natural_cmp,
 };
 
 use crate::function::{ContactKind, Functions};
@@ -32,6 +33,9 @@ pub struct Reference {
     pub pins: String,
     /// Page and column, from [`Project::location_of`].
     pub location: Location,
+    /// Structure of the page it is drawn on (`=A2+CAB1`), empty when the
+    /// page has none; see [`page_structure`].
+    pub structure: String,
     /// Position in the project's reading order (pages in natural order,
     /// then left to right, then top to bottom), as in
     /// [`Project::cross_references`].
@@ -52,9 +56,24 @@ impl Reference {
         format!("/{}", self.location)
     }
 
+    /// The location as read from a page with structure `reader`: `/3.4`,
+    /// or `=A2/3.4` when this symbol's page has a different structure.
+    pub fn target_from(&self, reader: &str) -> String {
+        if self.structure.is_empty() || self.structure == reader {
+            self.target()
+        } else {
+            format!("{}/{}", self.structure, self.location)
+        }
+    }
+
     /// One row of a contact image or reference list: `NO 13-14 /3.4`.
     pub fn row(&self) -> String {
-        [self.kind.label(), &self.pins, &self.target()]
+        self.row_from("")
+    }
+
+    /// [`Reference::row`] as read from a page with structure `reader`.
+    pub fn row_from(&self, reader: &str) -> String {
+        [self.kind.label(), &self.pins, &self.target_from(reader)]
             .iter()
             .filter(|s| !s.is_empty())
             .copied()
@@ -71,6 +90,8 @@ pub struct Highlight {
     pub off_page: Vec<Reference>,
     /// Device tag or interruption name, for the status bar.
     pub name: String,
+    /// Structure of the page being read, for the reference format.
+    pub reader: String,
 }
 
 impl Highlight {
@@ -84,9 +105,23 @@ impl Highlight {
         if self.off_page.is_empty() {
             return String::new();
         }
-        let rows: Vec<String> = self.off_page.iter().map(Reference::row).collect();
+        let rows: Vec<String> = self
+            .off_page
+            .iter()
+            .map(|r| r.row_from(&self.reader))
+            .collect();
         format!("{} elsewhere: {}", self.name, rows.join(", "))
     }
+}
+
+/// Where Ctrl+K with an exact tag goes; see [`XrefIndex::go_to_tag`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct TagJump<'i> {
+    pub device: DeviceId,
+    /// Where to jump: the main function, else the first occurrence.
+    pub main: &'i Reference,
+    /// Every other place the device occurs, in reading order.
+    pub others: Vec<&'i Reference>,
 }
 
 /// Cross-reference text to draw next to a symbol.
@@ -98,6 +133,27 @@ pub struct Label {
     /// The device has more contacts of some kind drawn than it has
     /// (see [`Issue::TooManyContacts`]); draw the image as a warning.
     pub warning: bool,
+}
+
+/// Page property naming the page's function aspect (`A2` for `=A2`), until
+/// the model gives pages a structure of their own.
+pub const PAGE_FUNCTION_PROPERTY: &str = "function";
+/// Page property naming the page's location aspect (`CAB1` for `+CAB1`).
+pub const PAGE_LOCATION_PROPERTY: &str = "location";
+
+/// The structure prefix of a page, `=A2+CAB1`, from its `function` and
+/// `location` properties; empty when it has neither.
+pub fn page_structure(page: &Page) -> String {
+    let mut out = String::new();
+    for (prefix, key) in [('=', PAGE_FUNCTION_PROPERTY), ('+', PAGE_LOCATION_PROPERTY)] {
+        if let Some(Value::Text(v)) = page.properties.get(key)
+            && !v.trim().is_empty()
+        {
+            out.push(prefix);
+            out.push_str(v.trim().trim_start_matches(prefix));
+        }
+    }
+    out
 }
 
 /// Device property giving how many contacts of a kind the device has,
@@ -160,6 +216,7 @@ pub struct XrefIndex {
     refs: HashMap<SymbolId, Reference>,
     groups: HashMap<Owner, Group>,
     by_page: HashMap<PageId, Vec<SymbolId>>,
+    structures: HashMap<PageId, String>,
 }
 
 const LIMITED_KINDS: [ContactKind; 4] = [
@@ -175,11 +232,16 @@ impl XrefIndex {
             revision: project.revision(),
             ..XrefIndex::default()
         };
-        let page_rank: HashMap<PageId, usize> = project
-            .pages_in_order()
-            .into_iter()
+        let pages = project.pages_in_order();
+        let page_rank: HashMap<PageId, usize> = pages
+            .iter()
             .enumerate()
             .map(|(rank, p)| (p.id, rank))
+            .collect();
+        index.structures = pages
+            .iter()
+            .map(|p| (p.id, page_structure(p)))
+            .filter(|(_, s)| !s.is_empty())
             .collect();
 
         let mut found = Vec::new();
@@ -251,6 +313,7 @@ impl XrefIndex {
                     main,
                     kind,
                     pins,
+                    structure: index.structures.get(&sym.page).cloned().unwrap_or_default(),
                     location,
                     order,
                 },
@@ -372,7 +435,7 @@ impl XrefIndex {
                 let mut lines: Vec<String> = self
                     .contact_image(*device)
                     .into_iter()
-                    .map(Reference::row)
+                    .map(|r| r.row_from(&me.structure))
                     .collect();
                 for &(kind, drawn, available) in &self.groups[&me.owner].over {
                     warning = true;
@@ -385,8 +448,11 @@ impl XrefIndex {
             }
             Owner::Device(_) if !me.kind.is_contact() => Vec::new(),
             _ => {
-                let targets: Vec<String> =
-                    self.partners(symbol).iter().map(|r| r.target()).collect();
+                let targets: Vec<String> = self
+                    .partners(symbol)
+                    .iter()
+                    .map(|r| r.target_from(&me.structure))
+                    .collect();
                 if targets.is_empty() {
                     Vec::new()
                 } else {
@@ -440,6 +506,7 @@ impl XrefIndex {
                 .get(owner)
                 .map(|g| g.name.clone())
                 .unwrap_or_default(),
+            reader: self.structures.get(&page).cloned().unwrap_or_default(),
             ..Highlight::default()
         };
         for r in self.group_refs(owner) {
@@ -468,6 +535,30 @@ impl XrefIndex {
                 _ => None,
             })
             .collect()
+    }
+
+    /// Ctrl+K with an exact tag, then Enter: the device's main location to
+    /// jump to (its coil, else its first occurrence) and every other
+    /// location to list. `None` unless the best search hit is a device
+    /// matching exactly and drawn somewhere.
+    pub fn go_to_tag<'i>(&'i self, project: &Project, query: &str) -> Option<TagJump<'i>> {
+        let hit = project.search(query).into_iter().next()?;
+        let AnyId::Device(device) = hit.id else {
+            return None;
+        };
+        if hit.quality != Match::Exact {
+            return None;
+        }
+        let mut all = self.device_references(device);
+        if all.is_empty() {
+            return None;
+        }
+        let main = all.remove(0);
+        Some(TagJump {
+            device,
+            main,
+            others: all,
+        })
     }
 
     /// Unresolved references, for the design checks (WS-14), in reading

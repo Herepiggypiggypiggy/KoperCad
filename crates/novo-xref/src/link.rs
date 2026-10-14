@@ -1,5 +1,9 @@
-//! "Link cross reference": right click a contact, coil or interruption
-//! point, then click its partner.
+//! Giving a symbol its owner. References follow ownership (DESIGN.md §2):
+//! a contact refers to its coil because it belongs to the coil's device, so
+//! "linking" is only ever setting that owner. The editor does it when the
+//! user types the tag in place or drops a contact on a coil; the "Link
+//! cross reference" command (pick the partner with the next click) is the
+//! fallback for symbols placed before their device existed.
 
 use novo_core::{
     AnyId, Command, DeviceId, Project, Record, SymbolId, SymbolInstance, SymbolRole, natural_cmp,

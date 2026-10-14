@@ -571,3 +571,47 @@ fn ten_thousand_symbols() {
     assert!(took.as_secs_f64() < 2.0, "index build took {took:?}");
     eprintln!("xref index over 10k symbols: {took:?}");
 }
+
+#[test]
+fn structure_prefix_only_when_it_differs() {
+    let mut doc = Document::default();
+    let ((coil_sym, near, far), _) = doc
+        .transact("Draw", |tx| {
+            let p1 = tx.add_page("1")?;
+            let p2 = tx.add_page("2")?;
+            let p3 = tx.add_page("3")?;
+            for (p, f) in [(p1, "A1"), (p2, "A1"), (p3, "A2")] {
+                tx.set_property(p, novo_xref::PAGE_FUNCTION_PROPERTY, Some(f.into()))?;
+            }
+            let k1 = tx.add_device(DeviceTag::parse("=A1-K1")?, "")?;
+            let c = coil(tx, p1, 10.0, k1);
+            let near = contact(tx, p2, 10.0, "iec/contacts/no", ["13", "14"], k1);
+            let far = contact(tx, p3, 10.0, "iec/contacts/nc", ["21", "22"], k1);
+            Ok((c, near, far))
+        })
+        .unwrap();
+    let x = XrefIndex::build(doc.project(), &FromKey);
+    assert_eq!(
+        x.label(coil_sym).unwrap().lines,
+        ["NO 13-14 /2.1", "NC 21-22 =A2/3.1"]
+    );
+    assert_eq!(x.label(near).unwrap().lines, ["/1.1"]);
+    assert_eq!(x.label(far).unwrap().lines, ["=A1/1.1"]);
+    assert_eq!(
+        x.highlight(coil_sym).status_text(),
+        "=A1-K1 elsewhere: NO 13-14 /2.1, NC 21-22 =A2/3.1"
+    );
+}
+
+#[test]
+fn exact_tag_jumps_to_the_main_location() {
+    let f = fixture();
+    let p = f.doc.project();
+    let x = XrefIndex::build(p, &FromKey);
+    let jump = x.go_to_tag(p, "-K1").unwrap();
+    assert_eq!(jump.device, f.k1);
+    assert_eq!(jump.main.symbol, f.k1_coil);
+    assert_eq!(jump.others.len(), 3);
+    assert!(x.go_to_tag(p, "-K").is_none()); // only a prefix
+    assert!(x.go_to_tag(p, "-Q9").is_none());
+}
