@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::geom::{Direction, Placement, Point, Rotation};
 use crate::id::{
-    AnyId, CableId, DeviceId, JunctionId, PageId, PartId, PotentialId, SymbolId, TerminalId,
-    TextId, WireId,
+    AnyId, CableId, DeviceId, JunctionId, PageId, PartId, PotentialId, PotentialSystemId, SymbolId,
+    TerminalId, TextId, WireId,
 };
 use crate::tag::DeviceTag;
 
@@ -391,6 +391,9 @@ pub struct SymbolInstance {
     /// apart.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pass_through: Vec<Vec<u16>>,
+    /// Pins that define a potential on their net, sorted by pin.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub feeds: Vec<PinFeed>,
     #[serde(default)]
     pub properties: Properties,
 }
@@ -705,6 +708,15 @@ pub enum PotentialSet {
 }
 
 impl PotentialSet {
+    /// The set's voltage: line-to-line for three-phase.
+    pub fn voltage(self) -> f64 {
+        match self {
+            PotentialSet::ThreePhase { voltage, .. }
+            | PotentialSet::SinglePhase { voltage }
+            | PotentialSet::Dc { voltage } => voltage,
+        }
+    }
+
     pub fn specs(self) -> Vec<PotentialSpec> {
         use PotentialKind::*;
         let spec = PotentialSpec::new;
@@ -742,6 +754,33 @@ impl PotentialSet {
             ],
         }
     }
+}
+
+/// A supply system: the potentials that belong together (L1, L2, L3, N,
+/// PE) with the system's voltage, declared once at its source.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PotentialSystem {
+    pub id: PotentialSystemId,
+    /// E.g. `400 V 3/N/PE AC`.
+    pub name: String,
+    /// Line-to-line voltage in volts (DC: the supply voltage).
+    #[serde(default)]
+    pub voltage: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frequency_hz: Option<f64>,
+    /// The system's potentials in conductor order (L1, L2, L3, N, PE).
+    #[serde(default)]
+    pub members: Vec<PotentialId>,
+    #[serde(default)]
+    pub properties: Properties,
+}
+
+/// A pin that defines a potential: the output of a supply, transformer or
+/// power supply, so a source is not a separate feed symbol.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct PinFeed {
+    pub pin: u16,
+    pub potential: PotentialId,
 }
 
 /// A named potential (`L1`, `N`, `PE`, `24V`, `0V`).
@@ -794,6 +833,10 @@ pub struct Terminal {
     /// and accessories.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub part: Option<PartId>,
+    /// A potential this terminal feeds into its net (an incoming supply
+    /// terminal), declared explicitly rather than read from its name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feed: Option<PotentialId>,
     #[serde(default)]
     pub properties: Properties,
 }

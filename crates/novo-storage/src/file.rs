@@ -510,6 +510,7 @@ pub(crate) fn kind_name(kind: EntityKind) -> &'static str {
         EntityKind::Cable => "cable",
         EntityKind::Part => "part",
         EntityKind::Text => "text",
+        EntityKind::PotentialSystem => "potential_system",
     }
 }
 

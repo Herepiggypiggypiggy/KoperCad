@@ -43,7 +43,7 @@ pub enum ModelError {
     DuplicateTerminal(TerminalId),
     #[error("{0} connects an endpoint to itself")]
     SelfConnection(WireId),
-    #[error("{wires} wire(s) but only {potentials} potential(s) to assign")]
+    #[error("{wires} wire(s) or pin(s) but only {potentials} potential(s) to assign")]
     TooFewPotentials { wires: usize, potentials: usize },
     #[error(
         "{symbol} lists {terminals} terminal(s) but has {bridges} bridge group(s); a multi-level terminal needs one group per distinct terminal"

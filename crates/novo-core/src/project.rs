@@ -4,15 +4,15 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::entity::{
-    Cable, Device, DeviceKind, Endpoint, Junction, Page, Part, PinRef, Potential, ProjectInfo,
-    SameName, SymbolInstance, SymbolRole, Terminal, Text, Wire,
+    Cable, Device, DeviceKind, Endpoint, Junction, Page, Part, PinRef, Potential, PotentialSystem,
+    ProjectInfo, SameName, SymbolInstance, SymbolRole, Terminal, Text, Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::Point;
 use crate::graph::Netlist;
 use crate::id::{
-    AnyId, CableId, DeviceId, EntityKind, JunctionId, PageId, PartId, PotentialId, SymbolId,
-    TerminalId, TextId, WireId,
+    AnyId, CableId, DeviceId, EntityKind, JunctionId, PageId, PartId, PotentialId,
+    PotentialSystemId, SymbolId, TerminalId, TextId, WireId,
 };
 use crate::record::{Entity, Op, Record, Transaction, sealed::Token};
 use crate::tag::DeviceTag;
@@ -38,6 +38,7 @@ pub struct Project {
     pub(crate) symbols: BTreeMap<SymbolId, SymbolInstance>,
     pub(crate) junctions: BTreeMap<JunctionId, Junction>,
     pub(crate) texts: BTreeMap<TextId, Text>,
+    pub(crate) potential_systems: BTreeMap<PotentialSystemId, PotentialSystem>,
     pub(crate) wires: BTreeMap<WireId, Wire>,
     pub(crate) potentials: BTreeMap<PotentialId, Potential>,
     pub(crate) terminals: BTreeMap<TerminalId, Terminal>,
@@ -302,6 +303,7 @@ impl Project {
             Record::Symbol(r) => put(self, r),
             Record::Junction(r) => put(self, r),
             Record::Text(r) => put(self, r),
+            Record::PotentialSystem(r) => put(self, r),
             Record::Wire(r) => put(self, r),
             Record::Potential(r) => put(self, r),
             Record::Terminal(r) => put(self, r),
@@ -320,6 +322,7 @@ impl Project {
             AnyId::Symbol(id) => take::<SymbolInstance>(self, id),
             AnyId::Junction(id) => take::<Junction>(self, id),
             AnyId::Text(id) => take::<Text>(self, id),
+            AnyId::PotentialSystem(id) => take::<PotentialSystem>(self, id),
             AnyId::Wire(id) => take::<Wire>(self, id),
             AnyId::Potential(id) => take::<Potential>(self, id),
             AnyId::Terminal(id) => take::<Terminal>(self, id),
@@ -371,15 +374,28 @@ impl Project {
                         bridges: symbol.bridges.len(),
                     });
                 }
-                for group in symbol.bridges.iter().chain(&symbol.pass_through) {
-                    for &pin in group {
-                        if usize::from(pin) >= symbol.pins.len() {
-                            return Err(ModelError::InvalidPin {
-                                symbol: symbol.id,
-                                pin,
-                            });
-                        }
+                let feed_pins = symbol.feeds.iter().map(|f| f.pin);
+                for pin in symbol
+                    .bridges
+                    .iter()
+                    .chain(&symbol.pass_through)
+                    .flatten()
+                    .copied()
+                    .chain(feed_pins)
+                {
+                    if usize::from(pin) >= symbol.pins.len() {
+                        return Err(ModelError::InvalidPin {
+                            symbol: symbol.id,
+                            pin,
+                        });
                     }
+                }
+                if symbol.feeds.windows(2).any(|w| w[0].pin >= w[1].pin) {
+                    // One potential per pin, kept sorted for stable files.
+                    return Err(ModelError::InvalidValue {
+                        id: symbol.id.into(),
+                        field: "feeds",
+                    });
                 }
                 if current.is_some() {
                     // Wires already on this symbol must stay valid.
@@ -521,6 +537,19 @@ impl Project {
                     });
                 }
             }
+            Record::PotentialSystem(system) => {
+                let members = &system.members;
+                if members
+                    .iter()
+                    .enumerate()
+                    .any(|(i, m)| members[..i].contains(m))
+                {
+                    return Err(ModelError::InvalidValue {
+                        id: system.id.into(),
+                        field: "members",
+                    });
+                }
+            }
             Record::Potential(_) | Record::Part(_) => {}
         }
         // Texts attached to this object must stay on its page.
@@ -575,6 +604,7 @@ impl Project {
             AnyId::Symbol(id) => self.symbols.contains_key(&id),
             AnyId::Junction(id) => self.junctions.contains_key(&id),
             AnyId::Text(id) => self.texts.contains_key(&id),
+            AnyId::PotentialSystem(id) => self.potential_systems.contains_key(&id),
             AnyId::Wire(id) => self.wires.contains_key(&id),
             AnyId::Potential(id) => self.potentials.contains_key(&id),
             AnyId::Terminal(id) => self.terminals.contains_key(&id),
@@ -591,6 +621,11 @@ impl Project {
             AnyId::Symbol(id) => self.symbols.get(&id).cloned().map(Record::Symbol),
             AnyId::Junction(id) => self.junctions.get(&id).cloned().map(Record::Junction),
             AnyId::Text(id) => self.texts.get(&id).cloned().map(Record::Text),
+            AnyId::PotentialSystem(id) => self
+                .potential_systems
+                .get(&id)
+                .cloned()
+                .map(Record::PotentialSystem),
             AnyId::Wire(id) => self.wires.get(&id).cloned().map(Record::Wire),
             AnyId::Potential(id) => self.potentials.get(&id).cloned().map(Record::Potential),
             AnyId::Terminal(id) => self.terminals.get(&id).cloned().map(Record::Terminal),
@@ -614,6 +649,11 @@ impl Project {
         let wires = self.wires.values().cloned().map(Record::Wire);
         let cables = self.cables.values().cloned().map(Record::Cable);
         let texts = self.texts.values().cloned().map(Record::Text);
+        let systems = self
+            .potential_systems
+            .values()
+            .cloned()
+            .map(Record::PotentialSystem);
         parts
             .chain(potentials)
             .chain(pages)
@@ -624,6 +664,7 @@ impl Project {
             .chain(wires)
             .chain(cables)
             .chain(texts)
+            .chain(systems)
     }
 
     /// Rebuilds a project from stored records, in any order, checking every
@@ -688,6 +729,19 @@ impl Project {
     }
     pub fn texts(&self) -> impl Iterator<Item = &Text> {
         self.texts.values()
+    }
+    pub fn potential_system(&self, id: PotentialSystemId) -> Option<&PotentialSystem> {
+        self.potential_systems.get(&id)
+    }
+    pub fn potential_systems(&self) -> impl Iterator<Item = &PotentialSystem> {
+        self.potential_systems.values()
+    }
+    /// The supply system a potential belongs to, if any.
+    pub fn system_of(&self, potential: PotentialId) -> Option<&PotentialSystem> {
+        self.referrers(potential).find_map(|id| match id {
+            AnyId::PotentialSystem(s) => self.potential_systems.get(&s),
+            _ => None,
+        })
     }
     pub fn junctions(&self) -> impl Iterator<Item = &Junction> {
         self.junctions.values()

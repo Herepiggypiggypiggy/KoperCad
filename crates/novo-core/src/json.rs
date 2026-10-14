@@ -6,8 +6,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::entity::{
-    Cable, Device, Junction, Page, Part, Potential, ProjectInfo, SymbolInstance, Terminal, Text,
-    Wire,
+    Cable, Device, Junction, Page, Part, Potential, PotentialSystem, ProjectInfo, SymbolInstance,
+    Terminal, Text, Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::project::Project;
@@ -41,6 +41,8 @@ struct ProjectJson {
     cables: Vec<Cable>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     texts: Vec<Text>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    potential_systems: Vec<PotentialSystem>,
 }
 
 impl Project {
@@ -61,6 +63,7 @@ impl Project {
             wires: self.wires.values().cloned().collect(),
             cables: self.cables.values().cloned().collect(),
             texts: self.texts.values().cloned().collect(),
+            potential_systems: self.potential_systems.values().cloned().collect(),
         };
         serde_json::to_string_pretty(&file).expect("project serializes to JSON")
     }
@@ -84,7 +87,12 @@ impl Project {
             .chain(file.junctions.into_iter().map(Record::Junction))
             .chain(file.wires.into_iter().map(Record::Wire))
             .chain(file.cables.into_iter().map(Record::Cable))
-            .chain(file.texts.into_iter().map(Record::Text));
+            .chain(file.texts.into_iter().map(Record::Text))
+            .chain(
+                file.potential_systems
+                    .into_iter()
+                    .map(Record::PotentialSystem),
+            );
         Project::from_records(file.info, file.next_id, records)
     }
 }

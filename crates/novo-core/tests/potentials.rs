@@ -234,3 +234,138 @@ fn potential_sets_and_wires_round_trip_through_json() {
     let loaded = Project::from_json(&doc.project().to_json()).unwrap();
     assert!(loaded.wire(wires[0]).unwrap().potential.is_some());
 }
+
+#[test]
+fn a_source_declares_its_system_once() {
+    let mut doc = Document::default();
+    let (page, wires, _) = wires(&mut doc, 3);
+    let created = doc
+        .execute(Command::AddPotentialSystem {
+            name: "400 V 3/N/PE AC".into(),
+            set: PotentialSet::ThreePhase {
+                voltage: 400.0,
+                neutral: true,
+                pe: true,
+                pen: false,
+            },
+            frequency_hz: Some(50.0),
+        })
+        .unwrap()
+        .created;
+    let AnyId::PotentialSystem(system) = created[0] else {
+        panic!("{created:?}")
+    };
+    assert_eq!(created.len(), 6, "the system and its five potentials");
+    let project = doc.project();
+    let members = project.potential_system(system).unwrap().members.clone();
+    let names: Vec<&str> = members
+        .iter()
+        .map(|&p| project.potential(p).unwrap().name.as_str())
+        .collect();
+    assert_eq!(names, ["L1", "L2", "L3", "N", "PE"]);
+    assert_eq!(project.system_of(members[0]).unwrap().id, system);
+    assert_eq!(
+        project.potential_system(system).unwrap().voltage,
+        Some(400.0)
+    );
+
+    // A supply symbol with five outputs, wired to the three loads' wires.
+    let (supply, _) = doc
+        .transact("Supply", |tx| {
+            let pins = (0..5)
+                .map(|i| Pin::new(format!("{i}"), 10.0 * f64::from(i), 0.0))
+                .collect();
+            let supply = tx.place_symbol(
+                page,
+                "iec/sources/supply",
+                Placement::at(Point::new(0.0, -50.0)),
+                pins,
+                SymbolRole::Unassigned,
+            )?;
+            for (i, &wire) in wires.iter().enumerate() {
+                let start = tx.project().wire(wire).unwrap().from;
+                tx.connect(Endpoint::pin(supply, i as u16), start)?;
+            }
+            Ok(supply)
+        })
+        .unwrap();
+    doc.execute(Command::FeedSystem {
+        symbol: supply,
+        pins: vec![0, 1, 2, 3, 4],
+        system,
+    })
+    .unwrap();
+    let net = doc.project().netlist();
+    for (i, &wire) in wires.iter().enumerate() {
+        let start = doc.project().wire(wire).unwrap().from;
+        assert_eq!(net.potential_of(start), Some(members[i]));
+    }
+    assert_eq!(net.potential_conflicts().count(), 0);
+
+    // More pins than the system has potentials is refused.
+    assert!(
+        doc.execute(Command::FeedSystem {
+            symbol: supply,
+            pins: vec![0, 1, 2, 3, 4, 5],
+            system,
+        })
+        .is_err()
+    );
+    // A pin outside the symbol is refused.
+    assert!(
+        doc.execute(Command::SetPinFeed {
+            symbol: supply,
+            pin: 9,
+            potential: Some(members[0]),
+        })
+        .is_err()
+    );
+
+    // Deleting a potential removes it from the system and the source, not
+    // the source itself; the save keeps the rest.
+    doc.transact("Drop N", |tx| tx.remove(members[3])).unwrap();
+    let project = doc.project();
+    assert_eq!(project.potential_system(system).unwrap().members.len(), 4);
+    let feeds = &project.symbol(supply).unwrap().feeds;
+    assert_eq!(feeds.len(), 4);
+    assert!(feeds.iter().all(|f| f.potential != members[3]));
+    let loaded = Project::from_json(&project.to_json()).unwrap();
+    assert_eq!(loaded.to_json(), project.to_json());
+}
+
+#[test]
+fn a_supply_terminal_feeds_its_net() {
+    let mut doc = Document::new(Project::default());
+    let (page, _, _) = wires(&mut doc, 0);
+    let ((terminal, block, l1), _) = doc
+        .transact("Incoming", |tx| {
+            let l1 = tx.add_potential("L1", PotentialKind::Line)?;
+            let x0 = tx.add_terminal_strip(DeviceTag::parse("-X0")?)?;
+            let terminal = tx.add_terminal(x0, "1")?;
+            let block = tx.place_symbol(
+                page,
+                "iec/terminals/terminal",
+                Placement::at(Point::new(0.0, 0.0)),
+                vec![Pin::new("1", 0.0, 0.0), Pin::new("2", 0.0, 8.0)],
+                SymbolRole::Terminal {
+                    terminals: vec![terminal],
+                },
+            )?;
+            Ok((terminal, block, l1))
+        })
+        .unwrap();
+    let potential_at = |doc: &Document| {
+        doc.project()
+            .netlist()
+            .potential_of(Endpoint::pin(block, 0))
+    };
+    assert_eq!(potential_at(&doc), None);
+    doc.execute(Command::SetTerminalFeed {
+        terminal,
+        potential: Some(l1),
+    })
+    .unwrap();
+    assert_eq!(potential_at(&doc), Some(l1));
+    doc.transact("Drop L1", |tx| tx.remove(l1)).unwrap();
+    assert_eq!(doc.project().terminal(terminal).unwrap().feed, None);
+}

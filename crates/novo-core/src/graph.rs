@@ -13,7 +13,8 @@
 //!
 //! Contacts never join nets: whether a contact conducts is simulation state.
 //! A potential is defined on a net by a potential definition point
-//! (`SymbolRole::PotentialFeed`), a wire with `Wire::potential`, or a
+//! (`SymbolRole::PotentialFeed`), a source pin (`SymbolInstance::feeds`), a
+//! supply terminal (`Terminal::feed`), a wire with `Wire::potential`, or a
 //! terminal named like a supply potential (`-X4:PE` defines `PE`) when
 //! [`PotentialRules::from_terminal_names`](crate::PotentialRules) is on. A
 //! potential carries on through switched poles (`SymbolInstance::pass_through`), so the
@@ -314,6 +315,14 @@ impl Netlist {
                 }
             }
         }
+        // Source pins define their potential on the pin's net.
+        for symbol in project.symbols() {
+            let base = first_pin[&symbol.id];
+            for feed in &symbol.feeds {
+                let net = by_endpoint[&endpoints[base + usize::from(feed.pin)]].0 as usize;
+                nets[net].defined.push(feed.potential);
+            }
+        }
         // Wires with a potential define it on their net.
         for wire in project.wires() {
             if let Some(potential) = wire.potential {
@@ -332,6 +341,13 @@ impl Netlist {
                 by_name
             });
         for terminal in project.terminals() {
+            if let (Some(potential), Some(&node)) = (
+                terminal.feed,
+                by_terminal.get(&terminal.id).and_then(|n| n.first()),
+            ) {
+                let net = by_endpoint[&endpoints[node]].0 as usize;
+                nets[net].defined.push(potential);
+            }
             if let (Some(potentials), Some(nodes)) = (
                 supply.get(terminal.name.as_str()),
                 by_terminal.get(&terminal.id),
