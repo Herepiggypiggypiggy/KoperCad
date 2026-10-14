@@ -2,7 +2,7 @@
 # merged in PR order. Published to the `experimental` pre-release, which the
 # desktop launcher (scripts/run-latest.ps1) downloads. It is deliberately
 # unverified: PRs that conflict are skipped, and if the combined build fails
-# it falls back to main alone.
+# the PRs that break it are dropped one by one.
 #
 # PR code (build scripts, proc macros) runs only in the read-only `build`
 # job; the write token exists only in `publish`, which runs no PR code.
@@ -27,6 +27,10 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # Speed over the last few percent of runtime: this build is unverified
+  # anyway, and thin LTO with one codegen unit roughly doubles link time.
+  CARGO_PROFILE_RELEASE_LTO: "false"
+  CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
 
 jobs:
   build:
@@ -52,39 +56,65 @@ jobs:
         run: |
           git config user.name "NovoElectric experimental build"
           git config user.email "noreply@github.com"
-          echo "main $(git rev-parse --short HEAD)" > merged.txt
-          : > skipped.txt
+          state="$(cygpath -u "$RUNNER_TEMP")/experimental"
+          mkdir -p "$state"
+          export state
+          echo "state=$state" >> "$GITHUB_ENV"
           gh api "repos/${{ github.repository }}/pulls?state=open&per_page=100" \
             --jq '.[] | select(.head.repo.full_name == "${{ github.repository }}") | "\(.number)\t\(.title)"' \
-            | sort -n > prs.tsv
+            | sort -n > "$state/prs.tsv"
+          # Merges every open PR onto HEAD in PR order. With "check", a PR
+          # whose merge stops novo-app from compiling is dropped again, so
+          # one broken PR no longer takes every other PR out of the build.
+          # Kept outside the work tree: merged PRs cannot change it.
+          cat > "$state/merge-prs.sh" <<'SCRIPT'
+          set -u
+          check="${1:-}"
+          echo "main $(git rev-parse --short HEAD)" > "$state/merged.txt"
+          : > "$state/skipped.txt"
           while IFS=$'\t' read -r n title; do
             git fetch -q origin "pull/$n/head"
-            if git merge -q --no-edit FETCH_HEAD; then
-              echo "#$n $(git rev-parse --short FETCH_HEAD) $title" >> merged.txt
-            elif [ "$(git diff --name-only --diff-filter=U)" = "Cargo.lock" ]; then
-              # Lock-only clash: keep ours, cargo re-resolves it during the build.
-              git checkout --ours Cargo.lock && git add Cargo.lock
-              git commit -q --no-edit
-              echo "#$n $(git rev-parse --short FETCH_HEAD) $title (Cargo.lock regenerated)" >> merged.txt
-            else
-              git merge --abort
-              echo "#$n $title (merge conflict)" >> skipped.txt
+            before=$(git rev-parse HEAD)
+            note=""
+            if ! git merge -q --no-edit FETCH_HEAD; then
+              if [ "$(git diff --name-only --diff-filter=U)" = "Cargo.lock" ]; then
+                # Lock-only clash: keep ours, cargo re-resolves it during the build.
+                git checkout --ours Cargo.lock && git add Cargo.lock
+                git commit -q --no-edit
+                note=" (Cargo.lock regenerated)"
+              else
+                git merge --abort
+                echo "#$n $title (merge conflict)" >> "$state/skipped.txt"
+                continue
+              fi
             fi
-          done < prs.tsv
-          cat merged.txt skipped.txt
+            if [ "$check" = check ] && ! cargo check -q -p novo-app; then
+              git reset -q --hard "$before"
+              echo "#$n $title (does not compile with the PRs before it)" >> "$state/skipped.txt"
+              continue
+            fi
+            echo "#$n $(git rev-parse --short FETCH_HEAD) $title$note" >> "$state/merged.txt"
+          done < "$state/prs.tsv"
+          cat "$state/merged.txt" "$state/skipped.txt"
+          SCRIPT
+          bash "$state/merge-prs.sh"
 
       - name: Build (main + open PRs)
         id: combined
         continue-on-error: true
         run: cargo build --release -p novo-app
 
-      - name: Fall back to main alone
+      - name: Drop the PRs that break the build
         if: steps.combined.outcome == 'failure'
         run: |
           git reset -q --hard origin/main
-          echo "Combined build failed; this build is main only." >> skipped.txt
-          echo "main $(git rev-parse --short HEAD)" > merged.txt
-          cargo build --release -p novo-app
+          bash "$state/merge-prs.sh" check
+          if ! cargo build --release -p novo-app; then
+            git reset -q --hard origin/main
+            echo "main $(git rev-parse --short HEAD)" > "$state/merged.txt"
+            echo "Release build failed with the remaining PRs; this build is main only." >> "$state/skipped.txt"
+            cargo build --release -p novo-app
+          fi
 
       - name: Build canvas stress demo (for the GPU check on real hardware)
         continue-on-error: true
@@ -100,8 +130,8 @@ jobs:
             echo "NovoElectric experimental build $stamp"
             echo
             echo "Included:"
-            cat merged.txt
-            if [ -s skipped.txt ]; then echo; echo "Skipped:"; cat skipped.txt; fi
+            cat "$state/merged.txt"
+            if [ -s "$state/skipped.txt" ]; then echo; echo "Skipped:"; cat "$state/skipped.txt"; fi
           } > dist/BUILD_INFO.txt
           cp dist/BUILD_INFO.txt out/
           printf '{"built":"%s","run":"%s","tree":"%s"}\n' "$stamp" "${{ github.run_id }}" "$(git rev-parse HEAD)" > out/build-info.json

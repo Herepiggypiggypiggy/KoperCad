@@ -14,6 +14,13 @@ on:
       - ".github/workflows/package-windows.yml"
   workflow_dispatch:
 
+# A newer push to the same pull request supersedes the running check, so
+# stale runs stop holding runners (and the experimental build's publish job
+# no longer queues behind them). Runs on main are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   CARGO_TERM_COLOR: always
 
