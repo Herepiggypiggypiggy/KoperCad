@@ -231,7 +231,8 @@ pub enum SymbolRole {
     /// One or more terminals of a terminal strip. A single-level terminal
     /// has one entry. A multi-level terminal block lists one terminal per
     /// level: `terminals[i]` owns the pins of `bridges[i]`, so the levels stay
-    /// separate nets. A single terminal owns every pin.
+    /// separate nets. A single terminal owns every pin and allows at most
+    /// one bridge group; more groups need one terminal each.
     Terminal { terminals: Vec<TerminalId> },
     /// An interruption point (off-page connector). All interruption points
     /// with the same name are electrically one node.

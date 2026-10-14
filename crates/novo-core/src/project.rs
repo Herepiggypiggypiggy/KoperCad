@@ -327,7 +327,8 @@ impl Project {
             Record::Symbol(symbol) => {
                 if let SymbolRole::Terminal { terminals } = &symbol.role
                     && (terminals.is_empty()
-                        || (terminals.len() > 1 && terminals.len() != symbol.bridges.len())
+                        || ((terminals.len() > 1 || symbol.bridges.len() > 1)
+                            && terminals.len() != symbol.bridges.len())
                         || terminals
                             .iter()
                             .enumerate()

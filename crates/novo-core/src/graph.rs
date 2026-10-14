@@ -33,16 +33,22 @@ pub struct Net {
     pub endpoints: Vec<Endpoint>,
     /// Wires inside the net, sorted.
     pub wires: Vec<WireId>,
-    /// Potentials this net carries, sorted: those defined on it plus those
-    /// passed through contacts, breakers and fuses. More than one means two
-    /// potentials meet (a short, or one waiting behind an open contact).
+    /// The net's potentials, sorted: `defined` when the net has its own
+    /// definition, otherwise `carried`. What a wire label shows.
     pub potentials: Vec<PotentialId>,
     /// Potentials defined by a potential definition point in this net itself.
+    /// More than one is a short.
     pub defined: Vec<PotentialId>,
+    /// Potentials that reach this net through contacts, breakers and fuses,
+    /// sorted; empty when the net defines its own. More than one means the
+    /// net is switched between them (a changeover, a reversing starter), which
+    /// is not a short.
+    pub carried: Vec<PotentialId>,
 }
 
 impl Net {
-    /// The net's potential when exactly one is assigned.
+    /// The net's potential when exactly one applies; `None` for a net without
+    /// one, a short, or a net switched between several.
     pub fn potential(&self) -> Option<PotentialId> {
         match self.potentials.as_slice() {
             [single] => Some(*single),
@@ -75,9 +81,10 @@ struct PassEdge {
 /// back out of the pin it arrived on or through the same pole again, so the
 /// break and make sides of a changeover contact stay apart (fed from the
 /// common, the potential still reaches both), while poles wired in series
-/// pass it on. Within one group every pin passes to every other, so a
+/// pass it on. The walk stops at nets that define their own potential.
+/// Returns the nets reached, starting nets excluded. Within one group every pin passes to every other, so a
 /// changeover needs two groups (`[common, break]`, `[common, make]`), not one.
-fn carried_nets(edges: &[Vec<PassEdge>], starts: &[usize]) -> Vec<usize> {
+fn carried_nets(edges: &[Vec<PassEdge>], starts: &[usize], defines: &[bool]) -> Vec<usize> {
     type Arrival = Option<(SymbolId, usize, u16)>;
     let mut seen: std::collections::HashSet<(usize, Arrival)> = Default::default();
     let mut reached = vec![false; edges.len()];
@@ -87,7 +94,12 @@ fn carried_nets(edges: &[Vec<PassEdge>], starts: &[usize]) -> Vec<usize> {
             continue;
         }
         let (net, arrival) = state;
-        reached[net] = true;
+        if arrival.is_some() {
+            if defines[net] {
+                continue;
+            }
+            reached[net] = true;
+        }
         for edge in &edges[net] {
             let blocked = arrival.is_some_and(|(symbol, group, pin)| {
                 symbol == edge.symbol && (group == edge.group || pin == edge.from_pin)
@@ -224,6 +236,7 @@ impl Netlist {
                     wires: Vec::new(),
                     potentials: Vec::new(),
                     defined: Vec::new(),
+                    carried: Vec::new(),
                 });
                 id
             });
@@ -271,9 +284,10 @@ impl Netlist {
                     }
                     feeds
                 });
+        let defines: Vec<bool> = nets.iter().map(|n| !n.defined.is_empty()).collect();
         for (potential, starts) in feeds {
-            for net in carried_nets(&edges, &starts) {
-                nets[net].potentials.push(potential);
+            for net in carried_nets(&edges, &starts, &defines) {
+                nets[net].carried.push(potential);
             }
         }
         for net in &mut nets {
@@ -281,8 +295,13 @@ impl Netlist {
             net.wires.sort();
             net.defined.sort();
             net.defined.dedup();
-            net.potentials.sort();
-            net.potentials.dedup();
+            net.carried.sort();
+            net.carried.dedup();
+            net.potentials = if net.defined.is_empty() {
+                net.carried.clone()
+            } else {
+                net.defined.clone()
+            };
         }
         Netlist {
             revision: project.revision(),
@@ -334,9 +353,10 @@ impl Netlist {
             .filter(move |n| n.potentials.contains(&potential))
     }
 
-    /// Nets where two or more potentials meet (a short between them).
+    /// Nets where two or more potentials are defined (a short between them).
+    /// A net switched between potentials (`Net::carried`) is not a conflict.
     pub fn potential_conflicts(&self) -> impl Iterator<Item = &Net> {
-        self.nets.iter().filter(|n| n.potentials.len() > 1)
+        self.nets.iter().filter(|n| n.defined.len() > 1)
     }
 
     /// Devices with a pin in the net, sorted, each once.

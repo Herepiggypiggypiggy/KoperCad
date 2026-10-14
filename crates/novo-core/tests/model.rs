@@ -1205,12 +1205,33 @@ fn multi_level_terminals_keep_levels_apart() {
         .unwrap_err();
     assert!(matches!(err, ModelError::TerminalLevels { .. }));
 
+    // A single terminal on a block with two levels is refused: both levels
+    // would show the same designation.
+    let err = doc
+        .transact("x", |tx| {
+            tx.update::<SymbolInstance>(block, |s| {
+                s.role = SymbolRole::Terminal {
+                    terminals: vec![upper],
+                }
+            })
+        })
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        ModelError::TerminalLevels {
+            terminals: 1,
+            bridges: 2,
+            ..
+        }
+    ));
+
     // A single terminal owns every pin, bridged or not.
     doc.transact("x", |tx| {
         tx.update::<SymbolInstance>(block, |s| {
             s.role = SymbolRole::Terminal {
                 terminals: vec![upper],
-            }
+            };
+            s.bridges = vec![vec![0, 1]];
         })
     })
     .unwrap();
@@ -1526,8 +1547,13 @@ fn changeover_keeps_break_and_make_potentials_apart() {
         };
         assert_eq!(potentials(contact, 1), vec![l1]);
         assert_eq!(potentials(contact, 2), vec![l2]);
-        // Both sides can reach the common, so it reports the meeting.
+        // The common is switched between both sides: information, not a short,
+        // and the feeds keep their own potential.
         assert_eq!(potentials(contact, 0), vec![l1, l2]);
+        assert_eq!(net.potential_of(Endpoint::pin(contact, 0)), None);
+        assert_eq!(net.potential_of(Endpoint::pin(contact, 1)), Some(l1));
+        assert_eq!(net.potential_of(Endpoint::pin(contact, 2)), Some(l2));
+        assert_eq!(net.potential_conflicts().count(), 0);
         // Fed from the common, the potential reaches both sides.
         assert_eq!(potentials(second, 1), vec![n]);
         assert_eq!(potentials(second, 2), vec![n]);
@@ -1569,4 +1595,61 @@ fn potentials_pass_through_poles_in_series() {
         .unwrap();
     let net = doc.project().netlist();
     assert_eq!(net.potential_of(Endpoint::pin(q1, 3)), Some(l1));
+}
+
+#[test]
+fn reversing_starter_switches_phases_without_a_short() {
+    // K1 takes L1 to U, K2 takes L3 to U: U is switched between them.
+    let mut doc = Document::default();
+    let ((l1, l3, k1, k2, motor), _) = doc
+        .transact("Reversing starter", |tx| {
+            let page = tx.add_page("1")?;
+            let mut feeds = Vec::new();
+            for (name, x) in [("L1", 0.0), ("L3", 20.0)] {
+                let potential = tx.add_potential(name, PotentialKind::Line)?;
+                let feed = tx.place_symbol(
+                    page,
+                    "iec/connectivity/potential_feed",
+                    at(x, 0.0),
+                    vec![Pin::new("1", 0.0, 0.0)],
+                    SymbolRole::PotentialFeed { potential },
+                )?;
+                let contact = tx.place_symbol(
+                    page,
+                    "iec/contacts/main",
+                    at(x, 20.0),
+                    two_pins(),
+                    SymbolRole::Unassigned,
+                )?;
+                tx.update::<SymbolInstance>(contact, |s| s.pass_through = vec![vec![0, 1]])?;
+                tx.connect(Endpoint::pin(feed, 0), Endpoint::pin(contact, 0))?;
+                feeds.push((potential, contact));
+            }
+            let motor = tx.place_symbol(
+                page,
+                "iec/motors/ac3",
+                at(10.0, 50.0),
+                two_pins(),
+                SymbolRole::Unassigned,
+            )?;
+            let [(l1, k1), (l3, k2)] = feeds[..] else {
+                unreachable!()
+            };
+            tx.connect(Endpoint::pin(k1, 1), Endpoint::pin(motor, 0))?;
+            tx.connect(Endpoint::pin(k2, 1), Endpoint::pin(motor, 0))?;
+            Ok((l1, l3, k1, k2, motor))
+        })
+        .unwrap();
+    let net = doc.project().netlist();
+    assert_eq!(net.potential_conflicts().count(), 0);
+    assert_eq!(net.potential_of(Endpoint::pin(k1, 0)), Some(l1));
+    assert_eq!(net.potential_of(Endpoint::pin(k2, 0)), Some(l3));
+    let u = net.net(net.net_of(Endpoint::pin(motor, 0)).unwrap());
+    assert_eq!(u.carried, vec![l1, l3]);
+    assert!(u.defined.is_empty());
+    assert_eq!(net.potential_of(Endpoint::pin(motor, 0)), None);
+    // Feed nets keep exactly their own potential, nothing carried in.
+    let l1_net = net.net(net.net_of(Endpoint::pin(k1, 0)).unwrap());
+    assert_eq!(l1_net.potentials, vec![l1]);
+    assert!(l1_net.carried.is_empty());
 }
