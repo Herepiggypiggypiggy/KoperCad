@@ -209,6 +209,9 @@ pub enum Scope {
     Anywhere,
     /// Only while the drawing has keyboard focus.
     Canvas,
+    /// While the drawing or a panel without a text field has focus. A text
+    /// field keeps the chord for itself (its own undo and redo).
+    OutsideText,
     /// Only while the command field is open in place mode with nothing
     /// typed yet (favourites 1 to 9), so typing `m3` or `13` still searches.
     PlaceFieldEmpty,
@@ -239,6 +242,7 @@ impl Focus {
         match scope {
             Scope::Anywhere => true,
             Scope::Canvas => self == Focus::Canvas,
+            Scope::OutsideText => !self.is_text_entry(),
             Scope::PlaceFieldEmpty => self == Focus::PlaceFieldEmpty,
         }
     }
@@ -296,11 +300,13 @@ impl Keymap {
         bind(Chord::ctrl(l('w')), Anywhere, "file.close");
         bind(Chord::ctrl(l('q')), Anywhere, "file.quit");
 
-        // Edit. Clipboard and selection chords belong to a text field
-        // while one has focus, so they are canvas-scoped.
-        bind(Chord::ctrl(l('z')), Anywhere, "edit.undo");
-        bind(Chord::ctrl_shift(l('z')), Anywhere, "edit.redo");
-        bind(Chord::ctrl(l('y')), Anywhere, "edit.redo");
+        // Edit. Undo and redo belong to a text field while one has focus
+        // (F2 tag editing, the command field), so the project's undo runs
+        // only outside text. Clipboard and selection chords are
+        // canvas-scoped for the same reason.
+        bind(Chord::ctrl(l('z')), OutsideText, "edit.undo");
+        bind(Chord::ctrl_shift(l('z')), OutsideText, "edit.redo");
+        bind(Chord::ctrl(l('y')), OutsideText, "edit.redo");
         bind(Chord::ctrl(l('c')), Canvas, "edit.copy");
         bind(Chord::ctrl(l('x')), Canvas, "edit.cut");
         bind(Chord::ctrl(l('v')), Canvas, "edit.paste");
@@ -346,7 +352,7 @@ impl Keymap {
         bind(Chord::ctrl(Digit(3)), Anywhere, "view.terminals_drawer");
         bind(Chord::ctrl(Digit(4)), Anywhere, "view.cables_drawer");
         bind(Chord::ctrl(Digit(5)), Anywhere, "view.devices_drawer");
-        bind(Chord::ctrl_shift(l('f')), Anywhere, "view.focus_mode");
+        bind(Chord::ctrl_shift(l('f')), Anywhere, "view.focus");
         bind(Chord::plain(F(11)), Anywhere, "view.full_screen");
         bind(Chord::ctrl(l('t')), Anywhere, "view.cabinet_table");
         Keymap { bindings }
@@ -454,6 +460,26 @@ mod tests {
             map.resolve(Chord::ctrl(Key::letter('c')), Focus::TextField),
             None
         );
+    }
+
+    #[test]
+    fn undo_and_redo_yield_to_text_fields() {
+        let map = Keymap::workflow();
+        let chords = [
+            (Chord::ctrl(Key::letter('z')), "edit.undo"),
+            (Chord::ctrl_shift(Key::letter('z')), "edit.redo"),
+            (Chord::ctrl(Key::letter('y')), "edit.redo"),
+        ];
+        for (chord, command) in chords {
+            // Typing in F2 tag editing or the command field: the field's
+            // own undo, not the project's.
+            assert_eq!(map.resolve(chord, Focus::TextField), None, "{chord}");
+            assert_eq!(map.resolve(chord, Focus::PlaceFieldEmpty), None, "{chord}");
+            // On the drawing or in a panel without a text field: the
+            // project's undo.
+            assert_eq!(map.resolve(chord, Focus::Canvas), Some(command), "{chord}");
+            assert_eq!(map.resolve(chord, Focus::Panel), Some(command), "{chord}");
+        }
     }
 
     #[test]

@@ -387,10 +387,17 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
-        "view.focus_mode",
+        "view.focus",
         "Focus mode",
         "View",
         &["distraction free"],
+        Needs::Nothing,
+    ),
+    cmd(
+        "view.pin_outline",
+        "Pin outline",
+        "View",
+        &["outline", "pages", "sidebar", "unpin"],
         Needs::Nothing,
     ),
     cmd(
@@ -527,7 +534,7 @@ mod tests {
             "proposal.next",
             "check.next_problem",
             "view.devices_drawer",
-            "view.focus_mode",
+            "view.focus",
         ] {
             assert!(map.shortcut_text(id).is_some(), "{id}");
         }

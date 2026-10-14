@@ -1,7 +1,10 @@
 //! WS-08 journeys against the Gate 1 motor starter (docs/WORKFLOW.md J4,
 //! J6 and J8).
 
-use novo_core::{AnyId, Document, Point, Project, SymbolRole};
+use novo_core::{
+    AnyId, DeviceTag, Document, Pin, Placement, Point, Project, SymbolRole, TextContent,
+    TextPlacement,
+};
 use novo_symbols::Library;
 use novo_tests::motor_starter;
 use novo_workflow::commands::Context;
@@ -232,10 +235,13 @@ fn duplicating_the_main_circuit_renumbers_without_asking() {
     assert_eq!(tag(copy.devices[&gate.f1]), "=A1+CAB-F4");
     assert_eq!(tag(copy.devices[&gate.f2]), "=A1+CAB-F5");
     assert_eq!(tag(copy.devices[&gate.m1]), "=A1+FLD-M2");
-    // K1's coil is on page 2, so its copied main contacts stay with -K1.
-    assert!(!copy.devices.contains_key(&gate.k1));
+    // K1's coil is on page 2, but its main poles were copied: they become
+    // a new contactor -K2 (flagged by the checker as having no coil), not
+    // a second set of main poles on -K1.
+    assert_eq!(tag(copy.devices[&gate.k1]), "=A1+CAB-K2");
     let k1_copy = project.symbol(copy.symbols[&gate.k1_main]).unwrap();
-    assert_eq!(k1_copy.device(), Some(gate.k1));
+    assert_eq!(k1_copy.device(), Some(copy.devices[&gate.k1]));
+    assert_eq!(project.symbols_of_device(gate.k1).len(), 3);
     // Terminals continue the strip, PE keeps its name.
     let names: Vec<String> = gate
         .x1_syms
@@ -256,10 +262,13 @@ fn duplicating_the_main_circuit_renumbers_without_asking() {
             .values()
             .all(|&w| project.wire(w).unwrap().number.is_none())
     );
-    // The copy connects like the original.
+    // The copy connects like the original, except for PE: the copied
+    // -X1:PE keeps its name, and new projects join terminals with the same
+    // name on one strip (the Join terminal rule), so the copy's PE net
+    // merges with the original's. That is right: PE is one conductor.
     assert_eq!(
         project.netlist().nets().len(),
-        before.netlist().nets().len() + page1_nets(&before, gate.main_page)
+        before.netlist().nets().len() + page1_nets(&before, gate.main_page) - 1
     );
 
     // One gesture, one undo step.
@@ -338,6 +347,167 @@ fn duplicating_a_coil_takes_its_contacts_along() {
         .map(locate::reference)
         .collect();
     assert_eq!(refs, ["/2.3", "/2.4"]);
+}
+
+#[test]
+fn a_lone_auxiliary_contact_stays_with_its_device() {
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let items = [AnyId::from(gate.k1_aux)];
+    let (copy, _) = doc
+        .transact("Smart duplicate", |tx| {
+            duplicate(
+                tx,
+                &items,
+                gate.control_page,
+                Point::new(84.0, 0.0),
+                TagMode::NextFree,
+            )
+        })
+        .unwrap();
+    let project = doc.project();
+    // A second 13/14 contact of -K1, not a new device.
+    assert!(copy.devices.is_empty());
+    assert_eq!(
+        project.symbol(copy.symbols[&gate.k1_aux]).unwrap().device(),
+        Some(gate.k1)
+    );
+    assert_eq!(project.symbols_of_device(gate.k1).len(), 4);
+}
+
+#[test]
+fn duplicate_copies_attached_texts_with_their_objects() {
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let page1 = doc.project().page_contents(gate.main_page);
+    let wire = page1.wires[0];
+    let label = TextPlacement {
+        offset: Point::new(-6.0, 4.0),
+        ..TextPlacement::default()
+    };
+    let ((k1_label, f1_label, wire_label, note), _) = doc
+        .transact("Label", |tx| {
+            let k1 = tx.add_text(
+                gate.main_page,
+                TextContent::DeviceTag,
+                label,
+                Some(gate.k1_main.into()),
+            )?;
+            let f1 = tx.add_text(
+                gate.main_page,
+                TextContent::DeviceTag,
+                label,
+                Some(gate.f1_sym.into()),
+            )?;
+            let w = tx.add_text(
+                gate.main_page,
+                TextContent::WireNumber,
+                label,
+                Some(wire.into()),
+            )?;
+            let note = tx.add_text(
+                gate.main_page,
+                TextContent::Literal {
+                    text: "400 V 50 Hz".into(),
+                },
+                TextPlacement {
+                    offset: Point::new(20.0, 10.0),
+                    ..TextPlacement::default()
+                },
+                None,
+            )?;
+            Ok((k1, f1, w, note))
+        })
+        .unwrap();
+    let before = doc.project().clone();
+
+    let mut items: Vec<AnyId> = page1.symbols.iter().map(|&s| s.into()).collect();
+    items.extend(page1.junctions.iter().map(|&j| AnyId::from(j)));
+    // Selecting a label too must not copy it twice.
+    items.push(k1_label.into());
+    items.push(note.into());
+    let offset = Point::new(100.0, 0.0);
+    let (copy, _) = doc
+        .transact("Smart duplicate", |tx| {
+            let page = tx.add_page("3")?;
+            duplicate(tx, &items, page, offset, TagMode::NextFree)
+        })
+        .unwrap();
+    let project = doc.project();
+    assert_eq!(copy.texts.len(), 4);
+    assert_eq!(project.texts().count(), before.texts().count() + 4);
+
+    // Device tag labels sit on the copied symbols and show the new tags.
+    let k1_copy = project.text(copy.texts[&k1_label]).unwrap();
+    assert_eq!(
+        k1_copy.attached_to,
+        Some(copy.symbols[&gate.k1_main].into())
+    );
+    assert_eq!(k1_copy.placement, label);
+    assert_eq!(
+        project.text_string(k1_copy.id).as_deref(),
+        Some("=A1+CAB-K2")
+    );
+    assert_eq!(
+        project.text_string(copy.texts[&f1_label]).as_deref(),
+        Some("=A1+CAB-F4")
+    );
+    // The originals still show the original tags.
+    assert_eq!(project.text_string(k1_label).as_deref(), Some("=A1+CAB-K1"));
+    // A wire label follows the copied wire.
+    assert_eq!(
+        project.text(copy.texts[&wire_label]).unwrap().attached_to,
+        Some(copy.wires[&wire].into())
+    );
+    // A free text moves by the offset, on the new page.
+    let note_copy = project.text(copy.texts[&note]).unwrap();
+    assert_eq!(note_copy.attached_to, None);
+    assert_eq!(note_copy.placement.offset, Point::new(120.0, 10.0));
+    assert_eq!(
+        note_copy.page,
+        project.symbol(copy.symbols[&gate.k1_main]).unwrap().page
+    );
+    // The copies are selected with the rest.
+    assert!(copy.new_ids().contains(&AnyId::from(note_copy.id)));
+
+    // One gesture, one undo step.
+    doc.undo().unwrap();
+    assert_eq!(doc.project().texts().count(), before.texts().count());
+}
+
+#[test]
+fn copied_devices_are_numbered_in_natural_tag_order() {
+    let mut doc = Document::default();
+    let two_pin = || vec![Pin::new("A1", 0.0, 0.0), Pin::new("A2", 0.0, 16.0)];
+    let ((k10, k2, items), _) = doc
+        .transact("Draw", |tx| {
+            let page = tx.add_page("1")?;
+            let k10 = tx.add_device(DeviceTag::parse("-K10").unwrap(), "")?;
+            let k2 = tx.add_device(DeviceTag::parse("-K2").unwrap(), "")?;
+            let mut items = Vec::new();
+            for (device, x) in [(k10, 0.0), (k2, 20.0)] {
+                let coil = tx.place_symbol(
+                    page,
+                    "iec/coils/relay",
+                    Placement::at(Point::new(x, 0.0)),
+                    two_pin(),
+                    SymbolRole::Device { device, main: true },
+                )?;
+                items.push(AnyId::from(coil));
+            }
+            Ok((k10, k2, items))
+        })
+        .unwrap();
+    let (copy, _) = doc
+        .transact("Smart duplicate", |tx| {
+            let page = tx.add_page("2")?;
+            duplicate(tx, &items, page, Point::new(0.0, 0.0), TagMode::NextFree)
+        })
+        .unwrap();
+    let tag = |id| doc.project().device(id).unwrap().tag.to_string();
+    // -K2 before -K10, not text order.
+    assert_eq!(tag(copy.devices[&k2]), "-K11");
+    assert_eq!(tag(copy.devices[&k10]), "-K12");
 }
 
 #[test]

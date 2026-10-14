@@ -9,9 +9,17 @@
 //! Rules:
 //!
 //! - A device gets a new tag when its main function (the coil) is copied,
-//!   or when it has no main function and all its symbols are copied. A
-//!   lone contact copied without its coil stays a contact of the original
-//!   device (a second contact of `-K1`).
+//!   or when it has no main function and all its symbols are copied.
+//! - A device whose main function stays behind still gets a new tag when
+//!   its main contacts are copied (a symbol with two or more switched
+//!   poles): copying the main circuit of a starter whose coil is on the
+//!   control page gives `-K2` main poles, which the checker flags as
+//!   having no coil, rather than a second set of main poles on `-K1`.
+//! - A lone auxiliary contact copied without its coil stays a contact of
+//!   the original device (a second contact of `-K1`).
+//! - Texts attached to a copied symbol, junction or wire (a device tag
+//!   label, a wire number label) are copied with it and attached to the
+//!   copy. Selected free texts are copied and moved by the offset.
 //! - Terminals are copied onto the same strip with the next free number;
 //!   non-numeric names (`PE`, `N`) are kept.
 //! - Wires are copied when both ends are copied, also when the wire itself
@@ -26,8 +34,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use novo_core::{
     AnyId, Device, DeviceId, DeviceKind, Endpoint, Junction, JunctionId, PageId, Point, Project,
-    Result, SymbolId, SymbolInstance, SymbolRole, Terminal, TerminalId, Tx, Wire, WireId,
-    split_code,
+    Result, SymbolId, SymbolInstance, SymbolRole, Terminal, TerminalId, Text, TextId, Tx, Wire,
+    WireId, natural_cmp, split_code,
 };
 
 /// How copied devices are tagged.
@@ -50,6 +58,9 @@ pub struct Duplicated {
     /// lone contact's coil) are not listed.
     pub devices: BTreeMap<DeviceId, DeviceId>,
     pub terminals: BTreeMap<TerminalId, TerminalId>,
+    /// Attached texts that came along with their objects, and selected
+    /// free texts.
+    pub texts: BTreeMap<TextId, TextId>,
 }
 
 impl Duplicated {
@@ -59,11 +70,13 @@ impl Duplicated {
         ids.extend(self.symbols.values().map(|&id| AnyId::from(id)));
         ids.extend(self.junctions.values().map(|&id| AnyId::from(id)));
         ids.extend(self.wires.values().map(|&id| AnyId::from(id)));
+        ids.extend(self.texts.values().map(|&id| AnyId::from(id)));
         ids
     }
 }
 
-/// Copies `items` (symbols, junctions and wires; other ids are ignored) to
+/// Copies `items` (symbols, junctions, wires and free texts; other ids are
+/// ignored), with the texts attached to them, to
 /// `page`, moved by `offset`.
 pub fn duplicate(
     tx: &mut Tx<'_>,
@@ -81,7 +94,8 @@ pub fn duplicate(
         .into_iter()
         .filter_map(|id| tx.project().device(id))
         .collect();
-    devices.sort_by(|a, b| a.tag.cmp(&b.tag));
+    // Natural order, so `-K2` is numbered before `-K10`.
+    devices.sort_by(|a, b| natural_cmp(&a.tag.to_string(), &b.tag.to_string()));
     let devices: Vec<Device> = devices.into_iter().cloned().collect();
     for device in devices {
         let tag = match mode {
@@ -157,6 +171,45 @@ pub fn duplicate(
         })?;
         out.wires.insert(original.id, new);
     }
+
+    // Texts attached to copied objects follow them; their offset is
+    // relative to the object, so it stays.
+    let attached: Vec<(AnyId, AnyId)> = out
+        .symbols
+        .iter()
+        .map(|(&a, &b)| (a.into(), b.into()))
+        .chain(out.junctions.iter().map(|(&a, &b)| (a.into(), b.into())))
+        .chain(out.wires.iter().map(|(&a, &b)| (a.into(), b.into())))
+        .collect();
+    for (original, copy) in attached {
+        let texts: Vec<Text> = tx
+            .project()
+            .texts_of(original)
+            .into_iter()
+            .filter_map(|id| tx.project().text(id).cloned())
+            .collect();
+        for text in texts {
+            let new = tx.insert(|id| Text {
+                id,
+                page,
+                attached_to: Some(copy),
+                ..text.clone()
+            })?;
+            out.texts.insert(text.id, new);
+        }
+    }
+    // Selected free texts move by the offset.
+    for text in selection.free_texts(tx.project()) {
+        let mut placement = text.placement;
+        placement.offset = placement.offset + offset;
+        let new = tx.insert(|id| Text {
+            id,
+            page,
+            placement,
+            ..text.clone()
+        })?;
+        out.texts.insert(text.id, new);
+    }
     Ok(out)
 }
 
@@ -210,6 +263,8 @@ struct Selection {
     symbols: BTreeSet<SymbolId>,
     junctions: BTreeSet<JunctionId>,
     wires: BTreeSet<WireId>,
+    /// Selected texts that are not attached to anything.
+    free_texts: BTreeSet<TextId>,
 }
 
 impl Selection {
@@ -218,6 +273,7 @@ impl Selection {
             symbols: BTreeSet::new(),
             junctions: BTreeSet::new(),
             wires: BTreeSet::new(),
+            free_texts: BTreeSet::new(),
         };
         for &item in items {
             match item {
@@ -229,6 +285,10 @@ impl Selection {
                 }
                 AnyId::Wire(id) if project.wire(id).is_some() => {
                     s.wires.insert(id);
+                }
+                // An attached text comes along with its object instead.
+                AnyId::Text(id) if project.text(id).is_some_and(|t| t.attached_to.is_none()) => {
+                    s.free_texts.insert(id);
                 }
                 _ => {}
             }
@@ -260,7 +320,12 @@ impl Selection {
                 .iter()
                 .find(|s| matches!(s.role, SymbolRole::Device { main: true, .. }));
             let copy = match main {
-                Some(main) => self.symbols.contains(&main.id),
+                Some(main) if self.symbols.contains(&main.id) => true,
+                // The coil stays behind: copied main contacts still make a
+                // new device, a lone auxiliary contact does not.
+                Some(_) => all
+                    .iter()
+                    .any(|s| self.symbols.contains(&s.id) && is_main_contact(s)),
                 None => all.iter().all(|s| self.symbols.contains(&s.id)),
             };
             // Terminal strips are never copied; their terminals are.
@@ -272,6 +337,13 @@ impl Selection {
             }
         }
         out
+    }
+
+    fn free_texts(&self, project: &Project) -> Vec<Text> {
+        self.free_texts
+            .iter()
+            .filter_map(|&id| project.text(id).cloned())
+            .collect()
     }
 
     fn symbols(&self, project: &Project) -> Vec<SymbolInstance> {
@@ -294,4 +366,21 @@ impl Selection {
             .filter_map(|&id| project.wire(id).cloned())
             .collect()
     }
+}
+
+/// A device's main contacts: a non-main symbol that switches two or more
+/// poles (the three main poles of a contactor). Auxiliary contacts switch
+/// one path (a changeover has two paths through one common pin, so it is
+/// told apart by sharing that pin).
+fn is_main_contact(symbol: &SymbolInstance) -> bool {
+    if matches!(symbol.role, SymbolRole::Device { main: true, .. }) {
+        return false;
+    }
+    let groups = &symbol.pass_through;
+    if groups.len() < 2 {
+        return false;
+    }
+    // Poles are separate: no pin in two groups.
+    let mut seen = BTreeSet::new();
+    groups.iter().flatten().all(|pin| seen.insert(*pin))
 }
