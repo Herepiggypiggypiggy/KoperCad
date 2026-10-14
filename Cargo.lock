@@ -2011,13 +2011,16 @@ dependencies = [
 name = "novo-tests"
 version = "0.1.0"
 dependencies = [
+ "egui",
  "novo-app",
  "novo-canvas",
  "novo-core",
+ "novo-editor",
  "novo-parts",
  "novo-storage",
  "novo-symbols",
  "novo-terminals",
+ "novo-theme",
  "novo-workflow",
  "serde_json",
  "tempfile",

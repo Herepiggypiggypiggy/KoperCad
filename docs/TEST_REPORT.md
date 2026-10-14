@@ -24,6 +24,34 @@ How a PR is tested: its branch is merged onto the current `main` (a
 main `11363c1` passes fmt, clippy and all 232 workspace tests on Linux.
 **Every Gate 0 criterion is met.**
 
+## Round 9 (2026-10-14, main `15c9992`): Gate 1 through the window, #38 gaps closed
+
+#53 (`NovoApp::execute`) and #38 (novo-editor) are on main, so the Gate 1
+scenario now also runs through the whole window, and the last two gap tests
+are filled in. `gate1_scenario.rs` has no ignored test left.
+
+| Test | Step | Closed by | State |
+| --- | --- | --- | --- |
+| `scenario_through_the_window` | Steps 1-7 headless through `NovoApp` with the real `EditorCanvas`: the file given on the command line opens on the first frame on its first page; every edit of the starter runs through `NovoApp::execute`; File > Save and File > Close leave nothing open and report no warning or error; a fresh window opens the same JSON and the same motor potentials | #53 | Passes |
+| `gap_place_by_search_with_auto_tags_and_self_wiring` | The I search finds `mcb3`, `main3`, `ol`, `m3`; one click each in a column plus Enter on the proposed wires gives `-F1`, `-K1`, `-F2`, `-M1` and exactly 9 straight main wires, Q1 to K1 to F1 to M1 connected per phase; save and reopen keep it | #38 | Passes |
+| `gap_draw_real_symbols` | Every placed symbol of the starter has `LibraryArt` artwork, drawn instead of the placeholder box, with its connection points where the placeholder had them | #38 | Passes |
+
+Notes:
+- The MCB is placed as `-F1`, not `-Q1`: novo-editor gives a miniature
+  circuit breaker letter F (protecting, IEC 81346-2) and a motor protection
+  breaker (`mpcb`) letter Q. That matches the standard, so the test asserts
+  it. The overload relay is then `-F2`.
+- The window test uses `StorageBackend::default()` and default settings, so
+  it writes only in its temp directory (no last-project or untitled files in
+  the user profile).
+- BOM terminal count equal to the strip's terminal count: #72 (open) adds
+  exactly this check (`bom_counts_every_terminal_the_strip_shows`), so it is
+  not duplicated here.
+
+main `15c9992` plus this round passes fmt, clippy and all workspace tests on
+Linux: 628 passed, 0 failed, 1 ignored (the `ignore` doc example in
+`novo-canvas`'s `widget.rs`).
+
 ## Round 8 (2026-10-14, main `7379d42`): Gate 1 gaps after #30, #36
 
 #30 (novo-terminals) and #36 (novo-parts) are on main, so their gap tests

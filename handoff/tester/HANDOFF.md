@@ -1,43 +1,40 @@
 # Tester handoff (rewritten each update)
 
-Updated: 2026-10-14 17:20 UTC
+Updated: 2026-10-14 (Round 9)
 
 ## Where things are
-- Repo: Herepiggypiggypiggy/NovoElectric. Branch: `claude/project-thread-dft1m7` (the only branch this thread pushes).
-- Open PR: **#42** "Tests: Gate 1 scenario through commands, with the known-gap list", head `80dcfe8`, based on main `9512822`. The reviewer has been pinged; no verdict yet. Subscribed to its events.
-- #42 adds `crates/novo-tests/tests/gate1_scenario.rs` (passing scenario plus 7 ignored `gap_*` tests naming #34, #38, #37/#29, #35, #30, #36, #28), `e2e_motor_starter.rs`, novo-canvas as a dev-dep, and TEST_REPORT Round 6 (gap table, F2).
-- When a gap's PR merges: fill in its `gap_*` test against the new API, remove `#[ignore]`, and update the Round table. This goes in a new PR if #42 is already READY or merged.
-- Round 8 (fixer, branch restarted from main 7379d42): #30 and #36 gaps filled, pe-fix.patch applied (the patch file is removed). Remaining gaps: the two #38 tests.
+- Repo: Herepiggypiggypiggy/NovoElectric. Branch: `claude/project-thread-dft1m7` (the only branch this thread pushes), restarted from main `15c9992`.
+- Round 9 PR (see PROGRESS for its number): `gate1_scenario.rs` gets `scenario_through_the_window` (whole flow through `NovoApp::execute`, headless, real `EditorCanvas`) and the two #38 gap tests filled in. No ignored test left in that file. TEST_REPORT Round 9.
+- novo-tests dev-deps added: `novo-editor` (feature `art`), `egui`, `novo-theme`.
+- BOM terminal count check: #72 (open, fixer) already adds `bom_counts_every_terminal_the_strip_shows`; not duplicated.
 
 ## How to resume
 ```
 cd NovoElectric && git fetch origin
-git checkout claude/project-thread-dft1m7   # or: git checkout -B claude/project-thread-dft1m7 origin/main
+git checkout -B claude/project-thread-dft1m7 origin/main   # if the PR merged
+export CARGO_TARGET_DIR=$HOME/target-tester                # one per worktree
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
-Test an open PR: create a worktree of origin/main, merge the PR branch (on a Cargo.lock-only conflict take main's lock and let cargo regenerate it), copy `crates/novo-tests` in if missing, run the three commands.
-In a container, the canvas GPU tests need `libxkbcommon-x11-0 mesa-vulkan-drivers` (llvmpipe); the app runs under Xvfb.
+Disk: the session allowance is small. Delete old target dirs (also in the scratchpad) before a full build.
 
 ## Rules (coordination/threads.md)
-- Before pushing, check that the PR is still open. A PR can merge while you work; follow-ups then go in a new PR from main.
-- After every push, message the reviewer (cse_016C9nTT8cN7voW8t1NQUG4W) with the new head SHA.
-- Once the reviewer says READY, don't push to that PR.
-- Commits end with Co-Authored-By and Claude-Session lines. PR bodies start with the claude-projects attribution block (copy from a merged PR such as #32).
-- Only WS-02 changes the novo-core API. novo-tests uses public APIs only.
+- Before pushing, check that the PR is still open. Follow-ups after a merge go in a new PR from main.
+- After every push, message reviewer A (session_01XEdxpvQFh4HWmurh72tKwp) with the new head SHA. After READY, don't push.
+- Commits end with Co-Authored-By and Claude-Session lines. PR bodies start with the claude-projects attribution block.
+- Only WS-02 changes the novo-core API. novo-tests uses public APIs only. Never edit the crate list or `[workspace.dependencies]`.
 
 ## Who to talk to
-- Integration lead (merges, assigns): session_011PfTJ1QaP1JQJPwXcFnxBE
-- Reviewer: cse_016C9nTT8cN7voW8t1NQUG4W
-- WS-01 app shell: cse_01AYuFPxz6eQReQdtzYKLMmW (ProjectBackend/StorageBackend after #34)
-- WS-03 canvas: cse_013KCL5cYRtSrq4yndv3Z7TD (F2 reported)
-- WS-11 terminals: cse_01AqzMrSLZaG8zin7Yf84RZP (#30)
+- Integration lead: session_011PfTJ1QaP1JQJPwXcFnxBE
+- Coordinator: session_01DZ68tTULUv7Uhe8ecKbC47
+- Reviewer A: session_01XEdxpvQFh4HWmurh72tKwp
 
 ## Traps and decisions
+- `gate1_scenario.rs` `Store` trait: `doc()` and `run(Command)`. `FileStore` (novo-storage), `StorageBackend` and `Window` (`NovoApp`) implement it. Tests that need `doc_mut`/`record` use `FileStore`'s inherent methods.
+- `NovoApp::with_settings(.., Default::default())`: `Settings` is not exported, but `Default::default()` infers it.
+- A headless `NovoApp` frame needs `novo_theme::apply(&ctx)`, else egui panics on a missing font family.
+- `NovoApp` shows an Info message on open; the window test checks only warnings and errors.
+- MCB places as `-F1` (IEC 81346-2 F); `mpcb` would be `-Q1`.
 - Refused edits still advance `next_id`. Compare project state without `next_id`.
-- Gate 1 fixture expected counts: 16 nets and 48 pins; L reaches 5 nets, L1 reaches 3 (the overload bridge merges the K1-out and motor nets).
-- The fixture sets `pass_through` = library pass-through minus bridges. `fixture_matches_library.rs` guards this.
-- #30's test expects X1:PE to be flagged, so the PE-kind fix waits until #30 merges, then flips that test in the same PR.
-- F2: in `PageScene`, a terminal's tag label overlaps the next terminal and wins the pick. The e2e test uses `pick_all` until WS-03 fixes this.
-- The 60 fps check can't be done in the cloud (llvmpipe only, 19 fps release / 53 ms debug frame).
+- Gate 1 fixture: 16 nets and 48 pins; L reaches 5 nets, L1 reaches 3.
