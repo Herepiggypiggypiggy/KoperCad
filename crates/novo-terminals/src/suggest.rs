@@ -15,6 +15,8 @@
 //! beyond the other end. A branch that already reaches a terminal, or
 //! reaches both locations, gets no suggestion.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use novo_core::{
     DeviceId, DeviceKind, DeviceTag, Endpoint, Point, Project, Result, SymbolRole, Tx, Value,
     WireId,
@@ -49,33 +51,80 @@ fn device_at(project: &Project, end: Endpoint) -> Option<DeviceId> {
     }
 }
 
-/// The devices one end of `wire` leads to: the device of a pin end, or
-/// every device pin reached through junctions without going back over
-/// `wire`. `None` when the way reaches a pin that is not a device's (a
-/// terminal is already there) or reaches nothing.
-fn devices_beyond(project: &Project, wire: WireId, end: Endpoint) -> Option<Vec<DeviceId>> {
-    let mut devices = Vec::new();
-    let mut seen = vec![end];
-    let mut todo = vec![end];
-    while let Some(at) = todo.pop() {
-        if at.as_pin().is_some() {
-            devices.push(device_at(project, at)?);
-            continue;
-        }
-        for next in project.wires_at(at).filter(|&w| w != wire) {
-            let Some(w) = project.wire(next) else {
-                continue;
-            };
-            let other = if w.from == at { w.to } else { w.from };
-            if !seen.contains(&other) {
-                seen.push(other);
-                todo.push(other);
+/// Junctions joined by wires, one group per connected set, with the device
+/// pins wired straight to each group. Built once, so every wire is judged
+/// without walking its net again.
+struct Groups {
+    parent: BTreeMap<Endpoint, Endpoint>,
+    /// Per group root: the (wire, device) of each pin wired to it, and how
+    /// many pins on it are not a device's (a terminal is already there).
+    leaves: BTreeMap<Endpoint, (Vec<(WireId, DeviceId)>, usize)>,
+}
+
+impl Groups {
+    fn new(project: &Project) -> Self {
+        let mut groups = Groups {
+            parent: BTreeMap::new(),
+            leaves: BTreeMap::new(),
+        };
+        for w in project.wires() {
+            if w.from.as_pin().is_none() && w.to.as_pin().is_none() {
+                let (a, b) = (groups.root(w.from), groups.root(w.to));
+                if a != b {
+                    groups.parent.insert(a, b);
+                }
             }
         }
+        for w in project.wires() {
+            let (pin, junction) = match (w.from.as_pin(), w.to.as_pin()) {
+                (Some(_), None) => (w.from, w.to),
+                (None, Some(_)) => (w.to, w.from),
+                _ => continue,
+            };
+            let root = groups.root(junction);
+            let entry = groups.leaves.entry(root).or_default();
+            match device_at(project, pin) {
+                Some(device) => entry.0.push((w.id, device)),
+                None => entry.1 += 1,
+            }
+        }
+        for (leaves, _) in groups.leaves.values_mut() {
+            leaves.sort_by_key(|&(wire, device)| (device, wire));
+        }
+        groups
     }
-    devices.sort();
-    devices.dedup();
-    (!devices.is_empty()).then_some(devices)
+
+    fn root(&mut self, mut at: Endpoint) -> Endpoint {
+        while let Some(&up) = self.parent.get(&at) {
+            if let Some(&top) = self.parent.get(&up) {
+                self.parent.insert(at, top);
+            }
+            at = up;
+        }
+        at
+    }
+
+    /// The devices beyond the junction end of `wire`: every device pin of
+    /// its group except the one `wire` brings. `None` when the group also
+    /// holds a terminal or nothing else.
+    fn beyond(&mut self, wire: WireId, junction: Endpoint) -> Option<Vec<DeviceId>> {
+        let root = self.root(junction);
+        let (leaves, others) = self.leaves.get(&root)?;
+        if *others > 0 {
+            return None;
+        }
+        let mut skipped = false;
+        let devices: Vec<DeviceId> = leaves
+            .iter()
+            .filter(|&&(w, _)| {
+                let skip = !skipped && w == wire;
+                skipped |= skip;
+                !skip
+            })
+            .map(|&(_, d)| d)
+            .collect();
+        (!devices.is_empty()).then_some(devices)
+    }
 }
 
 /// The one location all of `devices` share, with the first of them.
@@ -136,32 +185,60 @@ fn midpoint_of_longest_stretch(project: &Project, wire: WireId) -> Option<Point>
 /// dismissal, in page and wire order. The cabinet side is the location that
 /// holds a terminal strip, else the one with more devices; a tie goes to the
 /// wire's start.
+///
+/// Wires are followed through junctions: a wire from a device pin of one
+/// location to a junction qualifies when every other device pin joined
+/// there is in one other location. One connection gets one suggestion, even
+/// when several of its wires qualify (a junction with just two wires): the
+/// first in drawing order that starts at a cabinet-side pin, else the
+/// first. Declining that one declines the connection.
 pub fn suggest_terminals(project: &Project) -> Vec<Suggestion> {
-    let has_strip = |location: &[String]| {
-        project
-            .devices()
-            .any(|d| d.kind == DeviceKind::TerminalStrip && d.tag.location == location)
+    let mut strips: BTreeSet<&[String]> = BTreeSet::new();
+    let mut counts: BTreeMap<&[String], usize> = BTreeMap::new();
+    for d in project.devices() {
+        if d.kind == DeviceKind::TerminalStrip {
+            strips.insert(&d.tag.location);
+        }
+        *counts.entry(&d.tag.location).or_default() += 1;
+    }
+    let rank = |location: &[String]| {
+        (
+            strips.contains(location),
+            counts.get(location).copied().unwrap_or(0),
+        )
     };
-    let count_at = |location: &[String]| {
-        project
-            .devices()
-            .filter(|d| d.tag.location == location)
-            .count()
-    };
-    let rank = |location: &[String]| (has_strip(location), count_at(location));
+    let mut groups = Groups::new(project);
     let pages: Vec<_> = project.pages_in_order().iter().map(|p| p.id).collect();
     let mut wires: Vec<_> = project.wires().collect();
     wires.sort_by_key(|w| (pages.iter().position(|&p| p == w.page), w.id));
-    let mut out = Vec::new();
+    // (connection, not at a cabinet pin, dismissed, suggestion)
+    let mut found: Vec<(Vec<Endpoint>, bool, bool, Suggestion)> = Vec::new();
     for w in wires {
-        if w.from.as_pin().is_none() && w.to.as_pin().is_none() {
-            continue;
-        }
-        let (Some(a), Some(b)) = (
-            devices_beyond(project, w.id, w.from),
-            devices_beyond(project, w.id, w.to),
-        ) else {
-            continue;
+        let (a, b, connection) = match (w.from.as_pin(), w.to.as_pin()) {
+            (Some(_), Some(_)) => {
+                let (Some(a), Some(b)) = (device_at(project, w.from), device_at(project, w.to))
+                else {
+                    continue;
+                };
+                let mut pins = vec![w.from, w.to];
+                pins.sort();
+                (vec![a], vec![b], pins)
+            }
+            (Some(_), None) => {
+                let (Some(a), Some(b)) = (device_at(project, w.from), groups.beyond(w.id, w.to))
+                else {
+                    continue;
+                };
+                (vec![a], b, vec![groups.root(w.to)])
+            }
+            (None, Some(_)) => {
+                let (Some(a), Some(b)) = (groups.beyond(w.id, w.from), device_at(project, w.to))
+                else {
+                    continue;
+                };
+                (a, vec![b], vec![groups.root(w.from)])
+            }
+            (None, None) => continue,
         };
         let (Some(da), Some(db)) = (single_location(project, &a), single_location(project, &b))
         else {
@@ -170,26 +247,43 @@ pub fn suggest_terminals(project: &Project) -> Vec<Suggestion> {
         if da.tag.location == db.tag.location {
             continue;
         }
-        if matches!(w.properties.get(DISMISS_KEY), Some(Value::Bool(false))) {
-            continue;
-        }
-        let (internal, external) = if rank(&db.tag.location) > rank(&da.tag.location) {
-            (db, da)
+        let dismissed = matches!(w.properties.get(DISMISS_KEY), Some(Value::Bool(false)));
+        let (internal, external, internal_end) = if rank(&db.tag.location) > rank(&da.tag.location)
+        {
+            (db, da, w.to)
         } else {
-            (da, db)
+            (da, db, w.from)
         };
         let Some(at) = midpoint_of_longest_stretch(project, w.id) else {
             continue;
         };
-        out.push(Suggestion {
-            wire: w.id,
-            at,
-            strip: strip_tag(project, &structure(&internal.tag)),
-            internal: internal.id,
-            external: external.id,
-        });
+        found.push((
+            connection,
+            internal_end.as_pin().is_none(),
+            dismissed,
+            Suggestion {
+                wire: w.id,
+                at,
+                strip: strip_tag(project, &structure(&internal.tag)),
+                internal: internal.id,
+                external: external.id,
+            },
+        ));
     }
-    out
+    let mut best: BTreeMap<&[Endpoint], (bool, usize)> = BTreeMap::new();
+    for (i, (connection, rank, ..)) in found.iter().enumerate() {
+        let entry = best.entry(connection).or_insert((*rank, i));
+        if entry.0 && !*rank {
+            *entry = (*rank, i);
+        }
+    }
+    let keep: BTreeSet<usize> = best.into_values().map(|(_, i)| i).collect();
+    found
+        .iter()
+        .enumerate()
+        .filter(|(i, (_, _, dismissed, _))| keep.contains(i) && !dismissed)
+        .map(|(_, (.., s))| s.clone())
+        .collect()
 }
 
 /// Page index, on a horizontal wire, then the main and the cross axis.

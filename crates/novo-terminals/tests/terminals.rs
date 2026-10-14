@@ -925,7 +925,7 @@ fn wires_through_junctions_get_one_terminal_where_they_leave() {
     // One cabinet contact feeds two field motors through a junction: the
     // terminal goes on the wire from the contact to the junction, once.
     let mut doc = Document::default();
-    let (feed, k1, m1, back, k2) = doc
+    let (feed, k1, m1, back, k2, through, k5, m3) = doc
         .transact("Draw", |tx| {
             let page = tx.add_page("1")?;
             let k1 = tx.add_device(tag("=A1+CAB-K1"), "")?;
@@ -955,7 +955,16 @@ fn wires_through_junctions_get_one_terminal_where_they_leave() {
             let j3 = tx.add_junction(page, Point::new(200.0, 40.0))?;
             tx.connect(Endpoint::pin(k4s, 0), Endpoint::junction(j3))?;
             tx.connect(Endpoint::junction(j3), Endpoint::pin(k3s, 0))?;
-            Ok((feed, k1, m1, back, k2))
+            // A junction with just two wires passes the connection
+            // through: still one terminal, on the cabinet side.
+            let k5 = tx.add_device(tag("=A1+CAB-K5"), "")?;
+            let m3 = tx.add_device(tag("=A1+FLD-M3"), "")?;
+            let k5s = row_of_pins(tx, page, k5, &["2"], 240.0, 20.0)?;
+            let m3s = row_of_pins(tx, page, m3, &["U1"], 240.0, 100.0)?;
+            let j4 = tx.add_junction(page, Point::new(240.0, 60.0))?;
+            let through = tx.connect(Endpoint::pin(k5s, 0), Endpoint::junction(j4))?;
+            tx.connect(Endpoint::junction(j4), Endpoint::pin(m3s, 0))?;
+            Ok((feed, k1, m1, back, k2, through, k5, m3))
         })
         .unwrap()
         .0;
@@ -975,8 +984,19 @@ fn wires_through_junctions_get_one_terminal_where_they_leave() {
         [
             (feed, k1, m1.min(m2), "=A1+CAB-X1".into()),
             (back, k2, m1, "=A1+CAB-X1".into()),
+            (through, k5, m3, "=A1+CAB-X1".into()),
         ]
     );
+    // Declining it declines the connection: the field-side wire does not
+    // take its place.
+    doc.transact("Decline", |tx| dismiss_suggestion(tx, through))
+        .unwrap();
+    assert!(
+        suggest_terminals(doc.project())
+            .iter()
+            .all(|s| s.internal != k5)
+    );
+    doc.undo().unwrap();
     doc.transact("Accept", |tx| accept_suggestions(tx, &suggestions))
         .unwrap();
     assert!(suggest_terminals(doc.project()).is_empty());
