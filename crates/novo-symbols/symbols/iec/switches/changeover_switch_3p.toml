@@ -45,4 +45,5 @@ graphics = [
 kind = "contact"
 normally = "changeover"
 latching = true
+center_off = true
 poles = [["11", "12", "14"], ["21", "22", "24"], ["31", "32", "34"]]

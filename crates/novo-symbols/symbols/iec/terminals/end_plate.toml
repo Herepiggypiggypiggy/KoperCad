@@ -1,0 +1,23 @@
+format = 1
+id = "iec/terminals/end_plate"
+name = "Terminal end plate"
+description = "End plate closing the open side of the last terminal on a strip."
+standard = "IEC 60617"
+category = "terminals"
+function = "terminal.accessory.end_plate"
+keywords = ["end plate", "end cover", "terminal", "accessory"]
+aliases = ["endplate"]
+
+connections = [
+]
+
+anchors = [
+  { role = "tag", at = [-3, 4], align = "right" },
+]
+
+graphics = [
+  { kind = "rect", at = [-1, 0], size = [2, 8], fill = true },
+]
+
+[behavior]
+kind = "none"

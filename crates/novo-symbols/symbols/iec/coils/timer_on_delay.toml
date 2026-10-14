@@ -6,6 +6,8 @@ standard = "IEC 60617"
 category = "coils"
 function = "coil.timer.on_delay"
 keywords = ["timer", "on delay", "coil"]
+aliases = ["ton"]
+favorite = true
 
 connections = [
   { id = "A1", at = [0, 0], dir = "up" },

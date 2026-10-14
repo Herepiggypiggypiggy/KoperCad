@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "plc"
 function = "plc.input.analog"
 keywords = ["plc", "input", "ai", "analog", "4-20ma", "i/o"]
+aliases = ["ai"]
 
 connections = [
   { id = "1", at = [0, 0], dir = "up" },
