@@ -165,6 +165,26 @@ fn designations_read_like_a_drawing() {
 }
 
 #[test]
+fn terminal_kinds_match_their_use() {
+    let (doc, s) = starter();
+    let kinds: Vec<(String, TerminalKind)> = doc
+        .project()
+        .terminals_of_strip(s.x1)
+        .into_iter()
+        .map(|t| (t.name.clone(), t.kind))
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            ("1".to_string(), TerminalKind::Feedthrough),
+            ("2".to_string(), TerminalKind::Feedthrough),
+            ("3".to_string(), TerminalKind::Feedthrough),
+            ("PE".to_string(), TerminalKind::ProtectiveEarth),
+        ]
+    );
+}
+
+#[test]
 fn every_device_has_a_part_and_the_cable_its_cores() {
     let (doc, s) = starter();
     let p = doc.project();

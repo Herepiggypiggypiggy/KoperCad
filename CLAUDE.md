@@ -24,18 +24,37 @@ CI runs fmt, clippy (warnings are errors) and tests on Linux and Windows.
 
 Work is split into workstreams (WS-xx), each run by its own Claude thread.
 
+The crate list below is fixed and already registered in `[workspace.dependencies]`;
+pull requests never edit it or those lines (that used to make every new-crate PR
+conflict with every other). A crate that is not on the list is added by the
+coordinator in its own small PR first.
+
 | Crate | Owner | Purpose |
 | --- | --- | --- |
 | `novo-core` | WS-02 | Data model: the single source of truth |
-| `novo-canvas` | WS-03 | GPU canvas: pan, zoom, snap, hit testing, selection |
+| `novo-canvas` | WS-03 | GPU canvas: pan, zoom, snap, hit testing, selection, marks, page frame |
 | `novo-storage` | WS-04 | SQLite project file, autosave, migrations |
 | `novo-symbols` | WS-05 | IEC 60617 symbols, connection points, behavior slots |
-| `novo-terminals` | WS-11 | Terminal strips, same-name join rule, terminal connection screens |
+| `novo-editor` | WS-06 | Schematic editor: tools, auto tags, wiring, potentials |
 | `novo-parts` | WS-07 | Part catalog, part assignment, property sheet model, bulk edit |
-| `novo-workflow` | WS-08 | Keyboard workflow: keymap, commands, palette search, Tab orientation, smart duplicate |
+| `novo-workflow` | WS-08 | Keyboard workflow: keymap, commands, palette search, R/X orientation, smart duplicate |
+| `novo-pdf` | WS-09 | Vector PDF export: pages, title block, bookmarks, links |
+| `novo-xref` | WS-10 | Cross references: contact images, jumps, linking |
+| `novo-terminals` | WS-11 | Terminal strips, same-name join rule, terminal connection screens |
+| `novo-cables` | WS-12 | Cables: proposals at location boundaries, cores, shields, cable screens |
+| `novo-reports` | WS-13 | Generated pages and reports: BOM, device list, wire list, contents, Excel |
 | `novo-checks` | WS-14 | Design checks: problems with severity and location |
+| `novo-layout` | WS-15 | Cabinet layout (Phase 3) |
+| `novo-routing` | WS-16 | Wire routing through ducts (Phase 3) |
+| `novo-plc` | WS-17 | PLC and I/O (Phase 3) |
+| `novo-revisions` | WS-18 | Revisions and visual diff (Phase 3) |
 | `novo-sim` | WS-19 | Simulation engine (Phase 4) |
+| `novo-ai` | WS-23 | AI assistant (Phase 5) |
+| `novo-interop` | WS-24 | Import and export: DXF, EPLAN parts, Excel round trip (Phase 5) |
+| `novo-cli` | WS-28 | `novo` command-line tool |
+| `novo-py` | WS-28 | Python bindings (PyO3) |
 | `novo-theme` | Layout and branding | Dark theme, design tokens, icons, logo (`assets/branding`) |
+| `novo-tests` | Tester | Cross-crate tests and the Gate 1 fixture |
 | `novo-app` | WS-01 | Application shell, wiring crates together |
 
 Rules:

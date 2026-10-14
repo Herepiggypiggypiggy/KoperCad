@@ -165,7 +165,9 @@ fn fit(points: &[Point], at: Point, length: f64, wire: WireId) -> Result<(usize,
         // A quarter turn maps the symbol's downward axis to the right.
         (Rotation::R90, Point::new(centre.x - half, centre.y))
     };
-    let pin1_faces_start = pin1.distance(a) <= pin1.distance(b);
+    // Pin 1 is the top (left) end, so it faces the start of the wire when
+    // the wire runs down (right) here, wherever on the segment it lands.
+    let pin1_faces_start = if vertical { a.y <= b.y } else { a.x <= b.x };
     Ok((
         segment,
         Placement {
