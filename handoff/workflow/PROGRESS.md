@@ -27,3 +27,9 @@
 2026-10-14 21:38 UTC #88 READY on 774b5a9; lead told. Nits for next design PR: links into generated sheets point by name, never page.column; 'moves it to' not 'moves it as' (§3 Saving)
 2026-10-14 21:38 UTC #88 merged. No open PR of mine.
 2026-10-14 21:40 UTC Contactors stay K by default (rule K|Q); opened design PR with #88 nits; answered WS-08
+2026-10-14 21:41 UTC Opened #92 (head d89bf2b): contactors K default + K|Q rule, #88 nits, handoff sync; sent to design reviewer, lead, WS-08
+2026-10-14 21:40 UTC Lead confirmed contactor K default + Q rule is final; merges #92 on design READY
+2026-10-14 21:42 UTC Pushed e431274 to #92: highlighted proposal dashed full strength 2 px (not solid; reviewer's #91 finding). Re-sent to design reviewer; told WS-01
+2026-10-14 21:44 UTC #92 merged at e431274; told WS-06, WS-11 (WS-01 earlier) about dashed 2 px highlight. No open PR of mine.
+2026-10-14 21:45 UTC WS-06: dashed 2 px highlight committed (5089dde), PR after #91 merges
+2026-10-14 21:53 UTC Answered WS-02 on blocks (use BlockDefinition/Instance in Gate 1; project-first storage + libraries; tags allocated, properties/texts substituted, parts proposed). Recording in DESIGN §7 PR
