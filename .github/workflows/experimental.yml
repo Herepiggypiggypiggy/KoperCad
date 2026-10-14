@@ -61,6 +61,11 @@ jobs:
             git fetch -q origin "pull/$n/head"
             if git merge -q --no-edit FETCH_HEAD; then
               echo "#$n $(git rev-parse --short FETCH_HEAD) $title" >> merged.txt
+            elif [ "$(git diff --name-only --diff-filter=U)" = "Cargo.lock" ]; then
+              # Lock-only clash: keep ours, cargo re-resolves it during the build.
+              git checkout --ours Cargo.lock && git add Cargo.lock
+              git commit -q --no-edit
+              echo "#$n $(git rev-parse --short FETCH_HEAD) $title (Cargo.lock regenerated)" >> merged.txt
             else
               git merge --abort
               echo "#$n $title (merge conflict)" >> skipped.txt
