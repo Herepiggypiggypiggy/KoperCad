@@ -1,0 +1,31 @@
+[package]
+name = "novo-py"
+description = "Python API (the `novoelectric` module): open, edit and save project files headless through the same commands as the UI"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "novo_py"
+# cdylib is the Python extension (built by maturin with `--features python`);
+# rlib keeps the scripting API usable and testable from Rust.
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# Off by default so `cargo build/test --workspace` needs no Python toolchain.
+python = ["dep:pyo3", "pyo3/extension-module"]
+
+[dependencies]
+novo-core.workspace = true
+novo-storage.workspace = true
+novo-symbols.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+pyo3 = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
