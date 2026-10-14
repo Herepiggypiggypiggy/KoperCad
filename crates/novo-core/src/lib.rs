@@ -79,8 +79,8 @@ pub use document::{DEFAULT_HISTORY_LIMIT, Document, Outcome};
 pub use entity::{
     Cable, CableCore, Device, DeviceKind, Endpoint, Junction, Page, PageFormat, PageKind,
     PaperSize, Part, Pin, PinRef, Potential, PotentialKind, PotentialSet, PotentialSpec,
-    ProjectInfo, Properties, SymbolInstance, SymbolKey, SymbolRole, Terminal, TerminalKind, Value,
-    Wire,
+    ProjectInfo, ProjectRules, Properties, SameDesignation, SymbolInstance, SymbolKey, SymbolRole,
+    Terminal, TerminalKind, Value, Wire,
 };
 pub use error::{ModelError, Result};
 pub use geom::{Direction, Placement, Point, Rotation};

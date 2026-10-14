@@ -668,6 +668,36 @@ impl Project {
             .collect()
     }
 
+    /// Groups of two or more terminals on one strip with the same name and
+    /// level (two `-X2:1` on level 1), each in strip order, groups by strip,
+    /// name and level. Levels of a multi-level terminal may share a name and
+    /// are never grouped. Under [`SameDesignation::Separate`](crate::SameDesignation)
+    /// these are design check findings; under `Join` each group is one point.
+    pub fn terminal_designation_groups(&self) -> Vec<Vec<TerminalId>> {
+        let mut by_name: BTreeMap<(DeviceId, &str, u8), Vec<&Terminal>> = BTreeMap::new();
+        for terminal in self.terminals.values() {
+            by_name
+                .entry((terminal.strip, terminal.name.as_str(), terminal.level))
+                .or_default()
+                .push(terminal);
+        }
+        type Key<'a> = (DeviceId, &'a str, u8);
+        let mut groups: Vec<(Key<'_>, Vec<TerminalId>)> = by_name
+            .into_iter()
+            .filter(|(_, ts)| ts.len() > 1)
+            .map(|(key, mut ts)| {
+                ts.sort_by_key(|t| (t.order, t.id));
+                (key, ts.into_iter().map(|t| t.id).collect())
+            })
+            .collect();
+        groups.sort_by(|(a, _), (b, _)| {
+            a.0.cmp(&b.0)
+                .then_with(|| natural_cmp(a.1, b.1))
+                .then(a.2.cmp(&b.2))
+        });
+        groups.into_iter().map(|(_, g)| g).collect()
+    }
+
     /// Terminals of a strip in strip order (by `order`, then name).
     pub fn terminals_of_strip(&self, strip: DeviceId) -> Vec<&Terminal> {
         let mut terminals: Vec<&Terminal> = self

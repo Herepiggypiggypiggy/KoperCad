@@ -40,6 +40,7 @@ fn build() -> Project {
             info.description = "Every record type and optional field".into();
             info.properties.insert("customer".into(), "ACME".into());
             info.properties.insert("revision".into(), Value::Int(3));
+            info.rules.same_designation_terminals = SameDesignation::Join;
         })?;
         let power = tx.add_page("1")?;
         let control = tx.add_page("2")?;

@@ -3,6 +3,9 @@
   "info": {
     "name": "Format fixture",
     "description": "Every record type and optional field",
+    "rules": {
+      "same_designation_terminals": "join"
+    },
     "properties": {
       "customer": "ACME",
       "revision": 3

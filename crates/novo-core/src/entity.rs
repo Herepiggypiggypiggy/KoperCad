@@ -60,8 +60,41 @@ pub struct ProjectInfo {
     pub name: String,
     #[serde(default)]
     pub description: String,
+    /// Project-wide rules that change how the drawing is interpreted. Every
+    /// rule is explicit and off by default.
+    #[serde(default, skip_serializing_if = "ProjectRules::is_default")]
+    pub rules: ProjectRules,
     #[serde(default)]
     pub properties: Properties,
+}
+
+/// Explicit, inspectable project rules. Nothing here happens unless the
+/// project turns it on, and each rule has a query that shows its effect.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct ProjectRules {
+    /// What terminals with the same designation on one strip (two `-X2:1`)
+    /// mean. See [`Project::terminal_designation_groups`](crate::Project::terminal_designation_groups).
+    #[serde(default)]
+    pub same_designation_terminals: SameDesignation,
+}
+
+impl ProjectRules {
+    pub fn is_default(&self) -> bool {
+        *self == ProjectRules::default()
+    }
+}
+
+/// How terminals that share a designation are treated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SameDesignation {
+    /// Separate terminals that happen to share a name; listed as a design
+    /// check finding.
+    #[default]
+    Separate,
+    /// One electrical point, built from several clamps (1-in/1-out clamps
+    /// joined by a connector): the netlist joins them like a jumper.
+    Join,
 }
 
 /// Standard paper sizes.
