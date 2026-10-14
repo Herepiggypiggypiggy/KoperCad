@@ -19,7 +19,7 @@ use thiserror::Error;
 
 use crate::assign::{PartAllocator, count};
 use crate::catalog::{Catalog, CatalogPart, PartKey};
-use crate::csv::{cell_value, parse_delimited};
+use crate::csv::{ParseError, cell_value, parse_delimited};
 use crate::search::normalize_code;
 use crate::sheet::{display_value, parse_value, property_key, property_label};
 
@@ -148,6 +148,11 @@ impl BulkTable {
     /// Tab-separated text with a header row, for the clipboard. A cell
     /// holding a tab, a line break or a quote is quoted RFC 4180 style
     /// (as Excel itself copies such cells), so it pastes back unchanged.
+    ///
+    /// Excel reads a pasted cell starting with `-` or `=` as a formula, so
+    /// tags like `-K1` turn into `#NAME?`. Format the Tag column as Text
+    /// in Excel before pasting; a row whose tag came back as an Excel
+    /// error is skipped with that advice, never applied to another device.
     pub fn to_tsv(&self) -> String {
         let mut out = String::new();
         let header: Vec<String> = self.columns.iter().map(|c| quote(&c.header())).collect();
@@ -192,6 +197,8 @@ fn cell(project: &Project, device: &Device, column: &TableColumn) -> String {
 pub enum BulkError {
     #[error("nothing to apply")]
     Empty,
+    #[error(transparent)]
+    Text(#[from] ParseError),
     #[error("the first row needs a Tag column to know which device each row is")]
     NoTagColumn,
     #[error("the tag column cannot be changed here; rename a device with F2")]
@@ -281,10 +288,11 @@ pub fn apply_table(
     catalog: &Catalog,
     text: &str,
 ) -> Result<BulkOutcome, BulkError> {
-    let rows = parse_delimited(text);
+    let rows = parse_delimited(text)?;
     let Some((header, body)) = rows.split_first() else {
         return Err(BulkError::Empty);
     };
+    let header = &header.fields;
     let columns: Vec<Option<TableColumn>> = header
         .iter()
         .map(|h| TableColumn::from_header(h).map(|c| resolve_property(project, c)))
@@ -309,15 +317,26 @@ pub fn apply_table(
     let mut skipped = Vec::new();
     let mut ignored = Vec::new();
     let mut lines: BTreeMap<DeviceId, usize> = BTreeMap::new();
-    for (index, row) in body.iter().enumerate() {
-        let line = index + 2;
+    for record in body {
+        let (line, row) = (record.line, &record.fields);
+        // Excel shows a cell typed as `'-K1` as `-K1`; some copies keep
+        // the apostrophe.
         let tag = row.get(tag_index).map_or("", |s| s.trim());
+        let tag = tag.strip_prefix('\'').unwrap_or(tag);
         if tag.is_empty() {
             skipped.push((line, "no tag".into()));
             continue;
         }
         let Some(device) = find_device(project, tag) else {
-            skipped.push((line, format!("no device {tag}")));
+            let why = if tag.starts_with('#') {
+                format!(
+                    "the tag reads {tag}: the spreadsheet turned the tag into a formula; \
+                     format the Tag column as Text before pasting"
+                )
+            } else {
+                format!("no device {tag}")
+            };
+            skipped.push((line, why));
             continue;
         };
         // Two rows for one device would edit each other's result; the
@@ -443,13 +462,25 @@ impl<'a> Edits<'a> {
                     if value.is_empty() {
                         device.properties.remove(key);
                     } else {
-                        let old = device.properties.get(key);
-                        let new = match old {
-                            Some(old) => parse_value(value, Some(old))
-                                .unwrap_or_else(|| novo_core::Value::Text(value.into())),
-                            None => cell_value(value),
+                        let new = match device.properties.get(key) {
+                            Some(old) => parse_value(value, Some(old)),
+                            None => Some(cell_value(value)),
                         };
-                        device.properties.insert(key.clone(), new);
+                        match new {
+                            Some(new) => {
+                                device.properties.insert(key.clone(), new);
+                            }
+                            // A typed value keeps its type: `maybe` in a
+                            // yes/no cell is reported, not stored as text.
+                            None => notes.push(format!(
+                                "{} not changed: {value:?} is not {}",
+                                column.label(),
+                                match device.properties.get(key) {
+                                    Some(novo_core::Value::Bool(_)) => "yes or no",
+                                    _ => "a number",
+                                }
+                            )),
+                        }
                     }
                 }
             }

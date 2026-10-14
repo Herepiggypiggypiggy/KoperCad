@@ -36,7 +36,10 @@ pub use catalog::{
     CATALOG_FORMAT_VERSION, Catalog, CatalogError, CatalogPart, Dimensions, MergePreview, PartKey,
     keys, user_catalog_path,
 };
-pub use csv::{Column, ImportError, ImportReport, column_for, import_catalog, parse_delimited};
+pub use csv::{
+    Column, DelimitedRow, ImportError, ImportReport, ParseError, column_for, import_catalog,
+    parse_delimited,
+};
 pub use search::{Matcher, normalize_code};
 pub use sheet::{
     EditError, Group, PropertySheet, Row, RowKey, RowValue, display_value, parse_number,
