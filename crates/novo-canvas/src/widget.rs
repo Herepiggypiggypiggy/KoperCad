@@ -284,29 +284,6 @@ pub struct CanvasOutput {
     pub context_click: Option<Snapped>,
     /// What a built-in Escape press did (see [`Interaction::escape_on_hover`]).
     pub escape: Option<EscapeOutcome>,
-    /// Tab (forward) or Shift+Tab (back) was pressed over the canvas while a
-    /// tool runs (selection off) or with a selection: rotate the symbol being placed a quarter turn. The canvas
-    /// consumes the key so egui focus does not move; the placement tool
-    /// applies it. Junction shapes are never cycled by hand: they follow
-    /// the wires (see `model::JunctionGlyph::from_directions`).
-    pub cycle_orientation: Option<Cycle>,
-}
-
-/// Direction of an orientation cycle.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Cycle {
-    Forward,
-    Back,
-}
-
-impl Cycle {
-    /// Steps a quarter-turn index (0..4) one way round.
-    pub fn step(self, quarter_turns: u8) -> u8 {
-        match self {
-            Cycle::Forward => (quarter_turns + 1) % 4,
-            Cycle::Back => (quarter_turns + 3) % 4,
-        }
-    }
 }
 
 impl Default for CanvasView {
@@ -483,19 +460,6 @@ impl CanvasView {
         if !ui.ctx().input(|i| i.pointer.primary_down()) && !response.dragged() {
             self.band = None;
         }
-        let mut cycle_orientation = None;
-        // While a tool runs (selection switched off) or something is selected.
-        if response.hovered() && (!self.interaction.select || !self.selection.is_empty()) {
-            cycle_orientation = ui.ctx().input_mut(|i| {
-                if i.consume_key(egui::Modifiers::SHIFT, egui::Key::Tab) {
-                    Some(Cycle::Back)
-                } else if i.consume_key(egui::Modifiers::NONE, egui::Key::Tab) {
-                    Some(Cycle::Forward)
-                } else {
-                    None
-                }
-            });
-        }
         let mut escape = None;
         if self.interaction.escape_on_hover
             && response.hovered()
@@ -542,7 +506,6 @@ impl CanvasView {
             clicked,
             context_click: context_click.then_some(cursor).flatten(),
             escape,
-            cycle_orientation,
         }
     }
 
@@ -1021,50 +984,6 @@ mod tests {
         view.set_related([ItemId(1)]);
         build(&mut view);
         assert_ne!(view.highlight.as_ref().map(|h| h.key), key);
-    }
-
-    #[test]
-    fn tab_cycles_with_a_selection() {
-        let (ctx, mut view, scene) = setup();
-        let tab = |shift: bool| egui::Event::Key {
-            key: egui::Key::Tab,
-            physical_key: None,
-            pressed: true,
-            repeat: false,
-            modifiers: if shift {
-                egui::Modifiers::SHIFT
-            } else {
-                egui::Modifiers::NONE
-            },
-        };
-        let cycle = |view: &mut CanvasView, shift| {
-            let mut out = None;
-            let input = egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(800.0, 600.0),
-                )),
-                events: vec![tab(shift)],
-                ..Default::default()
-            };
-            let mut o = ctx.run_ui(input, |ui| {
-                egui::CentralPanel::default()
-                    .frame(egui::Frame::NONE)
-                    .show(ui, |ui| out = view.show(ui, &scene).cycle_orientation);
-            });
-            o.textures_delta.clear();
-            out
-        };
-        assert_eq!(
-            cycle(&mut view, false),
-            None,
-            "no selection, Tab stays egui's"
-        );
-        view.selection.apply([ItemId(1)], SelectOp::Replace);
-        assert_eq!(cycle(&mut view, false), Some(Cycle::Forward));
-        assert_eq!(cycle(&mut view, true), Some(Cycle::Back));
-        assert_eq!(Cycle::Forward.step(3), 0);
-        assert_eq!(Cycle::Back.step(0), 3);
     }
 
     #[test]
