@@ -68,6 +68,8 @@ pub(crate) struct Workbench {
     /// Where a Space-held pan last moved the drawing from, once the
     /// pointer has gone more than 4 px from `space_down`.
     pub(super) space_pan: Option<egui::Pos2>,
+    /// The tool dock's size last frame, to tell where it would sit.
+    pub(super) dock_size: egui::Vec2,
     /// Shift+P: false hides the marks on the drawing (counters stay).
     pub(super) marks: bool,
     /// Design-check results for one project revision.
@@ -114,6 +116,7 @@ impl Default for Workbench {
             space_down: None,
             pointer_world: None,
             space_pan: None,
+            dock_size: egui::Vec2::ZERO,
             marks: true,
             problems: None,
             pill_rect: egui::Rect::NOTHING,

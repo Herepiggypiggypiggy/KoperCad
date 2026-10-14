@@ -1066,3 +1066,70 @@ fn plc_commands_add_a_card_send_a_signal_and_renumber() {
     assert!(last(&d).starts_with("Renumbered"), "{}", last(&d));
     assert_eq!(d.doc().undo_depth(), depth + 1);
 }
+
+#[test]
+fn the_tool_dock_switches_tools_and_steps_aside_for_a_drag() {
+    use novo_editor::Tool;
+    use novo_workflow::keymap::Focus;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    d.frame();
+    let dock = || ctx.memory(|m| m.area_rect(egui::Id::new("tool_dock")));
+    let home = dock().expect("the dock is shown");
+    let (_, canvas) = d.app.wb.canvas_area.unwrap();
+    assert!(
+        (home.center().x - canvas.center().x).abs() < 1.0,
+        "bottom centre"
+    );
+
+    // Connect is the third button: one click starts wiring, and keys stay
+    // with the drawing.
+    let side = novo_theme::tokens::CONTROL_HEIGHT + 4.0;
+    let spacing = ctx.global_style().spacing.item_spacing.x;
+    let margin = egui::Frame::popup(&ctx.global_style()).inner_margin.left as f32;
+    let at = egui::pos2(
+        home.left() + margin + 2.5 * side + 2.0 * spacing,
+        home.center().y,
+    );
+    let button = |pressed| egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    d.frame_with(vec![egui::Event::PointerMoved(at), button(true)]);
+    d.frame_with(vec![button(false)]);
+    d.frame();
+    let tool = |d: &Drive| d.app.canvas.schematic_ref().unwrap().editor.tool().clone();
+    assert!(matches!(tool(&d), Tool::Wire(_)), "{:?}", tool(&d));
+    assert_eq!(d.app.key_focus(&ctx), Focus::Canvas);
+    let centred =
+        |r: Option<egui::Rect>| r.is_some_and(|r| (r.center().x - canvas.center().x).abs() < 1.0);
+    assert!(centred(dock()), "an active tool alone does not move it");
+
+    // A drag from the drawing that comes near the dock moves it aside.
+    let home = dock().unwrap();
+    let from = canvas.center();
+    let near = egui::pos2(home.center().x, home.top() - 10.0);
+    let press = |pos, pressed| egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    d.frame_with(vec![egui::Event::PointerMoved(from), press(from, true)]);
+    d.frame_with(vec![egui::Event::PointerMoved(near)]);
+    d.frame();
+    let aside = dock().unwrap();
+    assert!(aside.center().x > home.right(), "{aside:?} vs {home:?}");
+    d.frame_with(vec![press(near, false)]);
+    d.frame();
+    d.key(egui::Key::Escape, egui::Modifiers::NONE);
+    d.key(egui::Key::Escape, egui::Modifiers::NONE);
+    d.frame();
+    assert!(matches!(tool(&d), Tool::Select), "{:?}", tool(&d));
+    assert!(centred(dock()), "back once the gesture ends");
+}
