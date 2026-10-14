@@ -6,16 +6,19 @@ use std::collections::BTreeSet;
 
 use novo_core::*;
 use novo_storage::Session;
-use novo_tests::{motor_starter, stress_page};
+use novo_tests::{motor_starter, motor_starter_with_changes, stress_page};
+
+/// A net's potentials: shown, defined, carried and reachable.
+type Potentials = [Vec<PotentialId>; 4];
 
 type Electrical = (
-    BTreeSet<(Vec<PinRef>, Vec<PotentialId>)>,
+    BTreeSet<(Vec<PinRef>, Potentials)>,
     Vec<(PinRef, Option<PotentialId>)>,
 );
 
 /// The connectivity of a project in a form that does not depend on net
-/// numbering: every net as its sorted set of pins, with its potentials,
-/// plus each pin's potential.
+/// numbering: every net as its sorted set of pins, with all its potentials
+/// (pass-through data included), plus each pin's potential.
 fn electrical(project: &Project) -> Electrical {
     let net = project.netlist();
     let pins: Vec<PinRef> = project
@@ -30,8 +33,14 @@ fn electrical(project: &Project) -> Electrical {
             .filter(|&p| net.net_of(Endpoint::from(p)) == Some(id))
             .collect();
         members.sort();
-        let mut potentials = net.net(id).potentials.clone();
-        potentials.sort();
+        let n = net.net(id);
+        let mut potentials = [
+            n.potentials.clone(),
+            n.defined.clone(),
+            n.carried.clone(),
+            n.reachable.clone(),
+        ];
+        potentials.iter_mut().for_each(|p| p.sort());
         nets.insert((members, potentials));
     }
     let per_pin = pins
@@ -129,6 +138,39 @@ fn crash_recovery_offers_the_unsaved_starter() {
         0,
         "the last save was empty"
     );
+    let recovered = opened.recovered.expect("unsaved work is offered back");
+    assert_eq!(recovered.project.to_json(), doc.project().to_json());
+    assert_eq!(electrical(&recovered.project), electrical(doc.project()));
+}
+
+/// The same, fed the way the app does it: each transaction's own
+/// `ChangeSet`, with autosaves in between.
+#[test]
+fn crash_recovery_from_the_changesets_the_app_records() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("starter.novo");
+    let mut doc = Document::default();
+    Session::create(&path, doc.project())
+        .unwrap()
+        .close()
+        .unwrap();
+    let mut session = Session::open(&path).unwrap().session;
+    let (s, c) = motor_starter_with_changes(&mut doc).unwrap();
+    session.record(&c);
+    session.autosave(doc.project()).unwrap();
+    let (_, c) = doc
+        .transact("Move coil", |tx| {
+            tx.move_symbol(s.k1_coil, Placement::at(Point::new(80.0, 168.0)))
+        })
+        .unwrap();
+    session.record(&c);
+    let (_, c) = doc.transact("Delete -S1", |tx| tx.remove(s.s1)).unwrap();
+    session.record(&c);
+    session.autosave(doc.project()).unwrap();
+    drop(session);
+
+    let opened = Session::open(&path).unwrap();
+    assert_eq!(opened.project.records().count(), 0);
     let recovered = opened.recovered.expect("unsaved work is offered back");
     assert_eq!(recovered.project.to_json(), doc.project().to_json());
     assert_eq!(electrical(&recovered.project), electrical(doc.project()));

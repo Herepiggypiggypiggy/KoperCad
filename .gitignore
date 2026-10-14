@@ -1,3 +1,4 @@
 /target
 *.novo-journal
 .DS_Store
+tools/*/target

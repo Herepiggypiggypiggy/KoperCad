@@ -10,6 +10,50 @@ How a PR is tested: its branch is merged onto the current `main` (a
 `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
 `cargo test --workspace`. Windows results come from the PR's own CI.
 
+## Gate 0 summary (main `11363c1`)
+
+| Criterion | Status | Evidence |
+| --- | --- | --- |
+| Model API v0 frozen, with full unit tests | Met | #1, #11, #14, #21 (saved JSON format pinned) and #26 merged. F1 (non-finite numbers) fixed in #11 and covered by `robustness.rs` |
+| Canvas draws model objects | Met | #4 merged; its `PageScene` adapter and headless GPU tests pass on main |
+| 10,000 objects at 60 fps | **Waiting on a real GPU** | Model side and CPU side pass at 10k (see Round 5). Only llvmpipe is available here: 53 ms/frame (debug). The release check is running on Tadjiro's PC |
+| Save, close and reopen gives an identical project | Met | `gate0_storage.rs`: Gate 1 and a 10k page reopen with identical JSON, nets and potentials, also after incremental saves, undo and crash recovery |
+| Empty app installs and launches; CI green | Met | #3 merged. Its `installer` job on `798193a` built the installer, installed it as a standard (non-admin) user, found nothing in `HKLM`, and launched the app for 10 s. Linux launch verified under Xvfb |
+| No admin rights | Met | Per-user installer (`PrivilegesRequired=lowest`), `asInvoker` manifest checked in CI, standard-user install passes, no machine-wide paths anywhere in `crates/` or `scripts/` |
+
+main `11363c1` passes fmt, clippy and all 232 workspace tests on Linux.
+
+## Round 5 (2026-10-14, main `af01a66`)
+
+main now has #4 (canvas engine), #21 (saved JSON format pinned, 10k-symbol
+scale test), #22 (safer project file replace) and #23 (the storage gate
+tests). fmt, clippy and all 191 workspace tests
+pass with `novo-tests` merged in, including #4's headless GPU tests, which
+ran on llvmpipe here rather than skipping.
+
+- **Canvas on main passes.** The GPU stress test draws 10,001 items (330k
+  triangles) on llvmpipe at 53 ms a frame in a debug build. Picking under
+  the cursor takes 0.004 ms, snapping 0.018 ms and box-selecting a quarter
+  of the page 5.7 ms. Rebuilding the page mesh after one edit takes 37 ms
+  (debug). 60 fps at 10,000 objects still needs a real GPU and a release
+  build.
+- **No admin rights:** #4 adds no machine-wide paths, registry access or
+  elevation.
+- **Open PRs merged onto `af01a66`.** #3 (app shell, head `798193a`) merges
+  cleanly: fmt, clippy and 223 tests pass. #20 (theme and icons, head
+  `a98788e`) has a real conflict in `Cargo.toml` with main: both sides add
+  `egui` to `[workspace.dependencies]`. Main adds it with default
+  features, and #20 adds it with `default-features = false`. With main's
+  entry kept and #20's other additions (`novo-theme`, `egui-phosphor`), fmt,
+  clippy and 197 tests pass. #20 needs a rebase to pick one `egui` entry.
+  Neither PR adds machine-wide paths. #3's installer still asks for
+  `PrivilegesRequired=lowest`, and its CI fails if anything lands in `HKLM`.
+- **Storage tests tightened after review of #23.** The netlist comparison
+  across a reload now covers each net's `defined`, `carried` and
+  `reachable` potentials, not only the shown ones. A second crash-recovery
+  test feeds the session the `ChangeSet`s that real transactions return,
+  with autosaves in between, as the app will.
+
 ## Round 4 (2026-10-14, main `1a68be8`)
 
 main now has #18 (148 symbols, tighter `PassThrough`) and #5 (project
@@ -102,7 +146,7 @@ Test counts include the `novo-tests` crate added on top.
 | Criterion | Status | Evidence |
 | --- | --- | --- |
 | Model API v0 frozen, with full unit tests | Met, with F1 open | #1 merged; 31 tests in `novo-core`; 14 gate tests in `novo-tests` |
-| Canvas draws model objects | Pending merge of #4 | #4's `PageScene` adapter and tests pass on main |
+| Canvas draws model objects | Met | #4 merged as `d91e961`; its `PageScene` adapter and headless GPU tests pass on main |
 | 10,000 objects at 60 fps | Not verifiable here | The container only has llvmpipe (software): the release stress example measured 19 fps here with animation on (10,001 items, 330k triangles, tessellated in 35 ms), matching #4's own figure. Needs `cargo run --release -p novo-canvas --example stress` on a real GPU. Model side is fine: build 84 ms, netlist 17 ms, page read under 1 ms, one edit 0.3 ms (debug build) |
 | Save, close and reopen gives an identical project | Met on #5, except F1 | Gate 1 project, incremental saves after edits and undo, crash recovery and a 10k-object page (save 214 ms, open 253 ms) all reopen byte-identical |
 | Empty app installs and launches; CI green | Launch verified on Linux; installer pending | #3 under Xvfb with llvmpipe: window opens with menus and panels and stays up. The `installer` job on #3 was still running at the time of this round |
@@ -115,7 +159,7 @@ Everything must install and run as a standard user, with no elevation.
 | --- | --- | --- |
 | Installer is per-user | Pass (static) | #3 `novoelectric.iss`: `PrivilegesRequired=lowest`, installs to `{localappdata}\Programs`, shortcuts in `{userprograms}`/`{userdesktop}`, file association under `HKCU` only |
 | App never asks for elevation | Pass (static) | #3 `build.rs` embeds an `asInvoker` manifest; CI step fails if either exe contains `requireAdministrator` or `highestAvailable` |
-| Installs and launches as a standard user | Pending | #3's `installer` job creates a non-admin local user, installs with its credentials, checks nothing was written to `HKLM`, and launches the app for 10 s. The first run failed because the test user could not write the job's `TEMP`; #3 pushed a fix (`14ebe0a`) and the re-run is pending |
+| Installs and launches as a standard user | Pass | #3's `installer` job creates a non-admin local user, installs with its credentials, checks nothing was written to `HKLM`, and launches the app for 10 s. The first run failed on the job's `TEMP`; after the fix it passed on `798193a` (run 38597775983) |
 | No machine-wide paths at runtime | Pass (static) | No `HKLM`, `Program Files`, `ProgramData` or system paths in main or any open PR. #5 writes the project and its `.autosave` next to the project file; #3 keeps settings in eframe's per-user storage; #6's launcher and shortcut use `%LOCALAPPDATA%` and the user's desktop |
 
 From the next round, every PR is checked for new machine-wide paths or elevation requests.

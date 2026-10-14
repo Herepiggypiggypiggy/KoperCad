@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "contacts"
 function = "contact.nc.delay_on"
 keywords = ["timer", "delay", "nc", "delay on"]
+aliases = ["tnc"]
 
 connections = [
   { id = "15", at = [0, 0], dir = "up" },

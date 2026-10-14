@@ -9,12 +9,12 @@
 use serde::{Deserialize, Serialize};
 
 use crate::entity::{
-    CableCore, DeviceKind, Endpoint, PageFormat, PageKind, Pin, PotentialKind, ProjectInfo,
-    SymbolKey, SymbolRole, Value,
+    CableCore, DeviceKind, Endpoint, PageFormat, PageKind, Pin, PotentialKind, PotentialSpec,
+    ProjectInfo, SymbolKey, SymbolRole, TextContent, TextPlacement, Value,
 };
 use crate::error::Result;
 use crate::geom::{Placement, Point};
-use crate::id::{AnyId, CableId, DeviceId, PageId, PartId, SymbolId, WireId};
+use crate::id::{AnyId, CableId, DeviceId, PageId, PartId, PotentialId, SymbolId, TextId, WireId};
 use crate::record::Record;
 use crate::tag::DeviceTag;
 use crate::tx::Tx;
@@ -63,9 +63,29 @@ pub enum Command {
         symbol: SymbolId,
         placement: Placement,
     },
+    /// Links a symbol to a device or terminals, or unlinks it; see
+    /// [`Tx::set_role`].
+    SetRole {
+        symbol: SymbolId,
+        role: SymbolRole,
+    },
     AddJunction {
         page: PageId,
         position: Point,
+    },
+    /// Adds a text or label; see [`Tx::add_text`].
+    AddText {
+        page: PageId,
+        content: TextContent,
+        #[serde(default)]
+        placement: TextPlacement,
+        #[serde(default)]
+        attached_to: Option<AnyId>,
+    },
+    /// Moves, rotates or re-anchors a text on its own.
+    MoveText {
+        text: TextId,
+        placement: TextPlacement,
     },
     Connect {
         from: Endpoint,
@@ -80,6 +100,18 @@ pub enum Command {
     SetWireNumber {
         wire: WireId,
         number: Option<String>,
+    },
+    /// Sets or clears the potential one wire defines.
+    SetWirePotential {
+        wire: WireId,
+        potential: Option<PotentialId>,
+    },
+    /// Assigns potentials to wires in order, by name, creating missing
+    /// ones; see [`Tx::assign_potentials`]. Use
+    /// [`PotentialSet::specs`](crate::PotentialSet::specs) for L1/L2/L3/N/PE.
+    AssignPotentials {
+        wires: Vec<WireId>,
+        potentials: Vec<PotentialSpec>,
     },
     AddPotential {
         name: String,
@@ -150,11 +182,17 @@ impl Command {
             Command::SetTag { .. } => "Rename device".into(),
             Command::PlaceSymbol { .. } => "Place symbol".into(),
             Command::MoveSymbol { .. } => "Move symbol".into(),
+            Command::SetRole { .. } => "Cross reference".into(),
             Command::AddJunction { .. } => "Add junction".into(),
+            Command::AddText { .. } => "Add text".into(),
+            Command::MoveText { .. } => "Move text".into(),
             Command::Connect { .. } => "Draw wire".into(),
             Command::SplitWire { .. } => "Branch wire".into(),
             Command::SetWireNumber { .. } => "Number wire".into(),
             Command::AddPotential { .. } => "Add potential".into(),
+            Command::SetWirePotential { .. } | Command::AssignPotentials { .. } => {
+                "Assign potential".into()
+            }
             Command::AddTerminal { .. } => "Add terminal".into(),
             Command::AddCable { .. } => "Add cable".into(),
             Command::AssignCore { .. } => "Assign cable core".into(),
@@ -229,7 +267,21 @@ impl Tx<'_> {
                 self.move_symbol(symbol, placement)?;
                 return Ok(Vec::new());
             }
+            Command::SetRole { symbol, role } => {
+                self.set_role(symbol, role)?;
+                return Ok(Vec::new());
+            }
             Command::AddJunction { page, position } => self.add_junction(page, position)?.into(),
+            Command::AddText {
+                page,
+                content,
+                placement,
+                attached_to,
+            } => self.add_text(page, content, placement, attached_to)?.into(),
+            Command::MoveText { text, placement } => {
+                self.move_text(text, placement)?;
+                return Ok(Vec::new());
+            }
             Command::Connect { from, to, route } => {
                 let wire = self.connect(from, to)?;
                 if !route.is_empty() {
@@ -244,6 +296,14 @@ impl Tx<'_> {
             Command::SetWireNumber { wire, number } => {
                 self.update::<crate::Wire>(wire, |w| w.number = number)?;
                 return Ok(Vec::new());
+            }
+            Command::SetWirePotential { wire, potential } => {
+                self.set_wire_potential(wire, potential)?;
+                return Ok(Vec::new());
+            }
+            Command::AssignPotentials { wires, potentials } => {
+                let created = self.assign_potentials(&wires, potentials)?;
+                return Ok(created.into_iter().map(AnyId::from).collect());
             }
             Command::AddPotential {
                 name,

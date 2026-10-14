@@ -15,6 +15,7 @@ novo-symbols = { path = "crates/novo-symbols" }
 novo-storage = { path = "crates/novo-storage" }
 novo-sim = { path = "crates/novo-sim" }
 novo-parts = { path = "crates/novo-parts" }
+novo-theme = { path = "crates/novo-theme" }
 bytemuck = { version = "1", features = ["derive"] }
 egui = "0.36"
 egui-wgpu = "0.36"
@@ -25,6 +26,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "1"
 thiserror = "2"
+egui-phosphor = "0.14"
 rusqlite = { version = "0.40", features = ["bundled", "backup"] }
 tempfile = "3"
 eframe = { version = "0.36", default-features = false, features = ["wgpu", "default_fonts", "x11", "wayland"] }

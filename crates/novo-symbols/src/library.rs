@@ -24,6 +24,12 @@ pub enum LoadError {
     IdMismatch { path: String, id: String },
     /// Two sources define the same id.
     Duplicate { id: String },
+    /// Two symbols claim the same palette alias.
+    DuplicateAlias {
+        alias: String,
+        id: String,
+        other: String,
+    },
     /// Symbols parsed but broke validation rules.
     Invalid(Vec<Issue>),
 }
@@ -37,6 +43,9 @@ impl fmt::Display for LoadError {
                 write!(f, "{path}: id '{id}' does not match the file path")
             }
             LoadError::Duplicate { id } => write!(f, "{id}: defined more than once"),
+            LoadError::DuplicateAlias { alias, id, other } => {
+                write!(f, "{id}: alias '{alias}' is already used by {other}")
+            }
             LoadError::Invalid(issues) => {
                 write!(f, "{} symbol issue(s)", issues.len())?;
                 for issue in issues {
@@ -54,6 +63,8 @@ impl std::error::Error for LoadError {}
 #[derive(Debug, Clone, Default)]
 pub struct Library {
     symbols: BTreeMap<String, Symbol>,
+    /// Palette alias to symbol id.
+    aliases: BTreeMap<String, String>,
 }
 
 impl Library {
@@ -112,6 +123,7 @@ impl Library {
         sources: impl IntoIterator<Item = (String, &'a str)>,
     ) -> (Library, Vec<LoadError>) {
         let mut symbols = BTreeMap::new();
+        let mut aliases = BTreeMap::new();
         let mut problems = Vec::new();
         for (path, text) in sources {
             let symbol = match Symbol::from_toml(text) {
@@ -137,9 +149,24 @@ impl Library {
                 problems.push(LoadError::Invalid(issues));
                 continue;
             }
+            if let Some((alias, other)) = symbol
+                .aliases
+                .iter()
+                .find_map(|a| aliases.get(a).map(|other: &String| (a, other)))
+            {
+                problems.push(LoadError::DuplicateAlias {
+                    alias: alias.clone(),
+                    id: symbol.id,
+                    other: other.clone(),
+                });
+                continue;
+            }
+            for alias in &symbol.aliases {
+                aliases.insert(alias.clone(), symbol.id.clone());
+            }
             symbols.insert(symbol.id.clone(), symbol);
         }
-        (Library { symbols }, problems)
+        (Library { symbols, aliases }, problems)
     }
 
     /// Looks up a symbol by id.
@@ -161,6 +188,20 @@ impl Library {
                     .strip_prefix(function)
                     .is_some_and(|rest| rest.starts_with('.'))
         })
+    }
+
+    /// The symbol whose `aliases` contain `alias`, so the palette can insert
+    /// `mcb3` or `no` without a search. Surrounding spaces and letter case
+    /// are ignored (`NO` finds `no`); otherwise the match is exact.
+    pub fn by_alias(&self, alias: &str) -> Option<&Symbol> {
+        self.aliases
+            .get(&alias.trim().to_ascii_lowercase())
+            .and_then(|id| self.symbols.get(id))
+    }
+
+    /// Symbols marked `favorite`, ordered by id.
+    pub fn favorites(&self) -> impl Iterator<Item = &Symbol> {
+        self.iter().filter(|s| s.favorite)
     }
 
     /// Number of symbols.

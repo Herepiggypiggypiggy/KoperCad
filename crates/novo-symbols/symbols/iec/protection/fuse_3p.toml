@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "protection"
 function = "protection.fuse"
 keywords = ["fuse", "3p", "fuse base"]
+aliases = ["fuse3", "f3"]
 
 connections = [
   { id = "1", at = [0, 0], dir = "up" },

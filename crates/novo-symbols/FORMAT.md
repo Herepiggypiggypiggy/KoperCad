@@ -39,6 +39,8 @@ standard = "IEC 60617"
 category = "contacts"
 function = "contact.no"
 keywords = ["no", "make", "normally open", "auxiliary"]
+aliases = ["no"]
+favorite = true
 
 connections = [
   { id = "13", at = [0, 0], dir = "up" },
@@ -73,13 +75,17 @@ poles = [["13", "14"]]
 | `category` | yes | Must equal the directory the file is in. |
 | `function` | yes | Function type, dotted from general to specific (see below). |
 | `keywords` | no | Search words for the picker and command palette. |
+| `aliases` | no | Short names the palette matches exactly, such as `no`, `coil` or `mcb3`. Up to 12 characters of `a-z 0-9 _ -`, unique within a library. |
+| `favorite` | no | `true` to offer the symbol in the palette before anything is typed. |
 | `connections` | yes | Connection points (may be empty only for pure graphics). |
 | `anchors` | no | Text placement points; a `tag` anchor is required unless `behavior.kind = "none"`. |
 | `bridges` | no | Groups of connection ids always joined inside the symbol, whatever its behavior (e.g. PE in and out of a drive). |
 | `graphics` | yes | Artwork, drawn in order. |
 | `behavior` | yes | Simulation behavior slot (a table, written last). |
 
-Unknown fields are rejected, so typos fail loudly. That includes unknown
+Unknown fields are rejected, so typos fail loudly. `aliases`, `favorite`
+and the contact parameter `center_off` were added to version 1 before its
+first release; builds older than them reject files that use them. That includes unknown
 keys in `[behavior]` (see below).
 
 ## Connections
@@ -124,6 +130,40 @@ Arc angles: a point at angle `a` is `center + r * (cos a, sin a)`. Because y
 points down, 90° is straight down and increasing angles run clockwise on
 screen. `start = 180, end = 360` is the upper half of a circle.
 
+## Quick insert
+
+The command palette inserts common symbols without the picker:
+`Library::by_alias("mcb3")` returns the symbol that lists `mcb3` in its
+`aliases` (exact match after trimming and lowercasing, so `MCB3` works), and `Library::favorites()` returns the
+symbols marked `favorite = true`, ordered by id. The built-in set has about
+20 favourites (make and break contacts, coil, timer, contactor, MCBs, motor
+protection, overload, fuse, motor, terminal, PE terminal, terminal bridge,
+potential feed, push buttons, E-stop, lamp, PLC input) and about 90 aliases.
+Loading fails with `LoadError::DuplicateAlias` when two symbols of one
+library claim the same alias; when user and built-in libraries are combined,
+the editor decides which wins.
+
+The `favorite` flags are shipped defaults. A user's own favourites are
+stored per user (under the user's config directory) and layered over them;
+the editor never writes back into the library files, which may sit in a
+read-only install folder.
+
+## Terminals
+
+Every terminal clamp is drawn the same way: a circle of radius 1.2 mm on the
+conductor between two connection points, 8 mm apart per level (16 mm for
+the fused and disconnect terminals, which have a clamp at each end). A terminal strip of 400
+clamps of one type is 400 instances of one symbol, and the model stores only
+the symbol key and pins per instance, so they cannot drift apart. Variants
+(`terminal_n`, `terminal_pe`, multi-level, fused, disconnect) reuse the same
+clamp and add marks around it. Jumpers between clamps are the
+`connectivity/bridge_*` symbols; plug-in connector pieces are
+`terminals/plug`, `socket` and `plug_socket`. A strip is closed with
+`terminals/end_plate` and held on the rail by `terminals/end_bracket`;
+both are pure graphics (`behavior.kind = "none"`) with no connections and
+function types under `accessory.terminal`, so `by_function("terminal")`
+returns only real clamps.
+
 ## Function types
 
 The function type says what the device does, independent of its artwork. It
@@ -147,6 +187,7 @@ and the choice of simulation model. Lookups match prefixes, so
 | `earth`, `earth.*` | Earth, protective earth, chassis |
 | `connectivity.*` | Interruption points, potential feeds, terminal bridges |
 | `passive.*` | `resistor`, `capacitor`, `inductor`, `filter`, `diode`, `transistor`, `rectifier`, `potentiometer` and variants |
+| `accessory.terminal.*` | Terminal strip accessories without connections: `end_plate`, `end_bracket` |
 | `load.*`, `source.*`, `meter.*` | Loads, sources (including `source.generator`), instruments |
 | `plc.input.*`, `plc.output.*`, `plc.supply` | PLC channels and supply |
 
@@ -174,7 +215,7 @@ Two parameters name connections, and they mean different things:
 | --- | --- |
 | `none` | none (pure graphics: earth, interruption point, potential feed) |
 | `conductor` | **`poles`** (always joined: terminals, connectors, bridges) |
-| `contact` | **`poles`**, **`normally`** = `open` \| `closed` \| `changeover`, `latching` (bool; selector, E-stop), `delay` = `on` \| `off` |
+| `contact` | **`poles`**, **`normally`** = `open` \| `closed` \| `changeover`, `latching` (bool; selector, E-stop), `delay` = `on` \| `off`, `center_off` (bool, changeover only: a middle position where the common joins neither side, as on an I-0-II switch) |
 | `coil` | **`poles`**, `delay` = `on` \| `off` |
 | `fuse` | **`poles`**, `switched` (bool) |
 | `breaker` | **`poles`**, **`trip`** (non-empty subset of `thermal`, `magnetic`, `residual`), `adjustable` (bool) |
