@@ -1,24 +1,26 @@
 # Workflow thread handoff
 
-Updated 2026-10-14 17:08 UTC.
+Updated 2026-10-14 21:26 UTC.
 
 ## State
 - Repo herepiggypiggypiggy/novoelectric; my only branch: `claude/project-thread-o9tc55`.
-- #24 (DESIGN.md) MERGED 17:03. docs/DESIGN.md is on main.
-- #43 (DESIGN.md follow-ups) MERGED 17:06. No open PR of mine. Next design change =
-  new PR from main (restart branch: git checkout -B claude/project-thread-o9tc55 origin/main).
-  Queued optional nit: §9 half-sentence on why the empty-canvas New/Open/Recent view is
-  not a start screen (bundle with the next design change, not alone).
-- #38 (WS-06) review sent (Enter, menu order, potentials as source, facing pins as
-  proposals, 6 px pin radius, drag from pin); recheck when WS-06 pings.
-- Criteria sent to WS-01, WS-07, WS-08, WS-10, WS-11 and layout; recheck their heads
-  when they ping.
+- DESIGN.md on main (#24, #43). All feature PRs I reviewed are merged (#30, #31, #36,
+  #38, #46, #47, #53).
+- #80 MERGED 21:26 (saving, dots, letter codes, Enter target).
+- #88 MERGED 21:37 (generated pages reflow in own sections; Unsaved location; save a copy).
+  No open PR of mine. Repo copy of handoff/workflow should be committed with the next PR.
+- Nits for next design PR: links into generated sheets point by name, never page.column; §3 "moves it to" not "moves it as".
+- Criteria for #80 sent to WS-01, WS-03, WS-08, WS-05, WS-11; recheck their heads.
+- Integration lead is now session_01FiLvRBKEcNNHbQEGhYyL1S ("Catch up and resume the
+  build"). Design PRs go to the design reviewer session_01NLERJkVHpsVcABrarTR3CF.
+- Design-reviewer notes owed to WS-01/WS-03 are in handoff/design-reviewer/HANDOFF.md
+  (the design reviewer routes them; note 8 is settled by #80).
 
 ## Resume
 ```
 cd <repo>; git fetch origin claude/project-thread-o9tc55 main
-git checkout claude/project-thread-o9tc55   # #43's head
-# if #43 has merged: git checkout -B claude/project-thread-o9tc55 origin/main
+git checkout claude/project-thread-o9tc55   # then reset to main if no PR open
+# if #80 has merged: git checkout -B claude/project-thread-o9tc55 origin/main
 ```
 Commit trailers: see git log. PR body starts with the attribution comment + "Requested
 by Tadjiro" line, ends with the Claude Code footer. Assign Herepiggypiggypiggy.

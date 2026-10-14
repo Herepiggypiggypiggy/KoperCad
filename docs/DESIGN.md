@@ -184,7 +184,7 @@ second after each change and on close, so reopening shows exactly what was
 left. An untitled project closed with work in it is kept in
 `%LOCALAPPDATA%\NovoElectric\Unsaved` and offered back (under Unsaved with
 Recent, and reopened at start-up if it was the last one open); naming it
-moves it as `<Documents>\NovoElectric\<name>.novo`. The
+moves it to `<Documents>\NovoElectric\<name>.novo`. The
 deliberate checkpoints are revisions and exports (§8), not Save. Ctrl+S
 names an untitled project and otherwise only confirms Saved; Ctrl+Shift+S
 saves a copy under a new name and keeps working in the original.
@@ -401,10 +401,13 @@ page's function and location. A duplicate is refused while typing.
 **Letter codes** follow IEC 81346-2 by what a device is for, and come from
 the symbol or part, not from the user: a miniature circuit breaker that
 protects a circuit is F (`mcb`), a motor protective circuit breaker or a
-circuit breaker that switches a feeder is Q (`mpcb`), a contactor is Q, an
-overload relay is F. Because companies differ here, each class has a rule
-sentence ("Circuit breakers are coded [by purpose ▾ | always Q | always
-F]"), and a typed tag always wins.
+circuit breaker that switches a feeder is Q (`mpcb`), an overload relay is
+F. Contactors and relays are K by default: IEC 81346-2:2019 codes a
+power contactor Q, but K is what most existing projects and panel builders
+use, and a default that renumbers every contactor would cost more than it
+teaches. Because companies differ here, each class has a rule sentence
+("Circuit breakers are coded [by purpose ▾ | always Q | always F]",
+"Contactors are coded [K ▾ | Q]"), and a typed tag always wins.
 
 **Undo:** Ctrl+Z undoes the last gesture in every canvas, drawer and field,
 and brings the affected page into view. Text fields keep their own Ctrl+Z
@@ -444,7 +447,7 @@ user has edited:
 | Question | Options considered | Decision |
 | --- | --- | --- |
 | Pages | Hand-made; flowing; pinned flow | **Pinned flow:** automatic pagination, user page breaks never move, and pages freeze after a revision or export so `page.column` references never move under a printed set |
-| Generated pages under pinned flow | Freeze them too; append new sheets at the end; reflow | **Reflow.** Generated pages (BOM, terminal and cable diagrams, lists) sit in their own numbered sections after the schematic pages, so their growth never renumbers a schematic page. No reference points into them, so they reflow freely inside their section; the PDF bookmarks and the contents list name each sheet by what it shows (strip -X1, cable -W3), and a revision marks the generated sheets whose content changed |
+| Generated pages under pinned flow | Freeze them too; append new sheets at the end; reflow | **Reflow.** Generated pages (BOM, terminal and cable diagrams, lists) sit in their own numbered sections after the schematic pages, so their growth never renumbers a schematic page. No reference points into them, so they reflow freely inside their section; the PDF bookmarks and the contents list name each sheet by what it shows (strip -X1, cable -W3), and a revision marks the generated sheets whose content changed; anything that ever links into a generated sheet points at it by name, never by `page.column` |
 | Routing | Manual; always automatic; route once and keep | **Route once and keep:** moving a symbol stretches its connections; `tidy` re-routes on request |
 | Where a project starts | Page-first; structure-first; intent-first | **Structure-first**, with the empty page offering "type what you are building" |
 | Window | A Workbench; B Focus; C Split | **A**, with B as Focus mode and C as the drawer docked right |
