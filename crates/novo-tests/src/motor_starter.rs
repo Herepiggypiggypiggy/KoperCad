@@ -190,7 +190,9 @@ fn build(tx: &mut Tx<'_>) -> Result<MotorStarter> {
             key,
             at(x, 136.0),
             pins(&[("1", 0.0, 0.0), ("2", 0.0, 8.0)]),
-            SymbolRole::Terminal { terminal },
+            SymbolRole::Terminal {
+                terminals: vec![terminal],
+            },
         )?);
     }
     let x1_syms: [SymbolId; 4] = x1_syms.try_into().expect("four terminals");

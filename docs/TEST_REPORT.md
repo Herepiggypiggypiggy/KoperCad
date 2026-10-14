@@ -10,6 +10,35 @@ How a PR is tested: its branch is merged onto the current `main` (a
 `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
 `cargo test --workspace`. Windows results come from the PR's own CI.
 
+## Round 2 (2026-10-14, main `7b9392e`)
+
+main now has #6 (experimental builds) and #11 (non-finite numbers refused,
+pin directions, multi-level terminals). fmt, clippy and all 82 workspace
+tests pass with `novo-tests` merged in. `novo-tests` needed one change for
+#11: `SymbolRole::Terminal` now takes `terminals: vec![...]`.
+
+- **F1 fixed by #11.** New test `robustness.rs` tries NaN, +inf and -inf in
+  placements, pin offsets, junctions, wire routes, potential voltages, float
+  properties, cable lengths and core cross-sections. Every one is refused,
+  leaves the project and the undo history unchanged, and the project still
+  round-trips. A hand-edited project file with `1e999` is refused on load.
+- **Multi-level terminals pass.** Every multi-level terminal in the symbol
+  library (`iec/terminals/terminal_2level`) places through
+  `Command::PlaceSymbol` with its library pins, directions and bridges. Each
+  level is its own net with its own designation (`=A1+CAB-X2:1`, `:2`),
+  levels stay apart, and a symbol with more terminals than levels is
+  refused.
+- **Observation (low, WS-02):** a multi-level terminal symbol given a
+  single terminal is accepted. Its levels then stay separate nets that all
+  carry the same designation (`-X2:1` twice). This matches the documented
+  rule ("one terminal owns every pin"), but the editor should probably
+  require one terminal per level for symbols with more than one bridge
+  group.
+- **Observation (low):** a refused edit still uses up ids (`next_id` moves
+  on). This is harmless, since ids are never reused, but worth knowing
+  when comparing saved files.
+- #6 merged; the first `experimental` pre-release has not been checked yet.
+
 ## Round 1 (2026-10-14)
 
 ### Results
@@ -51,7 +80,7 @@ From the next round, every PR is checked for new machine-wide paths or elevation
 
 ### Findings
 
-**F1 (bug, high) A non-finite coordinate makes the project impossible to reopen.**
+**F1 (bug, high, fixed in #11) A non-finite coordinate makes the project impossible to reopen.**
 `novo-core` accepts `NaN` or infinite values in placements, points and
 offsets. JSON writes them as `null`, so the project saves but
 `Project::from_json` fails, and `novo-storage` (#5) then reports the file as
