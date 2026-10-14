@@ -206,8 +206,9 @@ pub fn choose_type(conductors: &[Conductor], cross_section_mm2: f64) -> (CableTy
     });
     for count in (needed.max(2)..=5).filter(|_| supply) {
         let t = CableType::standard(count, pe, cross_section_mm2);
+        // No colour-coded type of this size (there is no 2G): try the next.
         if t.is_numbered() {
-            break;
+            continue;
         }
         if let Some(cores) = assign(conductors, &t) {
             return (t, cores);
@@ -417,4 +418,17 @@ pub fn summarize_proposals(proposals: &[CableProposal]) -> String {
         .map(|p| format!("{} {}", p.tag, p.cable_type.name()))
         .collect();
     crate::strings::cables_proposed(proposals.len(), &list.join(", "))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn line_and_pe_get_a_colour_coded_3g() {
+        let (t, cores) = choose_type(&[Conductor::Line("L".into()), Conductor::Protective], 1.5);
+        assert_eq!(t.cores, ["BN", "BU", "GNYE"]);
+        assert!(!t.is_numbered());
+        assert_eq!(cores, [0, 2]);
+    }
 }

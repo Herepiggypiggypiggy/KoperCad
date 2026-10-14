@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use novo_core::{CableId, DeviceId, Project, Value, WireId};
 
-use crate::edit::{is_spare, shield_connection};
+use crate::edit::{ShieldConnection, is_spare, shield_connection};
 use crate::ends;
 use crate::kind::is_protective;
 use crate::propose::{Conductor, DISMISS_KEY, conductor};
@@ -125,7 +125,12 @@ pub fn check(project: &Project) -> Vec<Finding> {
         let cable = c.id;
         for (core, slot) in c.cores.iter().enumerate() {
             if slot.shield {
-                if shield_connection(c, core).is_none() {
+                // A shield on a terminal that was deleted floats again.
+                let connected = match shield_connection(c, core) {
+                    Some(ShieldConnection::Terminal(t)) => project.terminal(t).is_some(),
+                    other => other.is_some(),
+                };
+                if !connected {
                     findings.push(Finding::ShieldUnconnected { cable, core });
                 }
                 continue;

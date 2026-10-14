@@ -345,6 +345,19 @@ fn core_edits_and_checks() {
         novo_cables::shield_connection(s.doc.project().cable(cable).unwrap(), shield),
         Some(ShieldConnection::Terminal(strip_terminal))
     );
+    assert!(check(s.doc.project()).is_empty());
+    // Deleting that terminal leaves the shield floating again.
+    s.doc
+        .transact("Delete terminal", |tx| tx.remove(strip_terminal))
+        .unwrap();
+    assert!(
+        check(s.doc.project()).contains(&Finding::ShieldUnconnected {
+            cable,
+            core: shield
+        })
+    );
+    s.doc.undo().unwrap();
+    assert!(check(s.doc.project()).is_empty());
     assert!(
         s.doc
             .transact("Not a shield", |tx| connect_shield(
