@@ -231,3 +231,134 @@ fn search_finds_devices_terminals_and_pages() {
     assert!(texts("  ").is_empty());
     assert!(texts("zz").is_empty());
 }
+
+fn structure(text: &str) -> DeviceTag {
+    DeviceTag::parse(text).unwrap()
+}
+
+#[test]
+fn pages_sort_by_structure_then_name() {
+    let mut doc = Document::default();
+    doc.transact("Pages", |tx| {
+        for (name, s) in [
+            ("2", "=A10"),
+            ("1", "=A2+CAB1"),
+            ("10", "=A2"),
+            ("3", "=A2"),
+            ("5", ""),
+            ("1", "=A2"),
+        ] {
+            let page = tx.add_page(name)?;
+            tx.update::<Page>(page, |p| p.structure = structure(s))?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let order: Vec<String> = doc
+        .project()
+        .pages_in_order()
+        .iter()
+        .map(|p| format!("{}/{}", p.structure, p.name))
+        .collect();
+    assert_eq!(
+        order,
+        ["/5", "=A2/1", "=A2/3", "=A2/10", "=A2+CAB1/1", "=A10/2"]
+    );
+}
+
+#[test]
+fn page_structure_has_no_device_part() {
+    let mut doc = Document::default();
+    let (page, _) = doc.transact("Page", |tx| tx.add_page("1")).unwrap();
+    let before = doc.project().to_json();
+    let err = doc
+        .transact("x", |tx| {
+            tx.update::<Page>(page, |p| p.structure = structure("=A2-K1"))
+        })
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        ModelError::InvalidValue {
+            field: "structure",
+            ..
+        }
+    ));
+    let err = doc
+        .transact("x", |tx| {
+            tx.update::<Page>(page, |p| p.structure.function.push("A 2".into()))
+        })
+        .unwrap_err();
+    assert!(matches!(err, ModelError::Tag(_)), "{err:?}");
+    assert_eq!(doc.project().to_json(), before);
+
+    // A valid structure survives a save; an empty one is not written.
+    assert!(!before.contains("structure"));
+    doc.transact("Structure", |tx| {
+        tx.update::<Page>(page, |p| p.structure = structure("=A2+CAB1"))
+    })
+    .unwrap();
+    let loaded = Project::from_json(&doc.project().to_json()).unwrap();
+    assert_eq!(loaded.page(page).unwrap().structure, structure("=A2+CAB1"));
+}
+
+#[test]
+fn references_carry_the_structure_only_across_structures() {
+    let mut doc = Document::default();
+    let (coil, _) = doc
+        .transact("K1 over two functions", |tx| {
+            let supply = tx.add_page("3")?;
+            tx.update::<Page>(supply, |p| p.structure = structure("=A1"))?;
+            let loads = tx.add_page("3")?;
+            tx.update::<Page>(loads, |p| p.structure = structure("=A2"))?;
+            let k1 = tx.add_device(DeviceTag::parse("=A1-K1")?, "")?;
+            let coil = symbol(
+                tx,
+                loads,
+                130.0,
+                SymbolRole::Device {
+                    device: k1,
+                    main: true,
+                },
+            )?;
+            symbol(
+                tx,
+                supply,
+                10.0,
+                SymbolRole::Device {
+                    device: k1,
+                    main: false,
+                },
+            )?;
+            Ok(coil)
+        })
+        .unwrap();
+    let project = doc.project();
+    let k1 = project.devices().next().unwrap().id;
+    let refs = project.cross_references(k1);
+    // `=A1` pages come before `=A2` pages.
+    assert_eq!(refs[1].symbol, coil);
+    let coil_at = &refs[1].location;
+    assert_eq!(coil_at.structure, structure("=A2"));
+    assert_eq!(coil_at.to_string(), "3.4");
+    assert_eq!(coil_at.qualified(&structure("=A2")), "3.4");
+    assert_eq!(coil_at.qualified(&structure("=A1")), "=A2/3.4");
+    assert_eq!(coil_at.qualified(&DeviceTag::default()), "=A2/3.4");
+    let contact_at = &refs[0].location;
+    assert_eq!(contact_at.qualified(&structure("=A2")), "=A1/3.1");
+    assert_eq!(contact_at.qualified(&structure("=A1")), "3.1");
+}
+
+#[test]
+fn pages_without_structure_read_plainly() {
+    let mut doc = Document::default();
+    let (contact, _) = doc
+        .transact("x", |tx| {
+            let page = tx.add_page("7")?;
+            symbol(tx, page, 50.0, SymbolRole::Unassigned)
+        })
+        .unwrap();
+    let at = doc.project().location_of(contact).unwrap();
+    assert!(at.structure.is_empty());
+    assert_eq!(at.qualified(&DeviceTag::default()), "7.2");
+    assert_eq!(at.qualified(&structure("=A2")), "7.2");
+}
