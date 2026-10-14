@@ -381,7 +381,7 @@ fn deleting_a_device_removes_its_wires_and_tidies_junctions() {
 fn rename_keeps_structure_moves_contacts_and_refuses_duplicates() {
     let (mut doc, page, mut editor) = setup();
     doc.transact("Structure", |tx| {
-        tx.set_property(page, "structure", Some("=A1+CAB1".into()))
+        tx.update::<novo_core::Page>(page, |p| p.structure = "=A1+CAB1".parse().unwrap())
     })
     .unwrap();
     editor.begin_place("iec/coils/relay", None);
@@ -850,11 +850,9 @@ fn edit_points(doc: &Document, wire: novo_core::WireId) -> Vec<Point> {
 fn k1_no_finds_k1_in_the_pages_structure_and_refuses_a_missing_parent() {
     let (mut doc, page, mut editor) = setup();
     doc.transact("structure", |tx| {
-        tx.set_property(
-            page,
-            novo_editor::naming::PAGE_STRUCTURE,
-            Some(novo_core::Value::Text("=A1+CAB1".into())),
-        )
+        tx.update::<novo_core::Page>(page, |p| {
+            p.structure = novo_core::DeviceTag::parse("=A1+CAB1").unwrap();
+        })
     })
     .unwrap();
     editor.begin_place("iec/coils/relay", None);
