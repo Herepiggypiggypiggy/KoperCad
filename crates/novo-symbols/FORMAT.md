@@ -11,8 +11,10 @@ and function type from this crate.
 
 - **Units** are millimetres.
 - **Axes:** x to the right, **y downwards** (screen and SVG convention).
-- **Origin** is the insertion point. By convention it is the first connection
-  point, usually the top-left one.
+- **Origin** is the insertion point and must lie on the grid. Usually it is
+  the top-left connection point; where that would push artwork off-grid
+  (changeover contacts, potential feeds, PLC outputs) it is another grid
+  point near the symbol's top left.
 - **Connection grid:** every connection point lies on a 4 mm grid
   (`novo_symbols::GRID`). Place symbols with their origin on the sheet's grid
   and wires meet connection points exactly.
@@ -73,10 +75,12 @@ poles = [["13", "14"]]
 | `keywords` | no | Search words for the picker and command palette. |
 | `connections` | yes | Connection points (may be empty only for pure graphics). |
 | `anchors` | no | Text placement points; a `tag` anchor is required unless `behavior.kind = "none"`. |
+| `bridges` | no | Groups of connection ids always joined inside the symbol, whatever its behavior (e.g. PE in and out of a drive). |
 | `graphics` | yes | Artwork, drawn in order. |
 | `behavior` | yes | Simulation behavior slot (a table, written last). |
 
-Unknown fields are rejected, so typos fail loudly.
+Unknown fields are rejected, so typos fail loudly. That includes unknown
+keys in `[behavior]` (see below).
 
 ## Connections
 
@@ -95,6 +99,11 @@ Unknown fields are rejected, so typos fail loudly.
 artwork. The text is vertically centred on `at`; `align` is `left`, `center`
 or `right` (default `left`). Roles: `tag` (device tag, such as `-K1`),
 `function_text`, `address` (PLC address) and `part`.
+
+Texts stay readable under rotation: when an instance is rotated, the editor
+moves each anchor and each artwork text with the symbol but keeps the text
+itself horizontal (or reading bottom-to-top for 90° and 270°), never upside
+down.
 
 ## Graphics
 
@@ -124,57 +133,84 @@ and the choice of simulation model. Lookups match prefixes, so
 
 | Prefix | Used for |
 | --- | --- |
-| `contact.no`, `contact.nc`, `contact.co` | Auxiliary contacts; suffixes name the actuator (`push`, `turn`, `estop`, `position`, `thermal`, `proximity`, `pressure`, `float`, `temperature`, `delay_on`, `delay_off`) |
+| `contact.no`, `contact.nc`, `contact.co` | Auxiliary contacts; suffixes name the actuator (`push`, `turn`, `key`, `estop`, `position`, `thermal`, `proximity`, `pressure`, `float`, `temperature`, `delay_on`, `delay_off`) |
 | `contact.main` | Main (power) contacts of a contactor |
 | `coil.relay`, `coil.timer.*`, `coil.valve` | Operating coils |
-| `protection.*` | `fuse`, `mcb`, `mpcb`, `rcd`, `rcbo`, `overload` |
+| `protection.*` | `fuse`, `fuse_switch`, `mcb`, `mpcb`, `mcp`, `rcd`, `rcbo`, `overload`, `surge` |
 | `switch.*` | `disconnector`, `switch_disconnector`, `main` |
 | `motor.*` | `ac3`, `ac1`, `dc` |
-| `transformer.*`, `converter.*` | Transformers, power supplies, drives |
+| `transformer.*` | `1ph`, `3ph`, `current` |
+| `converter.*` | `ac_dc`, `dc_dc`, `vfd`, `soft_starter` |
+| `sensor.*` | `temperature.rtd`, `transmitter` |
 | `signal.*` | `lamp`, `horn`, `buzzer`, `bell` |
 | `terminal`, `terminal.*`, `connector.*` | Terminals, plugs, sockets |
 | `earth`, `earth.*` | Earth, protective earth, chassis |
 | `connectivity.*` | Interruption points, potential feeds, terminal bridges |
-| `passive.*`, `load.*`, `source.*`, `meter.*` | Components, loads, sources, instruments |
+| `passive.*` | `resistor`, `capacitor`, `inductor`, `filter`, `diode`, `transistor`, `rectifier`, `potentiometer` and variants |
+| `load.*`, `source.*`, `meter.*` | Loads, sources (including `source.generator`), instruments |
 | `plc.input.*`, `plc.output.*`, `plc.supply` | PLC channels and supply |
 
 ## Behavior slot
 
-`[behavior]` has a required `kind`; every other key is a parameter kept as
-data, so the simulation workstream (WS-19/20) can add parameters without a
-format change. The kinds and parameters below are provisional and owned by
-simulation.
+`[behavior]` has a required `kind` plus parameters. The simulation workstream
+(WS-19/20) owns their meaning and may add parameters; until then each kind
+accepts exactly the keys below and the validator rejects anything else
+(`novo_symbols::behavior_keys(kind)` returns the list).
 
-- `poles`: lists of connection ids that form one switched or conducting
-  path. Two ids per path; a changeover lists `[common, break, make]`.
-  The validator checks every id exists.
-- `kind = "conductor"`: the `poles` are always joined inside the symbol
-  (terminal sides, connectors, bridges). `Symbol::bridges()` returns them as
-  connection indices, matching `SymbolInstance::bridges` in `novo-core`.
-- `kind = "contact"`: `normally = "open" | "closed" | "changeover"`,
-  optional `latching = true` (stays where put: selector, E-stop),
-  optional `delay = "on" | "off"` (timer contact).
-- `kind = "coil"`: optional `delay = "on" | "off"` (timer relay).
-- `kind = "breaker"`: `trip = ["thermal", "magnetic", "residual"]`
-  subset, optional `adjustable = true`.
-- `kind = "motor"`: `phases = 0 | 1 | 3` (0 for DC).
-- `kind = "converter"`: `input`, `output` (`ac` or `dc`).
-- `kind = "meter"`: `quantity`.
-- `kind = "passive"`, `"load"`, `"source"`: `type`.
-- Other kinds: `none` (pure graphics such as earth), `conductor`
-  (terminals, connectors), `fuse`, `overload`, `lamp`, `signal`,
-  `transformer`, `plc_input`, `plc_output` (with `signal = "digital" |
-  "analog"`).
+Two parameters name connections, and they mean different things:
 
-The full list of accepted kinds is `novo_symbols::BEHAVIOR_KINDS`.
+- `poles`: conducting **paths**. Each group lists the connections one path
+  joins: two ids, or `[common, break, make]` for a changeover. No id may
+  appear in two groups. Whether a path conducts depends on the kind: always
+  for `conductor`, by switch state for `contact`, `breaker`, `fuse` and
+  `overload`, through the load for `coil`, `lamp`, `signal`, `meter`,
+  `load`, `passive` and `source`.
+- `ports`: groups of connections that together form one **winding or
+  port** of a motor, transformer or converter, such as `["U1", "V1", "W1"]`
+  or `["L+", "M"]`. Any size; no id in two groups.
+
+| `kind` | Parameters (required in bold) |
+| --- | --- |
+| `none` | none (pure graphics: earth, interruption point, potential feed) |
+| `conductor` | **`poles`** (always joined: terminals, connectors, bridges) |
+| `contact` | **`poles`**, **`normally`** = `open` \| `closed` \| `changeover`, `latching` (bool; selector, E-stop), `delay` = `on` \| `off` |
+| `coil` | **`poles`**, `delay` = `on` \| `off` |
+| `fuse` | **`poles`**, `switched` (bool) |
+| `breaker` | **`poles`**, **`trip`** (non-empty subset of `thermal`, `magnetic`, `residual`), `adjustable` (bool) |
+| `overload` | **`poles`** |
+| `motor` | **`ports`**, **`phases`** = 0 (DC) \| 1 \| 3, `speeds` (integer) |
+| `transformer` | **`ports`** |
+| `converter` | **`ports`**, **`input`**, **`output`** = `ac` \| `dc` |
+| `source` | `poles` or `ports`, `type`, `phases` |
+| `load`, `lamp`, `signal`, `meter` | `poles`; `load` also `type`, `meter` also `quantity` |
+| `passive` | `poles`, `type`, `wiper` (connection id of a potentiometer's wiper) |
+| `plc_input`, `plc_output` | **`signal`** = `digital` \| `analog` |
+
+## Bridges and pass-through
+
+`Symbol::bridges()` returns the groups of connection indices that are always
+joined inside the symbol: the `poles` of kinds that never open
+(`ALWAYS_CLOSED`: `conductor` and `overload`, whose main circuit 1-2, 3-4,
+5-6 is the heater elements in series) plus the top-level `bridges` field.
+Use the field for permanent links inside devices whose behavior is something
+else: series elements that always conduct (current transformer primary,
+ammeter, line reactor, EMC filter lines) and links such as
+`bridges = [["PE", "PE2"]]` on a drive, so a PE continuity check sees the
+motor behind it as earthed.
+
+`Symbol::pass_through()` adds the switched `poles` of contacts, breakers and
+fuses (`PASS_THROUGH`). A potential (L1, N, 24V) and its naming carry through
+these, so L1 stays L1 from the feed through fuse, breaker, contactor and
+overload to the motor terminals. Loads (coils, lamps, motors, meters) end a
+potential and are in neither list. Simulation decides whether a switched
+path actually conducts.
 
 ## Using a symbol in the model
 
 `novo-core` stores a placed symbol's library key (`SymbolKey`) plus a copy of
 its pins. Map a `Symbol` to it as: key = `id`, pins = `connections` in order
-(name = `id`, offset = `at`), bridges = `Symbol::bridges()`. Only
-`conductor` poles are bridges; contact, fuse and breaker poles are switched
-and belong to simulation state. A future "refresh from library" must match
+(name = `id`, offset = `at`), bridges = `Symbol::bridges()`; potential
+propagation follows `Symbol::pass_through()`. A future "refresh from library" must match
 pins by designation, not index, so reordering a file never rewires existing
 instances.
 
@@ -182,6 +218,8 @@ instances.
 
 1. Add or edit a `.toml` file under `symbols/<standard>/<category>/`.
 2. Run `cargo test -p novo-symbols`: every file is parsed and validated.
+   For a user or company library, `Library::load_dir_lenient` loads the
+   valid symbols and returns the problems with the rest.
 3. Look at it: `cargo run -p novo-symbols --example gallery -- gallery.html`
    writes a page with every symbol, its connection points and tag anchor.
 

@@ -33,4 +33,4 @@ graphics = [
 
 [behavior]
 kind = "transformer"
-poles = [["1U", "1V", "1W"], ["2U", "2V", "2W"]]
+ports = [["1U", "1V", "1W"], ["2U", "2V", "2W"]]

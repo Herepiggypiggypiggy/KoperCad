@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::geom::{Placement, Point};
+use crate::geom::{Direction, Placement, Point};
 use crate::id::{
     CableId, DeviceId, JunctionId, PageId, PartId, PotentialId, SymbolId, TerminalId, WireId,
 };
@@ -196,6 +196,10 @@ pub struct Pin {
     pub name: String,
     /// Position relative to the symbol origin, in symbol coordinates.
     pub offset: Point,
+    /// The direction a wire leaves the point, in symbol coordinates. Wire
+    /// routing uses it; it turns and mirrors with the symbol.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direction: Option<Direction>,
 }
 
 impl Pin {
@@ -203,7 +207,14 @@ impl Pin {
         Pin {
             name: name.into(),
             offset: Point::new(x, y),
+            direction: None,
         }
+    }
+
+    /// The same pin with an exit direction, builder style.
+    pub fn with_direction(mut self, direction: Direction) -> Self {
+        self.direction = Some(direction);
+        self
     }
 }
 
@@ -217,8 +228,11 @@ pub enum SymbolRole {
     /// A function of a device. `main` marks the main function (the coil of a
     /// contactor) whose cross references list the auxiliary functions.
     Device { device: DeviceId, main: bool },
-    /// A terminal of a terminal strip.
-    Terminal { terminal: TerminalId },
+    /// One or more terminals of a terminal strip. A single-level terminal
+    /// has one entry. A multi-level terminal block lists one terminal per
+    /// level: `terminals[i]` owns the pins of `bridges[i]`, so the levels stay
+    /// separate nets. With one terminal and no bridges, every pin belongs to it.
+    Terminal { terminals: Vec<TerminalId> },
     /// An interruption point (off-page connector). All interruption points
     /// with the same name are electrically one node.
     Interruption { name: String },
@@ -255,6 +269,30 @@ impl SymbolInstance {
         self.pins
             .get(usize::from(pin))
             .map(|p| self.placement.apply(p.offset))
+    }
+
+    /// Page direction a wire leaves a pin, when the pin defines one.
+    pub fn pin_direction(&self, pin: u16) -> Option<Direction> {
+        let local = self.pins.get(usize::from(pin))?.direction?;
+        Some(self.placement.apply_direction(local))
+    }
+
+    /// The terminal a pin belongs to, for terminal symbols.
+    pub fn terminal_of_pin(&self, pin: u16) -> Option<TerminalId> {
+        let SymbolRole::Terminal { terminals } = &self.role else {
+            return None;
+        };
+        if usize::from(pin) >= self.pins.len() {
+            return None;
+        }
+        match terminals.as_slice() {
+            [single] if self.bridges.is_empty() => Some(*single),
+            _ => self
+                .bridges
+                .iter()
+                .position(|group| group.contains(&pin))
+                .and_then(|level| terminals.get(level).copied()),
+        }
     }
 
     /// Index of the pin with this name.

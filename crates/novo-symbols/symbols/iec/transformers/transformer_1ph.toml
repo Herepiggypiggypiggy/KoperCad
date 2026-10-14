@@ -29,4 +29,4 @@ graphics = [
 
 [behavior]
 kind = "transformer"
-poles = [["1.1", "1.2"], ["2.1", "2.2"]]
+ports = [["1.1", "1.2"], ["2.1", "2.2"]]

@@ -20,6 +20,8 @@ anchors = [
   { role = "tag", at = [-3, 8], align = "right" },
 ]
 
+bridges = [["1U1", "1U2"], ["1V1", "1V2"], ["1W1", "1W2"]]
+
 graphics = [
   { kind = "line", from = [0, 0], to = [0, 4] },
   { kind = "arc", center = [0, 5], r = 1, start = -90, end = 90 },
@@ -45,4 +47,3 @@ graphics = [
 [behavior]
 kind = "passive"
 type = "inductor"
-poles = [["1U1", "1U2"], ["1V1", "1V2"], ["1W1", "1W2"]]

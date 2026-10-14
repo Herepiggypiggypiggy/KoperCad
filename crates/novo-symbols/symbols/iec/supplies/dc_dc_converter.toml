@@ -33,4 +33,4 @@ graphics = [
 kind = "converter"
 input = "dc"
 output = "dc"
-poles = [["+IN", "-IN"], ["+OUT", "-OUT"]]
+ports = [["+IN", "-IN"], ["+OUT", "-OUT"]]
