@@ -5,8 +5,10 @@ use std::path::{Path, PathBuf};
 use eframe::egui;
 
 use crate::actions::Action;
-use crate::backend::{PageId, ProjectBackend};
-use crate::canvas::CanvasView;
+use novo_core::PageId;
+
+use crate::backend::{ProjectBackend, page_labels};
+use crate::canvas::{CanvasView, OpenPage};
 use crate::palette::Palette;
 use crate::settings::{Settings, Theme};
 use crate::{APP_NAME, PROJECT_EXTENSION};
@@ -102,15 +104,59 @@ impl NovoApp {
         &self.messages
     }
 
+    fn is_open(&self) -> bool {
+        self.backend.document().is_some()
+    }
+
+    fn is_dirty(&self) -> bool {
+        self.backend.document().is_some_and(|d| d.is_dirty())
+    }
+
+    fn project_name(&self) -> Option<String> {
+        self.backend.document().map(|d| {
+            let name = &d.project().info().name;
+            if name.is_empty() {
+                "Untitled".to_owned()
+            } else {
+                name.clone()
+            }
+        })
+    }
+
+    fn pages(&self) -> Vec<(PageId, String)> {
+        self.backend.document().map(page_labels).unwrap_or_default()
+    }
+
+    /// Keeps the shown page valid after undo, redo or a reload removed it.
+    fn fix_current_page(&mut self) {
+        let pages = self.pages();
+        if !pages.iter().any(|(id, _)| Some(*id) == self.current_page) {
+            self.current_page = pages.first().map(|(id, _)| *id);
+        }
+    }
+
+    fn undo_redo(&mut self, redo: bool) {
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let result = if redo { doc.redo() } else { doc.undo() };
+        if let Err(e) = result {
+            let what = if redo { "redo" } else { "undo" };
+            self.message(Level::Error, format!("Could not {what}: {e}"));
+        }
+        self.fix_current_page();
+    }
+
     pub fn is_enabled(&self, action: Action) -> bool {
-        let open = self.backend.is_open();
+        let open = self.is_open();
+        let doc = self.backend.document();
         match action {
             Action::SaveProject
             | Action::SaveProjectAs
             | Action::CloseProject
             | Action::ZoomToFit => open,
-            Action::Undo => open && self.backend.can_undo(),
-            Action::Redo => open && self.backend.can_redo(),
+            Action::Undo => doc.is_some_and(|d| d.can_undo()),
+            Action::Redo => doc.is_some_and(|d| d.can_redo()),
             _ => true,
         }
     }
@@ -131,8 +177,8 @@ impl NovoApp {
             }
             Action::CloseProject => self.discard_then(ctx, Discarding::Close),
             Action::Quit => self.discard_then(ctx, Discarding::Quit),
-            Action::Undo => self.backend.undo(),
-            Action::Redo => self.backend.redo(),
+            Action::Undo => self.undo_redo(false),
+            Action::Redo => self.undo_redo(true),
             Action::ZoomToFit => self.canvas.zoom_to_fit(),
             Action::ToggleProjectPanel => {
                 self.settings.show_project_panel ^= true;
@@ -170,7 +216,7 @@ impl NovoApp {
     // Project lifecycle
 
     fn discard_then(&mut self, ctx: &egui::Context, next: Discarding) {
-        if self.backend.is_open() && self.backend.is_dirty() {
+        if self.is_dirty() {
             self.unsaved_prompt = Some(next);
         } else {
             self.finish_discarding(ctx, next);
@@ -201,7 +247,8 @@ impl NovoApp {
         match self.backend.new_project("Untitled") {
             Ok(()) => {
                 self.project_path = None;
-                self.current_page = self.backend.pages().first().map(|p| p.id);
+                self.current_page = None;
+                self.fix_current_page();
             }
             Err(e) => self.message(Level::Error, format!("Could not create a project: {e}")),
         }
@@ -211,7 +258,8 @@ impl NovoApp {
         match self.backend.open(path) {
             Ok(()) => {
                 self.project_path = Some(path.to_owned());
-                self.current_page = self.backend.pages().first().map(|p| p.id);
+                self.current_page = None;
+                self.fix_current_page();
                 self.settings.remember_recent(path);
                 self.message(Level::Info, format!("Opened {}", path.display()));
             }
@@ -244,10 +292,7 @@ impl NovoApp {
     }
 
     fn save_as(&mut self) -> bool {
-        let name = self
-            .backend
-            .project_name()
-            .unwrap_or_else(|| "Untitled".into());
+        let name = self.project_name().unwrap_or_else(|| "Untitled".into());
         let dialog = rfd::FileDialog::new()
             .set_title("Save project")
             .add_filter("NovoElectric project", &[PROJECT_EXTENSION])
@@ -285,6 +330,7 @@ impl NovoApp {
         if let Some(path) = self.open_on_start.take() {
             self.open_path(&path);
         }
+        self.fix_current_page();
         self.handle_close_request(&ctx);
         self.update_title(&ctx);
 
@@ -314,12 +360,13 @@ impl NovoApp {
                 .show(ui, properties_panel);
         }
         egui::CentralPanel::no_frame().show(ui, |ui| {
-            let page = if self.backend.is_open() {
-                self.current_page
-            } else {
-                None
-            };
-            self.canvas.show(ui, page);
+            let page = self.current_page;
+            let open = self
+                .backend
+                .document_mut()
+                .zip(page)
+                .map(|(document, page)| OpenPage { document, page });
+            self.canvas.show(ui, open);
         });
 
         let enabled: Vec<Action> = Action::ALL
@@ -354,16 +401,16 @@ impl NovoApp {
 
     fn handle_close_request(&mut self, ctx: &egui::Context) {
         let requested = ctx.input(|i| i.viewport().close_requested());
-        if requested && !self.quitting && self.backend.is_open() && self.backend.is_dirty() {
+        if requested && !self.quitting && self.is_dirty() {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.unsaved_prompt = Some(Discarding::Quit);
         }
     }
 
     fn update_title(&mut self, ctx: &egui::Context) {
-        let title = match self.backend.project_name() {
+        let title = match self.project_name() {
             Some(name) => {
-                let dirty = if self.backend.is_dirty() { "*" } else { "" };
+                let dirty = if self.is_dirty() { "*" } else { "" };
                 format!("{name}{dirty} - {APP_NAME}")
             }
             None => APP_NAME.to_owned(),
@@ -488,7 +535,7 @@ impl NovoApp {
         ui.set_min_width(ui.available_width());
         ui.strong("Project");
         ui.separator();
-        let Some(name) = self.backend.project_name() else {
+        let Some(name) = self.project_name() else {
             ui.weak("No project open");
             return;
         };
@@ -501,10 +548,10 @@ impl NovoApp {
         ui.separator();
         ui.strong("Pages");
         egui::ScrollArea::vertical().show(ui, |ui| {
-            for page in self.backend.pages() {
-                let selected = self.current_page == Some(page.id);
-                if ui.selectable_label(selected, &page.title).clicked() {
-                    self.current_page = Some(page.id);
+            for (id, label) in self.pages() {
+                let selected = self.current_page == Some(id);
+                if ui.selectable_label(selected, label).clicked() {
+                    self.current_page = Some(id);
                 }
             }
         });
@@ -540,7 +587,7 @@ impl NovoApp {
         let Some(next) = self.unsaved_prompt.clone() else {
             return;
         };
-        let name = self.backend.project_name().unwrap_or_default();
+        let name = self.project_name().unwrap_or_default();
         let mut answer = None;
         let modal = egui::Modal::new(egui::Id::new("unsaved_changes")).show(ctx, |ui| {
             ui.set_width(340.0);
@@ -625,41 +672,42 @@ fn properties_panel(ui: &mut egui::Ui) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backend::{BackendError, PageInfo, PlaceholderBackend};
+    use crate::backend::{BackendError, MemoryBackend, new_document};
     use crate::canvas::PlaceholderCanvas;
+    use novo_core::Document;
 
-    /// A backend whose project always has unsaved changes.
+    /// Opens and saves "files" in memory; `new_project` leaves an unsaved
+    /// edit so the unsaved-changes flow can be tested.
     #[derive(Default)]
     struct DirtyBackend {
-        open: bool,
+        document: Option<Document>,
     }
 
     impl ProjectBackend for DirtyBackend {
-        fn new_project(&mut self, _name: &str) -> Result<(), BackendError> {
-            self.open = true;
+        fn new_project(&mut self, name: &str) -> Result<(), BackendError> {
+            let mut doc = new_document(name)?;
+            doc.transact("Add page", |tx| tx.add_page("2"))?;
+            self.document = Some(doc);
             Ok(())
         }
         fn open(&mut self, _path: &Path) -> Result<(), BackendError> {
-            self.open = true;
+            self.document = Some(new_document("Opened")?);
             Ok(())
         }
         fn save(&mut self, _path: &Path) -> Result<(), BackendError> {
+            if let Some(doc) = &mut self.document {
+                doc.mark_saved();
+            }
             Ok(())
         }
         fn close(&mut self) {
-            self.open = false;
+            self.document = None;
         }
-        fn is_open(&self) -> bool {
-            self.open
+        fn document(&self) -> Option<&Document> {
+            self.document.as_ref()
         }
-        fn project_name(&self) -> Option<String> {
-            self.open.then(|| "Test".to_owned())
-        }
-        fn is_dirty(&self) -> bool {
-            self.open
-        }
-        fn pages(&self) -> Vec<PageInfo> {
-            Vec::new()
+        fn document_mut(&mut self) -> Option<&mut Document> {
+            self.document.as_mut()
         }
     }
 
@@ -692,35 +740,35 @@ mod tests {
     #[test]
     fn renders_with_and_without_a_project() {
         let ctx = egui::Context::default();
-        let mut app = app_with(PlaceholderBackend::default());
+        let mut app = app_with(MemoryBackend::default());
         frame(&ctx, &mut app, Default::default());
         app.run(&ctx, Action::NewProject);
         frame(&ctx, &mut app, Default::default());
-        assert_eq!(app.current_page, Some(PageId(1)));
+        assert!(app.current_page.is_some());
     }
 
     #[test]
     fn ctrl_n_creates_a_project() {
         let ctx = egui::Context::default();
-        let mut app = app_with(PlaceholderBackend::default());
+        let mut app = app_with(MemoryBackend::default());
         frame(&ctx, &mut app, key(egui::Key::N, egui::Modifiers::COMMAND));
-        assert!(app.backend.is_open());
+        assert!(app.is_open());
     }
 
     #[test]
     fn ctrl_k_opens_the_palette_and_blocks_other_shortcuts() {
         let ctx = egui::Context::default();
-        let mut app = app_with(PlaceholderBackend::default());
+        let mut app = app_with(MemoryBackend::default());
         frame(&ctx, &mut app, key(egui::Key::K, egui::Modifiers::COMMAND));
         assert!(app.palette.is_open());
         frame(&ctx, &mut app, key(egui::Key::N, egui::Modifiers::COMMAND));
-        assert!(!app.backend.is_open());
+        assert!(!app.is_open());
     }
 
     #[test]
     fn save_without_a_project_is_ignored() {
         let ctx = egui::Context::default();
-        let mut app = app_with(PlaceholderBackend::default());
+        let mut app = app_with(MemoryBackend::default());
         app.run(&ctx, Action::SaveProject);
         assert!(app.messages().is_empty());
     }
@@ -732,34 +780,34 @@ mod tests {
         app.run(&ctx, Action::NewProject);
         app.run(&ctx, Action::CloseProject);
         assert_eq!(app.unsaved_prompt, Some(Discarding::Close));
-        assert!(app.backend.is_open());
+        assert!(app.is_open());
 
         app.answer_unsaved(&ctx, Discarding::Close, UnsavedAnswer::Cancel);
-        assert!(app.backend.is_open());
+        assert!(app.is_open());
 
         app.run(&ctx, Action::CloseProject);
         app.answer_unsaved(&ctx, Discarding::Close, UnsavedAnswer::Discard);
-        assert!(!app.backend.is_open());
+        assert!(!app.is_open());
         assert!(app.unsaved_prompt.is_none());
     }
 
     #[test]
     fn closing_a_clean_project_does_not_ask() {
         let ctx = egui::Context::default();
-        let mut app = app_with(PlaceholderBackend::default());
+        let mut app = app_with(MemoryBackend::default());
         app.run(&ctx, Action::NewProject);
         app.run(&ctx, Action::CloseProject);
         assert!(app.unsaved_prompt.is_none());
-        assert!(!app.backend.is_open());
+        assert!(!app.is_open());
     }
 
     #[test]
     fn placeholder_open_reports_an_error() {
         let ctx = egui::Context::default();
-        let mut app = app_with(PlaceholderBackend::default());
+        let mut app = app_with(MemoryBackend::default());
         app.finish_discarding(&ctx, Discarding::OpenPath(PathBuf::from("x.novo")));
         assert_eq!(app.messages().last().map(|m| m.level), Some(Level::Error));
-        assert!(!app.backend.is_open());
+        assert!(!app.is_open());
     }
 
     #[test]
@@ -768,7 +816,7 @@ mod tests {
         let mut app = app_with(DirtyBackend::default());
         app.open_on_start(PathBuf::from("plant.novo"));
         frame(&ctx, &mut app, Default::default());
-        assert!(app.backend.is_open());
+        assert!(app.is_open());
         assert_eq!(app.project_path, Some(PathBuf::from("plant.novo")));
         assert_eq!(
             app.settings().recent_projects,
@@ -777,9 +825,37 @@ mod tests {
     }
 
     #[test]
+    fn undo_keeps_the_shown_page_valid() {
+        let ctx = egui::Context::default();
+        let mut app = app_with(DirtyBackend::default());
+        app.run(&ctx, Action::NewProject);
+        let second = app.pages()[1].0;
+        app.current_page = Some(second);
+        assert!(app.is_enabled(Action::Undo));
+        app.run(&ctx, Action::Undo);
+        assert_eq!(app.pages().len(), 1);
+        assert_ne!(app.current_page, Some(second));
+        assert!(app.current_page.is_some());
+        assert!(!app.is_dirty());
+        assert!(app.is_enabled(Action::Redo));
+    }
+
+    #[test]
+    fn saving_clears_the_dirty_flag() {
+        let ctx = egui::Context::default();
+        let mut app = app_with(DirtyBackend::default());
+        app.run(&ctx, Action::NewProject);
+        assert!(app.is_dirty());
+        assert!(app.save_to(Path::new("plant.novo")));
+        assert!(!app.is_dirty());
+        frame(&ctx, &mut app, Default::default());
+        assert_eq!(app.window_title, "Untitled - NovoElectric");
+    }
+
+    #[test]
     fn panel_toggles_flip_settings() {
         let ctx = egui::Context::default();
-        let mut app = app_with(PlaceholderBackend::default());
+        let mut app = app_with(MemoryBackend::default());
         let before = app.settings().show_messages_panel;
         app.run(&ctx, Action::ToggleMessagesPanel);
         assert_ne!(app.settings().show_messages_panel, before);

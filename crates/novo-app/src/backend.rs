@@ -1,29 +1,22 @@
-//! The hook between the shell and the project: model, undo history and file.
+//! The hook between the shell and the project file.
 //!
-//! The shell never touches the model directly. It asks a [`ProjectBackend`]
-//! to create, open, save and undo, and reads back what it needs to draw its
-//! panels. `novo-core` (WS-02) and `novo-storage` (WS-04) provide the real
-//! implementation; [`PlaceholderBackend`] stands in until then.
+//! The open project is a [`novo_core::Document`]: the shell reads it and the
+//! canvas edits it through `Document::transact`, so every edit shares one undo
+//! history. A [`ProjectBackend`] owns that document and creates, opens and
+//! saves it. `novo-storage` (WS-04) provides the file-backed implementation;
+//! [`MemoryBackend`] keeps projects in memory until then.
 
 use std::fmt;
 use std::path::Path;
 
-/// Identifies a page within the open project.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct PageId(pub u64);
-
-/// What the project panel shows for one page.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PageInfo {
-    pub id: PageId,
-    pub title: String,
-}
+use novo_core::{Document, ModelError, PageId, Project};
 
 #[derive(Debug)]
 pub enum BackendError {
     /// The feature is not built yet.
     Unavailable(&'static str),
     Io(std::io::Error),
+    Model(ModelError),
     /// The file exists but is not a project this version can read.
     InvalidProject(String),
 }
@@ -33,6 +26,7 @@ impl fmt::Display for BackendError {
         match self {
             BackendError::Unavailable(what) => write!(f, "{what} is not available yet"),
             BackendError::Io(e) => write!(f, "{e}"),
+            BackendError::Model(e) => write!(f, "{e}"),
             BackendError::InvalidProject(why) => write!(f, "not a valid project: {why}"),
         }
     }
@@ -46,10 +40,15 @@ impl From<std::io::Error> for BackendError {
     }
 }
 
-/// Everything the shell needs from the open project.
+impl From<ModelError> for BackendError {
+    fn from(e: ModelError) -> Self {
+        BackendError::Model(e)
+    }
+}
+
+/// Owns the open project and moves it to and from disk.
 ///
-/// At most one project is open at a time. Methods that read the project
-/// return empty values when none is open.
+/// At most one project is open at a time.
 pub trait ProjectBackend {
     /// Starts a new, unsaved project, replacing any open one.
     fn new_project(&mut self, name: &str) -> Result<(), BackendError>;
@@ -57,41 +56,26 @@ pub trait ProjectBackend {
     /// Opens a project file, replacing any open project.
     fn open(&mut self, path: &Path) -> Result<(), BackendError>;
 
-    /// Writes the open project to `path` and clears the unsaved flag.
+    /// Writes the open project to `path` and marks it saved.
     fn save(&mut self, path: &Path) -> Result<(), BackendError>;
 
     fn close(&mut self);
 
-    fn is_open(&self) -> bool;
+    fn document(&self) -> Option<&Document>;
 
-    /// Display name of the open project.
-    fn project_name(&self) -> Option<String>;
-
-    /// True when the project has changes that are not saved.
-    fn is_dirty(&self) -> bool;
-
-    fn pages(&self) -> Vec<PageInfo>;
-
-    fn can_undo(&self) -> bool {
-        false
-    }
-    fn can_redo(&self) -> bool {
-        false
-    }
-    fn undo(&mut self) {}
-    fn redo(&mut self) {}
+    fn document_mut(&mut self) -> Option<&mut Document>;
 }
 
-/// Keeps a project in memory so the shell can be exercised before the model
-/// and the project file exist. It cannot read or write files.
+/// Creates projects in memory so the shell works before the project file
+/// exists. It cannot read or write files.
 #[derive(Default)]
-pub struct PlaceholderBackend {
-    open: Option<String>,
+pub struct MemoryBackend {
+    document: Option<Document>,
 }
 
-impl ProjectBackend for PlaceholderBackend {
+impl ProjectBackend for MemoryBackend {
     fn new_project(&mut self, name: &str) -> Result<(), BackendError> {
-        self.open = Some(name.to_owned());
+        self.document = Some(new_document(name)?);
         Ok(())
     }
 
@@ -104,29 +88,52 @@ impl ProjectBackend for PlaceholderBackend {
     }
 
     fn close(&mut self) {
-        self.open = None;
+        self.document = None;
     }
 
-    fn is_open(&self) -> bool {
-        self.open.is_some()
+    fn document(&self) -> Option<&Document> {
+        self.document.as_ref()
     }
 
-    fn project_name(&self) -> Option<String> {
-        self.open.clone()
+    fn document_mut(&mut self) -> Option<&mut Document> {
+        self.document.as_mut()
     }
+}
 
-    fn is_dirty(&self) -> bool {
-        false
-    }
+/// A fresh project with one empty page, saved and with no undo history.
+pub fn new_document(name: &str) -> Result<Document, ModelError> {
+    let mut project = Project::new(name);
+    project.transact("New project", |tx| tx.add_page("1"))?;
+    Ok(Document::new(project))
+}
 
-    fn pages(&self) -> Vec<PageInfo> {
-        if self.open.is_some() {
-            vec![PageInfo {
-                id: PageId(1),
-                title: "Page 1".to_owned(),
-            }]
-        } else {
-            Vec::new()
-        }
+/// Pages in display order, with the label the project panel shows.
+pub fn page_labels(document: &Document) -> Vec<(PageId, String)> {
+    document
+        .project()
+        .pages_in_order()
+        .into_iter()
+        .map(|p| {
+            let label = if p.title.is_empty() {
+                p.name.clone()
+            } else {
+                format!("{} {}", p.name, p.title)
+            };
+            (p.id, label)
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_document_has_one_page_and_is_clean() {
+        let doc = new_document("Plant").unwrap();
+        assert_eq!(doc.project().info().name, "Plant");
+        assert_eq!(page_labels(&doc).len(), 1);
+        assert!(!doc.is_dirty());
+        assert!(!doc.can_undo());
     }
 }

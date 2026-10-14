@@ -3,12 +3,20 @@
 //! The shell gives the central area to a [`CanvasView`]. `novo-canvas`
 //! (WS-03) provides the real one; [`PlaceholderCanvas`] stands in until then.
 
-use crate::backend::PageId;
 use eframe::egui;
+use novo_core::{Document, PageId};
+
+/// The open page, handed to the canvas each frame.
+pub struct OpenPage<'a> {
+    /// Edit only through `Document::transact`, so edits join the shared undo
+    /// history.
+    pub document: &'a mut Document,
+    pub page: PageId,
+}
 
 pub trait CanvasView {
-    /// Draws `page` (or an empty state when `None`) into the whole of `ui`.
-    fn show(&mut self, ui: &mut egui::Ui, page: Option<PageId>);
+    /// Draws `open` (or an empty state when `None`) into the whole of `ui`.
+    fn show(&mut self, ui: &mut egui::Ui, open: Option<OpenPage<'_>>);
 
     /// Fits the open page into the view.
     fn zoom_to_fit(&mut self) {}
@@ -32,13 +40,13 @@ const GRID: f32 = 20.0;
 const MM_PER_GRID: f32 = 5.0;
 
 impl CanvasView for PlaceholderCanvas {
-    fn show(&mut self, ui: &mut egui::Ui, page: Option<PageId>) {
+    fn show(&mut self, ui: &mut egui::Ui, open: Option<OpenPage<'_>>) {
         let (response, painter) = ui.allocate_painter(ui.available_size(), egui::Sense::hover());
         let rect = response.rect;
         let visuals = ui.visuals();
         painter.rect_filled(rect, 0.0, visuals.extreme_bg_color);
 
-        if page.is_none() {
+        if open.is_none() {
             self.cursor_mm = None;
             painter.text(
                 rect.center(),

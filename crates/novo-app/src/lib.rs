@@ -3,12 +3,13 @@
 //! Owns the native window, menus, panels, keyboard shortcuts and the command
 //! palette, and wires the other crates together through two hooks:
 //!
-//! - [`ProjectBackend`]: opens, saves and edits a project. The model
-//!   (`novo-core`) and the project file (`novo-storage`) plug in here.
-//! - [`CanvasView`]: draws the open page. The canvas (`novo-canvas`) plugs in
-//!   here.
+//! - [`ProjectBackend`]: owns the open [`novo_core::Document`] and opens and
+//!   saves it. The project file (`novo-storage`) plugs in here.
+//! - [`CanvasView`]: draws and edits the open page through the same document,
+//!   so canvas edits share the undo history. The canvas (`novo-canvas`) plugs
+//!   in here.
 //!
-//! Until those land, [`PlaceholderBackend`] and [`PlaceholderCanvas`] keep the
+//! Until those land, [`MemoryBackend`] and [`PlaceholderCanvas`] keep the
 //! shell usable on its own.
 
 mod actions;
@@ -20,8 +21,8 @@ mod settings;
 
 pub use actions::Action;
 pub use app::NovoApp;
-pub use backend::{BackendError, PageId, PageInfo, PlaceholderBackend, ProjectBackend};
-pub use canvas::{CanvasView, PlaceholderCanvas};
+pub use backend::{BackendError, MemoryBackend, ProjectBackend, new_document, page_labels};
+pub use canvas::{CanvasView, OpenPage, PlaceholderCanvas};
 
 use eframe::egui;
 
@@ -58,7 +59,7 @@ pub fn run() -> eframe::Result {
         Box::new(|cc| {
             let mut app = NovoApp::new(
                 cc,
-                Box::new(PlaceholderBackend::default()),
+                Box::new(MemoryBackend::default()),
                 Box::new(PlaceholderCanvas::default()),
             );
             if let Some(path) = startup_file {
