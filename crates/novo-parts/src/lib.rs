@@ -1,0 +1,43 @@
+//! Parts database and properties (WS-07).
+//!
+//! - [`Catalog`]: manufacturer parts with dimensions and technical data,
+//!   searchable by order number, type, mnemonic (`mpcb`, `ol`, `pb`) or
+//!   description. A starter catalog ships with the program; the user's own
+//!   catalog lives in their profile ([`user_catalog_path`]).
+//! - [`assign_part`] and friends: device-to-part assignment as commands, so
+//!   assigning a part to 50 devices is one undo step.
+//! - [`PropertySheet`]: the searchable properties panel model (WORKFLOW.md
+//!   J12): common fields first, a filter over names and values, shared
+//!   values across a selection, one command per edit.
+//! - [`BulkTable`]: spreadsheet-style bulk edit with Excel copy and paste.
+//! - [`import_catalog`]: CSV import with English, German and Dutch headers.
+//! - [`ui`]: the egui properties panel and bulk editor the app shell shows.
+//!
+//! Nothing here edits the model directly: every change is a
+//! [`novo_core::Command`] the caller runs with `Document::execute`.
+
+mod assign;
+mod catalog;
+mod csv;
+mod search;
+mod sheet;
+mod table;
+pub mod ui;
+
+pub use assign::{
+    AssignMode, assign_cable_part, assign_part, catalog_entry, clear_parts, find_project_part,
+    missing_parts, remove_unused_parts, suggest_for_device, unused_parts,
+};
+pub use catalog::{
+    CATALOG_FORMAT_VERSION, Catalog, CatalogError, CatalogPart, Dimensions, PartKey, keys,
+    user_catalog_path,
+};
+pub use csv::{Column, ImportError, ImportReport, column_for, import_catalog, parse_delimited};
+pub use search::{Matcher, normalize_code};
+pub use sheet::{
+    EditError, Group, PropertySheet, Row, RowKey, RowValue, display_value, parse_number,
+    parse_value, property_key, property_label, resolve_selection,
+};
+pub use table::{
+    BulkError, BulkOutcome, BulkRow, BulkTable, TableColumn, apply_table, find_device, set_cell,
+};
