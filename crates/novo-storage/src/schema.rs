@@ -36,7 +36,7 @@ pub struct Migration {
 /// Every schema step, oldest first.
 pub const MIGRATIONS: &[Migration] = &[Migration { to: 1, run: v1 }];
 
-const fn latest(migrations: &[Migration]) -> u32 {
+pub(crate) const fn latest(migrations: &[Migration]) -> u32 {
     match migrations.last() {
         Some(m) => m.to,
         None => 0,
@@ -73,10 +73,15 @@ pub(crate) fn application_id(conn: &Connection) -> rusqlite::Result<i32> {
     conn.query_row("PRAGMA application_id", [], |r| r.get(0))
 }
 
-/// Brings the file up to the newest version in `migrations`. Before
-/// upgrading an existing file (version above 0), a copy is written next to
-/// it as `<file>.v<old>.bak`.
-pub(crate) fn migrate(conn: &mut Connection, path: &Path, migrations: &[Migration]) -> Result<()> {
+/// Brings the file up to the newest version in `migrations`. With
+/// `backup`, an existing file (version above 0) is first copied next to
+/// itself as `<file>.v<old>.bak`.
+pub(crate) fn migrate(
+    conn: &mut Connection,
+    path: &Path,
+    migrations: &[Migration],
+    backup: bool,
+) -> Result<()> {
     let target = latest(migrations);
     let current = user_version(conn)?;
     if current > target {
@@ -89,14 +94,20 @@ pub(crate) fn migrate(conn: &mut Connection, path: &Path, migrations: &[Migratio
     if current == target {
         return Ok(());
     }
-    if current > 0 {
-        let mut backup = path.as_os_str().to_owned();
-        backup.push(format!(".v{current}.bak"));
-        let backup = std::path::PathBuf::from(backup);
-        if backup.exists() {
-            std::fs::remove_file(&backup)?;
+    if backup && current > 0 {
+        let mut copy = path.as_os_str().to_owned();
+        copy.push(format!(".v{current}.bak"));
+        let copy = std::path::PathBuf::from(copy);
+        let name = copy.to_str().ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("{} is not a valid UTF-8 path", copy.display()),
+            )
+        })?;
+        if copy.exists() {
+            std::fs::remove_file(&copy)?;
         }
-        conn.execute("VACUUM INTO ?1", [backup.to_string_lossy()])?;
+        conn.execute("VACUUM INTO ?1", [name])?;
     }
     let tx = conn.transaction()?;
     for step in migrations.iter().filter(|m| m.to > current) {

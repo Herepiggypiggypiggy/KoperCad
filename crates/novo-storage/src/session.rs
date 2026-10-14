@@ -67,6 +67,15 @@ pub struct Recovered {
     pub autosaved_at: Option<SystemTime>,
 }
 
+/// A recovery file that could not be read. It is renamed aside (to
+/// `<file>.autosave.broken`) rather than deleted, so the work in it is not
+/// lost; tell the user where it is.
+#[derive(Debug)]
+pub struct SetAside {
+    pub path: PathBuf,
+    pub reason: StorageError,
+}
+
 /// What [`Session::open`] found.
 #[derive(Debug)]
 pub struct Opened {
@@ -75,8 +84,11 @@ pub struct Opened {
     pub project: Project,
     /// Unsaved work from an earlier run that did not close cleanly. Show it
     /// to the user, then call [`Session::accept_recovery`] (and use this
-    /// project) or [`Session::discard_recovery`].
+    /// project) or [`Session::discard_recovery`]. Autosave waits until one
+    /// of them is called, so the recovery file is kept meanwhile.
     pub recovered: Option<Recovered>,
+    /// A recovery file that was there but could not be read.
+    pub set_aside: Option<SetAside>,
 }
 
 /// An open project file with autosave.
@@ -89,15 +101,16 @@ pub struct Session {
     autosave: Option<ProjectFile>,
     /// Changes since the last write to the recovery file.
     unautosaved: Pending,
+    /// A recovered project was offered and the app has not decided yet.
+    recovery_pending: bool,
     last_autosave: Instant,
     autosave_interval: Duration,
 }
 
 impl Session {
-    /// Saves `project` as a new project file at `path` and opens it.
+    /// Saves `project` as a new project file at `path` and opens it. A file
+    /// open elsewhere is not replaced: [`StorageError::Locked`].
     pub fn create(path: impl AsRef<Path>, project: &Project) -> Result<Session> {
-        let path = path.as_ref();
-        remove_if_exists(&autosave_path(path))?;
         Ok(Session::with_file(ProjectFile::create(path, project)?))
     }
 
@@ -106,16 +119,14 @@ impl Session {
     pub fn open(path: impl AsRef<Path>) -> Result<Opened> {
         let file = ProjectFile::open(path.as_ref())?;
         let project = file.load()?;
-        let recovered = read_recovery(&file)?;
+        let (recovered, set_aside) = read_recovery(&file)?;
         let mut session = Session::with_file(file);
-        if recovered.is_some() {
-            // The next autosave starts a fresh recovery file.
-            session.unautosaved = Pending::Everything;
-        }
+        session.recovery_pending = recovered.is_some();
         Ok(Opened {
             session,
             project,
             recovered,
+            set_aside,
         })
     }
 
@@ -125,6 +136,7 @@ impl Session {
             unsaved: Pending::Nothing,
             autosave: None,
             unautosaved: Pending::Nothing,
+            recovery_pending: false,
             last_autosave: Instant::now(),
             autosave_interval: DEFAULT_AUTOSAVE_INTERVAL,
         }
@@ -158,27 +170,42 @@ impl Session {
     /// written. The recovery file is no longer needed and is deleted.
     pub fn save(&mut self, project: &Project) -> Result<()> {
         self.unsaved.write(&mut self.file, project)?;
-        self.unsaved = Pending::Nothing;
-        self.drop_autosave()?;
+        self.saved();
         Ok(())
     }
 
-    /// Saves `project` to a new file at `path` and continues there. The old
-    /// file is left as it was last saved.
+    /// Saves `project` to the file at `path` and continues there. The old
+    /// file is left as it was last saved. A file open elsewhere is not
+    /// replaced: [`StorageError::Locked`].
     pub fn save_as(&mut self, path: impl AsRef<Path>, project: &Project) -> Result<()> {
         let path = path.as_ref();
-        remove_if_exists(&autosave_path(path))?;
+        if same_file(path, self.file.path()) {
+            return self.save(project);
+        }
         let file = ProjectFile::create(path, project)?;
-        self.drop_autosave()?;
-        std::mem::replace(&mut self.file, file).close()?;
-        self.unsaved = Pending::Nothing;
+        self.drop_autosave_quietly();
+        let old = std::mem::replace(&mut self.file, file);
+        let _ = old.close();
+        self.saved();
         Ok(())
+    }
+
+    /// After a successful save: nothing is pending, and the recovery file
+    /// is obsolete. Failing to delete it is harmless, as it refers to an
+    /// older save and is discarded at the next open.
+    fn saved(&mut self) {
+        self.unsaved = Pending::Nothing;
+        self.unautosaved = Pending::Nothing;
+        self.recovery_pending = false;
+        self.drop_autosave_quietly();
     }
 
     /// Whether there are changes the recovery file does not hold yet and the
-    /// autosave interval has passed.
+    /// autosave interval has passed. Never while a recovery decision is
+    /// pending.
     pub fn autosave_due(&self) -> bool {
-        self.unautosaved != Pending::Nothing
+        !self.recovery_pending
+            && self.unautosaved != Pending::Nothing
             && self.last_autosave.elapsed() >= self.autosave_interval
     }
 
@@ -193,9 +220,10 @@ impl Session {
     }
 
     /// Writes the changes since the last autosave to the recovery file now.
-    /// Does nothing if there are none.
+    /// Does nothing if there are none, or while a recovery decision is
+    /// pending (the recovery file still holds the offered work).
     pub fn autosave(&mut self, project: &Project) -> Result<()> {
-        if self.unautosaved == Pending::Nothing {
+        if self.recovery_pending || self.unautosaved == Pending::Nothing {
             return Ok(());
         }
         match &mut self.autosave {
@@ -222,18 +250,18 @@ impl Session {
     }
 
     /// Keeps the recovered project offered by [`Session::open`]: the app
-    /// now edits it, and the next save writes all of it.
+    /// now edits it. The next save writes all of it, and the next autosave
+    /// writes a fresh recovery file; until then the old one stays.
     pub fn accept_recovery(&mut self) {
+        self.recovery_pending = false;
         self.unsaved = Pending::Everything;
+        self.unautosaved = Pending::Everything;
     }
 
     /// Throws the recovered work away and deletes the recovery file.
     pub fn discard_recovery(&mut self) -> Result<()> {
-        self.drop_autosave()?;
-        if self.unautosaved == Pending::Everything && self.unsaved == Pending::Nothing {
-            self.unautosaved = Pending::Nothing;
-        }
-        Ok(())
+        self.recovery_pending = false;
+        self.drop_autosave()
     }
 
     /// Closes the project. Unsaved changes are dropped (ask the user to save
@@ -249,42 +277,60 @@ impl Session {
         }
         remove_if_exists(&autosave_path(self.file.path()))
     }
+
+    fn drop_autosave_quietly(&mut self) {
+        let _ = self.drop_autosave();
+    }
 }
 
-/// Reads the recovery file next to `file`, if there is a usable one. A
-/// recovery file made against an older save of the project, or one that
-/// cannot be read, is deleted.
-fn read_recovery(file: &ProjectFile) -> Result<Option<Recovered>> {
+fn same_file(a: &Path, b: &Path) -> bool {
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a == b,
+    }
+}
+
+/// Reads the recovery file next to `file`. One made against an older save
+/// of the project is deleted; one that cannot be read is renamed aside.
+fn read_recovery(file: &ProjectFile) -> Result<(Option<Recovered>, Option<SetAside>)> {
     let path = autosave_path(file.path());
     if !path.exists() {
-        return Ok(None);
+        return Ok((None, None));
     }
-    let autosave = match ProjectFile::open_as(&path, Role::Autosave) {
-        Ok(autosave) => autosave,
-        Err(StorageError::Locked(path)) => return Err(StorageError::Locked(path)),
-        Err(_) => {
-            remove_if_exists(&path)?;
+    let read = (|| {
+        let autosave = ProjectFile::open_as(&path, Role::Autosave)?;
+        let base = autosave
+            .meta("base_seq")?
+            .and_then(|v| v.parse::<u64>().ok());
+        if base != Some(file.save_seq()?) {
+            autosave.close()?;
             return Ok(None);
         }
-    };
-    let base = autosave
-        .meta("base_seq")?
-        .and_then(|v| v.parse::<u64>().ok());
-    let current = base == Some(file.save_seq()?);
-    let recovered = if current {
-        match autosave.load() {
-            Ok(project) => Some(Recovered {
-                project,
-                autosaved_at: autosave.saved_at()?,
-            }),
-            Err(_) => None,
+        let recovered = Recovered {
+            project: autosave.load()?,
+            autosaved_at: autosave.saved_at()?,
+        };
+        autosave.close()?;
+        Ok(Some(recovered))
+    })();
+    match read {
+        Ok(Some(recovered)) => Ok((Some(recovered), None)),
+        Ok(None) => {
+            remove_if_exists(&path)?;
+            Ok((None, None))
         }
-    } else {
-        None
-    };
-    autosave.close()?;
-    if recovered.is_none() {
-        remove_if_exists(&path)?;
+        Err(StorageError::Locked(p)) => Err(StorageError::Locked(p)),
+        Err(reason) => {
+            let aside = sibling(&path, ".broken");
+            remove_if_exists(&aside)?;
+            std::fs::rename(&path, &aside)?;
+            Ok((
+                None,
+                Some(SetAside {
+                    path: aside,
+                    reason,
+                }),
+            ))
+        }
     }
-    Ok(recovered)
 }

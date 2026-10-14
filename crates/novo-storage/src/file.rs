@@ -8,6 +8,7 @@ use rusqlite::{Connection, OpenFlags, OptionalExtension, Transaction, params};
 
 use crate::error::{Result, StorageError, is_busy, is_not_a_database};
 use crate::schema::{self, APPLICATION_ID, MIGRATIONS, Migration};
+use crate::session::AUTOSAVE_SUFFIX;
 
 /// File name extension of project files.
 pub const PROJECT_EXTENSION: &str = "novo";
@@ -34,6 +35,14 @@ impl Role {
 /// or program opening it gets [`StorageError::Locked`]. Every write is one
 /// SQLite transaction: a crash or power cut during a save leaves the file as
 /// it was before the save, never half written.
+///
+/// The lock is SQLite's file lock. It is reliable on local disks; network
+/// shares (SMB, NFS) may not honour it, so two machines opening the same
+/// file on a share are not guaranteed to be kept apart.
+///
+/// While a file is open, SQLite keeps an empty `<file>-journal` next to it
+/// (exclusive locking blanks the journal instead of deleting it). It is
+/// removed when the file is closed and is harmless if copied or synced.
 #[derive(Debug)]
 pub struct ProjectFile {
     conn: Connection,
@@ -45,7 +54,8 @@ impl ProjectFile {
     ///
     /// The project is written to a temporary file next to `path` and moved
     /// into place only once complete, so an existing file is never left half
-    /// overwritten.
+    /// overwritten. A file that is open elsewhere is not replaced:
+    /// [`StorageError::Locked`].
     pub fn create(path: impl AsRef<Path>, project: &Project) -> Result<ProjectFile> {
         Self::create_as(path.as_ref(), project, Role::Project, |_| Ok(()))
     }
@@ -56,10 +66,34 @@ impl ProjectFile {
         Self::open_as(path.as_ref(), Role::Project)
     }
 
-    /// Opens `path`, reads the project and closes the file again. For tools
-    /// that only read, such as the command-line exporter.
+    /// Reads the project at `path` without writing to it, for tools that
+    /// only read (such as the command-line exporter). Works on read-only
+    /// media; a file from an older version is upgraded in memory only. A file
+    /// open in the app gives [`StorageError::Locked`].
     pub fn read(path: impl AsRef<Path>) -> Result<Project> {
-        Self::open(path)?.load()
+        let path = path.as_ref();
+        ensure_exists(path)?;
+        let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
+        let conn = Connection::open_with_flags(path, flags)?;
+        let version = check_existing(&conn, path, schema::SCHEMA_VERSION)?;
+        let conn = if version < schema::SCHEMA_VERSION {
+            let mut memory = Connection::open_in_memory()?;
+            rusqlite::backup::Backup::new(&conn, &mut memory)?.run_to_completion(
+                -1,
+                Duration::ZERO,
+                None,
+            )?;
+            schema::migrate(&mut memory, path, MIGRATIONS, false)?;
+            memory
+        } else {
+            conn
+        };
+        let file = ProjectFile {
+            conn,
+            path: path.to_owned(),
+        };
+        file.check_role(Role::Project)?;
+        file.load()
     }
 
     pub fn path(&self) -> &Path {
@@ -72,6 +106,9 @@ impl ProjectFile {
         role: Role,
         extra: impl FnOnce(&Transaction<'_>) -> Result<()>,
     ) -> Result<ProjectFile> {
+        // Hold the target's lock while preparing, so a file open in another
+        // window is never replaced and its recovery file never touched.
+        let lock = lock_existing(path)?;
         let temp = sibling(path, ".saving");
         remove_if_exists(&temp)?;
         let written = (|| {
@@ -84,41 +121,48 @@ impl ProjectFile {
             extra(&tx)?;
             tx.commit()?;
             // Close before moving: Windows cannot rename an open file.
-            file.close()
+            file.close()?;
+            if role == Role::Project {
+                // A recovery file left by a crash belongs to the file being
+                // replaced; it must not be offered against the new one.
+                remove_if_exists(&sibling(path, AUTOSAVE_SUFFIX))?;
+            }
+            if let Some(lock) = lock {
+                lock.close().map_err(|(_, e)| StorageError::from(e))?;
+            }
+            std::fs::rename(&temp, path)?;
+            Ok(())
         })();
         if let Err(err) = written {
             let _ = std::fs::remove_file(&temp);
             return Err(err);
         }
-        std::fs::rename(&temp, path)?;
         Self::open_as(path, role)
     }
 
     pub(crate) fn open_as(path: &Path, role: Role) -> Result<ProjectFile> {
-        if !path.exists() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("{} does not exist", path.display()),
-            )
-            .into());
-        }
+        ensure_exists(path)?;
         let file = Self::connect(path, false, MIGRATIONS)?;
-        let stored = file.meta("role")?;
-        if stored.as_deref() != Some(role.as_str()) {
-            return Err(StorageError::NotAProject(path.to_owned()));
-        }
+        file.check_role(role)?;
         Ok(file)
     }
 
+    fn check_role(&self, role: Role) -> Result<()> {
+        if self.meta("role")?.as_deref() != Some(role.as_str()) {
+            return Err(StorageError::NotAProject(self.path.clone()));
+        }
+        Ok(())
+    }
+
     /// Opens (and with `create`, creates) a database, takes the exclusive
-    /// lock, checks it is ours and runs pending migrations.
+    /// lock, checks it is ours and runs pending migrations. Recovery files
+    /// are upgraded without a backup copy.
     fn connect(path: &Path, create: bool, migrations: &[Migration]) -> Result<ProjectFile> {
         let mut flags = OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX;
         if create {
             flags |= OpenFlags::SQLITE_OPEN_CREATE;
         }
         let mut conn = Connection::open_with_flags(path, flags)?;
-        let not_ours = || StorageError::NotAProject(path.to_owned());
         // EXCLUSIVE locking keeps the write lock between transactions, so the
         // file stays ours until this connection closes.
         conn.execute_batch(
@@ -130,25 +174,16 @@ impl ProjectFile {
         conn.execute_batch("BEGIN EXCLUSIVE; COMMIT;")
             .map_err(|e| classify(e, path))?;
 
-        let app_id = schema::application_id(&conn).map_err(|e| classify(e, path))?;
-        let version = schema::user_version(&conn)?;
         if create {
-            if version != 0 || app_id != 0 {
-                return Err(not_ours());
+            let app_id = schema::application_id(&conn).map_err(|e| classify(e, path))?;
+            if schema::user_version(&conn)? != 0 || app_id != 0 {
+                return Err(StorageError::NotAProject(path.to_owned()));
             }
-        } else if app_id != APPLICATION_ID || version == 0 {
-            return Err(not_ours());
+        } else {
+            check_existing(&conn, path, schema::latest(migrations))?;
         }
-        if !create {
-            let check: String = conn.query_row("PRAGMA quick_check", [], |r| r.get(0))?;
-            if check != "ok" {
-                return Err(StorageError::Corrupt {
-                    path: path.to_owned(),
-                    reason: check,
-                });
-            }
-        }
-        schema::migrate(&mut conn, path, migrations)?;
+        let backup = !create && !is_autosave(path);
+        schema::migrate(&mut conn, path, migrations, backup)?;
         Ok(ProjectFile {
             conn,
             path: path.to_owned(),
@@ -170,9 +205,18 @@ impl ProjectFile {
             .meta("record_format")?
             .and_then(|v| v.parse().ok())
             .ok_or_else(|| corrupt("missing record format".into()))?;
+        // A change to novo-core's record JSON comes with a schema migration
+        // that rewrites the rows, so after migrating the formats match.
+        if format > JSON_FORMAT_VERSION {
+            return Err(StorageError::NewerFormat {
+                path: self.path.clone(),
+                found: format,
+                supported: JSON_FORMAT_VERSION,
+            });
+        }
         if format != JSON_FORMAT_VERSION {
             return Err(corrupt(format!(
-                "records use format {format}, this version reads {JSON_FORMAT_VERSION}"
+                "records use format {format} but no migration upgraded them to {JSON_FORMAT_VERSION}"
             )));
         }
         let info: ProjectInfo = serde_json::from_str(
@@ -269,6 +313,68 @@ impl ProjectFile {
             .conn
             .query_row("SELECT value FROM meta WHERE key = ?1", [key], |r| r.get(0))
             .optional()?)
+    }
+}
+
+fn ensure_exists(path: &Path) -> Result<()> {
+    if path.exists() {
+        return Ok(());
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        format!("{} does not exist", path.display()),
+    )
+    .into())
+}
+
+fn is_autosave(path: &Path) -> bool {
+    path.as_os_str()
+        .to_string_lossy()
+        .ends_with(AUTOSAVE_SUFFIX)
+}
+
+/// Checks an existing database is a project file this version can read.
+/// Returns its schema version.
+fn check_existing(conn: &Connection, path: &Path, supported: u32) -> Result<u32> {
+    let app_id = schema::application_id(conn).map_err(|e| classify(e, path))?;
+    let version = schema::user_version(conn)?;
+    if app_id != APPLICATION_ID || version == 0 {
+        return Err(StorageError::NotAProject(path.to_owned()));
+    }
+    if version > supported {
+        return Err(StorageError::NewerFormat {
+            path: path.to_owned(),
+            found: version,
+            supported,
+        });
+    }
+    let check: String = conn.query_row("PRAGMA quick_check", [], |r| r.get(0))?;
+    if check != "ok" {
+        return Err(StorageError::Corrupt {
+            path: path.to_owned(),
+            reason: check,
+        });
+    }
+    Ok(version)
+}
+
+/// Takes the exclusive lock on an existing file before it is replaced.
+/// `Locked` if another connection holds it; `None` if there is no file or
+/// it is not a SQLite database (so nothing can hold a SQLite lock on it).
+fn lock_existing(path: &Path) -> Result<Option<Connection>> {
+    if !path.exists() {
+        return Ok(None);
+    }
+    let flags = OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX;
+    let conn = Connection::open_with_flags(path, flags)?;
+    let locked = conn.execute_batch(
+        "PRAGMA locking_mode = EXCLUSIVE;
+         BEGIN EXCLUSIVE; COMMIT;",
+    );
+    match locked {
+        Ok(()) => Ok(Some(conn)),
+        Err(e) if is_not_a_database(&e) => Ok(None),
+        Err(e) => Err(classify(e, path)),
     }
 }
 

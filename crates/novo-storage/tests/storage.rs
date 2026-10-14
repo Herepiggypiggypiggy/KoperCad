@@ -576,3 +576,159 @@ fn a_large_project_round_trips() {
         .unwrap();
     assert_same(&ProjectFile::read(&path).unwrap(), doc.project());
 }
+
+#[test]
+fn a_file_open_elsewhere_is_not_replaced() {
+    let (_dir, path) = temp();
+    let mut doc = Document::default();
+    let mut a = Session::create(&path, doc.project()).unwrap();
+    let (_, c) = doc.transact("Add page", |tx| tx.add_page("1")).unwrap();
+    a.record(&c);
+    a.autosave(doc.project()).unwrap();
+
+    let other = Project::new("Other");
+    assert!(matches!(
+        Session::create(&path, &other),
+        Err(StorageError::Locked(_))
+    ));
+    let mut b = Session::create(path.with_file_name("b.novo"), &other).unwrap();
+    assert!(matches!(
+        b.save_as(&path, &other),
+        Err(StorageError::Locked(_))
+    ));
+    assert_eq!(b.path(), path.with_file_name("b.novo"));
+    assert!(!path.with_file_name("motor starter.novo.saving").exists());
+
+    // A's recovery file and file are untouched, and A can still save.
+    assert!(autosave_path(&path).exists());
+    a.save(doc.project()).unwrap();
+    a.close().unwrap();
+    b.close().unwrap();
+    assert_same(&ProjectFile::read(&path).unwrap(), doc.project());
+}
+
+#[test]
+fn create_replaces_a_file_that_is_not_a_database() {
+    let (_dir, path) = temp();
+    std::fs::write(&path, "plain text, not SQLite, long enough to be past any header ......................................................").unwrap();
+    let project = Project::new("New");
+    ProjectFile::create(&path, &project)
+        .unwrap()
+        .close()
+        .unwrap();
+    assert_same(&ProjectFile::read(&path).unwrap(), &project);
+}
+
+#[test]
+fn save_as_to_the_same_file_is_a_save() {
+    let (_dir, path) = temp();
+    let mut doc = Document::default();
+    let mut session = Session::create(&path, doc.project()).unwrap();
+    let (_, c) = doc.transact("Add page", |tx| tx.add_page("1")).unwrap();
+    session.record(&c);
+    let same = path
+        .parent()
+        .unwrap()
+        .join(".")
+        .join(path.file_name().unwrap());
+    session.save_as(&same, doc.project()).unwrap();
+    assert!(!session.has_unsaved_changes());
+    session.close().unwrap();
+    assert_same(&ProjectFile::read(&path).unwrap(), doc.project());
+}
+
+#[test]
+fn autosave_waits_for_the_recovery_decision() {
+    let (_dir, path) = temp();
+    let mut doc = Document::default();
+    let mut session = Session::create(&path, doc.project()).unwrap();
+    session.set_autosave_interval(Duration::ZERO);
+    let (_, c) = doc
+        .transact("Two pages", |tx| {
+            tx.add_page("1")?;
+            tx.add_page("2")
+        })
+        .unwrap();
+    session.record(&c);
+    session.autosave(doc.project()).unwrap();
+    crash(session);
+
+    let opened = Session::open(&path).unwrap();
+    let mut session = opened.session;
+    session.set_autosave_interval(Duration::ZERO);
+    // While the recovery dialog is showing, nothing overwrites the file.
+    assert!(!session.autosave_due());
+    assert!(!session.autosave_if_due(&opened.project).unwrap());
+    session.autosave(&opened.project).unwrap();
+
+    let mut doc = Document::new(opened.recovered.unwrap().project);
+    session.accept_recovery();
+    let (_, c) = doc.transact("Add page", |tx| tx.add_page("3")).unwrap();
+    session.record(&c);
+    assert!(session.autosave_if_due(doc.project()).unwrap());
+    crash(session);
+
+    let opened = Session::open(&path).unwrap();
+    let recovered = opened.recovered.expect("work is still recoverable");
+    assert_eq!(recovered.project.pages().count(), 3);
+    assert_same(&recovered.project, doc.project());
+}
+
+#[test]
+fn no_recovery_is_offered_after_a_clean_save() {
+    let (_dir, path) = temp();
+    let mut doc = Document::default();
+    let mut session = Session::create(&path, doc.project()).unwrap();
+    session.set_autosave_interval(Duration::ZERO);
+    let (_, c) = doc.transact("Add page", |tx| tx.add_page("1")).unwrap();
+    session.record(&c);
+    session.autosave(doc.project()).unwrap();
+    session.save(doc.project()).unwrap();
+    assert!(!session.autosave_due());
+    assert!(!session.autosave_if_due(doc.project()).unwrap());
+    crash(session);
+
+    let opened = Session::open(&path).unwrap();
+    assert!(opened.recovered.is_none());
+    assert_same(&opened.project, doc.project());
+}
+
+#[test]
+fn an_unreadable_recovery_file_is_set_aside_not_deleted() {
+    let (_dir, path) = temp();
+    Session::create(&path, &Project::new("P"))
+        .unwrap()
+        .close()
+        .unwrap();
+    let garbage = b"not a recovery file, but maybe someone's work ....................................................";
+    std::fs::write(autosave_path(&path), garbage).unwrap();
+
+    let opened = Session::open(&path).unwrap();
+    assert!(opened.recovered.is_none());
+    let aside = opened.set_aside.expect("reported");
+    assert!(matches!(aside.reason, StorageError::NotAProject(_)));
+    assert_eq!(std::fs::read(&aside.path).unwrap(), garbage);
+    assert!(!autosave_path(&path).exists());
+}
+
+#[test]
+fn read_does_not_write_and_works_on_read_only_files() {
+    let (_dir, path) = temp();
+    let mut doc = Document::default();
+    build_starter(&mut doc);
+    ProjectFile::create(&path, doc.project())
+        .unwrap()
+        .close()
+        .unwrap();
+    let before = std::fs::read(&path).unwrap();
+    let mut perms = std::fs::metadata(&path).unwrap().permissions();
+    perms.set_readonly(true);
+    std::fs::set_permissions(&path, perms.clone()).unwrap();
+
+    assert_same(&ProjectFile::read(&path).unwrap(), doc.project());
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+
+    #[allow(clippy::permissions_set_readonly_false)]
+    perms.set_readonly(false);
+    std::fs::set_permissions(&path, perms).unwrap();
+}
