@@ -3,6 +3,17 @@
 For a fresh cloud session that takes over as **integration lead**: the role that coordinates the threads and merges PRs.
 Last updated 2026-10-14 17:17 UTC (final from the first lead session) by the integration lead (session_011PfTJ1QaP1JQJPwXcFnxBE).
 
+## 0a. Lead change (2026-10-14 21:20 UTC)
+- **Integration lead from 21:20 UTC:** the project thread "Catch up and resume the build" (cse_01FiLvRBKEcNNHbQEGhYyL1S, branch `claude/project-thread-6lmg5c`). The old lead thread (cse_011PfTJ1QaP1JQJPwXcFnxBE) handed over to it; the cloud coordinator (session_01DZ68tTULUv7Uhe8ecKbC47) is stopped. There is one lead. Send verdicts and merge requests to it.
+- **CI still down:** Actions jobs fail with "recent account payments have failed or your spending limit needs to be increased". Owner told. Local fmt + clippy + tests remain the CI signal.
+- #73 is closed. #72 got CHANGES NEEDED from the main reviewer and its fixer has stopped, so it was closed; WS-07 redoes it from main following WS-02's decision (a terminal's own article is `Terminal.part` only, the strip default is `terminal_part.<kind>`, `novo_parts::terminal_part` is the single resolver with no strip-device fallback).
+- Merged by this lead: #80 and #88 (DESIGN.md, design READY, docs only), #85 (WS-11: cable 3G and shield fixes, reviewer B READY).
+- Reviewers now: main reviewer (cse_016C9nTT8cN7voW8t1NQUG4W) and reviewer B (session_01QSnXFBDRyvwwzhT1S1gFGN) share correctness reviews; one correctness READY is enough for fixes to existing crates. UI PRs also need the design reviewer (cse_0114emQ5fSFrzcALbR4S18TU).
+- New project thread "Outputs: PDF, reports and checks" (cse_01GNLWH7SKcFppZwCxZoC1rw) owns novo-pdf, novo-reports and novo-checks. WS-11 takes cable (WS-12) fixes. WS-28 is parked.
+- Main 9c9f522 + lopdf move: fmt and clippy -D warnings clean, cargo test --workspace 626 passed, 0 failed, 3 ignored (Linux). Release thread: `cargo clippy --target x86_64-pc-windows-gnu` clean on 15c9992; an untested Windows zip is at /mnt/project-files/builds/.
+- `lopdf` moved into `[workspace.dependencies]` (lead PR).
+- Several project threads restarted at 21:20, not 23:20: read `handoff/RESUME-2320.md` anyway.
+
 ## 0. Current state (2026-10-14 20:30 UTC, wrap-up by cloud coordinator session_01DZ68tTULUv7Uhe8ecKbC47)
 Sections 6 and 11 below are the 17:17 snapshot; this section supersedes them. **Project threads resuming at 23:20 UTC: read `handoff/RESUME-2320.md` next.**
 - **Who runs the project:** from 17:30 to 20:30 UTC a cloud coordinator ran it (see `handoff/cloud-coordinator/`). It has stopped, as have all cloud reviewers and workers (`handoff/coordinator/cloud-roster.md`); the owner is near their credit limit. Coordination returns to the project's integration lead thread.

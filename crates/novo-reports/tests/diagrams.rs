@@ -5,7 +5,9 @@ use std::io::Cursor;
 
 use calamine::{Data, Reader, Xlsx, open_workbook_from_rs};
 use novo_core::{DeviceTag, Document, Page, PageKind, Project};
-use novo_reports::{Cell, Column, LiveReports, ReportOutput, Section, sheet_name, xlsx_bytes};
+use novo_reports::{
+    Cell, Column, LiveReports, ReportOutput, Section, sheet_name, sheet_names, xlsx_bytes,
+};
 use novo_tests::motor_starter;
 
 fn starter() -> Document {
@@ -206,6 +208,78 @@ fn generated_pages_print_as_named_sheets() {
     let (w, h) = doc.project().page(devices).expect("page").format.size_mm();
     assert_eq!((layout.width, layout.height), (w, h));
     assert!(layout.texts.iter().any(|t| t.text == "page 2 / 3"));
+}
+
+#[test]
+fn sheet_names_never_repeat_another_page() {
+    let free = |_: &str| false;
+    assert_eq!(sheet_names("20", 1, free), ["20"]);
+    assert_eq!(sheet_names("20", 2, free), ["20.1", "20.2"]);
+    // A single sheet is the page's own name, whatever else exists.
+    assert_eq!(sheet_names("20", 1, |n| n == "20"), ["20"]);
+    // One clash moves the whole family to the next free separator.
+    assert_eq!(
+        sheet_names("20", 3, |n| n == "20.2"),
+        ["20/1", "20/2", "20/3"]
+    );
+    assert_eq!(
+        sheet_names("20", 2, |n| ["20.1", "20/2"].contains(&n)),
+        ["20-1", "20-2"]
+    );
+    // Every separator taken: still distinct, free names.
+    let taken = ["20.1", "20/1", "20-1", "20_1", "20.1'"];
+    assert_eq!(
+        sheet_names("20", 2, |n| taken.contains(&n)),
+        ["20.1''", "20.2"]
+    );
+}
+
+#[test]
+fn generated_sheets_step_around_a_real_sub_page() {
+    let mut doc = starter();
+    let (devices, _) = doc
+        .transact("Report page", |tx| {
+            let devices = tx.add_page("20")?;
+            tx.update::<Page>(devices, |p| {
+                p.kind = PageKind::Generated {
+                    generator: "devices".into(),
+                }
+            })?;
+            // A hand-drawn sub-page that happens to share a sheet's name.
+            tx.add_page("20.2")?;
+            for i in 1..=80 {
+                tx.add_device(DeviceTag::parse(&format!("=A9-K{i}"))?, "Relay")?;
+            }
+            Ok(devices)
+        })
+        .expect("pages");
+    let mut reports = LiveReports::standard();
+    let names: Vec<String> = reports
+        .sheets_of_page(doc.project(), devices)
+        .into_iter()
+        .map(|s| s.name)
+        .collect();
+    assert_eq!(names, ["20/1", "20/2", "20/3"]);
+    let pages: Vec<&str> = doc.project().pages().map(|p| p.name.as_str()).collect();
+    assert!(names.iter().all(|n| !pages.contains(&n.as_str())));
+
+    // Renaming the sub-page away gives the dotted names back.
+    let sub = doc
+        .project()
+        .pages()
+        .find(|p| p.name == "20.2")
+        .expect("sub-page")
+        .id;
+    doc.transact("Rename", |tx| {
+        tx.update::<Page>(sub, |p| p.name = "19.1".into())
+    })
+    .expect("rename");
+    let names: Vec<String> = reports
+        .sheets_of_page(doc.project(), devices)
+        .into_iter()
+        .map(|s| s.name)
+        .collect();
+    assert_eq!(names, ["20.1", "20.2", "20.3"]);
 }
 
 #[test]

@@ -33,8 +33,11 @@ impl NovoApp {
     pub fn export_pdf_to(&mut self, path: &Path) -> Option<PathBuf> {
         let summary = Summary::of(self.problems());
         let replaced = path.exists();
+        let options = novo_pdf::PdfOptions {
+            notes: self.xref_notes_by_page(),
+            ..Default::default()
+        };
         let doc = self.backend.document()?;
-        let options = novo_pdf::PdfOptions::default();
         let art = self
             .library()
             .map(|lib| novo_editor::art::LibraryArt::new(lib, options.style.symbol));

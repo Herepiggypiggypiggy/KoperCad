@@ -73,29 +73,48 @@ pub fn segment(ui: &mut Ui, text: &str, current: bool) -> Response {
     ui.add(button)
 }
 
-/// The live design check summary: a quiet pill that reads "No issues" or
-/// counts errors and warnings in their colours.
+/// The live design check summary: a quiet pill that reads "No issues", or
+/// counts errors and warnings, each in its own colour, both when both exist
+/// ("2 errors · 5 warnings").
 pub fn issue_pill(ui: &mut Ui, errors: usize, warnings: usize) -> Response {
-    let (text, color) = match (errors, warnings) {
-        (0, 0) => (
-            format!("{}  No issues", crate::icons::status::OK),
-            tokens::SUCCESS,
-        ),
-        (0, w) => (
-            format!("{}  {w} warnings", crate::icons::status::WARNING),
-            tokens::WARNING,
-        ),
-        (e, _) => (
-            format!("{}  {e} errors", crate::icons::status::ERROR),
-            tokens::ERROR,
-        ),
-    };
+    let small = egui::TextStyle::Small.resolve(ui.style());
+    let mut job = egui::text::LayoutJob::default();
+    for (text, color) in pill_parts(errors, warnings) {
+        job.append(&text, 0.0, egui::TextFormat::simple(small.clone(), color));
+    }
     ui.add(
-        Button::new(RichText::new(text).small().color(color))
+        Button::new(job)
             .fill(tokens::BG_2)
             .stroke(Stroke::new(1.0, tokens::BORDER))
             .corner_radius(11),
     )
+}
+
+/// The pill's text runs and their colours.
+fn pill_parts(errors: usize, warnings: usize) -> Vec<(String, egui::Color32)> {
+    use crate::icons::status;
+    let count =
+        |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
+    let mut parts = Vec::new();
+    if errors == 0 && warnings == 0 {
+        parts.push((format!("{}  No issues", status::OK), tokens::SUCCESS));
+    }
+    if errors > 0 {
+        let text = format!("{}  {}", status::ERROR, count(errors, "error", "errors"));
+        parts.push((text, tokens::ERROR));
+    }
+    if errors > 0 && warnings > 0 {
+        parts.push(("  ·  ".to_owned(), tokens::TEXT_FAINT));
+    }
+    if warnings > 0 {
+        let text = format!(
+            "{}  {}",
+            status::WARNING,
+            count(warnings, "warning", "warnings")
+        );
+        parts.push((text, tokens::WARNING));
+    }
+    parts
 }
 
 /// A read-only label and value row for the inspector.
@@ -111,4 +130,32 @@ pub fn field(ui: &mut Ui, label: &str, value: &str) {
         );
         ui.label(RichText::new(value).monospace().color(tokens::TEXT));
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn text(errors: usize, warnings: usize) -> String {
+        pill_parts(errors, warnings)
+            .into_iter()
+            .map(|(t, _)| t.chars().filter(char::is_ascii).collect::<String>())
+            .collect::<String>()
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    #[test]
+    fn issue_pill_counts_errors_and_warnings_together() {
+        assert_eq!(text(0, 0), "No issues");
+        assert_eq!(text(1, 0), "1 error");
+        assert_eq!(text(0, 5), "5 warnings");
+        assert_eq!(text(2, 1), "2 errors 1 warning");
+        let colours: Vec<_> = pill_parts(2, 1).into_iter().map(|(_, c)| c).collect();
+        assert_eq!(
+            colours,
+            [tokens::ERROR, tokens::TEXT_FAINT, tokens::WARNING]
+        );
+    }
 }

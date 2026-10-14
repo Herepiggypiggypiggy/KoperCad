@@ -181,11 +181,13 @@ the reference format, and the frame choice is a rule like any other.
 **Saving.** There are no save prompts and no Save step to remember. A named
 project is written into its own `.novo` file continuously, about half a
 second after each change and on close, so reopening shows exactly what was
-left. An untitled project closed with work in it is kept and offered back
-(under Unsaved with Recent, and reopened at start-up if it was the last one
-open); naming it saves it as `<Documents>\NovoElectric\<name>.novo`. The
+left. An untitled project closed with work in it is kept in
+`%LOCALAPPDATA%\NovoElectric\Unsaved` and offered back (under Unsaved with
+Recent, and reopened at start-up if it was the last one open); naming it
+moves it to `<Documents>\NovoElectric\<name>.novo`. The
 deliberate checkpoints are revisions and exports (§8), not Save. Ctrl+S
-names an untitled project and otherwise only confirms Saved.
+names an untitled project and otherwise only confirms Saved; Ctrl+Shift+S
+saves a copy under a new name and keeps working in the original.
 
 **Start-up.** The app opens the last project where it was left: same page
 and zoom, nothing selected. There is no start screen to click through. With
@@ -272,7 +274,7 @@ clear the selection.
 | Ctrl+Shift+V | Paste with the original tags |
 | Ctrl+D | Duplicate with the next free tags |
 | Ctrl+S / Ctrl+N / Ctrl+O | Name an untitled project (otherwise confirms Saved), new, open |
-| Ctrl+Shift+S / Ctrl+W / Ctrl+Q | Save as, close project, quit |
+| Ctrl+Shift+S / Ctrl+W / Ctrl+Q | Save a copy, close project, quit |
 | Delete | Delete the selection and its dangling connections |
 | Esc | The Escape ladder |
 | ? | Shortcut overlay |
@@ -294,7 +296,7 @@ between fields as usual.
 | --- | --- | --- |
 | Selection | Copper, 2 px | none |
 | Hover | Steel blue | none |
-| Proposal (terminals, cable, part) | Dashed steel blue at 55%; the highlighted one solid steel blue | "↵ accept · Tab next" on the highlighted one only |
+| Proposal (terminals, cable, part) | Dashed steel blue at 55%, 1 px; the highlighted one dashed at full strength, 2 px. Proposals are never solid, so none can be mistaken for a drawn wire | "↵ accept · Tab next" on the highlighted one only |
 | Warning | Small amber triangle, top right of the object, screen sized | on hover |
 | Error | Small red octagon, same place | on hover |
 | Override | Hollow grey diamond, top left, while Shift+O is held | the inspector shows "override" and a reset arrow |
@@ -399,10 +401,13 @@ page's function and location. A duplicate is refused while typing.
 **Letter codes** follow IEC 81346-2 by what a device is for, and come from
 the symbol or part, not from the user: a miniature circuit breaker that
 protects a circuit is F (`mcb`), a motor protective circuit breaker or a
-circuit breaker that switches a feeder is Q (`mpcb`), a contactor is Q, an
-overload relay is F. Because companies differ here, each class has a rule
-sentence ("Circuit breakers are coded [by purpose ▾ | always Q | always
-F]"), and a typed tag always wins.
+circuit breaker that switches a feeder is Q (`mpcb`), an overload relay is
+F. Contactors and relays are K by default: IEC 81346-2:2019 codes a
+power contactor Q, but K is what most existing projects and panel builders
+use, and a default that renumbers every contactor would cost more than it
+teaches. Because companies differ here, each class has a rule sentence
+("Circuit breakers are coded [by purpose ▾ | always Q | always F]",
+"Contactors are coded [K ▾ | Q]"), and a typed tag always wins.
 
 **Undo:** Ctrl+Z undoes the last gesture in every canvas, drawer and field,
 and brings the affected page into view. Text fields keep their own Ctrl+Z
@@ -442,6 +447,7 @@ user has edited:
 | Question | Options considered | Decision |
 | --- | --- | --- |
 | Pages | Hand-made; flowing; pinned flow | **Pinned flow:** automatic pagination, user page breaks never move, and pages freeze after a revision or export so `page.column` references never move under a printed set |
+| Generated pages under pinned flow | Freeze them too; append new sheets at the end; reflow | **Reflow.** Generated pages (BOM, terminal and cable diagrams, lists) sit in their own numbered sections after the schematic pages, so their growth never renumbers a schematic page. No reference points into them, so they reflow freely inside their section; the PDF bookmarks and the contents list name each sheet by what it shows (strip -X1, cable -W3), and a revision marks the generated sheets whose content changed; anything that ever links into a generated sheet points at it by name, never by `page.column` |
 | Routing | Manual; always automatic; route once and keep | **Route once and keep:** moving a symbol stretches its connections; `tidy` re-routes on request |
 | Where a project starts | Page-first; structure-first; intent-first | **Structure-first**, with the empty page offering "type what you are building" |
 | Window | A Workbench; B Focus; C Split | **A**, with B as Focus mode and C as the drawer docked right |

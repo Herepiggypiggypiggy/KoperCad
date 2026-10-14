@@ -15,7 +15,7 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 novo-tests = { path = "../novo-tests" }
-lopdf = { version = "0.45", default-features = false }
+lopdf.workspace = true
 
 [lints]
 workspace = true

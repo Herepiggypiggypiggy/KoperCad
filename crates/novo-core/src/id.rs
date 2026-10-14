@@ -104,4 +104,6 @@ define_ids! {
     PartId => Part, "Part";
     /// A text or label on a page.
     TextId => Text, "Text";
+    /// A supply system grouping potentials (`400 V 3/N/PE AC`).
+    PotentialSystemId => PotentialSystem, "PotentialSystem";
 }

@@ -79,20 +79,20 @@ pub use command::Command;
 pub use document::{DEFAULT_HISTORY_LIMIT, Document, Outcome};
 pub use entity::{
     Cable, CableCore, Device, DeviceKind, Endpoint, JoinLink, Junction, Page, PageFormat, PageKind,
-    PaperSize, Part, Pin, PinRef, Potential, PotentialKind, PotentialRules, PotentialSet,
-    PotentialSpec, ProjectInfo, ProjectRules, Properties, SameName, SymbolInstance, SymbolKey,
-    SymbolRole, Terminal, TerminalKind, TerminalRules, Text, TextAnchor, TextContent,
-    TextPlacement, Value, Wire,
+    PaperSize, Part, Pin, PinFeed, PinRef, Potential, PotentialKind, PotentialRules, PotentialSet,
+    PotentialSpec, PotentialSystem, ProjectInfo, ProjectRules, Properties, SameName,
+    SymbolInstance, SymbolKey, SymbolRole, Terminal, TerminalKind, TerminalRules, Text, TextAnchor,
+    TextContent, TextPlacement, Value, Wire,
 };
 pub use error::{ModelError, Result};
 pub use geom::{Direction, Placement, Point, Rotation};
-pub use graph::{Net, NetId, Netlist};
+pub use graph::{Net, NetId, Netlist, PotentialSource};
 pub use id::{
-    AnyId, CableId, DeviceId, EntityKind, JunctionId, PageId, PartId, PotentialId, SymbolId,
-    TerminalId, TextId, WireId,
+    AnyId, CableId, DeviceId, EntityKind, JunctionId, PageId, PartId, PotentialId,
+    PotentialSystemId, SymbolId, TerminalId, TextId, WireId,
 };
 pub use json::JSON_FORMAT_VERSION;
-pub use project::{PageContents, Project, natural_cmp};
+pub use project::{PageContents, Project, RATED_CURRENT_A, natural_cmp};
 pub use record::{ChangeSet, Entity, Op, Record, Transaction};
 pub use search::{Match, SearchHit};
 pub use tag::{Aspect, DeviceTag, TagError, split_code};

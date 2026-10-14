@@ -10,8 +10,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 
 use crate::entity::{
-    Cable, Device, Junction, Page, Part, Potential, ProjectInfo, Properties, SymbolInstance,
-    SymbolRole, Terminal, Text, Wire,
+    Cable, Device, Junction, Page, Part, Potential, PotentialSystem, ProjectInfo, Properties,
+    SymbolInstance, SymbolRole, Terminal, Text, Wire,
 };
 use crate::geom::Point;
 use crate::id::{AnyId, EntityKind, PageId};
@@ -33,6 +33,7 @@ pub enum Record {
     Cable(Cable),
     Part(Part),
     Text(Text),
+    PotentialSystem(PotentialSystem),
 }
 
 impl Record {
@@ -48,6 +49,7 @@ impl Record {
             Record::Cable(r) => r.id.into(),
             Record::Part(r) => r.id.into(),
             Record::Text(r) => r.id.into(),
+            Record::PotentialSystem(r) => r.id.into(),
         }
     }
 
@@ -83,6 +85,7 @@ impl Record {
                     SymbolRole::PotentialFeed { potential } => out.push((*potential).into()),
                     SymbolRole::Unassigned | SymbolRole::Interruption { .. } => {}
                 }
+                out.extend(r.feeds.iter().map(|f| AnyId::from(f.potential)));
             }
             Record::Junction(r) => out.push(r.page.into()),
             Record::Wire(r) => {
@@ -95,6 +98,7 @@ impl Record {
             Record::Terminal(r) => {
                 out.push(r.strip.into());
                 out.extend(r.part.map(AnyId::from));
+                out.extend(r.feed.map(AnyId::from));
             }
             Record::Cable(r) => {
                 out.extend(r.part.map(AnyId::from));
@@ -103,6 +107,9 @@ impl Record {
             Record::Text(r) => {
                 out.push(r.page.into());
                 out.extend(r.attached_to);
+            }
+            Record::PotentialSystem(r) => {
+                out.extend(r.members.iter().map(|&p| AnyId::from(p)));
             }
         }
         out.sort();
@@ -122,6 +129,7 @@ impl Record {
             Record::Cable(r) => &r.properties,
             Record::Part(r) => &r.properties,
             Record::Text(r) => &r.properties,
+            Record::PotentialSystem(r) => &r.properties,
         }
     }
 
@@ -138,6 +146,7 @@ impl Record {
             Record::Cable(r) => &mut r.properties,
             Record::Part(r) => &mut r.properties,
             Record::Text(r) => &mut r.properties,
+            Record::PotentialSystem(r) => &mut r.properties,
         })
     }
 
@@ -172,6 +181,15 @@ impl Record {
                 }
             }
             Record::Potential(r) => (!opt(r.voltage)).then_some("voltage"),
+            Record::PotentialSystem(r) => {
+                if !opt(r.voltage) {
+                    Some("voltage")
+                } else if !opt(r.frequency_hz) {
+                    Some("frequency_hz")
+                } else {
+                    None
+                }
+            }
             Record::Text(r) => {
                 if !point(&r.placement.offset) {
                     Some("placement")
@@ -208,6 +226,7 @@ impl Record {
             EntityKind::Wire => 7,
             EntityKind::Cable => 8,
             EntityKind::Text => 9,
+            EntityKind::PotentialSystem => 10,
         }
     }
 }
@@ -230,6 +249,10 @@ pub(crate) fn endpoint_owner(end: crate::entity::Endpoint) -> AnyId {
 }
 
 /// One primitive, exactly invertible change.
+// `Update` holds two records and the others one, so the size gap grows with
+// the largest record. Ops are short-lived and matched by value across
+// crates; boxing them would cost an allocation per op and an API change.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum Op {
@@ -442,4 +465,5 @@ impl_entity! {
     Cable => Cable, crate::id::CableId, cables;
     Part => Part, crate::id::PartId, parts;
     Text => Text, crate::id::TextId, texts;
+    PotentialSystem => PotentialSystem, crate::id::PotentialSystemId, potential_systems;
 }

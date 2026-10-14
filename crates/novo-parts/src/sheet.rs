@@ -530,6 +530,7 @@ fn noun(kind: EntityKind) -> &'static str {
         EntityKind::Cable => "cable",
         EntityKind::Part => "part",
         EntityKind::Text => "text",
+        EntityKind::PotentialSystem => "supply system",
     }
 }
 
@@ -805,6 +806,7 @@ impl PropertySheet {
                     novo_core::TextContent::Literal { text } => format!("Text {text}"),
                     _ => "Text".into(),
                 },
+                Record::PotentialSystem(s) => format!("Supply system {}", s.name),
             };
         }
         let kind = records[0].kind();

@@ -2,7 +2,7 @@
 
 use lopdf::{Document as Pdf, Object, ObjectId};
 use novo_core::{Document, PageFormat, PageId, PaperSize, Project};
-use novo_pdf::{PT_PER_MM, PageSet, PdfError, PdfOptions, export_pdf};
+use novo_pdf::{PT_PER_MM, PageSet, PdfError, PdfOptions, SymbolNote, export_pdf};
 use novo_tests::{MotorStarter, motor_starter};
 
 fn gate1() -> (Document, MotorStarter) {
@@ -108,6 +108,26 @@ fn device_tags_and_titles_are_printed_as_text() {
             assert!(line.starts_with("0 0 0 "), "non-black colour: {line}");
         }
     }
+}
+
+#[test]
+fn cross_reference_notes_are_printed_on_their_page() {
+    let (doc, h) = gate1();
+    let mut options = PdfOptions::default();
+    options.notes.insert(
+        h.control_page,
+        vec![SymbolNote {
+            symbol: h.k1_coil,
+            lines: vec!["1-2 /1.3".into(), "13-14 /2.4".into()],
+            warning: false,
+        }],
+    );
+    let pdf = parse(&export_pdf(doc.project(), &options).unwrap());
+    let ids = pages(&pdf);
+    let control = content(&pdf, ids[1]);
+    assert!(control.contains("(1-2 /1.3) Tj"), "{control}");
+    assert!(control.contains("(13-14 /2.4) Tj"));
+    assert!(!content(&pdf, ids[0]).contains("(1-2 /1.3) Tj"));
 }
 
 #[test]

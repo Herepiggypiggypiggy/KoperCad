@@ -4,20 +4,10 @@
 use novo_canvas::model::ModelStyle;
 use novo_canvas::widget::CanvasStyle;
 use novo_canvas::{Color, Highlight, Stroke};
-use novo_theme::{CANVAS_DARK, CanvasPalette, tokens};
-
-/// Change marks (added, modified, removed) sit at half strength so the
-/// drawing under them stays readable.
-const CHANGE_ALPHA: u8 = 128;
-/// Proposals are steel blue at about 55% (DESIGN.md §5).
-const PROPOSAL_ALPHA: u8 = 140;
+use novo_theme::{CANVAS_DARK, CanvasPalette};
 
 fn color(c: [u8; 4]) -> Color {
     Color(c)
-}
-
-fn with_alpha(c: eframe::egui::Color32, alpha: u8) -> Color {
-    Color::rgba(c.r(), c.g(), c.b(), alpha)
 }
 
 pub fn canvas_style() -> CanvasStyle {
@@ -51,16 +41,16 @@ fn canvas_style_from(p: &CanvasPalette) -> CanvasStyle {
         band_window: color(p.rubber_band),
         band_crossing: color(p.connection_point),
         snap_marker: color(p.selection),
-        // Marks (DESIGN.md §5), agreed with the layout thread. None is
-        // copper: that hue belongs to the selection.
-        proposal: with_alpha(tokens::INFO, PROPOSAL_ALPHA),
+        // Marks (DESIGN.md §5), from the palette. None is copper: that hue
+        // belongs to the selection.
+        proposal: color(p.proposal),
         warning: color(p.warning),
         error: color(p.error),
-        override_mark: Color::rgb(0x98, 0x96, 0x91),
-        added: with_alpha(tokens::SUCCESS, CHANGE_ALPHA),
-        modified: with_alpha(tokens::WARNING, CHANGE_ALPHA),
-        removed: with_alpha(tokens::ERROR, CHANGE_ALPHA),
-        mark_text: color(p.text),
+        override_mark: color(p.override_mark),
+        added: color(p.added),
+        modified: color(p.modified),
+        removed: color(p.removed),
+        mark_text: color(p.mark_text),
     }
 }
 
@@ -78,6 +68,8 @@ fn model_style_from(p: &CanvasPalette) -> ModelStyle {
         tag_color: color(p.text),
         sheet_fill: Some(color(p.sheet)),
         frame_color: color(p.sheet_frame),
+        note_color: color(p.cross_reference),
+        note_warning_color: color(p.warning),
         ..defaults
     }
 }

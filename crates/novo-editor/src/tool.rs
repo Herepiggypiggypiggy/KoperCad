@@ -957,6 +957,7 @@ impl Editor {
                         pins: model_pins(symbol),
                         bridges,
                         pass_through,
+                        feeds: Vec::new(),
                         properties: Default::default(),
                     });
                 }

@@ -1,15 +1,15 @@
 //! Editing: the only way to change a project.
 
 use crate::entity::{
-    Cable, CableCore, Device, DeviceKind, Endpoint, Junction, Page, Part, Pin, Potential,
-    PotentialKind, PotentialSpec, ProjectInfo, SymbolInstance, SymbolKey, SymbolRole, Terminal,
-    Text, TextContent, TextPlacement, Value, Wire,
+    Cable, CableCore, Device, DeviceKind, Endpoint, Junction, Page, Part, Pin, PinFeed, Potential,
+    PotentialKind, PotentialSet, PotentialSpec, PotentialSystem, ProjectInfo, SymbolInstance,
+    SymbolKey, SymbolRole, Terminal, Text, TextContent, TextPlacement, Value, Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::{Placement, Point};
 use crate::id::{
-    AnyId, CableId, DeviceId, JunctionId, PageId, PartId, PotentialId, SymbolId, TerminalId,
-    TextId, WireId,
+    AnyId, CableId, DeviceId, JunctionId, PageId, PartId, PotentialId, PotentialSystemId, SymbolId,
+    TerminalId, TextId, WireId,
 };
 use crate::project::Project;
 use crate::record::{Entity, Op, Record};
@@ -161,6 +161,26 @@ impl<'p> Tx<'p> {
                 (AnyId::Wire(wire), AnyId::Potential(_)) => {
                     self.update::<Wire>(wire, |w| w.potential = None)?;
                 }
+                (AnyId::Terminal(terminal), AnyId::Potential(_)) => {
+                    self.update::<Terminal>(terminal, |t| t.feed = None)?;
+                }
+                (AnyId::PotentialSystem(system), AnyId::Potential(potential)) => {
+                    self.update::<PotentialSystem>(system, |s| {
+                        s.members.retain(|&m| m != potential)
+                    })?;
+                }
+                // A source symbol keeps its other feeds; a feed symbol for
+                // this potential goes with it.
+                (AnyId::Symbol(symbol), AnyId::Potential(potential))
+                    if !matches!(
+                        self.project.symbol(symbol).map(|s| &s.role),
+                        Some(SymbolRole::PotentialFeed { .. })
+                    ) =>
+                {
+                    self.update::<SymbolInstance>(symbol, |s| {
+                        s.feeds.retain(|f| f.potential != potential)
+                    })?;
+                }
                 (AnyId::Cable(cable), AnyId::Wire(wire)) => {
                     self.update::<Cable>(cable, |c| {
                         for core in &mut c.cores {
@@ -237,6 +257,7 @@ impl<'p> Tx<'p> {
             order: 0,
             jumper: None,
             part: None,
+            feed: None,
             properties: Default::default(),
         })
     }
@@ -260,6 +281,7 @@ impl<'p> Tx<'p> {
             pins,
             bridges: Vec::new(),
             pass_through: Vec::new(),
+            feeds: Vec::new(),
             properties: Default::default(),
         })
     }
@@ -461,6 +483,89 @@ impl<'p> Tx<'p> {
             self.set_wire_potential(wire, Some(potential))?;
         }
         Ok(created)
+    }
+
+    /// Sets or clears the potential a symbol's pin defines on its net (the
+    /// output of a supply or transformer).
+    pub fn set_pin_feed(
+        &mut self,
+        symbol: SymbolId,
+        pin: u16,
+        potential: Option<PotentialId>,
+    ) -> Result<()> {
+        self.update::<SymbolInstance>(symbol, |s| {
+            s.feeds.retain(|f| f.pin != pin);
+            if let Some(potential) = potential {
+                s.feeds.push(PinFeed { pin, potential });
+                s.feeds.sort();
+            }
+        })
+    }
+
+    /// Sets or clears the potential a terminal feeds into its net.
+    pub fn set_terminal_feed(
+        &mut self,
+        terminal: TerminalId,
+        potential: Option<PotentialId>,
+    ) -> Result<()> {
+        self.update::<Terminal>(terminal, |t| t.feed = potential)
+    }
+
+    /// Adds a supply system from a [`PotentialSet`], reusing potentials
+    /// that already exist by name ([`Tx::ensure_potential`]). Returns the
+    /// system and the potentials it created.
+    pub fn add_potential_system(
+        &mut self,
+        name: impl Into<String>,
+        set: PotentialSet,
+        frequency_hz: Option<f64>,
+    ) -> Result<(PotentialSystemId, Vec<PotentialId>)> {
+        let mut members = Vec::new();
+        let mut created = Vec::new();
+        for spec in set.specs() {
+            let (potential, new) = self.ensure_potential(spec)?;
+            if new {
+                created.push(potential);
+            }
+            members.push(potential);
+        }
+        let name = name.into();
+        let system = self.insert(|id| PotentialSystem {
+            id,
+            name,
+            voltage: Some(set.voltage()),
+            frequency_hz,
+            members,
+            properties: Default::default(),
+        })?;
+        Ok((system, created))
+    }
+
+    /// Feeds a system from a source symbol: `pins[i]` defines the system's
+    /// `i`-th potential (L1, L2, L3, then N and PE). Fewer pins than
+    /// members is fine; more is refused.
+    pub fn feed_system(
+        &mut self,
+        symbol: SymbolId,
+        pins: &[u16],
+        system: PotentialSystemId,
+    ) -> Result<()> {
+        let members = self
+            .project
+            .potential_system(system)
+            .ok_or(ModelError::NotFound(system.into()))?
+            .members
+            .clone();
+        if pins.len() > members.len() {
+            return Err(ModelError::TooFewPotentials {
+                wires: pins.len(),
+                potentials: members.len(),
+            });
+        }
+        for (&pin, potential) in pins.iter().zip(members) {
+            self.set_pin_feed(symbol, pin, Some(potential))?;
+        }
+        Ok(())
     }
 
     /// Adds a cable with the given cores.
