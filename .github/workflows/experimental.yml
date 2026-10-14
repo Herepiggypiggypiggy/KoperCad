@@ -21,7 +21,9 @@ permissions:
 
 concurrency:
   group: experimental
-  cancel-in-progress: true
+  # Let a running build finish so busy periods still publish; GitHub keeps
+  # only the newest queued run, so the next build picks up everything since.
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
