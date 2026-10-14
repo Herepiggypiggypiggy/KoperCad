@@ -172,8 +172,11 @@ The full list of accepted kinds is `novo_symbols::BEHAVIOR_KINDS`.
 
 `novo-core` stores a placed symbol's library key (`SymbolKey`) plus a copy of
 its pins. Map a `Symbol` to it as: key = `id`, pins = `connections` in order
-(name = `id`, offset = `at`), bridges = `Symbol::bridges()`. Connection order
-is stable, so pin indices stay valid across library updates.
+(name = `id`, offset = `at`), bridges = `Symbol::bridges()`. Only
+`conductor` poles are bridges; contact, fuse and breaker poles are switched
+and belong to simulation state. A future "refresh from library" must match
+pins by designation, not index, so reordering a file never rewires existing
+instances.
 
 ## Adding or changing a symbol
 
