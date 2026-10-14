@@ -8,3 +8,10 @@
 2026-10-14 19:40 UTC Reviewer B READY on 19c1f00 (6 non-blocking notes); reviewer C (session_01Q6QWwh6uhq8Z2C1Ysih3UA) CHANGES NEEDED on the same head: create/save_as replaced a crashed file and deleted its recovery file. Reproduced, fixed (save_as refuses RecoveryPending unless it is the session's own file), Rust + pytest tests added; pushed to #56 since merging 19c1f00 would ship the data loss. B's 6 notes still go to a follow-up PR.
 2026-10-14 19:45 UTC B withdrew READY (CHANGES NEEDED on 0089b7c, same blocker as C). Coordinator's main merge 0089b7c (post-#51 crate list) is in. Added overwrite=False guard on create/save_as (B's note 1; recovery refused even with overwrite). Remaining follow-ups: plain clap errors, novo_checks (#50 merged), novo-pdf (#49), no panic in execute_one, atomic export write, venv-first README.
 2026-10-14 19:50 UTC C READY on ac037dc. Merged main (#49 pdf-writer) into e5bb8ae: Cargo.toml keep-both, main's Cargo.lock + cargo metadata; checks green.
+2026-10-14 19:50 UTC #56 READY from B and C on e5bb8ae; merged as 67c3591. Branch restarted from main for the review follow-ups (pdf on novo-pdf, check on novo-checks, export guard + atomic write, plain clap errors, NothingCreated, venv README).
+2026-10-14 20:05 UTC Opened PR #65 (follow-ups); head is the commit adding this line. Pinged B, C, coordinator.
+2026-10-14 20:20 UTC #55 merged; added reports to #65 (novo export bom/devices/wires/toc/reports, Python add_part/assign_part/report/export_bom/export_reports). test_dol_bom_to_excel un-skipped and passing: done-criterion met headless. Main (ea47b10) merged in.
+2026-10-14 20:10 UTC Reviewer B READY on #65 at 3354d4e (4 small notes; reminder: no pushes after READY, new scope goes to a new PR).
+2026-10-14 20:18 UTC Reviewer C READY on #65 at 3354d4e (3 small notes). #65 has both READYs and waits on the coordinator's merge.
+2026-10-14 20:20 UTC Wrap-up: wrote this handoff on claude/handoff-ws28 (docs only). Cancelled my check-in. Nothing half-done in code.
+2026-10-14 20:23 UTC #65 merged. Merged main into the handoff branch (kept this branch's handoff/ws28) and marked #65 merged.

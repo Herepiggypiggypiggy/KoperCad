@@ -50,17 +50,21 @@ impl Default for PageSetup {
 }
 
 impl PageSetup {
-    /// Default layout on a given sheet.
+    /// Default layout on a given sheet, inside the page frame the canvas and
+    /// PDF draw on every page (`novo_canvas::model`: frame line 10 mm in
+    /// from each edge, title block 36 mm high in the bottom-right corner):
+    /// 5 mm clear of the frame, and the table stops 4 mm above the title
+    /// block.
     pub fn for_format(format: PageFormat) -> Self {
         PageSetup {
             format,
             margins: Margins {
-                left: 20.0,
-                top: 10.0,
-                right: 10.0,
+                left: 15.0,
+                top: 15.0,
+                right: 15.0,
                 bottom: 10.0,
             },
-            title_block_mm: 30.0,
+            title_block_mm: 40.0,
             heading_mm: 12.0,
             header_row_mm: 8.0,
             row_mm: 6.0,
@@ -131,6 +135,15 @@ pub fn paginate(report: &ReportOutput, setup: &PageSetup) -> Vec<ReportPage> {
             }
         }
     }
+    if pages.is_empty() {
+        pages.push(ReportPage {
+            number: 1,
+            count: 0,
+            section: 0,
+            rows: 0..0,
+            continued: false,
+        });
+    }
     let count = pages.len();
     for page in &mut pages {
         page.count = count;
@@ -190,13 +203,13 @@ pub fn layout_page(report: &ReportOutput, page: &ReportPage, setup: &PageSetup) 
     let heading_text = setup.text_mm * 1.4;
     let heading_y = setup.margins.top;
 
-    let Some(section) = report.sections.get(page.section) else {
-        return layout;
-    };
+    // A report with no sections (no strips, no cables) still prints its
+    // heading on one page.
+    let section = report.sections.get(page.section);
     let mut heading = report.title.clone();
-    if !section.title.is_empty() {
+    if let Some(title) = section.map(|s| &s.title).filter(|t| !t.is_empty()) {
         heading.push_str(" · ");
-        heading.push_str(&section.title);
+        heading.push_str(title);
     }
     if page.continued {
         heading.push_str(" (continued)");
@@ -221,6 +234,10 @@ pub fn layout_page(report: &ReportOutput, page: &ReportPage, setup: &PageSetup) 
         align: Align::Right,
         bold: false,
     });
+
+    let Some(section) = section else {
+        return layout;
+    };
 
     // Column edges.
     let total: f64 = section.columns.iter().map(|c| c.width.max(0.0)).sum();

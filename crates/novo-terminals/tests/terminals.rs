@@ -960,6 +960,58 @@ fn accepting_all_numbers_terminals_in_drawing_order() {
 }
 
 #[test]
+fn accepting_all_numbers_horizontal_wires_of_any_length_top_to_bottom() {
+    // Review of #64: a column of horizontal wires to field devices at
+    // different distances numbered by the wires' midpoints (2, 1, 3).
+    let mut doc = Document::default();
+    doc.transact("Draw", |tx| {
+        let page = tx.add_page("1")?;
+        let k1 = tx.add_device(tag("=A1+CAB-K1"), "")?;
+        let ks = tx.place_symbol(
+            page,
+            "test/block",
+            Placement::at(Point::new(40.0, 20.0)),
+            vec![
+                Pin::new("2", 0.0, 0.0),
+                Pin::new("4", 0.0, 8.0),
+                Pin::new("6", 0.0, 16.0),
+            ],
+            SymbolRole::Device {
+                device: k1,
+                main: true,
+            },
+        )?;
+        for (i, x) in [200.0, 180.0, 220.0].into_iter().enumerate() {
+            let m = tx.add_device(tag(&format!("=A1+FLD-M{}", i + 1)), "")?;
+            let y = 20.0 + 8.0 * i as f64;
+            let ms = row_of_pins(tx, page, m, &["1"], x, y)?;
+            tx.connect(Endpoint::pin(ks, i as u16), Endpoint::pin(ms, 0))?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let suggestions = suggest_terminals(doc.project());
+    assert_eq!(suggestions.len(), 3);
+    doc.transact("Accept", |tx| accept_suggestions(tx, &suggestions))
+        .unwrap();
+    let strip = strips(doc.project())[0];
+    let rows: Vec<(String, String)> = screen(doc.project(), strip)
+        .rows
+        .iter()
+        .map(|r| (r.terminal.clone(), r.internal.join(",")))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            ("1", "=A1+CAB-K1:2"),
+            ("2", "=A1+CAB-K1:4"),
+            ("3", "=A1+CAB-K1:6"),
+        ]
+        .map(|(t, i)| (t.to_string(), i.to_string()))
+    );
+}
+
+#[test]
 fn the_side_with_a_strip_is_the_cabinet_and_dismissals_stick() {
     let mut doc = Document::default();
     let (wires, _) = doc

@@ -33,16 +33,22 @@ use std::sync::OnceLock;
 
 use novo_core::{
     AnyId, ChangeSet, Command, DeviceId, DeviceKind, DeviceTag, Document, Endpoint, ModelError,
-    PageFormat, PageId, PageKind, Placement, Point, PotentialId, PotentialKind, PotentialSpec,
-    Project, Rotation, SymbolId, SymbolKey, SymbolRole, TagError, TerminalId, WireId, natural_cmp,
+    PageFormat, PageId, PageKind, PartId, Placement, Point, PotentialId, PotentialKind,
+    PotentialSpec, Project, Rotation, SymbolId, SymbolKey, SymbolRole, TagError, TerminalId,
+    WireId, natural_cmp,
 };
 use novo_storage::{Session, StorageError, autosave_path};
 use novo_symbols::Library;
 use serde_json::{Value, json};
 use thiserror::Error;
 
+mod export;
 #[cfg(feature = "python")]
 mod python;
+
+pub use export::{
+    ReportFormat, generate, is_project_path, report_bytes, report_ids, report_json, write_export,
+};
 
 /// Why a script call was refused. A refused edit changes nothing.
 #[derive(Debug, Error)]
@@ -74,6 +80,17 @@ pub enum ScriptError {
     Exists(PathBuf),
     #[error("this project has no file yet: use save_as(path)")]
     NoFile,
+    #[error("`{0}` ran but did not create the object it should have; please report this")]
+    NothingCreated(String),
+    #[error("refusing to write an export over {}: it is a project file", .0.display())]
+    ProjectFileTarget(PathBuf),
+    #[error("cannot write {}: {source}", path.display())]
+    Io {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    #[error("export failed: {0}")]
+    Export(String),
     #[error("the symbol library did not load: {0}")]
     Library(String),
 }
@@ -238,47 +255,61 @@ impl ScriptProject {
         self.execute(command)
     }
 
-    fn execute_one(&mut self, command: Command) -> Result<AnyId> {
+    /// Runs a command that creates one object and returns that object's id,
+    /// picked out of what it created by `pick`.
+    fn execute_one<T>(&mut self, command: Command, pick: fn(AnyId) -> Option<T>) -> Result<T> {
+        let label = command.label();
         let created = self.execute(command)?;
-        Ok(*created
+        created
             .first()
-            .expect("commands that create an object return its id"))
+            .copied()
+            .and_then(pick)
+            .ok_or(ScriptError::NothingCreated(label))
     }
 
     pub fn add_page(&mut self, name: &str, title: &str) -> Result<PageId> {
-        match self.execute_one(Command::AddPage {
-            name: name.into(),
-            title: title.into(),
-            kind: PageKind::default(),
-            format: PageFormat::default(),
-        })? {
-            AnyId::Page(id) => Ok(id),
-            other => unreachable!("add_page created {other}"),
-        }
+        self.execute_one(
+            Command::AddPage {
+                name: name.into(),
+                title: title.into(),
+                kind: PageKind::default(),
+                format: PageFormat::default(),
+            },
+            |id| match id {
+                AnyId::Page(id) => Some(id),
+                _ => None,
+            },
+        )
     }
 
     /// Adds a device. `kind` is `general`, `terminal_strip`, `connector` or
     /// `plc`.
     pub fn add_device(&mut self, tag: &str, description: &str, kind: &str) -> Result<DeviceId> {
         let kind: DeviceKind = parse_kind("device kind", kind)?;
-        match self.execute_one(Command::AddDevice {
-            tag: DeviceTag::parse(tag)?,
-            description: description.into(),
-            kind,
-        })? {
-            AnyId::Device(id) => Ok(id),
-            other => unreachable!("add_device created {other}"),
-        }
+        self.execute_one(
+            Command::AddDevice {
+                tag: DeviceTag::parse(tag)?,
+                description: description.into(),
+                kind,
+            },
+            |id| match id {
+                AnyId::Device(id) => Some(id),
+                _ => None,
+            },
+        )
     }
 
     pub fn add_terminal(&mut self, strip: DeviceId, name: &str) -> Result<TerminalId> {
-        match self.execute_one(Command::AddTerminal {
-            strip,
-            name: name.into(),
-        })? {
-            AnyId::Terminal(id) => Ok(id),
-            other => unreachable!("add_terminal created {other}"),
-        }
+        self.execute_one(
+            Command::AddTerminal {
+                strip,
+                name: name.into(),
+            },
+            |id| match id {
+                AnyId::Terminal(id) => Some(id),
+                _ => None,
+            },
+        )
     }
 
     /// Adds a potential. `kind` is `line`, `neutral`, `protective_earth`,
@@ -290,14 +321,46 @@ impl ScriptProject {
         voltage: Option<f64>,
     ) -> Result<PotentialId> {
         let kind: PotentialKind = parse_kind("potential kind", kind)?;
-        match self.execute_one(Command::AddPotential {
-            name: name.into(),
-            kind,
-            voltage,
-        })? {
-            AnyId::Potential(id) => Ok(id),
-            other => unreachable!("add_potential created {other}"),
-        }
+        self.execute_one(
+            Command::AddPotential {
+                name: name.into(),
+                kind,
+                voltage,
+            },
+            |id| match id {
+                AnyId::Potential(id) => Some(id),
+                _ => None,
+            },
+        )
+    }
+
+    /// Adds a part (an article) to the project's parts, e.g. a contactor by
+    /// manufacturer and order number.
+    pub fn add_part(
+        &mut self,
+        manufacturer: &str,
+        order_number: &str,
+        type_number: &str,
+        description: &str,
+    ) -> Result<PartId> {
+        self.execute_one(
+            Command::AddPart {
+                manufacturer: manufacturer.into(),
+                order_number: order_number.into(),
+                type_number: type_number.into(),
+                description: description.into(),
+            },
+            |id| match id {
+                AnyId::Part(id) => Some(id),
+                _ => None,
+            },
+        )
+    }
+
+    /// Adds a part to a device's part list.
+    pub fn assign_part(&mut self, device: DeviceId, part: PartId) -> Result<()> {
+        self.execute(Command::AssignPart { device, part })?;
+        Ok(())
     }
 
     /// Renames a device: a new tag, e.g. `-K2` or `=A1+CAB1-K2`.
@@ -370,22 +433,25 @@ impl ScriptProject {
             .iter()
             .map(|c| novo_core::Pin::new(c.id.clone(), c.at[0], c.at[1]))
             .collect();
-        match self.execute_one(Command::PlaceSymbol {
-            page,
-            symbol: SymbolKey(def.id.clone()),
-            placement: Placement {
-                origin: Point::new(x, y),
-                rotation,
-                mirrored,
+        self.execute_one(
+            Command::PlaceSymbol {
+                page,
+                symbol: SymbolKey(def.id.clone()),
+                placement: Placement {
+                    origin: Point::new(x, y),
+                    rotation,
+                    mirrored,
+                },
+                role: role.into(),
+                pins,
+                bridges,
+                pass_through,
             },
-            role: role.into(),
-            pins,
-            bridges,
-            pass_through,
-        })? {
-            AnyId::Symbol(id) => Ok(id),
-            other => unreachable!("place created {other}"),
-        }
+            |id| match id {
+                AnyId::Symbol(id) => Some(id),
+                _ => None,
+            },
+        )
     }
 
     /// The endpoint of a symbol's pin, by its designation (`13`, `A1`).
@@ -412,14 +478,17 @@ impl ScriptProject {
     pub fn connect(&mut self, from: (SymbolId, &str), to: (SymbolId, &str)) -> Result<WireId> {
         let from = self.pin(from.0, from.1)?;
         let to = self.pin(to.0, to.1)?;
-        match self.execute_one(Command::Connect {
-            from,
-            to,
-            route: Vec::new(),
-        })? {
-            AnyId::Wire(id) => Ok(id),
-            other => unreachable!("connect created {other}"),
-        }
+        self.execute_one(
+            Command::Connect {
+                from,
+                to,
+                route: Vec::new(),
+            },
+            |id| match id {
+                AnyId::Wire(id) => Some(id),
+                _ => None,
+            },
+        )
     }
 
     /// Assigns potentials to wires in order, by name (`L1`, `L2`, `L3`),
@@ -550,6 +619,23 @@ impl ScriptProject {
     /// and potentials.
     pub fn nets(&self) -> Value {
         nets_json(self.project())
+    }
+
+    /// A built-in report (`toc`, `bom`, `devices`, `wires`) as plain data.
+    pub fn report(&self, id: &str) -> Result<Value> {
+        Ok(report_json(&generate(self.project(), id)?))
+    }
+
+    /// Writes reports to `path`: `.xlsx` (one sheet per report; every
+    /// report when `ids` is empty) or `.csv` (exactly one report). Never
+    /// writes over a project file.
+    pub fn export_reports(&self, ids: &[&str], path: impl AsRef<Path>) -> Result<()> {
+        let path = path.as_ref();
+        if is_project_path(path) {
+            return Err(ScriptError::ProjectFileTarget(path.to_path_buf()));
+        }
+        let bytes = report_bytes(self.project(), ids, ReportFormat::from_path(path)?)?;
+        write_export(path, &bytes, self.path())
     }
 
     /// The whole project in its diffable JSON form.

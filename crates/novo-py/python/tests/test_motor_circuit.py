@@ -184,8 +184,50 @@ def test_existing_project_needs_overwrite(tmp_path):
         assert p.info()["name"] == "Replacement"
 
 
-@pytest.mark.skip(reason="Excel BOM export waits for WS-13 (reports); see handoff/ws28/ROADMAP.md")
 def test_dol_bom_to_excel(tmp_path):
-    p = ne.Project()
-    build_dol(p)
-    p.export_bom(tmp_path / "bom.xlsx")  # API to be added on top of WS-13
+    """The WS-28 done-criterion: place a motor circuit, rename its tags and
+    export the bill of materials to Excel."""
+    import zipfile
+
+    p = ne.Project.create(tmp_path / "dol.novo", name="DOL starter")
+    devices = build_dol(p)
+    parts = {
+        "Q1": p.add_part("Siemens", "3RV2011-1EA10", "3RV2011", "Motor breaker 2.8-4 A"),
+        "K1": p.add_part("Siemens", "3RT2015-1BB41", "3RT2015", "Contactor 3 kW 24 V DC"),
+        "F2": p.add_part("Siemens", "3RU2116-1EB0", "3RU2116", "Overload relay 2.8-4 A"),
+        "M1": p.add_part("ABB", "3GAA092001-ADE", "M2AA 90 S", "Motor 2.2 kW 400 V"),
+    }
+    for short, part in parts.items():
+        p.assign_part(devices[short], part)
+    for short, device in devices.items():
+        p.set_tag(device, f"=A1+CAB-{short}")
+    p.save()
+
+    bom = p.report("bom")
+    rows = bom["sections"][0]["rows"]
+    assert [r[3] for r in rows] == [
+        "3GAA092001-ADE",
+        "3RT2015-1BB41",
+        "3RU2116-1EB0",
+        "3RV2011-1EA10",
+    ]
+    assert all(r[1] == "1" for r in rows)
+    # -F3 and -S1 still wait for a part.
+    without = bom["sections"][1]
+    assert [r[0] for r in without["rows"]] == ["=A1+CAB-F3", "=A1+CAB-S1"]
+
+    xlsx = tmp_path / "bom.xlsx"
+    p.export_bom(xlsx)
+    with zipfile.ZipFile(xlsx) as book:
+        names = book.namelist()
+        assert "xl/workbook.xml" in names
+        assert "Bill of materials" in book.read("xl/workbook.xml").decode()
+        strings = book.read("xl/sharedStrings.xml").decode()
+    for order_number in ("3RT2015-1BB41", "3GAA092001-ADE"):
+        assert order_number in strings
+    assert "=A1+CAB-K1" in strings
+
+    p.export_reports(tmp_path / "all.xlsx")
+    with pytest.raises(ne.NovoError, match="project file"):
+        p.export_bom(tmp_path / "dol.novo")
+    p.close()

@@ -5,6 +5,19 @@ call is one command and one undo step, the same commands the app runs.
 
 ## Build and install (no admin rights)
 
+A virtual environment works everywhere, including Linux distributions that
+refuse `pip install --user` (PEP 668, "externally managed environment"):
+
+```
+python -m venv .venv               # Windows: .venv\Scripts\activate
+. .venv/bin/activate
+pip install maturin pytest
+cd crates/novo-py
+maturin develop --release          # builds and installs into the venv
+```
+
+Without a venv, build a wheel and install it for your user only:
+
 ```
 pip install --user maturin
 cd crates/novo-py
@@ -12,10 +25,10 @@ maturin build --release            # wheel in target/wheels (abi3: Python 3.9+)
 pip install --user <the wheel>
 ```
 
-`pip install --user` writes only under your profile (`%APPDATA%\Python` on
-Windows). In a virtual environment, `maturin develop --release` builds and
-installs in one step. Without Python, `cargo build`/`cargo test` skip the
-bindings: they live behind the `python` feature, which maturin turns on.
+Neither needs admin rights: the venv lives where you create it, and
+`--user` installs under your profile (`%APPDATA%\Python` on Windows).
+Without Python, `cargo build`/`cargo test` skip the bindings: they live
+behind the `python` feature, which maturin turns on.
 
 ## Example
 
@@ -38,6 +51,11 @@ with ne.Project.create("dol.novo", name="DOL starter", overwrite=True) as p:
 - Queries: `info()`, `pages()`, `devices()`, `symbols()`, `wires()`,
   `potentials()`, `terminals()`, `nets()`, `device(tag)`, `to_json()`;
   `novoelectric.symbols()` lists the symbol library.
+- Parts and reports: `add_part(manufacturer, order_number, ...)`,
+  `assign_part(device, part)`, `report("bom")` (also `toc`, `devices`,
+  `wires`) as data, `export_bom("bom.xlsx")` and
+  `export_reports("all.xlsx")` (`.xlsx`, or `.csv` for one report). An
+  export is never written over a project file.
 - Any model command in its JSON form: `p.execute({"command": "add_page",
   "name": "3"})`; a `{"command": "batch", ...}` is one undo step.
 - Errors raise `novoelectric.NovoError`; a refused call changes nothing.

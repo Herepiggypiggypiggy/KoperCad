@@ -137,25 +137,67 @@ pub fn suggest_terminals(project: &Project) -> Vec<Suggestion> {
     out
 }
 
-/// Accepts suggestions: puts the terminals on their strips (created when
-/// missing), numbered next free in drawing order on each strip: page by
-/// page, then left to right, then top to bottom, the way a drag across the
-/// wires would number them. The order the suggestions were listed or
-/// picked in does not matter.
-pub fn accept_suggestions(tx: &mut Tx<'_>, suggestions: &[Suggestion]) -> Result<Vec<Placed>> {
-    let pages: Vec<_> = tx.project().pages_in_order().iter().map(|p| p.id).collect();
-    let page_of = |wire: WireId| {
-        tx.project()
-            .wire(wire)
-            .and_then(|w| pages.iter().position(|&p| p == w.page))
+/// Page index, on a horizontal wire, then the main and the cross axis.
+type SortKey = (Option<usize>, bool, f64, f64);
+
+/// Whether the stretch of `wire` nearest `at` runs horizontally.
+fn horizontal_at(project: &Project, wire: WireId, at: Point) -> bool {
+    let Some(w) = project.wire(wire) else {
+        return false;
     };
-    let mut ordered: Vec<(Option<usize>, &Suggestion)> =
-        suggestions.iter().map(|s| (page_of(s.wire), s)).collect();
-    ordered.sort_by(|(pa, a), (pb, b)| {
+    let (Some(from), Some(to)) = (
+        project.endpoint_position(w.from),
+        project.endpoint_position(w.to),
+    ) else {
+        return false;
+    };
+    let mut points = vec![from];
+    points.extend(&w.route);
+    points.push(to);
+    let distance = |a: Point, b: Point| {
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let len2 = dx * dx + dy * dy;
+        let t = if len2 == 0.0 {
+            0.0
+        } else {
+            (((at.x - a.x) * dx + (at.y - a.y) * dy) / len2).clamp(0.0, 1.0)
+        };
+        Point::new(a.x + t * dx, a.y + t * dy).distance(at)
+    };
+    points
+        .windows(2)
+        .min_by(|s, t| distance(s[0], s[1]).total_cmp(&distance(t[0], t[1])))
+        .is_some_and(|s| (s[1].x - s[0].x).abs() > (s[1].y - s[0].y).abs())
+}
+
+/// Accepts suggestions: puts the terminals on their strips (created when
+/// missing), numbered next free in drawing order on each strip, page by
+/// page: terminals on vertical wires stand in a row and are numbered left
+/// to right, terminals on horizontal wires stand in a column and are
+/// numbered top to bottom, the way a drag across the wires numbers them.
+/// The order the suggestions were listed or picked in does not matter, and
+/// neither do the wires' lengths.
+pub fn accept_suggestions(tx: &mut Tx<'_>, suggestions: &[Suggestion]) -> Result<Vec<Placed>> {
+    let project = tx.project();
+    let pages: Vec<_> = project.pages_in_order().iter().map(|p| p.id).collect();
+    let key = |s: &Suggestion| {
+        let page = project
+            .wire(s.wire)
+            .and_then(|w| pages.iter().position(|&p| p == w.page));
+        if horizontal_at(project, s.wire, s.at) {
+            (page, true, s.at.y, s.at.x)
+        } else {
+            (page, false, s.at.x, s.at.y)
+        }
+    };
+    let mut ordered: Vec<(SortKey, &Suggestion)> =
+        suggestions.iter().map(|s| (key(s), s)).collect();
+    ordered.sort_by(|((pa, ha, a1, a2), sa), ((pb, hb, b1, b2), sb)| {
         pa.cmp(pb)
-            .then(a.at.x.total_cmp(&b.at.x))
-            .then(a.at.y.total_cmp(&b.at.y))
-            .then(a.wire.cmp(&b.wire))
+            .then(ha.cmp(hb))
+            .then(a1.total_cmp(b1))
+            .then(a2.total_cmp(b2))
+            .then(sa.wire.cmp(&sb.wire))
     });
     let suggestions: Vec<&Suggestion> = ordered.into_iter().map(|(_, s)| s).collect();
     let mut placed = Vec::with_capacity(suggestions.len());

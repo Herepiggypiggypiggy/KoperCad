@@ -480,12 +480,13 @@ fn paging_repeats_headers_and_numbers_pages() {
         columns: 10,
     });
     let per_page = setup.rows_per_page();
-    // 297 - 10 - 12 - 10 - 30 = 235 mm; minus the 8 mm header: 37 rows of 6 mm.
-    assert_eq!(per_page, 37);
+    // Inside the canvas frame: 297 - 15 - 12 - 10 - 40 = 220 mm; minus the
+    // 8 mm header: 35 rows of 6 mm.
+    assert_eq!(per_page, 35);
     let pages = paginate(&devices, &setup);
     assert_eq!(pages.len(), 3);
-    assert_eq!(pages[0].rows, 0..37);
-    assert_eq!(pages[2].rows, 74..100);
+    assert_eq!(pages[0].rows, 0..35);
+    assert_eq!(pages[2].rows, 70..100);
     assert!(!pages[0].continued && pages[1].continued);
     for page in &pages {
         assert_eq!(page.count, 3);
@@ -501,11 +502,12 @@ fn paging_repeats_headers_and_numbers_pages() {
         );
         // Everything inside the frame and above the title block.
         for text in &layout.texts {
-            assert!(text.x >= 20.0 && text.x + text.width <= 200.0 + 1e-9);
-            assert!(text.y >= 10.0 && text.y + text.height <= 297.0 - 10.0 - 30.0 + 1e-9);
+            // 5 mm inside the 10 mm frame, clear of the 36 mm title block.
+            assert!(text.x >= 15.0 && text.x + text.width <= 195.0 + 1e-9);
+            assert!(text.y >= 15.0 && text.y + text.height <= 297.0 - 10.0 - 36.0 + 1e-9);
         }
     }
-    // Natural order across pages: -K37 ends page 1, -K38 starts page 2.
+    // Natural order across pages: -K35 ends page 1, -K36 starts page 2.
     let tags = |page: &novo_reports::ReportPage| -> Vec<String> {
         layout_page(&devices, page, &setup)
             .texts
@@ -514,8 +516,8 @@ fn paging_repeats_headers_and_numbers_pages() {
             .map(|t| t.text.clone())
             .collect()
     };
-    assert_eq!(tags(&pages[0]).last().map(String::as_str), Some("-K37"));
-    assert_eq!(tags(&pages[1]).first().map(String::as_str), Some("-K38"));
+    assert_eq!(tags(&pages[0]).last().map(String::as_str), Some("-K35"));
+    assert_eq!(tags(&pages[1]).first().map(String::as_str), Some("-K36"));
     assert!(
         layout_page(&devices, &pages[1], &setup)
             .texts
@@ -537,7 +539,9 @@ fn every_section_starts_a_page_and_empty_reports_get_one() {
             layout
                 .texts
                 .iter()
-                .any(|t| t.bold && t.text == output.title)
+                .any(|t| t.bold && t.text.starts_with(&output.title)),
+            "{}",
+            output.title
         );
     }
     let mut doc = Document::default();
@@ -571,10 +575,14 @@ fn xlsx_round_trips() {
             "Table of contents",
             "Bill of materials",
             "Device list",
-            "Wire list"
+            "Wire list",
+            "Terminal diagram",
+            "Cable diagram"
         ]
     );
-    for output in &outputs {
+    // Cell by cell for the one-table sheets (a sheet with several sections
+    // stacks them under titles).
+    for output in outputs.iter().filter(|o| o.sections.len() == 1) {
         let range = book.worksheet_range(&output.title).expect("sheet");
         let sheet: Vec<Vec<Data>> = range.rows().map(<[Data]>::to_vec).collect();
         let section = &output.sections[0];

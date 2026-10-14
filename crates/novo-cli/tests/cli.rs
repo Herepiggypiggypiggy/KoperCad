@@ -111,43 +111,128 @@ fn export_json_round_trips() {
 }
 
 #[test]
-fn export_never_overwrites_the_project() {
+fn export_never_overwrites_a_project() {
     let dir = tempfile::tempdir().unwrap();
     let path = project(dir.path(), false);
     let bytes = std::fs::read(&path).unwrap();
     let run = novo(&["export", "json", s(&path), "-o", s(&path)]);
     assert_eq!(run.code, exit::WRITE);
-    assert!(run.err.contains("refusing to overwrite"));
+    assert!(run.err.contains("it is a project file"), "{}", run.err);
     assert_eq!(std::fs::read(&path).unwrap(), bytes);
+
+    // Another project, under its own name or renamed, and a recovery file.
+    let other = tempfile::tempdir().unwrap();
+    let plant = project(other.path(), false);
+    let plant_bytes = std::fs::read(&plant).unwrap();
+    let renamed = other.path().join("plant-backup.db");
+    std::fs::copy(&plant, &renamed).unwrap();
+    let recovery = other.path().join("plant.novo.autosave");
+    for target in [&plant, &renamed, &recovery] {
+        let run = novo(&["export", "json", s(&path), "-o", s(target)]);
+        assert_eq!(run.code, exit::WRITE, "{}", target.display());
+        let run = novo(&["export", "pdf", s(&path), "-o", s(target)]);
+        assert_eq!(run.code, exit::WRITE, "{}", target.display());
+    }
+    assert_eq!(std::fs::read(&plant).unwrap(), plant_bytes);
+    assert_eq!(std::fs::read(&renamed).unwrap(), plant_bytes);
+    assert!(!recovery.exists());
 }
 
 #[test]
-fn export_pdf_says_it_is_not_here_yet() {
+fn export_replaces_an_earlier_export_in_one_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+    let out = dir.path().join("demo.json");
+    std::fs::write(&out, "old export").unwrap();
+    let run = novo(&["export", "json", s(&path), "-o", s(&out)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert!(std::fs::read_to_string(&out).unwrap().starts_with('{'));
+    let mut entries: Vec<_> = std::fs::read_dir(dir.path())
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    entries.sort();
+    assert_eq!(
+        entries,
+        ["demo.json", "demo.novo"],
+        "no temporary file left"
+    );
+
+    // A failed write leaves the earlier export whole.
+    let missing_dir = dir.path().join("no-such-dir").join("demo.json");
+    let run = novo(&["export", "json", s(&path), "-o", s(&missing_dir)]);
+    assert_eq!(run.code, exit::WRITE);
+    assert!(std::fs::read_to_string(&out).unwrap().starts_with('{'));
+}
+
+#[test]
+fn export_pdf_draws_every_page_or_the_ones_asked() {
     let dir = tempfile::tempdir().unwrap();
     let path = project(dir.path(), false);
     let out = dir.path().join("demo.pdf");
     let run = novo(&["export", "pdf", s(&path), "-o", s(&out)]);
-    assert_eq!(run.code, exit::UNAVAILABLE);
-    assert!(run.err.contains("novo-pdf"));
-    assert!(!out.exists());
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    let all = std::fs::read(&out).unwrap();
+    assert!(all.starts_with(b"%PDF-"));
+
+    let one = dir.path().join("page2.pdf");
+    let run = novo(&["export", "pdf", s(&path), "-o", s(&one), "--page", "2"]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    let page2 = std::fs::read(&one).unwrap();
+    assert!(page2.starts_with(b"%PDF-"));
+    assert!(page2.len() < all.len(), "one page is smaller than two");
+
+    let run = novo(&["export", "pdf", s(&path), "-o", s(&one), "--page", "9"]);
+    assert_eq!(run.code, exit::USAGE);
+    assert!(run.err.contains("no page `9`"));
 }
 
 #[test]
-fn check_reports_duplicate_tags() {
+fn check_runs_the_design_checks() {
     let dir = tempfile::tempdir().unwrap();
-    let clean = project(dir.path(), false);
+    let clean = dir.path().join("clean.novo");
+    let mut p = ScriptProject::create(&clean, "Clean", false).unwrap();
+    p.add_page("1", "").unwrap();
+    p.add_device("-K1", "Not drawn yet", "general").unwrap();
+    p.save().unwrap();
+    p.close().unwrap();
     let run = novo(&["check", s(&clean)]);
     assert_eq!(run.code, exit::OK, "{}", run.out);
-    assert!(run.out.contains("No problems"));
+    assert!(run.out.contains("No issues"), "{}", run.out);
+    assert!(
+        run.out.contains("info    No part: -K1"),
+        "infos are listed: {}",
+        run.out
+    );
 
     let other = tempfile::tempdir().unwrap();
     let dup = project(other.path(), true);
     let run = novo(&["check", s(&dup)]);
     assert_eq!(run.code, exit::PROBLEMS);
-    assert!(run.out.contains("duplicate_tag: -K1 is used by 2 objects"));
+    assert!(run.out.contains("error   Duplicate tag: "), "{}", run.out);
+    assert!(
+        run.out
+            .contains("warning Unconnected point: -K1: A1 not connected (page 1)"),
+        "{}",
+        run.out
+    );
     let run = novo(&["check", "--json", s(&dup)]);
     let v: serde_json::Value = serde_json::from_str(&run.out).unwrap();
-    assert_eq!(v[0]["check"], "duplicate_tag");
+    let kinds: Vec<&str> = v
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["kind"].as_str().unwrap())
+        .collect();
+    assert!(kinds.contains(&"duplicate_tag"), "{kinds:?}");
+    assert!(kinds.contains(&"unconnected_pin"), "{kinds:?}");
+    let dup_tag = v
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["kind"] == "duplicate_tag")
+        .unwrap();
+    assert_eq!(dup_tag["severity"], "error");
 }
 
 #[test]
@@ -163,7 +248,9 @@ fn bad_input_and_usage_have_their_own_codes() {
     std::fs::write(&junk, b"not a database").unwrap();
     assert_eq!(novo(&["info", s(&junk)]).code, exit::READ);
 
-    assert_eq!(novo(&["frobnicate"]).code, exit::USAGE);
+    let usage = novo(&["frobnicate"]);
+    assert_eq!(usage.code, exit::USAGE);
+    assert!(!usage.err.contains('\u{1b}'), "no terminal escape codes");
     assert_eq!(novo(&["export", "pdf", "x.novo"]).code, exit::USAGE);
     let help = novo(&["--help"]);
     assert_eq!(help.code, exit::OK);
@@ -202,9 +289,58 @@ fn check_reports_shorts_between_potentials() {
     let run = novo(&["check", s(&path)]);
     assert_eq!(run.code, exit::PROBLEMS);
     assert!(
-        run.out
-            .contains("potential_short: short between L1 and L2 at feed L1:1, feed L2:1"),
+        run.out.contains("error   Potential conflict: L1 and L2"),
         "{}",
         run.out
     );
+}
+
+#[test]
+fn export_reports_as_excel_and_csv() {
+    use calamine::{Reader, Xlsx, open_workbook};
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+
+    let run = novo(&["export", "devices", s(&path)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert!(!run.out.starts_with('\u{feff}'), "no BOM on stdout");
+    assert!(run.out.contains("'-K1"), "{}", run.out);
+
+    let csv = dir.path().join("bom.csv");
+    let run = novo(&["export", "bom", s(&path), "-o", s(&csv), "--delimiter", ";"]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    let text = std::fs::read_to_string(&csv).unwrap();
+    assert!(text.starts_with('\u{feff}'), "Excel reads mm² right");
+    assert!(text.contains(';'));
+
+    let all = dir.path().join("reports.xlsx");
+    let run = novo(&["export", "reports", s(&path), "-o", s(&all)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    let book: Xlsx<_> = open_workbook(&all).unwrap();
+    assert_eq!(
+        book.sheet_names(),
+        [
+            "Table of contents",
+            "Bill of materials",
+            "Device list",
+            "Wire list",
+            "Terminal diagram",
+            "Cable diagram"
+        ]
+    );
+
+    let wrong = dir.path().join("reports.csv");
+    assert_eq!(
+        novo(&["export", "reports", s(&path), "-o", s(&wrong)]).code,
+        exit::USAGE
+    );
+    let txt = dir.path().join("bom.txt");
+    assert_eq!(
+        novo(&["export", "bom", s(&path), "-o", s(&txt)]).code,
+        exit::USAGE
+    );
+    let run = novo(&["export", "wires", s(&path), "-o", s(&path)]);
+    assert_eq!(run.code, exit::WRITE);
+    assert!(run.err.contains("it is a project file"));
 }
