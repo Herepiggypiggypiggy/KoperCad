@@ -1,0 +1,31 @@
+format = 1
+id = "iec/sensors/pressure_nc"
+name = "Pressure switch, break contact"
+description = "Pressure switch with a normally closed contact."
+standard = "IEC 60617"
+category = "sensors"
+function = "contact.nc.pressure"
+keywords = ["pressure", "sensor", "nc"]
+
+connections = [
+  { id = "21", at = [0, 0], dir = "up" },
+  { id = "22", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-12, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 5] },
+  { kind = "line", from = [0, 5], to = [3.5, 5] },
+  { kind = "line", from = [0, 16], to = [0, 11] },
+  { kind = "line", from = [0, 11], to = [4, 4] },
+  { kind = "line", from = [1.714, 8], to = [-8, 8], stroke = "dashed" },
+  { kind = "text", at = [-9.5, 8], text = "p", size = 3 },
+]
+
+[behavior]
+kind = "contact"
+normally = "closed"
+poles = [["21", "22"]]

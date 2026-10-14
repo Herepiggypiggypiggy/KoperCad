@@ -1,0 +1,30 @@
+format = 1
+id = "iec/protection/surge_arrester"
+name = "Surge arrester"
+description = "Surge protective device (SPD) between a conductor and earth."
+standard = "IEC 60617"
+category = "protection"
+function = "protection.surge"
+keywords = ["surge arrester", "spd", "overvoltage", "lightning"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "PE", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-4, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "rect", at = [-1.5, 4], size = [3, 8] },
+  { kind = "line", from = [0, 5.5], to = [0, 10] },
+  { kind = "polyline", points = [[0, 10], [-0.8, 8.6], [0.8, 8.6]], closed = true, fill = true },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+]
+
+[behavior]
+kind = "passive"
+type = "surge_arrester"
+poles = [["1", "PE"]]

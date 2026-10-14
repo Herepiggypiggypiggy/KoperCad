@@ -1,0 +1,36 @@
+format = 1
+id = "iec/supplies/dc_dc_converter"
+name = "DC/DC converter"
+description = "DC/DC converter, for example 24 V to 12 V or an isolated supply."
+standard = "IEC 60617"
+category = "supplies"
+function = "converter.dc_dc"
+keywords = ["dc/dc", "converter", "isolated", "dc"]
+
+connections = [
+  { id = "+IN", at = [0, 0], dir = "up" },
+  { id = "-IN", at = [8, 0], dir = "up" },
+  { id = "+OUT", at = [0, 24], dir = "down" },
+  { id = "-OUT", at = [8, 24], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 12], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "line", from = [8, 0], to = [8, 4] },
+  { kind = "line", from = [0, 20], to = [0, 24] },
+  { kind = "line", from = [8, 20], to = [8, 24] },
+  { kind = "rect", at = [-4, 4], size = [16, 16] },
+  { kind = "line", from = [-4, 20], to = [12, 4] },
+  { kind = "text", at = [0, 8], text = "=", size = 3.5 },
+  { kind = "text", at = [8, 16], text = "=", size = 3.5 },
+]
+
+[behavior]
+kind = "converter"
+input = "dc"
+output = "dc"
+poles = [["+IN", "-IN"], ["+OUT", "-OUT"]]

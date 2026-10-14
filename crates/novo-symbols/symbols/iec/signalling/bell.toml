@@ -1,0 +1,28 @@
+format = 1
+id = "iec/signalling/bell"
+name = "Bell"
+description = "Electric bell."
+standard = "IEC 60617"
+category = "signalling"
+function = "signal.bell"
+keywords = ["bell", "alarm", "audible"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "line", from = [0, 4], to = [0, 12] },
+  { kind = "arc", center = [0, 8], r = 4, start = 90, end = 270 },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+]
+
+[behavior]
+kind = "signal"
+poles = [["1", "2"]]

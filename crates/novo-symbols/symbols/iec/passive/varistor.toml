@@ -1,0 +1,30 @@
+format = 1
+id = "iec/passive/varistor"
+name = "Varistor"
+description = "Voltage-dependent resistor (VDR) for overvoltage suppression."
+standard = "IEC 60617"
+category = "passive"
+function = "passive.resistor.varistor"
+keywords = ["varistor", "vdr", "mov", "suppressor"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "rect", at = [-1.5, 4], size = [3, 8] },
+  { kind = "polyline", points = [[-3.5, 12], [-2.5, 12], [3, 5]] },
+  { kind = "text", at = [4, 10.5], text = "U", size = 2.2, align = "left" },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+]
+
+[behavior]
+kind = "passive"
+type = "varistor"
+poles = [["1", "2"]]

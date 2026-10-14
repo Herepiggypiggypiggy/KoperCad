@@ -1,0 +1,30 @@
+format = 1
+id = "iec/sources/battery"
+name = "Battery or DC cell"
+description = "Battery or DC cell; the longer plate is positive."
+standard = "IEC 60617"
+category = "sources"
+function = "source.dc"
+keywords = ["battery", "cell", "dc source", "accumulator"]
+
+connections = [
+  { id = "+", at = [0, 0], dir = "up" },
+  { id = "-", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 7] },
+  { kind = "line", from = [-3.5, 7], to = [3.5, 7] },
+  { kind = "line", from = [-1.5, 9], to = [1.5, 9] },
+  { kind = "text", at = [4, 5], text = "+" },
+  { kind = "line", from = [0, 9], to = [0, 16] },
+]
+
+[behavior]
+kind = "source"
+type = "dc"
+poles = [["+", "-"]]

@@ -1,0 +1,27 @@
+format = 1
+id = "iec/signalling/horn"
+name = "Horn"
+description = "Horn or siren for audible alarms."
+standard = "IEC 60617"
+category = "signalling"
+function = "signal.horn"
+keywords = ["horn", "siren", "alarm", "audible"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-7, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 5] },
+  { kind = "polyline", points = [[-2, 5], [2, 5], [2, 8], [5, 11], [-5, 11], [-2, 8]], closed = true },
+  { kind = "line", from = [0, 11], to = [0, 16] },
+]
+
+[behavior]
+kind = "signal"
+poles = [["1", "2"]]

@@ -1,0 +1,29 @@
+format = 1
+id = "iec/connectivity/bridge_2"
+name = "Terminal bridge, 2 positions"
+description = "Jumper bridge linking two adjacent terminals."
+standard = "IEC 60617"
+category = "connectivity"
+function = "connectivity.bridge"
+keywords = ["bridge", "jumper", "link", "terminal bridge"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [8, 0], dir = "up" },
+]
+
+anchors = [
+  { role = "tag", at = [-3, 3], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 3] },
+  { kind = "line", from = [8, 0], to = [8, 3] },
+  { kind = "line", from = [0, 3], to = [8, 3] },
+  { kind = "circle", center = [0, 3], r = 0.6, fill = true },
+  { kind = "circle", center = [8, 3], r = 0.6, fill = true },
+]
+
+[behavior]
+kind = "conductor"
+poles = [["1", "2"]]
