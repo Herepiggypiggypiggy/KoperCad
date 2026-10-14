@@ -69,3 +69,7 @@
 - 21:45 Merged #80, #88, #92 (DESIGN, design READY, docs only), #85 (B READY). Contactor letter code: default K, project rule for Q (#92).
 - 21:58 main + #82 + #81 + #86 tested together: fmt, clippy clean, 637 passed, 0 failed. Merged #82 (core feeds), #81 (parts), #86 (outputs), #83 (theme; B + design READY).
 - 22:05 Merged #94 (lead: lopdf; B READY), #93 (WS-03 xref labels in scene; main + design READY) and #89 (WS-10; main READY) after testing #93 + #89 together on main: 642 passed, 0 failed.
+- 22:20 Merged #84, #97, #98, #100, #95, #101, #102, #103 (wgpu optional), #104, each on its reviewer's READY; combined runs on main: 647 and 650 passed, 0 failed. Contactor K default; generated-page n-of-m counts per section (design reviewer).
+- 22:30 Merged #106, #108 (DESIGN), #99 (WS-07 terminal article; 653 pass on main), #91 (WS-06) + #90 (WS-08) after a combined run: 662 passed, 0 failed.
+- 22:40 Merged #107, #96 and #110 (DESIGN sheet letters). WS-01 asked to merge main into #105 (gate1_tests conflict).
+- 22:45 Merged #109 (WS-03 report sheets in frame; B + design READY on 3dfbc1f; combined 669 passed). Sent sheet_name 20a/20b fix to Outputs; WS-03 on to perf then drawing.
