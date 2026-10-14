@@ -57,57 +57,25 @@ pub fn classify(symbol: &Symbol) -> SymbolClass {
     if f.starts_with("connectivity") || f.starts_with("earth") {
         return SymbolClass::Plain;
     }
-    if let Some(rest) = f.strip_prefix("contact.") {
+    let letter = letter_code(f);
+    if f.starts_with("contact.") {
         // Operated by hand or by a process value: a device of its own.
-        if ["push", "key", "turn", "estop"].iter().any(|p| has(p)) {
-            return SymbolClass::Main { letter: "S" };
-        }
-        if ["position", "proximity", "pressure", "float", "temperature"]
-            .iter()
-            .any(|p| has(p))
-        {
-            return SymbolClass::Main { letter: "B" };
-        }
-        if has("thermal") {
-            return SymbolClass::Child { letter: "F" };
-        }
-        let _ = rest;
-        return SymbolClass::Child { letter: "K" };
+        // Otherwise a contact of a relay, contactor or overload relay.
+        return if matches!(letter, "S" | "B") {
+            SymbolClass::Main { letter }
+        } else {
+            SymbolClass::Child { letter }
+        };
     }
-    SymbolClass::Main {
-        letter: letter_code(f),
-    }
+    SymbolClass::Main { letter }
 }
 
-/// IEC 81346-2 letter code for a function type: the class of object a
-/// device of that function is (`K` processing signals, `M` providing
-/// mechanical energy, `F` protecting, `Q` switching energy, ...).
+/// IEC 81346-2 letter code for a function type. The table is
+/// novo-workflow's ([`novo_workflow::insert::letter_code_of`]), so the
+/// editor and the insert search never disagree; functions that are not
+/// devices of their own fall back to `A`.
 pub fn letter_code(function: &str) -> &'static str {
-    let first = function.split('.').next().unwrap_or("");
-    match function {
-        "coil.valve" => return "M",
-        "protection.mpcb" | "protection.mcp" => return "Q",
-        "passive.capacitor" | "passive.capacitor.polarized" | "passive.capacitor.variable" => {
-            return "C";
-        }
-        "source.generator" => return "G",
-        _ => {}
-    }
-    match first {
-        "coil" | "plc" => "K",
-        "contact" => "K",
-        "motor" => "M",
-        "protection" => "F",
-        "switch" => "Q",
-        "signal" | "meter" => "P",
-        "terminal" | "connector" => "X",
-        "transformer" | "converter" => "T",
-        "sensor" => "B",
-        "source" => "G",
-        "load" => "E",
-        "passive" => "R",
-        _ => "A",
-    }
+    novo_workflow::insert::letter_code_of(function).unwrap_or("A")
 }
 
 /// Short names that rank first in the insert search (DESIGN.md §4), on
@@ -430,6 +398,23 @@ pub fn direction(d: novo_symbols::Direction) -> Direction {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn placing_and_the_insert_search_agree_on_letter_codes() {
+        let catalog = Catalog::builtin();
+        for symbol in catalog.library().iter() {
+            let letter = match classify(symbol) {
+                SymbolClass::Main { letter } | SymbolClass::Child { letter } => letter,
+                _ => continue,
+            };
+            assert_eq!(
+                Some(letter),
+                novo_workflow::insert::letter_code(symbol),
+                "{}",
+                symbol.id
+            );
+        }
+    }
 
     #[test]
     fn mnemonics_point_at_real_symbols() {
