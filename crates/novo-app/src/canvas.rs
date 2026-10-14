@@ -6,6 +6,8 @@
 use eframe::egui;
 use novo_core::{ChangeSet, Command, Document, ModelError, Outcome, PageId, Tx};
 
+use novo_editor::view::SchematicView;
+
 use crate::backend::ProjectBackend;
 
 /// The open page, handed to the canvas each frame. Edits go through
@@ -48,6 +50,22 @@ impl<'a> OpenPage<'a> {
         Ok((value, changes))
     }
 
+    /// Hands the document to a view that edits it directly, one
+    /// `Document::transact` per gesture (the schematic editor). `edit`
+    /// returns every change it made; they are recorded like any other.
+    pub fn edit(&mut self, edit: impl FnOnce(&mut Document, PageId) -> ChangeSet) -> ChangeSet {
+        let page = self.page;
+        let document = self
+            .backend
+            .document_mut()
+            .expect("OpenPage exists only while a project is open");
+        let changes = edit(document, page);
+        if !changes.is_empty() {
+            self.backend.record(&changes);
+        }
+        changes
+    }
+
     /// Runs a command as one undo step, see `Document::execute`.
     pub fn execute(&mut self, command: Command) -> Result<Outcome, ModelError> {
         let document = self
@@ -77,6 +95,27 @@ pub trait CanvasView {
 
     /// Short text for the status bar, such as cursor coordinates.
     fn status_text(&self) -> Option<String> {
+        None
+    }
+
+    /// The changes the canvas made to the document since the last call
+    /// (already recorded), so the shell can tell its other views.
+    fn take_changes(&mut self) -> ChangeSet {
+        ChangeSet::default()
+    }
+
+    /// A page the canvas asks the shell to open (Page Up, a new page).
+    fn take_page_request(&mut self) -> Option<PageId> {
+        None
+    }
+
+    /// The schematic editor, when this canvas is one.
+    fn schematic(&mut self) -> Option<&mut SchematicView> {
+        None
+    }
+
+    /// The schematic editor, read only.
+    fn schematic_ref(&self) -> Option<&SchematicView> {
         None
     }
 }

@@ -3,6 +3,15 @@
 //! toasts for messages, the dialogs and action dispatch. There is no menu
 //! bar and no status bar.
 
+mod checks;
+mod pdf;
+mod terminals;
+mod workbench;
+mod xref;
+
+#[cfg(test)]
+mod gate1_tests;
+
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -13,10 +22,11 @@ use novo_core::{Command, ModelError, Outcome, PageId};
 
 use crate::backend::{BackendError, ProjectBackend, page_labels};
 use crate::canvas::{CanvasView, OpenPage};
-use crate::palette::{Entry, Palette, Target};
 use crate::settings::Settings;
 use crate::{APP_NAME, PROJECT_EXTENSION};
 use novo_theme::widgets::{primary_button, section_label, segment};
+use workbench::Workbench;
+pub(crate) use workbench::app_runs;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Level {
@@ -65,7 +75,9 @@ pub struct NovoApp {
     settings: Settings,
     project_path: Option<PathBuf>,
     current_page: Option<PageId>,
-    palette: Palette,
+    /// The hosted engines: command field, keys, cross references,
+    /// terminals, problems and export.
+    wb: Workbench,
     messages: Vec<Message>,
     show_about: bool,
     window_title: String,
@@ -118,13 +130,14 @@ impl NovoApp {
         canvas: Box<dyn CanvasView>,
         settings: Settings,
     ) -> Self {
+        let wb = Workbench::with_recent(&settings.recent_actions);
         Self {
             backend,
             canvas,
             settings,
             project_path: None,
             current_page: None,
-            palette: Palette::default(),
+            wb,
             messages: Vec::new(),
             show_about: false,
             window_title: String::new(),
@@ -258,7 +271,7 @@ impl NovoApp {
                 let full = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!full));
             }
-            Action::CommandPalette => self.palette.open(),
+            Action::CommandPalette => self.wb.field.open(novo_workflow::palette::Mode::All, None),
             Action::About => self.show_about = true,
         }
     }
@@ -523,9 +536,13 @@ impl NovoApp {
         self.update_title(&ctx);
 
         let mut picked: Vec<Action> = Vec::new();
-        if !self.modal_open() {
-            picked.extend(self.consume_shortcuts(&ctx));
-        }
+        self.escape_popups(&ctx);
+        self.space_released(&ctx);
+        let commands = if self.modal_open() {
+            Vec::new()
+        } else {
+            self.key_commands(&ctx)
+        };
 
         self.window_width = ctx.content_rect().width();
         let pinned = self.outline_pinned() && !self.focus_mode;
@@ -543,13 +560,19 @@ impl NovoApp {
                 .resizable(false)
                 .show(ui, |ui| self.outline(ui, &mut picked));
         }
+        self.drawer(ui);
         let canvas_rect = egui::CentralPanel::no_frame()
             .show(ui, |ui| {
                 if self.is_open() {
+                    self.update_marks();
                     let open = self
                         .current_page
                         .and_then(|page| OpenPage::new(&mut *self.backend, page));
                     self.canvas.show(ui, open);
+                    self.after_canvas();
+                    self.after_canvas_frame();
+                    let rect = ui.min_rect();
+                    self.paint_overlays(ui, rect);
                 } else {
                     self.start_panel(ui, &mut picked);
                 }
@@ -565,64 +588,34 @@ impl NovoApp {
         }
         self.toasts(&ctx, canvas_rect);
 
-        if self.palette.is_open() {
-            let entries = self.palette_entries();
-            let recent: Vec<Target> = self
-                .settings
-                .recent_actions
-                .iter()
-                .filter_map(|id| Action::from_id(id))
-                .map(Target::Action)
-                .collect();
-            match self.palette.show(&ctx, &entries, &recent) {
-                Some(Target::Action(action)) => picked.push(action),
-                None => {}
-            }
-        }
+        self.occurrences_popup(&ctx, canvas_rect);
+        self.issues_popup(&ctx, canvas_rect);
+        self.command_field(&ctx, canvas_rect);
         self.recovery_dialog(&ctx);
         self.about_dialog(&ctx);
 
         for action in picked {
             self.run(&ctx, action);
         }
+        for command in commands {
+            self.run_key_command(&ctx, command);
+        }
     }
 
-    /// What the command palette searches: every enabled action for now;
-    /// pages, devices and symbols join later as new `Target`s.
-    fn palette_entries(&self) -> Vec<Entry> {
-        Action::ALL
-            .iter()
-            .copied()
-            .filter(|&a| a != Action::CommandPalette && self.is_enabled(a))
-            .map(Entry::action)
-            .collect()
+    /// Follows up on what the canvas did this frame: its edits reach the
+    /// other views, and a page it asked for is opened.
+    fn after_canvas(&mut self) {
+        let changes = self.canvas.take_changes();
+        if !changes.is_empty() {
+            self.fix_current_page();
+        }
+        if let Some(page) = self.canvas.take_page_request() {
+            self.show_page(page);
+        }
     }
 
     fn modal_open(&self) -> bool {
-        self.palette.is_open() || self.show_about || self.backend.recovery_offer().is_some()
-    }
-
-    /// Takes the key presses that trigger enabled actions, leaving the rest
-    /// (and anything a focused text field needs) to the widgets.
-    fn consume_shortcuts(&self, ctx: &egui::Context) -> Vec<Action> {
-        let typing = ctx.egui_wants_keyboard_input();
-        let mut fired = Vec::new();
-        for (action, shortcut) in Action::by_shortcut_specificity() {
-            if !self.is_enabled(action) || (typing && action.yields_to_text_input(&shortcut)) {
-                continue;
-            }
-            let hit = ctx.input_mut(|i| {
-                if shortcut.modifiers.is_none() {
-                    consume_bare_key(i, shortcut.logical_key)
-                } else {
-                    i.consume_shortcut(&shortcut)
-                }
-            });
-            if hit {
-                fired.push(action);
-            }
-        }
-        fired
+        self.show_about || self.backend.recovery_offer().is_some()
     }
 
     fn update_title(&mut self, ctx: &egui::Context) {
@@ -700,6 +693,7 @@ impl NovoApp {
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.weak(self.saved_state());
+                self.issue_pill(ui);
                 let shortcut = Action::CommandPalette
                     .shortcut()
                     .map(|s| ui.ctx().format_shortcut(&s))
@@ -737,6 +731,12 @@ impl NovoApp {
             Action::CloseProject,
         ] {
             self.action_button(ui, a, picked);
+        }
+        ui.separator();
+        let export = egui::Button::new("Export PDF");
+        if ui.add_enabled(self.is_open(), export).clicked() {
+            self.export_pdf();
+            ui.close();
         }
         ui.separator();
         for a in [Action::About, Action::Quit] {
@@ -1169,20 +1169,6 @@ fn ago(t: SystemTime) -> String {
     }
 }
 
-/// Consumes a press of `key` with no modifiers held. egui's own matching is
-/// loose, so a bare Home would also fire on Shift+Home.
-fn consume_bare_key(input: &mut egui::InputState, key: egui::Key) -> bool {
-    let before = input.events.len();
-    input.events.retain(|event| {
-        !matches!(
-            event,
-            egui::Event::Key { key: k, pressed: true, modifiers, .. }
-                if *k == key && modifiers.is_none()
-        )
-    });
-    input.events.len() != before
-}
-
 /// Where new projects are saved: `<Documents>\NovoElectric`. Documents comes
 /// from the known-folder lookup, because company PCs often redirect it to
 /// OneDrive; it is always inside the user's profile.
@@ -1301,13 +1287,17 @@ mod tests {
     }
 
     #[test]
-    fn ctrl_k_opens_the_palette_and_blocks_other_shortcuts() {
+    fn ctrl_k_opens_the_command_field() {
         let ctx = themed_ctx();
         let mut app = app_with(MemoryBackend::default());
         frame(&ctx, &mut app, key(egui::Key::K, egui::Modifiers::COMMAND));
-        assert!(app.palette.is_open());
-        frame(&ctx, &mut app, key(egui::Key::N, egui::Modifiers::COMMAND));
-        assert!(!app.is_open());
+        assert!(app.wb.field.is_open());
+        frame(
+            &ctx,
+            &mut app,
+            key(egui::Key::Escape, egui::Modifiers::NONE),
+        );
+        assert!(!app.wb.field.is_open());
     }
 
     #[test]
@@ -1395,12 +1385,12 @@ mod tests {
         assert_eq!(app.window_title, "Untitled - NovoElectric");
     }
 
-    /// Which actions a single key press would trigger.
-    fn fired_by(app: &NovoApp, key_: egui::Key, modifiers: egui::Modifiers) -> Vec<Action> {
+    /// Which commands a single key press would run.
+    fn fired_by(app: &NovoApp, key_: egui::Key, modifiers: egui::Modifiers) -> Vec<&'static str> {
         let ctx = themed_ctx();
         let mut fired = Vec::new();
         let mut output = ctx.run_ui(key(key_, modifiers), |ui| {
-            fired = app.consume_shortcuts(ui.ctx());
+            fired = app.key_commands(ui.ctx());
         });
         output.textures_delta.clear();
         fired
@@ -1413,7 +1403,7 @@ mod tests {
         app.run(&ctx, Action::NewProject);
         assert_eq!(
             fired_by(&app, egui::Key::Home, egui::Modifiers::NONE),
-            vec![Action::ZoomToFit]
+            vec!["view.fit"]
         );
         assert!(fired_by(&app, egui::Key::Home, egui::Modifiers::SHIFT).is_empty());
     }
@@ -1432,7 +1422,7 @@ mod tests {
         app.run(&ctx, Action::Undo);
         assert_eq!(
             fired_by(&app, egui::Key::Y, egui::Modifiers::COMMAND),
-            vec![Action::Redo]
+            vec!["edit.redo"]
         );
         assert_eq!(
             fired_by(
@@ -1440,7 +1430,7 @@ mod tests {
                 egui::Key::Z,
                 egui::Modifiers::COMMAND | egui::Modifiers::SHIFT
             ),
-            vec![Action::Redo]
+            vec!["edit.redo"]
         );
     }
 
