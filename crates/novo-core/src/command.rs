@@ -63,6 +63,12 @@ pub enum Command {
         symbol: SymbolId,
         placement: Placement,
     },
+    /// Links a symbol to a device or terminals, or unlinks it; see
+    /// [`Tx::set_role`].
+    SetRole {
+        symbol: SymbolId,
+        role: SymbolRole,
+    },
     AddJunction {
         page: PageId,
         position: Point,
@@ -150,6 +156,7 @@ impl Command {
             Command::SetTag { .. } => "Rename device".into(),
             Command::PlaceSymbol { .. } => "Place symbol".into(),
             Command::MoveSymbol { .. } => "Move symbol".into(),
+            Command::SetRole { .. } => "Cross reference".into(),
             Command::AddJunction { .. } => "Add junction".into(),
             Command::Connect { .. } => "Draw wire".into(),
             Command::SplitWire { .. } => "Branch wire".into(),
@@ -227,6 +234,10 @@ impl Tx<'_> {
             }
             Command::MoveSymbol { symbol, placement } => {
                 self.move_symbol(symbol, placement)?;
+                return Ok(Vec::new());
+            }
+            Command::SetRole { symbol, role } => {
+                self.set_role(symbol, role)?;
                 return Ok(Vec::new());
             }
             Command::AddJunction { page, position } => self.add_junction(page, position)?.into(),
