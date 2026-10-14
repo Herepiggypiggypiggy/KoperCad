@@ -33,3 +33,6 @@
 2026-10-14 21:44 UTC #92 merged at e431274; told WS-06, WS-11 (WS-01 earlier) about dashed 2 px highlight. No open PR of mine.
 2026-10-14 21:45 UTC WS-06: dashed 2 px highlight committed (5089dde), PR after #91 merges
 2026-10-14 21:53 UTC Answered WS-02 on blocks (use BlockDefinition/Instance in Gate 1; project-first storage + libraries; tags allocated, properties/texts substituted, parts proposed). Recording in DESIGN §7 PR
+2026-10-14 21:55 UTC Opened #100 (blocks storage/substitution, head 34eca56); sent to design reviewer and lead
+2026-10-14 21:55 UTC #100 merged. No open PR of mine.
+2026-10-14 22:04 UTC Lead asked: n of m per section (confirmed by design reviewer on #96); opening docs PR

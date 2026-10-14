@@ -9,7 +9,9 @@ Updated 2026-10-14 21:26 UTC.
 - #80 MERGED 21:26 (saving, dots, letter codes, Enter target).
 - #88 MERGED 21:37 (generated pages reflow in own sections; Unsaved location; save a copy).
 - #92 MERGED 21:43 (contactors K default with K|Q rule; highlighted proposal dashed
-  2 px, never solid). No open PR of mine; next change = new branch from main.
+  2 px, never solid).
+- #100 MERGED 21:55 (blocks live in project, libraries are copy sources; tags allocated,
+  properties/texts substituted, parts proposed). No open PR of mine.
 - Criteria for #80 sent to WS-01, WS-03, WS-08, WS-05, WS-11; recheck their heads.
 - Integration lead is now session_01FiLvRBKEcNNHbQEGhYyL1S ("Catch up and resume the
   build"). Design PRs go to the design reviewer session_01NLERJkVHpsVcABrarTR3CF.
