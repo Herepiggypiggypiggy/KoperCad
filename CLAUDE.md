@@ -51,6 +51,11 @@ Rules:
   goes in a new pull request from main. After every push, message the reviewer
   with the new head SHA. The thread roster with session ids is in
   `/mnt/project-files/coordination/threads.md`.
+- Every thread keeps `handoff/<thread>/ROADMAP.md`, `HANDOFF.md` and
+  `PROGRESS.md` current (convention in `handoff/README.md`; the project-wide
+  handoff is `handoff/MAIN-HANDOFF.md`). The copy in this repository is what
+  cloud sessions without the project mount read, so commit your updates here
+  too.
 - Until `docs/DESIGN.md` is merged, build engines and commands and keep UI code
   thin.
 

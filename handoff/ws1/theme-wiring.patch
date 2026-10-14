@@ -1,0 +1,1275 @@
+From 00e9cf9e30aab48addbb3e2d57d61491ce8a2907 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 14 Oct 2026 16:44:20 +0000
+Subject: [PATCH] novo-app: graphite theme, Nova icon and dark canvas from
+ novo-theme
+
+The shell applies novo_theme at start and is dark only, so the theme
+actions are gone (old settings files still load). Panel titles use
+section_label and the main dialog buttons primary_button. The canvas
+draws with the theme's dark canvas palette. The window, exe and
+installer use the new Nova icon from assets/branding; the old
+placeholder icon is removed.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AYuFPxz6eQReQdtzYKLMmW
+---
+ .github/workflows/package-windows.yml |   2 +-
+ Cargo.lock                            |   2 +
+ assets/icon/novoelectric.ico          | Bin 22884 -> 0 bytes
+ assets/icon/novoelectric.png          | Bin 9553 -> 0 bytes
+ crates/novo-app/Cargo.toml            |   2 +
+ crates/novo-app/build.rs              |   4 +-
+ crates/novo-app/src/actions.rs        |  21 +------
+ crates/novo-app/src/app.rs            |  77 ++++++++++++--------------
+ crates/novo-app/src/lib.rs            |   4 +-
+ crates/novo-app/src/model_canvas.rs   |  11 +++-
+ crates/novo-app/src/settings.rs       |  27 ++-------
+ crates/novo-app/src/theme.rs          |  70 +++++++++++++++++++++++
+ packaging/windows/novoelectric.iss    |   2 +-
+ 13 files changed, 129 insertions(+), 93 deletions(-)
+ delete mode 100644 assets/icon/novoelectric.ico
+ delete mode 100644 assets/icon/novoelectric.png
+ create mode 100644 crates/novo-app/src/theme.rs
+
+diff --git a/.github/workflows/package-windows.yml b/.github/workflows/package-windows.yml
+index 8577af1..6729fa3 100644
+--- a/.github/workflows/package-windows.yml
++++ b/.github/workflows/package-windows.yml
+@@ -6,7 +6,7 @@ on:
+   pull_request:
+     paths:
+       - "packaging/windows/**"
+-      - "assets/icon/**"
++      - "assets/branding/**"
+       - "crates/**"
+       - "Cargo.toml"
+       - "Cargo.lock"
+diff --git a/Cargo.lock b/Cargo.lock
+index 83e5c82..fecb6a2 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -1487,7 +1487,9 @@ dependencies = [
+  "novo-canvas",
+  "novo-core",
+  "novo-storage",
++ "novo-theme",
+  "rfd",
++ "ron",
+  "serde",
+  "tempfile",
+  "winresource",
+diff --git a/assets/icon/novoelectric.ico b/assets/icon/novoelectric.ico
+deleted file mode 100644
+index c1610f2dba10fe4d94069291ddc281c41cd92505..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 22884
+zcmag^WmH_x6E=zt?ykYz-Ge&>*Wj+f-C+hoaCg^W0|eLLmO#Sb5G1&}JIo=!|GUn;
+z>#n=bnGbuaySjTnU0wa`>e?FsfB_%@u(1JeKPo^IECAs1CJ__=ugn1t05HS7X{i2J
+z7DoU8^pF4mF0TKT?U4b1baVhfQu2T06;uG=1s?zaf&Nz(ev=m||H=P;Q~*tS0055<
+z0EpI5Q@}tad20>8_@F4O_4fY{0X8z?+m-SPY5@Si27Hi}((%i4P91kl)59MD?&aO(
+ztNhfbPgTr`AC~*98zYcha*yzZrCoz1ifS75hEk)G6}}(Wjk=Xe(M0hX&$#2p$Pm|9
+zN0V782X~q41J#oI$lYpSC$Zh{%8A{9o#%q9yeDd|Z*Ic6KN1qGr@xPjWw;ToDza<3
+z?rxKC;}Ol!guD4#I9%eyRRhoy$R)lxNWfJa>c{H2=S)>z<A>9QS0ZDcPs_M_galls
+zpgW1(R&|Qu^Is9uwu9QiS0%~3tu6(Hm@gxOM7JBKH0zex{xKg)owZb3mH7k{scDF5
+zV$4DGMBmR(*aJU4{dC|Q%gAM=+2xjPFiws5i%PtH@(0jC@4)%%x&BU^RFKVM2ZEgL
+z5$fvz-)B<qw1Ww%YI+6_?RSz$P!wz?BE1*`MdPAUt5WSy?%GsFP*Je8kFp@-9jdFj
+zSqA#U3#4}M^j~7CDn37V>l9m84SKz+6jr{WV8Hxq^^^(iqdA5KMZAdEX62q(?F~uk
+z<Z+bGm=qZhA0cHtY^IVdoMBuoNPj6(@>~?UJ<|Klexn&6BHb1$Vx6J?To?Jd_t<J;
+z2<G(lz3hCUP@p%jU_p>d%QO|kgIic@3R(w!#Qf~y_fHuI2T~BzW$BjbqNuZUUv%MO
+zoxI1RI1Cx(>sxp=<JHeGv}eWa@}Yk^0YEE2JdM@DPfv(3`Od3Tx>5&KN7t_yA@10F
+zc4g`qn_cdar0}_JRSHP$#%`(wI2c2EKVdcC_Dk%eDvZ9!<KH`dAJe3sR&T|an9@c|
+zaaT@LM#75S3I<N4Cy_f>@kfJ<%(m}8aNC;$%THH1O1@y9K0iIBBXNC$!hPCCo+KKI
+zU3qgxzy~=s*>BS3VgG+z_TMHU{?BFCeZ}qp0Jxj~xom!hNtCWG{tuwzndfN-B`?Iy
+z+m=M;H<>D0xpbPm;uH43J~a)KN)&2PRM0-P3X4ri1qEzX8wJn44EfKf608qNWcF$9
+zld@6~(kdgiUbeGO!H~u3$iOo$$chLa`yV&+la|+`=i4Pa@?r;ACQ0>))1oYPpUPNS
+ze!?6BT&B6OVKA|}_Tuc&zB*;5-Co+G%w2@ZC%XY(ogIHSlggZk=rR)Q5kyBaEl$-T
+zYFn~7*XE=r^UVQCOzhB?@~v02Pt)0EHHD`$m2sOngdCFe0?iey_^gC`=uz`Qh!?QN
+zI-=wsY?imH3i3ij6j-_!9uLIzMl*G3Bf$cO1w#R}nUiAb`BP^;&>~GbaQnMnhizke
+zGXYbFQlh{!sa{^zww^rr#bV7x>U*m4kNf1mNYahU!krBHIRZ_IlZz$3TX$w*ueBRI
+z4N={bq?4Un>YYL2P_Cw__qB$zSsF+5EgA3UFGeA2k{jn$bMOT+*`zcjm73JbJd2+Q
+zkJEDe=ee`7{xk)LM+Vk;erk^Q)XPZ5l(t+DH8x?37qQ7OC{-cCbutkd$yG0uliBz)
+zOrSyli#tDF4gAK=q@j>{ZH3w8l_EPpO~3Qh#M&@|^Im5AYe490BB-|5|1R5tVn17!
+zmYCde>v@iCQRUs5P{vp3pi))2uJX}%9us6gj~87ZSLkOUPW@7^w!L>Nfz6$aRe4a>
+zUl8>+i?0o`GBC-9s^jp~NIrQ(hQo5OsM%CBsSwRb=-7n11}ZzdRMgA^<1}_MPMOB7
+zA9QhMWq~)I6>WqG9L5q(4<~*s(ipu(bY}aZahl72MldRWG6(%V-|V2Cj3bzm^~>iv
+z^1an>M)&Lqc(lJB_Vqc*YvpJbo|$qBLSgMVe5p#(WPXW}w{=w4f=IFoF#WcEDO~)P
+ze$g&%NaDo{Z)T9G(G{rck?*9JX6p*R$Kfz>WSj|q0us7;?>21o69^Vz^oTb^eExi-
+zKd(g-L)2Y?hBhk)%emX&t@o}sZ?iU3+%T13Q;ww&2fIO4Dn{~sBb)0)Q%_*bg2eJb
+zym3lj?9}ju9ztAZ@3(=k=474&aZC@56B#X5LE`NRrL@&QThj=SNi+zCqQ}w*J+^kw
+z){tUgBZtt?mGtp6D-)8xQXY(3N=rOnP&=!q^CyhQ0bjM`P=?XsP!$+B(6`}lbIWq;
+zteq-*NjO_HOL2M42x~3Dl&$=R>8@dBNlQQ3;=>`pAcyv++uxIBoey&#Nyo&c3bnoS
+z$MR*&tU3DpN6E8LaC&OnmtV98;RLh!`)xyvIt7oFMAU`(zp<@;ZbFFDRVupxLV}YE
+z^RLWaz8!6JYIFYgNc?|b3#vD^p!$z3JOcu*0RRMq|FOkzrje75E`CIB%iVj=azV82
+zP#C8u>3HOL8cpOP23dM02bK7uC=#nU&C-j0y_-<M9XUKom9Hfw{YgyNrHZm}@?TJ^
+zh|URPi94EG*fX;aelG?-aFHvOW%3elDKTXKwm!S5<%iaIhX@HSEwMqppJ^lG?k%ru
+z^+bGcwksPORr8HlCIKulWBx?(xQOSp97G73QUTpRPy6fyC{O;(YLD@wb6rc#JoC3%
+zY1I*vs>z7u)HC78>AIQL?>=k8QX$@av05c4*gy5#>ef<Y?#}kO$uUAHsjVy#PmsdZ
+zWiJ_8HJ7c5vGnkd)!uj>1Y0_R8vOLys{_{}*qd7nV7~gC9)74|x+&#u)igQA{_qt6
+z=2@fPsPHvOL-f}|oumamK+@eZPIE2<Z^q-e???=Bk}17&8Bw#eQ%Eg`tj|#0jA3(e
+z=c(hibIXg&rHB&`heYBLrXTDJfuGtInw$gW&}6MfffM@00z68u?PxMgE|An~_lItf
+z&&~=z*oz6DiqU{g5nMneZc>$`V+F^)NS2H`3JCLcOP^I)BcV0LrPaycO3)RaNhyue
+zUoOdPi`ohayo;5wZe#H#O7Hru$b;*G4~c(Yxl5b?j%lyFIBmucB8jWdVyAIbn6177
+zsX6s8P+UoPREUOAw%tp2pk#lz(!vzU?d!a(P01}34ZvCusuDwVdY_}5tDZ7pNQWVU
+zrDjK!TSDUnFOL%UL$Q&YkWQ6?xQsJ(w{@O_!qg|}zL^?bl!MXf&tGW)Qg>;Dy0CyK
+zt%Nt2YFxv3Fj11L?+(EpUCobZI{lTFH7UOgC=5NKo(Ny#aEAS<6$5)tz;=VDge=<J
+zA!JdqfRCa;8&*H(6OJ6ayn%fD8eI*=3Nox!uYEGZzQIdxR$LShX$<(0nP6~OdacPy
+z;EOssrat~V!d&Sf!zgu9L?kvLzug<TpzFW%v$7BF)sZN|R3+P}FziHkGp|3@oYF02
+z1iO5j=oN?kqc|>ux_lAqPICrlm(Uvu^|!X*G@h4D=J_O_^w{wm2^~cn1ZTgZ)tFq<
+zO08d*a#3Gjm-}Cy49gbF;GJH&!*rphYlf<0sah?E+75vT=rdItydXFfoflL+8ag4^
+z0R{enI40fvvwAzYx)Rg?5I70b3as^I6Q<NFwlU}whb}B=9$VGJX@xsi)oh}qK{!{)
+zp9X|0D@w;eK7Fe@{uf&YJaBQe5$ku`{bly!w!7h~7pE(}_N=UoYC^}%tMr!T6XjZa
+zc&HP&JtkHBhY2=_sUys0J}snNZH(&E&aiWB(B+^PgDz%9H_{j)SIM@O@==_rO8%wI
+z9{#*@p?dHQRm1n9aZ?J(PmSya-f8#E8x4Y)gg-n6hIs`*N|Z%1b=<VK(yGD}(~AoJ
+zE;F#giL=`I96*H6l`*#%aL9$xQE{1TQ7P}x4Y;o0&7OJEGkt!SHZTOj)ans%)36j~
+z0_gDXz9n9DTf)X}j%*XslM5F>*GZ&}R!jA`1u?B^6Oq($|Fi+#JF4Umt^g~t?9o<>
+zSL0n&;KNIB-rOzGL2{&O<qrT4L~86EWcDONZ{;zc!w&%#sm28_{;B^k$9t$=BG-Ir
+z%@{@8#d(eWLp}e#{H4~y@ncMiT&}Mfo~Bn~iL!>XWOv;0NLG*CEEuO0xjX7_t)X8<
+zpzBkE=lH?Td&=X7wb=_f3JsfM=Qnoze~PvKu`Abq?5PL)5D5SvbN-J#TXG!ZOmqqU
+zi?t?x=Zhr%7UKM*yi-hvF*8Y|kCu;2LRu2dG@}Jq7DW9qR2J_!!s<g5N|d6sVjQ=n
+zQ3DrUW$_3yv0|Fqr`R&dV0iE>;l7F;>P!dkT|wZjX^4<7#fjHacHqQw>XU`XtwG?+
+zLQOYCAbA$Kw6CwEdSZ89&KEiL#Io-q0P9xzCeeNV`oHSWa}Ce8WQ)eRR~+yfH%+KD
+zh&1$HNNO}L7v0>>=NJ|2W<Fi!ztai`U<(e$OiGwD5~Q(h0-M1#!(@Na2trIFru`g6
+zCc7wB5AC*FpYzLcX~JgWv^VnH<ChO(lsh&=nEg?NYCqQ*O=ro$@&VnFjRx^d3CW5w
+z*!O<@Tku{=77bVNbBu_fB7>jW&^BL!CAQS8aUaHBao1*d5i(7HdvpwvZi7Y9J&pUP
+zt3FbZf<m<tHrk82TV12?T(*UhAG>35P{8v6BubDZ3@dmy({o{k(n{gD7G(OZm(D~?
+z(H3A>c((EEUsBMkQk<%ZzhheRMN*{8;txkGv58aH-Y6WoJtfJZ&3rtSk!o@8orplk
+zeWP+vmh8nzkMs4P1=Vt&^bt+)7}AKRu-PCxYht7Gpa`3@#9%{lfLgrmsJ^c|%#30s
+z>o9}%_v6&!<nj8yGk+a1P83qE=sI<E`7z82m$aEjG7`$ULp+vEXG0VEJ(24ANG8bC
+z`c<M23DVgCT`_{!Hy!GAo!>FNS|0VWwUmuNrtyABigf+^i$34~{Jh^hVIi?KwL04U
+zN|iB8^GtT~Z4U)kziSPITmL%C%u@TIQUxjW0)5AE(d*>9lQEQHn3r&Lpm5D#U_F~{
+zBWT4=cowd_N}tpiHVIpUk|9Gq5`<HRjl|{xx%%lGIF({PEQ21nYOJJ@`~-*wveF36
+zxupOsXL!ZT;V*|lk%70<Q{wW*_+cbFL!)Fb3L=%&(HFWOX=&sw!X#sm<Mw9lF?@qw
+z*MhA6YOYjLAtF!s6gIPEIF#^|#AU)}v?g3`slME&P{D?&btKmQ35N9AIix5a=3OwY
+zSCB&G9UWoV>Bn;8Jc0&-2M+(*32V_}6HiRqvl}hEq}F{4rW9n+FBRg)9*9L-7f-^4
+zp&ir5ce8n76m52=6vvHI5gY6;7}S+3T)b10i9*KT1Str1%PV_wyOV2np)!=_-7_gb
+z1Dg~mby?J;bn%dD-r%zP)=3OR93|lF;Vr<VIPiu`^t7ZU${*H`;05-pKkK-Ozu$j%
+z#OhHCE=j_%sma;^LlXVZ=NB#z`qg;r`6*D{JQtqG4uc6DZ`hQpQQ^-=?SE#Nt;o9n
+z#?5Q8l|li?LeB4Zd#7jdH!j1twZEf*BITU@3B9-NdX7WMg3k7igxrM{JiiH@Jyu%6
+zhTfnjSa;l&x3#;^p=@eWbL|P{XJoni<>T>S6xf+|r7)WI<g`W%JjaT#(3#7Q67d*!
+z`(;rEdqU9{-V>#c)}Yr(C*3@s4F-fvwq=w%@!g#s8=J8Bf53@>T<(`IRMv6gD1<po
+zGpIdtY>(hgoG$x|eYSI`LNOlJv|ok7IHo23kfyj_g6X;cg6D=f@c3?lUjx?C_FAC<
+zFHC+Xdd>G@V56*AFahuT*yoKd6d}&pg&{KG`LUD4Ae86DRk10k%l8ZCo~})yZ&dos
+zk-D7l-eViU;Fwj3nsR!*A>HC2Ie4lMT5m3vbMO36U<Zq5@bF~zp6^CwY;;Vz*!}?m
+zxsh!sD{s}A>aWcKNLmRfaa5H{$wpiLA~>O~X}`voRf*88h$w<w4U$(c`Znh$jJPZ5
+z8d8F()^%<9+~(=xf9vK~jPj4%hndT|n<9G@WMZ*x+Hta1wDcs!Tqb!)P%$+K)^s>w
+z!!pQ}TASZ{vERMyMvMh+7$iAJtm8-@8F(%N+QXCdxZdr&RxDheN?K`6>Jnc~M9v~3
+zYs6rj#9JA6+Y>A8RL&GV-=<GARzp3T=ZV0m*?Tep@UqN98P&oP<+c7~dbm6W6Tk$1
+zH{hBfNt5RE%GbDAx*QL9!<%d=<o-`u9BXYyh!I!(;qw*#CwwighGA)R7AC$A020Q<
+zhYPV^4>QZk_7H+-BHK!BhN5pQ2hv(J&D*G6COqNcZtIlJqW1$}oyL;~F790(z(<vE
+zE%%_*OVyPfXIi$ypS%LNZWG@~-B!)x%NK_j{Y?m1aiy|BvSq0(==6dbSCKeTN)bEC
+z5kH&#DEw{>SN(e9N0urNwJZ>2CB5macqw6t0|Jgm2ftr}yQoJTc;>S?(^3RiR=ne0
+z7exFvIZc`czGgaCIByNZgG*c~&Y(M7*Cc~|jg8UPkx|J?r${t*2TmlV@Aa&g6K<>r
+z{iJ9xD`SW?Ef@iRM^EA<>)4EZ=!k#MlXFS^DRbY(&YsDWlzo>7+ewJk^wlP9?d63h
+z=V*6r+0@uK?@u3?wVTw|FoW_8SOXY+rxCF6Gr5OJ<5cSgXT(rv&#O}ROHSX#nl?t4
+zmo>L4+Qwas%n&GGc*VO5+Tb1#fX-FR#H{|Zr03G{g{sLYNyDT{)HeS&QIkV?4%w~_
+zEo3{39}l2r;{L0zKVQAj?souYG=XnTy2|bc?rcXLu|pGoo|MCu-7i#8R1AuUf5k(7
+zblevdf9?&jxs|$mPp3bR=QAs~a+*F~5<;&S`}0fgjTfJ~N}>nJ2KK5bo~^tO+1VLs
+z?|lVgs?gJ5jB?%DJXv~)+TK<U!dwqJD+3Qn;j=juQoQJugO)Pkysz4enZ+A0J}ln$
+zAkjATvzB0Zv+(~V&X9c5Oa2#UfIqpf0syF`|BEx`avj}t=l&OGoT<9thJ!>=32_jT
+zS;n+$VH0Xg=No3G94|DFybPCPN^5;a5^Ce!mp+}u@!CI38k)h`$d5D4HEdZm$AIJt
+z466vt$ZJV(r9qMd!Fk<!5_!4d;n<2EXQ8ilkcun)z?VDVN%vcN2Mz9X(kO9`I^He+
+z7+{T^6a0g@bWN9};F`*CDbbE6LuDl6w$x?_uoT#Cihp<*{uqGew&E{Aq1hlIAv3Hl
+zMO?Z{iT5>%I8l-JJoKi2IX;)dDf)EwUAxhf_E0g(Pir;|3{3Oc6;cQhzhKFux79H*
+z_mA*3B&lwhxfW0t>~n|zAZ;B$Ea)J<2ZgDJYd7vl{z>OjoYo^hYWN9z)?Y_7P3X50
+z+-L5QEO;=5?wyX5NJyvS79La#9|Z|dBgkz#djZlA9m5!pp>}OCU&=&NKH;0d&J=@0
+zkXp$l&gOK7PuSvQ+ymysRY}x4Iz-37aGCvm25F3r$&}lcHTxMsg@~h!4vA$_`pQY3
+z_Y=OK#xjVSH0Gy1?I@A_ct?mh2FAC$bw7}dH=_AU&4{7hz&On=y!RLEWb?^YbZq%F
+zr~VXlQE6F3&;s@OHzDqMmL7Wiz>i0dk>ZiUq4wryA0>B9LIWt3PGPL@8bm0G)g1$4
+zs&|8iNPX+9$2s*bXE%vZYA8uy!gMJkEb&TV&F=AvX1&)EkeNnC_TR6)|B*E`*OTPw
+zeix)5zMjS%*zP+e%#gS`ILdfp5onY{?wn3nLzx4UEQ#jNDByo^(bVIMb92+fiysgN
+z1KzcbvzVL`+`pCLXl65L&e$0A++JeO`NFuMK9c4#tBFnE-gaAW(&aT&Lz<|Z^h9js
+zs986}w}dp`R9c&o%kgI{<*cr(ej!QGKgZ`I&)I_BWP!SQEZi1$@l@reh|XZDkwC3|
+zxUkhvYjnw!W0i(z!&!ezkJYH@0%f<Qdy|#aMbL!2Ek8<Kmtg3K*r$~Fbe1h_o&1K;
+zW@>IC5JFwHy#*W-k8T_@r1+wE9bK8Q*5XgSC`lN9jF8`HZM1%={f8%M-Jv4+3YdCV
+zaMm~7{QWE@k}WB7F_C3f{h<DjgplX3dK0daEXhv}-?rnierTnmUi6@=UJ4_E4&9gd
+zk-;N-T{t#o0{!pse6)P!=z>{ev_F@R(Lhc2Z|AP>^xtpj>U-Q6g2B>!aXHpZ70*xd
+z$MEp;O`c{5ZKn5_d*k*)-iq5bVIPL5pr%pjAjQWIwrWlrL~Bdo%bdh`(W2rHcMjU<
+z0s)et^m=v0Jmg_V1+Iw^&$QpUi?tsmzVEX`#7m>=#ZtuGX1B4pam?czeSs<OQ*%1D
+za*ayb+y25z7+ywZA)kxK+&tA8D6{MYC`vdCO(g@ZzyDU$pMc!rOY~Z!HB|`W`FJT)
+zCVYD?{td5Rdc0V;y^`AIxoqRQu@tC8N%N2zrq>o<QN^yx;ud9}MnJL2Vl(!!mA@AN
+zK^yJ!gz`InU=R!GrRru9ELmTVzF|y7V<&$AEF{9}&?1zDO~>Kc&{EYGl(#B{_znw0
+zL|eYpt0D*7^sr<}F3#mxx(f7nrRH>|l=KuKTc$a!UVc!<2z~d+)4}!+%&8&|P>Ht9
+z^ii#FI?_`9biLiHAkzhi>6zu-t1XjsY20@0=;TNyr7A~3uGA6769<z&U8f>U(e8sG
+zwT`m}4DFBdu?e4Epr2B~)d{2s@h4Gt%KBYD_B`qECBHTD`HN}20E^42_o94x;q(&i
+z-xH!2(ak(_*0eiu5=g%Kgq3V3A4Db^CF*P8=D?@Iru)s>cAx%h>X%SS7<7E;!Ofkk
+zPZJ36^O-dc20XCv$oU$nEa!bKj`bh0SYK#EJrRw{R-S$vbiKX`MO0k9KycyYMv?1B
+zW|mC*>p0earltDeoeC0r_Hn4!9VxDNVe9zM_lRYz^|}$#RyW}re=2RIYXb3)eM`V!
+z%ep`jH0dHZ0Z~OM#RlJ|_ieBwf~jDdPgEQI9-f(CO0JC>Wf&x*P;*PcP0zPu-qvV@
+zg{d+bjkIfDVk}2|nS=<!(meJW{hz<P!<RbT;$^ho6~n`Ob(+g|ycVOO$Y`&ui?*M|
+z%YOLHY;|`&JI+Zq-R>!^QCefn8y)#k-OAd#mF>+I(tU56P`y4d5WFVZ?U^TJ=Yc0>
+zSPEaYfPbLN#k_Mh!r~J6Ts^f}8Rxi_ViP8x7GwRVm%Ee>?#F{RsZ>#2<;Ona`_Y)I
+zKdTw#0{QgUJ4Q|Ed<5dgh9m*h`RMPDeu+@AafD-nJj2M#pD#KNM4NVG6DU6xv`b(&
+zqz}oa8TY$MpNN;oEy5uLpoguZ3DiCxeKtIOJTjKo*>SV+p|GUu!}kUC^7N#S<zSzE
+zb<EO{#Mr)y$jvBJZ#9oiFD70h_>2L7r}v8JNX?;+Dj!f2;{3z1BgkrZF%oI@?xVqy
+zQ=P<+JV>vYW+O|iszV=-?G(w6x>D<-^DFLMx6o%zo4m_MX|@bmsxvmL#3S>^b`y;#
+zL`hvK-1<P@m|VR)b;~HUihe3W*tmbmm8EtQbjpIk$S`CfgjAhVzh|e_HSs(zutuZJ
+zDNY+ZCT&;>7Df}}3CJ2B6M`buGJXDNO<^R$?{nZwLl_%_tv`|XL3O?KOG2%N_)AyL
+za-nEuP7LfR(~F;>&s(sh%x_?;V$TkNPR;uMGJ}-bxFS^bVRf_$>ZcWgET0Q`0<f$c
+zmr*<;ibk5QA7&nwB^Y^1SQLo2<P}}L$_A#_mb{SP@;uVNYNADwtaUhmfy;`gAwHNb
+z+%|zorOSFUH$n&+e>5?*W2j1g7tF>9N-GGMUo<}8OXC@}E|Aj5nceZnSX_TcrE0&M
+z6G@tmklX*VaUg1^_9yxS%bloLt{{|Gc;2awlm<*8*9N1}t%`wxK|%G7POuuwmv&yG
+zWGoej-mG4QxFL}_)#vIC7`KO2mj|ijnY~Q_#6;a#P#>vmsscW;Une(Z$GtfH9jq<l
+zj77mOo0uVh`+~F21fR#-5uM=Fmzcpx^)79D1}<`Q7%^u5aQ+4>nDB+%Y^`Z}om*LR
+zt%F({w;DVUR%Pb4u;uyC?oWJRO&r*&=M)<jRiqrcxpt91V}3y;^=m{y@1g!Yj!uhk
+z?)8_50;nr?8@l_W)ZhA~xw771<Pbt#Orn&8+V!h@smpz_DIZB@y-&1ggAakA?v?=q
+zZQSy+d1Wz`<UR)Lyec&pMS}c<FGZG{1u0kp5dL_&jO3-z&FGoF*s+t$*>$G}P9d<0
+z{2C6SW4eyyNX;Yw7ZY1a&Ejz^HGEoBn3~wQG5L-wcJt>QYA&VGNswQ3$vA_eoKn;*
+zmpSEE6;hHH$+riV6pMy++ttPnJ87oa+Cp*FYvTC${cSYe%$-%(FDVT@fG*KpXbf#6
+zGR;RP0P^8qWwoZZ<CS(xQZz#N8bj}-oW$ex?HW>!mXTMDIZk|1^wd>o2N|t~?kvHQ
+z)JNJ!^Q#C2J=o7eLW^HIODZ&f&lUu~+*6_3R!wPN#7QN_mo`QD(N5R=ah}greGAo|
+zo39|Dj6;ZtDkDCr7f_I}Hh6Fb3Fz1Fh)9T8qUpZQuir9>_4Nl737G^QLttyV?*ApW
+z1-<D(|HZb0;ugOE0DPGL#kME;foWvA`9CCjjpqKQ`qNQotKgb`kPX9KO@+rzL9dPq
+zTtN^F+^?74*?`j{(h(SQ7xRlaJ}hZxIu7tkR2Y_&{pu|zmDmYFPXYJ?aF8$Eq+n82
+zY*SQHvPZoZx_e(rI~lKz{cq6c{$9OjwBz|JX3};Ta(1`+I9C^fkgCG-;ep1caokdd
+z(LrWw<z0M4L?nhWKvhWpY{WOPO!~APMwLiNzb-D7X+#RJI3mc80M{+z`4H&<RvB=0
+zbo~73%UVDKPy8pcLnrsAwu&XhXGxjQg#<EENSZJRllF?I_*%@lfi{p1%8>8g0pBX;
+zS@UT2FTlbwvYVBJK38(_VaPFvVa>4Lb^SDl0&zDQb{Tt~(EnmiLWL5)NMD1JRC0_z
+zJ7fk~7i;=5mz>E}5pnKDBZDz#i-j#_j5KLzs1TFg5ZwggS$YKrUNAG4zIzYO0Qdw*
+z<_Go3Eu3H#8M=*sOnmD-H0Jjp9}A49tk$s8Bm!AV$wbF0wU3V`O9+80$?~rd%;FM>
+zv53Bs)AUN;9E~r#00H}RNTn9nVpEgrGqd=!^S!`tSwr!#l-whNka8)0fC|&z=qiQC
+zp#~XEk6(iZZF^u|JE>v8{i|})HPsIBu(Ug0KJ6q^{pvWlmxp;|#kT8@F_G7&KZ?JZ
+zdVNziiu7fN{ZO{@#3~`dE@!vPy#zgr_VU8?arLDMF6Q%_ti5j?yoF+gNvSpykH0g#
+z!vn*N+>gXsIop<=<w&$TKE06B=Htp!f$FdJ=FLprDb`P2ZB?7>Mq%vT9LLzCM9XWo
+zFbE9$3Uq&H$UObqX>q5RXWkBr4eGejQ*U6nLffL}aFen_q!TzSSJ#r{qYa@cmpadj
+z>2{-|A%^@UAR!U8Pm|>FRrLwMPtHO#d3W(5SF&r@G;uFUFq%JT2*P3qMIa`Ymz#fl
+zVQupZ+3eo=^C0gv37n$F553q@=HGRtN^jigBj2pM?8!CJm}Tz>YRMXc+9#o4k2y5h
+z$sQ;^2`xwjQNwCm!pV27$?{n}$7Ct{hIBrRinx$EXlAJc5J|GTj}u#Rq9tOv@LJMl
+z!X^Zj90S9CW%l;%0B>kowa?=sEZE`lKP3V?Jqc=0P%KUF1K>5VBcoa%1&f`*gJ>Ny
+zx1r*q_x5TGUuFZ2ruBkGhb)`;Jipec-3%n3xqFz9w$=Pq8NWt{50@E%Nv}USFgSLp
+z{>qZv|H)dKGK^(&cvJoa2uqY~SA->+BeU$*a-&yZ6?aFCF-@3Ey_c#b4f0yQxVdvK
+zv2}>>%I)_-ZIw~<C0@a?*s?-<pK`&KeDK5;Rw1=S!uk4bF}ALYcwQuB6y}MuFu%G#
+zm|{Y3kyS`@dE9;Qj*LB$wf%O$uH9|)2>v9Z{p>u>G7dNKeJAESijWN<Fz!1iFL@v(
+zzU~Vwph_DluLu!avXnZ#(L1&-0BzHxM#>Op%=Vg86O%I9eFUX8$l^x8xMF>D>R{%5
+zD7@&!kM~_&b|eJcr0E^Kf?*W`TSHfwzrnqm&;7<ly#NxAx&sMf2?~Y5^fkXWK_wvq
+zm*6!9Fc^*xS?{Tv%WW;e-?~P2;x({jlZztC7)H|5vv>ZMNOC6LBC`6mTR68{(u872
+zRN-g?^_%~XrWzqfBB{Xk!--<h9&^4k1(rBaH2s2V;1&y6-WgQ+I==E)&DvyO*iEvc
+z0EkDFb<7Mpx0Z!`Btk#Wo*p9J(U^a9-EVzeT{Y#q1>%1;WHde2S8(G1jD9_M2`#Y3
+z!;#wwy4XZ4E3{N1m~&I;y?9;I)a8%5k-7K-#2mH|_5Oocw8qD^zE7Awyfbw|{r<@8
+z?vy;wcefy99!t(1`Zuab4ch=+Qro1C{D>V?jz$KG$xFFuwfr;4z430x+%B&SEvMr(
+zrK0{MZ13johNc;cttmwg%LoHoWg7cf0K1P#gc|UcpxQl8=Tk$lN?V>6S1K6@8>bXt
+zWqCr9l+~5W_Wu24v?_S*L=fS(amWV@7T%_Y!ji@DDeNn<+DP1*@AgQsL?;*uy$2FC
+zu?w$F;UD?geTo8X@1?gum;lKUdP~Wmu$<fSjdx|WypYDWQ<U0X87??|3H*i^-%_gk
+zk0!k#Cyam#t1TZ=EgkGWVd_((o`-$~MLM>WiN|8alU}T8vke>fgf*fy&tpgR^M^ap
+z(NAc1I9}mLpiriOC(5u!Jdj-)9J%{P_Lbp^)vMn{)vsj3uFwZ&R+#M?2^`Or&Rfmr
+zESZ&a+`X99SES+^c(>WdHqXa_;Ee%S?4!u(HXsu%jGz4CTEV(Wtm$57?~7P#@VPE9
+zLF-L}2ZM~QU))JE=<G;2OiW&IBlBTdA}tyqI?>QeE44*$^xj{Jw3WB_M#le-L|Q07
+zw3N(V-EFF5;r?E3!U7A+`9*``7K@$(kX$+sJX%tXf|<fG-e7Tmio_)XF($y}qx7@~
+z{Hm{|9Q*NF9FDMVr}vVX_rOBgZO?e?_6ky09~*uxmPMd~J?P^q?Tj^AZF}F<C^pT>
+z4EHty!P^L}5Fs<;?l1m~WCP^M7HdBZ)ZT8#1XyEwT4HVAuF>nbBnJ{FzrkCSNXr7q
+z7O`^8&U;17OQaA0)yIZji-+LXKV&VvP&!hOHr&WOytPUKc(i%c8C)uG7~SyPPX4T+
+z9GiH<0H4(K+A$;C{?PaXapHgy)5aRAK?D2K0IJ6koY&zg;$}kI6vCwb1`8YHnl?XJ
+zd{g(X?Criw65G|-TJXf0!n_oW^Ax)oExCh+%T~-Q+x?t{?{W49(k}W4e1e1+lYh0c
+zJG{MhR#@80;Lokfoy#VFp@mZDo(Jtr_7F=f-V*Xa>g&2os4$bNYc_N$<B*1eh?wn|
+z4PovJN_R96^w@x*v6<aUZu;j67B7Gps-DZed6LzT;}A&pLKv$#V-;#c`%cG#ZT*p?
+z?pIljG+3?@ukzsC1&YnJ1<_FD#Gt8#yC=oLlC4{Js2$LtF9Vk_4Ga=ot+bp|1q!w@
+zJCHFcz4;Wh+L5BP_4a3FZ7(J2w`w<5pspKD<>%_2E6mr%-WV%zXFZ3o9g!R(DDMX7
+zw?o-(y;x0~aDydBT@6H3i<%R1QOh59g}SjdRrsVdObK7ad~}R>JIqb(G`Xpfn)MuC
+zXy%`(<Ikgnq&MCy3in*cdS)5?CFp=e(%?xFUtHZk+T>;lvx~JxtqGN&ZptWppI|&S
+zM!@dqkWiRHrm}m{s|zSV%j^>0uU*mX1Dms?k!mR~UM#7AS$Qmqn8WbD06gY_V=Hhq
+zy<Wef>Mm93=21ghJfOS&K}T&Bnns@CRAKXlw4LlnQof7xzXZ712j<UoxKRFdSEQ(~
+zb%%}lVP{{x^hb380@9sLNHUz`!8alUM(5CnZ#!K*y)iLa@me?sFwxC`2$p3MdXIT%
+zH`3}zVq5;uZ!j%9PX1jW?kAW&uCZ2mz#hD7%;hxe%zb8I-jC}sjvD#bNmv}hJ`EeA
+z(lA&DDm-Fw_a7`v--Dj_MMW(YX_!G9Y0mMe^Qfljm+65MyBkCaHUT!mTE(lyQC|Uk
+zfq+Q1<wpi96QMKLCGN;vV6Z^ToC3|elV1wkhDW4jJ8oeUT~D7NBA!^SrJ#8;Nt~UM
+zU?i-O4%;mym2EAt2!*fk=CbcscA7S~{~7}?W;SY95Sl~wzM6YB>Gsp5k)9fidAj~a
+zE)B+!*ddKlG{MkGKfQYOT@6BUsbMxXc-viD4d(Mwr;mT2o22C0^s<f!z48wa<qttm
+z$=X%5%;HBAIP5S0ZuN&>p)9W}hT8RLOg);n<ZAW%?ZNlD!sSQE93q#{#_E_iL(@DB
+z)raw2sZwjfg4|r<0~5j}j*-l<qV3XTf7|U0n3xaX*H0OO;DX=^SK7l&kXW)c=XCL5
+z3j3q-091i4CVdY&wHn#Tm4&@Tu*A+TF6Ib8@a5Va=jNXJgxyC~yMEqC#+*%;7cT73
+zW_~ik?))!JSdzA01`-gIkh04aW#0RNZskFHvt(cKH)4xpQsAMepj=b3Q3W;eY-WYQ
+z9!d$HxQ~yddzE){EeUe47w9XQ0>W_h2R9J{`|Wfp9Oh9>%Px1`mT4+;7vH3rlaihj
+zP$5lYYtUKr{)sOsIeyvL#cU?^$K{+^p>En#Pf!}903C#EUGpQaDxXc*XDw<EYTR6R
+zB1wF5rOL-Cm-r=xP*Mm=x+>r+@k8ZoY*j?)xwp-M3uWi=d*;Pv!6zMtu#&jjozkxe
+zR7?kbR-<9IQM@I~-Glapv^PILIQ<Di<*oislfNuzsN|X$P!wLgGkkRyfs<zefpX-|
+zJuQ*W1??8>=n(n;!^#ed<DdQL>pmYHNIh8Zf$D*!f*Y#tY%F!vkBZyFYH!Y>lveX*
+z7L#|0sfSBhfhs@hJyB~2x*T?TL;QvBPO^T)9d2UYV9KGOQPq&@Nc6tT9;kQu{ZsBK
+z1UjJN^1O&^tK)5<?6!LLVf54la-8{lZTaX<N}|r9xvu)x)|PJ#jn&}w6>k3HcV+_^
+zeMXf!l}I8G54yp{FK~ag&g%_h?Bb&mxpqaG+CR9=pp|C{*Inv2It!x$0+`}%-%~94
+zkhO`q3G*tmEoCOAtSHmE(VYtgnxciI4=(j9G=izP|MW`qxA@l5?WUXlHwZu@507xd
+z^)wm4!==_gl;-WrzPBT$T@{!4fAmM_a|G`)*nSoQENj>2m?VPktp&t;l9mp?m8hQ+
+zGt;-V4XOg%)y`Sc^vtR^nyPG6sueTkY$kis@&FO3fD(|>{Z)>LUSqGAl&EysGDAuV
+zUY{GTq{mc`5zrm6H{=$+oXFpDPoL>M40<{sMfu$C@WJr)q-WR$=WQ2%IC;=Op#p=j
+z$jQZ_ehP4*>5WnU)*GHn2R3TXZNqmfG4p)3&>>rxUYqcrL!|*O=|OLlEoh{+PKuTP
+zakkBqASFaW@^hTV<dZ#PLO-r#Uf57kSxcDXnW3h@1nhp~Emrg`9_VZn23tk(GpfoO
+zeA3Eu9n0UT9*LHDF8YtAQ{n)8$Go*VvnLeuwG2u!cxM6}rV@7^4cMsU(y1O1O2eOj
+zjnp87t}MJqL~w3gCUc7<J@q}`%>pS<zR0J(Ot=hz<eNEu0npO`(<WU9bDxY04GB#*
+z*;6)EzsTsyN;a1{yX=~;`36$PM?^OD{)%1P@ti^~a)phO(ZE}s^gqdGegEej<8Hb|
+zv$~uNQj(rxnUhZv);{1b@}u>A^5%QPU_42;bzNq&?`J9$L9gvU=MD-b@wrh&QLc%%
+zsk;#-y`*j}+nuyBVUndqBP>=9asiv2;ri*nG92m>ovLn8q-NLigtl=2hlc_2hvEu0
+z-LTWo8Mpa|D{9;YAbD|_5<OVOG8y`~Te)tXC-|Z$yV)|Mnh^oGB&D0fiJn2}Pxj}E
+zWi_FJ+~Q2hM3NKm*l$e<WU6l66&f}lz~{Ly%e{Z)c@C!ROwZ0@J3dJsWAXp|bIgZ*
+zK%J%xc)vG9_*MF0aSJV`MCa+g6tN;KRRr;A2%uos{aL=rZh6G6U!2KQrQ{g413u~f
+zjIiHR^wZ*%JpEBfa~G3ROCs;buB=Mcvz0)tCpge`3y}EOP|~9UpubaoPH}MIe4zi6
+z9+c-E#F{<>C+@xXAg2uuHrCV~ib6GGNN?ohL*L(qLwh^((WROm-C|&g<UUm0yJO8M
+zMnoc%@orr$RP>H?V{xu47_Axdl`Z|i7>=R5;@@BD^j(gKpR~7kAgPBU7E)<fuv8Lr
+zwyHT#CS1sy899@U3Jo4t<yQ{aof<&mz_d2RCr4js!gt2R#8K=aQ%E!u$%bc&-?#%?
+zgZ2oF>mh#JSS5R~karF&(?M6oGxqO|rMk#UgS#jD?orH~-L$VVFcMQ$0xaO&%p-0`
+zBM=MUPOxvs?U3~c?fK3kUOZFdcucjycHr+e`asgVdJPP^jC20fkgxtvCqzlcR*h)A
+zQjtTGri-)IZ*L9E@F=}o9h>f>iS5giPAFLA`JN<qdCr0)cB{v`;?8PeM%A_+Do!?3
+zGL#N={<gd<lW*F6bi@{AG`*J9m~X8kiK4ul>-;<45u00he@c<^0k2?s&kkOO;XrB(
+zV(2kU_W4fx!g8<UcQO?z6U$cdoo(s63taBG^<k>NEdgsY5`W&$cCDr2uw`l!rmU{k
+zlKPPD_0Aw1q($rAQ-x`@k3mw=6VJ1%FIX)Pd3wEDkHV6D#N!;c1$>N@O<r^tEPiJW
+z`DybhE*}dL4igM*%8|!JG`x!hf3NaCIuQi8e9gxyZF8Z{=KHGEdV2h8qVLWXcdHu-
+z!TXb312RKqEZ=C>6c<??jp^?w;yg3~kt6Yi%k4WL5;EVI+wOBuob%~vaeF7dUM->l
+zBh6myg=VhQTxb0TO_UNJ<qN)?&Y+j5ZlAd*?Fbf9ucwGkyZ71rSumwJUuh2`!hX`o
+zF%#CDpxuQo2210|Dc@MXt0BKimdf#0vdiCJyKrQ(2JNu9D}`s5{>F$`7IakaM4!FJ
+zI88t4i%_C=1YnWQkb7kXk062ha3rv7zC;z2f?egZ<M(IlVO>Mp%vP+g7ThICrO|#u
+zsV~#CUrZRbC>)m?HYD#V&?Yb5qprbNOvAwOyDeqwsnjVBC7|TR5(Ryy2Q_@k{RaNz
+z9B5}kdi3;rPa)B9_2;VMy9pd(4*Xnof<qsNVtgZUJ`xhHMJv5YwX;!KLpL9z_|(?I
+z%+p)}1|p@mtlOy26|{!>!Rp3kBklh=a|rXMh5`JSIW+dDv;_d@iT_XL@NZyRzIX81
+z#ogUq;O%OvH3PLCZn#Vm{;>|OVmm^()Phu?eM98jX<96@P8o+IL3Qns;`fO6?5zRK
+z=A6|WRrH~RG*-ogoMP8h@H-52#?soKN?^<5w;dFDGP?`+?!<tifsxeMjd#C$&dwa!
+zvAubY7Xw4q_O3)H?jBzIh^^wdNB+MqGZtSLIg4OAH|+RsO2<QBZf2QdWz02xy5hFp
+zRY=STOFsfJzA*G~%-kZ91K_ZP+W~}5S`kkK5owrAn9jxkMDn*vLN<+v$kf3Q1MxHH
+za;rb@-6^T2bVEGQbcTzgwCS;2Im$P|IoQeXy51~vBCz#N*$_Vh&RHLO$w?}W@TJom
+z1#j&*XqECR)&B>bOHgz~y^i}8^?N)zSVGiBYz!*r+pU~k4N3U9dP<9?by?j4oRs`S
+zPj$Z!AuJ6*_vOdBxUSs^40PEtIIU&;&p!G%(&A^B!P-Ox{;It(BFdi&B0UIk31ekv
+z+%csz*y({7Wk8om%DHAtIk)v`UO@7-gf3jp5Xt}$JQg5D=^={+Jq|B)^;5+i-wQs_
+zDK1l&GV;?U6J7eT1GU-6UbtqI;_w)t2M1)t@|Y4#!efM9yW(PIxB)a9WO}p7bak%R
+zB`U~h)P_Q1v2pl@?2(}f=j^)Oc0W*%C?xdJFa5F3%PXo>XT#8}CX?6bb_AXJ4Jd_j
+zip~hy4Rt5HGzF%Uil`Ck#R#yy%j8zWBoYrKA06B^<c4CeXgH)(iRA>DdB~)@d=?)0
+zCD>kYsC&m+45{tQ5NOfS?=Nwn`!m3!lPF^XKI4PZ<Ec81fOsjoaXa>#M^(KU5H5CC
+zyW)^s_*X8>Qx4cRS2O4w5W(<twuqllL;UPly8G#YUfwbN-KTZbJ>JD6d}=xrswnau
+zRgp<hNtEASQzc?p1d!l<<(BdFG=!?#TxjFE)gY%kYmDeVWs&t;K0(Jeo^(6p;kX7n
+zu|gpbXAQP)CTnz(kDxMYqVqbed6k6ebrHho0>uI#B9Y6CE5nT&>Ek6lDippNWo{DV
+zW{NS>ZDC7mbsjsQt$88ROX(QTZb@scpaoe3`t5qwn3?6Z6Oz=vN2|dH?iTnQaEs^M
+z%DHDNPr<8NifraW%1LNBJTx<sh7y&LDS`ekwTYQ2l7rvTNV_MeGfdvTUE9&?Rp|Pz
+z8)TbI_#<`tM0jC+!Agaf2^@W|67En#5(0cmZCgd3+~=F@gXP*E(-YsTYu`oOd!Yi`
+zM_I|1jC5mK8HT4&2@&nk4Gn*nzax@pJd12QbFjv-SAk)Ak!(`y2=Z|;oXCgRtm186
+zcnl_x->3>|>)>UM%H`1IZdrN^f2+`w=<hQh>MZVDqpt+QFtNY-vwqXxHohf=>_Lz(
+z>~ZL{?|^OGC(`^G&7;nV5!;*OM+>4WQAS^G#2zux<<YSiJ=ME6(a!?sWAAz2GS;ob
+zuD_{eY2ss}`<(VlkcilN4`phMh<Lg57iP8|=|R)Uz|$(dybazCDC?%Jqn3)2-a|aM
+zt1Lg2+K@uY@IcG*+ec|-1q<+pserLq=ykPnteI_vy2j$B;I3-4kYb@wn#wIJT87yT
+z_1iuVpbr(M16?~nr<B*)Bs~}RWLKW2w^Cd0<Eye*+Ns1Zg~fd~ZYx}&z?*gkjU#v}
+zx6c%wBk7*}nGd#|_p$%l<sg&D%8>oEU4R%|yz&~faoD=mmpit$B2X3jQW>JV)LwP)
+z@-dGPKE-F#;V2*@^9XuOb)&6@988tD^ykzrFA;#I37`+G-#Yv40$u~76k_Mst$yQ2
+z3#rC5wA+X7dH}JQ9)iZz{yJX8D-pdA*0euLUrYs)Y{IkM`jVdE<J5w4#We2@YsfwQ
+zzzx5yWk0w(+5dRt7n}uaRuUrg^;0QuzD$WWX4~mn!{k(Y-+L1=j`cLKZOKLcOm+k%
+zg^d6HB*!DJk5j2a!{K4bX4?Kz#ecW3dAmM~Ci%)SaSpcbkGWgh;hDKC7P4)7>WuRp
+zV=Xn{cz^PPO~jq3m`ce1il8<J;?#4MO#kfnL&f7AE3Cp-k|6~({%0nCIkn}R=N_D_
+zCHT#%{L;Ovf(_l#XM!^*2GPy7jQa}3@c|En8EJ%ewbdT0EofgVz?LBi;wmhPK*RL9
+za?ytMZ0Udg?L96|#fQ9hm5J!<gjZ&Cpck0goW-@93%yCtSOjfPydsCGGC1w8Jawhp
+zj1ATdFS|uh8{_I()E)V2T|;+4`+ED)#T&Lgm4K2z39sq6?$jJ~n<Z-nZO>o=bgam#
+z6_UK?FmmE+t~}W|;J{NsTZZsU4Ztfo4(oVjZBSvYCHX4DnU=zRn+GKs&Gk`F09BUc
+z9^(09Lryans)g|(Fg%EEfC$FMe&*|1-zfW^eyJawq$v*-!RFCIz9xzzpY!j0iO$l3
+zt=?sjx5XZDE=m&Pb&>fu=d-jcF7|kmV7ZzO#TC#<)dF<n&Pj;yh-{E{>)M5}21ol}
+z-hzh?*!oYYpvwFE#JmXz4gBzkpLaSJ_2V6cNsDAYL^fLZXFnYDmGIT^%&Sqn;a-B7
+z<sbt-fcE9VN!X$5kzYR;hM3IjZJu8$g4c;~pt;l(ScEU%mAB!(-`;WgU8Lsu9tv#2
+zVV<!V4Xfefw%=uMDfb5XtYoD%OEI~N-=SRvmYZS9P@fFds@<U7Ns$#rCra!GG1!rw
+zdB4r7o7Mm#@riWdWvqz~3I2>F*TMOscOG7jV8a)n#9YKOM+mU^tI=pbY;)Du%}FQM
+z;t4&ahW&u;ksY4P2^H65kR-_EFnX@z?swGE*el&psB1qA(?YFu5c{YHKtvQPivDG~
+zS$YgBZK(j|*fcS}3neS;u!pP2YtHridby892tATU+3Z3aXgPo;)g314=>g_(02O0M
+zGf%I#Fg~%-Q&1}+=NgvB&%@A8oC|7ZFcr~+#1{AqdY!Nq>Aa(kDFD%(3xAjWWgQm>
+z2xj2E%>()h@jcq{z*N!v>m-aTjSR61{BUnmlsC(&<qzY>bs~`Bbg_^(VXf(0<(#1U
+z(xrLrt1Anvzc({W5l3I=8;5?<s#DxSFej%bzZ<U0<al0Y{DV+V^3uNv{EMO{gVWz@
+zwHm`pm@cqhwU6<w8IZOKP0WnCpW$N$4?`h(vHzw;Dv3<(F3zj{vx~Iyp0B78mMdul
+zNZH|;7u#4C2rVC!<2bn~RJulrg<_N-SMH0z=-(+51Z$+f5sIKP8Bv<JNc9>yM8sx7
+zF~Ro^nwF@}^KUj0IPTQ&c^(2U4{SBy{Xy_KzPWCZM4|WC7&dOrO<Pm6B)8A+0&z%Y
+zoqyC%b&h{s5Iw^6-Cx5yW}eij#1tvr^FKBwkryfKJQ8lKG*pV+&m45Y-zL~Rq$-E>
+zUHmwueV6({?#&i!=2CeRwtQ>|mDYay$!L-Xx!ZYpRGSq>F#Ar)+CGWferJtD?T;oB
+zbc<)_As(@7o50Ui;3!(;7l6}QofM4Fz3PA#4wAzjG+zlGwZZB%&b`NNk@jGvhk4sO
+z78=h`0xrs70D0#o+`H%nanzN>DlvxM;`mfXPXRC7pOCeqUd=Ch-{Z?BBEly;d#%4g
+zsH#?+BA5rvb~wEIw-nmQYBI3xskZqZ51Q$G@VX)VYlv;$HHHfR&|4={rpFlGB<cX*
+zT_&w2AnG!H$_Ijjs8W$t-v5j~UW)oHQv8na?de~U1CTZI|MCg;#}c#TUbGU1L`%%S
+zdq=}#ut3yf^CSqF#?M5%V$@)U?C`(pe<rdwj6#mfBnfdK_y^;PIjqjU`{T@%9evlJ
+zkR~QRPtb)RrNu=<OZ4l`nd3$8B1^3C{Pc3!^k~ofZ=z5B9Km~pn<W4IZO!G4r>Ggn
+z?5Qm;x`Kmz=C;D!`*rK96zJJr+lW{JCW`R#s5oZ&H%wQ%@x=&k{KASx&#s&w0i7!E
+zAI(}W{W(k@q*cE?W*R)ZO1#zn9NGtNfq$SNNIBsDgC^1lJ1KYgpRxXl^#2pTzljKk
+z<o_D{|A-qr;`N?pSZADaP(%J_73+)MU;~(aa|rX(2v45JF^4$t!Rig+g3v#|^07rI
+zN@a#8aOrurNXX$&7`gG!nArqAy^UVXBmQ@GtMqK?r~j|kvZ-D~tVgo3O<-UX>}2TJ
+z6mZe~d;4n&MtH-h^Pwh6Ec9d?Rg#fK4w}mmn6>(Dxbr{vJAE@v)`A=~`SCwXp}ZB7
+z1mj-4+YilbFM40zaM5AJ{aYqHeVBdh`2R%hHxba&KSjy*>Wj(>AgAK{52>03LeY3x
+z;=}F#hc0j8|8-5(hq1R>We!wm%mYpfe0xf_`+zxHw_!&U3(X%ymCVHrr9<ve85qw5
+z7Bb;c@!761{2#?7NBxsz!h~^isJ7aY$zAoU4Ixw{mH;Hc$NdOAE{Vs8{Wtu~+wi=R
+z@=z59DvbX;>c0wC{1?ZDLbJCe_N8D2IDgIl4=&A{ShDzki!>ge>VUi@68g_)Iv)W`
+zAm6cqWU{kUC^Mz2^gs8_A48Rl#S67O&JqjG<21X%PIe9Yzw57X|A=JlsB=8P{Gj}v
+zXstr>A9FFjS$}}0;+SIeV%3Jz?dE%k{?*Gfi_Jx^rvZ$;CXGfExu;#+)t6rsQUqT=
+zRR3RPTzNc{Z`Z%=B3s!@gzQVnmYoP?Cn<i0$d+ApW+XzgWU1^@kt~ySgbZcR5*lPM
+z_I>PThB4;7{hs&pyuasp|DF3f*E!cY=lY)Sxvy*PfjQVR7|J4%TjY)|tdRWW)0msM
+z(iGCv{f%0A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
+CVqj_j
+
+diff --git a/assets/icon/novoelectric.png b/assets/icon/novoelectric.png
+deleted file mode 100644
+index 283d1de47c62e3e29218547d12d6e48fae675cfd..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 9553
+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
+H9r^zN9{BPH
+
+diff --git a/crates/novo-app/Cargo.toml b/crates/novo-app/Cargo.toml
+index 7abe26a..6b20967 100644
+--- a/crates/novo-app/Cargo.toml
++++ b/crates/novo-app/Cargo.toml
+@@ -15,12 +15,14 @@ eframe = { workspace = true, features = ["persistence"] }
+ novo-core.workspace = true
+ novo-storage.workspace = true
+ novo-canvas.workspace = true
++novo-theme.workspace = true
+ log = "0.4"
+ env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
+ rfd = "0.17"
+ serde.workspace = true
+ 
+ [dev-dependencies]
++ron = "0.12"
+ tempfile.workspace = true
+ 
+ [build-dependencies]
+diff --git a/crates/novo-app/build.rs b/crates/novo-app/build.rs
+index 0484188..9c88461 100644
+--- a/crates/novo-app/build.rs
++++ b/crates/novo-app/build.rs
+@@ -2,12 +2,12 @@
+ //! into the Windows executable.
+ 
+ fn main() {
+-    println!("cargo:rerun-if-changed=../../assets/icon/novoelectric.ico");
++    println!("cargo:rerun-if-changed=../../assets/branding/icon.ico");
+     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
+         return;
+     }
+     let mut res = winresource::WindowsResource::new();
+-    res.set_icon("../../assets/icon/novoelectric.ico");
++    res.set_icon("../../assets/branding/icon.ico");
+     // Never ask for elevation: NovoElectric must run without admin rights.
+     res.set_manifest(
+         r#"<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+diff --git a/crates/novo-app/src/actions.rs b/crates/novo-app/src/actions.rs
+index 30b8b87..0363e27 100644
+--- a/crates/novo-app/src/actions.rs
++++ b/crates/novo-app/src/actions.rs
+@@ -18,9 +18,6 @@ pub enum Action {
+     TogglePropertiesPanel,
+     ToggleMessagesPanel,
+     CommandPalette,
+-    ThemeSystem,
+-    ThemeLight,
+-    ThemeDark,
+     About,
+ }
+ 
+@@ -39,9 +36,6 @@ impl Action {
+         Action::TogglePropertiesPanel,
+         Action::ToggleMessagesPanel,
+         Action::CommandPalette,
+-        Action::ThemeSystem,
+-        Action::ThemeLight,
+-        Action::ThemeDark,
+         Action::About,
+     ];
+ 
+@@ -62,9 +56,6 @@ impl Action {
+             Action::TogglePropertiesPanel => "view.properties_panel",
+             Action::ToggleMessagesPanel => "view.messages_panel",
+             Action::CommandPalette => "view.command_palette",
+-            Action::ThemeSystem => "view.theme_system",
+-            Action::ThemeLight => "view.theme_light",
+-            Action::ThemeDark => "view.theme_dark",
+             Action::About => "help.about",
+         }
+     }
+@@ -88,9 +79,6 @@ impl Action {
+             Action::TogglePropertiesPanel => "Properties panel",
+             Action::ToggleMessagesPanel => "Messages panel",
+             Action::CommandPalette => "Command palette…",
+-            Action::ThemeSystem => "Theme: follow system",
+-            Action::ThemeLight => "Theme: light",
+-            Action::ThemeDark => "Theme: dark",
+             Action::About => "About NovoElectric",
+         }
+     }
+@@ -109,10 +97,7 @@ impl Action {
+             | Action::ToggleProjectPanel
+             | Action::TogglePropertiesPanel
+             | Action::ToggleMessagesPanel
+-            | Action::CommandPalette
+-            | Action::ThemeSystem
+-            | Action::ThemeLight
+-            | Action::ThemeDark => "View",
++            | Action::CommandPalette => "View",
+             Action::About => "Help",
+         }
+     }
+@@ -134,9 +119,7 @@ impl Action {
+             Action::TogglePropertiesPanel => (cmd, Key::Num2),
+             Action::ToggleMessagesPanel => (cmd, Key::Num3),
+             Action::CommandPalette => (cmd, Key::K),
+-            Action::ThemeSystem | Action::ThemeLight | Action::ThemeDark | Action::About => {
+-                return None;
+-            }
++            Action::About => return None,
+         };
+         Some(KeyboardShortcut::new(modifiers, key))
+     }
+diff --git a/crates/novo-app/src/app.rs b/crates/novo-app/src/app.rs
+index 2c1c16a..ba3e032 100644
+--- a/crates/novo-app/src/app.rs
++++ b/crates/novo-app/src/app.rs
+@@ -11,8 +11,9 @@ use novo_core::PageId;
+ use crate::backend::{BackendError, ProjectBackend, page_labels};
+ use crate::canvas::{CanvasView, OpenPage};
+ use crate::palette::{Entry, Palette, Target};
+-use crate::settings::{Settings, Theme};
++use crate::settings::Settings;
+ use crate::{APP_NAME, PROJECT_EXTENSION};
++use novo_theme::widgets::{primary_button, section_label};
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub enum Level {
+@@ -75,9 +76,8 @@ impl NovoApp {
+             .storage
+             .and_then(|s| eframe::get_value(s, Settings::STORAGE_KEY))
+             .unwrap_or_default();
+-        let app = Self::with_settings(backend, canvas, settings);
+-        cc.egui_ctx.set_theme(app.settings.theme.preference());
+-        app
++        novo_theme::apply(&cc.egui_ctx);
++        Self::with_settings(backend, canvas, settings)
+     }
+ 
+     pub fn with_settings(
+@@ -213,18 +213,10 @@ impl NovoApp {
+                 self.settings.show_messages_panel ^= true;
+             }
+             Action::CommandPalette => self.palette.open(),
+-            Action::ThemeSystem => self.set_theme(ctx, Theme::System),
+-            Action::ThemeLight => self.set_theme(ctx, Theme::Light),
+-            Action::ThemeDark => self.set_theme(ctx, Theme::Dark),
+             Action::About => self.show_about = true,
+         }
+     }
+ 
+-    fn set_theme(&mut self, ctx: &egui::Context, theme: Theme) {
+-        self.settings.theme = theme;
+-        ctx.set_theme(theme.preference());
+-    }
+-
+     fn message(&mut self, level: Level, text: impl Into<String>) {
+         let text = text.into();
+         match level {
+@@ -595,14 +587,6 @@ impl NovoApp {
+                 ] {
+                     self.toggle_button(ui, a, on, picked);
+                 }
+-                ui.separator();
+-                for (a, theme) in [
+-                    (Action::ThemeSystem, Theme::System),
+-                    (Action::ThemeLight, Theme::Light),
+-                    (Action::ThemeDark, Theme::Dark),
+-                ] {
+-                    self.toggle_button(ui, a, self.settings.theme == theme, picked);
+-                }
+             });
+             ui.menu_button("Help", |ui| {
+                 self.action_button(ui, Action::About, picked);
+@@ -667,7 +651,7 @@ impl NovoApp {
+ 
+     fn project_panel(&mut self, ui: &mut egui::Ui) {
+         ui.set_min_width(ui.available_width());
+-        ui.strong("Project");
++        section_label(ui, "Project");
+         ui.separator();
+         let Some(name) = self.project_name() else {
+             ui.weak("No project open");
+@@ -693,7 +677,7 @@ impl NovoApp {
+ 
+     fn messages_panel(&mut self, ui: &mut egui::Ui) {
+         ui.horizontal(|ui| {
+-            ui.strong("Messages");
++            section_label(ui, "Messages");
+             if ui.small_button("Clear").clicked() {
+                 self.messages.clear();
+             }
+@@ -729,7 +713,7 @@ impl NovoApp {
+             ui.label(format!("Save the changes to \"{name}\" first?"));
+             ui.add_space(8.0);
+             ui.horizontal(|ui| {
+-                if ui.button("Save").clicked() {
++                if primary_button(ui, "Save").clicked() {
+                     answer = Some(UnsavedAnswer::Save);
+                 }
+                 if ui.button("Don't save").clicked() {
+@@ -768,7 +752,7 @@ impl NovoApp {
+             ));
+             ui.add_space(8.0);
+             ui.horizontal(|ui| {
+-                if ui.button("Restore").clicked() {
++                if primary_button(ui, "Restore").clicked() {
+                     answer = Some(true);
+                 }
+                 if ui.button("Discard").clicked() {
+@@ -917,7 +901,7 @@ fn consume_bare_key(input: &mut egui::InputState, key: egui::Key) -> bool {
+ 
+ fn properties_panel(ui: &mut egui::Ui) {
+     ui.set_min_width(ui.available_width());
+-    ui.strong("Properties");
++    section_label(ui, "Properties");
+     ui.separator();
+     ui.weak("Nothing selected");
+ }
+@@ -965,6 +949,13 @@ mod tests {
+         }
+     }
+ 
++    /// A context with the app's theme and fonts, as `NovoApp::new` sets up.
++    fn themed_ctx() -> egui::Context {
++        let ctx = egui::Context::default();
++        novo_theme::apply(&ctx);
++        ctx
++    }
++
+     fn app_with(backend: impl ProjectBackend + 'static) -> NovoApp {
+         NovoApp::with_settings(
+             Box::new(backend),
+@@ -993,7 +984,7 @@ mod tests {
+ 
+     #[test]
+     fn renders_with_and_without_a_project() {
+-        let ctx = egui::Context::default();
++        let ctx = themed_ctx();
+         let mut app = app_with(MemoryBackend::default());
+         frame(&ctx, &mut app, Default::default());
+         app.run(&ctx, Action::NewProject);
+@@ -1003,7 +994,7 @@ mod tests {
+ 
+     #[test]
+     fn ctrl_n_creates_a_project() {
+-        let ctx = egui::Context::default();
++        let ctx = themed_ctx();
+         let mut app = app_with(MemoryBackend::default());
+         frame(&ctx, &mut app, key(egui::Key::N, egui::Modifiers::COMMAND));
+         assert!(app.is_open());
+@@ -1011,7 +1002,7 @@ mod tests {
+ 
+     #[test]
+     fn ctrl_k_opens_the_palette_and_blocks_other_shortcuts() {
+-        let ctx = egui::Context::default();
++        let ctx = themed_ctx();
+         let mut app = app_with(MemoryBackend::default());
+         frame(&ctx, &mut app, key(egui::Key::K, egui::Modifiers::COMMAND));
+         assert!(app.palette.is_open());
+@@ -1021,7 +1012,7 @@ mod tests {
+ 
+     #[test]
+     fn save_without_a_project_is_ignored() {
+-        let ctx = egui::Context::default();
++        let ctx = themed_ctx();
+         let mut app = app_with(MemoryBackend::default());
+         app.run(&ctx, Action::SaveProject);
+         assert!(app.messages().is_empty());
+@@ -1029,7 +1020,7 @@ mod tests {
+ 
+     #[test]
+     fn closing_a_dirty_project_asks_first() {
+-        let ctx = egui::Context::default();
++        let ctx = themed_ctx();
+         let mut app = app_with(DirtyBackend::default());
+         app.run(&ctx, Action::NewProject);
+         app.run(&ctx, Action::CloseProject);
+@@ -1047,7 +1038,7 @@ mod tests {
+ 
+     #[test]
+     fn closing_a_clean_project_does_not_ask() {
+-        let ctx = egui::Context::default();
++        let ctx = themed_ctx();
+         let mut app = app_with(MemoryBackend::default());
+         app.run(&ctx, Action::NewProject);
+         app.run(&ctx, Action::CloseProject);
+@@ -1057,7 +1048,7 @@ mod tests {
+ 
+     #[test]
+     fn placeholder_open_reports_an_error() {
+-        let ctx = egui::Context::default();
++        let ctx = themed_ctx();
+         let mut app = app_with(MemoryBackend::default());
+         app.finish_discarding(&ctx, Discarding::OpenPath(PathBuf::from("x.novo")));
+         assert_eq!(app.messages().last().map(|m| m.level), Some(Level::Error));
+@@ -1066,7 +1057,7 @@ mod tests {
+ 
+     #[test]
+     fn startup_file_is_opened_on_first_frame() {
+-        let ctx = egui::Context::default();
++        let ctx = themed_ctx();
+         let mut app = app_with(DirtyBackend::default());
+         app.open_on_start(PathBuf::from("plant.novo"));
+         frame(&ctx, &mut app, Default::default());
+@@ -1080,7 +1071,7 @@ mod tests {
+ 
+     #[test]
+     fn undo_keeps_the_shown_page_valid() {
+-        let ctx = egui::Context::default();
++        let ctx = themed_ctx();
+         let mut app = app_with(DirtyBackend::default());
+         app.run(&ctx, Action::NewProject);
+         let second = app.pages()[1].0;
+@@ -1096,7 +1087,7 @@ mod tests {
+ 
+     #[test]
+     fn saving_clears_the_dirty_flag() {
+-        let ctx = egui::Context::default();
++        let ctx = themed_ctx();
+         let mut app = app_with(DirtyBackend::default());
+         app.run(&ctx, Action::NewProject);
+         assert!(app.is_dirty());
+@@ -1108,7 +1099,7 @@ mod tests {
+ 
+     /// Which actions a single key press would trigger.
+     fn fired_by(app: &NovoApp, key_: egui::Key, modifiers: egui::Modifiers) -> Vec<Action> {
+-        let ctx = egui::Context::default();
++        let ctx = themed_ctx();
+         let mut fired = Vec::new();
+         let mut output = ctx.run_ui(key(key_, modifiers), |ui| {
+             fired = app.consume_shortcuts(ui.ctx());
+@@ -1119,7 +1110,7 @@ mod tests {
+ 
+     #[test]
+     fn bare_shortcuts_ignore_extra_modifiers() {
+-        let ctx = egui::Context::default();
++        let ctx = themed_ctx();
+         let mut app = app_with(MemoryBackend::default());
+         app.run(&ctx, Action::NewProject);
+         assert_eq!(
+@@ -1137,7 +1128,7 @@ mod tests {
+ 
+     #[test]
+     fn ctrl_y_redoes() {
+-        let ctx = egui::Context::default();
++        let ctx = themed_ctx();
+         let mut app = app_with(DirtyBackend::default());
+         app.run(&ctx, Action::NewProject);
+         app.run(&ctx, Action::Undo);
+@@ -1167,7 +1158,7 @@ mod tests {
+     fn edits_and_undo_reach_the_file() {
+         let dir = tempfile::tempdir().unwrap();
+         let path = dir.path().join("plant.novo");
+-        let ctx = egui::Context::default();
++        let ctx = themed_ctx();
+ 
+         let mut app = storage_app();
+         app.run(&ctx, Action::NewProject);
+@@ -1195,7 +1186,7 @@ mod tests {
+         let dir = tempfile::tempdir().unwrap();
+         let path = dir.path().join("plant.novo");
+         crate::backend::tests::crash_after_autosave(&path);
+-        let ctx = egui::Context::default();
++        let ctx = themed_ctx();
+ 
+         let mut app = storage_app();
+         app.open_path(&path);
+@@ -1216,7 +1207,7 @@ mod tests {
+     fn an_unsaved_new_project_is_offered_back_after_a_crash() {
+         let dir = tempfile::tempdir().unwrap();
+         crate::backend::tests::crash_untitled(dir.path());
+-        let ctx = egui::Context::default();
++        let ctx = themed_ctx();
+         let mut app = app_with(StorageBackend::with_untitled_dir(dir.path()));
+         frame(&ctx, &mut app, Default::default());
+         assert!(app.is_open());
+@@ -1252,7 +1243,7 @@ mod tests {
+     fn a_file_open_elsewhere_is_reported_plainly() {
+         let dir = tempfile::tempdir().unwrap();
+         let path = dir.path().join("plant.novo");
+-        let ctx = egui::Context::default();
++        let ctx = themed_ctx();
+         let mut first = storage_app();
+         first.run(&ctx, Action::NewProject);
+         assert!(first.save_to(&path));
+@@ -1266,7 +1257,7 @@ mod tests {
+ 
+     #[test]
+     fn panel_toggles_flip_settings() {
+-        let ctx = egui::Context::default();
++        let ctx = themed_ctx();
+         let mut app = app_with(MemoryBackend::default());
+         let before = app.settings().show_messages_panel;
+         app.run(&ctx, Action::ToggleMessagesPanel);
+diff --git a/crates/novo-app/src/lib.rs b/crates/novo-app/src/lib.rs
+index ef926cf..0f5ec4a 100644
+--- a/crates/novo-app/src/lib.rs
++++ b/crates/novo-app/src/lib.rs
+@@ -20,6 +20,7 @@ mod canvas;
+ mod model_canvas;
+ mod palette;
+ mod settings;
++mod theme;
+ 
+ pub use actions::{Action, RESERVED_SHORTCUTS};
+ pub use app::NovoApp;
+@@ -39,8 +40,7 @@ pub const APP_NAME: &str = "NovoElectric";
+ pub const PROJECT_EXTENSION: &str = novo_storage::PROJECT_EXTENSION;
+ 
+ fn window_icon() -> egui::IconData {
+-    eframe::icon_data::from_png_bytes(include_bytes!("../../../assets/icon/novoelectric.png"))
+-        .unwrap_or_default()
++    eframe::icon_data::from_png_bytes(novo_theme::brand::ICON_PNG_256).unwrap_or_default()
+ }
+ 
+ /// Opens the main window and runs until it is closed.
+diff --git a/crates/novo-app/src/model_canvas.rs b/crates/novo-app/src/model_canvas.rs
+index 5765d36..dd69dac 100644
+--- a/crates/novo-app/src/model_canvas.rs
++++ b/crates/novo-app/src/model_canvas.rs
+@@ -14,6 +14,7 @@ use novo_canvas::{Snapped, Vec2};
+ use novo_core::{ChangeSet, Document, PageId};
+ 
+ use crate::canvas::{CanvasView, OpenPage, empty_state};
++use crate::theme;
+ 
+ struct PageCanvas {
+     scene: PageScene,
+@@ -36,9 +37,13 @@ impl ModelCanvas {
+     }
+ 
+     fn page_canvas(&mut self, document: &Document, page: PageId) -> &mut PageCanvas {
+-        self.pages.entry(page).or_insert_with(|| PageCanvas {
+-            scene: PageScene::new(document.project(), page, &PlaceholderArt),
+-            view: View::new(),
++        self.pages.entry(page).or_insert_with(|| {
++            let project = document.project();
++            let mut scene = PageScene::new(project, page, &PlaceholderArt);
++            scene.set_style(theme::model_style(), project, &PlaceholderArt);
++            let mut view = View::new();
++            view.style = theme::canvas_style();
++            PageCanvas { scene, view }
+         })
+     }
+ }
+diff --git a/crates/novo-app/src/settings.rs b/crates/novo-app/src/settings.rs
+index 5c28f21..f6a0c16 100644
+--- a/crates/novo-app/src/settings.rs
++++ b/crates/novo-app/src/settings.rs
+@@ -6,28 +6,9 @@ use std::path::{Path, PathBuf};
+ const MAX_RECENT: usize = 10;
+ const MAX_RECENT_ACTIONS: usize = 20;
+ 
+-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+-pub enum Theme {
+-    System,
+-    Light,
+-    #[default]
+-    Dark,
+-}
+-
+-impl Theme {
+-    pub fn preference(self) -> eframe::egui::ThemePreference {
+-        match self {
+-            Theme::System => eframe::egui::ThemePreference::System,
+-            Theme::Light => eframe::egui::ThemePreference::Light,
+-            Theme::Dark => eframe::egui::ThemePreference::Dark,
+-        }
+-    }
+-}
+-
+ #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+ #[serde(default)]
+ pub struct Settings {
+-    pub theme: Theme,
+     pub show_project_panel: bool,
+     pub show_properties_panel: bool,
+     pub show_messages_panel: bool,
+@@ -40,7 +21,6 @@ pub struct Settings {
+ impl Default for Settings {
+     fn default() -> Self {
+         Self {
+-            theme: Theme::default(),
+             show_project_panel: true,
+             show_properties_panel: true,
+             show_messages_panel: false,
+@@ -87,8 +67,11 @@ mod tests {
+     }
+ 
+     #[test]
+-    fn default_theme_is_dark() {
+-        assert_eq!(Settings::default().theme, Theme::Dark);
++    fn settings_from_older_versions_still_load() {
++        // Older settings had a theme choice; the app is dark only now.
++        let old = r#"(theme: Light, show_messages_panel: true)"#;
++        let s: Settings = ron::from_str(old).unwrap();
++        assert!(s.show_messages_panel);
+     }
+ 
+     #[test]
+diff --git a/crates/novo-app/src/theme.rs b/crates/novo-app/src/theme.rs
+new file mode 100644
+index 0000000..3da96db
+--- /dev/null
++++ b/crates/novo-app/src/theme.rs
+@@ -0,0 +1,70 @@
++//! The canvas in the app's colours: `novo-theme`'s dark canvas palette
++//! applied to `novo-canvas` and its model drawing.
++
++use novo_canvas::model::ModelStyle;
++use novo_canvas::widget::CanvasStyle;
++use novo_canvas::{Color, Highlight, Stroke};
++use novo_theme::{CANVAS_DARK, CanvasPalette};
++
++fn color(c: [u8; 4]) -> Color {
++    Color(c)
++}
++
++pub fn canvas_style() -> CanvasStyle {
++    canvas_style_from(&CANVAS_DARK)
++}
++
++pub fn model_style() -> ModelStyle {
++    model_style_from(&CANVAS_DARK)
++}
++
++fn canvas_style_from(p: &CanvasPalette) -> CanvasStyle {
++    let defaults = CanvasStyle::default();
++    CanvasStyle {
++        background: color(p.background),
++        grid_minor: color(p.grid_minor),
++        grid_major: color(p.grid_major),
++        selection: Highlight {
++            color: color(p.selection),
++            ..defaults.selection
++        },
++        hover: Highlight {
++            color: color(p.hover),
++            ..defaults.hover
++        },
++        band_window: color(p.rubber_band),
++        band_crossing: color(p.connection_point),
++        snap_marker: color(p.selection),
++    }
++}
++
++fn model_style_from(p: &CanvasPalette) -> ModelStyle {
++    let defaults = ModelStyle::default();
++    ModelStyle {
++        symbol: Stroke {
++            color: color(p.symbol),
++            ..defaults.symbol
++        },
++        wire: Stroke {
++            color: color(p.wire),
++            ..defaults.wire
++        },
++        tag_color: color(p.text),
++        sheet_fill: Some(color(p.sheet)),
++        frame_color: color(p.sheet_frame),
++        ..defaults
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn the_canvas_uses_the_dark_palette() {
++        let style = canvas_style();
++        assert_eq!(style.background, Color(CANVAS_DARK.background));
++        assert_eq!(model_style().symbol.color, Color(CANVAS_DARK.symbol));
++        assert_eq!(model_style().sheet_fill, Some(Color(CANVAS_DARK.sheet)));
++    }
++}
+diff --git a/packaging/windows/novoelectric.iss b/packaging/windows/novoelectric.iss
+index 8d42ecb..41286d3 100644
+--- a/packaging/windows/novoelectric.iss
++++ b/packaging/windows/novoelectric.iss
+@@ -31,7 +31,7 @@ ArchitecturesAllowed=x64compatible
+ ArchitecturesInstallIn64BitMode=x64compatible
+ OutputDir={#RepoRoot}\dist
+ OutputBaseFilename=NovoElectric-{#AppVersion}-setup
+-SetupIconFile={#RepoRoot}\assets\icon\novoelectric.ico
++SetupIconFile={#RepoRoot}\assets\branding\icon.ico
+ UninstallDisplayIcon={app}\{#AppExe}
+ Compression=lzma2/max
+ SolidCompression=yes
+-- 
+2.43.0
+

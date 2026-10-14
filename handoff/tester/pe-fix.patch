@@ -1,0 +1,69 @@
+From 72b774f354428c1359e2ca72121a841a0ea01c9b Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 14 Oct 2026 16:37:43 +0000
+Subject: [PATCH] novo-tests: Gate 1 X1:PE is a protective earth terminal
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01LMMcDMt9qaHXoSXy7iDu58
+---
+ crates/novo-tests/src/motor_starter.rs        |  5 ++++-
+ .../novo-tests/tests/gate1_motor_starter.rs   | 20 +++++++++++++++++++
+ 2 files changed, 24 insertions(+), 1 deletion(-)
+
+diff --git a/crates/novo-tests/src/motor_starter.rs b/crates/novo-tests/src/motor_starter.rs
+index 9a24ff0..e7754b2 100644
+--- a/crates/novo-tests/src/motor_starter.rs
++++ b/crates/novo-tests/src/motor_starter.rs
+@@ -15,7 +15,7 @@
+ use novo_core::{
+     CableCore, CableId, ChangeSet, Device, DeviceId, DeviceTag, Document, Endpoint, JunctionId,
+     PageId, Pin, Placement, Point, PotentialId, PotentialKind, Result, SymbolId, SymbolInstance,
+-    SymbolRole, Tx, WireId,
++    SymbolRole, Terminal, TerminalKind, Tx, WireId,
+ };
+ 
+ /// Handles to the objects of the Gate 1 project.
+@@ -185,6 +185,9 @@ fn build(tx: &mut Tx<'_>) -> Result<MotorStarter> {
+         .enumerate()
+     {
+         let terminal = tx.add_terminal(x1, name)?;
++        if i == 3 {
++            tx.update::<Terminal>(terminal, |t| t.kind = TerminalKind::ProtectiveEarth)?;
++        }
+         let key = if i == 3 {
+             "iec/terminals/terminal_pe"
+         } else {
+diff --git a/crates/novo-tests/tests/gate1_motor_starter.rs b/crates/novo-tests/tests/gate1_motor_starter.rs
+index cadc019..535a141 100644
+--- a/crates/novo-tests/tests/gate1_motor_starter.rs
++++ b/crates/novo-tests/tests/gate1_motor_starter.rs
+@@ -164,6 +164,26 @@ fn designations_read_like_a_drawing() {
+     );
+ }
+ 
++#[test]
++fn terminal_kinds_match_their_use() {
++    let (doc, s) = starter();
++    let kinds: Vec<(String, TerminalKind)> = doc
++        .project()
++        .terminals_of_strip(s.x1)
++        .into_iter()
++        .map(|t| (t.name.clone(), t.kind))
++        .collect();
++    assert_eq!(
++        kinds,
++        [
++            ("1".to_string(), TerminalKind::Feedthrough),
++            ("2".to_string(), TerminalKind::Feedthrough),
++            ("3".to_string(), TerminalKind::Feedthrough),
++            ("PE".to_string(), TerminalKind::ProtectiveEarth),
++        ]
++    );
++}
++
+ #[test]
+ fn every_device_has_a_part_and_the_cable_its_cores() {
+     let (doc, s) = starter();
+-- 
+2.43.0
+
