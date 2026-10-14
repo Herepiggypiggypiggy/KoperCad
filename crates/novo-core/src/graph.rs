@@ -45,6 +45,13 @@ pub struct Net {
     /// net is switched between them (a changeover, a reversing starter), which
     /// is not a short.
     pub carried: Vec<PotentialId>,
+    /// Every potential that can reach this net through switched poles,
+    /// however many, sorted. `carried` keeps only the nearest for labels, so
+    /// a transfer switch whose mains path crosses more poles than its
+    /// generator path shows only the generator there; checks that ask
+    /// "which sources can feed this net" read this instead. Empty when the
+    /// net defines its own potential.
+    pub reachable: Vec<PotentialId>,
 }
 
 impl Net {
@@ -249,6 +256,7 @@ impl Netlist {
                     potentials: Vec::new(),
                     defined: Vec::new(),
                     carried: Vec::new(),
+                    reachable: Vec::new(),
                 });
                 id
             });
@@ -303,6 +311,7 @@ impl Netlist {
         let mut nearest: Vec<(u32, Vec<PotentialId>)> = vec![(u32::MAX, Vec::new()); nets.len()];
         for (potential, starts) in feeds {
             for (net, steps) in carried_nets(&edges, &starts, &defines) {
+                nets[net].reachable.push(potential);
                 let (best, potentials) = &mut nearest[net];
                 if steps < *best {
                     *best = steps;

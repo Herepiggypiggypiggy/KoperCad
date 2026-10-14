@@ -1724,4 +1724,7 @@ fn star_delta_keeps_each_winding_on_its_nearest_phase() {
     assert_eq!(net.potential_of(Endpoint::junction(u2)), Some(l2));
     assert_eq!(net.potential_of(Endpoint::junction(v2)), Some(l3));
     assert_eq!(carried(Endpoint::junction(star)), vec![l1, l2, l3]);
+    // U1 shows L1, but every phase can reach it through the loop.
+    let u1_net = net.net(net.net_of(Endpoint::junction(u1)).unwrap());
+    assert_eq!(u1_net.reachable, vec![l1, l2, l3]);
 }
