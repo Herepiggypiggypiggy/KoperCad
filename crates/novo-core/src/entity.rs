@@ -177,7 +177,7 @@ pub struct Device {
 }
 
 /// Names a symbol definition in a symbol library (WS-05), e.g.
-/// `iec/contact_no`. The model does not interpret it.
+/// `iec/contacts/no`. The model does not interpret it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct SymbolKey(pub String);
