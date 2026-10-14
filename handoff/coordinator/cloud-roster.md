@@ -23,3 +23,6 @@ branches; the cloud workers above took workstreams no project thread owns.
 | Fixer | session_017LndnL4fiT5rRPkqy3R36S | PR branches of paused threads | Fixes CHANGES NEEDED findings |
 | Gate 1 integration | session_01QtW6E2sY3dMnhYDgX3zXge | claude/gate1-integration | Hosts editor, command field, terminals, xref, PDF in novo-app (stacked on #46 + #38) |
 | Main reviewer C | session_01Q6QWwh6uhq8Z2C1Ysih3UA | (none) | Cloud workers' new-crate PRs: #54, #55, #56 |
+
+## Status at wrap-up (2026-10-14 ~20:30 UTC)
+All sessions above were told to finish at most one short in-flight item, write their handoff under `handoff/<folder>/` in a docs-only PR (`handoff: <folder> wrap-up`) and stop. Folders: reviewer-a, reviewer-b, reviewer-c, design-reviewer, fixer, gate1-integration, ws12, ws13, ws28, cloud-coordinator. Don't message these sessions expecting work; the project threads take over.

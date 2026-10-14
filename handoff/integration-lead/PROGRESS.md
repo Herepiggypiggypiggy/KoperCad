@@ -58,3 +58,5 @@
 - 20:10 Merged #66, #67 (A READY), #62, #63 (C READY). 32 merged today.
 - Process miss: #64 was merged at 19:57 before reviewer C's verdict; C then found a regression (accept-all sorted by wire midpoint x → horizontal wires of different lengths numbered 2/1/3). Fixer fixing first (sort by cabinet-side pin), reviewer C. Rule kept: never merge without the named reviewer's READY on the head.
 - Queued: A's terminal-part/BOM consistency finding (strip.rs reads style only, bom.rs reads Terminal.part only) → fixer, reviewer A. lopdf to [workspace.dependencies] after #53 → coordinator.
+- 20:15 Rebalanced: #70 (art feature) to B. Fixer opened #71 (regression fix, C) and #72 (one terminal article source, A).
+- 20:25 Owner near credit limit → wrap-up. All cloud sessions told to write handoffs and stop. Wrote handoff/cloud-coordinator/, handoff/RESUME-2320.md, MAIN-HANDOFF §0.
