@@ -14,6 +14,12 @@ use crate::project::Project;
 use crate::record::Record;
 
 /// Version of the JSON layout written by [`Project::to_json`].
+///
+/// New fields and record kinds are added within version 1 with serde
+/// defaults, so every newer build reads older files. Older builds do not
+/// read newer files that use them (an unknown record kind fails to load),
+/// and re-saving a newer file in an older build drops the fields it does
+/// not know. Bump this before the first release that must stay readable.
 pub const JSON_FORMAT_VERSION: u32 = 1;
 
 #[derive(Serialize, Deserialize)]

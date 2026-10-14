@@ -514,15 +514,23 @@ impl<'p> Tx<'p> {
     /// Adds a supply system from a [`PotentialSet`], reusing potentials
     /// that already exist by name ([`Tx::ensure_potential`]). Returns the
     /// system and the potentials it created.
+    ///
+    /// Systems that share names share members: a 400 V 3/N/PE system and
+    /// a 230 V 1/N/PE system taken from it have the same `N` and `PE`,
+    /// which is right in a TN network. An isolated supply (a control
+    /// transformer's secondary, a second incoming feed) passes a `prefix`
+    /// so its potentials are its own: `T1-` gives `T1-L`, `T1-N`, `T1-PE`.
     pub fn add_potential_system(
         &mut self,
         name: impl Into<String>,
         set: PotentialSet,
         frequency_hz: Option<f64>,
+        prefix: &str,
     ) -> Result<(PotentialSystemId, Vec<PotentialId>)> {
         let mut members = Vec::new();
         let mut created = Vec::new();
-        for spec in set.specs() {
+        for mut spec in set.specs() {
+            spec.name.insert_str(0, prefix);
             let (potential, new) = self.ensure_potential(spec)?;
             if new {
                 created.push(potential);
@@ -556,6 +564,12 @@ impl<'p> Tx<'p> {
             .ok_or(ModelError::NotFound(system.into()))?
             .members
             .clone();
+        if let Some(i) = (1..pins.len()).find(|&i| pins[..i].contains(&pins[i])) {
+            return Err(ModelError::InvalidPin {
+                symbol,
+                pin: pins[i],
+            });
+        }
         if pins.len() > members.len() {
             return Err(ModelError::TooFewPotentials {
                 wires: pins.len(),
