@@ -63,6 +63,9 @@ pick from this table or extend it here first.
 | --- | --- | --- |
 | Ctrl+K | Command palette | Commands, pages, devices and symbols in one list |
 | Ctrl+N / Ctrl+O / Ctrl+S | New, open, save project | |
+| Ctrl+Shift+S | Save as | |
+| Ctrl+W | Close project | Never asks to save (autosave) |
+| Ctrl+Q | Quit | |
 | Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z) | Undo / redo | |
 | Ctrl+C / Ctrl+X / Ctrl+V | Copy, cut, smart paste | Paste gives the next free tags |
 | Ctrl+Shift+V | Paste with the original tags | For moving circuits between projects |
@@ -107,7 +110,10 @@ block, ready to draw.
 
 Defaults:
 
-- Saved to `Documents\NovoElectric\<name>.novo` (per-user, no admin rights).
+- Saved to `<Documents>\NovoElectric\<name>.novo` (per-user, no admin rights).
+  `<Documents>` is the user's real Documents folder from the Windows
+  known-folder lookup (`dirs::document_dir()`), never a hard-coded path,
+  because company PCs often redirect Documents to OneDrive.
   A different folder is a field you can change, not a step you must take.
 - Uses the last-used template, or the built-in IEC A3 template the first time.
 - Creates page 1 (schematic, A3 landscape) and opens it, zoomed to fit.
@@ -371,4 +377,6 @@ workflow bug.
 - Does a new object get a valid default (tag, number, position) without a
   question?
 - Does the status bar say what the next click does?
+- Do plain letter shortcuts act only while the canvas has focus, and never
+  steal typing from a text field?
 - Does the journey stay within its budget?
