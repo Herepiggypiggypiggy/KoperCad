@@ -4,7 +4,7 @@ name = "Terminal end bracket"
 description = "End bracket (end stop) clamping a terminal strip on the DIN rail."
 standard = "IEC 60617"
 category = "terminals"
-function = "terminal.accessory.end_bracket"
+function = "accessory.terminal.end_bracket"
 keywords = ["end bracket", "end stop", "end clamp", "terminal", "accessory"]
 aliases = ["endstop", "endbracket"]
 

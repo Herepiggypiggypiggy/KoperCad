@@ -438,12 +438,16 @@ fn palette_aliases_find_common_symbols() {
             "{alias}"
         );
     }
-    assert!(lib.by_alias("No").is_none());
+    assert_eq!(
+        lib.by_alias(" MCB3 ").map(|s| s.id.as_str()),
+        Some("iec/protection/mcb_3p")
+    );
     assert!(lib.by_alias("nothing").is_none());
 
     let favorites: Vec<_> = lib.favorites().map(|s| s.id.as_str()).collect();
     assert_eq!(favorites.len(), 20, "{favorites:?}");
     assert!(favorites.contains(&"iec/terminals/terminal"));
+    assert_eq!(lib.by_function("accessory.terminal").count(), 2);
 }
 
 #[test]
@@ -496,26 +500,37 @@ fn aliases_are_checked_and_unique_per_library() {
 fn terminal_clamps_share_one_drawing() {
     use novo_symbols::Graphic;
     let lib = builtin();
-    let terminals: Vec<_> = lib
-        .by_function("terminal")
-        .filter(|s| !s.function.starts_with("terminal.accessory"))
-        .collect();
+    let terminals: Vec<_> = lib.by_function("terminal").collect();
     assert!(terminals.len() >= 6);
     for symbol in terminals {
         let clamps: Vec<_> = symbol
             .graphics
             .iter()
             .filter_map(|g| match g {
-                Graphic::Circle { r, .. } => Some(*r),
+                Graphic::Circle { center, r, .. } => Some((*center, *r)),
                 _ => None,
             })
             .collect();
         assert!(!clamps.is_empty(), "{} has no clamp", symbol.id);
-        assert!(
-            clamps.iter().all(|&r| r == 1.2),
-            "{}: {clamps:?}",
-            symbol.id
-        );
+        for (center, r) in clamps {
+            assert_eq!(r, 1.2, "{}", symbol.id);
+            // Each clamp sits on a conductor, between two of its connections.
+            let xs: Vec<_> = symbol
+                .connections
+                .iter()
+                .filter(|c| c.at[0] == center[0])
+                .collect();
+            assert!(
+                xs.len() >= 2,
+                "{}: clamp at {center:?} is off the conductor",
+                symbol.id
+            );
+            assert!(
+                xs.iter().any(|c| c.at[1] < center[1]) && xs.iter().any(|c| c.at[1] > center[1]),
+                "{}: clamp at {center:?} is not between its connections",
+                symbol.id
+            );
+        }
         let pitch: Vec<_> = symbol.connections.iter().map(|c| c.at[1]).collect();
         assert!(
             pitch.iter().all(|&y| y == 0.0 || y == 8.0 || y == 16.0),
@@ -545,6 +560,7 @@ fn changeover_switch_has_an_off_position_and_strips_have_end_pieces() {
     for (alias, id) in [
         ("term", "iec/terminals/terminal"),
         ("endplate", "iec/terminals/end_plate"),
+        ("NO", "iec/contacts/no"),
         ("endstop", "iec/terminals/end_bracket"),
     ] {
         assert_eq!(

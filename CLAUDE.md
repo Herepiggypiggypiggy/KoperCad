@@ -32,6 +32,7 @@ Work is split into workstreams (WS-xx), each run by its own Claude thread.
 | `novo-symbols` | WS-05 | IEC 60617 symbols, connection points, behavior slots |
 | `novo-xref` | WS-10 | Cross references: contact images, jumps, linking |
 | `novo-sim` | WS-19 | Simulation engine (Phase 4) |
+| `novo-theme` | Layout and branding | Dark theme, design tokens, icons, logo (`assets/branding`) |
 | `novo-app` | WS-01 | Application shell, wiring crates together |
 
 Rules:
