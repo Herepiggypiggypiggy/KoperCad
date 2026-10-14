@@ -12,3 +12,9 @@
 2026-10-14 17:13 UTC merged #37; WS-04/WS-05 retired; cancelled 33 stale CI runs (experimental stuck since 16:34 behind backlog); GPU check started on Tadjiro's PC via RC
 2026-10-14 17:16 UTC GPU check PASSED on work PC (10k: 1135 avg/127 min fps; 100k: 113 avg, stutter). Gate 0 complete. Gave Tadjiro launcher/setup-novoelectric-shortcut.ps1 for second PC; release thread to put it in repo
 2026-10-14 17:17 UTC session at limit; final handoff written (section 11 = first steps for next lead)
+2026-10-14 17:45 UTC New lead: cloud session session_01DZ68tTULUv7Uhe8ecKbC47 (branch claude/youthful-franklin-aey18d). Every project thread is at its session limit until 21:20 UTC.
+2026-10-14 17:45 UTC #35 was already merged (2e0fad6). Tested every open PR merged with main: #36 no longer compiles (EntityKind::Text, Record::Text matches); #29 journeys test fails (copied -X1:PE now joins the original under the Join rule); #30 join-rule test fails (core now joins duplicates). #20, #28, #31, #34, #38, #41, #42 pass fmt, clippy and tests on main.
+2026-10-14 17:50 UTC Merged #20 (READY 2d60fdd, CI green) as 6d10ab4.
+2026-10-14 17:50 UTC #41 not merged: no reviewer READY yet (auto-mode refuses merges without review). Waits for the main reviewer.
+2026-10-14 17:55 UTC Handoffs committed to the repository under handoff/ (branch claude/youthful-franklin-aey18d, 985f0a1); CLAUDE.md points at them.
+2026-10-14 17:55 UTC Fixing the blocking review items and #35 breakages for #28, #29, #30, #36 locally; results saved as patches in handoff/<thread>/lead-fixes/ because this session may push only to its own branch.
