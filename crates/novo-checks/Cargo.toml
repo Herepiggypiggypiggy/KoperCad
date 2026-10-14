@@ -1,0 +1,15 @@
+[package]
+name = "novo-checks"
+description = "Design checks: problems with severity and location, read from the model (WS-14)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+novo-core.workspace = true
+
+[dev-dependencies]
+novo-tests = { path = "../novo-tests" }
+
+[lints]
+workspace = true

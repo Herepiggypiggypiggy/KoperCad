@@ -91,11 +91,10 @@ fn open_place_wire_see_terminals_save_and_reload() {
         }
     }
 
-    // See the terminals: a click on terminal -X1:2 on the canvas reaches
-    // it, and the strip reads 1, 2, 3, PE with full designations.
-    // Finding F2 (docs/TEST_REPORT.md): the click also lands on -X1:1's tag,
-    // which runs across -X1:2, and the tag wins; so this checks every hit
-    // under the cursor, not only the first.
+    // See the terminals: a click on terminal -X1:2 on the canvas picks it
+    // first (finding F2, fixed in #28: -X1:1's tag no longer runs across
+    // -X1:2 and wins the pick), and the strip reads 1, 2, 3, PE with full
+    // designations.
     let at = doc.project().symbol(s.x1_syms[1]).unwrap().placement.origin;
     let hits: Vec<Option<AnyId>> = main
         .scene()
@@ -103,7 +102,16 @@ fn open_place_wire_see_terminals_save_and_reload() {
         .into_iter()
         .map(|h| main.model_id(h.id))
         .collect();
-    assert!(hits.contains(&Some(AnyId::from(s.x1_syms[1]))), "{hits:?}");
+    assert_eq!(
+        hits.first(),
+        Some(&Some(AnyId::from(s.x1_syms[1]))),
+        "{hits:?}"
+    );
+    let picked = main
+        .scene()
+        .pick(vec2(at.x as f32, at.y as f32 + 4.0), 1.0, 1.0)
+        .and_then(|h| main.model_id(h.id));
+    assert_eq!(picked, Some(AnyId::from(s.x1_syms[1])));
     let before = view(doc.project(), &s);
     let names: Vec<&str> = before.strip.iter().map(|(n, _, _)| n.as_str()).collect();
     assert_eq!(names, ["1", "2", "3", "PE"]);

@@ -14,12 +14,12 @@ packaging/windows/novoelectric.iss, scripts/run-latest.ps1, scripts/install-desk
   scripts/setup-new-pc.ps1 (one-paste setup on a new PC; copy also at launcher/setup-novoelectric-shortcut.ps1).
 
 ## Tadjiro's PC
-- Shortcut C:\Users\tvelzel\Desktop\NovoElectric (latest).lnk -> run-latest.ps1 copy in
+- Shortcut %USERPROFILE%\Desktop\NovoElectric (latest).lnk -> run-latest.ps1 copy in
   %LOCALAPPDATA%\NovoElectric\experimental. gh installed per user and signed in.
-- RC session cse_01PHrCqUwsyohsQLFPdQoxBG takes only Tadjiro's own typed messages.
+- The owner's Remote Control session (id on the project mount) takes only Tadjiro's own typed messages.
 - 60 fps GPU check pending: Tadjiro types "run the GPU speed check on my PC" in the
   coordination thread; RC runs `canvas-demo.exe --stress 10000 --seconds 10`; tester fills Gate 0.
-- Never touch C:\Users\tvelzel\Documents\Standaard eplan Coen - kopie voor v2022.
+- Never touch the owner's existing EPLAN project folder (path on the project mount only).
 
 ## Rules and traps
 - No admin rights ever: per-user, HKCU, %LOCALAPPDATA%, PrivilegesRequired=lowest.

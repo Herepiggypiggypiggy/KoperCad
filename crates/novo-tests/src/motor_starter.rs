@@ -15,7 +15,7 @@
 use novo_core::{
     CableCore, CableId, ChangeSet, Device, DeviceId, DeviceTag, Document, Endpoint, JunctionId,
     PageId, Pin, Placement, Point, PotentialId, PotentialKind, Result, SymbolId, SymbolInstance,
-    SymbolRole, Tx, WireId,
+    SymbolRole, Terminal, TerminalKind, Tx, WireId,
 };
 
 /// Handles to the objects of the Gate 1 project.
@@ -185,6 +185,9 @@ fn build(tx: &mut Tx<'_>) -> Result<MotorStarter> {
         .enumerate()
     {
         let terminal = tx.add_terminal(x1, name)?;
+        if i == 3 {
+            tx.update::<Terminal>(terminal, |t| t.kind = TerminalKind::ProtectiveEarth)?;
+        }
         let key = if i == 3 {
             "iec/terminals/terminal_pe"
         } else {

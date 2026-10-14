@@ -7,6 +7,7 @@ Updated: 2026-10-14 17:20 UTC
 - Open PR: **#42** "Tests: Gate 1 scenario through commands, with the known-gap list", head `80dcfe8`, based on main `9512822`. The reviewer has been pinged; no verdict yet. Subscribed to its events.
 - #42 adds `crates/novo-tests/tests/gate1_scenario.rs` (passing scenario plus 7 ignored `gap_*` tests naming #34, #38, #37/#29, #35, #30, #36, #28), `e2e_motor_starter.rs`, novo-canvas as a dev-dep, and TEST_REPORT Round 6 (gap table, F2).
 - When a gap's PR merges: fill in its `gap_*` test against the new API, remove `#[ignore]`, and update the Round table. This goes in a new PR if #42 is already READY or merged.
+- Round 8 (fixer, branch restarted from main 7379d42): #30 and #36 gaps filled, pe-fix.patch applied (the patch file is removed). Remaining gaps: the two #38 tests.
 
 ## How to resume
 ```
