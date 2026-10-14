@@ -1,11 +1,13 @@
 # Tester handoff (rewritten each update)
 
-Updated: 2026-10-14 (Round 9)
+Updated: 2026-10-14 21:55 UTC (Round 10)
 
 ## Where things are
 - Repo: Herepiggypiggypiggy/NovoElectric. Branch: `claude/project-thread-dft1m7` (the only branch this thread pushes), restarted from main `15c9992`.
 - Round 9 PR **#87**: `gate1_scenario.rs` gets `scenario_through_the_window` (whole flow through `NovoApp::execute`, headless, real `EditorCanvas`) and the two #38 gap tests filled in. No ignored test left in that file. TEST_REPORT Round 9.
-- novo-tests dev-deps added: `novo-editor` (feature `art`), `egui`, `novo-theme`.
+- novo-tests dev-deps added: `novo-editor` (feature `art`), `egui`, `novo-theme`, `novo-pdf`, `novo-checks`, `novo-reports` (those three dev-depend on novo-tests; the dev-dep cycle is fine).
+- Round 10 (also on #87): `outputs_of_the_starter`, plus ignored gap tests for F4 (BOM per terminal, WS-07/WS-13) and F5 (strip tag on the printed page, WS-03/outputs). Un-ignore each when fixed.
+- New lead: cse_01FiLvRBKEcNNHbQEGhYyL1S. #72 has had main merged into it by the lead; once that is pushed, re-run F4's test on it.
 - BOM terminal count check: #72 (open, fixer) already adds `bom_counts_every_terminal_the_strip_shows`; not duplicated.
 
 ## How to resume
@@ -26,7 +28,7 @@ Disk: the session allowance is small. Delete old target dirs (also in the scratc
 - Only WS-02 changes the novo-core API. novo-tests uses public APIs only. Never edit the crate list or `[workspace.dependencies]`.
 
 ## Who to talk to
-- Integration lead: session_011PfTJ1QaP1JQJPwXcFnxBE
+- Integration lead: cse_01FiLvRBKEcNNHbQEGhYyL1S (old lead session_011PfTJ1QaP1JQJPwXcFnxBE superseded)
 - Coordinator: session_01DZ68tTULUv7Uhe8ecKbC47
 - Reviewer A: session_01XEdxpvQFh4HWmurh72tKwp
 

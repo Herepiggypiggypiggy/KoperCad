@@ -1119,3 +1119,146 @@ fn gap_draw_real_symbols() {
         assert_eq!(pins(item), pins(placeholder), "{alias}");
     }
 }
+
+/// The Gate 1 starter on a new project file with every device's part
+/// assigned from the starter catalog, as `gap_assign_parts_from_the_catalog`
+/// does it.
+fn starter_with_parts<'a>(
+    library: &'a Library,
+    dir: &std::path::Path,
+) -> (Flow<'a, FileStore>, PageId, Starter) {
+    let (mut flow, page) = new_flow(library, dir);
+    let s = build(&mut flow, page, true);
+    let catalog = novo_parts::Catalog::starter();
+    let devices: Vec<DeviceId> = flow.project().devices().map(|d| d.id).collect();
+    for device in devices {
+        let part = novo_parts::suggest_for_device(&catalog, flow.project(), device, "", 1)
+            .into_iter()
+            .next()
+            .expect("a catalog part for every starter device");
+        let command = novo_parts::assign_part(
+            flow.project(),
+            &[device],
+            part,
+            novo_parts::AssignMode::Replace,
+        )
+        .expect("the device had no part");
+        flow.run(command);
+    }
+    (flow, page, s)
+}
+
+/// The bill of materials as (quantity, used by) per part row.
+fn bom_uses(project: &Project) -> Vec<(u32, String)> {
+    use novo_reports::Report;
+    let bom = novo_reports::BillOfMaterials.generate(project);
+    let parts = bom.section("parts").expect("a parts section");
+    let (quantity, used_by) = (
+        parts.column("quantity").unwrap(),
+        parts.column("used_by").unwrap(),
+    );
+    parts
+        .text_rows()
+        .into_iter()
+        .map(|row| (row[quantity].parse().unwrap(), row[used_by].clone()))
+        .collect()
+}
+
+/// What the finished starter gives the user besides the drawing: the design
+/// checks are clean (#50), every device's cross reference points at its
+/// main function on page 1 and -X1's at its four terminals (#31), the bill
+/// of materials lists each device's part (#55), and the PDF (#49) with the
+/// library artwork is one page with a bookmark and the tags as text.
+#[test]
+fn outputs_of_the_starter() {
+    let library = Library::builtin().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let (flow, page, s) = starter_with_parts(&library, dir.path());
+    let p = flow.project();
+
+    let problems: Vec<String> = novo_checks::check(p)
+        .into_iter()
+        .map(|pr| format!("{:?}: {}", pr.kind, pr.message))
+        .collect();
+    assert!(problems.is_empty(), "{problems:?}");
+
+    for device in p.devices() {
+        let refs = p.cross_references(device.id);
+        assert!(
+            refs.iter().all(|r| r.location.page == page),
+            "{}",
+            device.tag
+        );
+        if device.id == s.x1 {
+            let terminals: Vec<Option<TerminalId>> = refs.iter().map(|r| r.terminal).collect();
+            let strip: Vec<Option<TerminalId>> = p
+                .terminals_of_strip(s.x1)
+                .iter()
+                .map(|t| Some(t.id))
+                .collect();
+            assert_eq!(terminals, strip);
+        } else {
+            assert_eq!(refs.iter().filter(|r| r.main).count(), 1, "{}", device.tag);
+        }
+    }
+
+    let used_by: Vec<String> = bom_uses(p).into_iter().map(|(_, by)| by).collect();
+    for device in p.devices() {
+        let tag = device.tag.to_string();
+        assert!(
+            used_by.iter().any(|by| by.contains(&tag)),
+            "{tag} not in {used_by:?}"
+        );
+    }
+
+    let art = novo_editor::art::LibraryArt::new(&library, novo_pdf::print_style().symbol);
+    let pdf = novo_pdf::export_pdf_with_art(p, &novo_pdf::PdfOptions::default(), &art).unwrap();
+    assert!(pdf.starts_with(b"%PDF-"));
+    assert!(pdf.trim_ascii_end().ends_with(b"%%EOF"));
+    let text = String::from_utf8_lossy(&pdf);
+    // One page object, labelled with the page's name.
+    assert_eq!(text.matches("/Type /Page\n").count(), 1);
+    assert!(text.contains("/Type /PageLabel\n  /P (1)"));
+    assert!(text.contains("/Outlines"));
+    for tag in ["-Q1", "-K1", "-F1", "-M1", "(PE)"] {
+        assert!(text.contains(tag), "{tag} is not text in the PDF");
+    }
+}
+
+/// F5: terminals show only their own name (`1`, `2`, `3`, `PE`; #28 fixed
+/// F2 that way), and nothing else on the page names their strip, so the
+/// printed page does not say which strip they are on. IEC 61082 drawings
+/// name the strip once beside a group of its terminals.
+#[test]
+#[ignore = "known gap F5: the printed page never names the terminal strip -X1 (TEST_REPORT Round 10)"]
+fn gap_pdf_names_the_terminal_strip() {
+    let library = Library::builtin().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let (flow, _, _) = starter_with_parts(&library, dir.path());
+    let art = novo_editor::art::LibraryArt::new(&library, novo_pdf::print_style().symbol);
+    let pdf = novo_pdf::export_pdf_with_art(flow.project(), &Default::default(), &art).unwrap();
+    assert!(String::from_utf8_lossy(&pdf).contains("-X1"));
+}
+
+/// F4: the starter catalog's part for -X1 is a feed-through terminal block,
+/// and assigning it puts it on the strip device. The missing-parts check
+/// then counts the four terminals as covered, but the bill of materials
+/// orders one terminal block for a strip of four (and the PE terminal gets
+/// a grey feed-through block). The BOM should count a terminal article for
+/// every terminal the strip shows.
+#[test]
+#[ignore = "known gap F4: a catalog part on a strip is ordered once, not per terminal (TEST_REPORT Round 10)"]
+fn gap_bom_orders_a_terminal_block_per_terminal() {
+    let library = Library::builtin().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let (flow, _, s) = starter_with_parts(&library, dir.path());
+    let p = flow.project();
+    assert!(novo_parts::missing_parts(p).is_empty());
+    let x1 = p.device(s.x1).unwrap().tag.to_string();
+    let terminal_blocks: u32 = bom_uses(p)
+        .into_iter()
+        .filter(|(_, by)| by.split(", ").any(|d| d.starts_with(&x1)))
+        .map(|(quantity, _)| quantity)
+        .sum();
+    assert_eq!(terminal_blocks as usize, p.terminals_of_strip(s.x1).len());
+}

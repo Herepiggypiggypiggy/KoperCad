@@ -24,6 +24,41 @@ How a PR is tested: its branch is merged onto the current `main` (a
 main `11363c1` passes fmt, clippy and all 232 workspace tests on Linux.
 **Every Gate 0 criterion is met.**
 
+## Round 10 (2026-10-14, main `7bb466d`): main after the cloud merges; the starter's outputs
+
+GitHub Actions is down, so main was re-tested locally after the cloud
+session's merges (#53 Gate 1 in the app through #80):
+
+- main `7bb466d` alone: fmt and clippy clean; 625 passed, 0 failed, 3 ignored
+  (the two #38 gap tests this PR fills in and the `widget.rs` doc example).
+- main plus this PR: 629 passed, 0 failed, 3 ignored (the doc example and the
+  F4 and F5 gap tests below).
+
+New in `gate1_scenario.rs`:
+
+| Test | Checks | State |
+| --- | --- | --- |
+| `outputs_of_the_starter` | With every part assigned from the starter catalog: `novo_checks::check` reports nothing; each device's cross reference is its main function on page 1 and -X1's lists its four terminals in strip order; the BOM names every device; the PDF with `LibraryArt` is one page labelled `1`, has a bookmark tree, and carries the device tags and terminal names as text | Passes |
+| `gap_bom_orders_a_terminal_block_per_terminal` | F4 below | Ignored, fails |
+| `gap_pdf_names_the_terminal_strip` | F5 below | Ignored, fails |
+
+Findings:
+- **F4 (parts and BOM, medium):** the starter catalog's suggestion for -X1
+  is a feed-through terminal block (Phoenix UT 2,5), and `assign_part`
+  puts it on the strip device. `missing_parts()` then counts all four
+  terminals as covered, but the bill of materials orders **one** UT 2,5 for
+  a strip of four, and the PE terminal would get a grey feed-through block
+  instead of a PE block. #72 makes the strip row, BOM and missing-parts
+  check read one terminal article, but a part on the strip device itself is
+  still not a terminal article there. Suggested fix: assigning a terminal
+  block to a strip sets the strip's terminal article for that kind (or each
+  terminal's part), not a device part. Sent to WS-07 and WS-13.
+- **F5 (drawing and PDF, low):** terminals show only their own name (`1`,
+  `2`, `3`, `PE`; that is how #28 fixed F2), and nothing on the page names
+  the strip, so the printed page doesn't say which strip they belong to.
+  IEC 61082 drawings name the strip once beside a group of its terminals.
+  Sent to WS-03 (labels) and the outputs thread (PDF).
+
 ## Round 9 (2026-10-14, main `15c9992`): Gate 1 through the window, #38 gaps closed
 
 #53 (`NovoApp::execute`) and #38 (novo-editor) are on main, so the Gate 1

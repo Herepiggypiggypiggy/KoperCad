@@ -16,6 +16,9 @@ novo-editor = { workspace = true, features = ["art"] }
 egui.workspace = true
 novo-theme.workspace = true
 novo-parts.workspace = true
+novo-pdf.workspace = true
+novo-checks.workspace = true
+novo-reports.workspace = true
 novo-storage.workspace = true
 tempfile.workspace = true
 novo-symbols.workspace = true
