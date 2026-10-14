@@ -1542,6 +1542,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-editor"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui",
+ "novo-canvas",
+ "novo-core",
+ "novo-symbols",
+]
+
+[[package]]
 name = "novo-parts"
 version = "0.1.0"
 dependencies = [
