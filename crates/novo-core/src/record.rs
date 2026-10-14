@@ -16,9 +16,11 @@ use crate::entity::{
 use crate::id::{AnyId, EntityKind, PageId};
 use crate::project::Project;
 
-/// Any project object, as one value.
+/// Any project object, as one value. In JSON the kind is the `record` key
+/// (`{"record": "device", "id": 5, ...}`); it cannot be `kind`, which pages,
+/// devices, potentials and terminals use for their own field.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(tag = "record", rename_all = "snake_case")]
 pub enum Record {
     Page(Page),
     Device(Device),

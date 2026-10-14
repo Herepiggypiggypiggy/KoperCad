@@ -893,3 +893,65 @@ fn random_edits_undo_to_the_start() {
     }
     assert_eq!(state(doc.project()), start);
 }
+
+/// Records, ops, transactions and record-carrying commands must survive JSON:
+/// storage, macros, Python and the AI assistant all exchange them as JSON.
+#[test]
+fn records_ops_and_commands_round_trip_through_json() {
+    let mut doc = Document::default();
+    let s = build_starter(&mut doc);
+    let mut project = doc.project().clone();
+
+    // Every kind of record, including those with their own `kind` field.
+    let records: Vec<Record> = project.records().collect();
+    let kinds: std::collections::BTreeSet<EntityKind> = records.iter().map(|r| r.kind()).collect();
+    assert!(kinds.contains(&EntityKind::Page) && kinds.contains(&EntityKind::Terminal));
+    for record in &records {
+        let json = serde_json::to_string(record).unwrap();
+        let back: Record = serde_json::from_str(&json)
+            .unwrap_or_else(|e| panic!("{} did not round-trip: {e}\n{json}", record.id()));
+        assert_eq!(&back, record);
+    }
+
+    // A transaction touching pages, devices, potentials and terminals.
+    let (_, transaction) = project
+        .transact("Edit", |tx| {
+            tx.add_page("3")?;
+            tx.add_potential("PE", PotentialKind::ProtectiveEarth)?;
+            tx.update::<Device>(s.k1, |d| d.kind = DeviceKind::Plc)?;
+            tx.update::<Page>(s.page1, |p| {
+                p.kind = PageKind::Generated {
+                    generator: "terminal_diagram".into(),
+                }
+            })?;
+            let t = tx.add_terminal(s.x1, "2")?;
+            tx.update::<Terminal>(t, |t| t.kind = TerminalKind::ProtectiveEarth)?;
+            tx.remove(s.n)
+        })
+        .unwrap();
+    let json = serde_json::to_string(&transaction).unwrap();
+    let back: Transaction = serde_json::from_str(&json).unwrap();
+    assert_eq!(back, transaction);
+    // The deserialized inverse still undoes the edit.
+    project.apply(&back.inverse()).unwrap();
+    assert_eq!(state(&project), state(doc.project()));
+
+    // Commands carrying records and ids.
+    let device = project.record(s.k1.into()).unwrap();
+    for command in [
+        Command::Replace { record: device },
+        Command::Insert {
+            record: Record::Potential(Potential {
+                id: PotentialId(9000),
+                name: "24V".into(),
+                kind: PotentialKind::DcPositive,
+                voltage: Some(24.0),
+                properties: Properties::new(),
+            }),
+        },
+        Command::Remove { id: s.page2.into() },
+    ] {
+        let json = serde_json::to_string(&command).unwrap();
+        assert_eq!(serde_json::from_str::<Command>(&json).unwrap(), command);
+    }
+}
