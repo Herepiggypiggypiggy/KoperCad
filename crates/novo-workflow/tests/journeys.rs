@@ -425,7 +425,11 @@ fn every_grammar_form_can_be_picked_without_typing_syntax() {
             device: gate.f1
         }
     );
-    assert!(rows[..7].iter().all(|r| matches!(r.target, Target::Child { .. })));
+    assert!(
+        rows[..7]
+            .iter()
+            .all(|r| matches!(r.target, Target::Child { .. }))
+    );
     // A bare verb and a noun run or jump on the first pick.
     assert_eq!(
         pick_path(&palette, &src, "probl", &["Problems"]),
