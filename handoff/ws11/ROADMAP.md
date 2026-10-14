@@ -19,7 +19,7 @@ Direction (Tadjiro via the lead): NovoElectric is its own program, not an EPLAN 
 1. When #35 (WS-02) merges: switch Settings to info.rules.terminals (SameName Off/Join/Refuse, JoinLink), drop the property keys and own enum types. Join: core netlist already joins same-name records, so remove the NotJoined check. Refuse: place_named returns ModelError::DuplicateTerminal instead of creating a second record. Off: separate rows.
 1b. With that push, carry the Workflow thread's non-blocking notes: (a) the sentence() doc comment says it is also used in the Rules document (§3); (b) gather all user-facing strings (explain, check messages, sentence, summarize_suggestions, screen labels) into one strings module for later localisation (Dutch first, DESIGN §3, #43); (c) when WS-02 adds the enclosure flag on locations (§10), use it and drop the device-count fallback.
 2. Act on review findings on #30 until the reviewer says READY (no pushes after READY).
-3. Suggestions: walk wires through junctions; use an enclosure property on locations once WS-02 has one; use WS-02's dismissal record if it replaces the wire property.
+3. Suggestions: ~~walk wires through junctions~~ (done: one terminal on the wire that leaves the location); use an enclosure property on locations once WS-02 has one; use WS-02's dismissal record if it replaces the wire property.
 4. After WS-13 lands: the drawn terminal strip page and connection screen on the generated-page framework.
 5. DESIGN.md is on main (§2,3,5,6,7). UI is owned elsewhere: proposals drawn dashed steel blue at 55% with Enter accept and Tab next (editor), Terminals drawer Ctrl+3 linked to the selection, dock proposal count. WS-11 supplies the engine calls. Keep #30 free of UI until the lead lifts rule 4.
 
