@@ -54,6 +54,15 @@ impl PlaceOptions {
     }
 }
 
+/// The symbol carrying `device`'s main function, if it has one.
+pub fn main_symbol(project: &Project, device: DeviceId) -> Option<SymbolId> {
+    project
+        .symbols_of_device(device)
+        .into_iter()
+        .find(|s| matches!(s.role, SymbolRole::Device { main: true, .. }))
+        .map(|s| s.id)
+}
+
 /// Places a library symbol as a tagged device (or terminal, potential feed,
 /// interruption point) with no questions asked, and connects its pins to
 /// what they land on. Returns the new symbol.
@@ -70,11 +79,17 @@ pub fn place(
         SymbolClass::Main { letter } => {
             let device = match &options.parent {
                 // `coil K1`: the main function of that device, created when
-                // it does not exist yet.
+                // it does not exist yet. A device has one main function, so
+                // a second one is refused.
                 Some(tag) => {
                     let tag = complete_tag(tx.project(), page, tag);
                     match tx.project().devices_by_tag(&tag).first() {
-                        Some(&d) => d,
+                        Some(&d) => {
+                            if let Some(main) = main_symbol(tx.project(), d) {
+                                return Err(ModelError::AlreadyExists(main.into()));
+                            }
+                            d
+                        }
                         None => tx.add_device(tag, symbol.name.clone())?,
                     }
                 }

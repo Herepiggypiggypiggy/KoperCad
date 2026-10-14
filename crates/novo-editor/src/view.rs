@@ -13,7 +13,7 @@
 use egui::{Key, Modifiers};
 use novo_canvas::model::{self, ModelStyle, PageScene, PlaceholderArt, SymbolArt, item_id};
 use novo_canvas::widget::{CanvasView, EscapeTarget};
-use novo_canvas::{Color, Item, ItemId, Primitive, SelectOp, Shape, Stroke, Vec2};
+use novo_canvas::{Anchor, Color, Item, ItemId, Label, Primitive, SelectOp, Shape, Stroke, Vec2};
 use novo_core::{AnyId, ChangeSet, DeviceId, Document, PageId, Point};
 
 use crate::art::LibraryArt;
@@ -29,9 +29,13 @@ const GHOST: Color = Color::rgba(0, 120, 215, 200);
 /// Proposal marks and the pin-hover ring (DESIGN.md §5, steel blue).
 const STEEL: Color = Color::rgb(70, 130, 180);
 const PROPOSAL: Color = Color::rgba(70, 130, 180, 140);
-/// The proposal Enter takes: still dashed, only stronger and heavier, so a
-/// lone proposal never reads as a drawn wire.
-const PROPOSAL_CURRENT: Color = Color::rgba(70, 130, 180, 230);
+/// The hint on the highlighted proposal (DESIGN.md §5).
+const PROPOSAL_HINT: &str = "↵ accept · Tab next";
+/// Hint text height, in screen points.
+const HINT_PX: f32 = 11.0;
+/// After Tab the highlight stays put until the pointer travels this far,
+/// in screen points (DESIGN.md §5).
+const HOLD_PX: f32 = 24.0;
 /// A pin wins over the symbol body within this many screen points.
 const PIN_RADIUS: f32 = 6.0;
 /// First preview item id; previews count down from here.
@@ -284,9 +288,13 @@ impl SchematicView {
             );
         }
         if !preview.proposals.is_empty() {
-            let mut item = Item::new(layer).unselectable();
-            item.primitives = proposal_primitives(&preview.proposals, preview.current);
-            items.push(item);
+            let zoom = self.canvas.viewport.zoom;
+            items.push(proposal_item(
+                layer,
+                &preview.proposals,
+                preview.current,
+                zoom,
+            ));
         }
         if let Some(t) = preview.target {
             items.push(Item::new(layer).unselectable().with(Primitive::stroked(
@@ -359,6 +367,8 @@ impl SchematicView {
         }
         if let Some(w) = out.cursor_raw {
             self.editor.hover(document, page, point(w), tolerance);
+            self.editor
+                .follow_pointer(point(w), f64::from(HOLD_PX / zoom));
         }
         if self.editor.dragging()
             && response.drag_stopped_by(egui::PointerButton::Primary)
@@ -437,12 +447,14 @@ impl SchematicView {
         // Exactly no modifiers: Shift+R is not R.
         let pressed = |key: Key| ctx.input_mut(|i| consume_plain_key(i, key));
         // Enter accepts the highlighted proposal, Tab moves to the next one
-        // (DESIGN.md §4).
+        // and Delete declines it (DESIGN.md §4, §5).
         if !self.editor.proposals().is_empty() {
             if pressed(Key::Enter) {
                 self.editor.accept_proposal(document);
             } else if pressed(Key::Tab) {
                 self.editor.next_proposal();
+            } else if pressed(Key::Delete) {
+                self.editor.decline_proposal();
             }
         }
         let selection = self.selection();
@@ -823,24 +835,38 @@ fn short(name: &str) -> String {
     }
 }
 
-/// Proposal marks (DESIGN.md §5): every proposal is dashed steel blue at
-/// about 55%; the one Enter takes differs by opacity and weight only.
-fn proposal_primitives(proposals: &[(Point, Point)], current: Option<usize>) -> Vec<Primitive> {
-    let mut out = Vec::new();
+/// Proposal marks (DESIGN.md §5): proposals are dashed steel blue at about
+/// 55%; the highlighted one, which Enter takes, is solid steel blue and
+/// carries the "↵ accept · Tab next" hint, sized for the screen.
+fn proposal_item(
+    layer: novo_canvas::LayerId,
+    proposals: &[(Point, Point)],
+    current: Option<usize>,
+    zoom: f32,
+) -> Item {
+    let mut item = Item::new(layer).unselectable();
     for (i, &(a, b)) in proposals.iter().enumerate() {
-        let stroke = if current == Some(i) {
-            Stroke::world(0.5, PROPOSAL_CURRENT)
-        } else {
-            Stroke::world(0.35, PROPOSAL)
-        };
         let line = Shape::line(model::vec(a), model::vec(b));
-        out.extend(
-            crate::art::dashes(&line)
-                .into_iter()
-                .map(|dash| Primitive::stroked(dash, stroke)),
-        );
+        if current == Some(i) {
+            item.primitives
+                .push(Primitive::stroked(line, Stroke::world(0.35, STEEL)));
+            let gap = 4.0 / zoom;
+            let mid = model::vec(a).lerp(model::vec(b), 0.5);
+            item.labels.push(
+                Label::new(mid + Vec2::new(gap, -gap), PROPOSAL_HINT, HINT_PX / zoom)
+                    .anchored(Anchor::BottomLeft)
+                    .colored(STEEL),
+            );
+        } else {
+            let stroke = Stroke::world(0.35, PROPOSAL);
+            item.primitives.extend(
+                crate::art::dashes(&line)
+                    .into_iter()
+                    .map(|dash| Primitive::stroked(dash, stroke)),
+            );
+        }
     }
-    out
+    item
 }
 
 #[cfg(test)]
@@ -848,43 +874,48 @@ mod tests {
     use super::*;
 
     #[test]
-    fn proposals_are_all_dashed_and_the_enter_target_only_stronger() {
+    fn the_highlighted_proposal_is_solid_and_carries_the_hint() {
         let proposals = [
             (Point::new(0.0, 0.0), Point::new(40.0, 0.0)),
             (Point::new(0.0, 10.0), Point::new(40.0, 10.0)),
         ];
         for current in [None, Some(0), Some(1)] {
-            let prims = proposal_primitives(&proposals, current);
-            // Each 40 mm proposal is split into several dashes; none is
-            // drawn as one solid line.
+            let item = proposal_item(novo_canvas::LayerId(0), &proposals, current, 4.0);
             for (i, &(a, b)) in proposals.iter().enumerate() {
                 let y = a.y as f32;
-                let mine: Vec<_> = prims
+                let mine: Vec<_> = item
+                    .primitives
                     .iter()
                     .filter(|p| match &p.shape {
                         Shape::Line { a, b } => a.y == y && b.y == y,
                         _ => false,
                     })
                     .collect();
-                assert!(mine.len() > 1, "proposal {i} is not dashed ({current:?})");
                 let full = model::vec(a).distance(model::vec(b));
                 for p in &mine {
                     let Shape::Line { a, b } = &p.shape else {
                         unreachable!()
                     };
-                    assert!(a.distance(*b) < full * 0.5);
                     let s = p.stroke.unwrap();
+                    // Steel blue either way.
+                    assert_eq!(&s.color.0[..3], &[70, 130, 180]);
                     if current == Some(i) {
-                        assert_eq!(s.color, PROPOSAL_CURRENT);
-                        assert!(s.width > 0.35);
+                        assert_eq!(s.color, STEEL);
+                        assert_eq!(a.distance(*b), full);
                     } else {
                         assert_eq!(s.color, PROPOSAL);
-                        assert_eq!(s.width, 0.35);
+                        assert!(a.distance(*b) < full * 0.5);
                     }
-                    // Steel blue, never opaque.
-                    assert_eq!(&s.color.0[..3], &[70, 130, 180]);
-                    assert!(s.color.0[3] < 255);
                 }
+                let solid = current == Some(i);
+                assert_eq!(mine.len() == 1, solid, "proposal {i} ({current:?})");
+            }
+            // One hint, on the highlighted proposal only, 11 px at any zoom.
+            assert_eq!(item.labels.len(), usize::from(current.is_some()));
+            if let (Some(i), Some(l)) = (current, item.labels.first()) {
+                assert_eq!(l.text, PROPOSAL_HINT);
+                assert_eq!(l.height * 4.0, HINT_PX);
+                assert!((l.pos.y - proposals[i].0.y as f32).abs() < 2.0);
             }
         }
     }
@@ -1140,6 +1171,43 @@ mod tests {
         h.click(x, 120.0, egui::PointerButton::Primary);
         assert_eq!(h.view.editor.proposals().len(), 3);
         assert_eq!(h.doc.project().wires().count(), 0);
+    }
+
+    #[test]
+    fn the_highlight_follows_the_pointer_tab_holds_it_and_delete_declines() {
+        let mut h = Harness::new();
+        with_proposals(&mut h, 40.0);
+        let mid = |h: &Harness, i: usize| {
+            let f = &h.view.editor.proposals()[i];
+            ((f.a.x + f.b.x) / 2.0, (f.a.y + f.b.y) / 2.0)
+        };
+        let px = 1.0 / f64::from(h.view.canvas.viewport.zoom);
+        // The pointer picks the nearest proposal.
+        let (x, y) = mid(&h, 2);
+        h.hover(x, y);
+        assert_eq!(h.view.editor.highlighted(), Some(2));
+        // Tab moves on and holds there while the pointer stays near...
+        h.key(Key::Tab);
+        assert_eq!(h.view.editor.highlighted(), Some(0));
+        h.hover(x, y + 10.0 * px);
+        assert_eq!(h.view.editor.highlighted(), Some(0));
+        // ...and lets go once it travels more than 24 px.
+        h.hover(x, y + 30.0 * px);
+        assert_eq!(h.view.editor.highlighted(), Some(2));
+        // Delete declines the highlighted one and draws nothing.
+        h.key(Key::Delete);
+        assert_eq!(h.view.editor.proposals().len(), 2);
+        assert_eq!(h.doc.project().wires().count(), 0);
+        assert!(h.doc.project().symbols().count() == 2);
+        // Enter takes the highlighted one, the one under the pointer.
+        let (x, y) = mid(&h, 1);
+        h.hover(x, y);
+        let target = h.view.editor.proposals()[1];
+        h.key(Key::Enter);
+        assert_eq!(h.doc.project().wires().count(), 1);
+        let wire = h.doc.project().wires().next().unwrap();
+        let ends = [wire.from, wire.to];
+        assert!(ends.contains(&target.from) && ends.contains(&target.to));
     }
 
     #[test]
