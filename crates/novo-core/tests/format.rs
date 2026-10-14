@@ -198,6 +198,8 @@ fn build() -> Project {
             None,
         )?;
         tx.add_potential_system("24 V DC", PotentialSet::Dc { voltage: 24.0 }, None, "")?;
+        tx.add_structure(tag("+CAB1"), "Main cabinet", true)?;
+        tx.dismiss("terminal.suggest", vec![feed.into()])?;
         Ok(())
     })
     .unwrap();

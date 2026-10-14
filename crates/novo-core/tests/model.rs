@@ -1842,6 +1842,7 @@ fn moving_to_another_page_carries_wires_and_labels() {
                     wire: Some(wire),
                 }],
             )?;
+            tx.dismiss("terminal.suggest", vec![wire.into()])?;
             Ok((p1, p2, a, b, stay, wire, label, cable))
         })
         .unwrap();
@@ -1861,6 +1862,7 @@ fn moving_to_another_page_carries_wires_and_labels() {
     assert_eq!(project.wire(wire).unwrap().route, [Point::new(100.0, 20.0)]);
     assert_eq!(project.text(label).unwrap().page, p2);
     assert_eq!(project.cable(cable).unwrap().cores[0].wire, Some(wire));
+    assert!(project.is_dismissed("terminal.suggest", &[wire.into()]));
     assert!(
         project
             .netlist()

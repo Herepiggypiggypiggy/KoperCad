@@ -47,6 +47,8 @@ pub enum ModelError {
         "{0} connects the moved objects to something that stays; move both ends or delete it first"
     )]
     WireLeavesSelection(WireId),
+    #[error("a structure node `{0}` already exists")]
+    DuplicateStructure(String),
     #[error("{wires} wire(s) or pin(s) but only {potentials} potential(s) to assign")]
     TooFewPotentials { wires: usize, potentials: usize },
     #[error(

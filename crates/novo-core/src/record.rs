@@ -10,8 +10,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 
 use crate::entity::{
-    Cable, Device, Junction, Page, Part, Potential, PotentialSystem, ProjectInfo, Properties,
-    SymbolInstance, SymbolRole, Terminal, Text, Wire,
+    Cable, Device, Dismissal, Junction, Page, Part, Potential, PotentialSystem, ProjectInfo,
+    Properties, Structure, SymbolInstance, SymbolRole, Terminal, Text, Wire,
 };
 use crate::geom::Point;
 use crate::id::{AnyId, EntityKind, PageId};
@@ -34,6 +34,8 @@ pub enum Record {
     Part(Part),
     Text(Text),
     PotentialSystem(PotentialSystem),
+    Structure(Structure),
+    Dismissal(Dismissal),
 }
 
 impl Record {
@@ -50,6 +52,8 @@ impl Record {
             Record::Part(r) => r.id.into(),
             Record::Text(r) => r.id.into(),
             Record::PotentialSystem(r) => r.id.into(),
+            Record::Structure(r) => r.id.into(),
+            Record::Dismissal(r) => r.id.into(),
         }
     }
 
@@ -111,6 +115,8 @@ impl Record {
             Record::PotentialSystem(r) => {
                 out.extend(r.members.iter().map(|&p| AnyId::from(p)));
             }
+            Record::Structure(_) => {}
+            Record::Dismissal(r) => out.extend(r.subjects.iter().copied()),
         }
         out.sort();
         out.dedup();
@@ -130,6 +136,8 @@ impl Record {
             Record::Part(r) => &r.properties,
             Record::Text(r) => &r.properties,
             Record::PotentialSystem(r) => &r.properties,
+            Record::Structure(r) => &r.properties,
+            Record::Dismissal(r) => &r.properties,
         }
     }
 
@@ -147,6 +155,8 @@ impl Record {
             Record::Part(r) => &mut r.properties,
             Record::Text(r) => &mut r.properties,
             Record::PotentialSystem(r) => &mut r.properties,
+            Record::Structure(r) => &mut r.properties,
+            Record::Dismissal(r) => &mut r.properties,
         })
     }
 
@@ -208,7 +218,12 @@ impl Record {
                     None
                 }
             }
-            Record::Page(_) | Record::Device(_) | Record::Terminal(_) | Record::Part(_) => None,
+            Record::Page(_)
+            | Record::Device(_)
+            | Record::Terminal(_)
+            | Record::Part(_)
+            | Record::Structure(_)
+            | Record::Dismissal(_) => None,
         };
         bad.or_else(|| (!properties_finite(self.properties())).then_some("properties"))
     }
@@ -227,6 +242,8 @@ impl Record {
             EntityKind::Cable => 8,
             EntityKind::Text => 9,
             EntityKind::PotentialSystem => 10,
+            EntityKind::Structure => 11,
+            EntityKind::Dismissal => 12,
         }
     }
 }
@@ -466,4 +483,6 @@ impl_entity! {
     Part => Part, crate::id::PartId, parts;
     Text => Text, crate::id::TextId, texts;
     PotentialSystem => PotentialSystem, crate::id::PotentialSystemId, potential_systems;
+    Structure => Structure, crate::id::StructureId, structures;
+    Dismissal => Dismissal, crate::id::DismissalId, dismissals;
 }

@@ -17,7 +17,7 @@
       "revision": 3
     }
   },
-  "next_id": 27,
+  "next_id": 29,
   "parts": [
     {
       "id": 3,
@@ -533,6 +533,28 @@
       "members": [
         24,
         25
+      ],
+      "properties": {}
+    }
+  ],
+  "structures": [
+    {
+      "id": 27,
+      "tag": "+CAB1",
+      "description": "Main cabinet",
+      "enclosure": true,
+      "properties": {}
+    }
+  ],
+  "dismissals": [
+    {
+      "id": 28,
+      "proposal": "terminal.suggest",
+      "subjects": [
+        {
+          "kind": "symbol",
+          "id": 10
+        }
       ],
       "properties": {}
     }

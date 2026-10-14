@@ -168,6 +168,20 @@ pub enum Command {
         #[serde(default)]
         voltage: Option<f64>,
     },
+    /// Describes a plant section or location; see [`Tx::add_structure`].
+    AddStructure {
+        tag: DeviceTag,
+        #[serde(default)]
+        description: String,
+        #[serde(default)]
+        enclosure: bool,
+    },
+    /// Records a declined proposal; see [`Tx::dismiss`]. Remove the
+    /// dismissal to bring the proposal back.
+    Dismiss {
+        proposal: String,
+        subjects: Vec<AnyId>,
+    },
     AddTerminal {
         strip: DeviceId,
         name: String,
@@ -251,6 +265,8 @@ impl Command {
             Command::AssignCore { .. } => "Assign cable core".into(),
             Command::AddPart { .. } => "Add part".into(),
             Command::MoveToPage { .. } => "Move to page".into(),
+            Command::AddStructure { .. } => "Add structure".into(),
+            Command::Dismiss { .. } => "Dismiss proposal".into(),
             Command::AssignPart { .. } => "Assign part".into(),
             Command::SetProperty { .. } => "Set property".into(),
             Command::Replace { .. } => "Edit".into(),
@@ -428,6 +444,12 @@ impl Tx<'_> {
                 self.move_to_page(&items, page, offset)?;
                 return Ok(Vec::new());
             }
+            Command::AddStructure {
+                tag,
+                description,
+                enclosure,
+            } => self.add_structure(tag, description, enclosure)?.into(),
+            Command::Dismiss { proposal, subjects } => self.dismiss(proposal, subjects)?.into(),
             Command::AddPart {
                 manufacturer,
                 order_number,

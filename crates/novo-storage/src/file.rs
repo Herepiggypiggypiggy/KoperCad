@@ -511,6 +511,8 @@ pub(crate) fn kind_name(kind: EntityKind) -> &'static str {
         EntityKind::Part => "part",
         EntityKind::Text => "text",
         EntityKind::PotentialSystem => "potential_system",
+        EntityKind::Structure => "structure",
+        EntityKind::Dismissal => "dismissal",
     }
 }
 
