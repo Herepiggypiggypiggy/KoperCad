@@ -160,7 +160,8 @@ accepts exactly the keys below and the validator rejects anything else
 Two parameters name connections, and they mean different things:
 
 - `poles`: conducting **paths**. Each group lists the connections one path
-  joins: two ids, or `[common, break, make]` for a changeover. No id may
+  joins: two ids, `[common, break, make]` for a changeover, or two or more
+  for a `conductor` such as a bridge bar. No id may
   appear in two groups. Whether a path conducts depends on the kind: always
   for `conductor`, by switch state for `contact`, `breaker`, `fuse` and
   `overload`, through the load for `coil`, `lamp`, `signal`, `meter`,
@@ -203,14 +204,19 @@ fuses (`PASS_THROUGH`). A potential (L1, N, 24V) and its naming carry through
 these, so L1 stays L1 from the feed through fuse, breaker, contactor and
 overload to the motor terminals. Loads (coils, lamps, motors, meters) end a
 potential and are in neither list. Simulation decides whether a switched
-path actually conducts.
+path actually conducts. A changeover's `[common, break, make]` becomes two
+paths, common-break and common-make, and a potential propagates outward from
+the side it arrives on, so the break and make sides are never merged.
 
 ## Using a symbol in the model
 
 `novo-core` stores a placed symbol's library key (`SymbolKey`) plus a copy of
 its pins. Map a `Symbol` to it as: key = `id`, pins = `connections` in order
 (name = `id`, offset = `at`), bridges = `Symbol::bridges()`; potential
-propagation follows `Symbol::pass_through()`. A future "refresh from library" must match
+propagation follows `Symbol::pass_through()`. Never store `pass_through()` in
+`SymbolInstance::bridges`: it only propagates potential names and must not
+take part in netlist connectivity or potential conflict checks (it returns a
+`PassThrough` newtype so this can't happen by accident). A future "refresh from library" must match
 pins by designation, not index, so reordering a file never rewires existing
 instances.
 

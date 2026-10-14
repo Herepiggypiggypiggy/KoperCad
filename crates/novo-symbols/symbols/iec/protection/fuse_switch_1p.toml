@@ -1,0 +1,30 @@
+format = 1
+id = "iec/protection/fuse_switch_1p"
+name = "Fuse switch-disconnector, 1-pole"
+description = "1-pole switch-disconnector whose moving contact carries the fuse link."
+standard = "IEC 60617"
+category = "protection"
+function = "protection.fuse_switch"
+keywords = ["fuse switch", "fuse disconnector", "1p"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 5] },
+  { kind = "line", from = [-1.5, 5], to = [1.5, 5] },
+  { kind = "line", from = [0, 16], to = [0, 11] },
+  { kind = "line", from = [0, 11], to = [-4, 4] },
+  { kind = "polyline", points = [[-1.764, 10.13], [-4.146, 5.962], [-2.236, 4.87], [0.146, 9.038]], closed = true },
+]
+
+[behavior]
+kind = "fuse"
+switched = true
+poles = [["1", "2"]]

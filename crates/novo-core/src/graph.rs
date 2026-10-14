@@ -10,7 +10,9 @@
 //! - interruption points with the same name.
 //!
 //! Contacts never join nets: whether a contact conducts is simulation state.
-//! Potential definition points label the nets they touch.
+//! Potential definition points label the nets they touch, and a potential
+//! carries on through switched poles (`SymbolInstance::pass_through`), so the
+//! wire after a contactor or breaker still reads `L1`.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -31,13 +33,30 @@ pub struct Net {
     pub endpoints: Vec<Endpoint>,
     /// Wires inside the net, sorted.
     pub wires: Vec<WireId>,
-    /// Potentials assigned by potential definition points, sorted. More than
-    /// one means two potentials are shorted together.
+    /// The net's potentials, sorted: `defined` when the net has its own
+    /// definition, otherwise `carried`. What a wire label shows.
     pub potentials: Vec<PotentialId>,
+    /// Potentials defined by a potential definition point in this net itself.
+    /// More than one is a short.
+    pub defined: Vec<PotentialId>,
+    /// Potentials that reach this net through contacts, breakers and fuses,
+    /// sorted: those of the nearest feeds, counted in poles crossed. Empty
+    /// when the net defines its own. More than one means the
+    /// net is switched between them (a changeover, a reversing starter), which
+    /// is not a short.
+    pub carried: Vec<PotentialId>,
+    /// Every potential that can reach this net through switched poles,
+    /// however many, sorted. `carried` keeps only the nearest for labels, so
+    /// a transfer switch whose mains path crosses more poles than its
+    /// generator path shows only the generator there; checks that ask
+    /// "which sources can feed this net" read this instead. Empty when the
+    /// net defines its own potential.
+    pub reachable: Vec<PotentialId>,
 }
 
 impl Net {
-    /// The net's potential when exactly one is assigned.
+    /// The net's potential when exactly one applies; `None` for a net without
+    /// one, a short, or a net switched between several.
     pub fn potential(&self) -> Option<PotentialId> {
         match self.potentials.as_slice() {
             [single] => Some(*single),
@@ -47,11 +66,73 @@ impl Net {
 }
 
 /// The connectivity graph of one project revision.
+///
+/// Building one is a full pass (about 15 ms for 10k symbols in a release
+/// build; see `examples/scale.rs`). Keep it and rebuild only when
+/// [`Netlist::is_current`] says the project changed, never per frame.
 #[derive(Debug, Clone)]
 pub struct Netlist {
     revision: u64,
     nets: Vec<Net>,
     by_endpoint: HashMap<Endpoint, NetId>,
+}
+
+/// One way across a switched pole: from `from_pin` (in the current net) to
+/// `to_pin` (in net `to`) of pole `group` of `symbol`.
+#[derive(Debug, Clone, Copy)]
+struct PassEdge {
+    symbol: SymbolId,
+    group: usize,
+    from_pin: u16,
+    to_pin: u16,
+    to: usize,
+}
+
+/// How far a potential gets from the nets that define it, walking outward
+/// through switched poles: for each net reached, the fewest poles crossed.
+///
+/// Having crossed a pole, the walk does not cross back out of the pin it
+/// arrived on or through the same pole again, so the break and make sides of
+/// a changeover contact stay apart (fed from the common, the potential still
+/// reaches both), while poles wired in series pass it on. Within one group
+/// every pin passes to every other, so a changeover needs two groups
+/// (`[common, break]`, `[common, make]`), not one. The walk never enters a
+/// net that defines its own potential. Starting nets are not listed.
+fn carried_nets(edges: &[Vec<PassEdge>], starts: &[usize], defines: &[bool]) -> Vec<(usize, u32)> {
+    type Arrival = Option<(SymbolId, usize, u16)>;
+    let mut seen: std::collections::HashSet<(usize, Arrival)> = Default::default();
+    let mut distance: Vec<Option<u32>> = vec![None; edges.len()];
+    let mut queue: std::collections::VecDeque<(usize, Arrival, u32)> =
+        starts.iter().map(|&n| (n, None, 0)).collect();
+    while let Some((net, arrival, steps)) = queue.pop_front() {
+        if !seen.insert((net, arrival)) {
+            continue;
+        }
+        if arrival.is_some() {
+            if defines[net] {
+                continue;
+            }
+            // Breadth first, so the first visit is the shortest.
+            distance[net].get_or_insert(steps);
+        }
+        for edge in &edges[net] {
+            let blocked = arrival.is_some_and(|(symbol, group, pin)| {
+                symbol == edge.symbol && (group == edge.group || pin == edge.from_pin)
+            });
+            if !blocked {
+                queue.push_back((
+                    edge.to,
+                    Some((edge.symbol, edge.group, edge.to_pin)),
+                    steps + 1,
+                ));
+            }
+        }
+    }
+    distance
+        .into_iter()
+        .enumerate()
+        .filter_map(|(net, d)| Some((net, d?)))
+        .collect()
 }
 
 struct UnionFind {
@@ -177,6 +258,9 @@ impl Netlist {
                     endpoints: Vec::new(),
                     wires: Vec::new(),
                     potentials: Vec::new(),
+                    defined: Vec::new(),
+                    carried: Vec::new(),
+                    reachable: Vec::new(),
                 });
                 id
             });
@@ -187,19 +271,76 @@ impl Netlist {
             let net = by_endpoint[&wire.from];
             nets[net.0 as usize].wires.push(wire.id);
         }
+        // Pass-through edges: a potential crosses a switched pole from any
+        // of its pins to the others, without joining the nets.
+        let mut edges: Vec<Vec<PassEdge>> = vec![Vec::new(); nets.len()];
+        for symbol in project.symbols() {
+            let base = first_pin[&symbol.id];
+            let net_of_pin = |p: u16| by_endpoint[&endpoints[base + usize::from(p)]].0 as usize;
+            for (group, pins) in symbol.pass_through.iter().enumerate() {
+                for &from_pin in pins {
+                    for &to_pin in pins.iter().filter(|&&p| p != from_pin) {
+                        edges[net_of_pin(from_pin)].push(PassEdge {
+                            symbol: symbol.id,
+                            group,
+                            from_pin,
+                            to_pin,
+                            to: net_of_pin(to_pin),
+                        });
+                    }
+                }
+            }
+        }
         for symbol in project.symbols() {
             if let SymbolRole::PotentialFeed { potential } = symbol.role {
                 for node in pins_of(symbol.id, symbol.pins.len()) {
-                    let net = by_endpoint[&endpoints[node]];
-                    nets[net.0 as usize].potentials.push(potential);
+                    let net = by_endpoint[&endpoints[node]].0 as usize;
+                    nets[net].defined.push(potential);
                 }
             }
+        }
+        let feeds: BTreeMap<PotentialId, Vec<usize>> =
+            nets.iter()
+                .enumerate()
+                .fold(BTreeMap::new(), |mut feeds, (i, net)| {
+                    for &potential in &net.defined {
+                        feeds.entry(potential).or_default().push(i);
+                    }
+                    feeds
+                });
+        let defines: Vec<bool> = nets.iter().map(|n| !n.defined.is_empty()).collect();
+        // Each net keeps the potentials of its nearest feeds (fewest poles
+        // crossed). Paths that need several contacts closed at once, as
+        // around the loop of a star-delta starter, lose to the direct feed.
+        let mut nearest: Vec<(u32, Vec<PotentialId>)> = vec![(u32::MAX, Vec::new()); nets.len()];
+        for (potential, starts) in feeds {
+            for (net, steps) in carried_nets(&edges, &starts, &defines) {
+                nets[net].reachable.push(potential);
+                let (best, potentials) = &mut nearest[net];
+                if steps < *best {
+                    *best = steps;
+                    potentials.clear();
+                }
+                if steps == *best {
+                    potentials.push(potential);
+                }
+            }
+        }
+        for (net, (_, potentials)) in nets.iter_mut().zip(nearest) {
+            net.carried = potentials;
         }
         for net in &mut nets {
             net.endpoints.sort();
             net.wires.sort();
-            net.potentials.sort();
-            net.potentials.dedup();
+            net.defined.sort();
+            net.defined.dedup();
+            net.carried.sort();
+            net.carried.dedup();
+            net.potentials = if net.defined.is_empty() {
+                net.carried.clone()
+            } else {
+                net.defined.clone()
+            };
         }
         Netlist {
             revision: project.revision(),
@@ -251,9 +392,10 @@ impl Netlist {
             .filter(move |n| n.potentials.contains(&potential))
     }
 
-    /// Nets where two or more potentials meet (a short between them).
+    /// Nets where two or more potentials are defined (a short between them).
+    /// A net switched between potentials (`Net::carried`) is not a conflict.
     pub fn potential_conflicts(&self) -> impl Iterator<Item = &Net> {
-        self.nets.iter().filter(|n| n.potentials.len() > 1)
+        self.nets.iter().filter(|n| n.defined.len() > 1)
     }
 
     /// Devices with a pin in the net, sorted, each once.

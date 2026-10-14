@@ -327,7 +327,12 @@ impl Project {
             Record::Symbol(symbol) => {
                 if let SymbolRole::Terminal { terminals } = &symbol.role
                     && (terminals.is_empty()
-                        || (terminals.len() > 1 && terminals.len() != symbol.bridges.len()))
+                        || ((terminals.len() > 1 || symbol.bridges.len() > 1)
+                            && terminals.len() != symbol.bridges.len())
+                        || terminals
+                            .iter()
+                            .enumerate()
+                            .any(|(i, t)| terminals[..i].contains(t)))
                 {
                     return Err(ModelError::TerminalLevels {
                         symbol: symbol.id,
@@ -335,7 +340,7 @@ impl Project {
                         bridges: symbol.bridges.len(),
                     });
                 }
-                for group in &symbol.bridges {
+                for group in symbol.bridges.iter().chain(&symbol.pass_through) {
                     for &pin in group {
                         if usize::from(pin) >= symbol.pins.len() {
                             return Err(ModelError::InvalidPin {

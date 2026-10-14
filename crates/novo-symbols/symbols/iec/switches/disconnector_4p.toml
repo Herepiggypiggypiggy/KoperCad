@@ -1,0 +1,49 @@
+format = 1
+id = "iec/switches/disconnector_4p"
+name = "Disconnector, 4-pole"
+description = "4-pole disconnector (isolator) for isolating a circuit without load."
+standard = "IEC 60617"
+category = "switches"
+function = "switch.disconnector"
+keywords = ["disconnector", "isolator", "4p"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+  { id = "3", at = [8, 0], dir = "up" },
+  { id = "4", at = [8, 16], dir = "down" },
+  { id = "5", at = [16, 0], dir = "up" },
+  { id = "6", at = [16, 16], dir = "down" },
+  { id = "7", at = [24, 0], dir = "up" },
+  { id = "8", at = [24, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 5] },
+  { kind = "line", from = [-1.5, 5], to = [1.5, 5] },
+  { kind = "line", from = [0, 16], to = [0, 11] },
+  { kind = "line", from = [0, 11], to = [-4, 4] },
+  { kind = "line", from = [8, 0], to = [8, 5] },
+  { kind = "line", from = [6.5, 5], to = [9.5, 5] },
+  { kind = "line", from = [8, 16], to = [8, 11] },
+  { kind = "line", from = [8, 11], to = [4, 4] },
+  { kind = "line", from = [16, 0], to = [16, 5] },
+  { kind = "line", from = [14.5, 5], to = [17.5, 5] },
+  { kind = "line", from = [16, 16], to = [16, 11] },
+  { kind = "line", from = [16, 11], to = [12, 4] },
+  { kind = "line", from = [24, 0], to = [24, 5] },
+  { kind = "line", from = [22.5, 5], to = [25.5, 5] },
+  { kind = "line", from = [24, 16], to = [24, 11] },
+  { kind = "line", from = [24, 11], to = [20, 4] },
+  { kind = "line", from = [-1.714, 8], to = [22.286, 8], stroke = "dashed" },
+]
+
+[behavior]
+kind = "contact"
+normally = "open"
+latching = true
+poles = [["1", "2"], ["3", "4"], ["5", "6"], ["7", "8"]]

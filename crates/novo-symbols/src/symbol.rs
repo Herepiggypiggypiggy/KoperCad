@@ -19,6 +19,20 @@ pub const ALWAYS_CLOSED: &[&str] = &["conductor", "overload"];
 /// through when closed.
 pub const PASS_THROUGH: &[&str] = &["contact", "breaker", "fuse"];
 
+/// Groups of connection indices a potential passes through, from
+/// [`Symbol::pass_through`]. Deliberately not a plain `Vec` so it can't be
+/// stored as netlist bridges by accident. Each group is a path; propagate a
+/// potential outward from the side it arrives on.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct PassThrough(Vec<Vec<usize>>);
+
+impl PassThrough {
+    /// The paths as connection-index groups.
+    pub fn paths(&self) -> &[Vec<usize>] {
+        &self.0
+    }
+}
+
 /// A point in symbol coordinates: millimetres, `[x, y]`, x to the right and
 /// y downwards, relative to the symbol origin (its insertion point).
 pub type Point = [f64; 2];
@@ -291,18 +305,28 @@ impl Symbol {
         self.indices(always.into_iter().chain(declared))
     }
 
-    /// Groups of connection indices that a potential (L1, N, 24V, ...)
-    /// and its wire numbering pass through: the [`Symbol::bridges`] plus the
-    /// `poles` of switching devices ([`PASS_THROUGH`]: contacts, breakers,
-    /// fuses), as in a main circuit where L1 stays L1 through the fuse,
-    /// breaker, contactor and overload. Loads (coils, lamps, motors) end a
-    /// potential, so their poles are not included.
-    pub fn pass_through(&self) -> Vec<Vec<usize>> {
+    /// Paths a potential (L1, N, 24V, ...) and its naming pass through:
+    /// the [`Symbol::bridges`] plus the `poles` of switching devices
+    /// ([`PASS_THROUGH`]: contacts, breakers, fuses), as in a main circuit
+    /// where L1 stays L1 through the fuse, breaker, contactor and overload.
+    /// Loads (coils, lamps, motors) end a potential and are not included.
+    ///
+    /// Never store this in `SymbolInstance::bridges`: it only propagates
+    /// potential names and must not take part in netlist connectivity or
+    /// potential conflict checks, or every open switch would join two nets.
+    /// The [`PassThrough`] newtype keeps it from being passed by mistake.
+    pub fn pass_through(&self) -> PassThrough {
         let mut groups = self.bridges();
         if PASS_THROUGH.contains(&self.behavior.kind.as_str()) {
-            groups.extend(self.indices(self.behavior.poles().into_iter()));
+            // A changeover [common, break, make] becomes two paths from the
+            // common side, so the break and make sides are never joined.
+            let paths = self.behavior.poles().into_iter().flat_map(|g| match g[..] {
+                [common, brk, make] => vec![vec![common, brk], vec![common, make]],
+                _ => vec![g],
+            });
+            groups.extend(self.indices(paths));
         }
-        groups
+        PassThrough(groups)
     }
 
     fn indices<'a>(&self, groups: impl Iterator<Item = Vec<&'a str>>) -> Vec<Vec<usize>> {

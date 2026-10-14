@@ -10,7 +10,7 @@ fn builtin() -> Library {
 #[test]
 fn builtin_library_loads_and_validates() {
     let lib = builtin();
-    assert!(lib.len() >= 120, "only {} symbols", lib.len());
+    assert!(lib.len() >= 145, "only {} symbols", lib.len());
     for symbol in lib.iter() {
         assert_eq!(validate(symbol), vec![], "{}", symbol.id);
     }
@@ -205,6 +205,10 @@ fn bridges_join_terminal_sides_but_not_contacts() {
         lib.get("iec/terminals/terminal_2level").unwrap().bridges(),
         vec![vec![0, 1], vec![2, 3]]
     );
+    assert_eq!(
+        lib.get("iec/connectivity/bridge_4").unwrap().bridges(),
+        vec![vec![0, 1, 2, 3]]
+    );
     assert!(lib.get("iec/contacts/no").unwrap().bridges().is_empty());
     assert!(
         lib.get("iec/connectivity/interruption_point")
@@ -248,7 +252,7 @@ fn rejects_malformed_poles() {
     let has = |needle: &str| m.iter().any(|s| s.contains(needle));
     assert!(has("must be a list of lists"), "{m:?}");
     assert!(has("more than once"), "{m:?}");
-    assert!(has("must have 2 connections"), "{m:?}");
+    assert!(has("needs at least 2 connections"), "{m:?}");
 }
 
 #[test]
@@ -358,7 +362,7 @@ fn overload_main_circuit_is_permanently_connected() {
     let lib = builtin();
     let ol = lib.get("iec/protection/overload_relay").unwrap();
     assert_eq!(ol.bridges(), vec![vec![0, 1], vec![2, 3], vec![4, 5]]);
-    assert_eq!(ol.pass_through(), ol.bridges());
+    assert_eq!(ol.pass_through().paths(), ol.bridges().as_slice());
 }
 
 #[test]
@@ -374,8 +378,8 @@ fn switching_devices_pass_potentials_but_loads_do_not() {
         let s = lib.get(id).unwrap();
         assert!(s.bridges().is_empty(), "{id} must not be bridged");
         assert_eq!(
-            s.pass_through(),
-            vec![vec![0, 1], vec![2, 3], vec![4, 5]],
+            s.pass_through().paths(),
+            [vec![0, 1], vec![2, 3], vec![4, 5]],
             "{id}"
         );
     }
@@ -384,7 +388,10 @@ fn switching_devices_pass_potentials_but_loads_do_not() {
         "iec/signalling/lamp",
         "iec/motors/motor_3ph",
     ] {
-        assert!(lib.get(id).unwrap().pass_through().is_empty(), "{id}");
+        assert!(
+            lib.get(id).unwrap().pass_through().paths().is_empty(),
+            "{id}"
+        );
     }
 }
 
@@ -403,4 +410,12 @@ fn series_elements_that_always_conduct_are_bridged() {
     assert!(pairs("iec/measuring/voltmeter").is_empty());
     assert_eq!(pairs("iec/transformers/reactor_3ph").len(), 3);
     assert_eq!(pairs("iec/transformers/emc_filter").len(), 4);
+}
+
+#[test]
+fn changeover_passes_through_from_the_common_side_only() {
+    let lib = builtin();
+    let co = lib.get("iec/contacts/changeover").unwrap();
+    // connections: 11 (common), 12 (break), 14 (make)
+    assert_eq!(co.pass_through().paths(), [vec![0, 1], vec![0, 2]]);
 }
