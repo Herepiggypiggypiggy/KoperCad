@@ -1,16 +1,22 @@
 # Design reviewer: roadmap
 
-Scope: second reviewer for UI, visual and workflow PRs in NovoElectric. Reviews each against docs/DESIGN.md (draft: /mnt/project-files/design/DESIGN-draft.md) for coherence, elegance and flow, plus anything copied from EPLAN or other CAD without a reason. Also checks correctness and the no-admin rule. Verdicts go on the PR (COMMENT reviews, since the owner account authors every PR) and to the integration lead.
-
-My PRs (set by the integration lead): #24 (DESIGN.md), #20 (theme), #38 (novo-editor, UI side), and later the concept widgets PR. The main reviewer keeps core, engine, storage and test PRs.
+Scope: second reviewer for UI, visual and workflow PRs in NovoElectric.
+- Review each against docs/DESIGN.md for coherence, elegance and flow, and flag anything copied from EPLAN or other CAD without a reason.
+- Also check correctness, local CI (fmt, clippy -D warnings, tests, on a merge with main), the no-admin rule, and the real window under Xvfb.
+- Verdicts go on the PR (COMMENT reviews with a verdict line) and to the coordinator.
 
 ## Done
-- #20 reviewed at b326a85: changes needed (4 required items).
+- #20 theme: READY 2d60fdd (merged).
+- #24 DESIGN.md: READY c7f78ba (merged). #43 DESIGN follow-ups: READY f63d0fa (merged).
+- #38 schematic editor: reviewed through several heads; merged.
+- #46 Workbench and #47 marks/page frame: reviewed; merged.
+- #53 Gate 1 integration: four rounds (9956de4, 84eff50, 53f0e00, 67637b7). READY on 67637b7: proposals as dashed canvas marks, problem marks on the drawing, PDF next to the .novo with no silent overwrite, proposal hint shown.
 
 ## Next, in order
-2. #38 at a4da520: finish the review (correctness agent plus fmt, clippy and tests), then post the verdict.
-3. Re-review #20 when the layout thread sends a new SHA.
-4. Concept widgets PR, when it opens.
+1. #53: READY posted on 67637b7. If a newer head appears before merge, re-review only the delta.
+2. Review the UI follow-up PRs as they open (list in HANDOFF.md "Design notes still owed"). Order of value: problem/Issues outline mode, xref labels into the scene, drawer → drawing selection, Cables/Devices drawers, proposal dismiss, Space-held pan, inspector, tool dock.
+3. Settle the hint-vs-Enter-target question (HANDOFF note 8) with the workflow thread and record it in DESIGN.md §5.
+4. Windows check of single-click selection (HANDOFF note 7) once an on-device thread can run the app.
 
 ## Open questions
-- WORKFLOW.md (on main) and DESIGN.md disagree (Tab, W vs drag-connect, status bar vs dock). PRs built to WORKFLOW.md before DESIGN.md merges: gaps go to follow-up PRs, they don't block.
+- Should Enter accept the proposal nearest the pointer (where the hint is) instead of a Tab-cycled index? DESIGN §5 says the hint sits on the nearest proposal, so the two should agree.
