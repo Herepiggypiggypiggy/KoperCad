@@ -3,7 +3,7 @@
 ## State
 - Repo: github.com/Herepiggypiggypiggy/NovoElectric. Branch `claude/project-thread-lw2vpz`, restarted from main 7bb466d after #38 merged.
 - Merged: #38 (editor), #62 (`coil K1`), #70 (`art` feature). `SchematicView::set_style` is on main (#53).
-- Open: the "proposals follow DESIGN.md §5" PR from this branch (see PROGRESS.md for the number and head). Locally fmt, clippy -D warnings and `cargo test --workspace` (627 passed) are clean. CI (Actions) is down; local checks are the signal.
+- Open: PR #91 (proposals follow DESIGN.md §5; scripts refuse a second main symbol), head f73279d + this handoff commit. Locally fmt, clippy -D warnings and `cargo test --workspace` (627 passed) are clean. CI (Actions) is down; local checks are the signal.
 - Nothing half-done in the working tree.
 
 ## Resume
