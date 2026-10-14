@@ -1,0 +1,2039 @@
+From 29ba4e2465481371121c313b18856587f53da6fa Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 14 Oct 2026 17:11:44 +0000
+Subject: [PATCH 1/3] =?UTF-8?q?novo-app:=20Workbench=20window=20from=20DES?=
+ =?UTF-8?q?IGN.md=20=C2=A73?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Replaces the menu bar, status bar and side panels with a 42 px top bar
+(project menu on the mark, Schematic | Cabinet, breadcrumb, Search or run,
+saved state), a page outline that pins above 1700 px and floats as a flyout
+below, a HUD with the cursor position and toasts for messages. Adds focus
+mode (Ctrl+Shift+F), full screen (F11) and Pin outline.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AYuFPxz6eQReQdtzYKLMmW
+---
+ crates/novo-app/src/actions.rs  |  67 ++--
+ crates/novo-app/src/app.rs      | 654 +++++++++++++++++++++++---------
+ crates/novo-app/src/settings.rs |  21 +-
+ 3 files changed, 518 insertions(+), 224 deletions(-)
+
+diff --git a/crates/novo-app/src/actions.rs b/crates/novo-app/src/actions.rs
+index 30b8b87..6435b1a 100644
+--- a/crates/novo-app/src/actions.rs
++++ b/crates/novo-app/src/actions.rs
+@@ -1,5 +1,6 @@
+-//! Every user-facing action. Menus, keyboard shortcuts and the command palette
+-//! all dispatch the same [`Action`], so each one is reachable from the keyboard.
++//! Every user-facing action. The project menu, keyboard shortcuts and the
++//! command palette all dispatch the same [`Action`], so each one is reachable
++//! from the keyboard.
+ 
+ use eframe::egui::{Key, KeyboardShortcut, Modifiers};
+ 
+@@ -14,9 +15,11 @@ pub enum Action {
+     Undo,
+     Redo,
+     ZoomToFit,
+-    ToggleProjectPanel,
+-    TogglePropertiesPanel,
+-    ToggleMessagesPanel,
++    ShowSchematic,
++    ShowCabinet,
++    PinOutline,
++    FocusMode,
++    FullScreen,
+     CommandPalette,
+     ThemeSystem,
+     ThemeLight,
+@@ -35,9 +38,11 @@ impl Action {
+         Action::Undo,
+         Action::Redo,
+         Action::ZoomToFit,
+-        Action::ToggleProjectPanel,
+-        Action::TogglePropertiesPanel,
+-        Action::ToggleMessagesPanel,
++        Action::ShowSchematic,
++        Action::ShowCabinet,
++        Action::PinOutline,
++        Action::FocusMode,
++        Action::FullScreen,
+         Action::CommandPalette,
+         Action::ThemeSystem,
+         Action::ThemeLight,
+@@ -58,9 +63,11 @@ impl Action {
+             Action::Undo => "edit.undo",
+             Action::Redo => "edit.redo",
+             Action::ZoomToFit => "view.fit",
+-            Action::ToggleProjectPanel => "view.project_panel",
+-            Action::TogglePropertiesPanel => "view.properties_panel",
+-            Action::ToggleMessagesPanel => "view.messages_panel",
++            Action::ShowSchematic => "view.schematic",
++            Action::ShowCabinet => "view.cabinet",
++            Action::PinOutline => "view.pin_outline",
++            Action::FocusMode => "view.focus",
++            Action::FullScreen => "view.full_screen",
+             Action::CommandPalette => "view.command_palette",
+             Action::ThemeSystem => "view.theme_system",
+             Action::ThemeLight => "view.theme_light",
+@@ -84,9 +91,11 @@ impl Action {
+             Action::Undo => "Undo",
+             Action::Redo => "Redo",
+             Action::ZoomToFit => "Zoom to fit",
+-            Action::ToggleProjectPanel => "Project panel",
+-            Action::TogglePropertiesPanel => "Properties panel",
+-            Action::ToggleMessagesPanel => "Messages panel",
++            Action::ShowSchematic => "Schematic",
++            Action::ShowCabinet => "Cabinet",
++            Action::PinOutline => "Pin outline",
++            Action::FocusMode => "Focus mode",
++            Action::FullScreen => "Full screen",
+             Action::CommandPalette => "Command palette…",
+             Action::ThemeSystem => "Theme: follow system",
+             Action::ThemeLight => "Theme: light",
+@@ -95,7 +104,8 @@ impl Action {
+         }
+     }
+ 
+-    /// Menu the action belongs to; the palette shows it as a prefix.
++    /// Group the action belongs to (docs/DESIGN.md §4); the palette shows it
++    /// as a prefix.
+     pub fn category(self) -> &'static str {
+         match self {
+             Action::NewProject
+@@ -103,17 +113,19 @@ impl Action {
+             | Action::SaveProject
+             | Action::SaveProjectAs
+             | Action::CloseProject
+-            | Action::Quit => "File",
++            | Action::Quit
++            | Action::About => "Project",
+             Action::Undo | Action::Redo => "Edit",
+             Action::ZoomToFit
+-            | Action::ToggleProjectPanel
+-            | Action::TogglePropertiesPanel
+-            | Action::ToggleMessagesPanel
++            | Action::ShowSchematic
++            | Action::ShowCabinet
++            | Action::PinOutline
++            | Action::FocusMode
++            | Action::FullScreen
+             | Action::CommandPalette
+             | Action::ThemeSystem
+             | Action::ThemeLight
+             | Action::ThemeDark => "View",
+-            Action::About => "Help",
+         }
+     }
+ 
+@@ -130,18 +142,23 @@ impl Action {
+             Action::Undo => (cmd, Key::Z),
+             Action::Redo => (cmd_shift, Key::Z),
+             Action::ZoomToFit => (Modifiers::NONE, Key::Home),
+-            Action::ToggleProjectPanel => (cmd, Key::Num1),
+-            Action::TogglePropertiesPanel => (cmd, Key::Num2),
+-            Action::ToggleMessagesPanel => (cmd, Key::Num3),
++            Action::ShowSchematic => (cmd, Key::Num1),
++            Action::ShowCabinet => (cmd, Key::Num2),
++            Action::FocusMode => (cmd_shift, Key::F),
++            Action::FullScreen => (Modifiers::NONE, Key::F11),
+             Action::CommandPalette => (cmd, Key::K),
+-            Action::ThemeSystem | Action::ThemeLight | Action::ThemeDark | Action::About => {
++            Action::PinOutline
++            | Action::ThemeSystem
++            | Action::ThemeLight
++            | Action::ThemeDark
++            | Action::About => {
+                 return None;
+             }
+         };
+         Some(KeyboardShortcut::new(modifiers, key))
+     }
+ 
+-    /// Every shortcut for the action; the first is the one menus show.
++    /// Every shortcut for the action; the first is the one shown.
+     pub fn shortcuts(self) -> Vec<KeyboardShortcut> {
+         let mut all: Vec<_> = self.shortcut().into_iter().collect();
+         if self == Action::Redo {
+diff --git a/crates/novo-app/src/app.rs b/crates/novo-app/src/app.rs
+index 2c1c16a..e7e8d85 100644
+--- a/crates/novo-app/src/app.rs
++++ b/crates/novo-app/src/app.rs
+@@ -1,4 +1,7 @@
+-//! The main window: menus, panels, status bar, dialogs and action dispatch.
++//! The main window, laid out as the Workbench of docs/DESIGN.md §3: a thin
++//! top bar, the page outline (pinned or a flyout), the canvas with its HUD,
++//! toasts for messages, the dialogs and action dispatch. There is no menu
++//! bar and no status bar.
+ 
+ use std::path::{Path, PathBuf};
+ use std::time::{Duration, Instant, SystemTime};
+@@ -25,8 +28,25 @@ pub enum Level {
+ pub struct Message {
+     pub level: Level,
+     pub text: String,
++    /// When it was raised; info toasts fade after [`TOAST_INFO`].
++    pub at: Instant,
++    /// Clicked away; warnings and errors stay until then.
++    pub dismissed: bool,
+ }
+ 
++/// How long an info toast stays up.
++const TOAST_INFO: Duration = Duration::from_secs(5);
++/// Most toasts shown at once; older ones wait in [`NovoApp::messages`].
++const MAX_TOASTS: usize = 3;
++/// Height of the top bar.
++const TOP_BAR: f32 = 42.0;
++/// Width of the outline, pinned or as a flyout.
++const OUTLINE_WIDTH: f32 = 248.0;
++/// Windows at least this wide pin the outline unless the user chose.
++const PIN_OUTLINE_FROM: f32 = 1700.0;
++/// Pages listed under "Recent" in the outline.
++const MAX_RECENT_PAGES: usize = 5;
++
+ /// An action that throws away the open project, so it first asks about
+ /// unsaved changes.
+ #[derive(Clone, Debug, PartialEq, Eq)]
+@@ -60,6 +80,16 @@ pub struct NovoApp {
+     next_tick: Instant,
+     /// The last autosave failed; reported once until it works again.
+     autosave_failing: bool,
++    /// Focus mode (Ctrl+Shift+F) hides everything that is not pinned.
++    focus_mode: bool,
++    /// The outline flyout is showing over the canvas.
++    outline_open: bool,
++    /// Text in the outline's page filter.
++    page_filter: String,
++    /// Pages visited this session, newest first.
++    recent_pages: Vec<PageId>,
++    /// Window width last frame, which decides whether the outline pins.
++    window_width: f32,
+ }
+ 
+ /// How long to wait before retrying a failed autosave.
+@@ -101,6 +131,11 @@ impl NovoApp {
+             started: false,
+             next_tick: Instant::now(),
+             autosave_failing: false,
++            focus_mode: false,
++            outline_open: false,
++            page_filter: String::new(),
++            recent_pages: Vec::new(),
++            window_width: 0.0,
+         }
+     }
+ 
+@@ -143,6 +178,8 @@ impl NovoApp {
+     /// Keeps the shown page valid after undo, redo or a reload removed it.
+     fn fix_current_page(&mut self) {
+         let pages = self.pages();
++        self.recent_pages
++            .retain(|r| pages.iter().any(|(id, _)| id == r));
+         if !pages.iter().any(|(id, _)| Some(*id) == self.current_page) {
+             self.current_page = pages.first().map(|(id, _)| *id);
+         }
+@@ -175,6 +212,7 @@ impl NovoApp {
+             | Action::SaveProjectAs
+             | Action::CloseProject
+             | Action::ZoomToFit => open,
++            Action::ShowCabinet => false,
+             Action::Undo => doc.is_some_and(|d| d.can_undo()),
+             Action::Redo => doc.is_some_and(|d| d.can_redo()),
+             _ => true,
+@@ -203,14 +241,20 @@ impl NovoApp {
+             Action::Undo => self.undo_redo(false),
+             Action::Redo => self.undo_redo(true),
+             Action::ZoomToFit => self.canvas.zoom_to_fit(),
+-            Action::ToggleProjectPanel => {
+-                self.settings.show_project_panel ^= true;
++            // The only canvas so far; Cabinet stays disabled until it exists.
++            Action::ShowSchematic | Action::ShowCabinet => {}
++            Action::PinOutline => {
++                let pinned = !self.outline_pinned();
++                self.settings.outline_pinned = Some(pinned);
++                self.outline_open = false;
+             }
+-            Action::TogglePropertiesPanel => {
+-                self.settings.show_properties_panel ^= true;
++            Action::FocusMode => {
++                self.focus_mode ^= true;
++                self.outline_open = false;
+             }
+-            Action::ToggleMessagesPanel => {
+-                self.settings.show_messages_panel ^= true;
++            Action::FullScreen => {
++                let full = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
++                ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!full));
+             }
+             Action::CommandPalette => self.palette.open(),
+             Action::ThemeSystem => self.set_theme(ctx, Theme::System),
+@@ -232,7 +276,12 @@ impl NovoApp {
+             Level::Warning => log::warn!("{text}"),
+             Level::Error => log::error!("{text}"),
+         }
+-        self.messages.push(Message { level, text });
++        self.messages.push(Message {
++            level,
++            text,
++            at: Instant::now(),
++            dismissed: false,
++        });
+     }
+ 
+     // ------------------------------------------------------------------
+@@ -424,32 +473,38 @@ impl NovoApp {
+             picked.extend(self.consume_shortcuts(&ctx));
+         }
+ 
+-        egui::Panel::top("menu_bar").show(ui, |ui| self.menu_bar(ui, &mut picked));
+-        egui::Panel::bottom("status_bar").show(ui, |ui| self.status_bar(ui));
+-        if self.settings.show_messages_panel {
+-            egui::Panel::bottom("messages")
+-                .resizable(true)
+-                .default_size(140.0)
+-                .show(ui, |ui| self.messages_panel(ui));
++        self.window_width = ctx.content_rect().width();
++        let pinned = self.outline_pinned() && !self.focus_mode;
++        if pinned {
++            self.outline_open = false;
+         }
+-        if self.settings.show_project_panel {
+-            egui::Panel::left("project")
+-                .resizable(true)
+-                .default_size(220.0)
+-                .show(ui, |ui| self.project_panel(ui));
++
++        egui::Panel::top("top_bar")
++            .exact_size(TOP_BAR)
++            .show(ui, |ui| self.top_bar(ui, &mut picked));
++        if pinned && self.is_open() {
++            egui::Panel::left("outline")
++                .exact_size(OUTLINE_WIDTH)
++                .resizable(false)
++                .show(ui, |ui| self.outline(ui, &mut picked));
+         }
+-        if self.settings.show_properties_panel {
+-            egui::Panel::right("properties")
+-                .resizable(true)
+-                .default_size(260.0)
+-                .show(ui, properties_panel);
++        let canvas_rect = egui::CentralPanel::no_frame()
++            .show(ui, |ui| {
++                let open = self
++                    .current_page
++                    .and_then(|page| OpenPage::new(&mut *self.backend, page));
++                self.canvas.show(ui, open);
++            })
++            .response
++            .rect;
++
++        if !self.focus_mode {
++            if !pinned && self.is_open() {
++                self.outline_flyout(&ctx, canvas_rect, &mut picked);
++            }
++            self.hud(&ctx, canvas_rect);
+         }
+-        egui::CentralPanel::no_frame().show(ui, |ui| {
+-            let open = self
+-                .current_page
+-                .and_then(|page| OpenPage::new(&mut *self.backend, page));
+-            self.canvas.show(ui, open);
+-        });
++        self.toasts(&ctx, canvas_rect);
+ 
+         if self.palette.is_open() {
+             let entries = self.palette_entries();
+@@ -538,180 +593,334 @@ impl NovoApp {
+     }
+ 
+     // ------------------------------------------------------------------
+-    // Panels
++    // Workbench chrome
++
++    /// Whether the outline takes space beside the canvas: the user's
++    /// choice, otherwise only on wide windows.
++    fn outline_pinned(&self) -> bool {
++        self.settings
++            .outline_pinned
++            .unwrap_or(self.window_width >= PIN_OUTLINE_FROM)
++    }
++
++    /// Shows `page` on the canvas and puts it first under "Recent".
++    fn show_page(&mut self, page: PageId) {
++        self.current_page = Some(page);
++        self.recent_pages.retain(|&p| p != page);
++        self.recent_pages.insert(0, page);
++        self.recent_pages.truncate(MAX_RECENT_PAGES);
++    }
++
++    /// Autosave state for the top bar.
++    fn saved_state(&self) -> &'static str {
++        if !self.is_open() {
++            ""
++        } else if self.project_path.is_none() {
++            "Not saved yet"
++        } else if self.is_dirty() {
++            "Unsaved changes"
++        } else {
++            "Saved"
++        }
++    }
+ 
+-    fn menu_bar(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
+-        egui::MenuBar::new().ui(ui, |ui| {
+-            ui.menu_button("File", |ui| {
+-                for a in [Action::NewProject, Action::OpenProject] {
+-                    self.action_button(ui, a, picked);
+-                }
+-                ui.add_enabled_ui(!self.settings.recent_projects.is_empty(), |ui| {
+-                    ui.menu_button("Open recent", |ui| {
+-                        for path in self.settings.recent_projects.clone() {
+-                            if ui.button(path.display().to_string()).clicked() {
+-                                let ctx = ui.ctx().clone();
+-                                self.discard_then(&ctx, Discarding::OpenPath(path));
+-                            }
+-                        }
+-                    });
+-                });
+-                ui.separator();
+-                for a in [
+-                    Action::SaveProject,
+-                    Action::SaveProjectAs,
+-                    Action::CloseProject,
+-                ] {
+-                    self.action_button(ui, a, picked);
+-                }
+-                ui.separator();
+-                self.action_button(ui, Action::Quit, picked);
++    /// Mark (project menu), Schematic | Cabinet, breadcrumb, then "Search
++    /// or run" and the saved state on the right.
++    fn top_bar(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
++        ui.horizontal_centered(|ui| {
++            ui.menu_button(egui::RichText::new(APP_NAME).strong(), |ui| {
++                self.project_menu(ui, picked)
+             });
+-            ui.menu_button("Edit", |ui| {
+-                let doc = self.backend.document();
+-                let undo = doc
+-                    .and_then(|d| d.undo_label())
+-                    .map(|l| format!("Undo {l}"));
+-                let redo = doc
+-                    .and_then(|d| d.redo_label())
+-                    .map(|l| format!("Redo {l}"));
+-                self.labeled_button(ui, Action::Undo, undo, picked);
+-                self.labeled_button(ui, Action::Redo, redo, picked);
+-            });
+-            ui.menu_button("View", |ui| {
+-                self.action_button(ui, Action::CommandPalette, picked);
+-                self.action_button(ui, Action::ZoomToFit, picked);
+-                ui.separator();
+-                for (a, on) in [
+-                    (Action::ToggleProjectPanel, self.settings.show_project_panel),
+-                    (
+-                        Action::TogglePropertiesPanel,
+-                        self.settings.show_properties_panel,
+-                    ),
+-                    (
+-                        Action::ToggleMessagesPanel,
+-                        self.settings.show_messages_panel,
+-                    ),
+-                ] {
+-                    self.toggle_button(ui, a, on, picked);
++            ui.separator();
++            for (action, label) in [
++                (Action::ShowSchematic, "Schematic"),
++                (Action::ShowCabinet, "Cabinet"),
++            ] {
++                let selected = action == Action::ShowSchematic;
++                let response = ui.add_enabled(
++                    self.is_enabled(action),
++                    egui::Button::selectable(selected, label),
++                );
++                let response = if action == Action::ShowCabinet {
++                    response.on_disabled_hover_text("The cabinet canvas comes later")
++                } else {
++                    response
++                };
++                if response.clicked() {
++                    picked.push(action);
+                 }
+-                ui.separator();
+-                for (a, theme) in [
+-                    (Action::ThemeSystem, Theme::System),
+-                    (Action::ThemeLight, Theme::Light),
+-                    (Action::ThemeDark, Theme::Dark),
+-                ] {
+-                    self.toggle_button(ui, a, self.settings.theme == theme, picked);
++            }
++            ui.separator();
++            self.breadcrumb(ui);
++
++            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
++                ui.weak(self.saved_state());
++                let shortcut = Action::CommandPalette
++                    .shortcut()
++                    .map(|s| ui.ctx().format_shortcut(&s))
++                    .unwrap_or_default();
++                let search = egui::Button::new("Search or run")
++                    .shortcut_text(shortcut)
++                    .min_size(egui::vec2(240.0, 0.0));
++                if ui.add(search).clicked() {
++                    picked.push(Action::CommandPalette);
+                 }
+             });
+-            ui.menu_button("Help", |ui| {
+-                self.action_button(ui, Action::About, picked);
+-            });
+         });
+     }
+ 
+-    fn action_button(&self, ui: &mut egui::Ui, action: Action, picked: &mut Vec<Action>) {
+-        self.labeled_button(ui, action, None, picked);
+-    }
+-
+-    fn labeled_button(
+-        &self,
+-        ui: &mut egui::Ui,
+-        action: Action,
+-        label: Option<String>,
+-        picked: &mut Vec<Action>,
+-    ) {
+-        let label = label.unwrap_or_else(|| action.label().to_owned());
+-        let mut button = egui::Button::new(label);
+-        if let Some(s) = action.shortcut() {
+-            button = button.shortcut_text(ui.ctx().format_shortcut(&s));
+-        }
+-        if ui.add_enabled(self.is_enabled(action), button).clicked() {
+-            picked.push(action);
+-        }
+-    }
+-
+-    fn toggle_button(&self, ui: &mut egui::Ui, action: Action, on: bool, picked: &mut Vec<Action>) {
+-        let mut button = egui::Button::selectable(on, action.label());
+-        if let Some(s) = action.shortcut() {
+-            button = button.shortcut_text(ui.ctx().format_shortcut(&s));
+-        }
+-        if ui.add(button).clicked() {
+-            picked.push(action);
++    /// The short project menu behind the mark. Everything in it is also in
++    /// the command palette.
++    fn project_menu(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
++        for a in [Action::NewProject, Action::OpenProject] {
++            self.action_button(ui, a, picked);
+         }
+-    }
+-
+-    fn status_bar(&self, ui: &mut egui::Ui) {
+-        ui.horizontal(|ui| {
+-            match self.messages.last() {
+-                Some(m) if m.level == Level::Error => {
+-                    ui.colored_label(ui.visuals().error_fg_color, &m.text);
+-                }
+-                Some(m) if m.level == Level::Warning => {
+-                    ui.colored_label(ui.visuals().warn_fg_color, &m.text);
+-                }
+-                Some(m) => {
+-                    ui.label(&m.text);
+-                }
+-                None => {
+-                    ui.label("Ready");
+-                }
+-            }
+-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+-                if let Some(text) = self.canvas.status_text() {
+-                    ui.monospace(text);
++        ui.add_enabled_ui(!self.settings.recent_projects.is_empty(), |ui| {
++            ui.menu_button("Recent", |ui| {
++                for path in self.settings.recent_projects.clone() {
++                    if ui.button(path.display().to_string()).clicked() {
++                        let ctx = ui.ctx().clone();
++                        self.discard_then(&ctx, Discarding::OpenPath(path));
++                    }
+                 }
+             });
+         });
++        ui.separator();
++        for a in [
++            Action::SaveProject,
++            Action::SaveProjectAs,
++            Action::CloseProject,
++        ] {
++            self.action_button(ui, a, picked);
++        }
++        ui.separator();
++        for a in [Action::About, Action::Quit] {
++            self.action_button(ui, a, picked);
++        }
+     }
+ 
+-    fn project_panel(&mut self, ui: &mut egui::Ui) {
+-        ui.set_min_width(ui.available_width());
+-        ui.strong("Project");
+-        ui.separator();
++    /// project / page. A click on the page opens the outline.
++    fn breadcrumb(&mut self, ui: &mut egui::Ui) {
+         let Some(name) = self.project_name() else {
+             ui.weak("No project open");
+             return;
+         };
+-        ui.heading(name);
+-        if let Some(path) = &self.project_path {
+-            ui.weak(path.display().to_string());
+-        } else {
+-            ui.weak("Not saved yet");
+-        }
+-        ui.separator();
+-        ui.strong("Pages");
+-        egui::ScrollArea::vertical().show(ui, |ui| {
+-            for (id, label) in self.pages() {
+-                let selected = self.current_page == Some(id);
+-                if ui.selectable_label(selected, label).clicked() {
+-                    self.current_page = Some(id);
+-                }
++        ui.label(name);
++        let page = self
++            .current_page
++            .and_then(|id| self.pages().into_iter().find(|(p, _)| *p == id));
++        if let Some((_, label)) = page {
++            ui.weak("/");
++            let link = ui.add(egui::Button::new(egui::RichText::new(label).strong()).frame(false));
++            if link.clicked() && !self.outline_pinned() {
++                self.outline_open ^= true;
+             }
+-        });
++        }
+     }
+ 
+-    fn messages_panel(&mut self, ui: &mut egui::Ui) {
++    /// The outline's content: mode tabs, then the page list. Picking a page
++    /// closes the flyout.
++    fn outline(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
++        ui.set_min_width(ui.available_width());
+         ui.horizontal(|ui| {
+-            ui.strong("Messages");
+-            if ui.small_button("Clear").clicked() {
+-                self.messages.clear();
++            let _ = ui.selectable_label(true, "Pages");
++            for mode in ["Issues", "Changes"] {
++                ui.add_enabled(false, egui::Button::selectable(false, mode))
++                    .on_disabled_hover_text("Comes later");
+             }
++            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
++                let pinned = self.outline_pinned();
++                let pin = egui::Button::selectable(pinned, "Pin");
++                if ui
++                    .add(pin)
++                    .on_hover_text(if pinned {
++                        "Unpin outline"
++                    } else {
++                        "Pin outline"
++                    })
++                    .clicked()
++                {
++                    picked.push(Action::PinOutline);
++                }
++            });
+         });
+-        ui.separator();
++        ui.add(
++            egui::TextEdit::singleline(&mut self.page_filter)
++                .hint_text("Filter pages")
++                .desired_width(f32::INFINITY),
++        );
++        ui.add_space(4.0);
++
++        let pages = self.pages();
++        let filter = self.page_filter.to_lowercase();
++        let mut chosen = None;
+         egui::ScrollArea::vertical()
+-            .stick_to_bottom(true)
+             .auto_shrink(false)
+             .show(ui, |ui| {
+-                for m in &self.messages {
++                if filter.is_empty() {
++                    let recent: Vec<_> = self
++                        .recent_pages
++                        .iter()
++                        .filter_map(|id| pages.iter().find(|(p, _)| p == id))
++                        .collect();
++                    if !recent.is_empty() {
++                        ui.small("RECENT");
++                        for (id, label) in recent {
++                            if self.page_row(ui, *id, label) {
++                                chosen = Some(*id);
++                            }
++                        }
++                        ui.add_space(6.0);
++                    }
++                }
++                ui.small("ALL PAGES");
++                let mut any = false;
++                for (id, label) in &pages {
++                    if filter.is_empty() || label.to_lowercase().contains(&filter) {
++                        any = true;
++                        if self.page_row(ui, *id, label) {
++                            chosen = Some(*id);
++                        }
++                    }
++                }
++                if !any {
++                    ui.weak("No page matches");
++                }
++            });
++        if let Some(page) = chosen {
++            self.show_page(page);
++            self.outline_open = false;
++        }
++    }
++
++    fn page_row(&self, ui: &mut egui::Ui, id: PageId, label: &str) -> bool {
++        let selected = self.current_page == Some(id);
++        ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
++            ui.add(egui::Button::selectable(selected, label).min_size(egui::vec2(0.0, 22.0)))
++        })
++        .inner
++        .clicked()
++    }
++
++    /// Below the pinning width the outline floats over the canvas, opened
++    /// from the "Pages" button at its top left, so the drawing never moves.
++    fn outline_flyout(
++        &mut self,
++        ctx: &egui::Context,
++        canvas: egui::Rect,
++        picked: &mut Vec<Action>,
++    ) {
++        let toggle = egui::Area::new(egui::Id::new("outline_toggle"))
++            .fixed_pos(canvas.left_top() + egui::vec2(8.0, 8.0))
++            .show(ctx, |ui| {
++                ui.add(egui::Button::selectable(self.outline_open, "Pages"))
++            })
++            .inner;
++        if toggle.clicked() {
++            self.outline_open ^= true;
++        }
++        if !self.outline_open {
++            return;
++        }
++        let top = canvas.top() + 8.0 + toggle.rect.height() + 4.0;
++        let height = (canvas.bottom() - top - 8.0).max(120.0);
++        let area = egui::Area::new(egui::Id::new("outline_flyout"))
++            .fixed_pos(egui::pos2(canvas.left() + 8.0, top))
++            .show(ctx, |ui| {
++                egui::Frame::popup(ui.style()).show(ui, |ui| {
++                    ui.set_width(OUTLINE_WIDTH);
++                    ui.set_height(height);
++                    self.outline(ui, picked);
++                });
++            });
++        let escape = ctx.input(|i| i.key_pressed(egui::Key::Escape));
++        let elsewhere = area.response.clicked_elsewhere() && !toggle.clicked() && !toggle.hovered();
++        if escape || elsewhere {
++            self.outline_open = false;
++        }
++    }
++
++    /// Cursor position and friends, faint, at the canvas's top right.
++    fn hud(&self, ctx: &egui::Context, canvas: egui::Rect) {
++        let Some(text) = self.canvas.status_text() else {
++            return;
++        };
++        egui::Area::new(egui::Id::new("hud"))
++            .pivot(egui::Align2::RIGHT_TOP)
++            .fixed_pos(canvas.right_top() + egui::vec2(-12.0, 10.0))
++            .interactable(false)
++            .show(ctx, |ui| {
++                ui.label(egui::RichText::new(text).monospace().weak());
++            });
++    }
++
++    /// The latest messages, bottom left over the canvas. Info fades on its
++    /// own; warnings and errors stay until clicked.
++    fn toasts(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
++        let now = Instant::now();
++        let mut fade_in: Option<Duration> = None;
++        let shown: Vec<usize> = self
++            .messages
++            .iter()
++            .enumerate()
++            .rev()
++            .filter(|(_, m)| {
++                if m.dismissed {
++                    return false;
++                }
++                if m.level != Level::Info {
++                    return true;
++                }
++                let left = TOAST_INFO.saturating_sub(now - m.at);
++                if !left.is_zero() {
++                    fade_in = Some(fade_in.map_or(left, |f| f.min(left)));
++                }
++                !left.is_zero()
++            })
++            .map(|(i, _)| i)
++            .take(MAX_TOASTS)
++            .collect();
++        if let Some(wait) = fade_in {
++            ctx.request_repaint_after(wait);
++        }
++        if shown.is_empty() {
++            return;
++        }
++        let mut dismiss = Vec::new();
++        egui::Area::new(egui::Id::new("toasts"))
++            .pivot(egui::Align2::LEFT_BOTTOM)
++            .fixed_pos(canvas.left_bottom() + egui::vec2(12.0, -12.0))
++            .show(ctx, |ui| {
++                ui.set_max_width(420.0);
++                for &i in shown.iter().rev() {
++                    let m = &self.messages[i];
+                     let color = match m.level {
+                         Level::Info => ui.visuals().text_color(),
+                         Level::Warning => ui.visuals().warn_fg_color,
+                         Level::Error => ui.visuals().error_fg_color,
+                     };
+-                    ui.colored_label(color, &m.text);
++                    let frame = egui::Frame::popup(ui.style()).show(ui, |ui| {
++                        ui.add(egui::Label::new(egui::RichText::new(&m.text).color(color)).wrap());
++                    });
++                    let response = frame.response.interact(egui::Sense::click());
++                    if response.on_hover_text("Click to dismiss").clicked() {
++                        dismiss.push(i);
++                    }
+                 }
+             });
++        for i in dismiss {
++            self.messages[i].dismissed = true;
++        }
++    }
++
++    fn action_button(&self, ui: &mut egui::Ui, action: Action, picked: &mut Vec<Action>) {
++        let mut button = egui::Button::new(action.label());
++        if let Some(s) = action.shortcut() {
++            button = button.shortcut_text(ui.ctx().format_shortcut(&s));
++        }
++        if ui.add_enabled(self.is_enabled(action), button).clicked() {
++            picked.push(action);
++        }
+     }
+ 
+     // ------------------------------------------------------------------
+@@ -915,13 +1124,6 @@ fn consume_bare_key(input: &mut egui::InputState, key: egui::Key) -> bool {
+     input.events.len() != before
+ }
+ 
+-fn properties_panel(ui: &mut egui::Ui) {
+-    ui.set_min_width(ui.available_width());
+-    ui.strong("Properties");
+-    ui.separator();
+-    ui.weak("Nothing selected");
+-}
+-
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+@@ -1264,13 +1466,101 @@ mod tests {
+         assert!(text.contains("already open"), "{text}");
+     }
+ 
++    fn sized(width: f32) -> egui::RawInput {
++        egui::RawInput {
++            screen_rect: Some(egui::Rect::from_min_size(
++                egui::Pos2::ZERO,
++                egui::vec2(width, 800.0),
++            )),
++            ..Default::default()
++        }
++    }
++
++    #[test]
++    fn the_outline_pins_on_wide_windows_unless_chosen() {
++        let ctx = egui::Context::default();
++        let mut app = app_with(MemoryBackend::default());
++        app.run(&ctx, Action::NewProject);
++        frame(&ctx, &mut app, sized(1366.0));
++        assert!(!app.outline_pinned());
++        frame(&ctx, &mut app, sized(1920.0));
++        assert!(app.outline_pinned());
++
++        app.run(&ctx, Action::PinOutline);
++        assert_eq!(app.settings().outline_pinned, Some(false));
++        frame(&ctx, &mut app, sized(1920.0));
++        assert!(!app.outline_pinned());
++    }
++
+     #[test]
+-    fn panel_toggles_flip_settings() {
++    fn focus_mode_toggles_and_closes_the_flyout() {
+         let ctx = egui::Context::default();
+         let mut app = app_with(MemoryBackend::default());
+-        let before = app.settings().show_messages_panel;
+-        app.run(&ctx, Action::ToggleMessagesPanel);
+-        assert_ne!(app.settings().show_messages_panel, before);
++        app.run(&ctx, Action::NewProject);
++        app.outline_open = true;
++        frame(
++            &ctx,
++            &mut app,
++            key(
++                egui::Key::F,
++                egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
++            ),
++        );
++        assert!(app.focus_mode);
++        assert!(!app.outline_open);
++        app.run(&ctx, Action::FocusMode);
++        assert!(!app.focus_mode);
++    }
++
++    #[test]
++    fn cabinet_waits_for_its_canvas() {
++        let app = app_with(MemoryBackend::default());
++        assert!(!app.is_enabled(Action::ShowCabinet));
++        assert!(app.is_enabled(Action::ShowSchematic));
++    }
++
++    #[test]
++    fn visited_pages_lead_the_recent_list_and_vanish_with_their_page() {
++        let ctx = egui::Context::default();
++        let mut app = app_with(DirtyBackend::default());
++        app.run(&ctx, Action::NewProject);
++        let (one, two) = (app.pages()[0].0, app.pages()[1].0);
++        app.show_page(one);
++        app.show_page(two);
++        app.show_page(one);
++        assert_eq!(app.recent_pages, vec![one, two]);
++        app.run(&ctx, Action::Undo);
++        assert_eq!(app.recent_pages, vec![one]);
++    }
++
++    #[test]
++    fn info_toasts_fade_and_errors_stay_until_dismissed() {
++        let ctx = egui::Context::default();
++        let mut app = app_with(MemoryBackend::default());
++        app.message(Level::Info, "Saved");
++        app.message(Level::Error, "Could not save");
++        app.messages[0].at -= TOAST_INFO;
++        app.messages[1].at -= TOAST_INFO;
++        frame(&ctx, &mut app, Default::default());
++        let open = ctx.memory(|m| m.areas().visible_layer_ids());
++        assert!(open.iter().any(|l| l.id == egui::Id::new("toasts")));
++        app.messages[1].dismissed = true;
+         frame(&ctx, &mut app, Default::default());
++        frame(&ctx, &mut app, Default::default());
++        let open = ctx.memory(|m| m.areas().visible_layer_ids());
++        assert!(!open.iter().any(|l| l.id == egui::Id::new("toasts")));
++    }
++
++    #[test]
++    fn the_saved_state_follows_the_project() {
++        let ctx = egui::Context::default();
++        let mut app = app_with(DirtyBackend::default());
++        assert_eq!(app.saved_state(), "");
++        app.run(&ctx, Action::NewProject);
++        assert_eq!(app.saved_state(), "Not saved yet");
++        assert!(app.save_to(Path::new("plant.novo")));
++        assert_eq!(app.saved_state(), "Saved");
++        app.run(&ctx, Action::Undo);
++        assert_eq!(app.saved_state(), "Unsaved changes");
+     }
+ }
+diff --git a/crates/novo-app/src/settings.rs b/crates/novo-app/src/settings.rs
+index 5c28f21..2483d9e 100644
+--- a/crates/novo-app/src/settings.rs
++++ b/crates/novo-app/src/settings.rs
+@@ -24,32 +24,19 @@ impl Theme {
+     }
+ }
+ 
+-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
++#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+ #[serde(default)]
+ pub struct Settings {
+     pub theme: Theme,
+-    pub show_project_panel: bool,
+-    pub show_properties_panel: bool,
+-    pub show_messages_panel: bool,
++    /// Whether the outline takes space beside the canvas. `None` pins it
++    /// on wide windows only (docs/DESIGN.md §3).
++    pub outline_pinned: Option<bool>,
+     /// Most recently used project files, newest first.
+     pub recent_projects: Vec<PathBuf>,
+     /// Ids of recently run actions, newest first; the palette lists them first.
+     pub recent_actions: Vec<String>,
+ }
+ 
+-impl Default for Settings {
+-    fn default() -> Self {
+-        Self {
+-            theme: Theme::default(),
+-            show_project_panel: true,
+-            show_properties_panel: true,
+-            show_messages_panel: false,
+-            recent_projects: Vec::new(),
+-            recent_actions: Vec::new(),
+-        }
+-    }
+-}
+-
+ impl Settings {
+     pub const STORAGE_KEY: &str = "novo_settings";
+ 
+-- 
+2.43.0
+
+
+From 8c69f1b8e6074eb382dc891e1e35d34e178fb31e Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 14 Oct 2026 17:13:42 +0000
+Subject: [PATCH 2/3] novo-app: start where the user left off, start panel, run
+ commands
+
+Start-up reopens the last project when there is nothing to recover and no
+file was given. With no project open the canvas area offers New, Open and
+the recent projects. NovoApp::execute runs a model command the way the
+editor does, so scripts and the Gate 1 test can drive the whole window.
+Ctrl+3/4/5 are reserved for the drawer tabs.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AYuFPxz6eQReQdtzYKLMmW
+---
+ crates/novo-app/src/actions.rs |   3 +
+ crates/novo-app/src/app.rs     | 164 ++++++++++++++++++++++++++++++---
+ 2 files changed, 152 insertions(+), 15 deletions(-)
+
+diff --git a/crates/novo-app/src/actions.rs b/crates/novo-app/src/actions.rs
+index 6435b1a..583be72 100644
+--- a/crates/novo-app/src/actions.rs
++++ b/crates/novo-app/src/actions.rs
+@@ -206,6 +206,9 @@ pub const RESERVED_SHORTCUTS: &[(Modifiers, Key, &str)] = &[
+     (Modifiers::ALT, Key::ArrowLeft, "jump back"),
+     (Modifiers::ALT, Key::ArrowRight, "jump forward"),
+     (Modifiers::COMMAND, Key::D, "smart duplicate"),
++    (Modifiers::COMMAND, Key::Num3, "drawer: terminals"),
++    (Modifiers::COMMAND, Key::Num4, "drawer: cables"),
++    (Modifiers::COMMAND, Key::Num5, "drawer: devices"),
+ ];
+ 
+ fn modifier_count(m: Modifiers) -> u8 {
+diff --git a/crates/novo-app/src/app.rs b/crates/novo-app/src/app.rs
+index e7e8d85..741455e 100644
+--- a/crates/novo-app/src/app.rs
++++ b/crates/novo-app/src/app.rs
+@@ -9,7 +9,7 @@ use std::time::{Duration, Instant, SystemTime};
+ use eframe::egui;
+ 
+ use crate::actions::Action;
+-use novo_core::PageId;
++use novo_core::{Command, ModelError, Outcome, PageId};
+ 
+ use crate::backend::{BackendError, ProjectBackend, page_labels};
+ use crate::canvas::{CanvasView, OpenPage};
+@@ -356,22 +356,66 @@ impl NovoApp {
+     }
+ 
+     /// Offers back an unsaved new project from a session that crashed.
+-    fn restore_untitled(&mut self) {
++    /// Returns true when it opened one.
++    fn restore_untitled(&mut self) -> bool {
+         match self.backend.restore_untitled() {
+             Ok(true) => {
+                 self.project_path = None;
+                 self.current_page = None;
+                 self.canvas.document_replaced();
+                 self.fix_current_page();
++                true
++            }
++            Ok(false) => false,
++            Err(e) => {
++                self.message(
++                    Level::Warning,
++                    format!("Could not check for unsaved work from the last session: {e}"),
++                );
++                false
+             }
+-            Ok(false) => {}
+-            Err(e) => self.message(
+-                Level::Warning,
+-                format!("Could not check for unsaved work from the last session: {e}"),
+-            ),
+         }
+     }
+ 
++    /// Start-up: the file named on the command line, else unsaved work a
++    /// crash left behind, else the last project, where it was left. There
++    /// is no start screen.
++    fn start(&mut self) {
++        if let Some(path) = self.open_on_start.take() {
++            self.open_path(&path);
++        } else if !self.restore_untitled()
++            && let Some(last) = self.settings.recent_projects.first().cloned()
++            && last.is_file()
++        {
++            self.open_path(&last);
++        }
++    }
++
++    /// Runs a model command on the open project the way the editor does:
++    /// the canvas updates and the change reaches storage. For scripts and
++    /// tests that drive the whole window. `None` when no project is open.
++    pub fn execute(&mut self, command: Command) -> Option<Result<Outcome, ModelError>> {
++        let doc = self.backend.document_mut()?;
++        let outcome = match doc.execute(command) {
++            Ok(outcome) => outcome,
++            Err(e) => return Some(Err(e)),
++        };
++        self.canvas.document_changed(doc, &outcome.changes);
++        self.backend.record(&outcome.changes);
++        self.fix_current_page();
++        Some(Ok(outcome))
++    }
++
++    /// The open project, if any.
++    pub fn document(&self) -> Option<&novo_core::Document> {
++        self.backend.document()
++    }
++
++    /// The page on the canvas.
++    pub fn current_page(&self) -> Option<PageId> {
++        self.current_page
++    }
++
+     fn close_project(&mut self) {
+         if let Err(e) = self.backend.close() {
+             self.message(
+@@ -458,10 +502,7 @@ impl NovoApp {
+         let ctx = ui.ctx().clone();
+         if !self.started {
+             self.started = true;
+-            match self.open_on_start.take() {
+-                Some(path) => self.open_path(&path),
+-                None => self.restore_untitled(),
+-            }
++            self.start();
+         }
+         self.fix_current_page();
+         self.tick(&ctx);
+@@ -490,10 +531,14 @@ impl NovoApp {
+         }
+         let canvas_rect = egui::CentralPanel::no_frame()
+             .show(ui, |ui| {
+-                let open = self
+-                    .current_page
+-                    .and_then(|page| OpenPage::new(&mut *self.backend, page));
+-                self.canvas.show(ui, open);
++                if self.is_open() {
++                    let open = self
++                        .current_page
++                        .and_then(|page| OpenPage::new(&mut *self.backend, page));
++                    self.canvas.show(ui, open);
++                } else {
++                    self.start_panel(ui, &mut picked);
++                }
+             })
+             .response
+             .rect;
+@@ -840,6 +885,47 @@ impl NovoApp {
+         }
+     }
+ 
++    /// With no project open the canvas area offers the ways in: new, open
++    /// and the recent projects.
++    fn start_panel(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
++        let rect = ui.max_rect();
++        ui.painter()
++            .rect_filled(rect, 0.0, ui.visuals().extreme_bg_color);
++        let width = 320.0_f32.min(rect.width() - 32.0);
++        let top = rect.top() + (rect.height() * 0.25).min(200.0);
++        let column = egui::Rect::from_min_size(
++            egui::pos2(rect.center().x - width / 2.0, top),
++            egui::vec2(width, rect.bottom() - top),
++        );
++        ui.scope_builder(egui::UiBuilder::new().max_rect(column), |ui| {
++            ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
++                ui.weak("No project open");
++                ui.add_space(8.0);
++                for a in [Action::NewProject, Action::OpenProject] {
++                    self.action_button(ui, a, picked);
++                }
++                let recent = self.settings.recent_projects.clone();
++                if !recent.is_empty() {
++                    ui.add_space(16.0);
++                    ui.small("RECENT");
++                    for path in recent {
++                        let name = path
++                            .file_stem()
++                            .map(|n| n.to_string_lossy().into_owned())
++                            .unwrap_or_else(|| path.display().to_string());
++                        let row = ui
++                            .add(egui::Button::new(name).frame(false))
++                            .on_hover_text(path.display().to_string());
++                        if row.clicked() {
++                            let ctx = ui.ctx().clone();
++                            self.discard_then(&ctx, Discarding::OpenPath(path));
++                        }
++                    }
++                }
++            });
++        });
++    }
++
+     /// Cursor position and friends, faint, at the canvas's top right.
+     fn hud(&self, ctx: &egui::Context, canvas: egui::Rect) {
+         let Some(text) = self.canvas.status_text() else {
+@@ -1563,4 +1649,52 @@ mod tests {
+         app.run(&ctx, Action::Undo);
+         assert_eq!(app.saved_state(), "Unsaved changes");
+     }
++
++    #[test]
++    fn start_up_reopens_the_last_project() {
++        let dir = tempfile::tempdir().unwrap();
++        let path = dir.path().join("plant.novo");
++        let ctx = egui::Context::default();
++        let mut first = storage_app();
++        first.run(&ctx, Action::NewProject);
++        assert!(first.save_to(&path));
++        first.run(&ctx, Action::CloseProject);
++
++        let mut next = app_with(StorageBackend::default());
++        next.settings = first.settings().clone();
++        frame(&ctx, &mut next, Default::default());
++        assert_eq!(next.project_path, Some(path));
++
++        // A last project that is gone leaves the start panel, quietly.
++        let mut gone = storage_app();
++        gone.settings.remember_recent(&dir.path().join("gone.novo"));
++        frame(&ctx, &mut gone, Default::default());
++        assert!(!gone.is_open());
++        assert!(gone.messages().is_empty());
++    }
++
++    #[test]
++    fn commands_run_through_the_window_reach_storage() {
++        let dir = tempfile::tempdir().unwrap();
++        let path = dir.path().join("plant.novo");
++        let ctx = egui::Context::default();
++        let mut app = storage_app();
++        let add = || Command::AddPage {
++            name: "2".into(),
++            title: String::new(),
++            kind: Default::default(),
++            format: Default::default(),
++        };
++        assert!(app.execute(add()).is_none());
++        app.run(&ctx, Action::NewProject);
++        assert!(app.save_to(&path));
++        app.execute(add()).unwrap().unwrap();
++        assert_eq!(page_count(&app), 2);
++        assert!(app.save_to(&path));
++        app.run(&ctx, Action::CloseProject);
++
++        let mut reopened = storage_app();
++        reopened.open_path(&path);
++        assert_eq!(page_count(&reopened), 2);
++    }
+ }
+-- 
+2.43.0
+
+
+From 118d44dee98f925a733dd2a576de7cba0d020453 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 14 Oct 2026 17:17:51 +0000
+Subject: [PATCH 3/3] novo-app: no save prompts; saved projects write to their
+ file as they change
+
+A saved project is written to its .novo file shortly after each change
+and on close, so the file always matches the screen and nothing asks
+"save changes?" before new, open, close or quit. An untitled project
+closed with work is kept (kept-*.novo in the untitled folder) and listed
+under Unsaved on the start panel; one closed untouched is deleted.
+Start-up reopens whatever was open last, untitled included. The top bar
+shows Saving, Saved, Not saved yet or Not saved.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AYuFPxz6eQReQdtzYKLMmW
+---
+ crates/novo-app/src/app.rs      | 194 +++++++++-------------------
+ crates/novo-app/src/backend.rs  | 221 +++++++++++++++++++++++++++++---
+ crates/novo-app/src/settings.rs |   2 +
+ 3 files changed, 265 insertions(+), 152 deletions(-)
+
+diff --git a/crates/novo-app/src/app.rs b/crates/novo-app/src/app.rs
+index 741455e..15dd446 100644
+--- a/crates/novo-app/src/app.rs
++++ b/crates/novo-app/src/app.rs
+@@ -47,10 +47,10 @@ const PIN_OUTLINE_FROM: f32 = 1700.0;
+ /// Pages listed under "Recent" in the outline.
+ const MAX_RECENT_PAGES: usize = 5;
+ 
+-/// An action that throws away the open project, so it first asks about
+-/// unsaved changes.
++/// An action that replaces or closes the open project. Nothing asks first:
++/// the backend keeps the work (docs/DESIGN.md: no save prompts).
+ #[derive(Clone, Debug, PartialEq, Eq)]
+-enum Discarding {
++enum Leaving {
+     New,
+     Open,
+     OpenPath(PathBuf),
+@@ -66,11 +66,7 @@ pub struct NovoApp {
+     current_page: Option<PageId>,
+     palette: Palette,
+     messages: Vec<Message>,
+-    /// Waiting for the user to answer "save changes?" before doing this.
+-    unsaved_prompt: Option<Discarding>,
+     show_about: bool,
+-    /// Set once the user has agreed to quit, so the next close request passes.
+-    quitting: bool,
+     window_title: String,
+     /// Opened on the first frame, so errors show in the window.
+     open_on_start: Option<PathBuf>,
+@@ -92,6 +88,8 @@ pub struct NovoApp {
+     window_width: f32,
+ }
+ 
++/// How soon after a change a saved project is written to its file.
++const WRITE_DELAY: Duration = Duration::from_millis(500);
+ /// How long to wait before retrying a failed autosave.
+ const AUTOSAVE_RETRY: Duration = Duration::from_secs(30);
+ 
+@@ -123,9 +121,7 @@ impl NovoApp {
+             current_page: None,
+             palette: Palette::default(),
+             messages: Vec::new(),
+-            unsaved_prompt: None,
+             show_about: false,
+-            quitting: false,
+             window_title: String::new(),
+             open_on_start: None,
+             started: false,
+@@ -228,16 +224,16 @@ impl NovoApp {
+             self.settings.remember_action(action.id());
+         }
+         match action {
+-            Action::NewProject => self.discard_then(ctx, Discarding::New),
+-            Action::OpenProject => self.discard_then(ctx, Discarding::Open),
++            Action::NewProject => self.leave_then(ctx, Leaving::New),
++            Action::OpenProject => self.leave_then(ctx, Leaving::Open),
+             Action::SaveProject => {
+                 self.save();
+             }
+             Action::SaveProjectAs => {
+                 self.save_as();
+             }
+-            Action::CloseProject => self.discard_then(ctx, Discarding::Close),
+-            Action::Quit => self.discard_then(ctx, Discarding::Quit),
++            Action::CloseProject => self.leave_then(ctx, Leaving::Close),
++            Action::Quit => self.leave_then(ctx, Leaving::Quit),
+             Action::Undo => self.undo_redo(false),
+             Action::Redo => self.undo_redo(true),
+             Action::ZoomToFit => self.canvas.zoom_to_fit(),
+@@ -287,18 +283,10 @@ impl NovoApp {
+     // ------------------------------------------------------------------
+     // Project lifecycle
+ 
+-    fn discard_then(&mut self, ctx: &egui::Context, next: Discarding) {
+-        if self.is_dirty() {
+-            self.unsaved_prompt = Some(next);
+-        } else {
+-            self.finish_discarding(ctx, next);
+-        }
+-    }
+-
+-    fn finish_discarding(&mut self, ctx: &egui::Context, next: Discarding) {
++    fn leave_then(&mut self, ctx: &egui::Context, next: Leaving) {
+         match next {
+-            Discarding::New => self.new_project(),
+-            Discarding::Open => {
++            Leaving::New => self.new_project(),
++            Leaving::Open => {
+                 let dialog = rfd::FileDialog::new()
+                     .set_title("Open project")
+                     .add_filter("NovoElectric project", &[PROJECT_EXTENSION]);
+@@ -306,10 +294,9 @@ impl NovoApp {
+                     self.open_path(&path);
+                 }
+             }
+-            Discarding::OpenPath(path) => self.open_path(&path),
+-            Discarding::Close => self.close_project(),
+-            Discarding::Quit => {
+-                self.quitting = true;
++            Leaving::OpenPath(path) => self.open_path(&path),
++            Leaving::Close => self.close_project(),
++            Leaving::Quit => {
+                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+             }
+         }
+@@ -330,12 +317,16 @@ impl NovoApp {
+     fn open_path(&mut self, path: &Path) {
+         match self.backend.open(path) {
+             Ok(report) => {
+-                self.project_path = Some(path.to_owned());
+                 self.current_page = None;
+                 self.canvas.document_replaced();
+                 self.fix_current_page();
+-                self.settings.remember_recent(path);
+-                self.message(Level::Info, format!("Opened {}", path.display()));
++                if self.backend.is_untitled() {
++                    self.project_path = None;
++                } else {
++                    self.project_path = Some(path.to_owned());
++                    self.settings.remember_recent(path);
++                    self.message(Level::Info, format!("Opened {}", path.display()));
++                }
+                 if let Some(aside) = report.set_aside {
+                     self.message(
+                         Level::Warning,
+@@ -384,7 +375,7 @@ impl NovoApp {
+         if let Some(path) = self.open_on_start.take() {
+             self.open_path(&path);
+         } else if !self.restore_untitled()
+-            && let Some(last) = self.settings.recent_projects.first().cloned()
++            && let Some(last) = self.settings.last_open.clone()
+             && last.is_file()
+         {
+             self.open_path(&last);
+@@ -419,8 +410,10 @@ impl NovoApp {
+     fn close_project(&mut self) {
+         if let Err(e) = self.backend.close() {
+             self.message(
+-                Level::Warning,
+-                format!("The project did not close cleanly: {e}"),
++                Level::Error,
++                format!(
++                    "Could not write the project before closing it: {e}. The work is kept and offered back when you open it again."
++                ),
+             );
+         }
+         self.project_path = None;
+@@ -432,6 +425,10 @@ impl NovoApp {
+     /// time for the next one even when nothing else repaints.
+     fn tick(&mut self, ctx: &egui::Context) {
+         let now = Instant::now();
++        // A saved project is written to its file shortly after each change.
++        if self.project_path.is_some() && self.is_dirty() {
++            self.next_tick = self.next_tick.min(now + WRITE_DELAY);
++        }
+         if now < self.next_tick {
+             ctx.request_repaint_after(self.next_tick - now);
+             return;
+@@ -440,14 +437,14 @@ impl NovoApp {
+             Ok(next) => {
+                 if self.autosave_failing {
+                     self.autosave_failing = false;
+-                    self.message(Level::Info, "Autosave works again");
++                    self.message(Level::Info, "Saving works again");
+                 }
+                 next
+             }
+             Err(e) => {
+                 if !self.autosave_failing {
+                     self.autosave_failing = true;
+-                    self.message(Level::Warning, format!("Autosave failed: {e}"));
++                    self.message(Level::Warning, format!("Could not save the project: {e}"));
+                 }
+                 Some(AUTOSAVE_RETRY)
+             }
+@@ -506,7 +503,7 @@ impl NovoApp {
+         }
+         self.fix_current_page();
+         self.tick(&ctx);
+-        self.handle_close_request(&ctx);
++        self.settings.last_open = self.backend.file();
+         self.update_title(&ctx);
+ 
+         let mut picked: Vec<Action> = Vec::new();
+@@ -566,7 +563,6 @@ impl NovoApp {
+             }
+         }
+         self.recovery_dialog(&ctx);
+-        self.unsaved_dialog(&ctx);
+         self.about_dialog(&ctx);
+ 
+         for action in picked {
+@@ -586,10 +582,7 @@ impl NovoApp {
+     }
+ 
+     fn modal_open(&self) -> bool {
+-        self.palette.is_open()
+-            || self.unsaved_prompt.is_some()
+-            || self.show_about
+-            || self.backend.recovery_offer().is_some()
++        self.palette.is_open() || self.show_about || self.backend.recovery_offer().is_some()
+     }
+ 
+     /// Takes the key presses that trigger enabled actions, leaving the rest
+@@ -615,20 +608,9 @@ impl NovoApp {
+         fired
+     }
+ 
+-    fn handle_close_request(&mut self, ctx: &egui::Context) {
+-        let requested = ctx.input(|i| i.viewport().close_requested());
+-        if requested && !self.quitting && self.is_dirty() {
+-            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+-            self.unsaved_prompt = Some(Discarding::Quit);
+-        }
+-    }
+-
+     fn update_title(&mut self, ctx: &egui::Context) {
+         let title = match self.project_name() {
+-            Some(name) => {
+-                let dirty = if self.is_dirty() { "*" } else { "" };
+-                format!("{name}{dirty} - {APP_NAME}")
+-            }
++            Some(name) => format!("{name} - {APP_NAME}"),
+             None => APP_NAME.to_owned(),
+         };
+         if title != self.window_title {
+@@ -662,8 +644,10 @@ impl NovoApp {
+             ""
+         } else if self.project_path.is_none() {
+             "Not saved yet"
++        } else if self.autosave_failing {
++            "Not saved"
+         } else if self.is_dirty() {
+-            "Unsaved changes"
++            "Saving"
+         } else {
+             "Saved"
+         }
+@@ -725,7 +709,7 @@ impl NovoApp {
+                 for path in self.settings.recent_projects.clone() {
+                     if ui.button(path.display().to_string()).clicked() {
+                         let ctx = ui.ctx().clone();
+-                        self.discard_then(&ctx, Discarding::OpenPath(path));
++                        self.leave_then(&ctx, Leaving::OpenPath(path));
+                     }
+                 }
+             });
+@@ -904,6 +888,20 @@ impl NovoApp {
+                 for a in [Action::NewProject, Action::OpenProject] {
+                     self.action_button(ui, a, picked);
+                 }
++                let unsaved = self.backend.unsaved_projects();
++                if !unsaved.is_empty() {
++                    ui.add_space(16.0);
++                    ui.small("UNSAVED");
++                    for (path, changed) in unsaved {
++                        let row = ui.add(
++                            egui::Button::new(format!("Untitled, {}", ago(changed))).frame(false),
++                        );
++                        if row.clicked() {
++                            let ctx = ui.ctx().clone();
++                            self.leave_then(&ctx, Leaving::OpenPath(path));
++                        }
++                    }
++                }
+                 let recent = self.settings.recent_projects.clone();
+                 if !recent.is_empty() {
+                     ui.add_space(16.0);
+@@ -918,7 +916,7 @@ impl NovoApp {
+                             .on_hover_text(path.display().to_string());
+                         if row.clicked() {
+                             let ctx = ui.ctx().clone();
+-                            self.discard_then(&ctx, Discarding::OpenPath(path));
++                            self.leave_then(&ctx, Leaving::OpenPath(path));
+                         }
+                     }
+                 }
+@@ -1012,37 +1010,6 @@ impl NovoApp {
+     // ------------------------------------------------------------------
+     // Dialogs
+ 
+-    fn unsaved_dialog(&mut self, ctx: &egui::Context) {
+-        let Some(next) = self.unsaved_prompt.clone() else {
+-            return;
+-        };
+-        let name = self.project_name().unwrap_or_default();
+-        let mut answer = None;
+-        let modal = egui::Modal::new(egui::Id::new("unsaved_changes")).show(ctx, |ui| {
+-            ui.set_width(340.0);
+-            ui.heading("Unsaved changes");
+-            ui.label(format!("Save the changes to \"{name}\" first?"));
+-            ui.add_space(8.0);
+-            ui.horizontal(|ui| {
+-                if ui.button("Save").clicked() {
+-                    answer = Some(UnsavedAnswer::Save);
+-                }
+-                if ui.button("Don't save").clicked() {
+-                    answer = Some(UnsavedAnswer::Discard);
+-                }
+-                if ui.button("Cancel").clicked() {
+-                    answer = Some(UnsavedAnswer::Cancel);
+-                }
+-            });
+-        });
+-        if answer.is_none() && modal.should_close() {
+-            answer = Some(UnsavedAnswer::Cancel);
+-        }
+-        if let Some(answer) = answer {
+-            self.answer_unsaved(ctx, next, answer);
+-        }
+-    }
+-
+     /// Asks whether to restore the unsaved work a crash left behind. The
+     /// project as last saved stays shown until the user answers.
+     fn recovery_dialog(&mut self, ctx: &egui::Context) {
+@@ -1100,19 +1067,6 @@ impl NovoApp {
+         }
+     }
+ 
+-    fn answer_unsaved(&mut self, ctx: &egui::Context, next: Discarding, answer: UnsavedAnswer) {
+-        self.unsaved_prompt = None;
+-        match answer {
+-            UnsavedAnswer::Save => {
+-                if self.save() {
+-                    self.finish_discarding(ctx, next);
+-                }
+-            }
+-            UnsavedAnswer::Discard => self.finish_discarding(ctx, next),
+-            UnsavedAnswer::Cancel => {}
+-        }
+-    }
+-
+     fn about_dialog(&mut self, ctx: &egui::Context) {
+         if !self.show_about {
+             return;
+@@ -1131,13 +1085,6 @@ impl NovoApp {
+     }
+ }
+ 
+-#[derive(Clone, Copy, Debug)]
+-enum UnsavedAnswer {
+-    Save,
+-    Discard,
+-    Cancel,
+-}
+-
+ impl eframe::App for NovoApp {
+     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+         self.show(ui);
+@@ -1316,38 +1263,21 @@ mod tests {
+     }
+ 
+     #[test]
+-    fn closing_a_dirty_project_asks_first() {
++    fn closing_a_changed_project_does_not_ask() {
+         let ctx = egui::Context::default();
+         let mut app = app_with(DirtyBackend::default());
+         app.run(&ctx, Action::NewProject);
++        assert!(app.is_dirty());
+         app.run(&ctx, Action::CloseProject);
+-        assert_eq!(app.unsaved_prompt, Some(Discarding::Close));
+-        assert!(app.is_open());
+-
+-        app.answer_unsaved(&ctx, Discarding::Close, UnsavedAnswer::Cancel);
+-        assert!(app.is_open());
+-
+-        app.run(&ctx, Action::CloseProject);
+-        app.answer_unsaved(&ctx, Discarding::Close, UnsavedAnswer::Discard);
+-        assert!(!app.is_open());
+-        assert!(app.unsaved_prompt.is_none());
+-    }
+-
+-    #[test]
+-    fn closing_a_clean_project_does_not_ask() {
+-        let ctx = egui::Context::default();
+-        let mut app = app_with(MemoryBackend::default());
+-        app.run(&ctx, Action::NewProject);
+-        app.run(&ctx, Action::CloseProject);
+-        assert!(app.unsaved_prompt.is_none());
+         assert!(!app.is_open());
++        assert!(!app.modal_open());
+     }
+ 
+     #[test]
+     fn placeholder_open_reports_an_error() {
+         let ctx = egui::Context::default();
+         let mut app = app_with(MemoryBackend::default());
+-        app.finish_discarding(&ctx, Discarding::OpenPath(PathBuf::from("x.novo")));
++        app.leave_then(&ctx, Leaving::OpenPath(PathBuf::from("x.novo")));
+         assert_eq!(app.messages().last().map(|m| m.level), Some(Level::Error));
+         assert!(!app.is_open());
+     }
+@@ -1497,7 +1427,7 @@ mod tests {
+         assert_eq!(page_count(&app), 3);
+         assert!(app.is_dirty(), "restored work still needs a save");
+         frame(&ctx, &mut app, Default::default());
+-        assert_eq!(app.window_title, "Plant* - NovoElectric");
++        assert_eq!(app.window_title, "Plant - NovoElectric");
+     }
+ 
+     #[test]
+@@ -1647,7 +1577,7 @@ mod tests {
+         assert!(app.save_to(Path::new("plant.novo")));
+         assert_eq!(app.saved_state(), "Saved");
+         app.run(&ctx, Action::Undo);
+-        assert_eq!(app.saved_state(), "Unsaved changes");
++        assert_eq!(app.saved_state(), "Saving");
+     }
+ 
+     #[test]
+@@ -1661,7 +1591,7 @@ mod tests {
+         first.run(&ctx, Action::CloseProject);
+ 
+         let mut next = app_with(StorageBackend::default());
+-        next.settings = first.settings().clone();
++        next.settings.last_open = Some(path.clone());
+         frame(&ctx, &mut next, Default::default());
+         assert_eq!(next.project_path, Some(path));
+ 
+diff --git a/crates/novo-app/src/backend.rs b/crates/novo-app/src/backend.rs
+index 5338bd8..1abb360 100644
+--- a/crates/novo-app/src/backend.rs
++++ b/crates/novo-app/src/backend.rs
+@@ -68,13 +68,16 @@ pub trait ProjectBackend {
+     /// Starts a new, unsaved project, replacing any open one.
+     fn new_project(&mut self, name: &str) -> Result<(), BackendError>;
+ 
+-    /// Opens a project file, replacing any open project.
++    /// Opens a project file, replacing any open project. A file from
++    /// [`Self::unsaved_projects`] opens as an untitled project.
+     fn open(&mut self, path: &Path) -> Result<OpenReport, BackendError>;
+ 
+     /// Writes the open project to `path` and clears the unsaved flag.
+     fn save(&mut self, path: &Path) -> Result<(), BackendError>;
+ 
+-    /// Closes the open project, dropping unsaved changes.
++    /// Closes the open project without losing work: a saved project is
++    /// written to its file first, and an untitled one with work is kept
++    /// among [`Self::unsaved_projects`].
+     fn close(&mut self) -> Result<(), BackendError>;
+ 
+     fn document(&self) -> Option<&Document>;
+@@ -100,12 +103,30 @@ pub trait ProjectBackend {
+         Ok(())
+     }
+ 
+-    /// Called every frame: autosave when one is due. Returns when to call
+-    /// again at the latest, so autosave also runs while the app is idle.
++    /// Writes a saved project's changes to its file, and autosaves an
++    /// untitled one when due. Returns when to call again at the latest, so
++    /// this also runs while the app is idle.
+     fn tick(&mut self) -> Result<Option<Duration>, BackendError> {
+         Ok(None)
+     }
+ 
++    /// The file holding the open project, temporary ones included.
++    fn file(&self) -> Option<PathBuf> {
++        None
++    }
++
++    /// The open project has never been saved under a name, such as one
++    /// opened from [`Self::unsaved_projects`].
++    fn is_untitled(&self) -> bool {
++        false
++    }
++
++    /// Untitled projects closed with work in them, newest first, with when
++    /// they last changed. Not the open one.
++    fn unsaved_projects(&self) -> Vec<(PathBuf, SystemTime)> {
++        Vec::new()
++    }
++
+     /// Reopens an unsaved new project a crash left behind, with its work
+     /// offered through [`Self::recovery_offer`]. Returns whether it found one.
+     fn restore_untitled(&mut self) -> Result<bool, BackendError> {
+@@ -113,12 +134,15 @@ pub trait ProjectBackend {
+     }
+ }
+ 
+-/// The real backend: one `.novo` file per project, autosaved to a recovery
+-/// file next to it.
++/// The real backend: one `.novo` file per project. A saved project is
++/// written to its file as it changes (each [`ProjectBackend::tick`] and on
++/// close), so there is nothing to lose and no "save changes?" question.
+ ///
+ /// With an untitled folder set, a new project is kept in a file there from
+-/// the start, so its work survives a crash before the first save. The first
+-/// save moves it to the chosen file; closing it unsaved deletes it.
++/// the start, autosaved to a recovery file so its work survives a crash.
++/// The first save moves it to the chosen file. Closing it with work keeps
++/// it there as `kept-*.novo`, offered through `unsaved_projects`; closing
++/// it untouched deletes it.
+ #[derive(Default)]
+ pub struct StorageBackend {
+     document: Option<Document>,
+@@ -132,8 +156,14 @@ pub struct StorageBackend {
+     untitled_dir: Option<PathBuf>,
+     /// The open project's file is a temporary one in `untitled_dir`.
+     untitled: Option<PathBuf>,
++    /// The open untitled project came from a kept file, so it is kept
++    /// again on close even without new changes.
++    keep: bool,
+ }
+ 
++/// Prefix of untitled projects closed with work in them.
++const KEPT: &str = "kept-";
++
+ impl StorageBackend {
+     /// Keeps unsaved new projects in `dir`, which is created when needed.
+     pub fn with_untitled_dir(dir: impl Into<PathBuf>) -> Self {
+@@ -147,19 +177,51 @@ impl StorageBackend {
+         // recovery file), so an untitled project's file must stay with it
+         // to be offered again on the next start.
+         let undecided = self.recovery.take().is_some();
+-        self.restored_unsaved = false;
+-        let closed = match self.session.take() {
+-            Some(session) => session.close(),
+-            None => Ok(()),
++        let changed = std::mem::take(&mut self.restored_unsaved)
++            || self.document().is_some_and(|d| d.is_dirty());
++        let keep = std::mem::take(&mut self.keep);
++        let untitled = self.untitled.take();
++        let keep_untitled = untitled.is_some() && !undecided && (changed || keep);
++        let Some(mut session) = self.session.take() else {
++            return Ok(());
+         };
+-        if let Some(path) = self.untitled.take()
++        let write = !undecided && changed && (untitled.is_none() || keep_untitled);
++        if write
++            && let Some(document) = &self.document
++            && let Err(e) = session.save(document.project())
++        {
++            // Leave it as a crash would: the recovery file holds the work
++            // and the next open offers it back.
++            if let Err(e) = session.autosave(document.project()) {
++                log::error!("could not keep the unsaved work: {e}");
++            }
++            drop(session);
++            return Err(e.into());
++        }
++        let closed = session.close();
++        if let Some(path) = untitled
+             && !undecided
+         {
+-            remove_file_if_exists(&path);
++            if !keep_untitled {
++                remove_file_if_exists(&path);
++            } else if let Some(name) = path.file_name().and_then(|n| n.to_str())
++                && !name.starts_with(KEPT)
++            {
++                let kept = path.with_file_name(format!("{KEPT}{name}"));
++                if let Err(e) = std::fs::rename(&path, &kept) {
++                    log::warn!("could not keep {}: {e}", path.display());
++                }
++            }
+         }
+         Ok(closed?)
+     }
+ 
++    fn in_untitled_dir(&self, path: &Path) -> bool {
++        self.untitled_dir
++            .as_deref()
++            .is_some_and(|dir| path.parent() == Some(dir))
++    }
++
+     /// Starts a temporary file for a new project, if untitled projects are
+     /// kept on disk. Failing that, the project still works, unprotected.
+     fn start_untitled(&mut self) {
+@@ -211,6 +273,10 @@ impl ProjectBackend for StorageBackend {
+         self.document = Some(Document::new(opened.project));
+         self.session = Some(opened.session);
+         self.recovery = opened.recovered;
++        if self.in_untitled_dir(path) {
++            self.untitled = Some(path.to_owned());
++            self.keep = true;
++        }
+         Ok(OpenReport {
+             set_aside: opened.set_aside.map(|s| s.path),
+         })
+@@ -230,12 +296,14 @@ impl ProjectBackend for StorageBackend {
+         if let Some(temp) = self.untitled.take() {
+             remove_file_if_exists(&temp);
+         }
++        self.keep = false;
+         Ok(())
+     }
+ 
+     fn close(&mut self) -> Result<(), BackendError> {
++        let closed = self.close_session();
+         self.document = None;
+-        self.close_session()
++        closed
+     }
+ 
+     fn document(&self) -> Option<&Document> {
+@@ -281,14 +349,60 @@ impl ProjectBackend for StorageBackend {
+     }
+ 
+     fn tick(&mut self) -> Result<Option<Duration>, BackendError> {
+-        let (Some(session), Some(document)) = (self.session.as_mut(), self.document.as_ref())
++        let (Some(session), Some(document)) = (self.session.as_mut(), self.document.as_mut())
+         else {
+             return Ok(None);
+         };
+-        session.autosave_if_due(document.project())?;
++        let changed = self.restored_unsaved || document.is_dirty();
++        if self.untitled.is_none() && self.recovery.is_none() && changed {
++            session.save(document.project())?;
++            document.mark_saved();
++            self.restored_unsaved = false;
++        } else {
++            session.autosave_if_due(document.project())?;
++        }
+         Ok(Some(session.autosave_interval()))
+     }
+ 
++    fn file(&self) -> Option<PathBuf> {
++        self.session.as_ref().map(|s| s.path().to_owned())
++    }
++
++    fn is_untitled(&self) -> bool {
++        self.document.is_some() && (self.session.is_none() || self.untitled.is_some())
++    }
++
++    fn unsaved_projects(&self) -> Vec<(PathBuf, SystemTime)> {
++        let Some(entries) = self
++            .untitled_dir
++            .as_ref()
++            .and_then(|d| std::fs::read_dir(d).ok())
++        else {
++            return Vec::new();
++        };
++        let mut kept: Vec<(PathBuf, SystemTime)> = entries
++            .filter_map(Result::ok)
++            .map(|e| e.path())
++            .filter(|p| {
++                p.extension()
++                    .is_some_and(|e| e == novo_storage::PROJECT_EXTENSION)
++                    && p.file_name()
++                        .and_then(|n| n.to_str())
++                        .is_some_and(|n| n.starts_with(KEPT))
++                    && self.untitled.as_deref() != Some(p.as_path())
++            })
++            .map(|p| {
++                let modified = p
++                    .metadata()
++                    .and_then(|m| m.modified())
++                    .unwrap_or(SystemTime::UNIX_EPOCH);
++                (p, modified)
++            })
++            .collect();
++        kept.sort_by_key(|(_, modified)| std::cmp::Reverse(*modified));
++        kept
++    }
++
+     fn restore_untitled(&mut self) -> Result<bool, BackendError> {
+         let Some(dir) = self.untitled_dir.clone() else {
+             return Ok(false);
+@@ -323,6 +437,17 @@ impl ProjectBackend for StorageBackend {
+                     continue;
+                 }
+             };
++            let kept = path
++                .file_name()
++                .and_then(|n| n.to_str())
++                .is_some_and(|n| n.starts_with(KEPT));
++            if opened.recovered.is_none() && kept {
++                // Closed with work in it: offered in the unsaved list.
++                if let Err(e) = opened.session.close() {
++                    log::warn!("could not close {}: {e}", path.display());
++                }
++                continue;
++            }
+             if opened.recovered.is_none() {
+                 // Nothing was autosaved before the crash: nothing to offer.
+                 if let Some(aside) = &opened.set_aside {
+@@ -342,6 +467,7 @@ impl ProjectBackend for StorageBackend {
+             self.session = Some(opened.session);
+             self.recovery = opened.recovered;
+             self.untitled = Some(path);
++            self.keep = kept;
+             return Ok(true);
+         }
+         Ok(false)
+@@ -580,14 +706,69 @@ pub(crate) mod tests {
+     }
+ 
+     #[test]
+-    fn closing_an_unsaved_new_project_leaves_nothing_behind() {
++    fn closing_an_untouched_new_project_leaves_nothing_behind() {
+         let dir = tempfile::tempdir().unwrap();
+         let mut backend = StorageBackend::with_untitled_dir(dir.path());
+         backend.new_project("Plant").unwrap();
+-        edit(&mut backend, "2");
+         backend.close().unwrap();
+         assert!(files_in(dir.path()).is_empty());
+-        assert!(!backend.restore_untitled().unwrap());
++        assert!(backend.unsaved_projects().is_empty());
++    }
++
++    #[test]
++    fn closing_a_new_project_with_work_keeps_it() {
++        let dir = tempfile::tempdir().unwrap();
++        let mut backend = StorageBackend::with_untitled_dir(dir.path());
++        backend.new_project("Plant").unwrap();
++        edit(&mut backend, "2");
++        backend.close().unwrap();
++        assert!(!backend.restore_untitled().unwrap(), "not a crash");
++        let kept = backend.unsaved_projects();
++        assert_eq!(kept.len(), 1, "{:?}", files_in(dir.path()));
++
++        backend.open(&kept[0].0).unwrap();
++        assert!(backend.is_untitled());
++        assert_eq!(page_names(&backend), vec!["1", "2"]);
++        assert!(
++            backend.unsaved_projects().is_empty(),
++            "the open one is not listed"
++        );
++        backend.close().unwrap();
++        assert_eq!(backend.unsaved_projects().len(), 1, "kept again");
++
++        backend.open(&kept[0].0).unwrap();
++        let saved = tempfile::tempdir().unwrap();
++        backend.save(&saved.path().join("plant.novo")).unwrap();
++        assert!(!backend.is_untitled());
++        backend.close().unwrap();
++        assert!(
++            files_in(dir.path()).is_empty(),
++            "{:?}",
++            files_in(dir.path())
++        );
++    }
++
++    #[test]
++    fn a_saved_project_is_written_as_it_changes() {
++        let dir = tempfile::tempdir().unwrap();
++        let path = dir.path().join("plant.novo");
++        let mut backend = StorageBackend::default();
++        backend.new_project("Plant").unwrap();
++        backend.save(&path).unwrap();
++
++        edit(&mut backend, "2");
++        assert!(backend.is_dirty());
++        backend.tick().unwrap();
++        assert!(!backend.is_dirty());
++
++        // Closing writes what the last tick did not.
++        edit(&mut backend, "3");
++        backend.close().unwrap();
++        let mut reopened = StorageBackend::default();
++        let report = reopened.open(&path).unwrap();
++        assert!(report.set_aside.is_none());
++        assert!(reopened.recovery_offer().is_none());
++        assert_eq!(page_names(&reopened), vec!["1", "2", "3"]);
+     }
+ 
+     /// An untitled project with page 2 autosaved, then a crash.
+diff --git a/crates/novo-app/src/settings.rs b/crates/novo-app/src/settings.rs
+index 2483d9e..99fb745 100644
+--- a/crates/novo-app/src/settings.rs
++++ b/crates/novo-app/src/settings.rs
+@@ -31,6 +31,8 @@ pub struct Settings {
+     /// Whether the outline takes space beside the canvas. `None` pins it
+     /// on wide windows only (docs/DESIGN.md §3).
+     pub outline_pinned: Option<bool>,
++    /// The project open when the app last ran, reopened on start.
++    pub last_open: Option<PathBuf>,
+     /// Most recently used project files, newest first.
+     pub recent_projects: Vec<PathBuf>,
+     /// Ids of recently run actions, newest first; the palette lists them first.
+-- 
+2.43.0
+

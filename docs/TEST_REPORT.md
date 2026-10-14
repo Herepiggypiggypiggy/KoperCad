@@ -16,12 +16,55 @@ How a PR is tested: its branch is merged onto the current `main` (a
 | --- | --- | --- |
 | Model API v0 frozen, with full unit tests | Met | #1, #11, #14, #21 (saved JSON format pinned) and #26 merged. F1 (non-finite numbers) fixed in #11 and covered by `robustness.rs` |
 | Canvas draws model objects | Met | #4 merged; its `PageScene` adapter and headless GPU tests pass on main |
-| 10,000 objects at 60 fps | **Waiting on a real GPU** | Model side and CPU side pass at 10k (see Round 5). Only llvmpipe is available here: 53 ms/frame (debug). The release check is running on Tadjiro's PC |
+| 10,000 objects at 60 fps | Met | Release `canvas-demo` on Tadjiro's work PC (Quadro P1000, Vulkan, 2400x1350): at 10,000 objects 1135 fps average, 222 fps 1% low, 127 fps minimum. At 100,000 objects 113 fps average and 38.5 fps 1% low, with stutter while panning (not a Gate 0 criterion; worth a look before large projects) |
 | Save, close and reopen gives an identical project | Met | `gate0_storage.rs`: Gate 1 and a 10k page reopen with identical JSON, nets and potentials, also after incremental saves, undo and crash recovery |
 | Empty app installs and launches; CI green | Met | #3 merged. Its `installer` job on `798193a` built the installer, installed it as a standard (non-admin) user, found nothing in `HKLM`, and launched the app for 10 s. Linux launch verified under Xvfb |
 | No admin rights | Met | Per-user installer (`PrivilegesRequired=lowest`), `asInvoker` manifest checked in CI, standard-user install passes, no machine-wide paths anywhere in `crates/` or `scripts/` |
 
 main `11363c1` passes fmt, clippy and all 232 workspace tests on Linux.
+**Every Gate 0 criterion is met.**
+
+## Round 6 (2026-10-14, main `9512822`): Gate 1 scenario
+
+New `gate1_scenario.rs` runs the Gate 1 flow, "create a project, place a
+motor starter, wire it, see its terminals and potentials, save and reload",
+using `Command`s only and the real project file. On main it passes:
+- it creates a `.novo` file;
+- it places the supply feeds, `-Q1` MCB (`mcb3`), `-K1` contactor (`main3`),
+  `-F1` overload relay (`ol`), the `-X1` terminals (`term`, `xpe`) and
+  `-M1` motor (`m3`), each found by the short name the user types;
+- it wires all 17 connections;
+- it reads L1, L2, L3 and PE at the motor's U1, V1, W1 and PE with no
+  conflicts;
+- it reads the strip as 1, 2, 3, PE with full designations and kinds;
+- it finds `-X1` by search, draws every symbol on the canvas, then saves
+  and reloads to the same project and potentials.
+
+`e2e_motor_starter.rs` runs the two-page fixture the same way, adding
+cross references and canvas updates from change sets. fmt, clippy and all
+238 workspace tests pass.
+
+**Known gaps** (ignored tests in `gate1_scenario.rs`; run them with `--ignored`):
+
+| Step | Gap | Closed by |
+| --- | --- | --- |
+| Create, open, save through the app | The app's project backend (`StorageBackend`) | #34 |
+| Place by search with the next free tag; a column wires itself | `novo-editor` | #38 |
+| Short names in any case (`MCB3`); mnemonic search, favourites | `by_alias` normalising; `novo-workflow` | #37, #29 |
+| Give selected wires L1, L2, L3 in one step | `Command::AssignPotentials` | #35 |
+| Put terminals on the motor wires in one call; strip screen and checks | `novo-terminals` | #30 |
+| Assign catalog parts; nothing missing | `novo-parts` | #36 |
+| Draw real symbol artwork and pickable tags | `LibraryArt`, text picking; F2 below | #38, #28 |
+
+**F2 (bug, medium, WS-03): a terminal's tag steals clicks from the next
+terminal.** `PageScene` puts each symbol's tag to its right at tag height,
+and picking counts label boxes. On the Gate 1 strip (terminals 8 mm apart),
+`-X1:1`'s tag `=A1+CAB-X1:1` runs across `-X1:2`'s body. A click on `-X1:2`
+then picks `-X1:1` at distance 0, ahead of `-X1:2` at 0.8. The tags also
+overlap one another on screen. Suggestions: show only the terminal name
+(`1`, `2`) on terminal symbols, as strip drawings do; and let ink beat a
+label at equal or near distance when picking. The scenario test checks
+`pick_all` for now, and its comment points here.
 
 ## Round 5 (2026-10-14, main `af01a66`)
 

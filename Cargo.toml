@@ -14,6 +14,7 @@ novo-canvas = { path = "crates/novo-canvas" }
 novo-symbols = { path = "crates/novo-symbols" }
 novo-storage = { path = "crates/novo-storage" }
 novo-sim = { path = "crates/novo-sim" }
+novo-parts = { path = "crates/novo-parts" }
 novo-workflow = { path = "crates/novo-workflow" }
 novo-theme = { path = "crates/novo-theme" }
 bytemuck = { version = "1", features = ["derive"] }

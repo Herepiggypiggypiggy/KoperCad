@@ -30,6 +30,7 @@ Work is split into workstreams (WS-xx), each run by its own Claude thread.
 | `novo-canvas` | WS-03 | GPU canvas: pan, zoom, snap, hit testing, selection |
 | `novo-storage` | WS-04 | SQLite project file, autosave, migrations |
 | `novo-symbols` | WS-05 | IEC 60617 symbols, connection points, behavior slots |
+| `novo-parts` | WS-07 | Part catalog, part assignment, property sheet model, bulk edit |
 | `novo-workflow` | WS-08 | Keyboard workflow: keymap, commands, palette search, Tab orientation, smart duplicate |
 | `novo-sim` | WS-19 | Simulation engine (Phase 4) |
 | `novo-theme` | Layout and branding | Dark theme, design tokens, icons, logo (`assets/branding`) |
@@ -53,6 +54,11 @@ Rules:
   goes in a new pull request from main. After every push, message the reviewer
   with the new head SHA. The thread roster with session ids is in
   `/mnt/project-files/coordination/threads.md`.
+- Every thread keeps `handoff/<thread>/ROADMAP.md`, `HANDOFF.md` and
+  `PROGRESS.md` current (convention in `handoff/README.md`; the project-wide
+  handoff is `handoff/MAIN-HANDOFF.md`). The copy in this repository is what
+  cloud sessions without the project mount read, so commit your updates here
+  too.
 - Until `docs/DESIGN.md` is merged, build engines and commands and keep UI code
   thin.
 

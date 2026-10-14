@@ -254,6 +254,13 @@ pub struct Page {
     pub kind: PageKind,
     #[serde(default)]
     pub format: PageFormat,
+    /// The structure the page belongs to: function (`=A2`) and location
+    /// (`+CAB1`) levels only, never a product level. Pages sort by structure
+    /// first, then by name, and cross references to a page with another
+    /// structure carry it as a prefix (`=A2/3.4`). Empty for a page outside
+    /// any structure.
+    #[serde(default, skip_serializing_if = "DeviceTag::is_empty")]
+    pub structure: DeviceTag,
     #[serde(default)]
     pub properties: Properties,
 }
