@@ -1,18 +1,14 @@
 //! Symbol search for placing (I opens the command field in place mode):
 //! find a symbol in a few letters, with no insert centre to browse.
 //!
-//! - Short mnemonics rank first: `no`, `nc`, `coil`, `mcb`, `mpcb`, `ol`,
-//!   `m3`, `pb`, `lamp`, `term`, `k`.
+//! - The library's aliases (`no`, `nc`, `coil`, `mcb3`, `mpcb`, `ol`, `m3`,
+//!   `pb`, `lamp`, `term`, ...; [`Library::by_alias`]) are the top match.
 //! - Names, keywords, functions and categories from the symbol library
 //!   match fuzzily; recently used symbols rank higher.
-//! - A row of nine favourites; 1 to 9 picks one, so common parts are I then
-//!   one digit.
+//! - Nine favourite slots; 1 to 9 picks one, so common parts are I then
+//!   one digit. The library's other favourites follow without a digit.
 //! - A device tag with a mnemonic (`no K1`, or `K1 no`) places a child
 //!   symbol of that device: a contact of `-K1`.
-//!
-//! The mnemonic and favourite tables here are interim: once novo-symbols
-//! ships `Library::by_alias` and `favorites()` (WS-05, #25), this search
-//! reads them from the library instead of keeping its own.
 //!
 //! [`letter_code`] gives the IEC 81346-2 letter for the next free tag
 //! (`-K1`, `-K2`, ...) of a placed symbol.
@@ -21,37 +17,8 @@ use novo_symbols::{Library, Symbol};
 
 use crate::fuzzy;
 
-/// Mnemonic to symbol id. An exact mnemonic is always the top match.
-pub const MNEMONICS: &[(&str, &str)] = &[
-    ("no", "iec/contacts/no"),
-    ("nc", "iec/contacts/nc"),
-    ("co", "iec/contacts/changeover"),
-    ("coil", "iec/coils/relay"),
-    ("k", "iec/contactors/main_3p"),
-    ("km", "iec/contactors/main_3p"),
-    ("mcb", "iec/protection/mcb_1p"),
-    ("mcb3", "iec/protection/mcb_3p"),
-    ("mpcb", "iec/protection/motor_protection_breaker"),
-    ("ol", "iec/protection/overload_relay"),
-    ("fuse", "iec/protection/fuse"),
-    ("rcd", "iec/protection/rcd_4p"),
-    ("m3", "iec/motors/motor_3ph"),
-    ("m1", "iec/motors/motor_1ph"),
-    ("pb", "iec/operators/pushbutton_no"),
-    ("pbnc", "iec/operators/pushbutton_nc"),
-    ("estop", "iec/operators/emergency_stop"),
-    ("lamp", "iec/signalling/lamp"),
-    ("term", "iec/terminals/terminal"),
-    ("pe", "iec/terminals/terminal_pe"),
-    ("arrow", "iec/connectivity/interruption_point"),
-    ("pot", "iec/connectivity/potential_feed"),
-    ("main", "iec/switches/main_switch_3p"),
-    ("psu", "iec/supplies/power_supply_dc"),
-    ("vfd", "iec/drives/frequency_converter"),
-];
-
-/// Favourites when the user has not chosen their own: what a control
-/// cabinet designer places most.
+/// Slots 1 to 9 when the user has not chosen their own: the library
+/// favourites a control cabinet designer places most, in that order.
 pub const DEFAULT_FAVOURITES: [&str; 9] = [
     "iec/contacts/no",
     "iec/contacts/nc",
@@ -115,13 +82,9 @@ fn looks_like_tag(word: &str) -> bool {
         && suffix.is_empty()
 }
 
-/// The symbol id a mnemonic names exactly, if any.
-pub fn mnemonic(word: &str) -> Option<&'static str> {
-    let word = word.trim().to_lowercase();
-    MNEMONICS
-        .iter()
-        .find(|(m, _)| *m == word)
-        .map(|(_, id)| *id)
+/// The symbol an alias names exactly (`no`, `mcb3`), ignoring case.
+pub fn mnemonic<'l>(library: &'l Library, word: &str) -> Option<&'l Symbol> {
+    library.by_alias(&word.trim().to_lowercase())
 }
 
 /// One row of the insert search.
@@ -129,8 +92,8 @@ pub fn mnemonic(word: &str) -> Option<&'static str> {
 pub struct SymbolHit<'l> {
     pub symbol: &'l Symbol,
     pub score: i32,
-    /// The mnemonic that matched exactly, shown next to the name.
-    pub mnemonic: Option<&'static str>,
+    /// The alias that matched exactly, shown next to the name.
+    pub mnemonic: Option<&'l str>,
 }
 
 /// The insert search over a symbol library.
@@ -208,10 +171,11 @@ impl InsertSearch {
         let mut out: Vec<SymbolHit<'l>> = library
             .iter()
             .filter_map(|symbol| {
-                let mnemonic = MNEMONICS
+                let mnemonic = symbol
+                    .aliases
                     .iter()
-                    .find(|(m, id)| *m == lower && *id == symbol.id)
-                    .map(|(m, _)| *m);
+                    .find(|a| **a == lower)
+                    .map(String::as_str);
                 let last = symbol.id.rsplit('/').next().unwrap_or(&symbol.id);
                 let texts = [symbol.name.as_str(), last, symbol.function.as_str()]
                     .into_iter()
@@ -357,24 +321,28 @@ mod tests {
     }
 
     #[test]
-    fn every_mnemonic_and_favourite_exists() {
+    fn default_slots_are_library_favourites() {
         let lib = library();
-        for (m, id) in MNEMONICS {
-            assert!(lib.get(id).is_some(), "{m} -> {id}");
-        }
         for id in DEFAULT_FAVOURITES {
-            assert!(lib.get(id).is_some(), "{id}");
+            assert!(lib.get(id).is_some_and(|s| s.favorite), "{id}");
         }
     }
 
     #[test]
-    fn mnemonics_are_the_top_match() {
+    fn aliases_are_the_top_match() {
         let lib = library();
         let search = InsertSearch::default();
-        for (m, id) in MNEMONICS {
-            let hits = search.search(&lib, m);
-            // Several mnemonics may name the same symbol; the first hit is it.
-            assert_eq!(hits[0].symbol.id, *id, "{m}");
+        for symbol in lib.iter() {
+            for alias in &symbol.aliases {
+                let hits = search.search(&lib, alias);
+                assert_eq!(hits[0].symbol.id, symbol.id, "{alias}");
+                assert_eq!(hits[0].mnemonic, Some(alias.as_str()));
+            }
+        }
+        for word in [
+            "no", "nc", "coil", "mcb", "mpcb", "ol", "m3", "pb", "lamp", "term",
+        ] {
+            assert!(mnemonic(&lib, word).is_some(), "{word}");
         }
     }
 
@@ -430,8 +398,9 @@ mod tests {
         assert!(child_queries("no").is_empty());
         assert!(child_queries("K1").is_empty());
         assert!(child_queries("motor three").is_empty());
-        assert_eq!(mnemonic("NO"), Some("iec/contacts/no"));
-        assert_eq!(mnemonic("contactor"), None);
+        let lib = library();
+        assert_eq!(mnemonic(&lib, "NO").unwrap().id, "iec/contacts/no");
+        assert!(mnemonic(&lib, "contactor").is_none());
     }
 
     #[test]

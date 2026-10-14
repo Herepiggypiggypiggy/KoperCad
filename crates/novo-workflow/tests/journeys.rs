@@ -149,8 +149,10 @@ fn place_mode_shows_favourites_and_only_symbols() {
     let palette = Palette::default();
     let src = sources(&project, &library, &keymap);
     let rows = palette.search_in(Mode::Place, "", &src);
-    assert_eq!(rows.len(), 9);
-    assert_eq!(rows[0].shortcut.as_deref(), Some("1"));
+    let slots: Vec<_> = rows.iter().filter_map(|r| r.shortcut.clone()).collect();
+    assert_eq!(slots, ["1", "2", "3", "4", "5", "6", "7", "8", "9"]);
+    // The library's other favourites follow, without a digit.
+    assert_eq!(rows.len(), library.favorites().count());
     assert_eq!(rows[0].target, Target::Symbol("iec/contacts/no".into()));
     let rows = palette.search_in(Mode::Place, "undo", &src);
     assert!(rows.iter().all(|r| r.kind == Kind::Symbol));

@@ -17,7 +17,7 @@
 //! With an empty query the field is the menu: "Repeat last tool" first,
 //! then recent picks, then every command by group, each with its key and,
 //! when it can't run now, the reason. In place mode (I) the field searches
-//! symbols only and an empty query shows the favourites 1 to 9.
+//! symbols only and an empty query shows the favourites (1 to 9 first).
 
 use novo_core::{AnyId, DeviceId, Match, PageId, Project, SymbolId};
 use novo_symbols::Library;
@@ -280,7 +280,27 @@ impl Palette {
                 });
             }
         }
+        for symbol in library.favorites() {
+            if !rows
+                .iter()
+                .any(|r| r.target == Target::Symbol(symbol.id.clone()))
+            {
+                rows.push(Row {
+                    target: Target::Symbol(symbol.id.clone()),
+                    kind: Kind::Symbol,
+                    label: symbol.name.clone(),
+                    detail: symbol.category.clone(),
+                    group: FAVOURITES_GROUP,
+                    shortcut: None,
+                    disabled,
+                    score: 0,
+                });
+            }
+        }
         for id in self.symbols.recent() {
+            if rows.iter().any(|r| r.target == Target::Symbol(id.clone())) {
+                continue;
+            }
             if let Some(symbol) = library.get(id) {
                 rows.push(Row {
                     target: Target::Symbol(symbol.id.clone()),
@@ -304,7 +324,7 @@ fn child_rows(project: &Project, sources: &Sources<'_>, query: &str, rows: &mut 
         return;
     };
     for child in insert::child_queries(query) {
-        let Some(symbol) = insert::mnemonic(child.text).and_then(|id| library.get(id)) else {
+        let Some(symbol) = insert::mnemonic(library, child.text) else {
             continue;
         };
         let devices: Vec<DeviceId> = project
