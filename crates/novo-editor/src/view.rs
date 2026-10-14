@@ -29,6 +29,9 @@ const GHOST: Color = Color::rgba(0, 120, 215, 200);
 /// Proposal marks and the pin-hover ring (DESIGN.md §5, steel blue).
 const STEEL: Color = Color::rgb(70, 130, 180);
 const PROPOSAL: Color = Color::rgba(70, 130, 180, 140);
+/// The proposal Enter takes: still dashed, only stronger and heavier, so a
+/// lone proposal never reads as a drawn wire.
+const PROPOSAL_CURRENT: Color = Color::rgba(70, 130, 180, 230);
 /// A pin wins over the symbol body within this many screen points.
 const PIN_RADIUS: f32 = 6.0;
 /// First preview item id; previews count down from here.
@@ -265,19 +268,8 @@ impl SchematicView {
             );
         }
         if !preview.proposals.is_empty() {
-            // Proposals are dashed steel blue; the one Enter takes is solid
-            // (DESIGN.md §5).
             let mut item = Item::new(layer).unselectable();
-            for (i, &(a, b)) in preview.proposals.iter().enumerate() {
-                let line = Shape::line(model::vec(a), model::vec(b));
-                if preview.current == Some(i) {
-                    item = item.with(Primitive::stroked(line, Stroke::world(0.35, STEEL)));
-                } else {
-                    for dash in crate::art::dashes(&line) {
-                        item = item.with(Primitive::stroked(dash, Stroke::world(0.35, PROPOSAL)));
-                    }
-                }
-            }
+            item.primitives = proposal_primitives(&preview.proposals, preview.current);
             items.push(item);
         }
         if let Some(t) = preview.target {
@@ -815,9 +807,71 @@ fn short(name: &str) -> String {
     }
 }
 
+/// Proposal marks (DESIGN.md §5): every proposal is dashed steel blue at
+/// about 55%; the one Enter takes differs by opacity and weight only.
+fn proposal_primitives(proposals: &[(Point, Point)], current: Option<usize>) -> Vec<Primitive> {
+    let mut out = Vec::new();
+    for (i, &(a, b)) in proposals.iter().enumerate() {
+        let stroke = if current == Some(i) {
+            Stroke::world(0.5, PROPOSAL_CURRENT)
+        } else {
+            Stroke::world(0.35, PROPOSAL)
+        };
+        let line = Shape::line(model::vec(a), model::vec(b));
+        out.extend(
+            crate::art::dashes(&line)
+                .into_iter()
+                .map(|dash| Primitive::stroked(dash, stroke)),
+        );
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn proposals_are_all_dashed_and_the_enter_target_only_stronger() {
+        let proposals = [
+            (Point::new(0.0, 0.0), Point::new(40.0, 0.0)),
+            (Point::new(0.0, 10.0), Point::new(40.0, 10.0)),
+        ];
+        for current in [None, Some(0), Some(1)] {
+            let prims = proposal_primitives(&proposals, current);
+            // Each 40 mm proposal is split into several dashes; none is
+            // drawn as one solid line.
+            for (i, &(a, b)) in proposals.iter().enumerate() {
+                let y = a.y as f32;
+                let mine: Vec<_> = prims
+                    .iter()
+                    .filter(|p| match &p.shape {
+                        Shape::Line { a, b } => a.y == y && b.y == y,
+                        _ => false,
+                    })
+                    .collect();
+                assert!(mine.len() > 1, "proposal {i} is not dashed ({current:?})");
+                let full = model::vec(a).distance(model::vec(b));
+                for p in &mine {
+                    let Shape::Line { a, b } = &p.shape else {
+                        unreachable!()
+                    };
+                    assert!(a.distance(*b) < full * 0.5);
+                    let s = p.stroke.unwrap();
+                    if current == Some(i) {
+                        assert_eq!(s.color, PROPOSAL_CURRENT);
+                        assert!(s.width > 0.35);
+                    } else {
+                        assert_eq!(s.color, PROPOSAL);
+                        assert_eq!(s.width, 0.35);
+                    }
+                    // Steel blue, never opaque.
+                    assert_eq!(&s.color.0[..3], &[70, 130, 180]);
+                    assert!(s.color.0[3] < 255);
+                }
+            }
+        }
+    }
     use crate::tool::Tool;
     use novo_core::SymbolRole;
 
