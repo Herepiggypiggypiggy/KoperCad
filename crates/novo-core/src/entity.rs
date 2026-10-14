@@ -322,6 +322,11 @@ pub struct Pin {
     /// routing uses it; it turns and mirrors with the symbol.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub direction: Option<Direction>,
+    /// A spare point that may stay unconnected (a second PE clamp, an
+    /// unused auxiliary contact), copied from the symbol library. Design
+    /// checks do not report it as open.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub optional: bool,
 }
 
 impl Pin {
@@ -330,7 +335,14 @@ impl Pin {
             name: name.into(),
             offset: Point::new(x, y),
             direction: None,
+            optional: false,
         }
+    }
+
+    /// The same pin marked optional, builder style.
+    pub fn optional(mut self) -> Self {
+        self.optional = true;
+        self
     }
 
     /// The same pin with an exit direction, builder style.

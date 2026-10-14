@@ -121,6 +121,9 @@ pub(crate) fn page_cmp(a: &Page, b: &Page) -> Ordering {
         .then(a.id.cmp(&b.id))
 }
 
+/// Property key for a rated current in amperes, on a part or a device.
+pub const RATED_CURRENT_A: &str = "rated_current_a";
+
 /// Compares strings so that embedded numbers sort by value: `2` before `10`.
 pub fn natural_cmp(a: &str, b: &str) -> Ordering {
     let (mut a, mut b) = (a, b);
@@ -715,9 +718,34 @@ impl Project {
     pub fn devices(&self) -> impl Iterator<Item = &Device> {
         self.devices.values()
     }
+
+    /// A device's rated current in amperes: its own
+    /// [`RATED_CURRENT_A`] property (an override), else the first of its
+    /// parts that states one (catalog data). Checks compare it with the
+    /// cross-section of the wires it protects.
+    pub fn rated_current_a(&self, device: DeviceId) -> Option<f64> {
+        fn amps(properties: &crate::entity::Properties) -> Option<f64> {
+            match properties.get(RATED_CURRENT_A)? {
+                crate::entity::Value::Int(i) => Some(*i as f64),
+                crate::entity::Value::Float(f) => Some(*f),
+                _ => None,
+            }
+        }
+        let device = self.devices.get(&device)?;
+        amps(&device.properties).or_else(|| {
+            device
+                .parts
+                .iter()
+                .filter_map(|p| self.parts.get(p))
+                .find_map(|p| amps(&p.properties))
+        })
+    }
     pub fn symbol(&self, id: SymbolId) -> Option<&SymbolInstance> {
         self.symbols.get(&id)
     }
+    /// Every placed symbol in ascending id order (creation order). The
+    /// order is guaranteed and stable across saves; use
+    /// [`Project::cross_references`] or page contents for reading order.
     pub fn symbols(&self) -> impl Iterator<Item = &SymbolInstance> {
         self.symbols.values()
     }

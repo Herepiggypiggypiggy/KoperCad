@@ -369,3 +369,26 @@ fn a_supply_terminal_feeds_its_net() {
     doc.transact("Drop L1", |tx| tx.remove(l1)).unwrap();
     assert_eq!(doc.project().terminal(terminal).unwrap().feed, None);
 }
+
+#[test]
+fn nets_name_what_defines_each_potential() {
+    let mut doc = Document::default();
+    let (_, wires, _) = wires(&mut doc, 1);
+    doc.execute(Command::AssignPotentials {
+        wires: wires.clone(),
+        potentials: vec![PotentialSpec::new("L1", PotentialKind::Line, None)],
+    })
+    .unwrap();
+    let project = doc.project();
+    let l1 = project.potentials().next().unwrap().id;
+    let netlist = project.netlist();
+    let start = project.wire(wires[0]).unwrap().from;
+    let net = netlist.net(netlist.net_of(start).unwrap());
+    assert_eq!(
+        net.sources,
+        [PotentialSource {
+            potential: l1,
+            by: wires[0].into(),
+        }]
+    );
+}
