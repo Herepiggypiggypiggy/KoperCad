@@ -53,7 +53,11 @@ rusqlite = { version = "0.40", features = ["bundled", "backup"] }
 tempfile = "3"
 rust_xlsxwriter = { version = "0.99", default-features = false }
 calamine = { version = "0.36", default-features = false }
+# Known-folder lookup for Documents (SHGetKnownFolderPath on Windows), so
+# redirected or OneDrive Documents folders resolve without our own unsafe.
+dirs = "6"
 eframe = { version = "0.36", default-features = false, features = ["wgpu", "default_fonts", "x11", "wayland"] }
+pdf-writer = "0.15"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

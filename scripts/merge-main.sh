@@ -43,7 +43,7 @@ for f in "${unmerged[@]}"; do
            /^=======$/ && inside { next }
            /^>>>>>>> / { inside = 0; next }
            inside { print }
-         ' "$tmp/marked" | grep -vqE "$crate_line"; then
+         ' "$tmp/marked" | grep -vqE "$crate_line|^$"; then
         echo "conflict in $f is not only crate-list lines; aborting" >&2
         rm -rf "$tmp"
         git merge --abort
@@ -70,10 +70,19 @@ for f in "${unmerged[@]}"; do
       git show ":2:$f" > "$tmp/ours"
       git show ":3:$f" > "$tmp/theirs"
       git merge-file -p --union "$tmp/ours" "$tmp/base" "$tmp/theirs" > "$tmp/merged" || true
-      # Keep the first of any exactly duplicated crate-list line.
-      awk '
-        /^\| `novo-[a-z-]+` \|/ || /^novo-[a-z-]+ = \{ path = / {
-          if (seen[$0]++) next
+      # Replace the merged crate list with main's (sorted, fixed since #51),
+      # keeping only crates that main does not list yet.
+      awk -v main_file="$tmp/theirs" '
+        function key(l) { match(l, /novo-[a-z-]+/); return substr(l, RSTART, RLENGTH) }
+        function is_crate(l) { return l ~ /^\| `novo-[a-z-]+` \|/ || l ~ /^novo-[a-z-]+ = \{ path = / }
+        BEGIN {
+          while ((getline l < main_file) > 0)
+            if (is_crate(l)) { mainl[++n] = l; inmain[key(l)] = 1 }
+        }
+        is_crate($0) {
+          if (!done) { for (i = 1; i <= n; i++) print mainl[i]; done = 1 }
+          if (!(key($0) in inmain) && !seen[key($0)]++) print
+          next
         }
         { print }
       ' "$tmp/merged" > "$f"

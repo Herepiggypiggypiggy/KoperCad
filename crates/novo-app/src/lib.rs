@@ -20,6 +20,7 @@ mod canvas;
 mod model_canvas;
 mod palette;
 mod settings;
+mod theme;
 
 pub use actions::{Action, RESERVED_SHORTCUTS};
 pub use app::NovoApp;
@@ -39,8 +40,7 @@ pub const APP_NAME: &str = "NovoElectric";
 pub const PROJECT_EXTENSION: &str = novo_storage::PROJECT_EXTENSION;
 
 fn window_icon() -> egui::IconData {
-    eframe::icon_data::from_png_bytes(include_bytes!("../../../assets/icon/novoelectric.png"))
-        .unwrap_or_default()
+    eframe::icon_data::from_png_bytes(novo_theme::brand::ICON_PNG_256).unwrap_or_default()
 }
 
 /// Opens the main window and runs until it is closed.
