@@ -127,11 +127,7 @@ impl ProjectFile {
                 // replaced; it must not be offered against the new one.
                 remove_if_exists(&sibling(path, AUTOSAVE_SUFFIX))?;
             }
-            if let Some(lock) = lock {
-                lock.close().map_err(|(_, e)| StorageError::from(e))?;
-            }
-            std::fs::rename(&temp, path)?;
-            Ok(())
+            replace(&temp, path, lock)
         })();
         if let Err(err) = written {
             let _ = std::fs::remove_file(&temp);
@@ -376,6 +372,32 @@ fn lock_existing(path: &Path) -> Result<Option<Connection>> {
         Err(e) if is_not_a_database(&e) => Ok(None),
         Err(e) => Err(classify(e, path)),
     }
+}
+
+/// Moves the finished `temp` file over `path` without a moment in which
+/// another program could open the old file and then lose it to the rename.
+///
+/// On Unix a file can be renamed over while open, so the target's lock is
+/// held until the new file is in place: anyone trying to open the old file
+/// meanwhile gets `Locked`. On Windows a file open in another program cannot
+/// be replaced, so the lock is released first; if something opens the
+/// target in that instant, the rename fails and nothing is replaced.
+fn replace(temp: &Path, path: &Path, lock: Option<Connection>) -> Result<()> {
+    let release = |lock: Option<Connection>| -> Result<()> {
+        if let Some(lock) = lock {
+            lock.close().map_err(|(_, e)| StorageError::from(e))?;
+        }
+        Ok(())
+    };
+    if cfg!(windows) {
+        release(lock)?;
+        std::fs::rename(temp, path)?;
+    } else {
+        std::fs::rename(temp, path)?;
+        // The lock now refers to the replaced file; closing it releases it.
+        let _ = release(lock);
+    }
+    Ok(())
 }
 
 fn classify(err: rusqlite::Error, path: &Path) -> StorageError {
