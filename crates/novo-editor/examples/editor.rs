@@ -91,7 +91,8 @@ impl eframe::App for EditorApp {
             ));
         });
         egui::CentralPanel::no_frame().show(ui, |ui| {
-            self.view.show(ui, &mut self.doc, self.page);
+            // A real shell records these for saving (ProjectBackend::record).
+            let _changes = self.view.show(ui, &mut self.doc, self.page);
         });
         // Page Up / Page Down and "New page after this" open another page.
         if let Some(page) = self.view.take_page_request() {

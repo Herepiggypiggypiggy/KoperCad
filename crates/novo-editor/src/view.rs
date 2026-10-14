@@ -190,7 +190,7 @@ impl SchematicView {
         }
     }
 
-    fn apply_changes(&mut self, document: &Document) {
+    fn apply_changes(&mut self, document: &Document) -> ChangeSet {
         let changes = self.editor.take_changes();
         if let Some(scene) = &mut self.scene
             && !changes.is_empty()
@@ -201,6 +201,7 @@ impl SchematicView {
         if let Some(ids) = self.editor.take_selection() {
             self.select(&ids);
         }
+        changes
     }
 
     /// Draws the tool preview into the page scene, replacing last frame's.
@@ -261,10 +262,13 @@ impl SchematicView {
     /// Draws the page and handles the editing tools. Call once per frame
     /// with the open document and page; edits go through
     /// `Document::transact`, so they share the shell's undo history.
-    pub fn show(&mut self, ui: &mut egui::Ui, document: &mut Document, page: PageId) {
+    /// Draws the page and runs the tools. Returns every change the editor
+    /// made to `document` this frame, merged, so the shell can record it
+    /// (incremental save, autosave) and tell its other views.
+    pub fn show(&mut self, ui: &mut egui::Ui, document: &mut Document, page: PageId) -> ChangeSet {
         if document.project().page(page).is_none() {
             self.scene = None;
-            return;
+            return ChangeSet::default();
         }
         self.sync(document, page);
         self.update_preview(document, page);
@@ -272,7 +276,7 @@ impl SchematicView {
         self.canvas.interaction.select = !self.editor.tool_active();
         self.canvas.interaction.escape_on_hover = false;
         let Some(scene) = &self.scene else {
-            return;
+            return ChangeSet::default();
         };
         let out = self.canvas.show(ui, scene.scene());
         let response = out.response.clone();
@@ -332,8 +336,9 @@ impl SchematicView {
         self.rename_popup(&ctx, document);
         self.context_menu(&ctx, document);
 
-        self.apply_changes(document);
+        let changes = self.apply_changes(document);
         self.status = Some(self.editor.status(document, page));
+        changes
     }
 
     fn handle_keys(
@@ -719,6 +724,8 @@ mod tests {
         view: SchematicView,
         doc: Document,
         page: PageId,
+        /// Everything `show` reported, for the shell's save path.
+        reported: ChangeSet,
     }
 
     impl Harness {
@@ -730,6 +737,7 @@ mod tests {
                 view: SchematicView::default(),
                 doc,
                 page,
+                reported: ChangeSet::default(),
             };
             h.frame(Vec::new());
             h.frame(Vec::new());
@@ -746,7 +754,11 @@ mod tests {
                 ..Default::default()
             };
             let (view, doc, page) = (&mut self.view, &mut self.doc, self.page);
-            let mut out = self.ctx.run_ui(input, |ui| view.show(ui, doc, page));
+            let mut changes = ChangeSet::default();
+            let mut out = self
+                .ctx
+                .run_ui(input, |ui| changes = view.show(ui, doc, page));
+            self.reported.merge(&changes);
             out.textures_delta.clear();
         }
 
@@ -809,6 +821,10 @@ mod tests {
             .map(|d| d.tag.to_string())
             .collect();
         assert_eq!(tags, ["-K1", "-K2"]);
+        // The shell hears of every edit, so storage can record it.
+        for s in h.doc.project().symbols() {
+            assert!(h.reported.added.contains(&AnyId::Symbol(s.id)));
+        }
         // The scene shows both symbols, and the status bar the next tag.
         let scene = h.view.scene.as_ref().unwrap();
         for s in h.doc.project().symbols() {
