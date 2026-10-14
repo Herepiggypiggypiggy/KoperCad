@@ -1,0 +1,16 @@
+[package]
+name = "novo-terminals"
+description = "Terminal strips: placement, same-name join rule, strip editor model, terminal connection screens and checks (WS-11)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+novo-core.workspace = true
+
+[dev-dependencies]
+novo-symbols.workspace = true
+novo-tests = { path = "../novo-tests" }
+
+[lints]
+workspace = true
