@@ -629,6 +629,15 @@ impl Editor {
         true
     }
 
+    /// Whether `at` is on the highlighted proposal, within `tolerance`.
+    pub fn on_highlighted(&self, at: Point, tolerance: f64) -> bool {
+        self.highlighted().is_some_and(|i| {
+            let f = &self.proposals[i];
+            let (q, _) = crate::geometry::closest_on_segment(at, f.a, f.b);
+            q.distance(at) <= tolerance
+        })
+    }
+
     /// Delete on the highlighted proposal: declines it, drawing nothing.
     pub fn decline_proposal(&mut self) -> bool {
         let Some(i) = self.highlighted() else {

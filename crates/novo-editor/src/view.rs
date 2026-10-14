@@ -474,13 +474,19 @@ impl SchematicView {
         // Exactly no modifiers: Shift+R is not R.
         let pressed = |key: Key| ctx.input_mut(|i| consume_plain_key(i, key));
         // Enter accepts the highlighted proposal, Tab moves to the next one
-        // and Delete declines it (DESIGN.md §4, §5).
+        // and Delete on it declines it (DESIGN.md §4, §5).
         if !self.editor.proposals().is_empty() {
             if pressed(Key::Enter) {
                 self.editor.accept_proposal(document);
             } else if pressed(Key::Tab) {
                 self.editor.next_proposal();
-            } else if pressed(Key::Delete) {
+            } else if out.cursor_raw.is_some_and(|w| {
+                // Only with the pointer on it; elsewhere Delete deletes.
+                let zoom = self.canvas.viewport.zoom;
+                let tolerance = f64::from(self.canvas.pick_tolerance.max(PIN_RADIUS) / zoom);
+                self.editor.on_highlighted(point(w), tolerance)
+            }) && pressed(Key::Delete)
+            {
                 self.editor.decline_proposal();
             }
         }
@@ -1232,7 +1238,7 @@ mod tests {
         // ...and lets go once it travels more than 24 px.
         h.hover(x, y + 30.0 * px);
         assert_eq!(h.view.editor.highlighted(), Some(2));
-        // Delete declines the highlighted one and draws nothing.
+        // Delete on the highlighted one declines it and draws nothing.
         h.key(Key::Delete);
         assert_eq!(h.view.editor.proposals().len(), 2);
         assert_eq!(h.doc.project().wires().count(), 0);
@@ -1246,6 +1252,14 @@ mod tests {
         let wire = h.doc.project().wires().next().unwrap();
         let ends = [wire.from, wire.to];
         assert!(ends.contains(&target.from) && ends.contains(&target.to));
+        // Away from the highlighted proposal Delete is the usual delete: it
+        // removes the selection (the contactor just placed), not a proposal.
+        let selected = h.view.selection();
+        assert!(!selected.is_empty());
+        h.hover(x + 60.0 * px, y);
+        let before = h.doc.project().symbols().count();
+        h.key(Key::Delete);
+        assert_eq!(h.doc.project().symbols().count(), before - 1);
     }
 
     #[test]
