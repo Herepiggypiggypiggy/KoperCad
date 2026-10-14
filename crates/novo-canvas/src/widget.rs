@@ -10,10 +10,13 @@
 //! ```
 //!
 //! Default controls: wheel zooms at the cursor, middle drag (or trackpad
-//! scroll) pans, pinch or Ctrl+wheel zooms, double middle click fits the
-//! scene. Left click selects (Shift adds, Ctrl toggles), left drag on empty
-//! space box-selects (left to right: window, right to left: crossing),
-//! Escape clears the selection.
+//! scroll) pans, right drag pans once it moves past 4 points (a right click
+//! stays a click: see [`CanvasOutput::context_click`]), pinch or Ctrl+wheel
+//! zooms, double middle click fits the scene. Left click selects (Shift
+//! adds, Ctrl toggles), left drag on empty space box-selects (left to right:
+//! window, right to left: crossing). Escape climbs one rung of the ladder in
+//! [`CanvasView::escape_with`]: cancel the step, leave the tool, clear the
+//! selection.
 
 use crate::geom::Aabb;
 use crate::grid::{Grid, GridStyle};
@@ -157,6 +160,11 @@ pub struct Interaction {
     pub hover: bool,
     /// Show a marker where the cursor snaps.
     pub snap_marker: bool,
+    /// Run [`CanvasView::escape`] when Escape is pressed while the pointer
+    /// is over the canvas. Apps that route Escape themselves (whenever the
+    /// drawing has keyboard focus) turn this off and call `escape` or
+    /// `escape_with` directly, so one key press climbs one rung.
+    pub escape_on_hover: bool,
 }
 
 impl Default for Interaction {
@@ -167,8 +175,42 @@ impl Default for Interaction {
             select: true,
             hover: true,
             snap_marker: true,
+            escape_on_hover: true,
         }
     }
+}
+
+/// A right drag pans only after the pointer has moved this many points, so
+/// a plain right click stays a click (for context menus).
+pub const RIGHT_PAN_THRESHOLD: f32 = 4.0;
+
+/// What one Escape press did, top rung first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EscapeOutcome {
+    /// A step in progress was cancelled: a selection band, or the tool's
+    /// current step (the wire being drawn, a move in progress).
+    CancelledStep,
+    /// The active tool was left, back to selection.
+    LeftTool,
+    /// The selection was cleared.
+    ClearedSelection,
+    /// Nothing to undo; the app may pass Escape on.
+    Nothing,
+}
+
+/// The tool side of the Escape ladder. Editing tools (WS-06) implement it;
+/// [`CanvasView::escape_with`] asks them before clearing the selection.
+pub trait EscapeTarget {
+    /// Cancels the step in progress. Returns false when there is none.
+    fn cancel_step(&mut self) -> bool;
+    /// Leaves the tool. Returns false when no tool is active.
+    fn leave_tool(&mut self) -> bool;
+}
+
+#[derive(Clone, Copy, Debug)]
+struct RightDrag {
+    origin: egui::Pos2,
+    panning: bool,
 }
 
 static NEXT_CANVAS_ID: AtomicU64 = AtomicU64::new(1);
@@ -195,6 +237,7 @@ pub struct CanvasView {
     highlight_source: (u64, u64),
     hovered: Option<ItemId>,
     band: Option<Vec2>,
+    right_drag: Option<RightDrag>,
     fit_pending: bool,
     stats: FrameStats,
 }
@@ -220,6 +263,13 @@ pub struct CanvasOutput {
     pub selection_changed: bool,
     /// World position of a primary click, after snapping.
     pub clicked: Option<Snapped>,
+    /// World position of a right click that did not turn into a pan (moved
+    /// less than [`RIGHT_PAN_THRESHOLD`]), after snapping. Open context menus
+    /// on this rather than `response.secondary_clicked()`, whose click
+    /// distance differs from the pan threshold.
+    pub context_click: Option<Snapped>,
+    /// What a built-in Escape press did (see [`Interaction::escape_on_hover`]).
+    pub escape: Option<EscapeOutcome>,
 }
 
 impl Default for CanvasView {
@@ -248,9 +298,38 @@ impl CanvasView {
             highlight_source: (0, u64::MAX),
             hovered: None,
             band: None,
+            right_drag: None,
             fit_pending: true,
             stats: FrameStats::default(),
         }
+    }
+
+    /// One Escape press without a tool: cancels a selection band in
+    /// progress, else clears the selection.
+    pub fn escape(&mut self) -> EscapeOutcome {
+        self.escape_with(None)
+    }
+
+    /// One Escape press: cancels the step in progress (a selection band,
+    /// then the tool's step), else leaves the tool, else clears the
+    /// selection. Call it whenever the drawing has keyboard focus.
+    pub fn escape_with(&mut self, tool: Option<&mut dyn EscapeTarget>) -> EscapeOutcome {
+        if self.band.take().is_some() {
+            return EscapeOutcome::CancelledStep;
+        }
+        if let Some(tool) = tool {
+            if tool.cancel_step() {
+                return EscapeOutcome::CancelledStep;
+            }
+            if tool.leave_tool() {
+                return EscapeOutcome::LeftTool;
+            }
+        }
+        if !self.selection.is_empty() {
+            self.selection.clear();
+            return EscapeOutcome::ClearedSelection;
+        }
+        EscapeOutcome::Nothing
     }
 
     /// Fits the scene into view on the next frame.
@@ -288,7 +367,7 @@ impl CanvasView {
         let to_local = |p: egui::Pos2| Vec2::new(p.x - rect.min.x, p.y - rect.min.y);
         let hover_local = response.hover_pos().map(to_local);
 
-        self.handle_navigation(ui, &response, hover_local, scene);
+        let context_click = self.handle_navigation(ui, &response, hover_local, scene);
 
         let tol = self.viewport.screen_to_world_len(self.pick_tolerance);
         let cursor_raw = hover_local.map(|p| self.viewport.screen_to_world(p));
@@ -342,17 +421,20 @@ impl CanvasView {
                 self.selection.apply(ids, op);
                 selection_changed |= self.selection.revision() != rev;
             }
-            if ui.ctx().input(|i| i.key_pressed(egui::Key::Escape)) && response.hovered() {
-                self.band = None;
-                let rev = self.selection.revision();
-                self.selection.clear();
-                selection_changed |= self.selection.revision() != rev;
-            }
         } else {
             self.band = None;
         }
         if !ui.ctx().input(|i| i.pointer.primary_down()) && !response.dragged() {
             self.band = None;
+        }
+        let mut escape = None;
+        if self.interaction.escape_on_hover
+            && response.hovered()
+            && ui.ctx().input(|i| i.key_pressed(egui::Key::Escape))
+        {
+            let rev = self.selection.revision();
+            escape = Some(self.escape());
+            selection_changed |= self.selection.revision() != rev;
         }
 
         let rev = self.selection.revision();
@@ -385,6 +467,8 @@ impl CanvasView {
             hovered: self.hovered,
             selection_changed,
             clicked,
+            context_click: context_click.then_some(cursor).flatten(),
+            escape,
         }
     }
 
@@ -394,15 +478,15 @@ impl CanvasView {
         response: &egui::Response,
         hover: Option<Vec2>,
         scene: &Scene,
-    ) {
-        if self.interaction.pan
-            && (response.dragged_by(egui::PointerButton::Middle)
-                || response.dragged_by(egui::PointerButton::Secondary))
-        {
+    ) -> bool {
+        if self.interaction.pan && response.dragged_by(egui::PointerButton::Middle) {
             let d = response.drag_delta();
             self.viewport.pan_by_screen(Vec2::new(d.x, d.y));
         }
-        let Some(anchor) = hover else { return };
+        let context_click = self.right_drag_pan(ui, response);
+        let Some(anchor) = hover else {
+            return context_click;
+        };
         let (events, zoom_delta) = ui.ctx().input(|i| (i.events.clone(), i.zoom_delta()));
         if self.interaction.zoom && zoom_delta != 1.0 {
             self.viewport.zoom_at(anchor, zoom_delta);
@@ -451,6 +535,52 @@ impl CanvasView {
                 _ => {}
             }
         }
+        context_click
+    }
+
+    /// Right drag pans once the pointer has moved past the threshold;
+    /// returns true for a right click that never did.
+    fn right_drag_pan(&mut self, ui: &egui::Ui, response: &egui::Response) -> bool {
+        let (pressed, down, pos) = ui.ctx().input(|i| {
+            (
+                i.pointer.button_pressed(egui::PointerButton::Secondary),
+                i.pointer.secondary_down(),
+                i.pointer.latest_pos(),
+            )
+        });
+        if pressed
+            && response.contains_pointer()
+            && let Some(origin) = pos
+        {
+            self.right_drag = Some(RightDrag {
+                origin,
+                panning: false,
+            });
+        }
+        let Some(mut drag) = self.right_drag else {
+            return false;
+        };
+        if !down {
+            self.right_drag = None;
+            return !drag.panning;
+        }
+        if let Some(pos) = pos {
+            if drag.panning {
+                let d = ui.ctx().input(|i| i.pointer.delta());
+                if self.interaction.pan {
+                    self.viewport.pan_by_screen(Vec2::new(d.x, d.y));
+                }
+            } else if pos.distance(drag.origin) > RIGHT_PAN_THRESHOLD {
+                drag.panning = true;
+                // Catch up with the movement below the threshold.
+                let d = pos - drag.origin;
+                if self.interaction.pan {
+                    self.viewport.pan_by_screen(Vec2::new(d.x, d.y));
+                }
+            }
+        }
+        self.right_drag = Some(drag);
+        false
     }
 
     fn build_frame(
@@ -672,5 +802,146 @@ impl CanvasView {
         };
         self.tessellator
             .primitive(mesh, &Primitive::stroked(shape, stroke));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::scene::Item;
+    use crate::shape::Shape;
+
+    fn scene() -> Scene {
+        let mut s = Scene::new();
+        s.insert(
+            ItemId(1),
+            Item::new(crate::LayerId(0)).with(Primitive::stroked(
+                Shape::line(Vec2::ZERO, Vec2::new(100.0, 0.0)),
+                Stroke::default(),
+            )),
+        );
+        s
+    }
+
+    /// Runs one frame of a canvas filling an 800x600 window.
+    fn frame(
+        ctx: &egui::Context,
+        view: &mut CanvasView,
+        scene: &Scene,
+        events: Vec<egui::Event>,
+    ) -> (bool, Option<EscapeOutcome>) {
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(800.0, 600.0),
+            )),
+            events,
+            ..Default::default()
+        };
+        let mut out = (false, None);
+        let mut output = ctx.run_ui(input, |ui| {
+            egui::CentralPanel::default()
+                .frame(egui::Frame::NONE)
+                .show(ui, |ui| {
+                    let o = view.show(ui, scene);
+                    out = (o.context_click.is_some(), o.escape);
+                });
+        });
+        output.textures_delta.clear();
+        out
+    }
+
+    fn moved(x: f32, y: f32) -> egui::Event {
+        egui::Event::PointerMoved(egui::pos2(x, y))
+    }
+
+    fn right(x: f32, y: f32, pressed: bool) -> egui::Event {
+        egui::Event::PointerButton {
+            pos: egui::pos2(x, y),
+            button: egui::PointerButton::Secondary,
+            pressed,
+            modifiers: Default::default(),
+        }
+    }
+
+    fn setup() -> (egui::Context, CanvasView, Scene) {
+        let ctx = egui::Context::default();
+        let mut view = CanvasView::new();
+        let scene = scene();
+        frame(&ctx, &mut view, &scene, vec![moved(400.0, 300.0)]);
+        (ctx, view, scene)
+    }
+
+    #[test]
+    fn right_click_without_drag_is_a_context_click() {
+        let (ctx, mut view, scene) = setup();
+        let center = view.viewport.center;
+        frame(&ctx, &mut view, &scene, vec![right(400.0, 300.0, true)]);
+        frame(&ctx, &mut view, &scene, vec![moved(402.0, 301.0)]);
+        let (context, _) = frame(&ctx, &mut view, &scene, vec![right(402.0, 301.0, false)]);
+        assert!(context);
+        assert_eq!(view.viewport.center, center);
+    }
+
+    #[test]
+    fn right_drag_past_threshold_pans() {
+        let (ctx, mut view, scene) = setup();
+        let center = view.viewport.center;
+        frame(&ctx, &mut view, &scene, vec![right(400.0, 300.0, true)]);
+        frame(&ctx, &mut view, &scene, vec![moved(430.0, 300.0)]);
+        frame(&ctx, &mut view, &scene, vec![moved(450.0, 300.0)]);
+        let (context, _) = frame(&ctx, &mut view, &scene, vec![right(450.0, 300.0, false)]);
+        assert!(!context);
+        // The page followed the pointer by the full 50 points.
+        let moved_world = (center - view.viewport.center).x * view.viewport.zoom;
+        assert!((moved_world - 50.0).abs() < 1e-3, "{moved_world}");
+    }
+
+    #[test]
+    fn escape_ladder() {
+        struct Tool {
+            step: bool,
+            active: bool,
+        }
+        impl EscapeTarget for Tool {
+            fn cancel_step(&mut self) -> bool {
+                std::mem::take(&mut self.step)
+            }
+            fn leave_tool(&mut self) -> bool {
+                std::mem::take(&mut self.active)
+            }
+        }
+        let mut view = CanvasView::new();
+        view.selection.apply([ItemId(1)], SelectOp::Replace);
+        let mut tool = Tool {
+            step: true,
+            active: true,
+        };
+        let mut press = |view: &mut CanvasView| view.escape_with(Some(&mut tool));
+        assert_eq!(press(&mut view), EscapeOutcome::CancelledStep);
+        assert_eq!(press(&mut view), EscapeOutcome::LeftTool);
+        assert_eq!(press(&mut view), EscapeOutcome::ClearedSelection);
+        assert_eq!(press(&mut view), EscapeOutcome::Nothing);
+        assert!(view.selection.is_empty());
+    }
+
+    #[test]
+    fn escape_on_hover_climbs_one_rung() {
+        let (ctx, mut view, scene) = setup();
+        view.selection.apply([ItemId(1)], SelectOp::Replace);
+        let key = egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Default::default(),
+        };
+        let (_, esc) = frame(&ctx, &mut view, &scene, vec![key.clone()]);
+        assert_eq!(esc, Some(EscapeOutcome::ClearedSelection));
+        view.interaction.escape_on_hover = false;
+        view.selection.apply([ItemId(1)], SelectOp::Replace);
+        let (_, esc) = frame(&ctx, &mut view, &scene, vec![key]);
+        assert_eq!(esc, None);
+        assert_eq!(view.selection.len(), 1);
     }
 }
