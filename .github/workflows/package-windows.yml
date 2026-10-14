@@ -1,0 +1,118 @@
+name: Windows installer
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "packaging/windows/**"
+      - "assets/icon/**"
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".cargo/**"
+      - ".github/workflows/package-windows.yml"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release
+      - run: cargo build --release -p novo-app
+      - name: Install Inno Setup if missing
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y }
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $version = ((cargo pkgid -p novo-app) -split '[#@]')[-1]
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne "v$version") {
+            throw "tag $env:GITHUB_REF_NAME does not match the crate version $version"
+          }
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" packaging\windows\novoelectric.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Check no admin rights are requested
+        shell: pwsh
+        run: |
+          # The installer and the app must run without elevation.
+          foreach ($exe in @((Get-ChildItem dist\NovoElectric-*-setup.exe)[0].FullName, "target\release\novoelectric.exe")) {
+            $text = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($exe))
+            if ($text -match 'requireAdministrator|highestAvailable') { throw "$exe asks for admin rights" }
+          }
+          # A dynamically linked MSVC runtime would need the machine-wide VC++
+          # Redistributable, which a standard user cannot install.
+          $app = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes("target\release\novoelectric.exe"))
+          if ($app -match '(?i)vcruntime140|msvcp140|api-ms-win-crt-') { throw "novoelectric.exe links the MSVC runtime dynamically" }
+      - name: Install as a standard (non-admin) user
+        shell: pwsh
+        run: |
+          $user = "novotest"
+          $pw = ConvertTo-SecureString ("Nv1!" + [guid]::NewGuid().ToString("N")) -AsPlainText -Force
+          New-LocalUser -Name $user -Password $pw -PasswordNeverExpires | Out-Null
+          Add-LocalGroupMember -Group Users -Member $user
+          if (Get-LocalGroupMember -Group Administrators | Where-Object Name -like "*\$user") { throw "test user is an admin" }
+          $cred = New-Object PSCredential("$env:COMPUTERNAME\$user", $pw)
+
+          # Processes started with -Credential inherit this job's environment,
+          # including TEMP, which the test user cannot write to. Give it a
+          # work folder of its own.
+          $work = "C:\novotest"
+          New-Item -ItemType Directory -Force "$work\temp" | Out-Null
+          icacls $work /grant "${user}:(OI)(CI)F" | Out-Null
+          $env:TEMP = "$work\temp"
+          $env:TMP = "$work\temp"
+          # The same goes for the profile variables the shell folder lookups
+          # expand ({localappdata} failed with access denied on the runner's).
+          $profileDir = "C:\Users\$user"
+          $env:USERPROFILE = $profileDir
+          $env:HOMEDRIVE = "C:"
+          $env:HOMEPATH = "\Users\$user"
+          $env:USERNAME = $user
+          $env:APPDATA = "$profileDir\AppData\Roaming"
+          $env:LOCALAPPDATA = "$profileDir\AppData\Local"
+          # Loading the profile once creates it.
+          Start-Process cmd.exe -Credential $cred -LoadUserProfile -WorkingDirectory $work -ArgumentList "/c", "exit" -Wait
+          if (-not (Test-Path $profileDir)) { throw "profile for $user was not created" }
+
+          $setup = (Get-ChildItem dist\NovoElectric-*-setup.exe)[0]
+          Copy-Item $setup.FullName "$work\novo-setup.exe"
+          $p = Start-Process "$work\novo-setup.exe" -Credential $cred -LoadUserProfile -WorkingDirectory $work `
+            -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=$work\install.log" -Wait -PassThru
+          Get-Content "$work\install.log" -ErrorAction SilentlyContinue | Select-Object -Last 20
+          if ($p.ExitCode -ne 0) { throw "installer exited with $($p.ExitCode)" }
+
+          $exe = "C:\Users\$user\AppData\Local\Programs\NovoElectric\novoelectric.exe"
+          if (-not (Test-Path $exe)) { throw "novoelectric.exe is not in the user's %LOCALAPPDATA%\Programs" }
+          if (Test-Path "HKLM:\Software\Classes\NovoElectric.Project") { throw "file association was written machine-wide" }
+          if (Test-Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{AEB465B9-04F0-475B-AD7F-091D638587B5}_is1") { throw "uninstall entry was written machine-wide" }
+
+      - name: Launch the installed app
+        shell: pwsh
+        run: |
+          # A GUI started with -Credential from the runner's service session
+          # has no desktop to attach to, so this step runs the installed exe
+          # as the runner; its asInvoker manifest (checked above) means it
+          # runs with whatever rights its user has.
+          $exe = "C:\Users\novotest\AppData\Local\Programs\NovoElectric\novoelectric.exe"
+          $app = Start-Process $exe -WorkingDirectory C:\novotest -PassThru
+          Start-Sleep -Seconds 10
+          if ($app.HasExited) { throw "novoelectric.exe exited at startup with code $($app.ExitCode)" }
+          Stop-Process -Id $app.Id
+          $setup = (Get-ChildItem dist\NovoElectric-*-setup.exe)[0]
+          $size = [math]::Round($setup.Length / 1MB, 1)
+          "Installer: $($setup.Name), $size MB, installed as a standard user, app launched" >> $env:GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NovoElectric-windows-installer
+          path: dist/*.exe
+          if-no-files-found: error

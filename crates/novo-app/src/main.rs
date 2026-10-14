@@ -2,37 +2,19 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use eframe::egui;
-
 fn main() -> eframe::Result {
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_title("NovoElectric")
-            .with_inner_size([1280.0, 800.0]),
-        ..Default::default()
-    };
-    eframe::run_native(
-        "NovoElectric",
-        options,
-        Box::new(|_cc| Ok(Box::<App>::default())),
-    )
-}
-
-#[derive(Default)]
-struct App;
-
-impl eframe::App for App {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        egui::Panel::top("menu").show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.strong("NovoElectric");
-                ui.label(format!("model v{}", novo_core::MODEL_VERSION));
-            });
-        });
-        egui::CentralPanel::default().show(ui, |ui| {
-            ui.centered_and_justified(|ui| {
-                ui.label("Canvas arrives with WS-03");
-            });
-        });
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let result = novo_app::run();
+    if let Err(e) = &result {
+        // Release builds on Windows have no console, so say it in a dialog.
+        log::error!("NovoElectric could not start: {e}");
+        rfd::MessageDialog::new()
+            .set_level(rfd::MessageLevel::Error)
+            .set_title("NovoElectric could not start")
+            .set_description(format!(
+                "{e}\n\nNovoElectric needs a graphics driver with Vulkan, DirectX 12 or OpenGL support."
+            ))
+            .show();
     }
+    result
 }
