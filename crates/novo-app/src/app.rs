@@ -598,7 +598,7 @@ impl NovoApp {
             self.run(&ctx, action);
         }
         for command in commands {
-            self.run_command(&ctx, command, None);
+            self.run_key_command(&ctx, command);
         }
     }
 

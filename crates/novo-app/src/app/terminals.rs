@@ -241,13 +241,14 @@ pub(super) fn proposal_marks(proposals: &[Suggestion], current: usize) -> Vec<Ma
                 String::new()
             },
         };
-        if i == current {
-            marks.push(Mark {
-                text: String::new(),
-                ..mark.clone()
-            });
-        }
+        // The texted mark goes first: of two marks on the same area the
+        // canvas notes the first, and it skips marks without text.
+        let heavier = (i == current).then(|| Mark {
+            text: String::new(),
+            ..mark.clone()
+        });
         marks.push(mark);
+        marks.extend(heavier);
     }
     marks
 }

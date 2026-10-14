@@ -264,6 +264,17 @@ impl NovoApp {
         keys::take_commands(ctx, &self.wb.keymap, focus, |c| self.claims_key(c))
     }
 
+    /// Runs a command from a key press. Space only arms the command field:
+    /// it opens on the release, unless the pointer moved more than 4 px in
+    /// between (a held Space pans); every other key runs its command.
+    pub(super) fn run_key_command(&mut self, ctx: &egui::Context, id: &str) {
+        if id == "view.command_field_here" {
+            self.wb.space_down = ctx.pointer_latest_pos().or(Some(egui::Pos2::ZERO));
+        } else {
+            self.run_command(ctx, id, None);
+        }
+    }
+
     /// Runs a command by its novo-workflow id, from a key or the command
     /// field. `argument` is what was typed after its verb.
     pub(super) fn run_command(&mut self, ctx: &egui::Context, id: &str, argument: Option<&str>) {
@@ -289,12 +300,6 @@ impl NovoApp {
                 Some(text) => self.wb.field.open_with(Mode::Place, text, pointer),
                 None => self.wb.field.open(Mode::Place, pointer),
             },
-            // A tapped Space opens the field at the pointer: the press is
-            // noted here and the field opens on the release, unless the
-            // pointer moved more than 4 px in between (a held Space pans).
-            "view.command_field_here" if argument.is_none() => {
-                self.wb.space_down = pointer.or(Some(egui::Pos2::ZERO));
-            }
             "view.command_field_here" => self.wb.field.open(Mode::All, pointer),
             "tool.connect" => {
                 if let Some(view) = self.canvas.schematic() {

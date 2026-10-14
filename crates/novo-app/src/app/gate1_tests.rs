@@ -521,6 +521,23 @@ fn marks_keys_and_export_follow_the_design() {
             .count(),
         1
     );
+    // The canvas shows that note: on the proposal nearest the pointer, or
+    // the top-left one without a pointer, which is the Enter target here.
+    {
+        let view = &d.app.canvas.schematic_ref().unwrap().canvas;
+        let scene = novo_canvas::Scene::default();
+        let placed = novo_canvas::marks::layout(&marks, &scene, &view.viewport);
+        let Some(novo_canvas::marks::Placed::Outline { mark, .. }) =
+            novo_canvas::marks::nearest_proposal(&placed, None)
+        else {
+            panic!("a proposal outline is placed");
+        };
+        assert!(
+            marks.list[*mark].text.contains("↵ accept · Tab next"),
+            "the hint is shown: {:?}",
+            marks.list[*mark]
+        );
+    }
     // Problems sit on their objects: the motor's PE and the unwired
     // contactor poles are warnings on those symbols.
     let problems: Vec<_> = marks
@@ -563,6 +580,11 @@ fn marks_keys_and_export_follow_the_design() {
     assert!(d.app.wb.field.is_open(), "on the release");
     d.key(egui::Key::Escape, egui::Modifiers::NONE);
     assert!(!d.app.wb.field.is_open());
+
+    // Picked from the command field (or run by a script), it opens at once.
+    d.app.run_command(&ctx, "view.command_field_here", None);
+    assert!(d.app.wb.field.is_open());
+    d.app.wb.field.close();
 
     // A command the app cannot run yet is listed greyed, with a reason.
     d.app.wb.field.open(Mode::All, None);
