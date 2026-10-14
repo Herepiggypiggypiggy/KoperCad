@@ -70,7 +70,9 @@ fn build_starter(doc: &mut Document) -> Starter {
                 "iec/terminal",
                 at(10.0, 30.0),
                 two_pins(),
-                SymbolRole::Terminal { terminal: t1 },
+                SymbolRole::Terminal {
+                    terminals: vec![t1],
+                },
             )?;
             let stop = tx.place_symbol(
                 page1,
@@ -474,7 +476,7 @@ fn terminals_and_jumpers() {
                     "iec/terminal",
                     at(20.0 * i as f64, 0.0),
                     two_pins(),
-                    SymbolRole::Terminal { terminal: t },
+                    SymbolRole::Terminal { terminals: vec![t] },
                 )?);
             }
             let order: Vec<String> = tx
@@ -1103,4 +1105,255 @@ fn stale_info_ops_are_refused() {
     );
     project.apply(&rename.inverse()).unwrap();
     assert_eq!(project.info().name, "A");
+}
+
+#[test]
+fn multi_level_terminals_keep_levels_apart() {
+    let mut doc = Document::default();
+    let ((block, upper, lower), _) = doc
+        .transact("2-level terminal", |tx| {
+            let page = tx.add_page("1")?;
+            let x3 = tx.add_terminal_strip(tag("-X3"))?;
+            let upper = tx.add_terminal(x3, "1")?;
+            let lower = tx.add_terminal(x3, "2")?;
+            let created = tx.execute(Command::PlaceSymbol {
+                page,
+                symbol: "iec/terminals/terminal_2level".into(),
+                placement: at(0.0, 0.0),
+                role: SymbolRole::Terminal {
+                    terminals: vec![upper, lower],
+                },
+                pins: vec![
+                    Pin::new("1", 0.0, 0.0),
+                    Pin::new("2", 0.0, 8.0),
+                    Pin::new("3", 8.0, 0.0),
+                    Pin::new("4", 8.0, 8.0),
+                ],
+                bridges: vec![vec![0, 1], vec![2, 3]],
+            })?;
+            let [AnyId::Symbol(block)] = created[..] else {
+                panic!("unexpected {created:?}")
+            };
+            Ok((block, upper, lower))
+        })
+        .unwrap();
+    let p = doc.project();
+    let net = p.netlist();
+    assert!(net.connected(Endpoint::pin(block, 0), Endpoint::pin(block, 1)));
+    assert!(net.connected(Endpoint::pin(block, 2), Endpoint::pin(block, 3)));
+    assert!(!net.connected(Endpoint::pin(block, 1), Endpoint::pin(block, 2)));
+    assert_eq!(p.symbol(block).unwrap().terminal_of_pin(3), Some(lower));
+    assert_eq!(
+        p.pin_designation(PinRef::new(block, 0)).as_deref(),
+        Some("-X3:1")
+    );
+    assert_eq!(
+        p.pin_designation(PinRef::new(block, 3)).as_deref(),
+        Some("-X3:2")
+    );
+    assert_eq!(p.symbols_of_terminal(upper).len(), 1);
+    assert_eq!(p.symbols_of_terminal(lower).len(), 1);
+
+    // A jumper between the levels joins them.
+    doc.transact("jumper", |tx| {
+        tx.update::<Terminal>(upper, |t| t.jumper = Some(1))?;
+        tx.update::<Terminal>(lower, |t| t.jumper = Some(1))
+    })
+    .unwrap();
+    assert!(
+        doc.project()
+            .netlist()
+            .connected(Endpoint::pin(block, 1), Endpoint::pin(block, 2))
+    );
+
+    // Levels and bridge groups must match one to one.
+    let err = doc
+        .transact("x", |tx| {
+            tx.update::<SymbolInstance>(block, |s| s.bridges = vec![vec![0, 1, 2, 3]])
+        })
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        ModelError::TerminalLevels {
+            terminals: 2,
+            bridges: 1,
+            ..
+        }
+    ));
+    let err = doc
+        .transact("x", |tx| {
+            tx.update::<SymbolInstance>(block, |s| {
+                s.role = SymbolRole::Terminal { terminals: vec![] }
+            })
+        })
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        ModelError::TerminalLevels { terminals: 0, .. }
+    ));
+
+    // Deleting one level's terminal deletes the block that draws it.
+    doc.transact("x", |tx| tx.remove(lower)).unwrap();
+    assert!(doc.project().symbol(block).is_none());
+}
+
+#[test]
+fn pin_directions_turn_with_the_symbol() {
+    let mut doc = Document::default();
+    let (contact, _) = doc
+        .transact("x", |tx| {
+            let page = tx.add_page("1")?;
+            tx.place_symbol(
+                page,
+                "iec/contacts/no",
+                Placement {
+                    origin: Point::new(40.0, 40.0),
+                    rotation: Rotation::R90,
+                    mirrored: false,
+                },
+                vec![
+                    Pin::new("13", 0.0, 0.0).with_direction(Direction::Up),
+                    Pin::new("14", 0.0, 16.0).with_direction(Direction::Down),
+                    Pin::new("x", 4.0, 8.0),
+                ],
+                SymbolRole::Unassigned,
+            )
+        })
+        .unwrap();
+    let symbol = doc.project().symbol(contact).unwrap();
+    // A vertical contact turned a quarter counter-clockwise lies horizontally.
+    assert_eq!(symbol.pin_direction(0), Some(Direction::Left));
+    assert_eq!(symbol.pin_direction(1), Some(Direction::Right));
+    assert_eq!(symbol.pin_position(1), Some(Point::new(56.0, 40.0)));
+    assert_eq!(symbol.pin_direction(2), None);
+    assert_eq!(symbol.pin_direction(9), None);
+
+    // Pins without a direction keep their old JSON form.
+    let json = serde_json::to_value(&symbol.pins[2]).unwrap();
+    assert!(json.get("direction").is_none());
+    let json = serde_json::to_value(&symbol.pins[0]).unwrap();
+    assert_eq!(json["direction"], "up");
+}
+
+#[test]
+fn split_wire_refuses_its_own_ends() {
+    let mut doc = Document::default();
+    let (wire, _) = doc
+        .transact("x", |tx| {
+            let page = tx.add_page("1")?;
+            let a = tx.place_symbol(page, "s", at(0.0, 0.0), two_pins(), SymbolRole::Unassigned)?;
+            let b = tx.place_symbol(
+                page,
+                "s",
+                at(100.0, 0.0),
+                two_pins(),
+                SymbolRole::Unassigned,
+            )?;
+            // a:2 at (0,5) -> bend (50,20) -> b:2 at (100,5).
+            let wire = tx.connect(Endpoint::pin(a, 1), Endpoint::pin(b, 1))?;
+            tx.update::<Wire>(wire, |w| w.route = vec![Point::new(50.0, 20.0)])?;
+            Ok(wire)
+        })
+        .unwrap();
+    let before = state(doc.project());
+    // Clicks beyond either end clamp onto the end itself.
+    for click in [Point::new(-10.0, 5.0), Point::new(130.0, 0.0)] {
+        let err = doc
+            .transact("split", |tx| tx.split_wire(wire, click))
+            .unwrap_err();
+        assert_eq!(err, ModelError::SplitAtEnd(wire));
+    }
+    assert_eq!(state(doc.project()), before);
+    // Splitting at an interior bend is fine: both halves have length.
+    let ((junction, _), _) = doc
+        .transact("split", |tx| tx.split_wire(wire, Point::new(50.0, 25.0)))
+        .unwrap();
+    assert_eq!(
+        doc.project().junction(junction).unwrap().position,
+        Point::new(50.0, 20.0)
+    );
+}
+
+type Edit = dyn Fn(&mut Tx<'_>) -> Result<()>;
+
+/// NaN and infinity have no JSON or SQLite form: a project holding one
+/// saves but cannot be reopened. Every edit path must refuse them.
+#[test]
+fn non_finite_numbers_are_refused() {
+    let mut doc = Document::default();
+    let s = build_starter(&mut doc);
+    let before = state(doc.project());
+    for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        let edits: Vec<(&str, Box<Edit>)> = vec![
+            (
+                "placement",
+                Box::new(move |tx| tx.move_symbol(s.coil, at(bad, 0.0))),
+            ),
+            (
+                "pins",
+                Box::new(move |tx| {
+                    tx.update::<SymbolInstance>(s.coil, |c| c.pins[0].offset.y = bad)
+                }),
+            ),
+            (
+                "position",
+                Box::new(move |tx| tx.add_junction(s.page1, Point::new(0.0, bad)).map(|_| ())),
+            ),
+            (
+                "route",
+                Box::new(move |tx| {
+                    tx.update::<Wire>(s.w_start_coil, |w| w.route = vec![Point::new(bad, 1.0)])
+                }),
+            ),
+            (
+                "cross_section_mm2",
+                Box::new(move |tx| {
+                    tx.update::<Wire>(s.w_start_coil, |w| w.cross_section_mm2 = Some(bad))
+                }),
+            ),
+            (
+                "voltage",
+                Box::new(move |tx| tx.update::<Potential>(s.l, |p| p.voltage = Some(bad))),
+            ),
+            (
+                "cores",
+                Box::new(move |tx| {
+                    let mut core = CableCore::new("1");
+                    core.cross_section_mm2 = Some(bad);
+                    tx.add_cable(tag("-W9"), vec![core]).map(|_| ())
+                }),
+            ),
+            (
+                "properties",
+                Box::new(move |tx| tx.set_property(s.k1, "rating", Some(Value::Float(bad)))),
+            ),
+        ];
+        for (field, edit) in edits {
+            let err = doc.transact("bad", |tx| edit(tx)).unwrap_err();
+            assert!(
+                matches!(err, ModelError::NonFinite { field: f, .. } if f == field),
+                "{field}: {err:?}"
+            );
+        }
+        let err = doc
+            .transact("bad", |tx| {
+                tx.set_info(|i| {
+                    i.properties.insert("x".into(), Value::Float(bad));
+                })
+            })
+            .unwrap_err();
+        assert_eq!(err, ModelError::NonFiniteInfo);
+    }
+    assert_eq!(state(doc.project()), before);
+    // What is left still saves and reopens.
+    Project::from_json(&doc.project().to_json()).unwrap();
+
+    // Commands from scripts take the same path.
+    let err = doc
+        .execute(Command::AddJunction {
+            page: s.page1,
+            position: Point::new(f64::NAN, 0.0),
+        })
+        .unwrap_err();
+    assert!(matches!(err, ModelError::NonFinite { .. }));
 }

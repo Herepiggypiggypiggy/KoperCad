@@ -4,7 +4,8 @@
 //! in the same net when they are joined by:
 //! - a wire,
 //! - a bridge inside a symbol (`SymbolInstance::bridges`),
-//! - being pins of the same terminal (a terminal conducts end to end),
+//! - being pins of the same terminal (a terminal conducts end to end; each
+//!   level of a multi-level terminal is its own terminal),
 //! - a jumper between terminals of one strip (same `Terminal::jumper` group),
 //! - interruption points with the same name.
 //!
@@ -127,11 +128,13 @@ impl Netlist {
                 uf.union_all(group.iter().map(|&p| base + usize::from(p)));
             }
             match &symbol.role {
-                SymbolRole::Terminal { terminal } => {
-                    by_terminal
-                        .entry(*terminal)
-                        .or_default()
-                        .extend(pins_of(symbol.id, symbol.pins.len()));
+                SymbolRole::Terminal { .. } => {
+                    for pin in 0..symbol.pins.len() {
+                        let pin16 = u16::try_from(pin).expect("pin count fits u16");
+                        if let Some(terminal) = symbol.terminal_of_pin(pin16) {
+                            by_terminal.entry(terminal).or_default().push(base + pin);
+                        }
+                    }
                 }
                 SymbolRole::Interruption { name } => {
                     by_interruption
