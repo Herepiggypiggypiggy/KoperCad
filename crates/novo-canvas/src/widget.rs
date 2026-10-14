@@ -20,6 +20,7 @@
 
 use crate::geom::Aabb;
 use crate::grid::{Grid, GridStyle};
+use crate::marks::{self, MarkKind, Marks, Placed};
 use crate::render::{self, CanvasRenderer, FrameData, GpuCanvas, KeyedMesh, TargetConfig};
 use crate::scene::{BoxMode, Hit, ItemId, Scene};
 use crate::selection::{SelectOp, Selection};
@@ -134,6 +135,20 @@ pub struct CanvasStyle {
     pub band_window: Color,
     pub band_crossing: Color,
     pub snap_marker: Color,
+    /// Mark colours (docs/DESIGN.md §5). Copper is never a mark colour.
+    /// The defaults read on the canvas's default white sheet; the app's dark
+    /// theme maps its own (agreed with the layout thread): proposal INFO at
+    /// 55%, override #989691, added #7FB086, modified #D6A55C and removed
+    /// #E0766C at 50%, mark text #C4C2BD.
+    pub proposal: Color,
+    pub warning: Color,
+    pub error: Color,
+    pub override_mark: Color,
+    pub added: Color,
+    pub modified: Color,
+    pub removed: Color,
+    /// Text of mark hints and hover notes.
+    pub mark_text: Color,
 }
 
 impl Default for CanvasStyle {
@@ -152,6 +167,14 @@ impl Default for CanvasStyle {
             band_window: Color::rgb(40, 110, 230),
             band_crossing: Color::rgb(30, 160, 80),
             snap_marker: Color::rgb(230, 60, 160),
+            proposal: Color::rgba(70, 110, 160, 140),
+            warning: Color::rgb(214, 150, 40),
+            error: Color::rgb(200, 50, 45),
+            override_mark: Color::rgb(130, 130, 135),
+            added: Color::rgb(40, 150, 70),
+            modified: Color::rgb(214, 150, 40),
+            removed: Color::rgba(200, 60, 60, 150),
+            mark_text: Color::rgb(40, 40, 45),
         }
     }
 }
@@ -239,6 +262,8 @@ pub struct CanvasView {
     pub min_label_size: f32,
     /// Keep the drawing on whole device pixels ([`Viewport::snap_to_pixels`]).
     pub pixel_snap: bool,
+    /// Proposals, problems, overrides and changes drawn over the drawing.
+    pub marks: Marks,
     tessellator: Tessellator,
     mesh_cache: tessellate::ItemMeshCache,
     scene_mesh: Option<Arc<SceneMesh>>,
@@ -284,6 +309,9 @@ pub struct CanvasOutput {
     pub context_click: Option<Snapped>,
     /// What a built-in Escape press did (see [`Interaction::escape_on_hover`]).
     pub escape: Option<EscapeOutcome>,
+    /// Marks (indices into `CanvasView::marks.list`) under the cursor's
+    /// glyph; their text is shown as a hover note.
+    pub hovered_marks: Vec<usize>,
 }
 
 impl Default for CanvasView {
@@ -306,6 +334,7 @@ impl CanvasView {
             wheel_zoom_step: 1.2,
             min_label_size: 4.0,
             pixel_snap: true,
+            marks: Marks::default(),
             tessellator: Tessellator::default(),
             mesh_cache: tessellate::ItemMeshCache::default(),
             scene_mesh: None,
@@ -496,6 +525,8 @@ impl CanvasView {
             );
         }
 
+        let hovered_marks = self.paint_marks(ui, rect, scene, hover_local);
+
         CanvasOutput {
             response,
             cursor,
@@ -506,6 +537,7 @@ impl CanvasView {
             clicked,
             context_click: context_click.then_some(cursor).flatten(),
             escape,
+            hovered_marks,
         }
     }
 
@@ -737,6 +769,135 @@ impl CanvasView {
     }
 
     /// Draws item labels with egui's text renderer, on top of the geometry.
+    /// Paints the marks over the drawing and its text, and returns the marks
+    /// under the cursor's glyph (whose note is shown beside it).
+    fn paint_marks(
+        &self,
+        ui: &egui::Ui,
+        rect: egui::Rect,
+        scene: &Scene,
+        cursor: Option<Vec2>,
+    ) -> Vec<usize> {
+        let placed = marks::layout(&self.marks, scene, &self.viewport);
+        if placed.is_empty() {
+            return Vec::new();
+        }
+        let painter = ui.painter_at(rect);
+        let c32 = |c: Color| {
+            let [r, g, b, a] = c.0;
+            egui::Color32::from_rgba_unmultiplied(r, g, b, a)
+        };
+        let at = |v: Vec2| rect.min + egui::vec2(v.x, v.y);
+        let st = &self.style;
+        let font = egui::FontId::proportional(11.0);
+        for p in &placed {
+            match p {
+                Placed::Outline { kind, rect: r, .. } => {
+                    let color = c32(match kind {
+                        MarkKind::Proposal => st.proposal,
+                        MarkKind::Added => st.added,
+                        MarkKind::Modified => st.modified,
+                        _ => st.removed,
+                    });
+                    let corners = [
+                        at(r.min),
+                        at(Vec2::new(r.max.x, r.min.y)),
+                        at(r.max),
+                        at(Vec2::new(r.min.x, r.max.y)),
+                        at(r.min),
+                    ];
+                    let stroke = egui::Stroke::new(1.5, color);
+                    if kind.is_dashed() {
+                        painter.extend(egui::Shape::dashed_line(&corners, stroke, 5.0, 3.0));
+                    } else {
+                        painter.add(egui::Shape::line(corners.to_vec(), stroke));
+                    }
+                }
+                Placed::Glyph { kind, pos, marks } => {
+                    let c = at(*pos);
+                    let h = marks::GLYPH_SIZE * 0.5;
+                    match kind {
+                        MarkKind::Warning => {
+                            painter.add(egui::Shape::convex_polygon(
+                                vec![
+                                    c + egui::vec2(0.0, -h),
+                                    c + egui::vec2(h, h * 0.8),
+                                    c + egui::vec2(-h, h * 0.8),
+                                ],
+                                c32(st.warning),
+                                egui::Stroke::NONE,
+                            ));
+                        }
+                        MarkKind::Error => {
+                            let pts = (0..8)
+                                .map(|i| {
+                                    let a = std::f32::consts::TAU * (i as f32 + 0.5) / 8.0;
+                                    c + egui::vec2(a.cos(), a.sin()) * h
+                                })
+                                .collect();
+                            painter.add(egui::Shape::convex_polygon(
+                                pts,
+                                c32(st.error),
+                                egui::Stroke::NONE,
+                            ));
+                        }
+                        _ => {
+                            let pts = vec![
+                                c + egui::vec2(0.0, -h),
+                                c + egui::vec2(h, 0.0),
+                                c + egui::vec2(0.0, h),
+                                c + egui::vec2(-h, 0.0),
+                            ];
+                            painter.add(egui::Shape::closed_line(
+                                pts,
+                                egui::Stroke::new(1.5, c32(st.override_mark)),
+                            ));
+                        }
+                    }
+                    if marks.len() > 1 {
+                        painter.text(
+                            c + egui::vec2(h + 2.0, -h),
+                            egui::Align2::LEFT_TOP,
+                            marks.len().to_string(),
+                            font.clone(),
+                            c32(st.mark_text),
+                        );
+                    }
+                }
+            }
+        }
+
+        let note = |pos: egui::Pos2, text: &str| {
+            let galley = painter.layout_no_wrap(text.to_owned(), font.clone(), c32(st.mark_text));
+            let r = egui::Rect::from_min_size(pos, galley.size()).expand(3.0);
+            painter.rect_filled(r, 2.0, c32(st.background).gamma_multiply(0.92));
+            painter.galley(pos, galley, c32(st.mark_text));
+        };
+        // The hint goes on the nearest proposal only.
+        if let Some(Placed::Outline { rect: r, mark, .. }) =
+            marks::nearest_proposal(&placed, cursor)
+            && let Some(m) = self.marks.list.get(*mark)
+            && !m.text.is_empty()
+        {
+            note(at(Vec2::new(r.min.x, r.max.y + 4.0)), &m.text);
+        }
+        let Some(Placed::Glyph { pos, marks, .. }) =
+            cursor.and_then(|c| marks::glyph_at(&placed, c))
+        else {
+            return Vec::new();
+        };
+        let text: Vec<&str> = marks
+            .iter()
+            .filter_map(|&i| self.marks.list.get(i))
+            .map(|m| m.text.as_str())
+            .filter(|t| !t.is_empty())
+            .collect();
+        if !text.is_empty() {
+            note(at(*pos + Vec2::new(10.0, 6.0)), &text.join("\n"));
+        }
+        marks.clone()
+    }
+
     fn paint_labels(&self, ui: &egui::Ui, rect: egui::Rect, scene: &Scene) {
         // Above this size glyphs get expensive to rasterise and the label
         // fills the screen anyway.
