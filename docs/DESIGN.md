@@ -41,7 +41,7 @@ The user manipulates five kinds of things. Everything else is derived.
 | Derived | From | Automatic or proposed |
 | --- | --- | --- |
 | Wire routes and corners | Routed once when a connection is made, then stored | Automatic; `tidy` re-routes on request |
-| Junction dots and T-junctions | Where stored routes meet | Automatic; a dot can be dragged |
+| Junction dots and T-junctions | Where stored routes meet | Automatic; a dot can be dragged. A dot means three or more conductors join: a straight run of two connections through a point, a corner and a crossing without a connection get no dot (IEC 60617) |
 | Connections between placed pins | Where a placed or moved symbol's pins land | Automatic when pins touch or a pin lands on a connection. Free pins that face each other at a distance are proposed: drawn as proposals in the placement preview, so the click is informed, and still there after the drop for Enter or Tab. Moving a symbol never makes a connection the preview did not show |
 | Potentials (L1, L2, L3, N, PE, 24 V) | The declared source, flowing through conductors, contacts and terminals | Automatic. Recognising PE, N and PEN by name (`X4:PE`) is a visible, switchable rule; one conductor can be overridden |
 | Cross references and contact images | Which device a contact belongs to | Automatic |
@@ -103,7 +103,8 @@ What the screen must do:
 - **Search or run** (Ctrl+K): the command surface.
 - **Issue pill:** the issue count; a click opens Issues. Each count lives
   in exactly one place: the pill counts issues, the dock counts proposals.
-- **Saved:** autosave state.
+- **Saved:** the only save signal, reading Saving, Saved or Not saved yet.
+  See Saving below.
 
 **Outline (left, 248 px).** Pinned above 1700 px wide, a flyout below;
 pinned from its pin button or the "Pin outline" command. Three modes:
@@ -176,6 +177,15 @@ it differs from the reader's page (`=A2/3.4`). Revision fields come from the
 project's revisions, which also drive Changes mode and the pinned-flow
 freeze (§8). Owners: WS-03 draws the frame (`PageScene::frame`), WS-10 owns
 the reference format, and the frame choice is a rule like any other.
+
+**Saving.** There are no save prompts and no Save step to remember. A named
+project is written into its own `.novo` file continuously, about half a
+second after each change and on close, so reopening shows exactly what was
+left. An untitled project closed with work in it is kept and offered back
+(under Unsaved with Recent, and reopened at start-up if it was the last one
+open); naming it saves it as `<Documents>\NovoElectric\<name>.novo`. The
+deliberate checkpoints are revisions and exports (§8), not Save. Ctrl+S
+names an untitled project and otherwise only confirms Saved.
 
 **Start-up.** The app opens the last project where it was left: same page
 and zoom, nothing selected. There is no start screen to click through. With
@@ -261,7 +271,7 @@ clear the selection.
 | Ctrl+C / Ctrl+X / Ctrl+V | Copy, cut, paste with the next free tags |
 | Ctrl+Shift+V | Paste with the original tags |
 | Ctrl+D | Duplicate with the next free tags |
-| Ctrl+S / Ctrl+N / Ctrl+O | Save, new, open |
+| Ctrl+S / Ctrl+N / Ctrl+O | Name an untitled project (otherwise confirms Saved), new, open |
 | Ctrl+Shift+S / Ctrl+W / Ctrl+Q | Save as, close project, quit |
 | Delete | Delete the selection and its dangling connections |
 | Esc | The Escape ladder |
@@ -284,7 +294,7 @@ between fields as usual.
 | --- | --- | --- |
 | Selection | Copper, 2 px | none |
 | Hover | Steel blue | none |
-| Proposal (terminals, cable, part) | Dashed steel blue at 55% | "↵ accept · Tab next" on the nearest one only |
+| Proposal (terminals, cable, part) | Dashed steel blue at 55%; the highlighted one solid steel blue | "↵ accept · Tab next" on the highlighted one only |
 | Warning | Small amber triangle, top right of the object, screen sized | on hover |
 | Error | Small red octagon, same place | on hover |
 | Override | Hollow grey diamond, top left, while Shift+O is held | the inspector shows "override" and a reset arrow |
@@ -297,6 +307,12 @@ between fields as usual.
   position at once, so they stay apart for colour-blind users.
 - Change marks appear only in Changes mode, so they never compete with
   proposals and problems.
+- **Which proposal Enter takes.** Exactly one proposal is highlighted, and
+  it carries the hint, so Enter never acts on something unmarked. The
+  highlight follows the pointer to the nearest proposal on the page; Tab
+  moves it to the next one in page order and holds it there until the
+  pointer travels more than 24 px. Delete on the highlighted proposal
+  declines it.
 
 ## 6. Journeys and budgets
 
@@ -380,6 +396,14 @@ connections by drag, one proposal accept). With a block: 11.
 aspect (`-K301` for the first contactor on page 3). Typing `-K5` keeps the
 page's function and location. A duplicate is refused while typing.
 
+**Letter codes** follow IEC 81346-2 by what a device is for, and come from
+the symbol or part, not from the user: a miniature circuit breaker that
+protects a circuit is F (`mcb`), a motor protective circuit breaker or a
+circuit breaker that switches a feeder is Q (`mpcb`), a contactor is Q, an
+overload relay is F. Because companies differ here, each class has a rule
+sentence ("Circuit breakers are coded [by purpose ▾ | always Q | always
+F]"), and a typed tag always wins.
+
 **Undo:** Ctrl+Z undoes the last gesture in every canvas, drawer and field,
 and brings the affected page into view. Text fields keep their own Ctrl+Z
 while focused. The undo history lives for the session; crash recovery
@@ -428,6 +452,8 @@ user has edited:
 | Facing pins at a distance | Connect on placement; propose; ignore | **Propose**, in the placement preview; touching pins connect |
 | Command language | English only; translated words; aliases | **Aliases**: English and Dutch words both match; tags and IEC codes never translate |
 | Start-up | Start screen; last project | **Last project**, where it was left; the empty canvas offers New, Open, Example and Recent |
+| Saving | Save command and prompts; continuous | **Continuous**, into the project's own file; revisions and exports are the checkpoints |
+| Junction dots | Every meeting point; three or more conductors | **Three or more**; straight runs, corners and crossings get none |
 
 ## 9. What we leave behind
 
@@ -441,8 +467,9 @@ user has edited:
 | Corner and T-piece symbols | EPLAN | Drawing artefacts of connectivity, not intent |
 | Linking cross references by hand | EPLAN | References follow ownership |
 | Assigning potentials wire by wire | EPLAN | The source declares it once |
+| Save prompts and "save before closing?" | Most desktop software | Work is never lost and never asked about |
 | Autoconnect at any distance, without warning | EPLAN | Connections the user never saw; facing pins are proposed in the preview |
-| Start screens and tips of the day | Most CAD | A click between the user and their project; hints sit where the next action is |
+| Start screens and tips of the day | Most CAD | A click between the user and their project; hints sit where the next action is. The empty-canvas New/Open/Recent view is not one: it appears only when no project is open, never in front of one |
 | Tabbed property dialogs | Windows CAD | Relations first, then search |
 | Update, build and check runs | EPLAN | Everything is live; problems are marked in place |
 | File/Edit/View menu bar | Windows applications | A second, worse index of commands |
