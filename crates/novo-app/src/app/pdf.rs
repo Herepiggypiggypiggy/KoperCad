@@ -3,6 +3,11 @@
 //! (`Plant 2.novo` gives `Plant 2.pdf`), so projects with the same title
 //! never share a PDF; a project with no file yet exports to
 //! `<Documents>\NovoElectric\<name>.pdf` under a name not used yet.
+//!
+//! Only a PDF NovoElectric wrote (its `/Producer`) is ever replaced: a
+//! user's own `<stem>.pdf` stays, and the export takes `<stem> 2.pdf`.
+//! The PDF is written to a temporary file first and renamed into place, so
+//! a failed export never leaves a half-written file.
 
 use std::path::{Path, PathBuf};
 
@@ -17,7 +22,7 @@ impl NovoApp {
         // An untitled project's file is a temporary one; it has no name yet.
         let file = self.backend.file().filter(|_| !self.backend.is_untitled());
         let path = match file {
-            Some(file) => file.with_extension("pdf"),
+            Some(file) => replaceable_path(&file.with_extension("pdf")),
             None => {
                 let Some(dir) = projects_dir() else {
                     self.message(Level::Error, "Could not find the Documents folder");
@@ -38,17 +43,15 @@ impl NovoApp {
         let art = self
             .library()
             .map(|lib| novo_editor::art::LibraryArt::new(lib, options.style.symbol));
-        let result = std::fs::create_dir_all(path.parent().unwrap_or(path))
-            .map_err(novo_pdf::PdfError::from)
-            .and_then(|()| match &art {
-                Some(art) => novo_pdf::write_pdf(doc.project(), &options, art, path),
-                None => novo_pdf::write_pdf(
-                    doc.project(),
-                    &options,
-                    &novo_canvas::model::PlaceholderArt,
-                    path,
-                ),
-            });
+        let result = match &art {
+            Some(art) => novo_pdf::export_pdf_with_art(doc.project(), &options, art),
+            None => novo_pdf::export_pdf_with_art(
+                doc.project(),
+                &options,
+                &novo_canvas::model::PlaceholderArt,
+            ),
+        }
+        .and_then(|bytes| write_replacing(path, &bytes).map_err(novo_pdf::PdfError::from));
         match result {
             Ok(()) => {
                 let remaining = if summary.is_clean() {
@@ -68,6 +71,53 @@ impl NovoApp {
             }
         }
     }
+}
+
+/// Bytes NovoElectric puts in every PDF it writes.
+const OUR_PRODUCER: &[u8] = b"/Producer (NovoElectric)";
+
+/// Whether `path` is a PDF this app wrote, so replacing it loses nothing
+/// the user made.
+fn is_ours(path: &Path) -> bool {
+    std::fs::read(path)
+        .is_ok_and(|bytes| bytes.windows(OUR_PRODUCER.len()).any(|w| w == OUR_PRODUCER))
+}
+
+/// `path` itself when it is free or ours to replace, else the first free or
+/// ours of `<stem> 2.pdf`, `<stem> 3.pdf`...
+fn replaceable_path(path: &Path) -> PathBuf {
+    let stem = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let mut n = 1;
+    loop {
+        let candidate = if n == 1 {
+            path.to_owned()
+        } else {
+            path.with_file_name(format!("{stem} {n}.pdf"))
+        };
+        if !candidate.exists() || is_ours(&candidate) {
+            return candidate;
+        }
+        n += 1;
+    }
+}
+
+/// Writes `bytes` to a temporary file beside `path`, then renames it over
+/// `path`. The temporary file is removed when anything fails.
+fn write_replacing(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let mut name = path.file_name().unwrap_or_default().to_owned();
+    name.push(format!(".{}.part", std::process::id()));
+    let temp = path.with_file_name(name);
+    let written = std::fs::write(&temp, bytes).and_then(|()| std::fs::rename(&temp, path));
+    if written.is_err() {
+        let _ = std::fs::remove_file(&temp);
+    }
+    written
 }
 
 /// `<dir>/<name>.pdf`, or `<name> 2.pdf`, `<name> 3.pdf`... when taken, so
@@ -94,7 +144,53 @@ fn free_path(dir: &Path, name: &str) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::free_path;
+    use super::*;
+
+    #[test]
+    fn only_our_own_pdfs_are_replaced() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Plant.pdf");
+        assert_eq!(replaceable_path(&path), path, "free");
+
+        let project = novo_core::Project::new("Plant");
+        let ours = novo_pdf::export_pdf_with_art(
+            &project,
+            &Default::default(),
+            &novo_canvas::model::PlaceholderArt,
+        )
+        .unwrap();
+        write_replacing(&path, &ours).unwrap();
+        assert!(is_ours(&path));
+        assert_eq!(replaceable_path(&path), path, "ours");
+
+        std::fs::write(&path, b"%PDF-1.7 the user's own drawing").unwrap();
+        let next = dir.path().join("Plant 2.pdf");
+        assert_eq!(replaceable_path(&path), next, "theirs stays");
+        write_replacing(&next, &ours).unwrap();
+        assert_eq!(
+            replaceable_path(&path),
+            next,
+            "and the next export reuses ours"
+        );
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            b"%PDF-1.7 the user's own drawing"
+        );
+    }
+
+    #[test]
+    fn a_failed_write_leaves_no_temporary_file() {
+        let dir = tempfile::tempdir().unwrap();
+        // A folder where the PDF should go: the rename cannot replace it.
+        let path = dir.path().join("Plant.pdf");
+        std::fs::create_dir(&path).unwrap();
+        assert!(write_replacing(&path, b"%PDF").is_err());
+        let names: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(names, vec![std::ffi::OsString::from("Plant.pdf")]);
+    }
 
     #[test]
     fn an_untitled_export_never_takes_a_used_name() {
