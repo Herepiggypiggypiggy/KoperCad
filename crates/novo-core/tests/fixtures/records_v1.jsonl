@@ -2,7 +2,7 @@
 {"record":"part","id":8,"manufacturer":"Phoenix Contact","order_number":"3031212","type_number":"","description":"","properties":{}}
 {"record":"potential","id":9,"name":"L1","kind":"line","voltage":400.0,"properties":{}}
 {"record":"page","id":1,"name":"1","title":"","kind":{"type":"schematic"},"format":{"size":"A3","landscape":true,"columns":10},"properties":{}}
-{"record":"page","id":2,"name":"2","title":"Control","kind":{"type":"generated","generator":"terminal_diagram"},"format":{"size":"A4","landscape":true,"columns":10},"properties":{"approved":true}}
+{"record":"page","id":2,"name":"2","title":"Control","kind":{"type":"generated","generator":"terminal_diagram"},"format":{"size":"A4","landscape":true,"columns":10},"structure":"=A2+CAB1","properties":{"approved":true}}
 {"record":"device","id":4,"tag":"=A1+CAB1-K1","description":"Main contactor","kind":"general","parts":[3],"properties":{"note":"spare contact"}}
 {"record":"device","id":5,"tag":"+CAB1-X1","description":"","kind":"terminal_strip","parts":[],"properties":{}}
 {"record":"terminal","id":6,"strip":5,"name":"1","kind":"feedthrough","level":1,"order":0,"jumper":1,"part":8,"properties":{}}

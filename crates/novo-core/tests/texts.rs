@@ -191,3 +191,118 @@ fn free_texts_and_refusals() {
         }
     ));
 }
+
+#[test]
+fn set_text_changes_content_and_height_as_one_step() {
+    let mut doc = Document::default();
+    let ((page, note), _) = doc
+        .transact("Setup", |tx| {
+            let page = tx.add_page("1")?;
+            let note = tx.add_text(
+                page,
+                TextContent::Literal {
+                    text: "Main supply".into(),
+                },
+                placement(20.0, 280.0),
+                None,
+            )?;
+            Ok((page, note))
+        })
+        .unwrap();
+    let before = doc.project().to_json();
+    let depth = doc.undo_depth();
+
+    // Content and height in one command, one undo step.
+    doc.execute(Command::SetText {
+        text: note,
+        content: Some(TextContent::Literal {
+            text: "Control supply".into(),
+        }),
+        height_mm: Some(3.5),
+    })
+    .unwrap();
+    assert_eq!(doc.undo_depth(), depth + 1);
+    assert_eq!(doc.undo_label(), Some("Edit text"));
+    let text = doc.project().text(note).unwrap();
+    assert_eq!(text.height_mm, 3.5);
+    assert_eq!(
+        doc.project().text_string(note).as_deref(),
+        Some("Control supply")
+    );
+    // Placement and page are untouched.
+    assert_eq!(text.placement, placement(20.0, 280.0));
+    assert_eq!(text.page, page);
+    doc.undo().unwrap();
+    assert_eq!(doc.project().to_json(), before);
+    doc.redo().unwrap();
+
+    // `None` keeps the current value.
+    doc.transact("Height only", |tx| tx.set_text(note, None, Some(5.0)))
+        .unwrap();
+    let text = doc.project().text(note).unwrap();
+    assert_eq!(text.height_mm, 5.0);
+    assert_eq!(
+        doc.project().text_string(note).as_deref(),
+        Some("Control supply")
+    );
+
+    // Refused edits leave the project unchanged and add no undo step.
+    let before = doc.project().to_json();
+    let depth = doc.undo_depth();
+    for height in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+        let err = doc
+            .execute(Command::SetText {
+                text: note,
+                content: Some(TextContent::WireNumber),
+                height_mm: Some(height),
+            })
+            .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                ModelError::InvalidValue {
+                    field: "height_mm",
+                    ..
+                } | ModelError::NonFinite {
+                    field: "height_mm",
+                    ..
+                }
+            ),
+            "{height}: {err:?}"
+        );
+    }
+    let missing = TextId(9999);
+    assert!(matches!(
+        doc.execute(Command::SetText {
+            text: missing,
+            content: None,
+            height_mm: Some(3.0),
+        }),
+        Err(ModelError::NotFound(_))
+    ));
+    assert_eq!(doc.project().to_json(), before);
+    assert_eq!(doc.undo_depth(), depth);
+}
+
+#[test]
+fn set_text_command_round_trips_through_json() {
+    let command = Command::SetText {
+        text: TextId(7),
+        content: Some(TextContent::Property {
+            key: "rating".into(),
+        }),
+        height_mm: None,
+    };
+    let json = serde_json::to_string(&command).unwrap();
+    assert!(!json.contains("height_mm"), "{json}");
+    assert_eq!(serde_json::from_str::<Command>(&json).unwrap(), command);
+    let bare: Command = serde_json::from_str(r#"{"command":"set_text","text":7}"#).unwrap();
+    assert_eq!(
+        bare,
+        Command::SetText {
+            text: TextId(7),
+            content: None,
+            height_mm: None,
+        }
+    );
+}
