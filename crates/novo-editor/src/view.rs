@@ -29,6 +29,9 @@ const GHOST: Color = Color::rgba(0, 120, 215, 200);
 /// Proposal marks and the pin-hover ring (DESIGN.md §5, steel blue).
 const STEEL: Color = Color::rgb(70, 130, 180);
 const PROPOSAL: Color = Color::rgba(70, 130, 180, 140);
+/// The proposal Enter takes: still dashed, only stronger and heavier, so a
+/// lone proposal never reads as a drawn wire.
+const PROPOSAL_CURRENT: Color = Color::rgba(70, 130, 180, 230);
 /// A pin wins over the symbol body within this many screen points.
 const PIN_RADIUS: f32 = 6.0;
 /// First preview item id; previews count down from here.
@@ -141,12 +144,17 @@ impl SchematicView {
         self.scene = None;
         self.revision = None;
         self.previews.clear();
+        self.leave_page();
+        self.canvas.zoom_to_fit();
+    }
+
+    /// Drops everything tied to the page shown so far.
+    fn leave_page(&mut self) {
+        self.editor.page_changed();
         self.canvas.selection.clear();
-        self.editor.leave_tool();
         self.insert = None;
         self.rename = None;
         self.menu = None;
-        self.canvas.zoom_to_fit();
     }
 
     /// Draws the page with `style` (the app's theme) instead of the
@@ -212,9 +220,11 @@ impl SchematicView {
             }
             self.previews.clear();
             if fresh {
-                // Proposals belong to the page they were made on.
-                self.editor.clear_proposals();
-                self.canvas.selection.clear();
+                // A page opened by the shell (page list, Page Up / Page
+                // Down) or a new document: the tool, its proposals, the
+                // selection and the popups all refer to the old page's
+                // objects, so none of them carries over.
+                self.leave_page();
                 self.canvas.zoom_to_fit();
             }
             self.revision = Some(project.revision());
@@ -274,19 +284,8 @@ impl SchematicView {
             );
         }
         if !preview.proposals.is_empty() {
-            // Proposals are dashed steel blue; the one Enter takes is solid
-            // (DESIGN.md §5).
             let mut item = Item::new(layer).unselectable();
-            for (i, &(a, b)) in preview.proposals.iter().enumerate() {
-                let line = Shape::line(model::vec(a), model::vec(b));
-                if preview.current == Some(i) {
-                    item = item.with(Primitive::stroked(line, Stroke::world(0.35, STEEL)));
-                } else {
-                    for dash in crate::art::dashes(&line) {
-                        item = item.with(Primitive::stroked(dash, Stroke::world(0.35, PROPOSAL)));
-                    }
-                }
-            }
+            item.primitives = proposal_primitives(&preview.proposals, preview.current);
             items.push(item);
         }
         if let Some(t) = preview.target {
@@ -824,9 +823,71 @@ fn short(name: &str) -> String {
     }
 }
 
+/// Proposal marks (DESIGN.md §5): every proposal is dashed steel blue at
+/// about 55%; the one Enter takes differs by opacity and weight only.
+fn proposal_primitives(proposals: &[(Point, Point)], current: Option<usize>) -> Vec<Primitive> {
+    let mut out = Vec::new();
+    for (i, &(a, b)) in proposals.iter().enumerate() {
+        let stroke = if current == Some(i) {
+            Stroke::world(0.5, PROPOSAL_CURRENT)
+        } else {
+            Stroke::world(0.35, PROPOSAL)
+        };
+        let line = Shape::line(model::vec(a), model::vec(b));
+        out.extend(
+            crate::art::dashes(&line)
+                .into_iter()
+                .map(|dash| Primitive::stroked(dash, stroke)),
+        );
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn proposals_are_all_dashed_and_the_enter_target_only_stronger() {
+        let proposals = [
+            (Point::new(0.0, 0.0), Point::new(40.0, 0.0)),
+            (Point::new(0.0, 10.0), Point::new(40.0, 10.0)),
+        ];
+        for current in [None, Some(0), Some(1)] {
+            let prims = proposal_primitives(&proposals, current);
+            // Each 40 mm proposal is split into several dashes; none is
+            // drawn as one solid line.
+            for (i, &(a, b)) in proposals.iter().enumerate() {
+                let y = a.y as f32;
+                let mine: Vec<_> = prims
+                    .iter()
+                    .filter(|p| match &p.shape {
+                        Shape::Line { a, b } => a.y == y && b.y == y,
+                        _ => false,
+                    })
+                    .collect();
+                assert!(mine.len() > 1, "proposal {i} is not dashed ({current:?})");
+                let full = model::vec(a).distance(model::vec(b));
+                for p in &mine {
+                    let Shape::Line { a, b } = &p.shape else {
+                        unreachable!()
+                    };
+                    assert!(a.distance(*b) < full * 0.5);
+                    let s = p.stroke.unwrap();
+                    if current == Some(i) {
+                        assert_eq!(s.color, PROPOSAL_CURRENT);
+                        assert!(s.width > 0.35);
+                    } else {
+                        assert_eq!(s.color, PROPOSAL);
+                        assert_eq!(s.width, 0.35);
+                    }
+                    // Steel blue, never opaque.
+                    assert_eq!(&s.color.0[..3], &[70, 130, 180]);
+                    assert!(s.color.0[3] < 255);
+                }
+            }
+        }
+    }
     use crate::tool::Tool;
     use novo_core::SymbolRole;
 
@@ -1219,5 +1280,86 @@ mod tests {
         assert!(
             matches!(h.view.editor.tool(), Tool::Place(p) if p.rotation == novo_core::Rotation::R90)
         );
+    }
+
+    /// A second page added the way the shell does it (not through the
+    /// editor, which would leave the tool itself), with a relay on the
+    /// first page at (100, 100). Returns the new page and the relay.
+    fn two_pages(h: &mut Harness) -> (PageId, novo_core::SymbolId) {
+        h.view.editor.auto_connect = false;
+        h.view.editor.begin_place("iec/coils/relay", None);
+        h.click(100.0, 100.0, egui::PointerButton::Primary);
+        h.view.editor.leave_tool();
+        let sym = h.doc.project().symbols().next().unwrap().id;
+        let (page, _) = h.doc.transact("Add page", |tx| tx.add_page("2")).unwrap();
+        (page, sym)
+    }
+
+    fn placement(h: &Harness, sym: novo_core::SymbolId) -> novo_core::Placement {
+        h.doc.project().symbol(sym).unwrap().placement
+    }
+
+    #[test]
+    fn a_move_in_hand_does_not_survive_a_page_change() {
+        let mut h = Harness::new();
+        let (page, sym) = two_pages(&mut h);
+        let before = placement(&h, sym);
+        h.view.select(&[AnyId::Symbol(sym)]);
+        h.hover(100.0, 100.0);
+        h.key(Key::M);
+        assert!(matches!(h.view.editor.tool(), Tool::Move(_)));
+        let depth = h.doc.undo_depth();
+        // The shell opens the other page (the page list).
+        h.page = page;
+        h.frame(Vec::new());
+        assert!(!h.view.editor.tool_active());
+        assert!(!h.view.editor.in_progress());
+        h.click(160.0, 160.0, egui::PointerButton::Primary);
+        assert_eq!(placement(&h, sym), before);
+        assert_eq!(h.doc.undo_depth(), depth);
+    }
+
+    #[test]
+    fn a_wire_in_progress_does_not_survive_a_page_change() {
+        let mut h = Harness::new();
+        let (page, _) = two_pages(&mut h);
+        let a2 = pin_at(&h.doc, Point::new(100.0, 100.0), "A2");
+        h.view.editor.begin_wire();
+        h.click(a2.x, a2.y, egui::PointerButton::Primary);
+        assert!(h.view.editor.in_progress());
+        let depth = h.doc.undo_depth();
+        h.page = page;
+        h.frame(Vec::new());
+        assert!(!h.view.editor.tool_active());
+        assert!(h.view.editor.preview(&h.doc, page).wire.is_empty());
+        h.click(160.0, 160.0, egui::PointerButton::Primary);
+        h.click(160.0, 200.0, egui::PointerButton::Primary);
+        assert_eq!(h.doc.project().wires().count(), 0);
+        assert_eq!(h.doc.undo_depth(), depth);
+    }
+
+    #[test]
+    fn the_selection_does_not_survive_a_page_change() {
+        let mut h = Harness::new();
+        let (page, sym) = two_pages(&mut h);
+        let before = placement(&h, sym);
+        h.view.select(&[AnyId::Symbol(sym)]);
+        assert_eq!(h.view.selection(), [AnyId::Symbol(sym)]);
+        h.click(100.0, 100.0, egui::PointerButton::Secondary);
+        assert!(h.view.menu.is_some());
+        let depth = h.doc.undo_depth();
+        h.page = page;
+        h.frame(Vec::new());
+        assert!(h.view.selection().is_empty());
+        assert!(h.view.menu.is_none());
+        // Keys on the new page have nothing of the old page to act on.
+        h.hover(100.0, 100.0);
+        for key in [Key::R, Key::X, Key::M, Key::Delete] {
+            h.key(key);
+        }
+        h.click(160.0, 160.0, egui::PointerButton::Primary);
+        assert_eq!(placement(&h, sym), before);
+        assert!(h.doc.project().symbol(sym).is_some());
+        assert_eq!(h.doc.undo_depth(), depth);
     }
 }

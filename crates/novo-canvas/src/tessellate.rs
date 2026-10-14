@@ -71,7 +71,8 @@ impl Highlight {
     pub fn selection() -> Self {
         Self {
             color: Color::SELECTION,
-            extra_width: 3.0,
+            // docs/DESIGN.md §5: selection is a 2 px mark.
+            extra_width: 2.0,
             fill_alpha: 70,
         }
     }

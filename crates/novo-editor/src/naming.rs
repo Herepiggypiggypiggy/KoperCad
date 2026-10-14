@@ -1,22 +1,15 @@
 //! Device tags and connection numbers given without asking (DESIGN.md §2
 //! and §7: numbering is a rule, applied on placement).
 
-use novo_core::{DeviceId, DeviceTag, PageId, Project, Value};
-
-/// Page property holding the function and location aspects new devices on
-/// the page get, as tag text such as `=A1+CAB1`.
-pub const PAGE_STRUCTURE: &str = "structure";
+use novo_core::{DeviceId, DeviceTag, PageId, Project};
 
 /// The function and location aspects of new devices on a page: the page's
-/// [`PAGE_STRUCTURE`] property, or none.
+/// structure ([`novo_core::Page::structure`], such as `=A1+CAB1`), or none.
 pub fn page_structure(project: &Project, page: PageId) -> DeviceTag {
     project
         .page(page)
-        .and_then(|p| match p.properties.get(PAGE_STRUCTURE) {
-            Some(Value::Text(t)) => DeviceTag::parse(t).ok(),
-            _ => None,
-        })
-        .map(|mut t| {
+        .map(|p| {
+            let mut t = p.structure.clone();
             t.product.clear();
             t
         })

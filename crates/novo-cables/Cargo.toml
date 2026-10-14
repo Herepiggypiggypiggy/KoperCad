@@ -1,0 +1,16 @@
+[package]
+name = "novo-cables"
+description = "Cables: types, proposals at location boundaries, core assignment, shields, checks and cable screens (WS-12)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+novo-core.workspace = true
+novo-parts.workspace = true
+
+[dev-dependencies]
+novo-tests = { path = "../novo-tests" }
+
+[lints]
+workspace = true

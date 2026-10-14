@@ -22,7 +22,7 @@ novo-workflow.workspace = true
 novo-xref.workspace = true
 novo-pdf.workspace = true
 novo-checks.workspace = true
-novo-terminals = { path = "../novo-terminals" }
+novo-terminals.workspace = true
 log = "0.4"
 env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
 rfd = "0.17"

@@ -22,6 +22,9 @@ pub enum BackendError {
     Unavailable(&'static str),
     Model(ModelError),
     Storage(StorageError),
+    /// The open project could not be written before closing it, so it was
+    /// left open (see [`ProjectBackend::close`]).
+    NotWritten(StorageError),
 }
 
 impl fmt::Display for BackendError {
@@ -30,6 +33,12 @@ impl fmt::Display for BackendError {
             BackendError::Unavailable(what) => write!(f, "{what} is not available yet"),
             BackendError::Model(e) => write!(f, "{e}"),
             BackendError::Storage(e) => write!(f, "{e}"),
+            BackendError::NotWritten(e) => {
+                write!(
+                    f,
+                    "the open project could not be written ({e}), so it stays open"
+                )
+            }
         }
     }
 }
@@ -65,11 +74,14 @@ pub struct OpenReport {
 ///
 /// At most one project is open at a time.
 pub trait ProjectBackend {
-    /// Starts a new, unsaved project, replacing any open one.
+    /// Starts a new, unsaved project, replacing any open one. Fails, leaving
+    /// the open project as it was, if that one cannot be written first.
     fn new_project(&mut self, name: &str) -> Result<(), BackendError>;
 
     /// Opens a project file, replacing any open project. A file from
-    /// [`Self::unsaved_projects`] opens as an untitled project.
+    /// [`Self::unsaved_projects`] opens as an untitled project. Fails,
+    /// leaving the open project as it was, if that one cannot be written
+    /// first.
     fn open(&mut self, path: &Path) -> Result<OpenReport, BackendError>;
 
     /// Writes the open project to `path` and clears the unsaved flag.
@@ -77,7 +89,8 @@ pub trait ProjectBackend {
 
     /// Closes the open project without losing work: a saved project is
     /// written to its file first, and an untitled one with work is kept
-    /// among [`Self::unsaved_projects`].
+    /// among [`Self::unsaved_projects`]. If that write fails, the project
+    /// stays open (still bound to its file) and the error is returned.
     fn close(&mut self) -> Result<(), BackendError>;
 
     fn document(&self) -> Option<&Document>;
@@ -159,6 +172,10 @@ pub struct StorageBackend {
     /// The open untitled project came from a kept file, so it is kept
     /// again on close even without new changes.
     keep: bool,
+    /// Tests: writes to the project file fail, as for a locked file or a
+    /// drive that went away.
+    #[cfg(test)]
+    fail_writes: bool,
 }
 
 /// Prefix of untitled projects closed with work in them.
@@ -172,32 +189,37 @@ impl StorageBackend {
         backend
     }
 
+    /// Writes and closes the open project's file. If the write fails,
+    /// nothing is closed: the project stays open and bound to its file (with
+    /// its work also put in the recovery file) and the error is returned, so
+    /// the caller must not go on to replace or drop the project.
     fn close_session(&mut self) -> Result<(), BackendError> {
         // Undecided recovered work stays on disk (the session keeps its
         // recovery file), so an untitled project's file must stay with it
         // to be offered again on the next start.
-        let undecided = self.recovery.take().is_some();
-        let changed = std::mem::take(&mut self.restored_unsaved)
-            || self.document().is_some_and(|d| d.is_dirty());
-        let keep = std::mem::take(&mut self.keep);
-        let untitled = self.untitled.take();
-        let keep_untitled = untitled.is_some() && !undecided && (changed || keep);
-        let Some(mut session) = self.session.take() else {
-            return Ok(());
-        };
-        let write = !undecided && changed && (untitled.is_none() || keep_untitled);
+        let undecided = self.recovery.is_some();
+        let changed = self.restored_unsaved || self.document().is_some_and(|d| d.is_dirty());
+        let keep_untitled = self.untitled.is_some() && !undecided && (changed || self.keep);
+        let write = !undecided && changed && (self.untitled.is_none() || keep_untitled);
+        let fail = self.writes_fail();
         if write
-            && let Some(document) = &self.document
-            && let Err(e) = session.save(document.project())
+            && let (Some(session), Some(document)) = (self.session.as_mut(), &self.document)
+            && let Err(e) = Self::write(session, document.project(), fail)
         {
-            // Leave it as a crash would: the recovery file holds the work
-            // and the next open offers it back.
+            // Keep everything as it is so later edits are still written,
+            // and put the work in the recovery file in case of a crash.
             if let Err(e) = session.autosave(document.project()) {
                 log::error!("could not keep the unsaved work: {e}");
             }
-            drop(session);
-            return Err(e.into());
+            return Err(BackendError::NotWritten(e));
         }
+        self.recovery = None;
+        self.restored_unsaved = false;
+        self.keep = false;
+        let untitled = self.untitled.take();
+        let Some(session) = self.session.take() else {
+            return Ok(());
+        };
         let closed = session.close();
         if let Some(path) = untitled
             && !undecided
@@ -214,6 +236,21 @@ impl StorageBackend {
             }
         }
         Ok(closed?)
+    }
+
+    /// Writes the open project to its file.
+    fn write(session: &mut Session, project: &Project, fail: bool) -> Result<(), StorageError> {
+        if fail {
+            return Err(std::io::Error::other("the file cannot be written").into());
+        }
+        session.save(project)
+    }
+
+    fn writes_fail(&self) -> bool {
+        #[cfg(test)]
+        return self.fail_writes;
+        #[cfg(not(test))]
+        false
     }
 
     fn in_untitled_dir(&self, path: &Path) -> bool {
@@ -301,9 +338,9 @@ impl ProjectBackend for StorageBackend {
     }
 
     fn close(&mut self) -> Result<(), BackendError> {
-        let closed = self.close_session();
+        self.close_session()?;
         self.document = None;
-        closed
+        Ok(())
     }
 
     fn document(&self) -> Option<&Document> {
@@ -349,13 +386,22 @@ impl ProjectBackend for StorageBackend {
     }
 
     fn tick(&mut self) -> Result<Option<Duration>, BackendError> {
+        let fail = self.writes_fail();
         let (Some(session), Some(document)) = (self.session.as_mut(), self.document.as_mut())
         else {
             return Ok(None);
         };
         let changed = self.restored_unsaved || document.is_dirty();
         if self.untitled.is_none() && self.recovery.is_none() && changed {
-            session.save(document.project())?;
+            if let Err(e) = Self::write(session, document.project(), fail) {
+                // The file cannot be written now (locked, gone, read-only):
+                // keep the recovery file current so a crash loses nothing,
+                // and report the failure so the caller retries later.
+                if let Err(e) = session.autosave_if_due(document.project()) {
+                    log::error!("could not keep the unsaved work: {e}");
+                }
+                return Err(e.into());
+            }
             document.mark_saved();
             self.restored_unsaved = false;
         } else {
@@ -768,6 +814,80 @@ pub(crate) mod tests {
         let report = reopened.open(&path).unwrap();
         assert!(report.set_aside.is_none());
         assert!(reopened.recovery_offer().is_none());
+        assert_eq!(page_names(&reopened), vec!["1", "2", "3"]);
+    }
+
+    #[test]
+    fn a_failed_write_keeps_the_project_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plant.novo");
+        let other = dir.path().join("other.novo");
+        let mut backend = StorageBackend::default();
+        backend.new_project("Other").unwrap();
+        backend.save(&other).unwrap();
+        backend.new_project("Plant").unwrap();
+        backend.save(&path).unwrap();
+        edit(&mut backend, "2");
+
+        backend.fail_writes = true;
+        let err = backend.new_project("Next").unwrap_err();
+        assert!(matches!(err, BackendError::NotWritten(_)), "{err:?}");
+        let err = backend.open(&other).unwrap_err();
+        assert!(matches!(err, BackendError::NotWritten(_)), "{err:?}");
+        let err = backend.close().unwrap_err();
+        assert!(matches!(err, BackendError::NotWritten(_)), "{err:?}");
+
+        // Still open, still bound to its file, with the work in the
+        // recovery file in case of a crash.
+        assert_eq!(page_names(&backend), vec!["1", "2"]);
+        assert_eq!(backend.file().as_deref(), Some(path.as_path()));
+        assert!(!backend.is_untitled());
+        assert!(autosave_path(&path).exists());
+        // The other file was not left open.
+        StorageBackend::default().open(&other).unwrap();
+
+        // Edits made meanwhile are written once writing works again.
+        edit(&mut backend, "3");
+        backend.fail_writes = false;
+        backend.tick().unwrap();
+        assert!(!backend.is_dirty());
+        backend.open(&other).unwrap();
+        assert_eq!(backend.file().as_deref(), Some(other.as_path()));
+        backend.close().unwrap();
+
+        let mut reopened = StorageBackend::default();
+        reopened.open(&path).unwrap();
+        assert!(reopened.recovery_offer().is_none());
+        assert_eq!(page_names(&reopened), vec!["1", "2", "3"]);
+    }
+
+    #[test]
+    fn a_failing_write_still_keeps_a_recovery_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plant.novo");
+        let mut backend = StorageBackend::default();
+        backend.new_project("Plant").unwrap();
+        backend.save(&path).unwrap();
+        backend
+            .session
+            .as_mut()
+            .unwrap()
+            .set_autosave_interval(Duration::ZERO);
+
+        backend.fail_writes = true;
+        edit(&mut backend, "2");
+        assert!(backend.tick().is_err());
+        assert!(backend.is_dirty());
+        assert!(autosave_path(&path).exists());
+        edit(&mut backend, "3");
+        assert!(backend.tick().is_err());
+
+        // A crash now: the work comes back from the recovery file.
+        drop(backend.session.take());
+        let mut reopened = StorageBackend::default();
+        reopened.open(&path).unwrap();
+        assert!(reopened.recovery_offer().is_some());
+        reopened.resolve_recovery(true).unwrap();
         assert_eq!(page_names(&reopened), vec!["1", "2", "3"]);
     }
 

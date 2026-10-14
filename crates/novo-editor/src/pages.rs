@@ -3,23 +3,32 @@
 
 use std::cmp::Ordering;
 
-use novo_core::{AnyId, PageId, PageKind, Project, Result, Tx, Value, natural_cmp};
-
-use crate::naming::PAGE_STRUCTURE;
+use novo_core::{PageId, PageKind, Project, Result, Tx, natural_cmp};
 
 /// The name a page inserted after `after` gets: the next number (`3` after
 /// `2`) when that is free and still sorts before the following page,
 /// otherwise a sub-page (`2.1`, `2.2`, ...). Without `after` the page goes
-/// at the end.
+/// at the end. The new page has the structure of the page it follows (see
+/// [`add_page`]), and page names only need to be unique and ordered within
+/// one structure (`=A1/3` and `=A2/3` are different pages), so only pages
+/// of that structure are compared.
 pub fn next_page_name(project: &Project, after: Option<PageId>) -> String {
-    let pages = project.pages_in_order();
-    let after = after
-        .and_then(|a| pages.iter().position(|p| p.id == a))
-        .or_else(|| pages.len().checked_sub(1));
-    let Some(index) = after else {
+    let all = project.pages_in_order();
+    let Some(anchor) = after
+        .and_then(|a| all.iter().find(|p| p.id == a))
+        .or_else(|| all.last())
+    else {
         return "1".into();
     };
-    let name = pages[index].name.as_str();
+    let pages: Vec<_> = all
+        .iter()
+        .filter(|p| p.structure.same_structure(&anchor.structure))
+        .collect();
+    let index = pages
+        .iter()
+        .position(|p| p.id == anchor.id)
+        .expect("the anchor page has its own structure");
+    let name = anchor.name.as_str();
     let next = pages.get(index + 1).map(|p| p.name.as_str());
     let free = |n: &str| !pages.iter().any(|p| p.name == n);
     let fits = |n: &str| {
@@ -53,16 +62,14 @@ pub fn add_page(tx: &mut Tx<'_>, after: Option<PageId>) -> Result<PageId> {
     let template = after
         .or_else(|| tx.project().pages_in_order().last().map(|p| p.id))
         .and_then(|a| tx.project().page(a))
-        .map(|p| (p.format, p.properties.get(PAGE_STRUCTURE).cloned()));
+        .map(|p| (p.format, p.structure.clone()));
     let page = tx.add_page(name)?;
     if let Some((format, structure)) = template {
         tx.update::<novo_core::Page>(page, |p| {
             p.format = format;
             p.kind = PageKind::Schematic;
+            p.structure = structure;
         })?;
-        if let Some(structure @ Value::Text(_)) = structure {
-            tx.set_property(AnyId::from(page), PAGE_STRUCTURE, Some(structure))?;
-        }
     }
     Ok(page)
 }
@@ -95,6 +102,42 @@ mod tests {
         (doc, ids)
     }
 
+    fn structure(text: &str) -> novo_core::DeviceTag {
+        novo_core::DeviceTag::parse(text).unwrap()
+    }
+
+    #[test]
+    fn names_follow_on_within_the_structure() {
+        // =A1 has pages 1 and 2, =A2 has pages 1, 2 and 5. In page order
+        // =A1/2 is followed by =A2/1, which must not stop =A1 from going on
+        // to 3, and =A2's names do not count as taken for =A1.
+        let (mut d, ids) = doc(&["1", "2", "1", "2", "5"]);
+        d.transact("structures", |tx| {
+            for (i, id) in ids.iter().enumerate() {
+                let s = if i < 2 { "=A1" } else { "=A2" };
+                tx.update::<novo_core::Page>(*id, |p| p.structure = structure(s))?;
+            }
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(next_page_name(d.project(), Some(ids[1])), "3");
+        assert_eq!(next_page_name(d.project(), Some(ids[0])), "1.1");
+        assert_eq!(next_page_name(d.project(), Some(ids[3])), "3");
+        assert_eq!(next_page_name(d.project(), Some(ids[4])), "6");
+        // Without a page: after the last page in order, =A2/5.
+        assert_eq!(next_page_name(d.project(), None), "6");
+        let (page, _) = d
+            .transact("New page", |tx| add_page(tx, Some(ids[1])))
+            .unwrap();
+        let p = d.project().page(page).unwrap();
+        assert_eq!(
+            (p.name.as_str(), p.structure.to_string()),
+            ("3", "=A1".into())
+        );
+        assert_eq!(neighbour(d.project(), ids[1], 1), Some(page));
+        assert_eq!(neighbour(d.project(), page, 1), Some(ids[2]));
+    }
+
     #[test]
     fn names_follow_on() {
         let (d, ids) = doc(&[]);
@@ -115,12 +158,10 @@ mod tests {
     fn new_page_copies_format_and_structure() {
         let (mut d, ids) = doc(&["1"]);
         d.transact("setup", |tx| {
-            tx.update::<novo_core::Page>(ids[0], |p| p.format.size = novo_core::PaperSize::A4)?;
-            tx.set_property(
-                AnyId::from(ids[0]),
-                PAGE_STRUCTURE,
-                Some(Value::Text("=A1+CAB1".into())),
-            )
+            tx.update::<novo_core::Page>(ids[0], |p| {
+                p.format.size = novo_core::PaperSize::A4;
+                p.structure = structure("=A1+CAB1");
+            })
         })
         .unwrap();
         let (page, _) = d

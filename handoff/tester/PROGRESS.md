@@ -14,3 +14,4 @@
 2026-10-14 17:08 UTC F2 verified fixed by #28 (924be9b). After #28 merges, make e2e_motor_starter assert the first hit is -X1:2 and mark F2 fixed.
 2026-10-14 17:15 UTC WS-01 offered NovoApp::execute hook (their follow-up after #34); noted in ROADMAP.
 2026-10-14 17:18 UTC Gate 0 60 fps row marked met (Quadro P1000: 1135 fps avg at 10k). Pushed to #42 as 80dcfe8; reviewer pinged. All Gate 0 criteria met.
+2026-10-14 UTC (fixer session_017LndnL4fiT5rRPkqy3R36S): Round 8 on main 7379d42: gap tests for #30 (terminals) and #36 (parts) filled in and un-ignored; pe-fix.patch applied (X1:PE ProtectiveEarth, novo-terminals gate1 check test flipped to clean); F3 fixed in novo-terminals (terminal dropped on the far half of a wire went in backwards). New PR from main on claude/project-thread-dft1m7.
