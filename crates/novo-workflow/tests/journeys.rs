@@ -162,6 +162,58 @@ fn place_mode_shows_favourites_and_only_symbols() {
 }
 
 #[test]
+fn dutch_and_english_command_words_both_work() {
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let library = Library::builtin().unwrap();
+    let keymap = Keymap::workflow();
+    let palette = Palette::default();
+    let src = sources(doc.project(), &library, &keymap);
+
+    // A Dutch verb with a Dutch argument runs as the English command.
+    for query in ["hernummer pagina", "Hernummeren pagina", "renumber page"] {
+        assert_eq!(
+            palette.search(query, &src)[0].target,
+            Target::Run {
+                command: "edit.renumber",
+                argument: "page".into()
+            },
+            "{query}"
+        );
+    }
+    // The longest Dutch verb wins, as in English.
+    assert_eq!(
+        palette.search("alles accepteren", &src)[0].target,
+        Target::Command("proposal.accept_all")
+    );
+    // Dutch argument chips.
+    let rows = palette.search("hernummer sel", &src);
+    assert!(rows.iter().any(|r| r.target
+        == Target::Run {
+            command: "edit.renumber",
+            argument: "selection".into()
+        }));
+    // Dutch words find commands.
+    for (query, id) in [
+        ("opslaan", "file.save"),
+        ("sneltoetsen", "view.shortcuts"),
+        ("stuklijst", "export.bom"),
+    ] {
+        let rows = palette.search(query, &src);
+        assert!(
+            rows.iter().take(3).any(|r| r.target == Target::Command(id)),
+            "{query}: {:?}",
+            rows.iter().take(3).map(|r| &r.label).collect::<Vec<_>>()
+        );
+    }
+    // Tags are never translated: a tag still jumps.
+    assert_eq!(
+        palette.search("K1", &src)[0].target,
+        Target::Device(gate.k1)
+    );
+}
+
+#[test]
 fn grammar_verb_noun_and_bare_verb() {
     let mut doc = Document::default();
     let gate = motor_starter(&mut doc).unwrap();
@@ -591,6 +643,29 @@ fn paste_with_original_tags_keeps_them() {
         "=A1+CAB-S1"
     );
     assert_eq!(project.duplicate_tags().len(), 1);
+
+    // Terminals keep their names too.
+    let terminal = gate.x1_syms[0];
+    let (copy, _) = doc
+        .transact("Paste", |tx| {
+            let page = tx.add_page("4")?;
+            duplicate(
+                tx,
+                &[AnyId::from(terminal)],
+                page,
+                Point::new(0.0, 0.0),
+                TagMode::Keep,
+            )
+        })
+        .unwrap();
+    let project = doc.project();
+    let name = |symbol| {
+        let SymbolRole::Terminal { terminals } = &project.symbol(symbol).unwrap().role else {
+            panic!("terminal role")
+        };
+        project.terminal(terminals[0]).unwrap().name.clone()
+    };
+    assert_eq!(name(copy.symbols[&terminal]), name(terminal));
 }
 
 /// Picks rows the way a mouse user would: type a few letters, then follow

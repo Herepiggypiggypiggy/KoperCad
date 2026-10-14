@@ -239,6 +239,9 @@ pub fn letter_code(symbol: &Symbol) -> Option<&'static str> {
         "F"
     } else if has("contact") {
         "K"
+    } else if has("protection.mpcb") || has("protection.mcp") {
+        // A motor protective breaker switches its feeder (DESIGN §6).
+        "Q"
     } else if has("protection") {
         "F"
     } else if has("switch") {
@@ -414,6 +417,9 @@ mod tests {
         assert_eq!(code("iec/terminals/terminal"), Some("X"));
         assert_eq!(code("iec/motors/motor_3ph"), Some("M"));
         assert_eq!(code("iec/protection/mcb_1p"), Some("F"));
+        assert_eq!(code("iec/protection/motor_protection_breaker"), Some("Q"));
+        assert_eq!(code("iec/protection/motor_circuit_protector"), Some("Q"));
+        assert_eq!(code(lib.by_alias("mpcb").unwrap().id.as_str()), Some("Q"));
         assert_eq!(code("iec/operators/pushbutton_no"), Some("S"));
         assert_eq!(code("iec/connectivity/interruption_point"), None);
         // Every device symbol gets some code.

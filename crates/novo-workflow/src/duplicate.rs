@@ -15,6 +15,10 @@
 //!   poles): copying the main circuit of a starter whose coil is on the
 //!   control page gives `-K2` main poles, which the checker flags as
 //!   having no coil, rather than a second set of main poles on `-K1`.
+//!   "Main contacts" is a heuristic on the symbol's switched paths, not a
+//!   flag from the library: a two-pole auxiliary block copied without its
+//!   coil also gets a new device, and main poles drawn as three one-pole
+//!   symbols stay on the original device.
 //! - A lone auxiliary contact copied without its coil stays a contact of
 //!   the original device (a second contact of `-K1`).
 //! - Texts attached to a copied symbol, junction or wire (a device tag
@@ -22,13 +26,15 @@
 //!   copy. Selected free texts are copied and moved by the offset.
 //! - Terminals are copied onto the same strip with the next free number;
 //!   non-numeric names (`PE`, `N`) are kept.
+//! - A selected text attached to an object that is not copied is left out.
 //! - Wires are copied when both ends are copied, also when the wire itself
 //!   was not selected. Wire numbers are not copied (they are regenerated);
 //!   colours and cross-sections are.
 //! - Potential feeds and interruption points keep their potential and name.
 //! - [`TagMode::Keep`] keeps the original tags (Ctrl+Shift+V), for moving
 //!   circuits between projects; same-project duplicates show in the
-//!   checker.
+//!   checker. That includes copied main poles (a second device with the
+//!   same tag) and terminals (same names on the strip).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -125,7 +131,7 @@ pub fn duplicate(
             SymbolRole::Terminal { terminals } => {
                 let mut copies = Vec::with_capacity(terminals.len());
                 for &t in terminals {
-                    let copy = copy_terminal(tx, t)?;
+                    let copy = copy_terminal(tx, t, mode)?;
                     out.terminals.insert(t, copy);
                     copies.push(copy);
                 }
@@ -227,8 +233,8 @@ fn map_endpoint(out: &Duplicated, end: Endpoint) -> Option<Endpoint> {
 }
 
 /// A new terminal on the same strip: the next number, or the same
-/// non-numeric name.
-fn copy_terminal(tx: &mut Tx<'_>, original: TerminalId) -> Result<TerminalId> {
+/// non-numeric name. [`TagMode::Keep`] keeps every name.
+fn copy_terminal(tx: &mut Tx<'_>, original: TerminalId, mode: TagMode) -> Result<TerminalId> {
     let project = tx.project();
     let Some(terminal) = project.terminal(original).cloned() else {
         return Err(novo_core::ModelError::NotFound(original.into()));
@@ -238,7 +244,7 @@ fn copy_terminal(tx: &mut Tx<'_>, original: TerminalId) -> Result<TerminalId> {
         ("", Some(n), "") => Some(n),
         _ => None,
     };
-    let name = if numeric(&terminal.name).is_some() {
+    let name = if mode == TagMode::NextFree && numeric(&terminal.name).is_some() {
         let next = siblings
             .iter()
             .filter_map(|t| numeric(&t.name))
