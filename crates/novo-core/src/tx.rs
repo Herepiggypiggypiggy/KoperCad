@@ -2,12 +2,14 @@
 
 use crate::entity::{
     Cable, CableCore, Device, DeviceKind, Endpoint, Junction, Page, Part, Pin, Potential,
-    PotentialKind, ProjectInfo, SymbolInstance, SymbolKey, SymbolRole, Terminal, Value, Wire,
+    PotentialKind, PotentialSpec, ProjectInfo, SymbolInstance, SymbolKey, SymbolRole, Terminal,
+    Text, TextContent, TextPlacement, Value, Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::{Placement, Point};
 use crate::id::{
-    AnyId, CableId, DeviceId, JunctionId, PageId, PartId, PotentialId, SymbolId, TerminalId, WireId,
+    AnyId, CableId, DeviceId, JunctionId, PageId, PartId, PotentialId, SymbolId, TerminalId,
+    TextId, WireId,
 };
 use crate::project::Project;
 use crate::record::{Entity, Op, Record};
@@ -153,6 +155,12 @@ impl<'p> Tx<'p> {
                 (AnyId::Cable(cable), AnyId::Part(_)) => {
                     self.update::<Cable>(cable, |c| c.part = None)?;
                 }
+                (AnyId::Terminal(terminal), AnyId::Part(_)) => {
+                    self.update::<Terminal>(terminal, |t| t.part = None)?;
+                }
+                (AnyId::Wire(wire), AnyId::Potential(_)) => {
+                    self.update::<Wire>(wire, |w| w.potential = None)?;
+                }
                 (AnyId::Cable(cable), AnyId::Wire(wire)) => {
                     self.update::<Cable>(cable, |c| {
                         for core in &mut c.cores {
@@ -227,6 +235,7 @@ impl<'p> Tx<'p> {
             level: 1,
             order: 0,
             jumper: None,
+            part: None,
             properties: Default::default(),
         })
     }
@@ -269,6 +278,32 @@ impl<'p> Tx<'p> {
     /// Adds a junction (connection dot).
     pub fn add_junction(&mut self, page: PageId, position: Point) -> Result<JunctionId> {
         self.insert(|id| Junction { id, page, position })
+    }
+
+    /// Adds a text. Attached to a symbol, junction or wire, it moves and is
+    /// deleted with it; `placement.offset` is then relative to that object.
+    pub fn add_text(
+        &mut self,
+        page: PageId,
+        content: TextContent,
+        placement: TextPlacement,
+        attached_to: Option<AnyId>,
+    ) -> Result<TextId> {
+        self.insert(|id| Text {
+            id,
+            page,
+            attached_to,
+            content,
+            placement,
+            height_mm: Text::DEFAULT_HEIGHT_MM,
+            properties: Default::default(),
+        })
+    }
+
+    /// Moves, rotates or re-anchors a text without touching what it is
+    /// attached to.
+    pub fn move_text(&mut self, text: TextId, placement: TextPlacement) -> Result<()> {
+        self.update::<Text>(text, |t| t.placement = placement)
     }
 
     /// Draws a wire between two endpoints on the same page.
@@ -355,6 +390,57 @@ impl<'p> Tx<'p> {
             voltage: None,
             properties: Default::default(),
         })
+    }
+
+    /// The potential named `spec.name`, created from `spec` if the project
+    /// has none by that name. An existing one is reused as it is. Returns
+    /// the id and whether it was created.
+    pub fn ensure_potential(&mut self, spec: PotentialSpec) -> Result<(PotentialId, bool)> {
+        if let Some(existing) = self.project.potentials().find(|p| p.name == spec.name) {
+            return Ok((existing.id, false));
+        }
+        let id = self.add_potential(spec.name, spec.kind)?;
+        if spec.voltage.is_some() {
+            self.update::<Potential>(id, |p| p.voltage = spec.voltage)?;
+        }
+        Ok((id, true))
+    }
+
+    /// Sets or clears the potential a wire defines on its net.
+    pub fn set_wire_potential(
+        &mut self,
+        wire: WireId,
+        potential: Option<PotentialId>,
+    ) -> Result<()> {
+        self.update::<Wire>(wire, |w| w.potential = potential)
+    }
+
+    /// Assigns potentials to wires in order: `wires[i]` gets `potentials[i]`,
+    /// looked up by name or created ([`Tx::ensure_potential`]). Extra
+    /// potentials are ignored, so three selected wires and a
+    /// [`PotentialSet`](crate::PotentialSet) of L1/L2/L3/N/PE get L1, L2, L3.
+    /// More wires than potentials is refused. Returns the potentials it
+    /// created.
+    pub fn assign_potentials(
+        &mut self,
+        wires: &[WireId],
+        potentials: Vec<PotentialSpec>,
+    ) -> Result<Vec<PotentialId>> {
+        if wires.len() > potentials.len() {
+            return Err(ModelError::TooFewPotentials {
+                wires: wires.len(),
+                potentials: potentials.len(),
+            });
+        }
+        let mut created = Vec::new();
+        for (&wire, spec) in wires.iter().zip(potentials) {
+            let (potential, new) = self.ensure_potential(spec)?;
+            if new {
+                created.push(potential);
+            }
+            self.set_wire_potential(wire, Some(potential))?;
+        }
+        Ok(created)
     }
 
     /// Adds a cable with the given cores.
