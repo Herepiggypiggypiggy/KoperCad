@@ -17,6 +17,8 @@ novo-sim = { path = "crates/novo-sim" }
 novo-parts = { path = "crates/novo-parts" }
 novo-workflow = { path = "crates/novo-workflow" }
 novo-theme = { path = "crates/novo-theme" }
+novo-py = { path = "crates/novo-py" }
+novo-cli = { path = "crates/novo-cli" }
 bytemuck = { version = "1", features = ["derive"] }
 egui = "0.36"
 egui-wgpu = "0.36"
@@ -30,6 +32,9 @@ thiserror = "2"
 egui-phosphor = "0.14"
 rusqlite = { version = "0.40", features = ["bundled", "backup"] }
 tempfile = "3"
+clap = { version = "4.6", features = ["derive"] }
+# abi3: one wheel serves every CPython from 3.9 on.
+pyo3 = { version = "0.29", features = ["abi3-py39"] }
 eframe = { version = "0.36", default-features = false, features = ["wgpu", "default_fonts", "x11", "wayland"] }
 
 [workspace.lints.rust]

@@ -33,6 +33,8 @@ Work is split into workstreams (WS-xx), each run by its own Claude thread.
 | `novo-parts` | WS-07 | Part catalog, part assignment, property sheet model, bulk edit |
 | `novo-workflow` | WS-08 | Keyboard workflow: keymap, commands, palette search, Tab orientation, smart duplicate |
 | `novo-sim` | WS-19 | Simulation engine (Phase 4) |
+| `novo-cli` | WS-28 | `novo` command-line tool: info, checks, batch export (read-only on project files) |
+| `novo-py` | WS-28 | Python API (`novoelectric`, PyO3 behind the `python` feature, built with maturin) |
 | `novo-theme` | Layout and branding | Dark theme, design tokens, icons, logo (`assets/branding`) |
 | `novo-app` | WS-01 | Application shell, wiring crates together |
 
