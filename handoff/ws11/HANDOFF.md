@@ -36,4 +36,4 @@ After each push, send_message the reviewer the new head SHA. Check the PR is sti
 - Keep UI out of #30 (lead rule 4/5).
 
 ## Lead fixes waiting (read first)
-See lead-fixes/README.md: review items and #35 fallout fixed locally at 351d8cc by the integration lead; apply with the bundle, check, push, ping the reviewer.
+See lead-fixes/README.md: review items and #35 fallout fixed locally at 351d8cc by the integration lead; ALREADY PUSHED at 18:06 UTC; just `git pull` the PR branch.

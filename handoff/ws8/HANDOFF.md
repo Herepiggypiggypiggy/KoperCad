@@ -42,4 +42,4 @@ Check that #29 is still open before pushing. After every push, message the revie
 - `m3 K1` is ambiguous; child_queries returns both readings and palette keeps the one whose device exists.
 
 ## Lead fixes waiting (read first)
-See lead-fixes/README.md: review items and #35 fallout fixed locally at c3f4d7f by the integration lead; apply with the bundle, check, push, ping the reviewer.
+See lead-fixes/README.md: review items and #35 fallout fixed locally at c3f4d7f by the integration lead; ALREADY PUSHED at 18:06 UTC; just `git pull` the PR branch.

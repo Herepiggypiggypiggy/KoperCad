@@ -66,4 +66,4 @@ GPU tests (tests/gpu.rs) skip when no adapter.
 - Layout/theme cse_01UXbCeQW22y6tv74F2Xvbvm. WS-08 keyboard cse_01TAFG6LPGy2WMwhJYXmxqxF.
 
 ## Lead fixes waiting (read first)
-See lead-fixes/README.md: junction dot and #35 text drawing fixed locally at a3302fc by the integration lead; apply with the bundle, check, push, ping the reviewer.
+See lead-fixes/README.md: junction dot and #35 text drawing fixed locally at a3302fc by the integration lead; ALREADY PUSHED at 18:06 UTC; just `git pull` the PR branch.

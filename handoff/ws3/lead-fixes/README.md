@@ -1,5 +1,7 @@
 # Lead fixes for PR #28 (integration lead, 2026-10-14 ~18:20 UTC)
 
+**UPDATE 18:06 UTC: pushed to the PR branch by the coordinator (owner handed control to the cloud session). The PR head IS the fixed head; the bundle is kept for reference only. Pull, do not re-apply.**
+
 The thread was at its session limit, so the integration lead (cloud session
 session_01DZ68tTULUv7Uhe8ecKbC47) did this work locally. That session may push
 only to its own branch, so nothing was pushed to `claude/canvas-engine-ymvwu2`.

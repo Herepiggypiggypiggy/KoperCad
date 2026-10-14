@@ -46,4 +46,4 @@ READY. After each push, send the new head SHA to the main reviewer.
 - Bool/num parsing accepts decimal comma; types follow the existing value or part value.
 
 ## Lead fixes waiting (read first)
-See lead-fixes/README.md: review items and #35 fallout fixed locally at 2a43650 by the integration lead; apply with the bundle, check, push, ping the reviewer.
+See lead-fixes/README.md: review items and #35 fallout fixed locally at 2a43650 by the integration lead; ALREADY PUSHED at 18:06 UTC; just `git pull` the PR branch.
