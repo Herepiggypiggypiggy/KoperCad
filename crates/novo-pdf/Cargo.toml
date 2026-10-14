@@ -1,0 +1,21 @@
+[package]
+name = "novo-pdf"
+description = "Vector PDF export: pages, title block, bookmarks, links"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+novo-core = { workspace = true }
+# Only the model adapter: the PDF is drawn from the same page scene as the
+# canvas, without the egui widget.
+novo-canvas = { path = "../novo-canvas", default-features = false, features = ["model"] }
+pdf-writer = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+novo-tests = { path = "../novo-tests" }
+lopdf = { version = "0.45", default-features = false }
+
+[lints]
+workspace = true

@@ -52,6 +52,7 @@ egui-phosphor = "0.14"
 rusqlite = { version = "0.40", features = ["bundled", "backup"] }
 tempfile = "3"
 eframe = { version = "0.36", default-features = false, features = ["wgpu", "default_fonts", "x11", "wayland"] }
+pdf-writer = "0.15"
 
 [workspace.lints.rust]
 unsafe_code = "deny"
