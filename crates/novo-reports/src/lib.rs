@@ -39,9 +39,8 @@
 //!   [`PageKind::Generated`](novo_core::PageKind) page.
 //! - **Generated pages**: a generated page record prints as one sheet named
 //!   like the page (`20`), or as `20a`, `20b`, ... when its report needs
-//!   more ([`LiveReports::sheets_of_page`], [`LiveReports::layout_sheet`]);
-//!   `20-a`, `20-b`, ... when a real page is already named `20a`
-//!   ([`sheet_names`]).
+//!   more, skipping `i`, `l` and `o` ([`LiveReports::sheets_of_page`],
+//!   [`LiveReports::layout_sheet`], [`sheet_names`]).
 //! - **Live cache**: [`LiveReports`]. Call [`LiveReports::notify`] with every
 //!   transaction's change set; [`LiveReports::get`] regenerates only stale
 //!   reports. On the 10k-object stress project an edit plus regenerating and

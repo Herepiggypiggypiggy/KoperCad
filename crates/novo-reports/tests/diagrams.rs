@@ -157,10 +157,8 @@ fn generated_pages_print_as_named_sheets() {
     assert_eq!(sheet_name("20", 0, 1), "20");
     assert_eq!(sheet_name("20", 0, 3), "20a");
     assert_eq!(sheet_name("20", 2, 3), "20c");
-    assert_eq!(sheet_name("20", 25, 30), "20z");
-    assert_eq!(sheet_name("20", 26, 30), "20aa");
-    assert_eq!(sheet_name("20", 27, 30), "20ab");
-    assert_eq!(sheet_name("20", 52, 60), "20ba");
+    assert_eq!(sheet_name("20", 22, 30), "20z");
+    assert_eq!(sheet_name("20", 23, 30), "20aa");
 
     let mut doc = starter();
     let (pages, _) = doc
@@ -223,17 +221,9 @@ fn sheet_names_never_repeat_another_page() {
     assert_eq!(sheet_names("20", 2, free), ["20a", "20b"]);
     // A single sheet is the page's own name, whatever else exists.
     assert_eq!(sheet_names("20", 1, |n| n == "20"), ["20"]);
-    // One clash moves the whole family to the next free separator.
-    assert_eq!(
-        sheet_names("20", 3, |n| n == "20b"),
-        ["20-a", "20-b", "20-c"]
-    );
-    assert_eq!(
-        sheet_names("20", 2, |n| ["20a", "20-b"].contains(&n)),
-        ["20/a", "20/b"]
-    );
-    // Every separator taken: still distinct, free names.
-    let taken = ["20a", "20-a", "20/a", "20_a", "20a'"];
+    // A page the user named like a sheet keeps its name; the sheet gets marks.
+    assert_eq!(sheet_names("20", 3, |n| n == "20b"), ["20a", "20b'", "20c"]);
+    let taken = ["20a", "20a'"];
     assert_eq!(
         sheet_names("20", 2, |n| taken.contains(&n)),
         ["20a''", "20b"]
@@ -241,7 +231,26 @@ fn sheet_names_never_repeat_another_page() {
 }
 
 #[test]
-fn generated_sheets_step_around_a_real_sub_page() {
+fn sheet_letters_skip_i_l_and_o() {
+    let names: Vec<String> = (0..30).map(|i| sheet_name("20", i, 30)).collect();
+    assert_eq!(
+        names[..10],
+        [
+            "20a", "20b", "20c", "20d", "20e", "20f", "20g", "20h", "20j", "20k"
+        ]
+    );
+    assert_eq!(names[10..14], ["20m", "20n", "20p", "20q"]);
+    assert_eq!(names[22], "20z");
+    assert_eq!(names[23], "20aa");
+    assert_eq!(names[24], "20ab");
+    assert!(names.iter().all(|n| !n[2..].contains(['i', 'l', 'o', '.'])));
+    // 23 + 23 * 23 names with up to two letters.
+    assert_eq!(sheet_name("20", 23 + 23 * 23 - 1, 1000), "20zz");
+    assert_eq!(sheet_name("20", 23 + 23 * 23, 1000), "20aaa");
+}
+
+#[test]
+fn a_page_named_like_a_sheet_keeps_its_name() {
     let mut doc = starter();
     let (devices, _) = doc
         .transact("Report page", |tx| {
@@ -251,7 +260,7 @@ fn generated_sheets_step_around_a_real_sub_page() {
                     generator: "devices".into(),
                 }
             })?;
-            // A hand-drawn sub-page that happens to share a sheet's name.
+            // A hand-drawn page that happens to share a sheet's name.
             tx.add_page("20b")?;
             for i in 1..=80 {
                 tx.add_device(DeviceTag::parse(&format!("=A9-K{i}"))?, "Relay")?;
@@ -265,11 +274,11 @@ fn generated_sheets_step_around_a_real_sub_page() {
         .into_iter()
         .map(|s| s.name)
         .collect();
-    assert_eq!(names, ["20-a", "20-b", "20-c"]);
+    assert_eq!(names, ["20a", "20b'", "20c"]);
     let pages: Vec<&str> = doc.project().pages().map(|p| p.name.as_str()).collect();
     assert!(names.iter().all(|n| !pages.contains(&n.as_str())));
 
-    // Renaming the sub-page away gives the dotted names back.
+    // Renaming the page away gives the plain names back.
     let sub = doc
         .project()
         .pages()
