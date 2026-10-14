@@ -417,7 +417,18 @@ impl PageScene {
 pub fn symbol_text(project: &Project, sym: &SymbolInstance) -> Option<String> {
     match &sym.role {
         SymbolRole::Device { device, .. } => project.device(*device).map(|d| d.tag.to_string()),
-        SymbolRole::Terminal { terminal } => project.terminal_designation(*terminal),
+        // One designation per level; levels of one terminal usually share it.
+        SymbolRole::Terminal { terminals } => {
+            let mut names: Vec<String> = Vec::new();
+            for t in terminals {
+                if let Some(n) = project.terminal_designation(*t)
+                    && !names.contains(&n)
+                {
+                    names.push(n);
+                }
+            }
+            (!names.is_empty()).then(|| names.join(" / "))
+        }
         SymbolRole::Interruption { name } => Some(name.clone()),
         SymbolRole::PotentialFeed { potential } => {
             project.potential(*potential).map(|p| p.name.clone())
@@ -699,7 +710,7 @@ mod tests {
                     "iec/terminal",
                     MPlacement::at(Point::new(60.0, 40.0)),
                     vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
-                    SymbolRole::Terminal { terminal: t },
+                    SymbolRole::Terminal { terminals: vec![t] },
                 )?;
                 Ok((strip, sym))
             })
