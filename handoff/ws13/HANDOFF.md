@@ -4,7 +4,7 @@ Updated: 2026-10-14 ~20:30 UTC
 
 ## State
 - #55 (crate novo-reports) merged as ea47b10 (READY from reviewers B and C on 3a6771c).
-- Follow-up PR from main on branch `claude/ws13-reports` (restarted from ea47b10): terminal + cable diagram reports, generated-page sheet naming, frame-aligned PageSetup, C's notes. PR number and head SHA are in PROGRESS.md.
+- Follow-up PR from main on branch `claude/ws13-reports` (restarted from ea47b10): terminal + cable diagram reports, generated-page sheet naming, frame-aligned PageSetup, C's notes. PR #68; head in PROGRESS.md (code at 74d5d33).
 - Review: two-reviewer policy for worker PRs: B (session_01QSnXFBDRyvwwzhT1S1gFGN) and C (session_01Q6QWwh6uhq8Z2C1Ysih3UA). Coordinator: session_01DZ68tTULUv7Uhe8ecKbC47 (merges). WS-28 worker (novo CLI): session_011qgUKo3T6sBPNTVxKy9zZF; it was sent the BOM/xlsx/CSV API.
 - GitHub Actions does not run on this account: local fmt/clippy/test are the CI signal.
 
