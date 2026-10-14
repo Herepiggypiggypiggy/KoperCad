@@ -24,6 +24,37 @@ How a PR is tested: its branch is merged onto the current `main` (a
 main `11363c1` passes fmt, clippy and all 232 workspace tests on Linux.
 **Every Gate 0 criterion is met.**
 
+## Round 8 (2026-10-14, main `7379d42`): Gate 1 gaps after #30, #36
+
+#30 (novo-terminals) and #36 (novo-parts) are on main, so their gap tests
+drive the real APIs through the Gate 1 motor starter and are no longer
+ignored.
+
+| Gap test | Step | Closed by | State |
+| --- | --- | --- | --- |
+| `gap_place_terminals_on_wires_and_show_the_strip` | The starter wired straight from `-F1` to `-M1`; one `place_terminals` call across the four motor wires is one undo step and gives `-X1:1`, `:2`, `:3` (feed-through) and `:PE` (protective earth, from the wire's potential); the motor still reads L1, L2, L3, PE; the connection screen lists `-F1:2/4/6` and the PE feed inside and `-M1:U1/V1/W1/PE` in the field; `check()` is clean | #30 | Passes |
+| `gap_assign_parts_from_the_catalog` | Each of the 5 devices gets the starter catalog's first suggestion for its letter code through `assign_part` (one undo step each); `missing_parts()` is empty; save and reopen keep the parts | #36 | Passes |
+| `gap_place_by_search_with_auto_tags_and_self_wiring` | Place by search with the next free tag; a column wires itself | #38 | Open, panics |
+| `gap_draw_real_symbols` | Library artwork instead of placeholders | #38 | Open, panics |
+
+Also in this round:
+- The Gate 1 fixture's `-X1:PE` is now a protective earth terminal
+  (`handoff/tester/pe-fix.patch`, waiting for #30). novo-terminals'
+  `gate1_checks_flag_the_pe_terminal_kind` became `gate1_checks_are_clean`:
+  `check()` reports nothing on the fixture.
+- **F3 (fixed here, novo-terminals, medium):** `place_terminals` decided
+  which pin faces the start of a wire by which wire end was nearer, not by
+  the wire's direction. A terminal dropped on the far half of a long wire
+  went in backwards: the incoming wire ran through the symbol to pin 2, and
+  internal and external sides swapped (the PE row of the gap test showed
+  `-M1:PE` inside and the feed in the field). Pin 1 now faces the start
+  when the wire runs down (or right). Regression test
+  `a_terminal_dropped_near_the_far_end_keeps_its_sides`.
+
+main `7379d42` plus this round passes fmt, clippy and all workspace tests on
+Linux: 411 passed, 0 failed, 3 ignored (the 2 open #38 gaps and the
+`ignore` doc example in `novo-canvas`'s `widget.rs`).
+
 ## Round 7 (2026-10-14, main `f6ee2f1`): Gate 1 gaps after #28, #29, #34, #35, #37
 
 Since #42 merged, #35 (core: potential assignment, terminal rule, text
