@@ -1,0 +1,16 @@
+[package]
+name = "novo-theme"
+description = "NovoElectric look: dark theme, design tokens, canvas palette and branding"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+egui.workspace = true
+egui-phosphor.workspace = true
+
+[dev-dependencies]
+eframe.workspace = true
+
+[lints]
+workspace = true

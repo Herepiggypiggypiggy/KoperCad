@@ -1,0 +1,13 @@
+[package]
+name = "brand-render"
+description = "Renders assets/branding SVGs to the PNG and ICO files the app ships"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Not part of the app workspace: run it by hand when a logo SVG changes.
+[workspace]
+
+[dependencies]
+resvg = "0.45"
+ico = "0.4"
