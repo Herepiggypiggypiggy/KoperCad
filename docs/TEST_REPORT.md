@@ -24,6 +24,80 @@ How a PR is tested: its branch is merged onto the current `main` (a
 main `11363c1` passes fmt, clippy and all 232 workspace tests on Linux.
 **Every Gate 0 criterion is met.**
 
+## Round 8 (2026-10-14, main `7379d42`): Gate 1 gaps after #30, #36
+
+#30 (novo-terminals) and #36 (novo-parts) are on main, so their gap tests
+drive the real APIs through the Gate 1 motor starter and are no longer
+ignored.
+
+| Gap test | Step | Closed by | State |
+| --- | --- | --- | --- |
+| `gap_place_terminals_on_wires_and_show_the_strip` | The starter wired straight from `-F1` to `-M1`; one `place_terminals` call across the four motor wires is one undo step and gives `-X1:1`, `:2`, `:3` (feed-through) and `:PE` (protective earth, from the wire's potential); the motor still reads L1, L2, L3, PE; the connection screen lists `-F1:2/4/6` and the PE feed inside and `-M1:U1/V1/W1/PE` in the field; `check()` is clean | #30 | Passes |
+| `gap_assign_parts_from_the_catalog` | Each of the 5 devices gets the starter catalog's first suggestion for its letter code through `assign_part` (one undo step each); `missing_parts()` is empty; save and reopen keep the parts | #36 | Passes |
+| `gap_place_by_search_with_auto_tags_and_self_wiring` | Place by search with the next free tag; a column wires itself | #38 | Open, panics |
+| `gap_draw_real_symbols` | Library artwork instead of placeholders | #38 | Open, panics |
+
+Also in this round:
+- The Gate 1 fixture's `-X1:PE` is now a protective earth terminal
+  (`handoff/tester/pe-fix.patch`, waiting for #30). novo-terminals'
+  `gate1_checks_flag_the_pe_terminal_kind` became `gate1_checks_are_clean`:
+  `check()` reports nothing on the fixture.
+- **F3 (fixed here, novo-terminals, medium):** `place_terminals` decided
+  which pin faces the start of a wire by which wire end was nearer, not by
+  the wire's direction. A terminal dropped on the far half of a long wire
+  went in backwards: the incoming wire ran through the symbol to pin 2, and
+  internal and external sides swapped (the PE row of the gap test showed
+  `-M1:PE` inside and the feed in the field). Pin 1 now faces the start
+  when the wire runs down (or right). Regression test
+  `a_terminal_dropped_near_the_far_end_keeps_its_sides`.
+
+main `7379d42` plus this round passes fmt, clippy and all workspace tests on
+Linux: 411 passed, 0 failed, 3 ignored (the 2 open #38 gaps and the
+`ignore` doc example in `novo-canvas`'s `widget.rs`).
+
+## Round 7 (2026-10-14, main `f6ee2f1`): Gate 1 gaps after #28, #29, #34, #35, #37
+
+Since #42 merged, #35 (core: potential assignment, terminal rule, text
+records), #37 (symbols), #34 (app storage and canvas), #28 (canvas: text
+picking, junction glyphs, text drawing) and #29 (novo-workflow) are on main.
+Each gap test whose pull request merged now drives the real public API
+through the Gate 1 motor starter and is no longer ignored. Each gap still
+waiting for an open pull request panics with `gap: closed by #NN`, so
+`cargo test -p novo-tests --test gate1_scenario -- --ignored` shows the
+open gaps as failures.
+
+| Gap test | Step | Closed by | State |
+| --- | --- | --- | --- |
+| `gap_create_open_and_save_through_the_app` | Create, save, open through `StorageBackend`: the new project is on disk before the first save, the first save moves it to the chosen file, reopening shows the same project and potentials | #34 | Passes |
+| `gap_insert_search_ignores_case` | `MCB3`, ` M3 ` etc. find the same symbol through `by_alias`, `mnemonic` and the I search (exact short name first); `next_tag` gives -K2, -M2, -F2 and starts a new location at 1 | #37, #29 | Passes |
+| `gap_assign_potentials_to_selected_wires` | `AssignPotentials` on the three `-Q1`/`-K1` wires with a 400 V three-phase set: L1, L2, L3 at the motor, extras ignored, reruns create nothing, too many wires refused; `-X1:PE` defines PE by the terminal-name rule; undo removes it all | #35 | Passes |
+| `gap_place_by_search_with_auto_tags_and_self_wiring` | Place by search with the next free tag; a column wires itself | #38 | Open, panics |
+| `gap_place_terminals_on_wires_and_show_the_strip` | Terminals on the motor wires in one call; strip screen and checks | #30 | Open, panics |
+| `gap_assign_parts_from_the_catalog` | Catalog parts on every device; nothing missing | #36 | Open, panics |
+| `gap_draw_real_symbols` | Library artwork instead of placeholders | #38 | Open, panics (pickable tags and F2 are done by #28) |
+
+Also in this round, from the review of #42:
+- Line potentials are 400 V (between lines); PE has no voltage. The
+  scenario asserts both.
+- The scenario no longer builds a change set by hand: every command records
+  its own `Outcome::changes` with the session (or the app backend), and the
+  save writes exactly that. Reload still gives identical JSON.
+- The canvas check asserts positions: every symbol's connection points are
+  at its placement plus the library's connection points, and every wire
+  runs from pin to pin.
+- **F2 is fixed** (#28). `e2e_motor_starter.rs` now asserts that a click on
+  `-X1:2` picks `-X1:2` first.
+
+**O1 (observation, low, WS-08):** the I search codes a motor circuit
+breaker (`mcb3`) as F (protection), so placing one in the Gate 1 project
+proposes `-F2`, next to the overload relay `-F1`. The Gate 1 fixture and
+many cabinet builders tag it `-Q1` (IEC 81346-2 class Q, switching). Worth
+a decision in WS-08's letter-code table or as a project setting.
+
+main `f6ee2f1` plus this round passes fmt, clippy and all workspace tests on
+Linux: 337 passed, 0 failed, 5 ignored (the 4 open gaps above and the
+`ignore` doc example in `novo-canvas`'s `widget.rs`).
+
 ## Round 6 (2026-10-14, main `9512822`): Gate 1 scenario
 
 New `gate1_scenario.rs` runs the Gate 1 flow, "create a project, place a
@@ -56,8 +130,8 @@ cross references and canvas updates from change sets. fmt, clippy and all
 | Assign catalog parts; nothing missing | `novo-parts` | #36 |
 | Draw real symbol artwork and pickable tags | `LibraryArt`, text picking; F2 below | #38, #28 |
 
-**F2 (bug, medium, WS-03): a terminal's tag steals clicks from the next
-terminal.** `PageScene` puts each symbol's tag to its right at tag height,
+**F2 (bug, medium, WS-03), fixed in #28 (verified in Round 7): a terminal's
+tag steals clicks from the next terminal.** `PageScene` puts each symbol's tag to its right at tag height,
 and picking counts label boxes. On the Gate 1 strip (terminals 8 mm apart),
 `-X1:1`'s tag `=A1+CAB-X1:1` runs across `-X1:2`'s body. A click on `-X1:2`
 then picks `-X1:1` at distance 0, ahead of `-X1:2` at 0.8. The tags also
