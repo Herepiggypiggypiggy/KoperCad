@@ -865,18 +865,37 @@ fn gap_assign_parts_from_the_catalog() {
             .into_iter()
             .next()
             .unwrap_or_else(|| panic!("no catalog part suggested for {device:?}"));
-        let p = flow.project();
-        let command = if p.device(device).unwrap().kind == DeviceKind::TerminalStrip {
-            let terminals: Vec<_> = p.terminals_of_strip(device).iter().map(|t| t.id).collect();
-            novo_parts::assign_terminal_part(p, &terminals, part)
-        } else {
-            novo_parts::assign_part(p, &[device], part, novo_parts::AssignMode::Replace)
-        }
+        let command = novo_parts::assign_part(
+            flow.project(),
+            &[device],
+            part,
+            novo_parts::AssignMode::Replace,
+        )
         .expect("the device had no part");
         let depth = flow.store.doc().undo_depth();
         flow.run(command);
         assert_eq!(flow.store.doc().undo_depth(), depth + 1);
     }
+    // The strip's top suggestion is a feed-through block: it became the
+    // strip's part for feed-through terminals, so only -X1:PE still needs
+    // one, and a PE block covers it.
+    let missing = novo_parts::missing_parts(flow.project());
+    assert_eq!(missing.len(), 1, "{missing:?}");
+    let strip = flow
+        .project()
+        .devices()
+        .find(|d| d.kind == DeviceKind::TerminalStrip)
+        .unwrap()
+        .id;
+    let pe_block = novo_parts::suggest_for_device(&catalog, flow.project(), strip, "pe", 1)[0];
+    let command = novo_parts::assign_part(
+        flow.project(),
+        &[strip],
+        pe_block,
+        novo_parts::AssignMode::Replace,
+    )
+    .unwrap();
+    flow.run(command);
     assert_eq!(
         novo_parts::missing_parts(flow.project()),
         Vec::<AnyId>::new()

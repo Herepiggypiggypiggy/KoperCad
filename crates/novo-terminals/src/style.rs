@@ -38,6 +38,12 @@ fn symbol_key(kind: TerminalKind) -> String {
     format!("terminal_symbol.{}", kind_key(kind))
 }
 
+/// The strip device property that holds the strip's part for a terminal
+/// kind (`terminal_part.<kind>`), for crates that set it as a command.
+pub fn strip_part_key(kind: TerminalKind) -> String {
+    part_key(kind)
+}
+
 fn part_key(kind: TerminalKind) -> String {
     format!("terminal_part.{}", kind_key(kind))
 }

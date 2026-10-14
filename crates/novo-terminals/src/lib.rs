@@ -81,8 +81,8 @@ pub use strip::{
     set_kind, set_level, strip_view, strips,
 };
 pub use style::{
-    Style, clear_override, default_symbol, overrides, set_strip_style, strip_style, style_of,
-    terminal_part,
+    Style, clear_override, default_symbol, overrides, set_strip_style, strip_part_key, strip_style,
+    style_of, terminal_part,
 };
 pub use suggest::{
     DISMISS_KEY, Suggestion, accept_suggestions, dismiss_suggestion, restore_suggestion,

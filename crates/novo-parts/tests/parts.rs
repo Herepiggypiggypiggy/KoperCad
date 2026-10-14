@@ -1056,9 +1056,16 @@ fn a_strip_style_part_covers_its_kind_and_is_not_unused() {
     }
     let pe = terminals[3].id;
     assert_eq!(missing_parts(p), vec![AnyId::from(pe)]);
-    // The strip device's own part list is never a terminal's article.
-    let command = assign_part(p, &[gate.x1], &block, AssignMode::Replace);
-    run(&mut doc, command);
+    // The strip device's own part list (end plates, accessories) is never
+    // a terminal's article.
+    let mut x1 = p.device(gate.x1).unwrap().clone();
+    x1.parts = vec![id];
+    run(
+        &mut doc,
+        Some(novo_core::Command::Replace {
+            record: Record::Device(x1),
+        }),
+    );
     let p = doc.project();
     assert_eq!(novo_parts::terminal_part(p, pe), None);
     assert_eq!(missing_parts(p), vec![AnyId::from(pe)]);
@@ -1129,4 +1136,51 @@ fn bulk_paste_reports_what_it_cannot_read() {
         err,
         novo_parts::BulkError::Text(novo_parts::ParseError::UnterminatedQuote { line: 2 })
     );
+}
+
+#[test]
+fn a_terminal_block_given_to_a_strip_is_ordered_per_terminal() {
+    // Tester finding F4: the strip's top suggestion (UT 2,5) landed on the
+    // strip device, so the BOM ordered one block for four terminals while
+    // missing parts called every terminal covered.
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let catalog = Catalog::starter();
+    clear_strip_style(&mut doc, gate.x1);
+    let block = suggest_for_device(&catalog, doc.project(), gate.x1, "", 1)[0].clone();
+    assert_eq!(block.order_number, "3044076");
+    assert_eq!(
+        novo_parts::terminal_kind_of(&block),
+        novo_core::TerminalKind::Feedthrough
+    );
+    let depth = doc.undo_depth();
+    let command = assign_part(doc.project(), &[gate.x1], &block, AssignMode::Replace);
+    run(&mut doc, command);
+    assert_eq!(doc.undo_depth(), depth + 1);
+    let p = doc.project();
+    assert!(p.device(gate.x1).unwrap().parts.is_empty());
+    let terminals = p.terminals_of_strip(gate.x1);
+    let id = novo_parts::terminal_part(p, terminals[0].id).unwrap();
+    assert_eq!(p.part(id).unwrap().order_number, "3044076");
+    for t in &terminals[..3] {
+        assert_eq!(novo_parts::terminal_part(p, t.id), Some(id));
+    }
+    // PE is not a feed-through terminal: it is still missing its block.
+    let pe = terminals[3].id;
+    assert_eq!(missing_parts(p), vec![AnyId::from(pe)]);
+    // Assigning the same block again changes nothing.
+    assert!(assign_part(p, &[gate.x1], &block, AssignMode::Replace).is_none());
+
+    let pe_block = suggest_for_device(&catalog, p, gate.x1, "pe", 1)[0].clone();
+    assert_eq!(pe_block.order_number, "3044089");
+    let command = assign_part(p, &[gate.x1], &pe_block, AssignMode::Replace);
+    run(&mut doc, command);
+    let p = doc.project();
+    assert_eq!(
+        p.part(novo_parts::terminal_part(p, pe).unwrap())
+            .unwrap()
+            .order_number,
+        "3044089"
+    );
+    assert!(missing_parts(p).is_empty());
 }

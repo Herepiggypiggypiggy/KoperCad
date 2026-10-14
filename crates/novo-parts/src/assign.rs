@@ -8,7 +8,7 @@
 
 use novo_core::{
     AnyId, Cable, CableCore, CableId, Command, Device, DeviceId, DeviceKind, Part, PartId, Project,
-    Record, Terminal, TerminalId, TerminalKind,
+    Record, Terminal, TerminalId, TerminalKind, Value,
 };
 
 use crate::catalog::{Catalog, CatalogPart, PartKey};
@@ -76,6 +76,12 @@ impl<'a> PartAllocator<'a> {
 ///
 /// The part is copied into the project once, or reused if the project
 /// already has it. Returns `None` if there is nothing to change.
+///
+/// A terminal block (letter code `X`) given to a terminal strip becomes the
+/// strip's part for the terminal kind it suits ([`terminal_kind_of`]), so
+/// every terminal of that kind is built with it and the bill of materials
+/// orders one per terminal. It never lands in the strip device's own part
+/// list, which is for end plates and accessories.
 pub fn assign_part(
     project: &Project,
     devices: &[DeviceId],
@@ -90,6 +96,18 @@ pub fn assign_part(
         let Some(current) = project.device(device) else {
             continue;
         };
+        if current.kind == DeviceKind::TerminalStrip && part.fits("X") {
+            let kind = terminal_kind_of(part);
+            if novo_terminals::strip_style(project, device, kind).part != Some(part_id) {
+                commands.push(Command::SetProperty {
+                    target: device.into(),
+                    key: novo_terminals::strip_part_key(kind),
+                    value: Some(Value::Int(i64::try_from(part_id.raw()).unwrap_or(i64::MAX))),
+                });
+                changed += 1;
+            }
+            continue;
+        }
         let mut next = current.clone();
         match mode {
             AssignMode::Replace => next.parts = vec![part_id],
@@ -113,6 +131,23 @@ pub fn assign_part(
         label: format!("Assign {part} to {}", count(changed, "device")),
         commands,
     })
+}
+
+/// The terminal kind a terminal block is for: a protective conductor block
+/// (`PE` in its keywords or type number, `UT 2,5-PE`) is for PE terminals,
+/// any other block for feed-through terminals.
+pub fn terminal_kind_of(part: &CatalogPart) -> TerminalKind {
+    let pe = part.keywords.iter().any(|k| k.eq_ignore_ascii_case("pe"))
+        || part
+            .type_number
+            .to_ascii_uppercase()
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .any(|w| w == "PE");
+    if pe {
+        TerminalKind::ProtectiveEarth
+    } else {
+        TerminalKind::Feedthrough
+    }
 }
 
 /// Assigns a cable part to a cable as one command. The cable takes the
