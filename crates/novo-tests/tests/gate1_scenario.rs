@@ -112,6 +112,9 @@ impl Window {
     fn frame(&mut self) {
         let app = &mut self.app;
         let mut output = self.ctx.run_ui(Default::default(), |ui| app.show(ui));
+        // Headless: there is no renderer to upload or free textures, so the
+        // delta is dropped. Real code must hand it to its painter, or the
+        // font atlas and images are never freed.
         output.textures_delta.clear();
     }
 
@@ -1225,7 +1228,7 @@ fn bom_uses(project: &Project) -> Vec<(u32, String)> {
 }
 
 /// What the finished starter gives the user besides the drawing: the design
-/// checks find no error or warning (#50), every device's cross reference points at its
+/// checks find nothing (#50), every device's cross reference points at its
 /// main function on page 1 and -X1's at its four terminals (#31), the bill
 /// of materials lists each device's part and one terminal block per
 /// terminal, PE included (#55), and the PDF (#49) with the
@@ -1237,10 +1240,8 @@ fn outputs_of_the_starter() {
     let (flow, page, s) = starter_with_parts(&library, dir.path());
     let p = flow.project();
 
-    // Errors and warnings; "missing part" infos are F4's gap test.
     let problems: Vec<String> = novo_checks::check(p)
         .into_iter()
-        .filter(|pr| pr.kind.severity() != novo_checks::Severity::Info)
         .map(|pr| format!("{:?}: {}", pr.kind, pr.message))
         .collect();
     assert!(problems.is_empty(), "{problems:?}");
@@ -1324,11 +1325,10 @@ fn gap_pdf_names_the_terminal_strip() {
     assert!(String::from_utf8_lossy(&pdf).contains("-X1"));
 }
 
-/// F4 (a): with every terminal of -X1 given its article, the missing-parts
-/// check still lists the strip device -X1 itself, which has no part of its
-/// own, so the parts pill and the Issues list never come out clean.
+/// F4 (a), fixed by #99: with every terminal of -X1 given its article, the
+/// missing-parts check does not list the strip device -X1 itself, which has
+/// no part of its own.
 #[test]
-#[ignore = "known gap F4: missing parts lists the strip device whose terminals all have articles (#99)"]
 fn gap_missing_parts_counts_a_strip_by_its_terminals() {
     let library = Library::builtin().unwrap();
     let dir = tempfile::tempdir().unwrap();
@@ -1339,14 +1339,11 @@ fn gap_missing_parts_counts_a_strip_by_its_terminals() {
     );
 }
 
-/// F4 (b): the property sheet path still treats a terminal block as a part
-/// of the strip device: the catalog suggests UT 2,5 for -X1 and
-/// `assign_part` puts it on the strip, where the bill of materials orders
-/// one block for the whole strip (a stray article) and no terminal gets
-/// it. A terminal block should go to the terminals (or the strip style for
-/// their kind), or be refused.
+/// F4 (b), fixed by #99: the property sheet path gives a terminal block
+/// to the strip's terminals, not to the strip device. The catalog suggests
+/// UT 2,5 for -X1 and `assign_part` sets the strip's part for that kind, so
+/// the bill of materials never orders it once against -X1 itself.
 #[test]
-#[ignore = "known gap F4: assign_part puts a terminal block on the strip device (TEST_REPORT Round 10)"]
 fn gap_a_terminal_block_is_not_a_part_of_the_strip() {
     let library = Library::builtin().unwrap();
     let dir = tempfile::tempdir().unwrap();
