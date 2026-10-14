@@ -845,6 +845,7 @@ impl NovoApp {
         let toggle = egui::Area::new(egui::Id::new("outline_toggle"))
             .fixed_pos(canvas.left_top() + egui::vec2(8.0, 8.0))
             .show(ctx, |ui| {
+                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
                 ui.add(egui::Button::selectable(self.outline_open, "Pages"))
             })
             .inner;
@@ -859,9 +860,12 @@ impl NovoApp {
         let area = egui::Area::new(egui::Id::new("outline_flyout"))
             .fixed_pos(egui::pos2(canvas.left() + 8.0, top))
             .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.set_width(OUTLINE_WIDTH);
-                    ui.set_height(height);
+                let frame = egui::Frame::popup(ui.style());
+                // The frame's margins and stroke come on top of the content.
+                let chrome = frame.total_margin().sum();
+                frame.show(ui, |ui| {
+                    ui.set_width(OUTLINE_WIDTH - chrome.x);
+                    ui.set_height(height - chrome.y);
                     self.outline(ui, picked);
                 });
             });
@@ -937,7 +941,7 @@ impl NovoApp {
             .fixed_pos(canvas.right_top() + egui::vec2(-12.0, 10.0))
             .interactable(false)
             .show(ctx, |ui| {
-                ui.label(egui::RichText::new(text).monospace().weak());
+                ui.add(egui::Label::new(egui::RichText::new(text).monospace().weak()).extend());
             });
     }
 
