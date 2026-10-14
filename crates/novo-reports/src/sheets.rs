@@ -6,23 +6,23 @@
 //! sheet prints as several sheets under that one record:
 //!
 //! - one sheet: the page's own name (`20`);
-//! - several: `20.1`, `20.2`, ... in order. Page names with a dot (`3.1`)
-//!   are already the model's convention for sub-pages, and they sort
-//!   naturally between `20` and `21`.
+//! - several: `20a`, `20b`, ... `20z`, then `20aa`, `20ab`, ... in order,
+//!   like spreadsheet columns (DESIGN.md §8). Never a dot, so a sheet name
+//!   cannot read as a `page.column` cross reference (`3.4`).
 //!
 //! A sheet name of a multi-sheet page never repeats another page's name
 //! (a single sheet is the page's own name, so it is unique when page names
-//! are). When a real page is
-//! already called `20.1` (or `20.2`, ...), the generated page's sheets use
-//! the next separator that is free for all of them: `20/1`, `20/2`, ...,
-//! then `20-1`, then `20_1`. The separator is chosen per generated page, so
-//! its sheets always read as one family; if every separator is taken, each
-//! sheet still gets a free name by adding `'` marks (`20.1'`). The real
-//! page keeps its name: the user named it, the report did not. The choice
-//! is made for the family as a whole, so it can change as the report grows:
-//! a 2-sheet `20.1, 20.2` that grows to 3 next to a real `20.3` becomes
-//! `20/1 .. 20/3`. That is fine under DESIGN.md's rule for generated pages
-//! (they reflow, and nothing references a sheet's name).
+//! are). When a real page is already called `20a` (or `20b`, ...), the
+//! generated page's sheets take the next form that is free for all of
+//! them: `20-a`, `20-b`, ..., then `20/a`, then `20_a`. The form is chosen
+//! per generated page, so its sheets always read as one family; if every
+//! form is taken, each sheet still gets a free name by adding `'` marks
+//! (`20a'`). The real page keeps its name: the user named it, the report
+//! did not. Because the choice is made for the family as a whole, it can
+//! change as the report grows: a 2-sheet `20a, 20b` that grows to 3 next
+//! to a real `20c` becomes `20-a .. 20-c`. That is fine under DESIGN.md's
+//! rule for generated pages (they reflow, and nothing references a sheet's
+//! name).
 //!
 //! Each sheet is laid out with [`PageSetup::for_format`] of the page's
 //! format, so it fits the same frame and title block as the schematic
@@ -37,19 +37,33 @@ use novo_core::{Page, PageId, PageKind, Project};
 use crate::page::{PageLayout, PageSetup, ReportPage, layout_page, paginate};
 use crate::report::LiveReports;
 
-/// The plain dotted name of sheet `index` (0-based) of `count` sheets of a
-/// generated page named `page_name`, ignoring other pages. Printed sheets
-/// use [`sheet_names`], which steps around names other pages already have.
+/// The letters of sheet `k` (1-based), like a spreadsheet column: `a` for
+/// 1, `z` for 26, `aa` for 27, `ab` for 28, ...
+fn letters(mut k: usize) -> String {
+    let mut out = Vec::new();
+    while k > 0 {
+        k -= 1;
+        out.push(b'a' + (k % 26) as u8);
+        k /= 26;
+    }
+    out.reverse();
+    String::from_utf8(out).expect("ASCII letters")
+}
+
+/// The plain name of sheet `index` (0-based) of `count` sheets of a
+/// generated page named `page_name` (`20`, or `20a`, `20b`, ...), ignoring
+/// other pages. Printed sheets use [`sheet_names`], which steps around
+/// names other pages already have.
 pub fn sheet_name(page_name: &str, index: usize, count: usize) -> String {
     if count <= 1 {
         page_name.to_owned()
     } else {
-        format!("{page_name}.{}", index + 1)
+        format!("{page_name}{}", letters(index + 1))
     }
 }
 
-/// Separators tried, in order, for the sheets of a generated page.
-const SEPARATORS: [char; 4] = ['.', '/', '-', '_'];
+/// Separators between the page name and the sheet letters, tried in order.
+const SEPARATORS: [&str; 4] = ["", "-", "/", "_"];
 
 /// The names of the `count` sheets of a generated page named `page_name`,
 /// avoiding every name `taken` reports as used by another page (see the
@@ -59,14 +73,14 @@ pub fn sheet_names(page_name: &str, count: usize, taken: impl Fn(&str) -> bool) 
         // The page's own name: it is already the page's, not another's.
         return (0..count).map(|_| page_name.to_owned()).collect();
     }
-    let with = |sep: char| -> Vec<String> {
+    let with = |sep: &str| -> Vec<String> {
         (1..=count)
-            .map(|k| format!("{page_name}{sep}{k}"))
+            .map(|k| format!("{page_name}{sep}{}", letters(k)))
             .collect()
     };
     if let Some(names) = SEPARATORS
         .iter()
-        .map(|&sep| with(sep))
+        .map(|sep| with(sep))
         .find(|names| names.iter().all(|n| !taken(n)))
     {
         return names;
@@ -89,8 +103,8 @@ pub struct GeneratedSheet {
     pub page: PageId,
     /// The report that fills it.
     pub report: String,
-    /// `20`, `20.3`, or when a real page holds a dotted name, `20/3`, `20-3`,
-    /// `20_3` or, last resort, `20.3'` (see [`sheet_names`]).
+    /// `20`, `20c`, or when a real page holds such a name, `20-c`, `20/c`,
+    /// `20_c` or, last resort, `20c'` (see [`sheet_names`]).
     pub name: String,
     /// Which rows of which section the sheet holds.
     pub sheet: ReportPage,

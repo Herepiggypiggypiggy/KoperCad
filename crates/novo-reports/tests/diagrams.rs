@@ -155,8 +155,12 @@ fn cable_diagram_has_an_overview_and_one_section_per_cable() {
 #[test]
 fn generated_pages_print_as_named_sheets() {
     assert_eq!(sheet_name("20", 0, 1), "20");
-    assert_eq!(sheet_name("20", 0, 3), "20.1");
-    assert_eq!(sheet_name("20", 2, 3), "20.3");
+    assert_eq!(sheet_name("20", 0, 3), "20a");
+    assert_eq!(sheet_name("20", 2, 3), "20c");
+    assert_eq!(sheet_name("20", 25, 30), "20z");
+    assert_eq!(sheet_name("20", 26, 30), "20aa");
+    assert_eq!(sheet_name("20", 27, 30), "20ab");
+    assert_eq!(sheet_name("20", 52, 60), "20ba");
 
     let mut doc = starter();
     let (pages, _) = doc
@@ -183,16 +187,18 @@ fn generated_pages_print_as_named_sheets() {
 
     let sheets = reports.sheets_of_page(doc.project(), devices);
     let names: Vec<&str> = sheets.iter().map(|s| s.name.as_str()).collect();
-    assert_eq!(names, ["20.1", "20.2", "20.3"]);
+    assert_eq!(names, ["20a", "20b", "20c"]);
     assert!(
         sheets
             .iter()
             .all(|s| s.report == "devices" && s.page == devices)
     );
-    // Sub-sheet names sort between the page and the next one.
-    let mut sorted = vec!["21", "20.2", "20", "20.10", "20.1"];
+    // Sheet names sort between the page and the next one, and never
+    // contain a dot, so they cannot read as a page.column reference.
+    let mut sorted = vec!["21", "20b", "20", "20c", "20a"];
     sorted.sort_by(|a, b| novo_core::natural_cmp(a, b));
-    assert_eq!(sorted, ["20", "20.1", "20.2", "20.10", "21"]);
+    assert_eq!(sorted, ["20", "20a", "20b", "20c", "21"]);
+    assert!(names.iter().all(|n| !n.contains('.')));
 
     // An unregistered generator prints nothing rather than failing.
     assert!(reports.sheets_of_page(doc.project(), unknown).is_empty());
@@ -214,23 +220,23 @@ fn generated_pages_print_as_named_sheets() {
 fn sheet_names_never_repeat_another_page() {
     let free = |_: &str| false;
     assert_eq!(sheet_names("20", 1, free), ["20"]);
-    assert_eq!(sheet_names("20", 2, free), ["20.1", "20.2"]);
+    assert_eq!(sheet_names("20", 2, free), ["20a", "20b"]);
     // A single sheet is the page's own name, whatever else exists.
     assert_eq!(sheet_names("20", 1, |n| n == "20"), ["20"]);
     // One clash moves the whole family to the next free separator.
     assert_eq!(
-        sheet_names("20", 3, |n| n == "20.2"),
-        ["20/1", "20/2", "20/3"]
+        sheet_names("20", 3, |n| n == "20b"),
+        ["20-a", "20-b", "20-c"]
     );
     assert_eq!(
-        sheet_names("20", 2, |n| ["20.1", "20/2"].contains(&n)),
-        ["20-1", "20-2"]
+        sheet_names("20", 2, |n| ["20a", "20-b"].contains(&n)),
+        ["20/a", "20/b"]
     );
     // Every separator taken: still distinct, free names.
-    let taken = ["20.1", "20/1", "20-1", "20_1", "20.1'"];
+    let taken = ["20a", "20-a", "20/a", "20_a", "20a'"];
     assert_eq!(
         sheet_names("20", 2, |n| taken.contains(&n)),
-        ["20.1''", "20.2"]
+        ["20a''", "20b"]
     );
 }
 
@@ -246,7 +252,7 @@ fn generated_sheets_step_around_a_real_sub_page() {
                 }
             })?;
             // A hand-drawn sub-page that happens to share a sheet's name.
-            tx.add_page("20.2")?;
+            tx.add_page("20b")?;
             for i in 1..=80 {
                 tx.add_device(DeviceTag::parse(&format!("=A9-K{i}"))?, "Relay")?;
             }
@@ -259,7 +265,7 @@ fn generated_sheets_step_around_a_real_sub_page() {
         .into_iter()
         .map(|s| s.name)
         .collect();
-    assert_eq!(names, ["20/1", "20/2", "20/3"]);
+    assert_eq!(names, ["20-a", "20-b", "20-c"]);
     let pages: Vec<&str> = doc.project().pages().map(|p| p.name.as_str()).collect();
     assert!(names.iter().all(|n| !pages.contains(&n.as_str())));
 
@@ -267,7 +273,7 @@ fn generated_sheets_step_around_a_real_sub_page() {
     let sub = doc
         .project()
         .pages()
-        .find(|p| p.name == "20.2")
+        .find(|p| p.name == "20b")
         .expect("sub-page")
         .id;
     doc.transact("Rename", |tx| {
@@ -279,7 +285,7 @@ fn generated_sheets_step_around_a_real_sub_page() {
         .into_iter()
         .map(|s| s.name)
         .collect();
-    assert_eq!(names, ["20.1", "20.2", "20.3"]);
+    assert_eq!(names, ["20a", "20b", "20c"]);
 }
 
 #[test]

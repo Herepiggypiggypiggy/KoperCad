@@ -38,9 +38,9 @@
 //!   novo-cables). Ids double as the `generator` of a
 //!   [`PageKind::Generated`](novo_core::PageKind) page.
 //! - **Generated pages**: a generated page record prints as one sheet named
-//!   like the page (`20`), or as `20.1`, `20.2`, ... when its report needs
+//!   like the page (`20`), or as `20a`, `20b`, ... when its report needs
 //!   more ([`LiveReports::sheets_of_page`], [`LiveReports::layout_sheet`]);
-//!   `20/1`, `20/2`, ... when a real page is already named `20.1`
+//!   `20-a`, `20-b`, ... when a real page is already named `20a`
 //!   ([`sheet_names`]).
 //! - **Live cache**: [`LiveReports`]. Call [`LiveReports::notify`] with every
 //!   transaction's change set; [`LiveReports::get`] regenerates only stale
