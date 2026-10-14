@@ -137,7 +137,9 @@ impl Report for CableDiagram {
                 Column::new("spare", "Spare", 10.0).right(),
             ],
         );
-        for row in novo_cables::overview(project) {
+        // Built once: the overview rows are derived from the same screens.
+        let screens = novo_cables::cable_screens(project);
+        for row in screens.iter().map(novo_cables::OverviewRow::of) {
             overview.push(
                 vec![
                     Cell::text(row.tag),
@@ -153,7 +155,7 @@ impl Report for CableDiagram {
             );
         }
         let mut sections = vec![overview];
-        for screen in novo_cables::cable_screens(project) {
+        for screen in screens {
             let mut title = format!("{} · {}", screen.tag, screen.type_name);
             if !screen.from.is_empty() || !screen.to.is_empty() {
                 title.push_str(&format!(" · {} → {}", screen.from, screen.to));
