@@ -165,6 +165,31 @@ fn terminals_named_like_a_supply_potential_define_it() {
     assert_eq!(net.potential_of(Endpoint::pin(x4_1, 0)), None);
     assert_eq!(net.potential_conflicts().count(), 0);
 
+    // The rule is explicit: off, the name means nothing (what files without
+    // the rule load as), and turning it back on is one undo step.
+    doc.transact("Names off", |tx| {
+        tx.set_info(|info| info.rules.potentials.from_terminal_names = false)
+    })
+    .unwrap();
+    let off = doc.project().netlist();
+    assert_eq!(off.potential_of(Endpoint::pin(x4_pe, 1)), None);
+    let mut loaded = doc.project().to_json();
+    assert!(!loaded.contains("from_terminal_names"));
+    loaded = Project::from_json(&loaded).unwrap().to_json();
+    assert!(!loaded.contains("from_terminal_names"));
+    doc.undo().unwrap();
+    assert!(
+        doc.project()
+            .to_json()
+            .contains("\"from_terminal_names\": true")
+    );
+    assert_eq!(
+        doc.project()
+            .netlist()
+            .potential_of(Endpoint::pin(x4_pe, 1)),
+        Some(pe)
+    );
+
     // Wiring the PE terminal to a wire marked L1 is a short.
     doc.execute(Command::AssignPotentials {
         wires: wires.clone(),

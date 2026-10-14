@@ -76,6 +76,8 @@ pub struct ProjectInfo {
 pub struct ProjectRules {
     #[serde(default, skip_serializing_if = "TerminalRules::is_off")]
     pub terminals: TerminalRules,
+    #[serde(default, skip_serializing_if = "PotentialRules::is_off")]
+    pub potentials: PotentialRules,
 }
 
 impl ProjectRules {
@@ -86,6 +88,9 @@ impl ProjectRules {
             terminals: TerminalRules {
                 same_name: SameName::Join,
                 join_link: JoinLink::Connector,
+            },
+            potentials: PotentialRules {
+                from_terminal_names: true,
             },
         }
     }
@@ -111,6 +116,21 @@ pub struct TerminalRules {
 impl TerminalRules {
     pub fn is_off(&self) -> bool {
         *self == TerminalRules::default()
+    }
+}
+
+/// Rules for where potentials come from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub struct PotentialRules {
+    /// A terminal named like a supply potential (`-X4:PE`, `-X1:N`, `PEN`)
+    /// defines that potential on its net.
+    #[serde(default)]
+    pub from_terminal_names: bool,
+}
+
+impl PotentialRules {
+    pub fn is_off(&self) -> bool {
+        *self == PotentialRules::default()
     }
 }
 

@@ -7,6 +7,9 @@
       "terminals": {
         "same_name": "join",
         "join_link": "connector"
+      },
+      "potentials": {
+        "from_terminal_names": true
       }
     },
     "properties": {

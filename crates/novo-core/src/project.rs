@@ -24,6 +24,10 @@ use crate::tx::Tx;
 /// Changing goes through [`Project::transact`] (or a [`Document`](crate::Document)
 /// when undo is wanted), which validates every primitive op, so a project can
 /// never hold a dangling reference.
+///
+/// `Project::default()` has every rule off, which is what a file without
+/// rules loads as. The app and scripts create projects with
+/// [`Project::new`], which starts from the recommended rules.
 #[derive(Debug, Clone, Default)]
 pub struct Project {
     pub(crate) info: ProjectInfo,

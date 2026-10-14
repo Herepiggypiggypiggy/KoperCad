@@ -14,7 +14,8 @@
 //! Contacts never join nets: whether a contact conducts is simulation state.
 //! A potential is defined on a net by a potential definition point
 //! (`SymbolRole::PotentialFeed`), a wire with `Wire::potential`, or a
-//! terminal named like a supply potential (`-X4:PE` defines `PE`). A
+//! terminal named like a supply potential (`-X4:PE` defines `PE`) when
+//! [`PotentialRules::from_terminal_names`](crate::PotentialRules) is on. A
 //! potential carries on through switched poles (`SymbolInstance::pass_through`), so the
 //! wire after a contactor or breaker still reads `L1`.
 
@@ -320,10 +321,12 @@ impl Netlist {
                 nets[net].defined.push(potential);
             }
         }
-        // A terminal named like a supply potential (`-X4:PE`) defines it.
+        // Under the rule, a terminal named like a supply potential
+        // (`-X4:PE`) defines it.
+        let from_names = project.info().rules.potentials.from_terminal_names;
         let supply: HashMap<&str, Vec<PotentialId>> = project
             .potentials()
-            .filter(|p| p.kind.is_supply())
+            .filter(|p| from_names && p.kind.is_supply())
             .fold(HashMap::new(), |mut by_name, p| {
                 by_name.entry(p.name.as_str()).or_default().push(p.id);
                 by_name
