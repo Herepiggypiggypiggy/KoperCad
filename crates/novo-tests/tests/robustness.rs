@@ -37,14 +37,16 @@ fn non_finite_numbers_are_refused_everywhere() {
             ),
             (
                 "pin offset",
-                doc.execute(Command::PlaceSymbol {
-                    page: s.main_page,
-                    symbol: "iec/contacts/no".into(),
-                    placement: Placement::at(Point::new(200.0, 200.0)),
-                    role: SymbolRole::Unassigned,
-                    pins: vec![Pin::new("13", 0.0, bad)],
-                    bridges: vec![],
-                }),
+                doc.transact("pin", |tx| {
+                    tx.place_symbol(
+                        s.main_page,
+                        "iec/contacts/no",
+                        Placement::at(Point::new(200.0, 200.0)),
+                        vec![Pin::new("13", 0.0, bad)],
+                        SymbolRole::Unassigned,
+                    )
+                })
+                .map(|_| Outcome::default()),
             ),
             (
                 "junction",
@@ -170,17 +172,19 @@ fn library_multi_level_terminals_keep_levels_apart() {
                 for level in 0..levels {
                     terminals.push(tx.add_terminal(strip, (level + 1).to_string())?);
                 }
-                let created = tx.execute(Command::PlaceSymbol {
+                // Bridges first, then the levels' terminals, so every step
+                // passes the integrity check.
+                let placed = tx.place_symbol(
                     page,
-                    symbol: symbol.id.as_str().into(),
-                    placement: Placement::at(Point::new(40.0, 40.0)),
-                    role: SymbolRole::Terminal { terminals },
-                    pins: pins_from_library(symbol),
-                    bridges: bridges.clone(),
+                    symbol.id.as_str(),
+                    Placement::at(Point::new(40.0, 40.0)),
+                    pins_from_library(symbol),
+                    SymbolRole::Unassigned,
+                )?;
+                tx.update::<SymbolInstance>(placed, |s| s.bridges = bridges.clone())?;
+                tx.update::<SymbolInstance>(placed, |s| {
+                    s.role = SymbolRole::Terminal { terminals }
                 })?;
-                let [AnyId::Symbol(placed)] = created[..] else {
-                    panic!("unexpected {created:?}")
-                };
                 Ok(placed)
             })
             .unwrap_or_else(|e| panic!("`{}` does not place: {e}", symbol.id));
