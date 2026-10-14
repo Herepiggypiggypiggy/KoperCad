@@ -15,8 +15,9 @@ pub fn section_label(ui: &mut Ui, text: &str) -> Response {
     )
 }
 
-/// The one button in a dialog that does the main thing: copper text on the
-/// normal control fill with a copper hairline, rather than a loud solid fill.
+/// The main action of a project-level screen or a command preview, such as
+/// "Place 12 devices": copper text on the normal control fill with a copper
+/// hairline, rather than a loud solid fill. At most one per screen.
 pub fn primary_button(ui: &mut Ui, text: &str) -> Response {
     ui.add(
         Button::new(
@@ -28,8 +29,8 @@ pub fn primary_button(ui: &mut Ui, text: &str) -> Response {
     )
 }
 
-/// A square, frameless toolbar button showing only an icon. `active` marks
-/// the current tool with a copper icon and a short copper bar beneath it.
+/// A square, frameless dock button showing only an icon. `active` marks the
+/// current tool with a copper icon and a short copper bar beneath it.
 pub fn tool_button(ui: &mut Ui, icon: &str, active: bool, tooltip: &str) -> Response {
     let color = if active {
         tokens::ACCENT_HOVER
@@ -53,4 +54,61 @@ pub fn tool_button(ui: &mut Ui, icon: &str, active: bool, tooltip: &str) -> Resp
         ui.painter().rect_filled(bar, 1, tokens::ACCENT);
     }
     response
+}
+
+/// One option of a segmented switch: quiet text, the current one lifted
+/// onto a control fill.
+pub fn segment(ui: &mut Ui, text: &str, current: bool) -> Response {
+    let rich = RichText::new(text).color(if current {
+        tokens::TEXT
+    } else {
+        tokens::TEXT_MUTED
+    });
+    let mut button = Button::new(rich).frame(current);
+    if current {
+        button = button
+            .fill(tokens::BG_3)
+            .stroke(Stroke::new(1.0, tokens::BORDER_STRONG));
+    }
+    ui.add(button)
+}
+
+/// The live design check summary: a quiet pill that reads "No issues" or
+/// counts errors and warnings in their colours.
+pub fn issue_pill(ui: &mut Ui, errors: usize, warnings: usize) -> Response {
+    let (text, color) = match (errors, warnings) {
+        (0, 0) => (
+            format!("{}  No issues", crate::icons::status::OK),
+            tokens::SUCCESS,
+        ),
+        (0, w) => (
+            format!("{}  {w} warnings", crate::icons::status::WARNING),
+            tokens::WARNING,
+        ),
+        (e, _) => (
+            format!("{}  {e} errors", crate::icons::status::ERROR),
+            tokens::ERROR,
+        ),
+    };
+    ui.add(
+        Button::new(RichText::new(text).small().color(color))
+            .fill(tokens::BG_2)
+            .stroke(Stroke::new(1.0, tokens::BORDER))
+            .corner_radius(11),
+    )
+}
+
+/// A read-only label and value row for the inspector.
+pub fn field(ui: &mut Ui, label: &str, value: &str) {
+    ui.horizontal(|ui| {
+        ui.allocate_ui_with_layout(
+            Vec2::new(84.0, tokens::CONTROL_HEIGHT - 4.0),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                ui.set_min_width(84.0);
+                ui.label(RichText::new(label).color(tokens::TEXT_MUTED));
+            },
+        );
+        ui.label(RichText::new(value).monospace().color(tokens::TEXT));
+    });
 }

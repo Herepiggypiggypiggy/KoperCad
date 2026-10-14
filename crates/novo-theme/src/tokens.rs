@@ -15,9 +15,10 @@ use egui::Color32;
 
 /// Deepest surface: text fields, lists, the area around the drawing sheet.
 pub const BG_0: Color32 = Color32::from_rgb(0x0E, 0x0E, 0x10);
-/// Panels and the menu bar.
+/// Panels: the top bar, the outline and the drawer.
 pub const BG_1: Color32 = Color32::from_rgb(0x15, 0x15, 0x17);
-/// Windows, dialogs, menus and tooltips.
+/// Floating surfaces: the inspector, the dock, the command field and
+/// tooltips.
 pub const BG_2: Color32 = Color32::from_rgb(0x1B, 0x1B, 0x1E);
 /// Resting controls: buttons, checkboxes, sliders.
 pub const BG_3: Color32 = Color32::from_rgb(0x23, 0x23, 0x27);
@@ -69,9 +70,10 @@ pub const INFO: Color32 = Color32::from_rgb(0x8F, 0xA8, 0xC8);
 
 /// Body and button text.
 pub const FONT_BODY: f32 = 13.0;
-/// Status bar, captions, section labels.
+/// Hints, captions, section labels, the HUD.
 pub const FONT_SMALL: f32 = 11.0;
-/// Dialog titles. Panels use small section labels instead of headings.
+/// The inspector's title and document headings. Panels use small section
+/// labels instead of headings.
 pub const FONT_HEADING: f32 = 15.0;
 /// Device tags, part numbers, code.
 pub const FONT_MONO: f32 = 12.0;
