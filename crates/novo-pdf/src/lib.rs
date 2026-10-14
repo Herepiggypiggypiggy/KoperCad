@@ -28,7 +28,7 @@
 mod draw;
 mod font;
 
-use novo_canvas::model::{ModelStyle, PageScene, PlaceholderArt, SymbolArt};
+use novo_canvas::model::{ModelStyle, PageScene, PlaceholderArt, SheetLabel, SymbolArt};
 use novo_canvas::{Color, ItemId, Stroke};
 use novo_core::{AnyId, Page, PageId, PageKind, Project, SymbolId, SymbolRole, TextContent};
 use novo_reports::{GeneratedSheet, LiveReports, PageLayout};
@@ -182,6 +182,14 @@ pub fn export_pdf_with_reports(
         .iter()
         .flat_map(|page| sheets_of(project, page, reports))
         .collect();
+    // "Sheet n of m" counts every printed sheet of the project, not just
+    // the exported ones, so a partial export reads like the full set.
+    let all: Vec<(PageId, String)> = project
+        .pages_in_order()
+        .into_iter()
+        .flat_map(|page| sheets_of(project, page, reports))
+        .map(|sheet| (sheet.page.id, sheet.name))
+        .collect();
 
     let mut next = 1;
     let mut alloc = || {
@@ -269,6 +277,18 @@ pub fn export_pdf_with_reports(
             let page = sheet.page;
             let mut scene = PageScene::new(project, page.id, art);
             scene.set_style(options.style, project, art);
+            // Every page is numbered among all printed sheets, so schematic
+            // pages count the report sheets too.
+            let number = all
+                .iter()
+                .position(|(p, name)| *p == page.id && *name == sheet.name)
+                .map_or(0, |i| i + 1);
+            let label = SheetLabel {
+                name: sheet.name.clone(),
+                number,
+                total: all.len(),
+            };
+            scene.set_sheet(project, Some(label));
             let s = scene.scene();
             let mut items: Vec<_> = s
                 .iter()

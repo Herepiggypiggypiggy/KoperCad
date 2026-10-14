@@ -5,8 +5,8 @@
 //! every coordinate below is written in the drawing's own millimetres.
 
 use crate::font;
-use novo_canvas::{Color, Label, Primitive, Shape, Stroke, Vec2, WidthUnit};
 use novo_canvas::Anchor;
+use novo_canvas::{Color, Label, Primitive, Shape, Stroke, Vec2, WidthUnit};
 use novo_reports::{Align, TextBox};
 use pdf_writer::types::{LineCapStyle, LineJoinStyle, TextRenderingMode};
 use pdf_writer::{Content, Name, Str};
@@ -198,7 +198,8 @@ impl PageWriter {
         self.content.end_path();
         if t.bold {
             self.set_stroke(&Stroke::world(t.text_mm as f32 * 0.04, color));
-            self.content.set_text_rendering_mode(TextRenderingMode::FillStroke);
+            self.content
+                .set_text_rendering_mode(TextRenderingMode::FillStroke);
         }
         self.label(&label);
         self.content.restore_state();
