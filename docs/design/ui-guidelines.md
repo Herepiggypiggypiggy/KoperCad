@@ -109,6 +109,9 @@ the label and key in the tooltip.
 (WS-03 owns rendering): warm light grey symbols and blue-grey wires on a
 near black sheet, bright copper selection, steel blue hover and cross
 references, muted green open connection points. Printing and PDF stay black on white.
+The DESIGN.md §5 marks are in the palette too: proposals in the hover hue
+at 55% (dashed, where hover is solid), a grey override diamond, and change
+marks in the status colours at 50%. A test keeps every mark off copper.
 
 The app maps it onto `novo_canvas::widget::CanvasStyle` (background, grid,
 selection, hover, rubber band, snap marker) and `novo_canvas::model::ModelStyle`

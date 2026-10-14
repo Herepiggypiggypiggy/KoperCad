@@ -38,6 +38,19 @@ pub struct CanvasPalette {
     /// Design check markers.
     pub error: [u8; 4],
     pub warning: [u8; 4],
+    /// Proposed terminals, cables and parts (DESIGN.md §5): steel blue at
+    /// about 55%, drawn dashed. Hover is the same hue but solid and opaque,
+    /// so the two differ in line and strength, not hue alone.
+    pub proposal: [u8; 4],
+    /// Hollow diamond on a value that differs from its block or rule.
+    pub override_mark: [u8; 4],
+    /// Changes since the last revision, at half strength so the drawing
+    /// under them stays readable. Removed items are drawn dashed.
+    pub added: [u8; 4],
+    pub modified: [u8; 4],
+    pub removed: [u8; 4],
+    /// Text on marks, such as the proposal's accept hint.
+    pub mark_text: [u8; 4],
 }
 
 /// Converts a palette colour for drawing with egui.
@@ -62,6 +75,12 @@ pub const CANVAS_DARK: CanvasPalette = CanvasPalette {
     rubber_band: [0x8F, 0xA8, 0xC8, 0xFF],
     error: [0xE0, 0x76, 0x6C, 0xFF],
     warning: [0xD6, 0xA5, 0x5C, 0xFF],
+    proposal: [0x8F, 0xA8, 0xC8, 0x8C],
+    override_mark: [0x98, 0x96, 0x91, 0xFF],
+    added: [0x7F, 0xB0, 0x86, 0x80],
+    modified: [0xD6, 0xA5, 0x5C, 0x80],
+    removed: [0xE0, 0x76, 0x6C, 0x80],
+    mark_text: [0xC4, 0xC2, 0xBD, 0xFF],
 };
 
 #[cfg(test)]
@@ -97,5 +116,33 @@ mod tests {
             let ratio = crate::tokens::tests::contrast(to_color32(c), sheet);
             assert!(ratio >= 4.5, "{c:?}: {ratio}");
         }
+    }
+
+    #[test]
+    fn marks_follow_the_design_rules() {
+        let p = CANVAS_DARK;
+        let marks = [
+            p.proposal,
+            p.override_mark,
+            p.added,
+            p.modified,
+            p.removed,
+            p.warning,
+            p.error,
+        ];
+        let rgb = |c: [u8; 4]| [c[0], c[1], c[2]];
+        // Copper belongs to the selection; no mark uses it.
+        for m in marks {
+            assert_ne!(rgb(m), rgb(p.selection), "{m:?}");
+        }
+        // A proposal is a fainter form of the hover hue, never as strong.
+        assert_eq!(rgb(p.proposal), rgb(p.hover));
+        assert!(p.proposal[3] < p.hover[3]);
+        // Change marks stay translucent so the drawing shows through.
+        for c in [p.added, p.modified, p.removed] {
+            assert!(c[3] < 0xFF, "{c:?}");
+        }
+        let ratio = crate::tokens::tests::contrast(to_color32(p.mark_text), to_color32(p.sheet));
+        assert!(ratio >= 4.5);
     }
 }
