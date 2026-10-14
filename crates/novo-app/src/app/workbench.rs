@@ -340,10 +340,6 @@ impl NovoApp {
             "nav.partner" => self.go_partner(),
             "nav.all_references" => self.list_occurrences(),
             "nav.back" | "nav.forward" => self.go_history(id == "nav.back"),
-            // `accept all` can reach here as `accept` with `all` after it.
-            "proposal.accept" if argument.is_some_and(|a| a.trim() == "all") => {
-                self.accept_all_proposals();
-            }
             "proposal.accept" => self.accept_proposal(),
             "proposal.next" => {
                 // Tab is "next proposal" on the drawing: egui's own focus
