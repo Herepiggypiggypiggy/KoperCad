@@ -76,11 +76,20 @@ impl NovoApp {
 /// Bytes NovoElectric puts in every PDF it writes.
 const OUR_PRODUCER: &[u8] = b"/Producer (NovoElectric)";
 
-/// Whether `path` is a PDF this app wrote, so replacing it loses nothing
-/// the user made.
+/// Whether `path` is a PDF this app wrote and nobody changed since, so
+/// replacing it loses nothing the user made. A viewer that saves comments
+/// or markup appends an incremental update with its own `%%EOF` and keeps
+/// our Producer, so a second `%%EOF` means the file is the user's now.
 fn is_ours(path: &Path) -> bool {
-    std::fs::read(path)
-        .is_ok_and(|bytes| bytes.windows(OUR_PRODUCER.len()).any(|w| w == OUR_PRODUCER))
+    std::fs::read(path).is_ok_and(|bytes| {
+        let count = |pattern: &[u8]| {
+            bytes
+                .windows(pattern.len())
+                .filter(|w| *w == pattern)
+                .count()
+        };
+        count(OUR_PRODUCER) == 1 && count(b"%%EOF") == 1
+    })
 }
 
 /// `path` itself when it is free or ours to replace, else the first free or
@@ -176,6 +185,27 @@ mod tests {
             std::fs::read(&path).unwrap(),
             b"%PDF-1.7 the user's own drawing"
         );
+    }
+
+    #[test]
+    fn an_export_marked_up_in_a_viewer_is_the_users() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Plant.pdf");
+        let project = novo_core::Project::new("Plant");
+        let mut bytes = novo_pdf::export_pdf_with_art(
+            &project,
+            &Default::default(),
+            &novo_canvas::model::PlaceholderArt,
+        )
+        .unwrap();
+        // What a viewer's "Save" appends after adding a comment.
+        bytes.extend_from_slice(
+            b"\n99 0 obj\n<< /Type /Annot /Subtype /Text /Contents (check K1) >>\nendobj\n\
+              xref\n99 1\n0000000000 00000 n \ntrailer\n<< /Size 100 >>\nstartxref\n0\n%%EOF\n",
+        );
+        std::fs::write(&path, &bytes).unwrap();
+        assert!(!is_ours(&path));
+        assert_eq!(replaceable_path(&path), dir.path().join("Plant 2.pdf"));
     }
 
     #[test]
