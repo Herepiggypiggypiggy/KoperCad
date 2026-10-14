@@ -49,6 +49,10 @@ pub enum ModelError {
     WireLeavesSelection(WireId),
     #[error("a structure node `{0}` already exists")]
     DuplicateStructure(String),
+    #[error("a block definition named `{0}` already exists")]
+    DuplicateBlock(String),
+    #[error("{0} cannot be part of a block: terminals and potential feeds are project-wide")]
+    NotInBlock(AnyId),
     #[error("{wires} wire(s) or pin(s) but only {potentials} potential(s) to assign")]
     TooFewPotentials { wires: usize, potentials: usize },
     #[error(

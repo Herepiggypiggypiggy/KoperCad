@@ -146,6 +146,9 @@ impl<'p> Tx<'p> {
         if !self.project.contains(id) {
             return Err(ModelError::NotFound(id));
         }
+        // First, so a detached block names what the user deleted rather
+        // than something that went with it.
+        self.forget_block_member(id)?;
         let referrers: Vec<AnyId> = self.project.referrers(id).collect();
         for referrer in referrers {
             if !self.project.contains(referrer) {

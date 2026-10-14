@@ -533,6 +533,8 @@ fn noun(kind: EntityKind) -> &'static str {
         EntityKind::PotentialSystem => "supply system",
         EntityKind::Structure => "structure",
         EntityKind::Dismissal => "dismissal",
+        EntityKind::BlockDefinition => "block definition",
+        EntityKind::BlockInstance => "block",
     }
 }
 
@@ -811,6 +813,8 @@ impl PropertySheet {
                 Record::PotentialSystem(s) => format!("Supply system {}", s.name),
                 Record::Structure(s) => format!("Structure {}", s.tag),
                 Record::Dismissal(d) => format!("Dismissed {}", d.proposal),
+                Record::BlockDefinition(d) => format!("Block definition {}", d.name),
+                Record::BlockInstance(b) => format!("Block {}", b.id),
             };
         }
         let kind = records[0].kind();

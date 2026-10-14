@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::geom::{Direction, Placement, Point, Rotation};
 use crate::id::{
-    AnyId, CableId, DeviceId, DismissalId, JunctionId, PageId, PartId, PotentialId,
-    PotentialSystemId, StructureId, SymbolId, TerminalId, TextId, WireId,
+    AnyId, BlockDefinitionId, BlockInstanceId, CableId, DeviceId, DismissalId, JunctionId, PageId,
+    PartId, PotentialId, PotentialSystemId, StructureId, SymbolId, TerminalId, TextId, WireId,
 };
 use crate::tag::DeviceTag;
 
@@ -49,6 +49,17 @@ impl From<&str> for Value {
 impl From<String> for Value {
     fn from(v: String) -> Self {
         Value::Text(v)
+    }
+}
+
+impl std::fmt::Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Bool(v) => write!(f, "{v}"),
+            Value::Int(v) => write!(f, "{v}"),
+            Value::Float(v) => write!(f, "{v}"),
+            Value::Text(v) => f.write_str(v),
+        }
     }
 }
 
@@ -849,6 +860,116 @@ pub struct Dismissal {
     pub subjects: Vec<AnyId>,
     #[serde(default)]
     pub properties: Properties,
+}
+
+/// A parametric circuit kept in the project (DESIGN §7): devices, symbols,
+/// junctions, wires and texts captured from a drawing, placed again as
+/// [`BlockInstance`]s. The members are records with their own ids, local to
+/// the definition; they sit on no page (page id 0) and their positions are
+/// relative to the block origin. Device properties, descriptions and
+/// literal texts may name a parameter as `{name}`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BlockDefinition {
+    pub id: BlockDefinitionId,
+    /// Unique within the project, e.g. `dol`.
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub parameters: Vec<BlockParameter>,
+    /// The template records: devices, symbols, junctions, wires and texts.
+    pub members: Vec<crate::record::Record>,
+    /// Where the definition was copied from, so a newer library version can
+    /// be offered as an update.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<BlockSource>,
+    #[serde(default)]
+    pub properties: Properties,
+}
+
+/// A value the user sets per placement, e.g. `power` = 4.0.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BlockParameter {
+    pub name: String,
+    /// Used when a placement does not set it.
+    pub default: Value,
+    #[serde(default)]
+    pub description: String,
+}
+
+/// The library a definition was copied from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BlockSource {
+    /// The library file or folder, as the user's library list names it.
+    pub library: String,
+    pub version: u32,
+}
+
+/// One placement of a [`BlockDefinition`]: which drawn object came from
+/// which template member, the parameter values, and what the user changed
+/// by hand. Deleting a member detaches the instance; the drawing stays.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BlockInstance {
+    pub id: BlockInstanceId,
+    pub definition: BlockDefinitionId,
+    pub page: PageId,
+    /// Where the definition's origin was placed.
+    pub origin: Point,
+    /// Parameter values set for this placement, sorted by name; a parameter
+    /// not listed takes its default.
+    #[serde(default)]
+    pub values: Vec<(String, Value)>,
+    pub members: Vec<BlockMember>,
+    /// Why the instance no longer follows its definition, after a
+    /// structural edit (a member deleted); `None` while it does.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detached: Option<String>,
+    #[serde(default)]
+    pub properties: Properties,
+}
+
+impl BlockInstance {
+    /// The value of a parameter for this placement, if set here.
+    pub fn value(&self, name: &str) -> Option<&Value> {
+        self.values
+            .binary_search_by(|(n, _)| n.as_str().cmp(name))
+            .ok()
+            .map(|i| &self.values[i].1)
+    }
+
+    /// The member record for a drawn object.
+    pub fn member(&self, actual: AnyId) -> Option<&BlockMember> {
+        self.members.iter().find(|m| m.actual == actual)
+    }
+}
+
+/// A drawn object that came from a template member.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BlockMember {
+    /// The member's id inside the definition.
+    pub template: AnyId,
+    /// The object in the project.
+    pub actual: AnyId,
+    /// Fields the user changed by hand; a parameter edit or a definition
+    /// update keeps them. Sorted.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub overrides: Vec<BlockOverride>,
+}
+
+/// A hand edit on a block member that survives updates (DESIGN §7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BlockOverride {
+    /// Moved: position relative to the instance origin.
+    Position,
+    /// A label moved or turned.
+    TextPlacement,
+    /// The tag changed by hand; renumbering and updates leave it.
+    Tag,
+    /// A connection re-routed.
+    Route,
+    /// A property or description edited by hand; parameter edits leave it.
+    Value,
 }
 
 /// A pin that defines a potential: the output of a supply, transformer or

@@ -9,14 +9,15 @@
 use serde::{Deserialize, Serialize};
 
 use crate::entity::{
-    CableCore, DeviceKind, Endpoint, PageFormat, PageKind, Pin, PotentialKind, PotentialSet,
-    PotentialSpec, ProjectInfo, SymbolKey, SymbolRole, TextContent, TextPlacement, Value,
+    BlockOverride, BlockParameter, CableCore, DeviceKind, Endpoint, PageFormat, PageKind, Pin,
+    PotentialKind, PotentialSet, PotentialSpec, ProjectInfo, SymbolKey, SymbolRole, TextContent,
+    TextPlacement, Value,
 };
 use crate::error::Result;
 use crate::geom::{Placement, Point};
 use crate::id::{
-    AnyId, CableId, DeviceId, PageId, PartId, PotentialId, PotentialSystemId, SymbolId, TerminalId,
-    TextId, WireId,
+    AnyId, BlockDefinitionId, BlockInstanceId, CableId, DeviceId, PageId, PartId, PotentialId,
+    PotentialSystemId, SymbolId, TerminalId, TextId, WireId,
 };
 use crate::record::Record;
 use crate::tag::DeviceTag;
@@ -176,6 +177,41 @@ pub enum Command {
         #[serde(default)]
         voltage: Option<f64>,
     },
+    /// Captures a block definition from the drawing; see [`Tx::define_block`].
+    DefineBlock {
+        name: String,
+        items: Vec<AnyId>,
+        #[serde(default)]
+        origin: Point,
+        #[serde(default)]
+        parameters: Vec<BlockParameter>,
+    },
+    /// Places a block; see [`Tx::place_block`].
+    PlaceBlock {
+        definition: BlockDefinitionId,
+        page: PageId,
+        origin: Point,
+        #[serde(default)]
+        values: Vec<(String, Value)>,
+    },
+    /// Sets a placed block's parameter values; see [`Tx::set_block_values`].
+    SetBlockValues {
+        instance: BlockInstanceId,
+        values: Vec<(String, Value)>,
+    },
+    /// Marks or clears a hand edit on a block member; see
+    /// [`Tx::set_block_override`].
+    SetBlockOverride {
+        instance: BlockInstanceId,
+        member: AnyId,
+        which: BlockOverride,
+        on: bool,
+    },
+    /// Stops a placed block from following its definition.
+    DetachBlock {
+        instance: BlockInstanceId,
+        reason: String,
+    },
     /// Describes a plant section or location; see [`Tx::add_structure`].
     AddStructure {
         tag: DeviceTag,
@@ -274,6 +310,11 @@ impl Command {
             Command::AddPart { .. } => "Add part".into(),
             Command::MoveToPage { .. } => "Move to page".into(),
             Command::AddStructure { .. } => "Add structure".into(),
+            Command::DefineBlock { .. } => "Define block".into(),
+            Command::PlaceBlock { .. } => "Place block".into(),
+            Command::SetBlockValues { .. } => "Set block parameters".into(),
+            Command::SetBlockOverride { .. } => "Mark block edit".into(),
+            Command::DetachBlock { .. } => "Detach block".into(),
             Command::FreezePage { .. } => "Freeze page".into(),
             Command::UnfreezePage { .. } => "Unfreeze page".into(),
             Command::Dismiss { .. } => "Dismiss proposal".into(),
@@ -460,6 +501,35 @@ impl Tx<'_> {
             }
             Command::UnfreezePage { page } => {
                 self.unfreeze_page(page)?;
+                return Ok(Vec::new());
+            }
+            Command::DefineBlock {
+                name,
+                items,
+                origin,
+                parameters,
+            } => self.define_block(name, &items, origin, parameters)?.into(),
+            Command::PlaceBlock {
+                definition,
+                page,
+                origin,
+                values,
+            } => self.place_block(definition, page, origin, values)?.into(),
+            Command::SetBlockValues { instance, values } => {
+                self.set_block_values(instance, values)?;
+                return Ok(Vec::new());
+            }
+            Command::SetBlockOverride {
+                instance,
+                member,
+                which,
+                on,
+            } => {
+                self.set_block_override(instance, member, which, on)?;
+                return Ok(Vec::new());
+            }
+            Command::DetachBlock { instance, reason } => {
+                self.detach_block(instance, reason)?;
                 return Ok(Vec::new());
             }
             Command::AddStructure {

@@ -59,6 +59,7 @@
 //! # Ok::<(), novo_core::ModelError>(())
 //! ```
 
+mod block;
 mod command;
 mod document;
 mod entity;
@@ -78,18 +79,20 @@ mod xref;
 pub use command::Command;
 pub use document::{DEFAULT_HISTORY_LIMIT, Document, Outcome};
 pub use entity::{
-    Cable, CableCore, Device, DeviceKind, Dismissal, Endpoint, JoinLink, Junction, Page,
-    PageFormat, PageFreeze, PageKind, PaperSize, Part, Pin, PinFeed, PinRef, Potential,
-    PotentialKind, PotentialRules, PotentialSet, PotentialSpec, PotentialSystem, ProjectInfo,
-    ProjectRules, Properties, SameName, Structure, SymbolInstance, SymbolKey, SymbolRole, Terminal,
-    TerminalKind, TerminalRules, Text, TextAnchor, TextContent, TextPlacement, Value, Wire,
+    BlockDefinition, BlockInstance, BlockMember, BlockOverride, BlockParameter, BlockSource, Cable,
+    CableCore, Device, DeviceKind, Dismissal, Endpoint, JoinLink, Junction, Page, PageFormat,
+    PageFreeze, PageKind, PaperSize, Part, Pin, PinFeed, PinRef, Potential, PotentialKind,
+    PotentialRules, PotentialSet, PotentialSpec, PotentialSystem, ProjectInfo, ProjectRules,
+    Properties, SameName, Structure, SymbolInstance, SymbolKey, SymbolRole, Terminal, TerminalKind,
+    TerminalRules, Text, TextAnchor, TextContent, TextPlacement, Value, Wire,
 };
 pub use error::{ModelError, Result};
 pub use geom::{Direction, Placement, Point, Rotation};
 pub use graph::{Net, NetId, Netlist, PotentialSource};
 pub use id::{
-    AnyId, CableId, DeviceId, DismissalId, EntityKind, JunctionId, PageId, PartId, PotentialId,
-    PotentialSystemId, StructureId, SymbolId, TerminalId, TextId, WireId,
+    AnyId, BlockDefinitionId, BlockInstanceId, CableId, DeviceId, DismissalId, EntityKind,
+    JunctionId, PageId, PartId, PotentialId, PotentialSystemId, StructureId, SymbolId, TerminalId,
+    TextId, WireId,
 };
 pub use json::JSON_FORMAT_VERSION;
 pub use project::{PageContents, Project, RATED_CURRENT_A, natural_cmp};

@@ -201,6 +201,31 @@ fn build() -> Project {
         tx.add_structure(tag("+CAB1"), "Main cabinet", true)?;
         tx.freeze_page(power, "A")?;
         tx.dismiss("terminal.suggest", vec![feed.into()])?;
+        let definition = tx.define_block(
+            "contact",
+            &[contact.into()],
+            Point::new(10.0, 40.0),
+            vec![BlockParameter {
+                name: "coil".into(),
+                default: "24 V DC".into(),
+                description: "Coil voltage".into(),
+            }],
+        )?;
+        tx.update::<BlockDefinition>(definition, |d| {
+            d.description = "Changeover contact".into();
+            d.source = Some(BlockSource {
+                library: "company".into(),
+                version: 2,
+            });
+        })?;
+        let placed = tx.place_block(
+            definition,
+            control,
+            Point::new(150.0, 50.0),
+            vec![("coil".into(), "230 V AC".into())],
+        )?;
+        let member = tx.project().block_instance(placed).unwrap().members[0].actual;
+        tx.set_block_override(placed, member, BlockOverride::Position, true)?;
         Ok(())
     })
     .unwrap();
@@ -228,8 +253,15 @@ fn fixture_loads() {
     let project = Project::from_json(FIXTURE).unwrap();
     assert_eq!(project.info().name, "Format fixture");
     assert_eq!(project.pages().count(), 2);
-    assert_eq!(project.symbols().count(), 6);
+    // Six drawn, one placed from the block definition.
+    assert_eq!(project.symbols().count(), 7);
     assert_eq!(project.wires().count(), 4);
+    let placed = project.block_instances().next().unwrap();
+    assert_eq!(
+        project.block_values(placed.id)[0].1,
+        Value::from("230 V AC")
+    );
+    assert_eq!(project.devices_by_tag(&tag("=A2+CAB1-K1")).len(), 1);
 
     let net = project.netlist();
     let l1 = project.potentials().next().unwrap().id;

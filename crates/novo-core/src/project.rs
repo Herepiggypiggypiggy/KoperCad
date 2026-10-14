@@ -4,16 +4,17 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::entity::{
-    Cable, Device, DeviceKind, Dismissal, Endpoint, Junction, Page, Part, PinRef, Potential,
-    PotentialSystem, ProjectInfo, SameName, Structure, SymbolInstance, SymbolRole, Terminal, Text,
-    Wire,
+    BlockDefinition, BlockInstance, Cable, Device, DeviceKind, Dismissal, Endpoint, Junction, Page,
+    Part, PinRef, Potential, PotentialSystem, ProjectInfo, SameName, Structure, SymbolInstance,
+    SymbolRole, Terminal, Text, Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::Point;
 use crate::graph::Netlist;
 use crate::id::{
-    AnyId, CableId, DeviceId, DismissalId, EntityKind, JunctionId, PageId, PartId, PotentialId,
-    PotentialSystemId, StructureId, SymbolId, TerminalId, TextId, WireId,
+    AnyId, BlockDefinitionId, BlockInstanceId, CableId, DeviceId, DismissalId, EntityKind,
+    JunctionId, PageId, PartId, PotentialId, PotentialSystemId, StructureId, SymbolId, TerminalId,
+    TextId, WireId,
 };
 use crate::record::{Entity, Op, Record, Transaction, sealed::Token};
 use crate::tag::DeviceTag;
@@ -42,6 +43,8 @@ pub struct Project {
     pub(crate) potential_systems: BTreeMap<PotentialSystemId, PotentialSystem>,
     pub(crate) structures: BTreeMap<StructureId, Structure>,
     pub(crate) dismissals: BTreeMap<DismissalId, Dismissal>,
+    pub(crate) block_definitions: BTreeMap<BlockDefinitionId, BlockDefinition>,
+    pub(crate) block_instances: BTreeMap<BlockInstanceId, BlockInstance>,
     pub(crate) wires: BTreeMap<WireId, Wire>,
     pub(crate) potentials: BTreeMap<PotentialId, Potential>,
     pub(crate) terminals: BTreeMap<TerminalId, Terminal>,
@@ -312,6 +315,8 @@ impl Project {
             Record::PotentialSystem(r) => put(self, r),
             Record::Structure(r) => put(self, r),
             Record::Dismissal(r) => put(self, r),
+            Record::BlockDefinition(r) => put(self, r),
+            Record::BlockInstance(r) => put(self, r),
             Record::Wire(r) => put(self, r),
             Record::Potential(r) => put(self, r),
             Record::Terminal(r) => put(self, r),
@@ -333,6 +338,8 @@ impl Project {
             AnyId::PotentialSystem(id) => take::<PotentialSystem>(self, id),
             AnyId::Structure(id) => take::<Structure>(self, id),
             AnyId::Dismissal(id) => take::<Dismissal>(self, id),
+            AnyId::BlockDefinition(id) => take::<BlockDefinition>(self, id),
+            AnyId::BlockInstance(id) => take::<BlockInstance>(self, id),
             AnyId::Wire(id) => take::<Wire>(self, id),
             AnyId::Potential(id) => take::<Potential>(self, id),
             AnyId::Terminal(id) => take::<Terminal>(self, id),
@@ -595,6 +602,31 @@ impl Project {
                     });
                 }
             }
+            Record::BlockDefinition(definition) => self.check_block_definition(definition)?,
+            Record::BlockInstance(instance) => {
+                let bad = |field| ModelError::InvalidValue {
+                    id: instance.id.into(),
+                    field,
+                };
+                let definition = self
+                    .block_definitions
+                    .get(&instance.definition)
+                    .ok_or(ModelError::NotFound(instance.definition.into()))?;
+                if instance.values.windows(2).any(|w| w[0].0 >= w[1].0)
+                    || instance
+                        .values
+                        .iter()
+                        .any(|(name, _)| !definition.parameters.iter().any(|p| &p.name == name))
+                {
+                    return Err(bad("values"));
+                }
+                if instance.members.iter().any(|m| {
+                    m.overrides.windows(2).any(|w| w[0] >= w[1])
+                        || !definition.members.iter().any(|t| t.id() == m.template)
+                }) {
+                    return Err(bad("members"));
+                }
+            }
             Record::Potential(_) | Record::Part(_) => {}
         }
         // Texts attached to this object must stay on its page.
@@ -652,6 +684,8 @@ impl Project {
             AnyId::PotentialSystem(id) => self.potential_systems.contains_key(&id),
             AnyId::Structure(id) => self.structures.contains_key(&id),
             AnyId::Dismissal(id) => self.dismissals.contains_key(&id),
+            AnyId::BlockDefinition(id) => self.block_definitions.contains_key(&id),
+            AnyId::BlockInstance(id) => self.block_instances.contains_key(&id),
             AnyId::Wire(id) => self.wires.contains_key(&id),
             AnyId::Potential(id) => self.potentials.contains_key(&id),
             AnyId::Terminal(id) => self.terminals.contains_key(&id),
@@ -675,6 +709,16 @@ impl Project {
                 .map(Record::PotentialSystem),
             AnyId::Structure(id) => self.structures.get(&id).cloned().map(Record::Structure),
             AnyId::Dismissal(id) => self.dismissals.get(&id).cloned().map(Record::Dismissal),
+            AnyId::BlockDefinition(id) => self
+                .block_definitions
+                .get(&id)
+                .cloned()
+                .map(Record::BlockDefinition),
+            AnyId::BlockInstance(id) => self
+                .block_instances
+                .get(&id)
+                .cloned()
+                .map(Record::BlockInstance),
             AnyId::Wire(id) => self.wires.get(&id).cloned().map(Record::Wire),
             AnyId::Potential(id) => self.potentials.get(&id).cloned().map(Record::Potential),
             AnyId::Terminal(id) => self.terminals.get(&id).cloned().map(Record::Terminal),
@@ -705,6 +749,16 @@ impl Project {
             .map(Record::PotentialSystem);
         let structures = self.structures.values().cloned().map(Record::Structure);
         let dismissals = self.dismissals.values().cloned().map(Record::Dismissal);
+        let definitions = self
+            .block_definitions
+            .values()
+            .cloned()
+            .map(Record::BlockDefinition);
+        let instances = self
+            .block_instances
+            .values()
+            .cloned()
+            .map(Record::BlockInstance);
         parts
             .chain(structures)
             .chain(potentials)
@@ -718,6 +772,8 @@ impl Project {
             .chain(texts)
             .chain(systems)
             .chain(dismissals)
+            .chain(definitions)
+            .chain(instances)
     }
 
     /// Rebuilds a project from stored records, in any order, checking every
@@ -814,6 +870,59 @@ impl Project {
     pub fn potential_systems(&self) -> impl Iterator<Item = &PotentialSystem> {
         self.potential_systems.values()
     }
+    fn check_block_definition(&self, definition: &BlockDefinition) -> Result<()> {
+        let bad = |field| ModelError::InvalidValue {
+            id: definition.id.into(),
+            field,
+        };
+        if definition.name.trim().is_empty() {
+            return Err(bad("name"));
+        }
+        if self
+            .block_definitions
+            .values()
+            .any(|d| d.id != definition.id && d.name == definition.name)
+        {
+            return Err(ModelError::DuplicateBlock(definition.name.clone()));
+        }
+        let names: Vec<&str> = definition
+            .parameters
+            .iter()
+            .map(|p| p.name.as_str())
+            .collect();
+        if names
+            .iter()
+            .enumerate()
+            .any(|(i, n)| n.trim().is_empty() || names[..i].contains(n))
+        {
+            return Err(bad("parameters"));
+        }
+        let ids: BTreeSet<AnyId> = definition.members.iter().map(Record::id).collect();
+        if ids.len() != definition.members.len() {
+            return Err(bad("members"));
+        }
+        for member in &definition.members {
+            let allowed = matches!(
+                member,
+                Record::Device(_)
+                    | Record::Symbol(_)
+                    | Record::Junction(_)
+                    | Record::Wire(_)
+                    | Record::Text(_)
+            );
+            // A template is self-contained: it refers only to its own
+            // members (its page id is a placeholder).
+            let closed = member
+                .refs()
+                .into_iter()
+                .all(|r| matches!(r, AnyId::Page(_)) || ids.contains(&r));
+            if !allowed || !closed {
+                return Err(bad("members"));
+            }
+        }
+        Ok(())
+    }
+
     pub fn structures(&self) -> impl Iterator<Item = &Structure> {
         self.structures.values()
     }
@@ -859,6 +968,49 @@ impl Project {
                 .filter(|d| d.proposal == proposal && d.subjects == wanted),
             _ => None,
         })
+    }
+
+    pub fn block_definition(&self, id: BlockDefinitionId) -> Option<&BlockDefinition> {
+        self.block_definitions.get(&id)
+    }
+    pub fn block_definitions(&self) -> impl Iterator<Item = &BlockDefinition> {
+        self.block_definitions.values()
+    }
+    pub fn block_definition_by_name(&self, name: &str) -> Option<&BlockDefinition> {
+        self.block_definitions.values().find(|d| d.name == name)
+    }
+    pub fn block_instance(&self, id: BlockInstanceId) -> Option<&BlockInstance> {
+        self.block_instances.get(&id)
+    }
+    pub fn block_instances(&self) -> impl Iterator<Item = &BlockInstance> {
+        self.block_instances.values()
+    }
+
+    /// The placed block a drawn object belongs to, if any.
+    pub fn block_of(&self, id: impl Into<AnyId>) -> Option<&BlockInstance> {
+        let id = id.into();
+        self.block_instances
+            .values()
+            .find(|b| b.members.iter().any(|m| m.actual == id))
+    }
+
+    /// Every parameter of a placed block with its value: the one set on
+    /// the instance, else the definition's default. In definition order.
+    pub fn block_values(&self, instance: BlockInstanceId) -> Vec<(String, crate::Value)> {
+        let Some(instance) = self.block_instances.get(&instance) else {
+            return Vec::new();
+        };
+        let Some(definition) = self.block_definitions.get(&instance.definition) else {
+            return Vec::new();
+        };
+        definition
+            .parameters
+            .iter()
+            .map(|p| {
+                let value = instance.value(&p.name).unwrap_or(&p.default);
+                (p.name.clone(), value.clone())
+            })
+            .collect()
     }
 
     /// Whether the user declined this proposal about these subjects.
