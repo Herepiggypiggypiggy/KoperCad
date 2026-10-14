@@ -20,6 +20,7 @@ novo-editor = { path = "crates/novo-editor" }
 novo-xref = { path = "crates/novo-xref" }
 novo-theme = { path = "crates/novo-theme" }
 novo-pdf = { path = "crates/novo-pdf" }
+novo-checks = { path = "crates/novo-checks" }
 bytemuck = { version = "1", features = ["derive"] }
 egui = "0.36"
 egui-wgpu = "0.36"

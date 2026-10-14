@@ -35,6 +35,7 @@ Work is split into workstreams (WS-xx), each run by its own Claude thread.
 | `novo-workflow` | WS-08 | Keyboard workflow: keymap, commands, palette search, Tab orientation, smart duplicate |
 | `novo-editor` | WS-06 | Schematic editor: tools, auto tags, wiring, potentials |
 | `novo-xref` | WS-10 | Cross references: contact images, jumps, linking |
+| `novo-checks` | WS-14 | Design checks: problems with severity and location |
 | `novo-sim` | WS-19 | Simulation engine (Phase 4) |
 | `novo-pdf` | WS-09 | Vector PDF export: pages, title block, bookmarks, links |
 | `novo-theme` | Layout and branding | Dark theme, design tokens, icons, logo (`assets/branding`) |
