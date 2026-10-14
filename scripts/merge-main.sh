@@ -43,7 +43,7 @@ for f in "${unmerged[@]}"; do
            /^=======$/ && inside { next }
            /^>>>>>>> / { inside = 0; next }
            inside { print }
-         ' "$tmp/marked" | grep -vqE "$crate_line"; then
+         ' "$tmp/marked" | grep -vqE "$crate_line|^$"; then
         echo "conflict in $f is not only crate-list lines; aborting" >&2
         rm -rf "$tmp"
         git merge --abort
