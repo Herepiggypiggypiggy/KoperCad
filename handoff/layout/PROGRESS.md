@@ -1,0 +1,5 @@
+2026-10-14 17:00 UTC  Handoff folder created. #20 at b326a85 (TEXT_FAINT 4.5:1), sent to reviewer. Round-2 layout fixes done; DESIGN-draft ok'd with 3 fixes to workflow. concept.rs and widgets parked in design/code/.
+2026-10-14 17:06 UTC  Second reviewer: changes needed on #20 (old chrome in preview, icon names, wording, copper rule). Fixed in 2d60fdd, pushed; both reviewers pinged; PR comment posted.
+2026-10-14 17:04 UTC  Workflow opened DESIGN.md as PR #24 (head c7f78ba) with my three corrections; no objection.
+2026-10-14 17:06 UTC  Design reviewer: #20 READY on 2d60fdd, frozen (no more pushes). Follow-ups for a new PR from main: CanvasPalette mark entries; issue_pill showing errors and warnings together. CI on 2d60fdd running.
+2026-10-14 17:13 UTC  Canvas (WS-03) adding §5 mark fields to CanvasStyle (proposal, warning, error, override_mark, added, modified, removed, mark_text), novo_canvas::Color([u8;4]), alpha in byte, dashing built in. Agreed values: proposal INFO@55%, override #989691, added #7FB086/modified #D6A55C/removed #E0766C @50%, mark_text #C4C2BD. Inter covers U+21B5.
