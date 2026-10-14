@@ -36,7 +36,7 @@ pub enum ModelError {
     #[error("{0} connects an endpoint to itself")]
     SelfConnection(WireId),
     #[error(
-        "{symbol} lists {terminals} terminal(s) but has {bridges} bridge group(s); a multi-level terminal needs one group per terminal"
+        "{symbol} lists {terminals} terminal(s) but has {bridges} bridge group(s); a multi-level terminal needs one group per distinct terminal"
     )]
     TerminalLevels {
         symbol: SymbolId,

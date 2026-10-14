@@ -249,6 +249,7 @@ impl<'p> Tx<'p> {
             role,
             pins,
             bridges: Vec::new(),
+            pass_through: Vec::new(),
             properties: Default::default(),
         })
     }
