@@ -11,7 +11,7 @@
 //! stay with the shell.
 
 use egui::{Key, Modifiers};
-use novo_canvas::model::{self, PageScene, PlaceholderArt, SymbolArt, item_id};
+use novo_canvas::model::{self, ModelStyle, PageScene, PlaceholderArt, SymbolArt, item_id};
 use novo_canvas::widget::{CanvasView, EscapeTarget};
 use novo_canvas::{Color, Item, ItemId, Primitive, SelectOp, Shape, Stroke, Vec2};
 use novo_core::{AnyId, ChangeSet, DeviceId, Document, PageId, Point};
@@ -64,6 +64,8 @@ pub struct SchematicView {
     pub editor: Editor,
     pub canvas: CanvasView,
     art: LibraryArt,
+    /// How the page is drawn; the shell sets its theme's look.
+    style: ModelStyle,
     scene: Option<PageScene>,
     revision: Option<u64>,
     previews: Vec<ItemId>,
@@ -104,12 +106,13 @@ fn point(v: Vec2) -> Point {
 
 impl SchematicView {
     pub fn new(editor: Editor) -> Self {
-        let style = novo_canvas::model::ModelStyle::default();
+        let style = ModelStyle::default();
         let art = LibraryArt::new(editor.catalog.library(), style.symbol);
         SchematicView {
             editor,
             canvas: CanvasView::new(),
             art,
+            style,
             scene: None,
             revision: None,
             previews: Vec::new(),
@@ -144,6 +147,15 @@ impl SchematicView {
         self.rename = None;
         self.menu = None;
         self.canvas.zoom_to_fit();
+    }
+
+    /// Draws the page with `style` (the app's theme) instead of the
+    /// default look; the scene is rebuilt on the next frame.
+    pub fn set_style(&mut self, style: ModelStyle) {
+        self.art = LibraryArt::new(self.editor.catalog.library(), style.symbol);
+        self.style = style;
+        self.scene = None;
+        self.revision = None;
     }
 
     /// The page the user asked to open (Page Up / Page Down, "New page").
@@ -192,7 +204,11 @@ impl SchematicView {
             let fresh = self.scene.as_ref().is_none_or(|s| s.page() != page);
             match &mut self.scene {
                 Some(s) if s.page() == page => s.rebuild(project, &self.art),
-                _ => self.scene = Some(PageScene::new(project, page, &self.art)),
+                _ => {
+                    let mut scene = PageScene::new(project, page, &self.art);
+                    scene.set_style(self.style, project, &self.art);
+                    self.scene = Some(scene);
+                }
             }
             self.previews.clear();
             if fresh {
