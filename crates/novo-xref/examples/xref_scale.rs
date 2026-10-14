@@ -1,5 +1,5 @@
 //! Times the cross-reference index on 10,000 symbols:
-//! `cargo run --release -p novo-xref --example scale`.
+//! `cargo run --release -p novo-xref --example xref_scale`.
 
 use std::time::Instant;
 
