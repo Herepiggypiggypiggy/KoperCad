@@ -32,6 +32,7 @@ Work is split into workstreams (WS-xx), each run by its own Claude thread.
 | `novo-symbols` | WS-05 | IEC 60617 symbols, connection points, behavior slots |
 | `novo-terminals` | WS-11 | Terminal strips, same-name join rule, terminal connection screens |
 | `novo-sim` | WS-19 | Simulation engine (Phase 4) |
+| `novo-theme` | Layout and branding | Dark theme, design tokens, icons, logo (`assets/branding`) |
 | `novo-app` | WS-01 | Application shell, wiring crates together |
 
 Rules:
@@ -45,6 +46,15 @@ Rules:
 - New crates are added under `crates/` and picked up by the workspace glob;
   shared dependencies go in `[workspace.dependencies]`.
 - `unsafe` is denied workspace-wide; justify any exception in the pull request.
+- The integration lead thread merges pull requests once the main reviewer says
+  READY on the current head and CI is green. Don't ask the owner to review or
+  merge.
+- Once a pull request is marked READY, don't push to it again. Follow-up work
+  goes in a new pull request from main. After every push, message the reviewer
+  with the new head SHA. The thread roster with session ids is in
+  `/mnt/project-files/coordination/threads.md`.
+- Until `docs/DESIGN.md` is merged, build engines and commands and keep UI code
+  thin.
 
 ## Experimental builds
 

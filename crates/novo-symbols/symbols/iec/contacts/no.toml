@@ -6,6 +6,8 @@ standard = "IEC 60617"
 category = "contacts"
 function = "contact.no"
 keywords = ["no", "make", "normally open", "auxiliary"]
+aliases = ["no"]
+favorite = true
 
 connections = [
   { id = "13", at = [0, 0], dir = "up" },

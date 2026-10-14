@@ -6,6 +6,8 @@ standard = "IEC 60617"
 category = "operators"
 function = "contact.no.push"
 keywords = ["push button", "start", "no", "button"]
+aliases = ["pb", "sb"]
+favorite = true
 
 connections = [
   { id = "13", at = [0, 0], dir = "up" },

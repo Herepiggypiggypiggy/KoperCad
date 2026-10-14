@@ -102,4 +102,6 @@ define_ids! {
     CableId => Cable, "Cable";
     /// A part (manufacturer article) used in this project.
     PartId => Part, "Part";
+    /// A text or label on a page.
+    TextId => Text, "Text";
 }

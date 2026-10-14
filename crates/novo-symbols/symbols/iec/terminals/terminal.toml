@@ -6,6 +6,8 @@ standard = "IEC 60617"
 category = "terminals"
 function = "terminal"
 keywords = ["terminal", "x", "clamp", "feed-through"]
+aliases = ["x", "term"]
+favorite = true
 
 connections = [
   { id = "1", at = [0, 0], dir = "up" },

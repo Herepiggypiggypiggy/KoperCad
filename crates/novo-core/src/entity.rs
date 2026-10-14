@@ -8,9 +8,10 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::geom::{Direction, Placement, Point};
+use crate::geom::{Direction, Placement, Point, Rotation};
 use crate::id::{
-    CableId, DeviceId, JunctionId, PageId, PartId, PotentialId, SymbolId, TerminalId, WireId,
+    AnyId, CableId, DeviceId, JunctionId, PageId, PartId, PotentialId, SymbolId, TerminalId,
+    TextId, WireId,
 };
 use crate::tag::DeviceTag;
 
@@ -60,8 +61,101 @@ pub struct ProjectInfo {
     pub name: String,
     #[serde(default)]
     pub description: String,
+    /// Project-wide rules that change how the drawing is interpreted. Every
+    /// rule is explicit and off by default.
+    #[serde(default, skip_serializing_if = "ProjectRules::is_default")]
+    pub rules: ProjectRules,
     #[serde(default)]
     pub properties: Properties,
+}
+
+/// Explicit, inspectable project rules. A file without an entry has the
+/// rule off, so loading never changes what a project means; new projects
+/// start from [`ProjectRules::recommended`].
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct ProjectRules {
+    #[serde(default, skip_serializing_if = "TerminalRules::is_off")]
+    pub terminals: TerminalRules,
+    #[serde(default, skip_serializing_if = "PotentialRules::is_off")]
+    pub potentials: PotentialRules,
+}
+
+impl ProjectRules {
+    /// The rules a new project starts with: terminals sharing a name are
+    /// joined with a connector (WORKFLOW.md J5).
+    pub fn recommended() -> Self {
+        ProjectRules {
+            terminals: TerminalRules {
+                same_name: SameName::Join,
+                join_link: JoinLink::Connector,
+            },
+            potentials: PotentialRules {
+                from_terminal_names: true,
+            },
+        }
+    }
+
+    pub fn is_default(&self) -> bool {
+        *self == ProjectRules::default()
+    }
+}
+
+/// What terminals with the same name and level on one strip (two `-X2:1`)
+/// mean. See [`Project::terminal_designation_groups`](crate::Project::terminal_designation_groups)
+/// for the terminals a rule applies to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub struct TerminalRules {
+    #[serde(default)]
+    pub same_name: SameName,
+    /// How the clamps of a joined terminal are linked (bill of materials,
+    /// terminal diagrams). Only meaningful with [`SameName::Join`].
+    #[serde(default)]
+    pub join_link: JoinLink,
+}
+
+impl TerminalRules {
+    pub fn is_off(&self) -> bool {
+        *self == TerminalRules::default()
+    }
+}
+
+/// Rules for where potentials come from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub struct PotentialRules {
+    /// A terminal named like a supply potential (`-X4:PE`, `-X1:N`, `PEN`)
+    /// defines that potential on its net.
+    #[serde(default)]
+    pub from_terminal_names: bool,
+}
+
+impl PotentialRules {
+    pub fn is_off(&self) -> bool {
+        *self == PotentialRules::default()
+    }
+}
+
+/// How terminals that share a name are treated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SameName {
+    /// No rule: separate terminals that happen to share a name, listed as a
+    /// design check finding. What files without a rule load as.
+    #[default]
+    Off,
+    /// One electrical point built from several clamps (1-in/1-out clamps
+    /// linked by [`JoinLink`]): the netlist joins them like a jumper.
+    Join,
+    /// A second terminal with a name already on the strip is refused.
+    Refuse,
+}
+
+/// What links the clamps of a joined terminal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum JoinLink {
+    #[default]
+    Connector,
+    Jumper,
 }
 
 /// Standard paper sizes.
@@ -93,6 +187,14 @@ impl PaperSize {
 pub struct PageFormat {
     pub size: PaperSize,
     pub landscape: bool,
+    /// Number of grid columns across the page, used for cross-references
+    /// such as `3.4` (page 3, column 4). 0 counts as 1.
+    #[serde(default = "default_columns")]
+    pub columns: u16,
+}
+
+fn default_columns() -> u16 {
+    PageFormat::DEFAULT_COLUMNS
 }
 
 impl Default for PageFormat {
@@ -100,11 +202,24 @@ impl Default for PageFormat {
         PageFormat {
             size: PaperSize::A3,
             landscape: true,
+            columns: PageFormat::DEFAULT_COLUMNS,
         }
     }
 }
 
 impl PageFormat {
+    pub const DEFAULT_COLUMNS: u16 = 10;
+
+    /// The grid column (1-based) at a horizontal position. Positions off the
+    /// page fall into the first or last column.
+    pub fn column_at(self, x: f64) -> u16 {
+        let columns = self.columns.max(1);
+        let (width, _) = self.size_mm();
+        let column = (x / width * f64::from(columns)).floor();
+        // NaN and negatives clamp to 0, so the result is 1..=columns.
+        (column.clamp(0.0, f64::from(columns - 1)) as u16) + 1
+    }
+
     /// Width and height of the page in millimetres.
     pub fn size_mm(self) -> (f64, f64) {
         let (w, h) = self.size.portrait_mm();
@@ -383,6 +498,87 @@ pub struct Junction {
     pub position: Point,
 }
 
+/// A text on a page: free text, or a label that shows a value of the object
+/// it is attached to (a symbol's device tag, a wire's number) and moves with
+/// it. Labels are records of their own so they can be moved and rotated
+/// independently.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Text {
+    pub id: TextId,
+    pub page: PageId,
+    /// The symbol, junction or wire this text belongs to, on the same page.
+    /// The text moves with it and is deleted with it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attached_to: Option<AnyId>,
+    pub content: TextContent,
+    #[serde(default)]
+    pub placement: TextPlacement,
+    /// Character height in mm.
+    #[serde(default = "default_text_height")]
+    pub height_mm: f64,
+    #[serde(default)]
+    pub properties: Properties,
+}
+
+fn default_text_height() -> f64 {
+    Text::DEFAULT_HEIGHT_MM
+}
+
+impl Text {
+    pub const DEFAULT_HEIGHT_MM: f64 = 2.5;
+}
+
+/// What a text shows. Everything but `Literal` is read from the object the
+/// text is attached to, so it never goes stale; see
+/// [`Project::text_string`](crate::Project::text_string).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum TextContent {
+    Literal {
+        text: String,
+    },
+    /// The device tag of the attached symbol's device (`-K1`), or the
+    /// designation of its terminal (`-X1:3`).
+    DeviceTag,
+    /// The attached wire's number.
+    WireNumber,
+    /// The name of the potential the attached wire defines.
+    Potential,
+    /// A property of the attached object, or of its device for a symbol.
+    Property {
+        key: String,
+    },
+}
+
+/// Where a text sits: an offset from its attached object's origin (or from
+/// the page origin when free), a rotation, and which point of the text box
+/// the offset names. The offset does not turn with a rotated symbol, so
+/// labels stay readable.
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+pub struct TextPlacement {
+    pub offset: Point,
+    #[serde(default)]
+    pub rotation: Rotation,
+    #[serde(default)]
+    pub anchor: TextAnchor,
+}
+
+/// The point of a text box that sits at the text's position.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TextAnchor {
+    TopLeft,
+    TopCenter,
+    TopRight,
+    MiddleLeft,
+    MiddleCenter,
+    MiddleRight,
+    #[default]
+    BottomLeft,
+    BottomCenter,
+    BottomRight,
+}
+
 /// A wire drawn between two endpoints on the same page.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Wire {
@@ -402,6 +598,10 @@ pub struct Wire {
     /// Cross-section in mm².
     #[serde(default)]
     pub cross_section_mm2: Option<f64>,
+    /// A potential this wire defines on its net, like a potential definition
+    /// point: select three wires and assign L1, L2, L3.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub potential: Option<PotentialId>,
     #[serde(default)]
     pub properties: Properties,
 }
@@ -418,6 +618,7 @@ impl Wire {
             number: None,
             color: None,
             cross_section_mm2: None,
+            potential: None,
             properties: Properties::new(),
         }
     }
@@ -436,10 +637,104 @@ pub enum PotentialKind {
     Neutral,
     /// Protective earth.
     ProtectiveEarth,
+    /// Combined protective earth and neutral (TN-C).
+    Pen,
     DcPositive,
     DcNegative,
     #[default]
     Signal,
+}
+
+impl PotentialKind {
+    /// Supply potentials: everything but `Signal`. A terminal named like a
+    /// supply potential (`-X4:PE`, `-X1:N`) defines it on its net.
+    pub fn is_supply(self) -> bool {
+        self != PotentialKind::Signal
+    }
+}
+
+/// A potential by name, kind and voltage, for assigning potentials without
+/// looking up ids first: an existing potential with the same name is
+/// reused, otherwise one is created.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PotentialSpec {
+    pub name: String,
+    #[serde(default)]
+    pub kind: PotentialKind,
+    #[serde(default)]
+    pub voltage: Option<f64>,
+}
+
+impl PotentialSpec {
+    pub fn new(name: impl Into<String>, kind: PotentialKind, voltage: Option<f64>) -> Self {
+        PotentialSpec {
+            name: name.into(),
+            kind,
+            voltage,
+        }
+    }
+}
+
+/// Common sets of supply potentials, in the order wires are usually drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum PotentialSet {
+    /// L1, L2, L3, then N and PE as asked (TN-S: both; TN-C: use `pen`).
+    ThreePhase {
+        /// Line-to-line voltage, e.g. 400.
+        voltage: f64,
+        #[serde(default)]
+        neutral: bool,
+        #[serde(default)]
+        pe: bool,
+        /// A combined PEN conductor instead of separate N and PE.
+        #[serde(default)]
+        pen: bool,
+    },
+    /// L, N, PE.
+    SinglePhase { voltage: f64 },
+    /// L+ and L- (e.g. 24 V control voltage).
+    Dc { voltage: f64 },
+}
+
+impl PotentialSet {
+    pub fn specs(self) -> Vec<PotentialSpec> {
+        use PotentialKind::*;
+        let spec = PotentialSpec::new;
+        match self {
+            PotentialSet::ThreePhase {
+                voltage,
+                neutral,
+                pe,
+                pen,
+            } => {
+                let mut specs: Vec<PotentialSpec> = ["L1", "L2", "L3"]
+                    .into_iter()
+                    .map(|name| spec(name, Line, Some(voltage)))
+                    .collect();
+                if pen {
+                    specs.push(spec("PEN", Pen, None));
+                } else {
+                    if neutral {
+                        specs.push(spec("N", Neutral, None));
+                    }
+                    if pe {
+                        specs.push(spec("PE", ProtectiveEarth, None));
+                    }
+                }
+                specs
+            }
+            PotentialSet::SinglePhase { voltage } => vec![
+                spec("L", Line, Some(voltage)),
+                spec("N", Neutral, None),
+                spec("PE", ProtectiveEarth, None),
+            ],
+            PotentialSet::Dc { voltage } => vec![
+                spec("L+", DcPositive, Some(voltage)),
+                spec("L-", DcNegative, None),
+            ],
+        }
+    }
 }
 
 /// A named potential (`L1`, `N`, `PE`, `24V`, `0V`).
@@ -487,6 +782,11 @@ pub struct Terminal {
     /// Terminals of one strip with the same jumper group are bridged.
     #[serde(default)]
     pub jumper: Option<u32>,
+    /// The terminal's article. Terminals of one type on a strip usually
+    /// share one part; the strip device itself may carry the end plates
+    /// and accessories.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub part: Option<PartId>,
     #[serde(default)]
     pub properties: Properties,
 }

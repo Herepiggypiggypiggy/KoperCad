@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "terminals"
 function = "terminal.fuse"
 keywords = ["terminal", "fuse", "fuse terminal"]
+aliases = ["xf"]
 
 connections = [
   { id = "1", at = [0, 0], dir = "up" },

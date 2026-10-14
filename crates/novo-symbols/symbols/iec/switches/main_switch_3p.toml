@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "switches"
 function = "switch.main"
 keywords = ["main switch", "rotary", "isolator", "repair switch", "3p"]
+aliases = ["qs3", "mainsw"]
 
 connections = [
   { id = "1", at = [0, 0], dir = "up" },

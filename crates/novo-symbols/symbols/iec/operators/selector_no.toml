@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "operators"
 function = "contact.no.turn"
 keywords = ["selector", "rotary", "switch", "key", "no"]
+aliases = ["sel"]
 
 connections = [
   { id = "13", at = [0, 0], dir = "up" },

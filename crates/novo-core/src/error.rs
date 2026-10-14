@@ -2,7 +2,7 @@
 
 use thiserror::Error;
 
-use crate::id::{AnyId, CableId, DeviceId, PageId, SymbolId, WireId};
+use crate::id::{AnyId, CableId, DeviceId, PageId, SymbolId, TerminalId, TextId, WireId};
 use crate::tag::TagError;
 
 /// Why an edit or a load was refused. A refused edit leaves the project
@@ -33,8 +33,18 @@ pub enum ModelError {
         expected: PageId,
         found: PageId,
     },
+    #[error("{id}: `{field}` is out of range")]
+    InvalidValue { id: AnyId, field: &'static str },
+    #[error("{text} cannot be attached to {target}; only symbols, junctions and wires carry texts")]
+    InvalidAttachment { text: TextId, target: AnyId },
+    #[error(
+        "{0} has the same name as another terminal on its strip, which the project rule refuses"
+    )]
+    DuplicateTerminal(TerminalId),
     #[error("{0} connects an endpoint to itself")]
     SelfConnection(WireId),
+    #[error("{wires} wire(s) but only {potentials} potential(s) to assign")]
+    TooFewPotentials { wires: usize, potentials: usize },
     #[error(
         "{symbol} lists {terminals} terminal(s) but has {bridges} bridge group(s); a multi-level terminal needs one group per distinct terminal"
     )]
