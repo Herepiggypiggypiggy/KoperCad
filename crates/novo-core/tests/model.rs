@@ -641,6 +641,7 @@ fn commands_round_trip_through_json() {
             },
             pins: vec![Pin::new("U1", -5.0, 0.0)],
             bridges: vec![],
+            pass_through: vec![],
         })
         .unwrap();
     let AnyId::Symbol(motor) = outcome.created[0] else {
@@ -1130,6 +1131,7 @@ fn multi_level_terminals_keep_levels_apart() {
                     Pin::new("4", 8.0, 8.0),
                 ],
                 bridges: vec![vec![0, 1], vec![2, 3]],
+                pass_through: vec![],
             })?;
             let [AnyId::Symbol(block)] = created[..] else {
                 panic!("unexpected {created:?}")
@@ -1385,4 +1387,79 @@ fn non_finite_numbers_are_refused() {
         })
         .unwrap_err();
     assert!(matches!(err, ModelError::NonFinite { .. }));
+}
+
+#[test]
+fn potentials_pass_through_switched_poles() {
+    let mut doc = Document::default();
+    let ((l1, feed, q1, k1, k1_coil, motor), _) = doc
+        .transact("Main circuit", |tx| {
+            let page = tx.add_page("1")?;
+            let l1 = tx.add_potential("L1", PotentialKind::Line)?;
+            let feed = tx.place_symbol(
+                page,
+                "iec/connectivity/potential_feed",
+                at(0.0, 0.0),
+                vec![Pin::new("1", 0.0, 0.0)],
+                SymbolRole::PotentialFeed { potential: l1 },
+            )?;
+            // Breaker -Q1 and contactor contact -K1: switched poles.
+            let mut q1 = None;
+            let mut k1 = None;
+            for (key, y, slot) in [
+                ("iec/protection/mcb", 20.0, &mut q1),
+                ("iec/contacts/main", 50.0, &mut k1),
+            ] {
+                let id =
+                    tx.place_symbol(page, key, at(0.0, y), two_pins(), SymbolRole::Unassigned)?;
+                tx.update::<SymbolInstance>(id, |s| s.pass_through = vec![vec![0, 1]])?;
+                *slot = Some(id);
+            }
+            let (q1, k1) = (q1.unwrap(), k1.unwrap());
+            // A coil ends the potential.
+            let k1_coil = tx.place_symbol(
+                page,
+                "iec/coils/relay",
+                at(40.0, 0.0),
+                two_pins(),
+                SymbolRole::Unassigned,
+            )?;
+            let motor = tx.place_symbol(
+                page,
+                "iec/motors/ac3",
+                at(0.0, 80.0),
+                two_pins(),
+                SymbolRole::Unassigned,
+            )?;
+            tx.connect(Endpoint::pin(feed, 0), Endpoint::pin(q1, 0))?;
+            tx.connect(Endpoint::pin(q1, 1), Endpoint::pin(k1, 0))?;
+            tx.connect(Endpoint::pin(k1, 1), Endpoint::pin(motor, 0))?;
+            tx.connect(Endpoint::pin(q1, 1), Endpoint::pin(k1_coil, 0))?;
+            Ok((l1, feed, q1, k1, k1_coil, motor))
+        })
+        .unwrap();
+    let net = doc.project().netlist();
+    // L1 reaches the motor through the breaker and the open contact...
+    assert_eq!(net.potential_of(Endpoint::pin(motor, 0)), Some(l1));
+    assert_eq!(net.potential_of(Endpoint::pin(k1_coil, 0)), Some(l1));
+    // ...but the poles are not connected, and coils and motors end it.
+    assert!(!net.connected(Endpoint::pin(q1, 0), Endpoint::pin(q1, 1)));
+    assert!(!net.connected(Endpoint::pin(k1, 0), Endpoint::pin(k1, 1)));
+    assert_eq!(net.potential_of(Endpoint::pin(k1_coil, 1)), None);
+    assert_eq!(net.potential_of(Endpoint::pin(motor, 1)), None);
+    // Only the feed's own net defines L1.
+    let motor_net = net.net(net.net_of(Endpoint::pin(motor, 0)).unwrap());
+    assert!(motor_net.defined.is_empty());
+    let feed_net = net.net(net.net_of(Endpoint::pin(feed, 0)).unwrap());
+    assert_eq!(feed_net.defined, vec![l1]);
+
+    // Pass-through groups must name existing pins and survive JSON.
+    let err = doc
+        .transact("x", |tx| {
+            tx.update::<SymbolInstance>(k1, |s| s.pass_through = vec![vec![0, 7]])
+        })
+        .unwrap_err();
+    assert!(matches!(err, ModelError::InvalidPin { pin: 7, .. }));
+    let loaded = Project::from_json(&doc.project().to_json()).unwrap();
+    assert_eq!(loaded.symbol(k1).unwrap().pass_through, vec![vec![0, 1]]);
 }

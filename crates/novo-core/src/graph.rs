@@ -10,7 +10,9 @@
 //! - interruption points with the same name.
 //!
 //! Contacts never join nets: whether a contact conducts is simulation state.
-//! Potential definition points label the nets they touch.
+//! Potential definition points label the nets they touch, and a potential
+//! carries on through switched poles (`SymbolInstance::pass_through`), so the
+//! wire after a contactor or breaker still reads `L1`.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -31,9 +33,12 @@ pub struct Net {
     pub endpoints: Vec<Endpoint>,
     /// Wires inside the net, sorted.
     pub wires: Vec<WireId>,
-    /// Potentials assigned by potential definition points, sorted. More than
-    /// one means two potentials are shorted together.
+    /// Potentials this net carries, sorted: those defined on it plus those
+    /// passed through contacts, breakers and fuses. More than one means two
+    /// potentials meet (a short, or one waiting behind an open contact).
     pub potentials: Vec<PotentialId>,
+    /// Potentials defined by a potential definition point in this net itself.
+    pub defined: Vec<PotentialId>,
 }
 
 impl Net {
@@ -177,6 +182,7 @@ impl Netlist {
                     endpoints: Vec::new(),
                     wires: Vec::new(),
                     potentials: Vec::new(),
+                    defined: Vec::new(),
                 });
                 id
             });
@@ -187,19 +193,41 @@ impl Netlist {
             let net = by_endpoint[&wire.from];
             nets[net.0 as usize].wires.push(wire.id);
         }
+        // Potential groups: nets joined through pass-through poles.
+        let mut groups = UnionFind::new(nets.len());
+        for symbol in project.symbols() {
+            let base = first_pin[&symbol.id];
+            for group in &symbol.pass_through {
+                groups.union_all(
+                    group
+                        .iter()
+                        .map(|&p| by_endpoint[&endpoints[base + usize::from(p)]].0 as usize),
+                );
+            }
+        }
+        let mut group_potentials: HashMap<usize, Vec<PotentialId>> = HashMap::new();
         for symbol in project.symbols() {
             if let SymbolRole::PotentialFeed { potential } = symbol.role {
                 for node in pins_of(symbol.id, symbol.pins.len()) {
                     let net = by_endpoint[&endpoints[node]];
-                    nets[net.0 as usize].potentials.push(potential);
+                    nets[net.0 as usize].defined.push(potential);
+                    group_potentials
+                        .entry(groups.find(net.0 as usize))
+                        .or_default()
+                        .push(potential);
                 }
             }
         }
-        for net in &mut nets {
+        for (i, net) in nets.iter_mut().enumerate() {
             net.endpoints.sort();
             net.wires.sort();
-            net.potentials.sort();
-            net.potentials.dedup();
+            net.defined.sort();
+            net.defined.dedup();
+            if let Some(carried) = group_potentials.get(&groups.find(i)) {
+                net.potentials = carried.clone();
+                net.potentials.sort();
+                net.potentials.dedup();
+            }
         }
         Netlist {
             revision: project.revision(),

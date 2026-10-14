@@ -259,6 +259,12 @@ pub struct SymbolInstance {
     /// contact conducts is simulation state, not connectivity.
     #[serde(default)]
     pub bridges: Vec<Vec<u16>>,
+    /// Groups of pin indices a potential passes through without them being
+    /// connected: the switched poles of contacts, breakers and fuses
+    /// (novo-symbols' `Symbol::pass_through()` minus its bridges). `L1`
+    /// stays `L1` after a contactor, while coils, lamps and motors end it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pass_through: Vec<Vec<u16>>,
     #[serde(default)]
     pub properties: Properties,
 }

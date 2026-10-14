@@ -56,6 +56,8 @@ pub enum Command {
         pins: Vec<Pin>,
         #[serde(default)]
         bridges: Vec<Vec<u16>>,
+        #[serde(default)]
+        pass_through: Vec<Vec<u16>>,
     },
     MoveSymbol {
         symbol: SymbolId,
@@ -206,6 +208,7 @@ impl Tx<'_> {
                 role,
                 pins,
                 bridges,
+                pass_through,
             } => {
                 // Inserted in one step: a multi-level terminal is only valid
                 // together with its bridges.
@@ -217,6 +220,7 @@ impl Tx<'_> {
                     role,
                     pins,
                     bridges,
+                    pass_through,
                     properties: Default::default(),
                 })?
                 .into()

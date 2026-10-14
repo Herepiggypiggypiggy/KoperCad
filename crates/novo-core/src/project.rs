@@ -339,7 +339,7 @@ impl Project {
                         bridges: symbol.bridges.len(),
                     });
                 }
-                for group in &symbol.bridges {
+                for group in symbol.bridges.iter().chain(&symbol.pass_through) {
                     for &pin in group {
                         if usize::from(pin) >= symbol.pins.len() {
                             return Err(ModelError::InvalidPin {
