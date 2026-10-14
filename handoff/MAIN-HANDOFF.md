@@ -3,36 +3,37 @@
 For a fresh cloud session that takes over as **integration lead**: the role that coordinates the threads and merges PRs.
 Last updated 2026-10-14 17:17 UTC (final from the first lead session) by the integration lead (session_011PfTJ1QaP1JQJPwXcFnxBE).
 
-## 0. Current state (2026-10-14 18:20 UTC, cloud lead session_01DZ68tTULUv7Uhe8ecKbC47)
+## 0. Current state (2026-10-14 18:55 UTC, coordinator session_01DZ68tTULUv7Uhe8ecKbC47)
 Sections 6 and 11 below are the 17:17 snapshot; this section supersedes them.
-- Every project thread hit its session limit (resume 23:20 UTC). This cloud session is the lead meanwhile. It may push only to `claude/youthful-franklin-aey18d`, and merges only on a reviewer's READY (auto-mode refuses unreviewed merges).
-- Merged since: #35 (2e0fad6, by the old lead's job), #20 (6d10ab4, READY 2d60fdd, CI green).
-- `handoff/` (this folder) is now in the repo on `claude/youthful-franklin-aey18d`; CLAUDE.md points threads at it. Needs a PR + READY to reach main.
-- #35 fallout found by merging each PR with main: #36 did not compile (Text matches), #29 and #30 had one failing test each. #20, #28, #31, #34, #38, #41, #42 pass on main.
-- Lead fixes done locally, saved as `handoff/<thread>/lead-fixes/` (git bundle that fast-forwards the PR branch + readable patch + README with apply steps):
-  | PR | Thread folder | Fixed head | What |
+- **Who runs the project:** Tadjiro handed full coordination to the cloud coordinator session above (branch `claude/youthful-franklin-aey18d` for handoff updates; it may push thread branches and merge). The project threads hit their session limit and resume at **23:20 UTC**; when they do, each must `git fetch` and read its own `handoff/<thread>/` first, because the coordinator has pushed to their branches.
+- **Reviewer:** independent cloud session `session_01XEdxpvQFh4HWmurh72tKwp` ("NovoElectric main reviewer (cloud)"). PRs merge only on its READY on the exact head. The coordinator never approves work it or its helper agents wrote. After a READY, a main-merge push (crate rows / Cargo.lock only) is sent back to the reviewer to confirm before merging.
+- **CI is down:** GitHub Actions starts no jobs on this account (every job fails in ~3 s without a runner, Linux too; likely minutes or spending limit; Tadjiro to check billing). Interim rule: the reviewer's local fmt + clippy -D warnings + cargo test --workspace on the PR merged with main is the CI signal. Windows is unverified until Actions returns.
+- **Merged today (this session):** #20 theme, #41 CI/experimental fixes, #34 app storage + canvas, #28 canvas follow-up, #29 novo-workflow, #42 Gate 1 scenario, #45 core SetText + Page.structure, #44 handoffs.
+- **Open PRs:**
+  | PR | Thread | Head | State |
   | --- | --- | --- | --- |
-  | #28 | ws3 | a3302fc | junction dot for 3+ wires; Text records, no double tags, potential labels |
-  | #29 | ws8 | c3f4d7f | undo yields to text fields; copied main poles get a new device; duplicate copies texts; PE join test |
-  | #30 | ws11 | 351d8cc | core terminal rule (own Settings removed), PEN, pin refit, rename/level validation |
-  | #36 | ws7 | 2a43650 | Text compile fix, Terminal.part, lossless bulk table (3 data-loss bugs) |
-  Each owner (or a session allowed to push to that branch) applies the bundle, re-runs checks, pushes, pings the reviewer.
-- **Reviewer (new):** cloud session `session_01XEdxpvQFh4HWmurh72tKwp` ("NovoElectric main reviewer (cloud)") is the independent main reviewer while the project threads are paused (they resume 23:20 UTC). Merge only on its READY; the coordinator never approves work it wrote. Message it with each new head SHA.
-- #41 merged as ec06390 (CI/experimental fixes). #44 opened (handoff/ into main).
-- Still waiting on reviewers: #31, #34, #41 (workflow-only; merge on main reviewer READY), #42; #38 waits on the design reviewer's recheck at 904aae0.
-- Experimental build: run 166 failed before getting a runner and cancelled main's run; lead re-ran it by workflow_dispatch at ~18:00 UTC. With #36 broken on main, the old workflow falls back to main only until #41 merges or #36 is fixed.
-- Crate-row conflicts: #29, #31, #36, #38 each add a row to CLAUDE.md and Cargo.toml at the same spot; whichever merges first, the others need a main merge (keep both rows).
-- Trap: agents sharing one CARGO_TARGET_DIR across worktrees can run another worktree's stale test binary (false green). Give each worktree its own target dir.
+  | #30 terminals | WS-11 | 4bd64c2 | READY at ac067ff; main merge sent to reviewer to confirm |
+  | #31 xref (draft) | WS-10 | caf760c | READY; needs main merge (crate row) after #30, then mark ready-for-review |
+  | #36 parts | WS-07 | 8cc6e0e | Kelvin-sign fix + main merge; reviewer verdict pending |
+  | #38 editor | WS-06 | 581dcbd | blocker fixes pushed; reviewer (incl. DESIGN.md) pending |
+  | #46 Workbench | WS-01 | 73e8194 | new; reviewer pending |
+  | #47 marks + frame | WS-03 | 09fe4a9 | new; reviewer pending |
+  | #48 Gate 1 gaps | Tester | bbe2a24 | new; reviewer pending |
+- **In progress (coordinator helper agents, not yet PRs):** WS-09 PDF export (`claude/ws09-pdf-export`, crate novo-pdf; Gate 1 needs PDF) and WS-14 design checks (`claude/ws14-design-checks`, crate novo-checks; feeds the issue pill).
+- **Crate-row conflicts:** every new crate adds a row after `novo-symbols` in CLAUDE.md and Cargo.toml, so each merge makes the next PR conflict. Resolution is always "keep both rows"; send the merge sha to the reviewer.
+- **Next for Gate 1:** after #38 and #46 merge, WS-01 hosts `SchematicView` (#38) in the Workbench, wires #29's palette/keymap, #30 terminals and #31 xref; WS-09 PDF; then the tester drives the scenario through `NovoApp::execute`.
+- **Going public (owner's request):** no secrets anywhere in history (gitleaks + regex over all branches, PR refs, comments). Personal paths/ids were scrubbed from current files (#52), but the owner's Windows user name and an EPLAN folder name remain in older commits (#44 d3bd761 and earlier). Owner decides: accept that, or start a fresh repository from current main. Visibility is switched by the owner in Settings (no tool here can).
+- **Traps:** worktrees sharing one CARGO_TARGET_DIR run stale test binaries (false green): one target dir per worktree. Disk is ~40 GB: build with CARGO_INCREMENTAL=0 and debug info off, delete target dirs when done.
 
 ## 1. What this is
 NovoElectric is a local-first electrical CAD program in Rust: egui/eframe 0.36, wgpu, SQLite, with PyO3 as the scripting layer.
 - Repository: `Herepiggypiggypiggy/NovoElectric`, default branch `main`.
 - Roadmap: the Claude Doc https://claude.ai/code/artifact/8ff48512-c76a-4566-8937-166b4b128d2e, summarised in `docs/ROADMAP.md`.
-- Owner: Tadjiro (user_015gECXX3mZNSyeFMTnseTZT). He works in the project thread "coordination" and is often away.
+- Owner: Tadjiro. They work in the project thread "coordination" and is often away.
 
 ## 2. Owner's standing instructions (hard rules)
 1. **No admin rights, ever.** Everything must install, run, update and be scripted as a standard Windows user: per-user install, HKCU and %LOCALAPPDATA% only.
-2. **Never modify** `C:\Users\tvelzel\Documents\Standaard eplan Coen - kopie voor v2022` on his PC.
+2. **Never modify** the owner's existing EPLAN project folder on their PC (path kept on the project mount, not in the repo).
 3. **It is its own program, not an EPLAN copy.** Be critical, design creatively, and let the layout, workflow and review threads critique each other. Fix the EPLAN pain points without copying EPLAN. The pain points are in the roadmap doc under "Lessons from EPLAN".
 4. **Don't wait on him.** Pick reasonable defaults and keep moving. He trusts the lead to run the project efficiently and to re-examine the setup routinely.
 5. The integration lead merges PRs itself. Never ask Tadjiro to review or merge.
@@ -47,6 +48,7 @@ gh api $R/commits/<sha>/check-runs --jq '[.check_runs[]|"\(.name)=\(.conclusion 
 gh api -X PUT $R/pulls/N/merge -f merge_method=squash -f sha=<sha>
 ```
 - Mark a draft PR ready: `gh api -X POST $R/pulls/N/ccr/ready_for_review`.
+- **Mechanical main merges keep READY (from #51):** when a PR's head moved after READY only by merging main (use `scripts/merge-main.sh`), run `scripts/check-mechanical-merge.sh <ready-sha> <new-head>`. If it prints `OK`, the READY carries over: re-run `cargo test --workspace` on the new head (a lock-only difference passes the script), paste the script output into a PR comment, then merge with the new head's full sha. Any other change after READY goes back to the reviewer.
 - If the head moved after READY: docs-only or trivial changes can merge after you read the diff yourself; anything else goes back to the reviewer.
 - After a core (#35-style) merge, check open PRs for build breaks: exhaustive matches, struct literals.
 - The repo is private on a free plan, so there is no branch protection and Actions capacity is limited. Keep CI load low.
@@ -58,7 +60,7 @@ gh api -X PUT $R/pulls/N/merge -f merge_method=squash -f sha=<sha>
 - **Other threads.** Layout/branding, Workflow (owns DESIGN.md), Tester.
 - **Release/build thread** (cse_01UuGC6jT84yVrbcwGaSJ5Df) owns `.github/workflows`, the installer, run-latest.ps1, the launcher and the GPU check. It has #41.
 - **Design and workflow reviewer** (cse_0114emQ5fSFrzcALbR4S18TU).
-- **Remote Control session on Tadjiro's PC** (cse_01PHrCqUwsyohsQLFPdQoxBG). It only takes his own typed messages; you cannot message it.
+- **Remote Control session on Tadjiro's PC** (id on the project mount: coordination/threads.md). It only takes his own typed messages; you cannot message it.
 
 Working rules, also in CLAUDE.md via #39:
 - A PR is frozen once READY; follow-ups go in a new PR from main.
