@@ -145,6 +145,54 @@ fn a_contact_without_a_parent_gets_its_own_device() {
     assert!(matches!(s.role, SymbolRole::Device { main: false, .. }));
 }
 
+#[test]
+fn coil_k1_places_the_coil_of_the_existing_device() {
+    let (mut doc, page, mut editor) = setup();
+    // A contact placed first makes -K1 without a coil.
+    editor.begin_place("iec/contacts/no", None);
+    editor.click(&mut doc, page, p(40.0, 60.0), TOL);
+    assert_eq!(tags(&doc), ["-K1"]);
+    let k1 = doc.project().devices().next().unwrap().id;
+
+    // `coil K1` gives -K1 its coil instead of making -K2.
+    let hit = editor.catalog.search("coil K1")[0].clone();
+    assert_eq!(hit.parent.as_deref(), Some("-K1"));
+    editor.begin_place(&hit.symbol, hit.parent.as_deref());
+    assert_eq!(
+        editor.click(&mut doc, page, p(40.0, 160.0), TOL),
+        Clicked::Edited
+    );
+    assert_eq!(tags(&doc), ["-K1"]);
+    let mains = |doc: &Document| {
+        doc.project()
+            .symbols_of_device(k1)
+            .iter()
+            .filter(|s| matches!(s.role, SymbolRole::Device { main: true, .. }))
+            .count()
+    };
+    assert_eq!(mains(&doc), 1);
+
+    // A second coil for -K1 is refused with a notice; nothing changes.
+    let depth = doc.undo_depth();
+    assert_eq!(
+        editor.click(&mut doc, page, p(80.0, 160.0), TOL),
+        Clicked::Refused
+    );
+    assert_eq!(doc.undo_depth(), depth);
+    assert_eq!(mains(&doc), 1);
+    let notice = editor.notice().unwrap_or_default().to_string();
+    assert!(
+        notice.contains("-K1 already has its main function"),
+        "{notice}"
+    );
+
+    // A tag that names no device yet places a new device with that tag.
+    let hit = editor.catalog.search("coil K7")[0].clone();
+    editor.begin_place(&hit.symbol, hit.parent.as_deref());
+    editor.click(&mut doc, page, p(120.0, 160.0), TOL);
+    assert_eq!(tags(&doc), ["-K1", "-K7"]);
+}
+
 /// Places the Gate 1 main circuit in one column: fuses, contactor,
 /// overload and motor stacked 8 mm apart line up pin for pin.
 fn main_circuit(doc: &mut Document, page: PageId, editor: &mut Editor, gap: f64) -> [Point; 4] {
