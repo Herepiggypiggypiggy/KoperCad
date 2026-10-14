@@ -1,0 +1,16 @@
+[package]
+name = "novo-workflow"
+description = "Keyboard-first workflow: keymap, commands, palette search, insert search, orientation cycling, jump history and smart duplicate (WS-08)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+novo-core.workspace = true
+novo-symbols.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+novo-tests = { path = "../novo-tests" }

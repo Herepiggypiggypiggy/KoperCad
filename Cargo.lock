@@ -1484,9 +1484,12 @@ dependencies = [
  "eframe",
  "env_logger",
  "log",
+ "novo-canvas",
  "novo-core",
+ "novo-storage",
  "rfd",
  "serde",
+ "tempfile",
  "winresource",
 ]
 
@@ -1551,6 +1554,7 @@ dependencies = [
 name = "novo-tests"
 version = "0.1.0"
 dependencies = [
+ "novo-canvas",
  "novo-core",
  "novo-storage",
  "novo-symbols",
@@ -1565,6 +1569,15 @@ dependencies = [
  "eframe",
  "egui",
  "egui-phosphor",
+]
+
+[[package]]
+name = "novo-workflow"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-symbols",
+ "novo-tests",
 ]
 
 [[package]]
