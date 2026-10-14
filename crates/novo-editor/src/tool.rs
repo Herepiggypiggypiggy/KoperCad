@@ -341,6 +341,19 @@ impl Editor {
         true
     }
 
+    /// Another page was opened (or the document replaced): everything that
+    /// refers to the old page's objects goes. The tool is left (a move in
+    /// hand, a wire in progress, a placement and its proposals), and the
+    /// hover target, pointer position, pending selection and notice are
+    /// dropped, so the next click on the new page starts from nothing.
+    pub fn page_changed(&mut self) {
+        self.leave_tool();
+        self.target = None;
+        self.cursor = None;
+        self.select = None;
+        self.notice = None;
+    }
+
     /// The pointer moved to `raw` (page millimetres). `tolerance` is the
     /// pick radius in millimetres at the current zoom.
     pub fn hover(&mut self, doc: &Document, page: PageId, raw: Point, tolerance: f64) {

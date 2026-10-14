@@ -138,12 +138,17 @@ impl SchematicView {
         self.scene = None;
         self.revision = None;
         self.previews.clear();
+        self.leave_page();
+        self.canvas.zoom_to_fit();
+    }
+
+    /// Drops everything tied to the page shown so far.
+    fn leave_page(&mut self) {
+        self.editor.page_changed();
         self.canvas.selection.clear();
-        self.editor.leave_tool();
         self.insert = None;
         self.rename = None;
         self.menu = None;
-        self.canvas.zoom_to_fit();
     }
 
     /// The page the user asked to open (Page Up / Page Down, "New page").
@@ -196,9 +201,11 @@ impl SchematicView {
             }
             self.previews.clear();
             if fresh {
-                // Proposals belong to the page they were made on.
-                self.editor.clear_proposals();
-                self.canvas.selection.clear();
+                // A page opened by the shell (page list, Page Up / Page
+                // Down) or a new document: the tool, its proposals, the
+                // selection and the popups all refer to the old page's
+                // objects, so none of them carries over.
+                self.leave_page();
                 self.canvas.zoom_to_fit();
             }
             self.revision = Some(project.revision());
@@ -1203,5 +1210,86 @@ mod tests {
         assert!(
             matches!(h.view.editor.tool(), Tool::Place(p) if p.rotation == novo_core::Rotation::R90)
         );
+    }
+
+    /// A second page added the way the shell does it (not through the
+    /// editor, which would leave the tool itself), with a relay on the
+    /// first page at (100, 100). Returns the new page and the relay.
+    fn two_pages(h: &mut Harness) -> (PageId, novo_core::SymbolId) {
+        h.view.editor.auto_connect = false;
+        h.view.editor.begin_place("iec/coils/relay", None);
+        h.click(100.0, 100.0, egui::PointerButton::Primary);
+        h.view.editor.leave_tool();
+        let sym = h.doc.project().symbols().next().unwrap().id;
+        let (page, _) = h.doc.transact("Add page", |tx| tx.add_page("2")).unwrap();
+        (page, sym)
+    }
+
+    fn placement(h: &Harness, sym: novo_core::SymbolId) -> novo_core::Placement {
+        h.doc.project().symbol(sym).unwrap().placement
+    }
+
+    #[test]
+    fn a_move_in_hand_does_not_survive_a_page_change() {
+        let mut h = Harness::new();
+        let (page, sym) = two_pages(&mut h);
+        let before = placement(&h, sym);
+        h.view.select(&[AnyId::Symbol(sym)]);
+        h.hover(100.0, 100.0);
+        h.key(Key::M);
+        assert!(matches!(h.view.editor.tool(), Tool::Move(_)));
+        let depth = h.doc.undo_depth();
+        // The shell opens the other page (the page list).
+        h.page = page;
+        h.frame(Vec::new());
+        assert!(!h.view.editor.tool_active());
+        assert!(!h.view.editor.in_progress());
+        h.click(160.0, 160.0, egui::PointerButton::Primary);
+        assert_eq!(placement(&h, sym), before);
+        assert_eq!(h.doc.undo_depth(), depth);
+    }
+
+    #[test]
+    fn a_wire_in_progress_does_not_survive_a_page_change() {
+        let mut h = Harness::new();
+        let (page, _) = two_pages(&mut h);
+        let a2 = pin_at(&h.doc, Point::new(100.0, 100.0), "A2");
+        h.view.editor.begin_wire();
+        h.click(a2.x, a2.y, egui::PointerButton::Primary);
+        assert!(h.view.editor.in_progress());
+        let depth = h.doc.undo_depth();
+        h.page = page;
+        h.frame(Vec::new());
+        assert!(!h.view.editor.tool_active());
+        assert!(h.view.editor.preview(&h.doc, page).wire.is_empty());
+        h.click(160.0, 160.0, egui::PointerButton::Primary);
+        h.click(160.0, 200.0, egui::PointerButton::Primary);
+        assert_eq!(h.doc.project().wires().count(), 0);
+        assert_eq!(h.doc.undo_depth(), depth);
+    }
+
+    #[test]
+    fn the_selection_does_not_survive_a_page_change() {
+        let mut h = Harness::new();
+        let (page, sym) = two_pages(&mut h);
+        let before = placement(&h, sym);
+        h.view.select(&[AnyId::Symbol(sym)]);
+        assert_eq!(h.view.selection(), [AnyId::Symbol(sym)]);
+        h.click(100.0, 100.0, egui::PointerButton::Secondary);
+        assert!(h.view.menu.is_some());
+        let depth = h.doc.undo_depth();
+        h.page = page;
+        h.frame(Vec::new());
+        assert!(h.view.selection().is_empty());
+        assert!(h.view.menu.is_none());
+        // Keys on the new page have nothing of the old page to act on.
+        h.hover(100.0, 100.0);
+        for key in [Key::R, Key::X, Key::M, Key::Delete] {
+            h.key(key);
+        }
+        h.click(160.0, 160.0, egui::PointerButton::Primary);
+        assert_eq!(placement(&h, sym), before);
+        assert!(h.doc.project().symbol(sym).is_some());
+        assert_eq!(h.doc.undo_depth(), depth);
     }
 }
