@@ -7,12 +7,15 @@ on:
     paths:
       - "packaging/windows/**"
       - "assets/icon/**"
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - ".cargo/**"
       - ".github/workflows/package-windows.yml"
   workflow_dispatch:
+
+# Ordinary code PRs are covered by CI's windows-latest job and the
+# experimental build; the release installer only rebuilds when packaging
+# changes. A new push cancels the older run of the same PR.
+concurrency:
+  group: installer-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
