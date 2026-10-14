@@ -218,7 +218,7 @@ fn undoing_the_damage_clears_every_problem() {
 #[test]
 fn stress_page_checks_in_reasonable_time() {
     // Debug build on CI: a generous bound. Release timing is in
-    // `examples/scale.rs` and the handoff notes.
+    // `examples/checks_scale.rs` and the handoff notes.
     let mut doc = Document::default();
     stress_page(&mut doc, 10_000).unwrap();
     let start = Instant::now();

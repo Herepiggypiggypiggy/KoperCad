@@ -1,6 +1,6 @@
 //! Times the design checks on the Gate 0 stress page.
 //!
-//! `cargo run --release -p novo-checks --example scale`
+//! `cargo run --release -p novo-checks --example checks_scale`
 
 use std::time::Instant;
 

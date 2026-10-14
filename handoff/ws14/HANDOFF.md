@@ -15,7 +15,7 @@ Updated 2026-10-14 by the WS-14 session started by the cloud lead
 git fetch origin claude/ws14-design-checks main
 git checkout -B ws14-checks origin/claude/ws14-design-checks
 cargo test -p novo-checks
-cargo run --release -p novo-checks --example scale
+cargo run --release -p novo-checks --example checks_scale
 ```
 
 ## Code map (crates/novo-checks)
@@ -26,7 +26,7 @@ cargo run --release -p novo-checks --example scale
 - contacts.rs: ContactKind from the symbol key, contact_limit_property.
 - tests/checks.rs: one test per check; tests/motor_starter.rs: broken and
   clean Gate 1 starter, undo clears problems, stress page in debug.
-- examples/scale.rs: release timing on a 10k-symbol page.
+- examples/checks_scale.rs: release timing on a 10k-symbol page.
 
 ## Timing (release, this container, median of 10, 10k symbols, 10k wires)
 - netlist build ~7 ms; check_with (netlist kept) ~7.5 ms with parts
