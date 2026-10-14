@@ -15,12 +15,15 @@ eframe = { workspace = true, features = ["persistence"] }
 novo-core.workspace = true
 novo-storage.workspace = true
 novo-canvas.workspace = true
+novo-theme.workspace = true
 log = "0.4"
 env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
 rfd = "0.17"
 serde.workspace = true
+dirs.workspace = true
 
 [dev-dependencies]
+ron = "0.12"
 tempfile.workspace = true
 
 [build-dependencies]
