@@ -8,7 +8,7 @@
 
 use novo_core::{
     AnyId, Cable, CableCore, CableId, Command, Device, DeviceId, DeviceKind, Part, PartId, Project,
-    Record,
+    Record, Terminal, TerminalId, TerminalKind,
 };
 
 use crate::catalog::{Catalog, CatalogPart, PartKey};
@@ -184,6 +184,89 @@ pub fn assign_cable_part(project: &Project, cable: CableId, part: &CatalogPart) 
     })
 }
 
+/// Assigns a catalog part to terminals as their own article
+/// (`Terminal.part`), as one command. The part is copied into the project
+/// once, or reused. Returns `None` if there is nothing to change.
+pub fn assign_terminal_part(
+    project: &Project,
+    terminals: &[TerminalId],
+    part: &CatalogPart,
+) -> Option<Command> {
+    let mut commands = Vec::new();
+    let mut parts = PartAllocator::new(project);
+    let part_id = parts.part_id(part, &mut commands);
+    let changed: Vec<Command> = terminals
+        .iter()
+        .filter_map(|&id| project.terminal(id))
+        .filter(|t| t.part != Some(part_id))
+        .map(|t| Command::Replace {
+            record: Record::Terminal(Terminal {
+                part: Some(part_id),
+                ..t.clone()
+            }),
+        })
+        .collect();
+    if changed.is_empty() {
+        return None;
+    }
+    let label = format!("Assign {part} to {}", count(changed.len(), "terminal"));
+    commands.extend(changed);
+    Some(Command::Batch { label, commands })
+}
+
+/// The part a terminal is built with: its own article (`Terminal.part`),
+/// else its terminal strip's style for its kind or its own style override
+/// (novo-terminals), else the strip device's part.
+pub fn terminal_part(project: &Project, terminal: TerminalId) -> Option<PartId> {
+    let t = project.terminal(terminal)?;
+    t.part
+        .filter(|&p| project.part(p).is_some())
+        .or_else(|| novo_terminals::style_of(project, terminal).and_then(|s| s.part))
+        .or_else(|| {
+            project
+                .device(t.strip)
+                .and_then(|d| d.parts.first().copied())
+        })
+}
+
+/// Every terminal kind, for the strip styles.
+const TERMINAL_KINDS: [TerminalKind; 5] = [
+    TerminalKind::Feedthrough,
+    TerminalKind::ProtectiveEarth,
+    TerminalKind::Neutral,
+    TerminalKind::Fuse,
+    TerminalKind::Disconnect,
+];
+
+/// Fails to compile when a terminal kind is added, so it is added to
+/// [`TERMINAL_KINDS`] too.
+const fn _every_kind_listed(kind: TerminalKind) {
+    match kind {
+        TerminalKind::Feedthrough
+        | TerminalKind::ProtectiveEarth
+        | TerminalKind::Neutral
+        | TerminalKind::Fuse
+        | TerminalKind::Disconnect => {}
+    }
+}
+
+/// Parts the terminal strip styles use (novo-terminals keeps them as
+/// properties, which the project's references do not see).
+fn style_parts(project: &Project) -> Vec<PartId> {
+    let strips = project
+        .devices()
+        .filter(|d| d.kind == DeviceKind::TerminalStrip)
+        .flat_map(|d| {
+            TERMINAL_KINDS
+                .iter()
+                .filter_map(move |&k| novo_terminals::strip_style(project, d.id, k).part)
+        });
+    let terminals = project
+        .terminals()
+        .filter_map(|t| novo_terminals::style_of(project, t.id).and_then(|s| s.part));
+    strips.chain(terminals).collect()
+}
+
 /// Removes parts from devices (all of them) as one command.
 pub fn clear_parts(project: &Project, devices: &[DeviceId]) -> Option<Command> {
     let commands: Vec<Command> = devices
@@ -206,11 +289,13 @@ pub fn clear_parts(project: &Project, devices: &[DeviceId]) -> Option<Command> {
     })
 }
 
-/// Project parts no device or cable uses any more, oldest first.
+/// Project parts nothing uses any more (no device, cable or terminal, and
+/// no terminal strip style), oldest first.
 pub fn unused_parts(project: &Project) -> Vec<PartId> {
+    let styles = style_parts(project);
     project
         .parts()
-        .filter(|p| project.referrers(p.id).next().is_none())
+        .filter(|p| project.referrers(p.id).next().is_none() && !styles.contains(&p.id))
         .map(|p| p.id)
         .collect()
 }
@@ -230,20 +315,33 @@ pub fn remove_unused_parts(project: &Project) -> Option<Command> {
     })
 }
 
-/// Devices and cables that have no part yet, in tag order. This is the
-/// WS-07 done criterion for the Gate 1 project ("every device carries a
-/// real part") and the input for the design check "missing parts" (WS-14).
+/// Devices, terminals and cables that have no part yet, in that order and
+/// each in tag order. This is the WS-07 done criterion for the Gate 1
+/// project ("every device carries a real part") and the input for the
+/// design check "missing parts" (WS-14).
 ///
-/// Terminals are not listed: a terminal without its own part is covered by
-/// its strip device, which is listed here when it has none either.
+/// A terminal has a part when [`terminal_part`] finds one: its own, its
+/// strip's style, or its strip device's part.
 pub fn missing_parts(project: &Project) -> Vec<AnyId> {
     let mut devices: Vec<&Device> = project.devices().filter(|d| d.parts.is_empty()).collect();
     devices.sort_by(|a, b| novo_core::natural_cmp(&a.tag.to_string(), &b.tag.to_string()));
+    let mut terminals: Vec<(String, TerminalId)> = project
+        .terminals()
+        .filter(|t| terminal_part(project, t.id).is_none())
+        .map(|t| {
+            let name = project
+                .terminal_designation(t.id)
+                .unwrap_or_else(|| t.name.clone());
+            (name, t.id)
+        })
+        .collect();
+    terminals.sort_by(|a, b| novo_core::natural_cmp(&a.0, &b.0).then(a.1.cmp(&b.1)));
     let mut cables: Vec<&Cable> = project.cables().filter(|c| c.part.is_none()).collect();
     cables.sort_by(|a, b| novo_core::natural_cmp(&a.tag.to_string(), &b.tag.to_string()));
     devices
         .into_iter()
         .map(|d| AnyId::from(d.id))
+        .chain(terminals.into_iter().map(|(_, t)| AnyId::from(t)))
         .chain(cables.into_iter().map(|c| AnyId::from(c.id)))
         .collect()
 }
@@ -410,19 +508,25 @@ pub fn auto_assign_parts(catalog: &Catalog, project: &Project) -> Option<Command
 }
 
 /// The Issues line for missing parts: `2 devices without a part`,
-/// `1 device and 1 cable without a part`, or `None` when all have one.
+/// `1 device, 4 terminals and 1 cable without a part`, or `None` when all
+/// have one.
 pub fn missing_parts_summary(project: &Project) -> Option<String> {
     let missing = missing_parts(project);
-    let devices = missing
+    let of = |pick: fn(&AnyId) -> bool| missing.iter().filter(|id| pick(id)).count();
+    let counts = [
+        (of(|id| matches!(id, AnyId::Device(_))), "device"),
+        (of(|id| matches!(id, AnyId::Terminal(_))), "terminal"),
+        (of(|id| matches!(id, AnyId::Cable(_))), "cable"),
+    ];
+    let parts: Vec<String> = counts
         .iter()
-        .filter(|id| matches!(id, AnyId::Device(_)))
-        .count();
-    let cables = missing.len() - devices;
-    let what = match (devices, cables) {
-        (0, 0) => return None,
-        (d, 0) => count(d, "device"),
-        (0, c) => count(c, "cable"),
-        (d, c) => format!("{} and {}", count(d, "device"), count(c, "cable")),
+        .filter(|(n, _)| *n > 0)
+        .map(|&(n, noun)| count(n, noun))
+        .collect();
+    let what = match parts.as_slice() {
+        [] => return None,
+        [one] => one.clone(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
     };
     Some(format!("{what} without a part"))
 }

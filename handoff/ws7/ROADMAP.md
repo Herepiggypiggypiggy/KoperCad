@@ -25,8 +25,13 @@ DESIGN.md merges, build engines and commands only, no UI layout.
 
 ## Next, in order
 1. Drive PR #36 to READY and merged (no pushes after READY; new PR from main)
-2. After #35 merges: terminal parts (Terminal.part) in assigned_parts(),
-   assign_part for terminals, missing_parts includes terminals (J5)
+2. Done (fixer, claude/ws07-followups): terminal parts. assign_terminal_part
+   sets Terminal.part; terminal_part() = Terminal.part, else the
+   novo-terminals style (override or strip per kind), else the strip
+   device's part; missing_parts lists terminals with none; unused_parts
+   keeps parts the strip styles use. Open question for WS-11/WS-02: two
+   stores for a terminal's part (Terminal.part vs novo-terminals' `part` /
+   `terminal_part.<kind>` properties); one should go.
 3. After DESIGN.md merges: thin UI on PropertySheet per the design (with WS-01)
 4. EPLAN part import (WS-24 overlap) and catalog persistence UX
 
