@@ -6,7 +6,8 @@
 use eframe::egui;
 use novo_canvas::{Aabb, Mark, MarkKind, MarkTarget, Vec2};
 use novo_core::{AnyId, DeviceId, SymbolRole};
-use novo_terminals::Suggestion;
+use novo_terminals::{Occurrence, Suggestion};
+use novo_xref::Place;
 
 use super::workbench::{DRAWER_SHARE, Drawer};
 use super::{Level, NovoApp};
@@ -183,7 +184,9 @@ impl NovoApp {
         }
         let height = (ui.ctx().content_rect().height() * DRAWER_SHARE).max(120.0);
         let strip = self.drawer_strip();
+        let selected = self.selection();
         let mut close = false;
+        let mut go = None;
         egui::Panel::bottom("drawer")
             .exact_size(height)
             .resizable(false)
@@ -216,17 +219,33 @@ impl NovoApp {
                     return;
                 };
                 let view = novo_terminals::strip_view(doc.project(), strip);
-                strip_table(ui, &view);
+                go = strip_table(ui, &view, &selected);
             });
         if close {
             self.wb.drawer = None;
+        }
+        if let Some(o) = go {
+            self.jump(
+                Place {
+                    page: o.page,
+                    symbol: Some(o.symbol),
+                },
+                true,
+            );
         }
     }
 }
 
 /// The strip editor's rows as a table: terminal, internal targets, external
-/// targets, state.
-pub(super) fn strip_table(ui: &mut egui::Ui, view: &novo_terminals::StripView) {
+/// targets, state. A drawn terminal's name selects it on the drawing (its
+/// first drawing, centred); returns that drawing when one was clicked.
+/// Rows drawn by a selected symbol show as selected.
+pub(super) fn strip_table(
+    ui: &mut egui::Ui,
+    view: &novo_terminals::StripView,
+    selected: &[AnyId],
+) -> Option<Occurrence> {
+    let mut go = None;
     ui.horizontal(|ui| {
         ui.strong(&view.tag);
         ui.weak(format!("{} terminals", view.rows.len()));
@@ -249,7 +268,23 @@ pub(super) fn strip_table(ui: &mut egui::Ui, view: &novo_terminals::StripView) {
                             .collect::<Vec<_>>()
                             .join(", ")
                     };
-                    ui.label(&row.name);
+                    match row.occurrences.first() {
+                        Some(first) => {
+                            let on = row
+                                .occurrences
+                                .iter()
+                                .any(|o| selected.contains(&AnyId::Symbol(o.symbol)));
+                            let name = ui
+                                .selectable_label(on, &row.name)
+                                .on_hover_text("Show on the drawing");
+                            if name.clicked() {
+                                go = Some(first.clone());
+                            }
+                        }
+                        None => {
+                            ui.label(&row.name).on_hover_text("Spare: not drawn");
+                        }
+                    }
                     ui.label(join(row.internal_targets()));
                     ui.label(join(row.external_targets()));
                     ui.weak(row.state().label());
@@ -257,6 +292,7 @@ pub(super) fn strip_table(ui: &mut egui::Ui, view: &novo_terminals::StripView) {
                 }
             });
     });
+    go
 }
 
 /// The world area a proposed terminal would take, around its spot.
