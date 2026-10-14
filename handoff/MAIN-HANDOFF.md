@@ -5,7 +5,7 @@ Last updated 2026-10-14 17:17 UTC (final from the first lead session) by the int
 
 ## 0. Current state (2026-10-14 18:20 UTC, cloud lead session_01DZ68tTULUv7Uhe8ecKbC47)
 Sections 6 and 11 below are the 17:17 snapshot; this section supersedes them.
-- Every project thread hit its session limit (resets 21:20 UTC). This cloud session is the lead meanwhile. It may push only to `claude/youthful-franklin-aey18d`, and merges only on a reviewer's READY (auto-mode refuses unreviewed merges).
+- Every project thread hit its session limit (resume 23:20 UTC). This cloud session is the lead meanwhile. It may push only to `claude/youthful-franklin-aey18d`, and merges only on a reviewer's READY (auto-mode refuses unreviewed merges).
 - Merged since: #35 (2e0fad6, by the old lead's job), #20 (6d10ab4, READY 2d60fdd, CI green).
 - `handoff/` (this folder) is now in the repo on `claude/youthful-franklin-aey18d`; CLAUDE.md points threads at it. Needs a PR + READY to reach main.
 - #35 fallout found by merging each PR with main: #36 did not compile (Text matches), #29 and #30 had one failing test each. #20, #28, #31, #34, #38, #41, #42 pass on main.
@@ -17,6 +17,8 @@ Sections 6 and 11 below are the 17:17 snapshot; this section supersedes them.
   | #30 | ws11 | 351d8cc | core terminal rule (own Settings removed), PEN, pin refit, rename/level validation |
   | #36 | ws7 | 2a43650 | Text compile fix, Terminal.part, lossless bulk table (3 data-loss bugs) |
   Each owner (or a session allowed to push to that branch) applies the bundle, re-runs checks, pushes, pings the reviewer.
+- **Reviewer (new):** cloud session `session_01XEdxpvQFh4HWmurh72tKwp` ("NovoElectric main reviewer (cloud)") is the independent main reviewer while the project threads are paused (they resume 23:20 UTC). Merge only on its READY; the coordinator never approves work it wrote. Message it with each new head SHA.
+- #41 merged as ec06390 (CI/experimental fixes). #44 opened (handoff/ into main).
 - Still waiting on reviewers: #31, #34, #41 (workflow-only; merge on main reviewer READY), #42; #38 waits on the design reviewer's recheck at 904aae0.
 - Experimental build: run 166 failed before getting a runner and cancelled main's run; lead re-ran it by workflow_dispatch at ~18:00 UTC. With #36 broken on main, the old workflow falls back to main only until #41 merges or #36 is fixed.
 - Crate-row conflicts: #29, #31, #36, #38 each add a row to CLAUDE.md and Cargo.toml at the same spot; whichever merges first, the others need a main merge (keep both rows).
