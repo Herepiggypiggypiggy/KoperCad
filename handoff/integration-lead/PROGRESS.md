@@ -18,3 +18,4 @@
 2026-10-14 17:50 UTC #41 not merged: no reviewer READY yet (auto-mode refuses merges without review). Waits for the main reviewer.
 2026-10-14 17:55 UTC Handoffs committed to the repository under handoff/ (branch claude/youthful-franklin-aey18d, 985f0a1); CLAUDE.md points at them.
 2026-10-14 17:55 UTC Fixing the blocking review items and #35 breakages for #28, #29, #30, #36 locally; results saved as patches in handoff/<thread>/lead-fixes/ because this session may push only to its own branch.
+2026-10-14 18:35 UTC Re-verified the four lead-fix heads in a clean, unshared target dir: #28 a3302fc 264 pass, #29 c3f4d7f 314 pass, #30 351d8cc 290 pass, #36 2a43650 292 pass; fmt and clippy -D warnings clean on all. Experimental build fails before a runner is assigned (runs 166, 167); likely Actions minutes or spending limit, owner to check billing.
