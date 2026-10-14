@@ -75,13 +75,37 @@ pub fn run() -> eframe::Result {
                 }
                 None => Box::new(PlaceholderCanvas::default()),
             };
-            let mut app = NovoApp::new(cc, Box::new(StorageBackend::default()), canvas);
+            let backend = match data_dir() {
+                Some(dir) => StorageBackend::with_untitled_dir(dir.join("untitled")),
+                None => StorageBackend::default(),
+            };
+            let mut app = NovoApp::new(cc, Box::new(backend), canvas);
             if let Some(path) = startup_file {
                 app.open_on_start(path);
             }
             Ok(Box::new(app))
         }),
     )
+}
+
+/// The per-user folder for data the app keeps for itself, such as unsaved
+/// new projects: `%LOCALAPPDATA%\NovoElectric` on Windows. Never a
+/// system-wide location, so no admin rights are needed.
+fn data_dir() -> Option<std::path::PathBuf> {
+    use std::path::PathBuf;
+    let env = |name| {
+        std::env::var_os(name)
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+    };
+    let base = if cfg!(windows) {
+        env("LOCALAPPDATA")?
+    } else if cfg!(target_os = "macos") {
+        env("HOME")?.join("Library/Application Support")
+    } else {
+        env("XDG_DATA_HOME").or_else(|| env("HOME").map(|h| h.join(".local/share")))?
+    };
+    Some(base.join(APP_NAME))
 }
 
 #[cfg(test)]

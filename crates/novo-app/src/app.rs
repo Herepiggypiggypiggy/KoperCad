@@ -54,6 +54,8 @@ pub struct NovoApp {
     window_title: String,
     /// Opened on the first frame, so errors show in the window.
     open_on_start: Option<PathBuf>,
+    /// The first frame has run its start-up work.
+    started: bool,
     /// When to give the backend its next chance to autosave.
     next_tick: Instant,
     /// The last autosave failed; reported once until it works again.
@@ -96,6 +98,7 @@ impl NovoApp {
             quitting: false,
             window_title: String::new(),
             open_on_start: None,
+            started: false,
             next_tick: Instant::now(),
             autosave_failing: false,
         }
@@ -303,6 +306,23 @@ impl NovoApp {
         }
     }
 
+    /// Offers back an unsaved new project from a session that crashed.
+    fn restore_untitled(&mut self) {
+        match self.backend.restore_untitled() {
+            Ok(true) => {
+                self.project_path = None;
+                self.current_page = None;
+                self.canvas.document_replaced();
+                self.fix_current_page();
+            }
+            Ok(false) => {}
+            Err(e) => self.message(
+                Level::Warning,
+                format!("Could not check for unsaved work from the last session: {e}"),
+            ),
+        }
+    }
+
     fn close_project(&mut self) {
         if let Err(e) = self.backend.close() {
             self.message(
@@ -387,8 +407,12 @@ impl NovoApp {
     /// Lays out one frame of the whole window.
     pub fn show(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
-        if let Some(path) = self.open_on_start.take() {
-            self.open_path(&path);
+        if !self.started {
+            self.started = true;
+            match self.open_on_start.take() {
+                Some(path) => self.open_path(&path),
+                None => self.restore_untitled(),
+            }
         }
         self.fix_current_page();
         self.tick(&ctx);
@@ -766,7 +790,14 @@ impl NovoApp {
                 self.fix_current_page();
                 self.message(Level::Info, "Restored the unsaved work. Save to keep it.");
             }
-            Ok(()) => self.message(Level::Info, "Discarded the unsaved work"),
+            Ok(()) => {
+                if !self.is_open() {
+                    self.project_path = None;
+                    self.current_page = None;
+                    self.canvas.document_replaced();
+                }
+                self.message(Level::Info, "Discarded the unsaved work");
+            }
             Err(e) => self.message(
                 Level::Error,
                 format!("Could not discard the unsaved work: {e}"),
@@ -1179,6 +1210,29 @@ mod tests {
         assert!(app.is_dirty(), "restored work still needs a save");
         frame(&ctx, &mut app, Default::default());
         assert_eq!(app.window_title, "Plant* - NovoElectric");
+    }
+
+    #[test]
+    fn an_unsaved_new_project_is_offered_back_after_a_crash() {
+        let dir = tempfile::tempdir().unwrap();
+        crate::backend::tests::crash_untitled(dir.path());
+        let ctx = egui::Context::default();
+        let mut app = app_with(StorageBackend::with_untitled_dir(dir.path()));
+        frame(&ctx, &mut app, Default::default());
+        assert!(app.is_open());
+        assert!(app.modal_open());
+        app.resolve_recovery(true);
+        assert_eq!(page_count(&app), 2);
+        assert_eq!(app.project_path, None);
+        assert!(app.is_dirty());
+
+        // Discarding instead leaves no project open.
+        let dir = tempfile::tempdir().unwrap();
+        crate::backend::tests::crash_untitled(dir.path());
+        let mut app = app_with(StorageBackend::with_untitled_dir(dir.path()));
+        frame(&ctx, &mut app, Default::default());
+        app.resolve_recovery(false);
+        assert!(!app.is_open());
     }
 
     #[test]

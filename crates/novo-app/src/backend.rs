@@ -105,28 +105,89 @@ pub trait ProjectBackend {
     fn tick(&mut self) -> Result<Option<Duration>, BackendError> {
         Ok(None)
     }
+
+    /// Reopens an unsaved new project a crash left behind, with its work
+    /// offered through [`Self::recovery_offer`]. Returns whether it found one.
+    fn restore_untitled(&mut self) -> Result<bool, BackendError> {
+        Ok(false)
+    }
 }
 
 /// The real backend: one `.novo` file per project, autosaved to a recovery
 /// file next to it.
+///
+/// With an untitled folder set, a new project is kept in a file there from
+/// the start, so its work survives a crash before the first save. The first
+/// save moves it to the chosen file; closing it unsaved deletes it.
 #[derive(Default)]
 pub struct StorageBackend {
     document: Option<Document>,
-    /// `None` until a new project is first saved.
+    /// `None` for a new project until it is first saved, unless untitled
+    /// projects are kept on disk.
     session: Option<Session>,
     recovery: Option<novo_storage::Recovered>,
     /// The project shown is a restored recovery that differs from the file.
     restored_unsaved: bool,
+    /// Where unsaved new projects are kept.
+    untitled_dir: Option<PathBuf>,
+    /// The open project's file is a temporary one in `untitled_dir`.
+    untitled: Option<PathBuf>,
 }
 
 impl StorageBackend {
+    /// Keeps unsaved new projects in `dir`, which is created when needed.
+    pub fn with_untitled_dir(dir: impl Into<PathBuf>) -> Self {
+        let mut backend = Self::default();
+        backend.untitled_dir = Some(dir.into());
+        backend
+    }
+
     fn close_session(&mut self) -> Result<(), BackendError> {
         self.recovery = None;
         self.restored_unsaved = false;
-        match self.session.take() {
-            Some(session) => Ok(session.close()?),
+        let closed = match self.session.take() {
+            Some(session) => session.close(),
             None => Ok(()),
+        };
+        if let Some(path) = self.untitled.take() {
+            remove_file_if_exists(&path);
         }
+        Ok(closed?)
+    }
+
+    /// Starts a temporary file for a new project, if untitled projects are
+    /// kept on disk. Failing that, the project still works, unprotected.
+    fn start_untitled(&mut self) {
+        let (Some(dir), Some(document)) = (&self.untitled_dir, &self.document) else {
+            return;
+        };
+        let stamp = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or_default();
+        let path = dir.join(format!(
+            "untitled-{stamp}-{}.{}",
+            std::process::id(),
+            novo_storage::PROJECT_EXTENSION
+        ));
+        let created = std::fs::create_dir_all(dir)
+            .map_err(StorageError::from)
+            .and_then(|()| Session::create(&path, document.project()));
+        match created {
+            Ok(session) => {
+                self.session = Some(session);
+                self.untitled = Some(path);
+            }
+            Err(e) => log::warn!("unsaved new projects are not protected from crashes: {e}"),
+        }
+    }
+}
+
+fn remove_file_if_exists(path: &Path) {
+    match std::fs::remove_file(path) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => log::warn!("could not delete {}: {e}", path.display()),
     }
 }
 
@@ -135,6 +196,7 @@ impl ProjectBackend for StorageBackend {
         let document = new_document(name)?;
         self.close_session()?;
         self.document = Some(document);
+        self.start_untitled();
         Ok(())
     }
 
@@ -160,6 +222,9 @@ impl ProjectBackend for StorageBackend {
         }
         document.mark_saved();
         self.restored_unsaved = false;
+        if let Some(temp) = self.untitled.take() {
+            remove_file_if_exists(&temp);
+        }
         Ok(())
     }
 
@@ -200,6 +265,9 @@ impl ProjectBackend for StorageBackend {
             session.accept_recovery();
             self.document = Some(Document::new(recovered.project));
             self.restored_unsaved = true;
+        } else if self.untitled.is_some() {
+            // An untitled project is nothing without its unsaved work.
+            self.close()?;
         } else {
             session.discard_recovery()?;
         }
@@ -213,6 +281,58 @@ impl ProjectBackend for StorageBackend {
         };
         session.autosave_if_due(document.project())?;
         Ok(Some(session.autosave_interval()))
+    }
+
+    fn restore_untitled(&mut self) -> Result<bool, BackendError> {
+        let Some(dir) = self.untitled_dir.clone() else {
+            return Ok(false);
+        };
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            return Ok(false);
+        };
+        let mut leftovers: Vec<(SystemTime, PathBuf)> = entries
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .filter(|p| {
+                p.extension()
+                    .is_some_and(|e| e == novo_storage::PROJECT_EXTENSION)
+            })
+            .map(|p| {
+                let modified = p
+                    .metadata()
+                    .and_then(|m| m.modified())
+                    .unwrap_or(SystemTime::UNIX_EPOCH);
+                (modified, p)
+            })
+            .collect();
+        // Newest first; older ones are offered on later starts.
+        leftovers.sort_by_key(|(modified, _)| std::cmp::Reverse(*modified));
+        for (_, path) in leftovers {
+            let opened = match Session::open(&path) {
+                Ok(opened) => opened,
+                // Another window is using it.
+                Err(StorageError::Locked(_)) => continue,
+                Err(e) => {
+                    log::warn!("leaving unreadable {}: {e}", path.display());
+                    continue;
+                }
+            };
+            if opened.recovered.is_none() {
+                // Nothing was autosaved before the crash: nothing to offer.
+                if let Err(e) = opened.session.close() {
+                    log::warn!("could not close {}: {e}", path.display());
+                }
+                remove_file_if_exists(&path);
+                continue;
+            }
+            self.close_session()?;
+            self.document = Some(Document::new(opened.project));
+            self.session = Some(opened.session);
+            self.recovery = opened.recovered;
+            self.untitled = Some(path);
+            return Ok(true);
+        }
+        Ok(false)
     }
 }
 
@@ -414,6 +534,110 @@ pub(crate) mod tests {
         assert_eq!(page_names(&backend), vec!["1", "2"]);
         assert!(!backend.is_dirty());
         assert!(!autosave_path(&path).exists());
+    }
+
+    fn files_in(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .map(|d| {
+                d.filter_map(Result::ok)
+                    .map(|e| e.file_name().to_string_lossy().into_owned())
+                    .collect()
+            })
+            .unwrap_or_default();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn a_new_project_is_kept_on_disk_until_saved() {
+        let dir = tempfile::tempdir().unwrap();
+        let untitled = dir.path().join("untitled");
+        let path = dir.path().join("plant.novo");
+
+        let mut backend = StorageBackend::with_untitled_dir(&untitled);
+        backend.new_project("Plant").unwrap();
+        assert_eq!(files_in(&untitled).len(), 1);
+        edit(&mut backend, "2");
+        backend.save(&path).unwrap();
+        assert!(files_in(&untitled).is_empty(), "{:?}", files_in(&untitled));
+        backend.close().unwrap();
+
+        let mut reopened = StorageBackend::default();
+        reopened.open(&path).unwrap();
+        assert_eq!(page_names(&reopened), vec!["1", "2"]);
+    }
+
+    #[test]
+    fn closing_an_unsaved_new_project_leaves_nothing_behind() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut backend = StorageBackend::with_untitled_dir(dir.path());
+        backend.new_project("Plant").unwrap();
+        edit(&mut backend, "2");
+        backend.close().unwrap();
+        assert!(files_in(dir.path()).is_empty());
+        assert!(!backend.restore_untitled().unwrap());
+    }
+
+    /// An untitled project with page 2 autosaved, then a crash.
+    pub(crate) fn crash_untitled(dir: &Path) {
+        let mut backend = StorageBackend::with_untitled_dir(dir);
+        backend.new_project("Plant").unwrap();
+        edit(&mut backend, "2");
+        let session = backend.session.as_mut().unwrap();
+        session
+            .autosave(backend.document.as_ref().unwrap().project())
+            .unwrap();
+        drop(backend.session.take());
+        backend.untitled = None;
+    }
+
+    #[test]
+    fn an_untitled_project_survives_a_crash() {
+        let dir = tempfile::tempdir().unwrap();
+        crash_untitled(dir.path());
+
+        let mut backend = StorageBackend::with_untitled_dir(dir.path());
+        assert!(backend.restore_untitled().unwrap());
+        assert!(backend.recovery_offer().is_some());
+        backend.resolve_recovery(true).unwrap();
+        assert_eq!(page_names(&backend), vec!["1", "2"]);
+        assert!(backend.is_dirty());
+
+        let saved = tempfile::tempdir().unwrap();
+        backend.save(&saved.path().join("plant.novo")).unwrap();
+        backend.close().unwrap();
+        assert!(
+            files_in(dir.path()).is_empty(),
+            "{:?}",
+            files_in(dir.path())
+        );
+    }
+
+    #[test]
+    fn discarding_a_crashed_untitled_project_deletes_it() {
+        let dir = tempfile::tempdir().unwrap();
+        crash_untitled(dir.path());
+
+        let mut backend = StorageBackend::with_untitled_dir(dir.path());
+        assert!(backend.restore_untitled().unwrap());
+        backend.resolve_recovery(false).unwrap();
+        assert!(backend.document().is_none());
+        assert!(
+            files_in(dir.path()).is_empty(),
+            "{:?}",
+            files_in(dir.path())
+        );
+        assert!(!backend.restore_untitled().unwrap());
+    }
+
+    #[test]
+    fn an_untitled_project_open_in_another_window_is_left_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut first = StorageBackend::with_untitled_dir(dir.path());
+        first.new_project("Plant").unwrap();
+        let mut second = StorageBackend::with_untitled_dir(dir.path());
+        assert!(!second.restore_untitled().unwrap());
+        assert_eq!(files_in(dir.path()).len(), 1);
     }
 
     #[test]
