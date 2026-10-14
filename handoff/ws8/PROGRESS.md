@@ -13,3 +13,4 @@
 
 - 2026-10-14: CI fmt check red on 01d8023 (journeys.rs). Pushed 946d8ed (cargo fmt only). Reviewer and coordinator told.
 2026-10-14 18:15 UTC Integration lead fixed PR #29 locally (review items + #35 merge) at c3f4d7f; bundle and patches in lead-fixes/, not pushed.
+2026-10-14 UTC (fixer session_017LndnL4fiT5rRPkqy3R36S): fixes from the Gate 1 integration run: `accept all` ran `accept` with argument `all` (the longest typed verb phrase now wins); the device list after `no ` sorted -K10 before -K2 (natural tag order now; devices with a coil still first; DESIGN.md gives no other order). PR claude/fix-workflow-accept-all.
