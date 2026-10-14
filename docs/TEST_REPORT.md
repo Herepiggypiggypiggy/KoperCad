@@ -36,6 +36,19 @@ Test counts include the `novo-tests` crate added on top.
 | Save, close and reopen gives an identical project | Met on #5, except F1 | Gate 1 project, incremental saves after edits and undo, crash recovery and a 10k-object page (save 214 ms, open 253 ms) all reopen byte-identical |
 | Empty app installs and launches; CI green | Launch verified on Linux; installer pending | #3 under Xvfb with llvmpipe: window opens with menus and panels and stays up. The `installer` job on #3 was still running at the time of this round |
 
+### No admin rights (hard rule from Tadjiro)
+
+Everything must install and run as a standard user, with no elevation.
+
+| Check | Status | Evidence |
+| --- | --- | --- |
+| Installer is per-user | Pass (static) | #3 `novoelectric.iss`: `PrivilegesRequired=lowest`, installs to `{localappdata}\Programs`, shortcuts in `{userprograms}`/`{userdesktop}`, file association under `HKCU` only |
+| App never asks for elevation | Pass (static) | #3 `build.rs` embeds an `asInvoker` manifest; CI step fails if either exe contains `requireAdministrator` or `highestAvailable` |
+| Installs and launches as a standard user | Pending | #3's `installer` job creates a non-admin local user, installs with its credentials, checks nothing was written to `HKLM`, and launches the app for 10 s. The first run failed because the test user could not write the job's `TEMP`; #3 pushed a fix (`14ebe0a`) and the re-run is pending |
+| No machine-wide paths at runtime | Pass (static) | No `HKLM`, `Program Files`, `ProgramData` or system paths in main or any open PR. #5 writes the project and its `.autosave` next to the project file; #3 keeps settings in eframe's per-user storage; #6's launcher and shortcut use `%LOCALAPPDATA%` and the user's desktop |
+
+From the next round, every PR is checked for new machine-wide paths or elevation requests.
+
 ### Findings
 
 **F1 (bug, high) A non-finite coordinate makes the project impossible to reopen.**
