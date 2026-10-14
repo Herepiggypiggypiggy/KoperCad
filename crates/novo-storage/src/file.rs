@@ -56,6 +56,10 @@ impl ProjectFile {
     /// into place only once complete, so an existing file is never left half
     /// overwritten. A file that is open elsewhere is not replaced:
     /// [`StorageError::Locked`].
+    ///
+    /// On Unix, another program could open the new file in the instant
+    /// between moving it into place and opening it here; the file is then
+    /// written but this returns `Locked`.
     pub fn create(path: impl AsRef<Path>, project: &Project) -> Result<ProjectFile> {
         Self::create_as(path.as_ref(), project, Role::Project, |_| Ok(()))
     }
@@ -116,22 +120,24 @@ impl ProjectFile {
             let tx = file.conn.transaction()?;
             set_meta(&tx, "role", role.as_str())?;
             set_meta(&tx, "created_at", &now_millis().to_string())?;
+            set_meta(&tx, "file_id", &new_file_id())?;
             write_all(&tx, project)?;
             finish_save(&tx)?;
             extra(&tx)?;
             tx.commit()?;
             // Close before moving: Windows cannot rename an open file.
             file.close()?;
-            if role == Role::Project {
-                // A recovery file left by a crash belongs to the file being
-                // replaced; it must not be offered against the new one.
-                remove_if_exists(&sibling(path, AUTOSAVE_SUFFIX))?;
-            }
             replace(&temp, path, lock)
         })();
         if let Err(err) = written {
             let _ = std::fs::remove_file(&temp);
             return Err(err);
+        }
+        if role == Role::Project {
+            // A recovery file left by a crash belonged to the replaced file.
+            // It names that file's id, so it would never be offered against
+            // the new one; this only tidies it away.
+            let _ = remove_if_exists(&sibling(path, AUTOSAVE_SUFFIX));
         }
         Self::open_as(path, role)
     }
@@ -294,6 +300,12 @@ impl ProjectFile {
             .meta("saved_at")?
             .and_then(|v| v.parse::<u64>().ok())
             .map(|ms| UNIX_EPOCH + Duration::from_millis(ms)))
+    }
+
+    /// A random id given to the file when it is created, so a recovery file
+    /// can tell this file from another one written to the same path.
+    pub(crate) fn file_id(&self) -> Result<Option<String>> {
+        self.meta("file_id")
     }
 
     /// Counts the saves made to this file; identifies a saved state.
@@ -498,6 +510,24 @@ pub(crate) fn kind_name(kind: EntityKind) -> &'static str {
         EntityKind::Cable => "cable",
         EntityKind::Part => "part",
     }
+}
+
+fn new_file_id() -> String {
+    use std::hash::{BuildHasher, Hasher};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    // RandomState is seeded randomly per process; mixing in the time and a
+    // counter keeps ids distinct within a process as well.
+    let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
+    hasher.write_u128(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0),
+    );
+    hasher.write_u32(std::process::id());
+    hasher.write_u64(COUNTER.fetch_add(1, Ordering::Relaxed));
+    format!("{:016x}", hasher.finish())
 }
 
 fn now_millis() -> u64 {
