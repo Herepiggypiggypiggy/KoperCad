@@ -1494,6 +1494,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-cables"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-parts",
+ "novo-tests",
+]
+
+[[package]]
 name = "novo-canvas"
 version = "0.1.0"
 dependencies = [
