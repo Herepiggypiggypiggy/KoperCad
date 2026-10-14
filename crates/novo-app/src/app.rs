@@ -1,13 +1,14 @@
 //! The main window: menus, panels, status bar, dialogs and action dispatch.
 
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant, SystemTime};
 
 use eframe::egui;
 
 use crate::actions::Action;
 use novo_core::PageId;
 
-use crate::backend::{ProjectBackend, page_labels};
+use crate::backend::{BackendError, ProjectBackend, page_labels};
 use crate::canvas::{CanvasView, OpenPage};
 use crate::palette::{Entry, Palette, Target};
 use crate::settings::{Settings, Theme};
@@ -53,7 +54,16 @@ pub struct NovoApp {
     window_title: String,
     /// Opened on the first frame, so errors show in the window.
     open_on_start: Option<PathBuf>,
+    /// The first frame has run its start-up work.
+    started: bool,
+    /// When to give the backend its next chance to autosave.
+    next_tick: Instant,
+    /// The last autosave failed; reported once until it works again.
+    autosave_failing: bool,
 }
+
+/// How long to wait before retrying a failed autosave.
+const AUTOSAVE_RETRY: Duration = Duration::from_secs(30);
 
 impl NovoApp {
     pub fn new(
@@ -88,6 +98,9 @@ impl NovoApp {
             quitting: false,
             window_title: String::new(),
             open_on_start: None,
+            started: false,
+            next_tick: Instant::now(),
+            autosave_failing: false,
         }
     }
 
@@ -109,7 +122,7 @@ impl NovoApp {
     }
 
     fn is_dirty(&self) -> bool {
-        self.backend.document().is_some_and(|d| d.is_dirty())
+        self.backend.is_dirty()
     }
 
     fn project_name(&self) -> Option<String> {
@@ -141,7 +154,10 @@ impl NovoApp {
         };
         let result = if redo { doc.redo() } else { doc.undo() };
         match result {
-            Ok(Some(changes)) => self.canvas.document_changed(doc, &changes),
+            Ok(Some(changes)) => {
+                self.canvas.document_changed(doc, &changes);
+                self.backend.record(&changes);
+            }
             Ok(None) => {}
             Err(e) => {
                 let what = if redo { "redo" } else { "undo" };
@@ -264,32 +280,89 @@ impl NovoApp {
 
     fn open_path(&mut self, path: &Path) {
         match self.backend.open(path) {
-            Ok(()) => {
+            Ok(report) => {
                 self.project_path = Some(path.to_owned());
                 self.current_page = None;
                 self.canvas.document_replaced();
                 self.fix_current_page();
                 self.settings.remember_recent(path);
                 self.message(Level::Info, format!("Opened {}", path.display()));
+                if let Some(aside) = report.set_aside {
+                    self.message(
+                        Level::Warning,
+                        format!(
+                            "The unsaved work from the last session could not be read. It was kept as {}.",
+                            aside.display()
+                        ),
+                    );
+                }
             }
             Err(e) => {
-                if matches!(e, crate::BackendError::Io(ref io) if io.kind() == std::io::ErrorKind::NotFound)
-                {
+                if is_not_found(&e) {
                     self.settings.forget_recent(path);
                 }
-                self.message(
-                    Level::Error,
-                    format!("Could not open {}: {e}", path.display()),
-                );
+                self.message(Level::Error, describe_error("open", path, &e));
             }
         }
     }
 
+    /// Offers back an unsaved new project from a session that crashed.
+    fn restore_untitled(&mut self) {
+        match self.backend.restore_untitled() {
+            Ok(true) => {
+                self.project_path = None;
+                self.current_page = None;
+                self.canvas.document_replaced();
+                self.fix_current_page();
+            }
+            Ok(false) => {}
+            Err(e) => self.message(
+                Level::Warning,
+                format!("Could not check for unsaved work from the last session: {e}"),
+            ),
+        }
+    }
+
     fn close_project(&mut self) {
-        self.backend.close();
+        if let Err(e) = self.backend.close() {
+            self.message(
+                Level::Warning,
+                format!("The project did not close cleanly: {e}"),
+            );
+        }
         self.project_path = None;
         self.current_page = None;
         self.canvas.document_replaced();
+    }
+
+    /// Gives the backend its chance to autosave, and wakes the app up in
+    /// time for the next one even when nothing else repaints.
+    fn tick(&mut self, ctx: &egui::Context) {
+        let now = Instant::now();
+        if now < self.next_tick {
+            ctx.request_repaint_after(self.next_tick - now);
+            return;
+        }
+        let wait = match self.backend.tick() {
+            Ok(next) => {
+                if self.autosave_failing {
+                    self.autosave_failing = false;
+                    self.message(Level::Info, "Autosave works again");
+                }
+                next
+            }
+            Err(e) => {
+                if !self.autosave_failing {
+                    self.autosave_failing = true;
+                    self.message(Level::Warning, format!("Autosave failed: {e}"));
+                }
+                Some(AUTOSAVE_RETRY)
+            }
+        };
+        if let Some(wait) = wait {
+            self.next_tick = now + wait;
+            ctx.request_repaint_after(wait);
+        }
     }
 
     /// Saves to the current file, asking for one if there is none.
@@ -322,10 +395,7 @@ impl NovoApp {
                 true
             }
             Err(e) => {
-                self.message(
-                    Level::Error,
-                    format!("Could not save {}: {e}", path.display()),
-                );
+                self.message(Level::Error, describe_error("save", path, &e));
                 false
             }
         }
@@ -337,10 +407,15 @@ impl NovoApp {
     /// Lays out one frame of the whole window.
     pub fn show(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
-        if let Some(path) = self.open_on_start.take() {
-            self.open_path(&path);
+        if !self.started {
+            self.started = true;
+            match self.open_on_start.take() {
+                Some(path) => self.open_path(&path),
+                None => self.restore_untitled(),
+            }
         }
         self.fix_current_page();
+        self.tick(&ctx);
         self.handle_close_request(&ctx);
         self.update_title(&ctx);
 
@@ -370,12 +445,9 @@ impl NovoApp {
                 .show(ui, properties_panel);
         }
         egui::CentralPanel::no_frame().show(ui, |ui| {
-            let page = self.current_page;
             let open = self
-                .backend
-                .document_mut()
-                .zip(page)
-                .map(|(document, page)| OpenPage { document, page });
+                .current_page
+                .and_then(|page| OpenPage::new(&mut *self.backend, page));
             self.canvas.show(ui, open);
         });
 
@@ -393,6 +465,7 @@ impl NovoApp {
                 None => {}
             }
         }
+        self.recovery_dialog(&ctx);
         self.unsaved_dialog(&ctx);
         self.about_dialog(&ctx);
 
@@ -413,7 +486,10 @@ impl NovoApp {
     }
 
     fn modal_open(&self) -> bool {
-        self.palette.is_open() || self.unsaved_prompt.is_some() || self.show_about
+        self.palette.is_open()
+            || self.unsaved_prompt.is_some()
+            || self.show_about
+            || self.backend.recovery_offer().is_some()
     }
 
     /// Takes the key presses that trigger enabled actions, leaving the rest
@@ -672,6 +748,63 @@ impl NovoApp {
         }
     }
 
+    /// Asks whether to restore the unsaved work a crash left behind. The
+    /// project as last saved stays shown until the user answers.
+    fn recovery_dialog(&mut self, ctx: &egui::Context) {
+        let Some(offer) = self.backend.recovery_offer() else {
+            return;
+        };
+        let name = self.project_name().unwrap_or_default();
+        let when = offer
+            .autosaved_at
+            .map(|t| format!(" from {}", ago(t)))
+            .unwrap_or_default();
+        let mut answer = None;
+        egui::Modal::new(egui::Id::new("recovery")).show(ctx, |ui| {
+            ui.set_width(380.0);
+            ui.heading("Restore unsaved work?");
+            ui.label(format!(
+                "NovoElectric did not close cleanly last time. \"{name}\" has unsaved work{when}."
+            ));
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if ui.button("Restore").clicked() {
+                    answer = Some(true);
+                }
+                if ui.button("Discard").clicked() {
+                    answer = Some(false);
+                }
+            });
+        });
+        // No implicit answer on Escape or a backdrop click: either choice
+        // changes what is on disk, so it takes a deliberate click.
+        if let Some(restore) = answer {
+            self.resolve_recovery(restore);
+        }
+    }
+
+    fn resolve_recovery(&mut self, restore: bool) {
+        match self.backend.resolve_recovery(restore) {
+            Ok(()) if restore => {
+                self.canvas.document_replaced();
+                self.fix_current_page();
+                self.message(Level::Info, "Restored the unsaved work. Save to keep it.");
+            }
+            Ok(()) => {
+                if !self.is_open() {
+                    self.project_path = None;
+                    self.current_page = None;
+                    self.canvas.document_replaced();
+                }
+                self.message(Level::Info, "Discarded the unsaved work");
+            }
+            Err(e) => self.message(
+                Level::Error,
+                format!("Could not discard the unsaved work: {e}"),
+            ),
+        }
+    }
+
     fn answer_unsaved(&mut self, ctx: &egui::Context, next: Discarding, answer: UnsavedAnswer) {
         self.unsaved_prompt = None;
         match answer {
@@ -718,6 +851,54 @@ impl eframe::App for NovoApp {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, Settings::STORAGE_KEY, &self.settings);
     }
+
+    fn on_exit(&mut self) {
+        // A clean close deletes the recovery file, so the next start does
+        // not offer to restore work that was deliberately not saved.
+        if let Err(e) = self.backend.close() {
+            log::warn!("The project did not close cleanly: {e}");
+        }
+    }
+}
+
+fn is_not_found(e: &BackendError) -> bool {
+    matches!(
+        e,
+        BackendError::Storage(novo_storage::StorageError::Io(io))
+            if io.kind() == std::io::ErrorKind::NotFound
+    )
+}
+
+/// One line for the status bar. Storage errors already name the file and
+/// say what is wrong in plain words.
+fn describe_error(verb: &str, path: &Path, e: &BackendError) -> String {
+    use novo_storage::StorageError as S;
+    match e {
+        BackendError::Storage(
+            S::Locked(_) | S::NotAProject(_) | S::NewerFormat { .. } | S::Corrupt { .. },
+        ) => format!("Could not {verb} the project: {e}"),
+        _ if is_not_found(e) => format!(
+            "Could not {verb} {}: the file does not exist",
+            path.display()
+        ),
+        _ => format!("Could not {verb} {}: {e}", path.display()),
+    }
+}
+
+/// "3 minutes ago" style text for a past moment.
+fn ago(t: SystemTime) -> String {
+    let secs = SystemTime::now()
+        .duration_since(t)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    match secs {
+        0..60 => "less than a minute ago".to_owned(),
+        60..120 => "1 minute ago".to_owned(),
+        120..3600 => format!("{} minutes ago", secs / 60),
+        3600..7200 => "1 hour ago".to_owned(),
+        7200..86400 => format!("{} hours ago", secs / 3600),
+        _ => format!("{} days ago", secs / 86400),
+    }
 }
 
 /// Consumes a press of `key` with no modifiers held. egui's own matching is
@@ -744,7 +925,7 @@ fn properties_panel(ui: &mut egui::Ui) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backend::{BackendError, MemoryBackend, new_document};
+    use crate::backend::{MemoryBackend, OpenReport, StorageBackend, new_document};
     use crate::canvas::PlaceholderCanvas;
     use novo_core::Document;
 
@@ -762,9 +943,9 @@ mod tests {
             self.document = Some(doc);
             Ok(())
         }
-        fn open(&mut self, _path: &Path) -> Result<(), BackendError> {
+        fn open(&mut self, _path: &Path) -> Result<OpenReport, BackendError> {
             self.document = Some(new_document("Opened")?);
-            Ok(())
+            Ok(OpenReport::default())
         }
         fn save(&mut self, _path: &Path) -> Result<(), BackendError> {
             if let Some(doc) = &mut self.document {
@@ -772,8 +953,9 @@ mod tests {
             }
             Ok(())
         }
-        fn close(&mut self) {
+        fn close(&mut self) -> Result<(), BackendError> {
             self.document = None;
+            Ok(())
         }
         fn document(&self) -> Option<&Document> {
             self.document.as_ref()
@@ -971,6 +1153,115 @@ mod tests {
             ),
             vec![Action::Redo]
         );
+    }
+
+    fn storage_app() -> NovoApp {
+        app_with(StorageBackend::default())
+    }
+
+    fn page_count(app: &NovoApp) -> usize {
+        app.pages().len()
+    }
+
+    #[test]
+    fn edits_and_undo_reach_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plant.novo");
+        let ctx = egui::Context::default();
+
+        let mut app = storage_app();
+        app.run(&ctx, Action::NewProject);
+        let page = app.current_page.unwrap();
+        let mut open = OpenPage::new(&mut *app.backend, page).unwrap();
+        open.transact("Add page", |tx| tx.add_page("2")).unwrap();
+        open.transact("Add page", |tx| tx.add_page("3")).unwrap();
+        assert!(app.is_dirty());
+        assert!(app.save_to(&path));
+        assert!(!app.is_dirty());
+
+        app.run(&ctx, Action::Undo);
+        assert!(app.is_dirty());
+        assert!(app.save_to(&path));
+        app.run(&ctx, Action::CloseProject);
+        assert!(!app.is_open());
+
+        let mut reopened = storage_app();
+        reopened.open_path(&path);
+        assert_eq!(page_count(&reopened), 2, "{:?}", reopened.messages());
+    }
+
+    #[test]
+    fn a_crash_offers_the_unsaved_work_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plant.novo");
+        crate::backend::tests::crash_after_autosave(&path);
+        let ctx = egui::Context::default();
+
+        let mut app = storage_app();
+        app.open_path(&path);
+        assert_eq!(page_count(&app), 2);
+        assert!(app.modal_open(), "the recovery question blocks the window");
+        frame(&ctx, &mut app, key(egui::Key::N, egui::Modifiers::COMMAND));
+        assert_eq!(page_count(&app), 2, "shortcuts wait for the answer");
+
+        app.resolve_recovery(true);
+        assert!(!app.modal_open());
+        assert_eq!(page_count(&app), 3);
+        assert!(app.is_dirty(), "restored work still needs a save");
+        frame(&ctx, &mut app, Default::default());
+        assert_eq!(app.window_title, "Plant* - NovoElectric");
+    }
+
+    #[test]
+    fn an_unsaved_new_project_is_offered_back_after_a_crash() {
+        let dir = tempfile::tempdir().unwrap();
+        crate::backend::tests::crash_untitled(dir.path());
+        let ctx = egui::Context::default();
+        let mut app = app_with(StorageBackend::with_untitled_dir(dir.path()));
+        frame(&ctx, &mut app, Default::default());
+        assert!(app.is_open());
+        assert!(app.modal_open());
+        app.resolve_recovery(true);
+        assert_eq!(page_count(&app), 2);
+        assert_eq!(app.project_path, None);
+        assert!(app.is_dirty());
+
+        // Discarding instead leaves no project open.
+        let dir = tempfile::tempdir().unwrap();
+        crate::backend::tests::crash_untitled(dir.path());
+        let mut app = app_with(StorageBackend::with_untitled_dir(dir.path()));
+        frame(&ctx, &mut app, Default::default());
+        app.resolve_recovery(false);
+        assert!(!app.is_open());
+    }
+
+    #[test]
+    fn opening_a_missing_recent_file_forgets_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("gone.novo");
+        let mut app = storage_app();
+        app.settings.remember_recent(&path);
+        app.open_path(&path);
+        assert!(app.settings().recent_projects.is_empty());
+        let last = app.messages().last().unwrap();
+        assert_eq!(last.level, Level::Error);
+        assert!(last.text.contains("does not exist"), "{}", last.text);
+    }
+
+    #[test]
+    fn a_file_open_elsewhere_is_reported_plainly() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plant.novo");
+        let ctx = egui::Context::default();
+        let mut first = storage_app();
+        first.run(&ctx, Action::NewProject);
+        assert!(first.save_to(&path));
+
+        let mut second = storage_app();
+        second.open_path(&path);
+        assert!(!second.is_open());
+        let text = &second.messages().last().unwrap().text;
+        assert!(text.contains("already open"), "{text}");
     }
 
     #[test]

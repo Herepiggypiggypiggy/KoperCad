@@ -1484,9 +1484,12 @@ dependencies = [
  "eframe",
  "env_logger",
  "log",
+ "novo-canvas",
  "novo-core",
+ "novo-storage",
  "rfd",
  "serde",
+ "tempfile",
  "winresource",
 ]
 
