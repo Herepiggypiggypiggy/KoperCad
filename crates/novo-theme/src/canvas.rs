@@ -51,6 +51,10 @@ pub struct CanvasPalette {
     pub removed: [u8; 4],
     /// Text on marks, such as the proposal's accept hint.
     pub mark_text: [u8; 4],
+    /// The "+" that shows the snapped cursor position. It is always on
+    /// screen, so it stays a quiet grey rather than copper, which belongs
+    /// to the selection.
+    pub snap_marker: [u8; 4],
 }
 
 /// Converts a palette colour for drawing with egui.
@@ -81,6 +85,7 @@ pub const CANVAS_DARK: CanvasPalette = CanvasPalette {
     modified: [0xD6, 0xA5, 0x5C, 0x80],
     removed: [0xE0, 0x76, 0x6C, 0x80],
     mark_text: [0xC4, 0xC2, 0xBD, 0xFF],
+    snap_marker: [0x85, 0x83, 0x80, 0xFF],
 };
 
 #[cfg(test)]
@@ -131,8 +136,9 @@ mod tests {
             p.error,
         ];
         let rgb = |c: [u8; 4]| [c[0], c[1], c[2]];
-        // Copper belongs to the selection; no mark uses it.
-        for m in marks {
+        // Copper belongs to the selection; no mark, and not the always
+        // visible snap marker, uses it.
+        for m in marks.into_iter().chain([p.snap_marker]) {
             assert_ne!(rgb(m), rgb(p.selection), "{m:?}");
         }
         // A proposal is a fainter form of the hover hue, never as strong.
