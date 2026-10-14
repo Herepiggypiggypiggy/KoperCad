@@ -686,3 +686,57 @@ fn gate1_checks_flag_the_pe_terminal_kind() {
         println!("{:?}: {}", i.severity, i.message);
     }
 }
+
+#[test]
+fn wires_crossing_a_location_boundary_get_suggested_terminals() {
+    let mut doc = Document::default();
+    doc.transact("Draw", |tx| {
+        let page = tx.add_page("1")?;
+        let k1 = tx.add_device(tag("=A1+CAB-K1"), "")?;
+        let k2 = tx.add_device(tag("=A1+CAB-K2"), "")?;
+        let m1 = tx.add_device(tag("=A1+FLD-M1"), "")?;
+        let ks = row_of_pins(tx, page, k1, &["2", "4"], 40.0, 20.0)?;
+        let k2s = row_of_pins(tx, page, k2, &["A1"], 80.0, 20.0)?;
+        let ms = row_of_pins(tx, page, m1, &["U1", "V1"], 40.0, 100.0)?;
+        tx.connect(Endpoint::pin(ks, 0), Endpoint::pin(ms, 0))?;
+        tx.connect(Endpoint::pin(ms, 1), Endpoint::pin(ks, 1))?;
+        // Inside the cabinet: no terminal needed.
+        tx.connect(Endpoint::pin(ks, 1), Endpoint::pin(k2s, 0))?;
+        Ok(())
+    })
+    .unwrap();
+    let suggestions = suggest_terminals(doc.project());
+    assert_eq!(suggestions.len(), 2);
+    assert!(
+        suggestions
+            .iter()
+            .all(|s| s.strip.to_string() == "=A1+CAB-X1")
+    );
+    assert_eq!(suggestions[0].at, Point::new(40.0, 60.0));
+    let (placed, _) = doc
+        .transact("Accept", |tx| accept_suggestions(tx, &suggestions))
+        .unwrap();
+    assert_eq!(placed.len(), 2);
+    let strip = strips(doc.project())[0];
+    let s = screen(doc.project(), strip);
+    let rows: Vec<_> = s
+        .rows
+        .iter()
+        .map(|r| {
+            (
+                r.internal.join(","),
+                r.terminal.clone(),
+                r.external.join(","),
+            )
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            ("=A1+CAB-K1:2".into(), "1".into(), "=A1+FLD-M1:U1".into()),
+            ("=A1+CAB-K1:4".into(), "2".into(), "=A1+FLD-M1:V1".into()),
+        ]
+    );
+    // Accepted terminals end the suggestions.
+    assert!(suggest_terminals(doc.project()).is_empty());
+}

@@ -52,6 +52,7 @@ mod screen;
 mod settings;
 mod strip;
 mod style;
+mod suggest;
 
 pub use check::{Issue, IssueKind, Severity, check};
 pub use naming::{
@@ -66,9 +67,10 @@ pub use place::{
 pub use screen::{Screen, ScreenRow, screen};
 pub use settings::{JOIN_LINK_KEY, JoinLink, SAME_NAME_KEY, SameName, Settings};
 pub use strip::{
-    Build, Row, StripView, add_spares, explain, free_jumper, join_duplicates, renumber, reorder,
-    set_jumper, set_kind, strip_view, strips,
+    Build, Row, StripView, add_spares, explain, free_jumper, join_duplicates, renumber,
+    renumber_preview, reorder, set_jumper, set_kind, set_level, strip_view, strips,
 };
 pub use style::{
     Style, clear_override, default_symbol, overrides, set_strip_style, strip_style, style_of,
 };
+pub use suggest::{Suggestion, accept_suggestions, suggest_terminals};

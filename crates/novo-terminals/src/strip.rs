@@ -354,17 +354,18 @@ pub fn join_duplicates(tx: &mut Tx<'_>, strip: DeviceId) -> Result<Vec<TerminalI
     Ok(merges.into_iter().map(|(gone, _)| gone).collect())
 }
 
-/// Renumbers the numbered terminals of a strip `1, 2, 3, ...` in strip
-/// order. Records that share a number keep sharing it (a joined terminal
-/// stays joined). PE and N terminals and other named ones keep their names.
-pub fn renumber(tx: &mut Tx<'_>, strip: DeviceId) -> Result<()> {
-    let numbered: Vec<(TerminalId, String)> = tx
-        .project()
+/// What [`renumber`] would do: each numbered terminal with its current and
+/// new name, in strip order. Terminals that keep their number are included,
+/// so a preview can show the whole strip.
+pub fn renumber_preview(project: &Project, strip: DeviceId) -> Vec<(TerminalId, String, String)> {
+    let numbered: Vec<(TerminalId, String)> = project
         .terminals_of_strip(strip)
         .into_iter()
         .filter(|t| !t.name.is_empty() && t.name.chars().all(|c| c.is_ascii_digit()))
         .map(|t| (t.id, t.name.clone()))
         .collect();
+    // Records that share a number keep sharing it (a joined terminal stays
+    // joined).
     let mut new_names: Vec<(String, String)> = Vec::new();
     for (_, old) in &numbered {
         if !new_names.iter().any(|(o, _)| o == old) {
@@ -372,13 +373,30 @@ pub fn renumber(tx: &mut Tx<'_>, strip: DeviceId) -> Result<()> {
             new_names.push((old.clone(), next));
         }
     }
-    for (id, old) in numbered {
-        let name = new_names
-            .iter()
-            .find(|(o, _)| *o == old)
-            .map(|(_, n)| n.clone())
-            .expect("every old name is mapped");
+    numbered
+        .into_iter()
+        .map(|(id, old)| {
+            let new = new_names
+                .iter()
+                .find(|(o, _)| *o == old)
+                .map(|(_, n)| n.clone())
+                .expect("every old name is mapped");
+            (id, old, new)
+        })
+        .collect()
+}
+
+/// Renumbers the numbered terminals of a strip `1, 2, 3, ...` in strip
+/// order, as [`renumber_preview`] shows. PE and N terminals and other named
+/// ones keep their names.
+pub fn renumber(tx: &mut Tx<'_>, strip: DeviceId) -> Result<()> {
+    for (id, _, name) in renumber_preview(tx.project(), strip) {
         tx.update::<Terminal>(id, |t| t.name = name)?;
     }
     Ok(())
+}
+
+/// Moves a terminal to another level of a multi-level terminal (from 1).
+pub fn set_level(tx: &mut Tx<'_>, terminal: TerminalId, level: u8) -> Result<()> {
+    tx.update::<Terminal>(terminal, |t| t.level = level.max(1))
 }
