@@ -193,8 +193,10 @@ joined inside the symbol: the `poles` of kinds that never open
 (`ALWAYS_CLOSED`: `conductor` and `overload`, whose main circuit 1-2, 3-4,
 5-6 is the heater elements in series) plus the top-level `bridges` field.
 Use the field for permanent links inside devices whose behavior is something
-else, such as `bridges = [["PE", "PE2"]]` on a drive, so a PE continuity
-check sees the motor behind it as earthed.
+else: series elements that always conduct (current transformer primary,
+ammeter, line reactor, EMC filter lines) and links such as
+`bridges = [["PE", "PE2"]]` on a drive, so a PE continuity check sees the
+motor behind it as earthed.
 
 `Symbol::pass_through()` adds the switched `poles` of contacts, breakers and
 fuses (`PASS_THROUGH`). A potential (L1, N, 24V) and its naming carry through

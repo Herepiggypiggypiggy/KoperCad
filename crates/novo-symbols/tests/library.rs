@@ -387,3 +387,20 @@ fn switching_devices_pass_potentials_but_loads_do_not() {
         assert!(lib.get(id).unwrap().pass_through().is_empty(), "{id}");
     }
 }
+
+#[test]
+fn series_elements_that_always_conduct_are_bridged() {
+    let lib = builtin();
+    let pairs = |id: &str| -> Vec<Vec<String>> {
+        let s = lib.get(id).unwrap();
+        s.bridges()
+            .iter()
+            .map(|g| g.iter().map(|&i| s.connections[i].id.clone()).collect())
+            .collect()
+    };
+    assert_eq!(pairs("iec/measuring/current_transformer"), [["P1", "P2"]]);
+    assert_eq!(pairs("iec/measuring/ammeter"), [["1", "2"]]);
+    assert!(pairs("iec/measuring/voltmeter").is_empty());
+    assert_eq!(pairs("iec/transformers/reactor_3ph").len(), 3);
+    assert_eq!(pairs("iec/transformers/emc_filter").len(), 4);
+}
