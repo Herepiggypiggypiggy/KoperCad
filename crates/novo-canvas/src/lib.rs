@@ -15,10 +15,13 @@
 //! - [`Tessellator`]: primitives to triangles; zoom-independent meshes.
 //! - [`render::CanvasRenderer`]: wgpu pipeline that draws meshes.
 //! - [`widget`] (feature `egui`): an egui widget wiring all of it together.
+//! - [`model`] (feature `model`): keeps a scene in sync with a `novo-core` page.
 
 pub mod demo;
 pub mod geom;
 pub mod grid;
+#[cfg(feature = "model")]
+pub mod model;
 pub mod render;
 pub mod scene;
 pub mod selection;

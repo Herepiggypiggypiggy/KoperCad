@@ -1328,6 +1328,7 @@ dependencies = [
  "egui-wgpu",
  "glam",
  "naga",
+ "novo-core",
  "pollster",
  "wgpu",
 ]

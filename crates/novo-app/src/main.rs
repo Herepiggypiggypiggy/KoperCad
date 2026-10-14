@@ -24,15 +24,23 @@ fn main() -> eframe::Result {
 }
 
 struct App {
-    /// Placeholder page until the schematic editor (WS-06) draws real ones.
-    page: novo_canvas::Scene,
+    /// Demo project until the schematic editor (WS-06) can draw real pages.
+    _doc: novo_core::Document,
+    page: novo_canvas::model::PageScene,
     canvas: novo_canvas::widget::CanvasView,
 }
 
 impl Default for App {
     fn default() -> Self {
+        let (doc, page) = novo_canvas::model::demo_document().expect("demo project builds");
+        let page = novo_canvas::model::PageScene::new(
+            doc.project(),
+            page,
+            &novo_canvas::model::PlaceholderArt,
+        );
         Self {
-            page: novo_canvas::demo::sample_page(),
+            _doc: doc,
+            page,
             canvas: novo_canvas::widget::CanvasView::new(),
         }
     }
@@ -49,7 +57,7 @@ impl eframe::App for App {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
             .show(ui, |ui| {
-                self.canvas.show(ui, &self.page);
+                self.canvas.show(ui, self.page.scene());
             });
     }
 }
