@@ -26,10 +26,18 @@
         Remove-Item -Recurse -Force $ghDir -ErrorAction SilentlyContinue
         Expand-Archive $zip -DestinationPath $ghDir
         Remove-Item -Force $zip
-        $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-        if ("$userPath" -notlike "*$ghBin*") {
-            [Environment]::SetEnvironmentVariable('Path', ("$userPath".TrimEnd(';') + ";$ghBin").TrimStart(';'), 'User')
-        }
+        # Edit HKCU\Environment directly: [Environment]::SetEnvironmentVariable
+        # would expand entries such as %USERPROFILE%\... into fixed paths.
+        # New terminals pick it up after the next sign-in; run-latest.ps1
+        # finds the portable gh on its own.
+        $envKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
+        try {
+            $userPath = $envKey.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+            if ("$userPath" -notlike "*$ghBin*") {
+                $newPath = ("$userPath".TrimEnd(';') + ";$ghBin").TrimStart(';')
+                $envKey.SetValue('Path', $newPath, [Microsoft.Win32.RegistryValueKind]::ExpandString)
+            }
+        } finally { $envKey.Close() }
         $env:Path += ";$ghBin"
     }
 
@@ -55,5 +63,7 @@
     # policy blocks script files, and changing it machine-wide needs admin.
     powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $tmp 'install-desktop-shortcut.ps1')
     if ($LASTEXITCODE -ne 0) { throw 'Creating the shortcut failed.' }
+    # The installer copied the launcher into place; the downloads are no longer needed.
+    Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
     Write-Host 'Done. Double-click "NovoElectric (latest)" on the desktop.'
 }

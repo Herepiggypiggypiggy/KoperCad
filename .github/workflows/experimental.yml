@@ -69,35 +69,65 @@ jobs:
           # Merges every open PR onto HEAD in PR order. With "check", a PR
           # whose merge stops novo-app from compiling is dropped again, so
           # one broken PR no longer takes every other PR out of the build.
-          # Kept outside the work tree: merged PRs cannot change it.
+          # Kept outside the work tree so a merge or checkout cannot change
+          # it. Build scripts run by `cargo check` could still write here;
+          # that is acceptable because this job holds only a read token and
+          # builds only same-repository PRs.
           cat > "$state/merge-prs.sh" <<'SCRIPT'
           set -u
           check="${1:-}"
           echo "main $(git rev-parse --short HEAD)" > "$state/merged.txt"
           : > "$state/skipped.txt"
-          while IFS=$'\t' read -r n title; do
-            git fetch -q origin "pull/$n/head"
+          # The PR list is read on fd 3, so nothing in the loop (git, cargo,
+          # build scripts) can consume it through stdin.
+          while IFS=$'\t' read -r n title <&3; do
             before=$(git rev-parse HEAD)
+            if ! git fetch -q origin "pull/$n/head"; then
+              echo "#$n $title (could not fetch the PR head)" >> "$state/skipped.txt"
+              continue
+            fi
+            head=$(git rev-parse --short FETCH_HEAD)
             note=""
-            if ! git merge -q --no-edit FETCH_HEAD; then
-              if [ "$(git diff --name-only --diff-filter=U)" = "Cargo.lock" ]; then
-                # Lock-only clash: keep ours, cargo re-resolves it during the build.
-                git checkout --ours Cargo.lock && git add Cargo.lock
+            if ! out=$(git merge -q --no-edit FETCH_HEAD 2>&1); then
+              unmerged=$(git diff --name-only --diff-filter=U)
+              if [ "$unmerged" = "Cargo.lock" ]; then
+                # Lock-only clash: keep ours; cargo re-resolves it below or
+                # during the build.
+                git checkout -q --ours Cargo.lock && git add Cargo.lock
                 git commit -q --no-edit
                 note=" (Cargo.lock regenerated)"
               else
-                git merge --abort
-                echo "#$n $title (merge conflict)" >> "$state/skipped.txt"
+                # Reset rather than `git merge --abort`: when git refused to
+                # start the merge there is nothing to abort.
+                git reset -q --hard "$before"
+                if [ -n "$unmerged" ]; then
+                  echo "#$n $title (merge conflict)" >> "$state/skipped.txt"
+                else
+                  echo "#$n $title (merge failed: $(echo "$out" | head -n 1))" >> "$state/skipped.txt"
+                fi
                 continue
               fi
             fi
-            if [ "$check" = check ] && ! cargo check -q -p novo-app; then
-              git reset -q --hard "$before"
-              echo "#$n $title (does not compile with the PRs before it)" >> "$state/skipped.txt"
-              continue
+            if [ "$check" = check ]; then
+              if ! cargo check -q -p novo-app < /dev/null; then
+                git reset -q --hard "$before"
+                git clean -qfd
+                echo "#$n $title (does not compile with the PRs before it)" >> "$state/skipped.txt"
+                continue
+              fi
+              # cargo check re-resolves Cargo.lock after a lock-only clash.
+              # Commit that as part of this PR's merge result so the next
+              # merge starts from a clean tree and sees the resolved lock,
+              # and so dropping a later PR (reset to its $before) keeps it.
+              if ! git diff --quiet -- Cargo.lock; then
+                git commit -q -m "Re-resolve Cargo.lock after merging #$n" -- Cargo.lock
+              fi
+              # Anything else a build script left behind goes too.
+              git reset -q --hard HEAD
+              git clean -qfd
             fi
-            echo "#$n $(git rev-parse --short FETCH_HEAD) $title$note" >> "$state/merged.txt"
-          done < "$state/prs.tsv"
+            echo "#$n $head $title$note" >> "$state/merged.txt"
+          done 3< "$state/prs.tsv"
           cat "$state/merged.txt" "$state/skipped.txt"
           SCRIPT
           bash "$state/merge-prs.sh"
