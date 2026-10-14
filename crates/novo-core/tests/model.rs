@@ -1191,6 +1191,35 @@ fn multi_level_terminals_keep_levels_apart() {
         err,
         ModelError::TerminalLevels { terminals: 0, .. }
     ));
+    // The same terminal cannot sit on two levels.
+    let err = doc
+        .transact("x", |tx| {
+            tx.update::<SymbolInstance>(block, |s| {
+                s.role = SymbolRole::Terminal {
+                    terminals: vec![upper, upper],
+                }
+            })
+        })
+        .unwrap_err();
+    assert!(matches!(err, ModelError::TerminalLevels { .. }));
+
+    // A single terminal owns every pin, bridged or not.
+    doc.transact("x", |tx| {
+        tx.update::<SymbolInstance>(block, |s| {
+            s.role = SymbolRole::Terminal {
+                terminals: vec![upper],
+            }
+        })
+    })
+    .unwrap();
+    let p = doc.project();
+    let s = p.symbol(block).unwrap();
+    assert!((0..4).all(|pin| s.terminal_of_pin(pin) == Some(upper)));
+    assert!(
+        p.netlist()
+            .connected(Endpoint::pin(block, 0), Endpoint::pin(block, 3))
+    );
+    doc.undo().unwrap();
 
     // Deleting one level's terminal deletes the block that draws it.
     doc.transact("x", |tx| tx.remove(lower)).unwrap();

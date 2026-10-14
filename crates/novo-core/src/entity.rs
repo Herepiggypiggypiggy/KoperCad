@@ -231,7 +231,7 @@ pub enum SymbolRole {
     /// One or more terminals of a terminal strip. A single-level terminal
     /// has one entry. A multi-level terminal block lists one terminal per
     /// level: `terminals[i]` owns the pins of `bridges[i]`, so the levels stay
-    /// separate nets. With one terminal and no bridges, every pin belongs to it.
+    /// separate nets. A single terminal owns every pin.
     Terminal { terminals: Vec<TerminalId> },
     /// An interruption point (off-page connector). All interruption points
     /// with the same name are electrically one node.
@@ -286,7 +286,7 @@ impl SymbolInstance {
             return None;
         }
         match terminals.as_slice() {
-            [single] if self.bridges.is_empty() => Some(*single),
+            [single] => Some(*single),
             _ => self
                 .bridges
                 .iter()

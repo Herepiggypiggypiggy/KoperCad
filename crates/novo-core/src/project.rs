@@ -327,7 +327,11 @@ impl Project {
             Record::Symbol(symbol) => {
                 if let SymbolRole::Terminal { terminals } = &symbol.role
                     && (terminals.is_empty()
-                        || (terminals.len() > 1 && terminals.len() != symbol.bridges.len()))
+                        || (terminals.len() > 1 && terminals.len() != symbol.bridges.len())
+                        || terminals
+                            .iter()
+                            .enumerate()
+                            .any(|(i, t)| terminals[..i].contains(t)))
                 {
                     return Err(ModelError::TerminalLevels {
                         symbol: symbol.id,
