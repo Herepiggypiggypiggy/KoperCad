@@ -854,9 +854,9 @@ fn gap_assign_parts_from_the_catalog() {
     let dir = tempfile::tempdir().unwrap();
     let (mut flow, page) = new_flow(&library, dir.path());
     build(&mut flow, page, true);
-    // Five devices and the four -X1 terminals, which -X1's part covers once
-    // it has one.
-    assert_eq!(novo_parts::missing_parts(flow.project()).len(), 5 + 4);
+    // Four devices and the four -X1 terminals. The strip itself carries no
+    // article: its terminals do.
+    assert_eq!(novo_parts::missing_parts(flow.project()).len(), 4 + 4);
 
     let catalog = novo_parts::Catalog::starter();
     let devices: Vec<DeviceId> = flow.project().devices().map(|d| d.id).collect();
@@ -876,6 +876,26 @@ fn gap_assign_parts_from_the_catalog() {
         flow.run(command);
         assert_eq!(flow.store.doc().undo_depth(), depth + 1);
     }
+    // The strip's top suggestion is a feed-through block: it became the
+    // strip's part for feed-through terminals, so only -X1:PE still needs
+    // one, and a PE block covers it.
+    let missing = novo_parts::missing_parts(flow.project());
+    assert_eq!(missing.len(), 1, "{missing:?}");
+    let strip = flow
+        .project()
+        .devices()
+        .find(|d| d.kind == DeviceKind::TerminalStrip)
+        .unwrap()
+        .id;
+    let pe_block = novo_parts::suggest_for_device(&catalog, flow.project(), strip, "pe", 1)[0];
+    let command = novo_parts::assign_part(
+        flow.project(),
+        &[strip],
+        pe_block,
+        novo_parts::AssignMode::Replace,
+    )
+    .unwrap();
+    flow.run(command);
     assert_eq!(
         novo_parts::missing_parts(flow.project()),
         Vec::<AnyId>::new()

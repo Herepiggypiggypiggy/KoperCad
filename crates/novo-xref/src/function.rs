@@ -81,6 +81,40 @@ impl ContactKind {
         self != ContactKind::Other
     }
 
+    /// EN 50005 function digits of an auxiliary contact, after the ordinal:
+    /// normally closed `1 2`, normally open `3 4`, changeover `1 2 4`.
+    pub(crate) fn function_digits(self) -> Option<&'static [char]> {
+        match self {
+            ContactKind::NormallyOpen => Some(&['3', '4']),
+            ContactKind::NormallyClosed => Some(&['1', '2']),
+            ContactKind::Changeover => Some(&['1', '2', '4']),
+            _ => None,
+        }
+    }
+
+    /// True when connection designations `pins` (sorted, as in
+    /// [`Reference::pins`](crate::Reference::pins)) already say what kind
+    /// of contact this is: `13-14` is normally open by EN 50005, `1-2 3-4`
+    /// single digits are main contacts.
+    pub fn numbered_as(self, pins: &str) -> bool {
+        let terms: Vec<&str> = pins.split([' ', '-']).filter(|t| !t.is_empty()).collect();
+        if terms.is_empty() {
+            return false;
+        }
+        match self {
+            ContactKind::Power => terms
+                .iter()
+                .all(|t| t.len() == 1 && t.as_bytes()[0].is_ascii_digit()),
+            _ => self.function_digits().is_some_and(|digits| {
+                terms.len() == digits.len()
+                    && terms.iter().zip(digits).all(|(t, d)| {
+                        let b = t.as_bytes();
+                        b.len() == 2 && (b'1'..=b'9').contains(&b[0]) && b[1] == *d as u8
+                    })
+            }),
+        }
+    }
+
     /// Short label used in text contact images.
     pub fn label(self) -> &'static str {
         match self {
@@ -134,6 +168,19 @@ mod tests {
         assert_eq!(c("iec/contacts/thermal_nc"), ContactKind::NormallyClosed);
         assert_eq!(c("iec/contactors/main_3p"), ContactKind::Power);
         assert_eq!(c("iec/coils/relay"), ContactKind::Other);
+    }
+
+    #[test]
+    fn numbering_tells_the_kind() {
+        use ContactKind::*;
+        assert!(NormallyOpen.numbered_as("13-14"));
+        assert!(NormallyClosed.numbered_as("21-22"));
+        assert!(Changeover.numbered_as("11-12-14"));
+        assert!(Power.numbered_as("1-2 3-4 5-6"));
+        assert!(!NormallyOpen.numbered_as("21-22"));
+        assert!(!NormallyOpen.numbered_as("A-B"));
+        assert!(!NormallyOpen.numbered_as(""));
+        assert!(!Power.numbered_as("L1-T1"));
     }
 
     #[test]

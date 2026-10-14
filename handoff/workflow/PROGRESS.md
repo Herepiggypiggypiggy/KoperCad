@@ -33,3 +33,14 @@
 2026-10-14 21:44 UTC #92 merged at e431274; told WS-06, WS-11 (WS-01 earlier) about dashed 2 px highlight. No open PR of mine.
 2026-10-14 21:45 UTC WS-06: dashed 2 px highlight committed (5089dde), PR after #91 merges
 2026-10-14 21:53 UTC Answered WS-02 on blocks (use BlockDefinition/Instance in Gate 1; project-first storage + libraries; tags allocated, properties/texts substituted, parts proposed). Recording in DESIGN §7 PR
+2026-10-14 21:55 UTC Opened #100 (blocks storage/substitution, head 34eca56); sent to design reviewer and lead
+2026-10-14 21:55 UTC #100 merged. No open PR of mine.
+2026-10-14 22:04 UTC Lead asked: n of m per section (confirmed by design reviewer on #96); opening docs PR
+2026-10-14 22:05 UTC Opened #106 (n of m per section, head 9f5e0fb); sent to design reviewer and lead
+2026-10-14 22:04 UTC WS-03: junction rule done locally (105d8ff, canvas-drawing; dots only at 3+); PR head to follow
+- 2026-10-14: WS-02 confirmed the blocks model (BlockDefinition in project, BlockInstance per placement, per-member overridden fields plus detached/reason); Gate 1 covers place_block and parameter edits; lands after #107, Structure+Dismissal and page freeze.
+2026-10-14 22:05 UTC #106 merged. No open PR of mine.
+2026-10-14 22:10 UTC Lead asked for non-dotted generated sheet names; opened #108 (20a, 20b ... 20aa; head e90b056); sent to design reviewer, lead, outputs
+2026-10-14 22:09 UTC Outputs had proposed 20-1; told them letters (20a) per #108 ('-' is the tag prefix, '/' the structure separator)
+2026-10-14 22:10 UTC #108 READY (e90b056). Accepted reviewer's optional note: skip i, l, o in sheet letters; follow-up docs PR after #108 merges; outputs told
+2026-10-14 22:10 UTC #108 merged; opening follow-up for skip i/l/o

@@ -193,6 +193,37 @@ fn coil_k1_places_the_coil_of_the_existing_device() {
     assert_eq!(tags(&doc), ["-K1", "-K7"]);
 }
 
+#[test]
+fn scripts_cannot_give_a_device_a_second_main_function() {
+    let (mut doc, page, editor) = setup();
+    let coil = editor.catalog.get("iec/coils/relay").unwrap().clone();
+    let options = PlaceOptions {
+        parent: Some("-K1".parse().unwrap()),
+        ..PlaceOptions::new()
+    };
+    let place = |doc: &mut Document, x: f64| {
+        doc.transact("Place", |tx| {
+            edit::place(
+                tx,
+                page,
+                &coil,
+                novo_core::Placement::at(p(x, 40.0)),
+                &options,
+            )
+        })
+    };
+    let (first, _) = place(&mut doc, 40.0).unwrap();
+    let k1 = doc.project().devices().next().unwrap().id;
+    assert_eq!(edit::main_symbol(doc.project(), k1), Some(first));
+    let depth = doc.undo_depth();
+    assert_eq!(
+        place(&mut doc, 80.0).unwrap_err(),
+        novo_core::ModelError::AlreadyExists(first.into())
+    );
+    assert_eq!(doc.undo_depth(), depth);
+    assert_eq!(doc.project().symbols().count(), 1);
+}
+
 /// Places the Gate 1 main circuit in one column: fuses, contactor,
 /// overload and motor stacked 8 mm apart line up pin for pin.
 fn main_circuit(doc: &mut Document, page: PageId, editor: &mut Editor, gap: f64) -> [Point; 4] {

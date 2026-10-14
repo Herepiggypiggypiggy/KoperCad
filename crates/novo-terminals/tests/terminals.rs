@@ -1584,3 +1584,32 @@ fn rename_into_a_name_being_renamed_works_under_refuse() {
     doc.undo().unwrap();
     assert_eq!(names_of(doc.project(), strip), ["X", "XX", "XXX"]);
 }
+
+#[test]
+fn kind_change_leaves_a_terminal_with_its_own_symbol_drawn_as_it_is() {
+    // A terminal drawn with its own symbol, here one the built-in library
+    // does not know (a user or newer library symbol), keeps that drawing
+    // when its kind changes; only the kind changes.
+    let mut doc = Document::default();
+    let (pages, _) = doc.transact("Draw", two_pages).unwrap();
+    let (placed, _) = doc
+        .transact("T", |tx| {
+            let strip = strip_by_tag(tx, "-X1")?;
+            let p = place_named(tx, strip, drop_at(pages[0].1), "1", None)?;
+            tx.set_property(
+                p.terminal,
+                "symbol",
+                Some(Value::Text("user/my_terminal".into())),
+            )?;
+            Ok(p)
+        })
+        .unwrap();
+    let before = doc.project().symbol(placed.symbol).unwrap().clone();
+    doc.transact("Kind", |tx| {
+        set_kind(tx, placed.terminal, TerminalKind::Fuse)
+    })
+    .unwrap();
+    let t = doc.project().terminal(placed.terminal).unwrap();
+    assert_eq!(t.kind, TerminalKind::Fuse);
+    assert_eq!(doc.project().symbol(placed.symbol).unwrap(), &before);
+}

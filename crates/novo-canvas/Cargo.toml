@@ -7,8 +7,11 @@ license.workspace = true
 
 [features]
 default = ["egui", "model"]
+# The wgpu renderer (`render`). Headless users (PDF export, novo-cli,
+# novo-py) turn default features off and never link wgpu.
+gpu = ["dep:wgpu"]
 # egui widget and paint callback for embedding the canvas in eframe.
-egui = ["dep:egui", "dep:egui-wgpu"]
+egui = ["gpu", "dep:egui", "dep:egui-wgpu"]
 # Adapter that draws novo-core pages. The rest of the crate is model-agnostic.
 model = ["dep:novo-core"]
 
@@ -18,13 +21,17 @@ egui = { workspace = true, optional = true }
 egui-wgpu = { workspace = true, optional = true }
 glam = { workspace = true }
 novo-core = { workspace = true, optional = true }
-wgpu = { workspace = true }
+wgpu = { workspace = true, optional = true }
 
 [dev-dependencies]
 eframe = { workspace = true }
 novo-core = { workspace = true }
 naga = { version = "30", features = ["wgsl-in"] }
 pollster = "1"
+
+[[test]]
+name = "gpu"
+required-features = ["gpu"]
 
 [[example]]
 name = "stress"

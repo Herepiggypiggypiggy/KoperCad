@@ -117,7 +117,7 @@ fn row(project: &Project, rules: TerminalRules, group: &[&Terminal]) -> Row {
         terminals: group.iter().map(|t| t.id).collect(),
         kind: first.kind,
         jumper: first.jumper,
-        part: style_of(project, first.id).and_then(|s| s.part),
+        part: crate::style::terminal_part(project, first.id),
         occurrences,
         build: Build {
             clamps,
@@ -302,19 +302,20 @@ pub fn set_jumper(
 }
 
 /// Changes the kind of a terminal and redraws it with its strip's symbol for
-/// that kind (or its own override), refitting the connection points to the
-/// new symbol. Refused, with nothing changed, when a drawing's wires leave
-/// no room for the new symbol (see [`crate::redraw`]).
+/// that kind, refitting the connection points to the new symbol. A terminal
+/// with a symbol override of its own keeps its drawing. Refused, with
+/// nothing changed, when a drawing's wires leave no room for the new symbol
+/// (see [`crate::redraw`]).
 pub fn set_kind(tx: &mut Tx<'_>, terminal: TerminalId, kind: TerminalKind) -> Result<()> {
     tx.update::<Terminal>(terminal, |t| t.kind = kind)?;
     if let Some(style) = style_of(tx.project(), terminal) {
+        // A terminal drawn with its own symbol keeps it: that symbol does
+        // not depend on the kind, and may be one the library does not know.
         let symbols: Vec<_> = tx
             .project()
             .symbols_of_terminal(terminal)
             .into_iter()
-            .filter(
-                |s| matches!(&s.role, SymbolRole::Terminal { terminals } if terminals.len() == 1),
-            )
+            .filter(|s| crate::style::draws_only_inherited(tx.project(), s))
             .map(|s| s.id)
             .collect();
         for id in symbols {

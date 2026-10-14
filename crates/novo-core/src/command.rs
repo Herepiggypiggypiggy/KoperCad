@@ -72,6 +72,14 @@ pub enum Command {
         symbol: SymbolId,
         role: SymbolRole,
     },
+    /// Moves symbols, junctions and free texts to a page with their wires
+    /// and labels; see [`Tx::move_to_page`].
+    MoveToPage {
+        items: Vec<AnyId>,
+        page: PageId,
+        #[serde(default)]
+        offset: Point,
+    },
     AddJunction {
         page: PageId,
         position: Point,
@@ -131,6 +139,10 @@ pub enum Command {
         set: PotentialSet,
         #[serde(default)]
         frequency_hz: Option<f64>,
+        /// Prefix for an isolated system's own potentials; see
+        /// [`Tx::add_potential_system`].
+        #[serde(default)]
+        prefix: String,
     },
     /// Feeds a system's potentials from a source symbol's pins, in order.
     FeedSystem {
@@ -238,6 +250,7 @@ impl Command {
             Command::AddCable { .. } => "Add cable".into(),
             Command::AssignCore { .. } => "Assign cable core".into(),
             Command::AddPart { .. } => "Add part".into(),
+            Command::MoveToPage { .. } => "Move to page".into(),
             Command::AssignPart { .. } => "Assign part".into(),
             Command::SetProperty { .. } => "Set property".into(),
             Command::Replace { .. } => "Edit".into(),
@@ -359,8 +372,10 @@ impl Tx<'_> {
                 name,
                 set,
                 frequency_hz,
+                prefix,
             } => {
-                let (system, created) = self.add_potential_system(name, set, frequency_hz)?;
+                let (system, created) =
+                    self.add_potential_system(name, set, frequency_hz, &prefix)?;
                 return Ok(std::iter::once(system.into())
                     .chain(created.into_iter().map(AnyId::from))
                     .collect());
@@ -403,6 +418,14 @@ impl Tx<'_> {
             Command::AddCable { tag, cores } => self.add_cable(tag, cores)?.into(),
             Command::AssignCore { cable, core, wire } => {
                 self.assign_core(cable, core, wire)?;
+                return Ok(Vec::new());
+            }
+            Command::MoveToPage {
+                items,
+                page,
+                offset,
+            } => {
+                self.move_to_page(&items, page, offset)?;
                 return Ok(Vec::new());
             }
             Command::AddPart {

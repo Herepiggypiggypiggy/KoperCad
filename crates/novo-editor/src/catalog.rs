@@ -534,6 +534,15 @@ mod tests {
             class_of("iec/protection/overload_relay"),
             SymbolClass::Main { letter: "F" }
         );
+        // Breakers by purpose (DESIGN.md letter codes): MCB F, MPCB Q.
+        assert_eq!(
+            class_of("iec/protection/mcb_1p"),
+            SymbolClass::Main { letter: "F" }
+        );
+        assert_eq!(
+            class_of("iec/protection/motor_protection_breaker"),
+            SymbolClass::Main { letter: "Q" }
+        );
         assert_eq!(
             class_of("iec/contacts/thermal_nc"),
             SymbolClass::Child { letter: "F" }

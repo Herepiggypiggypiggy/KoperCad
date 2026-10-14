@@ -1,0 +1,221 @@
+//! Dutch aliases for command words (DESIGN.md section 3, "Language").
+//!
+//! Every command has its English label, keywords and verbs in
+//! [`crate::commands`]; this table adds the Dutch words. Both languages
+//! always match, whatever the UI language, so a colleague's habit still
+//! works: `hernummer pagina` is `renumber page`, `alles accepteren` is
+//! `accept all`. Device tags, IEC letter codes, units and potential names
+//! are never translated, so nothing here touches them.
+
+/// The Dutch words for one command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Aliases {
+    /// A command id from [`crate::commands::COMMANDS`].
+    pub command: &'static str,
+    /// Verb phrases, like the command's English `verbs`.
+    pub verbs: &'static [&'static str],
+    /// Search words, like the command's English label and keywords.
+    pub words: &'static [&'static str],
+}
+
+const fn nl(
+    command: &'static str,
+    verbs: &'static [&'static str],
+    words: &'static [&'static str],
+) -> Aliases {
+    Aliases {
+        command,
+        verbs,
+        words,
+    }
+}
+
+/// Dutch words per command.
+pub const DUTCH: &[Aliases] = &[
+    // Project
+    nl("file.new", &[], &["nieuw project", "nieuw"]),
+    nl("file.open", &[], &["project openen", "openen"]),
+    nl("file.save", &[], &["opslaan", "bewaren"]),
+    nl("file.save_as", &[], &["opslaan als"]),
+    nl("file.close", &[], &["project sluiten", "sluiten"]),
+    nl("page.new", &["nieuwe pagina", "pagina"], &["blad"]),
+    nl("project.rules", &["regels"], &["nummering", "instellingen"]),
+    nl("file.quit", &[], &["afsluiten", "stoppen"]),
+    // Draw
+    nl(
+        "tool.repeat",
+        &[],
+        &["herhaal laatste", "herhalen", "opnieuw"],
+    ),
+    nl("tool.place", &[], &["plaatsen", "invoegen", "component"]),
+    nl("tool.connect", &[], &["verbinden", "draad"]),
+    nl("edit.rotate", &[], &["draaien", "roteren"]),
+    nl("edit.mirror", &[], &["spiegelen"]),
+    nl(
+        "proposal.accept",
+        &["accepteren", "accepteer"],
+        &["voorstel accepteren"],
+    ),
+    nl(
+        "proposal.accept_all",
+        &["alles accepteren", "accepteer alles"],
+        &["alle voorstellen accepteren"],
+    ),
+    nl("proposal.next", &[], &["volgend voorstel"]),
+    nl("draw.tidy", &["opruimen", "netjes"], &["routes opruimen"]),
+    // Edit
+    nl("edit.undo", &[], &["ongedaan maken", "terugdraaien"]),
+    nl("edit.redo", &[], &["opnieuw uitvoeren"]),
+    nl("edit.copy", &[], &["kopiëren", "kopieren"]),
+    nl("edit.cut", &[], &["knippen"]),
+    nl("edit.paste", &[], &["plakken"]),
+    nl("edit.paste_keep_tags", &[], &["plakken met originele tags"]),
+    nl("edit.duplicate", &[], &["dupliceren", "kopie"]),
+    nl("edit.select_all", &[], &["alles selecteren"]),
+    nl("edit.delete", &[], &["verwijderen", "wissen"]),
+    nl("edit.rename", &[], &["hernoemen", "tag wijzigen"]),
+    nl(
+        "edit.renumber",
+        &["hernummeren", "hernummer"],
+        &["nummering", "apparaten hernummeren"],
+    ),
+    nl("edit.escape", &[], &["annuleren"]),
+    // Navigate
+    nl("nav.partner", &[], &["naar partner", "kruisverwijzing"]),
+    nl(
+        "nav.all_references",
+        &[],
+        &["alle verwijzingen", "waar gebruikt"],
+    ),
+    nl("nav.back", &[], &["terug"]),
+    nl("nav.forward", &[], &["vooruit"]),
+    nl("nav.previous_page", &[], &["vorige pagina"]),
+    nl("nav.next_page", &[], &["volgende pagina"]),
+    nl("nav.changes", &["wijzigingen"], &["gewijzigd sinds export"]),
+    // View
+    nl("view.command_palette", &[], &["opdrachtveld", "zoeken"]),
+    nl(
+        "view.command_field_here",
+        &[],
+        &["opdrachtveld bij de muis"],
+    ),
+    nl("view.fit", &[], &["passend zoomen", "alles tonen"]),
+    nl("view.schematic", &[], &["schema"]),
+    nl("view.cabinet", &[], &["kast", "kastindeling"]),
+    nl("view.terminals_drawer", &[], &["klemmen", "klemmenstroken"]),
+    nl("view.cables_drawer", &[], &["kabels", "aders"]),
+    nl("view.devices_drawer", &[], &["apparaten", "onderdelen"]),
+    nl("view.focus", &[], &["focusmodus"]),
+    nl(
+        "view.pin_outline",
+        &[],
+        &["overzicht vastzetten", "paginaoverzicht"],
+    ),
+    nl("view.full_screen", &[], &["volledig scherm"]),
+    nl("view.cabinet_table", &[], &["kast als tabel", "tabel"]),
+    nl(
+        "view.toggle_marks",
+        &[],
+        &["markeringen tonen of verbergen"],
+    ),
+    nl(
+        "view.override_marks",
+        &[],
+        &["handmatige wijzigingen tonen"],
+    ),
+    nl("view.shortcuts", &[], &["sneltoetsen", "toetsen"]),
+    // Check
+    nl("check.problems", &["problemen", "fouten"], &["controles"]),
+    nl("check.next_problem", &[], &["volgend probleem"]),
+    nl("check.previous_problem", &[], &["vorig probleem"]),
+    // Export
+    nl(
+        "export.pdf",
+        &["exporteer pdf", "pdf exporteren"],
+        &["afdrukken"],
+    ),
+    nl(
+        "export.bom",
+        &["exporteer stuklijst", "stuklijst"],
+        &["onderdelenlijst"],
+    ),
+];
+
+/// Dutch command arguments and the English chip each one stands for.
+pub const DUTCH_ARGUMENTS: &[(&str, &str)] = &[
+    ("pagina", "page"),
+    ("selectie", "selection"),
+    ("project", "project"),
+];
+
+/// The Dutch words for a command, if it has any.
+pub fn dutch(command: &str) -> Option<&'static Aliases> {
+    DUTCH.iter().find(|a| a.command == command)
+}
+
+/// The English argument chip for a typed argument in either language.
+pub fn english_argument(word: &str) -> &str {
+    DUTCH_ARGUMENTS
+        .iter()
+        .find(|(nl, _)| nl.eq_ignore_ascii_case(word))
+        .map_or(word, |(_, en)| en)
+}
+
+/// The Dutch name of an English argument chip, if it has one.
+pub fn dutch_argument(english: &str) -> Option<&'static str> {
+    DUTCH_ARGUMENTS
+        .iter()
+        .find(|(_, en)| *en == english)
+        .map(|(nl, _)| *nl)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::commands::{COMMANDS, is_known};
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn every_command_has_dutch_words_once() {
+        let mut seen = BTreeSet::new();
+        for aliases in DUTCH {
+            assert!(is_known(aliases.command), "{}", aliases.command);
+            assert!(seen.insert(aliases.command), "{} twice", aliases.command);
+            assert!(!aliases.verbs.is_empty() || !aliases.words.is_empty());
+        }
+        for info in COMMANDS {
+            assert!(dutch(info.id).is_some(), "{} has no Dutch words", info.id);
+            // A command with English verbs has Dutch verbs too.
+            if !info.verbs.is_empty() {
+                assert!(!dutch(info.id).unwrap().verbs.is_empty(), "{}", info.id);
+            }
+        }
+    }
+
+    #[test]
+    fn verbs_are_lower_case_ascii() {
+        // The command field matches verbs case-insensitively by ASCII
+        // folding, which keeps byte offsets in the typed text valid.
+        for verb in DUTCH.iter().flat_map(|a| a.verbs) {
+            assert!(
+                verb.is_ascii() && *verb == verb.to_ascii_lowercase(),
+                "{verb}"
+            );
+        }
+        for info in COMMANDS {
+            for verb in info.verbs {
+                assert!(
+                    verb.is_ascii() && *verb == verb.to_ascii_lowercase(),
+                    "{verb}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn arguments_translate_both_ways() {
+        assert_eq!(english_argument("Pagina"), "page");
+        assert_eq!(english_argument("page"), "page");
+        assert_eq!(dutch_argument("selection"), Some("selectie"));
+    }
+}

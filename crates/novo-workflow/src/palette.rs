@@ -26,6 +26,7 @@ use crate::commands::{self, COMMANDS, CommandInfo, Context, GROUPS};
 use crate::fuzzy;
 use crate::insert::{self, InsertSearch};
 use crate::keymap::Keymap;
+use crate::language;
 use crate::locate;
 
 /// What picking a row does.
@@ -557,21 +558,24 @@ fn command_row(
     }
 }
 
+/// Every verb phrase of a command, English then Dutch.
+fn verbs_of(info: &CommandInfo) -> impl Iterator<Item = &'static str> {
+    let dutch = language::dutch(info.id).map_or(&[][..], |a| a.verbs);
+    info.verbs.iter().chain(dutch).copied()
+}
+
 /// The verb phrase of `command` that starts `query` as whole words, and
-/// what follows it.
+/// what follows it. Verbs are ASCII, so folding ASCII case keeps the byte
+/// offset valid in the typed text.
 fn split_verb<'q>(info: &CommandInfo, query: &'q str) -> Option<(&'static str, &'q str)> {
-    let lower = query.to_lowercase();
-    info.verbs
-        .iter()
-        .filter(|v| {
-            lower.starts_with(*v)
-                && lower[v.len()..]
-                    .chars()
-                    .next()
-                    .is_none_or(char::is_whitespace)
+    verbs_of(info)
+        .filter_map(|v| {
+            let head = query.get(..v.len())?;
+            let rest = &query[v.len()..];
+            (head.eq_ignore_ascii_case(v) && rest.chars().next().is_none_or(char::is_whitespace))
+                .then_some((v, rest.trim()))
         })
-        .max_by_key(|v| v.len())
-        .map(|v| (*v, query[v.len()..].trim()))
+        .max_by_key(|(v, _)| v.len())
 }
 
 fn command_rows(query: &str, wants_next: bool, sources: &Sources<'_>, rows: &mut Vec<Row>) {
@@ -587,6 +591,8 @@ fn command_rows(query: &str, wants_next: bool, sources: &Sources<'_>, rows: &mut
         if let Some((verb, argument)) = split_verb(info, query)
             && Some(verb.len()) == longest
         {
+            // A Dutch argument runs as its English chip (`pagina` is `page`).
+            let argument = language::english_argument(argument);
             if argument.is_empty() {
                 rows.push(command_row(info, sources, "", EXACT + 200));
             } else {
@@ -596,8 +602,10 @@ fn command_rows(query: &str, wants_next: bool, sources: &Sources<'_>, rows: &mut
             if argument.is_empty() && !wants_next {
                 continue;
             }
+            let typed = argument.to_lowercase();
             for (n, chip) in info.arguments.iter().enumerate() {
-                if chip.starts_with(&argument.to_lowercase()) && *chip != argument {
+                let dutch = language::dutch_argument(chip).unwrap_or(chip);
+                if (chip.starts_with(&typed) || dutch.starts_with(&typed)) && *chip != argument {
                     let score = EXACT + 250 - i32::try_from(n).unwrap_or(0);
                     rows.push(run_row(info, sources, chip, score));
                 }
@@ -605,13 +613,13 @@ fn command_rows(query: &str, wants_next: bool, sources: &Sources<'_>, rows: &mut
             continue;
         }
         let full = format!("{} {}", info.group, info.label);
-        let score = fuzzy::best_score(
-            query,
-            [info.label, full.as_str()]
-                .into_iter()
-                .chain(info.keywords.iter().copied())
-                .chain(info.verbs.iter().copied()),
-        );
+        let dutch = language::dutch(info.id).map_or(&[][..], |a| a.words);
+        let words = [info.label]
+            .into_iter()
+            .chain(info.keywords.iter().copied())
+            .chain(verbs_of(info))
+            .chain(dutch.iter().copied());
+        let score = fuzzy::score(query, &full).max(fuzzy::best_score(query, words));
         if let Some(score) = score {
             let mut row = command_row(info, sources, "", score);
             // A verb that takes chips completes to itself first.

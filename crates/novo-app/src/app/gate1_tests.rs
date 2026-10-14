@@ -652,3 +652,57 @@ fn keys_go_to_a_focused_panel_button_not_the_canvas() {
     }
     assert_eq!(d.app.key_focus(&ctx), Focus::Panel);
 }
+
+#[test]
+/// A real pointer click on a symbol (moved, press, release) selects it
+/// through the whole window. Under Xvfb a single click was reported not to
+/// select; this pins the path down without X.
+fn a_click_on_a_symbol_selects_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.run(&d.ctx.clone(), Action::NewProject);
+    d.frame();
+    let q1 = d.place("mcb3", 80.0, 48.0);
+    d.frame();
+    let item = novo_canvas::model::item_id(AnyId::Symbol(q1));
+    let sym = d.doc().project().symbol(q1).unwrap().placement.origin;
+    let local = {
+        let view = d.app.canvas.schematic().unwrap();
+        view.canvas
+            .viewport
+            .world_to_screen(novo_canvas::Vec2::new(sym.x as f32, sym.y as f32))
+    };
+    // Where the canvas sits in the window: hover until the symbol lights.
+    let mut at = None;
+    'scan: for oy in 0..80 {
+        for ox in [0.0f32, 248.0] {
+            let p = egui::pos2(local.x + ox, local.y + oy as f32);
+            d.frame_with(vec![egui::Event::PointerMoved(p)]);
+            let hovered = d.app.canvas.schematic().unwrap().canvas.hovered();
+            if hovered == Some(item) {
+                at = Some(p);
+                break 'scan;
+            }
+        }
+    }
+    let p = at.expect("the symbol can be hovered");
+    let btn = |pressed| egui::Event::PointerButton {
+        pos: p,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: Default::default(),
+    };
+    d.frame_with(vec![btn(true)]);
+    d.frame_with(vec![btn(false)]);
+    d.frame();
+    let sel = d
+        .app
+        .canvas
+        .schematic()
+        .unwrap()
+        .canvas
+        .selection
+        .ids()
+        .to_vec();
+    assert_eq!(sel, vec![item]);
+}

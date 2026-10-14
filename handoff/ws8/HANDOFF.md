@@ -1,11 +1,9 @@
 # WS-08 Keyboard workflow: handoff
 
-## State (2026-10-14 17:00 UTC)
-- Repo: github.com/Herepiggypiggypiggy/NovoElectric. Branch `claude/project-thread-9lkslj`, PR #29, head 946d8ed.
-- #29 is ON HOLD for the main reviewer. Do not push to it again. After READY, follow-up work goes in a new PR from main (coordination rule 1).
-- 946d8ed fixes the fmt failure on 01d8023 (formatting only). CI was running on 946d8ed at handoff time.
-- Nothing is half-done in the working tree.
-- WS-06 (#38) will drop its own symbol search and tag allocation and depend on novo-workflow after #29 merges (API names sent 17:01).
+## State (2026-10-14 21:50 UTC)
+- #29 merged (5a73f86). Follow-up PR from branch `claude/project-thread-9lkslj`, restarted from main 7bb466d: MPCB coded Q (DESIGN §6, tester O1), `?` overlay and Shift+O (held) keys, Ctrl+Y shown first for redo, Escape yields to text fields, Dutch command words (language.rs), Keep-mode paste keeps terminal names, renumber keeps sub-device numbers shared, split_verb byte-offset fix.
+- novo-app maps keys (WS-01, crates/novo-app/src/keys.rs): it still needs to map `?` to `Key::Char('?')` and to treat Shift+O as held. Engine side is done.
+- Open: the per-class letter-code rule sentence (DESIGN §6) and contactor as Q (DESIGN says Q; the Gate 1 fixture and #62 use -K1). Ask the Workflow thread before changing contactors.
 
 ## Crate layout (crates/novo-workflow/src)
 keymap.rs (keys and scopes), commands.rs (COMMANDS, GROUPS, verbs, arguments, availability),
@@ -19,7 +17,7 @@ Tests: unit tests per module, plus tests/journeys.rs against the novo-tests Gate
 git fetch origin && git checkout claude/project-thread-9lkslj
 cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings && cargo test -p novo-workflow
 ```
-Check that #29 is still open before pushing. After every push, message the reviewer with the SHA.
+Check that the PR is still open before pushing. After every push, message the reviewer with the SHA.
 
 ## People (session ids; send_message uses session_<id without cse_>)
 - Integration lead / coordinator: session_011PfTJ1QaP1JQJPwXcFnxBE (merges) and session_018btnHEHYdedX4jueCivWjT

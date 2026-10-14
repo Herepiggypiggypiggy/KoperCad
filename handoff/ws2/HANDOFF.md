@@ -1,24 +1,36 @@
 # WS-02 Data model: handoff
 
-## State (2026-10-14 17:00 UTC)
-- Repo: herepiggypiggypiggy/novoelectric, clone at /home/claude/NovoElectric.
-- Branch `claude/data-model-amzaxu` (the only branch this thread may push to).
-- Open PR #35 "novo-core: potential assignment, terminal rule, text records",
-  head 7677b8c. Subscribed to PR activity.
-- Review: READY at 7677b8c (17:01 UTC). Do NOT push to #35 again. Waiting on
-  CI and the integration lead's merge.
-- Ready locally: branch `ws02-set-text` (2 commits on top of 7677b8c):
-  465f976-ish `Command::SetText { text, content?, height_mm? }` + `Tx::set_text`
-  (tests/texts.rs), and `Page.structure: DeviceTag` (function/location only,
-  checked), `pages_in_order` by structure then name, `Location.structure` +
-  `Location::qualified()` (tests/xref.rs, fixture pins it). Not pushed
-  (container-local; if lost, redo from this description).
-  After #35 merges: `git fetch origin main && git checkout -B
-  claude/data-model-amzaxu origin/main && git cherry-pick 7677b8c..ws02-set-text`,
-  push, open a new PR, ping the reviewer.
-- Next follow-ups the reviewer listed (non-blocking): cross-page moves that
-  carry attached texts/wires (no MoveToPage command exists yet), a stored
-  `PotentialSystem`.
+## State (2026-10-14 22:05 UTC)
+- #35, #45, #82, #101 merged. The repo copy of this handoff (handoff/ws2/)
+  is refreshed with each PR; the shared-folder copy may be newer.
+- Lead's order, one small PR each, each from main after the previous merges:
+  MoveToPage (open now, branch `claude/data-model-amzaxu`) -> Structure
+  enclosure + Dismissal -> page freeze. Local stack: `ws02-structure` 533afaf,
+  `ws02-freeze` 354f2d9 (patches 0006, 0007; built before #101, so expect a
+  small conflict in tests/format.rs: the extra `""` prefix argument).
+  After Structure merges tell WS-11; after freeze merges tell WS-10.
+- CI (Actions) is down: reviewers' local checks are the signal.
+- #101 review notes (non-blocking, open): an isolated system's prefix also
+  renames PE, though a control-transformer secondary usually shares the
+  cabinet PE (option: keep PE unprefixed); the prefix is not validated;
+  name-based helpers (novo_cables::kind::is_protective, terminal-name rule)
+  only know bare `PE`/`N`/`L+`; tell WS-11 and WS-12.
+- Blocks: the workflow thread answered (21:51 UTC). BlockDefinition record in
+  the project (self-contained .novo; libraries are copy sources:
+  %APPDATA%\NovoElectric\Blocks, optional company folder; project copy keeps
+  source + version). BlockInstance remembers placements. Gate 1 needs only
+  place_block + parameter edits. Tags are allocated (letter code kept, next
+  free number), property values and "{param}" texts substituted, `x3` = three
+  instances, parts not a parameter (WS-07 proposes after). Plan the DESIGN §7
+  survival rules now: per member a set of overridden fields (position, text
+  placement, tag, routes) relative to the instance origin, and
+  `detached` + reason on a structural edit.
+- Terminal-article decision: Terminal.part per terminal; strip rule stays
+  WS-11's `terminal_part.<kind>`; WS-11 retires its per-terminal `part`
+  property in style.rs itself (do not touch it).
+- New integration lead: cse_01FiLvRBKEcNNHbQEGhYyL1S.
+- Blocks: asked the workflow thread (DESIGN owner) for Gate 1 scope before
+  building (proposal: BlockDefinition template + BlockInstance members).
 
 ## Resume
 ```
@@ -60,7 +72,3 @@ claude/data-model-amzaxu origin/main`, then new PR for new work.
   the two-group pass-through form.
 - PRs get squash-merged: rebase follow-ups with `git rebase --onto origin/main <old-head>`.
 - Commit trailers: Co-Authored-By Claude line + Claude-Session link (see git log).
-
-## Changed while this thread was paused (read first)
-- The coordinator session (session_01DZ68tTULUv7Uhe8ecKbC47) redid your lost `ws02-set-text` work from this file's description and pushed it to `claude/data-model-amzaxu` as PR #45 (head b0ad1b8): `Command::SetText`, `Tx::set_text`, `Page.structure`, `xref::Location.structure` + `Location::qualified`, `pages_in_order` by structure. This changed the novo-core public API without you: review #45 yourself when you resume and adjust anything you disagree with in a follow-up.
-- Open decision for you: a target page with no structure reads plainly (`3.4`) even from a structured reader page.
