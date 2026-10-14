@@ -131,6 +131,10 @@ pub enum Command {
         set: PotentialSet,
         #[serde(default)]
         frequency_hz: Option<f64>,
+        /// Prefix for an isolated system's own potentials; see
+        /// [`Tx::add_potential_system`].
+        #[serde(default)]
+        prefix: String,
     },
     /// Feeds a system's potentials from a source symbol's pins, in order.
     FeedSystem {
@@ -359,8 +363,10 @@ impl Tx<'_> {
                 name,
                 set,
                 frequency_hz,
+                prefix,
             } => {
-                let (system, created) = self.add_potential_system(name, set, frequency_hz)?;
+                let (system, created) =
+                    self.add_potential_system(name, set, frequency_hz, &prefix)?;
                 return Ok(std::iter::once(system.into())
                     .chain(created.into_iter().map(AnyId::from))
                     .collect());
