@@ -4,7 +4,7 @@
 {"record":"potential","id":9,"name":"L1","kind":"line","voltage":400.0,"properties":{}}
 {"record":"potential","id":24,"name":"L+","kind":"dc_positive","voltage":24.0,"properties":{}}
 {"record":"potential","id":25,"name":"L-","kind":"dc_negative","voltage":null,"properties":{}}
-{"record":"page","id":1,"name":"1","title":"","kind":{"type":"schematic"},"format":{"size":"A3","landscape":true,"columns":10},"properties":{}}
+{"record":"page","id":1,"name":"1","title":"","kind":{"type":"schematic"},"format":{"size":"A3","landscape":true,"columns":10},"frozen":{"revision":"A","name":"1","columns":[[10,1],[11,1],[13,3]]},"properties":{}}
 {"record":"page","id":2,"name":"2","title":"Control","kind":{"type":"generated","generator":"terminal_diagram"},"format":{"size":"A4","landscape":true,"columns":10},"structure":"=A2+CAB1","properties":{"approved":true}}
 {"record":"device","id":4,"tag":"=A1+CAB1-K1","description":"Main contactor","kind":"general","parts":[3],"properties":{"note":"spare contact"}}
 {"record":"device","id":5,"tag":"+CAB1-X1","description":"","kind":"terminal_strip","parts":[],"properties":{}}
@@ -26,7 +26,7 @@
 {"record":"text","id":23,"page":2,"content":{"type":"literal","text":"Control circuit"},"placement":{"offset":{"x":0.0,"y":0.0},"rotation":"0","anchor":"bottom_left"},"height_mm":2.5,"properties":{}}
 {"record":"potential_system","id":26,"name":"24 V DC","voltage":24.0,"members":[24,25],"properties":{}}
 {"record":"dismissal","id":28,"proposal":"terminal.suggest","subjects":[{"kind":"symbol","id":10}],"properties":{}}
-{"op":"insert","record":{"record":"page","id":1,"name":"1","title":"","kind":{"type":"schematic"},"format":{"size":"A3","landscape":true,"columns":10},"properties":{}}}
-{"op":"remove","record":{"record":"page","id":1,"name":"1","title":"","kind":{"type":"schematic"},"format":{"size":"A3","landscape":true,"columns":10},"properties":{}}}
-{"op":"update","before":{"record":"page","id":1,"name":"1","title":"","kind":{"type":"schematic"},"format":{"size":"A3","landscape":true,"columns":10},"properties":{}},"after":{"record":"page","id":1,"name":"1a","title":"","kind":{"type":"schematic"},"format":{"size":"A3","landscape":true,"columns":10},"properties":{}}}
+{"op":"insert","record":{"record":"page","id":1,"name":"1","title":"","kind":{"type":"schematic"},"format":{"size":"A3","landscape":true,"columns":10},"frozen":{"revision":"A","name":"1","columns":[[10,1],[11,1],[13,3]]},"properties":{}}}
+{"op":"remove","record":{"record":"page","id":1,"name":"1","title":"","kind":{"type":"schematic"},"format":{"size":"A3","landscape":true,"columns":10},"frozen":{"revision":"A","name":"1","columns":[[10,1],[11,1],[13,3]]},"properties":{}}}
+{"op":"update","before":{"record":"page","id":1,"name":"1","title":"","kind":{"type":"schematic"},"format":{"size":"A3","landscape":true,"columns":10},"frozen":{"revision":"A","name":"1","columns":[[10,1],[11,1],[13,3]]},"properties":{}},"after":{"record":"page","id":1,"name":"1a","title":"","kind":{"type":"schematic"},"format":{"size":"A3","landscape":true,"columns":10},"frozen":{"revision":"A","name":"1","columns":[[10,1],[11,1],[13,3]]},"properties":{}}}
 {"op":"set_info","before":{"name":"","description":"","properties":{}},"after":{"name":"Format fixture","description":"Every record type and optional field","rules":{"terminals":{"same_name":"join","join_link":"connector"},"potentials":{"from_terminal_names":true}},"properties":{"customer":"ACME","revision":3}}}

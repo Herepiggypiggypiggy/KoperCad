@@ -79,10 +79,10 @@ pub use command::Command;
 pub use document::{DEFAULT_HISTORY_LIMIT, Document, Outcome};
 pub use entity::{
     Cable, CableCore, Device, DeviceKind, Dismissal, Endpoint, JoinLink, Junction, Page,
-    PageFormat, PageKind, PaperSize, Part, Pin, PinFeed, PinRef, Potential, PotentialKind,
-    PotentialRules, PotentialSet, PotentialSpec, PotentialSystem, ProjectInfo, ProjectRules,
-    Properties, SameName, Structure, SymbolInstance, SymbolKey, SymbolRole, Terminal, TerminalKind,
-    TerminalRules, Text, TextAnchor, TextContent, TextPlacement, Value, Wire,
+    PageFormat, PageFreeze, PageKind, PaperSize, Part, Pin, PinFeed, PinRef, Potential,
+    PotentialKind, PotentialRules, PotentialSet, PotentialSpec, PotentialSystem, ProjectInfo,
+    ProjectRules, Properties, SameName, Structure, SymbolInstance, SymbolKey, SymbolRole, Terminal,
+    TerminalKind, TerminalRules, Text, TextAnchor, TextContent, TextPlacement, Value, Wire,
 };
 pub use error::{ModelError, Result};
 pub use geom::{Direction, Placement, Point, Rotation};

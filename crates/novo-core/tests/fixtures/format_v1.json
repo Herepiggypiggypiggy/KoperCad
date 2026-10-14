@@ -74,6 +74,24 @@
         "landscape": true,
         "columns": 10
       },
+      "frozen": {
+        "revision": "A",
+        "name": "1",
+        "columns": [
+          [
+            10,
+            1
+          ],
+          [
+            11,
+            1
+          ],
+          [
+            13,
+            3
+          ]
+        ]
+      },
       "properties": {}
     },
     {

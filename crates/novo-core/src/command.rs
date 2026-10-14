@@ -80,6 +80,14 @@ pub enum Command {
         #[serde(default)]
         offset: Point,
     },
+    /// Freezes a page as issued; see [`Tx::freeze_page`].
+    FreezePage {
+        page: PageId,
+        revision: String,
+    },
+    UnfreezePage {
+        page: PageId,
+    },
     AddJunction {
         page: PageId,
         position: Point,
@@ -266,6 +274,8 @@ impl Command {
             Command::AddPart { .. } => "Add part".into(),
             Command::MoveToPage { .. } => "Move to page".into(),
             Command::AddStructure { .. } => "Add structure".into(),
+            Command::FreezePage { .. } => "Freeze page".into(),
+            Command::UnfreezePage { .. } => "Unfreeze page".into(),
             Command::Dismiss { .. } => "Dismiss proposal".into(),
             Command::AssignPart { .. } => "Assign part".into(),
             Command::SetProperty { .. } => "Set property".into(),
@@ -442,6 +452,14 @@ impl Tx<'_> {
                 offset,
             } => {
                 self.move_to_page(&items, page, offset)?;
+                return Ok(Vec::new());
+            }
+            Command::FreezePage { page, revision } => {
+                self.freeze_page(page, revision)?;
+                return Ok(Vec::new());
+            }
+            Command::UnfreezePage { page } => {
+                self.unfreeze_page(page)?;
                 return Ok(Vec::new());
             }
             Command::AddStructure {
