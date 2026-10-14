@@ -3,3 +3,8 @@
 2026-10-14 17:04 UTC  Workflow opened DESIGN.md as PR #24 (head c7f78ba) with my three corrections; no objection.
 2026-10-14 17:06 UTC  Design reviewer: #20 READY on 2d60fdd, frozen (no more pushes). Follow-ups for a new PR from main: CanvasPalette mark entries; issue_pill showing errors and warnings together. CI on 2d60fdd running.
 2026-10-14 17:13 UTC  Canvas (WS-03) adding §5 mark fields to CanvasStyle (proposal, warning, error, override_mark, added, modified, removed, mark_text), novo_canvas::Color([u8;4]), alpha in byte, dashing built in. Agreed values: proposal INFO@55%, override #989691, added #7FB086/modified #D6A55C/removed #E0766C @50%, mark_text #C4C2BD. Inter covers U+21B5.
+2026-10-14 21:40 UTC  #20 merged (17:25). Branch restarted from main 15c9992. PR #83 opened (3eba511): mark colours in CANVAS_DARK, issue_pill shows both counts. Sent to design reviewer, WS-01, lead.
+2026-10-14 21:32 UTC  #83 CI: all three jobs failed instantly with empty output (Actions not starting account-wide). Commented on PR; local checks are the signal.
+2026-10-14 21:36 UTC  Design reviewer: #83 READY on 3eba511, frozen. Next follow-up (new PR after #83 merges): snap_marker entry in CanvasPalette, muted/INFO tone instead of copper (app canvas_style_from uses p.selection). WS-01 to switch app pill to widgets::issue_pill.
+2026-10-14 21:44 UTC  Reviewer B: #83 READY (correctness) on 3eba511; both reviews READY, waiting for lead merge. Optional note for next PR: comment in issue_pill that infos are deliberately left out.
+2026-10-14 21:45 UTC  #83 merged (cdc7bbe). Branch restarted from main. Next PR: CanvasPalette.snap_marker #858380 (app maps it instead of copper selection) + issue_pill comment on infos.

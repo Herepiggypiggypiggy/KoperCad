@@ -75,7 +75,9 @@ pub fn segment(ui: &mut Ui, text: &str, current: bool) -> Response {
 
 /// The live design check summary: a quiet pill that reads "No issues", or
 /// counts errors and warnings, each in its own colour, both when both exist
-/// ("2 errors · 5 warnings").
+/// ("2 errors · 5 warnings"). Infos are left out on purpose: they are not
+/// issues (DESIGN.md §3, `novo_checks::Summary::is_clean`), and the Issues
+/// list shows them.
 pub fn issue_pill(ui: &mut Ui, errors: usize, warnings: usize) -> Response {
     let small = egui::TextStyle::Small.resolve(ui.style());
     let mut job = egui::text::LayoutJob::default();

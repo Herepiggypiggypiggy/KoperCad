@@ -10,6 +10,8 @@ Requested by Tadjiro. His direction: elegant rather than playful; no
 N-shaped logo; not a copy of EPLAN; be critical; don't wait on him.
 
 ## Done
+- #83 merged (mark colours in palette, combined pill).
+- #20 merged (theme, logo, icons); DESIGN.md merged; theme wired in #46.
 - Graphite theme with a single copper accent, Inter 4.1 and Phosphor icons,
   and WCAG contrast floors tested: `crates/novo-theme` (PR #20).
 - Nova logo and app icon (`assets/branding`, re-rendered with
@@ -20,16 +22,10 @@ N-shaped logo; not a copy of EPLAN; be critical; don't wait on him.
   it into docs/DESIGN.md.
 
 ## Next, in order
-1. Drive PR #20 through review to merge. After the reviewer says READY,
-   no more pushes to it.
-2. Check workflow's docs/DESIGN.md PR against screen-architecture.md.
-3. After #20 merges: a new PR from main with CanvasPalette entries for
-   the DESIGN §5 marks (proposal, override, change colours).
-4. Help App shell apply the theme (`novo_theme::apply`, dark only, the
-   window icon from brand::ICON_PNG_256, `assets/branding/icon.ico` for
-   exe and installer, and deleting `assets/icon`).
-5. Build the real chrome widgets as the app reaches them: command field,
-   outline, inspector card, dock and drawer.
+1. Snap marker colour PR (quiet grey, not copper) to READY and merge.
+2. Support WS-01 on the remaining chrome from DESIGN.md (Issues outline
+   mode, Cables/Devices drawers, inspector, dock), with theme widgets as
+   needed. Design notes owed: handoff/design-reviewer/HANDOFF.md on main.
 
 ## Open questions
 - Structure board on first run: how much form, how much drawing.
