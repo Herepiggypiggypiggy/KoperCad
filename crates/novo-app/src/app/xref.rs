@@ -123,7 +123,7 @@ impl NovoApp {
                     ui.set_min_width(280.0);
                     ui.small("EVERY OCCURRENCE");
                     for r in list {
-                        let text = format!("{}   {}", r.row_from(&reader), r.target_from(&reader));
+                        let text = r.row_from(&reader);
                         if ui.selectable_label(false, text).clicked() {
                             chosen = Some(r.clone());
                         }
@@ -169,10 +169,13 @@ pub(super) fn paint_labels(
     editor: &novo_editor::Editor,
     labels: &[Label],
 ) {
-    let size = (2.5 * overlay.viewport.zoom).min(14.0);
-    if size < 7.0 {
+    // Like the drawing's own tags: readable from page-fit zoom up, and
+    // gone when zoomed so far out that they would be noise.
+    let drawn = 2.5 * overlay.viewport.zoom;
+    if drawn < 4.0 {
         return;
     }
+    let size = drawn.clamp(9.0, 14.0);
     let palette = &novo_theme::CANVAS_DARK;
     let color = |c: [u8; 4]| egui::Color32::from_rgba_unmultiplied(c[0], c[1], c[2], c[3]);
     for label in labels {
@@ -188,8 +191,9 @@ pub(super) fn paint_labels(
             color(palette.cross_reference)
         };
         overlay.painter.text(
-            overlay.to_screen(max.x + 1.5, min.y),
-            egui::Align2::LEFT_TOP,
+            // Above the symbol's top right corner, clear of its own tag.
+            overlay.to_screen(max.x + 1.0, min.y - 0.5),
+            egui::Align2::LEFT_BOTTOM,
             label.lines.join("\n"),
             egui::FontId::monospace(size),
             c,

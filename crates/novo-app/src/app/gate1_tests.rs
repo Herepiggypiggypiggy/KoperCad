@@ -409,6 +409,12 @@ fn gate1_motor_starter_through_the_window() {
     assert!(bytes.starts_with(b"%PDF"));
     let pages = lopdf::Document::load_mem(&bytes).unwrap().get_pages().len();
     assert_eq!(pages, 2, "one PDF page per project page");
+    // NOVO_GATE1_OUT=<dir> keeps the project and the PDF, for screenshots.
+    if let Some(out) = std::env::var_os("NOVO_GATE1_OUT") {
+        let out = std::path::PathBuf::from(out);
+        std::fs::create_dir_all(&out).unwrap();
+        std::fs::copy(&pdf, out.join("Starter.pdf")).unwrap();
+    }
     d.app.run(&d.ctx.clone(), Action::CloseProject);
     d.frame();
 
@@ -416,6 +422,11 @@ fn gate1_motor_starter_through_the_window() {
     e.app.open_path(&file);
     e.frame();
     assert_eq!(summary(e.doc().project()), before, "the reopened project");
+    if let Some(out) = std::env::var_os("NOVO_GATE1_OUT") {
+        e.app.run(&e.ctx.clone(), Action::CloseProject);
+        std::fs::copy(&file, std::path::Path::new(&out).join("Starter.novo")).unwrap();
+        return;
+    }
     assert_eq!(
         e.app.backend.file().as_deref(),
         Some(file.as_path()),

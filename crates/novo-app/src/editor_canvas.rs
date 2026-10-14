@@ -24,6 +24,7 @@ impl Default for EditorCanvas {
     fn default() -> Self {
         let mut view = SchematicView::default();
         view.canvas.style = theme::canvas_style();
+        view.set_style(theme::model_style());
         EditorCanvas {
             view,
             changes: ChangeSet::default(),

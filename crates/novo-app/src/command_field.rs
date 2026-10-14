@@ -11,7 +11,7 @@ use novo_workflow::palette::{Mode, Palette, Row, Sources, Target};
 const MAX_HEIGHT: f32 = 380.0;
 const WIDTH: f32 = 480.0;
 
-struct Open {
+struct OpenField {
     mode: Mode,
     query: String,
     selected: usize,
@@ -23,12 +23,12 @@ struct Open {
 pub struct CommandField {
     /// The search engine and its memory (recent picks, favourites).
     pub palette: Palette,
-    open: Option<Open>,
+    open: Option<OpenField>,
 }
 
 impl CommandField {
     pub fn open(&mut self, mode: Mode, at: Option<egui::Pos2>) {
-        self.open = Some(Open {
+        self.open = Some(OpenField {
             mode,
             query: String::new(),
             selected: 0,
@@ -42,6 +42,10 @@ impl CommandField {
         if let Some(open) = &mut self.open {
             open.query = query.to_owned();
         }
+    }
+
+    pub fn close(&mut self) {
+        self.open = None;
     }
 
     pub fn is_open(&self) -> bool {
@@ -224,8 +228,14 @@ impl CommandField {
 
 /// One row: kind, label, grey detail, and the key or why it is disabled.
 fn row_ui(ui: &mut egui::Ui, row: &Row, selected: bool) -> egui::Response {
+    // Under a group heading the group name would only repeat it.
+    let detail = if row.detail == row.group {
+        ""
+    } else {
+        row.detail.as_str()
+    };
     let mut text = row.label.clone();
-    if !row.detail.is_empty() {
+    if !detail.is_empty() {
         text.push_str("   ");
     }
     let mut job = egui::text::LayoutJob::default();
@@ -238,7 +248,7 @@ fn row_ui(ui: &mut egui::Ui, row: &Row, selected: bool) -> egui::Response {
         ..Default::default()
     };
     job.append(&text, 0.0, body);
-    job.append(&row.detail, 0.0, weak);
+    job.append(detail, 0.0, weak);
     let right = match (row.disabled, &row.shortcut) {
         (Some(reason), _) => reason.to_owned(),
         (None, Some(key)) => key.clone(),

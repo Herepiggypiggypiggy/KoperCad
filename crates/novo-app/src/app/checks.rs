@@ -42,7 +42,9 @@ impl NovoApp {
         };
         let pill = egui::Button::new(egui::RichText::new(summary.pill_text()).color(color))
             .corner_radius(10.0);
-        if ui.add(pill).clicked() {
+        let response = ui.add(pill);
+        self.wb.pill_rect = response.rect;
+        if response.clicked() {
             self.wb.issues_open ^= true;
         }
     }
@@ -86,7 +88,11 @@ impl NovoApp {
             self.go_problem(i);
         }
         let escape = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
-        if escape || (area.response.clicked_elsewhere() && go.is_none()) {
+        // The click on the pill that opened the list is not "elsewhere".
+        let on_pill = ctx
+            .pointer_interact_pos()
+            .is_some_and(|p| self.wb.pill_rect.contains(p));
+        if escape || (area.response.clicked_elsewhere() && go.is_none() && !on_pill) {
             self.wb.issues_open = false;
         }
     }

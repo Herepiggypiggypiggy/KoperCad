@@ -54,6 +54,9 @@ pub(crate) struct Workbench {
     pub(super) marks: bool,
     /// Design-check results for one project revision.
     pub(super) problems: Option<(u64, Vec<Problem>)>,
+    /// Where the issue pill was drawn, so its own click does not close
+    /// the list it opens.
+    pub(super) pill_rect: egui::Rect,
     /// The issue list under the pill is open.
     pub(super) issues_open: bool,
     /// F8 position in the problem list.
@@ -75,6 +78,7 @@ impl Default for Workbench {
             proposal: 0,
             marks: true,
             problems: None,
+            pill_rect: egui::Rect::NOTHING,
             issues_open: false,
             problem_at: None,
             last_export: None,
@@ -186,6 +190,22 @@ impl NovoApp {
                 Some(action) => self.is_enabled(action),
                 None => novo_workflow::commands::is_known(id),
             },
+        }
+    }
+
+    /// Escape closes the command field or a list over the canvas first.
+    /// Taken before the canvas runs, which would read it as its own Escape
+    /// ladder while the pointer is over the drawing.
+    pub(super) fn escape_popups(&mut self, ctx: &egui::Context) {
+        let open = self.wb.field.is_open() || self.wb.occurrences.is_some() || self.wb.issues_open;
+        if open && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+            if self.wb.field.is_open() {
+                self.wb.field.close();
+            } else if self.wb.occurrences.is_some() {
+                self.wb.occurrences = None;
+            } else {
+                self.wb.issues_open = false;
+            }
         }
     }
 

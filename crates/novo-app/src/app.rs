@@ -522,6 +522,7 @@ impl NovoApp {
         self.update_title(&ctx);
 
         let mut picked: Vec<Action> = Vec::new();
+        self.escape_popups(&ctx);
         let commands = if self.modal_open() {
             Vec::new()
         } else {
