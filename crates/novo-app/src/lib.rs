@@ -17,6 +17,7 @@ mod actions;
 mod app;
 mod backend;
 mod canvas;
+mod model_canvas;
 mod palette;
 mod settings;
 
@@ -27,6 +28,7 @@ pub use backend::{
     new_document, page_labels,
 };
 pub use canvas::{CanvasView, OpenPage, PlaceholderCanvas};
+pub use model_canvas::ModelCanvas;
 
 use eframe::egui;
 
@@ -61,15 +63,19 @@ pub fn run() -> eframe::Result {
         renderer: eframe::Renderer::Wgpu,
         ..Default::default()
     };
+    let msaa = u32::from(options.multisampling);
     eframe::run_native(
         APP_NAME,
         options,
-        Box::new(|cc| {
-            let mut app = NovoApp::new(
-                cc,
-                Box::new(StorageBackend::default()),
-                Box::new(PlaceholderCanvas::default()),
-            );
+        Box::new(move |cc| {
+            let canvas: Box<dyn CanvasView> = match cc.wgpu_render_state.as_ref() {
+                Some(rs) => {
+                    ModelCanvas::install(rs, msaa);
+                    Box::new(ModelCanvas::default())
+                }
+                None => Box::new(PlaceholderCanvas::default()),
+            };
+            let mut app = NovoApp::new(cc, Box::new(StorageBackend::default()), canvas);
             if let Some(path) = startup_file {
                 app.open_on_start(path);
             }

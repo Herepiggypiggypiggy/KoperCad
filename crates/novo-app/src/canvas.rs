@@ -81,6 +81,21 @@ pub trait CanvasView {
     }
 }
 
+/// What the central area shows while no project is open.
+pub(crate) fn empty_state(ui: &mut egui::Ui) {
+    let (rect, _) = ui.allocate_exact_size(ui.available_size(), egui::Sense::hover());
+    let visuals = ui.visuals();
+    let painter = ui.painter();
+    painter.rect_filled(rect, 0.0, visuals.extreme_bg_color);
+    painter.text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        "No project open\nCtrl+N new project · Ctrl+O open · Ctrl+K commands",
+        egui::FontId::proportional(15.0),
+        visuals.weak_text_color(),
+    );
+}
+
 /// Draws a sheet outline on a dot grid and reports the cursor position, so the
 /// shell layout can be checked before the real canvas lands.
 #[derive(Default)]
@@ -95,22 +110,15 @@ const MM_PER_GRID: f32 = 5.0;
 
 impl CanvasView for PlaceholderCanvas {
     fn show(&mut self, ui: &mut egui::Ui, open: Option<OpenPage<'_>>) {
+        if open.is_none() {
+            self.cursor_mm = None;
+            empty_state(ui);
+            return;
+        }
         let (response, painter) = ui.allocate_painter(ui.available_size(), egui::Sense::hover());
         let rect = response.rect;
         let visuals = ui.visuals();
         painter.rect_filled(rect, 0.0, visuals.extreme_bg_color);
-
-        if open.is_none() {
-            self.cursor_mm = None;
-            painter.text(
-                rect.center(),
-                egui::Align2::CENTER_CENTER,
-                "No project open\nCtrl+N new project · Ctrl+O open · Ctrl+K commands",
-                egui::FontId::proportional(15.0),
-                visuals.weak_text_color(),
-            );
-            return;
-        }
 
         let dot = visuals.weak_text_color().gamma_multiply(0.5);
         let mut y = rect.top() + GRID;
