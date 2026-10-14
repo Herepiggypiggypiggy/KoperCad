@@ -26,3 +26,9 @@ Crate: `crates/novo-reports` (owner WS-13). Engine only; no UI.
 
 ## Decisions
 - 2026-10-14 (coordinator, from DESIGN.md §2 "automatic and live"): report pages ARE pages. Use `PageKind::Generated { generator }` page records: they appear in the outline, print, and get page numbers and cross-reference columns like any page, while their content is computed from the report on demand and never stored. Command-only views (export xlsx/csv) stay as a convenience. Follow-up: a report with N paged sheets maps onto its Generated page record (sub-page naming such as `20.1`, `20.2` to be agreed with WS-03/WS-09 and the workflow thread).
+
+## Follow-up PR (from main, after #55 merges): reviewer C notes
+- LiveReports: also key cached output by project identity, not only revision (guards a forgotten `clear()`).
+- xlsx: truncate text over 32,767 chars instead of failing the export.
+- tests/live.rs: debug-build slack factor like novo-canvas/tests/perf.rs.
+- CableDiagram report over `novo_cables::cable_screens` (#54) and TerminalDiagram over novo-terminals `screen()`.

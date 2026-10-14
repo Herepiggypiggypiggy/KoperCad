@@ -5,3 +5,4 @@
 2026-10-14 19:15 UTC Coordinator rerouted #55 to reviewer B (session_01QSnXFBDRyvwwzhT1S1gFGN); sent. Next: merge main once #51 merges.
 2026-10-14 19:16 UTC Decision (coordinator): report pages are PageKind::Generated page records with live content; recorded in ROADMAP.
 2026-10-14 19:40 UTC Reviewer B CHANGES NEEDED on 6d40835 (CSV formula injection: tags start with = + -). Fixed: CsvOptions.excel_safe (default on, ' prefix on text fields), plus nits: ReportOutput.revision rolled forward, sheet names (trailing ', History), save_xlsx via temp+rename. Tests added.
+2026-10-14 19:45 UTC Reviewer C sent READY on 6d40835, which conflicts with B's CHANGES NEEDED on the same head. Flagged to the coordinator: merge only on B's verdict for 37f684f. C's notes logged in ROADMAP for a follow-up PR.
