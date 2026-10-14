@@ -233,6 +233,9 @@ pub fn remove_unused_parts(project: &Project) -> Option<Command> {
 /// Devices and cables that have no part yet, in tag order. This is the
 /// WS-07 done criterion for the Gate 1 project ("every device carries a
 /// real part") and the input for the design check "missing parts" (WS-14).
+///
+/// Terminals are not listed: a terminal without its own part is covered by
+/// its strip device, which is listed here when it has none either.
 pub fn missing_parts(project: &Project) -> Vec<AnyId> {
     let mut devices: Vec<&Device> = project.devices().filter(|d| d.parts.is_empty()).collect();
     devices.sort_by(|a, b| novo_core::natural_cmp(&a.tag.to_string(), &b.tag.to_string()));

@@ -526,6 +526,7 @@ fn noun(kind: EntityKind) -> &'static str {
         EntityKind::Terminal => "terminal",
         EntityKind::Cable => "cable",
         EntityKind::Part => "part",
+        EntityKind::Text => "text",
     }
 }
 
@@ -541,6 +542,9 @@ fn assigned_parts(record: &Record) -> Option<Vec<PartId>> {
     match record {
         Record::Device(d) => Some(d.parts.clone()),
         Record::Cable(c) => Some(c.part.into_iter().collect()),
+        Record::Terminal(t) => Some(t.part.into_iter().collect()),
+        // Pages, symbols, wires, junctions, potentials, parts and texts
+        // carry no part.
         _ => None,
     }
 }
@@ -794,6 +798,10 @@ impl PropertySheet {
                 },
                 Record::Symbol(s) => format!("Symbol {}", s.symbol.0),
                 Record::Junction(_) => "Junction".into(),
+                Record::Text(t) => match &t.content {
+                    novo_core::TextContent::Literal { text } => format!("Text {text}"),
+                    _ => "Text".into(),
+                },
             };
         }
         let kind = records[0].kind();

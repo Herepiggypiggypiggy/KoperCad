@@ -645,3 +645,54 @@ fn certain_parts_are_assigned_and_the_rest_proposed() {
     );
     assert!(doc.project().device(gate.k1).unwrap().parts.is_empty());
 }
+
+#[test]
+fn texts_have_no_part_and_terminals_show_theirs() {
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let created = doc
+        .execute(novo_core::Command::AddText {
+            page: gate.main_page,
+            content: novo_core::TextContent::Literal {
+                text: "Main supply".into(),
+            },
+            placement: Default::default(),
+            attached_to: None,
+        })
+        .unwrap()
+        .created;
+    let [AnyId::Text(note)] = created[..] else {
+        panic!("{created:?}")
+    };
+    let sheet = PropertySheet::build(doc.project(), &[note.into()]);
+    assert_eq!(sheet.title(), "Text Main supply");
+    assert!(sheet.row(&RowKey::Part).is_none());
+    let sheet = PropertySheet::build(doc.project(), &[note.into(), gate.k1.into()]);
+    assert_eq!(sheet.title(), "2 objects");
+    assert!(sheet.row(&RowKey::Part).is_none());
+
+    // A terminal carries its own article (novo-core #35).
+    let k1_part = doc.project().device(gate.k1).unwrap().parts[0];
+    let mut terminal = doc.project().terminals().next().unwrap().clone();
+    let sheet = PropertySheet::build(doc.project(), &[terminal.id.into()]);
+    assert_eq!(
+        sheet.row(&RowKey::Part).map(|r| &r.value),
+        Some(&RowValue::Same(String::new()))
+    );
+    terminal.part = Some(k1_part);
+    let id = terminal.id;
+    doc.execute(novo_core::Command::Replace {
+        record: Record::Terminal(terminal),
+    })
+    .unwrap();
+    let sheet = PropertySheet::build(doc.project(), &[id.into()]);
+    let RowValue::Same(label) = &sheet.row(&RowKey::Part).unwrap().value else {
+        panic!("one part")
+    };
+    assert!(label.starts_with("Siemens 3RT2016"), "{label}");
+    // A part used only by a terminal is not unused.
+    let devices: Vec<DeviceId> = doc.project().devices().map(|d| d.id).collect();
+    let command = clear_parts(doc.project(), &devices);
+    run(&mut doc, command);
+    assert!(!novo_parts::unused_parts(doc.project()).contains(&k1_part));
+}
