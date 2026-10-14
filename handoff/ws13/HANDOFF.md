@@ -8,8 +8,7 @@ Crate: `crates/novo-reports` (owner WS-13). Engine only, no UI.
 - **#68 open**: "WS-13: terminal and cable diagram reports, generated-page sheets, review follow-ups".
   - Branch `claude/ws13-reports`, head **02d6e29** (code at 74d5d33).
   - Reviewer B (session_01QSnXFBDRyvwwzhT1S1gFGN): **READY at 02d6e29**, all green when merged with main cdf2402.
-  - Reviewer C (session_01Q6QWwh6uhq8Z2C1Ysih3UA): **verdict pending**.
-  - Two-reviewer policy: it merges only when both are READY. **Do not push to #68** unless C asks for changes. If C asks, push fixes, then send the new SHA to both B and C.
+  - Reviewer C (session_01Q6QWwh6uhq8Z2C1Ysih3UA): **READY at 02d6e29** too. Both verdicts are in, and the coordinator merges. **Do not push to #68.**
   - It also carries handoff/ws13 edits. This wrap-up PR (claude/handoff-ws13) supersedes them; on conflict, keep this version.
 - **#72** (fixer session_017LndnL4fiT5rRPkqy3R36S, reviewer A), branch claude/fix-terminal-part-one-source, head 38c3070.
   - Moves `novo_terminals::terminal_part(project, terminal) -> Option<PartId>`, which resolves Terminal.part, else the style override, else the strip's `terminal_part.<kind>`. It does not include strip device parts.
@@ -41,8 +40,9 @@ Crate: `crates/novo-reports` (owner WS-13). Engine only, no UI.
 - **WS-01 (app)** needs to keep one LiveReports per Document, call notify for every transaction/undo/redo, and call clear() on open.
 
 ## Open notes, not yet done (do them in a new PR from main after #68 and #72 merge)
-1. (B, #68) Sheet names like `20.1` can collide with a real page named `20.1`. Pick a rule (e.g. detect the collision and fall back to `20/1`, or forbid real pages named like generated sheets), document it and test it.
+1. (B and C, #68) Sheet names like `20.1` can collide with a real page named `20.1`. Pick a rule (e.g. detect the collision and fall back to `20/1`, or forbid real pages named like generated sheets), document it and test it.
 2. (B, #68) CableDiagram builds every cable screen twice (`overview()` calls `cable_screens()` internally). Build the screens once and derive the overview rows locally, or ask WS-12 for an overview-from-screens function.
+2b. (C, #68) Pinned flow vs growing generated pages: DESIGN wants page.column references frozen after a revision or export, but a generated page that grows from 2 to 3 sheets renumbers 20.2 and later sheets. Decide with the workflow thread, e.g. freeze a report's sheet split at revision time and append new sheets at the end.
 3. (Coordinator, from reviewer A) After #72: add a novo-reports BOM test with a strip-level terminal article (`terminal_part.<kind>` on the strip). Expected: one BOM line counted per terminal, Used by `-X1:1, …`.
 4. Command-field verbs (`bom`, `export xlsx`): owned by WS-08/WS-01. WS-28 (#65) already exports via the CLI and Python, and plans a generic `novo export report <id>`.
 5. Report templates (user column choice, order, headers), joined-terminal accessories (JoinLink) in the BOM, wire-list sort by wire number, frozen page.column after a revision.

@@ -14,7 +14,7 @@ Crate: `crates/novo-reports` (owner WS-13). Engine only, no UI.
   - toc, bom, devices and wires reports;
   - paging plus mm layout;
   - xlsx (deterministic) and CSV (Excel formula-safe) export.
-- #68 (open; B READY, C pending):
+- #68 (READY from B and C at 02d6e29; awaiting the coordinator's merge):
   - TerminalDiagram and CableDiagram reports;
   - generated-page sheets (`20`, or `20.1`, `20.2`, ...);
   - PageSetup aligned to the canvas frame;
@@ -28,11 +28,12 @@ Crate: `crates/novo-reports` (owner WS-13). Engine only, no UI.
 - Multi-sheet naming: the page's own name for a single sheet, `<name>.k` otherwise (proposed in #68; WS-03 and WS-09 still need to adopt it).
 
 ## Next, in order
-1. Get #68 merged (wait for C; fix only what C asks).
+1. #68 merge is with the coordinator (both READY).
 2. After #72 merges: a BOM test with a strip-level terminal article.
 3. B's #68 notes:
    - a sheet-name collision rule for `20.1` vs a real page `20.1`;
    - CableDiagram building screens once.
+   - (C) pinned flow vs growing generated pages: keep sheet numbers stable after a revision.
 4. Coordinate the drawing of generated sheets:
    - WS-03: canvas draws `layout_sheet` and the sheet name in the title block;
    - WS-09: PDF emits one page per sheet, with label and bookmark = sheet name;

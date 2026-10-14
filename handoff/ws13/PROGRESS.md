@@ -14,3 +14,4 @@
 2026-10-14 20:15 UTC Reviewer B READY on #68 at 02d6e29 with 2 non-blocking notes (20.1 name collisions, cable screens built twice); C pending.
 2026-10-14 20:18 UTC BOM strip-level terminal-part gap: fixer's #72 owns the bom.rs change (novo_terminals::terminal_part); WS-13 stays off bom.rs until it merges, then adds a test.
 2026-10-14 20:25 UTC Wrap-up: handoff written on claude/handoff-ws13 for the on-device threads.
+2026-10-14 20:20 UTC Reviewer C READY on #68 at 02d6e29 (notes: 20.1 collisions, pinned flow vs growing generated pages). Both reviewers READY; the coordinator merges.
