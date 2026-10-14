@@ -562,7 +562,8 @@ impl CanvasView {
         };
         if !down {
             self.right_drag = None;
-            return !drag.panning;
+            // A click released off the canvas is not a click on it.
+            return !drag.panning && response.contains_pointer();
         }
         if let Some(pos) = pos {
             if drag.panning {
