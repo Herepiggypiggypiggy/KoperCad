@@ -190,10 +190,13 @@ impl Library {
         })
     }
 
-    /// The symbol whose `aliases` contain `alias`, matched exactly, so the
-    /// palette can insert `mcb3` or `no` without a search.
+    /// The symbol whose `aliases` contain `alias`, so the palette can insert
+    /// `mcb3` or `no` without a search. Surrounding spaces and letter case
+    /// are ignored (`NO` finds `no`); otherwise the match is exact.
     pub fn by_alias(&self, alias: &str) -> Option<&Symbol> {
-        self.aliases.get(alias).and_then(|id| self.symbols.get(id))
+        self.aliases
+            .get(&alias.trim().to_ascii_lowercase())
+            .and_then(|id| self.symbols.get(id))
     }
 
     /// Symbols marked `favorite`, ordered by id.

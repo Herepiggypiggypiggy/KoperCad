@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::entity::{
     Cable, Device, Junction, Page, Part, Potential, ProjectInfo, Properties, SymbolInstance,
-    SymbolRole, Terminal, Wire,
+    SymbolRole, Terminal, Text, Wire,
 };
 use crate::geom::Point;
 use crate::id::{AnyId, EntityKind, PageId};
@@ -32,6 +32,7 @@ pub enum Record {
     Terminal(Terminal),
     Cable(Cable),
     Part(Part),
+    Text(Text),
 }
 
 impl Record {
@@ -46,6 +47,7 @@ impl Record {
             Record::Terminal(r) => r.id.into(),
             Record::Cable(r) => r.id.into(),
             Record::Part(r) => r.id.into(),
+            Record::Text(r) => r.id.into(),
         }
     }
 
@@ -60,6 +62,7 @@ impl Record {
             Record::Symbol(r) => Some(r.page),
             Record::Junction(r) => Some(r.page),
             Record::Wire(r) => Some(r.page),
+            Record::Text(r) => Some(r.page),
             _ => None,
         }
     }
@@ -87,11 +90,19 @@ impl Record {
                 for end in r.ends() {
                     out.push(endpoint_owner(end));
                 }
+                out.extend(r.potential.map(AnyId::from));
             }
-            Record::Terminal(r) => out.push(r.strip.into()),
+            Record::Terminal(r) => {
+                out.push(r.strip.into());
+                out.extend(r.part.map(AnyId::from));
+            }
             Record::Cable(r) => {
                 out.extend(r.part.map(AnyId::from));
                 out.extend(r.cores.iter().filter_map(|c| c.wire.map(AnyId::from)));
+            }
+            Record::Text(r) => {
+                out.push(r.page.into());
+                out.extend(r.attached_to);
             }
         }
         out.sort();
@@ -110,6 +121,7 @@ impl Record {
             Record::Terminal(r) => &r.properties,
             Record::Cable(r) => &r.properties,
             Record::Part(r) => &r.properties,
+            Record::Text(r) => &r.properties,
         }
     }
 
@@ -125,6 +137,7 @@ impl Record {
             Record::Terminal(r) => &mut r.properties,
             Record::Cable(r) => &mut r.properties,
             Record::Part(r) => &mut r.properties,
+            Record::Text(r) => &mut r.properties,
         })
     }
 
@@ -159,6 +172,15 @@ impl Record {
                 }
             }
             Record::Potential(r) => (!opt(r.voltage)).then_some("voltage"),
+            Record::Text(r) => {
+                if !point(&r.placement.offset) {
+                    Some("placement")
+                } else if !r.height_mm.is_finite() {
+                    Some("height_mm")
+                } else {
+                    None
+                }
+            }
             Record::Cable(r) => {
                 if !opt(r.length_m) {
                     Some("length_m")
@@ -185,6 +207,7 @@ impl Record {
             EntityKind::Junction => 6,
             EntityKind::Wire => 7,
             EntityKind::Cable => 8,
+            EntityKind::Text => 9,
         }
     }
 }
@@ -418,4 +441,5 @@ impl_entity! {
     Terminal => Terminal, crate::id::TerminalId, terminals;
     Cable => Cable, crate::id::CableId, cables;
     Part => Part, crate::id::PartId, parts;
+    Text => Text, crate::id::TextId, texts;
 }

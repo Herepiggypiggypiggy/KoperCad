@@ -756,3 +756,23 @@ fn a_recovery_file_for_a_replaced_file_is_not_offered() {
     assert!(!autosave_path(&path).exists());
     assert_same(&opened.project, &other);
 }
+
+#[test]
+fn closing_before_the_recovery_decision_keeps_the_work() {
+    let (_dir, path) = temp();
+    let mut doc = Document::default();
+    let mut session = Session::create(&path, doc.project()).unwrap();
+    let (_, c) = doc.transact("Add page", |tx| tx.add_page("1")).unwrap();
+    session.record(&c);
+    session.autosave(doc.project()).unwrap();
+    crash(session);
+
+    // The user quits while the restore prompt is still showing.
+    let opened = Session::open(&path).unwrap();
+    assert!(opened.recovered.is_some());
+    opened.session.close().unwrap();
+
+    let opened = Session::open(&path).unwrap();
+    let recovered = opened.recovered.expect("still offered");
+    assert_same(&recovered.project, doc.project());
+}

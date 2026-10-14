@@ -40,6 +40,7 @@ fn build() -> Project {
             info.description = "Every record type and optional field".into();
             info.properties.insert("customer".into(), "ACME".into());
             info.properties.insert("revision".into(), Value::Int(3));
+            info.rules.terminals.same_name = SameName::Join;
         })?;
         let power = tx.add_page("1")?;
         let control = tx.add_page("2")?;
@@ -74,7 +75,11 @@ fn build() -> Project {
             t.order = 5;
             t.jumper = Some(1);
         })?;
-        tx.update::<Terminal>(upper, |t| t.jumper = Some(1))?;
+        let clamp = tx.add_part("Phoenix Contact", "3031212")?;
+        tx.update::<Terminal>(upper, |t| {
+            t.jumper = Some(1);
+            t.part = Some(clamp);
+        })?;
 
         let l1 = tx.add_potential("L1", PotentialKind::Line)?;
         tx.update::<Potential>(l1, |p| p.voltage = Some(400.0))?;
@@ -153,6 +158,7 @@ fn build() -> Project {
             w.number = Some("101".into());
             w.color = Some("BK".into());
             w.cross_section_mm2 = Some(2.5);
+            w.potential = Some(l1);
             w.properties.insert("twisted".into(), Value::Bool(false));
         })?;
         tx.connect(Endpoint::junction(junction), Endpoint::pin(contact, 0))?;
@@ -171,6 +177,25 @@ fn build() -> Project {
             c.properties.insert("route".into(), "tray 3".into());
         })?;
         tx.assign_core(cable, 0, Some(w4))?;
+        let label = tx.add_text(
+            power,
+            TextContent::DeviceTag,
+            TextPlacement {
+                offset: Point::new(6.0, -2.0),
+                rotation: Rotation::R90,
+                anchor: TextAnchor::MiddleLeft,
+            },
+            Some(contact.into()),
+        )?;
+        tx.update::<Text>(label, |t| t.height_mm = 3.5)?;
+        tx.add_text(
+            control,
+            TextContent::Literal {
+                text: "Control circuit".into(),
+            },
+            TextPlacement::default(),
+            None,
+        )?;
         Ok(())
     })
     .unwrap();
