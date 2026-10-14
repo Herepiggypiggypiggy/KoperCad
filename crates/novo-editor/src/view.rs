@@ -26,6 +26,11 @@ use crate::tool::{Editor, EditorKey};
 const SEARCH_ROWS: usize = 8;
 /// Colour of things that follow the pointer.
 const GHOST: Color = Color::rgba(0, 120, 215, 200);
+/// Proposal marks and the pin-hover ring (DESIGN.md §5, steel blue).
+const STEEL: Color = Color::rgb(70, 130, 180);
+const PROPOSAL: Color = Color::rgba(70, 130, 180, 140);
+/// A pin wins over the symbol body within this many screen points.
+const PIN_RADIUS: f32 = 6.0;
 /// First preview item id; previews count down from here.
 const PREVIEW_BASE: u64 = u64::MAX - 16;
 
@@ -69,6 +74,8 @@ pub struct SchematicView {
     /// A page the view wants the shell to open (Page Up / Page Down, a new
     /// page).
     goto: Option<PageId>,
+    /// The press that closed a popup, until its release.
+    swallow: bool,
     /// Where the canvas was drawn last frame, in screen points.
     rect: egui::Rect,
 }
@@ -111,6 +118,7 @@ impl SchematicView {
             menu: None,
             status: None,
             goto: None,
+            swallow: false,
             rect: egui::Rect::NOTHING,
         }
     }
@@ -245,20 +253,26 @@ impl SchematicView {
                     .with(Primitive::stroked(Shape::polyline(pts, false), ghost)),
             );
         }
-        if !preview.connections.is_empty() {
+        if !preview.proposals.is_empty() {
+            // Proposals are dashed steel blue; the one Enter takes is solid
+            // (DESIGN.md §5).
             let mut item = Item::new(layer).unselectable();
-            for &(a, b) in &preview.connections {
-                item = item.with(Primitive::stroked(
-                    Shape::line(model::vec(a), model::vec(b)),
-                    ghost,
-                ));
+            for (i, &(a, b)) in preview.proposals.iter().enumerate() {
+                let line = Shape::line(model::vec(a), model::vec(b));
+                if preview.current == Some(i) {
+                    item = item.with(Primitive::stroked(line, Stroke::world(0.35, STEEL)));
+                } else {
+                    for dash in crate::art::dashes(&line) {
+                        item = item.with(Primitive::stroked(dash, Stroke::world(0.35, PROPOSAL)));
+                    }
+                }
             }
             items.push(item);
         }
         if let Some(t) = preview.target {
             items.push(Item::new(layer).unselectable().with(Primitive::stroked(
                 Shape::circle(model::vec(t), 1.2),
-                Stroke::screen(2.0, GHOST),
+                Stroke::screen(2.0, STEEL),
             )));
         }
         for (i, item) in items.into_iter().enumerate() {
@@ -286,7 +300,14 @@ impl SchematicView {
         self.sync(document, page);
         self.update_preview(document, page);
 
-        self.canvas.interaction.select = !self.editor.tool_active();
+        // The press that closes a popup only closes it: nothing on the
+        // canvas acts on it, through to its release.
+        let popup_before = self.popup_open();
+        if popup_before && ui.input(|i| i.pointer.any_pressed()) {
+            self.swallow = true;
+        }
+        self.canvas.interaction.select =
+            !self.editor.tool_active() && !popup_before && !self.swallow;
         self.canvas.interaction.escape_on_hover = false;
         let Some(scene) = &self.scene else {
             return ChangeSet::default();
@@ -298,18 +319,45 @@ impl SchematicView {
         if response.clicked() || response.secondary_clicked() {
             response.request_focus();
         }
-        // Alt held: this drop draws no facing wires (and the preview shows none).
-        self.editor.suppress_connect = ui.input(|i| i.modifiers.alt);
-        let tolerance = f64::from(self.canvas.pick_tolerance / self.canvas.viewport.zoom);
+        let zoom = self.canvas.viewport.zoom;
+        let tolerance = f64::from(self.canvas.pick_tolerance.max(PIN_RADIUS) / zoom);
+        // A drag from a pin connects (DESIGN.md §4): the pin under the
+        // press, not under the pointer once the drag is recognised.
+        if response.drag_started_by(egui::PointerButton::Primary)
+            && !self.swallow
+            && !self.editor.tool_active()
+            && let Some(o) = ui.input(|i| i.pointer.press_origin())
+        {
+            let local = o - rect.min;
+            let w = self
+                .canvas
+                .viewport
+                .screen_to_world(Vec2::new(local.x, local.y));
+            self.editor.hover(document, page, point(w), tolerance);
+            if self.editor.begin_drag() {
+                self.canvas.selection.clear();
+            }
+        }
         if let Some(w) = out.cursor_raw {
             self.editor.hover(document, page, point(w), tolerance);
         }
-        // Clicks drive the active tool; with none, the canvas selects.
-        if response.clicked_by(egui::PointerButton::Primary)
-            && self.editor.tool_active()
+        if self.editor.dragging()
+            && response.drag_stopped_by(egui::PointerButton::Primary)
             && let Some(w) = out.cursor_raw
         {
             self.editor.click(document, page, point(w), tolerance);
+        }
+        // Clicks drive the active tool; with none, the canvas selects (and
+        // the editor drops unaccepted proposals).
+        if response.clicked_by(egui::PointerButton::Primary)
+            && !self.swallow
+            && let Some(w) = out.cursor_raw
+        {
+            self.editor.click(document, page, point(w), tolerance);
+        }
+        // Pin under the pointer: the connect cursor.
+        if !self.editor.tool_active() && self.editor.pin_hovered() && response.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
         }
 
         // Keys, only while the drawing has the keyboard.
@@ -351,6 +399,9 @@ impl SchematicView {
         self.rename_popup(&ctx, document);
         self.context_menu(&ctx, document);
 
+        if self.swallow && !self.popup_open() && ctx.input(|i| !i.pointer.any_down()) {
+            self.swallow = false;
+        }
         let changes = self.apply_changes(document);
         self.status = Some(self.editor.status(document, page));
         changes
@@ -364,7 +415,17 @@ impl SchematicView {
         out: &novo_canvas::widget::CanvasOutput,
         rect: egui::Rect,
     ) {
-        let pressed = |key: Key| ctx.input_mut(|i| i.consume_key(Modifiers::NONE, key));
+        // Exactly no modifiers: Shift+R is not R.
+        let pressed = |key: Key| ctx.input_mut(|i| consume_plain_key(i, key));
+        // Enter accepts the highlighted proposal, Tab moves to the next one
+        // (DESIGN.md §4).
+        if !self.editor.proposals().is_empty() {
+            if pressed(Key::Enter) {
+                self.editor.accept_proposal(document);
+            } else if pressed(Key::Tab) {
+                self.editor.next_proposal();
+            }
+        }
         let selection = self.selection();
         for (key, step) in [(Key::PageUp, -1), (Key::PageDown, 1)] {
             if pressed(key)
@@ -722,6 +783,17 @@ enum MenuChoice {
     NewPage,
 }
 
+/// Consumes a press of `key` with no modifiers at all. egui's
+/// `consume_key` ignores extra Shift and Alt, which would make Shift+R
+/// rotate.
+fn consume_plain_key(input: &mut egui::InputState, key: Key) -> bool {
+    let found = input.events.iter().position(|e| {
+        matches!(e, egui::Event::Key { key: k, pressed: true, modifiers, .. }
+            if *k == key && modifiers.is_none())
+    });
+    found.map(|i| input.events.remove(i)).is_some()
+}
+
 /// A symbol name cut to a short favourite label.
 fn short(name: &str) -> String {
     let s: String = name.chars().take(18).collect();
@@ -735,6 +807,7 @@ fn short(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tool::Tool;
     use novo_core::SymbolRole;
 
     struct Harness {
@@ -797,6 +870,25 @@ mod tests {
                 repeat: false,
                 modifiers: Modifiers::NONE,
             }]);
+        }
+
+        fn drag(&mut self, from: (f64, f64), to: (f64, f64)) {
+            let a = self.screen(from.0, from.1);
+            let b = self.screen(to.0, to.1);
+            let button = |pos, pressed| egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Modifiers::NONE,
+            };
+            self.frame(vec![egui::Event::PointerMoved(a)]);
+            self.frame(vec![button(a, true)]);
+            for i in 1..=8 {
+                let t = i as f32 / 8.0;
+                self.frame(vec![egui::Event::PointerMoved(a + (b - a) * t)]);
+            }
+            self.frame(vec![button(b, false)]);
+            self.frame(Vec::new());
         }
 
         fn hover(&mut self, x: f64, y: f64) {
@@ -995,5 +1087,67 @@ mod tests {
         let menu = h.view.menu.as_ref().expect("context menu");
         assert!(menu.empty);
         assert!(h.view.editor.repeat_label().is_some());
+    }
+
+    fn pin_at(doc: &Document, origin: Point, name: &str) -> Point {
+        let s = doc
+            .project()
+            .symbols()
+            .find(|s| s.placement.origin == origin)
+            .unwrap();
+        s.pin_position(s.pin_index(name).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn a_drag_from_a_pin_connects_without_w() {
+        let mut h = Harness::new();
+        h.view.editor.auto_connect = false;
+        h.view.editor.begin_place("iec/coils/relay", None);
+        h.click(60.0, 60.0, egui::PointerButton::Primary);
+        h.click(140.0, 120.0, egui::PointerButton::Primary);
+        h.view.editor.leave_tool();
+        let a = pin_at(&h.doc, Point::new(60.0, 60.0), "A2");
+        let b = pin_at(&h.doc, Point::new(140.0, 120.0), "A1");
+        // Hovering the pin shows it can be dragged from.
+        h.hover(a.x, a.y);
+        assert!(h.view.editor.pin_hovered());
+        h.drag((a.x, a.y), (b.x, b.y));
+        assert_eq!(h.doc.project().wires().count(), 1);
+        assert!(!h.view.editor.tool_active());
+    }
+
+    #[test]
+    fn the_click_that_closes_a_menu_does_not_place() {
+        let mut h = Harness::new();
+        h.view.editor.begin_place("iec/coils/relay", None);
+        h.click(100.0, 100.0, egui::PointerButton::Secondary);
+        assert!(h.view.menu.is_some());
+        h.click(160.0, 160.0, egui::PointerButton::Primary);
+        assert!(h.view.menu.is_none());
+        assert_eq!(h.doc.project().symbols().count(), 0);
+        // The next click places as usual.
+        h.click(160.0, 160.0, egui::PointerButton::Primary);
+        assert_eq!(h.doc.project().symbols().count(), 1);
+    }
+
+    #[test]
+    fn shift_r_is_not_r() {
+        let mut h = Harness::new();
+        h.view.editor.begin_place("iec/coils/relay", None);
+        h.hover(100.0, 100.0);
+        h.frame(vec![egui::Event::Key {
+            key: Key::R,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::SHIFT,
+        }]);
+        assert!(
+            matches!(h.view.editor.tool(), Tool::Place(p) if p.rotation == novo_core::Rotation::R0)
+        );
+        h.key(Key::R);
+        assert!(
+            matches!(h.view.editor.tool(), Tool::Place(p) if p.rotation == novo_core::Rotation::R90)
+        );
     }
 }

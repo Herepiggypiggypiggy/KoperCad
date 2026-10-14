@@ -9,7 +9,9 @@
 //! favourite), W draws wires, M moves, R rotates, X mirrors, F2 renames,
 //! Delete deletes, Escape steps back, Ctrl+Z and Ctrl+Y undo and redo. Right
 //! click on wires declares a potential source; on empty canvas it repeats
-//! the last tool. Hold Alt while placing to drop without facing wires.
+//! the last tool. Facing pins are proposed
+//! (dashed); Enter accepts, Tab moves to the next. Drag from a pin to
+//! connect.
 
 use eframe::egui;
 use novo_core::{Document, PageId};
@@ -103,7 +105,8 @@ impl eframe::App for EditorApp {
 }
 
 /// Draws the Gate 1 main circuit through the editor, the way a user would:
-/// stacked devices wire themselves, then L1, L2 and L3 get their potential.
+/// stacked devices propose their wires (accepted with Enter), then L1, L2
+/// and L3 are declared as a source.
 fn demo(doc: &mut Document, page: PageId, view: &mut SchematicView) {
     use novo_core::{AnyId, Point};
     let editor = &mut view.editor;
@@ -124,6 +127,8 @@ fn demo(doc: &mut Document, page: PageId, view: &mut SchematicView) {
     ] {
         editor.begin_place(symbol, Some("-K1"));
         editor.click(doc, page, origin, 1.0);
+        // The facing pins above and below are proposed; Enter takes each.
+        while editor.accept_proposal(doc) {}
     }
     editor.leave_tool();
     // Feed wires from the top of the page onto the fuses.

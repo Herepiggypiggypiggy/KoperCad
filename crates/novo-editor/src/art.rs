@@ -144,7 +144,7 @@ fn is_dashed(s: novo_symbols::Stroke) -> bool {
 }
 
 /// Splits straight parts of a shape into dashes. Curves stay solid.
-fn dashes(shape: &Shape) -> Vec<Shape> {
+pub(crate) fn dashes(shape: &Shape) -> Vec<Shape> {
     let points: Vec<Vec2> = match shape {
         Shape::Line { a, b } => vec![*a, *b],
         Shape::Polyline { points, closed } => {

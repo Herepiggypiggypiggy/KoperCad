@@ -19,13 +19,15 @@ use crate::geometry::{
     self, EPS, Target, arc_position, endpoint_direction, locate_on_polyline, route, route_through,
     simplify, wire_points, wires_through,
 };
-use crate::naming::{Numbering, child_pin_names, new_device_tag, page_structure};
+use crate::naming::{Numbering, child_pin_names, complete_tag, new_device_tag, page_structure};
 
 /// What a placement attaches to, beyond the symbol itself.
 #[derive(Debug, Clone, Default)]
 pub struct PlaceOptions {
     /// Parent device of a child symbol (an auxiliary contact of `-K1`).
-    /// A tag that names no device yet creates it.
+    /// Untyped aspects come from the page's structure. A tag that names no
+    /// device yet creates it (scripts); the editor refuses that with a
+    /// notice instead.
     pub parent: Option<DeviceTag>,
     /// Terminal strip for terminal symbols; `None` uses the strip of the
     /// last terminal on the page, else `-X1`.
@@ -37,9 +39,6 @@ pub struct PlaceOptions {
     /// Connect pins that land on wires (on by default; scripts may turn it
     /// off).
     pub auto_connect: bool,
-    /// Also wire free pins that face a free pin ([`facing_wires`]). The
-    /// editor turns this on only while it shows those wires in the preview.
-    pub connect_facing: bool,
     /// How a new device is numbered.
     pub numbering: Numbering,
 }
@@ -73,10 +72,13 @@ pub fn place(
         }
         SymbolClass::Child { letter } => {
             let device = match &options.parent {
-                Some(tag) => match tx.project().devices_by_tag(tag).first() {
-                    Some(&d) => d,
-                    None => tx.add_device(tag.clone(), "")?,
-                },
+                Some(tag) => {
+                    let tag = complete_tag(tx.project(), page, tag);
+                    match tx.project().devices_by_tag(&tag).first() {
+                        Some(&d) => d,
+                        None => tx.add_device(tag, "")?,
+                    }
+                }
                 None => {
                     let tag = new_device_tag(tx.project(), page, letter, options.numbering);
                     tx.add_device(tag, symbol.name.clone())?
@@ -139,7 +141,7 @@ pub fn place(
         properties: Default::default(),
     })?;
     if options.auto_connect {
-        auto_connect(tx, id, options.connect_facing)?;
+        auto_connect(tx, id)?;
     }
     Ok(id)
 }
@@ -249,38 +251,66 @@ pub fn find_or_add_potential(
 
 /// Connects the pins of a newly placed symbol to what they land on
 /// (DESIGN.md §2, "anything with exactly one correct answer happens on its
-/// own"):
-///
-/// - pins inside a wire split it; a symbol with two pins on one wire is
-///   inserted in series (the piece between its pins goes away), one pin on a
-///   wire makes a T there;
-/// - with `facing`, a free pin that faces a free pin of another symbol on the
-///   same line is wired to it straight. The editor shows those wires as
-///   ghosts before the click ([`facing_wires`]), so what the preview shows
-///   is what you get.
-pub fn auto_connect(tx: &mut Tx<'_>, symbol: SymbolId, facing: bool) -> Result<()> {
-    let wires = match (facing, tx.project().symbol(symbol)) {
-        (true, Some(sym)) => facing_wires(tx.project(), std::slice::from_ref(sym)),
-        _ => Vec::new(),
-    };
-    settle(tx, &[symbol], &wires)
+/// own"): pins inside a wire split it (a symbol with two pins on one wire is
+/// inserted in series, one pin on a wire makes a T there), and pins dropped
+/// on free pins connect. See [`settle`].
+pub fn auto_connect(tx: &mut Tx<'_>, symbol: SymbolId) -> Result<()> {
+    settle(tx, &[symbol])
 }
 
-/// Finishes a placement or move: pins dropped inside wires split them, then
-/// the facing wires the preview showed are drawn where both ends are still
-/// free.
-pub fn settle(tx: &mut Tx<'_>, symbols: &[SymbolId], facing: &[FacingWire]) -> Result<()> {
+/// Finishes a placement or move with what has exactly one answer (DESIGN.md
+/// §2): pins dropped inside a wire split it, and a free pin dropped on
+/// another free pin connects to it. Facing pins at a distance are only
+/// proposed ([`facing_wires`], [`accept`]).
+pub fn settle(tx: &mut Tx<'_>, symbols: &[SymbolId]) -> Result<()> {
     for &s in symbols {
         insert_into_wires(tx, s)?;
     }
-    for f in facing {
+    for &s in symbols {
+        connect_touching(tx, s)?;
+    }
+    Ok(())
+}
+
+/// Connects free pins of `symbol` to free pins of other symbols at the same
+/// point.
+fn connect_touching(tx: &mut Tx<'_>, symbol: SymbolId) -> Result<()> {
+    let Some(page) = tx.project().symbol(symbol).map(|s| s.page) else {
+        return Ok(());
+    };
+    for (pin, p) in pin_positions(tx.project(), symbol) {
+        let from = Endpoint::pin(symbol, pin);
         let project = tx.project();
-        let exists = |e: Endpoint| project.endpoint_position(e).is_some();
-        if exists(f.from) && exists(f.to) && is_free(project, f.from) && is_free(project, f.to) {
-            tx.connect(f.from, f.to)?;
+        if !is_free(project, from) {
+            continue;
+        }
+        let other = project
+            .page_contents(page)
+            .symbols
+            .into_iter()
+            .filter(|&o| o != symbol)
+            .flat_map(|o| {
+                pin_positions(project, o)
+                    .into_iter()
+                    .map(move |(opin, q)| (Endpoint::pin(o, opin), q))
+            })
+            .find(|&(e, q)| q.approx_eq(p, EPS) && is_free(project, e));
+        if let Some((to, _)) = other {
+            tx.connect(from, to)?;
         }
     }
     Ok(())
+}
+
+/// Accepts a proposed facing wire: draws it if both pins are still free.
+pub fn accept(tx: &mut Tx<'_>, proposal: &FacingWire) -> Result<Option<WireId>> {
+    let project = tx.project();
+    let ok = |e: Endpoint| project.endpoint_position(e).is_some() && is_free(project, e);
+    if ok(proposal.from) && ok(proposal.to) {
+        tx.connect(proposal.from, proposal.to).map(Some)
+    } else {
+        Ok(None)
+    }
 }
 
 fn pin_positions(project: &Project, symbol: SymbolId) -> Vec<(u16, Point)> {
@@ -298,19 +328,38 @@ fn insert_into_wires(tx: &mut Tx<'_>, symbol: SymbolId) -> Result<()> {
     // Which pins lie inside which wire, in order along the wire.
     let mut on_wire: BTreeMap<WireId, Vec<(f64, usize, Point, u16)>> = BTreeMap::new();
     for (pin, p) in pin_positions(tx.project(), symbol) {
-        for (wire, seg) in wires_through(tx.project(), page, p) {
-            if tx.project().wire(wire).is_some_and(|w| {
-                w.ends()
-                    .iter()
-                    .any(|e| matches!(e, Endpoint::Pin { symbol: s, .. } if *s == symbol))
-            }) {
-                continue;
-            }
-            let pts = wire_points(tx.project(), wire).expect("wire on page");
+        let project = tx.project();
+        let candidates: Vec<(WireId, usize, Vec<Point>)> = wires_through(project, page, p)
+            .into_iter()
+            .filter(|(wire, _)| {
+                !project.wire(*wire).is_some_and(|w| {
+                    w.ends()
+                        .iter()
+                        .any(|e| matches!(e, Endpoint::Pin { symbol: s, .. } if *s == symbol))
+                })
+            })
+            .filter_map(|(wire, seg)| Some((wire, seg, wire_points(project, wire)?)))
+            .collect();
+        // On a crossing of unconnected wires the pin joins only the wire its
+        // direction runs along; the other keeps crossing (joining both
+        // would short two nets).
+        let direction = project.symbol(symbol).and_then(|s| s.pin_direction(pin));
+        let along = |pts: &[Point], seg: usize| {
+            let (a, b) = (pts[seg], pts[seg + 1]);
+            direction.is_some_and(|d| {
+                let v = d.vector();
+                ((b.x - a.x) * v.y - (b.y - a.y) * v.x).abs() < EPS
+            })
+        };
+        let chosen = candidates
+            .iter()
+            .find(|(_, seg, pts)| along(pts, *seg))
+            .or(candidates.first());
+        if let Some((wire, seg, pts)) = chosen {
             on_wire
-                .entry(wire)
+                .entry(*wire)
                 .or_default()
-                .push((arc_position(&pts, seg, p), seg, p, pin));
+                .push((arc_position(pts, *seg, p), *seg, p, pin));
         }
     }
     for (wire, mut pins) in on_wire {
@@ -353,12 +402,17 @@ pub struct FacingWire {
     pub b: Point,
 }
 
-/// The facing wires for symbols at the placement they would get. `ghosts`
-/// are symbol instances as they would be (a placement preview, or moved
-/// symbols at their new place, keeping their ids); other ghosts are ignored
-/// as partners. A pin that already has a wire, or that lands inside a wire,
-/// gets none.
-pub fn facing_wires(project: &Project, ghosts: &[SymbolInstance]) -> Vec<FacingWire> {
+/// The facing wires proposed for symbols at the placement they would get.
+/// `ghosts` are symbol instances as they would be (a placement preview, or
+/// moved symbols at their new place, keeping their ids); other ghosts are
+/// ignored as partners. A pin that already has a wire, or that lands inside
+/// a wire, gets none, and a line that would cross a wire or another symbol's
+/// body (`body` gives a symbol's drawn extent on the page) is not proposed.
+pub fn facing_wires(
+    project: &Project,
+    ghosts: &[SymbolInstance],
+    body: &dyn Fn(&SymbolInstance) -> Option<(Point, Point)>,
+) -> Vec<FacingWire> {
     let ignore: BTreeSet<SymbolId> = ghosts.iter().map(|g| g.id).collect();
     let mut out = Vec::new();
     for sym in ghosts {
@@ -414,7 +468,19 @@ pub fn facing_wires(project: &Project, ghosts: &[SymbolInstance]) -> Vec<FacingW
                 let w = d.vector();
                 (w.x + v.x).abs() < EPS && (w.y + v.y).abs() < EPS
             });
-            if facing && is_free(project, to) && !crosses_wire(project, page, p, len, v) {
+            let partner = to.as_pin().map(|r| r.symbol);
+            let through_body = |s: SymbolId| {
+                Some(s) != partner
+                    && project
+                        .symbol(s)
+                        .and_then(body)
+                        .is_some_and(|(min, max)| segment_in_box(p, q, min, max))
+            };
+            if facing
+                && is_free(project, to)
+                && !crosses_wire(project, page, p, len, v)
+                && !others.iter().any(|&s| through_body(s))
+            {
                 out.push(FacingWire {
                     from,
                     to,
@@ -425,6 +491,17 @@ pub fn facing_wires(project: &Project, ghosts: &[SymbolInstance]) -> Vec<FacingW
         }
     }
     out
+}
+
+/// Whether an axis-aligned segment passes through the inside of a box.
+fn segment_in_box(a: Point, b: Point, min: Point, max: Point) -> bool {
+    let inside = |t: f64, lo: f64, hi: f64| t > lo + EPS && t < hi - EPS;
+    let overlaps = |s: f64, e: f64, lo: f64, hi: f64| s.min(e) < hi - EPS && s.max(e) > lo + EPS;
+    if (a.x - b.x).abs() < EPS {
+        inside(a.x, min.x, max.x) && overlaps(a.y, b.y, min.y, max.y)
+    } else {
+        inside(a.y, min.y, max.y) && overlaps(a.x, b.x, min.x, max.x)
+    }
 }
 
 /// Whether a straight line from `p` along `v` for `len` would cross or run
@@ -801,16 +878,34 @@ fn keep_wires_through(tx: &mut Tx<'_>, symbol: SymbolId) -> Result<()> {
 /// Removes junctions without wires and joins the two wires of a junction
 /// that is no longer a T.
 pub fn tidy_junctions(tx: &mut Tx<'_>, page: PageId) -> Result<()> {
-    for j in tx.project().page_contents(page).junctions {
-        let end = Endpoint::junction(j);
-        let wires: Vec<WireId> = tx.project().wires_at(end).collect();
-        match wires.as_slice() {
-            [] => tx.remove(j)?,
-            [a, b] if a != b => join_wires(tx, j, *a, *b)?,
-            _ => {}
+    // Removing a dead stub can leave the junction at its other end with
+    // one or two wires, so repeat until nothing changes.
+    loop {
+        let mut changed = false;
+        for j in tx.project().page_contents(page).junctions {
+            if tx.project().junction(j).is_none() {
+                continue;
+            }
+            let end = Endpoint::junction(j);
+            let wires: Vec<WireId> = tx.project().wires_at(end).collect();
+            match wires.as_slice() {
+                [] => tx.remove(j)?,
+                // A dot on a dead stub: the stub is a dangling connection.
+                [a] => {
+                    tx.remove(*a)?;
+                    if tx.project().junction(j).is_some() {
+                        tx.remove(j)?;
+                    }
+                }
+                [a, b] if a != b => join_wires(tx, j, *a, *b)?,
+                _ => continue,
+            }
+            changed = true;
+        }
+        if !changed {
+            return Ok(());
         }
     }
-    Ok(())
 }
 
 fn join_wires(tx: &mut Tx<'_>, junction: JunctionId, keep: WireId, other: WireId) -> Result<()> {

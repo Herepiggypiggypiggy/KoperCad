@@ -165,6 +165,8 @@ fn main_circuit(doc: &mut Document, page: PageId, editor: &mut Editor, gap: f64)
     {
         editor.begin_place(symbol, None);
         assert_eq!(editor.click(doc, page, at, TOL), Clicked::Edited);
+        // Facing pins are proposed; Enter takes each.
+        while editor.accept_proposal(doc) {}
     }
     origins
 }
@@ -179,7 +181,7 @@ fn stacked_three_pole_devices_wire_themselves() {
         symbol_at(&doc, page, ol),
         symbol_at(&doc, page, m),
     );
-    // Facing free pins on one line are wired straight: 9 wires, no clicks.
+    // Facing free pins on one line are proposed and accepted: 9 wires.
     assert_eq!(doc.project().wires().count(), 9);
     for (a, b) in [("2", "1"), ("4", "3"), ("6", "5")] {
         assert!(connected(&doc, pin(&doc, f, a), pin(&doc, k, b)));
@@ -596,7 +598,8 @@ fn terminals_number_themselves_on_the_strip_in_use() {
 #[test]
 fn status_bar_says_what_the_next_click_does() {
     let (mut doc, page, mut editor) = setup();
-    assert!(editor.status(&doc, page).contains("I insert"));
+    // Quiet with nothing in hand.
+    assert_eq!(editor.status(&doc, page), "");
     editor.begin_place("iec/coils/relay", None);
     assert!(editor.status(&doc, page).contains("as -K1"));
     editor.click(&mut doc, page, p(40.0, 40.0), TOL);
@@ -645,7 +648,7 @@ fn wire_ends(doc: &Document) -> Vec<(Point, Point)> {
 fn preview_ends(editor: &Editor, doc: &Document, page: PageId) -> Vec<(Point, Point)> {
     let mut ends: Vec<(Point, Point)> = editor
         .preview(doc, page)
-        .connections
+        .proposals
         .into_iter()
         .map(|(a, b)| {
             if (a.x, a.y) <= (b.x, b.y) {
@@ -659,8 +662,24 @@ fn preview_ends(editor: &Editor, doc: &Document, page: PageId) -> Vec<(Point, Po
     ends
 }
 
+fn proposal_ends(editor: &Editor) -> Vec<(Point, Point)> {
+    let mut ends: Vec<(Point, Point)> = editor
+        .proposals()
+        .iter()
+        .map(|f| {
+            if (f.a.x, f.a.y) <= (f.b.x, f.b.y) {
+                (f.a, f.b)
+            } else {
+                (f.b, f.a)
+            }
+        })
+        .collect();
+    ends.sort_by(|x, y| x.0.x.total_cmp(&y.0.x));
+    ends
+}
+
 #[test]
-fn placing_draws_exactly_the_facing_wires_the_preview_showed() {
+fn facing_pins_are_proposed_as_previewed_and_enter_accepts_them() {
     let (mut doc, page, mut editor) = setup();
     editor.begin_place("iec/protection/fuse_3p", None);
     editor.click(&mut doc, page, p(40.0, 40.0), TOL);
@@ -669,43 +688,269 @@ fn placing_draws_exactly_the_facing_wires_the_preview_showed() {
     let shown = preview_ends(&editor, &doc, page);
     assert_eq!(shown.len(), 3);
     editor.click(&mut doc, page, p(40.0, 120.0), TOL);
+    // Proposed, not connected.
+    assert_eq!(doc.project().wires().count(), 0);
+    assert_eq!(proposal_ends(&editor), shown);
+    assert_eq!(editor.preview(&doc, page).current, Some(0));
+    // Enter accepts one at a time, each its own undo step; Tab moves on.
+    let depth = doc.undo_depth();
+    assert!(editor.accept_proposal(&mut doc));
+    assert!(editor.next_proposal());
+    assert!(editor.accept_proposal(&mut doc));
+    assert!(editor.accept_proposal(&mut doc));
+    assert!(!editor.accept_proposal(&mut doc));
+    assert_eq!(doc.undo_depth(), depth + 3);
     assert_eq!(wire_ends(&doc), shown);
 }
 
 #[test]
-fn alt_drops_without_facing_wires() {
+fn escape_or_clicking_elsewhere_leaves_proposals_unaccepted() {
     let (mut doc, page, mut editor) = setup();
     editor.begin_place("iec/protection/fuse_3p", None);
     editor.click(&mut doc, page, p(40.0, 40.0), TOL);
     editor.begin_place("iec/contactors/main_3p", None);
-    editor.suppress_connect = true;
-    editor.hover(&doc, page, p(40.0, 120.0), TOL);
-    assert!(preview_ends(&editor, &doc, page).is_empty());
     editor.click(&mut doc, page, p(40.0, 120.0), TOL);
+    assert_eq!(editor.proposals().len(), 3);
+    // Escape's first rung drops the proposals and keeps the tool.
+    assert!(editor.cancel_step());
+    assert!(editor.proposals().is_empty());
+    assert!(editor.tool_active());
+    editor.click(&mut doc, page, p(40.0, 200.0), TOL);
+    assert!(!editor.proposals().is_empty());
+    editor.leave_tool();
+    editor.click(&mut doc, page, p(150.0, 150.0), TOL);
+    assert!(editor.proposals().is_empty());
     assert_eq!(doc.project().wires().count(), 0);
 }
 
 #[test]
-fn moving_connects_only_what_the_preview_showed() {
+fn moving_connects_nothing_the_preview_did_not_show() {
     let (mut doc, page, mut editor) = setup();
     editor.begin_place("iec/protection/fuse_3p", None);
     editor.click(&mut doc, page, p(40.0, 40.0), TOL);
     editor.begin_place("iec/contactors/main_3p", None);
     editor.click(&mut doc, page, p(80.0, 120.0), TOL);
     editor.leave_tool();
-    assert_eq!(doc.project().wires().count(), 0);
     let k = AnyId::Symbol(symbol_at(&doc, page, p(80.0, 120.0)));
-    // A move with no preview (arrow keys, scripts) lines the pins up but
-    // draws nothing.
+    // A move with no preview (arrow keys, scripts) proposes nothing.
     assert!(editor.move_selection(&mut doc, &[k], p(-40.0, 0.0)));
-    assert_eq!(doc.project().wires().count(), 0);
+    assert!(editor.proposals().is_empty());
     assert!(editor.move_selection(&mut doc, &[k], p(40.0, 0.0)));
-    // The move tool shows the wires while dragging, and the drop draws them.
+    // The move tool shows the proposals while dragging; the drop keeps them.
     editor.hover(&doc, page, p(80.0, 120.0), TOL);
     assert!(editor.begin_move(&[k]));
     editor.hover(&doc, page, p(40.0, 120.0), TOL);
     let shown = preview_ends(&editor, &doc, page);
     assert_eq!(shown.len(), 3);
     editor.click(&mut doc, page, p(40.0, 120.0), TOL);
-    assert_eq!(wire_ends(&doc), shown);
+    assert_eq!(doc.project().wires().count(), 0);
+    assert_eq!(proposal_ends(&editor), shown);
+}
+
+#[test]
+fn a_symbol_body_in_between_blocks_a_proposal() {
+    let (mut doc, page, mut editor) = setup();
+    editor.begin_place("iec/protection/fuse_3p", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    // A lamp off to the side whose body covers the column but whose pins
+    // are not on it.
+    editor.begin_place("iec/signalling/lamp", None);
+    editor.click(&mut doc, page, p(48.0, 88.0), TOL);
+    let lamp = symbol_at(&doc, page, p(48.0, 88.0));
+    editor.begin_place("iec/contactors/main_3p", None);
+    editor.hover(&doc, page, p(40.0, 140.0), TOL);
+    let shown = preview_ends(&editor, &doc, page);
+    let body = editor.body(doc.project().symbol(lamp).unwrap()).unwrap();
+    for (a, b) in shown {
+        let x = a.x;
+        let crosses =
+            x > body.0.x && x < body.1.x && a.y.min(b.y) < body.1.y && a.y.max(b.y) > body.0.y;
+        assert!(!crosses, "a proposal runs through the lamp at x = {x}");
+    }
+}
+
+#[test]
+fn touching_pins_connect_on_drop() {
+    let (mut doc, page, mut editor) = setup();
+    editor.begin_place("iec/protection/fuse_3p", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    let f = symbol_at(&doc, page, p(40.0, 40.0));
+    // Put the contactor's pin 1 exactly on the fuse's pin 2.
+    let at = pin_pos(&doc, f, "2");
+    editor.begin_place("iec/contactors/main_3p", None);
+    editor.hover(&doc, page, p(40.0, 120.0), TOL);
+    let ghost = editor.preview(&doc, page).symbols[0].clone();
+    let i = ghost.pin_index("1").unwrap();
+    let offset = at - ghost.pin_position(i).unwrap();
+    editor.click(&mut doc, page, p(40.0 + offset.x, 120.0 + offset.y), TOL);
+    let k = symbol_at(&doc, page, p(40.0 + offset.x, 120.0 + offset.y));
+    assert!(connected(&doc, pin(&doc, f, "2"), pin(&doc, k, "1")));
+    assert!(connected(&doc, pin(&doc, f, "6"), pin(&doc, k, "5")));
+}
+
+#[test]
+fn a_pin_on_a_crossing_joins_only_the_wire_it_runs_along() {
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    // Two coils left and right, two coils above and below: a + of wires.
+    editor.begin_place("iec/coils/relay", None);
+    for (x, y) in [(0.0, 80.0), (160.0, 80.0)] {
+        editor.click(&mut doc, page, p(x, y), TOL);
+    }
+    editor.leave_tool();
+    let a = symbol_at(&doc, page, p(0.0, 80.0));
+    let b = symbol_at(&doc, page, p(160.0, 80.0));
+    editor.begin_wire();
+    // A2 of the left coil to A2 of the right coil.
+    click_pin(&mut editor, &mut doc, page, a, "A2");
+    click_pin(&mut editor, &mut doc, page, b, "A2");
+    editor.leave_tool();
+    let horizontal = doc.project().wires().next().unwrap().id;
+    let pts = edit_points(&doc, horizontal);
+    // A vertical wire crossing it: between two terminals above and below.
+    let cross_x = 80.0;
+    let y = pts.iter().map(|p| p.y).fold(f64::NAN, f64::max);
+    editor.auto_connect = false;
+    editor.begin_place("iec/terminals/terminal", None);
+    editor.click(&mut doc, page, p(cross_x, y - 40.0), TOL);
+    editor.click(&mut doc, page, p(cross_x, y + 40.0), TOL);
+    editor.leave_tool();
+    let t1 = symbol_at(&doc, page, p(cross_x, y - 40.0));
+    let t2 = symbol_at(&doc, page, p(cross_x, y + 40.0));
+    editor.begin_wire();
+    click_pin(&mut editor, &mut doc, page, t1, "2");
+    click_pin(&mut editor, &mut doc, page, t2, "1");
+    editor.leave_tool();
+    assert_eq!(doc.project().wires().count(), 2);
+    // A one-pin feed dropped right on the crossing joins one wire only.
+    editor.auto_connect = true;
+    let feed = doc.transact("feed", |tx| {
+        let lib = novo_symbols::Library::builtin().unwrap();
+        let sym = lib.get(potential::FEED_SYMBOL).unwrap().clone();
+        edit::place(
+            tx,
+            page,
+            &sym,
+            novo_core::Placement::at(p(cross_x, y - 8.0)),
+            &PlaceOptions::new(),
+        )
+    });
+    assert!(feed.is_ok());
+    // It split one wire (3 wires now), and the two nets stay apart.
+    assert_eq!(doc.project().wires().count(), 3);
+    assert!(!connected(&doc, pin(&doc, a, "A2"), pin(&doc, t1, "2")));
+    assert!(!connected(&doc, pin(&doc, b, "A2"), pin(&doc, t2, "1")));
+}
+
+fn edit_points(doc: &Document, wire: novo_core::WireId) -> Vec<Point> {
+    novo_editor::geometry::wire_points(doc.project(), wire).unwrap()
+}
+
+#[test]
+fn k1_no_finds_k1_in_the_pages_structure_and_refuses_a_missing_parent() {
+    let (mut doc, page, mut editor) = setup();
+    doc.transact("structure", |tx| {
+        tx.set_property(
+            page,
+            novo_editor::naming::PAGE_STRUCTURE,
+            Some(novo_core::Value::Text("=A1+CAB1".into())),
+        )
+    })
+    .unwrap();
+    editor.begin_place("iec/coils/relay", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.begin_place("iec/contacts/no", Some("-K1"));
+    assert_eq!(
+        editor.click(&mut doc, page, p(80.0, 40.0), TOL),
+        Clicked::Edited
+    );
+    assert_eq!(tags(&doc), ["=A1+CAB1-K1"]);
+    editor.begin_place("iec/contacts/no", Some("-K7"));
+    assert_eq!(
+        editor.click(&mut doc, page, p(120.0, 40.0), TOL),
+        Clicked::Refused
+    );
+    assert!(editor.notice().unwrap().contains("-K7"));
+    assert_eq!(tags(&doc), ["=A1+CAB1-K1"]);
+}
+
+#[test]
+fn deleting_two_branches_of_a_t_leaves_no_dot_on_a_stub() {
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/coils/relay", None);
+    for (x, y) in [(40.0, 40.0), (40.0, 160.0), (120.0, 100.0)] {
+        editor.click(&mut doc, page, p(x, y), TOL);
+    }
+    editor.leave_tool();
+    let top = symbol_at(&doc, page, p(40.0, 40.0));
+    let bottom = symbol_at(&doc, page, p(40.0, 160.0));
+    let side = symbol_at(&doc, page, p(120.0, 100.0));
+    editor.begin_wire();
+    click_pin(&mut editor, &mut doc, page, top, "A2");
+    click_pin(&mut editor, &mut doc, page, bottom, "A1");
+    // T off the middle of that wire to the side coil.
+    let mid = Point::new(pin_pos(&doc, top, "A2").x, 100.0);
+    editor.click(&mut doc, page, mid, TOL);
+    click_pin(&mut editor, &mut doc, page, side, "A1");
+    editor.leave_tool();
+    assert_eq!(doc.project().junctions().count(), 1);
+    let j = Endpoint::junction(doc.project().junctions().next().unwrap().id);
+    let branches: Vec<AnyId> = doc
+        .project()
+        .wires_at(j)
+        .filter(|&w| {
+            let wire = doc.project().wire(w).unwrap();
+            !wire.ends().contains(&pin(&doc, top, "A2"))
+        })
+        .map(AnyId::Wire)
+        .collect();
+    assert_eq!(branches.len(), 2);
+    assert!(editor.delete(&mut doc, &branches));
+    assert_eq!(doc.project().junctions().count(), 0);
+    assert_eq!(doc.project().wires().count(), 0);
+}
+
+#[test]
+fn turning_a_moved_coil_connects_where_it_lands_not_where_it_was() {
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/terminals/terminal", None);
+    editor.click(&mut doc, page, p(0.0, 100.0), TOL);
+    editor.click(&mut doc, page, p(200.0, 100.0), TOL);
+    editor.leave_tool();
+    let t1 = symbol_at(&doc, page, p(0.0, 100.0));
+    let t2 = symbol_at(&doc, page, p(200.0, 100.0));
+    editor.begin_wire();
+    click_pin(&mut editor, &mut doc, page, t1, "2");
+    click_pin(&mut editor, &mut doc, page, t2, "1");
+    editor.leave_tool();
+    let before = doc.project().wires().count();
+    let wire = doc.project().wires().next().unwrap().id;
+    // The wire's horizontal run, and a grid point in the middle of it.
+    let pts = edit_points(&doc, wire);
+    let (a, b) = pts
+        .windows(2)
+        .map(|s| (s[0], s[1]))
+        .filter(|(a, b)| (a.y - b.y).abs() < 1e-6)
+        .max_by(|x, y| (x.1.x - x.0.x).abs().total_cmp(&(y.1.x - y.0.x).abs()))
+        .unwrap();
+    let wire_y = a.y;
+    let mid_x = ((a.x + b.x) / 2.0 / 4.0).round() * 4.0;
+    editor.auto_connect = true;
+    editor.begin_place("iec/coils/relay", None);
+    editor.click(&mut doc, page, p(100.0, 300.0), TOL);
+    editor.leave_tool();
+    let coil = AnyId::Symbol(symbol_at(&doc, page, p(100.0, 300.0)));
+    editor.hover(&doc, page, p(100.0, 300.0), TOL);
+    assert!(editor.begin_move(&[coil]));
+    assert!(editor.key(&mut doc, EditorKey::Rotate, &[coil]));
+    // Unturned, the coil (vertical, pins above and below its origin) at
+    // this x would sit on the horizontal wire's line with its pins off it;
+    // drop it with its origin on the wire line, 4 mm off the wire's x span
+    // so only the turn decides.
+    editor.click(&mut doc, page, p(mid_x, wire_y), TOL);
+    // Turned horizontal on the wire: inserted in series, so the wire
+    // was split by the turned pins.
+    assert_eq!(doc.project().wires().count(), before + 1);
 }

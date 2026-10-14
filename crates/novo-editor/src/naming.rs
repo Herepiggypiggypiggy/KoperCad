@@ -23,6 +23,20 @@ pub fn page_structure(project: &Project, page: PageId) -> DeviceTag {
         .unwrap_or_default()
 }
 
+/// A tag typed without function or location (`-K1`) completed with the
+/// page's structure (`=A1+CAB1-K1`); typed aspects are kept.
+pub fn complete_tag(project: &Project, page: PageId, tag: &DeviceTag) -> DeviceTag {
+    let structure = page_structure(project, page);
+    let mut tag = tag.clone();
+    if tag.function.is_empty() {
+        tag.function = structure.function;
+    }
+    if tag.location.is_empty() {
+        tag.location = structure.location;
+    }
+    tag
+}
+
 /// How new devices are numbered: a project rule (DESIGN.md §7), so other
 /// schemes such as page based `-K301` (§6) are added here without touching
 /// placement.

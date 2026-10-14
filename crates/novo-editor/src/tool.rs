@@ -3,19 +3,19 @@
 //! The view (or a test) feeds pointer positions, clicks and keys in; the
 //! [`Editor`] edits the [`Document`] one gesture per undo step and says what
 //! to preview and what the status bar should read. Tools are sticky
-//! (principle 3): after a placement or a wire the tool stays active, and
-//! Escape climbs the ladder step, tool, selection (principle 4).
+//! (DESIGN.md §4): after a placement or a wire the tool stays active, and
+//! Escape climbs the ladder: proposals or the step in progress, then the
+//! tool, then the selection.
 
 use novo_core::{
-    AnyId, ChangeSet, DeviceId, DeviceTag, Document, PageId, Placement, Point, Rotation, SymbolId,
-    SymbolInstance, SymbolKey, SymbolRole, WireId,
+    AnyId, ChangeSet, DeviceId, DeviceTag, Document, Endpoint, PageId, Placement, Point, Rotation,
+    SymbolId, SymbolInstance, SymbolKey, SymbolRole, WireId,
 };
 
 use crate::catalog::{Catalog, SymbolClass, classify, model_groups, model_pins};
 use crate::edit::{self, PlaceOptions, Transform};
 use crate::geometry::{Target, endpoint_direction, route_through, snap, target_at};
-use crate::naming::Numbering;
-use crate::naming::{next_device_tag, parse_tag_input, tag_conflict};
+use crate::naming::{self, Numbering, parse_tag_input, tag_conflict};
 use crate::potential::{self, FEED_SYMBOL, PotentialMenu, Suggestion};
 
 /// Placing one symbol, over and over.
@@ -36,6 +36,9 @@ pub struct WireTool {
     pub start: Option<Target>,
     /// Corners clicked in empty space so far.
     pub corners: Vec<Point>,
+    /// Started by dragging from a pin (DESIGN.md §4): the release ends the
+    /// wire and the editor goes back to selecting.
+    pub drag: bool,
 }
 
 /// Moving the selection: it follows the pointer until the next click.
@@ -113,9 +116,12 @@ pub struct Preview {
     pub wire: Vec<Point>,
     /// A pin, junction or wire point the next click would connect to.
     pub target: Option<Point>,
-    /// Straight wires the click would draw between facing free pins
-    /// ([`edit::facing_wires`]): what the preview shows is what you get.
-    pub connections: Vec<(Point, Point)>,
+    /// Proposed wires between facing free pins ([`edit::facing_wires`]),
+    /// drawn dashed: before a drop, what the drop would propose; after it,
+    /// the proposals Enter accepts.
+    pub proposals: Vec<(Point, Point)>,
+    /// The proposal Enter would accept (an index into `proposals`).
+    pub current: Option<usize>,
 }
 
 /// Id used for preview symbols; never a real model id.
@@ -137,9 +143,9 @@ pub struct Editor {
     /// The rule that recognises PE, N and PEN from connection names
     /// (`-X4:PE`) without any action (DESIGN.md §2). On by default.
     pub supply_names: bool,
-    /// Held Alt: this drop draws no facing wires (pins dropped inside a
-    /// wire still connect, since that has one answer).
-    pub suppress_connect: bool,
+    /// Facing-pin wires proposed by the last drop, and the highlighted one.
+    proposals: Vec<edit::FacingWire>,
+    proposal: usize,
     /// The terminal strip in use, once the user placed or chose one.
     pub strip: Option<DeviceId>,
     notice: Option<String>,
@@ -163,7 +169,8 @@ impl Editor {
             target: None,
             grid: novo_symbols::GRID,
             auto_connect: true,
-            suppress_connect: false,
+            proposals: Vec::new(),
+            proposal: 0,
             supply_names: true,
             numbering: Numbering::default(),
             strip: None,
@@ -259,7 +266,14 @@ impl Editor {
             self.notice = Some(format!("No symbol {symbol}"));
             return false;
         }
-        let parent = parent.and_then(|p| DeviceTag::parse(p).ok());
+        let parent = match parent.map(|p| naming::parse_tag_input(p, &DeviceTag::default())) {
+            None => None,
+            Some(Ok(tag)) => Some(tag),
+            Some(Err(e)) => {
+                self.notice = Some(format!("Parent tag: {e}"));
+                return false;
+            }
+        };
         self.set_tool(Tool::Place(PlaceTool {
             symbol: symbol.into(),
             parent,
@@ -299,6 +313,10 @@ impl Editor {
 
     /// Escape, first rung: cancels the step in progress.
     pub fn cancel_step(&mut self) -> bool {
+        if !self.proposals.is_empty() {
+            self.proposals.clear();
+            return true;
+        }
         match &mut self.tool {
             Tool::Wire(w) if w.start.is_some() => {
                 *w = WireTool::default();
@@ -328,6 +346,10 @@ impl Editor {
         let project = doc.project();
         self.target = match &self.tool {
             Tool::Wire(_) => target_at(project, page, raw, tolerance),
+            // A pin wins over the symbol body near it: dragging from it
+            // connects (DESIGN.md §4).
+            Tool::Select => target_at(project, page, raw, tolerance)
+                .filter(|t| matches!(t, Target::Endpoint(Endpoint::Pin { .. }, _))),
             _ => None,
         };
         self.cursor = Some(match self.target {
@@ -348,6 +370,8 @@ impl Editor {
         let Some(at) = self.cursor else {
             return Clicked::Unhandled;
         };
+        // Clicking elsewhere leaves proposals unaccepted.
+        self.proposals.clear();
         match self.tool.clone() {
             Tool::Select => Clicked::Unhandled,
             Tool::Place(p) => self.commit_place(doc, page, &p, at),
@@ -364,6 +388,11 @@ impl Editor {
                         self.notice = Some("Start a wire on a pin, junction or wire".into());
                         Clicked::Refused
                     }
+                    (Some(_), None) if w.drag => {
+                        // A drag released on nothing connects nothing.
+                        self.tool = Tool::Select;
+                        Clicked::Step
+                    }
                     (Some(_), None) => {
                         w.corners.push(at);
                         self.tool = Tool::Wire(w);
@@ -371,13 +400,22 @@ impl Editor {
                     }
                     (Some(start), Some(end)) => {
                         if start == end {
+                            if w.drag {
+                                self.tool = Tool::Select;
+                                return Clicked::Step;
+                            }
+                            self.notice = Some("Pick a different end for the wire".into());
                             return Clicked::Refused;
                         }
                         let corners = w.corners.clone();
                         let result = doc.transact("Draw wire", |tx| {
                             edit::draw_wire(tx, page, start, &corners, end)
                         });
-                        self.tool = Tool::Wire(WireTool::default());
+                        self.tool = if w.drag {
+                            Tool::Select
+                        } else {
+                            Tool::Wire(WireTool::default())
+                        };
                         self.finish(result.map(|(_, c)| c), None)
                     }
                 }
@@ -385,12 +423,6 @@ impl Editor {
             Tool::Move(m) => {
                 let delta = at - m.from;
                 let grid = self.grid;
-                // The facing wires the preview showed, decided before the move.
-                let facing = if self.connects_facing() {
-                    edit::facing_wires(doc.project(), &move_ghosts(doc.project(), &m, at, grid))
-                } else {
-                    Vec::new()
-                };
                 let result = doc.transact("Move", |tx| {
                     if delta != Point::ZERO {
                         edit::transform(tx, &m.ids, Transform::Move(delta))?;
@@ -405,12 +437,15 @@ impl Editor {
                         }
                     }
                     if self.auto_connect {
-                        edit::settle(tx, &edit::symbols_in(&m.ids), &facing)?;
+                        edit::settle(tx, &edit::symbols_in(&m.ids))?;
                     }
                     Ok(())
                 });
                 self.tool = Tool::Select;
                 let r = self.finish(result.map(|(_, c)| c), None);
+                if r == Clicked::Edited {
+                    self.propose(doc, &edit::symbols_in(&m.ids));
+                }
                 self.select = Some(m.ids);
                 r
             }
@@ -436,10 +471,18 @@ impl Editor {
             parent: p.parent.clone(),
             strip: self.strip,
             auto_connect: self.auto_connect,
-            connect_facing: self.connects_facing(),
             numbering: self.numbering,
             ..PlaceOptions::default()
         };
+        if let Some(parent) = &options.parent
+            && matches!(classify(&symbol), SymbolClass::Child { .. })
+        {
+            let tag = naming::complete_tag(doc.project(), page, parent);
+            if doc.project().devices_by_tag(&tag).is_empty() {
+                self.notice = Some(format!("No device {tag}; place it first"));
+                return Clicked::Refused;
+            }
+        }
         let result = doc.transact(format!("Place {}", symbol.name), |tx| {
             edit::place(tx, page, &symbol, placement, &options)
         });
@@ -455,7 +498,97 @@ impl Editor {
                     .map(|t| t.strip);
             }
         }
-        self.finish(result.map(|(_, c)| c), placed)
+        let r = self.finish(result.map(|(_, c)| c), placed);
+        if let Some(AnyId::Symbol(s)) = placed {
+            self.propose(doc, &[s]);
+        }
+        r
+    }
+
+    /// Proposes the facing-pin wires of symbols just dropped.
+    fn propose(&mut self, doc: &Document, symbols: &[SymbolId]) {
+        if !self.auto_connect {
+            return;
+        }
+        let project = doc.project();
+        let placed: Vec<SymbolInstance> = symbols
+            .iter()
+            .filter_map(|&s| project.symbol(s).cloned())
+            .collect();
+        self.proposals = edit::facing_wires(project, &placed, &|s| self.body(s));
+        self.proposal = 0;
+    }
+
+    /// The drawn extent of a placed symbol on its page.
+    pub fn body(&self, sym: &SymbolInstance) -> Option<(Point, Point)> {
+        let (a, b) = self.catalog.get(&sym.symbol.0)?.bounds();
+        let corners = [[a[0], a[1]], [b[0], a[1]], [a[0], b[1]], [b[0], b[1]]]
+            .map(|c| sym.placement.apply(Point::new(c[0], c[1])));
+        let min = corners
+            .iter()
+            .fold(corners[0], |m, c| Point::new(m.x.min(c.x), m.y.min(c.y)));
+        let max = corners
+            .iter()
+            .fold(corners[0], |m, c| Point::new(m.x.max(c.x), m.y.max(c.y)));
+        Some((min, max))
+    }
+
+    /// The facing-pin wires the last drop proposes.
+    pub fn proposals(&self) -> &[edit::FacingWire] {
+        &self.proposals
+    }
+
+    /// Tab: highlights the next proposal.
+    pub fn next_proposal(&mut self) -> bool {
+        if self.proposals.is_empty() {
+            return false;
+        }
+        self.proposal = (self.proposal + 1) % self.proposals.len();
+        true
+    }
+
+    /// Enter: accepts the highlighted proposal as one undo step.
+    pub fn accept_proposal(&mut self, doc: &mut Document) -> bool {
+        if self.proposals.is_empty() {
+            return false;
+        }
+        let i = self.proposal.min(self.proposals.len() - 1);
+        let proposal = self.proposals.remove(i);
+        if self.proposal >= self.proposals.len() {
+            self.proposal = 0;
+        }
+        let result = doc.transact("Connect", |tx| edit::accept(tx, &proposal));
+        self.finish(result.map(|(_, c)| c), None) == Clicked::Edited
+    }
+
+    /// Starts a wire by dragging from the pin under the pointer (DESIGN.md
+    /// §4). Returns whether a pin was there.
+    pub fn begin_drag(&mut self) -> bool {
+        let Some(start @ Target::Endpoint(Endpoint::Pin { .. }, _)) = self.target else {
+            return false;
+        };
+        if !matches!(self.tool, Tool::Select) {
+            return false;
+        }
+        self.proposals.clear();
+        self.tool = Tool::Wire(WireTool {
+            start: Some(start),
+            corners: Vec::new(),
+            drag: true,
+        });
+        self.notice = None;
+        true
+    }
+
+    /// Whether the pointer is on a pin a drag would connect from.
+    pub fn pin_hovered(&self) -> bool {
+        matches!(self.tool, Tool::Select)
+            && matches!(self.target, Some(Target::Endpoint(Endpoint::Pin { .. }, _)))
+    }
+
+    /// Whether a wire is being dragged from a pin.
+    pub fn dragging(&self) -> bool {
+        matches!(&self.tool, Tool::Wire(w) if w.drag)
     }
 
     fn finish(&mut self, result: novo_core::Result<ChangeSet>, select: Option<AnyId>) -> Clicked {
@@ -555,7 +688,7 @@ impl Editor {
             edit::transform(tx, selection, Transform::Rotate(c))?;
             // No preview here, so only pins dropped inside wires connect.
             if settle {
-                edit::settle(tx, &edit::symbols_in(selection), &[])?;
+                edit::settle(tx, &edit::symbols_in(selection))?;
             }
             Ok(())
         })
@@ -571,7 +704,7 @@ impl Editor {
             edit::transform(tx, selection, Transform::Mirror(c))?;
             // No preview here, so only pins dropped inside wires connect.
             if settle {
-                edit::settle(tx, &edit::symbols_in(selection), &[])?;
+                edit::settle(tx, &edit::symbols_in(selection))?;
             }
             Ok(())
         })
@@ -589,7 +722,7 @@ impl Editor {
             edit::transform(tx, selection, Transform::Move(delta))?;
             // No preview here, so only pins dropped inside wires connect.
             if settle {
-                edit::settle(tx, &edit::symbols_in(selection), &[])?;
+                edit::settle(tx, &edit::symbols_in(selection))?;
             }
             Ok(())
         })
@@ -690,21 +823,23 @@ impl Editor {
     /// What the next click would do, for the status bar (principle 8).
     pub fn status(&self, doc: &Document, page: PageId) -> String {
         let text = match &self.tool {
-            Tool::Select => {
-                "I insert · W wire · M move · R rotate · X mirror · F2 rename · Del delete".into()
-            }
+            // Quiet until something is in hand (DESIGN.md §3).
+            Tool::Select if self.pin_hovered() => "Drag from the pin to connect".into(),
+            Tool::Select => String::new(),
             Tool::Place(p) => {
                 let name = self
                     .catalog
                     .get(&p.symbol)
                     .map_or(p.symbol.as_str(), |s| s.name.as_str());
                 let tag = self.catalog.get(&p.symbol).and_then(|s| match classify(s) {
-                    SymbolClass::Main { letter } => {
-                        Some(next_device_tag(doc.project(), page, letter).to_string())
-                    }
+                    SymbolClass::Main { letter } => Some(
+                        naming::new_device_tag(doc.project(), page, letter, self.numbering)
+                            .to_string(),
+                    ),
                     SymbolClass::Child { letter } => Some(match &p.parent {
-                        Some(t) => t.to_string(),
-                        None => next_device_tag(doc.project(), page, letter).to_string(),
+                        Some(t) => naming::complete_tag(doc.project(), page, t).to_string(),
+                        None => naming::new_device_tag(doc.project(), page, letter, self.numbering)
+                            .to_string(),
                     }),
                     _ => None,
                 });
@@ -715,6 +850,7 @@ impl Editor {
                     None => format!("Click to place {name} · R rotate · X mirror · Esc to stop"),
                 }
             }
+            Tool::Wire(w) if w.drag => "Release on a pin or wire to connect".into(),
             Tool::Wire(w) if w.start.is_none() => {
                 "Click a pin, junction or wire to start a wire · Esc to stop".into()
             }
@@ -724,7 +860,23 @@ impl Editor {
             }
             Tool::Move(_) => "Click to drop · R rotate · X mirror · Esc cancels the move".into(),
         };
+        let text = if self.proposals.is_empty() {
+            text
+        } else {
+            let n = self.proposals.len();
+            let what = if n == 1 {
+                "1 connection proposed".to_string()
+            } else {
+                format!("{n} connections proposed")
+            };
+            [format!("{what} · ↵ accept · Tab next"), text]
+                .into_iter()
+                .filter(|t| !t.is_empty())
+                .collect::<Vec<_>>()
+                .join(" · ")
+        };
         match &self.notice {
+            Some(n) if text.is_empty() => n.clone(),
             Some(n) => format!("{n} · {text}"),
             None => text,
         }
@@ -784,19 +936,16 @@ impl Editor {
                 preview.symbols = move_ghosts(project, m, cursor, self.grid);
             }
         }
-        if matches!(self.tool, Tool::Place(_) | Tool::Move(_)) && self.connects_facing() {
-            preview.connections = edit::facing_wires(project, &preview.symbols)
+        if !self.proposals.is_empty() {
+            preview.proposals = self.proposals.iter().map(|f| (f.a, f.b)).collect();
+            preview.current = Some(self.proposal.min(self.proposals.len() - 1));
+        } else if matches!(self.tool, Tool::Place(_) | Tool::Move(_)) && self.auto_connect {
+            preview.proposals = edit::facing_wires(project, &preview.symbols, &|s| self.body(s))
                 .into_iter()
                 .map(|f| (f.a, f.b))
                 .collect();
         }
         preview
-    }
-
-    /// Whether the next drop draws facing wires (auto-connect on, Alt not
-    /// held).
-    fn connects_facing(&self) -> bool {
-        self.auto_connect && !self.suppress_connect
     }
 }
 
