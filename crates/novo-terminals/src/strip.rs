@@ -400,3 +400,32 @@ pub fn renumber(tx: &mut Tx<'_>, strip: DeviceId) -> Result<()> {
 pub fn set_level(tx: &mut Tx<'_>, terminal: TerminalId, level: u8) -> Result<()> {
     tx.update::<Terminal>(terminal, |t| t.level = level.max(1))
 }
+
+/// What [`rename`] would do: terminals of the strip whose name contains
+/// `find`, with the name after replacing every occurrence by `replace`.
+/// Case-sensitive; an empty `find` matches nothing.
+pub fn rename_preview(
+    project: &Project,
+    strip: DeviceId,
+    find: &str,
+    replace: &str,
+) -> Vec<(TerminalId, String, String)> {
+    if find.is_empty() {
+        return Vec::new();
+    }
+    project
+        .terminals_of_strip(strip)
+        .into_iter()
+        .filter(|t| t.name.contains(find))
+        .map(|t| (t.id, t.name.clone(), t.name.replace(find, replace)))
+        .collect()
+}
+
+/// Find and replace in the terminal names of a strip, as one edit.
+pub fn rename(tx: &mut Tx<'_>, strip: DeviceId, find: &str, replace: &str) -> Result<usize> {
+    let changes = rename_preview(tx.project(), strip, find, replace);
+    for (id, _, name) in &changes {
+        tx.update::<Terminal>(*id, |t| t.name = name.clone())?;
+    }
+    Ok(changes.len())
+}

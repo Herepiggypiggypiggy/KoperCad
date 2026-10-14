@@ -180,3 +180,20 @@ pub fn dismiss_suggestion(tx: &mut Tx<'_>, wire: WireId) -> Result<()> {
 pub fn restore_suggestion(tx: &mut Tx<'_>, wire: WireId) -> Result<()> {
     tx.set_property(wire, DISMISS_KEY, None)
 }
+
+/// One line for the "accept all" summary: how many terminals go on which
+/// strip, e.g. `9 terminals on -X1, 2 terminals on +FLD-X2`.
+pub fn summarize_suggestions(suggestions: &[Suggestion]) -> String {
+    let mut counts: Vec<(&DeviceTag, usize)> = Vec::new();
+    for s in suggestions {
+        match counts.iter_mut().find(|(tag, _)| *tag == &s.strip) {
+            Some((_, n)) => *n += 1,
+            None => counts.push((&s.strip, 1)),
+        }
+    }
+    counts
+        .into_iter()
+        .map(|(tag, n)| format!("{n} terminal{} on {tag}", if n == 1 { "" } else { "s" }))
+        .collect::<Vec<_>>()
+        .join(", ")
+}

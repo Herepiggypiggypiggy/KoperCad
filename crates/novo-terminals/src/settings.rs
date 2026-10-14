@@ -100,3 +100,16 @@ impl Settings {
         })
     }
 }
+
+impl Settings {
+    /// The rule as one plain sentence, for the Terminals drawer.
+    pub fn sentence(self) -> String {
+        match self.same_name {
+            SameName::Join => format!(
+                "Terminals with the same name are one terminal, joined with {}s.",
+                self.join_link.label()
+            ),
+            SameName::Refuse => "Each terminal name may be used once per strip.".to_owned(),
+        }
+    }
+}

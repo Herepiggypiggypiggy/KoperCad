@@ -713,6 +713,10 @@ fn wires_crossing_a_location_boundary_get_suggested_terminals() {
             .all(|s| s.strip.to_string() == "=A1+CAB-X1")
     );
     assert_eq!(suggestions[0].at, Point::new(40.0, 60.0));
+    assert_eq!(
+        summarize_suggestions(&suggestions),
+        "2 terminals on =A1+CAB-X1"
+    );
     let (placed, _) = doc
         .transact("Accept", |tx| accept_suggestions(tx, &suggestions))
         .unwrap();
@@ -779,4 +783,38 @@ fn the_side_with_a_strip_is_the_cabinet_and_dismissals_stick() {
     assert_eq!(left[0].wire, wires[1]);
     doc.undo().unwrap();
     assert_eq!(suggest_terminals(doc.project()).len(), 2);
+}
+
+#[test]
+fn rule_sentence_summary_and_rename_by_pattern() {
+    assert_eq!(
+        Settings::default().sentence(),
+        "Terminals with the same name are one terminal, joined with connectors."
+    );
+    let mut doc = Document::default();
+    let (motor, _) = doc.transact("Draw", motor_circuit).unwrap();
+    let (strip, _) = doc
+        .transact("T", |tx| {
+            let strip = strip_by_tag(tx, "X1")?;
+            let d = drops(&motor.wires[..3], 60.0, tx.project());
+            for (i, drop) in d.into_iter().enumerate() {
+                place_named(tx, strip, drop, &format!("A{}", i + 1), None)?;
+            }
+            Ok(strip)
+        })
+        .unwrap();
+    let preview = rename_preview(doc.project(), strip, "A", "B");
+    assert_eq!(preview.len(), 3);
+    let (n, _) = doc
+        .transact("Rename", |tx| rename(tx, strip, "A", "B"))
+        .unwrap();
+    assert_eq!(n, 3);
+    let names: Vec<_> = strip_view(doc.project(), strip)
+        .rows
+        .iter()
+        .map(|r| r.name.clone())
+        .collect();
+    assert_eq!(names, ["B1", "B2", "B3"]);
+    doc.undo().unwrap();
+    assert_eq!(strip_view(doc.project(), strip).rows[0].name, "A1");
 }
