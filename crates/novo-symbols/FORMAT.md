@@ -39,6 +39,8 @@ standard = "IEC 60617"
 category = "contacts"
 function = "contact.no"
 keywords = ["no", "make", "normally open", "auxiliary"]
+aliases = ["no"]
+favorite = true
 
 connections = [
   { id = "13", at = [0, 0], dir = "up" },
@@ -73,6 +75,8 @@ poles = [["13", "14"]]
 | `category` | yes | Must equal the directory the file is in. |
 | `function` | yes | Function type, dotted from general to specific (see below). |
 | `keywords` | no | Search words for the picker and command palette. |
+| `aliases` | no | Short names the palette matches exactly, such as `no`, `coil` or `mcb3`. Up to 12 characters of `a-z 0-9 _ -`, unique within a library. |
+| `favorite` | no | `true` to offer the symbol in the palette before anything is typed. |
 | `connections` | yes | Connection points (may be empty only for pure graphics). |
 | `anchors` | no | Text placement points; a `tag` anchor is required unless `behavior.kind = "none"`. |
 | `bridges` | no | Groups of connection ids always joined inside the symbol, whatever its behavior (e.g. PE in and out of a drive). |
@@ -124,6 +128,32 @@ Arc angles: a point at angle `a` is `center + r * (cos a, sin a)`. Because y
 points down, 90° is straight down and increasing angles run clockwise on
 screen. `start = 180, end = 360` is the upper half of a circle.
 
+## Quick insert
+
+The command palette inserts common symbols without the picker:
+`Library::by_alias("mcb3")` returns the symbol that lists `mcb3` in its
+`aliases` (exact match, lowercase), and `Library::favorites()` returns the
+symbols marked `favorite = true`, ordered by id. The built-in set has about
+20 favourites (make and break contacts, coil, timer, contactor, MCBs, motor
+protection, overload, fuse, motor, terminal, PE terminal, terminal bridge,
+potential feed, push buttons, E-stop, lamp, PLC input) and about 90 aliases.
+Loading fails with `LoadError::DuplicateAlias` when two symbols of one
+library claim the same alias; when user and built-in libraries are combined,
+the editor decides which wins.
+
+## Terminals
+
+Every terminal clamp is drawn the same way: a circle of radius 1.2 mm on the
+conductor, 8 mm between connection points per level. A terminal strip of 400
+clamps of one type is 400 instances of one symbol, and the model stores only
+the symbol key and pins per instance, so they cannot drift apart. Variants
+(`terminal_n`, `terminal_pe`, multi-level, fused, disconnect) reuse the same
+clamp and add marks around it. Jumpers between clamps are the
+`connectivity/bridge_*` symbols; plug-in connector pieces are
+`terminals/plug`, `socket` and `plug_socket`. A strip is closed with
+`terminals/end_plate` and held on the rail by `terminals/end_bracket`;
+both are pure graphics (`behavior.kind = "none"`) with no connections.
+
 ## Function types
 
 The function type says what the device does, independent of its artwork. It
@@ -174,7 +204,7 @@ Two parameters name connections, and they mean different things:
 | --- | --- |
 | `none` | none (pure graphics: earth, interruption point, potential feed) |
 | `conductor` | **`poles`** (always joined: terminals, connectors, bridges) |
-| `contact` | **`poles`**, **`normally`** = `open` \| `closed` \| `changeover`, `latching` (bool; selector, E-stop), `delay` = `on` \| `off` |
+| `contact` | **`poles`**, **`normally`** = `open` \| `closed` \| `changeover`, `latching` (bool; selector, E-stop), `delay` = `on` \| `off`, `center_off` (bool, changeover only: a middle position where the common joins neither side, as on an I-0-II switch) |
 | `coil` | **`poles`**, `delay` = `on` \| `off` |
 | `fuse` | **`poles`**, `switched` (bool) |
 | `breaker` | **`poles`**, **`trip`** (non-empty subset of `thermal`, `magnetic`, `residual`), `adjustable` (bool) |

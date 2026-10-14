@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "protection"
 function = "protection.mcb"
 keywords = ["mcb", "circuit breaker", "3p+n", "neutral"]
+aliases = ["mcb3n"]
 
 connections = [
   { id = "1", at = [0, 0], dir = "up" },

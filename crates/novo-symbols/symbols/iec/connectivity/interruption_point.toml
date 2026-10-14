@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "connectivity"
 function = "connectivity.interruption"
 keywords = ["interruption point", "off page", "continuation", "arrow", "link"]
+aliases = ["ip"]
 
 connections = [
   { id = "1", at = [0, 0], dir = "up" },

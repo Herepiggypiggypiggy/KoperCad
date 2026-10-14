@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "plc"
 function = "plc.output.digital"
 keywords = ["plc", "output", "do", "digital", "i/o"]
+aliases = ["do"]
 
 connections = [
   { id = "1", at = [0, 8], dir = "down" },

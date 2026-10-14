@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "passive"
 function = "passive.capacitor"
 keywords = ["capacitor", "c", "condenser"]
+aliases = ["c"]
 
 connections = [
   { id = "1", at = [0, 0], dir = "up" },

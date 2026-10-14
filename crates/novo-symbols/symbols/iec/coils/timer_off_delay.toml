@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "coils"
 function = "coil.timer.off_delay"
 keywords = ["timer", "off delay", "coil"]
+aliases = ["tof"]
 
 connections = [
   { id = "A1", at = [0, 0], dir = "up" },

@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "contacts"
 function = "contact.co"
 keywords = ["co", "changeover", "spdt", "auxiliary"]
+aliases = ["co"]
 
 connections = [
   { id = "11", at = [0, 16], dir = "down" },
