@@ -44,4 +44,4 @@ graphics = [
 kind = "motor"
 phases = 3
 speeds = 2
-poles = [["1U", "1V", "1W"], ["2U", "2V", "2W"]]
+ports = [["1U", "1V", "1W"], ["2U", "2V", "2W"]]

@@ -12,6 +12,13 @@ pub const FORMAT_VERSION: u32 = 1;
 /// symbols placed on the sheet grid connect to orthogonal wires exactly.
 pub const GRID: f64 = 4.0;
 
+/// Behavior kinds whose `poles` always conduct, so they are bridges.
+pub const ALWAYS_CLOSED: &[&str] = &["conductor", "overload"];
+
+/// Behavior kinds whose `poles` are switched paths that carry a potential
+/// through when closed.
+pub const PASS_THROUGH: &[&str] = &["contact", "breaker", "fuse"];
+
 /// A point in symbol coordinates: millimetres, `[x, y]`, x to the right and
 /// y downwards, relative to the symbol origin (its insertion point).
 pub type Point = [f64; 2];
@@ -47,6 +54,10 @@ pub struct Symbol {
     /// Where texts such as the device tag are placed.
     #[serde(default)]
     pub anchors: Vec<Anchor>,
+    /// Groups of connection designations that are always joined inside the
+    /// symbol whatever its behavior, such as the PE in and out of a drive.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bridges: Vec<Vec<String>>,
     /// The artwork, drawn in order.
     pub graphics: Vec<Graphic>,
     /// The behavior slot read by the simulation engine.
@@ -222,11 +233,22 @@ pub struct Behavior {
 }
 
 impl Behavior {
-    /// The `poles` parameter as lists of connection ids; empty when absent
-    /// or malformed.
+    /// The `poles` parameter: conducting paths between connections, as
+    /// designations. Empty when absent or malformed (the validator reports
+    /// malformed values).
     pub fn poles(&self) -> Vec<Vec<&str>> {
+        self.groups("poles")
+    }
+
+    /// The `ports` parameter: connections that together form one winding
+    /// or port of a motor, transformer or converter.
+    pub fn ports(&self) -> Vec<Vec<&str>> {
+        self.groups("ports")
+    }
+
+    fn groups(&self, key: &str) -> Vec<Vec<&str>> {
         self.params
-            .get("poles")
+            .get(key)
             .and_then(|p| p.as_array())
             .map(|groups| {
                 groups
@@ -251,16 +273,40 @@ impl Symbol {
     }
 
     /// Groups of connection indices that are always joined inside the
-    /// symbol, such as the two sides of a terminal. These are the `poles` of
-    /// a `conductor` behavior; switched paths (contacts, breakers) are not
-    /// bridges because whether they conduct is simulation state.
+    /// symbol: the `poles` of kinds that never open ([`ALWAYS_CLOSED`]:
+    /// terminals, connectors, the heaters of an overload relay) plus the
+    /// top-level `bridges`. Switched paths (contacts, breakers, fuses) are
+    /// not bridges because whether they conduct is simulation state. Maps to
+    /// `SymbolInstance::bridges` in `novo-core`.
     pub fn bridges(&self) -> Vec<Vec<usize>> {
-        if self.behavior.kind != "conductor" {
-            return Vec::new();
+        let always = if ALWAYS_CLOSED.contains(&self.behavior.kind.as_str()) {
+            self.behavior.poles()
+        } else {
+            Vec::new()
+        };
+        let declared = self
+            .bridges
+            .iter()
+            .map(|g| g.iter().map(String::as_str).collect::<Vec<_>>());
+        self.indices(always.into_iter().chain(declared))
+    }
+
+    /// Groups of connection indices that a potential (L1, N, 24V, ...)
+    /// and its wire numbering pass through: the [`Symbol::bridges`] plus the
+    /// `poles` of switching devices ([`PASS_THROUGH`]: contacts, breakers,
+    /// fuses), as in a main circuit where L1 stays L1 through the fuse,
+    /// breaker, contactor and overload. Loads (coils, lamps, motors) end a
+    /// potential, so their poles are not included.
+    pub fn pass_through(&self) -> Vec<Vec<usize>> {
+        let mut groups = self.bridges();
+        if PASS_THROUGH.contains(&self.behavior.kind.as_str()) {
+            groups.extend(self.indices(self.behavior.poles().into_iter()));
         }
-        self.behavior
-            .poles()
-            .into_iter()
+        groups
+    }
+
+    fn indices<'a>(&self, groups: impl Iterator<Item = Vec<&'a str>>) -> Vec<Vec<usize>> {
+        groups
             .map(|group| {
                 group
                     .iter()
