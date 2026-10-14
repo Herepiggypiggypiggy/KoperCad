@@ -1,7 +1,38 @@
-//! Command palette: type a few letters, press Enter to run the action.
+//! Command palette: type a few letters, press Enter to run the pick.
+//!
+//! The palette searches a list of [`Entry`]s rather than the [`Action`] enum
+//! itself, so pages, devices and symbols can join the same search box later
+//! as new [`Target`] variants.
 
 use crate::actions::Action;
 use eframe::egui;
+
+/// What picking an entry does.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Target {
+    Action(Action),
+}
+
+/// One searchable row.
+#[derive(Clone, Debug)]
+pub struct Entry {
+    pub target: Target,
+    /// Shown before the label and searched with it, such as "File".
+    pub group: String,
+    pub label: String,
+    pub shortcut: Option<egui::KeyboardShortcut>,
+}
+
+impl Entry {
+    pub fn action(action: Action) -> Self {
+        Entry {
+            target: Target::Action(action),
+            group: action.category().to_owned(),
+            label: action.label().to_owned(),
+            shortcut: action.shortcut(),
+        }
+    }
+}
 
 #[derive(Default)]
 pub struct Palette {
@@ -21,18 +52,20 @@ impl Palette {
         self.open
     }
 
-    /// Shows the palette if it is open and returns the action the user picked.
+    /// Shows the palette if it is open and returns what the user picked.
+    /// `recent` lists recently picked targets, newest first.
     pub fn show(
         &mut self,
         ctx: &egui::Context,
-        is_enabled: impl Fn(Action) -> bool,
-    ) -> Option<Action> {
+        entries: &[Entry],
+        recent: &[Target],
+    ) -> Option<Target> {
         if !self.open {
             return None;
         }
 
-        let matches = matching_actions(&self.query, &is_enabled);
-        self.selected = self.selected.min(matches.len().saturating_sub(1));
+        let ranked = rank(&self.query, entries, recent);
+        self.selected = self.selected.min(ranked.len().saturating_sub(1));
 
         let (up, down, enter, escape) = ctx.input_mut(|i| {
             (
@@ -45,7 +78,7 @@ impl Palette {
         if up {
             self.selected = self.selected.saturating_sub(1);
         }
-        if down && self.selected + 1 < matches.len() {
+        if down && self.selected + 1 < ranked.len() {
             self.selected += 1;
         }
 
@@ -67,18 +100,19 @@ impl Palette {
                     self.selected = 0;
                 }
                 ui.separator();
-                if matches.is_empty() {
-                    ui.weak("No matching command");
+                if ranked.is_empty() {
+                    ui.weak("No match");
                 }
                 egui::ScrollArea::vertical()
                     .max_height(320.0)
                     .show(ui, |ui| {
-                        for (row, &action) in matches.iter().enumerate() {
-                            let shortcut = action
-                                .shortcut()
+                        for (row, &index) in ranked.iter().enumerate() {
+                            let entry = &entries[index];
+                            let shortcut = entry
+                                .shortcut
                                 .map(|s| ui.ctx().format_shortcut(&s))
                                 .unwrap_or_default();
-                            let text = format!("{}: {}", action.category(), action.label());
+                            let text = format!("{}: {}", entry.group, entry.label);
                             let response = ui.add(
                                 egui::Button::selectable(row == self.selected, text)
                                     .shortcut_text(shortcut)
@@ -88,14 +122,18 @@ impl Palette {
                                 response.scroll_to_me(None);
                             }
                             if response.clicked() {
-                                picked = Some(action);
+                                picked = Some(entry.target.clone());
                             }
                         }
                     });
             });
 
         if enter {
-            picked = picked.or_else(|| matches.get(self.selected).copied());
+            picked = picked.or_else(|| {
+                ranked
+                    .get(self.selected)
+                    .map(|&i| entries[i].target.clone())
+            });
         }
         if picked.is_some() || escape || modal.backdrop_response.clicked() {
             self.open = false;
@@ -104,19 +142,25 @@ impl Palette {
     }
 }
 
-/// Enabled actions that fuzzy-match `query`, best match first.
-pub fn matching_actions(query: &str, is_enabled: impl Fn(Action) -> bool) -> Vec<Action> {
-    let mut scored: Vec<(i32, usize, Action)> = Action::ALL
+/// Indices of the entries that match `query`, best first. Better fuzzy
+/// matches win; ties go to the most recently used, then to list order. With
+/// an empty query that puts the last thing used at the top.
+pub fn rank(query: &str, entries: &[Entry], recent: &[Target]) -> Vec<usize> {
+    let mut scored: Vec<(i32, usize, usize)> = entries
         .iter()
         .enumerate()
-        .filter(|&(_, &a)| a != Action::CommandPalette && is_enabled(a))
-        .filter_map(|(order, &a)| {
-            let haystack = format!("{} {}", a.category(), a.label());
-            fuzzy_score(query, &haystack).map(|score| (score, order, a))
+        .filter_map(|(index, entry)| {
+            let haystack = format!("{} {}", entry.group, entry.label);
+            let score = fuzzy_score(query, &haystack)?;
+            let recency = recent
+                .iter()
+                .position(|t| *t == entry.target)
+                .unwrap_or(usize::MAX);
+            Some((score, recency, index))
         })
         .collect();
-    scored.sort_by_key(|&(score, order, _)| (std::cmp::Reverse(score), order));
-    scored.into_iter().map(|(_, _, a)| a).collect()
+    scored.sort_by_key(|&(score, recency, index)| (std::cmp::Reverse(score), recency, index));
+    scored.into_iter().map(|(_, _, index)| index).collect()
 }
 
 /// Scores `haystack` against `query` when every query character appears in
@@ -145,6 +189,16 @@ pub fn fuzzy_score(query: &str, haystack: &str) -> Option<i32> {
 mod tests {
     use super::*;
 
+    fn all_actions() -> Vec<Entry> {
+        Action::ALL.iter().map(|&a| Entry::action(a)).collect()
+    }
+
+    fn top(query: &str, entries: &[Entry], recent: &[Target]) -> Option<Target> {
+        rank(query, entries, recent)
+            .first()
+            .map(|&i| entries[i].target.clone())
+    }
+
     #[test]
     fn empty_query_matches_everything() {
         assert_eq!(fuzzy_score("", "File Save"), Some(0));
@@ -165,14 +219,37 @@ mod tests {
 
     #[test]
     fn save_query_ranks_save_first() {
-        let found = matching_actions("save", |_| true);
-        assert_eq!(found.first(), Some(&Action::SaveProject));
+        assert_eq!(
+            top("save", &all_actions(), &[]),
+            Some(Target::Action(Action::SaveProject))
+        );
     }
 
     #[test]
-    fn hides_disabled_actions_and_itself() {
-        let found = matching_actions("", |a| a != Action::Undo);
-        assert!(!found.contains(&Action::Undo));
-        assert!(!found.contains(&Action::CommandPalette));
+    fn last_used_is_the_top_row() {
+        let recent = [
+            Target::Action(Action::ZoomToFit),
+            Target::Action(Action::About),
+        ];
+        let entries = all_actions();
+        let order = rank("", &entries, &recent);
+        assert_eq!(entries[order[0]].target, recent[0]);
+        assert_eq!(entries[order[1]].target, recent[1]);
+    }
+
+    #[test]
+    fn recency_breaks_ties_but_not_better_matches() {
+        // "save" matches Save and Save as equally; the recent one wins.
+        let recent = [Target::Action(Action::SaveProjectAs)];
+        assert_eq!(
+            top("save", &all_actions(), &recent),
+            Some(Target::Action(Action::SaveProjectAs))
+        );
+        // A recent action that matches worse stays below the better match.
+        let recent = [Target::Action(Action::About)];
+        assert_eq!(
+            top("save", &all_actions(), &recent),
+            Some(Target::Action(Action::SaveProject))
+        );
     }
 }

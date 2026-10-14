@@ -45,6 +45,34 @@ impl Action {
         Action::About,
     ];
 
+    /// Stable identifier, used to remember recent actions between sessions
+    /// and, later, by scripts and keymaps.
+    pub fn id(self) -> &'static str {
+        match self {
+            Action::NewProject => "file.new",
+            Action::OpenProject => "file.open",
+            Action::SaveProject => "file.save",
+            Action::SaveProjectAs => "file.save_as",
+            Action::CloseProject => "file.close",
+            Action::Quit => "file.quit",
+            Action::Undo => "edit.undo",
+            Action::Redo => "edit.redo",
+            Action::ZoomToFit => "view.fit",
+            Action::ToggleProjectPanel => "view.project_panel",
+            Action::TogglePropertiesPanel => "view.properties_panel",
+            Action::ToggleMessagesPanel => "view.messages_panel",
+            Action::CommandPalette => "view.command_palette",
+            Action::ThemeSystem => "view.theme_system",
+            Action::ThemeLight => "view.theme_light",
+            Action::ThemeDark => "view.theme_dark",
+            Action::About => "help.about",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Action> {
+        Action::ALL.iter().copied().find(|a| a.id() == id)
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Action::NewProject => "New project",
@@ -143,6 +171,26 @@ impl Action {
     }
 }
 
+/// Shortcuts held for upcoming features (see docs/WORKFLOW.md). No action
+/// may take one of these until its feature claims it.
+pub const RESERVED_SHORTCUTS: &[(Modifiers, Key, &str)] = &[
+    (Modifiers::NONE, Key::I, "canvas tool: insert symbol"),
+    (Modifiers::NONE, Key::W, "canvas tool: wire"),
+    (Modifiers::NONE, Key::T, "canvas tool: terminal"),
+    (Modifiers::NONE, Key::C, "canvas tool: cable"),
+    (Modifiers::NONE, Key::P, "canvas tool: potential"),
+    (Modifiers::NONE, Key::M, "canvas tool: move"),
+    (Modifiers::NONE, Key::R, "canvas tool: rotate"),
+    (Modifiers::NONE, Key::X, "canvas tool: mirror"),
+    (Modifiers::NONE, Key::G, "canvas tool: go to"),
+    (Modifiers::NONE, Key::F2, "edit tag in place"),
+    (Modifiers::NONE, Key::PageUp, "previous page"),
+    (Modifiers::NONE, Key::PageDown, "next page"),
+    (Modifiers::ALT, Key::ArrowLeft, "jump back"),
+    (Modifiers::ALT, Key::ArrowRight, "jump forward"),
+    (Modifiers::COMMAND, Key::D, "smart duplicate"),
+];
+
 fn modifier_count(m: Modifiers) -> u8 {
     u8::from(m.alt) + u8::from(m.shift) + u8::from(m.ctrl || m.command || m.mac_cmd)
 }
@@ -175,6 +223,35 @@ mod tests {
         let pos = |a| order.iter().position(|(x, _)| *x == a).unwrap();
         assert!(pos(Action::SaveProjectAs) < pos(Action::SaveProject));
         assert!(pos(Action::Redo) < pos(Action::Undo));
+    }
+
+    #[test]
+    fn reserved_shortcuts_stay_free() {
+        for (action, s) in Action::by_shortcut_specificity() {
+            let taken = RESERVED_SHORTCUTS
+                .iter()
+                .find(|(m, k, _)| *m == s.modifiers && *k == s.logical_key);
+            assert!(
+                taken.is_none(),
+                "{action:?} takes a reserved shortcut: {taken:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn plain_key_shortcuts_yield_to_text_fields() {
+        for (action, s) in Action::by_shortcut_specificity() {
+            if s.modifiers.is_none() {
+                assert!(action.yields_to_text_input(&s), "{action:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn ids_round_trip() {
+        for &a in Action::ALL {
+            assert_eq!(Action::from_id(a.id()), Some(a));
+        }
     }
 
     #[test]

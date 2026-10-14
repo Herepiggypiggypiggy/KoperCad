@@ -9,7 +9,7 @@ use novo_core::PageId;
 
 use crate::backend::{ProjectBackend, page_labels};
 use crate::canvas::{CanvasView, OpenPage};
-use crate::palette::Palette;
+use crate::palette::{Entry, Palette, Target};
 use crate::settings::{Settings, Theme};
 use crate::{APP_NAME, PROJECT_EXTENSION};
 
@@ -169,6 +169,9 @@ impl NovoApp {
     pub fn run(&mut self, ctx: &egui::Context, action: Action) {
         if !self.is_enabled(action) {
             return;
+        }
+        if action != Action::CommandPalette {
+            self.settings.remember_action(action.id());
         }
         match action {
             Action::NewProject => self.discard_then(ctx, Discarding::New),
@@ -376,13 +379,19 @@ impl NovoApp {
             self.canvas.show(ui, open);
         });
 
-        let enabled: Vec<Action> = Action::ALL
-            .iter()
-            .copied()
-            .filter(|&a| self.is_enabled(a))
-            .collect();
-        if let Some(action) = self.palette.show(&ctx, |a| enabled.contains(&a)) {
-            picked.push(action);
+        if self.palette.is_open() {
+            let entries = self.palette_entries();
+            let recent: Vec<Target> = self
+                .settings
+                .recent_actions
+                .iter()
+                .filter_map(|id| Action::from_id(id))
+                .map(Target::Action)
+                .collect();
+            match self.palette.show(&ctx, &entries, &recent) {
+                Some(Target::Action(action)) => picked.push(action),
+                None => {}
+            }
         }
         self.unsaved_dialog(&ctx);
         self.about_dialog(&ctx);
@@ -390,6 +399,17 @@ impl NovoApp {
         for action in picked {
             self.run(&ctx, action);
         }
+    }
+
+    /// What the command palette searches: every enabled action for now;
+    /// pages, devices and symbols join later as new `Target`s.
+    fn palette_entries(&self) -> Vec<Entry> {
+        Action::ALL
+            .iter()
+            .copied()
+            .filter(|&a| a != Action::CommandPalette && self.is_enabled(a))
+            .map(Entry::action)
+            .collect()
     }
 
     fn modal_open(&self) -> bool {

@@ -19,7 +19,7 @@ mod canvas;
 mod palette;
 mod settings;
 
-pub use actions::Action;
+pub use actions::{Action, RESERVED_SHORTCUTS};
 pub use app::NovoApp;
 pub use backend::{BackendError, MemoryBackend, ProjectBackend, new_document, page_labels};
 pub use canvas::{CanvasView, OpenPage, PlaceholderCanvas};
