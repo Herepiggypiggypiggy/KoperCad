@@ -21,5 +21,4 @@ graphics = [
 ]
 
 [behavior]
-kind = "conductor"
-poles = [["1"]]
+kind = "none"

@@ -29,4 +29,5 @@ graphics = [
 [behavior]
 kind = "passive"
 type = "potentiometer"
-poles = [["1", "3"], ["2"]]
+poles = [["1", "3"]]
+wiper = "2"

@@ -31,4 +31,4 @@ graphics = [
 [behavior]
 kind = "motor"
 phases = 1
-poles = [["U1", "U2"]]
+ports = [["U1", "U2"]]
