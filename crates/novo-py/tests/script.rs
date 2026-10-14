@@ -279,3 +279,74 @@ fn an_existing_project_is_replaced_only_on_request() -> Result<(), ScriptError> 
     assert_eq!(p.project().info().name, "Replacement");
     p.close()
 }
+
+#[test]
+fn dol_bom_exports_to_excel() -> Result<(), ScriptError> {
+    use calamine::{Data, Reader, Xlsx, open_workbook};
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut p = ScriptProject::create(dir.path().join("dol.novo"), "DOL", false)?;
+    build(&mut p)?;
+    let contactor = p.add_part(
+        "Siemens",
+        "3RT2015-1BB41",
+        "3RT2015",
+        "Contactor 3 kW 24 V DC",
+    )?;
+    let breaker = p.add_part(
+        "Siemens",
+        "3RV2011-1EA10",
+        "3RV2011",
+        "Motor breaker 2.8-4 A",
+    )?;
+    let k1 = p.device_by_tag("-K1")?.unwrap();
+    let q1 = p.device_by_tag("-Q1")?.unwrap();
+    p.assign_part(k1, contactor)?;
+    p.assign_part(q1, breaker)?;
+    p.set_tag(k1, "=A1+CAB-K1")?;
+
+    let bom = p.report("bom")?;
+    let parts = &bom["sections"][0];
+    assert_eq!(parts["key"], "parts");
+    let order_numbers: Vec<&str> = parts["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r[3].as_str().unwrap())
+        .collect();
+    assert_eq!(order_numbers, ["3RT2015-1BB41", "3RV2011-1EA10"]);
+
+    let xlsx = dir.path().join("bom.xlsx");
+    p.export_reports(&["bom"], &xlsx)?;
+    let mut book: Xlsx<_> = open_workbook(&xlsx).unwrap();
+    assert_eq!(book.sheet_names(), ["Bill of materials"]);
+    let sheet = book.worksheet_range("Bill of materials").unwrap();
+    let cells: Vec<String> = sheet.cells().map(|(_, _, c)| c.to_string()).collect();
+    assert!(cells.iter().any(|c| c == "3RT2015-1BB41"), "{cells:?}");
+    assert!(cells.iter().any(|c| c == "=A1+CAB-K1"), "{cells:?}");
+    assert!(
+        sheet
+            .cells()
+            .any(|(_, _, c)| *c == Data::Float(1.0) || *c == Data::Int(1))
+    );
+
+    let csv = dir.path().join("bom.csv");
+    p.export_reports(&["bom"], &csv)?;
+    let text = std::fs::read_to_string(&csv).unwrap();
+    assert!(text.contains("3RV2011-1EA10"));
+
+    // Exports never land on a project file.
+    assert!(matches!(
+        p.export_reports(&["bom"], dir.path().join("dol.novo")),
+        Err(ScriptError::ProjectFileTarget(_))
+    ));
+    assert!(matches!(
+        p.export_reports(&[], dir.path().join("all.csv")),
+        Err(ScriptError::UnknownValue { .. })
+    ));
+    assert!(matches!(
+        p.report("nope"),
+        Err(ScriptError::UnknownValue { .. })
+    ));
+    p.close()
+}
