@@ -31,15 +31,27 @@ for c in $(git rev-list --first-parent --reverse "$reviewed..$head"); do
      grep -vqE '^[+-](\| `novo-[a-z-]+` \||<<<<<<< |=======$|>>>>>>> )'; then
     echo "DIFFERENT: $c edits CLAUDE.md beyond crate-list lines" >&2; exit 1
   fi
-  # In Cargo.toml, every line the resolution adds or drops must be a conflict
-  # marker or a line taken verbatim from one of the two parents (keeping both
-  # sides' dependency lines is mechanical; inventing a new line is not).
-  parents_toml=$( { git show "$p1:Cargo.toml"; git show "$p2:Cargo.toml"; } 2>/dev/null )
+  # In Cargo.toml the resolution may only drop conflict markers and exact
+  # duplicates (a dropped line must still be in the result), and may only add
+  # crate-list or dependency lines taken verbatim from a parent. Nothing of
+  # either side is lost or reverted, and no crate is listed twice.
+  # (Rule by main reviewer A, review of #61.)
+  parents_toml=$( { git show "$p1:Cargo.toml"; git show "$p2:Cargo.toml"; } 2>/dev/null || true )
+  result_toml=$(git show "$c:Cargo.toml" 2>/dev/null || true)
   bad=$(git diff "$auto" "$c" -- Cargo.toml | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) ' |
-        grep -vE '^[+-](<<<<<<< |=======$|>>>>>>> )' | cut -c2- |
-        while IFS= read -r line; do grep -qxF -- "$line" <<<"$parents_toml" || printf '%s\n' "$line"; done || true)
+        grep -vE '^-(<<<<<<< |=======$|>>>>>>> )' |
+        while IFS= read -r line; do
+          body=${line:1}
+          case $line in
+            -*) grep -qxF -- "$body" <<<"$result_toml" || printf 'dropped: %s\n' "$body" ;;
+            +*) if ! grep -qE '^([A-Za-z0-9_-]+ = |# )' <<<"$body" || ! grep -qxF -- "$body" <<<"$parents_toml"; then
+                  printf 'added: %s\n' "$body"; fi ;;
+          esac
+        done || true)
+  dup=$(sed -n '/^\[workspace.dependencies\]/,/^\[/p' <<<"$result_toml" | grep -oE '^[A-Za-z0-9_-]+ = ' | sort | uniq -d || true)
+  [ -n "$dup" ] && bad="$bad${bad:+$'\n'}listed twice: $dup"
   if [ -n "$bad" ]; then
-    echo "DIFFERENT: $c puts lines in Cargo.toml that neither parent has:" >&2
+    echo "DIFFERENT: $c resolves Cargo.toml beyond keeping both sides:" >&2
     printf '%s\n' "$bad" >&2; exit 1
   fi
   prev=$c
