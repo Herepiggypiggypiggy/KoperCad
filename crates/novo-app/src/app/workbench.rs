@@ -347,30 +347,32 @@ impl NovoApp {
 
     pub(super) fn editor_key(&mut self, key: EditorKey) {
         let selection = self.selection();
-        let Some(view) = self.canvas.schematic() else {
-            return;
-        };
-        let Some(doc) = self.backend.document_mut() else {
-            return;
-        };
-        // The editor keeps the change and hands it back from its next
-        // frame, which records it like any other canvas edit.
-        view.editor.key(doc, key, &selection);
+        self.with_editor(|editor, doc| editor.key(doc, key, &selection));
     }
 
     pub(super) fn new_page(&mut self) {
         let Some(after) = self.current_page else {
             return;
         };
-        let Some(view) = self.canvas.schematic() else {
-            return;
-        };
-        let Some(doc) = self.backend.document_mut() else {
-            return;
-        };
-        if let Some(page) = view.editor.new_page(doc, after) {
+        if let Some(Some(page)) = self.with_editor(|editor, doc| editor.new_page(doc, after)) {
             self.show_page(page);
         }
+    }
+
+    /// Runs an editor edit from outside the canvas frame (a command or a
+    /// key the shell handles) and records what it changed at once: storage
+    /// and the views hear about it now, so a save or autosave before the
+    /// next frame cannot miss it. `None` without an editor or a project.
+    pub(super) fn with_editor<R>(
+        &mut self,
+        edit: impl FnOnce(&mut novo_editor::Editor, &mut Document) -> R,
+    ) -> Option<R> {
+        let view = self.canvas.schematic()?;
+        let doc = self.backend.document_mut()?;
+        let result = edit(&mut view.editor, doc);
+        let changes = view.editor.take_changes();
+        self.changed_outside_canvas(&changes);
+        Some(result)
     }
 
     /// Shows the command field when open and runs its pick.

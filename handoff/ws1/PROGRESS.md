@@ -22,3 +22,4 @@
 2026-10-14 19:20 UTC #53: command field and keys on novo-workflow, xref, Terminals drawer + proposals, issue pill, Export PDF (7cfb0f7); headless Gate 1 end-to-end test (e823e31).
 2026-10-14 19:40 UTC #53: themed editor (SchematicView::set_style, for #38), Escape/pill/focus fixes after Xvfb screenshots (09738e7). fmt, clippy -D warnings, workspace tests green.
 2026-10-14 19:55 UTC #53: all stacked PRs merged; merged origin/main (main's versions of their files, this branch's changes re-applied). Checks green. Marked ready for review.
+2026-10-14 19:57 UTC #53: reviewer A CHANGES NEEDED (command-field edits buffered until the next frame could be lost by a save): shell-side editor edits now record at once (with_editor), regression test with no frame before save; PDF named after the project file.

@@ -433,3 +433,44 @@ fn gate1_motor_starter_through_the_window() {
         "reopened from its file"
     );
 }
+
+/// Edits run from the command field (not drawn by the canvas) reach the
+/// file even when the project is saved and closed before another frame.
+#[test]
+fn command_edits_are_saved_without_another_frame() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("Rotated.novo");
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.run(&d.ctx.clone(), Action::NewProject);
+    d.frame();
+    assert!(d.app.save_to(&file));
+    let k1 = d.place("coil", 100.0, 100.0);
+    let s1 = d.place("pb", 160.0, 100.0);
+    d.select(k1);
+
+    // Rotate, then delete the push button, then a new page, all through the
+    // command field, then save and close at once.
+    let ctx = d.ctx.clone();
+    assert!(d.app.type_command(&ctx, Mode::All, "rotate"));
+    let rotated = d.doc().project().symbol(k1).unwrap().placement.rotation;
+    let view = d.app.canvas.schematic().unwrap();
+    view.canvas.selection.clear();
+    view.canvas.selection.apply(
+        [novo_canvas::model::item_id(AnyId::Symbol(s1))],
+        novo_canvas::SelectOp::Replace,
+    );
+    d.app.run_command(&ctx, "edit.delete", None);
+    assert!(d.app.type_command(&ctx, Mode::All, "new page"));
+    let before = summary(d.doc().project());
+    assert!(d.doc().project().symbol(s1).is_none(), "deleted");
+    assert_eq!(d.doc().project().pages_in_order().len(), 2);
+    assert!(d.app.save_to(&file));
+    d.app.run(&ctx, Action::CloseProject);
+
+    let mut e = Drive::new(&dir.path().join("untitled2"));
+    e.app.open_path(&file);
+    e.frame();
+    let project = e.doc().project();
+    assert_eq!(project.symbol(k1).unwrap().placement.rotation, rotated);
+    assert_eq!(summary(project), before, "every command edit was written");
+}

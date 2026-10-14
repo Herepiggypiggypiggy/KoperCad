@@ -16,9 +16,9 @@ impl NovoApp {
             self.message(Level::Error, "Could not find the Documents folder");
             return None;
         };
-        let path = dir
-            .join(super::project_file_name(&name))
-            .with_extension("pdf");
+        // An untitled project's file is a temporary one; it has no name yet.
+        let file = self.backend.file().filter(|_| !self.backend.is_untitled());
+        let path = dir.join(pdf_file_name(file.as_deref(), &name));
         self.export_pdf_to(&path)
     }
 
@@ -60,5 +60,33 @@ impl NovoApp {
                 None
             }
         }
+    }
+}
+
+/// The PDF's file name: the project file's own name (`Plant 2.novo` gives
+/// `Plant 2.pdf`), so two projects with the same title never overwrite
+/// each other's PDF; the project name while it has no file yet.
+fn pdf_file_name(file: Option<&std::path::Path>, name: &str) -> String {
+    match file.and_then(|f| f.file_stem()) {
+        Some(stem) => format!("{}.pdf", stem.to_string_lossy()),
+        None => std::path::Path::new(&super::project_file_name(name))
+            .with_extension("pdf")
+            .to_string_lossy()
+            .into_owned(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pdf_file_name;
+    use std::path::Path;
+
+    #[test]
+    fn the_pdf_is_named_after_the_project_file() {
+        let a = pdf_file_name(Some(Path::new("/p/a/Plant.novo")), "Pumps");
+        let b = pdf_file_name(Some(Path::new("/p/b/Plant 2.novo")), "Pumps");
+        assert_eq!(a, "Plant.pdf");
+        assert_eq!(b, "Plant 2.pdf");
+        assert_eq!(pdf_file_name(None, "Pumps: v1"), "Pumps_ v1.pdf");
     }
 }
