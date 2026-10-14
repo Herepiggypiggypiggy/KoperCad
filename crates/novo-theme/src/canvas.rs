@@ -21,7 +21,7 @@ pub struct CanvasPalette {
     pub grid_major: [u8; 4],
     /// Symbol outlines.
     pub symbol: [u8; 4],
-    /// Wires and connections.
+    /// Wires and connections, tinted blue so they read apart from symbols.
     pub wire: [u8; 4],
     /// Device tags, terminal numbers and page text.
     pub text: [u8; 4],
@@ -33,7 +33,7 @@ pub struct CanvasPalette {
     pub selection: [u8; 4],
     /// The item under the pointer.
     pub hover: [u8; 4],
-    /// Rubber band selection fill.
+    /// Rubber band selection, opaque: the canvas applies its own fill alpha.
     pub rubber_band: [u8; 4],
     /// Design check markers.
     pub error: [u8; 4],
@@ -53,13 +53,13 @@ pub const CANVAS_DARK: CanvasPalette = CanvasPalette {
     grid_minor: [0x25, 0x2A, 0x32, 0xFF],
     grid_major: [0x33, 0x39, 0x44, 0xFF],
     symbol: [0xD8, 0xDC, 0xE2, 0xFF],
-    wire: [0xB4, 0xBC, 0xC8, 0xFF],
+    wire: [0x9F, 0xB4, 0xD0, 0xFF],
     text: [0xC6, 0xCC, 0xD5, 0xFF],
     cross_reference: [0x72, 0xB3, 0xFF, 0xFF],
     connection_point: [0x3F, 0xB9, 0x50, 0xFF],
     selection: [0xFF, 0xB8, 0x1C, 0xFF],
     hover: [0x4C, 0x9E, 0xFF, 0xFF],
-    rubber_band: [0x4C, 0x9E, 0xFF, 0x33],
+    rubber_band: [0x4C, 0x9E, 0xFF, 0xFF],
     error: [0xF8, 0x51, 0x49, 0xFF],
     warning: [0xF0, 0x9A, 0x3E, 0xFF],
 };

@@ -114,9 +114,14 @@ label and shortcut in the tooltip.
 ## Canvas
 
 `novo_theme::CANVAS_DARK` is the proposed screen palette for `novo-canvas`
-(WS-03 owns rendering): light grey symbols and wires on a near black sheet,
+(WS-03 owns rendering): light grey symbols and blue-grey wires on a near black sheet,
 amber selection, blue hover, green open connection points, blue cross
 references. Printing and PDF stay black on white.
+
+The app maps it onto `novo_canvas::widget::CanvasStyle` (background, grid,
+selection, hover, rubber band, snap marker) and `novo_canvas::model::ModelStyle`
+(symbol, wire, tag text, sheet fill, frame) and applies it with
+`PageScene::set_style`. novo-canvas itself keeps black on white defaults.
 
 ## Branding
 
