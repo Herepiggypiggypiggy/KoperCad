@@ -4,6 +4,7 @@
 use crate::scene::{Item, ItemId, Layer, LayerId, Scene, SnapPoint};
 use crate::shape::{Placement, Primitive, Shape};
 use crate::style::{Color, Stroke};
+use crate::text::{Anchor, Label};
 use glam::Vec2;
 use std::f32::consts::{FRAC_PI_2, PI};
 
@@ -80,6 +81,14 @@ fn symbol(kind: usize) -> (Vec<Primitive>, Vec<Vec2>) {
     (p, pins)
 }
 
+/// Device tag to the right of a symbol, IEC 81346 style.
+fn tag(i: usize) -> Label {
+    let letter = ["K", "S", "S", "M", "P"][i % 5];
+    Label::new(Vec2::new(6.0, 8.0), format!("-{letter}{}", i / 5 + 1), 2.5)
+        .anchored(Anchor::CenterLeft)
+        .colored(INK)
+}
+
 /// Layers used by the demo pages.
 pub struct DemoLayers {
     pub frame: LayerId,
@@ -126,6 +135,7 @@ pub fn stress_scene(objects: usize) -> Scene {
             .iter()
             .map(|p| SnapPoint::connection(place.affine().transform_point2(*p)))
             .collect();
+        item.labels.push(tag(i).transformed(&place));
         scene.insert(next(), item);
         placed += 1;
         // Wire from this symbol's bottom pin to the next row's top pin,
@@ -211,6 +221,7 @@ pub fn sample_page() -> Scene {
             .iter()
             .map(|p| SnapPoint::connection(place.affine().transform_point2(*p)))
             .collect();
+        item.labels.push(tag(k).transformed(&place));
         scene.insert(ItemId(id), item);
         id += 1;
         for (a, b) in [

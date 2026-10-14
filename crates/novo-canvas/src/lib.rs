@@ -26,6 +26,7 @@ pub mod shape;
 pub mod snap;
 pub mod style;
 pub mod tessellate;
+pub mod text;
 pub mod viewport;
 #[cfg(feature = "egui")]
 pub mod widget;
@@ -39,4 +40,5 @@ pub use shape::{Placement, Primitive, Shape};
 pub use snap::{SnapKind, SnapSettings, Snapped, ortho, snap};
 pub use style::{Color, Stroke, WidthUnit};
 pub use tessellate::{Highlight, ItemMeshCache, Mesh, SceneMesh, Tessellator, Vertex};
+pub use text::{Anchor, Label};
 pub use viewport::Viewport;

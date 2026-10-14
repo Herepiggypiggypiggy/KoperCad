@@ -165,6 +165,8 @@ pub struct CanvasView {
     pub pick_tolerance: f32,
     /// Zoom factor per wheel notch.
     pub wheel_zoom_step: f32,
+    /// Labels smaller than this many screen points are not drawn.
+    pub min_label_size: f32,
     tessellator: Tessellator,
     mesh_cache: tessellate::ItemMeshCache,
     scene_mesh: Option<Arc<SceneMesh>>,
@@ -217,6 +219,7 @@ impl CanvasView {
             interaction: Interaction::default(),
             pick_tolerance: 5.0,
             wheel_zoom_step: 1.2,
+            min_label_size: 4.0,
             tessellator: Tessellator::default(),
             mesh_cache: tessellate::ItemMeshCache::default(),
             scene_mesh: None,
@@ -340,6 +343,7 @@ impl CanvasView {
             rect,
             CanvasCallback { id: self.id, frame },
         ));
+        self.paint_labels(ui, rect, scene);
 
         CanvasOutput {
             response,
@@ -501,6 +505,56 @@ impl CanvasView {
             highlight: self.highlight.clone(),
             under,
             over,
+        }
+    }
+
+    /// Draws item labels with egui's text renderer, on top of the geometry.
+    fn paint_labels(&self, ui: &egui::Ui, rect: egui::Rect, scene: &Scene) {
+        // Above this size glyphs get expensive to rasterise and the label
+        // fills the screen anyway.
+        const MAX_SIZE: f32 = 512.0;
+        const MAX_LABELS: usize = 20_000;
+        let painter = ui.painter_at(rect);
+        let zoom = self.viewport.zoom;
+        let mut drawn = 0;
+        for id in scene.query(&self.viewport.visible_world()) {
+            let Some(item) = scene.get(id) else { continue };
+            if item.labels.is_empty() || !scene.layer(item.layer).is_some_and(|l| l.visible) {
+                continue;
+            }
+            let highlight = if self.selection.contains(id) {
+                Some(self.style.selection.color)
+            } else if self.hovered == Some(id) {
+                Some(self.style.hover.color)
+            } else {
+                None
+            };
+            for l in &item.labels {
+                let size = l.height * zoom;
+                if size < self.min_label_size || size > MAX_SIZE || l.text.is_empty() {
+                    continue;
+                }
+                // Quantise sizes (12 steps per octave) so continuous zooming
+                // does not rasterise a new font size every frame.
+                let size = 2f32.powf((size.log2() * 12.0).round() / 12.0);
+                let [r, g, b, a] = highlight.unwrap_or(l.color).0;
+                let color = egui::Color32::from_rgba_unmultiplied(r, g, b, a);
+                let galley =
+                    painter.layout_no_wrap(l.text.clone(), egui::FontId::proportional(size), color);
+                let f = l.anchor.fractions();
+                let offset = egui::vec2(f.x * galley.size().x, f.y * galley.size().y);
+                let s = self.viewport.world_to_screen(l.pos);
+                let anchor = rect.min + egui::vec2(s.x, s.y);
+                let rot = egui::emath::Rot2::from_angle(l.rotation);
+                painter.add(
+                    egui::epaint::TextShape::new(anchor - rot * offset, galley, color)
+                        .with_angle(l.rotation),
+                );
+                drawn += 1;
+                if drawn >= MAX_LABELS {
+                    return;
+                }
+            }
         }
     }
 

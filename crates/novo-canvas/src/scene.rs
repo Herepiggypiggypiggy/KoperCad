@@ -9,6 +9,7 @@
 use crate::geom::Aabb;
 use crate::shape::Primitive;
 use crate::snap::SnapKind;
+use crate::text::Label;
 use glam::Vec2;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -70,6 +71,8 @@ pub struct Item {
     pub primitives: Vec<Primitive>,
     /// Extra snap targets beyond the geometric ones (connection points).
     pub snap_points: Vec<SnapPoint>,
+    /// Text drawn with the item (tags, pin numbers).
+    pub labels: Vec<Label>,
     /// Non-selectable items (page frames, title blocks) are drawn and can be
     /// snapped to, but clicks go through them.
     pub selectable: bool,
@@ -81,6 +84,7 @@ impl Item {
             layer,
             primitives: Vec::new(),
             snap_points: Vec::new(),
+            labels: Vec::new(),
             selectable: true,
         }
     }
@@ -92,6 +96,11 @@ impl Item {
 
     pub fn with_snap(mut self, s: SnapPoint) -> Self {
         self.snap_points.push(s);
+        self
+    }
+
+    pub fn with_label(mut self, l: Label) -> Self {
+        self.labels.push(l);
         self
     }
 
@@ -109,6 +118,9 @@ impl Item {
         for s in &self.snap_points {
             b.include_point(s.pos);
         }
+        for l in &self.labels {
+            b = b.union(&l.bounds());
+        }
         b
     }
 
@@ -124,10 +136,18 @@ impl Item {
 
     /// Distance from `p` to the item's ink.
     pub fn distance(&self, p: Vec2, zoom: f32) -> f32 {
-        self.primitives
+        let d = self
+            .primitives
             .iter()
             .map(|prim| prim.distance(p, zoom))
-            .fold(f32::INFINITY, f32::min)
+            .fold(f32::INFINITY, f32::min);
+        self.labels.iter().map(|l| l.distance(p)).fold(d, f32::min)
+    }
+
+    /// True when any ink or text touches `rect`.
+    pub fn intersects(&self, rect: &Aabb) -> bool {
+        self.primitives.iter().any(|p| p.intersects(rect))
+            || self.labels.iter().any(|l| l.intersects(rect))
     }
 }
 
@@ -414,7 +434,7 @@ impl Scene {
                 }
                 let hit = match mode {
                     BoxMode::Window => rect.contains(&slot.bounds),
-                    BoxMode::Crossing => slot.item.primitives.iter().any(|p| p.intersects(rect)),
+                    BoxMode::Crossing => slot.item.intersects(rect),
                 };
                 hit.then_some(slot.id)
             })
