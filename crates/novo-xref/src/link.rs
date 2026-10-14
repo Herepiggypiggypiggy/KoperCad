@@ -202,18 +202,6 @@ fn is_disposable(project: &Project, device: DeviceId, leaving: SymbolId) -> bool
             .all(|r| r == AnyId::Symbol(leaving))
 }
 
-/// EN 50005 auxiliary contact numbers: the ordinal digit (1 to 9) followed by
-/// the function digit. Normally closed contacts end in 1-2, normally open in
-/// 3-4, changeovers in 1-2-4.
-fn function_digits(kind: ContactKind) -> Option<&'static [char]> {
-    match kind {
-        ContactKind::NormallyOpen => Some(&['3', '4']),
-        ContactKind::NormallyClosed => Some(&['1', '2']),
-        ContactKind::Changeover => Some(&['1', '2', '4']),
-        _ => None,
-    }
-}
-
 /// The ordinal of a two-digit auxiliary contact number, `2` for `23`.
 fn ordinal(pin: &str) -> Option<u32> {
     let mut chars = pin.chars();
@@ -233,7 +221,7 @@ fn renumber_if_clashing(
     target: DeviceId,
 ) -> bool {
     let kind = ContactKind::classify(functions.function(&moved.symbol), &moved.symbol);
-    let Some(digits) = function_digits(kind) else {
+    let Some(digits) = kind.function_digits() else {
         return false;
     };
     let existing: Vec<&SymbolInstance> = project
