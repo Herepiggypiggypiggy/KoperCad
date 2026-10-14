@@ -338,7 +338,7 @@ pub struct SymbolNote {
 /// independent of the report crate; callers convert.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SheetContent {
-    /// Printed where the page name goes: `20`, or `20.2` for the second
+    /// Printed where the page name goes: `20`, or `20b` for the second
     /// of several sheets.
     pub name: String,
     /// "n of m" for the title block when the caller counts sheets (a
@@ -1907,7 +1907,7 @@ mod tests {
             align,
         };
         let sheet = SheetContent {
-            name: "20.2".into(),
+            name: "20b".into(),
             number: Some((2, 3)),
             texts: vec![
                 cell(15.0, "-K1", Anchor::CenterLeft),
@@ -1949,7 +1949,7 @@ mod tests {
         assert!(long.size().x <= 30.0 + 1e-3, "{}", long.size().x);
         // The title block names the sheet and counts sheets.
         let t = texts(&ps);
-        for want in ["20.2  Bill of materials", "2 of 3"] {
+        for want in ["20b  Bill of materials", "2 of 3"] {
             assert!(t.iter().any(|s| s == want), "{want} missing from {t:?}");
         }
         // Kept across a rebuild; None goes back to the page alone.
