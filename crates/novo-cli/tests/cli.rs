@@ -324,7 +324,9 @@ fn export_reports_as_excel_and_csv() {
             "Table of contents",
             "Bill of materials",
             "Device list",
-            "Wire list"
+            "Wire list",
+            "Terminal diagram",
+            "Cable diagram"
         ]
     );
 

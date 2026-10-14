@@ -1958,7 +1958,9 @@ name = "novo-reports"
 version = "0.1.0"
 dependencies = [
  "calamine",
+ "novo-cables",
  "novo-core",
+ "novo-terminals",
  "novo-tests",
  "rust_xlsxwriter",
  "thiserror 2.0.21",

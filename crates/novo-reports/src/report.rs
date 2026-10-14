@@ -89,10 +89,30 @@ pub trait Report: Send + Sync {
     }
 }
 
+/// Which project state an output matches: the revision, plus two cheap
+/// facts that tell projects apart when one replaces another in place (a
+/// forgotten [`LiveReports::clear`]): the next free id and the name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Stamp {
+    revision: u64,
+    next_id: u64,
+    name: String,
+}
+
+impl Stamp {
+    fn of(project: &Project) -> Self {
+        Stamp {
+            revision: project.revision(),
+            next_id: project.next_id(),
+            name: project.info().name.clone(),
+        }
+    }
+}
+
 struct Entry {
     report: Box<dyn Report>,
-    /// The output and the project revision it is known to match.
-    output: Option<(u64, ReportOutput)>,
+    /// The output and the project state it is known to match.
+    output: Option<(Stamp, ReportOutput)>,
 }
 
 /// Every report of one document, kept current: the live views behind
@@ -107,9 +127,11 @@ struct Entry {
 /// only from the revision just before the edit, so after a gap `get` sees
 /// the revision mismatch and regenerates.
 ///
-/// One `LiveReports` belongs to one [`Document`](novo_core::Document):
-/// output is matched by revision number, so call [`LiveReports::clear`]
-/// (or make a new one) when another project is opened.
+/// One `LiveReports` belongs to one [`Document`](novo_core::Document);
+/// call [`LiveReports::clear`] (or make a new one) when another project is
+/// opened. Output is matched by revision, next free id and project name, so
+/// a forgotten `clear` is caught unless the new project agrees on all
+/// three.
 pub struct LiveReports {
     entries: Vec<Entry>,
 }
@@ -202,20 +224,20 @@ impl LiveReports {
         since: u64,
         changes: &ChangeSet,
     ) -> Vec<&str> {
-        let revision = project.revision();
+        let now = Stamp::of(project);
         let mut stale = Vec::new();
         for entry in &mut self.entries {
             let Some((at, output)) = &mut entry.output else {
                 continue;
             };
-            if *at == revision {
+            if *at == now {
                 continue;
             }
-            if *at == since && !entry.report.affected_by(changes) {
+            if at.revision == since && at.name == now.name && !entry.report.affected_by(changes) {
                 // Still correct for the new revision: say so, so readers of
                 // `ReportOutput::revision` see it as current.
-                *at = revision;
-                output.revision = revision;
+                output.revision = now.revision;
+                *at = now.clone();
             } else {
                 entry.output = None;
                 stale.push(entry.report.id());
@@ -227,7 +249,7 @@ impl LiveReports {
     /// Whether a report's cached output matches the project (no work needed).
     pub fn is_current(&self, project: &Project, id: &str) -> bool {
         self.entries.iter().any(|e| {
-            e.report.id() == id && matches!(&e.output, Some((at, _)) if *at == project.revision())
+            e.report.id() == id && matches!(&e.output, Some((at, _)) if *at == Stamp::of(project))
         })
     }
 
@@ -247,9 +269,9 @@ impl LiveReports {
     }
 
     fn refresh<'a>(entry: &'a mut Entry, project: &Project) -> &'a ReportOutput {
-        let revision = project.revision();
-        if !matches!(&entry.output, Some((at, _)) if *at == revision) {
-            entry.output = Some((revision, entry.report.generate(project)));
+        let now = Stamp::of(project);
+        if !matches!(&entry.output, Some((at, _)) if *at == now) {
+            entry.output = Some((now, entry.report.generate(project)));
         }
         &entry.output.as_ref().expect("just generated").1
     }
