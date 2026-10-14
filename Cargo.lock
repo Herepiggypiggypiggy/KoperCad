@@ -1388,8 +1388,10 @@ name = "novo-tests"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+ "novo-storage",
  "novo-symbols",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

@@ -10,6 +10,21 @@ How a PR is tested: its branch is merged onto the current `main` (a
 `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
 `cargo test --workspace`. Windows results come from the PR's own CI.
 
+## Round 4 (2026-10-14, main `1a68be8`)
+
+main now has #18 (148 symbols, tighter `PassThrough`) and #5 (project
+file). fmt, clippy and all 117 workspace tests pass.
+
+- **Gate 0 "save, close and reopen gives an identical project" is met on
+  main.** New `gate0_storage.rs` saves the Gate 1 project to a `.novo`
+  file and reopens it. The JSON is identical, and so are the netlist (every
+  net as its set of pins, with its potentials) and every pin's potential.
+  `-M1:U1` is still `L1` and coil A1 is still `L`, with no conflicts. The
+  same holds after incremental saves with a move, a delete, an undo and a
+  retag, and for a project recovered from the autosave after a simulated
+  crash. A 10,000-object page saves in 221 ms and opens in 252 ms (debug
+  build).
+
 ## Round 3 (2026-10-14, main `e487ccc`)
 
 main now has #14 (potentials carried through switched poles, terminal level
