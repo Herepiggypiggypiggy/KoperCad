@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "terminals"
 function = "connector.pair"
 keywords = ["plug", "socket", "connector", "mated"]
+aliases = ["xs", "conn"]
 
 connections = [
   { id = "1", at = [0, 0], dir = "up" },

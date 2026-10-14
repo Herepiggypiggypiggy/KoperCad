@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "transformers"
 function = "transformer.1ph"
 keywords = ["transformer", "control transformer", "1 phase", "isolation"]
+aliases = ["tr1"]
 
 connections = [
   { id = "1.1", at = [0, 0], dir = "up" },

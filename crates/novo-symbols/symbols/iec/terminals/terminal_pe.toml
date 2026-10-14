@@ -6,6 +6,8 @@ standard = "IEC 60617"
 category = "terminals"
 function = "terminal.pe"
 keywords = ["terminal", "pe", "earth", "ground", "protective earth"]
+aliases = ["xpe"]
+favorite = true
 
 connections = [
   { id = "1", at = [0, 0], dir = "up", role = "pe" },

@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "transformers"
 function = "transformer.3ph"
 keywords = ["transformer", "3 phase", "power transformer"]
+aliases = ["tr3"]
 
 connections = [
   { id = "1U", at = [0, 0], dir = "up" },

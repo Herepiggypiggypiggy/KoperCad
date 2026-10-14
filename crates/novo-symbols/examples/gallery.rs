@@ -32,10 +32,16 @@ fn main() {
         }
         let _ = writeln!(
             html,
-            "<figure>{}<figcaption>{}<br><code>{}</code></figcaption></figure>",
+            "<figure>{}<figcaption>{}{}<br><code>{}</code>{}</figcaption></figure>",
             to_svg(symbol, &options),
+            if symbol.favorite { "&#9733; " } else { "" },
             escape(&symbol.name),
-            escape(&symbol.id)
+            escape(&symbol.id),
+            if symbol.aliases.is_empty() {
+                String::new()
+            } else {
+                format!("<br>alias: <b>{}</b>", escape(&symbol.aliases.join(", ")))
+            }
         );
     }
     html.push_str("</div>\n");

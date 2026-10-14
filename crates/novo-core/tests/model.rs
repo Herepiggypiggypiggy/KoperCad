@@ -1728,3 +1728,33 @@ fn star_delta_keeps_each_winding_on_its_nearest_phase() {
     let u1_net = net.net(net.net_of(Endpoint::junction(u1)).unwrap());
     assert_eq!(u1_net.reachable, vec![l1, l2, l3]);
 }
+
+#[test]
+fn terminal_parts_are_referenced_and_cleared_with_the_part() {
+    let mut doc = Document::default();
+    let ((terminal, clamp), _) = doc
+        .transact("Strip", |tx| {
+            let x1 = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+            let terminal = tx.add_terminal(x1, "1")?;
+            let clamp = tx.add_part("Phoenix Contact", "3031212")?;
+            tx.update::<Terminal>(terminal, |t| t.part = Some(clamp))?;
+            Ok((terminal, clamp))
+        })
+        .unwrap();
+    assert!(
+        doc.project()
+            .referrers(clamp)
+            .any(|id| id == AnyId::from(terminal))
+    );
+    doc.transact("Delete part", |tx| tx.remove(clamp)).unwrap();
+    assert_eq!(doc.project().get::<Terminal>(terminal).unwrap().part, None);
+
+    // A part that does not exist is refused.
+    let missing = PartId(9999);
+    assert!(
+        doc.transact("Bad part", |tx| {
+            tx.update::<Terminal>(terminal, |t| t.part = Some(missing))
+        })
+        .is_err()
+    );
+}

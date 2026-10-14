@@ -266,9 +266,13 @@ impl Session {
     }
 
     /// Closes the project. Unsaved changes are dropped (ask the user to save
-    /// first) and the recovery file is deleted.
+    /// first) and the recovery file is deleted, except while a recovery
+    /// decision is still pending: then the offered work is kept for the next
+    /// open.
     pub fn close(mut self) -> Result<()> {
-        self.drop_autosave()?;
+        if !self.recovery_pending {
+            self.drop_autosave()?;
+        }
         self.file.close()
     }
 

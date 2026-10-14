@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "protection"
 function = "protection.rcd"
 keywords = ["rcd", "rccb", "residual current", "earth leakage", "2p", "fi"]
+aliases = ["rcd2", "rcd"]
 
 connections = [
   { id = "1", at = [0, 0], dir = "up" },

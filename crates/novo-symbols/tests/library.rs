@@ -419,3 +419,154 @@ fn changeover_passes_through_from_the_common_side_only() {
     // connections: 11 (common), 12 (break), 14 (make)
     assert_eq!(co.pass_through().paths(), [vec![0, 1], vec![0, 2]]);
 }
+
+#[test]
+fn palette_aliases_find_common_symbols() {
+    let lib = builtin();
+    for (alias, id) in [
+        ("no", "iec/contacts/no"),
+        ("nc", "iec/contacts/nc"),
+        ("coil", "iec/coils/relay"),
+        ("mcb3", "iec/protection/mcb_3p"),
+        ("motor3", "iec/motors/motor_3ph"),
+        ("x", "iec/terminals/terminal"),
+        ("br2", "iec/connectivity/bridge_2"),
+    ] {
+        assert_eq!(
+            lib.by_alias(alias).map(|s| s.id.as_str()),
+            Some(id),
+            "{alias}"
+        );
+    }
+    assert_eq!(
+        lib.by_alias(" MCB3 ").map(|s| s.id.as_str()),
+        Some("iec/protection/mcb_3p")
+    );
+    assert!(lib.by_alias("nothing").is_none());
+
+    let favorites: Vec<_> = lib.favorites().map(|s| s.id.as_str()).collect();
+    assert_eq!(favorites.len(), 20, "{favorites:?}");
+    assert!(favorites.contains(&"iec/terminals/terminal"));
+    assert_eq!(lib.by_function("accessory.terminal").count(), 2);
+}
+
+#[test]
+fn aliases_are_checked_and_unique_per_library() {
+    let no = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("symbols/iec/contacts/no.toml"),
+    )
+    .unwrap();
+    let nc = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("symbols/iec/contacts/nc.toml"),
+    )
+    .unwrap()
+    .replace("aliases = [\"nc\"]", "aliases = [\"no\"]");
+    let clash = Library::from_sources([
+        ("iec/contacts/no".to_string(), no.as_str()),
+        ("iec/contacts/nc".to_string(), nc.as_str()),
+    ]);
+    assert!(
+        matches!(&clash, Err(novo_symbols::LoadError::DuplicateAlias { alias, .. }) if alias == "no"),
+        "{clash:?}"
+    );
+
+    for bad in [
+        "\"NO\"",
+        "\"\"",
+        "\"make contact\"",
+        "\"averyveryverylongalias\"",
+    ] {
+        let text = no.replace("aliases = [\"no\"]", &format!("aliases = [{bad}]"));
+        let symbol = Symbol::from_toml(&text).unwrap();
+        assert!(
+            validate(&symbol)
+                .iter()
+                .any(|i| i.message.contains("alias")),
+            "{bad}"
+        );
+    }
+    let twice = no.replace("aliases = [\"no\"]", "aliases = [\"no\", \"no\"]");
+    let symbol = Symbol::from_toml(&twice).unwrap();
+    assert!(
+        validate(&symbol)
+            .iter()
+            .any(|i| i.message.contains("twice"))
+    );
+}
+
+/// Every clamp of a terminal strip is drawn the same way, so a strip of 400
+/// terminals of one type looks uniform whatever variant each one is.
+#[test]
+fn terminal_clamps_share_one_drawing() {
+    use novo_symbols::Graphic;
+    let lib = builtin();
+    let terminals: Vec<_> = lib.by_function("terminal").collect();
+    assert!(terminals.len() >= 6);
+    for symbol in terminals {
+        let clamps: Vec<_> = symbol
+            .graphics
+            .iter()
+            .filter_map(|g| match g {
+                Graphic::Circle { center, r, .. } => Some((*center, *r)),
+                _ => None,
+            })
+            .collect();
+        assert!(!clamps.is_empty(), "{} has no clamp", symbol.id);
+        for (center, r) in clamps {
+            assert_eq!(r, 1.2, "{}", symbol.id);
+            // Each clamp sits on a conductor, between two of its connections.
+            let xs: Vec<_> = symbol
+                .connections
+                .iter()
+                .filter(|c| c.at[0] == center[0])
+                .collect();
+            assert!(
+                xs.len() >= 2,
+                "{}: clamp at {center:?} is off the conductor",
+                symbol.id
+            );
+            assert!(
+                xs.iter().any(|c| c.at[1] < center[1]) && xs.iter().any(|c| c.at[1] > center[1]),
+                "{}: clamp at {center:?} is not between its connections",
+                symbol.id
+            );
+        }
+        let pitch: Vec<_> = symbol.connections.iter().map(|c| c.at[1]).collect();
+        assert!(
+            pitch.iter().all(|&y| y == 0.0 || y == 8.0 || y == 16.0),
+            "{}: {pitch:?}",
+            symbol.id
+        );
+    }
+}
+
+#[test]
+fn changeover_switch_has_an_off_position_and_strips_have_end_pieces() {
+    let lib = builtin();
+    let switch = lib.get("iec/switches/changeover_switch_3p").unwrap();
+    assert_eq!(
+        switch
+            .behavior
+            .params
+            .get("center_off")
+            .and_then(|v| v.as_bool()),
+        Some(true)
+    );
+    assert!(
+        behavior_messages("[behavior]\nkind = \"contact\"\nnormally = \"open\"\ncenter_off = true\npoles = [[\"1\", \"2\"]]")
+            .iter()
+            .any(|m| m.contains("center_off only applies"))
+    );
+    for (alias, id) in [
+        ("term", "iec/terminals/terminal"),
+        ("endplate", "iec/terminals/end_plate"),
+        ("NO", "iec/contacts/no"),
+        ("endstop", "iec/terminals/end_bracket"),
+    ] {
+        assert_eq!(
+            lib.by_alias(alias).map(|s| s.id.as_str()),
+            Some(id),
+            "{alias}"
+        );
+    }
+}

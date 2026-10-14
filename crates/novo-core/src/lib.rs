@@ -71,22 +71,25 @@ mod project;
 mod record;
 mod search;
 mod tag;
+mod text;
 mod tx;
 mod xref;
 
 pub use command::Command;
 pub use document::{DEFAULT_HISTORY_LIMIT, Document, Outcome};
 pub use entity::{
-    Cable, CableCore, Device, DeviceKind, Endpoint, Junction, Page, PageFormat, PageKind,
-    PaperSize, Part, Pin, PinRef, Potential, PotentialKind, ProjectInfo, Properties,
-    SymbolInstance, SymbolKey, SymbolRole, Terminal, TerminalKind, Value, Wire,
+    Cable, CableCore, Device, DeviceKind, Endpoint, JoinLink, Junction, Page, PageFormat, PageKind,
+    PaperSize, Part, Pin, PinRef, Potential, PotentialKind, PotentialRules, PotentialSet,
+    PotentialSpec, ProjectInfo, ProjectRules, Properties, SameName, SymbolInstance, SymbolKey,
+    SymbolRole, Terminal, TerminalKind, TerminalRules, Text, TextAnchor, TextContent,
+    TextPlacement, Value, Wire,
 };
 pub use error::{ModelError, Result};
 pub use geom::{Direction, Placement, Point, Rotation};
 pub use graph::{Net, NetId, Netlist};
 pub use id::{
     AnyId, CableId, DeviceId, EntityKind, JunctionId, PageId, PartId, PotentialId, SymbolId,
-    TerminalId, WireId,
+    TerminalId, TextId, WireId,
 };
 pub use json::JSON_FORMAT_VERSION;
 pub use project::{PageContents, Project, natural_cmp};

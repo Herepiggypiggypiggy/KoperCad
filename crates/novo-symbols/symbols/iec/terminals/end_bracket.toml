@@ -1,0 +1,24 @@
+format = 1
+id = "iec/terminals/end_bracket"
+name = "Terminal end bracket"
+description = "End bracket (end stop) clamping a terminal strip on the DIN rail."
+standard = "IEC 60617"
+category = "terminals"
+function = "accessory.terminal.end_bracket"
+keywords = ["end bracket", "end stop", "end clamp", "terminal", "accessory"]
+aliases = ["endstop", "endbracket"]
+
+connections = [
+]
+
+anchors = [
+  { role = "tag", at = [-4, 4], align = "right" },
+]
+
+graphics = [
+  { kind = "rect", at = [-2, 0], size = [4, 8] },
+  { kind = "line", from = [-2, 8], to = [2, 0] },
+]
+
+[behavior]
+kind = "none"

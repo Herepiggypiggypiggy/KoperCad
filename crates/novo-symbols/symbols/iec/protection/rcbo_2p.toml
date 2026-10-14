@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "protection"
 function = "protection.rcbo"
 keywords = ["rcbo", "residual current", "breaker", "1p+n"]
+aliases = ["rcbo2", "rcbo"]
 
 connections = [
   { id = "1", at = [0, 0], dir = "up" },
