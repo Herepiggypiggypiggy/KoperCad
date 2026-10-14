@@ -6,6 +6,8 @@ standard = "IEC 60617"
 category = "coils"
 function = "coil.relay"
 keywords = ["coil", "relay", "contactor", "a1", "a2"]
+aliases = ["coil", "k"]
+favorite = true
 
 connections = [
   { id = "A1", at = [0, 0], dir = "up" },

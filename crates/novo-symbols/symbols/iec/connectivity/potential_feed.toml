@@ -6,6 +6,8 @@ standard = "IEC 60617"
 category = "connectivity"
 function = "connectivity.potential"
 keywords = ["potential", "feed", "supply", "net label", "l1", "24v"]
+aliases = ["feed"]
+favorite = true
 
 connections = [
   { id = "1", at = [0, 8], dir = "down" },

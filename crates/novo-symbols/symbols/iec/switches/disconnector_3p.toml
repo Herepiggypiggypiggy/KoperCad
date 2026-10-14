@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "switches"
 function = "switch.disconnector"
 keywords = ["disconnector", "isolator", "3p"]
+aliases = ["iso3"]
 
 connections = [
   { id = "1", at = [0, 0], dir = "up" },

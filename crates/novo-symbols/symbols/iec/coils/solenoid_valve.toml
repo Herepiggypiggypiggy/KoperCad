@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "coils"
 function = "coil.valve"
 keywords = ["valve", "solenoid", "coil", "pneumatic"]
+aliases = ["valve", "yv"]
 
 connections = [
   { id = "A1", at = [0, 0], dir = "up" },
