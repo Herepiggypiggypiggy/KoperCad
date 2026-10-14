@@ -3,11 +3,13 @@
 Updated 2026-10-14 23:30 UTC.
 
 ## State
-- #31 merged (19:22 UTC). Follow-up PR from main on branch
-  `claude/project-thread-mtm4pw`: core Page.structure / Location::qualified
-  instead of page props, EN 50005 ordinal clash, negative contact counts.
+- #31 and #89 merged. New PR from main on `claude/project-thread-mtm4pw`:
+  compact contact image (kind dropped when EN 50005 numbers say it) and
+  `Label.anchor` (Below for coils, Right for contacts), from the #93
+  design review. WS-03 asked to add the anchor to canvas `SymbolNote`.
+- Reference format stays `3.4` (DESIGN §3); a `/2.5` switch would be a
+  Workflow-thread DESIGN change first.
 - Main reviewer cse_016C9nTT8cN7voW8t1NQUG4W gets the head SHA after each push.
-- Open review notes not done (see ROADMAP "Next").
 
 ## Resume
 ```
