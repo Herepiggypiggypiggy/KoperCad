@@ -136,6 +136,7 @@ selection, hover, rubber band, snap marker) and `novo_canvas::model::ModelStyle`
 ## Branding
 
 - Name: NovoElectric, one word, capital N and E.
-- Mark: being chosen (round two: Nova, Phase or Ground).
+- Mark: "Nova", a four-ray star meeting at a copper junction dot
+  (`assets/branding/icon.svg`).
 - Tagline: "Electrical design, without the weight".
 - Window icon and installer icon come from `assets/branding`; see its README.

@@ -6,10 +6,13 @@
 | `icon-<size>.png` | Rendered app icon, 16 to 256 px. |
 | `icon.ico` | Windows icon (all sizes in one file) for the exe, installer and shortcuts. |
 
-The mark is an "N" drawn as an open contact: two posts and an amber blade
-that pivots on the left post and stops short of the right one. Colours come
-from `crates/novo-theme/src/tokens.rs` (`BRAND` amber `#FFB81C`, `TEXT`
-`#E4E7EC`, tile `#171A1F`).
+The mark is "Nova": novo means new, and a nova is a new star. Four tapered
+rays meet at a copper junction dot, the dot that joins wires on a schematic.
+Colours come from `crates/novo-theme/src/tokens.rs` (copper `ACCENT`
+`#C88A5E`, `TEXT` `#E3E1DC`, tile `#151517`).
+
+Alternatives considered in round two (Phase, Ground) are in
+`assets/branding/alternatives/`.
 
 After changing `icon.svg`, re-render the PNG and ICO files from the
 repository root:
