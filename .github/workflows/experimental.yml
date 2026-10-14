@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read # listing open PRs needs it; contents alone returns 403
 
 concurrency:
   group: experimental
