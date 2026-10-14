@@ -18,9 +18,6 @@ pub enum Action {
     TogglePropertiesPanel,
     ToggleMessagesPanel,
     CommandPalette,
-    ThemeSystem,
-    ThemeLight,
-    ThemeDark,
     About,
 }
 
@@ -39,9 +36,6 @@ impl Action {
         Action::TogglePropertiesPanel,
         Action::ToggleMessagesPanel,
         Action::CommandPalette,
-        Action::ThemeSystem,
-        Action::ThemeLight,
-        Action::ThemeDark,
         Action::About,
     ];
 
@@ -62,9 +56,6 @@ impl Action {
             Action::TogglePropertiesPanel => "view.properties_panel",
             Action::ToggleMessagesPanel => "view.messages_panel",
             Action::CommandPalette => "view.command_palette",
-            Action::ThemeSystem => "view.theme_system",
-            Action::ThemeLight => "view.theme_light",
-            Action::ThemeDark => "view.theme_dark",
             Action::About => "help.about",
         }
     }
@@ -88,9 +79,6 @@ impl Action {
             Action::TogglePropertiesPanel => "Properties panel",
             Action::ToggleMessagesPanel => "Messages panel",
             Action::CommandPalette => "Command palette…",
-            Action::ThemeSystem => "Theme: follow system",
-            Action::ThemeLight => "Theme: light",
-            Action::ThemeDark => "Theme: dark",
             Action::About => "About NovoElectric",
         }
     }
@@ -109,10 +97,7 @@ impl Action {
             | Action::ToggleProjectPanel
             | Action::TogglePropertiesPanel
             | Action::ToggleMessagesPanel
-            | Action::CommandPalette
-            | Action::ThemeSystem
-            | Action::ThemeLight
-            | Action::ThemeDark => "View",
+            | Action::CommandPalette => "View",
             Action::About => "Help",
         }
     }
@@ -134,9 +119,7 @@ impl Action {
             Action::TogglePropertiesPanel => (cmd, Key::Num2),
             Action::ToggleMessagesPanel => (cmd, Key::Num3),
             Action::CommandPalette => (cmd, Key::K),
-            Action::ThemeSystem | Action::ThemeLight | Action::ThemeDark | Action::About => {
-                return None;
-            }
+            Action::About => return None,
         };
         Some(KeyboardShortcut::new(modifiers, key))
     }

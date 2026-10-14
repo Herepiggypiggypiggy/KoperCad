@@ -8,7 +8,7 @@ on:
   pull_request:
     paths:
       - "packaging/windows/**"
-      - "assets/icon/**"
+      - "assets/branding/**"
       - ".github/workflows/package-windows.yml"
   workflow_dispatch:
 

@@ -2,12 +2,12 @@
 //! into the Windows executable.
 
 fn main() {
-    println!("cargo:rerun-if-changed=../../assets/icon/novoelectric.ico");
+    println!("cargo:rerun-if-changed=../../assets/branding/icon.ico");
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
         return;
     }
     let mut res = winresource::WindowsResource::new();
-    res.set_icon("../../assets/icon/novoelectric.ico");
+    res.set_icon("../../assets/branding/icon.ico");
     // Never ask for elevation: NovoElectric must run without admin rights.
     res.set_manifest(
         r#"<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">

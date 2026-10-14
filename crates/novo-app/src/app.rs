@@ -11,8 +11,9 @@ use novo_core::PageId;
 use crate::backend::{BackendError, ProjectBackend, page_labels};
 use crate::canvas::{CanvasView, OpenPage};
 use crate::palette::{Entry, Palette, Target};
-use crate::settings::{Settings, Theme};
+use crate::settings::Settings;
 use crate::{APP_NAME, PROJECT_EXTENSION};
+use novo_theme::widgets::{primary_button, section_label};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Level {
@@ -75,9 +76,8 @@ impl NovoApp {
             .storage
             .and_then(|s| eframe::get_value(s, Settings::STORAGE_KEY))
             .unwrap_or_default();
-        let app = Self::with_settings(backend, canvas, settings);
-        cc.egui_ctx.set_theme(app.settings.theme.preference());
-        app
+        novo_theme::apply(&cc.egui_ctx);
+        Self::with_settings(backend, canvas, settings)
     }
 
     pub fn with_settings(
@@ -213,16 +213,8 @@ impl NovoApp {
                 self.settings.show_messages_panel ^= true;
             }
             Action::CommandPalette => self.palette.open(),
-            Action::ThemeSystem => self.set_theme(ctx, Theme::System),
-            Action::ThemeLight => self.set_theme(ctx, Theme::Light),
-            Action::ThemeDark => self.set_theme(ctx, Theme::Dark),
             Action::About => self.show_about = true,
         }
-    }
-
-    fn set_theme(&mut self, ctx: &egui::Context, theme: Theme) {
-        self.settings.theme = theme;
-        ctx.set_theme(theme.preference());
     }
 
     fn message(&mut self, level: Level, text: impl Into<String>) {
@@ -595,14 +587,6 @@ impl NovoApp {
                 ] {
                     self.toggle_button(ui, a, on, picked);
                 }
-                ui.separator();
-                for (a, theme) in [
-                    (Action::ThemeSystem, Theme::System),
-                    (Action::ThemeLight, Theme::Light),
-                    (Action::ThemeDark, Theme::Dark),
-                ] {
-                    self.toggle_button(ui, a, self.settings.theme == theme, picked);
-                }
             });
             ui.menu_button("Help", |ui| {
                 self.action_button(ui, Action::About, picked);
@@ -667,7 +651,7 @@ impl NovoApp {
 
     fn project_panel(&mut self, ui: &mut egui::Ui) {
         ui.set_min_width(ui.available_width());
-        ui.strong("Project");
+        section_label(ui, "Project");
         ui.separator();
         let Some(name) = self.project_name() else {
             ui.weak("No project open");
@@ -693,7 +677,7 @@ impl NovoApp {
 
     fn messages_panel(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            ui.strong("Messages");
+            section_label(ui, "Messages");
             if ui.small_button("Clear").clicked() {
                 self.messages.clear();
             }
@@ -729,7 +713,7 @@ impl NovoApp {
             ui.label(format!("Save the changes to \"{name}\" first?"));
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                if ui.button("Save").clicked() {
+                if primary_button(ui, "Save").clicked() {
                     answer = Some(UnsavedAnswer::Save);
                 }
                 if ui.button("Don't save").clicked() {
@@ -768,7 +752,7 @@ impl NovoApp {
             ));
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                if ui.button("Restore").clicked() {
+                if primary_button(ui, "Restore").clicked() {
                     answer = Some(true);
                 }
                 if ui.button("Discard").clicked() {
@@ -917,7 +901,7 @@ fn consume_bare_key(input: &mut egui::InputState, key: egui::Key) -> bool {
 
 fn properties_panel(ui: &mut egui::Ui) {
     ui.set_min_width(ui.available_width());
-    ui.strong("Properties");
+    section_label(ui, "Properties");
     ui.separator();
     ui.weak("Nothing selected");
 }
@@ -965,6 +949,13 @@ mod tests {
         }
     }
 
+    /// A context with the app's theme and fonts, as `NovoApp::new` sets up.
+    fn themed_ctx() -> egui::Context {
+        let ctx = egui::Context::default();
+        novo_theme::apply(&ctx);
+        ctx
+    }
+
     fn app_with(backend: impl ProjectBackend + 'static) -> NovoApp {
         NovoApp::with_settings(
             Box::new(backend),
@@ -993,7 +984,7 @@ mod tests {
 
     #[test]
     fn renders_with_and_without_a_project() {
-        let ctx = egui::Context::default();
+        let ctx = themed_ctx();
         let mut app = app_with(MemoryBackend::default());
         frame(&ctx, &mut app, Default::default());
         app.run(&ctx, Action::NewProject);
@@ -1003,7 +994,7 @@ mod tests {
 
     #[test]
     fn ctrl_n_creates_a_project() {
-        let ctx = egui::Context::default();
+        let ctx = themed_ctx();
         let mut app = app_with(MemoryBackend::default());
         frame(&ctx, &mut app, key(egui::Key::N, egui::Modifiers::COMMAND));
         assert!(app.is_open());
@@ -1011,7 +1002,7 @@ mod tests {
 
     #[test]
     fn ctrl_k_opens_the_palette_and_blocks_other_shortcuts() {
-        let ctx = egui::Context::default();
+        let ctx = themed_ctx();
         let mut app = app_with(MemoryBackend::default());
         frame(&ctx, &mut app, key(egui::Key::K, egui::Modifiers::COMMAND));
         assert!(app.palette.is_open());
@@ -1021,7 +1012,7 @@ mod tests {
 
     #[test]
     fn save_without_a_project_is_ignored() {
-        let ctx = egui::Context::default();
+        let ctx = themed_ctx();
         let mut app = app_with(MemoryBackend::default());
         app.run(&ctx, Action::SaveProject);
         assert!(app.messages().is_empty());
@@ -1029,7 +1020,7 @@ mod tests {
 
     #[test]
     fn closing_a_dirty_project_asks_first() {
-        let ctx = egui::Context::default();
+        let ctx = themed_ctx();
         let mut app = app_with(DirtyBackend::default());
         app.run(&ctx, Action::NewProject);
         app.run(&ctx, Action::CloseProject);
@@ -1047,7 +1038,7 @@ mod tests {
 
     #[test]
     fn closing_a_clean_project_does_not_ask() {
-        let ctx = egui::Context::default();
+        let ctx = themed_ctx();
         let mut app = app_with(MemoryBackend::default());
         app.run(&ctx, Action::NewProject);
         app.run(&ctx, Action::CloseProject);
@@ -1057,7 +1048,7 @@ mod tests {
 
     #[test]
     fn placeholder_open_reports_an_error() {
-        let ctx = egui::Context::default();
+        let ctx = themed_ctx();
         let mut app = app_with(MemoryBackend::default());
         app.finish_discarding(&ctx, Discarding::OpenPath(PathBuf::from("x.novo")));
         assert_eq!(app.messages().last().map(|m| m.level), Some(Level::Error));
@@ -1066,7 +1057,7 @@ mod tests {
 
     #[test]
     fn startup_file_is_opened_on_first_frame() {
-        let ctx = egui::Context::default();
+        let ctx = themed_ctx();
         let mut app = app_with(DirtyBackend::default());
         app.open_on_start(PathBuf::from("plant.novo"));
         frame(&ctx, &mut app, Default::default());
@@ -1080,7 +1071,7 @@ mod tests {
 
     #[test]
     fn undo_keeps_the_shown_page_valid() {
-        let ctx = egui::Context::default();
+        let ctx = themed_ctx();
         let mut app = app_with(DirtyBackend::default());
         app.run(&ctx, Action::NewProject);
         let second = app.pages()[1].0;
@@ -1096,7 +1087,7 @@ mod tests {
 
     #[test]
     fn saving_clears_the_dirty_flag() {
-        let ctx = egui::Context::default();
+        let ctx = themed_ctx();
         let mut app = app_with(DirtyBackend::default());
         app.run(&ctx, Action::NewProject);
         assert!(app.is_dirty());
@@ -1108,7 +1099,7 @@ mod tests {
 
     /// Which actions a single key press would trigger.
     fn fired_by(app: &NovoApp, key_: egui::Key, modifiers: egui::Modifiers) -> Vec<Action> {
-        let ctx = egui::Context::default();
+        let ctx = themed_ctx();
         let mut fired = Vec::new();
         let mut output = ctx.run_ui(key(key_, modifiers), |ui| {
             fired = app.consume_shortcuts(ui.ctx());
@@ -1119,7 +1110,7 @@ mod tests {
 
     #[test]
     fn bare_shortcuts_ignore_extra_modifiers() {
-        let ctx = egui::Context::default();
+        let ctx = themed_ctx();
         let mut app = app_with(MemoryBackend::default());
         app.run(&ctx, Action::NewProject);
         assert_eq!(
@@ -1137,7 +1128,7 @@ mod tests {
 
     #[test]
     fn ctrl_y_redoes() {
-        let ctx = egui::Context::default();
+        let ctx = themed_ctx();
         let mut app = app_with(DirtyBackend::default());
         app.run(&ctx, Action::NewProject);
         app.run(&ctx, Action::Undo);
@@ -1167,7 +1158,7 @@ mod tests {
     fn edits_and_undo_reach_the_file() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("plant.novo");
-        let ctx = egui::Context::default();
+        let ctx = themed_ctx();
 
         let mut app = storage_app();
         app.run(&ctx, Action::NewProject);
@@ -1195,7 +1186,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("plant.novo");
         crate::backend::tests::crash_after_autosave(&path);
-        let ctx = egui::Context::default();
+        let ctx = themed_ctx();
 
         let mut app = storage_app();
         app.open_path(&path);
@@ -1216,7 +1207,7 @@ mod tests {
     fn an_unsaved_new_project_is_offered_back_after_a_crash() {
         let dir = tempfile::tempdir().unwrap();
         crate::backend::tests::crash_untitled(dir.path());
-        let ctx = egui::Context::default();
+        let ctx = themed_ctx();
         let mut app = app_with(StorageBackend::with_untitled_dir(dir.path()));
         frame(&ctx, &mut app, Default::default());
         assert!(app.is_open());
@@ -1252,7 +1243,7 @@ mod tests {
     fn a_file_open_elsewhere_is_reported_plainly() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("plant.novo");
-        let ctx = egui::Context::default();
+        let ctx = themed_ctx();
         let mut first = storage_app();
         first.run(&ctx, Action::NewProject);
         assert!(first.save_to(&path));
@@ -1266,7 +1257,7 @@ mod tests {
 
     #[test]
     fn panel_toggles_flip_settings() {
-        let ctx = egui::Context::default();
+        let ctx = themed_ctx();
         let mut app = app_with(MemoryBackend::default());
         let before = app.settings().show_messages_panel;
         app.run(&ctx, Action::ToggleMessagesPanel);

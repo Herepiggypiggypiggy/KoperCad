@@ -6,28 +6,9 @@ use std::path::{Path, PathBuf};
 const MAX_RECENT: usize = 10;
 const MAX_RECENT_ACTIONS: usize = 20;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Theme {
-    System,
-    Light,
-    #[default]
-    Dark,
-}
-
-impl Theme {
-    pub fn preference(self) -> eframe::egui::ThemePreference {
-        match self {
-            Theme::System => eframe::egui::ThemePreference::System,
-            Theme::Light => eframe::egui::ThemePreference::Light,
-            Theme::Dark => eframe::egui::ThemePreference::Dark,
-        }
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
-    pub theme: Theme,
     pub show_project_panel: bool,
     pub show_properties_panel: bool,
     pub show_messages_panel: bool,
@@ -40,7 +21,6 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            theme: Theme::default(),
             show_project_panel: true,
             show_properties_panel: true,
             show_messages_panel: false,
@@ -87,8 +67,11 @@ mod tests {
     }
 
     #[test]
-    fn default_theme_is_dark() {
-        assert_eq!(Settings::default().theme, Theme::Dark);
+    fn settings_from_older_versions_still_load() {
+        // Older settings had a theme choice; the app is dark only now.
+        let old = r#"(theme: Light, show_messages_panel: true)"#;
+        let s: Settings = ron::from_str(old).unwrap();
+        assert!(s.show_messages_panel);
     }
 
     #[test]
