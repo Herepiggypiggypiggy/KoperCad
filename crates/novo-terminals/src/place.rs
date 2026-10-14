@@ -3,8 +3,11 @@
 //!
 //! Each drop cuts the wire where it was hit and puts a terminal in the gap.
 //! The terminal's internal side (`1`) goes to the top on a vertical wire and
-//! to the left on a horizontal one. The wire part on that side keeps the
-//! wire's id, number and cable core; the other part is a new wire.
+//! to the left on a horizontal one. The wire part from the wire's start to
+//! the terminal keeps the wire's id, number and cable core; the part from
+//! the terminal to the wire's end is a new wire. That kept part is on the
+//! internal side when the wire runs top to bottom (left to right), and on
+//! the external side when it runs the other way; [`Placed`] says which.
 
 use novo_core::{
     DeviceId, DeviceKind, DeviceTag, Direction, Endpoint, ModelError, Netlist, PageId, Pin,
@@ -35,9 +38,10 @@ pub struct Drop {
 pub struct Placed {
     pub terminal: TerminalId,
     pub symbol: novo_core::SymbolId,
-    /// The wire part on the internal side (the original wire).
+    /// The wire part on the internal side.
     pub internal_wire: WireId,
-    /// The new wire part on the external side.
+    /// The wire part on the external side. One of the two is the original
+    /// wire (the part at its start), the other a new wire.
     pub external_wire: WireId,
     /// The drop reused a terminal of the same name (the "join" rule).
     pub joined: bool,

@@ -223,6 +223,7 @@ pub fn explain(project: &Project, terminal: TerminalId) -> Vec<String> {
             .filter(|o| o.jumper == Some(group) && o.name != t.name)
             .map(|o| o.name.clone())
             .collect();
+        others.sort_by(|a, b| natural_cmp(a, b));
         others.dedup();
         if !others.is_empty() {
             out.push(strings::explain_jumpered(&others, group));
@@ -417,8 +418,39 @@ pub fn renumber_preview(project: &Project, strip: DeviceId) -> Vec<(TerminalId, 
 /// order, as [`renumber_preview`] shows. PE and N terminals and other named
 /// ones keep their names.
 pub fn renumber(tx: &mut Tx<'_>, strip: DeviceId) -> Result<()> {
-    for (id, _, name) in renumber_preview(tx.project(), strip) {
-        tx.update::<Terminal>(id, |t| t.name = name)?;
+    let changes: Vec<(TerminalId, String)> = renumber_preview(tx.project(), strip)
+        .into_iter()
+        .filter(|(_, old, new)| old != new)
+        .map(|(id, _, new)| (id, new))
+        .collect();
+    set_names(tx, strip, &changes)
+}
+
+/// Gives several terminals of one strip new names in one transaction.
+/// novo-core checks every terminal update on its own, so under the Refuse
+/// rule a name that is still held by another record being renamed (a swap,
+/// or `3 -> 2` while `2 -> 3` is still to come) would be refused in
+/// between. Every record therefore first takes a temporary name with a
+/// prefix no terminal of the strip uses, then its final name. Only the end
+/// state has to be valid; the transaction stays one undo step.
+fn set_names(tx: &mut Tx<'_>, strip: DeviceId, changes: &[(TerminalId, String)]) -> Result<()> {
+    if changes.is_empty() {
+        return Ok(());
+    }
+    let mut prefix = String::from("\u{1}renaming~");
+    while tx
+        .project()
+        .terminals_of_strip(strip)
+        .iter()
+        .any(|t| t.name.starts_with(&prefix))
+    {
+        prefix.push('~');
+    }
+    for (i, (id, _)) in changes.iter().enumerate() {
+        tx.update::<Terminal>(*id, |t| t.name = format!("{prefix}{i}"))?;
+    }
+    for (id, name) in changes {
+        tx.update::<Terminal>(*id, |t| t.name = name.clone())?;
     }
     Ok(())
 }
@@ -558,8 +590,10 @@ pub fn rename(tx: &mut Tx<'_>, strip: DeviceId, find: &str, replace: &str) -> Re
             None => {}
         }
     }
-    for change in &changes {
-        tx.update::<Terminal>(change.terminal, |t| t.name = change.new.clone())?;
-    }
+    let names: Vec<(TerminalId, String)> = changes
+        .iter()
+        .map(|c| (c.terminal, c.new.clone()))
+        .collect();
+    set_names(tx, strip, &names)?;
     Ok(changes.len())
 }

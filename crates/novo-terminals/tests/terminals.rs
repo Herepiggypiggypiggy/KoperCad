@@ -1267,3 +1267,113 @@ fn jumpers_stay_on_one_strip_and_strips_sort_by_number() {
     doc.transact("Jumper", |tx| set_jumper(tx, &ids, None))
         .unwrap();
 }
+
+/// Sets the Refuse rule and returns strip `-X1`.
+fn refuse_strip(tx: &mut Tx<'_>) -> Result<DeviceId> {
+    set_rules(
+        tx,
+        TerminalRules {
+            same_name: SameName::Refuse,
+            join_link: JoinLink::Jumper,
+        },
+    )?;
+    strip_by_tag(tx, "X1")
+}
+
+fn names_of(project: &Project, strip: DeviceId) -> Vec<String> {
+    strip_view(project, strip)
+        .rows
+        .iter()
+        .map(|r| r.name.clone())
+        .collect()
+}
+
+/// Review of PR #30: under Refuse, novo-core checks each terminal update on
+/// its own. Renumbering `[1, 3, 2, 4]` must not stop at `3 -> 2` while the
+/// record named `2` still exists.
+#[test]
+fn renumber_after_a_gap_works_under_refuse() {
+    let mut doc = Document::default();
+    let (motor, _) = doc.transact("Draw", motor_circuit).unwrap();
+    let (strip, _) = doc
+        .transact("Terminals", |tx| {
+            let strip = refuse_strip(tx)?;
+            let d = drops(&motor.wires[..3], 60.0, tx.project());
+            place_terminals(tx, strip, &d)?;
+            Ok(strip)
+        })
+        .unwrap();
+    let two = doc
+        .project()
+        .terminals_of_strip(strip)
+        .iter()
+        .find(|t| t.name == "2")
+        .unwrap()
+        .id;
+    doc.transact("Remove", |tx| tx.remove(two)).unwrap();
+    doc.transact("Spares", |tx| add_spares(tx, strip, 2))
+        .unwrap();
+    assert_eq!(names_of(doc.project(), strip), ["1", "3", "2", "4"]);
+    let depth = doc.undo_depth();
+    doc.transact("Renumber", |tx| renumber(tx, strip)).unwrap();
+    assert_eq!(doc.undo_depth(), depth + 1);
+    assert_eq!(names_of(doc.project(), strip), ["1", "2", "3", "4"]);
+    assert_eq!(
+        strip_view(doc.project(), strip).rows[1].external_targets()[0].designation,
+        "-M1:W1"
+    );
+    // One undo step restores every name.
+    doc.undo().unwrap();
+    assert_eq!(names_of(doc.project(), strip), ["1", "3", "2", "4"]);
+}
+
+/// Swapping two numbers is a cycle: no order of single updates avoids an
+/// in-between duplicate.
+#[test]
+fn renumber_swaps_two_terminals_under_refuse() {
+    let mut doc = Document::default();
+    let ((strip, ids), _) = doc
+        .transact("Spares", |tx| {
+            let strip = refuse_strip(tx)?;
+            let ids = add_spares(tx, strip, 3)?;
+            Ok((strip, ids))
+        })
+        .unwrap();
+    doc.transact("Reorder", |tx| reorder(tx, strip, &[ids[1], ids[0]]))
+        .unwrap();
+    assert_eq!(names_of(doc.project(), strip), ["2", "1", "3"]);
+    doc.transact("Renumber", |tx| renumber(tx, strip)).unwrap();
+    assert_eq!(names_of(doc.project(), strip), ["1", "2", "3"]);
+    let name = |id| doc.project().terminal(id).unwrap().name.clone();
+    assert_eq!([name(ids[0]), name(ids[1]), name(ids[2])], ["2", "1", "3"]);
+    doc.undo().unwrap();
+    assert_eq!(names_of(doc.project(), strip), ["2", "1", "3"]);
+}
+
+/// A rename whose new name is another renamed record's old name (`X -> XX`
+/// while `XX -> XXXX`) is fine at the end but clashes in between.
+#[test]
+fn rename_into_a_name_being_renamed_works_under_refuse() {
+    let mut doc = Document::default();
+    let (strip, _) = doc
+        .transact("Spares", |tx| {
+            let strip = refuse_strip(tx)?;
+            let ids = add_spares(tx, strip, 3)?;
+            for (id, name) in ids.into_iter().zip(["X", "XX", "XXX"]) {
+                tx.update::<novo_core::Terminal>(id, |t| t.name = name.into())?;
+            }
+            Ok(strip)
+        })
+        .unwrap();
+    let preview = rename_preview(doc.project(), strip, "X", "XX");
+    assert!(preview.iter().all(|c| c.problem.is_none()));
+    let depth = doc.undo_depth();
+    let (n, _) = doc
+        .transact("Rename", |tx| rename(tx, strip, "X", "XX"))
+        .unwrap();
+    assert_eq!(n, 3);
+    assert_eq!(doc.undo_depth(), depth + 1);
+    assert_eq!(names_of(doc.project(), strip), ["XX", "XXXX", "XXXXXX"]);
+    doc.undo().unwrap();
+    assert_eq!(names_of(doc.project(), strip), ["X", "XX", "XXX"]);
+}
