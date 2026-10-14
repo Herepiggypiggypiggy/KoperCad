@@ -13,7 +13,8 @@ use crate::table::{Cell, Column, ReportOutput, Section};
 ///
 /// Section `parts`: one row per article (manufacturer and order number),
 /// counting every use: each entry in a device's part list, each terminal's
-/// part and each cable's part. Cable rows also sum the cable lengths.
+/// article ([`novo_terminals::terminal_part`]: its own part or its strip's
+/// style) and each cable's part. Cable rows also sum the cable lengths.
 /// Rows sort by manufacturer, then order number, in natural order.
 ///
 /// Section `without_parts` (only when non-empty): devices and cables with
@@ -60,7 +61,7 @@ impl Report for BillOfMaterials {
                 });
             }
             for terminal in project.terminals_of_strip(device.id) {
-                if let Some(part) = terminal.part {
+                if let Some(part) = novo_terminals::terminal_part(project, terminal.id) {
                     uses.entry(part).or_default().push(Use {
                         designation: format!("{}:{}", device.tag, terminal.name),
                         source: terminal.id.into(),
@@ -148,7 +149,7 @@ impl Report for BillOfMaterials {
                     && project
                         .terminals_of_strip(device.id)
                         .iter()
-                        .any(|t| t.part.is_some()));
+                        .any(|t| novo_terminals::terminal_part(project, t.id).is_some()));
             if !covered {
                 missing.push(
                     vec![

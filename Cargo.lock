@@ -1952,6 +1952,7 @@ version = "0.1.0"
 dependencies = [
  "calamine",
  "novo-core",
+ "novo-terminals",
  "novo-tests",
  "rust_xlsxwriter",
  "thiserror 2.0.21",
@@ -1998,6 +1999,7 @@ dependencies = [
  "novo-canvas",
  "novo-core",
  "novo-parts",
+ "novo-reports",
  "novo-storage",
  "novo-symbols",
  "novo-terminals",

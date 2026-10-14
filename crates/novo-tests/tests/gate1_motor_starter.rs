@@ -276,3 +276,44 @@ fn deleting_the_contactor_takes_its_symbols_and_wires_and_undo_restores_them() {
     doc.undo().unwrap();
     assert_eq!(state(doc.project()), built);
 }
+
+/// Terminal articles come from one place (`novo_terminals::terminal_part`):
+/// with the -X1 article set as the strip's style, the strip editor shows it
+/// on every row and the bill of materials counts every terminal.
+#[test]
+fn bom_counts_every_terminal_the_strip_shows() {
+    use novo_reports::{BillOfMaterials, Report};
+
+    let (mut doc, s) = starter();
+    let block = doc.project().device(s.x1).unwrap().parts[0];
+    doc.transact("Terminal style", |tx| {
+        for kind in [TerminalKind::Feedthrough, TerminalKind::ProtectiveEarth] {
+            let style = novo_terminals::Style {
+                symbol: SymbolKey(novo_terminals::default_symbol(kind).into()),
+                part: Some(block),
+            };
+            novo_terminals::set_strip_style(tx, s.x1, kind, &style)?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let p = doc.project();
+
+    let rows = novo_terminals::strip_view(p, s.x1).rows;
+    assert_eq!(rows.len(), 4);
+    assert!(rows.iter().all(|r| r.part == Some(block)));
+
+    let bom = BillOfMaterials.generate(p);
+    let parts = bom.sections.iter().find(|s| s.key == "parts").unwrap();
+    let terminals = parts
+        .rows
+        .iter()
+        .flat_map(|r| &r.sources)
+        .filter(|id| matches!(id, AnyId::Terminal(_)))
+        .count();
+    assert_eq!(terminals, rows.len());
+    assert!(
+        rows.iter()
+            .all(|r| novo_parts::terminal_part(p, r.terminals[0]) == Some(block))
+    );
+}

@@ -214,19 +214,16 @@ pub fn assign_terminal_part(
     Some(Command::Batch { label, commands })
 }
 
-/// The part a terminal is built with: its own article (`Terminal.part`),
-/// else its terminal strip's style for its kind or its own style override
-/// (novo-terminals), else the strip device's part.
+/// Whether a terminal is covered by a part, and by which: its own article
+/// ([`novo_terminals::terminal_part`]: `Terminal.part`, else its strip
+/// style), else the strip device's part.
 pub fn terminal_part(project: &Project, terminal: TerminalId) -> Option<PartId> {
     let t = project.terminal(terminal)?;
-    t.part
-        .filter(|&p| project.part(p).is_some())
-        .or_else(|| novo_terminals::style_of(project, terminal).and_then(|s| s.part))
-        .or_else(|| {
-            project
-                .device(t.strip)
-                .and_then(|d| d.parts.first().copied())
-        })
+    novo_terminals::terminal_part(project, terminal).or_else(|| {
+        project
+            .device(t.strip)
+            .and_then(|d| d.parts.first().copied())
+    })
 }
 
 /// Every terminal kind, for the strip styles.
