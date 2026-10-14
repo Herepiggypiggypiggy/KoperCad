@@ -1000,7 +1000,7 @@ mod tests {
     #[test]
     fn related_items_are_highlighted() {
         let (_ctx, mut view, scene) = setup();
-        let mut build = |view: &mut CanvasView| drop(view.build_frame(1.0, &scene, None, None));
+        let build = |view: &mut CanvasView| drop(view.build_frame(1.0, &scene, None, None));
         assert!(view.highlight.is_none());
         view.set_related([ItemId(1)]);
         let rev = view.related_revision;
@@ -1035,7 +1035,7 @@ mod tests {
                 egui::Modifiers::NONE
             },
         };
-        let mut cycle = |view: &mut CanvasView, shift| {
+        let cycle = |view: &mut CanvasView, shift| {
             let mut out = None;
             let input = egui::RawInput {
                 screen_rect: Some(egui::Rect::from_min_size(

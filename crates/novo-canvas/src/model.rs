@@ -51,6 +51,35 @@ pub fn placement(p: &novo_core::Placement) -> Placement {
 pub trait SymbolArt {
     /// Primitives for the symbol, or `None` to fall back to the placeholder.
     fn artwork(&self, symbol: &SymbolInstance) -> Option<Vec<Primitive>>;
+
+    /// What the artwork depends on. Instances with the same key share one
+    /// drawing, so the same clamp type always looks exactly the same and is
+    /// built once per page. The default is the symbol key plus the pin
+    /// offsets; return `None` for art that depends on more (properties),
+    /// which is then built per instance.
+    fn cache_key(&self, symbol: &SymbolInstance) -> Option<ArtKey> {
+        Some(ArtKey::of(symbol))
+    }
+}
+
+/// Identity of a symbol drawing: its symbol key and pin offsets.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ArtKey {
+    pub symbol: SymbolKey,
+    pins: Vec<(u64, u64)>,
+}
+
+impl ArtKey {
+    pub fn of(symbol: &SymbolInstance) -> Self {
+        Self {
+            symbol: symbol.symbol.clone(),
+            pins: symbol
+                .pins
+                .iter()
+                .map(|p| (p.offset.x.to_bits(), p.offset.y.to_bits()))
+                .collect(),
+        }
+    }
 }
 
 /// A box around the pins with a stub to each pin.
@@ -196,6 +225,7 @@ pub struct PageScene {
     scene: Scene,
     layers: ModelLayers,
     ids: HashMap<ItemId, AnyId>,
+    art_cache: HashMap<ArtKey, std::sync::Arc<[Primitive]>>,
     pub style: ModelStyle,
 }
 
@@ -218,6 +248,7 @@ impl PageScene {
             scene,
             layers,
             ids: HashMap::new(),
+            art_cache: HashMap::new(),
             style: ModelStyle::default(),
         };
         s.rebuild(project, art);
@@ -252,10 +283,12 @@ impl PageScene {
         self.ids.get(&item).copied()
     }
 
-    /// Rebuilds every item, for example after undo or loading a file.
+    /// Rebuilds every item, for example after loading a file or changing
+    /// the symbol library (this also drops the cached symbol drawings).
     pub fn rebuild(&mut self, project: &Project, art: &dyn SymbolArt) {
         self.scene.clear();
         self.ids.clear();
+        self.art_cache.clear();
         self.frame(project);
         let contents = project.page_contents(self.page);
         for id in contents.symbols {
@@ -392,9 +425,16 @@ impl PageScene {
             return;
         };
         let place = placement(&sym.placement);
-        let local = art
-            .artwork(sym)
-            .unwrap_or_else(|| PlaceholderArt::draw(sym, self.style.symbol));
+        let style = self.style.symbol;
+        let draw = || -> std::sync::Arc<[Primitive]> {
+            art.artwork(sym)
+                .unwrap_or_else(|| PlaceholderArt::draw(sym, style))
+                .into()
+        };
+        let local = match art.cache_key(sym) {
+            Some(key) => self.art_cache.entry(key).or_insert_with(draw).clone(),
+            None => draw(),
+        };
         let mut item = Item::new(self.layers.symbols);
         item.primitives = local.iter().map(|p| p.transformed(&place)).collect();
         item.snap_points = (0..sym.pins.len() as u16)
@@ -842,6 +882,32 @@ mod tests {
         assert_eq!(corner.len(), 2);
         assert!(corner.iter().any(|e| e.distance(Vec2::X) < 1e-6));
         assert!(corner.iter().any(|e| e.distance(Vec2::Y) < 1e-6));
+    }
+
+    #[test]
+    fn identical_symbols_share_one_drawing() {
+        use std::cell::Cell;
+        struct Counting(Cell<usize>);
+        impl SymbolArt for Counting {
+            fn artwork(&self, _: &SymbolInstance) -> Option<Vec<Primitive>> {
+                self.0.set(self.0.get() + 1);
+                None
+            }
+        }
+        let (doc, page) = demo_document().unwrap();
+        let art = Counting(Cell::new(0));
+        let ps = PageScene::new(doc.project(), page, &art);
+        let symbols = doc.project().page_contents(page).symbols.len();
+        let kinds: std::collections::HashSet<ArtKey> = doc
+            .project()
+            .page_contents(page)
+            .symbols
+            .iter()
+            .map(|&s| ArtKey::of(doc.project().symbol(s).unwrap()))
+            .collect();
+        assert!(kinds.len() < symbols, "the demo repeats a symbol");
+        assert_eq!(art.0.get(), kinds.len());
+        assert_eq!(ps.scene().len(), 1 + symbols + 2 + 12);
     }
 
     #[test]
