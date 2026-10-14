@@ -186,3 +186,64 @@ fn a_file_with_recovered_work_is_left_alone() -> Result<(), ScriptError> {
     assert!(recovery.exists(), "the recovered work is kept for the app");
     Ok(())
 }
+
+/// Leaves `path` as the app does after a crash: saved once, then unsaved
+/// work in the recovery file next to it.
+fn crash_with_unsaved_work(path: &std::path::Path) -> Result<(), ScriptError> {
+    let mut doc = Document::default();
+    let mut session = Session::create(path, doc.project())?;
+    let (_, changes) = doc.transact("Add", |tx| {
+        tx.add_device(DeviceTag::parse("-K9")?, "unsaved")
+    })?;
+    session.record(&changes);
+    session.autosave(doc.project())?;
+    drop(session);
+    assert!(autosave_path(path).exists());
+    Ok(())
+}
+
+#[test]
+fn create_and_save_as_never_replace_a_file_with_recovered_work() -> Result<(), ScriptError> {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("crashed.novo");
+    crash_with_unsaved_work(&path)?;
+    let saved = std::fs::read(&path).unwrap();
+
+    assert!(matches!(
+        ScriptProject::create(&path, "Generated"),
+        Err(ScriptError::RecoveryPending(_))
+    ));
+    let mut other = ScriptProject::create(dir.path().join("other.novo"), "Other")?;
+    assert!(matches!(
+        other.save_as(&path),
+        Err(ScriptError::RecoveryPending(_))
+    ));
+    let mut fresh = ScriptProject::new("Fresh");
+    assert!(matches!(
+        fresh.save_as(&path),
+        Err(ScriptError::RecoveryPending(_))
+    ));
+
+    assert!(autosave_path(&path).exists(), "the recovered work is kept");
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        saved,
+        "the file is untouched"
+    );
+    assert_eq!(other.path(), Some(dir.path().join("other.novo").as_path()));
+    other.close()
+}
+
+#[test]
+fn save_as_onto_its_own_file_still_saves() -> Result<(), ScriptError> {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("own.novo");
+    let mut p = ScriptProject::create(&path, "Own")?;
+    p.add_page("1", "")?;
+    p.save_as(&path)?;
+    assert!(!p.is_dirty());
+    p.close()?;
+    let p = ScriptProject::open(&path)?;
+    assert_eq!(p.pages().as_array().unwrap().len(), 1);
+    p.close()
+}

@@ -157,6 +157,19 @@ def test_assign_potentials_by_name():
     assert p.wires()[0]["potentials"] == ["L1"]
 
 
+def test_create_refuses_a_file_with_crash_recovery(tmp_path):
+    path = tmp_path / "crashed.novo"
+    recovery = tmp_path / "crashed.novo.autosave"
+    recovery.write_bytes(b"work the app has not offered back yet")
+    with pytest.raises(ne.NovoError, match="did not close cleanly"):
+        ne.Project.create(path)
+    p = ne.Project("Fresh")
+    with pytest.raises(ne.NovoError, match="did not close cleanly"):
+        p.save_as(path)
+    assert recovery.read_bytes() == b"work the app has not offered back yet"
+    assert not path.exists()
+
+
 @pytest.mark.skip(reason="Excel BOM export waits for WS-13 (reports); see handoff/ws28/ROADMAP.md")
 def test_dol_bom_to_excel(tmp_path):
     p = ne.Project()

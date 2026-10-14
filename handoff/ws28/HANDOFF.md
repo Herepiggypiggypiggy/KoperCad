@@ -26,7 +26,8 @@ python -m pytest -p no:cacheprovider crates/novo-py/python/tests
 
 ## Decisions and traps
 - Python is behind a cargo feature so CI (no Python) stays green; maturin turns it on. Use a separate CARGO_TARGET_DIR for maturin (it builds with other flags).
-- `ScriptProject::open` refuses a file with recovered autosave work and leaves the recovery file (closing a pending session keeps it), so scripts never save over crash work.
+- `ScriptProject::open`, `create` and `save_as` refuse a file with recovered autosave work (save_as onto the session's own file is allowed) and leave the recovery file, so scripts never save over crash work.
+- Reviewer B's non-blocking notes on #56 (overwrite=False on create, plain clap errors, novo_checks/novo-pdf, no panic in execute_one, atomic export write, venv-first README) are the next follow-up PR from main.
 - Opening a file that is locked waits ~5 s (storage's SQLite busy timeout) before `Locked`; the CLI test for that takes 5 s.
 - Netlist names: device/terminal pins by designation (`-K1:13`); feeds `feed L1:1`, interruption points `ip NAME:1`, unlinked `symbol 12:1`.
 - `novo check` has two built-in checks until a checks engine is on main; `export pdf` exits 5 until novo-pdf (#49) merges.

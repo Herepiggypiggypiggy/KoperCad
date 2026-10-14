@@ -36,7 +36,7 @@ use novo_core::{
     PageFormat, PageId, PageKind, Placement, Point, PotentialId, PotentialKind, PotentialSpec,
     Project, Rotation, SymbolId, SymbolKey, SymbolRole, TagError, TerminalId, WireId, natural_cmp,
 };
-use novo_storage::{Session, StorageError};
+use novo_storage::{Session, StorageError, autosave_path};
 use novo_symbols::Library;
 use serde_json::{Value, json};
 use thiserror::Error;
@@ -136,7 +136,8 @@ impl ScriptProject {
     }
 
     /// A new project saved at once to `path` (replacing a file there that is
-    /// not open elsewhere).
+    /// not open elsewhere and has no unrecovered work from a crashed app
+    /// session).
     pub fn create(path: impl AsRef<Path>, name: &str) -> Result<ScriptProject> {
         let mut project = ScriptProject::new(name);
         project.save_as(path)?;
@@ -182,8 +183,15 @@ impl ScriptProject {
         Ok(())
     }
 
-    /// Writes the project to `path` and continues there.
+    /// Writes the project to `path` and continues there. Another file with
+    /// unrecovered work from a crashed app session is refused, because
+    /// replacing it would delete that work.
     pub fn save_as(&mut self, path: impl AsRef<Path>) -> Result<()> {
+        let path = path.as_ref();
+        let own_file = self.path().is_some_and(|own| same_file(own, path));
+        if !own_file && autosave_path(path).exists() {
+            return Err(ScriptError::RecoveryPending(path.to_path_buf()));
+        }
         match &mut self.session {
             Some(session) => session.save_as(path, self.doc.project())?,
             None => self.session = Some(Session::create(path, self.doc.project())?),
@@ -539,6 +547,13 @@ impl ScriptProject {
     /// The whole project in its diffable JSON form.
     pub fn to_json(&self) -> String {
         self.project().to_json()
+    }
+}
+
+fn same_file(a: &Path, b: &Path) -> bool {
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a == b,
     }
 }
 

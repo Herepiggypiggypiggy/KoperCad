@@ -42,8 +42,8 @@ with ne.Project.create("dol.novo", name="DOL starter") as p:
   "name": "3"})`; a `{"command": "batch", ...}` is one undo step.
 - Errors raise `novoelectric.NovoError`; a refused call changes nothing.
 - A file stays locked against the app while it is open in a script. A file
-  with unrecovered work from a crashed app session is refused, never saved
-  over.
+  with unrecovered work from a crashed app session is refused by `open`,
+  `create` and `save_as`, never saved over.
 
 ## Tests
 
