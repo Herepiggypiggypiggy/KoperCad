@@ -13,13 +13,18 @@ Done criterion: the Gate 1 circuit can be drawn in under 5 minutes (about 73 act
 - Thin egui view `SchematicView` (I search, F2 rename, right-click menu), LibraryArt from WS-05 artwork.
 - `show` returns the frame's ChangeSet for the shell's storage path.
 
+## Done after #38
+- #62 `coil K1` gives the existing device its coil; #70 `art` feature; `set_style` via #53.
+- Proposals follow DESIGN.md §5 (#80): highlight follows pointer, Tab holds (24 px), solid highlighted proposal with hint, Delete declines. `edit::place` refuses a second main symbol (scripts too).
+
 ## Next, in order
-1. Drive #38 through CI and the design reviewer (cse_0114emQ5fSFrzcALbR4S18TU). After READY: no more pushes to #38.
-2. Follow-up PR from main once #28 (canvas) merges: implement `SymbolArt::labels` (artwork text such as M 3~, pin names) and `tag_anchor` (from novo-symbols anchors) in art.rs.
-3. Follow-up once #35 (WS-02) merges: potentials via `AssignPotentials` / `SetWirePotential` (feeds only at sources); tag texts via `AddText{TextContent::DeviceTag}` + `MoveText` (J11 text selection, drag, R, reset); drop own PE/N/PEN inference for the netlist's.
-4. Once WS-08's novo-workflow (#29) merges: replace catalog search with `insert::InsertSearch::search` + `insert::child_queries` (keep the reading whose parent exists) or `palette::Palette::search_in(Mode::Place, ..)`; tags via `insert::next_tag(&Project, &structure, &Symbol)`; children via `insert::is_child_function`; use `duplicate::duplicate`, `renumber::{plan, apply}`, `keymap::Keymap::resolve(chord, Focus)`. Delete catalog/naming duplicates. Split agreed with WS-08.
-5. J4 renumbering (project scheme, page based -3K1), renaming a coil renames contacts, Ctrl+D smart duplicate (with WS-08), highlight linked objects (with WS-10).
-6. Budget tests: count input events per journey against WORKFLOW.md budgets (asked by workflow thread).
+1. Letter codes (lead's call, DESIGN.md via #92): contactors and relays K by default, MCB F, MPCB Q, overload F; the editor already does this (catalog test). Still to do: the "Contactors are coded [K | Q]" project rule. Contactor and relay share the coil symbol, so the rule needs a contactor marker (part, or the device's main contacts) and a project-rule store; agree with WS-08 and WS-02.
+2. Move catalog search / tags onto novo-workflow (#29): `InsertSearch`, `next_tag`, `duplicate`, `renumber`, `keymap`; delete the editor's duplicates.
+3. #35 potentials (Wire.potential override, AssignPotentials) and tag texts (AddText DeviceTag, MoveText).
+4. SymbolArt labels/tag_anchor (#28) in art.rs.
+5. Reviewer notes: `no KM1`/`no M1` prefer the device reading when that device exists; `pt100` reads as device -PT100; proposal_holds should check crossings and bodies; deleting a device tidies its pages; the I popup becomes the command surface's place mode.
+6. Single-click select under Xvfb (box select works): check with WS-03, then on Windows.
+7. Budget tests per DESIGN.md §6 journeys.
 
 ## Open questions
 - Revised J3/J10/terminal criteria from the workflow thread (potentials defined at source; terminals suggested at location boundaries) — waiting for revised WORKFLOW.md / DESIGN.md.

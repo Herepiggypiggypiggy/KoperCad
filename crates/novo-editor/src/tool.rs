@@ -146,6 +146,11 @@ pub struct Editor {
     /// Facing-pin wires proposed by the last drop, and the highlighted one.
     proposals: Vec<edit::FacingWire>,
     proposal: usize,
+    /// Tab holds the highlight: where the pointer was when it did (once
+    /// known), until the pointer travels away (DESIGN.md §5).
+    held: Option<Option<Point>>,
+    /// The pointer, as last given to [`Editor::follow_pointer`].
+    pointer: Option<Point>,
     /// The terminal strip in use, once the user placed or chose one.
     pub strip: Option<DeviceId>,
     notice: Option<String>,
@@ -171,6 +176,8 @@ impl Editor {
             auto_connect: true,
             proposals: Vec::new(),
             proposal: 0,
+            held: None,
+            pointer: None,
             supply_names: true,
             numbering: Numbering::default(),
             strip: None,
@@ -500,10 +507,8 @@ impl Editor {
                 // A device has one main function (DESIGN.md: the coil is
                 // where its contacts are referenced from).
                 (SymbolClass::Main { .. }, Some(device)) => {
-                    if let Some(main) = project
-                        .symbols_of_device(device)
-                        .into_iter()
-                        .find(|s| matches!(s.role, SymbolRole::Device { main: true, .. }))
+                    if let Some(main) =
+                        edit::main_symbol(project, device).and_then(|s| project.symbol(s))
                     {
                         let page = project.page(main.page).map_or("", |p| p.name.as_str());
                         self.notice = Some(format!(
@@ -550,6 +555,7 @@ impl Editor {
             .collect();
         self.proposals = edit::facing_wires(project, &placed, &|s| self.body(s));
         self.proposal = 0;
+        self.held = None;
     }
 
     /// The drawn extent of a placed symbol on its page.
@@ -577,14 +583,61 @@ impl Editor {
     pub fn clear_proposals(&mut self) {
         self.proposals.clear();
         self.proposal = 0;
+        self.held = None;
     }
 
-    /// Tab: highlights the next proposal.
+    /// The highlighted proposal: the one Enter accepts and Delete declines.
+    pub fn highlighted(&self) -> Option<usize> {
+        (!self.proposals.is_empty()).then(|| self.proposal.min(self.proposals.len() - 1))
+    }
+
+    /// The pointer moved to `at`: the highlight follows it to the nearest
+    /// proposal, unless Tab holds it there; the hold ends once the pointer
+    /// travels more than `hold` (24 px in world units) from where it was
+    /// (DESIGN.md §5).
+    pub fn follow_pointer(&mut self, at: Point, hold: f64) {
+        self.pointer = Some(at);
+        match self.held {
+            Some(None) => {
+                self.held = Some(Some(at));
+                return;
+            }
+            Some(Some(from)) if from.distance(at) <= hold => return,
+            _ => self.held = None,
+        }
+        let nearest = self
+            .proposals
+            .iter()
+            .enumerate()
+            .map(|(i, f)| {
+                let (q, _) = crate::geometry::closest_on_segment(at, f.a, f.b);
+                (i, q.distance(at))
+            })
+            .min_by(|x, y| x.1.total_cmp(&y.1));
+        if let Some((i, _)) = nearest {
+            self.proposal = i;
+        }
+    }
+
+    /// Tab: highlights the next proposal and holds it there.
     pub fn next_proposal(&mut self) -> bool {
         if self.proposals.is_empty() {
             return false;
         }
         self.proposal = (self.proposal + 1) % self.proposals.len();
+        self.held = Some(self.pointer);
+        true
+    }
+
+    /// Delete on the highlighted proposal: declines it, drawing nothing.
+    pub fn decline_proposal(&mut self) -> bool {
+        let Some(i) = self.highlighted() else {
+            return false;
+        };
+        self.proposals.remove(i);
+        if self.proposal >= self.proposals.len() {
+            self.proposal = 0;
+        }
         true
     }
 
