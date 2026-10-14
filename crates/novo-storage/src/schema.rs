@@ -45,9 +45,9 @@ const fn latest(migrations: &[Migration]) -> u32 {
 
 /// Version 1: key/value metadata and one row per model record.
 ///
-/// `records.data` is the object as JSON (the serde form of `Page`, `Wire`,
-/// ...) and `kind` says which. `page` is a copy kept for indexed queries,
-/// such as loading a single page later on.
+/// `records.data` is the record as JSON (the `novo_core::Record` serde
+/// form). `kind` and `page` are copies kept for indexed queries, such as
+/// loading a single page later on.
 fn v1(tx: &Transaction<'_>) -> rusqlite::Result<()> {
     tx.execute_batch(
         "CREATE TABLE meta (

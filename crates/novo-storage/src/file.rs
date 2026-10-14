@@ -314,39 +314,21 @@ fn write_record(stmt: &mut rusqlite::CachedStatement<'_>, record: &Record) -> Re
     Ok(())
 }
 
-/// The record's object as JSON, without the record wrapper: the `kind`
-/// column already says what it is, so the row holds the plain `Page`,
-/// `Wire`, ... and the type is stored only once.
+/// The record in the model's own JSON form (tagged with `"record"`).
 fn encode(record: &Record) -> String {
-    match record {
-        Record::Page(r) => to_json(r),
-        Record::Device(r) => to_json(r),
-        Record::Symbol(r) => to_json(r),
-        Record::Junction(r) => to_json(r),
-        Record::Wire(r) => to_json(r),
-        Record::Potential(r) => to_json(r),
-        Record::Terminal(r) => to_json(r),
-        Record::Cable(r) => to_json(r),
-        Record::Part(r) => to_json(r),
-    }
+    to_json(record)
 }
 
+/// Parses a stored record and checks it matches its `kind` column.
 fn decode(kind: &str, data: &str) -> std::result::Result<Record, String> {
-    fn parse<T: serde::de::DeserializeOwned>(data: &str) -> std::result::Result<T, String> {
-        serde_json::from_str(data).map_err(|e| e.to_string())
+    let record: Record = serde_json::from_str(data).map_err(|e| e.to_string())?;
+    if kind_name(record.kind()) != kind {
+        return Err(format!(
+            "stored as {kind:?} but holds a {}",
+            kind_name(record.kind())
+        ));
     }
-    Ok(match kind {
-        "page" => Record::Page(parse(data)?),
-        "device" => Record::Device(parse(data)?),
-        "symbol" => Record::Symbol(parse(data)?),
-        "junction" => Record::Junction(parse(data)?),
-        "wire" => Record::Wire(parse(data)?),
-        "potential" => Record::Potential(parse(data)?),
-        "terminal" => Record::Terminal(parse(data)?),
-        "cable" => Record::Cable(parse(data)?),
-        "part" => Record::Part(parse(data)?),
-        other => return Err(format!("unknown kind {other:?}")),
-    })
+    Ok(record)
 }
 
 fn finish_save(tx: &Transaction<'_>) -> Result<()> {
