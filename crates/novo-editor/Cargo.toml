@@ -7,15 +7,21 @@ license.workspace = true
 
 [features]
 default = ["egui"]
+# Library symbol artwork (`art::LibraryArt`) for novo-canvas's page model,
+# without the canvas widget or egui: what headless renderers (novo-cli,
+# novo-py) need to draw pages with real IEC symbols.
+art = ["dep:novo-canvas"]
 # The interactive editor view: canvas widget, symbol artwork, insert search,
 # in-place rename and context menu. Without it the crate is the headless
 # editing logic only (what tests, scripts and the AI assistant drive).
-egui = ["dep:egui", "dep:novo-canvas"]
+egui = ["art", "dep:egui", "novo-canvas/egui"]
 
 [dependencies]
 novo-core.workspace = true
 novo-symbols.workspace = true
-novo-canvas = { workspace = true, optional = true }
+# Not the workspace entry: that one keeps novo-canvas's default features
+# (the egui widget), which the `art` feature must not pull in.
+novo-canvas = { path = "../novo-canvas", default-features = false, features = ["model"], optional = true }
 egui = { workspace = true, optional = true }
 
 [lints]
