@@ -215,23 +215,27 @@ fn sorted_cables(project: &Project) -> Vec<CableId> {
 
 /// The cable overview: one row per cable, in tag order.
 pub fn overview(project: &Project) -> Vec<OverviewRow> {
-    cable_screens(project)
-        .into_iter()
-        .map(|s| {
-            let conductors = || s.rows.iter().filter(|r| !r.shield);
-            OverviewRow {
-                cable: s.cable,
-                used: conductors().filter(|r| r.wire.is_some()).count(),
-                cores: conductors().count(),
-                spare: conductors().filter(|r| r.spare).count(),
-                tag: s.tag,
-                type_name: s.type_name,
-                length_m: s.length_m,
-                from: s.from,
-                to: s.to,
-            }
-        })
-        .collect()
+    cable_screens(project).iter().map(OverviewRow::of).collect()
+}
+
+impl OverviewRow {
+    /// The overview row of a cable screen already built, for callers that
+    /// show both (the cable diagram report) without building every screen
+    /// twice.
+    pub fn of(s: &CableScreen) -> Self {
+        let conductors = || s.rows.iter().filter(|r| !r.shield);
+        OverviewRow {
+            cable: s.cable,
+            used: conductors().filter(|r| r.wire.is_some()).count(),
+            cores: conductors().count(),
+            spare: conductors().filter(|r| r.spare).count(),
+            tag: s.tag.clone(),
+            type_name: s.type_name.clone(),
+            length_m: s.length_m,
+            from: s.from.clone(),
+            to: s.to.clone(),
+        }
+    }
 }
 
 impl CableScreen {
