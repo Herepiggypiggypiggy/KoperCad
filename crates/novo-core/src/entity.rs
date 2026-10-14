@@ -430,81 +430,12 @@ impl From<JunctionId> for Endpoint {
     }
 }
 
-/// A connection point where wires meet (T-junction, corner).
+/// A connection dot where wires meet (T-junction).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Junction {
     pub id: JunctionId,
     pub page: PageId,
     pub position: Point,
-    /// How the point is drawn, and so which way each wire leaves it.
-    #[serde(default, skip_serializing_if = "JunctionStyle::is_dot")]
-    pub style: JunctionStyle,
-}
-
-/// How a junction is drawn. A T names the side its branch leaves from (a
-/// `t_down` has a through line left-right and a branch going down); a
-/// corner names the two sides its wires leave from. Wire connection order
-/// matters in reports and wire numbering, which is what the style records.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum JunctionStyle {
-    /// A plain connection dot.
-    #[default]
-    Dot,
-    TDown,
-    TLeft,
-    TUp,
-    TRight,
-    CornerDownRight,
-    CornerDownLeft,
-    CornerUpLeft,
-    CornerUpRight,
-}
-
-impl JunctionStyle {
-    /// Every style in the order Tab cycles through them.
-    pub const ALL: [JunctionStyle; 9] = [
-        JunctionStyle::Dot,
-        JunctionStyle::TDown,
-        JunctionStyle::TLeft,
-        JunctionStyle::TUp,
-        JunctionStyle::TRight,
-        JunctionStyle::CornerDownRight,
-        JunctionStyle::CornerDownLeft,
-        JunctionStyle::CornerUpLeft,
-        JunctionStyle::CornerUpRight,
-    ];
-
-    pub fn is_dot(&self) -> bool {
-        *self == JunctionStyle::Dot
-    }
-
-    /// The next style for Tab: the four Ts turn clockwise, then the four
-    /// corners, then back to the dot.
-    pub fn next(self) -> JunctionStyle {
-        let i = JunctionStyle::ALL
-            .iter()
-            .position(|&s| s == self)
-            .unwrap_or(0);
-        JunctionStyle::ALL[(i + 1) % JunctionStyle::ALL.len()]
-    }
-
-    /// The sides wires leave from: four for a dot (any), three for a T, two
-    /// for a corner.
-    pub fn sides(self) -> &'static [Direction] {
-        use Direction::*;
-        match self {
-            JunctionStyle::Dot => &[Up, Right, Down, Left],
-            JunctionStyle::TDown => &[Left, Right, Down],
-            JunctionStyle::TLeft => &[Up, Down, Left],
-            JunctionStyle::TUp => &[Left, Right, Up],
-            JunctionStyle::TRight => &[Up, Down, Right],
-            JunctionStyle::CornerDownRight => &[Down, Right],
-            JunctionStyle::CornerDownLeft => &[Down, Left],
-            JunctionStyle::CornerUpLeft => &[Up, Left],
-            JunctionStyle::CornerUpRight => &[Up, Right],
-        }
-    }
 }
 
 /// A text on a page: free text, or a label that shows a value of the object

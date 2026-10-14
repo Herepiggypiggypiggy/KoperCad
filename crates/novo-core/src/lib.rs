@@ -78,8 +78,8 @@ mod xref;
 pub use command::Command;
 pub use document::{DEFAULT_HISTORY_LIMIT, Document, Outcome};
 pub use entity::{
-    Cable, CableCore, Device, DeviceKind, Endpoint, Junction, JunctionStyle, Page, PageFormat,
-    PageKind, PaperSize, Part, Pin, PinRef, Potential, PotentialKind, PotentialSet, PotentialSpec,
+    Cable, CableCore, Device, DeviceKind, Endpoint, Junction, Page, PageFormat, PageKind,
+    PaperSize, Part, Pin, PinRef, Potential, PotentialKind, PotentialSet, PotentialSpec,
     ProjectInfo, ProjectRules, Properties, SameDesignation, SymbolInstance, SymbolKey, SymbolRole,
     Terminal, TerminalKind, Text, TextAnchor, TextContent, TextPlacement, Value, Wire,
 };

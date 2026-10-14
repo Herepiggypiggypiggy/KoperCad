@@ -1,9 +1,9 @@
 //! Editing: the only way to change a project.
 
 use crate::entity::{
-    Cable, CableCore, Device, DeviceKind, Endpoint, Junction, JunctionStyle, Page, Part, Pin,
-    Potential, PotentialKind, PotentialSpec, ProjectInfo, SymbolInstance, SymbolKey, SymbolRole,
-    Terminal, Text, TextContent, TextPlacement, Value, Wire,
+    Cable, CableCore, Device, DeviceKind, Endpoint, Junction, Page, Part, Pin, Potential,
+    PotentialKind, PotentialSpec, ProjectInfo, SymbolInstance, SymbolKey, SymbolRole, Terminal,
+    Text, TextContent, TextPlacement, Value, Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::{Placement, Point};
@@ -273,12 +273,7 @@ impl<'p> Tx<'p> {
 
     /// Adds a junction (connection dot).
     pub fn add_junction(&mut self, page: PageId, position: Point) -> Result<JunctionId> {
-        self.insert(|id| Junction {
-            id,
-            page,
-            position,
-            style: JunctionStyle::Dot,
-        })
+        self.insert(|id| Junction { id, page, position })
     }
 
     /// Adds a text. Attached to a symbol, junction or wire, it moves and is
@@ -305,24 +300,6 @@ impl<'p> Tx<'p> {
     /// attached to.
     pub fn move_text(&mut self, text: TextId, placement: TextPlacement) -> Result<()> {
         self.update::<Text>(text, |t| t.placement = placement)
-    }
-
-    /// Sets how a junction is drawn.
-    pub fn set_junction_style(&mut self, junction: JunctionId, style: JunctionStyle) -> Result<()> {
-        self.update::<Junction>(junction, |j| j.style = style)
-    }
-
-    /// Moves a junction to its next style ([`JunctionStyle::next`]): Tab on a
-    /// selected junction. Returns the new style.
-    pub fn cycle_junction_style(&mut self, junction: JunctionId) -> Result<JunctionStyle> {
-        let style = self
-            .project
-            .junction(junction)
-            .ok_or(ModelError::NotFound(junction.into()))?
-            .style
-            .next();
-        self.set_junction_style(junction, style)?;
-        Ok(style)
     }
 
     /// Draws a wire between two endpoints on the same page.

@@ -9,14 +9,12 @@
 use serde::{Deserialize, Serialize};
 
 use crate::entity::{
-    CableCore, DeviceKind, Endpoint, JunctionStyle, PageFormat, PageKind, Pin, PotentialKind,
-    PotentialSpec, ProjectInfo, SymbolKey, SymbolRole, TextContent, TextPlacement, Value,
+    CableCore, DeviceKind, Endpoint, PageFormat, PageKind, Pin, PotentialKind, PotentialSpec,
+    ProjectInfo, SymbolKey, SymbolRole, TextContent, TextPlacement, Value,
 };
 use crate::error::Result;
 use crate::geom::{Placement, Point};
-use crate::id::{
-    AnyId, CableId, DeviceId, JunctionId, PageId, PartId, PotentialId, SymbolId, TextId, WireId,
-};
+use crate::id::{AnyId, CableId, DeviceId, PageId, PartId, PotentialId, SymbolId, TextId, WireId};
 use crate::record::Record;
 use crate::tag::DeviceTag;
 use crate::tx::Tx;
@@ -88,14 +86,6 @@ pub enum Command {
     MoveText {
         text: TextId,
         placement: TextPlacement,
-    },
-    SetJunctionStyle {
-        junction: JunctionId,
-        style: JunctionStyle,
-    },
-    /// Tab on a selected junction: the next style.
-    CycleJunctionStyle {
-        junction: JunctionId,
     },
     Connect {
         from: Endpoint,
@@ -196,9 +186,6 @@ impl Command {
             Command::AddJunction { .. } => "Add junction".into(),
             Command::AddText { .. } => "Add text".into(),
             Command::MoveText { .. } => "Move text".into(),
-            Command::SetJunctionStyle { .. } | Command::CycleJunctionStyle { .. } => {
-                "Junction style".into()
-            }
             Command::Connect { .. } => "Draw wire".into(),
             Command::SplitWire { .. } => "Branch wire".into(),
             Command::SetWireNumber { .. } => "Number wire".into(),
@@ -293,14 +280,6 @@ impl Tx<'_> {
             } => self.add_text(page, content, placement, attached_to)?.into(),
             Command::MoveText { text, placement } => {
                 self.move_text(text, placement)?;
-                return Ok(Vec::new());
-            }
-            Command::SetJunctionStyle { junction, style } => {
-                self.set_junction_style(junction, style)?;
-                return Ok(Vec::new());
-            }
-            Command::CycleJunctionStyle { junction } => {
-                self.cycle_junction_style(junction)?;
                 return Ok(Vec::new());
             }
             Command::Connect { from, to, route } => {
