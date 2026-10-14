@@ -1,0 +1,30 @@
+format = 1
+id = "iec/passive/thermistor_ptc"
+name = "PTC thermistor"
+description = "Thermistor with positive temperature coefficient, as used for motor winding protection."
+standard = "IEC 60617"
+category = "passive"
+function = "passive.resistor.ptc"
+keywords = ["ptc", "thermistor", "motor protection", "temperature"]
+
+connections = [
+  { id = "T1", at = [0, 0], dir = "up" },
+  { id = "T2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "rect", at = [-1.5, 4], size = [3, 8] },
+  { kind = "polyline", points = [[-3.5, 12], [-2.5, 12], [3, 5]] },
+  { kind = "text", at = [4, 10.5], text = "θ", size = 2.2, align = "left" },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+]
+
+[behavior]
+kind = "passive"
+type = "thermistor"
+poles = [["T1", "T2"]]

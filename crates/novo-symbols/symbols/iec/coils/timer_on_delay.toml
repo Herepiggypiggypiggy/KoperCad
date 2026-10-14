@@ -1,0 +1,31 @@
+format = 1
+id = "iec/coils/timer_on_delay"
+name = "Timer coil, on-delay"
+description = "Coil of an on-delay timer relay: its delayed contacts switch after the set time once energised."
+standard = "IEC 60617"
+category = "coils"
+function = "coil.timer.on_delay"
+keywords = ["timer", "on delay", "coil"]
+
+connections = [
+  { id = "A1", at = [0, 0], dir = "up" },
+  { id = "A2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 5] },
+  { kind = "rect", at = [-4, 5], size = [8, 6] },
+  { kind = "line", from = [0, 11], to = [0, 16] },
+  { kind = "rect", at = [4, 5], size = [4, 6] },
+  { kind = "line", from = [4, 5], to = [8, 11] },
+  { kind = "line", from = [4, 11], to = [8, 5] },
+]
+
+[behavior]
+kind = "coil"
+poles = [["A1", "A2"]]
+delay = "on"

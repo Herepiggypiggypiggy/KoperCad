@@ -584,7 +584,8 @@ fn split_wire_makes_a_t_junction() {
     assert_eq!(second.from, Endpoint::junction(j));
     assert_eq!(second.to, Endpoint::pin(b, 0));
     assert_eq!(second.route, vec![Point::new(100.0, 50.0)]);
-    assert_eq!(second.number.as_deref(), Some("101"));
+    assert_eq!(first.number.as_deref(), Some("101"));
+    assert_eq!(second.number, None, "wire numbers are not duplicated");
     assert!(
         p.netlist()
             .connected(Endpoint::pin(a, 1), Endpoint::pin(b, 0))
@@ -892,4 +893,214 @@ fn random_edits_undo_to_the_start() {
         assert_eq!(state(doc.project()), snapshots[doc.undo_depth()]);
     }
     assert_eq!(state(doc.project()), start);
+}
+
+/// Records, ops, transactions and record-carrying commands must survive JSON:
+/// storage, macros, Python and the AI assistant all exchange them as JSON.
+#[test]
+fn records_ops_and_commands_round_trip_through_json() {
+    let mut doc = Document::default();
+    let s = build_starter(&mut doc);
+    let mut project = doc.project().clone();
+
+    // Every kind of record, including those with their own `kind` field.
+    let records: Vec<Record> = project.records().collect();
+    let kinds: std::collections::BTreeSet<EntityKind> = records.iter().map(|r| r.kind()).collect();
+    assert!(kinds.contains(&EntityKind::Page) && kinds.contains(&EntityKind::Terminal));
+    for record in &records {
+        let json = serde_json::to_string(record).unwrap();
+        let back: Record = serde_json::from_str(&json)
+            .unwrap_or_else(|e| panic!("{} did not round-trip: {e}\n{json}", record.id()));
+        assert_eq!(&back, record);
+    }
+
+    // A transaction touching pages, devices, potentials and terminals.
+    let (_, transaction) = project
+        .transact("Edit", |tx| {
+            tx.add_page("3")?;
+            tx.add_potential("PE", PotentialKind::ProtectiveEarth)?;
+            tx.update::<Device>(s.k1, |d| d.kind = DeviceKind::Plc)?;
+            tx.update::<Page>(s.page1, |p| {
+                p.kind = PageKind::Generated {
+                    generator: "terminal_diagram".into(),
+                }
+            })?;
+            let t = tx.add_terminal(s.x1, "2")?;
+            tx.update::<Terminal>(t, |t| t.kind = TerminalKind::ProtectiveEarth)?;
+            tx.remove(s.n)
+        })
+        .unwrap();
+    let json = serde_json::to_string(&transaction).unwrap();
+    let back: Transaction = serde_json::from_str(&json).unwrap();
+    assert_eq!(back, transaction);
+    // The deserialized inverse still undoes the edit.
+    project.apply(&back.inverse()).unwrap();
+    assert_eq!(state(&project), state(doc.project()));
+
+    // Commands carrying records and ids.
+    let device = project.record(s.k1.into()).unwrap();
+    for command in [
+        Command::Replace { record: device },
+        Command::Insert {
+            record: Record::Potential(Potential {
+                id: PotentialId(9000),
+                name: "24V".into(),
+                kind: PotentialKind::DcPositive,
+                voltage: Some(24.0),
+                properties: Properties::new(),
+            }),
+        },
+        Command::Remove { id: s.page2.into() },
+    ] {
+        let json = serde_json::to_string(&command).unwrap();
+        assert_eq!(serde_json::from_str::<Command>(&json).unwrap(), command);
+    }
+}
+
+#[test]
+fn split_wire_puts_the_junction_on_the_wire() {
+    let mut doc = Document::default();
+    let (wire, _) = doc
+        .transact("x", |tx| {
+            let page = tx.add_page("1")?;
+            let a = tx.place_symbol(page, "s", at(0.0, 0.0), two_pins(), SymbolRole::Unassigned)?;
+            let b = tx.place_symbol(
+                page,
+                "s",
+                at(100.0, 0.0),
+                two_pins(),
+                SymbolRole::Unassigned,
+            )?;
+            // A horizontal wire along y = 5.
+            tx.connect(Endpoint::pin(a, 1), Endpoint::pin(b, 1))
+        })
+        .unwrap();
+    let ((junction, _), _) = doc
+        .transact("split", |tx| tx.split_wire(wire, Point::new(50.0, 7.0)))
+        .unwrap();
+    assert_eq!(
+        doc.project().junction(junction).unwrap().position,
+        Point::new(50.0, 5.0)
+    );
+}
+
+#[test]
+fn ids_are_unique_across_kinds_and_bounded() {
+    let mut doc = Document::default();
+    let s = build_starter(&mut doc);
+    let potential = |id: u64| {
+        Record::Potential(Potential {
+            id: PotentialId(id),
+            name: "X".into(),
+            kind: PotentialKind::Signal,
+            voltage: None,
+            properties: Properties::new(),
+        })
+    };
+    let before = state(doc.project());
+    let next_id = doc.project().next_id();
+
+    // Reserved ids are refused instead of overflowing the id counter.
+    for id in [0, u64::MAX] {
+        let err = doc
+            .execute(Command::Insert {
+                record: potential(id),
+            })
+            .unwrap_err();
+        assert_eq!(err, ModelError::InvalidId(id));
+    }
+    // An id already used by another kind is refused.
+    let err = doc
+        .execute(Command::Insert {
+            record: potential(s.k1.raw()),
+        })
+        .unwrap_err();
+    assert_eq!(err, ModelError::AlreadyExists(s.k1.into()));
+    assert_eq!(state(doc.project()), before);
+    assert_eq!(doc.project().next_id(), next_id);
+
+    // The largest usable id still works, and new ids never wrap around.
+    doc.execute(Command::Insert {
+        record: potential(u64::MAX - 1),
+    })
+    .unwrap();
+    assert_eq!(doc.project().next_id(), u64::MAX);
+    let err = doc.transact("x", |tx| tx.add_page("9")).unwrap_err();
+    assert_eq!(err, ModelError::InvalidId(u64::MAX));
+
+    // Loading refuses duplicate raw ids across kinds too.
+    let mut records: Vec<Record> = doc.project().records().collect();
+    records.push(potential(s.page1.raw()));
+    let err = Project::from_records(ProjectInfo::default(), 1, records).unwrap_err();
+    assert!(matches!(err, ModelError::AlreadyExists(_)));
+}
+
+#[test]
+fn invalid_tags_cannot_enter_a_project() {
+    let mut doc = Document::default();
+    let s = build_starter(&mut doc);
+    let bad_tags = [
+        DeviceTag {
+            function: vec!["A-1".into()],
+            location: vec![],
+            product: vec!["K9".into()],
+        },
+        DeviceTag::product(""),
+        DeviceTag::product("K#1"),
+    ];
+    for bad in bad_tags {
+        assert!(bad.validate().is_err());
+        let err = doc
+            .transact("x", |tx| tx.add_device(bad.clone(), ""))
+            .unwrap_err();
+        assert!(matches!(err, ModelError::Tag(_)), "{err:?}");
+        let err = doc
+            .transact("x", |tx| tx.set_tag(s.k1, bad.clone()))
+            .unwrap_err();
+        assert!(matches!(err, ModelError::Tag(_)));
+        let err = doc
+            .transact("x", |tx| tx.add_cable(bad.clone(), vec![]))
+            .unwrap_err();
+        assert!(matches!(err, ModelError::Tag(_)));
+    }
+    assert!(tag("=A1+CAB1-K1.2_b").validate().is_ok());
+    // The project still saves and loads.
+    Project::from_json(&doc.project().to_json()).unwrap();
+}
+
+#[test]
+fn update_cannot_change_an_id() {
+    let mut doc = Document::default();
+    let s = build_starter(&mut doc);
+    let stop_device = doc.project().symbol(s.stop).unwrap().device().unwrap();
+    let before = state(doc.project());
+    let err = doc
+        .transact("x", |tx| {
+            tx.update::<Device>(s.k1, |d| {
+                d.id = stop_device;
+                d.description = "overwritten".into();
+            })
+        })
+        .unwrap_err();
+    assert_eq!(err, ModelError::IdChanged(s.k1.into()));
+    assert_eq!(state(doc.project()), before);
+    assert_eq!(
+        doc.project().device(stop_device).unwrap().description,
+        "Stop"
+    );
+}
+
+#[test]
+fn stale_info_ops_are_refused() {
+    let mut project = Project::new("A");
+    let (_, rename) = project
+        .transact("rename", |tx| tx.set_info(|i| i.name = "B".into()))
+        .unwrap();
+    // Applying the same rename again no longer matches the current info.
+    assert_eq!(
+        project.apply(&rename).unwrap_err(),
+        ModelError::InfoConflict
+    );
+    project.apply(&rename.inverse()).unwrap();
+    assert_eq!(project.info().name, "A");
 }

@@ -1527,6 +1527,10 @@ version = "0.1.0"
 [[package]]
 name = "novo-symbols"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "toml",
+]
 
 [[package]]
 name = "num-traits"

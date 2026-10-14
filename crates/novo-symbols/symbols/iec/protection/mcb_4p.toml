@@ -1,0 +1,55 @@
+format = 1
+id = "iec/protection/mcb_4p"
+name = "Miniature circuit breaker, 4-pole"
+description = "4-pole miniature circuit breaker (MCB) with thermal and magnetic trip."
+standard = "IEC 60617"
+category = "protection"
+function = "protection.mcb"
+keywords = ["mcb", "circuit breaker", "breaker", "4p", "b curve", "c curve"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+  { id = "3", at = [8, 0], dir = "up" },
+  { id = "4", at = [8, 16], dir = "down" },
+  { id = "5", at = [16, 0], dir = "up" },
+  { id = "6", at = [16, 16], dir = "down" },
+  { id = "7", at = [24, 0], dir = "up" },
+  { id = "8", at = [24, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-18.5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 5] },
+  { kind = "line", from = [-1.2, 3.8], to = [1.2, 6.2] },
+  { kind = "line", from = [-1.2, 6.2], to = [1.2, 3.8] },
+  { kind = "line", from = [0, 16], to = [0, 11] },
+  { kind = "line", from = [0, 11], to = [-4, 4] },
+  { kind = "line", from = [8, 0], to = [8, 5] },
+  { kind = "line", from = [6.8, 3.8], to = [9.2, 6.2] },
+  { kind = "line", from = [6.8, 6.2], to = [9.2, 3.8] },
+  { kind = "line", from = [8, 16], to = [8, 11] },
+  { kind = "line", from = [8, 11], to = [4, 4] },
+  { kind = "line", from = [16, 0], to = [16, 5] },
+  { kind = "line", from = [14.8, 3.8], to = [17.2, 6.2] },
+  { kind = "line", from = [14.8, 6.2], to = [17.2, 3.8] },
+  { kind = "line", from = [16, 16], to = [16, 11] },
+  { kind = "line", from = [16, 11], to = [12, 4] },
+  { kind = "line", from = [24, 0], to = [24, 5] },
+  { kind = "line", from = [22.8, 3.8], to = [25.2, 6.2] },
+  { kind = "line", from = [22.8, 6.2], to = [25.2, 3.8] },
+  { kind = "line", from = [24, 16], to = [24, 11] },
+  { kind = "line", from = [24, 11], to = [20, 4] },
+  { kind = "line", from = [-1.714, 8], to = [22.286, 8], stroke = "dashed" },
+  { kind = "line", from = [-1.714, 8], to = [-8, 8], stroke = "dashed" },
+  { kind = "polyline", points = [[-8, 8], [-8, 6], [-10, 6], [-10, 10], [-12, 10], [-12, 8]] },
+  { kind = "text", at = [-14, 8], text = "I>", size = 2.2, align = "right" },
+]
+
+[behavior]
+kind = "breaker"
+trip = ["thermal", "magnetic"]
+poles = [["1", "2"], ["3", "4"], ["5", "6"], ["7", "8"]]

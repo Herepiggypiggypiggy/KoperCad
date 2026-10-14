@@ -1,0 +1,30 @@
+format = 1
+id = "iec/contacts/changeover"
+name = "Changeover contact"
+description = "Changeover (CO) contact with common 11, break side 12 and make side 14."
+standard = "IEC 60617"
+category = "contacts"
+function = "contact.co"
+keywords = ["co", "changeover", "spdt", "auxiliary"]
+
+connections = [
+  { id = "11", at = [0, 16], dir = "down" },
+  { id = "12", at = [4, 0], dir = "up" },
+  { id = "14", at = [-4, 0], dir = "up" },
+]
+
+anchors = [
+  { role = "tag", at = [-8, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 16], to = [0, 11] },
+  { kind = "line", from = [0, 11], to = [3.4, 4.5] },
+  { kind = "polyline", points = [[-4, 0], [-4, 5], [-1.5, 5]] },
+  { kind = "polyline", points = [[4, 0], [4, 5], [1.5, 5]] },
+]
+
+[behavior]
+kind = "contact"
+normally = "changeover"
+poles = [["11", "12", "14"]]

@@ -1,0 +1,38 @@
+format = 1
+id = "iec/supplies/power_supply_dc"
+name = "Power supply, AC/DC"
+description = "Switched-mode power supply converting mains AC to a DC control voltage such as 24 V DC."
+standard = "IEC 60617"
+category = "supplies"
+function = "converter.ac_dc"
+keywords = ["power supply", "psu", "24v", "dc", "rectifier", "smps"]
+
+connections = [
+  { id = "L", at = [0, 0], dir = "up" },
+  { id = "N", at = [8, 0], dir = "up", role = "n" },
+  { id = "PE", at = [16, 0], dir = "up", role = "pe" },
+  { id = "L+", at = [0, 24], dir = "down" },
+  { id = "M", at = [8, 24], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 12], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "line", from = [8, 0], to = [8, 4] },
+  { kind = "line", from = [16, 0], to = [16, 4] },
+  { kind = "line", from = [0, 20], to = [0, 24] },
+  { kind = "line", from = [8, 20], to = [8, 24] },
+  { kind = "rect", at = [-4, 4], size = [24, 16] },
+  { kind = "line", from = [-4, 20], to = [20, 4] },
+  { kind = "text", at = [2, 8], text = "~", size = 3.5 },
+  { kind = "text", at = [14, 16], text = "=", size = 3.5 },
+]
+
+[behavior]
+kind = "converter"
+input = "ac"
+output = "dc"
+poles = [["L", "N"], ["L+", "M"]]

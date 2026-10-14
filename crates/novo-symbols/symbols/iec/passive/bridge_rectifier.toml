@@ -1,0 +1,35 @@
+format = 1
+id = "iec/passive/bridge_rectifier"
+name = "Bridge rectifier"
+description = "Single-phase bridge rectifier: AC in on the two ~ terminals, DC out on + and -."
+standard = "IEC 60617"
+category = "passive"
+function = "passive.rectifier"
+keywords = ["bridge rectifier", "rectifier", "diode bridge", "graetz"]
+
+connections = [
+  { id = "~1", at = [0, 0], dir = "up" },
+  { id = "~2", at = [8, 0], dir = "up" },
+  { id = "+", at = [0, 20], dir = "down" },
+  { id = "-", at = [8, 20], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 10], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "line", from = [8, 0], to = [8, 4] },
+  { kind = "rect", at = [-4, 4], size = [16, 12] },
+  { kind = "line", from = [0, 16], to = [0, 20] },
+  { kind = "line", from = [8, 16], to = [8, 20] },
+  { kind = "polyline", points = [[1.5, 8], [6.5, 8], [4, 12]], closed = true },
+  { kind = "line", from = [1.5, 12], to = [6.5, 12] },
+]
+
+[behavior]
+kind = "converter"
+input = "ac"
+output = "dc"
+poles = [["~1", "~2"], ["+", "-"]]

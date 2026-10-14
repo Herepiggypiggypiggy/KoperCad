@@ -1,0 +1,29 @@
+format = 1
+id = "iec/coils/solenoid_valve"
+name = "Solenoid valve coil"
+description = "Coil of a solenoid valve."
+standard = "IEC 60617"
+category = "coils"
+function = "coil.valve"
+keywords = ["valve", "solenoid", "coil", "pneumatic"]
+
+connections = [
+  { id = "A1", at = [0, 0], dir = "up" },
+  { id = "A2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 5] },
+  { kind = "rect", at = [-4, 5], size = [8, 6] },
+  { kind = "line", from = [0, 11], to = [0, 16] },
+  { kind = "line", from = [4, 8], to = [8, 8], stroke = "dashed" },
+  { kind = "polyline", points = [[8, 6], [12, 10], [12, 6], [8, 10]], closed = true },
+]
+
+[behavior]
+kind = "coil"
+poles = [["A1", "A2"]]

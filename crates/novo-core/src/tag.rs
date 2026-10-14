@@ -113,6 +113,27 @@ impl DeviceTag {
         Ok(tag)
     }
 
+    /// Checks that every level is non-empty and uses only letters, digits,
+    /// `.` and `_`, i.e. that the tag survives a round trip through its text
+    /// form. Projects refuse devices and cables whose tag fails this, so a
+    /// tag built field by field cannot make a saved project unloadable.
+    pub fn validate(&self) -> Result<(), TagError> {
+        for aspect in [Aspect::Function, Aspect::Location, Aspect::Product] {
+            for level in self.levels(aspect) {
+                if level.is_empty() {
+                    return Err(TagError::EmptyLevel(self.to_string()));
+                }
+                if let Some(ch) = level.chars().find(|&ch| !valid_level_char(ch)) {
+                    return Err(TagError::InvalidChar {
+                        tag: self.to_string(),
+                        ch,
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Adds a function level, builder style: `DeviceTag::product("K1").with_function("A1")`.
     pub fn with_function(mut self, level: impl Into<String>) -> Self {
         self.function.push(level.into());
