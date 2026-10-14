@@ -19,7 +19,7 @@ git fetch origin claude/project-thread-mtm4pw main
 git checkout claude/project-thread-mtm4pw
 cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-cargo run --release -p novo-xref --example scale   # ~11 ms / 10k symbols
+cargo run --release -p novo-xref --example xref_scale   # ~11 ms / 10k symbols
 ```
 Then: check CI on #31; if green, mark ready (update_pull_request draft=false)
 and message the reviewer the head SHA. PR is subscribed for activity.
@@ -34,7 +34,7 @@ and message the reviewer the head SHA. PR is subscribed for activity.
 - nav.rs: Navigator (G cycle; only first jump enters history), JumpHistory.
 - actions.rs: XrefAction ids/labels/shortcuts, for_symbol.
 - function.rs: ContactKind classify via novo_symbols::Library or key name.
-- tests/xref.rs: acceptance tests; examples/scale.rs: timing.
+- tests/xref.rs: acceptance tests; examples/xref_scale.rs: timing.
 
 ## Who to talk to (send_message)
 - Integration lead / coordinator: session_011PfTJ1QaP1JQJPwXcFnxBE
