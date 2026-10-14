@@ -15,6 +15,7 @@ novo-storage.workspace = true
 novo-py.workspace = true
 novo-checks.workspace = true
 novo-pdf.workspace = true
+novo-reports.workspace = true
 # Symbol artwork for PDF export (`art` lives behind the editor's egui feature).
 novo-editor = { workspace = true, features = ["egui"] }
 clap.workspace = true
@@ -22,6 +23,7 @@ serde_json.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+calamine.workspace = true
 
 [lints]
 workspace = true

@@ -51,6 +51,11 @@ with ne.Project.create("dol.novo", name="DOL starter", overwrite=True) as p:
 - Queries: `info()`, `pages()`, `devices()`, `symbols()`, `wires()`,
   `potentials()`, `terminals()`, `nets()`, `device(tag)`, `to_json()`;
   `novoelectric.symbols()` lists the symbol library.
+- Parts and reports: `add_part(manufacturer, order_number, ...)`,
+  `assign_part(device, part)`, `report("bom")` (also `toc`, `devices`,
+  `wires`) as data, `export_bom("bom.xlsx")` and
+  `export_reports("all.xlsx")` (`.xlsx`, or `.csv` for one report). An
+  export is never written over a project file.
 - Any model command in its JSON form: `p.execute({"command": "add_page",
   "name": "3"})`; a `{"command": "batch", ...}` is one undo step.
 - Errors raise `novoelectric.NovoError`; a refused call changes nothing.

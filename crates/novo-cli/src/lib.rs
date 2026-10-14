@@ -7,7 +7,7 @@
 //!
 //! Exit codes are stable so batch files can test them; see [`exit`].
 
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
@@ -15,7 +15,9 @@ use novo_checks::{Problem, ProblemKind, Severity, Summary};
 use novo_core::Project;
 use novo_editor::art::LibraryArt;
 use novo_pdf::{PageSet, PdfOptions};
-use novo_storage::{AUTOSAVE_SUFFIX, PROJECT_EXTENSION, ProjectFile};
+use novo_py::ReportFormat;
+use novo_reports::CsvOptions;
+use novo_storage::ProjectFile;
 use serde_json::{Value, json};
 
 /// Process exit codes.
@@ -74,8 +76,36 @@ enum Cmd {
     },
 }
 
+/// Where a report goes.
+#[derive(Debug, clap::Args)]
+struct ReportArgs {
+    file: PathBuf,
+    /// Output file, `.xlsx` or `.csv`; CSV on standard output when left out.
+    #[arg(short, long)]
+    output: Option<PathBuf>,
+    /// CSV field separator; `;` suits Excel in locales with a decimal comma.
+    #[arg(long, default_value_t = ',')]
+    delimiter: char,
+}
+
 #[derive(Debug, Subcommand)]
 enum Export {
+    /// Bill of materials: every part with its quantity, plus devices
+    /// without a part.
+    Bom(ReportArgs),
+    /// Device list.
+    Devices(ReportArgs),
+    /// Wire list.
+    Wires(ReportArgs),
+    /// Table of contents (the pages).
+    Toc(ReportArgs),
+    /// Every report in one workbook, one sheet each.
+    Reports {
+        file: PathBuf,
+        /// Output file (.xlsx).
+        #[arg(short, long)]
+        output: PathBuf,
+    },
     /// The whole project as diffable JSON.
     Json {
         file: PathBuf,
@@ -165,6 +195,27 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             }
             Ok(exit::OK)
         }
+        Cmd::Export(Export::Bom(args)) => export_reports(&args.file, &["bom"], &args, out),
+        Cmd::Export(Export::Devices(args)) => export_reports(&args.file, &["devices"], &args, out),
+        Cmd::Export(Export::Wires(args)) => export_reports(&args.file, &["wires"], &args, out),
+        Cmd::Export(Export::Toc(args)) => export_reports(&args.file, &["toc"], &args, out),
+        Cmd::Export(Export::Reports { file, output }) => {
+            let args = ReportArgs {
+                file,
+                output: Some(output),
+                delimiter: ',',
+            };
+            if !matches!(
+                args.output.as_deref().map(ReportFormat::from_path),
+                Some(Ok(ReportFormat::Xlsx))
+            ) {
+                return Err(Failure::new(
+                    exit::USAGE,
+                    "`novo export reports` writes one workbook: give an .xlsx output",
+                ));
+            }
+            export_reports(&args.file, &[], &args, out)
+        }
         Cmd::Export(Export::Pdf {
             file,
             output,
@@ -207,59 +258,49 @@ fn print(out: &mut dyn Write, text: &str) -> Result<(), Failure> {
         .map_err(|e| Failure::new(exit::WRITE, format!("cannot write output: {e}")))
 }
 
-/// The first bytes of every SQLite database, so of every project file.
-const SQLITE_MAGIC: &[u8] = b"SQLite format 3\0";
-
-/// Whether `path` is, or looks like, a project or recovery file: an export
-/// must never land on one.
-fn is_project_path(path: &Path) -> bool {
-    let name = path
-        .file_name()
-        .map(|n| n.to_string_lossy().to_ascii_lowercase())
-        .unwrap_or_default();
-    let ext = format!(".{PROJECT_EXTENSION}");
-    if name.ends_with(&ext) || name.ends_with(&format!("{ext}{AUTOSAVE_SUFFIX}")) {
-        return true;
-    }
-    let mut head = [0u8; 16];
-    std::fs::File::open(path)
-        .and_then(|mut f| f.read_exact(&mut head))
-        .is_ok_and(|()| head == SQLITE_MAGIC)
+/// Writes an export through the shared guard: never over the input or any
+/// other project or recovery file, atomically.
+fn write_output(input: &Path, output: &Path, bytes: &[u8]) -> Result<(), Failure> {
+    novo_py::write_export(output, bytes, Some(input))
+        .map_err(|e| Failure::new(exit::WRITE, e.to_string()))
 }
 
-/// Writes an export, never over a project file (the input or any other).
-/// The bytes go to a temporary file next to `output` that is moved into
-/// place only once complete, so a failed write leaves an earlier export
-/// whole.
-fn write_output(input: &Path, output: &Path, bytes: &[u8]) -> Result<(), Failure> {
-    let same_as_input = matches!(
-        (input.canonicalize(), output.canonicalize()),
-        (Ok(a), Ok(b)) if a == b
-    );
-    if same_as_input || is_project_path(output) {
-        return Err(Failure::new(
-            exit::WRITE,
-            format!(
-                "refusing to write the export over {}: it is a project file",
-                output.display()
-            ),
-        ));
-    }
-    let failed = |e: std::io::Error| {
-        Failure::new(
-            exit::WRITE,
-            format!("cannot write {}: {e}", output.display()),
-        )
+/// Writes reports (`ids`; every report when empty) to `output` as .xlsx or
+/// .csv, or one report as CSV to `out` when there is no output path.
+fn export_reports(
+    file: &Path,
+    ids: &[&str],
+    args: &ReportArgs,
+    out: &mut dyn Write,
+) -> Result<i32, Failure> {
+    let project = read(file)?;
+    let usage = |e: novo_py::ScriptError| Failure::new(exit::USAGE, e.to_string());
+    let csv = CsvOptions {
+        delimiter: args.delimiter,
+        ..CsvOptions::default()
     };
-    let mut temp = output.as_os_str().to_owned();
-    temp.push(".novo-tmp");
-    let temp = PathBuf::from(temp);
-    let written = std::fs::write(&temp, bytes).and_then(|()| std::fs::rename(&temp, output));
-    if let Err(e) = written {
-        let _ = std::fs::remove_file(&temp);
-        return Err(failed(e));
+    match &args.output {
+        Some(path) => {
+            if novo_py::is_project_path(path) {
+                // Say why before complaining about the file type.
+                return write_output(file, path, &[]).map(|()| exit::OK);
+            }
+            let format = match ReportFormat::from_path(path).map_err(usage)? {
+                ReportFormat::Csv(_) => ReportFormat::Csv(csv),
+                xlsx => xlsx,
+            };
+            let bytes = novo_py::report_bytes(&project, ids, format).map_err(usage)?;
+            write_output(file, path, &bytes)?;
+        }
+        None => {
+            // On a terminal or in a pipe a byte order mark is only noise.
+            let format = ReportFormat::Csv(CsvOptions { bom: false, ..csv });
+            let bytes = novo_py::report_bytes(&project, ids, format).map_err(usage)?;
+            out.write_all(&bytes)
+                .map_err(|e| Failure::new(exit::WRITE, format!("cannot write output: {e}")))?;
+        }
     }
-    Ok(())
+    Ok(exit::OK)
 }
 
 /// The PDF of the given pages (all when empty), drawn with the symbol

@@ -10,3 +10,4 @@
 2026-10-14 19:50 UTC C READY on ac037dc. Merged main (#49 pdf-writer) into e5bb8ae: Cargo.toml keep-both, main's Cargo.lock + cargo metadata; checks green.
 2026-10-14 19:50 UTC #56 READY from B and C on e5bb8ae; merged as 67c3591. Branch restarted from main for the review follow-ups (pdf on novo-pdf, check on novo-checks, export guard + atomic write, plain clap errors, NothingCreated, venv README).
 2026-10-14 20:05 UTC Opened PR #65 (follow-ups); head is the commit adding this line. Pinged B, C, coordinator.
+2026-10-14 20:20 UTC #55 merged; added reports to #65 (novo export bom/devices/wires/toc/reports, Python add_part/assign_part/report/export_bom/export_reports). test_dol_bom_to_excel un-skipped and passing: done-criterion met headless. Main (ea47b10) merged in.

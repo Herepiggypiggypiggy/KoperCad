@@ -33,16 +33,22 @@ use std::sync::OnceLock;
 
 use novo_core::{
     AnyId, ChangeSet, Command, DeviceId, DeviceKind, DeviceTag, Document, Endpoint, ModelError,
-    PageFormat, PageId, PageKind, Placement, Point, PotentialId, PotentialKind, PotentialSpec,
-    Project, Rotation, SymbolId, SymbolKey, SymbolRole, TagError, TerminalId, WireId, natural_cmp,
+    PageFormat, PageId, PageKind, PartId, Placement, Point, PotentialId, PotentialKind,
+    PotentialSpec, Project, Rotation, SymbolId, SymbolKey, SymbolRole, TagError, TerminalId,
+    WireId, natural_cmp,
 };
 use novo_storage::{Session, StorageError, autosave_path};
 use novo_symbols::Library;
 use serde_json::{Value, json};
 use thiserror::Error;
 
+mod export;
 #[cfg(feature = "python")]
 mod python;
+
+pub use export::{
+    ReportFormat, generate, is_project_path, report_bytes, report_ids, report_json, write_export,
+};
 
 /// Why a script call was refused. A refused edit changes nothing.
 #[derive(Debug, Error)]
@@ -76,6 +82,15 @@ pub enum ScriptError {
     NoFile,
     #[error("`{0}` ran but did not create the object it should have; please report this")]
     NothingCreated(String),
+    #[error("refusing to write an export over {}: it is a project file", .0.display())]
+    ProjectFileTarget(PathBuf),
+    #[error("cannot write {}: {source}", path.display())]
+    Io {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    #[error("export failed: {0}")]
+    Export(String),
     #[error("the symbol library did not load: {0}")]
     Library(String),
 }
@@ -317,6 +332,35 @@ impl ScriptProject {
                 _ => None,
             },
         )
+    }
+
+    /// Adds a part (an article) to the project's parts, e.g. a contactor by
+    /// manufacturer and order number.
+    pub fn add_part(
+        &mut self,
+        manufacturer: &str,
+        order_number: &str,
+        type_number: &str,
+        description: &str,
+    ) -> Result<PartId> {
+        self.execute_one(
+            Command::AddPart {
+                manufacturer: manufacturer.into(),
+                order_number: order_number.into(),
+                type_number: type_number.into(),
+                description: description.into(),
+            },
+            |id| match id {
+                AnyId::Part(id) => Some(id),
+                _ => None,
+            },
+        )
+    }
+
+    /// Adds a part to a device's part list.
+    pub fn assign_part(&mut self, device: DeviceId, part: PartId) -> Result<()> {
+        self.execute(Command::AssignPart { device, part })?;
+        Ok(())
     }
 
     /// Renames a device: a new tag, e.g. `-K2` or `=A1+CAB1-K2`.
@@ -575,6 +619,23 @@ impl ScriptProject {
     /// and potentials.
     pub fn nets(&self) -> Value {
         nets_json(self.project())
+    }
+
+    /// A built-in report (`toc`, `bom`, `devices`, `wires`) as plain data.
+    pub fn report(&self, id: &str) -> Result<Value> {
+        Ok(report_json(&generate(self.project(), id)?))
+    }
+
+    /// Writes reports to `path`: `.xlsx` (one sheet per report; every
+    /// report when `ids` is empty) or `.csv` (exactly one report). Never
+    /// writes over a project file.
+    pub fn export_reports(&self, ids: &[&str], path: impl AsRef<Path>) -> Result<()> {
+        let path = path.as_ref();
+        if is_project_path(path) {
+            return Err(ScriptError::ProjectFileTarget(path.to_path_buf()));
+        }
+        let bytes = report_bytes(self.project(), ids, ReportFormat::from_path(path)?)?;
+        write_export(path, &bytes, self.path())
     }
 
     /// The whole project in its diffable JSON form.

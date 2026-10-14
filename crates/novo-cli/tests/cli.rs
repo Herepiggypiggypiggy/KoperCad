@@ -294,3 +294,51 @@ fn check_reports_shorts_between_potentials() {
         run.out
     );
 }
+
+#[test]
+fn export_reports_as_excel_and_csv() {
+    use calamine::{Reader, Xlsx, open_workbook};
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+
+    let run = novo(&["export", "devices", s(&path)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert!(!run.out.starts_with('\u{feff}'), "no BOM on stdout");
+    assert!(run.out.contains("'-K1"), "{}", run.out);
+
+    let csv = dir.path().join("bom.csv");
+    let run = novo(&["export", "bom", s(&path), "-o", s(&csv), "--delimiter", ";"]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    let text = std::fs::read_to_string(&csv).unwrap();
+    assert!(text.starts_with('\u{feff}'), "Excel reads mm² right");
+    assert!(text.contains(';'));
+
+    let all = dir.path().join("reports.xlsx");
+    let run = novo(&["export", "reports", s(&path), "-o", s(&all)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    let book: Xlsx<_> = open_workbook(&all).unwrap();
+    assert_eq!(
+        book.sheet_names(),
+        [
+            "Table of contents",
+            "Bill of materials",
+            "Device list",
+            "Wire list"
+        ]
+    );
+
+    let wrong = dir.path().join("reports.csv");
+    assert_eq!(
+        novo(&["export", "reports", s(&path), "-o", s(&wrong)]).code,
+        exit::USAGE
+    );
+    let txt = dir.path().join("bom.txt");
+    assert_eq!(
+        novo(&["export", "bom", s(&path), "-o", s(&txt)]).code,
+        exit::USAGE
+    );
+    let run = novo(&["export", "wires", s(&path), "-o", s(&path)]);
+    assert_eq!(run.code, exit::WRITE);
+    assert!(run.err.contains("it is a project file"));
+}

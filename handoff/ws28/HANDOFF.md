@@ -32,7 +32,8 @@ python -m pytest -p no:cacheprovider crates/novo-py/python/tests
 - Netlist names: device/terminal pins by designation (`-K1:13`); feeds `feed L1:1`, interruption points `ip NAME:1`, unlinked `symbol 12:1`.
 - `novo check` runs `novo_checks::check`; exit 1 when the summary is not clean (infos such as missing parts do not count). `--json` gives severity, snake_case kind, label, message, page name, ids.
 - `novo export pdf` uses `novo_pdf::export_pdf_with_art` with `novo_editor::art::LibraryArt` (needs novo-editor's `egui` feature, so the CLI links egui; see ROADMAP item 3). `--page NAME` repeats.
-- Exports go through `write_output`: refused onto the input, any `*.novo`, `*.novo.autosave` or any existing SQLite file; written to `<out>.novo-tmp` then renamed.
+- Reports: `crates/novo-py/src/export.rs` (`report_bytes`, `report_json`, `write_export`, `is_project_path`) is shared by Python and the CLI; `novo export bom|devices|wires|toc|reports`.
+- Exports go through `novo_py::write_export`: refused onto the input, any `*.novo`, `*.novo.autosave` or any existing SQLite file; written to `<out>.novo-tmp` then renamed.
 - No novo-core API changes were needed.
 
 ## People
