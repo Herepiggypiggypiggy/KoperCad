@@ -22,3 +22,4 @@ branches; the cloud workers above took workstreams no project thread owns.
 | Main reviewer B | session_01QSnXFBDRyvwwzhT1S1gFGN | (none) | New-crate PRs: #49, #50, WS-12/13/28 |
 | Fixer | session_017LndnL4fiT5rRPkqy3R36S | PR branches of paused threads | Fixes CHANGES NEEDED findings |
 | Gate 1 integration | session_01QtW6E2sY3dMnhYDgX3zXge | claude/gate1-integration | Hosts editor, command field, terminals, xref, PDF in novo-app (stacked on #46 + #38) |
+| Main reviewer C | session_01Q6QWwh6uhq8Z2C1Ysih3UA | (none) | Cloud workers' new-crate PRs: #54, #55, #56 |
