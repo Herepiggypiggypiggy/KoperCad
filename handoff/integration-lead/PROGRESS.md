@@ -38,3 +38,4 @@
 2026-10-14 18:47 UTC Started new workstreams in the coordinator session: WS-09 PDF export (novo-pdf, branch claude/ws09-pdf-export; Gate 1 needs PDF) and WS-14 design checks (novo-checks, branch claude/ws14-design-checks; feeds the issue pill). Tester filling Gate 1 gap tests on claude/project-thread-dft1m7.
 2026-10-14 18:50 UTC Reviewer READY: #45 b0ad1b8 (after coordinator's rebuttal of the NaN finding), #44 88c0652, #30 ac067ff, #31 caf760c. Merged #45 (2f5ed6f), #44 (d3bd761). Opened #48 (tester gaps, bbe2a24). #30 main merge pushed (4bd64c2, 369 tests pass) for reviewer confirmation.
 2026-10-14 18:58 UTC Merged #36 (9fa18ed) on READY 8cc6e0e. #30 re-merged with main (b6f8168, 398 tests) for confirmation. WS-09 pushed (95d4749); PR #49 opened.
+2026-10-14 19:00 UTC Scaled out: started design reviewer (session_01NLERJkVHpsVcABrarTR3CF) and cloud workers WS-13 reports, WS-12 cables, WS-28 Python/CLI (roster in handoff/coordinator/cloud-roster.md).
