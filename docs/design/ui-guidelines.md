@@ -1,6 +1,6 @@
 # Interface guidelines
 
-How NovoElectric looks and how its screens are laid out. The look lives in
+How NovoElectric looks: the visual language. The look lives in
 the `novo-theme` crate; this page says how to use it. Owned by the layout and
 branding thread; how the work flows (shortcuts, steps, defaults) belongs to
 the workflow thread.
@@ -27,7 +27,7 @@ the workflow thread.
 
 The app shell calls `novo_theme::apply(&ctx)` once in the creation context.
 It installs the Inter font, Phosphor icons and the dark style, and pins the
-theme to dark. The System, Light and Dark choices in the View menu go away
+theme to dark. Any light, dark or system theme choice goes away
 until a light theme exists.
 
 ## Tokens
@@ -35,7 +35,7 @@ until a light theme exists.
 | Token | Hex | Use |
 | --- | --- | --- |
 | `BG_0` | `#0E0E10` | Text fields, lists, around the sheet |
-| `BG_1` | `#151517` | Panels, menu bar, status bar |
+| `BG_1` | `#151517` | Panels and bars |
 | `BG_2` | `#1B1B1E` | Windows, dialogs, menus, tooltips |
 | `BG_3` | `#232327` | Buttons and fields at rest |
 | `BG_4` | `#2D2D32` | Hovered controls |
@@ -63,55 +63,13 @@ an underline when active) for the toolbar.
 Unit tests hold body text to WCAG AA (contrast 7:1 for `TEXT`, 4.5:1 for
 `TEXT_MUTED` and the status colours) on every surface.
 
-## Main window
+## Layout and menus
 
-```
-+--------------------------------------------------------------------+
-| File  Edit  View  Insert  Project  Tools  Help                     |  menu bar
-| [save undo redo] | [select wire symbol terminal text] | [snap grid] |  toolbar
-+-----------+----------------------------------------+---------------+
-| Project   | 2 Power supply | 3 Motor starter  (+)  | Properties    |
-|  Pages    |                                        |  Tag   -K1    |
-|  Devices  |              canvas                    |  Part  ...    |
-|  Parts    |                                        |               |
-|  Reports  |                                        |               |
-|           +----------------------------------------+               |
-|           | Messages (collapsible)                 |               |
-+-----------+----------------------------------------+---------------+
-| X 125.0  Y 80.0 mm | Grid 2.5 mm | Snap on | 2 selected | No errors |  status bar
-+--------------------------------------------------------------------+
-```
-
-- **Left, Project (240 pt):** one tree with Pages, Devices, Parts and
-  Reports. Pages carry their number and title.
-- **Centre:** page tabs over the canvas, with a `+` tab for a new page.
-- **Right, Properties (280 pt):** a two column grid, label left and value
-  right, for whatever is selected.
-- **Bottom of the centre, Messages:** design check results; collapsed until
-  there is something to say.
-- **Status bar:** cursor position in mm, grid, snap, selection count, and
-  the design check summary with its icon.
-
-Panels resize and collapse; the canvas keeps the rest.
-
-## Menus
-
-Proposed top level, in this order. Every item also lives in the command
-palette (Ctrl+K), so menus stay short and only list what people look for.
-
-| Menu | Items |
-| --- | --- |
-| File | New project, Open, Open recent, Save, Save as, Close / Export PDF, Print / Project properties / Quit |
-| Edit | Undo, Redo / Cut, Copy, Paste, Duplicate, Delete / Select all / Find |
-| View | Command palette / Zoom to fit, Zoom to selection / Grid, Snap / Panels: Project, Properties, Messages |
-| Insert | Symbol, Wire, Terminal, Cable, Cross reference, Text / Page |
-| Project | Pages, Devices, Parts / Reports / Check design |
-| Tools | Simulate / Scripts / Settings |
-| Help | Keyboard shortcuts, About NovoElectric |
-
-Rules: items are verbs or nouns in sentence case; `...` only when a dialog
-follows; shortcuts show on the right; disabled rather than hidden when they
-do not apply; separators (`/` above) group items, at most four groups.
+Window structure, panels and how commands are organised are being designed
+in `docs/design/screen-architecture.md` (layout thread) and
+`docs/design/interaction-model.md` (workflow thread), merged into
+`docs/DESIGN.md`. This file covers only the visual language those screens
+use.
 
 ## Icons
 
