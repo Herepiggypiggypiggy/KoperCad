@@ -449,7 +449,12 @@ fn reports_are_deterministic() {
         .map(|o| to_csv(o, &CsvOptions::default()))
         .collect();
     assert_eq!(csv, csv_again);
-    assert!(!xlsx_bytes(&refs).expect("xlsx").is_empty());
+    // xlsx too, even across a clock tick (a creation timestamp would
+    // change the bytes once a second).
+    let first = xlsx_bytes(&refs).expect("xlsx");
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    let again_refs: Vec<&ReportOutput> = again.iter().collect();
+    assert_eq!(first, xlsx_bytes(&again_refs).expect("xlsx"));
 }
 
 /// A project with `n` devices, for paging.

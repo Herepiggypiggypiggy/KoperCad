@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use rust_xlsxwriter::{Format, Workbook, XlsxError};
+use rust_xlsxwriter::{DocProperties, ExcelDateTime, Format, Workbook, XlsxError};
 
 use crate::table::{Cell, ReportOutput, Section};
 
@@ -52,8 +52,14 @@ fn sheet_name(title: &str, taken: &[String]) -> String {
 /// A sheet holds its sections one below the other: section title (when the
 /// report has several), bold header row, rows, a blank row. With one
 /// section the header row is frozen.
+///
+/// Output is deterministic: the workbook's creation date is fixed instead
+/// of the current time, so the same reports always give the same bytes
+/// (exports can be compared, cached and diffed).
 pub fn xlsx_bytes(reports: &[&ReportOutput]) -> Result<Vec<u8>, ExportError> {
     let mut workbook = Workbook::new();
+    let created = ExcelDateTime::from_ymd(2000, 1, 1)?;
+    workbook.set_properties(&DocProperties::new().set_creation_datetime(&created));
     let bold = Format::new().set_bold();
     let mut taken: Vec<String> = Vec::new();
     for report in reports {
