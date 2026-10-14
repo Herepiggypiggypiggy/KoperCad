@@ -11,7 +11,10 @@
 //!   values across a selection, one command per edit.
 //! - [`BulkTable`]: spreadsheet-style bulk edit with Excel copy and paste.
 //! - [`import_catalog`]: CSV import with English, German and Dutch headers.
-//! - [`ui`]: the egui properties panel and bulk editor the app shell shows.
+//!
+//! There is deliberately no panel layout here yet: the screen design comes
+//! from `docs/DESIGN.md`, and any UI built on top reads rows and returns
+//! commands from these types.
 //!
 //! Nothing here edits the model directly: every change is a
 //! [`novo_core::Command`] the caller runs with `Document::execute`.
@@ -22,15 +25,14 @@ mod csv;
 mod search;
 mod sheet;
 mod table;
-pub mod ui;
 
 pub use assign::{
     AssignMode, assign_cable_part, assign_part, catalog_entry, clear_parts, find_project_part,
     missing_parts, remove_unused_parts, suggest_for_device, unused_parts,
 };
 pub use catalog::{
-    CATALOG_FORMAT_VERSION, Catalog, CatalogError, CatalogPart, Dimensions, PartKey, keys,
-    user_catalog_path,
+    CATALOG_FORMAT_VERSION, Catalog, CatalogError, CatalogPart, Dimensions, MergePreview, PartKey,
+    keys, user_catalog_path,
 };
 pub use csv::{Column, ImportError, ImportReport, column_for, import_catalog, parse_delimited};
 pub use search::{Matcher, normalize_code};
@@ -39,5 +41,6 @@ pub use sheet::{
     parse_value, property_key, property_label, resolve_selection,
 };
 pub use table::{
-    BulkError, BulkOutcome, BulkRow, BulkTable, TableColumn, apply_table, find_device, set_cell,
+    BulkError, BulkOutcome, BulkRow, BulkTable, TableColumn, apply_table, fill, find_device,
+    set_cell,
 };

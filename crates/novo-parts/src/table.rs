@@ -268,6 +268,27 @@ pub fn set_cell(
     Ok(edits.finish().command)
 }
 
+/// Sets one column to the same value on many devices (fill down, or a
+/// paste of one value over a selected range), as one command.
+pub fn fill(
+    project: &Project,
+    catalog: &Catalog,
+    devices: &[DeviceId],
+    column: &TableColumn,
+    value: &str,
+) -> Result<Option<Command>, BulkError> {
+    if column == &TableColumn::Tag {
+        return Err(BulkError::TagColumn);
+    }
+    let mut edits = Edits::new(project, catalog);
+    let mut cells = BTreeMap::new();
+    cells.insert(column, value.trim());
+    for &device in devices {
+        edits.apply_row(device, &cells);
+    }
+    Ok(edits.finish().command)
+}
+
 struct Edits<'a> {
     project: &'a Project,
     catalog: &'a Catalog,

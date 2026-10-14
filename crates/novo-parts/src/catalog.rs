@@ -250,6 +250,17 @@ struct CatalogFile {
     parts: Vec<CatalogPart>,
 }
 
+/// What importing parts into a catalog would change.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MergePreview {
+    /// Parts the catalog does not have yet.
+    pub added: Vec<PartKey>,
+    /// Parts whose catalog entry would be replaced.
+    pub changed: Vec<PartKey>,
+    /// Parts already in the catalog exactly as imported.
+    pub unchanged: usize,
+}
+
 /// A searchable set of parts, unique by [`PartKey`].
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Catalog {
@@ -347,6 +358,20 @@ impl Catalog {
             .map(|p| self.upsert(p))
             .filter(|&new| new)
             .count()
+    }
+
+    /// What [`Catalog::merge`] would do with `parts`, without doing it: the
+    /// import preview the user accepts before the catalog changes.
+    pub fn preview_merge(&self, parts: &[CatalogPart]) -> MergePreview {
+        let mut preview = MergePreview::default();
+        for part in parts {
+            match self.get(&part.key()) {
+                None => preview.added.push(part.key()),
+                Some(existing) if existing != part => preview.changed.push(part.key()),
+                Some(_) => preview.unchanged += 1,
+            }
+        }
+        preview
     }
 
     /// Parts matching every word of `query`, best match first. An empty

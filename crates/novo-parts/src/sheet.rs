@@ -70,8 +70,13 @@ pub enum RowKey {
     /// The assigned part. Changed by picking from the catalog
     /// ([`crate::assign_part`]), not by typing a value.
     Part,
-    /// A field or data entry of the assigned part (read-only).
+    /// A field of the assigned part: manufacturer, order number, type
+    /// (read-only; pick another part to change them).
     PartField(String),
+    /// A technical value of the assigned part (`rated_current_a`). Editing
+    /// it overrides the value on the selected objects only, as their own
+    /// property; [`PropertySheet::reset_to_part`] removes the override.
+    PartData(String),
 }
 
 impl fmt::Display for RowKey {
@@ -80,7 +85,7 @@ impl fmt::Display for RowKey {
             RowKey::Field(k) => f.write_str(k),
             RowKey::Property(k) => write!(f, "properties.{k}"),
             RowKey::Part => f.write_str("part"),
-            RowKey::PartField(k) => write!(f, "part.{k}"),
+            RowKey::PartField(k) | RowKey::PartData(k) => write!(f, "part.{k}"),
         }
     }
 }
@@ -128,6 +133,10 @@ pub struct Row {
     /// Other words that find this row (`order` finds Part, `color` finds
     /// Colour).
     pub synonyms: &'static [&'static str],
+    /// The object's own property differs from the value its part gives,
+    /// so the part no longer decides it. Shown as an override, with
+    /// [`PropertySheet::reset_to_part`] to undo it.
+    pub overrides_part: bool,
     order: u32,
 }
 
@@ -642,6 +651,7 @@ impl PropertySheet {
                 },
                 synonyms: spec.map_or(&[], |s| s.synonyms),
                 order: spec.map_or(50, |s| s.order),
+                overrides_part: false,
             });
         }
 
@@ -658,6 +668,7 @@ impl PropertySheet {
                 choices: &[],
                 synonyms: PART_SYNONYMS,
                 order: 4,
+                overrides_part: false,
             });
             let firsts: BTreeSet<Option<PartId>> =
                 assigned.iter().map(|p| p.first().copied()).collect();
@@ -667,6 +678,12 @@ impl PropertySheet {
                 rows.extend(Self::part_rows(part));
             }
         }
+        let part_value = |record: &Record, key: &str| -> Option<Value> {
+            assigned_parts(record)?
+                .first()
+                .and_then(|&p| project.part(p))
+                .and_then(|p| p.properties.get(key).cloned())
+        };
 
         // Named properties: union over the selection; a missing one counts
         // as empty, so it shows as mixed.
@@ -695,6 +712,9 @@ impl PropertySheet {
                     choices: &[],
                     synonyms: &[],
                     order: 100,
+                    overrides_part: records.iter().any(|r| {
+                        part_value(r, key).is_some_and(|v| r.properties().get(*key) != Some(&v))
+                    }),
                 });
             }
         }
@@ -722,6 +742,7 @@ impl PropertySheet {
             choices: &[],
             synonyms: field_spec(key).map_or(&[], |s| s.synonyms),
             order,
+            overrides_part: false,
         };
         let mut rows = vec![
             field("manufacturer", "Manufacturer", &part.manufacturer, 0),
@@ -741,15 +762,16 @@ impl PropertySheet {
         for (key, value) in &part.properties {
             let (label, unit) = property_label(key);
             rows.push(Row {
-                key: RowKey::PartField(key.clone()),
+                key: RowKey::PartData(key.clone()),
                 label,
                 group: Group::PartData,
                 value: RowValue::Same(display_value(value)),
-                editable: false,
+                editable: true,
                 unit,
                 choices: &[],
                 synonyms: &[],
                 order: 100,
+                overrides_part: false,
             });
         }
         rows
@@ -842,6 +864,7 @@ impl PropertySheet {
         let commands = match key {
             RowKey::Part => return Err(EditError::UsePartSearch),
             RowKey::PartField(_) => return Err(EditError::ReadOnly(label)),
+            RowKey::PartData(name) => self.edit_property(project, name, &label, input)?,
             RowKey::Field(field) if field == "tag" => self.edit_tag(project, input)?,
             RowKey::Field(field) => self.edit_field(project, field, &label, input)?,
             RowKey::Property(name) => self.edit_property(project, name, &label, input)?,
@@ -863,6 +886,30 @@ impl PropertySheet {
         let (label, _) = property_label(&key);
         let commands = self.edit_property(project, &key, &label, input)?;
         Ok(self.batch(format!("Add property {label}"), commands))
+    }
+
+    /// Removes the selection's own value for `name` wherever its part gives
+    /// one, so the part decides again (one undo step).
+    pub fn reset_to_part(&self, project: &Project, name: &str) -> Option<Command> {
+        let commands: Vec<Command> = self
+            .targets
+            .iter()
+            .filter_map(|&id| project.record(id))
+            .filter(|r| r.properties().contains_key(name))
+            .filter(|r| {
+                assigned_parts(r)
+                    .and_then(|parts| parts.first().copied())
+                    .and_then(|p| project.part(p))
+                    .is_some_and(|p| p.properties.contains_key(name))
+            })
+            .map(|r| Command::SetProperty {
+                target: r.id(),
+                key: name.into(),
+                value: None,
+            })
+            .collect();
+        let (label, _) = property_label(name);
+        self.batch(format!("Reset {} to part", label.to_lowercase()), commands)
     }
 
     /// Removes a named property from every target.
@@ -1040,12 +1087,21 @@ impl PropertySheet {
             }
             let old = record.properties().get(name);
             // The type the selection already uses for this property.
-            let like = old.cloned().or_else(|| {
-                self.targets
-                    .iter()
-                    .filter_map(|&t| project.record(t))
-                    .find_map(|r| r.properties().get(name).cloned())
-            });
+            let like = old
+                .cloned()
+                .or_else(|| {
+                    self.targets
+                        .iter()
+                        .filter_map(|&t| project.record(t))
+                        .find_map(|r| r.properties().get(name).cloned())
+                })
+                .or_else(|| {
+                    // An override of part data keeps the part's type.
+                    assigned_parts(&record)?
+                        .first()
+                        .and_then(|&p| project.part(p))
+                        .and_then(|p| p.properties.get(name).cloned())
+                });
             let new = if input.trim().is_empty() {
                 None
             } else {

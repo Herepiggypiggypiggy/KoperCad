@@ -189,12 +189,13 @@ fn j12_any_property_is_found_by_part_of_its_name() {
         sheet.best_match("desc").unwrap().key,
         RowKey::Field("description".into())
     );
-    // Part data is read-only here; the part is changed by picking another.
-    let rated = sheet.filter("rated current")[0];
-    assert_eq!(rated.group, Group::PartData);
-    assert_eq!(rated.unit, Some("A"));
+    // The part's identity is read-only; the part is changed by picking
+    // another.
+    let order = sheet
+        .row(&RowKey::PartField("order_number".into()))
+        .unwrap();
     assert!(matches!(
-        sheet.edit(doc.project(), &rated.key, "12"),
+        sheet.edit(doc.project(), &order.key, "x"),
         Err(EditError::ReadOnly(_))
     ));
     assert_eq!(
@@ -501,4 +502,101 @@ fn empty_optional_numbers_take_whole_and_decimal_values() {
     let command = sheet.edit(doc.project(), &key, "").unwrap();
     run(&mut doc, command);
     assert_eq!(doc.project().wire(wire).unwrap().number, None);
+}
+
+#[test]
+fn part_data_can_be_overridden_and_reset() {
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let catalog = Catalog::starter();
+    let part = catalog.find("Siemens", "3RT2016-1BB41").unwrap();
+    let command = assign_part(doc.project(), &[gate.k1], part, AssignMode::Replace);
+    run(&mut doc, command);
+
+    let sheet = PropertySheet::build(doc.project(), &[gate.k1.into()]);
+    let rated = sheet.filter("rated current")[0].clone();
+    assert_eq!(rated.group, Group::PartData);
+    assert_eq!(rated.unit, Some("A"));
+    // Editing the part's value overrides it on this device only.
+    let command = sheet.edit(doc.project(), &rated.key, "12").unwrap();
+    run(&mut doc, command);
+    let k1 = doc.project().device(gate.k1).unwrap();
+    assert_eq!(k1.properties["rated_current_a"], Value::Float(12.0));
+    assert_eq!(
+        doc.project().part(k1.parts[0]).unwrap().properties["rated_current_a"],
+        Value::Float(9.0)
+    );
+    let sheet = PropertySheet::build(doc.project(), &[gate.k1.into()]);
+    let own = sheet
+        .row(&RowKey::Property("rated_current_a".into()))
+        .unwrap();
+    assert!(own.overrides_part);
+    // An ordinary property is not an override.
+    let sheet_m1 = PropertySheet::build(doc.project(), &[gate.m1.into()]);
+    assert!(
+        !sheet_m1
+            .row(&RowKey::Property("power_kw".into()))
+            .unwrap()
+            .overrides_part
+    );
+
+    let command = sheet.reset_to_part(doc.project(), "rated_current_a");
+    run(&mut doc, command);
+    assert!(
+        !doc.project()
+            .device(gate.k1)
+            .unwrap()
+            .properties
+            .contains_key("rated_current_a")
+    );
+    let sheet = PropertySheet::build(doc.project(), &[gate.k1.into()]);
+    assert!(
+        sheet
+            .reset_to_part(doc.project(), "rated_current_a")
+            .is_none()
+    );
+}
+
+#[test]
+fn fill_down_sets_one_column_on_many_devices_in_one_step() {
+    let mut doc = Document::default();
+    stress_page(&mut doc, 30).unwrap();
+    let devices: Vec<DeviceId> = doc.project().devices().map(|d| d.id).collect();
+    let catalog = Catalog::starter();
+    let depth = doc.undo_depth();
+    let command = novo_parts::fill(
+        doc.project(),
+        &catalog,
+        &devices,
+        &novo_parts::TableColumn::OrderNumber,
+        "3RT2016-1BB41",
+    )
+    .unwrap();
+    run(&mut doc, command);
+    assert_eq!(doc.undo_depth(), depth + 1);
+    assert_eq!(doc.project().parts().count(), 1);
+    assert!(missing_parts(doc.project()).is_empty());
+    assert!(
+        novo_parts::fill(
+            doc.project(),
+            &catalog,
+            &devices,
+            &novo_parts::TableColumn::Tag,
+            "x"
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn import_preview_shows_what_would_change() {
+    let catalog = Catalog::starter();
+    let mut changed = catalog.find("Siemens", "3RV2011-1JA10").unwrap().clone();
+    changed.description = "Updated text".into();
+    let same = catalog.find("Lapp", "1119304").unwrap().clone();
+    let new = CatalogPart::new("Eaton", "199263");
+    let preview = catalog.preview_merge(&[changed.clone(), same, new.clone()]);
+    assert_eq!(preview.added, vec![new.key()]);
+    assert_eq!(preview.changed, vec![changed.key()]);
+    assert_eq!(preview.unchanged, 1);
 }
