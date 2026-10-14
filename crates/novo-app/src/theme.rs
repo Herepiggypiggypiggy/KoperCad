@@ -68,6 +68,8 @@ fn model_style_from(p: &CanvasPalette) -> ModelStyle {
         tag_color: color(p.text),
         sheet_fill: Some(color(p.sheet)),
         frame_color: color(p.sheet_frame),
+        note_color: color(p.cross_reference),
+        note_warning_color: color(p.warning),
         ..defaults
     }
 }
