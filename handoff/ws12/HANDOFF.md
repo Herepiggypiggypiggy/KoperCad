@@ -5,7 +5,7 @@ Updated: see PROGRESS.md last line.
 ## State
 - Repo: github.com/Herepiggypiggypiggy/NovoElectric. Branch `claude/ws12-cables` (from main 9fa18ed).
 - PR #54 (https://github.com/Herepiggypiggypiggy/NovoElectric/pull/54); latest head SHA in PROGRESS.md and `git log`.
-- Review: head SHA sent to the main reviewer session_01XEdxpvQFh4HWmurh72tKwp and the coordinator session_01DZ68tTULUv7Uhe8ecKbC47.
+- Review: head SHA sent to the main reviewer B session_01QSnXFBDRyvwwzhT1S1gFGN (my reviewer; reviewer A is session_01XEdxpvQFh4HWmurh72tKwp) and the coordinator session_01DZ68tTULUv7Uhe8ecKbC47.
 - GitHub Actions is not running jobs: local fmt/clippy/test are the CI signal.
 
 ## Code
@@ -27,3 +27,4 @@ After each push, send_message the reviewer and coordinator the new head SHA. Che
 - Colour order follows the starter catalog (4G: BN,BK,GY,GNYE; 5G: BU,BN,BK,GY,GNYE). The Gate 1 fixture's own -W1 uses BK,BN,GY,GNYE; tests remove it before proposing.
 - Cross-section default: 1.5 mm² with any supply/PE conductor, 1 mm² for pure signals.
 - Merge conflicts on CLAUDE.md / Cargo.toml crate rows: keep both rows.
+- PR #51 (pending) fixes the CLAUDE.md crate list and pre-registers every crate in [workspace.dependencies]. After it merges, merge main with scripts/merge-main.sh and drop this PR's row edits if they conflict.
