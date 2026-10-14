@@ -16,6 +16,20 @@
 //!   Python (WS-28) and the AI assistant (WS-23).
 //! - [`Netlist`] is the connectivity graph, derived on demand.
 //!
+//! # JSON wire format
+//!
+//! Storage (WS-04), scripting (WS-28) and the AI assistant exchange model
+//! values as JSON, so these tag keys are stable API:
+//!
+//! - [`Record`]: `{"record": "device", "id": 5, ...}`
+//! - [`Op`]: `{"op": "insert" | "remove" | "update" | "set_info", ...}`
+//! - [`Command`]: `{"command": "add_device", ...}`
+//! - [`AnyId`]: `{"kind": "device", "id": 5}`
+//! - [`Endpoint`], [`SymbolRole`] and [`PageKind`]: `{"type": ..., ...}`
+//!
+//! Typed ids serialize as bare numbers and [`DeviceTag`] as its text form
+//! (`"=A1+CAB1-K1"`).
+//!
 //! ```
 //! use novo_core::{Document, DeviceTag, Endpoint, Pin, Placement, Point, SymbolRole};
 //!
