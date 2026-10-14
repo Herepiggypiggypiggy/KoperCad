@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use novo_core::{
     AnyId, DeviceId, DeviceKind, DeviceTag, Endpoint, Netlist, PageId, Point, SameName, SymbolId,
-    SymbolInstance, SymbolRole, Value,
+    SymbolInstance, SymbolRole, TerminalKind, Value,
 };
 
 use crate::contacts::{ContactKind, contact_limit_property};
@@ -576,4 +576,70 @@ pub(crate) fn undersized_wires(cx: &Context<'_>, out: &mut Vec<Problem>) {
 /// `16`, `0.75`, `12.2`: at most two decimals, no trailing zeros.
 fn number(value: f64) -> String {
     format!("{}", (value * 100.0).round() / 100.0)
+}
+
+/// Terminals whose article does not suit their kind, read with the catalog's
+/// PE marker (`PE` in the keywords or type number, `UT 2,5-PE`;
+/// [`novo_parts::terminal_kind_of`]) from the article the strip editor, the
+/// bill of materials and the missing-parts check all use
+/// ([`novo_terminals::terminal_part`]). Articles without a type number are
+/// not judged. One problem per strip and mismatch, naming the terminals.
+pub(crate) fn wrong_terminal_blocks(cx: &Context<'_>, out: &mut Vec<Problem>) {
+    let project = cx.project;
+    for strip in project
+        .devices()
+        .filter(|d| d.kind == DeviceKind::TerminalStrip)
+    {
+        // (PE terminal on a plain block, plain terminal on a PE block)
+        let mut wrong: [Vec<&novo_core::Terminal>; 2] = [Vec::new(), Vec::new()];
+        for terminal in project.terminals_of_strip(strip.id) {
+            let Some(part) =
+                novo_terminals::terminal_part(project, terminal.id).and_then(|p| project.part(p))
+            else {
+                continue;
+            };
+            let catalog = novo_parts::CatalogPart::from_model(part);
+            // A bare order number says nothing about the block: only judge
+            // parts whose catalog data could carry the PE marker.
+            if catalog.type_number.trim().is_empty() && catalog.keywords.is_empty() {
+                continue;
+            }
+            let block_is_pe =
+                novo_parts::terminal_kind_of(&catalog) == TerminalKind::ProtectiveEarth;
+            let wants_pe = terminal.kind == TerminalKind::ProtectiveEarth;
+            if wants_pe && !block_is_pe {
+                wrong[0].push(terminal);
+            } else if !wants_pe && block_is_pe {
+                wrong[1].push(terminal);
+            }
+        }
+        for (i, terminals) in wrong.into_iter().enumerate() {
+            if terminals.is_empty() {
+                continue;
+            }
+            let names: Vec<&str> = terminals.iter().map(|t| t.name.as_str()).collect();
+            let one = names.len() == 1;
+            let what = match (i, one) {
+                (0, true) => "is a PE terminal on a block that is not a PE block",
+                (0, false) => "are PE terminals on a block that is not a PE block",
+                (_, true) => "is built with a PE block but is not a PE terminal",
+                (_, false) => "are built with a PE block but are not PE terminals",
+            };
+            let mut at: Vec<AnyId> = terminals
+                .iter()
+                .flat_map(|t| project.symbols_of_terminal(t.id))
+                .map(|s| AnyId::from(s.id))
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect();
+            if at.is_empty() {
+                at.extend(terminals.iter().map(|t| AnyId::from(t.id)));
+            }
+            out.push(Problem::new(
+                ProblemKind::WrongTerminalBlock,
+                at,
+                format!("{}:{} {what}", strip.tag, names.join(", ")),
+            ));
+        }
+    }
 }

@@ -20,6 +20,7 @@
 //! | [`SeveralMainFunctions`](ProblemKind::SeveralMainFunctions) | warning | A device drawn with more than one main function |
 //! | [`DuplicateTerminal`](ProblemKind::DuplicateTerminal) | warning | Two terminals with one name on a strip while the same-name rule is off |
 //! | [`ZeroLengthWire`](ProblemKind::ZeroLengthWire) | warning | A wire of zero length that is not two touching pins |
+//! | [`WrongTerminalBlock`](ProblemKind::WrongTerminalBlock) | warning | A PE terminal built with a block that is not a PE block, or another terminal built with a PE block |
 //! | [`UndersizedWire`](ProblemKind::UndersizedWire) | warning | A wire on an overcurrent protective device that carries less than the device's rated current |
 //! | [`MissingPart`](ProblemKind::MissingPart) | info | A device or cable without a part |
 //!
@@ -94,11 +95,16 @@ pub enum ProblemKind {
     /// overload relay) whose cross-section carries less current than the
     /// device is rated for.
     UndersizedWire,
+    /// A terminal whose article does not suit its kind: a PE terminal built
+    /// with an ordinary (grey) block, which leaves the protective conductor
+    /// unbonded, or another terminal built with a PE block, which bonds a
+    /// live conductor to the rail.
+    WrongTerminalBlock,
 }
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 11] = [
+    pub const ALL: [ProblemKind; 12] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -108,6 +114,7 @@ impl ProblemKind {
         ProblemKind::SeveralMainFunctions,
         ProblemKind::DuplicateTerminal,
         ProblemKind::ZeroLengthWire,
+        ProblemKind::WrongTerminalBlock,
         ProblemKind::UndersizedWire,
         ProblemKind::MissingPart,
     ];
@@ -123,7 +130,8 @@ impl ProblemKind {
             | ProblemKind::SeveralMainFunctions
             | ProblemKind::DuplicateTerminal
             | ProblemKind::ZeroLengthWire
-            | ProblemKind::UndersizedWire => Severity::Warning,
+            | ProblemKind::UndersizedWire
+            | ProblemKind::WrongTerminalBlock => Severity::Warning,
             ProblemKind::MissingPart => Severity::Info,
         }
     }
@@ -142,6 +150,7 @@ impl ProblemKind {
             ProblemKind::ZeroLengthWire => "Zero-length wire",
             ProblemKind::MissingPart => "No part",
             ProblemKind::UndersizedWire => "Undersized wire",
+            ProblemKind::WrongTerminalBlock => "Wrong terminal block",
         }
     }
 }
@@ -244,6 +253,7 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     checks::zero_length_wires(&cx, &mut problems);
     checks::missing_parts(&cx, &mut problems);
     checks::undersized_wires(&cx, &mut problems);
+    checks::wrong_terminal_blocks(&cx, &mut problems);
     cx.sort(&mut problems);
     problems
 }

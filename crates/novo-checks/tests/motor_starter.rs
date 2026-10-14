@@ -114,6 +114,14 @@ fn break_it(doc: &mut Document, ms: &MotorStarter) -> Broken {
                 .next()
                 .expect("wire to -S0");
             tx.update::<Wire>(thin_wire, |w| w.cross_section_mm2 = Some(1.0))?;
+            // 12. -X1:PE ordered as a grey UT 2,5 feed-through block.
+            let grey = tx.add_part("Phoenix Contact", "3044076-PE")?;
+            tx.update::<Part>(grey, |p| p.type_number = "UT 2,5".into())?;
+            tx.set_property(
+                ms.x1,
+                "terminal_part.protective_earth",
+                Some(Value::Int(i64::try_from(grey.0).expect("small id"))),
+            )?;
             Ok(Broken {
                 lamp,
                 s0_sym: ms.s0_sym,
@@ -211,9 +219,14 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         "=A1+CAB-F3 is rated 16 A, but a 1 mm² wire on it carries about 9.6 A"
     );
 
+    assert_eq!(
+        one(ProblemKind::WrongTerminalBlock).message,
+        "=A1+CAB-X1:PE is a PE terminal on a block that is not a PE block"
+    );
+
     let summary = Summary::of(&problems);
-    assert_eq!((summary.errors, summary.warnings, summary.infos), (3, 7, 1));
-    assert_eq!(summary.pill_text(), "3 errors · 7 warnings");
+    assert_eq!((summary.errors, summary.warnings, summary.infos), (3, 8, 1));
+    assert_eq!(summary.pill_text(), "3 errors · 8 warnings");
 
     // Reading order: main circuit page, then control page.
     let pages: Vec<Option<PageId>> = problems.iter().map(|p| p.page).collect();
@@ -284,4 +297,76 @@ fn a_strip_without_a_pe_block_is_flagged() {
         "{}",
         problems[0].message
     );
+}
+
+/// Gives the starter's -X1 catalog articles with type numbers: `pe` is the
+/// type number of the block its PE terminal uses.
+fn catalog_blocks(doc: &mut Document, s: &MotorStarter, pe: &str) {
+    doc.transact("Blocks", |tx| {
+        for (kind, order, type_number) in [
+            ("feedthrough", "3044076", "UT 2,5"),
+            ("protective_earth", "3044089", pe),
+        ] {
+            let part = tx.add_part("Phoenix Contact", format!("{order}-{type_number}"))?;
+            tx.update::<Part>(part, |p| p.type_number = type_number.into())?;
+            tx.set_property(
+                s.x1,
+                format!("terminal_part.{kind}"),
+                Some(Value::Int(i64::try_from(part.0).expect("small id"))),
+            )?;
+        }
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn a_pe_terminal_on_a_grey_block_is_flagged() {
+    let (mut doc, s) = starter();
+    catalog_blocks(&mut doc, &s, "UT 2,5-PE");
+    assert!(check(doc.project()).is_empty());
+
+    // The tester's case: -X1:PE ordered as a grey UT 2,5.
+    catalog_blocks(&mut doc, &s, "UT 2,5");
+    let problems = check(doc.project());
+    assert_eq!(problems.len(), 1, "{problems:#?}");
+    let p = &problems[0];
+    assert_eq!(p.kind, ProblemKind::WrongTerminalBlock);
+    assert_eq!(p.severity, Severity::Warning);
+    assert_eq!(
+        p.message,
+        "=A1+CAB-X1:PE is a PE terminal on a block that is not a PE block"
+    );
+    assert!(
+        matches!(p.at[..], [AnyId::Symbol(_)]),
+        "marks the drawn PE terminal"
+    );
+}
+
+#[test]
+fn plain_terminals_on_a_pe_block_are_flagged() {
+    let (mut doc, s) = starter();
+    catalog_blocks(&mut doc, &s, "UT 2,5-PE");
+    // Every feed-through terminal of -X1 gets the PE block.
+    doc.transact("Swap", |tx| {
+        let pe_part = tx
+            .project()
+            .parts()
+            .find(|p| p.type_number == "UT 2,5-PE")
+            .expect("pe block")
+            .id;
+        tx.set_property(
+            s.x1,
+            "terminal_part.feedthrough",
+            Some(Value::Int(i64::try_from(pe_part.0).expect("small id"))),
+        )
+    })
+    .unwrap();
+    let problems = check(doc.project());
+    assert_eq!(problems.len(), 1, "{problems:#?}");
+    assert_eq!(
+        problems[0].message,
+        "=A1+CAB-X1:1, 2, 3 are built with a PE block but are not PE terminals"
+    );
+    assert_eq!(problems[0].at.len(), 3);
 }
