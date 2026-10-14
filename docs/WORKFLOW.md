@@ -1,5 +1,10 @@
 # Workflow specs
 
+> **Superseded where they differ** by `docs/design/` (the interaction model
+> and screen architecture), until `docs/DESIGN.md` replaces both. In
+> particular the J key, Tab for T-pieces, the T, C and P tools and the
+> Ctrl+1 to Ctrl+3 panel keys below are withdrawn.
+
 How NovoElectric should feel to an electrical designer who comes from EPLAN:
 fewer clicks, no dialogs in the drawing loop, and every action on the
 keyboard. This file is owned by the workflow thread. Each journey below has a

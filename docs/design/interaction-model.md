@@ -156,6 +156,13 @@ Since the last export or revision, changed objects are marked in the
 schematic, the drawers and the cabinet.
 The command `changes` lists them, and each row jumps.
 
+### Work through every problem
+
+Marks and counters suit drawing; a final check of 150 findings on a large
+project needs a list. The `problems` command (or a click on the counter)
+opens the problems as a list mode of the outline, sorted by page; F8 and
+Shift+F8 step to the next and previous problem on the drawing.
+
 ### First run and empty states
 
 A new user sees the structure of a new project and one line on the empty
@@ -235,6 +242,7 @@ drawing loop.
 | Ctrl+D | Duplicate with the next free tags |
 | Ctrl+Z / Ctrl+Y | Undo / redo |
 | Shift+P | Hide or show problem and proposal marks (counters stay) |
+| F8 / Shift+F8 | Next / previous problem |
 | 1 to 9 | Favourite symbols, only while the place field is still empty |
 
 Favourites act only on an empty field, so typing `m3` or `13` still searches.
@@ -275,7 +283,10 @@ potentials, because the user does not place those.
   Least work, but surprising when a page break moves.
 - **C. Pinned flow (recommended).** Pagination is automatic like B, but any
   page break the user sets is pinned and never moves. New circuits flow into
-  the next free space under their function.
+  the next free space under their function. Once a revision is issued or the
+  project is exported, pages freeze: `page.column` references never move
+  under a printed set, and new circuits go to new pages until the user
+  reflows on purpose.
 
 ### 9.2 Routing
 
@@ -304,7 +315,9 @@ each one transaction and one undo step. The rule for an instance the user
 has edited:
 
 - **Layout edits survive** as overrides: a moved symbol, a moved text, a
-  re-routed connection, a changed tag.
+  re-routed connection.
+- **Identity edits survive**: a tag the user changed by hand stays, and a
+  later renumber or update does not undo it.
 - **Parameter values survive**: an instance set to 7.5 kW stays 7.5 kW.
 - **Structural edits detach** the instance: adding or removing a device or
   connection inside it. The inspector says "Detached: a contact was added",
@@ -337,7 +350,8 @@ Gate 1 (one DOL starter over two pages) is benchmarked on the hand path:
 | Potentials from a source | Live restyling from rules (no text entity yet) |
 | Command field with nouns and verbs | Cabinet lens |
 | Numbering rule, F2 rename | Table faces other than the Connections drawer |
-| Problem marks in place | Boundary proposals in the editor (WS-11 already derives them) |
+| Problem marks in place, `problems` list | Boundary proposals in the editor (WS-11 already derives them) |
+| | Part proposals for block devices (needs the WS-07 parts database) |
 
 ## 13. Consistency notes from the critique so far
 
