@@ -571,8 +571,6 @@ impl NovoApp {
                     self.canvas.show(ui, open);
                     self.after_canvas();
                     self.after_canvas_frame();
-                    let rect = ui.min_rect();
-                    self.paint_overlays(ui, rect);
                 } else {
                     self.start_panel(ui, &mut picked);
                 }

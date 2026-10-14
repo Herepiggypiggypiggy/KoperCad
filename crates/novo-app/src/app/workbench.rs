@@ -21,7 +21,6 @@ use novo_workflow::keymap::{FAVOURITE_COMMANDS, Focus, Keymap};
 use novo_workflow::palette::{Mode, Sources, Target};
 use novo_xref::{LiveXref, Navigator, Place, Reference};
 
-use super::xref::paint_labels;
 use super::{Level, NovoApp};
 use crate::actions::Action;
 use crate::command_field::CommandField;
@@ -532,26 +531,6 @@ impl NovoApp {
         self.highlight_related();
     }
 
-    /// Cross-reference labels and terminal proposals over the drawing.
-    pub(super) fn paint_overlays(&mut self, ui: &egui::Ui, rect: egui::Rect) {
-        let Some(page) = self.current_page else {
-            return;
-        };
-        let labels = self.xref_labels(page);
-        let Some(view) = self.canvas.schematic_ref() else {
-            return;
-        };
-        let Some(doc) = self.backend.document() else {
-            return;
-        };
-        let overlay = Overlay {
-            painter: ui.painter().with_clip_rect(rect),
-            viewport: view.canvas.viewport,
-            rect,
-        };
-        paint_labels(&overlay, doc.project(), &view.editor, &labels);
-    }
-
     /// Fills the canvas marks for the shown page before it draws: terminal
     /// proposals and problems. Shift+P hides them (the counters stay).
     pub(super) fn update_marks(&mut self) {
@@ -561,9 +540,13 @@ impl NovoApp {
         let mut list = super::terminals::proposal_marks(&self.page_proposals(), self.wb.proposal);
         list.extend(self.problem_marks(page));
         let hidden = !self.wb.marks;
+        // Cross references are printed drawing content: they go into the
+        // page scene, like the tags, so the PDF shows them the same way.
+        let notes = self.xref_notes(page);
         if let Some(view) = self.canvas.schematic() {
             view.canvas.marks.list = list;
             view.canvas.marks.hidden = hidden;
+            view.set_notes(notes);
         }
     }
 
@@ -603,20 +586,5 @@ fn sources(app: &NovoApp) -> Sources<'_> {
         library: app.library(),
         keymap: &app.wb.keymap,
         context: app.command_context(),
-    }
-}
-
-/// Where overlays over the drawing paint, and how world millimetres map to
-/// the screen.
-pub(super) struct Overlay {
-    pub painter: egui::Painter,
-    pub viewport: novo_canvas::Viewport,
-    pub rect: egui::Rect,
-}
-
-impl Overlay {
-    pub fn to_screen(&self, x: f64, y: f64) -> egui::Pos2 {
-        let s = self.viewport.world_to_screen(Vec2::new(x as f32, y as f32));
-        self.rect.min + egui::vec2(s.x, s.y)
     }
 }

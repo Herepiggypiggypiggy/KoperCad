@@ -179,6 +179,10 @@ pub struct ModelStyle {
     pub sheet_fill: Option<Color>,
     /// Sheet outline, drawing frame and title text.
     pub frame_color: Color,
+    /// Cross-reference text next to symbols ([`SymbolNote`]).
+    pub note_color: Color,
+    /// A [`SymbolNote`] flagged as a warning.
+    pub note_warning_color: Color,
 }
 
 impl Default for ModelStyle {
@@ -192,6 +196,8 @@ impl Default for ModelStyle {
             wire_number_height: 2.0,
             sheet_fill: None,
             frame_color: Color::rgb(90, 90, 90),
+            note_color: Color::rgb(60, 90, 140),
+            note_warning_color: Color::rgb(190, 120, 20),
         }
     }
 }
@@ -314,6 +320,19 @@ pub struct ModelLayers {
 }
 
 /// The canvas scene of one model page, kept in sync with the project.
+/// Text drawn next to a symbol that the model does not hold itself, such
+/// as a cross reference (`/2.3` under a contact, a coil's contact image).
+/// It is part of the printed drawing, so it lives in the scene: the canvas
+/// and the PDF show the same text in the same place.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SymbolNote {
+    pub symbol: SymbolId,
+    /// One line per row.
+    pub lines: Vec<String>,
+    /// Draw in [`ModelStyle::note_warning_color`].
+    pub warning: bool,
+}
+
 pub struct PageScene {
     page: PageId,
     scene: Scene,
@@ -325,6 +344,8 @@ pub struct PageScene {
     /// What each drawn text is attached to, to redraw it when the text goes
     /// (a device tag text hides the symbol's own tag).
     text_hosts: HashMap<TextId, AnyId>,
+    /// Notes by symbol, kept across rebuilds; see [`Self::set_notes`].
+    notes: HashMap<SymbolId, SymbolNote>,
     pub style: ModelStyle,
 }
 
@@ -351,6 +372,7 @@ impl PageScene {
             art_cache: HashMap::new(),
             wire_junctions: HashMap::new(),
             text_hosts: HashMap::new(),
+            notes: HashMap::new(),
             style: ModelStyle::default(),
         };
         s.rebuild(project, art);
@@ -383,6 +405,48 @@ impl PageScene {
     /// The model object behind a canvas item.
     pub fn model_id(&self, item: ItemId) -> Option<AnyId> {
         self.ids.get(&item).copied()
+    }
+
+    /// Replaces the notes drawn next to symbols (cross references). Only
+    /// symbols whose note changed are redrawn, so calling this every frame
+    /// with the same notes costs a comparison. Returns whether anything
+    /// changed.
+    pub fn set_notes(
+        &mut self,
+        project: &Project,
+        notes: impl IntoIterator<Item = SymbolNote>,
+        art: &dyn SymbolArt,
+    ) -> bool {
+        let mut fresh: HashMap<SymbolId, SymbolNote> = HashMap::new();
+        for note in notes {
+            if !note.lines.iter().all(|l| l.trim().is_empty()) {
+                fresh.insert(note.symbol, note);
+            }
+        }
+        let mut touched: Vec<SymbolId> = self
+            .notes
+            .iter()
+            .filter(|(id, n)| fresh.get(id) != Some(n))
+            .map(|(id, _)| *id)
+            .collect();
+        touched.extend(
+            fresh
+                .iter()
+                .filter(|(id, n)| self.notes.get(id) != Some(n))
+                .map(|(id, _)| *id),
+        );
+        touched.sort();
+        touched.dedup();
+        self.notes = fresh;
+        for &id in &touched {
+            self.sync_symbol(project, id, art);
+        }
+        !touched.is_empty()
+    }
+
+    /// The notes currently drawn, by symbol.
+    pub fn notes(&self) -> impl Iterator<Item = &SymbolNote> {
+        self.notes.values()
     }
 
     /// Rebuilds every item, for example after loading a file or changing
@@ -739,7 +803,34 @@ impl PageScene {
                     .colored(self.style.tag_color),
             );
         }
+        if let Some(note) = self.notes.get(&id) {
+            item.labels.push(self.note_label(&item, note));
+        }
         self.put(id.into(), item);
+    }
+
+    /// A note above the top right corner of the symbol's ink, clear of its
+    /// tag, in the tag's size so both read alike.
+    fn note_label(&self, item: &Item, note: &SymbolNote) -> Label {
+        let ink = item
+            .primitives
+            .iter()
+            .fold(crate::Aabb::EMPTY, |b, p| b.union(&p.shape.bounds()));
+        let pos = if ink.is_empty() {
+            item.snap_points
+                .first()
+                .map_or(Vec2::ZERO, |s| s.pos + Vec2::new(1.0, -1.0))
+        } else {
+            Vec2::new(ink.max.x + 1.0, ink.min.y - 0.5)
+        };
+        let color = if note.warning {
+            self.style.note_warning_color
+        } else {
+            self.style.note_color
+        };
+        Label::new(pos, note.lines.join("\n"), self.style.tag_height)
+            .anchored(Anchor::BottomLeft)
+            .colored(color)
     }
 
     fn sync_junction(&mut self, project: &Project, id: JunctionId) {
@@ -1066,6 +1157,72 @@ mod tests {
         // Picking the wire on the canvas gives back the model wire.
         let hit = scene.pick(Vec2::new(100.2, 80.0), 1.0, 2.0).unwrap();
         assert_eq!(ps.model_id(hit.id), Some(AnyId::Wire(w)));
+    }
+
+    #[test]
+    fn notes_are_drawn_with_the_symbol_and_survive_edits() {
+        let (mut doc, page, k1, s1, _w) = doc();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let note = |lines: &[&str], warning| SymbolNote {
+            symbol: k1,
+            lines: lines.iter().map(|l| l.to_string()).collect(),
+            warning,
+        };
+        let labels =
+            |ps: &PageScene| -> Vec<Label> { ps.scene().get(item_id(k1)).unwrap().labels.clone() };
+        assert!(ps.set_notes(
+            doc.project(),
+            [note(&["13-14 /1.2", "23-24 /1.3"], false)],
+            &PlaceholderArt
+        ));
+        let l = labels(&ps);
+        // The tag stays first; the note follows, above the ink's top right.
+        assert_eq!(l[0].text, "-K1");
+        let n = l.last().unwrap();
+        assert_eq!(n.text, "13-14 /1.2\n23-24 /1.3");
+        assert_eq!(n.color, ps.style.note_color);
+        assert_eq!(n.anchor, Anchor::BottomLeft);
+        assert_eq!(n.height, ps.style.tag_height);
+        let ink = ps.scene().get(item_id(k1)).unwrap().primitives[0]
+            .shape
+            .bounds();
+        assert!(
+            n.pos.x > ink.max.x && n.pos.y < ink.min.y,
+            "{:?} vs {ink:?}",
+            n.pos
+        );
+        // The same notes again change nothing.
+        assert!(!ps.set_notes(
+            doc.project(),
+            [note(&["13-14 /1.2", "23-24 /1.3"], false)],
+            &PlaceholderArt
+        ));
+        // Moving the symbol carries its note along.
+        let (_, changes) = doc
+            .transact("move", |tx| {
+                tx.move_symbol(k1, MPlacement::at(Point::new(150.0, 100.0)))
+            })
+            .unwrap();
+        ps.apply(doc.project(), &changes, &PlaceholderArt);
+        let moved = labels(&ps);
+        assert_eq!(moved.last().unwrap().text, n.text);
+        assert!((moved.last().unwrap().pos.x - n.pos.x - 50.0).abs() < 1e-3);
+        // So does a full rebuild.
+        ps.rebuild(doc.project(), &PlaceholderArt);
+        assert_eq!(labels(&ps).len(), moved.len());
+        // A warning switches colour; an empty note is dropped.
+        ps.set_notes(
+            doc.project(),
+            [note(&["13-14 /1.2"], true)],
+            &PlaceholderArt,
+        );
+        assert_eq!(
+            labels(&ps).last().unwrap().color,
+            ps.style.note_warning_color
+        );
+        assert!(ps.set_notes(doc.project(), [note(&[" "], false)], &PlaceholderArt));
+        assert_eq!(labels(&ps).len(), 1);
+        assert_eq!(ps.scene().get(item_id(s1)).unwrap().labels.len(), 1);
     }
 
     #[test]
