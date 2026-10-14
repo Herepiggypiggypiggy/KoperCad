@@ -1518,6 +1518,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-checks"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-tests",
+]
+
+[[package]]
 name = "novo-core"
 version = "0.1.0"
 dependencies = [
@@ -1563,13 +1571,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-terminals"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-symbols",
+ "novo-tests",
+]
+
+[[package]]
 name = "novo-tests"
 version = "0.1.0"
 dependencies = [
+ "novo-app",
  "novo-canvas",
  "novo-core",
+ "novo-parts",
  "novo-storage",
  "novo-symbols",
+ "novo-terminals",
+ "novo-workflow",
  "serde_json",
  "tempfile",
 ]
@@ -1590,6 +1611,15 @@ dependencies = [
  "novo-core",
  "novo-symbols",
  "novo-tests",
+]
+
+[[package]]
+name = "novo-xref"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-symbols",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

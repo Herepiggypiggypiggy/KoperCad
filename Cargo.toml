@@ -9,15 +9,35 @@ license = "UNLICENSED"
 repository = "https://github.com/Herepiggypiggypiggy/NovoElectric"
 
 [workspace.dependencies]
-novo-core = { path = "crates/novo-core" }
-novo-canvas = { path = "crates/novo-canvas" }
-novo-symbols = { path = "crates/novo-symbols" }
-novo-storage = { path = "crates/novo-storage" }
-novo-sim = { path = "crates/novo-sim" }
-novo-parts = { path = "crates/novo-parts" }
-novo-workflow = { path = "crates/novo-workflow" }
-novo-theme = { path = "crates/novo-theme" }
+# Every roadmap crate is registered here once, in alphabetical order, so a
+# pull request that adds a crate never edits these lines (cargo ignores a
+# path entry until some crate uses it). Add external crates below.
+novo-ai = { path = "crates/novo-ai" }
+novo-app = { path = "crates/novo-app" }
 novo-cables = { path = "crates/novo-cables" }
+novo-canvas = { path = "crates/novo-canvas" }
+novo-checks = { path = "crates/novo-checks" }
+novo-cli = { path = "crates/novo-cli" }
+novo-core = { path = "crates/novo-core" }
+novo-editor = { path = "crates/novo-editor" }
+novo-interop = { path = "crates/novo-interop" }
+novo-layout = { path = "crates/novo-layout" }
+novo-parts = { path = "crates/novo-parts" }
+novo-pdf = { path = "crates/novo-pdf" }
+novo-plc = { path = "crates/novo-plc" }
+novo-py = { path = "crates/novo-py" }
+novo-reports = { path = "crates/novo-reports" }
+novo-revisions = { path = "crates/novo-revisions" }
+novo-routing = { path = "crates/novo-routing" }
+novo-sim = { path = "crates/novo-sim" }
+novo-storage = { path = "crates/novo-storage" }
+novo-symbols = { path = "crates/novo-symbols" }
+novo-terminals = { path = "crates/novo-terminals" }
+novo-tests = { path = "crates/novo-tests" }
+novo-theme = { path = "crates/novo-theme" }
+novo-workflow = { path = "crates/novo-workflow" }
+novo-xref = { path = "crates/novo-xref" }
+
 bytemuck = { version = "1", features = ["derive"] }
 egui = "0.36"
 egui-wgpu = "0.36"
