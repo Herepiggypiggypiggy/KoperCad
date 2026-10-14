@@ -30,3 +30,6 @@
 2026-10-14 18:26 UTC Opened #45 (WS-02: SetText, Page.structure, Location::qualified; head b0ad1b8). Sent to reviewer.
 2026-10-14 18:30 UTC Reviewer READY on #34 baf6e72, #28 a3302fc, #29 c3f4d7f (local fmt/clippy/tests on main ec06390). Merged #34 (26f46de), #28 (a5530e2), #29 (5a73f86).
 2026-10-14 18:32 UTC Merged main into #36 (crate rows: kept both) and #42 (clean); local checks running before push.
+2026-10-14 18:33 UTC #30 fix pushed (ac067ff: renumber/rename under Refuse via temporary names); #31 fix pushed (caf760c: linked non-contact becomes main, DeviceHasMain); both sent to reviewer.
+2026-10-14 18:35 UTC Opened #46 (WS-01 Workbench window, graphite theme wiring, no save prompts, first save to Documents\NovoElectric; head 73e8194, rebuilt on main from WS-01's local patches). Sent to reviewer. Started WS-03 marks + page frame PR work.
+2026-10-14 18:37 UTC Reviewer: #42 READY (merged f6ee2f1); #36 CHANGES NEEDED (property_label panics on U+212A keys). Fixed (0f36bb3, ASCII lowering + test), merged main; checks running.
