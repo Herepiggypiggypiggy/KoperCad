@@ -3,12 +3,13 @@
 use crate::entity::{
     Cable, CableCore, Device, DeviceKind, Endpoint, Junction, JunctionStyle, Page, Part, Pin,
     Potential, PotentialKind, PotentialSpec, ProjectInfo, SymbolInstance, SymbolKey, SymbolRole,
-    Terminal, Value, Wire,
+    Terminal, Text, TextContent, TextPlacement, Value, Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::{Placement, Point};
 use crate::id::{
-    AnyId, CableId, DeviceId, JunctionId, PageId, PartId, PotentialId, SymbolId, TerminalId, WireId,
+    AnyId, CableId, DeviceId, JunctionId, PageId, PartId, PotentialId, SymbolId, TerminalId,
+    TextId, WireId,
 };
 use crate::project::Project;
 use crate::record::{Entity, Op, Record};
@@ -278,6 +279,32 @@ impl<'p> Tx<'p> {
             position,
             style: JunctionStyle::Dot,
         })
+    }
+
+    /// Adds a text. Attached to a symbol, junction or wire, it moves and is
+    /// deleted with it; `placement.offset` is then relative to that object.
+    pub fn add_text(
+        &mut self,
+        page: PageId,
+        content: TextContent,
+        placement: TextPlacement,
+        attached_to: Option<AnyId>,
+    ) -> Result<TextId> {
+        self.insert(|id| Text {
+            id,
+            page,
+            attached_to,
+            content,
+            placement,
+            height_mm: Text::DEFAULT_HEIGHT_MM,
+            properties: Default::default(),
+        })
+    }
+
+    /// Moves, rotates or re-anchors a text without touching what it is
+    /// attached to.
+    pub fn move_text(&mut self, text: TextId, placement: TextPlacement) -> Result<()> {
+        self.update::<Text>(text, |t| t.placement = placement)
     }
 
     /// Sets how a junction is drawn.

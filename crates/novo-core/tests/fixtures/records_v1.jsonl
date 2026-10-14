@@ -18,6 +18,8 @@
 {"record":"wire","id":18,"page":1,"from":{"type":"pin","symbol":10,"pin":2},"to":{"type":"pin","symbol":12,"pin":0},"route":[],"number":null,"color":null,"cross_section_mm2":null,"properties":{}}
 {"record":"wire","id":19,"page":2,"from":{"type":"pin","symbol":13,"pin":0},"to":{"type":"pin","symbol":11,"pin":0},"route":[],"number":null,"color":null,"cross_section_mm2":null,"properties":{}}
 {"record":"cable","id":20,"tag":"+CAB1-W1","description":"Control cable","part":3,"cores":[{"name":"1","cross_section_mm2":1.5,"shield":false,"wire":19},{"name":"SH","cross_section_mm2":null,"shield":true,"wire":null}],"length_m":12.5,"properties":{"route":"tray 3"}}
+{"record":"text","id":21,"page":1,"attached_to":{"kind":"symbol","id":10},"content":{"type":"device_tag"},"placement":{"offset":{"x":6.0,"y":-2.0},"rotation":"90","anchor":"middle_left"},"height_mm":3.5,"properties":{}}
+{"record":"text","id":22,"page":2,"content":{"type":"literal","text":"Control circuit"},"placement":{"offset":{"x":0.0,"y":0.0},"rotation":"0","anchor":"bottom_left"},"height_mm":2.5,"properties":{}}
 {"op":"insert","record":{"record":"page","id":1,"name":"1","title":"","kind":{"type":"schematic"},"format":{"size":"A3","landscape":true,"columns":10},"properties":{}}}
 {"op":"remove","record":{"record":"page","id":1,"name":"1","title":"","kind":{"type":"schematic"},"format":{"size":"A3","landscape":true,"columns":10},"properties":{}}}
 {"op":"update","before":{"record":"page","id":1,"name":"1","title":"","kind":{"type":"schematic"},"format":{"size":"A3","landscape":true,"columns":10},"properties":{}},"after":{"record":"page","id":1,"name":"1a","title":"","kind":{"type":"schematic"},"format":{"size":"A3","landscape":true,"columns":10},"properties":{}}}

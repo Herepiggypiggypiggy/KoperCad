@@ -10,12 +10,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::entity::{
     CableCore, DeviceKind, Endpoint, JunctionStyle, PageFormat, PageKind, Pin, PotentialKind,
-    PotentialSpec, ProjectInfo, SymbolKey, SymbolRole, Value,
+    PotentialSpec, ProjectInfo, SymbolKey, SymbolRole, TextContent, TextPlacement, Value,
 };
 use crate::error::Result;
 use crate::geom::{Placement, Point};
 use crate::id::{
-    AnyId, CableId, DeviceId, JunctionId, PageId, PartId, PotentialId, SymbolId, WireId,
+    AnyId, CableId, DeviceId, JunctionId, PageId, PartId, PotentialId, SymbolId, TextId, WireId,
 };
 use crate::record::Record;
 use crate::tag::DeviceTag;
@@ -74,6 +74,20 @@ pub enum Command {
     AddJunction {
         page: PageId,
         position: Point,
+    },
+    /// Adds a text or label; see [`Tx::add_text`].
+    AddText {
+        page: PageId,
+        content: TextContent,
+        #[serde(default)]
+        placement: TextPlacement,
+        #[serde(default)]
+        attached_to: Option<AnyId>,
+    },
+    /// Moves, rotates or re-anchors a text on its own.
+    MoveText {
+        text: TextId,
+        placement: TextPlacement,
     },
     SetJunctionStyle {
         junction: JunctionId,
@@ -180,6 +194,8 @@ impl Command {
             Command::MoveSymbol { .. } => "Move symbol".into(),
             Command::SetRole { .. } => "Cross reference".into(),
             Command::AddJunction { .. } => "Add junction".into(),
+            Command::AddText { .. } => "Add text".into(),
+            Command::MoveText { .. } => "Move text".into(),
             Command::SetJunctionStyle { .. } | Command::CycleJunctionStyle { .. } => {
                 "Junction style".into()
             }
@@ -269,6 +285,16 @@ impl Tx<'_> {
                 return Ok(Vec::new());
             }
             Command::AddJunction { page, position } => self.add_junction(page, position)?.into(),
+            Command::AddText {
+                page,
+                content,
+                placement,
+                attached_to,
+            } => self.add_text(page, content, placement, attached_to)?.into(),
+            Command::MoveText { text, placement } => {
+                self.move_text(text, placement)?;
+                return Ok(Vec::new());
+            }
             Command::SetJunctionStyle { junction, style } => {
                 self.set_junction_style(junction, style)?;
                 return Ok(Vec::new());

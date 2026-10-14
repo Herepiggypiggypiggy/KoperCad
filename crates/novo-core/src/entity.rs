@@ -8,9 +8,10 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::geom::{Direction, Placement, Point};
+use crate::geom::{Direction, Placement, Point, Rotation};
 use crate::id::{
-    CableId, DeviceId, JunctionId, PageId, PartId, PotentialId, SymbolId, TerminalId, WireId,
+    AnyId, CableId, DeviceId, JunctionId, PageId, PartId, PotentialId, SymbolId, TerminalId,
+    TextId, WireId,
 };
 use crate::tag::DeviceTag;
 
@@ -504,6 +505,87 @@ impl JunctionStyle {
             JunctionStyle::CornerUpRight => &[Up, Right],
         }
     }
+}
+
+/// A text on a page: free text, or a label that shows a value of the object
+/// it is attached to (a symbol's device tag, a wire's number) and moves with
+/// it. Labels are records of their own so they can be moved and rotated
+/// independently.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Text {
+    pub id: TextId,
+    pub page: PageId,
+    /// The symbol, junction or wire this text belongs to, on the same page.
+    /// The text moves with it and is deleted with it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attached_to: Option<AnyId>,
+    pub content: TextContent,
+    #[serde(default)]
+    pub placement: TextPlacement,
+    /// Character height in mm.
+    #[serde(default = "default_text_height")]
+    pub height_mm: f64,
+    #[serde(default)]
+    pub properties: Properties,
+}
+
+fn default_text_height() -> f64 {
+    Text::DEFAULT_HEIGHT_MM
+}
+
+impl Text {
+    pub const DEFAULT_HEIGHT_MM: f64 = 2.5;
+}
+
+/// What a text shows. Everything but `Literal` is read from the object the
+/// text is attached to, so it never goes stale; see
+/// [`Project::text_string`](crate::Project::text_string).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum TextContent {
+    Literal {
+        text: String,
+    },
+    /// The device tag of the attached symbol's device (`-K1`), or the
+    /// designation of its terminal (`-X1:3`).
+    DeviceTag,
+    /// The attached wire's number.
+    WireNumber,
+    /// The name of the potential the attached wire defines.
+    Potential,
+    /// A property of the attached object, or of its device for a symbol.
+    Property {
+        key: String,
+    },
+}
+
+/// Where a text sits: an offset from its attached object's origin (or from
+/// the page origin when free), a rotation, and which point of the text box
+/// the offset names. The offset does not turn with a rotated symbol, so
+/// labels stay readable.
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+pub struct TextPlacement {
+    pub offset: Point,
+    #[serde(default)]
+    pub rotation: Rotation,
+    #[serde(default)]
+    pub anchor: TextAnchor,
+}
+
+/// The point of a text box that sits at the text's position.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TextAnchor {
+    TopLeft,
+    TopCenter,
+    TopRight,
+    MiddleLeft,
+    MiddleCenter,
+    MiddleRight,
+    #[default]
+    BottomLeft,
+    BottomCenter,
+    BottomRight,
 }
 
 /// A wire drawn between two endpoints on the same page.

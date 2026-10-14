@@ -5,14 +5,14 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::entity::{
     Cable, Device, DeviceKind, Endpoint, Junction, Page, Part, PinRef, Potential, ProjectInfo,
-    SymbolInstance, SymbolRole, Terminal, Wire,
+    SymbolInstance, SymbolRole, Terminal, Text, Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::Point;
 use crate::graph::Netlist;
 use crate::id::{
     AnyId, CableId, DeviceId, EntityKind, JunctionId, PageId, PartId, PotentialId, SymbolId,
-    TerminalId, WireId,
+    TerminalId, TextId, WireId,
 };
 use crate::record::{Entity, Op, Record, Transaction, sealed::Token};
 use crate::tag::DeviceTag;
@@ -33,6 +33,7 @@ pub struct Project {
     pub(crate) devices: BTreeMap<DeviceId, Device>,
     pub(crate) symbols: BTreeMap<SymbolId, SymbolInstance>,
     pub(crate) junctions: BTreeMap<JunctionId, Junction>,
+    pub(crate) texts: BTreeMap<TextId, Text>,
     pub(crate) wires: BTreeMap<WireId, Wire>,
     pub(crate) potentials: BTreeMap<PotentialId, Potential>,
     pub(crate) terminals: BTreeMap<TerminalId, Terminal>,
@@ -95,6 +96,7 @@ impl Index {
 pub struct PageContents {
     pub symbols: Vec<SymbolId>,
     pub junctions: Vec<JunctionId>,
+    pub texts: Vec<TextId>,
     pub wires: Vec<WireId>,
 }
 
@@ -272,6 +274,7 @@ impl Project {
             Record::Device(r) => put(self, r),
             Record::Symbol(r) => put(self, r),
             Record::Junction(r) => put(self, r),
+            Record::Text(r) => put(self, r),
             Record::Wire(r) => put(self, r),
             Record::Potential(r) => put(self, r),
             Record::Terminal(r) => put(self, r),
@@ -289,6 +292,7 @@ impl Project {
             AnyId::Device(id) => take::<Device>(self, id),
             AnyId::Symbol(id) => take::<SymbolInstance>(self, id),
             AnyId::Junction(id) => take::<Junction>(self, id),
+            AnyId::Text(id) => take::<Text>(self, id),
             AnyId::Wire(id) => take::<Wire>(self, id),
             AnyId::Potential(id) => take::<Potential>(self, id),
             AnyId::Terminal(id) => take::<Terminal>(self, id),
@@ -440,7 +444,51 @@ impl Project {
                     }
                 }
             }
+            Record::Text(text) => {
+                if text.height_mm <= 0.0 {
+                    return Err(ModelError::InvalidValue {
+                        id: text.id.into(),
+                        field: "height_mm",
+                    });
+                }
+                if let Some(target) = text.attached_to {
+                    if !matches!(
+                        target,
+                        AnyId::Symbol(_) | AnyId::Junction(_) | AnyId::Wire(_)
+                    ) {
+                        return Err(ModelError::InvalidAttachment {
+                            text: text.id,
+                            target,
+                        });
+                    }
+                    let page = self.record(target).and_then(|r| r.page());
+                    if let Some(page) = page
+                        && page != text.page
+                    {
+                        return Err(ModelError::WrongPage {
+                            id: text.id.into(),
+                            expected: page,
+                            found: text.page,
+                        });
+                    }
+                }
+            }
             Record::Page(_) | Record::Potential(_) | Record::Part(_) => {}
+        }
+        // Texts attached to this object must stay on its page.
+        if current.is_some()
+            && let Some(page) = record.page()
+            && !matches!(record, Record::Page(_))
+            && let Some(text) = referrers().find_map(|r| match r {
+                AnyId::Text(t) => self.texts.get(&t).filter(|t| t.page != page),
+                _ => None,
+            })
+        {
+            return Err(ModelError::WrongPage {
+                id: record.id(),
+                expected: text.page,
+                found: page,
+            });
         }
         Ok(())
     }
@@ -478,6 +526,7 @@ impl Project {
             AnyId::Device(id) => self.devices.contains_key(&id),
             AnyId::Symbol(id) => self.symbols.contains_key(&id),
             AnyId::Junction(id) => self.junctions.contains_key(&id),
+            AnyId::Text(id) => self.texts.contains_key(&id),
             AnyId::Wire(id) => self.wires.contains_key(&id),
             AnyId::Potential(id) => self.potentials.contains_key(&id),
             AnyId::Terminal(id) => self.terminals.contains_key(&id),
@@ -493,6 +542,7 @@ impl Project {
             AnyId::Device(id) => self.devices.get(&id).cloned().map(Record::Device),
             AnyId::Symbol(id) => self.symbols.get(&id).cloned().map(Record::Symbol),
             AnyId::Junction(id) => self.junctions.get(&id).cloned().map(Record::Junction),
+            AnyId::Text(id) => self.texts.get(&id).cloned().map(Record::Text),
             AnyId::Wire(id) => self.wires.get(&id).cloned().map(Record::Wire),
             AnyId::Potential(id) => self.potentials.get(&id).cloned().map(Record::Potential),
             AnyId::Terminal(id) => self.terminals.get(&id).cloned().map(Record::Terminal),
@@ -515,6 +565,7 @@ impl Project {
         let junctions = self.junctions.values().cloned().map(Record::Junction);
         let wires = self.wires.values().cloned().map(Record::Wire);
         let cables = self.cables.values().cloned().map(Record::Cable);
+        let texts = self.texts.values().cloned().map(Record::Text);
         parts
             .chain(potentials)
             .chain(pages)
@@ -524,6 +575,7 @@ impl Project {
             .chain(junctions)
             .chain(wires)
             .chain(cables)
+            .chain(texts)
     }
 
     /// Rebuilds a project from stored records, in any order, checking every
@@ -583,6 +635,12 @@ impl Project {
     pub fn junction(&self, id: JunctionId) -> Option<&Junction> {
         self.junctions.get(&id)
     }
+    pub fn text(&self, id: TextId) -> Option<&Text> {
+        self.texts.get(&id)
+    }
+    pub fn texts(&self) -> impl Iterator<Item = &Text> {
+        self.texts.values()
+    }
     pub fn junctions(&self) -> impl Iterator<Item = &Junction> {
         self.junctions.values()
     }
@@ -633,6 +691,7 @@ impl Project {
             match id {
                 AnyId::Symbol(s) => contents.symbols.push(s),
                 AnyId::Junction(j) => contents.junctions.push(j),
+                AnyId::Text(t) => contents.texts.push(t),
                 AnyId::Wire(w) => contents.wires.push(w),
                 _ => {}
             }

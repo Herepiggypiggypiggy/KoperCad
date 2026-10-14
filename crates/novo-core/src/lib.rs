@@ -71,6 +71,7 @@ mod project;
 mod record;
 mod search;
 mod tag;
+mod text;
 mod tx;
 mod xref;
 
@@ -80,14 +81,14 @@ pub use entity::{
     Cable, CableCore, Device, DeviceKind, Endpoint, Junction, JunctionStyle, Page, PageFormat,
     PageKind, PaperSize, Part, Pin, PinRef, Potential, PotentialKind, PotentialSet, PotentialSpec,
     ProjectInfo, ProjectRules, Properties, SameDesignation, SymbolInstance, SymbolKey, SymbolRole,
-    Terminal, TerminalKind, Value, Wire,
+    Terminal, TerminalKind, Text, TextAnchor, TextContent, TextPlacement, Value, Wire,
 };
 pub use error::{ModelError, Result};
 pub use geom::{Direction, Placement, Point, Rotation};
 pub use graph::{Net, NetId, Netlist};
 pub use id::{
     AnyId, CableId, DeviceId, EntityKind, JunctionId, PageId, PartId, PotentialId, SymbolId,
-    TerminalId, WireId,
+    TerminalId, TextId, WireId,
 };
 pub use json::JSON_FORMAT_VERSION;
 pub use project::{PageContents, Project, natural_cmp};

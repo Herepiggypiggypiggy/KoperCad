@@ -11,7 +11,7 @@
       "revision": 3
     }
   },
-  "next_id": 21,
+  "next_id": 23,
   "parts": [
     {
       "id": 3,
@@ -453,6 +453,47 @@
       "properties": {
         "route": "tray 3"
       }
+    }
+  ],
+  "texts": [
+    {
+      "id": 21,
+      "page": 1,
+      "attached_to": {
+        "kind": "symbol",
+        "id": 10
+      },
+      "content": {
+        "type": "device_tag"
+      },
+      "placement": {
+        "offset": {
+          "x": 6.0,
+          "y": -2.0
+        },
+        "rotation": "90",
+        "anchor": "middle_left"
+      },
+      "height_mm": 3.5,
+      "properties": {}
+    },
+    {
+      "id": 22,
+      "page": 2,
+      "content": {
+        "type": "literal",
+        "text": "Control circuit"
+      },
+      "placement": {
+        "offset": {
+          "x": 0.0,
+          "y": 0.0
+        },
+        "rotation": "0",
+        "anchor": "bottom_left"
+      },
+      "height_mm": 2.5,
+      "properties": {}
     }
   ]
 }

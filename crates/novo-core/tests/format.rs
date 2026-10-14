@@ -174,6 +174,25 @@ fn build() -> Project {
             c.properties.insert("route".into(), "tray 3".into());
         })?;
         tx.assign_core(cable, 0, Some(w4))?;
+        let label = tx.add_text(
+            power,
+            TextContent::DeviceTag,
+            TextPlacement {
+                offset: Point::new(6.0, -2.0),
+                rotation: Rotation::R90,
+                anchor: TextAnchor::MiddleLeft,
+            },
+            Some(contact.into()),
+        )?;
+        tx.update::<Text>(label, |t| t.height_mm = 3.5)?;
+        tx.add_text(
+            control,
+            TextContent::Literal {
+                text: "Control circuit".into(),
+            },
+            TextPlacement::default(),
+            None,
+        )?;
         Ok(())
     })
     .unwrap();
