@@ -231,7 +231,8 @@ pub enum SymbolRole {
     /// One or more terminals of a terminal strip. A single-level terminal
     /// has one entry. A multi-level terminal block lists one terminal per
     /// level: `terminals[i]` owns the pins of `bridges[i]`, so the levels stay
-    /// separate nets. With one terminal and no bridges, every pin belongs to it.
+    /// separate nets. A single terminal owns every pin and allows at most
+    /// one bridge group; more groups need one terminal each.
     Terminal { terminals: Vec<TerminalId> },
     /// An interruption point (off-page connector). All interruption points
     /// with the same name are electrically one node.
@@ -259,6 +260,15 @@ pub struct SymbolInstance {
     /// contact conducts is simulation state, not connectivity.
     #[serde(default)]
     pub bridges: Vec<Vec<u16>>,
+    /// Groups of pin indices a potential passes through without them being
+    /// connected: the switched poles of contacts, breakers and fuses
+    /// (novo-symbols' `Symbol::pass_through()` minus its bridges). `L1`
+    /// stays `L1` after a contactor, while coils, lamps and motors end it.
+    /// One group per contact path: a changeover is `[[common, break],
+    /// [common, make]]`, which keeps potentials on its break and make sides
+    /// apart.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pass_through: Vec<Vec<u16>>,
     #[serde(default)]
     pub properties: Properties,
 }
@@ -286,7 +296,7 @@ impl SymbolInstance {
             return None;
         }
         match terminals.as_slice() {
-            [single] if self.bridges.is_empty() => Some(*single),
+            [single] => Some(*single),
             _ => self
                 .bridges
                 .iter()
