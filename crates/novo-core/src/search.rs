@@ -1,7 +1,5 @@
 //! Finding devices, cables, terminals and pages by tag, designation or name.
 
-use std::cmp::Ordering;
-
 use crate::id::AnyId;
 use crate::project::{Project, natural_cmp};
 
@@ -94,7 +92,7 @@ impl Project {
             a.quality
                 .cmp(&b.quality)
                 .then_with(|| natural_cmp(&a.text, &b.text))
-                .then_with(|| a.id.cmp(&b.id).then(Ordering::Equal))
+                .then_with(|| a.id.cmp(&b.id))
         });
         hits
     }

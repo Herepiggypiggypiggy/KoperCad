@@ -9,7 +9,7 @@
 //! - a jumper between terminals of one strip (same `Terminal::jumper` group),
 //! - interruption points with the same name,
 //! - terminals sharing a designation, when the project rule
-//!   [`SameDesignation::Join`] is on.
+//!   [`SameName::Join`] is on.
 //!
 //! Contacts never join nets: whether a contact conducts is simulation state.
 //! A potential is defined on a net by a potential definition point
@@ -20,7 +20,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use crate::entity::{Endpoint, SameDesignation, SymbolRole};
+use crate::entity::{Endpoint, SameName, SymbolRole};
 use crate::id::{DeviceId, PageId, PotentialId, SymbolId, WireId};
 use crate::project::Project;
 
@@ -249,7 +249,7 @@ impl Netlist {
             uf.union_all(nodes.iter().copied());
         }
         // Project rule: terminals sharing a designation are one point.
-        if project.info().rules.same_designation_terminals == SameDesignation::Join {
+        if project.info().rules.terminals.same_name == SameName::Join {
             for group in project.terminal_designation_groups() {
                 uf.union_all(
                     group

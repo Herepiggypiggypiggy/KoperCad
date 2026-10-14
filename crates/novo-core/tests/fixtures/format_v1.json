@@ -4,7 +4,10 @@
     "name": "Format fixture",
     "description": "Every record type and optional field",
     "rules": {
-      "same_designation_terminals": "join"
+      "terminals": {
+        "same_name": "join",
+        "join_link": "connector"
+      }
     },
     "properties": {
       "customer": "ACME",

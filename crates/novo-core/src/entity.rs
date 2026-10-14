@@ -69,33 +69,73 @@ pub struct ProjectInfo {
     pub properties: Properties,
 }
 
-/// Explicit, inspectable project rules. Nothing here happens unless the
-/// project turns it on, and each rule has a query that shows its effect.
+/// Explicit, inspectable project rules. A file without an entry has the
+/// rule off, so loading never changes what a project means; new projects
+/// start from [`ProjectRules::recommended`].
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ProjectRules {
-    /// What terminals with the same designation on one strip (two `-X2:1`)
-    /// mean. See [`Project::terminal_designation_groups`](crate::Project::terminal_designation_groups).
-    #[serde(default)]
-    pub same_designation_terminals: SameDesignation,
+    #[serde(default, skip_serializing_if = "TerminalRules::is_off")]
+    pub terminals: TerminalRules,
 }
 
 impl ProjectRules {
+    /// The rules a new project starts with: terminals sharing a name are
+    /// joined with a connector (WORKFLOW.md J5).
+    pub fn recommended() -> Self {
+        ProjectRules {
+            terminals: TerminalRules {
+                same_name: SameName::Join,
+                join_link: JoinLink::Connector,
+            },
+        }
+    }
+
     pub fn is_default(&self) -> bool {
         *self == ProjectRules::default()
     }
 }
 
-/// How terminals that share a designation are treated.
+/// What terminals with the same name and level on one strip (two `-X2:1`)
+/// mean. See [`Project::terminal_designation_groups`](crate::Project::terminal_designation_groups)
+/// for the terminals a rule applies to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub struct TerminalRules {
+    #[serde(default)]
+    pub same_name: SameName,
+    /// How the clamps of a joined terminal are linked (bill of materials,
+    /// terminal diagrams). Only meaningful with [`SameName::Join`].
+    #[serde(default)]
+    pub join_link: JoinLink,
+}
+
+impl TerminalRules {
+    pub fn is_off(&self) -> bool {
+        *self == TerminalRules::default()
+    }
+}
+
+/// How terminals that share a name are treated.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum SameDesignation {
-    /// Separate terminals that happen to share a name; listed as a design
-    /// check finding.
+pub enum SameName {
+    /// No rule: separate terminals that happen to share a name, listed as a
+    /// design check finding. What files without a rule load as.
     #[default]
-    Separate,
-    /// One electrical point, built from several clamps (1-in/1-out clamps
-    /// joined by a connector): the netlist joins them like a jumper.
+    Off,
+    /// One electrical point built from several clamps (1-in/1-out clamps
+    /// linked by [`JoinLink`]): the netlist joins them like a jumper.
     Join,
+    /// A second terminal with a name already on the strip is refused.
+    Refuse,
+}
+
+/// What links the clamps of a joined terminal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum JoinLink {
+    #[default]
+    Connector,
+    Jumper,
 }
 
 /// Standard paper sizes.

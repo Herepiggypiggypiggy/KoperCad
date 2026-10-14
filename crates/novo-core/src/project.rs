@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::entity::{
     Cable, Device, DeviceKind, Endpoint, Junction, Page, Part, PinRef, Potential, ProjectInfo,
-    SymbolInstance, SymbolRole, Terminal, Text, Wire,
+    SameName, SymbolInstance, SymbolRole, Terminal, Text, Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::Point;
@@ -134,11 +134,13 @@ pub fn natural_cmp(a: &str, b: &str) -> Ordering {
 }
 
 impl Project {
-    /// An empty project.
+    /// A new, empty project with the recommended rules
+    /// ([`ProjectRules::recommended`](crate::ProjectRules::recommended)).
     pub fn new(name: impl Into<String>) -> Self {
         Project {
             info: ProjectInfo {
                 name: name.into(),
+                rules: crate::entity::ProjectRules::recommended(),
                 ..ProjectInfo::default()
             },
             next_id: 1,
@@ -258,6 +260,11 @@ impl Project {
                 }
                 if !crate::record::properties_finite(&after.properties) {
                     return Err(ModelError::NonFiniteInfo);
+                }
+                if after.rules.terminals.same_name == SameName::Refuse
+                    && let Some(group) = self.terminal_designation_groups().first()
+                {
+                    return Err(ModelError::DuplicateTerminal(group[1]));
                 }
                 self.info = after.clone();
             }
@@ -419,6 +426,18 @@ impl Project {
             Record::Terminal(terminal) => {
                 if self.devices[&terminal.strip].kind != DeviceKind::TerminalStrip {
                     return Err(ModelError::NotATerminalStrip(terminal.strip));
+                }
+                if self.info.rules.terminals.same_name == SameName::Refuse
+                    && self.referrers(terminal.strip).any(|id| match id {
+                        AnyId::Terminal(t) => self.terminals.get(&t).is_some_and(|other| {
+                            other.id != terminal.id
+                                && other.name == terminal.name
+                                && other.level == terminal.level
+                        }),
+                        _ => false,
+                    })
+                {
+                    return Err(ModelError::DuplicateTerminal(terminal.id));
                 }
             }
             Record::Device(device) => {
@@ -730,8 +749,9 @@ impl Project {
     /// Groups of two or more terminals on one strip with the same name and
     /// level (two `-X2:1` on level 1), each in strip order, groups by strip,
     /// name and level. Levels of a multi-level terminal may share a name and
-    /// are never grouped. Under [`SameDesignation::Separate`](crate::SameDesignation)
-    /// these are design check findings; under `Join` each group is one point.
+    /// are never grouped. With [`SameName::Off`](crate::SameName) these are
+    /// design check findings; under `Join` each group is one point, and
+    /// `Refuse` keeps the list empty.
     pub fn terminal_designation_groups(&self) -> Vec<Vec<TerminalId>> {
         let mut by_name: BTreeMap<(DeviceId, &str, u8), Vec<&Terminal>> = BTreeMap::new();
         for terminal in self.terminals.values() {
