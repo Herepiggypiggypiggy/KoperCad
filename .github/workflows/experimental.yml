@@ -81,11 +81,16 @@ jobs:
           echo "main $(git rev-parse --short HEAD)" > merged.txt
           cargo build --release -p novo-app
 
+      - name: Build canvas stress demo (for the GPU check on real hardware)
+        continue-on-error: true
+        run: cargo build --release -p novo-canvas --example demo
+
       - name: Package
         run: |
           stamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           mkdir -p dist out
           cp target/release/novoelectric.exe dist/
+          if [ -f target/release/examples/demo.exe ]; then cp target/release/examples/demo.exe dist/canvas-demo.exe; fi
           {
             echo "NovoElectric experimental build $stamp"
             echo
