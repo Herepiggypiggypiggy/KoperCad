@@ -4,7 +4,7 @@ Updated: see PROGRESS.md last line.
 
 ## State
 - Repo: github.com/Herepiggypiggypiggy/NovoElectric. Branch `claude/ws12-cables` (from main 9fa18ed).
-- PR: see PROGRESS.md (number and head SHA are logged after each push).
+- PR #54 (https://github.com/Herepiggypiggypiggy/NovoElectric/pull/54); latest head SHA in PROGRESS.md and `git log`.
 - Review: head SHA sent to the main reviewer session_01XEdxpvQFh4HWmurh72tKwp and the coordinator session_01DZ68tTULUv7Uhe8ecKbC47.
 - GitHub Actions is not running jobs: local fmt/clippy/test are the CI signal.
 
