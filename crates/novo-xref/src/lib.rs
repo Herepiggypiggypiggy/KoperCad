@@ -14,13 +14,19 @@
 //!   jump history.
 //! - [`XrefIndex::highlight`]: what selecting a coil lights up on its page,
 //!   and the status bar line for the rest.
-//! - [`link_command`]: right click, "Link cross reference", click the
-//!   partner. Returns a model [`Command`](novo_core::Command), so it is one
-//!   undo step and scripts can do the same.
-//! - [`XrefIndex::find_tag`]: every place a typed tag occurs.
+//! - [`link_command`]: "Link cross reference", then click the partner.
+//!   Returns a model [`Command`](novo_core::Command) (`SetRole`), so it is
+//!   one undo step and scripts can do the same.
+//! - [`XrefAction::for_symbol`]: the actions a selection offers, one list
+//!   for the context menu and the command bar.
+//! - [`XrefIndex::find`]: every place a typed tag occurs, through
+//!   [`Project::search`](novo_core::Project::search).
+//! - [`XrefIndex::issues`]: contacts without a coil, more contacts drawn
+//!   than the device has, lone interruption points (for WS-14).
 //!
-//! Locations are `page.column`; [`PageGrid`] divides each page into
-//! columns (10 by default, see the `xref.*` page properties).
+//! Locations and reading order come from the model
+//! ([`Project::location_of`](novo_core::Project::location_of),
+//! [`PageFormat::columns`](novo_core::PageFormat::columns)).
 //!
 //! ```
 //! use novo_core::{DeviceTag, Document, Pin, Placement, Point, SymbolRole};
@@ -48,17 +54,16 @@
 //! # Ok::<(), novo_core::ModelError>(())
 //! ```
 
+mod actions;
 mod function;
-mod grid;
 mod index;
 mod link;
 mod nav;
 
+pub use actions::XrefAction;
 pub use function::{ContactKind, FromKey, Functions};
-pub use grid::{
-    COLUMNS_PROPERTY, DEFAULT_COLUMNS, Location, MARGIN_LEFT_PROPERTY, MARGIN_RIGHT_PROPERTY,
-    PageGrid,
+pub use index::{
+    Highlight, Issue, Label, LiveXref, Owner, Reference, XrefIndex, contact_limit_property,
 };
-pub use index::{Highlight, Issue, Label, LiveXref, Owner, Reference, XrefIndex};
 pub use link::{LINK_LABEL, LinkError, can_link, link_command};
 pub use nav::{Go, JumpHistory, Navigator, Place};

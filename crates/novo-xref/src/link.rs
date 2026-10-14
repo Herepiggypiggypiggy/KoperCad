@@ -112,15 +112,25 @@ pub fn link_command(
     };
     let target = target.ok_or(LinkError::NoDevice)?;
 
-    let mut moved = aux.clone();
-    moved.role = SymbolRole::Device {
+    let role = SymbolRole::Device {
         device: target,
         main: false,
     };
-    renumber_if_clashing(project, functions, &mut moved, target);
-    let mut commands = vec![Command::Replace {
-        record: Record::Symbol(moved),
-    }];
+    let mut moved = aux.clone();
+    moved.role = role.clone();
+    // A plain SetRole, unless the contact numbers had to change too.
+    let mut commands = vec![
+        if renumber_if_clashing(project, functions, &mut moved, target) {
+            Command::Replace {
+                record: Record::Symbol(moved),
+            }
+        } else {
+            Command::SetRole {
+                symbol: aux.id,
+                role,
+            }
+        },
+    ];
     if let SymbolRole::Device { device: old, .. } = aux.role
         && is_disposable(project, old, aux.id)
     {
@@ -147,18 +157,14 @@ fn link_interruptions(
             Err(LinkError::AlreadyLinked)
         };
     }
-    let (mut renamed, name) = if nb.is_empty() {
-        (b.clone(), na)
-    } else {
-        (a.clone(), nb)
-    };
-    renamed.role = SymbolRole::Interruption {
-        name: name.to_owned(),
-    };
+    let (renamed, name) = if nb.is_empty() { (b, na) } else { (a, nb) };
     Ok(Command::Batch {
         label: LINK_LABEL.into(),
-        commands: vec![Command::Replace {
-            record: Record::Symbol(renamed),
+        commands: vec![Command::SetRole {
+            symbol: renamed.id,
+            role: SymbolRole::Interruption {
+                name: name.to_owned(),
+            },
         }],
     })
 }
@@ -199,15 +205,17 @@ fn ordinal(pin: &str) -> Option<u32> {
     o.to_digit(10).filter(|&o| o > 0)
 }
 
+/// Gives `moved` the next free contact numbers when its own clash with
+/// the device's; true when it changed anything.
 fn renumber_if_clashing(
     project: &Project,
     functions: &dyn Functions,
     moved: &mut SymbolInstance,
     target: DeviceId,
-) {
+) -> bool {
     let kind = ContactKind::classify(functions.function(&moved.symbol), &moved.symbol);
     let Some(digits) = function_digits(kind) else {
-        return;
+        return false;
     };
     let existing: Vec<&SymbolInstance> = project
         .symbols_of_device(target)
@@ -219,7 +227,7 @@ fn renumber_if_clashing(
         .flat_map(|s| s.pins.iter().map(|p| p.name.as_str()))
         .collect();
     if !moved.pins.iter().any(|p| taken.contains(&p.name.as_str())) {
-        return;
+        return false;
     }
     // Only renumber pins that already follow the scheme.
     let mut ours: Vec<usize> = (0..moved.pins.len()).collect();
@@ -229,13 +237,14 @@ fn renumber_if_clashing(
             moved.pins[i].name.ends_with(*d) && ordinal(&moved.pins[i].name).is_some()
         })
     {
-        return;
+        return false;
     }
     let used: Vec<u32> = taken.iter().filter_map(|p| ordinal(p)).collect();
     let Some(free) = (1..=9).find(|o| !used.contains(o)) else {
-        return;
+        return false;
     };
     for (&i, d) in ours.iter().zip(digits) {
         moved.pins[i].name = format!("{free}{d}");
     }
+    true
 }

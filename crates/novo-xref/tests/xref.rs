@@ -7,7 +7,8 @@ use novo_core::{
     Command, DeviceId, DeviceTag, Document, PageId, Pin, Placement, Point, SymbolId, SymbolRole, Tx,
 };
 use novo_xref::{
-    ContactKind, FromKey, Issue, LinkError, LiveXref, Navigator, Place, XrefIndex, link_command,
+    ContactKind, FromKey, Issue, LinkError, LiveXref, Navigator, Place, XrefAction, XrefIndex,
+    link_command,
 };
 
 fn coil(tx: &mut Tx<'_>, page: PageId, x: f64, device: DeviceId) -> SymbolId {
@@ -214,15 +215,15 @@ fn renaming_the_device_carries_every_reference() {
         .transact("Rename", |tx| tx.set_tag(k1, DeviceTag::parse("-K10")?))
         .unwrap();
     let x = XrefIndex::build(f.doc.project(), &FromKey);
-    assert!(x.find_tag("-K1").is_empty());
-    let found = x.find_tag("-K10");
+    let found = x.find(f.doc.project(), "-K10");
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].1.len(), 4);
     assert_eq!(x.highlight(f.k1_coil).name, "-K10");
+    assert_eq!(x.label(f.k1_contacts[0]).unwrap().lines, ["/2.5"]);
 }
 
 #[test]
-fn find_tag_matches_missing_aspects_and_ranks_exact_first() {
+fn find_uses_the_model_search() {
     let mut doc = Document::default();
     doc.transact("Draw", |tx| {
         let p = tx.add_page("1")?;
@@ -234,15 +235,102 @@ fn find_tag_matches_missing_aspects_and_ranks_exact_first() {
         Ok(())
     })
     .unwrap();
-    let x = XrefIndex::build(doc.project(), &FromKey);
-    let hits = x.find_tag("-k1");
+    let p = doc.project();
+    let x = XrefIndex::build(p, &FromKey);
+    let hits = x.find(p, "k1");
     assert_eq!(hits.len(), 2);
-    assert_eq!(x.find_tag("=A1-K1").len(), 1);
-    let exact = x.find_tag("-K1");
-    let first = doc.project().device(exact[0].0).unwrap();
-    assert_eq!(first.tag.to_string(), "-K1");
-    assert!(x.find_tag("=B9").is_empty());
-    assert!(x.find_tag("not a tag").is_empty());
+    assert!(hits.iter().all(|(_, refs)| refs.len() == 1));
+    assert_eq!(x.find(p, "=A1-K1").len(), 1);
+    assert!(x.find(p, "-K2")[0].1.is_empty()); // not drawn yet
+    assert!(x.find(p, "=B9").is_empty());
+}
+
+#[test]
+fn order_matches_the_model() {
+    let f = fixture();
+    let p = f.doc.project();
+    let x = XrefIndex::build(p, &FromKey);
+    let model: Vec<SymbolId> = p.cross_references(f.k1).iter().map(|r| r.symbol).collect();
+    let mut ours: Vec<&novo_xref::Reference> = x.device_references(f.k1);
+    ours.sort_by_key(|r| r.order);
+    assert_eq!(ours.iter().map(|r| r.symbol).collect::<Vec<_>>(), model);
+    for r in ours {
+        assert_eq!(Some(&r.location), p.location_of(r.symbol).as_ref());
+    }
+}
+
+#[test]
+fn too_many_contacts_show_in_the_contact_image() {
+    let mut f = fixture();
+    let k1 = f.k1;
+    f.doc
+        .transact("Limit", |tx| {
+            tx.set_property(k1, "contacts.no", Some(1i64.into()))
+        })
+        .unwrap();
+    let x = XrefIndex::build(f.doc.project(), &FromKey);
+    let label = x.label(f.k1_coil).unwrap();
+    assert!(label.warning);
+    assert_eq!(label.lines.last().unwrap(), "! 2 NO drawn, 1 available");
+    assert_eq!(
+        x.issues(),
+        [Issue::TooManyContacts {
+            device: k1,
+            kind: ContactKind::NormallyOpen,
+            drawn: 2,
+            available: 1
+        }]
+    );
+}
+
+#[test]
+fn terminal_strips_list_their_terminals() {
+    let mut doc = Document::default();
+    let ((strip, t1, t2), _) = doc
+        .transact("Draw", |tx| {
+            let p1 = tx.add_page("1")?;
+            let p2 = tx.add_page("2")?;
+            let strip = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+            let mut syms = Vec::new();
+            for (page, n) in [(p1, "1"), (p2, "2")] {
+                let t = tx.add_terminal(strip, n)?;
+                syms.push(tx.place_symbol(
+                    page,
+                    "iec/terminals/terminal",
+                    Placement::at(Point::new(10.0, 10.0)),
+                    vec![Pin::new("1", 0.0, 0.0), Pin::new("2", 0.0, 4.0)],
+                    SymbolRole::Terminal { terminals: vec![t] },
+                )?);
+            }
+            Ok((strip, syms[0], syms[1]))
+        })
+        .unwrap();
+    let x = XrefIndex::build(doc.project(), &FromKey);
+    assert_eq!(x.device_references(strip).len(), 2);
+    assert_eq!(
+        x.partners(t1).iter().map(|r| r.symbol).collect::<Vec<_>>(),
+        [t2]
+    );
+    // Terminals draw no cross-reference text and are not "contacts without a coil".
+    assert!(x.label(t1).is_none());
+    assert!(x.issues().is_empty());
+}
+
+#[test]
+fn context_menu_and_command_bar_share_one_action_list() {
+    let f = fixture();
+    let p = f.doc.project();
+    let x = XrefIndex::build(p, &FromKey);
+    assert_eq!(
+        XrefAction::for_symbol(p, &x, f.k1_coil),
+        [
+            XrefAction::GoToPartner,
+            XrefAction::AllReferences,
+            XrefAction::Link
+        ]
+    );
+    assert_eq!(XrefAction::Link.label(), "Link cross reference");
+    assert_eq!(XrefAction::GoToPartner.shortcut(), Some("G"));
 }
 
 #[test]
