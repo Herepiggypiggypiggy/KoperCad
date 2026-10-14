@@ -600,3 +600,48 @@ fn import_preview_shows_what_would_change() {
     assert_eq!(preview.changed, vec![changed.key()]);
     assert_eq!(preview.unchanged, 1);
 }
+
+#[test]
+fn certain_parts_are_assigned_and_the_rest_proposed() {
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let catalog = Catalog::starter();
+    let devices: Vec<DeviceId> = doc.project().devices().map(|d| d.id).collect();
+    let command = clear_parts(doc.project(), &devices);
+    run(&mut doc, command);
+    assert_eq!(
+        novo_parts::missing_parts_summary(doc.project()).as_deref(),
+        Some("8 devices without a part")
+    );
+
+    // The 2.2 kW motor has exactly one fitting part; a contactor has several.
+    let proposals = novo_parts::propose_parts(&catalog, doc.project(), None);
+    let of = |id| proposals.iter().find(|p| p.device == id).unwrap();
+    assert_eq!(of(gate.m1).candidates.len(), 1);
+    assert!(of(gate.k1).candidates.len() > 1);
+
+    // A device's own sizing narrows the choice: 8 A fits one 3RU2116 range.
+    let command = PropertySheet::build(doc.project(), &[gate.f2.into()])
+        .add_property(doc.project(), "current_a", "8")
+        .unwrap();
+    run(&mut doc, command);
+    let proposals = novo_parts::propose_parts(&catalog, doc.project(), Some(&[gate.f2]));
+    let orders: Vec<&str> = proposals[0]
+        .candidates
+        .iter()
+        .map(|p| p.order_number.as_str())
+        .collect();
+    assert!(orders.contains(&"3RU2116-1JB0"));
+    assert!(!orders.contains(&"3RU2116-1FB0"));
+
+    let depth = doc.undo_depth();
+    let command = novo_parts::auto_assign_parts(&catalog, doc.project());
+    run(&mut doc, command);
+    assert_eq!(doc.undo_depth(), depth + 1);
+    let m1 = doc.project().device(gate.m1).unwrap();
+    assert_eq!(
+        doc.project().part(m1.parts[0]).unwrap().order_number,
+        "1LE1003-0EB42-2AA4"
+    );
+    assert!(doc.project().device(gate.k1).unwrap().parts.is_empty());
+}

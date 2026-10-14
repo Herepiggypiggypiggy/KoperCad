@@ -27,8 +27,9 @@ mod sheet;
 mod table;
 
 pub use assign::{
-    AssignMode, assign_cable_part, assign_part, catalog_entry, clear_parts, find_project_part,
-    missing_parts, remove_unused_parts, suggest_for_device, unused_parts,
+    AssignMode, PartProposal, assign_cable_part, assign_part, auto_assign_parts, catalog_entry,
+    clear_parts, find_project_part, missing_parts, missing_parts_summary, propose_parts,
+    remove_unused_parts, suggest_for_device, unused_parts,
 };
 pub use catalog::{
     CATALOG_FORMAT_VERSION, Catalog, CatalogError, CatalogPart, Dimensions, MergePreview, PartKey,

@@ -289,3 +289,137 @@ fn is_protective(name: &str) -> bool {
         "pe" | "gnye" | "yegn" | "pen"
     )
 }
+
+/// Catalog parts that could be a device's part, for a proposal.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PartProposal<'c> {
+    pub device: DeviceId,
+    /// Every fitting part, best first. One candidate means the answer is
+    /// certain and [`auto_assign_parts`] takes it without asking.
+    pub candidates: Vec<&'c CatalogPart>,
+}
+
+/// `rated_power_kw` and `power_kw` name the same quantity.
+fn quantity(key: &str) -> &str {
+    key.strip_prefix("rated_").unwrap_or(key)
+}
+
+fn number(value: &novo_core::Value) -> Option<f64> {
+    match value {
+        novo_core::Value::Int(i) => Some(*i as f64),
+        novo_core::Value::Float(f) => Some(*f),
+        _ => None,
+    }
+}
+
+/// Whether a catalog part agrees with the device's own sizing values: an
+/// equal value for the same quantity (`power_kw` 2.2), or a current inside
+/// the part's setting range (`current_a` 8 within 7 to 10 A). A quantity
+/// the part does not state does not rule it out.
+fn sized_for(part: &CatalogPart, device: &Device) -> bool {
+    device.properties.iter().all(|(key, value)| {
+        let Some(wanted) = number(value) else {
+            return true;
+        };
+        let q = quantity(key);
+        let stated = part
+            .data
+            .iter()
+            .find(|(k, _)| quantity(k) == q)
+            .and_then(|(_, v)| number(v));
+        if let Some(have) = stated {
+            return (have - wanted).abs() <= 1e-9 * wanted.abs().max(1.0);
+        }
+        if q == "current_a" {
+            let min = part.data.get("setting_min_a").and_then(number);
+            let max = part.data.get("setting_max_a").and_then(number);
+            if let (Some(min), Some(max)) = (min, max) {
+                return (min..=max).contains(&wanted);
+            }
+        }
+        true
+    })
+}
+
+/// Part proposals for devices that have no part yet (all of them when
+/// `devices` is `None`), in tag order. A device for which no catalog part
+/// fits gets no proposal.
+pub fn propose_parts<'c>(
+    catalog: &'c Catalog,
+    project: &Project,
+    devices: Option<&[DeviceId]>,
+) -> Vec<PartProposal<'c>> {
+    let mut list: Vec<&Device> = match devices {
+        Some(ids) => ids.iter().filter_map(|&id| project.device(id)).collect(),
+        None => project.devices().collect(),
+    };
+    list.retain(|d| d.parts.is_empty());
+    list.sort_by(|a, b| novo_core::natural_cmp(&a.tag.to_string(), &b.tag.to_string()));
+    list.into_iter()
+        .filter_map(|device| {
+            let code = match device.kind {
+                DeviceKind::TerminalStrip => "X",
+                _ => device.tag.letter_code(),
+            };
+            if code.is_empty() {
+                return None;
+            }
+            let candidates: Vec<&CatalogPart> = catalog
+                .suggest(code, "", usize::MAX)
+                .into_iter()
+                .filter(|p| sized_for(p, device))
+                .collect();
+            (!candidates.is_empty()).then_some(PartProposal {
+                device: device.id,
+                candidates,
+            })
+        })
+        .collect()
+}
+
+/// Assigns the part to every device without one where exactly one catalog
+/// part fits (DESIGN.md §2: one correct answer happens on its own), as one
+/// command. The rest stay proposals.
+pub fn auto_assign_parts(catalog: &Catalog, project: &Project) -> Option<Command> {
+    let mut commands = Vec::new();
+    let mut parts = PartAllocator::new(project);
+    let mut assigned = 0;
+    for proposal in propose_parts(catalog, project, None) {
+        let [part] = proposal.candidates[..] else {
+            continue;
+        };
+        let Some(device) = project.device(proposal.device) else {
+            continue;
+        };
+        let id = parts.part_id(part, &mut commands);
+        commands.push(Command::Replace {
+            record: Record::Device(Device {
+                parts: vec![id],
+                ..device.clone()
+            }),
+        });
+        assigned += 1;
+    }
+    (assigned > 0).then(|| Command::Batch {
+        label: format!("Assign parts to {}", count(assigned, "device")),
+        commands,
+    })
+}
+
+/// The Issues line for missing parts: `2 devices without a part`,
+/// `1 device and 1 cable without a part`, or `None` when all have one.
+pub fn missing_parts_summary(project: &Project) -> Option<String> {
+    let missing = missing_parts(project);
+    let devices = missing
+        .iter()
+        .filter(|id| matches!(id, AnyId::Device(_)))
+        .count();
+    let cables = missing.len() - devices;
+    let what = match (devices, cables) {
+        (0, 0) => return None,
+        (d, 0) => count(d, "device"),
+        (0, c) => count(c, "cable"),
+        (d, c) => format!("{} and {}", count(d, "device"), count(c, "cable")),
+    };
+    Some(format!("{what} without a part"))
+}
