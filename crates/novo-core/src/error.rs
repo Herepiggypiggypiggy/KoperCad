@@ -17,7 +17,12 @@ pub enum ModelError {
     InvalidId(u64),
     #[error("the recorded project info no longer matches the project")]
     InfoConflict,
-
+    #[error("{id} has a value in `{field}` that is not a finite number")]
+    NonFinite { id: AnyId, field: &'static str },
+    #[error("the project info has a property that is not a finite number")]
+    NonFiniteInfo,
+    #[error("{0} cannot be split at one of its ends")]
+    SplitAtEnd(WireId),
     #[error("{id} is still used by {} other object(s)", by.len())]
     StillReferenced { id: AnyId, by: Vec<AnyId> },
     #[error("{symbol} has no pin {pin}")]

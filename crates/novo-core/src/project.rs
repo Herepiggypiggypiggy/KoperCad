@@ -254,6 +254,9 @@ impl Project {
                 if self.info != *before {
                     return Err(ModelError::InfoConflict);
                 }
+                if !crate::record::properties_finite(&after.properties) {
+                    return Err(ModelError::NonFiniteInfo);
+                }
                 self.info = after.clone();
             }
         }
@@ -309,6 +312,12 @@ impl Project {
                 .flatten()
                 .copied()
         };
+        if let Some(field) = record.non_finite_field() {
+            return Err(ModelError::NonFinite {
+                id: record.id(),
+                field,
+            });
+        }
         match record {
             Record::Device(device) => device.tag.validate()?,
             Record::Cable(cable) => cable.tag.validate()?,
@@ -519,6 +528,9 @@ impl Project {
         next_id: u64,
         records: impl IntoIterator<Item = Record>,
     ) -> Result<Project> {
+        if !crate::record::properties_finite(&info.properties) {
+            return Err(ModelError::NonFiniteInfo);
+        }
         let mut records: Vec<Record> = records.into_iter().collect();
         records.sort_by_key(|r| (Record::rank(r.kind()), r.id()));
         let mut project = Project {

@@ -13,6 +13,7 @@ use crate::entity::{
     Cable, Device, Junction, Page, Part, Potential, ProjectInfo, Properties, SymbolInstance,
     SymbolRole, Terminal, Wire,
 };
+use crate::geom::Point;
 use crate::id::{AnyId, EntityKind, PageId};
 use crate::project::Project;
 
@@ -127,6 +128,51 @@ impl Record {
         })
     }
 
+    /// The first number in this record that is NaN or infinite, named by
+    /// field. Such values cannot be saved (JSON and the project file have
+    /// no representation for them), so the model refuses them.
+    pub fn non_finite_field(&self) -> Option<&'static str> {
+        fn point(p: &Point) -> bool {
+            p.x.is_finite() && p.y.is_finite()
+        }
+        fn opt(v: Option<f64>) -> bool {
+            v.is_none_or(f64::is_finite)
+        }
+        let bad = match self {
+            Record::Symbol(r) => {
+                if !point(&r.placement.origin) {
+                    Some("placement")
+                } else if !r.pins.iter().all(|p| point(&p.offset)) {
+                    Some("pins")
+                } else {
+                    None
+                }
+            }
+            Record::Junction(r) => (!point(&r.position)).then_some("position"),
+            Record::Wire(r) => {
+                if !r.route.iter().all(point) {
+                    Some("route")
+                } else if !opt(r.cross_section_mm2) {
+                    Some("cross_section_mm2")
+                } else {
+                    None
+                }
+            }
+            Record::Potential(r) => (!opt(r.voltage)).then_some("voltage"),
+            Record::Cable(r) => {
+                if !opt(r.length_m) {
+                    Some("length_m")
+                } else if !r.cores.iter().all(|c| opt(c.cross_section_mm2)) {
+                    Some("cores")
+                } else {
+                    None
+                }
+            }
+            Record::Page(_) | Record::Device(_) | Record::Terminal(_) | Record::Part(_) => None,
+        };
+        bad.or_else(|| (!properties_finite(self.properties())).then_some("properties"))
+    }
+
     /// Load order: a record only refers to kinds with a lower rank.
     pub(crate) fn rank(kind: EntityKind) -> u8 {
         match kind {
@@ -144,6 +190,14 @@ impl Record {
 }
 
 static EMPTY_PROPERTIES: Properties = BTreeMap::new();
+
+/// Whether every float property is finite.
+pub(crate) fn properties_finite(properties: &Properties) -> bool {
+    properties.values().all(|v| match v {
+        crate::entity::Value::Float(f) => f.is_finite(),
+        _ => true,
+    })
+}
 
 pub(crate) fn endpoint_owner(end: crate::entity::Endpoint) -> AnyId {
     match end {

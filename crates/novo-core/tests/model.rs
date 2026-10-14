@@ -1234,3 +1234,126 @@ fn pin_directions_turn_with_the_symbol() {
     let json = serde_json::to_value(&symbol.pins[0]).unwrap();
     assert_eq!(json["direction"], "up");
 }
+
+#[test]
+fn split_wire_refuses_its_own_ends() {
+    let mut doc = Document::default();
+    let (wire, _) = doc
+        .transact("x", |tx| {
+            let page = tx.add_page("1")?;
+            let a = tx.place_symbol(page, "s", at(0.0, 0.0), two_pins(), SymbolRole::Unassigned)?;
+            let b = tx.place_symbol(
+                page,
+                "s",
+                at(100.0, 0.0),
+                two_pins(),
+                SymbolRole::Unassigned,
+            )?;
+            // a:2 at (0,5) -> bend (50,20) -> b:2 at (100,5).
+            let wire = tx.connect(Endpoint::pin(a, 1), Endpoint::pin(b, 1))?;
+            tx.update::<Wire>(wire, |w| w.route = vec![Point::new(50.0, 20.0)])?;
+            Ok(wire)
+        })
+        .unwrap();
+    let before = state(doc.project());
+    // Clicks beyond either end clamp onto the end itself.
+    for click in [Point::new(-10.0, 5.0), Point::new(130.0, 0.0)] {
+        let err = doc
+            .transact("split", |tx| tx.split_wire(wire, click))
+            .unwrap_err();
+        assert_eq!(err, ModelError::SplitAtEnd(wire));
+    }
+    assert_eq!(state(doc.project()), before);
+    // Splitting at an interior bend is fine: both halves have length.
+    let ((junction, _), _) = doc
+        .transact("split", |tx| tx.split_wire(wire, Point::new(50.0, 25.0)))
+        .unwrap();
+    assert_eq!(
+        doc.project().junction(junction).unwrap().position,
+        Point::new(50.0, 20.0)
+    );
+}
+
+type Edit = dyn Fn(&mut Tx<'_>) -> Result<()>;
+
+/// NaN and infinity have no JSON or SQLite form: a project holding one
+/// saves but cannot be reopened. Every edit path must refuse them.
+#[test]
+fn non_finite_numbers_are_refused() {
+    let mut doc = Document::default();
+    let s = build_starter(&mut doc);
+    let before = state(doc.project());
+    for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        let edits: Vec<(&str, Box<Edit>)> = vec![
+            (
+                "placement",
+                Box::new(move |tx| tx.move_symbol(s.coil, at(bad, 0.0))),
+            ),
+            (
+                "pins",
+                Box::new(move |tx| {
+                    tx.update::<SymbolInstance>(s.coil, |c| c.pins[0].offset.y = bad)
+                }),
+            ),
+            (
+                "position",
+                Box::new(move |tx| tx.add_junction(s.page1, Point::new(0.0, bad)).map(|_| ())),
+            ),
+            (
+                "route",
+                Box::new(move |tx| {
+                    tx.update::<Wire>(s.w_start_coil, |w| w.route = vec![Point::new(bad, 1.0)])
+                }),
+            ),
+            (
+                "cross_section_mm2",
+                Box::new(move |tx| {
+                    tx.update::<Wire>(s.w_start_coil, |w| w.cross_section_mm2 = Some(bad))
+                }),
+            ),
+            (
+                "voltage",
+                Box::new(move |tx| tx.update::<Potential>(s.l, |p| p.voltage = Some(bad))),
+            ),
+            (
+                "cores",
+                Box::new(move |tx| {
+                    let mut core = CableCore::new("1");
+                    core.cross_section_mm2 = Some(bad);
+                    tx.add_cable(tag("-W9"), vec![core]).map(|_| ())
+                }),
+            ),
+            (
+                "properties",
+                Box::new(move |tx| tx.set_property(s.k1, "rating", Some(Value::Float(bad)))),
+            ),
+        ];
+        for (field, edit) in edits {
+            let err = doc.transact("bad", |tx| edit(tx)).unwrap_err();
+            assert!(
+                matches!(err, ModelError::NonFinite { field: f, .. } if f == field),
+                "{field}: {err:?}"
+            );
+        }
+        let err = doc
+            .transact("bad", |tx| {
+                tx.set_info(|i| {
+                    i.properties.insert("x".into(), Value::Float(bad));
+                })
+            })
+            .unwrap_err();
+        assert_eq!(err, ModelError::NonFiniteInfo);
+    }
+    assert_eq!(state(doc.project()), before);
+    // What is left still saves and reopens.
+    Project::from_json(&doc.project().to_json()).unwrap();
+
+    // Commands from scripts take the same path.
+    let err = doc
+        .execute(Command::AddJunction {
+            page: s.page1,
+            position: Point::new(f64::NAN, 0.0),
+        })
+        .unwrap_err();
+    assert!(matches!(err, ModelError::NonFinite { .. }));
+}
