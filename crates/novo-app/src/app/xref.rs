@@ -110,7 +110,7 @@ impl NovoApp {
         let reader = self
             .current_page
             .and_then(|p| self.backend.document().and_then(|d| d.project().page(p)))
-            .map(novo_xref::page_structure)
+            .map(|p| p.structure.clone())
             .unwrap_or_default();
         let mut chosen = None;
         let mut close = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
