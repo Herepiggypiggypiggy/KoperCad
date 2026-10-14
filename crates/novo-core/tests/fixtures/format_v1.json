@@ -75,6 +75,7 @@
         "landscape": true,
         "columns": 10
       },
+      "structure": "=A2+CAB1",
       "properties": {
         "approved": true
       }

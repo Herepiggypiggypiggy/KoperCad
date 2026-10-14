@@ -2,6 +2,8 @@
 //! interruption point, are drawn.
 //!
 //! A location is a page and a grid column, written `page.column` (`3.4`).
+//! Seen from a page of another structure it carries the target page's
+//! structure as a prefix (`=A2/3.4`); see [`Location::qualified`].
 //! Everything here is derived from the project; cross-reference text on the
 //! drawing (WS-10) is built from these queries, never stored.
 
@@ -10,7 +12,8 @@ use std::fmt;
 use crate::entity::{Endpoint, SymbolInstance, SymbolRole};
 use crate::graph::{NetId, Netlist};
 use crate::id::{DeviceId, PageId, SymbolId, TerminalId};
-use crate::project::{Project, natural_cmp};
+use crate::project::{Project, page_cmp};
+use crate::tag::DeviceTag;
 
 /// Where a symbol is drawn: its page and the grid column of its origin.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -18,6 +21,8 @@ pub struct Location {
     pub page: PageId,
     /// The page's name, e.g. `3`.
     pub page_name: String,
+    /// The page's structure (function and location levels), e.g. `=A2`.
+    pub structure: DeviceTag,
     /// Grid column, 1-based (see [`PageFormat::columns`](crate::PageFormat::columns)).
     pub column: u16,
 }
@@ -26,6 +31,19 @@ impl fmt::Display for Location {
     /// `3.4` for page `3`, column 4.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}.{}", self.page_name, self.column)
+    }
+}
+
+impl Location {
+    /// The reference as read on a page with structure `reader`: `3.4` when
+    /// the target page has the same structure (or none), `=A2/3.4` when it
+    /// differs. Pass the reading page's [`Page::structure`](crate::Page::structure).
+    pub fn qualified(&self, reader: &DeviceTag) -> String {
+        if self.structure.is_empty() || self.structure.same_structure(reader) {
+            self.to_string()
+        } else {
+            format!("{}/{}", self.structure, self)
+        }
     }
 }
 
@@ -49,12 +67,13 @@ impl Project {
         Some(Location {
             page: page.id,
             page_name: page.name.clone(),
+            structure: page.structure.clone(),
             column: page.format.column_at(symbol.placement.origin.x),
         })
     }
 
-    /// Every place a device is drawn, in reading order (pages in natural
-    /// order, then left to right, then top to bottom): its main symbol and
+    /// Every place a device is drawn, in reading order (pages as in
+    /// [`Project::pages_in_order`], then left to right, then top to bottom): its main symbol and
     /// contacts, or for a terminal strip the symbols of all its terminals.
     /// This is "go to all references"; the pages are in each entry. A coil
     /// shows the entries with `main == false` as its contact image, and each
@@ -114,9 +133,12 @@ impl Project {
         mut symbols: Vec<&'a SymbolInstance>,
     ) -> Vec<&'a SymbolInstance> {
         symbols.sort_by(|a, b| {
-            let page_name = |s: &SymbolInstance| self.page(s.page).map_or("", |p| p.name.as_str());
-            natural_cmp(page_name(a), page_name(b))
-                .then(a.page.cmp(&b.page))
+            let pages = (self.page(a.page), self.page(b.page));
+            let by_page = match pages {
+                (Some(pa), Some(pb)) => page_cmp(pa, pb),
+                _ => a.page.cmp(&b.page),
+            };
+            by_page
                 .then(a.placement.origin.x.total_cmp(&b.placement.origin.x))
                 .then(a.placement.origin.y.total_cmp(&b.placement.origin.y))
                 .then(a.id.cmp(&b.id))

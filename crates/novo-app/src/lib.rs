@@ -9,20 +9,26 @@
 //!   so canvas edits share the undo history. The canvas (`novo-canvas`) plugs
 //!   in here.
 //!
-//! Until those land, [`MemoryBackend`] and [`PlaceholderCanvas`] keep the
-//! shell usable on its own.
+//! [`StorageBackend`] keeps projects in `.novo` files with autosave and crash
+//! recovery. [`MemoryBackend`] and [`PlaceholderCanvas`] stand in for tests
+//! and until the canvas is wired.
 
 mod actions;
 mod app;
 mod backend;
 mod canvas;
+mod model_canvas;
 mod palette;
 mod settings;
 
 pub use actions::{Action, RESERVED_SHORTCUTS};
 pub use app::NovoApp;
-pub use backend::{BackendError, MemoryBackend, ProjectBackend, new_document, page_labels};
+pub use backend::{
+    BackendError, MemoryBackend, OpenReport, ProjectBackend, RecoveryOffer, StorageBackend,
+    new_document, page_labels,
+};
 pub use canvas::{CanvasView, OpenPage, PlaceholderCanvas};
+pub use model_canvas::ModelCanvas;
 
 use eframe::egui;
 
@@ -30,7 +36,7 @@ use eframe::egui;
 pub const APP_NAME: &str = "NovoElectric";
 
 /// File extension of a NovoElectric project file, without the dot.
-pub const PROJECT_EXTENSION: &str = "novo";
+pub const PROJECT_EXTENSION: &str = novo_storage::PROJECT_EXTENSION;
 
 fn window_icon() -> egui::IconData {
     eframe::icon_data::from_png_bytes(include_bytes!("../../../assets/icon/novoelectric.png"))
@@ -57,21 +63,49 @@ pub fn run() -> eframe::Result {
         renderer: eframe::Renderer::Wgpu,
         ..Default::default()
     };
+    let msaa = u32::from(options.multisampling);
     eframe::run_native(
         APP_NAME,
         options,
-        Box::new(|cc| {
-            let mut app = NovoApp::new(
-                cc,
-                Box::new(MemoryBackend::default()),
-                Box::new(PlaceholderCanvas::default()),
-            );
+        Box::new(move |cc| {
+            let canvas: Box<dyn CanvasView> = match cc.wgpu_render_state.as_ref() {
+                Some(rs) => {
+                    ModelCanvas::install(rs, msaa);
+                    Box::new(ModelCanvas::default())
+                }
+                None => Box::new(PlaceholderCanvas::default()),
+            };
+            let backend = match data_dir() {
+                Some(dir) => StorageBackend::with_untitled_dir(dir.join("untitled")),
+                None => StorageBackend::default(),
+            };
+            let mut app = NovoApp::new(cc, Box::new(backend), canvas);
             if let Some(path) = startup_file {
                 app.open_on_start(path);
             }
             Ok(Box::new(app))
         }),
     )
+}
+
+/// The per-user folder for data the app keeps for itself, such as unsaved
+/// new projects: `%LOCALAPPDATA%\NovoElectric` on Windows. Never a
+/// system-wide location, so no admin rights are needed.
+fn data_dir() -> Option<std::path::PathBuf> {
+    use std::path::PathBuf;
+    let env = |name| {
+        std::env::var_os(name)
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+    };
+    let base = if cfg!(windows) {
+        env("LOCALAPPDATA")?
+    } else if cfg!(target_os = "macos") {
+        env("HOME")?.join("Library/Application Support")
+    } else {
+        env("XDG_DATA_HOME").or_else(|| env("HOME").map(|h| h.join(".local/share")))?
+    };
+    Some(base.join(APP_NAME))
 }
 
 #[cfg(test)]

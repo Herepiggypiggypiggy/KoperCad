@@ -59,6 +59,20 @@ impl Viewport {
         )
     }
 
+    /// Nudges the centre (by under half a device pixel) so the world origin
+    /// lands on a whole device pixel of the canvas. Then any two copies of
+    /// an item a whole number of pixels apart rasterise identically, and
+    /// panning moves the drawing in whole pixels instead of shimmering.
+    pub fn snap_to_pixels(&mut self, pixels_per_point: f32) {
+        let px_per_world = self.zoom * pixels_per_point;
+        if !(px_per_world.is_finite() && px_per_world > 0.0) {
+            return;
+        }
+        let origin_px = self.world_to_screen(Vec2::ZERO) * pixels_per_point;
+        let frac = origin_px - origin_px.round();
+        self.center += frac / px_per_world;
+    }
+
     /// Moves the view by a screen delta, so content follows the cursor.
     pub fn pan_by_screen(&mut self, delta: Vec2) {
         self.center -= delta / self.zoom;
@@ -103,6 +117,29 @@ impl Viewport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pixel_snap_puts_the_origin_on_a_pixel() {
+        for ppp in [1.0, 1.25, 2.0] {
+            let mut v = Viewport {
+                center: Vec2::new(123.456, -78.9),
+                zoom: 3.7,
+                size: Vec2::new(801.0, 600.0),
+                ..Default::default()
+            };
+            let before = v.center;
+            v.snap_to_pixels(ppp);
+            let px = v.world_to_screen(Vec2::ZERO) * ppp;
+            assert!((px - px.round()).abs().max_element() < 1e-2, "{px}");
+            // Never more than half a device pixel.
+            let moved = (v.center - before).abs() * v.zoom * ppp;
+            assert!(moved.max_element() <= 0.5 + 1e-3, "{moved}");
+            // Idempotent.
+            let c = v.center;
+            v.snap_to_pixels(ppp);
+            assert!((v.center - c).length() < 1e-4);
+        }
+    }
 
     #[test]
     fn round_trip() {
