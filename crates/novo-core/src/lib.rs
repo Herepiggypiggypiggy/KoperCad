@@ -73,7 +73,7 @@ pub use entity::{
     SymbolInstance, SymbolKey, SymbolRole, Terminal, TerminalKind, Value, Wire,
 };
 pub use error::{ModelError, Result};
-pub use geom::{Placement, Point, Rotation};
+pub use geom::{Direction, Placement, Point, Rotation};
 pub use graph::{Net, NetId, Netlist};
 pub use id::{
     AnyId, CableId, DeviceId, EntityKind, JunctionId, PageId, PartId, PotentialId, SymbolId,
