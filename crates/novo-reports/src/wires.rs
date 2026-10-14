@@ -1,0 +1,255 @@
+//! Wire list: every connection from device pin to device pin.
+
+use std::collections::{BTreeMap, HashMap};
+
+use novo_core::{
+    AnyId, Endpoint, EntityKind, PageId, PinRef, Project, SymbolRole, Wire, natural_cmp,
+};
+
+use crate::order::{join_distinct, location_text};
+use crate::report::{Dependencies, Report};
+use crate::table::{Cell, Column, ReportOutput, Section};
+
+/// The wire list: one row per connection between two device or terminal
+/// pins, the way a wireman reads it.
+///
+/// Drawn wires are joined into connections at everything that is not a
+/// physical connection point: junctions, interruption points (by name,
+/// across pages) and potential feeds. A connection reaching more than two
+/// pins (a T-junction) is listed as a daisy chain in drawing order (page,
+/// then top to bottom, then left to right), because a clamp takes the wires
+/// one by one. Wires that reach fewer than two pins (a supply feed into a
+/// fuse) are not wiring work and are left out.
+///
+/// Columns: wire number, from, to (`=A1+CAB-K1:13` designations), the
+/// net's potential(s), colour, cross-section (the wire's own, else its
+/// cable core's), cable and core, and the `page.column` of the from pin.
+/// Connections sort by the reading order of their first pin: page, then
+/// left to right, then top to bottom.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct WireList;
+
+impl WireList {
+    pub const ID: &'static str = "wires";
+}
+
+/// Where wires join without a physical clamp.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum Joint<'a> {
+    End(Endpoint),
+    Interruption(&'a str),
+}
+
+fn find(parent: &mut [usize], mut i: usize) -> usize {
+    while parent[i] != i {
+        parent[i] = parent[parent[i]];
+        i = parent[i];
+    }
+    i
+}
+
+impl Report for WireList {
+    fn id(&self) -> &str {
+        Self::ID
+    }
+
+    fn title(&self) -> String {
+        "Wire list".into()
+    }
+
+    fn dependencies(&self) -> Dependencies {
+        use EntityKind::*;
+        // The netlist (potentials) also reads the project rules.
+        Dependencies::on(&[
+            Page, Device, Symbol, Junction, Wire, Potential, Terminal, Cable,
+        ])
+        .with_info()
+    }
+
+    fn generate(&self, project: &Project) -> ReportOutput {
+        let page_index: HashMap<PageId, usize> = project
+            .pages_in_order()
+            .iter()
+            .enumerate()
+            .map(|(i, p)| (p.id, i))
+            .collect();
+        let mut wires: Vec<&Wire> = project.wires().collect();
+        wires.sort_by_key(|w| w.id);
+
+        // Physical pins stay apart; everything else joins its wires.
+        let joint = |end: Endpoint| -> Option<Joint<'_>> {
+            match end {
+                Endpoint::Junction { .. } => Some(Joint::End(end)),
+                Endpoint::Pin { symbol, .. } => match &project.symbol(symbol)?.role {
+                    SymbolRole::Device { .. } | SymbolRole::Terminal { .. } => None,
+                    SymbolRole::Interruption { name } => Some(Joint::Interruption(name)),
+                    SymbolRole::PotentialFeed { .. } | SymbolRole::Unassigned => {
+                        Some(Joint::End(end))
+                    }
+                },
+            }
+        };
+        let mut parent: Vec<usize> = (0..wires.len()).collect();
+        let mut first_at: HashMap<Joint<'_>, usize> = HashMap::new();
+        for (i, wire) in wires.iter().enumerate() {
+            for end in wire.ends() {
+                if let Some(j) = joint(end) {
+                    let other = *first_at.entry(j).or_insert(i);
+                    let (a, b) = (find(&mut parent, i), find(&mut parent, other));
+                    parent[a] = b;
+                }
+            }
+        }
+        let mut components: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+        for i in 0..wires.len() {
+            let root = find(&mut parent, i);
+            components.entry(root).or_default().push(i);
+        }
+
+        // Pin order key: page, then top to bottom, then left to right.
+        let pin_key = |pin: PinRef| {
+            let symbol = project.symbol(pin.symbol);
+            let page = symbol.map_or(usize::MAX, |s| {
+                page_index.get(&s.page).copied().unwrap_or(usize::MAX)
+            });
+            let at = project
+                .endpoint_position(pin.into())
+                .unwrap_or(novo_core::Point::new(0.0, 0.0));
+            (page, at)
+        };
+
+        let netlist = project.netlist();
+        struct Connection {
+            reading: (usize, f64, f64),
+            from: PinRef,
+            to: PinRef,
+            wires: Vec<usize>,
+        }
+        let mut connections = Vec::new();
+        for members in components.into_values() {
+            let mut pins: Vec<PinRef> = members
+                .iter()
+                .flat_map(|&i| wires[i].ends())
+                .filter(|&end| joint(end).is_none())
+                .filter_map(Endpoint::as_pin)
+                .collect();
+            pins.sort();
+            pins.dedup();
+            if pins.len() < 2 {
+                continue;
+            }
+            pins.sort_by(|&a, &b| {
+                let ((pa, ka), (pb, kb)) = (pin_key(a), pin_key(b));
+                pa.cmp(&pb)
+                    .then(ka.y.total_cmp(&kb.y))
+                    .then(ka.x.total_cmp(&kb.x))
+                    .then(a.cmp(&b))
+            });
+            let (page, first) = pin_key(pins[0]);
+            for pair in pins.windows(2) {
+                connections.push(Connection {
+                    reading: (page, first.x, first.y),
+                    from: pair[0],
+                    to: pair[1],
+                    wires: members.clone(),
+                });
+            }
+        }
+        // Stable sort: a chain keeps its order.
+        connections.sort_by(|a, b| {
+            a.reading
+                .0
+                .cmp(&b.reading.0)
+                .then(a.reading.1.total_cmp(&b.reading.1))
+                .then(a.reading.2.total_cmp(&b.reading.2))
+        });
+
+        let mut section = Section::new(
+            "wires",
+            "",
+            vec![
+                Column::new("number", "Wire no.", 15.0),
+                Column::new("from", "From", 35.0),
+                Column::new("to", "To", 35.0),
+                Column::new("potential", "Potential", 15.0),
+                Column::new("color", "Colour", 12.0),
+                Column::new("cross_section_mm2", "mm²", 10.0).right(),
+                Column::new("cable", "Cable", 25.0),
+                Column::new("location", "Location", 15.0),
+            ],
+        );
+        for connection in connections {
+            let members: Vec<&Wire> = connection.wires.iter().map(|&i| wires[i]).collect();
+            let mut numbers: Vec<&str> =
+                members.iter().filter_map(|w| w.number.as_deref()).collect();
+            numbers.sort_by(|a, b| natural_cmp(a, b));
+            let mut cores = Vec::new();
+            let mut sections: Vec<f64> = Vec::new();
+            for wire in &members {
+                let core = project.core_of_wire(wire.id).and_then(|(cable, core)| {
+                    let cable = project.cable(cable)?;
+                    Some((cable, cable.cores.get(core)?))
+                });
+                if let Some((cable, core)) = core {
+                    cores.push(format!("{} {}", cable.tag, core.name));
+                }
+                let section = wire
+                    .cross_section_mm2
+                    .or_else(|| core.and_then(|(_, c)| c.cross_section_mm2));
+                if let Some(value) = section
+                    && !sections.iter().any(|s| s.to_bits() == value.to_bits())
+                {
+                    sections.push(value);
+                }
+            }
+            sections.sort_by(f64::total_cmp);
+            let cross_section = match sections.as_slice() {
+                [] => Cell::Empty,
+                [single] => Cell::Number(*single),
+                many => Cell::text(join_distinct(many.iter().map(f64::to_string))),
+            };
+            let potential = netlist
+                .net_of(connection.from)
+                .map(|net| {
+                    join_distinct(
+                        netlist
+                            .net(net)
+                            .potentials
+                            .iter()
+                            .filter_map(|&p| project.potential(p))
+                            .map(|p| p.name.as_str()),
+                    )
+                })
+                .unwrap_or_default();
+            let location = project.symbol(connection.from.symbol).and_then(|symbol| {
+                let mut location = project.location_of(symbol.id)?;
+                let page = project.page(symbol.page)?;
+                let x = project.endpoint_position(connection.from.into())?.x;
+                location.column = page.format.column_at(x);
+                Some(location_text(&location))
+            });
+            let designation = |pin| project.pin_designation(pin).unwrap_or_default();
+            section.push(
+                vec![
+                    Cell::text(join_distinct(numbers)),
+                    Cell::text(designation(connection.from)),
+                    Cell::text(designation(connection.to)),
+                    Cell::text(potential),
+                    Cell::text(join_distinct(
+                        members.iter().filter_map(|w| w.color.as_deref()),
+                    )),
+                    cross_section,
+                    Cell::text(join_distinct(cores)),
+                    location.into(),
+                ],
+                members.iter().map(|w| AnyId::from(w.id)).collect(),
+            );
+        }
+        ReportOutput {
+            report: Self::ID.into(),
+            title: self.title(),
+            revision: project.revision(),
+            sections: vec![section],
+        }
+    }
+}

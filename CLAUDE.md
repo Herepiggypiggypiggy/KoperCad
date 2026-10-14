@@ -32,6 +32,7 @@ Work is split into workstreams (WS-xx), each run by its own Claude thread.
 | `novo-symbols` | WS-05 | IEC 60617 symbols, connection points, behavior slots |
 | `novo-parts` | WS-07 | Part catalog, part assignment, property sheet model, bulk edit |
 | `novo-workflow` | WS-08 | Keyboard workflow: keymap, commands, palette search, Tab orientation, smart duplicate |
+| `novo-reports` | WS-13 | Generated pages and reports: BOM, device, wire lists, table of contents, paging, Excel/CSV export |
 | `novo-sim` | WS-19 | Simulation engine (Phase 4) |
 | `novo-theme` | Layout and branding | Dark theme, design tokens, icons, logo (`assets/branding`) |
 | `novo-app` | WS-01 | Application shell, wiring crates together |

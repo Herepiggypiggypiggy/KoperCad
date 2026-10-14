@@ -17,6 +17,7 @@ novo-sim = { path = "crates/novo-sim" }
 novo-parts = { path = "crates/novo-parts" }
 novo-workflow = { path = "crates/novo-workflow" }
 novo-theme = { path = "crates/novo-theme" }
+novo-reports = { path = "crates/novo-reports" }
 bytemuck = { version = "1", features = ["derive"] }
 egui = "0.36"
 egui-wgpu = "0.36"
@@ -30,6 +31,8 @@ thiserror = "2"
 egui-phosphor = "0.14"
 rusqlite = { version = "0.40", features = ["bundled", "backup"] }
 tempfile = "3"
+rust_xlsxwriter = { version = "0.99", default-features = false }
+calamine = { version = "0.36", default-features = false }
 eframe = { version = "0.36", default-features = false, features = ["wgpu", "default_fonts", "x11", "wayland"] }
 
 [workspace.lints.rust]
