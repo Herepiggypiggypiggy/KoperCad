@@ -1,0 +1,25 @@
+format = 1
+id = "iec/connectivity/interruption_point"
+name = "Interruption point"
+description = "Off-page connector: every interruption point with the same name is one electrical node."
+standard = "IEC 60617"
+category = "connectivity"
+function = "connectivity.interruption"
+keywords = ["interruption point", "off page", "continuation", "arrow", "link"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+]
+
+anchors = [
+  { role = "tag", at = [3, 6], align = "left" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "polyline", points = [[-2, 4], [0, 7], [2, 4]] },
+]
+
+[behavior]
+kind = "conductor"
+poles = [["1"]]

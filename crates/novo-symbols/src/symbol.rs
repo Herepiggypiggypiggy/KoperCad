@@ -221,6 +221,24 @@ pub struct Behavior {
     pub params: toml::Table,
 }
 
+impl Behavior {
+    /// The `poles` parameter as lists of connection ids; empty when absent
+    /// or malformed.
+    pub fn poles(&self) -> Vec<Vec<&str>> {
+        self.params
+            .get("poles")
+            .and_then(|p| p.as_array())
+            .map(|groups| {
+                groups
+                    .iter()
+                    .filter_map(|g| g.as_array())
+                    .map(|g| g.iter().filter_map(|v| v.as_str()).collect())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+}
+
 impl Symbol {
     /// Parses one symbol from TOML text.
     pub fn from_toml(text: &str) -> Result<Symbol, toml::de::Error> {
@@ -230,6 +248,27 @@ impl Symbol {
     /// Looks up a connection point by its designation.
     pub fn connection(&self, id: &str) -> Option<&Connection> {
         self.connections.iter().find(|c| c.id == id)
+    }
+
+    /// Groups of connection indices that are always joined inside the
+    /// symbol, such as the two sides of a terminal. These are the `poles` of
+    /// a `conductor` behavior; switched paths (contacts, breakers) are not
+    /// bridges because whether they conduct is simulation state.
+    pub fn bridges(&self) -> Vec<Vec<usize>> {
+        if self.behavior.kind != "conductor" {
+            return Vec::new();
+        }
+        self.behavior
+            .poles()
+            .into_iter()
+            .map(|group| {
+                group
+                    .iter()
+                    .filter_map(|id| self.connections.iter().position(|c| c.id == *id))
+                    .collect::<Vec<_>>()
+            })
+            .filter(|group| group.len() >= 2)
+            .collect()
     }
 
     /// Looks up the first anchor with the given role.

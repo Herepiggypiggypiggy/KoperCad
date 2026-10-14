@@ -193,3 +193,23 @@ kind = "none"
     );
     assert!(Symbol::from_toml(&text).is_err());
 }
+
+#[test]
+fn bridges_join_terminal_sides_but_not_contacts() {
+    let lib = builtin();
+    assert_eq!(
+        lib.get("iec/terminals/terminal").unwrap().bridges(),
+        vec![vec![0, 1]]
+    );
+    assert_eq!(
+        lib.get("iec/terminals/terminal_2level").unwrap().bridges(),
+        vec![vec![0, 1], vec![2, 3]]
+    );
+    assert!(lib.get("iec/contacts/no").unwrap().bridges().is_empty());
+    assert!(
+        lib.get("iec/connectivity/interruption_point")
+            .unwrap()
+            .bridges()
+            .is_empty()
+    );
+}

@@ -134,6 +134,7 @@ and the choice of simulation model. Lookups match prefixes, so
 | `signal.*` | `lamp`, `horn`, `buzzer`, `bell` |
 | `terminal`, `terminal.*`, `connector.*` | Terminals, plugs, sockets |
 | `earth`, `earth.*` | Earth, protective earth, chassis |
+| `connectivity.*` | Interruption points, potential feeds, terminal bridges |
 | `passive.*`, `load.*`, `source.*`, `meter.*` | Components, loads, sources, instruments |
 | `plc.input.*`, `plc.output.*`, `plc.supply` | PLC channels and supply |
 
@@ -147,6 +148,9 @@ simulation.
 - `poles`: lists of connection ids that form one switched or conducting
   path. Two ids per path; a changeover lists `[common, break, make]`.
   The validator checks every id exists.
+- `kind = "conductor"`: the `poles` are always joined inside the symbol
+  (terminal sides, connectors, bridges). `Symbol::bridges()` returns them as
+  connection indices, matching `SymbolInstance::bridges` in `novo-core`.
 - `kind = "contact"`: `normally = "open" | "closed" | "changeover"`,
   optional `latching = true` (stays where put: selector, E-stop),
   optional `delay = "on" | "off"` (timer contact).
@@ -163,6 +167,13 @@ simulation.
   "analog"`).
 
 The full list of accepted kinds is `novo_symbols::BEHAVIOR_KINDS`.
+
+## Using a symbol in the model
+
+`novo-core` stores a placed symbol's library key (`SymbolKey`) plus a copy of
+its pins. Map a `Symbol` to it as: key = `id`, pins = `connections` in order
+(name = `id`, offset = `at`), bridges = `Symbol::bridges()`. Connection order
+is stable, so pin indices stay valid across library updates.
 
 ## Adding or changing a symbol
 
