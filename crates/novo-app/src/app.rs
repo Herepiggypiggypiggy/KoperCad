@@ -89,6 +89,8 @@ pub struct NovoApp {
     window_width: f32,
 }
 
+/// Most messages remembered; older ones are forgotten.
+const MESSAGE_HISTORY: usize = 200;
 /// How soon after a change a saved project is written to its file.
 const WRITE_DELAY: Duration = Duration::from_millis(500);
 /// How long to wait before retrying a failed autosave.
@@ -270,6 +272,10 @@ impl NovoApp {
             at: Instant::now(),
             dismissed: false,
         });
+        if self.messages.len() > MESSAGE_HISTORY {
+            let excess = self.messages.len() - MESSAGE_HISTORY;
+            self.messages.drain(..excess);
+        }
     }
 
     // ------------------------------------------------------------------
@@ -407,9 +413,10 @@ impl NovoApp {
             self.message(
                 Level::Error,
                 format!(
-                    "Could not write the project before closing it: {e}. The work is kept and offered back when you open it again."
+                    "Could not close the project: {e}. Your work is also kept in its recovery file."
                 ),
             );
+            return;
         }
         self.project_path = None;
         self.current_page = None;
@@ -421,7 +428,8 @@ impl NovoApp {
     fn tick(&mut self, ctx: &egui::Context) {
         let now = Instant::now();
         // A saved project is written to its file shortly after each change.
-        if self.project_path.is_some() && self.is_dirty() {
+        // While writing fails, wait for the slower retry instead.
+        if self.project_path.is_some() && self.is_dirty() && !self.autosave_failing {
             self.next_tick = self.next_tick.min(now + WRITE_DELAY);
         }
         if now < self.next_tick {
