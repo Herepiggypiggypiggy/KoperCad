@@ -1732,6 +1732,7 @@ dependencies = [
  "eframe",
  "env_logger",
  "log",
+ "lopdf",
  "novo-canvas",
  "novo-checks",
  "novo-core",

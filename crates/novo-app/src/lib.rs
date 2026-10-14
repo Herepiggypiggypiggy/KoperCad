@@ -17,9 +17,10 @@ mod actions;
 mod app;
 mod backend;
 mod canvas;
+mod command_field;
 mod editor_canvas;
+mod keys;
 mod model_canvas;
-mod palette;
 mod settings;
 mod theme;
 
