@@ -921,6 +921,45 @@ fn wires_crossing_a_location_boundary_get_suggested_terminals() {
 }
 
 #[test]
+fn accepting_all_numbers_terminals_in_drawing_order() {
+    // Wires drawn right to left, and suggestions handed over in reverse:
+    // the terminals are still numbered left to right.
+    let mut doc = Document::default();
+    doc.transact("Draw", |tx| {
+        let page = tx.add_page("1")?;
+        let k1 = tx.add_device(tag("=A1+CAB-K1"), "")?;
+        let m1 = tx.add_device(tag("=A1+FLD-M1"), "")?;
+        let ks = row_of_pins(tx, page, k1, &["2", "4", "6"], 40.0, 20.0)?;
+        let ms = row_of_pins(tx, page, m1, &["U1", "V1", "W1"], 40.0, 100.0)?;
+        for i in [2u16, 0, 1] {
+            tx.connect(Endpoint::pin(ks, i), Endpoint::pin(ms, i))?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let mut suggestions = suggest_terminals(doc.project());
+    assert_eq!(suggestions.len(), 3);
+    suggestions.reverse();
+    doc.transact("Accept", |tx| accept_suggestions(tx, &suggestions))
+        .unwrap();
+    let strip = strips(doc.project())[0];
+    let rows: Vec<(String, String)> = screen(doc.project(), strip)
+        .rows
+        .iter()
+        .map(|r| (r.terminal.clone(), r.external.join(",")))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            ("1", "=A1+FLD-M1:U1"),
+            ("2", "=A1+FLD-M1:V1"),
+            ("3", "=A1+FLD-M1:W1"),
+        ]
+        .map(|(t, e)| (t.to_string(), e.to_string()))
+    );
+}
+
+#[test]
 fn the_side_with_a_strip_is_the_cabinet_and_dismissals_stick() {
     let mut doc = Document::default();
     let (wires, _) = doc
