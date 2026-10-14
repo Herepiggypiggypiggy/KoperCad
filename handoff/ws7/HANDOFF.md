@@ -5,7 +5,7 @@
   from main for the last #36 review notes (CSV parsing, line numbers,
   duplicate catalog headers, typed cells, Excel formula tags); see PROGRESS.
 - CI (Actions) is down; reviewers' local fmt + clippy + tests are the signal.
-- Open question for WS-02/WS-11: one terminal-article store.
+- Terminal-article store decided by WS-02 (21:31 UTC): Terminal.part only; strip default terminal_part.<kind>; novo_parts::terminal_part is the resolver.
 
 ## What is in the PR
 - crates/novo-parts/: catalog.rs, search.rs, assign.rs, sheet.rs, table.rs,
