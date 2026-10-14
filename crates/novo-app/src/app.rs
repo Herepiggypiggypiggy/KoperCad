@@ -81,6 +81,9 @@ pub struct NovoApp {
     focus_mode: bool,
     /// The outline flyout is showing over the canvas.
     outline_open: bool,
+    /// The breadcrumb's page link this frame. A click on it toggles the
+    /// flyout, so the flyout must not count it as a click elsewhere.
+    breadcrumb_link: Option<egui::Response>,
     /// Text in the outline's page filter.
     page_filter: String,
     /// Pages visited this session, newest first.
@@ -131,6 +134,7 @@ impl NovoApp {
             autosave_failing: false,
             focus_mode: false,
             outline_open: false,
+            breadcrumb_link: None,
             page_filter: String::new(),
             recent_pages: Vec::new(),
             window_width: 0.0,
@@ -529,6 +533,7 @@ impl NovoApp {
             self.outline_open = false;
         }
 
+        self.breadcrumb_link = None;
         egui::Panel::top("top_bar")
             .exact_size(TOP_BAR)
             .show(ui, |ui| self.top_bar(ui, &mut picked));
@@ -755,6 +760,7 @@ impl NovoApp {
             if link.clicked() && !self.outline_pinned() {
                 self.outline_open ^= true;
             }
+            self.breadcrumb_link = Some(link);
         }
     }
 
@@ -878,7 +884,12 @@ impl NovoApp {
                 });
             });
         let escape = ctx.input(|i| i.key_pressed(egui::Key::Escape));
-        let elsewhere = area.response.clicked_elsewhere() && !toggle.clicked() && !toggle.hovered();
+        // The "Pages" toggle and the breadcrumb's page link open and close
+        // the flyout themselves; a click on either is not a click elsewhere.
+        let opener = |r: &egui::Response| r.clicked() || r.hovered();
+        let elsewhere = area.response.clicked_elsewhere()
+            && !opener(&toggle)
+            && !self.breadcrumb_link.as_ref().is_some_and(opener);
         if escape || elsewhere {
             self.outline_open = false;
         }
@@ -1566,6 +1577,46 @@ mod tests {
         assert_eq!(app.settings().outline_pinned, Some(false));
         frame(&ctx, &mut app, sized(1920.0));
         assert!(!app.outline_pinned());
+    }
+
+    fn click_at(pos: egui::Pos2) -> egui::RawInput {
+        let mut input = sized(1366.0);
+        input.events = vec![
+            egui::Event::PointerMoved(pos),
+            egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: egui::Modifiers::NONE,
+            },
+            egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: egui::Modifiers::NONE,
+            },
+        ];
+        input
+    }
+
+    #[test]
+    fn the_breadcrumb_page_opens_the_flyout_and_a_canvas_click_closes_it() {
+        let ctx = themed_ctx();
+        let mut app = app_with(MemoryBackend::default());
+        app.run(&ctx, Action::NewProject);
+        frame(&ctx, &mut app, sized(1366.0));
+        assert!(!app.outline_pinned());
+        let link = app.breadcrumb_link.as_ref().expect("page link").rect;
+
+        frame(&ctx, &mut app, click_at(link.center()));
+        assert!(app.outline_open, "the breadcrumb click opens the flyout");
+        frame(&ctx, &mut app, sized(1366.0));
+        assert!(app.outline_open, "and it stays open the next frame");
+
+        // A click on the canvas, away from the flyout, closes it.
+        frame(&ctx, &mut app, click_at(egui::pos2(1000.0, 500.0)));
+        frame(&ctx, &mut app, sized(1366.0));
+        assert!(!app.outline_open);
     }
 
     #[test]
