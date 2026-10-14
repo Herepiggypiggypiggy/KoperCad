@@ -78,6 +78,8 @@ pub(crate) struct Workbench {
     pub(super) space_pan: Option<egui::Pos2>,
     /// The tool dock's size last frame, to tell where it would sit.
     pub(super) dock_size: egui::Vec2,
+    /// The inspector's fields while they are edited.
+    pub(super) inspector: super::inspector::InspectorState,
     /// Shift+P: false hides the marks on the drawing (counters stay).
     pub(super) marks: bool,
     /// Design-check results for one project revision.
@@ -128,6 +130,7 @@ impl Default for Workbench {
             pointer_world: None,
             space_pan: None,
             dock_size: egui::Vec2::ZERO,
+            inspector: Default::default(),
             marks: true,
             problems: None,
             pill_rect: egui::Rect::NOTHING,
