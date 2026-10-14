@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "motors"
 function = "motor.ac1"
 keywords = ["motor", "single phase", "1 phase", "m"]
+aliases = ["motor1", "m1"]
 
 connections = [
   { id = "U1", at = [0, 0], dir = "up" },

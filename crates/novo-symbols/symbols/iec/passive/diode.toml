@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "passive"
 function = "passive.diode"
 keywords = ["diode", "rectifier", "freewheeling"]
+aliases = ["d"]
 
 connections = [
   { id = "A", at = [0, 0], dir = "up" },

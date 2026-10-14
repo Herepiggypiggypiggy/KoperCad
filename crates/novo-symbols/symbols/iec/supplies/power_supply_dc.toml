@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "supplies"
 function = "converter.ac_dc"
 keywords = ["power supply", "psu", "24v", "dc", "rectifier", "smps"]
+aliases = ["psu", "g24"]
 
 connections = [
   { id = "L", at = [0, 0], dir = "up" },

@@ -6,6 +6,8 @@ standard = "IEC 60617"
 category = "motors"
 function = "motor.ac3"
 keywords = ["motor", "3 phase", "induction", "asynchronous", "m"]
+aliases = ["motor3", "m3"]
+favorite = true
 
 connections = [
   { id = "U1", at = [0, 0], dir = "up" },

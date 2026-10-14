@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "terminals"
 function = "terminal.disconnect"
 keywords = ["terminal", "disconnect", "knife", "test"]
+aliases = ["xd"]
 
 connections = [
   { id = "1", at = [0, 0], dir = "up" },

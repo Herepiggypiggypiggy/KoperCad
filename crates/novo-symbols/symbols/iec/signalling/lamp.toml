@@ -6,6 +6,8 @@ standard = "IEC 60617"
 category = "signalling"
 function = "signal.lamp"
 keywords = ["lamp", "indicator", "pilot light", "signal", "h"]
+aliases = ["lamp", "h"]
+favorite = true
 
 connections = [
   { id = "X1", at = [0, 0], dir = "up" },

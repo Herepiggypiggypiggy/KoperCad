@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "contacts"
 function = "contact.no.position"
 keywords = ["limit switch", "position", "no"]
+aliases = ["ls", "lsno"]
 
 connections = [
   { id = "13", at = [0, 0], dir = "up" },

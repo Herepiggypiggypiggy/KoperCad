@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "protection"
 function = "protection.surge"
 keywords = ["surge arrester", "spd", "overvoltage", "lightning"]
+aliases = ["spd"]
 
 connections = [
   { id = "1", at = [0, 0], dir = "up" },

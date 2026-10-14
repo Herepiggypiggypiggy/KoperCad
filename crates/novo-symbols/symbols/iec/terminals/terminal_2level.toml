@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "terminals"
 function = "terminal.multilevel"
 keywords = ["terminal", "double level", "two level", "2 tier"]
+aliases = ["x2"]
 
 connections = [
   { id = "1", at = [0, 0], dir = "up" },
