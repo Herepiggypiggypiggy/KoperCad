@@ -4,7 +4,7 @@ Updated: 2026-10-14 (Round 9)
 
 ## Where things are
 - Repo: Herepiggypiggypiggy/NovoElectric. Branch: `claude/project-thread-dft1m7` (the only branch this thread pushes), restarted from main `15c9992`.
-- Round 9 PR (see PROGRESS for its number): `gate1_scenario.rs` gets `scenario_through_the_window` (whole flow through `NovoApp::execute`, headless, real `EditorCanvas`) and the two #38 gap tests filled in. No ignored test left in that file. TEST_REPORT Round 9.
+- Round 9 PR **#87**: `gate1_scenario.rs` gets `scenario_through_the_window` (whole flow through `NovoApp::execute`, headless, real `EditorCanvas`) and the two #38 gap tests filled in. No ignored test left in that file. TEST_REPORT Round 9.
 - novo-tests dev-deps added: `novo-editor` (feature `art`), `egui`, `novo-theme`.
 - BOM terminal count check: #72 (open, fixer) already adds `bom_counts_every_terminal_the_strip_shows`; not duplicated.
 
