@@ -32,7 +32,7 @@ Test counts include the `novo-tests` crate added on top.
 | --- | --- | --- |
 | Model API v0 frozen, with full unit tests | Met, with F1 open | #1 merged; 31 tests in `novo-core`; 14 gate tests in `novo-tests` |
 | Canvas draws model objects | Pending merge of #4 | #4's `PageScene` adapter and tests pass on main |
-| 10,000 objects at 60 fps | Not verifiable here | The container only has llvmpipe (software): #4 reports about 20 fps there. Needs `cargo run --release -p novo-canvas --example stress` on a real GPU. Model side is fine: build 84 ms, netlist 17 ms, page read under 1 ms, one edit 0.3 ms (debug build) |
+| 10,000 objects at 60 fps | Not verifiable here | The container only has llvmpipe (software): the release stress example measured 19 fps here with animation on (10,001 items, 330k triangles, tessellated in 35 ms), matching #4's own figure. Needs `cargo run --release -p novo-canvas --example stress` on a real GPU. Model side is fine: build 84 ms, netlist 17 ms, page read under 1 ms, one edit 0.3 ms (debug build) |
 | Save, close and reopen gives an identical project | Met on #5, except F1 | Gate 1 project, incremental saves after edits and undo, crash recovery and a 10k-object page (save 214 ms, open 253 ms) all reopen byte-identical |
 | Empty app installs and launches; CI green | Launch verified on Linux; installer pending | #3 under Xvfb with llvmpipe: window opens with menus and panels and stays up. The `installer` job on #3 was still running at the time of this round |
 
