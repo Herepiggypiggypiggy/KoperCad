@@ -16,6 +16,7 @@ novo-storage = { path = "crates/novo-storage" }
 novo-sim = { path = "crates/novo-sim" }
 novo-workflow = { path = "crates/novo-workflow" }
 novo-theme = { path = "crates/novo-theme" }
+novo-pdf = { path = "crates/novo-pdf" }
 bytemuck = { version = "1", features = ["derive"] }
 egui = "0.36"
 egui-wgpu = "0.36"
@@ -29,6 +30,7 @@ thiserror = "2"
 egui-phosphor = "0.14"
 rusqlite = { version = "0.40", features = ["bundled", "backup"] }
 tempfile = "3"
+pdf-writer = "0.15"
 eframe = { version = "0.36", default-features = false, features = ["wgpu", "default_fonts", "x11", "wayland"] }
 
 [workspace.lints.rust]
