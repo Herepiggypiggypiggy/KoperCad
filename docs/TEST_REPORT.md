@@ -10,6 +10,22 @@ How a PR is tested: its branch is merged onto the current `main` (a
 `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
 `cargo test --workspace`. Windows results come from the PR's own CI.
 
+## Round 3 (2026-10-14, main `e487ccc`)
+
+main now has #14 (potentials carried through switched poles, terminal level
+fixes) and #16 (experimental build merges `Cargo.lock`-only conflicts).
+fmt, clippy and all 87 workspace tests pass with `novo-tests` merged in.
+
+- The Gate 1 fixture now sets `pass_through` on fuses, the contactor, the
+  breaker and every contact, as the library says. L1, L2 and L3 now reach
+  the motor by name (`-M1:U1` is `L1`), and L reaches the coil's A1 and
+  stops there. There are no potential conflicts.
+  `fixture_matches_library.rs` checks each placed symbol's `pass_through`
+  against `Symbol::pass_through()` minus its bridges.
+- **Round 2's low observation is fixed by #14.** A multi-level terminal
+  given a single terminal is now refused with `TerminalLevels`, and
+  `robustness.rs` tests it.
+
 ## Round 2 (2026-10-14, main `244c008`)
 
 main now has #6 (experimental builds), #11 (non-finite numbers refused,

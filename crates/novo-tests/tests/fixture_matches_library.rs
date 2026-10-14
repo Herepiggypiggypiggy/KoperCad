@@ -55,3 +55,24 @@ fn bridges_match_the_library() {
         }
     }
 }
+
+#[test]
+fn pass_through_matches_the_library() {
+    // The model stores the library's pass-through paths minus its bridges.
+    let library = Library::builtin().unwrap();
+    let mut doc = Document::default();
+    motor_starter(&mut doc).unwrap();
+    for placed in doc.project().symbols() {
+        let key = &placed.symbol.0;
+        let symbol = library.get(key).unwrap();
+        let bridges = symbol.bridges();
+        let expected: Vec<Vec<u16>> = symbol
+            .pass_through()
+            .paths()
+            .iter()
+            .filter(|g| !bridges.contains(g))
+            .map(|g| g.iter().map(|&i| u16::try_from(i).unwrap()).collect())
+            .collect();
+        assert_eq!(placed.pass_through, expected, "pass-through of `{key}`");
+    }
+}

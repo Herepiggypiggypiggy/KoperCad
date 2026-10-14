@@ -231,5 +231,18 @@ fn library_multi_level_terminals_keep_levels_apart() {
             matches!(err, Err(ModelError::TerminalLevels { .. })),
             "`{id}` accepted more terminals than levels"
         );
+        // One terminal for several levels is refused too (since #14): both
+        // levels would carry the same designation.
+        let err = doc.transact("x", |tx| {
+            tx.update::<SymbolInstance>(placed, |s| {
+                if let SymbolRole::Terminal { terminals } = &mut s.role {
+                    terminals.truncate(1);
+                }
+            })
+        });
+        assert!(
+            matches!(err, Err(ModelError::TerminalLevels { .. })),
+            "`{id}` accepted one terminal for {levels} levels"
+        );
     }
 }

@@ -308,6 +308,22 @@ fn build(tx: &mut Tx<'_>) -> Result<MotorStarter> {
     tx.connect(Endpoint::pin(f2_aux, 1), Endpoint::pin(k1_coil, 0))?;
     tx.connect(Endpoint::pin(k1_coil, 1), Endpoint::pin(feed_n, 0))?;
 
+    // Potentials pass through switched poles (fuses, breakers, contacts) as
+    // the library's `Symbol::pass_through()` says; loads end them.
+    let single = vec![vec![0, 1]];
+    let three = vec![vec![0, 1], vec![2, 3], vec![4, 5]];
+    for (symbol, groups) in [
+        (f1_sym, &three),
+        (k1_main, &three),
+        (f3_sym, &single),
+        (s0_sym, &single),
+        (s1_sym, &single),
+        (k1_aux, &single),
+        (f2_aux, &single),
+    ] {
+        tx.update::<SymbolInstance>(symbol, |s| s.pass_through = groups.clone())?;
+    }
+
     // ----- parts ----------------------------------------------------------
     // Fixture data: plausible catalogue entries, not a verified parts list.
     let parts: [(DeviceId, &str, &str); DEVICE_COUNT] = [

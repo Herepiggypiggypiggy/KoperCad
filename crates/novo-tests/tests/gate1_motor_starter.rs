@@ -62,13 +62,16 @@ fn main_circuit_connectivity() {
         );
     }
     // Fuses and contactor main contacts are switching elements: they do not
-    // join nets, so the motor is not on L1 in the netlist.
+    // join nets, but L1 passes through them by name.
     assert!(!net.connected(Endpoint::pin(s.f1_sym, 0), Endpoint::pin(s.f1_sym, 1)));
     assert!(!net.connected(Endpoint::pin(s.k1_main, 0), Endpoint::pin(s.k1_main, 1)));
-    // Current behaviour: potentials stop at switched poles. Once #14 carries
-    // them through pass-through poles and the fixture sets those from the
-    // library, this becomes `Some(s.l1)`.
-    assert_eq!(net.potential_of(Endpoint::pin(s.m1_sym, 0)), None);
+    for (pin, potential) in [(0, s.l1), (1, s.l2), (2, s.l3)] {
+        assert_eq!(
+            net.potential_of(Endpoint::pin(s.m1_sym, pin)),
+            Some(potential),
+            "motor pin {pin}"
+        );
+    }
 
     // Overload heaters (bridges) and terminals conduct, and the cable cores
     // carry the motor wires, so -K1:2 reaches -M1:U1 and so on.
@@ -101,9 +104,16 @@ fn control_circuit_self_hold() {
     assert!(net.connected(Endpoint::pin(s.s0_sym, 1), Endpoint::pin(s.s1_sym, 0)));
     assert!(net.connected(Endpoint::pin(s.s1_sym, 1), Endpoint::pin(s.f2_aux, 0)));
     assert!(net.connected(Endpoint::pin(s.f2_aux, 1), Endpoint::pin(s.k1_coil, 0)));
-    // Control and main circuits are separate supplies.
-    assert_eq!(net.nets_with_potential(s.l).count(), 1);
-    assert_eq!(net.nets_with_potential(s.l1).count(), 1);
+    // L passes through -F3, -S0, -S1/-K1 and -F2 95-96 to the coil, which
+    // ends it: feed, three nets between switches, coil A1.
+    assert_eq!(net.potential_of(Endpoint::pin(s.k1_coil, 0)), Some(s.l));
+    assert_eq!(net.nets_with_potential(s.l).count(), 5);
+    assert_eq!(net.nets_with_potential(s.n).count(), 1);
+    // L1 covers three nets: feed to -F1, -F1 to -K1, and -K1 through the
+    // overload heaters (a bridge) and -X1 to the motor. Control and main
+    // circuits stay separate supplies with no conflicts.
+    assert_eq!(net.nets_with_potential(s.l1).count(), 3);
+    assert_eq!(net.potential_conflicts().count(), 0);
 }
 
 #[test]
