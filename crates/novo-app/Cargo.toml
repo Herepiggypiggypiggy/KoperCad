@@ -1,0 +1,17 @@
+[package]
+name = "novo-app"
+description = "NovoElectric desktop application"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "novoelectric"
+path = "src/main.rs"
+
+[dependencies]
+eframe.workspace = true
+novo-core.workspace = true
+
+[lints]
+workspace = true

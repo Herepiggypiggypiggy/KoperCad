@@ -1,0 +1,27 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "UNLICENSED"
+repository = "https://github.com/Herepiggypiggypiggy/NovoElectric"
+
+[workspace.dependencies]
+novo-core = { path = "crates/novo-core" }
+novo-canvas = { path = "crates/novo-canvas" }
+novo-symbols = { path = "crates/novo-symbols" }
+novo-storage = { path = "crates/novo-storage" }
+novo-sim = { path = "crates/novo-sim" }
+eframe = { version = "0.36", default-features = false, features = ["wgpu", "default_fonts", "x11", "wayland"] }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

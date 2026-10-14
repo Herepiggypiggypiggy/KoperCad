@@ -1,0 +1,11 @@
+[package]
+name = "novo-canvas"
+description = "GPU drawing canvas: pan, zoom, snap, hit testing, selection"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

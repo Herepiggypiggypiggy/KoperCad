@@ -1,0 +1,11 @@
+[package]
+name = "novo-symbols"
+description = "IEC 60617 symbol library and symbol definitions"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true
