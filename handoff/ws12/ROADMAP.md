@@ -1,24 +1,33 @@
 # WS-12 Cables: roadmap
 
-Scope (roadmap WS-12): cable definitions, core-to-wire assignment (colour or number), shields, cable connection screens, cable overview. Done when each cable screen shows both ends and every core.
-Spec: docs/DESIGN.md (cables proposed where connections cross a location boundary, drawn dashed, Enter accepts, Tab next, declined proposals remembered; Cables drawer tab Ctrl+4). Engine and commands first; no UI here.
+Scope (roadmap WS-12): cable definitions, core-to-wire assignment (by colour or number), shields, cable connection screens and the cable overview. Done when each cable screen shows both ends and every core.
+Spec: docs/DESIGN.md. Cables are proposed where connections cross a location boundary. Proposals are drawn dashed; Enter accepts, Tab moves to the next one, and declined proposals are remembered. The drawer's Cables tab is Ctrl+4. Engine and commands only; the UI belongs to the editor and drawer threads.
 
-## Done (first PR, crate crates/novo-cables)
-- kind: CableType (4G1.5, 5G2.5, 7x1 numbered, shielded variants), HD 308 S2 colours (L1 BN, L2 BK, L3 GY, N BU, PE GNYE) in the starter catalog's core order, default_types(), find_part() against the novo-parts catalog (letter code W, same cores and cross-section)
-- propose: wires crossing a location boundary pin to pin, grouped by the two devices they connect (strip -X1 in +CAB to motor -M1 in +FLD); stable core order L1 L2 L3 N L+ L- signals PE; colour type for up to 5 supply conductors, numbered otherwise; cross-section from the wires; tag -W<next> in the cabinet device's function; accept_proposals in one Tx (part from catalog, reused if the project has it); dismiss/restore via wire property cable.propose=false; retype() for a shielded or bigger type
-- edit: assign (moves within cable), unassign, unassign_wire, swap, set_spare (cable property cable.spare), add_shield (SH core), connect_shield (PE, terminal, or a wire; cable property cable.shield.<core>)
-- check: SpareInUse, ProtectiveCoreMisused, ProtectiveOnOtherCore, CoreCountExceeded, MoreCoresThanPart, ShieldUnconnected, UndersizedCore
-- screen: cable_screen (both ends per core, cabinet side left), cable_screens, overview (tag, type, length, from/to, used/cores/spare), to_text
-- strings module with every user-facing string
-- Tests: Gate 1 -W1 proposed and accepted as 4G1.5 L1/L2/L3/PE (one undo step), Gate 1 screen, core order, numbered with spares, edits and checks
+## Done (PR #54, merged as efac4d4)
+- Cable types: 4G1.5, 5G2.5, 7x1 numbered and shielded variants, with HD 308 S2 colours. Catalog part matching against novo-parts. default_types().
+- Proposals at location boundaries, grouped by end-device pair, with a stable core order (L1 L2 L3 N L+ L- signals PE). A colour type is used for up to 5 supply conductors, a numbered one otherwise. Accepting is one undo step and reuses the catalog or project part. Declined proposals are remembered, and retype() is available.
+- Core edits: assign, unassign, swap, spare, shield add/connect.
+- Checks: spare in use, PE misuse in both directions, core count exceeded, more cores than the part has, shield unconnected, undersized core.
+- Cable screen (both ends of every core, cabinet side on the left) and overview (tag, type, length, from/to, used/cores/spare).
+- Tests on the Gate 1 motor starter.
 
 ## Next, in order
-1. Act on review findings until READY (no pushes after READY).
-2. Requests to WS-02 (described in the PR): `CableCore::spare: bool`, a typed shield connection on CableCore (PE / terminal / pin, per end), and a stored dismissal record for proposals (shared with WS-11's terminal.suggest). Move off the properties once they land.
-3. Proposals: walk wires through junctions; cables between a strip and a field junction box with its own strip; combine with WS-11's terminal suggestions (Suggestion carries internal and external devices) so a field device gets terminal + cable in one accept.
-4. Lengths from the cabinet layout / routing (placeholder `length_m` today).
-5. After WS-13: generated cable pages (PageKind::Generated { generator: "cable" }) from cable_screens.
-6. UI is owned by the editor/drawer threads: proposals dashed, Enter accept, Tab next; Cables drawer Ctrl+4 reads overview() and cable_screen().
+1. Follow-up PR from main with the reviewers' non-blocking notes on #54 (reviews by B and C on 42a921b):
+   a. BUG: in propose.rs choose_type, the colour loop `break`s when standard(2, pe) falls back to numbered, so L+PE never tries 3G (BN BU GNYE) and ends up as a numbered 3G "1,2,GNYE". Change it to `continue` (or start at needed.max(3) when pe). Add a test: one line plus PE gives 3G1.5 with L on BN, PE on GNYE and BU free.
+   b. edit.rs shield_connection / check.rs: a `cable.shield.<core> = terminal:<id>` whose terminal was deleted still counts as connected, and the screen shows an empty end. Treat a missing terminal as unconnected (ShieldUnconnected) and add a test.
+   c. edit.rs assign_core: the doc says a wire already on another cable is refused, but only novo-core validation (WireAlreadyOnCore) does that. Add an explicit check with a clear error, or reword the doc.
+   d. screen.rs: cable_screen builds project.netlist() for every cable, so cable_screens and overview rebuild it N times, and ends::rank scans every device for each wire end. Build one netlist and one location-to-rank map per call; this needs internal helpers that take them as arguments.
+   e. Make the rank tie-break agree. propose_cables breaks equal rank by DeviceId, while screen::oriented breaks it by location text, so the proposal's ends[0] and the screen's left column can disagree. Share one rule (e.g. a function in ends.rs).
+   f. kind.rs is_numbered: an empty core name counts as numbered. Use `!c.is_empty() && c.chars().all(..)`.
+   g. Spare marks are stored by core name, so renaming a core drops its mark. Leave this until CableCore::spare exists (item 2), but mention it in the docs.
+2. When WS-02 lands typed fields, move off the properties: CableCore::spare, a typed shield connection per core and per end (PE / terminal / pin), and a stored dismissal record (shared with WS-11).
+3. Proposals:
+   - walk wires through junctions (today only pin-to-pin wires are proposed);
+   - combine with WS-11's terminal suggestions (novo-terminals is on main; its Suggestion carries the internal and external devices), so one accept gives a field device both a terminal and a cable.
+4. Cable lengths from the cabinet layout or routing; today length_m is a placeholder.
+5. Generated cable pages, now that WS-13 novo-reports is on main (#55): PageKind::Generated { generator: "cable" } built from cable_screens, plus a cable list report.
+6. Supply data for the UI threads. Proposals are drawn dashed, Enter accepts and Tab moves on. The Cables drawer (Ctrl+4) reads overview() and cable_screen().
 
 ## Open questions
-- Cable tag structure: today the cabinet device's function only (`=A1-W1`), no location, matching the Gate 1 fixture. Revisit if DESIGN wants `+CAB` on cables.
+- Cable tags currently carry only the function (=A1-W1), with no location. Revisit if DESIGN wants +CAB on cables.
+- For L + PE: should the cable be 3G (with a spare BU) or a 2-core with PE? 3G is the plan in 1a.
