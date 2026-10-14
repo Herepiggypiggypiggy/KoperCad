@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use novo_core::{
-    AnyId, DeviceId, Location, Match, Page, PageId, Project, SymbolId, SymbolRole, Value,
+    AnyId, DeviceId, DeviceTag, Location, Match, PageId, Project, SymbolId, SymbolRole, Value,
     natural_cmp,
 };
 
@@ -31,11 +31,8 @@ pub struct Reference {
     /// Connection designations, `13-14`, or `1-2 3-4 5-6` for main contacts.
     /// Empty for symbols that are neither a main function nor a contact.
     pub pins: String,
-    /// Page and column, from [`Project::location_of`].
+    /// Page, page structure and column, from [`Project::location_of`].
     pub location: Location,
-    /// Structure of the page it is drawn on (`=A2+CAB1`), empty when the
-    /// page has none; see [`page_structure`].
-    pub structure: String,
     /// Position in the project's reading order (pages in natural order,
     /// then left to right, then top to bottom), as in
     /// [`Project::cross_references`].
@@ -57,22 +54,30 @@ impl Reference {
     }
 
     /// The location as read from a page with structure `reader`: `3.4`,
-    /// or `=A2/3.4` when this symbol's page has a different structure.
-    pub fn target_from(&self, reader: &str) -> String {
-        if self.structure.is_empty() || self.structure == reader {
-            self.target()
-        } else {
-            format!("{}/{}", self.structure, self.location)
-        }
+    /// or `=A2/3.4` when this symbol's page has a different structure
+    /// ([`Location::qualified`]).
+    pub fn target_from(&self, reader: &DeviceTag) -> String {
+        self.location.qualified(reader)
     }
 
     /// One row of a contact image or reference list: `NO 13-14 3.4`.
     pub fn row(&self) -> String {
-        self.row_from("")
+        self.row_from(&DeviceTag::default())
+    }
+
+    /// One row of a contact image drawn on the page: [`Reference::row_from`]
+    /// without the kind when the contact numbers already say it, so
+    /// `13-14 3.4` but `NO A-B 3.4`.
+    pub fn image_row_from(&self, reader: &DeviceTag) -> String {
+        if self.kind.numbered_as(&self.pins) {
+            format!("{} {}", self.pins, self.target_from(reader))
+        } else {
+            self.row_from(reader)
+        }
     }
 
     /// [`Reference::row`] as read from a page with structure `reader`.
-    pub fn row_from(&self, reader: &str) -> String {
+    pub fn row_from(&self, reader: &DeviceTag) -> String {
         [self.kind.label(), &self.pins, &self.target_from(reader)]
             .iter()
             .filter(|s| !s.is_empty())
@@ -91,7 +96,7 @@ pub struct Highlight {
     /// Device tag or interruption name, for the dock hint.
     pub name: String,
     /// Structure of the page being read, for the reference format.
-    pub reader: String,
+    pub reader: DeviceTag,
 }
 
 impl Highlight {
@@ -124,36 +129,28 @@ pub struct TagJump<'i> {
     pub others: Vec<&'i Reference>,
 }
 
+/// Where a [`Label`] goes relative to its symbol.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LabelAnchor {
+    /// Under the symbol, left-aligned with it: a coil's contact image
+    /// (IEC 61082), clear of the incoming wire and of the top-right
+    /// warning mark.
+    Below,
+    /// Right of the symbol, on its centre line: a contact's single
+    /// reference, an interruption point's partners.
+    Right,
+}
+
 /// Cross-reference text to draw next to a symbol.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Label {
     pub symbol: SymbolId,
+    pub anchor: LabelAnchor,
     /// One line per row; a coil's contact image has one row per contact.
     pub lines: Vec<String>,
     /// The device has more contacts of some kind drawn than it has
     /// (see [`Issue::TooManyContacts`]); draw the image as a warning.
     pub warning: bool,
-}
-
-/// Page property naming the page's function aspect (`A2` for `=A2`), until
-/// the model gives pages a structure of their own.
-pub const PAGE_FUNCTION_PROPERTY: &str = "function";
-/// Page property naming the page's location aspect (`CAB1` for `+CAB1`).
-pub const PAGE_LOCATION_PROPERTY: &str = "location";
-
-/// The structure prefix of a page, `=A2+CAB1`, from its `function` and
-/// `location` properties; empty when it has neither.
-pub fn page_structure(page: &Page) -> String {
-    let mut out = String::new();
-    for (prefix, key) in [('=', PAGE_FUNCTION_PROPERTY), ('+', PAGE_LOCATION_PROPERTY)] {
-        if let Some(Value::Text(v)) = page.properties.get(key)
-            && !v.trim().is_empty()
-        {
-            out.push(prefix);
-            out.push_str(v.trim().trim_start_matches(prefix));
-        }
-    }
-    out
 }
 
 /// Device property giving how many contacts of a kind the device has,
@@ -216,7 +213,7 @@ pub struct XrefIndex {
     refs: HashMap<SymbolId, Reference>,
     groups: HashMap<Owner, Group>,
     by_page: HashMap<PageId, Vec<SymbolId>>,
-    structures: HashMap<PageId, String>,
+    structures: HashMap<PageId, DeviceTag>,
 }
 
 const LIMITED_KINDS: [ContactKind; 4] = [
@@ -240,7 +237,7 @@ impl XrefIndex {
             .collect();
         index.structures = pages
             .iter()
-            .map(|p| (p.id, page_structure(p)))
+            .map(|p| (p.id, p.structure.clone()))
             .filter(|(_, s)| !s.is_empty())
             .collect();
 
@@ -313,7 +310,6 @@ impl XrefIndex {
                     main,
                     kind,
                     pins,
-                    structure: index.structures.get(&sym.page).cloned().unwrap_or_default(),
                     location,
                     order,
                 },
@@ -336,7 +332,10 @@ impl XrefIndex {
                         else {
                             continue;
                         };
-                        let available = usize::try_from(*limit).unwrap_or(0);
+                        // A negative count is a typing error, not "none".
+                        let Ok(available) = usize::try_from(*limit) else {
+                            continue;
+                        };
                         let drawn = group
                             .symbols
                             .iter()
@@ -435,7 +434,7 @@ impl XrefIndex {
                 let mut lines: Vec<String> = self
                     .contact_image(*device)
                     .into_iter()
-                    .map(|r| r.row_from(&me.structure))
+                    .map(|r| r.image_row_from(&me.location.structure))
                     .collect();
                 for &(kind, drawn, available) in &self.groups[&me.owner].over {
                     warning = true;
@@ -451,7 +450,7 @@ impl XrefIndex {
                 let targets: Vec<String> = self
                     .partners(symbol)
                     .iter()
-                    .map(|r| r.target_from(&me.structure))
+                    .map(|r| r.target_from(&me.location.structure))
                     .collect();
                 if targets.is_empty() {
                     Vec::new()
@@ -460,8 +459,14 @@ impl XrefIndex {
                 }
             }
         };
+        let anchor = if me.main {
+            LabelAnchor::Below
+        } else {
+            LabelAnchor::Right
+        };
         (!lines.is_empty()).then_some(Label {
             symbol,
+            anchor,
             lines,
             warning,
         })

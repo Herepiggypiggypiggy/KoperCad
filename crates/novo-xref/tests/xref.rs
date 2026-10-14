@@ -4,11 +4,12 @@
 use std::time::Instant;
 
 use novo_core::{
-    Command, DeviceId, DeviceTag, Document, PageId, Pin, Placement, Point, SymbolId, SymbolRole, Tx,
+    Command, DeviceId, DeviceTag, Document, Page, PageId, Pin, Placement, Point, SymbolId,
+    SymbolRole, Tx,
 };
 use novo_xref::{
-    ContactKind, FromKey, Issue, LinkError, LiveXref, Navigator, Place, XrefAction, XrefIndex,
-    link_command,
+    ContactKind, FromKey, Issue, LabelAnchor, LinkError, LiveXref, Navigator, Place, XrefAction,
+    XrefIndex, link_command,
 };
 
 fn coil(tx: &mut Tx<'_>, page: PageId, x: f64, device: DeviceId) -> SymbolId {
@@ -83,11 +84,16 @@ fn coil_shows_contact_image_and_contacts_show_the_coil() {
     let x = XrefIndex::build(f.doc.project(), &FromKey);
     assert_eq!(
         x.label(f.k1_coil).unwrap().lines,
-        ["NO 13-14 2.2", "NC 21-22 2.8", "NO 33-34 3.4"]
+        ["13-14 2.2", "21-22 2.8", "33-34 3.4"]
     );
+    assert_eq!(x.label(f.k1_coil).unwrap().anchor, LabelAnchor::Below);
     for c in f.k1_contacts {
-        assert_eq!(x.label(c).unwrap().lines, ["2.5"]);
+        let label = x.label(c).unwrap();
+        assert_eq!(label.lines, ["2.5"]);
+        assert_eq!(label.anchor, LabelAnchor::Right);
     }
+    // Lists keep the kind; the dock hint is read away from the drawing.
+    assert_eq!(x.all_references(f.k1_coil)[1].row(), "NO 13-14 2.2");
     assert_eq!(x.labels_on_page(f.pages[1]).len(), 3);
     assert!(x.labels_on_page(f.pages[0]).is_empty());
     assert!(x.issues().is_empty());
@@ -101,7 +107,7 @@ fn moving_a_contact_updates_the_coil_at_once() {
         .get(f.doc.project(), &FromKey)
         .label(f.k1_coil)
         .unwrap();
-    assert!(before.lines.contains(&"NO 33-34 3.4".to_owned()));
+    assert!(before.lines.contains(&"33-34 3.4".to_owned()));
 
     let moved = f.k1_contacts[2];
     f.doc
@@ -113,7 +119,7 @@ fn moving_a_contact_updates_the_coil_at_once() {
         .get(f.doc.project(), &FromKey)
         .label(f.k1_coil)
         .unwrap();
-    assert!(after.lines.contains(&"NO 33-34 3.10".to_owned()));
+    assert!(after.lines.contains(&"33-34 3.10".to_owned()));
 
     f.doc.undo().unwrap();
     let undone = live
@@ -370,7 +376,7 @@ fn link_a_lone_contact_to_a_coil() {
         x.label(f.k1_coil)
             .unwrap()
             .lines
-            .contains(&"NO 43-44 1.1".to_owned())
+            .contains(&"43-44 1.1".to_owned())
     );
     assert!(x.issues().is_empty());
 
@@ -452,7 +458,7 @@ fn unassigned_coil_becomes_the_main_function_of_a_contact_only_device() {
         }
     );
     let x = XrefIndex::build(p, &FromKey);
-    assert_eq!(x.label(coil_sym).unwrap().lines, ["NO 13-14 3.8"]);
+    assert_eq!(x.label(coil_sym).unwrap().lines, ["13-14 3.8"]);
     assert_eq!(x.label(k3_contact).unwrap().lines, ["1.1"]);
     assert!(x.issues().is_empty());
 
@@ -604,7 +610,7 @@ fn builtin_library_drives_the_contact_image() {
     let x = XrefIndex::build(doc.project(), &lib);
     assert_eq!(
         x.label(k1_coil).unwrap().lines,
-        ["main 1-2 3-4 5-6 1.3", "NC 21-22 1.5"]
+        ["1-2 3-4 5-6 1.3", "21-22 1.5"]
     );
     let image = x.contact_image(x.reference(k1_coil).unwrap().device().unwrap());
     assert_eq!(image[0].kind, ContactKind::Power);
@@ -659,7 +665,8 @@ fn structure_prefix_only_when_it_differs() {
             let p2 = tx.add_page("2")?;
             let p3 = tx.add_page("3")?;
             for (p, f) in [(p1, "A1"), (p2, "A1"), (p3, "A2")] {
-                tx.set_property(p, novo_xref::PAGE_FUNCTION_PROPERTY, Some(f.into()))?;
+                let structure = DeviceTag::parse(&format!("={f}"))?;
+                tx.update::<Page>(p, |page| page.structure = structure)?;
             }
             let k1 = tx.add_device(DeviceTag::parse("=A1-K1")?, "")?;
             let c = coil(tx, p1, 10.0, k1);
@@ -671,7 +678,7 @@ fn structure_prefix_only_when_it_differs() {
     let x = XrefIndex::build(doc.project(), &FromKey);
     assert_eq!(
         x.label(coil_sym).unwrap().lines,
-        ["NO 13-14 2.1", "NC 21-22 =A2/3.1"]
+        ["13-14 2.1", "21-22 =A2/3.1"]
     );
     assert_eq!(x.label(near).unwrap().lines, ["1.1"]);
     assert_eq!(x.label(far).unwrap().lines, ["=A1/1.1"]);
@@ -692,4 +699,31 @@ fn exact_tag_jumps_to_the_main_location() {
     assert_eq!(jump.others.len(), 3);
     assert!(x.go_to_tag(p, "-K").is_none()); // only a prefix
     assert!(x.go_to_tag(p, "-Q9").is_none());
+}
+
+#[test]
+fn link_renumbers_when_the_ordinal_is_taken() {
+    // -K1 has 13-14, 21-22 and 33-34; a 23-24 shares no pin name with them,
+    // but ordinal 2 is taken by the NC contact (EN 50005).
+    let mut f = fixture();
+    let page = f.pages[0];
+    let (lone, _) = f
+        .doc
+        .transact("Place", |tx| {
+            let k2 = tx.add_device(DeviceTag::parse("-K2")?, "")?;
+            Ok(contact(tx, page, 20.0, "iec/contacts/no", ["23", "24"], k2))
+        })
+        .unwrap();
+    let cmd = link_command(f.doc.project(), &FromKey, lone, f.k1_coil).unwrap();
+    f.doc.execute(cmd).unwrap();
+    let names: Vec<String> = f
+        .doc
+        .project()
+        .symbol(lone)
+        .unwrap()
+        .pins
+        .iter()
+        .map(|p| p.name.clone())
+        .collect();
+    assert_eq!(names, ["43", "44"]);
 }

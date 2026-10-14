@@ -249,6 +249,7 @@ fn a_source_declares_its_system_once() {
                 pen: false,
             },
             frequency_hz: Some(50.0),
+            prefix: String::new(),
         })
         .unwrap()
         .created;
@@ -301,6 +302,31 @@ fn a_source_declares_its_system_once() {
         assert_eq!(net.potential_of(start), Some(members[i]));
     }
     assert_eq!(net.potential_conflicts().count(), 0);
+
+    // A repeated pin is refused.
+    assert!(
+        doc.execute(Command::FeedSystem {
+            symbol: supply,
+            pins: vec![0, 0],
+            system,
+        })
+        .is_err()
+    );
+    // An isolated system has its own potentials.
+    let isolated = doc
+        .execute(Command::AddPotentialSystem {
+            name: "230 V control transformer".into(),
+            set: PotentialSet::SinglePhase { voltage: 230.0 },
+            frequency_hz: Some(50.0),
+            prefix: "T1-".into(),
+        })
+        .unwrap()
+        .created;
+    assert_eq!(isolated.len(), 4, "the system and T1-L, T1-N, T1-PE");
+    let AnyId::Potential(t1_n) = isolated[2] else {
+        panic!("{isolated:?}")
+    };
+    assert_eq!(doc.project().potential(t1_n).unwrap().name, "T1-N");
 
     // More pins than the system has potentials is refused.
     assert!(

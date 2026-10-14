@@ -11,7 +11,9 @@
 //! stay with the shell.
 
 use egui::{Key, Modifiers};
-use novo_canvas::model::{self, ModelStyle, PageScene, PlaceholderArt, SymbolArt, item_id};
+use novo_canvas::model::{
+    self, ModelStyle, PageScene, PlaceholderArt, SymbolArt, SymbolNote, item_id,
+};
 use novo_canvas::widget::{CanvasView, EscapeTarget};
 use novo_canvas::{Color, Item, ItemId, Primitive, SelectOp, Shape, Stroke, Vec2};
 use novo_core::{AnyId, ChangeSet, DeviceId, Document, PageId, Point};
@@ -83,6 +85,10 @@ pub struct SchematicView {
     swallow: bool,
     /// Where the canvas was drawn last frame, in screen points.
     rect: egui::Rect,
+    /// Text the shell draws next to symbols (cross references).
+    notes: Vec<SymbolNote>,
+    /// `notes` changed since they were last handed to the scene.
+    notes_dirty: bool,
 }
 
 impl Default for SchematicView {
@@ -126,6 +132,18 @@ impl SchematicView {
             goto: None,
             swallow: false,
             rect: egui::Rect::NOTHING,
+            notes: Vec::new(),
+            notes_dirty: false,
+        }
+    }
+
+    /// Text drawn next to symbols on the shown page, such as cross
+    /// references. It becomes part of the page scene, so it scales, prints
+    /// and hit-tests like the symbols' own tags. Cheap to call every frame.
+    pub fn set_notes(&mut self, notes: Vec<SymbolNote>) {
+        if notes != self.notes {
+            self.notes = notes;
+            self.notes_dirty = true;
         }
     }
 
@@ -228,6 +246,13 @@ impl SchematicView {
                 self.canvas.zoom_to_fit();
             }
             self.revision = Some(project.revision());
+            self.notes_dirty = true;
+        }
+        if self.notes_dirty
+            && let Some(scene) = &mut self.scene
+        {
+            scene.set_notes(project, self.notes.iter().cloned(), &self.art);
+            self.notes_dirty = false;
         }
     }
 

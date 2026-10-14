@@ -34,10 +34,11 @@ use novo_core::{AnyId, Page, PageId, PageKind, Project, SymbolId, SymbolRole, Te
 use novo_reports::{GeneratedSheet, LiveReports, PageLayout};
 use pdf_writer::types::{ActionType, AnnotationType, PageMode};
 use pdf_writer::{Finish, Name, Pdf, Rect, Ref, TextStr};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 
 pub use draw::PT_PER_MM;
+pub use novo_canvas::model::SymbolNote;
 
 /// Which pages to export.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -62,6 +63,9 @@ pub struct PdfOptions {
     pub links: bool,
     /// Document title; the project name when `None`.
     pub title: Option<String>,
+    /// Text next to symbols, by page: the cross references the canvas
+    /// shows (novo-xref's `labels_on_page`). Empty draws none.
+    pub notes: BTreeMap<PageId, Vec<SymbolNote>>,
 }
 
 impl Default for PdfOptions {
@@ -72,6 +76,7 @@ impl Default for PdfOptions {
             bookmarks: true,
             links: true,
             title: None,
+            notes: BTreeMap::new(),
         }
     }
 }
@@ -87,6 +92,8 @@ pub fn print_style() -> ModelStyle {
         tag_color: ink,
         sheet_fill: None,
         frame_color: ink,
+        note_color: ink,
+        note_warning_color: ink,
         ..ModelStyle::default()
     }
 }
@@ -281,6 +288,9 @@ pub fn export_pdf_with_reports(
             let page = sheet.page;
             let mut scene = PageScene::new(project, page.id, art);
             scene.set_style(options.style, project, art);
+            if let Some(notes) = options.notes.get(&page.id) {
+                scene.set_notes(project, notes.iter().cloned(), art);
+            }
             let s = scene.scene();
             let mut items: Vec<_> = s
                 .iter()

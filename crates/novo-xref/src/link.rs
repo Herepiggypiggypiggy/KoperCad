@@ -64,10 +64,12 @@ fn device_has_main(project: &Project, device: DeviceId) -> bool {
 /// - A contact and a coil, in either order: the contact joins the coil's
 ///   device. An unassigned coil linked to a contact joins the contact's
 ///   device as its main function, which is refused when that device
-///   already has one ([`LinkError::DeviceHasMain`]). A contact whose old device is left with nothing drawn and no
-///   data of its own is deleted with it. If the contact's connection
-///   designations clash with a contact already on the device, it gets the
-///   next free ones (`13-14`, then `23-24`).
+///   already has one ([`LinkError::DeviceHasMain`]).
+///   A contact whose old device is left with nothing drawn and no data of
+///   its own is deleted with it. If the contact's connection designations
+///   clash with a contact already on the device (the same pin name, or the
+///   same EN 50005 ordinal: `13-14` next to `11-12`), it gets the next
+///   free ones (`13-14`, then `23-24`).
 /// - Two contacts: `first` joins the device of the partner (or of whichever
 ///   has a coil).
 pub fn link_command(
@@ -121,7 +123,9 @@ pub fn link_command(
     let target = target.ok_or(LinkError::NoDevice)?;
 
     // A coil (anything that is not a contact) that joins a device becomes
-    // its main function; a device has only one.
+    // its main function; a device has only one. Linking the other way
+    // round would move a contact off a device that has its coil, so the
+    // link is refused instead.
     let joins_as_main =
         !ContactKind::classify(functions.function(&aux.symbol), &aux.symbol).is_contact();
     if joins_as_main && device_has_main(project, target) {
@@ -198,18 +202,6 @@ fn is_disposable(project: &Project, device: DeviceId, leaving: SymbolId) -> bool
             .all(|r| r == AnyId::Symbol(leaving))
 }
 
-/// EN 50005 auxiliary contact numbers: the ordinal digit (1 to 9) followed by
-/// the function digit. Normally closed contacts end in 1-2, normally open in
-/// 3-4, changeovers in 1-2-4.
-fn function_digits(kind: ContactKind) -> Option<&'static [char]> {
-    match kind {
-        ContactKind::NormallyOpen => Some(&['3', '4']),
-        ContactKind::NormallyClosed => Some(&['1', '2']),
-        ContactKind::Changeover => Some(&['1', '2', '4']),
-        _ => None,
-    }
-}
-
 /// The ordinal of a two-digit auxiliary contact number, `2` for `23`.
 fn ordinal(pin: &str) -> Option<u32> {
     let mut chars = pin.chars();
@@ -229,7 +221,7 @@ fn renumber_if_clashing(
     target: DeviceId,
 ) -> bool {
     let kind = ContactKind::classify(functions.function(&moved.symbol), &moved.symbol);
-    let Some(digits) = function_digits(kind) else {
+    let Some(digits) = kind.function_digits() else {
         return false;
     };
     let existing: Vec<&SymbolInstance> = project
@@ -241,9 +233,6 @@ fn renumber_if_clashing(
         .iter()
         .flat_map(|s| s.pins.iter().map(|p| p.name.as_str()))
         .collect();
-    if !moved.pins.iter().any(|p| taken.contains(&p.name.as_str())) {
-        return false;
-    }
     // Only renumber pins that already follow the scheme.
     let mut ours: Vec<usize> = (0..moved.pins.len()).collect();
     ours.sort_by(|&x, &y| natural_cmp(&moved.pins[x].name, &moved.pins[y].name));
@@ -254,7 +243,13 @@ fn renumber_if_clashing(
     {
         return false;
     }
+    // Ordinals are unique per device across NO, NC and CO contacts.
     let used: Vec<u32> = taken.iter().filter_map(|p| ordinal(p)).collect();
+    let clashes = moved.pins.iter().any(|p| taken.contains(&p.name.as_str()))
+        || ordinal(&moved.pins[ours[0]].name).is_some_and(|o| used.contains(&o));
+    if !clashes {
+        return false;
+    }
     let Some(free) = (1..=9).find(|o| !used.contains(o)) else {
         return false;
     };

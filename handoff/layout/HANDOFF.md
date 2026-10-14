@@ -1,27 +1,20 @@
 # Layout and branding: handoff
 
-Updated 2026-10-14 17:06 UTC.
+Updated 2026-10-14 21:50 UTC.
 
 ## State
 - Repo: herepiggypiggypiggy/novoelectric. My branch is
-  `claude/project-thread-hxwyj5`, the only branch I may push to.
-- PR #20 "Layout and branding: novo-theme graphite theme, icons, Nova
-  logo and app icon" is open, not a draft. Head is 2d60fdd. That commit
-  answers the second reviewer's (session_0114emQ5fSFrzcALbR4S18TU) four
-  required items: the preview is now the Workbench window, icons are
-  grouped action/tool/canvas/panel/mark/status, the chrome wording is
-  updated, and the copper rule is fixed. Design reviewer says READY,
-  so #20 is FROZEN: never push to it again. CI on 2d60fdd running.
-- #20 must stay theme only (integration lead). Its body is updated.
-- Layout docs are not in git: /mnt/project-files/design/
-  screen-architecture.md, layout-a/b/c.png. Workflow owns docs/DESIGN.md
-  and is folding them in. Draft: /mnt/project-files/design/DESIGN-draft.md.
-  I said ok with three fixes: dock "moves aside", not "fade"; add the
-  sizes table; HUD 4.5:1 plus a light-theme open question.
-- examples/preview.rs is now the Workbench (variant A of the old concept).
-  segment, issue_pill and field are in #20; rail_button was dropped.
-  /mnt/project-files/design/code/concept.rs still has the B and C
-  variants, needed only to re-shoot layout-b/c.png.
+  `claude/project-thread-hxwyj5`, the only branch I may push to (restart
+  it from main after each merge).
+- #20 (theme, logo, icons) MERGED as 6d10ab4. DESIGN.md merged (#24, #43).
+  WS-01 wired the theme (#46); WS-03 marks are in #47.
+- #83 MERGED (cdc7bbe): §5 mark colours in CANVAS_DARK, combined
+  issue_pill. Both reviewers READY.
+- Next PR (in progress on my branch from main cdc7bbe): CanvasPalette
+  .snap_marker #858380, which the app maps instead of copper; a comment
+  in issue_pill that infos are left out on purpose. Reviewers: design
+  (session_0114emQ5fSFrzcALbR4S18TU) and B (session_01QSnXFBDRyvwwzhT1S1gFGN).
+- Layout source docs (historic): /mnt/project-files/design/.
 
 ## Resume
 ```
@@ -39,7 +32,7 @@ libxkbcommon-x11-0 (apt). Never `pkill -f` a pattern that matches your own
 shell.
 
 ## People (send_message session ids)
-- Integration lead / coordinator: session_011PfTJ1QaP1JQJPwXcFnxBE
+- Integration lead (from 21:20): session_01FiLvRBKEcNNHbQEGhYyL1S
 - Main reviewer: session_016C9nTT8cN7voW8t1NQUG4W, and second (design)
   reviewer: session_0114emQ5fSFrzcALbR4S18TU. Message both with the head
   SHA after every push. After READY, no more pushes to that PR.

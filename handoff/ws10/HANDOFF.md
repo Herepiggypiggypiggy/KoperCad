@@ -1,17 +1,15 @@
 # WS-10 Cross references: handoff
 
-Updated 2026-10-14 17:25 UTC.
+Updated 2026-10-14 23:30 UTC.
 
 ## State
-- Repo github.com/Herepiggypiggypiggy/NovoElectric, branch
-  `claude/project-thread-mtm4pw`, draft PR #31.
-- Head 2c9f74f93bda01a7d788d888dc3601ae7795f8a9 (no leading slash; before: cd8482a merged main incl.
-  DESIGN.md; added =A2/3.4 structure prefix and go_to_tag). Previous head
-  37b3247 was green on Linux + Windows; CI on cd8482a pending.
-- Main reviewer (cse_016C9nTT8cN7voW8t1NQUG4W) and Workflow thread have the
-  head SHA. No review verdict yet. Still a draft: mark ready when CI green.
-- Asked WS-02 for Page structure field and pinned-page freeze support.
-- Nothing half-done locally; working tree clean.
+- #31 and #89 merged. New PR from main on `claude/project-thread-mtm4pw`:
+  compact contact image (kind dropped when EN 50005 numbers say it) and
+  `Label.anchor` (Below for coils, Right for contacts), from the #93
+  design review. WS-03 asked to add the anchor to canvas `SymbolNote`.
+- Reference format stays `3.4` (DESIGN §3); a `/2.5` switch would be a
+  Workflow-thread DESIGN change first.
+- Main reviewer cse_016C9nTT8cN7voW8t1NQUG4W gets the head SHA after each push.
 
 ## Resume
 ```
@@ -21,8 +19,7 @@ cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo run --release -p novo-xref --example xref_scale   # ~11 ms / 10k symbols
 ```
-Then: check CI on #31; if green, mark ready (update_pull_request draft=false)
-and message the reviewer the head SHA. PR is subscribed for activity.
+CI (Actions) is down: the reviewer's local fmt/clippy/test run is the CI signal.
 
 ## Code map (crates/novo-xref)
 - index.rs: XrefIndex::build (one pass, reading order = model's), label,
@@ -37,7 +34,7 @@ and message the reviewer the head SHA. PR is subscribed for activity.
 - tests/xref.rs: acceptance tests; examples/xref_scale.rs: timing.
 
 ## Who to talk to (send_message)
-- Integration lead / coordinator: session_011PfTJ1QaP1JQJPwXcFnxBE
+- Integration lead: cse_01FiLvRBKEcNNHbQEGhYyL1S (old one session_011PfTJ1QaP1JQJPwXcFnxBE idle)
 - Main reviewer: cse_016C9nTT8cN7voW8t1NQUG4W
 - Workflow (docs/DESIGN.md, acceptance list): cse_01JHYmmTDsVHDL7pEab8MGwy
 - WS-02 data model: cse_01B1jpjzeDiXvWoBCsv1BWt9
@@ -47,7 +44,7 @@ and message the reviewer the head SHA. PR is subscribed for activity.
 Roster: /mnt/project-files/coordination/threads.md
 
 ## Rules and decisions
-- After reviewer says READY: no more pushes to #31; follow-ups in a new PR.
+- After reviewer says READY: no more pushes to that PR; follow-ups in a new PR from main.
 - After every push: message the reviewer the new head SHA. Check PR is open
   before pushing.
 - Until docs/DESIGN.md and #35 land: engine and commands only, no UI.
@@ -58,7 +55,7 @@ Roster: /mnt/project-files/coordination/threads.md
 - Contact limits read device props contacts.main/no/nc/co until WS-07.
 - Reference format (DESIGN.md §3, WS-10 owns it): page.column `3.4` (no leading slash, Workflow agreed),
   `=A2/3.4` when the target page's structure differs from the reader's.
-  Page structure read from page props `function`/`location` until WS-02.
+  Structure comes from core `Page.structure`; formatting is `Location::qualified`.
 - Ctrl+K exact tag + Enter: XrefIndex::go_to_tag (main location + others).
 - Commits end with Co-Authored-By + Claude-Session lines; PR body keeps
   the two-line attribution block first.

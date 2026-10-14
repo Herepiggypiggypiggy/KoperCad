@@ -15,25 +15,29 @@ P3 too-many-contacts in the contact image).
   XrefAction (one list for context menu + command bar), issues, find via
   Project::search. Built on #26 model API (location_of, cross_references,
   SetRole, PageFormat::columns). 19 integration tests + unit tests + doctest.
-- Draft PR #31. DESIGN.md format (=A2/3.4) and go_to_tag (Ctrl+K exact).
+- #31 merged: DESIGN.md format (=A2/3.4) and go_to_tag (Ctrl+K exact).
+- F## Next, in order
+1. #89 merged. Get the contact-image PR (compact rows, Label.anchor) READY.
+2. Review notes still open from #31:
+   - Renaming a named interruption point on link can split a node: make it
+     a proposal or a warning.
+   - Reading order: call `Project::cross_references` instead of re-sorting,
+     so the structure-first page order stays in step with core.
+   - A terminal symbol is grouped only under its first terminal's strip.
+   - Renumbering gives up silently when ordinals 1-9 are all used; report
+     it as an issue once WS-14 checks consume `issues()`.
+   - WS-03 to honour `Label.anchor` (Below/Right) in canvas `SymbolNote`.
+3. Share one ContactKind classifier with WS-14 novo-checks (#50 copies it).
+4. Help WS-03 / WS-01 draw `labels_on_page` and the highlight in the scene.
+5. Primary link path: tag in place / drop a contact on a coil (WS-06).
+6. Contact limits from parts (WS-07) instead of `contacts.*` device props.
+7. Pinned-flow freeze (DESIGN.md §8) once WS-02 models it.
+8. Incremental index only if the 10k build (~11 ms release) gets too slow.
 
-## Next, in order
-1. CI green on Linux + Windows for #31, mark ready, get reviewer READY.
-2. After #31 merges: help Canvas (cse_013KCL5cYRtSrq4yndv3Z7TD, #28) draw
-   `labels_on_page` and `set_related(highlight().on_page)`; help App shell /
-   WS-08 (cse_01TAFG6LPGy2WMwhJYXmxqxF, #29) bind G, Shift+G, Alt+Left/Right
-   and register XrefAction ids in the command bar. They own that code.
-3. Primary link path per Workflow thread: giving a contact its device by
-   typing the tag in place or dragging onto the coil (WS-06 owns editing;
-   offer `link_command` / SetRole helpers).
-4. Contact limits from parts (WS-07) instead of `contacts.*` device props.
-5. Incremental index update from ChangeSet if 10k build (~11 ms release)
-   ever becomes a frame-time problem.
+Decided: no "other direction" retry before DeviceHasMain. The only other
+direction moves a contact off a device that already has its coil.
 
-6. Pinned-flow freeze (DESIGN.md §8): show frozen locations on frozen
-   pages once WS-02 models revisions/freeze.
-7. When WS-02's Page.structure PR (after #35) merges: use
-   Location.structure in page_structure()/Reference.structure, drop the
+e_structure()/Reference.structure, drop the
    `function`/`location` page props (new PR from main if #31 is READY).
 
 ## Open questions

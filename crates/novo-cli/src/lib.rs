@@ -14,7 +14,7 @@ use clap::{Parser, Subcommand};
 use novo_checks::{Problem, ProblemKind, Severity, Summary};
 use novo_core::Project;
 use novo_editor::art::LibraryArt;
-use novo_pdf::{PageSet, PdfOptions};
+use novo_pdf::{PageSet, PdfOptions, SymbolNote};
 use novo_py::ReportFormat;
 use novo_reports::CsvOptions;
 use novo_storage::ProjectFile;
@@ -320,6 +320,19 @@ fn pdf(project: &Project, pages: &[String]) -> Result<Vec<u8>, Failure> {
     }
     let library = novo_py::library().map_err(|e| Failure::new(exit::UNAVAILABLE, e.to_string()))?;
     let art = LibraryArt::new(library, options.style.symbol);
+    // The cross references the canvas shows, printed the same way.
+    let xref = novo_xref::XrefIndex::build(project, library);
+    options.notes = project
+        .pages()
+        .map(|p| {
+            let notes = xref.labels_on_page(p.id).into_iter().map(|l| SymbolNote {
+                symbol: l.symbol,
+                lines: l.lines,
+                warning: l.warning,
+            });
+            (p.id, notes.collect())
+        })
+        .collect();
     novo_pdf::export_pdf_with_art(project, &options, &art)
         .map_err(|e| Failure::new(exit::WRITE, e.to_string()))
 }
