@@ -1,41 +1,36 @@
 #!/usr/bin/env bash
-# Prove that a pull request's new head differs from its reviewed head only by
-# merging main: the PR's own change against main must be identical, apart
-# from Cargo.lock and the crate-list lines in CLAUDE.md / Cargo.toml.
+# Prove that a pull request's new head is its reviewed head plus mechanical
+# merges of main only. Every commit in <reviewed>..<head> must be a two-parent
+# merge whose first parent is the previous head and whose second parent is on
+# main, with a tree equal to git's automatic merge of those parents, except
+# for Cargo.lock and crate-list lines / resolved conflict markers in CLAUDE.md
+# and Cargo.toml.
 #
-# When this passes, the reviewer's READY on <reviewed> carries over to <head>
-# and the coordinator may merge without asking for a re-review (MAIN-HANDOFF.md).
+# When this passes, the reviewer's READY on <reviewed> carries over to <head>;
+# the coordinator pastes this script's output into the merge comment. A
+# lock-only difference passes, so `cargo test --workspace` is still re-run on
+# the new head before merging. Needs git >= 2.38 (merge-tree --write-tree).
+# (Design and first version by main reviewer A, review of #51.)
 #
 # Usage: scripts/check-mechanical-merge.sh <reviewed-sha> <new-head-sha>
 set -euo pipefail
-
-reviewed=$1
-head=$2
-git fetch -q origin main
-
-# The PR's change as reviewed (against the main it was based on) and as it
-# stands now (against current main).
-before_base=$(git merge-base origin/main "$reviewed")
-after_base=$(git merge-base origin/main "$head")
-
-normalize() {
-  # Keep only the PR's own added and removed lines (context shifts when main
-  # moves), minus the crate-list lines a main merge may reshuffle.
-  grep -v -E '^(index |@@ | )' |
-    grep -v -E '^[ +-]\| `novo-[a-z-]+` \|' |
-    grep -v -E '^[ +-]novo-[a-z-]+ = \{ path = '
-}
-
-pathspec=(-- . ':(exclude)Cargo.lock')
-git diff "$before_base" "$reviewed" "${pathspec[@]}" | normalize > /tmp/mech-before.$$
-git diff "$after_base" "$head" "${pathspec[@]}" | normalize > /tmp/mech-after.$$
-
-if diff -q /tmp/mech-before.$$ /tmp/mech-after.$$ >/dev/null; then
-  echo "OK: $head carries exactly the change reviewed at $reviewed"
-  rm -f /tmp/mech-before.$$ /tmp/mech-after.$$
-  exit 0
-fi
-echo "DIFFERENT: the PR's own change moved between $reviewed and $head:" >&2
-diff /tmp/mech-before.$$ /tmp/mech-after.$$ | head -60 >&2
-rm -f /tmp/mech-before.$$ /tmp/mech-after.$$
-exit 1
+reviewed=$(git rev-parse "$1^{commit}"); head=$(git rev-parse "$2^{commit}")
+git merge-base --is-ancestor "$reviewed" "$head" || { echo "DIFFERENT: $reviewed is not an ancestor of $head" >&2; exit 1; }
+prev=$reviewed
+for c in $(git rev-list --first-parent --reverse "$reviewed..$head"); do
+  read -r p1 p2 extra <<<"$(git rev-list --parents -n1 "$c" | cut -d' ' -f2-)"
+  [ "$p1" = "$prev" ] && [ -n "${p2:-}" ] && [ -z "${extra:-}" ] || { echo "DIFFERENT: $c is not a two-parent merge on top of $prev" >&2; exit 1; }
+  git merge-base --is-ancestor "$p2" origin/main || { echo "DIFFERENT: $c merges $p2, which is not on main" >&2; exit 1; }
+  auto=$(git merge-tree --write-tree "$p1" "$p2" | head -n1 || true)
+  if ! git diff --quiet "$auto" "$c" -- . ':(exclude)Cargo.lock' ':(exclude)CLAUDE.md' ':(exclude)Cargo.toml'; then
+    echo "DIFFERENT: $c changes code beyond git's automatic merge:" >&2
+    git diff --stat "$auto" "$c" -- . ':(exclude)Cargo.lock' ':(exclude)CLAUDE.md' ':(exclude)Cargo.toml' >&2; exit 1
+  fi
+  # The mechanical files may differ from git's merge only in crate-list lines and resolved conflict markers.
+  if git diff "$auto" "$c" -- CLAUDE.md Cargo.toml | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) ' |
+     grep -vqE '^[+-](\| `novo-[a-z-]+` \||novo-[a-z-]+ = \{ path = |<<<<<<< |=======$|>>>>>>> )'; then
+    echo "DIFFERENT: $c edits CLAUDE.md/Cargo.toml beyond crate-list lines" >&2; exit 1
+  fi
+  prev=$c
+done
+echo "OK: $head is $reviewed plus mechanical main merges"
