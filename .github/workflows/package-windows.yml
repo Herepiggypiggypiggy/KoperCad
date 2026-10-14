@@ -53,11 +53,20 @@ jobs:
           if (Get-LocalGroupMember -Group Administrators | Where-Object Name -like "*\$user") { throw "test user is an admin" }
           $cred = New-Object PSCredential("$env:COMPUTERNAME\$user", $pw)
 
+          # Processes started with -Credential inherit this job's environment,
+          # including TEMP, which the test user cannot write to. Give it a
+          # work folder of its own.
+          $work = "C:\novotest"
+          New-Item -ItemType Directory -Force "$work\temp" | Out-Null
+          icacls $work /grant "${user}:(OI)(CI)F" | Out-Null
+          $env:TEMP = "$work\temp"
+          $env:TMP = "$work\temp"
+
           $setup = (Get-ChildItem dist\NovoElectric-*-setup.exe)[0]
-          Copy-Item $setup.FullName C:\Users\Public\novo-setup.exe
-          $p = Start-Process C:\Users\Public\novo-setup.exe -Credential $cred -LoadUserProfile -WorkingDirectory C:\Users\Public `
-            -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=C:\Users\Public\novo-install.log" -Wait -PassThru
-          Get-Content C:\Users\Public\novo-install.log -ErrorAction SilentlyContinue | Select-Object -Last 15
+          Copy-Item $setup.FullName "$work\novo-setup.exe"
+          $p = Start-Process "$work\novo-setup.exe" -Credential $cred -LoadUserProfile -WorkingDirectory $work `
+            -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=$work\install.log" -Wait -PassThru
+          Get-Content "$work\install.log" -ErrorAction SilentlyContinue | Select-Object -Last 20
           if ($p.ExitCode -ne 0) { throw "installer exited with $($p.ExitCode)" }
 
           $exe = "C:\Users\$user\AppData\Local\Programs\NovoElectric\novoelectric.exe"
@@ -65,7 +74,7 @@ jobs:
           if (Test-Path "HKLM:\Software\Classes\NovoElectric.Project") { throw "file association was written machine-wide" }
           if (Test-Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{AEB465B9-04F0-475B-AD7F-091D638587B5}_is1") { throw "uninstall entry was written machine-wide" }
 
-          $app = Start-Process $exe -Credential $cred -LoadUserProfile -WorkingDirectory C:\Users\Public -PassThru
+          $app = Start-Process $exe -Credential $cred -LoadUserProfile -WorkingDirectory $work -PassThru
           Start-Sleep -Seconds 10
           if ($app.HasExited) { throw "novoelectric.exe exited at startup with code $($app.ExitCode)" }
           Stop-Process -Id $app.Id
