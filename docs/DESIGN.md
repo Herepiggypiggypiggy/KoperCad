@@ -181,11 +181,13 @@ the reference format, and the frame choice is a rule like any other.
 **Saving.** There are no save prompts and no Save step to remember. A named
 project is written into its own `.novo` file continuously, about half a
 second after each change and on close, so reopening shows exactly what was
-left. An untitled project closed with work in it is kept and offered back
-(under Unsaved with Recent, and reopened at start-up if it was the last one
-open); naming it saves it as `<Documents>\NovoElectric\<name>.novo`. The
+left. An untitled project closed with work in it is kept in
+`%LOCALAPPDATA%\NovoElectric\Unsaved` and offered back (under Unsaved with
+Recent, and reopened at start-up if it was the last one open); naming it
+moves it as `<Documents>\NovoElectric\<name>.novo`. The
 deliberate checkpoints are revisions and exports (§8), not Save. Ctrl+S
-names an untitled project and otherwise only confirms Saved.
+names an untitled project and otherwise only confirms Saved; Ctrl+Shift+S
+saves a copy under a new name and keeps working in the original.
 
 **Start-up.** The app opens the last project where it was left: same page
 and zoom, nothing selected. There is no start screen to click through. With
@@ -272,7 +274,7 @@ clear the selection.
 | Ctrl+Shift+V | Paste with the original tags |
 | Ctrl+D | Duplicate with the next free tags |
 | Ctrl+S / Ctrl+N / Ctrl+O | Name an untitled project (otherwise confirms Saved), new, open |
-| Ctrl+Shift+S / Ctrl+W / Ctrl+Q | Save as, close project, quit |
+| Ctrl+Shift+S / Ctrl+W / Ctrl+Q | Save a copy, close project, quit |
 | Delete | Delete the selection and its dangling connections |
 | Esc | The Escape ladder |
 | ? | Shortcut overlay |
@@ -442,6 +444,7 @@ user has edited:
 | Question | Options considered | Decision |
 | --- | --- | --- |
 | Pages | Hand-made; flowing; pinned flow | **Pinned flow:** automatic pagination, user page breaks never move, and pages freeze after a revision or export so `page.column` references never move under a printed set |
+| Generated pages under pinned flow | Freeze them too; append new sheets at the end; reflow | **Reflow.** Generated pages (BOM, terminal and cable diagrams, lists) sit in their own numbered sections after the schematic pages, so their growth never renumbers a schematic page. No reference points into them, so they reflow freely inside their section; the PDF bookmarks and the contents list name each sheet by what it shows (strip -X1, cable -W3), and a revision marks the generated sheets whose content changed |
 | Routing | Manual; always automatic; route once and keep | **Route once and keep:** moving a symbol stretches its connections; `tidy` re-routes on request |
 | Where a project starts | Page-first; structure-first; intent-first | **Structure-first**, with the empty page offering "type what you are building" |
 | Window | A Workbench; B Focus; C Split | **A**, with B as Focus mode and C as the drawer docked right |
