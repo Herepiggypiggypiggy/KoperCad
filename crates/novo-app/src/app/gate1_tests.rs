@@ -610,6 +610,25 @@ fn marks_keys_and_export_follow_the_design() {
     d.key(egui::Key::Escape, egui::Modifiers::NONE);
     assert!(!d.app.wb.field.is_open());
 
+    // Held and dragged more than 4 px, Space pans the drawing with the
+    // pointer and opens nothing.
+    let viewport = |d: &mut Drive| d.app.canvas.schematic_ref().unwrap().canvas.viewport;
+    let before = viewport(&mut d);
+    d.frame_with(vec![at.clone(), space(true)]);
+    d.frame_with(vec![egui::Event::PointerMoved(egui::pos2(703.0, 400.0))]);
+    assert_eq!(viewport(&mut d).center, before.center, "not within 4 px");
+    d.frame_with(vec![egui::Event::PointerMoved(egui::pos2(760.0, 430.0))]);
+    d.frame_with(vec![egui::Event::PointerMoved(egui::pos2(780.0, 440.0))]);
+    d.frame_with(vec![space(false)]);
+    d.frame();
+    let after = viewport(&mut d);
+    let moved = (after.center - before.center) * before.zoom;
+    assert!(
+        (moved.x + 80.0).abs() < 0.5 && (moved.y + 40.0).abs() < 0.5,
+        "the drawing followed the pointer: {moved:?}"
+    );
+    assert!(!d.app.wb.field.is_open(), "a pan opens no field");
+
     // Picked from the command field (or run by a script), it opens at once.
     d.app.run_command(&ctx, "view.command_field_here", None);
     assert!(d.app.wb.field.is_open());
