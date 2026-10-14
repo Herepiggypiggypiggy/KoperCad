@@ -1545,10 +1545,12 @@ dependencies = [
 name = "novo-tests"
 version = "0.1.0"
 dependencies = [
+ "novo-app",
  "novo-canvas",
  "novo-core",
  "novo-storage",
  "novo-symbols",
+ "novo-workflow",
  "serde_json",
  "tempfile",
 ]
