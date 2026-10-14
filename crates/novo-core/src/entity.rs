@@ -263,6 +263,9 @@ pub struct SymbolInstance {
     /// connected: the switched poles of contacts, breakers and fuses
     /// (novo-symbols' `Symbol::pass_through()` minus its bridges). `L1`
     /// stays `L1` after a contactor, while coils, lamps and motors end it.
+    /// One group per contact path: a changeover is `[[common, break],
+    /// [common, make]]`, which keeps potentials on its break and make sides
+    /// apart.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pass_through: Vec<Vec<u16>>,
     #[serde(default)]

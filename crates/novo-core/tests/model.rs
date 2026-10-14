@@ -1463,3 +1463,110 @@ fn potentials_pass_through_switched_poles() {
     let loaded = Project::from_json(&doc.project().to_json()).unwrap();
     assert_eq!(loaded.symbol(k1).unwrap().pass_through, vec![vec![0, 1]]);
 }
+
+#[test]
+fn changeover_keeps_break_and_make_potentials_apart() {
+    // Pins: 0 common, 1 break (NC), 2 make (NO), one group per contact path.
+    let groups = vec![vec![0, 1], vec![0, 2]];
+    {
+        let mut doc = Document::default();
+        let ((l1, l2, n, contact, second), _) = doc
+            .transact("Changeover", |tx| {
+                let page = tx.add_page("1")?;
+                let feed = |tx: &mut Tx<'_>, name: &str, x: f64| {
+                    let potential = tx.add_potential(name, PotentialKind::Line)?;
+                    let symbol = tx.place_symbol(
+                        page,
+                        "iec/connectivity/potential_feed",
+                        at(x, 0.0),
+                        vec![Pin::new("1", 0.0, 0.0)],
+                        SymbolRole::PotentialFeed { potential },
+                    )?;
+                    Ok::<_, ModelError>((potential, symbol))
+                };
+                let (l1, l1_feed) = feed(tx, "L1", 0.0)?;
+                let (l2, l2_feed) = feed(tx, "L2", 20.0)?;
+                let (n, n_feed) = feed(tx, "N", 40.0)?;
+                let changeover_pins = || {
+                    vec![
+                        Pin::new("11", 0.0, 0.0),
+                        Pin::new("12", -5.0, 10.0),
+                        Pin::new("14", 5.0, 10.0),
+                    ]
+                };
+                let contact = tx.place_symbol(
+                    page,
+                    "iec/contacts/changeover",
+                    at(10.0, 30.0),
+                    changeover_pins(),
+                    SymbolRole::Unassigned,
+                )?;
+                // A second changeover fed from its common.
+                let second = tx.place_symbol(
+                    page,
+                    "iec/contacts/changeover",
+                    at(40.0, 30.0),
+                    changeover_pins(),
+                    SymbolRole::Unassigned,
+                )?;
+                for symbol in [contact, second] {
+                    tx.update::<SymbolInstance>(symbol, |s| s.pass_through = groups.clone())?;
+                }
+                tx.connect(Endpoint::pin(l1_feed, 0), Endpoint::pin(contact, 1))?;
+                tx.connect(Endpoint::pin(l2_feed, 0), Endpoint::pin(contact, 2))?;
+                tx.connect(Endpoint::pin(n_feed, 0), Endpoint::pin(second, 0))?;
+                Ok((l1, l2, n, contact, second))
+            })
+            .unwrap();
+        let net = doc.project().netlist();
+        let potentials = |symbol, pin| {
+            net.net(net.net_of(Endpoint::pin(symbol, pin)).unwrap())
+                .potentials
+                .clone()
+        };
+        assert_eq!(potentials(contact, 1), vec![l1]);
+        assert_eq!(potentials(contact, 2), vec![l2]);
+        // Both sides can reach the common, so it reports the meeting.
+        assert_eq!(potentials(contact, 0), vec![l1, l2]);
+        // Fed from the common, the potential reaches both sides.
+        assert_eq!(potentials(second, 1), vec![n]);
+        assert_eq!(potentials(second, 2), vec![n]);
+    }
+}
+
+#[test]
+fn potentials_pass_through_poles_in_series() {
+    let mut doc = Document::default();
+    let ((l1, q1), _) = doc
+        .transact("Series poles", |tx| {
+            let page = tx.add_page("1")?;
+            let l1 = tx.add_potential("L1", PotentialKind::Line)?;
+            let feed = tx.place_symbol(
+                page,
+                "iec/connectivity/potential_feed",
+                at(0.0, 0.0),
+                vec![Pin::new("1", 0.0, 0.0)],
+                SymbolRole::PotentialFeed { potential: l1 },
+            )?;
+            // A two-pole switch with its poles wired in series.
+            let q1 = tx.place_symbol(
+                page,
+                "iec/switches/two_pole",
+                at(0.0, 20.0),
+                vec![
+                    Pin::new("1", 0.0, 0.0),
+                    Pin::new("2", 0.0, 10.0),
+                    Pin::new("3", 10.0, 0.0),
+                    Pin::new("4", 10.0, 10.0),
+                ],
+                SymbolRole::Unassigned,
+            )?;
+            tx.update::<SymbolInstance>(q1, |s| s.pass_through = vec![vec![0, 1], vec![2, 3]])?;
+            tx.connect(Endpoint::pin(feed, 0), Endpoint::pin(q1, 0))?;
+            tx.connect(Endpoint::pin(q1, 1), Endpoint::pin(q1, 2))?;
+            Ok((l1, q1))
+        })
+        .unwrap();
+    let net = doc.project().netlist();
+    assert_eq!(net.potential_of(Endpoint::pin(q1, 3)), Some(l1));
+}

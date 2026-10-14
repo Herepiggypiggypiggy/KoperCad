@@ -59,6 +59,47 @@ pub struct Netlist {
     by_endpoint: HashMap<Endpoint, NetId>,
 }
 
+/// One way across a switched pole: from `from_pin` (in the current net) to
+/// `to_pin` (in net `to`) of pole `group` of `symbol`.
+#[derive(Debug, Clone, Copy)]
+struct PassEdge {
+    symbol: SymbolId,
+    group: usize,
+    from_pin: u16,
+    to_pin: u16,
+    to: usize,
+}
+
+/// Nets a potential reaches from the nets that define it, walking outward
+/// through switched poles. Having crossed a pole, the walk does not cross
+/// back out of the pin it arrived on or through the same pole again, so the
+/// break and make sides of a changeover contact stay apart (fed from the
+/// common, the potential still reaches both), while poles wired in series
+/// pass it on. Within one group every pin passes to every other, so a
+/// changeover needs two groups (`[common, break]`, `[common, make]`), not one.
+fn carried_nets(edges: &[Vec<PassEdge>], starts: &[usize]) -> Vec<usize> {
+    type Arrival = Option<(SymbolId, usize, u16)>;
+    let mut seen: std::collections::HashSet<(usize, Arrival)> = Default::default();
+    let mut reached = vec![false; edges.len()];
+    let mut stack: Vec<(usize, Arrival)> = starts.iter().map(|&n| (n, None)).collect();
+    while let Some(state) = stack.pop() {
+        if !seen.insert(state) {
+            continue;
+        }
+        let (net, arrival) = state;
+        reached[net] = true;
+        for edge in &edges[net] {
+            let blocked = arrival.is_some_and(|(symbol, group, pin)| {
+                symbol == edge.symbol && (group == edge.group || pin == edge.from_pin)
+            });
+            if !blocked {
+                stack.push((edge.to, Some((edge.symbol, edge.group, edge.to_pin))));
+            }
+        }
+    }
+    (0..edges.len()).filter(|&n| reached[n]).collect()
+}
+
 struct UnionFind {
     parent: Vec<usize>,
 }
@@ -193,41 +234,55 @@ impl Netlist {
             let net = by_endpoint[&wire.from];
             nets[net.0 as usize].wires.push(wire.id);
         }
-        // Potential groups: nets joined through pass-through poles.
-        let mut groups = UnionFind::new(nets.len());
+        // Pass-through edges: a potential crosses a switched pole from any
+        // of its pins to the others, without joining the nets.
+        let mut edges: Vec<Vec<PassEdge>> = vec![Vec::new(); nets.len()];
         for symbol in project.symbols() {
             let base = first_pin[&symbol.id];
-            for group in &symbol.pass_through {
-                groups.union_all(
-                    group
-                        .iter()
-                        .map(|&p| by_endpoint[&endpoints[base + usize::from(p)]].0 as usize),
-                );
-            }
-        }
-        let mut group_potentials: HashMap<usize, Vec<PotentialId>> = HashMap::new();
-        for symbol in project.symbols() {
-            if let SymbolRole::PotentialFeed { potential } = symbol.role {
-                for node in pins_of(symbol.id, symbol.pins.len()) {
-                    let net = by_endpoint[&endpoints[node]];
-                    nets[net.0 as usize].defined.push(potential);
-                    group_potentials
-                        .entry(groups.find(net.0 as usize))
-                        .or_default()
-                        .push(potential);
+            let net_of_pin = |p: u16| by_endpoint[&endpoints[base + usize::from(p)]].0 as usize;
+            for (group, pins) in symbol.pass_through.iter().enumerate() {
+                for &from_pin in pins {
+                    for &to_pin in pins.iter().filter(|&&p| p != from_pin) {
+                        edges[net_of_pin(from_pin)].push(PassEdge {
+                            symbol: symbol.id,
+                            group,
+                            from_pin,
+                            to_pin,
+                            to: net_of_pin(to_pin),
+                        });
+                    }
                 }
             }
         }
-        for (i, net) in nets.iter_mut().enumerate() {
+        for symbol in project.symbols() {
+            if let SymbolRole::PotentialFeed { potential } = symbol.role {
+                for node in pins_of(symbol.id, symbol.pins.len()) {
+                    let net = by_endpoint[&endpoints[node]].0 as usize;
+                    nets[net].defined.push(potential);
+                }
+            }
+        }
+        let feeds: BTreeMap<PotentialId, Vec<usize>> =
+            nets.iter()
+                .enumerate()
+                .fold(BTreeMap::new(), |mut feeds, (i, net)| {
+                    for &potential in &net.defined {
+                        feeds.entry(potential).or_default().push(i);
+                    }
+                    feeds
+                });
+        for (potential, starts) in feeds {
+            for net in carried_nets(&edges, &starts) {
+                nets[net].potentials.push(potential);
+            }
+        }
+        for net in &mut nets {
             net.endpoints.sort();
             net.wires.sort();
             net.defined.sort();
             net.defined.dedup();
-            if let Some(carried) = group_potentials.get(&groups.find(i)) {
-                net.potentials = carried.clone();
-                net.potentials.sort();
-                net.potentials.dedup();
-            }
+            net.potentials.sort();
+            net.potentials.dedup();
         }
         Netlist {
             revision: project.revision(),
