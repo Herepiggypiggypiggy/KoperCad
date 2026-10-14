@@ -296,7 +296,7 @@ between fields as usual.
 | --- | --- | --- |
 | Selection | Copper, 2 px | none |
 | Hover | Steel blue | none |
-| Proposal (terminals, cable, part) | Dashed steel blue at 55%; the highlighted one solid steel blue | "↵ accept · Tab next" on the highlighted one only |
+| Proposal (terminals, cable, part) | Dashed steel blue at 55%, 1 px; the highlighted one dashed at full strength, 2 px. Proposals are never solid, so none can be mistaken for a drawn wire | "↵ accept · Tab next" on the highlighted one only |
 | Warning | Small amber triangle, top right of the object, screen sized | on hover |
 | Error | Small red octagon, same place | on hover |
 | Override | Hollow grey diamond, top left, while Shift+O is held | the inspector shows "override" and a reset arrow |
