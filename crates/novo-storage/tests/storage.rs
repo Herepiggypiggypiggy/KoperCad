@@ -72,7 +72,9 @@ fn build_starter(doc: &mut Document) -> Vec<AnyId> {
                 "iec/terminal",
                 at(10.0, 30.0),
                 two_pins("1", "2"),
-                SymbolRole::Terminal { terminal: t1 },
+                SymbolRole::Terminal {
+                    terminals: vec![t1],
+                },
             )?;
             let stop = tx.place_symbol(
                 page1,
