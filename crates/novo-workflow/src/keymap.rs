@@ -1,7 +1,9 @@
-//! The shortcut map from `docs/WORKFLOW.md`.
+//! The keys from docs/design/interaction-model.md: a small set for frequent
+//! actions, everything else through the command field.
 //!
-//! Letters are tools and act only while the drawing has focus; Ctrl chords
-//! are commands that work anywhere. A plain key never steals typing from a
+//! Letters act only while the drawing has focus; Ctrl chords are commands
+//! that work anywhere. There are deliberately no keys for corners, T-pieces,
+//! terminals, cables or potentials: the user does not place those. A plain key never steals typing from a
 //! text field (principle 10): while a text field has focus only chords with
 //! Ctrl or Alt, function keys and Escape resolve.
 
@@ -17,6 +19,7 @@ pub enum Key {
     Enter,
     Escape,
     Tab,
+    Space,
     Delete,
     Home,
     End,
@@ -39,7 +42,7 @@ impl Key {
     pub fn types_text(self) -> bool {
         matches!(
             self,
-            Key::Letter(_) | Key::Digit(_) | Key::Enter | Key::Tab | Key::Delete
+            Key::Letter(_) | Key::Digit(_) | Key::Enter | Key::Tab | Key::Space | Key::Delete
         ) || matches!(
             self,
             Key::Home | Key::End | Key::ArrowLeft | Key::ArrowRight | Key::ArrowUp | Key::ArrowDown
@@ -56,6 +59,7 @@ impl fmt::Display for Key {
             Key::Enter => f.write_str("Enter"),
             Key::Escape => f.write_str("Esc"),
             Key::Tab => f.write_str("Tab"),
+            Key::Space => f.write_str("Space"),
             Key::Delete => f.write_str("Delete"),
             Key::Home => f.write_str("Home"),
             Key::End => f.write_str("End"),
@@ -150,6 +154,7 @@ fn parse_key(text: &str) -> Option<Key> {
         "enter" | "return" => Key::Enter,
         "esc" | "escape" => Key::Escape,
         "tab" => Key::Tab,
+        "space" => Key::Space,
         "delete" | "del" => Key::Delete,
         "home" => Key::Home,
         "end" => Key::End,
@@ -204,39 +209,42 @@ pub enum Scope {
     Anywhere,
     /// Only while the drawing has keyboard focus.
     Canvas,
-    /// Only while a tool is placing or moving something (Tab, R, X).
-    Placing,
-    /// Only while the insert search is open (favourites 1 to 9).
-    InsertSearch,
+    /// Only while the command field is open in place mode with nothing
+    /// typed yet (favourites 1 to 9), so typing `m3` or `13` still searches.
+    PlaceFieldEmpty,
 }
 
 /// What has keyboard focus right now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Focus {
-    /// The drawing, with no tool step in progress.
+    /// The drawing.
     Canvas,
-    /// The drawing, while placing, moving or wiring.
-    Placing,
-    /// The insert search box at the cursor.
-    InsertSearch,
-    /// A panel or text field outside the drawing.
+    /// The command field in place mode, still empty.
+    PlaceFieldEmpty,
+    /// The command field with text in it, or any other text field.
     TextField,
-    /// A panel without a text field (project tree, messages).
+    /// A panel or drawer without a text field.
     Panel,
 }
 
 impl Focus {
+    const ALL: [Focus; 4] = [
+        Focus::Canvas,
+        Focus::PlaceFieldEmpty,
+        Focus::TextField,
+        Focus::Panel,
+    ];
+
     fn allows(self, scope: Scope) -> bool {
         match scope {
             Scope::Anywhere => true,
-            Scope::Canvas => matches!(self, Focus::Canvas | Focus::Placing),
-            Scope::Placing => self == Focus::Placing,
-            Scope::InsertSearch => self == Focus::InsertSearch,
+            Scope::Canvas => self == Focus::Canvas,
+            Scope::PlaceFieldEmpty => self == Focus::PlaceFieldEmpty,
         }
     }
 
     fn is_text_entry(self) -> bool {
-        matches!(self, Focus::TextField | Focus::InsertSearch)
+        matches!(self, Focus::TextField | Focus::PlaceFieldEmpty)
     }
 }
 
@@ -263,7 +271,8 @@ impl Default for Keymap {
 }
 
 impl Keymap {
-    /// The shortcut map of `docs/WORKFLOW.md`.
+    /// The keys of docs/design/interaction-model.md (section 7). Provisional
+    /// until docs/DESIGN.md is final.
     pub fn workflow() -> Keymap {
         use Key::*;
         use Scope::*;
@@ -277,18 +286,21 @@ impl Keymap {
         };
         let l = Key::letter;
 
+        // Project and the command field.
         bind(Chord::ctrl(l('k')), Anywhere, "view.command_palette");
+        bind(Chord::plain(Space), Canvas, "view.command_field_here");
         bind(Chord::ctrl(l('n')), Anywhere, "file.new");
         bind(Chord::ctrl(l('o')), Anywhere, "file.open");
         bind(Chord::ctrl(l('s')), Anywhere, "file.save");
         bind(Chord::ctrl_shift(l('s')), Anywhere, "file.save_as");
         bind(Chord::ctrl(l('w')), Anywhere, "file.close");
         bind(Chord::ctrl(l('q')), Anywhere, "file.quit");
+
+        // Edit. Clipboard and selection chords belong to a text field
+        // while one has focus, so they are canvas-scoped.
         bind(Chord::ctrl(l('z')), Anywhere, "edit.undo");
         bind(Chord::ctrl_shift(l('z')), Anywhere, "edit.redo");
         bind(Chord::ctrl(l('y')), Anywhere, "edit.redo");
-        // Clipboard and selection chords belong to a text field while one
-        // has focus, so they are canvas-scoped.
         bind(Chord::ctrl(l('c')), Canvas, "edit.copy");
         bind(Chord::ctrl(l('x')), Canvas, "edit.cut");
         bind(Chord::ctrl(l('v')), Canvas, "edit.paste");
@@ -297,38 +309,43 @@ impl Keymap {
         bind(Chord::ctrl(l('a')), Canvas, "edit.select_all");
         bind(Chord::plain(Delete), Canvas, "edit.delete");
         bind(Chord::plain(F(2)), Canvas, "edit.rename");
-        bind(Chord::plain(Enter), Canvas, "tool.repeat");
         bind(Chord::plain(Escape), Anywhere, "edit.escape");
 
-        bind(Chord::plain(l('i')), Canvas, "tool.insert");
-        bind(Chord::plain(l('w')), Canvas, "tool.wire");
-        bind(Chord::plain(l('t')), Canvas, "tool.terminals");
-        bind(Chord::plain(l('c')), Canvas, "tool.cable");
-        bind(Chord::plain(l('p')), Canvas, "tool.potential");
-        bind(Chord::plain(l('m')), Canvas, "tool.move");
+        // Draw.
+        bind(Chord::plain(l('i')), Canvas, "tool.place");
+        bind(Chord::plain(l('w')), Canvas, "tool.connect");
         bind(Chord::plain(l('r')), Canvas, "edit.rotate");
         bind(Chord::plain(l('x')), Canvas, "edit.mirror");
-        bind(Chord::plain(Tab), Canvas, "edit.next_orientation");
-        bind(Chord::shift(Tab), Canvas, "edit.previous_orientation");
-        bind(Chord::plain(l('g')), Canvas, "nav.partner");
-        bind(Chord::shift(l('g')), Canvas, "nav.all_references");
-
         for digit in 1..=9 {
             bind(
                 Chord::plain(Digit(digit)),
-                InsertSearch,
+                PlaceFieldEmpty,
                 FAVOURITE_COMMANDS[usize::from(digit - 1)],
             );
         }
 
+        // Proposals and problems.
+        bind(Chord::plain(Enter), Canvas, "proposal.accept");
+        bind(Chord::plain(Tab), Canvas, "proposal.next");
+        bind(Chord::shift(l('p')), Canvas, "view.toggle_marks");
+        bind(Chord::plain(F(8)), Anywhere, "check.next_problem");
+        bind(Chord::shift(F(8)), Anywhere, "check.previous_problem");
+
+        // Navigate.
+        bind(Chord::plain(l('g')), Canvas, "nav.partner");
+        bind(Chord::shift(l('g')), Canvas, "nav.all_references");
         bind(Chord::alt(ArrowLeft), Anywhere, "nav.back");
         bind(Chord::alt(ArrowRight), Anywhere, "nav.forward");
         bind(Chord::plain(PageUp), Canvas, "nav.previous_page");
         bind(Chord::plain(PageDown), Canvas, "nav.next_page");
+
+        // View: lenses and drawers.
         bind(Chord::plain(Home), Canvas, "view.fit");
-        bind(Chord::ctrl(Digit(1)), Anywhere, "view.project_panel");
-        bind(Chord::ctrl(Digit(2)), Anywhere, "view.properties_panel");
-        bind(Chord::ctrl(Digit(3)), Anywhere, "view.messages_panel");
+        bind(Chord::ctrl(Digit(1)), Anywhere, "view.schematic");
+        bind(Chord::ctrl(Digit(2)), Anywhere, "view.cabinet");
+        bind(Chord::ctrl(Digit(3)), Anywhere, "view.connections_drawer");
+        bind(Chord::ctrl(Digit(4)), Anywhere, "view.devices_drawer");
+        bind(Chord::ctrl(l('t')), Anywhere, "view.cabinet_table");
         Keymap { bindings }
     }
 
@@ -338,25 +355,15 @@ impl Keymap {
 
     /// The command a key press runs with this focus, if any.
     pub fn resolve(&self, chord: Chord, focus: Focus) -> Option<&'static str> {
-        if focus.is_text_entry() && chord.types_text() {
-            // Tab, digits and letters type; but the insert search owns its
-            // favourite digits.
-            if !(focus == Focus::InsertSearch && matches!(chord.key, Key::Digit(_))) {
-                return None;
-            }
+        // Typing keys type, except the empty place field's favourite digits.
+        let favourite = focus == Focus::PlaceFieldEmpty && matches!(chord.key, Key::Digit(_));
+        if focus.is_text_entry() && chord.types_text() && !favourite {
+            return None;
         }
-        // A tool step in progress makes the placing bindings win over the
-        // plain canvas ones for the same chord.
-        let mut found = None;
-        for b in &self.bindings {
-            if b.chord == chord && focus.allows(b.scope) {
-                if b.scope == Scope::Placing || b.scope == Scope::InsertSearch {
-                    return Some(b.command);
-                }
-                found.get_or_insert(b.command);
-            }
-        }
-        found
+        self.bindings
+            .iter()
+            .find(|b| b.chord == chord && focus.allows(b.scope))
+            .map(|b| b.command)
     }
 
     /// The chords for a command, in the order they were bound. The first
@@ -415,14 +422,7 @@ pub const FAVOURITE_COMMANDS: [&str; 9] = [
 ];
 
 fn scopes_overlap(a: Scope, b: Scope) -> bool {
-    let focuses = [
-        Focus::Canvas,
-        Focus::Placing,
-        Focus::InsertSearch,
-        Focus::TextField,
-        Focus::Panel,
-    ];
-    focuses.iter().any(|f| f.allows(a) && f.allows(b))
+    Focus::ALL.iter().any(|f| f.allows(a) && f.allows(b))
 }
 
 #[cfg(test)]
@@ -433,10 +433,10 @@ mod tests {
     fn letters_act_only_on_the_canvas() {
         let map = Keymap::workflow();
         let w = Chord::plain(Key::letter('w'));
-        assert_eq!(map.resolve(w, Focus::Canvas), Some("tool.wire"));
+        assert_eq!(map.resolve(w, Focus::Canvas), Some("tool.connect"));
         assert_eq!(map.resolve(w, Focus::TextField), None);
         assert_eq!(map.resolve(w, Focus::Panel), None);
-        assert_eq!(map.resolve(w, Focus::InsertSearch), None);
+        assert_eq!(map.resolve(w, Focus::PlaceFieldEmpty), None);
     }
 
     #[test]
@@ -454,30 +454,63 @@ mod tests {
     }
 
     #[test]
-    fn tab_rotates_on_the_canvas_but_types_in_text() {
+    fn tab_and_enter_work_proposals_not_orientation() {
         let map = Keymap::workflow();
-        let tab = Chord::plain(Key::Tab);
         assert_eq!(
-            map.resolve(tab, Focus::Placing),
-            Some("edit.next_orientation")
+            map.resolve(Chord::plain(Key::Tab), Focus::Canvas),
+            Some("proposal.next")
         );
-        assert_eq!(map.resolve(tab, Focus::TextField), None);
         assert_eq!(
-            map.resolve(Chord::shift(Key::Tab), Focus::Placing),
-            Some("edit.previous_orientation")
+            map.resolve(Chord::plain(Key::Enter), Focus::Canvas),
+            Some("proposal.accept")
+        );
+        assert_eq!(map.resolve(Chord::plain(Key::Tab), Focus::TextField), None);
+        assert_eq!(
+            map.resolve(Chord::plain(Key::letter('r')), Focus::Canvas),
+            Some("edit.rotate")
+        );
+        assert_eq!(
+            map.resolve(Chord::plain(Key::letter('x')), Focus::Canvas),
+            Some("edit.mirror")
         );
     }
 
     #[test]
-    fn favourites_only_in_the_insert_search() {
+    fn no_keys_for_things_the_user_does_not_place() {
+        let map = Keymap::workflow();
+        for letter in ['t', 'c', 'p', 'j'] {
+            assert_eq!(
+                map.resolve(Chord::plain(Key::letter(letter)), Focus::Canvas),
+                None
+            );
+        }
+    }
+
+    #[test]
+    fn favourites_only_in_the_empty_place_field() {
         let map = Keymap::workflow();
         let three = Chord::plain(Key::Digit(3));
         assert_eq!(
-            map.resolve(three, Focus::InsertSearch),
+            map.resolve(three, Focus::PlaceFieldEmpty),
             Some("insert.favourite_3")
         );
         assert_eq!(map.resolve(three, Focus::Canvas), None);
+        // Once something is typed the field is a text field: 3 types.
         assert_eq!(map.resolve(three, Focus::TextField), None);
+    }
+
+    #[test]
+    fn lenses_and_drawers() {
+        let map = Keymap::workflow();
+        let ctrl = |d| map.resolve(Chord::ctrl(Key::Digit(d)), Focus::Canvas);
+        assert_eq!(ctrl(1), Some("view.schematic"));
+        assert_eq!(ctrl(2), Some("view.cabinet"));
+        assert_eq!(ctrl(3), Some("view.connections_drawer"));
+        assert_eq!(ctrl(4), Some("view.devices_drawer"));
+        assert_eq!(
+            map.resolve(Chord::plain(Key::F(8)), Focus::Panel),
+            Some("check.next_problem")
+        );
     }
 
     #[test]

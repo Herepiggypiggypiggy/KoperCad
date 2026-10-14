@@ -1,23 +1,30 @@
-//! The Ctrl+K search (J8): commands, pages, devices and symbols in one list.
+//! The command field's search (Ctrl+K at the top, I and a tapped Space at
+//! the pointer): one engine for commands, pages, devices and symbols. It
+//! returns rows; how they are shown (a field at the pointer, a bar at the
+//! top) is up to the app.
 //!
-//! - Each row says what it is and shows the command's shortcut, so the
-//!   palette teaches the keys.
-//! - An exact tag (`-K1`, `K1`, `=A1+CAB1-K1`) puts that device first, then
-//!   every place it is drawn (page and column) as rows to jump to. This is
-//!   the "search can't find my component" fix: it works every time.
-//! - A page name or number (`3`) puts that page first.
-//! - Recently picked rows rank first for an empty or short query, so the
-//!   last command used is the first row when the palette opens.
-//! - Unavailable commands stay in the list, greyed, with the reason.
+//! The query is read as a small grammar (docs/design/interaction-model.md):
 //!
-//! The UI (WS-01) draws [`Row`]s and runs the picked [`Target`].
+//! - **A noun selects or jumps.** An exact tag (`K1`, `-K1`, `=A1+CAB-K1`)
+//!   puts that device first, then every place it is drawn as `/page.column`
+//!   rows; Enter on the device jumps to its main location. A terminal
+//!   (`X1:2`) lists where it is drawn, a page number (`12`) opens the page.
+//! - **A verb with a noun acts.** `renumber page`, `export pdf`, and a
+//!   symbol mnemonic with a device: `no K1` places a contact of `-K1`.
+//! - **A bare verb runs** (`problems`, `rules`).
+//! - Anything else is a fuzzy search over all of the above.
+//!
+//! With an empty query the field is the menu: "Repeat last tool" first,
+//! then recent picks, then every command by group, each with its key and,
+//! when it can't run now, the reason. In place mode (I) the field searches
+//! symbols only and an empty query shows the favourites 1 to 9.
 
 use novo_core::{AnyId, DeviceId, Match, PageId, Project, SymbolId};
 use novo_symbols::Library;
 
-use crate::commands::{self, COMMANDS, Context};
+use crate::commands::{self, COMMANDS, CommandInfo, Context, GROUPS};
 use crate::fuzzy;
-use crate::insert::InsertSearch;
+use crate::insert::{self, InsertSearch};
 use crate::keymap::Keymap;
 use crate::locate;
 
@@ -26,14 +33,22 @@ use crate::locate;
 pub enum Target {
     /// Run a command by id.
     Command(&'static str),
+    /// Run a command with what was typed after its verb (`renumber page`
+    /// gives `edit.renumber` with `page`). The command reads the argument.
+    Run {
+        command: &'static str,
+        argument: String,
+    },
     /// Open a page.
     Page(PageId),
-    /// Select a device and jump to its main symbol.
+    /// Select a device and jump to its main location.
     Device(DeviceId),
     /// Jump to one place a device is drawn.
     Location { device: DeviceId, symbol: SymbolId },
     /// Start placing a symbol (by library id).
     Symbol(String),
+    /// Start placing a symbol as a function of an existing device.
+    Child { symbol: String, device: DeviceId },
 }
 
 /// What kind of thing a row is, shown as a label in front of it.
@@ -58,22 +73,35 @@ impl Kind {
     }
 }
 
-/// One palette row.
+/// One row.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Row {
     pub target: Target,
     pub kind: Kind,
     pub label: String,
-    /// Grey text after the label: a menu, a page title, a location.
+    /// Grey text after the label: a group, a page title, a location.
     pub detail: String,
-    /// The shortcut, for commands that have one.
+    /// Heading the row sits under when the field lists by group (empty
+    /// query); empty otherwise.
+    pub group: &'static str,
+    /// The key, for commands and favourites that have one.
     pub shortcut: Option<String>,
     /// Why the row can't be picked now; `None` when it can.
     pub disabled: Option<&'static str>,
     pub score: i32,
 }
 
-/// Everything the palette searches.
+/// What the field is open for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Mode {
+    /// Everything (Ctrl+K, Space).
+    #[default]
+    All,
+    /// Symbols to place (I).
+    Place,
+}
+
+/// Everything the field searches.
 pub struct Sources<'a> {
     pub project: Option<&'a Project>,
     pub library: Option<&'a Library>,
@@ -81,7 +109,8 @@ pub struct Sources<'a> {
     pub context: Context,
 }
 
-/// The palette's memory: recent picks, newest first.
+/// The field's memory: recent picks, newest first, and the symbol
+/// search's recents and favourites.
 #[derive(Debug, Clone, Default)]
 pub struct Palette {
     recent: Vec<Target>,
@@ -92,14 +121,22 @@ pub struct Palette {
 pub const MAX_ROWS: usize = 50;
 /// How many recent picks are remembered.
 pub const RECENT_LIMIT: usize = 30;
+/// How many recent picks the empty field lists above the groups.
+pub const RECENT_SHOWN: usize = 5;
 
 const EXACT: i32 = 100_000;
+
+/// Group heading of the recent rows of an empty field.
+pub const RECENT_GROUP: &str = "Recent";
+/// Group heading of the favourites in place mode.
+pub const FAVOURITES_GROUP: &str = "Favourites";
 
 impl Palette {
     /// Notes a pick, so it ranks first next time.
     pub fn picked(&mut self, target: Target) {
-        if let Target::Symbol(id) = &target {
-            self.symbols.used(id);
+        match &target {
+            Target::Symbol(id) | Target::Child { symbol: id, .. } => self.symbols.used(id),
+            _ => {}
         }
         self.recent.retain(|t| *t != target);
         self.recent.insert(0, target);
@@ -108,6 +145,15 @@ impl Palette {
 
     pub fn recent(&self) -> &[Target] {
         &self.recent
+    }
+
+    /// The symbol search, for its favourites (1 to 9) and recents.
+    pub fn symbols(&self) -> &InsertSearch {
+        &self.symbols
+    }
+
+    pub fn symbols_mut(&mut self) -> &mut InsertSearch {
+        &mut self.symbols
     }
 
     /// Restores recent picks saved by the app, newest first. Command ids
@@ -124,16 +170,31 @@ impl Palette {
         self.recent.truncate(RECENT_LIMIT);
     }
 
-    /// Rows for a query, best first.
+    /// Rows for a query in the everything mode (Ctrl+K), best first.
     pub fn search(&self, query: &str, sources: &Sources<'_>) -> Vec<Row> {
-        let query = query.trim();
-        let mut rows: Vec<Row> = Vec::new();
+        self.search_in(Mode::All, query, sources)
+    }
 
-        if let Some(project) = sources.project {
-            project_rows(project, query, &mut rows);
+    /// Rows for a query, best first.
+    pub fn search_in(&self, mode: Mode, query: &str, sources: &Sources<'_>) -> Vec<Row> {
+        let query = query.trim();
+        if query.is_empty() {
+            return match mode {
+                Mode::All => self.menu(sources),
+                Mode::Place => self.favourites(sources),
+            };
         }
-        command_rows(query, sources, &mut rows);
-        if let (Some(library), false) = (sources.library, query.is_empty()) {
+        let mut rows: Vec<Row> = Vec::new();
+        if let Some(project) = sources.project {
+            child_rows(project, sources, query, &mut rows);
+        }
+        if mode == Mode::All {
+            if let Some(project) = sources.project {
+                project_rows(project, query, &mut rows);
+            }
+            command_rows(query, sources, &mut rows);
+        }
+        if let Some(library) = sources.library {
             for hit in self.symbols.search(library, query).into_iter().take(10) {
                 rows.push(Row {
                     target: Target::Symbol(hit.symbol.id.clone()),
@@ -142,6 +203,7 @@ impl Palette {
                     detail: hit
                         .mnemonic
                         .map_or_else(|| hit.symbol.category.clone(), |m| format!("`{m}`")),
+                    group: "",
                     shortcut: None,
                     disabled: (!sources.context.has_page).then_some("No page is open"),
                     // Symbols come after commands and devices of equal match.
@@ -150,7 +212,7 @@ impl Palette {
             }
         }
 
-        // Recent picks first for an empty or short query.
+        // Recent picks first for a short query.
         if query.chars().count() <= 3 {
             for row in &mut rows {
                 if let Some(rank) = self.recent.iter().position(|t| *t == row.target) {
@@ -172,6 +234,106 @@ impl Palette {
         });
         rows.truncate(MAX_ROWS);
         rows
+    }
+
+    /// The empty field: repeat, recents, then every command by group.
+    fn menu(&self, sources: &Sources<'_>) -> Vec<Row> {
+        let mut rows = Vec::new();
+        if let Some(info) = commands::get("tool.repeat") {
+            rows.push(command_row(info, sources, "", 0));
+        }
+        for target in self.recent.iter().take(RECENT_SHOWN) {
+            if let Target::Command(id) = target
+                && let Some(info) = commands::get(id)
+            {
+                rows.push(command_row(info, sources, RECENT_GROUP, 0));
+            }
+        }
+        for group in GROUPS {
+            for info in COMMANDS.iter().filter(|c| c.group == group) {
+                if info.id != "tool.repeat" {
+                    rows.push(command_row(info, sources, group, 0));
+                }
+            }
+        }
+        rows
+    }
+
+    /// The empty place field: favourites 1 to 9, then recent symbols.
+    fn favourites(&self, sources: &Sources<'_>) -> Vec<Row> {
+        let Some(library) = sources.library else {
+            return Vec::new();
+        };
+        let disabled = (!sources.context.has_page).then_some("No page is open");
+        let mut rows = Vec::new();
+        for slot in 1..=9 {
+            if let Some(symbol) = self.symbols.favourite(library, slot) {
+                rows.push(Row {
+                    target: Target::Symbol(symbol.id.clone()),
+                    kind: Kind::Symbol,
+                    label: symbol.name.clone(),
+                    detail: symbol.category.clone(),
+                    group: FAVOURITES_GROUP,
+                    shortcut: Some(slot.to_string()),
+                    disabled,
+                    score: 0,
+                });
+            }
+        }
+        for id in self.symbols.recent() {
+            if let Some(symbol) = library.get(id) {
+                rows.push(Row {
+                    target: Target::Symbol(symbol.id.clone()),
+                    kind: Kind::Symbol,
+                    label: symbol.name.clone(),
+                    detail: symbol.category.clone(),
+                    group: RECENT_GROUP,
+                    shortcut: None,
+                    disabled,
+                    score: 0,
+                });
+            }
+        }
+        rows
+    }
+}
+
+/// `no K1`: a symbol mnemonic and an existing device place a child symbol.
+fn child_rows(project: &Project, sources: &Sources<'_>, query: &str, rows: &mut Vec<Row>) {
+    let Some(library) = sources.library else {
+        return;
+    };
+    for child in insert::child_queries(query) {
+        let Some(symbol) = insert::mnemonic(child.text).and_then(|id| library.get(id)) else {
+            continue;
+        };
+        let devices: Vec<DeviceId> = project
+            .search(child.parent)
+            .into_iter()
+            .filter(|h| h.quality == Match::Exact)
+            .filter_map(|h| match h.id {
+                AnyId::Device(d) => Some(d),
+                _ => None,
+            })
+            .collect();
+        for (n, device) in devices.into_iter().enumerate() {
+            let Some(d) = project.device(device) else {
+                continue;
+            };
+            rows.push(Row {
+                target: Target::Child {
+                    symbol: symbol.id.clone(),
+                    device,
+                },
+                kind: Kind::Symbol,
+                label: format!("{} of {}", symbol.name, d.tag),
+                detail: d.description.clone(),
+                group: "",
+                shortcut: None,
+                disabled: (!sources.context.has_page).then_some("No page is open"),
+                score: EXACT + 500 - i32::try_from(n).unwrap_or(0),
+            });
+        }
     }
 }
 
@@ -201,6 +363,7 @@ fn project_rows(project: &Project, query: &str, rows: &mut Vec<Row>) {
                     kind: Kind::Device,
                     label: device.tag.to_string(),
                     detail: join_detail(&device.description, &summary),
+                    group: "",
                     shortcut: None,
                     disabled: None,
                     score: base,
@@ -227,6 +390,7 @@ fn project_rows(project: &Project, query: &str, rows: &mut Vec<Row>) {
                         kind: Kind::Location,
                         label: format!("{} /{location}", hit.text),
                         detail: "terminal".to_owned(),
+                        group: "",
                         shortcut: None,
                         disabled: None,
                         score: base - i32::try_from(i).unwrap_or(0),
@@ -242,6 +406,7 @@ fn project_rows(project: &Project, query: &str, rows: &mut Vec<Row>) {
                     kind: Kind::Page,
                     label: format!("Page {}", page.name),
                     detail: page.title.clone(),
+                    group: "",
                     shortcut: None,
                     disabled: None,
                     score: base,
@@ -273,6 +438,7 @@ fn location_rows(project: &Project, device: DeviceId, tag: &str, base: i32, rows
             kind: Kind::Location,
             label: format!("{tag} {}", locate::reference(place)),
             detail: what,
+            group: "",
             shortcut: None,
             disabled: None,
             score: base - 1 - i32::try_from(i).unwrap_or(0),
@@ -280,32 +446,69 @@ fn location_rows(project: &Project, device: DeviceId, tag: &str, base: i32, rows
     }
 }
 
+fn command_row(
+    info: &'static CommandInfo,
+    sources: &Sources<'_>,
+    group: &'static str,
+    score: i32,
+) -> Row {
+    Row {
+        target: Target::Command(info.id),
+        kind: Kind::Command,
+        label: info.label.to_owned(),
+        detail: info.group.to_owned(),
+        group,
+        shortcut: sources.keymap.shortcut_text(info.id),
+        disabled: commands::availability(info, &sources.context).err(),
+        score,
+    }
+}
+
+/// The verb phrase of `command` that starts `query` as whole words, and
+/// what follows it.
+fn split_verb<'q>(info: &CommandInfo, query: &'q str) -> Option<(&'static str, &'q str)> {
+    let lower = query.to_lowercase();
+    info.verbs
+        .iter()
+        .filter(|v| {
+            lower.starts_with(*v)
+                && lower[v.len()..]
+                    .chars()
+                    .next()
+                    .is_none_or(char::is_whitespace)
+        })
+        .max_by_key(|v| v.len())
+        .map(|v| (*v, query[v.len()..].trim()))
+}
+
 fn command_rows(query: &str, sources: &Sources<'_>, rows: &mut Vec<Row>) {
-    for (order, info) in COMMANDS.iter().enumerate() {
-        let full = format!("{} {}", info.menu, info.label);
-        let score = if query.is_empty() {
-            // Menu order.
-            Some(-i32::try_from(order).unwrap_or(0))
-        } else {
-            fuzzy::best_score(
-                query,
-                [info.label, full.as_str()]
-                    .into_iter()
-                    .chain(info.keywords.iter().copied()),
-            )
-        };
-        let Some(score) = score else {
+    for info in COMMANDS {
+        // A verb: bare it runs, with words after it it runs on them.
+        if let Some((_, argument)) = split_verb(info, query) {
+            if argument.is_empty() {
+                rows.push(command_row(info, sources, "", EXACT + 200));
+            } else {
+                rows.push(Row {
+                    target: Target::Run {
+                        command: info.id,
+                        argument: argument.to_owned(),
+                    },
+                    label: format!("{}: {argument}", info.label),
+                    ..command_row(info, sources, "", EXACT + 300)
+                });
+            }
             continue;
-        };
-        rows.push(Row {
-            target: Target::Command(info.id),
-            kind: Kind::Command,
-            label: info.label.to_owned(),
-            detail: info.menu.to_owned(),
-            shortcut: sources.keymap.shortcut_text(info.id),
-            disabled: commands::availability(info, &sources.context).err(),
-            score,
-        });
+        }
+        let full = format!("{} {}", info.group, info.label);
+        let score = fuzzy::best_score(
+            query,
+            [info.label, full.as_str()]
+                .into_iter()
+                .chain(info.keywords.iter().copied()),
+        );
+        if let Some(score) = score {
+            rows.push(command_row(info, sources, "", score));
+        }
     }
 }
 

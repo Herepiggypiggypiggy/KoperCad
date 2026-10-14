@@ -8,7 +8,7 @@ use novo_workflow::commands::Context;
 use novo_workflow::duplicate::{TagMode, duplicate};
 use novo_workflow::keymap::Keymap;
 use novo_workflow::locate;
-use novo_workflow::palette::{Kind, Palette, Sources, Target};
+use novo_workflow::palette::{Kind, Mode, Palette, Sources, Target};
 
 fn sources<'a>(project: &'a Project, library: &'a Library, keymap: &'a Keymap) -> Sources<'a> {
     Sources {
@@ -109,7 +109,7 @@ fn commands_show_shortcuts_and_reasons() {
 }
 
 #[test]
-fn last_command_is_first_when_the_palette_opens() {
+fn empty_field_is_the_menu() {
     let library = Library::builtin().unwrap();
     let keymap = Keymap::workflow();
     let project = Project::new("empty");
@@ -118,12 +118,93 @@ fn last_command_is_first_when_the_palette_opens() {
     palette.picked(Target::Command("page.new"));
     let src = sources(&project, &library, &keymap);
     let rows = palette.search("", &src);
-    assert_eq!(rows[0].target, Target::Command("page.new"));
-    assert_eq!(rows[1].target, Target::Command("view.fit"));
+    // Repeat last tool first, then recent picks, newest first.
+    assert_eq!(rows[0].target, Target::Command("tool.repeat"));
+    assert_eq!(rows[1].target, Target::Command("page.new"));
+    assert_eq!(rows[1].group, "Recent");
+    assert_eq!(rows[2].target, Target::Command("view.fit"));
+    // Then every command, by group, with its key and reason.
+    let menu = &rows[3..];
+    assert_eq!(menu.len(), novo_workflow::commands::COMMANDS.len() - 1);
+    assert_eq!(menu[0].group, "Project");
+    assert_eq!(menu.last().unwrap().group, "Export");
+    let undo = menu
+        .iter()
+        .find(|r| r.target == Target::Command("edit.undo"))
+        .unwrap();
+    assert_eq!(undo.shortcut.as_deref(), Some("Ctrl+Z"));
+    assert_eq!(undo.disabled, Some("Nothing to undo"));
     // A short query still prefers the recent pick.
     assert_eq!(
         palette.search("n", &src)[0].target,
         Target::Command("page.new")
+    );
+}
+
+#[test]
+fn place_mode_shows_favourites_and_only_symbols() {
+    let library = Library::builtin().unwrap();
+    let keymap = Keymap::workflow();
+    let project = Project::new("empty");
+    let palette = Palette::default();
+    let src = sources(&project, &library, &keymap);
+    let rows = palette.search_in(Mode::Place, "", &src);
+    assert_eq!(rows.len(), 9);
+    assert_eq!(rows[0].shortcut.as_deref(), Some("1"));
+    assert_eq!(rows[0].target, Target::Symbol("iec/contacts/no".into()));
+    let rows = palette.search_in(Mode::Place, "undo", &src);
+    assert!(rows.iter().all(|r| r.kind == Kind::Symbol));
+}
+
+#[test]
+fn grammar_verb_noun_and_bare_verb() {
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let library = Library::builtin().unwrap();
+    let keymap = Keymap::workflow();
+    let palette = Palette::default();
+    let src = sources(doc.project(), &library, &keymap);
+
+    // A mnemonic with a device places a child of that device.
+    for query in ["no K1", "K1 no", "no -K1", "nc =A1+CAB-K1"] {
+        let rows = palette.search(query, &src);
+        assert!(
+            matches!(&rows[0].target, Target::Child { device, .. } if *device == gate.k1),
+            "{query}: {:?}",
+            rows[0]
+        );
+    }
+    let rows = palette.search("no K1", &src);
+    assert_eq!(rows[0].label, "Make contact (NO) of =A1+CAB-K1");
+    // A verb with words after it runs on them.
+    let rows = palette.search("renumber page", &src);
+    assert_eq!(
+        rows[0].target,
+        Target::Run {
+            command: "edit.renumber",
+            argument: "page".into()
+        }
+    );
+    // A bare verb runs.
+    assert_eq!(
+        palette.search("problems", &src)[0].target,
+        Target::Command("check.problems")
+    );
+    assert_eq!(
+        palette.search("export pdf", &src)[0].target,
+        Target::Command("export.pdf")
+    );
+    // A verb must be a whole word: "pdfs" is not "pdf" plus "s".
+    assert!(
+        !palette
+            .search("pdfs", &src)
+            .iter()
+            .any(|r| matches!(r.target, Target::Run { .. }))
+    );
+    // A noun still jumps.
+    assert_eq!(
+        palette.search("K1", &src)[0].target,
+        Target::Device(gate.k1)
     );
 }
 

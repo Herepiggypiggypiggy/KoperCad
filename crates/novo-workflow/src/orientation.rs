@@ -1,13 +1,12 @@
-//! Tab cycles orientations.
+//! R and X: orienting a symbol or text while placing or on the selection.
 //!
-//! While placing or with a symbol or text selected, Tab steps through the
-//! four rotations and then the four mirrored ones; Shift+Tab walks back. R
-//! rotates and X mirrors on the page. The canvas reports the key as
-//! `cycle_orientation` (WS-03) and the editor (WS-06) asks this table for
-//! the next orientation, so the order is defined once.
+//! R turns a quarter counter-clockwise on the page and X mirrors left to
+//! right on the page, whatever the current orientation. The editor (WS-06)
+//! applies these to the placement, so the maths lives in one place. Tab is
+//! not an orientation key: it steps to the next proposal.
 //!
-//! Connection pieces (corners and Ts) have no table here: the wire tool
-//! makes junctions itself, from where the wires go.
+//! Corners and T-junctions have no table here: they are derived from the
+//! connections, never placed by hand.
 
 use novo_core::{Placement, Rotation};
 
@@ -20,7 +19,7 @@ pub struct Orientation {
 }
 
 impl Orientation {
-    /// The Tab order.
+    /// Every orientation.
     pub const ALL: [Orientation; 8] = [
         Orientation::new(Rotation::R0, false),
         Orientation::new(Rotation::R90, false),
@@ -49,23 +48,6 @@ impl Orientation {
         }
     }
 
-    fn index(self) -> usize {
-        Orientation::ALL
-            .iter()
-            .position(|o| *o == self)
-            .expect("every orientation is in ALL")
-    }
-
-    /// Tab.
-    pub fn next(self) -> Orientation {
-        Orientation::ALL[(self.index() + 1) % 8]
-    }
-
-    /// Shift+Tab.
-    pub fn previous(self) -> Orientation {
-        Orientation::ALL[(self.index() + 7) % 8]
-    }
-
     /// R: a quarter turn counter-clockwise on the page.
     pub fn rotate(self) -> Orientation {
         Orientation::new(self.rotation.then(Rotation::R90), self.mirrored)
@@ -87,17 +69,16 @@ mod tests {
     use std::collections::HashSet;
 
     #[test]
-    fn symbol_tab_walks_all_eight_orientations() {
-        let mut o = Orientation::default();
+    fn r_and_x_reach_all_eight_orientations() {
         let mut seen = HashSet::new();
-        for _ in 0..8 {
+        let mut o = Orientation::default();
+        for _ in 0..4 {
             seen.insert(o);
-            o = o.next();
+            seen.insert(o.mirror());
+            o = o.rotate();
         }
         assert_eq!(seen.len(), 8);
-        assert_eq!(o, Orientation::default());
         for o in Orientation::ALL {
-            assert_eq!(o.next().previous(), o);
             assert_eq!(o.mirror().mirror(), o);
             assert_eq!(o.rotate().rotate().rotate().rotate(), o);
         }

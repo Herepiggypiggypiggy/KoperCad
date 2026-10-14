@@ -1,5 +1,5 @@
-//! The insert search (I, J2): find a symbol in a few letters, with no
-//! separate insert centre to browse.
+//! Symbol search for placing (I opens the command field in place mode):
+//! find a symbol in a few letters, with no insert centre to browse.
 //!
 //! - Short mnemonics rank first: `no`, `nc`, `coil`, `mcb`, `mpcb`, `ol`,
 //!   `m3`, `pb`, `lamp`, `term`, `k`.
@@ -7,8 +7,8 @@
 //!   match fuzzily; recently used symbols rank higher.
 //! - A row of nine favourites; 1 to 9 picks one, so common parts are I then
 //!   one digit.
-//! - A device tag in front (`K1 no`) places a child symbol of that device:
-//!   a contact of `-K1`.
+//! - A device tag with a mnemonic (`no K1`, or `K1 no`) places a child
+//!   symbol of that device: a contact of `-K1`.
 //!
 //! The mnemonic and favourite tables here are interim: once novo-symbols
 //! ships `Library::by_alias` and `favorites()` (WS-05, #25), this search
@@ -64,42 +64,64 @@ pub const DEFAULT_FAVOURITES: [&str; 9] = [
     "iec/terminals/terminal",
 ];
 
-/// A parsed insert query.
+/// A child placement read from a query: a symbol search plus the device
+/// it belongs to.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InsertQuery<'a> {
-    /// The device a child symbol belongs to, as typed (`K1`, `-K1`).
-    pub parent: Option<&'a str>,
-    /// What to search symbols for.
+pub struct ChildQuery<'a> {
+    /// The device, as typed (`K1`, `-K1`, `=A1-K1`).
+    pub parent: &'a str,
+    /// What to search symbols for (`no`).
     pub text: &'a str,
 }
 
-/// Splits `K1 no` into the parent `K1` and the search `no`. The first word
-/// is a parent only when it looks like a device code (letters then a
-/// number, optionally with a `-`) and more words follow.
-pub fn parse_query(query: &str) -> InsertQuery<'_> {
+/// The ways a query can name a child symbol: `no K1` (verb, then the
+/// device, as the command field's grammar reads it) and `K1 no`. Both
+/// readings are returned when both fit (`m3 K1`); the caller keeps the one
+/// whose device exists.
+pub fn child_queries(query: &str) -> Vec<ChildQuery<'_>> {
     let query = query.trim();
-    if let Some((first, rest)) = query.split_once(char::is_whitespace)
-        && looks_like_device_code(first)
+    let mut out = Vec::new();
+    if let Some((rest, last)) = query.rsplit_once(char::is_whitespace)
+        && looks_like_tag(last)
         && !rest.trim().is_empty()
     {
-        return InsertQuery {
-            parent: Some(first),
+        out.push(ChildQuery {
+            parent: last,
             text: rest.trim(),
-        };
+        });
     }
-    InsertQuery {
-        parent: None,
-        text: query,
+    if let Some((first, rest)) = query.split_once(char::is_whitespace)
+        && looks_like_tag(first)
+        && !rest.trim().is_empty()
+    {
+        out.push(ChildQuery {
+            parent: first,
+            text: rest.trim(),
+        });
     }
+    out
 }
 
-fn looks_like_device_code(word: &str) -> bool {
+/// A device code (`K1`, `-K1`) or a full tag (`=A1+CAB-K1`).
+fn looks_like_tag(word: &str) -> bool {
+    if word.starts_with(['=', '+']) {
+        return novo_core::DeviceTag::parse(word).is_ok_and(|t| !t.product.is_empty());
+    }
     let word = word.strip_prefix('-').unwrap_or(word);
     let (letters, number, suffix) = novo_core::split_code(word);
     !letters.is_empty()
         && letters.chars().all(|c| c.is_ascii_alphabetic())
         && number.is_some()
         && suffix.is_empty()
+}
+
+/// The symbol id a mnemonic names exactly, if any.
+pub fn mnemonic(word: &str) -> Option<&'static str> {
+    let word = word.trim().to_lowercase();
+    MNEMONICS
+        .iter()
+        .find(|(m, _)| *m == word)
+        .map(|(_, id)| *id)
 }
 
 /// One row of the insert search.
@@ -398,20 +420,18 @@ mod tests {
     }
 
     #[test]
-    fn child_query_splits_off_the_parent() {
-        assert_eq!(
-            parse_query("K1 no"),
-            InsertQuery {
-                parent: Some("K1"),
-                text: "no"
-            }
-        );
-        assert_eq!(parse_query("-K12 nc").parent, Some("-K12"));
-        assert_eq!(parse_query("no").parent, None);
-        assert_eq!(parse_query("K1").parent, None);
-        // "m3 motor" is a search, not a child of -M3? It is a device code,
-        // so it is read as one; a plain word first is never a parent.
-        assert_eq!(parse_query("motor 3").parent, None);
+    fn child_queries_read_both_orders() {
+        let q = |parent, text| ChildQuery { parent, text };
+        assert_eq!(child_queries("no K1"), [q("K1", "no")]);
+        assert_eq!(child_queries("K1 no"), [q("K1", "no")]);
+        assert_eq!(child_queries("nc =A1+CAB-K12"), [q("=A1+CAB-K12", "nc")]);
+        // Both words look like tags: both readings, verb first.
+        assert_eq!(child_queries("m3 K1"), [q("K1", "m3"), q("m3", "K1")]);
+        assert!(child_queries("no").is_empty());
+        assert!(child_queries("K1").is_empty());
+        assert!(child_queries("motor three").is_empty());
+        assert_eq!(mnemonic("NO"), Some("iec/contacts/no"));
+        assert_eq!(mnemonic("contactor"), None);
     }
 
     #[test]

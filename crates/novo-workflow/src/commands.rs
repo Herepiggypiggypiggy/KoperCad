@@ -1,6 +1,7 @@
-//! Every user command, as data. Menus, the keymap and the palette all list
-//! commands from here, so a command can't be in one and missing from the
-//! other (J8). Ids match the app shell's action ids (`file.new`, ...).
+//! Every user command, as data. The keymap and the command field list
+//! commands from here; with an empty query the command field lists them all
+//! by group, which is the menu (there is no menu bar). Ids match the app
+//! shell's action ids (`file.new`, ...).
 
 use crate::keymap::{FAVOURITE_COMMANDS, Keymap};
 
@@ -10,10 +11,14 @@ pub struct CommandInfo {
     /// Stable id, used by the keymap, recents and scripts.
     pub id: &'static str,
     pub label: &'static str,
-    /// Menu it sits in, shown as a prefix in the palette.
-    pub menu: &'static str,
-    /// Extra words the palette matches ("renumber" also finds "numbering").
+    /// One of [`GROUPS`]; the empty command field lists commands by group.
+    pub group: &'static str,
+    /// Extra words the search matches ("renumber" also finds "numbering").
     pub keywords: &'static [&'static str],
+    /// Phrases that make this command the verb of a typed command
+    /// (`renumber page`, `export pdf`). Matched as whole words at the start
+    /// of the query; what follows is the command's argument.
+    pub verbs: &'static [&'static str],
     /// What it needs before it can run.
     pub needs: Needs,
 }
@@ -72,42 +77,142 @@ pub fn availability(command: &CommandInfo, ctx: &Context) -> Result<(), &'static
     }
 }
 
+/// Command groups, in the order the empty command field lists them.
+pub const GROUPS: [&str; 7] = [
+    "Project", "Draw", "Edit", "Navigate", "View", "Check", "Export",
+];
+
 const fn cmd(
     id: &'static str,
     label: &'static str,
-    menu: &'static str,
+    group: &'static str,
     keywords: &'static [&'static str],
     needs: Needs,
 ) -> CommandInfo {
     CommandInfo {
         id,
         label,
-        menu,
+        group,
         keywords,
+        verbs: &[],
         needs,
     }
 }
 
-/// Every command, in menu order.
+const fn verb(mut info: CommandInfo, verbs: &'static [&'static str]) -> CommandInfo {
+    info.verbs = verbs;
+    info
+}
+
+/// Every command, by group.
 pub const COMMANDS: &[CommandInfo] = &[
+    // Project
     cmd(
         "file.new",
         "New project",
-        "File",
+        "Project",
         &["create"],
         Needs::Nothing,
     ),
     cmd(
         "file.open",
         "Open project",
-        "File",
+        "Project",
         &["load"],
         Needs::Nothing,
     ),
-    cmd("file.save", "Save", "File", &[], Needs::Project),
-    cmd("file.save_as", "Save as", "File", &["copy"], Needs::Project),
-    cmd("file.close", "Close project", "File", &[], Needs::Project),
-    cmd("file.quit", "Quit", "File", &["exit"], Needs::Nothing),
+    cmd("file.save", "Save", "Project", &[], Needs::Project),
+    cmd(
+        "file.save_as",
+        "Save as",
+        "Project",
+        &["copy"],
+        Needs::Project,
+    ),
+    cmd(
+        "file.close",
+        "Close project",
+        "Project",
+        &[],
+        Needs::Project,
+    ),
+    verb(
+        cmd(
+            "page.new",
+            "New page",
+            "Project",
+            &["add page"],
+            Needs::Project,
+        ),
+        &["new page", "page"],
+    ),
+    verb(
+        cmd(
+            "project.rules",
+            "Rules",
+            "Project",
+            &["numbering", "settings"],
+            Needs::Project,
+        ),
+        &["rules"],
+    ),
+    cmd("file.quit", "Quit", "Project", &["exit"], Needs::Nothing),
+    // Draw
+    cmd(
+        "tool.repeat",
+        "Repeat last tool",
+        "Draw",
+        &["again"],
+        Needs::Page,
+    ),
+    cmd(
+        "tool.place",
+        "Place symbol",
+        "Draw",
+        &["insert", "device", "component"],
+        Needs::Page,
+    ),
+    cmd(
+        "tool.connect",
+        "Connect",
+        "Draw",
+        &["wire", "chain"],
+        Needs::Page,
+    ),
+    cmd("edit.rotate", "Rotate", "Draw", &["turn"], Needs::Selection),
+    cmd("edit.mirror", "Mirror", "Draw", &["flip"], Needs::Selection),
+    verb(
+        cmd(
+            "proposal.accept",
+            "Accept proposal",
+            "Draw",
+            &[],
+            Needs::Page,
+        ),
+        &["accept"],
+    ),
+    verb(
+        cmd(
+            "proposal.accept_all",
+            "Accept all proposals",
+            "Draw",
+            &[],
+            Needs::Page,
+        ),
+        &["accept all"],
+    ),
+    cmd("proposal.next", "Next proposal", "Draw", &[], Needs::Page),
+    verb(
+        cmd(
+            "draw.tidy",
+            "Tidy routes",
+            "Draw",
+            &["reroute"],
+            Needs::Selection,
+        ),
+        &["tidy"],
+    ),
+    // Edit
     cmd("edit.undo", "Undo", "Edit", &[], Needs::Undo),
     cmd("edit.redo", "Redo", "Edit", &[], Needs::Redo),
     cmd("edit.copy", "Copy", "Edit", &[], Needs::Selection),
@@ -128,7 +233,7 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     cmd(
         "edit.duplicate",
-        "Smart duplicate",
+        "Duplicate",
         "Edit",
         &["copy", "clone"],
         Needs::Selection,
@@ -149,114 +254,83 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     cmd(
         "edit.rename",
-        "Rename device",
+        "Rename",
         "Edit",
         &["tag", "edit tag"],
         Needs::Device,
     ),
-    cmd(
-        "edit.renumber",
-        "Renumber devices",
-        "Edit",
-        &["numbering", "number"],
-        Needs::Project,
-    ),
-    cmd(
-        "edit.rotate",
-        "Rotate 90°",
-        "Edit",
-        &["turn"],
-        Needs::Selection,
-    ),
-    cmd("edit.mirror", "Mirror", "Edit", &["flip"], Needs::Selection),
-    cmd(
-        "edit.next_orientation",
-        "Next orientation",
-        "Edit",
-        &["tab", "turn"],
-        Needs::Selection,
-    ),
-    cmd(
-        "edit.previous_orientation",
-        "Previous orientation",
-        "Edit",
-        &[],
-        Needs::Selection,
+    verb(
+        cmd(
+            "edit.renumber",
+            "Renumber devices",
+            "Edit",
+            &["numbering", "number"],
+            Needs::Project,
+        ),
+        &["renumber"],
     ),
     cmd("edit.escape", "Cancel", "Edit", &["escape"], Needs::Nothing),
-    cmd(
-        "tool.repeat",
-        "Repeat last tool",
-        "Insert",
-        &["again"],
-        Needs::Page,
-    ),
-    cmd(
-        "tool.insert",
-        "Insert symbol",
-        "Insert",
-        &["place", "device", "component"],
-        Needs::Page,
-    ),
-    cmd(
-        "tool.wire",
-        "Wire",
-        "Insert",
-        &["connect", "line"],
-        Needs::Page,
-    ),
-    cmd(
-        "tool.terminals",
-        "Terminals",
-        "Insert",
-        &["clamp", "strip"],
-        Needs::Page,
-    ),
-    cmd("tool.cable", "Cable", "Insert", &["cores"], Needs::Page),
-    cmd(
-        "tool.potential",
-        "Potential or interruption point",
-        "Insert",
-        &["arrow", "off page"],
-        Needs::Page,
-    ),
-    cmd("tool.move", "Move selection", "Edit", &[], Needs::Selection),
+    // Navigate
     cmd(
         "nav.partner",
         "Go to partner",
-        "Go",
+        "Navigate",
         &["cross reference", "coil", "contact"],
         Needs::Device,
     ),
     cmd(
         "nav.all_references",
-        "All references",
-        "Go",
-        &["cross reference", "occurrences", "where used"],
+        "Every occurrence",
+        "Navigate",
+        &["cross reference", "references", "where used"],
         Needs::Device,
     ),
     cmd(
         "nav.back",
         "Back",
-        "Go",
+        "Navigate",
         &[],
         Needs::History(Direction::Back),
     ),
     cmd(
         "nav.forward",
         "Forward",
-        "Go",
+        "Navigate",
         &[],
         Needs::History(Direction::Forward),
     ),
-    cmd("nav.previous_page", "Previous page", "Go", &[], Needs::Page),
-    cmd("nav.next_page", "Next page", "Go", &[], Needs::Page),
     cmd(
-        "page.new",
-        "New page",
-        "Page",
-        &["add page"],
-        Needs::Project,
+        "nav.previous_page",
+        "Previous page",
+        "Navigate",
+        &[],
+        Needs::Page,
+    ),
+    cmd("nav.next_page", "Next page", "Navigate", &[], Needs::Page),
+    verb(
+        cmd(
+            "nav.changes",
+            "Changes since export",
+            "Navigate",
+            &["changed"],
+            Needs::Project,
+        ),
+        &["changes"],
+    ),
+    // View
+    cmd(
+        "view.command_palette",
+        "Command field",
+        "View",
+        &["search", "find", "palette"],
+        Needs::Nothing,
+    ),
+    cmd(
+        "view.command_field_here",
+        "Command field at the pointer",
+        "View",
+        &[],
+        Needs::Page,
     ),
     cmd(
         "view.fit",
@@ -266,32 +340,92 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd(
-        "view.project_panel",
-        "Project panel",
+        "view.schematic",
+        "Schematic",
         "View",
-        &["tree"],
-        Needs::Nothing,
+        &["lens"],
+        Needs::Project,
     ),
     cmd(
-        "view.properties_panel",
-        "Properties panel",
+        "view.cabinet",
+        "Cabinet",
         "View",
+        &["lens", "layout"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.connections_drawer",
+        "Connections drawer",
+        "View",
+        &["terminals", "cables", "plugs"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.devices_drawer",
+        "Devices drawer",
+        "View",
+        &["parts", "locations"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.cabinet_table",
+        "Cabinet as table",
+        "View",
+        &["table"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.toggle_marks",
+        "Show or hide marks",
+        "View",
+        &["problems", "proposals"],
+        Needs::Page,
+    ),
+    // Check
+    verb(
+        cmd(
+            "check.problems",
+            "Problems",
+            "Check",
+            &["errors", "checks"],
+            Needs::Project,
+        ),
+        &["problems"],
+    ),
+    cmd(
+        "check.next_problem",
+        "Next problem",
+        "Check",
         &[],
-        Needs::Nothing,
+        Needs::Project,
     ),
     cmd(
-        "view.messages_panel",
-        "Messages panel",
-        "View",
-        &["errors", "checks"],
-        Needs::Nothing,
+        "check.previous_problem",
+        "Previous problem",
+        "Check",
+        &[],
+        Needs::Project,
     ),
-    cmd(
-        "view.command_palette",
-        "Command palette",
-        "View",
-        &["search", "find"],
-        Needs::Nothing,
+    // Export
+    verb(
+        cmd(
+            "export.pdf",
+            "Export PDF",
+            "Export",
+            &["print"],
+            Needs::Project,
+        ),
+        &["export pdf", "pdf"],
+    ),
+    verb(
+        cmd(
+            "export.bom",
+            "Export bill of materials",
+            "Export",
+            &["parts list"],
+            Needs::Project,
+        ),
+        &["export bom", "bom"],
     ),
 ];
 
@@ -340,14 +474,26 @@ mod tests {
     }
 
     #[test]
-    fn every_shortcut_map_row_has_a_shortcut() {
+    fn groups_are_known_and_in_order() {
+        let mut last = 0;
+        for c in COMMANDS {
+            let g = GROUPS.iter().position(|g| *g == c.group).expect(c.id);
+            assert!(g >= last, "{} is out of group order", c.id);
+            last = g;
+        }
+    }
+
+    #[test]
+    fn every_key_row_has_a_shortcut() {
         let map = Keymap::workflow();
         for id in [
             "view.command_palette",
             "edit.duplicate",
             "nav.all_references",
             "nav.back",
-            "edit.next_orientation",
+            "proposal.next",
+            "check.next_problem",
+            "view.devices_drawer",
         ] {
             assert!(map.shortcut_text(id).is_some(), "{id}");
         }
