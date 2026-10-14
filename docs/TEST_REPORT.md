@@ -10,6 +10,19 @@ How a PR is tested: its branch is merged onto the current `main` (a
 `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
 `cargo test --workspace`. Windows results come from the PR's own CI.
 
+## Gate 0 summary (main `11363c1`)
+
+| Criterion | Status | Evidence |
+| --- | --- | --- |
+| Model API v0 frozen, with full unit tests | Met | #1, #11, #14, #21 (saved JSON format pinned) and #26 merged. F1 (non-finite numbers) fixed in #11 and covered by `robustness.rs` |
+| Canvas draws model objects | Met | #4 merged; its `PageScene` adapter and headless GPU tests pass on main |
+| 10,000 objects at 60 fps | **Waiting on a real GPU** | Model side and CPU side pass at 10k (see Round 5). Only llvmpipe is available here: 53 ms/frame (debug). The release check is running on Tadjiro's PC |
+| Save, close and reopen gives an identical project | Met | `gate0_storage.rs`: Gate 1 and a 10k page reopen with identical JSON, nets and potentials, also after incremental saves, undo and crash recovery |
+| Empty app installs and launches; CI green | Met | #3 merged. Its `installer` job on `798193a` built the installer, installed it as a standard (non-admin) user, found nothing in `HKLM`, and launched the app for 10 s. Linux launch verified under Xvfb |
+| No admin rights | Met | Per-user installer (`PrivilegesRequired=lowest`), `asInvoker` manifest checked in CI, standard-user install passes, no machine-wide paths anywhere in `crates/` or `scripts/` |
+
+main `11363c1` passes fmt, clippy and all 232 workspace tests on Linux.
+
 ## Round 5 (2026-10-14, main `af01a66`)
 
 main now has #4 (canvas engine), #21 (saved JSON format pinned, 10k-symbol
@@ -146,7 +159,7 @@ Everything must install and run as a standard user, with no elevation.
 | --- | --- | --- |
 | Installer is per-user | Pass (static) | #3 `novoelectric.iss`: `PrivilegesRequired=lowest`, installs to `{localappdata}\Programs`, shortcuts in `{userprograms}`/`{userdesktop}`, file association under `HKCU` only |
 | App never asks for elevation | Pass (static) | #3 `build.rs` embeds an `asInvoker` manifest; CI step fails if either exe contains `requireAdministrator` or `highestAvailable` |
-| Installs and launches as a standard user | Pending | #3's `installer` job creates a non-admin local user, installs with its credentials, checks nothing was written to `HKLM`, and launches the app for 10 s. The first run failed because the test user could not write the job's `TEMP`; #3 pushed a fix (`14ebe0a`) and the re-run is pending |
+| Installs and launches as a standard user | Pass | #3's `installer` job creates a non-admin local user, installs with its credentials, checks nothing was written to `HKLM`, and launches the app for 10 s. The first run failed on the job's `TEMP`; after the fix it passed on `798193a` (run 38597775983) |
 | No machine-wide paths at runtime | Pass (static) | No `HKLM`, `Program Files`, `ProgramData` or system paths in main or any open PR. #5 writes the project and its `.autosave` next to the project file; #3 keeps settings in eframe's per-user storage; #6's launcher and shortcut use `%LOCALAPPDATA%` and the user's desktop |
 
 From the next round, every PR is checked for new machine-wide paths or elevation requests.
