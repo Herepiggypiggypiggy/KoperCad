@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use novo_core::*;
 
-#[path = "../tests/scale_project.rs"]
+#[path = "../tests/common/scale_project.rs"]
 mod scale_project;
 
 fn time<R>(label: &str, f: impl FnOnce() -> R) -> R {

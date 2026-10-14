@@ -10,6 +10,37 @@ How a PR is tested: its branch is merged onto the current `main` (a
 `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
 `cargo test --workspace`. Windows results come from the PR's own CI.
 
+## Round 5 (2026-10-14, main `af01a66`)
+
+main now has #4 (canvas engine), #21 (saved JSON format pinned, 10k-symbol
+scale test), #22 (safer project file replace) and #23 (the storage gate
+tests). fmt, clippy and all 191 workspace tests
+pass with `novo-tests` merged in, including #4's headless GPU tests, which
+ran on llvmpipe here rather than skipping.
+
+- **Canvas on main passes.** The GPU stress test draws 10,001 items (330k
+  triangles) on llvmpipe at 53 ms a frame in a debug build. Picking under
+  the cursor takes 0.004 ms, snapping 0.018 ms and box-selecting a quarter
+  of the page 5.7 ms. Rebuilding the page mesh after one edit takes 37 ms
+  (debug). 60 fps at 10,000 objects still needs a real GPU and a release
+  build.
+- **No admin rights:** #4 adds no machine-wide paths, registry access or
+  elevation.
+- **Open PRs merged onto `af01a66`.** #3 (app shell, head `798193a`) merges
+  cleanly: fmt, clippy and 223 tests pass. #20 (theme and icons, head
+  `a98788e`) has a real conflict in `Cargo.toml` with main: both sides add
+  `egui` to `[workspace.dependencies]`. Main adds it with default
+  features, and #20 adds it with `default-features = false`. With main's
+  entry kept and #20's other additions (`novo-theme`, `egui-phosphor`), fmt,
+  clippy and 197 tests pass. #20 needs a rebase to pick one `egui` entry.
+  Neither PR adds machine-wide paths. #3's installer still asks for
+  `PrivilegesRequired=lowest`, and its CI fails if anything lands in `HKLM`.
+- **Storage tests tightened after review of #23.** The netlist comparison
+  across a reload now covers each net's `defined`, `carried` and
+  `reachable` potentials, not only the shown ones. A second crash-recovery
+  test feeds the session the `ChangeSet`s that real transactions return,
+  with autosaves in between, as the app will.
+
 ## Round 4 (2026-10-14, main `1a68be8`)
 
 main now has #18 (148 symbols, tighter `PassThrough`) and #5 (project
@@ -102,7 +133,7 @@ Test counts include the `novo-tests` crate added on top.
 | Criterion | Status | Evidence |
 | --- | --- | --- |
 | Model API v0 frozen, with full unit tests | Met, with F1 open | #1 merged; 31 tests in `novo-core`; 14 gate tests in `novo-tests` |
-| Canvas draws model objects | Pending merge of #4 | #4's `PageScene` adapter and tests pass on main |
+| Canvas draws model objects | Met | #4 merged as `d91e961`; its `PageScene` adapter and headless GPU tests pass on main |
 | 10,000 objects at 60 fps | Not verifiable here | The container only has llvmpipe (software): the release stress example measured 19 fps here with animation on (10,001 items, 330k triangles, tessellated in 35 ms), matching #4's own figure. Needs `cargo run --release -p novo-canvas --example stress` on a real GPU. Model side is fine: build 84 ms, netlist 17 ms, page read under 1 ms, one edit 0.3 ms (debug build) |
 | Save, close and reopen gives an identical project | Met on #5, except F1 | Gate 1 project, incremental saves after edits and undo, crash recovery and a 10k-object page (save 214 ms, open 253 ms) all reopen byte-identical |
 | Empty app installs and launches; CI green | Launch verified on Linux; installer pending | #3 under Xvfb with llvmpipe: window opens with menus and panels and stays up. The `installer` job on #3 was still running at the time of this round |

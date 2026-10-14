@@ -40,7 +40,8 @@
       },
       "format": {
         "size": "A3",
-        "landscape": true
+        "landscape": true,
+        "columns": 10
       },
       "properties": {}
     },
@@ -54,7 +55,8 @@
       },
       "format": {
         "size": "A4",
-        "landscape": true
+        "landscape": true,
+        "columns": 10
       },
       "properties": {
         "approved": true

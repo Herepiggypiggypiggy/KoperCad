@@ -13,9 +13,9 @@
 //! the WS-07 done-criterion asks.
 
 use novo_core::{
-    CableCore, CableId, Device, DeviceId, DeviceTag, Document, Endpoint, JunctionId, PageId, Pin,
-    Placement, Point, PotentialId, PotentialKind, Result, SymbolId, SymbolInstance, SymbolRole, Tx,
-    WireId,
+    CableCore, CableId, ChangeSet, Device, DeviceId, DeviceTag, Document, Endpoint, JunctionId,
+    PageId, Pin, Placement, Point, PotentialId, PotentialKind, Result, SymbolId, SymbolInstance,
+    SymbolRole, Tx, WireId,
 };
 
 /// Handles to the objects of the Gate 1 project.
@@ -103,8 +103,13 @@ fn role(device: DeviceId, main: bool) -> SymbolRole {
 
 /// Builds the Gate 1 project as one undo step and returns its handles.
 pub fn motor_starter(doc: &mut Document) -> Result<MotorStarter> {
-    let (starter, _) = doc.transact("Draw Gate 1 motor starter", build)?;
-    Ok(starter)
+    Ok(motor_starter_with_changes(doc)?.0)
+}
+
+/// [`motor_starter`], also returning the transaction's `ChangeSet`, as the
+/// app hands it to the storage session.
+pub fn motor_starter_with_changes(doc: &mut Document) -> Result<(MotorStarter, ChangeSet)> {
+    doc.transact("Draw Gate 1 motor starter", build)
 }
 
 fn build(tx: &mut Tx<'_>) -> Result<MotorStarter> {
