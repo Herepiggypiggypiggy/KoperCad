@@ -12,10 +12,13 @@
 //!
 //! - A terminal conducts end to end. Drawings of one terminal record are one
 //!   node; jumpers join terminals with the same jumper group.
-//! - The project rule [`Settings`] decides what one name in several places
-//!   means. **Join** (default): the drawings are one terminal, built from
+//! - novo-core's project rule `ProjectInfo.rules.terminals` ([`rules`])
+//!   decides what one name in several places means. **Join** (new
+//!   projects): the drawings and records are one terminal, built from
 //!   1-in/1-out clamps linked by connectors (or a jumper), one row in the
-//!   strip editor. **Refuse**: later drawings are flagged as duplicates.
+//!   strip editor, one node in the netlist. **Refuse**: a second record
+//!   with the name is refused. **Off** (files without a rule): records stay
+//!   separate and [`check`] lists them.
 //! - [`explain`] says in plain words which of these applies to a terminal.
 //!
 //! ```
@@ -45,31 +48,37 @@
 //! ```
 
 mod check;
+mod geometry;
 mod naming;
 mod occurrence;
 mod place;
+mod rules;
 mod screen;
-mod settings;
+pub mod strings;
 mod strip;
 mod style;
 mod suggest;
 
 pub use check::{Issue, IssueKind, Severity, check};
+pub use geometry::{redraw, symbol_length, symbol_pins};
 pub use naming::{
-    compare_names, kind_for_name, kind_for_potential, kind_key, kind_label, next_free_name,
-    next_free_number, next_order, potential_kind_for_name,
+    base_name_for_potential, compare_names, kind_for_name, kind_for_potential, kind_key,
+    named_potential, next_free_name, next_free_number, next_order, potential_fits,
 };
 pub use occurrence::{Occurrence, Side, State, Target, occurrence_in, occurrences};
 pub use place::{
     Drop, Placed, place_named, place_terminals, strip_by_tag, strip_in_use, terminal_length,
     terminal_pins,
 };
+pub use rules::{
+    LEGACY_JOIN_LINK_KEY, LEGACY_SAME_NAME_KEY, migrate_legacy_rules, rules, set_rules,
+};
 pub use screen::{Screen, ScreenRow, screen};
-pub use settings::{JOIN_LINK_KEY, JoinLink, SAME_NAME_KEY, SameName, Settings};
+pub use strings::{kind_label, rule_sentence};
 pub use strip::{
-    Build, Row, StripView, add_spares, explain, free_jumper, join_duplicates, rename,
-    rename_preview, renumber, renumber_preview, reorder, set_jumper, set_kind, set_level,
-    strip_view, strips,
+    Build, RenameChange, RenameProblem, Row, StripView, add_spares, explain, free_jumper,
+    join_duplicates, rename, rename_preview, renumber, renumber_preview, reorder, set_jumper,
+    set_kind, set_level, strip_view, strips,
 };
 pub use style::{
     Style, clear_override, default_symbol, overrides, set_strip_style, strip_style, style_of,

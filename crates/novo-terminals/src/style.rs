@@ -20,6 +20,7 @@ use novo_core::{
     TerminalKind, Tx, Value,
 };
 
+use crate::geometry::{redraw, symbol_pins};
 use crate::naming::kind_key;
 
 /// The built-in symbol for a terminal kind (novo-symbols keys).
@@ -109,34 +110,39 @@ fn draws_only_inherited(project: &Project, symbol: &SymbolInstance) -> bool {
 }
 
 /// Sets the style of one terminal kind on a strip and redraws every terminal
-/// of that kind that has no override of its own with the new symbol.
+/// of that kind that has no override of its own with the new symbol,
+/// refitting its connection points (see [`crate::redraw`]). Refused, with
+/// nothing changed, for a symbol that is not a single-level terminal symbol
+/// or when a drawing's wires leave no room for it.
 pub fn set_strip_style(
     tx: &mut Tx<'_>,
     strip: DeviceId,
     kind: TerminalKind,
     style: &Style,
 ) -> Result<()> {
+    symbol_pins(&style.symbol)?;
     tx.set_property(strip, symbol_key(kind), Some(style.symbol.0.clone().into()))?;
     let part = style
         .part
         .map(|p| Value::Int(i64::try_from(p.raw()).unwrap_or(i64::MAX)));
     tx.set_property(strip, part_key(kind), part)?;
-    let redraw: Vec<_> = tx
+    let symbols: Vec<_> = tx
         .project()
         .terminals_of_strip(strip)
         .into_iter()
         .filter(|t| t.kind == kind)
         .flat_map(|t| tx.project().symbols_of_terminal(t.id))
-        .filter(|s| draws_only_inherited(tx.project(), s) && s.symbol != style.symbol)
+        .filter(|s| draws_only_inherited(tx.project(), s))
         .map(|s| s.id)
         .collect();
-    for symbol in redraw {
-        tx.update::<SymbolInstance>(symbol, |s| s.symbol = style.symbol.clone())?;
+    for symbol in symbols {
+        redraw(tx, symbol, &style.symbol)?;
     }
     Ok(())
 }
 
-/// Removes a terminal's own symbol and part, so it follows its strip again.
+/// Removes a terminal's own symbol and part, so it follows its strip again,
+/// and redraws it with the strip's symbol (see [`crate::redraw`]).
 pub fn clear_override(tx: &mut Tx<'_>, terminal: TerminalId) -> Result<()> {
     tx.set_property(terminal, "symbol", None)?;
     tx.set_property(terminal, "part", None)?;
@@ -144,15 +150,15 @@ pub fn clear_override(tx: &mut Tx<'_>, terminal: TerminalId) -> Result<()> {
         return Ok(());
     };
     let symbol = strip_style(tx.project(), t.strip, t.kind).symbol;
-    let redraw: Vec<_> = tx
+    let symbols: Vec<_> = tx
         .project()
         .symbols_of_terminal(terminal)
         .into_iter()
-        .filter(|s| draws_only_inherited(tx.project(), s) && s.symbol != symbol)
+        .filter(|s| draws_only_inherited(tx.project(), s))
         .map(|s| s.id)
         .collect();
-    for id in redraw {
-        tx.update::<SymbolInstance>(id, |s| s.symbol = symbol.clone())?;
+    for id in symbols {
+        redraw(tx, id, &symbol)?;
     }
     Ok(())
 }

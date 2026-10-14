@@ -9,9 +9,8 @@ use std::fmt::Write as _;
 
 use novo_core::{DeviceId, Project};
 
-use crate::naming::kind_label;
 use crate::occurrence::Target;
-use crate::settings::JoinLink;
+use crate::strings;
 use crate::strip::strip_view;
 
 /// One line of a terminal connection screen.
@@ -44,10 +43,17 @@ pub struct Screen {
     pub rows: Vec<ScreenRow>,
 }
 
+/// Distinct items in first-seen order.
+fn distinct(items: impl IntoIterator<Item = String>) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    items
+        .into_iter()
+        .filter(|item| seen.insert(item.clone()))
+        .collect()
+}
+
 fn designations(targets: &[&Target]) -> Vec<String> {
-    let mut out: Vec<String> = targets.iter().map(|t| t.designation.clone()).collect();
-    out.dedup();
-    out
+    distinct(targets.iter().map(|t| t.designation.clone()))
 }
 
 /// Builds the connection screen of a strip from the model.
@@ -58,42 +64,26 @@ pub fn screen(project: &Project, strip: DeviceId) -> Screen {
         .iter()
         .map(|row| {
             let external = row.external_targets();
-            let mut cables: Vec<String> = row
-                .occurrences
-                .iter()
-                .flat_map(|o| &o.external.wires)
-                .filter_map(|&w| {
-                    let (cable, core) = project.core_of_wire(w)?;
-                    let cable = project.cable(cable)?;
-                    Some(format!("{} {}", cable.tag, cable.cores[core].name))
-                })
-                .collect();
-            cables.dedup();
-            let mut pages: Vec<String> = row
-                .occurrences
-                .iter()
-                .filter_map(|o| project.page(o.page).map(|p| p.name.clone()))
-                .collect();
-            pages.dedup();
-            let build = if row.build.clamps <= 1 {
-                "1 clamp".to_owned()
-            } else {
-                let link = match row.build.link {
-                    JoinLink::Connector => "connector",
-                    JoinLink::Jumper => "jumper",
-                };
-                format!(
-                    "{} clamps + {} {}{}",
-                    row.build.clamps,
-                    row.build.links,
-                    link,
-                    if row.build.links == 1 { "" } else { "s" }
-                )
-            };
+            let cables = distinct(
+                row.occurrences
+                    .iter()
+                    .flat_map(|o| &o.external.wires)
+                    .filter_map(|&w| {
+                        let (cable, core) = project.core_of_wire(w)?;
+                        let cable = project.cable(cable)?;
+                        Some(format!("{} {}", cable.tag, cable.cores[core].name))
+                    }),
+            );
+            let pages = distinct(
+                row.occurrences
+                    .iter()
+                    .filter_map(|o| project.page(o.page).map(|p| p.name.clone())),
+            );
+            let build = strings::build(row.build.clamps, row.build.links, row.build.link);
             ScreenRow {
                 internal: designations(&row.internal_targets()),
                 terminal: row.name.clone(),
-                kind: kind_label(row.kind).to_owned(),
+                kind: strings::kind_label(row.kind).to_owned(),
                 external: designations(&external),
                 cables,
                 jumper: row.jumper,
@@ -121,7 +111,7 @@ impl Screen {
                 [
                     r.internal.join(", "),
                     if r.spare {
-                        format!("{} (spare)", r.terminal)
+                        strings::screen_spare(&r.terminal)
                     } else {
                         r.terminal.clone()
                     },
@@ -132,9 +122,7 @@ impl Screen {
                 ]
             })
             .collect();
-        let header = [
-            "Internal", "Terminal", "External", "Cable", "Jumper", "Pages",
-        ];
+        let header = strings::SCREEN_HEADER;
         let mut widths = header.map(|h| h.chars().count());
         for row in &cells {
             for (w, c) in widths.iter_mut().zip(row) {
@@ -142,7 +130,7 @@ impl Screen {
             }
         }
         let mut out = String::new();
-        let _ = writeln!(out, "Terminal strip {}", self.tag);
+        let _ = writeln!(out, "{}", strings::screen_title(&self.tag));
         let line = |out: &mut String, row: &[String]| {
             let padded: Vec<String> = row
                 .iter()

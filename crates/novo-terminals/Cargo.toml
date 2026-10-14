@@ -7,9 +7,9 @@ license.workspace = true
 
 [dependencies]
 novo-core.workspace = true
+novo-symbols.workspace = true
 
 [dev-dependencies]
-novo-symbols.workspace = true
 novo-tests = { path = "../novo-tests" }
 
 [lints]

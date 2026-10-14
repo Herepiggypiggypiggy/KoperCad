@@ -8,14 +8,17 @@
 
 use novo_core::{
     DeviceId, DeviceKind, DeviceTag, Direction, Endpoint, ModelError, Netlist, PageId, Pin,
-    Placement, Point, PotentialKind, Project, Result, Rotation, SymbolKey, SymbolRole, Terminal,
-    TerminalId, TerminalKind, Tx, Wire, WireId,
+    Placement, Point, PotentialKind, Project, Result, Rotation, SameName, SymbolKey, SymbolRole,
+    Terminal, TerminalId, TerminalKind, Tx, Wire, WireId,
 };
 
+use crate::geometry::symbol_pins;
 use crate::naming::{
-    kind_for_name, kind_for_potential, next_free_name, next_free_number, next_order,
+    base_name_for_potential, kind_for_name, kind_for_potential, next_free_name, next_free_number,
+    next_order,
 };
-use crate::settings::{SameName, Settings};
+use crate::rules::rules;
+use crate::strings;
 use crate::style::strip_style;
 
 /// A click on a wire, or one wire crossed by a drag.
@@ -42,6 +45,8 @@ pub struct Placed {
 
 /// Connection points of a terminal symbol: `1` at the origin pointing up,
 /// `2` straight below it at `length` pointing down (novo-symbols geometry).
+/// Placing and redrawing read the actual symbol with
+/// [`crate::symbol_pins`]; this is for drawing a terminal by hand.
 pub fn terminal_pins(length: f64) -> Vec<Pin> {
     vec![
         Pin::new("1", 0.0, 0.0).with_direction(Direction::Up),
@@ -49,7 +54,8 @@ pub fn terminal_pins(length: f64) -> Vec<Pin> {
     ]
 }
 
-/// Length of a terminal symbol from `1` to `2`, in millimetres.
+/// Length of the built-in terminal symbol of a kind from `1` to `2`, in
+/// millimetres.
 pub fn terminal_length(kind: TerminalKind) -> f64 {
     match kind {
         TerminalKind::Fuse | TerminalKind::Disconnect => 16.0,
@@ -98,34 +104,12 @@ pub fn strip_by_tag(tx: &mut Tx<'_>, tag: &str) -> Result<DeviceId> {
     }
 }
 
-/// The kind a terminal on this wire should be: PE on a PE wire or a wire to
-/// a pin named PE, N likewise, otherwise feed-through.
-fn kind_for_wire(project: &Project, netlist: &Netlist, wire: &Wire) -> TerminalKind {
-    let Some(net) = netlist.net_of(wire.from) else {
-        return TerminalKind::Feedthrough;
-    };
-    let net = netlist.net(net);
-    if let Some(potential) = net.potential().and_then(|p| project.potential(p)) {
-        let kind = kind_for_potential(potential.kind);
-        if kind != TerminalKind::Feedthrough || potential.kind != PotentialKind::Signal {
-            return kind;
-        }
-    }
-    net.endpoints
-        .iter()
-        .filter_map(|e| e.as_pin())
-        .filter_map(|pin| {
-            let symbol = project.symbol(pin.symbol)?;
-            if matches!(symbol.role, SymbolRole::Terminal { .. }) {
-                project
-                    .terminal(symbol.terminal_of_pin(pin.pin)?)
-                    .and_then(|t| kind_for_name(&t.name))
-            } else {
-                kind_for_name(&symbol.pins.get(usize::from(pin.pin))?.name)
-            }
-        })
-        .next()
-        .unwrap_or(TerminalKind::Feedthrough)
+/// The potential kind of a wire's net, as the netlist assigns it. Under
+/// novo-core's `rules.potentials.from_terminal_names` that includes a
+/// terminal named like a supply potential (`-X4:PE`) on the net.
+fn potential_of_wire(project: &Project, netlist: &Netlist, wire: &Wire) -> Option<PotentialKind> {
+    let net = netlist.net(netlist.net_of(wire.from)?);
+    project.potential(net.potential()?).map(|p| p.kind)
 }
 
 fn polyline(project: &Project, wire: &Wire) -> Option<Vec<Point>> {
@@ -159,9 +143,7 @@ fn fit(points: &[Point], at: Point, length: f64, wire: WireId) -> Result<(usize,
     let vertical = (a.x - b.x).abs() < 1e-9;
     let horizontal = (a.y - b.y).abs() < 1e-9;
     if !vertical && !horizontal || a.distance(b) <= length {
-        return Err(ModelError::Format(format!(
-            "no room for a terminal on {wire}: it needs a straight stretch longer than {length} mm"
-        )));
+        return Err(ModelError::Format(strings::no_room(wire, length)));
     }
     let centre = closest_on_segment(at, a, b);
     // Keep both pins on the segment.
@@ -197,8 +179,9 @@ fn insert_into_wire(
     drop: Drop,
     terminal: TerminalId,
     symbol: SymbolKey,
-    length: f64,
 ) -> Result<(novo_core::SymbolId, WireId, WireId)> {
+    let pins = symbol_pins(&symbol)?;
+    let length = pins[1].offset.y;
     let original = tx
         .project()
         .wire(drop.wire)
@@ -210,7 +193,7 @@ fn insert_into_wire(
         original.page,
         symbol,
         placement,
-        terminal_pins(length),
+        pins,
         SymbolRole::Terminal {
             terminals: vec![terminal],
         },
@@ -238,35 +221,41 @@ fn insert_into_wire(
 
 /// Puts one terminal per drop on `strip`, in drop order (the order a drag
 /// crossed the wires), numbered next free. PE wires get a PE terminal named
-/// `PE` (`PE2`, ... when taken), N wires an N terminal.
+/// `PE` (`PE2`, ... when taken), PEN wires a PE terminal named `PEN`, N
+/// wires an N terminal named `N`.
 pub fn place_terminals(tx: &mut Tx<'_>, strip: DeviceId, drops: &[Drop]) -> Result<Vec<Placed>> {
     let netlist = tx.project().netlist();
-    let kinds: Vec<TerminalKind> = drops
+    let potentials: Vec<Option<PotentialKind>> = drops
         .iter()
         .map(|d| {
             tx.project()
                 .wire(d.wire)
-                .map_or(TerminalKind::Feedthrough, |w| {
-                    kind_for_wire(tx.project(), &netlist, w)
-                })
+                .and_then(|w| potential_of_wire(tx.project(), &netlist, w))
         })
         .collect();
     let mut placed = Vec::with_capacity(drops.len());
-    for (&drop, kind) in drops.iter().zip(kinds) {
-        let name = match kind {
-            TerminalKind::ProtectiveEarth => next_free_name(tx.project(), strip, "PE"),
-            TerminalKind::Neutral => next_free_name(tx.project(), strip, "N"),
-            _ => next_free_number(tx.project(), strip),
+    for (&drop, potential) in drops.iter().zip(potentials) {
+        let kind = potential.map_or(TerminalKind::Feedthrough, kind_for_potential);
+        let name = match potential.and_then(base_name_for_potential) {
+            Some(base) => next_free_name(tx.project(), strip, base),
+            None => next_free_number(tx.project(), strip),
         };
         placed.push(place_named(tx, strip, drop, &name, Some(kind))?);
     }
     Ok(placed)
 }
 
-/// Puts a terminal with a given name into a wire. With the "join" rule a
-/// terminal of that name already on the strip is reused, so the drawings are
-/// one terminal; with "refuse" a second record is made and flagged by
-/// [`crate::check`]. The kind comes from `kind`, else from the name.
+/// Puts a terminal with a given name into a wire, following the project's
+/// terminal rule ([`crate::rules`]):
+///
+/// - **Join**: a terminal of that name and level 1 already on the strip is
+///   reused, so the drawings are one terminal record.
+/// - **Refuse**: a name already on the strip is refused with novo-core's
+///   [`ModelError::DuplicateTerminal`]; nothing is created.
+/// - **Off**: a separate record is made, and [`crate::check`] lists it.
+///
+/// The kind of a new record comes from `kind`, else from the name
+/// ([`crate::kind_for_name`]).
 pub fn place_named(
     tx: &mut Tx<'_>,
     strip: DeviceId,
@@ -274,23 +263,23 @@ pub fn place_named(
     name: &str,
     kind: Option<TerminalKind>,
 ) -> Result<Placed> {
-    let settings = Settings::of(tx.project());
-    let existing = match settings.same_name {
+    let existing = match rules(tx.project()).same_name {
         SameName::Join => tx
             .project()
             .terminals_of_strip(strip)
             .into_iter()
-            .find(|t| t.level == 1 && t.name.eq_ignore_ascii_case(name))
+            .find(|t| t.level == 1 && t.name == name)
             .map(|t| t.id),
-        SameName::Refuse => None,
+        SameName::Refuse | SameName::Off => None,
     };
     let (terminal, joined) = match existing {
         Some(t) => (t, true),
         None => {
             let kind = kind
-                .or_else(|| kind_for_name(name))
+                .or_else(|| kind_for_name(tx.project(), name))
                 .unwrap_or(TerminalKind::Feedthrough);
             let order = next_order(tx.project(), strip);
+            // Under Refuse, novo-core rejects the record if the name is taken.
             let t = tx.add_terminal(strip, name)?;
             tx.update::<Terminal>(t, |t| {
                 t.kind = kind;
@@ -307,8 +296,7 @@ pub fn place_named(
         || strip_style(tx.project(), strip, kind).symbol,
         |s| s.symbol,
     );
-    let (symbol, internal_wire, external_wire) =
-        insert_into_wire(tx, drop, terminal, symbol, terminal_length(kind))?;
+    let (symbol, internal_wire, external_wire) = insert_into_wire(tx, drop, terminal, symbol)?;
     Ok(Placed {
         terminal,
         symbol,

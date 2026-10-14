@@ -21,6 +21,7 @@ use novo_core::{
 pub const DISMISS_KEY: &str = "terminal.suggest";
 
 use crate::place::{Drop, Placed, place_terminals};
+use crate::strings;
 
 /// One suggested terminal.
 #[derive(Debug, Clone, PartialEq)]
@@ -61,7 +62,7 @@ fn strip_tag(project: &Project, location: &DeviceTag) -> DeviceTag {
         .filter(|d| d.kind == DeviceKind::TerminalStrip && structure(&d.tag) == *location)
         .map(|d| &d.tag)
         .collect();
-    strips.sort();
+    strips.sort_by(|a, b| novo_core::natural_cmp(&a.to_string(), &b.to_string()).then(a.cmp(b)));
     match strips.first() {
         Some(tag) => (*tag).clone(),
         None => {
@@ -193,7 +194,7 @@ pub fn summarize_suggestions(suggestions: &[Suggestion]) -> String {
     }
     counts
         .into_iter()
-        .map(|(tag, n)| format!("{n} terminal{} on {tag}", if n == 1 { "" } else { "s" }))
+        .map(|(tag, n)| strings::terminals_on(n, &tag.to_string()))
         .collect::<Vec<_>>()
         .join(", ")
 }

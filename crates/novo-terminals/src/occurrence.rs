@@ -67,12 +67,7 @@ impl State {
 
     /// Short text for the schematic and the strip editor.
     pub fn label(self) -> &'static str {
-        match self {
-            State::Through => "through",
-            State::InternalEnd => "end (internal side)",
-            State::ExternalEnd => "end (external side)",
-            State::Open => "not wired",
-        }
+        crate::strings::state_label(self)
     }
 }
 

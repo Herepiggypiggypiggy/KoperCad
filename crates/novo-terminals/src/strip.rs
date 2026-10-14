@@ -1,16 +1,18 @@
 //! The terminal strip editor's model: one row per physical terminal, in
 //! strip order, with what it is built from and where it is wired.
 
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 use novo_core::{
-    DeviceId, DeviceKind, PartId, Project, Result, SymbolInstance, SymbolRole, Terminal,
-    TerminalId, TerminalKind, Tx,
+    DeviceId, DeviceKind, JoinLink, ModelError, PartId, Project, Result, SameName, SymbolInstance,
+    SymbolRole, Terminal, TerminalId, TerminalKind, TerminalRules, Tx, natural_cmp,
 };
 
-use crate::naming::{kind_label, next_free_number, next_order};
+use crate::geometry::redraw;
+use crate::naming::{next_free_number, next_order};
 use crate::occurrence::{Occurrence, State, Target, occurrences};
-use crate::settings::{JoinLink, SameName, Settings};
+use crate::rules::rules;
+use crate::strings;
 use crate::style::style_of;
 
 /// What a terminal row is physically built from.
@@ -29,9 +31,9 @@ pub struct Build {
 pub struct Row {
     pub name: String,
     pub level: u8,
-    /// The terminal records behind the row. More than one only when the
-    /// project joins same-named terminals and several records carry the
-    /// name (see [`join_duplicates`]).
+    /// The terminal records behind the row. More than one only under the
+    /// Join rule when several records carry the name; the netlist joins
+    /// them, and [`join_duplicates`] tidies them into one record.
     pub terminals: Vec<TerminalId>,
     pub kind: TerminalKind,
     pub jumper: Option<u32>,
@@ -86,17 +88,19 @@ pub struct StripView {
     pub rows: Vec<Row>,
 }
 
-/// Terminal strip devices, sorted by tag.
+/// Terminal strip devices, sorted by tag with numbers by value (`-X2`
+/// before `-X10`).
 pub fn strips(project: &Project) -> Vec<DeviceId> {
     let mut strips: Vec<_> = project
         .devices()
         .filter(|d| d.kind == DeviceKind::TerminalStrip)
+        .map(|d| (d.tag.to_string(), d.id))
         .collect();
-    strips.sort_by(|a, b| a.tag.cmp(&b.tag).then(a.id.cmp(&b.id)));
-    strips.into_iter().map(|d| d.id).collect()
+    strips.sort_by(|a, b| natural_cmp(&a.0, &b.0).then(a.1.cmp(&b.1)));
+    strips.into_iter().map(|(_, id)| id).collect()
 }
 
-fn row(project: &Project, settings: Settings, group: &[&Terminal]) -> Row {
+fn row(project: &Project, rules: TerminalRules, group: &[&Terminal]) -> Row {
     let first = group[0];
     let occurrences: Vec<Occurrence> = group
         .iter()
@@ -118,28 +122,29 @@ fn row(project: &Project, settings: Settings, group: &[&Terminal]) -> Row {
         build: Build {
             clamps,
             links: clamps.saturating_sub(1),
-            link: settings.join_link,
+            link: rules.join_link,
         },
     }
 }
 
-/// The strip editor rows of a strip. With the "join" rule, terminals that
-/// share a name and level are one row; with "refuse" each record is its own
-/// row and [`crate::check`] flags the duplicates.
+/// The strip editor rows of a strip. Under the Join rule, records that
+/// share a name and level are one row, exactly as the netlist joins them;
+/// under Refuse and Off each record is its own row.
 pub fn strip_view(project: &Project, strip: DeviceId) -> StripView {
-    let settings = Settings::of(project);
+    let rules = rules(project);
     let terminals = project.terminals_of_strip(strip);
     let mut groups: Vec<Vec<&Terminal>> = Vec::new();
-    match settings.same_name {
-        SameName::Refuse => groups.extend(terminals.into_iter().map(|t| vec![t])),
+    match rules.same_name {
+        SameName::Refuse | SameName::Off => {
+            groups.extend(terminals.into_iter().map(|t| vec![t]));
+        }
         SameName::Join => {
-            let mut index: BTreeMap<(String, u8), usize> = BTreeMap::new();
+            let mut index: HashMap<(&str, u8), usize> = HashMap::new();
             for t in terminals {
-                let key = (t.name.to_ascii_uppercase(), t.level);
-                match index.get(&key) {
+                match index.get(&(t.name.as_str(), t.level)) {
                     Some(&i) => groups[i].push(t),
                     None => {
-                        index.insert(key, groups.len());
+                        index.insert((t.name.as_str(), t.level), groups.len());
                         groups.push(vec![t]);
                     }
                 }
@@ -152,7 +157,7 @@ pub fn strip_view(project: &Project, strip: DeviceId) -> StripView {
             .device(strip)
             .map(|d| d.tag.to_string())
             .unwrap_or_default(),
-        rows: groups.iter().map(|g| row(project, settings, g)).collect(),
+        rows: groups.iter().map(|g| row(project, rules, g)).collect(),
     }
 }
 
@@ -163,79 +168,67 @@ pub fn explain(project: &Project, terminal: TerminalId) -> Vec<String> {
     let Some(t) = project.terminal(terminal) else {
         return Vec::new();
     };
-    let settings = Settings::of(project);
+    let rules = rules(project);
     let designation = project
         .terminal_designation(terminal)
         .unwrap_or_else(|| t.name.clone());
-    let view = strip_view(project, t.strip);
-    let Some(row) = view.rows.iter().find(|r| r.terminals.contains(&terminal)) else {
-        return Vec::new();
+    let on_strip = project.terminals_of_strip(t.strip);
+    let same_name: Vec<&Terminal> = on_strip
+        .iter()
+        .copied()
+        .filter(|o| o.name == t.name && o.level == t.level)
+        .collect();
+    let group = if rules.same_name == SameName::Join {
+        same_name.clone()
+    } else {
+        vec![t]
     };
+    let row = row(project, rules, &group);
     let page_name = |o: &Occurrence| {
         project
             .page(o.page)
             .map(|p| p.name.clone())
             .unwrap_or_default()
     };
-    let mut out = vec![format!(
-        "{designation} is a {} terminal, {}.",
-        kind_label(row.kind),
-        row.state().label()
+    let mut out = vec![strings::explain_kind_and_state(
+        &designation,
+        row.kind,
+        row.state(),
     )];
-    match row.occurrences.len() {
-        0 => out.push(format!(
-            "{designation} is a spare: it is not drawn on any page."
-        )),
-        1 => out.push(format!(
-            "{designation} is drawn once, on page {}.",
-            page_name(&row.occurrences[0])
-        )),
-        n => {
-            let pages: Vec<String> = row.occurrences.iter().map(page_name).collect();
-            out.push(match settings.same_name {
-                SameName::Join => format!(
-                    "{designation} is drawn {n} times (pages {}). The project joins terminals with the same name, so these are one terminal: {} clamps linked by {} {}.",
-                    pages.join(", "),
-                    row.build.clamps,
-                    row.build.links,
-                    plural(settings.join_link.label(), row.build.links),
-                ),
-                SameName::Refuse => format!(
-                    "{designation} is drawn {n} times (pages {}). The project refuses duplicate terminal names, so only the first counts.",
-                    pages.join(", ")
-                ),
-            });
-        }
+    let pages: Vec<String> = row.occurrences.iter().map(page_name).collect();
+    match pages.as_slice() {
+        [] => out.push(strings::explain_spare(&designation)),
+        [page] => out.push(strings::explain_drawn_once(&designation, page)),
+        _ => out.push(match rules.same_name {
+            SameName::Join => strings::explain_drawn_joined(
+                &designation,
+                &pages,
+                row.build.clamps,
+                row.build.links,
+                rules.join_link,
+            ),
+            SameName::Refuse => strings::explain_drawn_refused(&designation, &pages),
+            SameName::Off => strings::explain_drawn_one_record(&designation, &pages),
+        }),
     }
-    if row.terminals.len() > 1 && settings.same_name == SameName::Join {
-        out.push(format!(
-            "{} separate records carry this name; joining them makes the electrical connection match the strip.",
-            row.terminals.len()
-        ));
+    if same_name.len() > 1 {
+        out.push(match rules.same_name {
+            SameName::Join => strings::explain_records_joined(same_name.len()),
+            SameName::Refuse | SameName::Off => strings::explain_records_separate(same_name.len()),
+        });
     }
-    if let Some(group) = row.jumper {
-        let others: Vec<String> = view
-            .rows
+    if let Some(group) = t.jumper {
+        let mut others: Vec<String> = on_strip
             .iter()
-            .filter(|r| r.jumper == Some(group) && r.name != row.name)
-            .map(|r| r.name.clone())
+            .filter(|o| o.jumper == Some(group) && o.name != t.name)
+            .map(|o| o.name.clone())
             .collect();
+        others.dedup();
         if !others.is_empty() {
-            out.push(format!(
-                "Jumpered to {} (jumper {group}).",
-                others.join(", ")
-            ));
+            out.push(strings::explain_jumpered(&others, group));
         }
     }
     out
-}
-
-fn plural(word: &str, n: usize) -> String {
-    if n == 1 {
-        word.to_owned()
-    } else {
-        format!("{word}s")
-    }
 }
 
 // ----- strip editor edits ----------------------------------------------------
@@ -283,12 +276,24 @@ pub fn free_jumper(project: &Project, strip: DeviceId) -> u32 {
 }
 
 /// Bridges terminals of one strip with a new jumper, or removes them from
-/// any jumper with `None`. Returns the jumper group used.
+/// any jumper with `None`. Returns the jumper group used. Terminals of
+/// several strips are refused: the netlist bridges jumper groups per strip.
 pub fn set_jumper(
     tx: &mut Tx<'_>,
     terminals: &[TerminalId],
     jumper: Option<u32>,
 ) -> Result<Option<u32>> {
+    let mut strip = None;
+    for &id in terminals {
+        let t = tx
+            .project()
+            .terminal(id)
+            .ok_or(ModelError::NotFound(id.into()))?;
+        if jumper.is_some() && strip.is_some_and(|s| s != t.strip) {
+            return Err(ModelError::Format(strings::not_on_one_strip()));
+        }
+        strip = Some(t.strip);
+    }
     for &id in terminals {
         tx.update::<Terminal>(id, |t| t.jumper = jumper)?;
     }
@@ -296,7 +301,9 @@ pub fn set_jumper(
 }
 
 /// Changes the kind of a terminal and redraws it with its strip's symbol for
-/// that kind.
+/// that kind (or its own override), refitting the connection points to the
+/// new symbol. Refused, with nothing changed, when a drawing's wires leave
+/// no room for the new symbol (see [`crate::redraw`]).
 pub fn set_kind(tx: &mut Tx<'_>, terminal: TerminalId, kind: TerminalKind) -> Result<()> {
     tx.update::<Terminal>(terminal, |t| t.kind = kind)?;
     if let Some(style) = style_of(tx.project(), terminal) {
@@ -310,48 +317,68 @@ pub fn set_kind(tx: &mut Tx<'_>, terminal: TerminalId, kind: TerminalKind) -> Re
             .map(|s| s.id)
             .collect();
         for id in symbols {
-            tx.update::<SymbolInstance>(id, |s| s.symbol = style.symbol.clone())?;
+            redraw(tx, id, &style.symbol)?;
         }
     }
     Ok(())
 }
 
 /// Merges terminal records that share a name and level on a strip into the
-/// first of them, so the drawings become one terminal electrically as well.
+/// first of them in strip order, so each name is one record. Under the Join
+/// rule the netlist already treats them as one terminal; merging is the
+/// tidy-up before switching to Refuse, and under Off it is how the user
+/// joins them on purpose. The kept record takes a removed record's jumper,
+/// part and properties where it has none of its own; its kind wins.
 /// Returns the records removed.
 pub fn join_duplicates(tx: &mut Tx<'_>, strip: DeviceId) -> Result<Vec<TerminalId>> {
-    let mut keep: BTreeMap<(String, u8), TerminalId> = BTreeMap::new();
-    let mut merges: Vec<(TerminalId, TerminalId)> = Vec::new();
-    for t in tx.project().terminals_of_strip(strip) {
-        let key = (t.name.to_ascii_uppercase(), t.level);
-        match keep.get(&key) {
-            Some(&into) => merges.push((t.id, into)),
-            None => {
-                keep.insert(key, t.id);
-            }
-        }
-    }
-    for &(gone, into) in &merges {
-        let symbols: Vec<_> = tx
-            .project()
-            .symbols_of_terminal(gone)
-            .into_iter()
-            .map(|s| s.id)
-            .collect();
-        for symbol in symbols {
-            tx.update::<SymbolInstance>(symbol, |s| {
-                if let SymbolRole::Terminal { terminals } = &mut s.role {
-                    for t in terminals.iter_mut() {
-                        if *t == gone {
-                            *t = into;
+    let groups: Vec<Vec<TerminalId>> = tx
+        .project()
+        .terminal_designation_groups()
+        .into_iter()
+        .filter(|g| {
+            tx.project()
+                .terminal(g[0])
+                .is_some_and(|t| t.strip == strip)
+        })
+        .collect();
+    let mut removed = Vec::new();
+    for group in groups {
+        let into = group[0];
+        for &gone in &group[1..] {
+            let old = tx
+                .project()
+                .terminal(gone)
+                .ok_or(ModelError::NotFound(gone.into()))?
+                .clone();
+            let symbols: Vec<_> = tx
+                .project()
+                .symbols_of_terminal(gone)
+                .into_iter()
+                .map(|s| s.id)
+                .collect();
+            for symbol in symbols {
+                tx.update::<SymbolInstance>(symbol, |s| {
+                    if let SymbolRole::Terminal { terminals } = &mut s.role {
+                        for t in terminals.iter_mut() {
+                            if *t == gone {
+                                *t = into;
+                            }
                         }
                     }
+                })?;
+            }
+            tx.remove(gone)?;
+            tx.update::<Terminal>(into, |t| {
+                t.jumper = t.jumper.or(old.jumper);
+                t.part = t.part.or(old.part);
+                for (key, value) in old.properties {
+                    t.properties.entry(key).or_insert(value);
                 }
             })?;
+            removed.push(gone);
         }
-        tx.remove(gone)?;
     }
-    Ok(merges.into_iter().map(|(gone, _)| gone).collect())
+    Ok(removed)
 }
 
 /// What [`renumber`] would do: each numbered terminal with its current and
@@ -397,35 +424,142 @@ pub fn renumber(tx: &mut Tx<'_>, strip: DeviceId) -> Result<()> {
 }
 
 /// Moves a terminal to another level of a multi-level terminal (from 1).
+/// Refused when the level is 0, when another terminal of the strip already
+/// has this name on that level, or when a multi-level drawing of the
+/// terminal has fewer levels.
 pub fn set_level(tx: &mut Tx<'_>, terminal: TerminalId, level: u8) -> Result<()> {
-    tx.update::<Terminal>(terminal, |t| t.level = level.max(1))
+    let t = tx
+        .project()
+        .terminal(terminal)
+        .ok_or(ModelError::NotFound(terminal.into()))?;
+    if level == 0 {
+        return Err(ModelError::InvalidValue {
+            id: terminal.into(),
+            field: "level",
+        });
+    }
+    if t.level == level {
+        return Ok(());
+    }
+    if let Some(other) = tx
+        .project()
+        .terminals_of_strip(t.strip)
+        .into_iter()
+        .find(|o| o.id != terminal && o.name == t.name && o.level == level)
+    {
+        return Err(ModelError::AlreadyExists(other.id.into()));
+    }
+    for symbol in tx.project().symbols_of_terminal(terminal) {
+        let SymbolRole::Terminal { terminals } = &symbol.role else {
+            continue;
+        };
+        let mut distinct = terminals.clone();
+        distinct.sort();
+        distinct.dedup();
+        if distinct.len() > 1 && usize::from(level) > distinct.len() {
+            return Err(ModelError::InvalidValue {
+                id: terminal.into(),
+                field: "level",
+            });
+        }
+    }
+    tx.update::<Terminal>(terminal, |t| t.level = level)
+}
+
+/// Why a name in a [`rename_preview`] cannot be applied.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenameProblem {
+    /// The new name would be empty.
+    Empty,
+    /// Another terminal of the strip has (or would get) this name on the
+    /// same level. Under the Join rule that would silently connect them.
+    Taken(TerminalId),
+}
+
+/// One terminal [`rename`] would change.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenameChange {
+    pub terminal: TerminalId,
+    pub old: String,
+    pub new: String,
+    /// Set when the change cannot be applied; [`rename`] then refuses the
+    /// whole edit.
+    pub problem: Option<RenameProblem>,
 }
 
 /// What [`rename`] would do: terminals of the strip whose name contains
-/// `find`, with the name after replacing every occurrence by `replace`.
-/// Case-sensitive; an empty `find` matches nothing.
+/// `find`, with the name after replacing every occurrence by `replace`, and
+/// any problem with the result (shown before the edit is applied).
+/// Case-sensitive; an empty `find` matches nothing; names that would not
+/// change are left out.
 pub fn rename_preview(
     project: &Project,
     strip: DeviceId,
     find: &str,
     replace: &str,
-) -> Vec<(TerminalId, String, String)> {
+) -> Vec<RenameChange> {
     if find.is_empty() {
         return Vec::new();
     }
-    project
-        .terminals_of_strip(strip)
-        .into_iter()
+    let terminals = project.terminals_of_strip(strip);
+    let renamed: HashMap<TerminalId, String> = terminals
+        .iter()
         .filter(|t| t.name.contains(find))
-        .map(|t| (t.id, t.name.clone(), t.name.replace(find, replace)))
+        .map(|t| (t.id, t.name.replace(find, replace)))
+        .filter(|(id, new)| project.terminal(*id).is_some_and(|t| t.name != *new))
+        .collect();
+    let final_name = |t: &Terminal| renamed.get(&t.id).unwrap_or(&t.name).clone();
+    terminals
+        .iter()
+        .filter_map(|t| {
+            let new = renamed.get(&t.id)?.clone();
+            let problem = if new.trim().is_empty() {
+                Some(RenameProblem::Empty)
+            } else {
+                terminals
+                    .iter()
+                    .find(|o| {
+                        o.id != t.id
+                            && o.level == t.level
+                            && final_name(o) == new
+                            // Records that already shared a name may keep
+                            // sharing it.
+                            && o.name != t.name
+                    })
+                    .map(|o| RenameProblem::Taken(o.id))
+            };
+            Some(RenameChange {
+                terminal: t.id,
+                old: t.name.clone(),
+                new,
+                problem,
+            })
+        })
         .collect()
 }
 
-/// Find and replace in the terminal names of a strip, as one edit.
+/// Find and replace in the terminal names of a strip, as one edit. Refused
+/// with nothing changed when [`rename_preview`] shows a problem: an empty
+/// name ([`ModelError::InvalidValue`]) or a name taken by another terminal
+/// ([`ModelError::AlreadyExists`] naming it).
 pub fn rename(tx: &mut Tx<'_>, strip: DeviceId, find: &str, replace: &str) -> Result<usize> {
     let changes = rename_preview(tx.project(), strip, find, replace);
-    for (id, _, name) in &changes {
-        tx.update::<Terminal>(*id, |t| t.name = name.clone())?;
+    for change in &changes {
+        match change.problem {
+            Some(RenameProblem::Empty) => {
+                return Err(ModelError::InvalidValue {
+                    id: change.terminal.into(),
+                    field: "name",
+                });
+            }
+            Some(RenameProblem::Taken(other)) => {
+                return Err(ModelError::AlreadyExists(other.into()));
+            }
+            None => {}
+        }
+    }
+    for change in &changes {
+        tx.update::<Terminal>(change.terminal, |t| t.name = change.new.clone())?;
     }
     Ok(changes.len())
 }
