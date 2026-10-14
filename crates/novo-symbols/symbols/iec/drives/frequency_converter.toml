@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "drives"
 function = "converter.vfd"
 keywords = ["vfd", "frequency converter", "inverter", "drive", "speed"]
+aliases = ["vfd"]
 
 connections = [
   { id = "L1", at = [0, 0], dir = "up" },

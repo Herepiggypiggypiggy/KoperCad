@@ -113,6 +113,15 @@ pub fn validate(symbol: &Symbol) -> Vec<Issue> {
     if symbol.function.trim().is_empty() {
         fail("function is empty".into());
     }
+    for (i, alias) in symbol.aliases.iter().enumerate() {
+        if !valid_alias(alias) {
+            fail(format!(
+                "alias '{alias}' must be 1 to {MAX_ALIAS_LEN} characters of a-z, 0-9, '_' or '-'"
+            ));
+        } else if symbol.aliases[..i].contains(alias) {
+            fail(format!("alias '{alias}' is listed twice"));
+        }
+    }
     if symbol.graphics.is_empty() {
         fail("symbol has no graphics".into());
     }
@@ -215,7 +224,10 @@ pub fn validate(symbol: &Symbol) -> Vec<Issue> {
 const BEHAVIOR_SCHEMA: &[(&str, &[&str])] = &[
     ("none", &[]),
     ("conductor", &["poles"]),
-    ("contact", &["poles", "normally", "latching", "delay"]),
+    (
+        "contact",
+        &["poles", "normally", "latching", "delay", "center_off"],
+    ),
     ("coil", &["poles", "delay"]),
     ("fuse", &["poles", "switched"]),
     ("breaker", &["poles", "trip", "adjustable"]),
@@ -297,7 +309,14 @@ fn check_behavior(symbol: &Symbol, ids: &HashSet<&str>) -> Vec<String> {
     string_in("input", &["ac", "dc"], &mut out);
     string_in("output", &["ac", "dc"], &mut out);
     string_in("signal", &["digital", "analog"], &mut out);
-    for key in ["latching", "adjustable", "switched"] {
+    if params
+        .get("center_off")
+        .is_some_and(|v| v.as_bool() == Some(true))
+        && params.get("normally").and_then(|v| v.as_str()) != Some("changeover")
+    {
+        out.push("behavior.center_off only applies to normally = \"changeover\"".into());
+    }
+    for key in ["latching", "adjustable", "switched", "center_off"] {
         if params.get(key).is_some_and(|v| v.as_bool().is_none()) {
             out.push(format!("behavior.{key} must be true or false"));
         }
@@ -408,4 +427,15 @@ fn check_groups(
             }
         }
     }
+}
+
+/// Longest alias the validator accepts; aliases are typed, so keep them short.
+pub const MAX_ALIAS_LEN: usize = 12;
+
+fn valid_alias(alias: &str) -> bool {
+    !alias.is_empty()
+        && alias.len() <= MAX_ALIAS_LEN
+        && alias
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-')
 }

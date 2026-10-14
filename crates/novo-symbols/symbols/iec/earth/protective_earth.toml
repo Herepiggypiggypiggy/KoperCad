@@ -6,6 +6,7 @@ standard = "IEC 60617"
 category = "earth"
 function = "earth.pe"
 keywords = ["pe", "protective earth", "ground", "earth"]
+aliases = ["pe"]
 
 connections = [
   { id = "PE", at = [0, 0], dir = "up", role = "pe" },

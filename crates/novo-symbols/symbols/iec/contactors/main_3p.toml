@@ -6,6 +6,8 @@ standard = "IEC 60617"
 category = "contactors"
 function = "contact.main"
 keywords = ["contactor", "main contact", "power", "3p"]
+aliases = ["km3", "main3"]
+favorite = true
 
 connections = [
   { id = "1", at = [0, 0], dir = "up" },

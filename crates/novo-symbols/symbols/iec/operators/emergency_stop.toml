@@ -6,6 +6,8 @@ standard = "IEC 60617"
 category = "operators"
 function = "contact.nc.estop"
 keywords = ["emergency stop", "e-stop", "mushroom", "nc"]
+aliases = ["estop"]
+favorite = true
 
 connections = [
   { id = "11", at = [0, 0], dir = "up" },

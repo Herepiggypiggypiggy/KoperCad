@@ -6,6 +6,8 @@ standard = "IEC 60617"
 category = "connectivity"
 function = "connectivity.bridge"
 keywords = ["bridge", "jumper", "link", "terminal bridge"]
+aliases = ["br2", "jumper"]
+favorite = true
 
 connections = [
   { id = "1", at = [0, 0], dir = "up" },

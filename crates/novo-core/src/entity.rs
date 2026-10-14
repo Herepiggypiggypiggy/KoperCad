@@ -93,6 +93,14 @@ impl PaperSize {
 pub struct PageFormat {
     pub size: PaperSize,
     pub landscape: bool,
+    /// Number of grid columns across the page, used for cross-references
+    /// such as `3.4` (page 3, column 4). 0 counts as 1.
+    #[serde(default = "default_columns")]
+    pub columns: u16,
+}
+
+fn default_columns() -> u16 {
+    PageFormat::DEFAULT_COLUMNS
 }
 
 impl Default for PageFormat {
@@ -100,11 +108,24 @@ impl Default for PageFormat {
         PageFormat {
             size: PaperSize::A3,
             landscape: true,
+            columns: PageFormat::DEFAULT_COLUMNS,
         }
     }
 }
 
 impl PageFormat {
+    pub const DEFAULT_COLUMNS: u16 = 10;
+
+    /// The grid column (1-based) at a horizontal position. Positions off the
+    /// page fall into the first or last column.
+    pub fn column_at(self, x: f64) -> u16 {
+        let columns = self.columns.max(1);
+        let (width, _) = self.size_mm();
+        let column = (x / width * f64::from(columns)).floor();
+        // NaN and negatives clamp to 0, so the result is 1..=columns.
+        (column.clamp(0.0, f64::from(columns - 1)) as u16) + 1
+    }
+
     /// Width and height of the page in millimetres.
     pub fn size_mm(self) -> (f64, f64) {
         let (w, h) = self.size.portrait_mm();

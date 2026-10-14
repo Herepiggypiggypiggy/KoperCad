@@ -21,4 +21,4 @@ pub use symbol::{
     ALWAYS_CLOSED, Align, Anchor, Behavior, Connection, Direction, FORMAT_VERSION, GRID, Graphic,
     PASS_THROUGH, PassThrough, Point, Stroke, Symbol,
 };
-pub use validate::{ANCHOR_ROLES, BEHAVIOR_KINDS, Issue, behavior_keys, validate};
+pub use validate::{ANCHOR_ROLES, BEHAVIOR_KINDS, Issue, MAX_ALIAS_LEN, behavior_keys, validate};

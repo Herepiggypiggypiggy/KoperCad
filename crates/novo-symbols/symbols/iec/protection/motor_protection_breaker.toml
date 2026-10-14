@@ -6,6 +6,8 @@ standard = "IEC 60617"
 category = "protection"
 function = "protection.mpcb"
 keywords = ["mpcb", "motor protection", "motor circuit breaker", "pkz", "gv2"]
+aliases = ["mpcb"]
+favorite = true
 
 connections = [
   { id = "1", at = [0, 0], dir = "up" },
