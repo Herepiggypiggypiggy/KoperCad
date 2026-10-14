@@ -4,7 +4,7 @@ Updated: 2026-10-14 (first session)
 
 ## State
 - Branch `claude/ws13-reports` from origin/main (9fa18ed). PR #55; reviewed head 5512392 (later commits are handoff-only).
-- Review: head SHA sent to the main reviewer (session_01XEdxpvQFh4HWmurh72tKwp) and coordinator (session_01DZ68tTULUv7Uhe8ecKbC47).
+- Review: new-crate PRs go to main reviewer B (session_01QSnXFBDRyvwwzhT1S1gFGN), per coordinator (session_01DZ68tTULUv7Uhe8ecKbC47). Waiting on #51 (pre-registers novo-reports in Cargo.toml/CLAUDE.md); after it merges run scripts/merge-main.sh, push, ping B.
 - GitHub Actions does not run on this account: local fmt/clippy/test are the CI signal.
 
 ## Code
