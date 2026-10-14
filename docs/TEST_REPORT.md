@@ -33,6 +33,8 @@ session's merges (#53 Gate 1 in the app through #80):
   (the two #38 gap tests this PR fills in and the `widget.rs` doc example).
 - main plus this PR: 629 passed, 0 failed, 3 ignored (the doc example and the
   F4 and F5 gap tests below).
+- Re-tested after 10 more merges (#81-#94, #89): main `067e56a` plus this PR
+  passes fmt and clippy; 646 passed, 0 failed, 3 ignored (same three).
 
 New in `gate1_scenario.rs`:
 
