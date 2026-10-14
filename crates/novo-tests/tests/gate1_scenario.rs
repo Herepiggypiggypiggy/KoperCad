@@ -1123,8 +1123,9 @@ fn gap_draw_real_symbols() {
 }
 
 /// The Gate 1 starter on a new project file with every device's part
-/// assigned from the starter catalog, as `gap_assign_parts_from_the_catalog`
-/// does it.
+/// assigned from the starter catalog, one command each, and -X1's terminal
+/// blocks from the catalog's suggestions for a strip: the first for the
+/// feed-through terminals, the first `pe` one for the PE terminal.
 fn starter_with_parts<'a>(
     library: &'a Library,
     dir: &std::path::Path,
@@ -1132,7 +1133,12 @@ fn starter_with_parts<'a>(
     let (mut flow, page) = new_flow(library, dir);
     let s = build(&mut flow, page, true);
     let catalog = novo_parts::Catalog::starter();
-    let devices: Vec<DeviceId> = flow.project().devices().map(|d| d.id).collect();
+    let devices: Vec<DeviceId> = flow
+        .project()
+        .devices()
+        .filter(|d| d.id != s.x1)
+        .map(|d| d.id)
+        .collect();
     for device in devices {
         let part = novo_parts::suggest_for_device(&catalog, flow.project(), device, "", 1)
             .into_iter()
@@ -1145,6 +1151,22 @@ fn starter_with_parts<'a>(
             novo_parts::AssignMode::Replace,
         )
         .expect("the device had no part");
+        flow.run(command);
+    }
+    for (kind, query) in [
+        (TerminalKind::Feedthrough, ""),
+        (TerminalKind::ProtectiveEarth, "pe"),
+    ] {
+        let terminals: Vec<TerminalId> = flow
+            .project()
+            .terminals_of_strip(s.x1)
+            .into_iter()
+            .filter(|t| t.kind == kind)
+            .map(|t| t.id)
+            .collect();
+        let part = novo_parts::suggest_for_device(&catalog, flow.project(), s.x1, query, 1)[0];
+        let command = novo_parts::assign_terminal_part(flow.project(), &terminals, part)
+            .expect("the terminals had no article");
         flow.run(command);
     }
     (flow, page, s)
@@ -1183,9 +1205,10 @@ fn bom_uses(project: &Project) -> Vec<(u32, String)> {
 }
 
 /// What the finished starter gives the user besides the drawing: the design
-/// checks are clean (#50), every device's cross reference points at its
+/// checks find no error or warning (#50), every device's cross reference points at its
 /// main function on page 1 and -X1's at its four terminals (#31), the bill
-/// of materials lists each device's part (#55), and the PDF (#49) with the
+/// of materials lists each device's part and one terminal block per
+/// terminal, PE included (#55), and the PDF (#49) with the
 /// library artwork is one page with a bookmark and the tags as text.
 #[test]
 fn outputs_of_the_starter() {
@@ -1194,8 +1217,10 @@ fn outputs_of_the_starter() {
     let (flow, page, s) = starter_with_parts(&library, dir.path());
     let p = flow.project();
 
+    // Errors and warnings; "missing part" infos are F4's gap test.
     let problems: Vec<String> = novo_checks::check(p)
         .into_iter()
+        .filter(|pr| pr.kind.severity() != novo_checks::Severity::Info)
         .map(|pr| format!("{:?}: {}", pr.kind, pr.message))
         .collect();
     assert!(problems.is_empty(), "{problems:?}");
@@ -1219,6 +1244,27 @@ fn outputs_of_the_starter() {
             assert_eq!(refs.iter().filter(|r| r.main).count(), 1, "{}", device.tag);
         }
     }
+
+    // One terminal block per terminal of the strip, PE in green-yellow.
+    let x1 = p.device(s.x1).unwrap().tag.to_string();
+    let terminal_rows: Vec<(u32, String, String)> = bom_rows(p)
+        .into_iter()
+        .filter(|(_, _, by)| by.starts_with(&x1))
+        .collect();
+    assert_eq!(
+        terminal_rows,
+        [
+            (
+                3,
+                "3044076",
+                [":1", ":2", ":3"].map(|n| format!("{x1}{n}")).join(", ")
+            ),
+            (1, "3044089", format!("{x1}:PE")),
+        ]
+        .map(|(q, order, by)| (q, order.to_string(), by))
+    );
+    let blocks: u32 = terminal_rows.iter().map(|(q, _, _)| q).sum();
+    assert_eq!(blocks as usize, p.terminals_of_strip(s.x1).len());
 
     let used_by: Vec<String> = bom_uses(p).into_iter().map(|(_, by)| by).collect();
     for device in p.devices() {
@@ -1258,43 +1304,49 @@ fn gap_pdf_names_the_terminal_strip() {
     assert!(String::from_utf8_lossy(&pdf).contains("-X1"));
 }
 
-/// F4: the starter catalog's part for -X1 is a feed-through terminal block
-/// (UT 2,5), and assigning it puts it on the strip device. The missing-parts
-/// check then counts the four terminals as covered, but the bill of
-/// materials orders one terminal block for a strip of four, and nothing
-/// gives the PE terminal a protective conductor block. Expected: every
-/// feed-through terminal orders the UT 2,5, and the PE terminal either
-/// orders a PE block (UT 2,5-PE, 3044089) or is reported as missing a part.
+/// F4 (a): with every terminal of -X1 given its article, the missing-parts
+/// check still lists the strip device -X1 itself, which has no part of its
+/// own, so the parts pill and the Issues list never come out clean.
 #[test]
-#[ignore = "known gap F4: a catalog part on a strip is ordered once, not per terminal (TEST_REPORT Round 10)"]
-fn gap_bom_orders_a_terminal_block_per_terminal() {
+#[ignore = "known gap F4: missing parts lists the strip device whose terminals all have articles (#99)"]
+fn gap_missing_parts_counts_a_strip_by_its_terminals() {
     let library = Library::builtin().unwrap();
     let dir = tempfile::tempdir().unwrap();
-    let (flow, _, s) = starter_with_parts(&library, dir.path());
+    let (flow, _, _) = starter_with_parts(&library, dir.path());
+    assert_eq!(
+        novo_parts::missing_parts(flow.project()),
+        Vec::<AnyId>::new()
+    );
+}
+
+/// F4 (b): the property sheet path still treats a terminal block as a part
+/// of the strip device: the catalog suggests UT 2,5 for -X1 and
+/// `assign_part` puts it on the strip, where the bill of materials orders
+/// one block for the whole strip (a stray article) and no terminal gets
+/// it. A terminal block should go to the terminals (or the strip style for
+/// their kind), or be refused.
+#[test]
+#[ignore = "known gap F4: assign_part puts a terminal block on the strip device (TEST_REPORT Round 10)"]
+fn gap_a_terminal_block_is_not_a_part_of_the_strip() {
+    let library = Library::builtin().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut flow, page) = new_flow(&library, dir.path());
+    let s = build(&mut flow, page, true);
+    let catalog = novo_parts::Catalog::starter();
+    let block = novo_parts::suggest_for_device(&catalog, flow.project(), s.x1, "", 1)[0];
+    if let Some(command) = novo_parts::assign_part(
+        flow.project(),
+        &[s.x1],
+        block,
+        novo_parts::AssignMode::Replace,
+    ) {
+        flow.run(command);
+    }
     let p = flow.project();
     let x1 = p.device(s.x1).unwrap().tag.to_string();
-    // The order numbers of the rows that name a terminal.
-    let ordered = |name: &str| -> Vec<String> {
-        let designation = format!("{x1}:{name}");
-        bom_rows(p)
-            .into_iter()
-            .filter(|(_, _, by)| by.split(", ").any(|d| d == designation))
-            .map(|(_, order, _)| order)
-            .collect()
-    };
-    for name in ["1", "2", "3"] {
-        assert_eq!(ordered(name), ["3044076"], "-X1:{name}");
-    }
-    let pe = p
-        .terminals_of_strip(s.x1)
+    let on_the_strip: Vec<(u32, String, String)> = bom_rows(p)
         .into_iter()
-        .find(|t| t.kind == TerminalKind::ProtectiveEarth)
-        .unwrap()
-        .id;
-    let pe_missing = novo_parts::missing_parts(p).contains(&AnyId::Terminal(pe));
-    let pe_ordered = ordered("PE");
-    assert!(
-        pe_ordered == ["3044089"] || (pe_ordered.is_empty() && pe_missing),
-        "-X1:PE orders {pe_ordered:?}, reported missing: {pe_missing}"
-    );
+        .filter(|(_, _, by)| by.split(", ").any(|d| d == x1))
+        .collect();
+    assert_eq!(on_the_strip, []);
 }

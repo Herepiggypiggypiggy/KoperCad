@@ -31,32 +31,43 @@ session's merges (#53 Gate 1 in the app through #80):
 
 - main `7bb466d` alone: fmt and clippy clean; 625 passed, 0 failed, 3 ignored
   (the two #38 gap tests this PR fills in and the `widget.rs` doc example).
-- main plus this PR: 629 passed, 0 failed, 3 ignored (the doc example and the
-  F4 and F5 gap tests below).
 - Re-tested after 10 more merges (#81-#94, #89): main `067e56a` plus this PR
-  passes fmt and clippy; 646 passed, 0 failed, 3 ignored (same three).
+  passes fmt and clippy; 646 passed, 0 failed, 4 ignored (the doc example,
+  the two F4 gap tests and F5's).
+- main `067e56a` plus this PR plus #99 (head `854f8cf`): fmt and clippy
+  clean; 647 passed, 0 failed, 4 ignored; F4 (a) passes when un-ignored.
 
 New in `gate1_scenario.rs`:
 
 | Test | Checks | State |
 | --- | --- | --- |
-| `outputs_of_the_starter` | With every part assigned from the starter catalog: `novo_checks::check` reports nothing; each device's cross reference is its main function on page 1 and -X1's lists its four terminals in strip order; the BOM names every device; the PDF with `LibraryArt` is one page labelled `1`, has a bookmark tree, and carries the device tags and terminal names as text | Passes |
-| `gap_bom_orders_a_terminal_block_per_terminal` | F4 below | Ignored, fails |
+| `outputs_of_the_starter` | With every part assigned from the starter catalog: `novo_checks::check` reports no error or warning; each device's cross reference is its main function on page 1 and -X1's lists its four terminals in strip order; the BOM names every device and orders one terminal block per -X1 terminal (3 × UT 2,5, 1 × UT 2,5-PE); the PDF with `LibraryArt` is one page labelled `1`, has a bookmark tree, and carries the device tags and terminal names as text | Passes |
+| `gap_missing_parts_counts_a_strip_by_its_terminals` | F4 (a) below | Ignored, fails on main, passes with #99 |
+| `gap_a_terminal_block_is_not_a_part_of_the_strip` | F4 (b) below | Ignored, fails |
 | `gap_pdf_names_the_terminal_strip` | F5 below | Ignored, fails |
 
 Findings:
 - **F4 (parts and BOM, medium):** the starter catalog's suggestion for -X1
   is a feed-through terminal block (Phoenix UT 2,5), and `assign_part`
-  puts it on the strip device. `missing_parts()` then counts all four
-  terminals as covered, but the bill of materials orders **one** UT 2,5 for
-  a strip of four, and the PE terminal would get a grey feed-through block
-  instead of a PE block. #72 makes the strip row, BOM and missing-parts
-  check read one terminal article, but a part on the strip device itself is
-  still not a terminal article there. Decided by the lead: WS-07 moves the
-  terminal article to the strip style (`terminal_part.<kind>`); the BOM
-  does not fall back to the strip device's part. The gap test expects
-  `-X1:1`, `:2`, `:3` each to order the UT 2,5 (3044076) and `-X1:PE` to
-  order the UT 2,5-PE (3044089) or be reported as missing a part.
+  puts it on the strip device. On main the missing-parts check then counts
+  all four terminals as covered, but the bill of materials orders **one**
+  UT 2,5 for a strip of four, and the PE terminal gets no PE block.
+  Assigning the articles to the terminals instead (`assign_terminal_part`,
+  the catalog's first suggestion for the feed-through terminals and its
+  first `pe` one for PE) gives the right BOM on main: 3 × 3044076 for
+  `-X1:1`, `:2`, `:3` and 1 × 3044089 for `-X1:PE`
+  (`outputs_of_the_starter` checks this). Two gaps are left:
+  - (a) `gap_missing_parts_counts_a_strip_by_its_terminals`: with every
+    terminal given its article, `missing_parts()` still lists the strip
+    device -X1. **Fixed by #99** (WS-07's redo of #72); re-tested on main
+    `067e56a` plus this PR plus #99: passes.
+  - (b) `gap_a_terminal_block_is_not_a_part_of_the_strip`: `assign_part`
+    still accepts a terminal block for the strip device, and the BOM orders
+    it once against `-X1` while no terminal gets it. Still open with #99.
+  - Also with #99: its updated `gap_assign_parts_from_the_catalog` gives
+    all four terminals the first suggestion, so `-X1:PE` is ordered as a
+    grey UT 2,5. Nothing warns about a PE terminal with a non-PE article
+    (a design-check or assign-time rule for WS-07 / WS-14).
 - **F5 (drawing and PDF, low):** terminals show only their own name (`1`,
   `2`, `3`, `PE`; that is how #28 fixed F2), and nothing on the page names
   the strip, so the printed page doesn't say which strip they belong to.

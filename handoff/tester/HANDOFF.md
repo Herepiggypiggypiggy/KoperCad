@@ -7,7 +7,7 @@ Updated: 2026-10-14 21:55 UTC (Round 10)
 - Round 9 PR **#87**: `gate1_scenario.rs` gets `scenario_through_the_window` (whole flow through `NovoApp::execute`, headless, real `EditorCanvas`) and the two #38 gap tests filled in. No ignored test left in that file. TEST_REPORT Round 9.
 - novo-tests dev-deps added: `novo-editor` (feature `art`), `egui`, `novo-theme`, `novo-pdf`, `novo-checks`, `novo-reports` (those three dev-depend on novo-tests; the dev-dep cycle is fine).
 - Round 10 (also on #87): `outputs_of_the_starter`, plus ignored gap tests for F4 (BOM per terminal, WS-07/WS-13) and F5 (strip tag on the printed page, WS-03/outputs). Un-ignore each when fixed.
-- #72 is closed; WS-07 is redoing it from main (article on the strip style, BOM qty 4). Re-test it when they ping; F4's gap test should flip there.
+- F4: (a) fixed by #99 (WS-07, re-tested 647/0/4), un-ignore `gap_missing_parts_counts_a_strip_by_its_terminals` after both merge; (b) `gap_a_terminal_block_is_not_a_part_of_the_strip` still open (WS-07).
 
 ## How to resume
 ```

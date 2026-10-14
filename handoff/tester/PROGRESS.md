@@ -20,3 +20,4 @@
 2026-10-14 21:50 UTC #87 at 0434c4f (mcb3 -F1 pins current behaviour; O1 open). Reviewer A stopped; sent to main reviewer cse_016C9nTT8cN7voW8t1NQUG4W. CI red only from Actions billing outage (commented on PR). #72 closed; WS-07 redoing it, re-test when they ping.
 2026-10-14 22:00 UTC F4 gap test tightened (per-terminal order numbers; PE gets 3044089 or is reported missing). Lead decided WS-07's strip-style fix is the one answer; Outputs drops its strip-device fallback.
 2026-10-14 22:05 UTC main 067e56a merged into #87: fmt/clippy clean, 646/0/3.
+2026-10-14 22:15 UTC #99 (854f8cf) re-tested on main 067e56a + #87: 647/0/4. F4 split: (a) missing parts lists the strip device -> fixed by #99; (b) assign_part still puts a terminal block on the strip device -> open. outputs test now assigns terminal articles (3 x UT 2,5 + UT 2,5-PE) and checks the BOM. #99's own gap test gives PE the grey block.
