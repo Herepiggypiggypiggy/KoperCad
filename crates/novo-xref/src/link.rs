@@ -27,6 +27,8 @@ pub enum LinkError {
     Mixed,
     #[error("both symbols are main functions (coils); one of them must be a contact")]
     BothMain,
+    #[error("that device already has a main function (coil); link a contact to it instead")]
+    DeviceHasMain,
     #[error("neither symbol belongs to a device yet; tag one of them first")]
     NoDevice,
     #[error("give one of the interruption points a name first")]
@@ -60,7 +62,9 @@ fn device_has_main(project: &Project, device: DeviceId) -> bool {
 /// - Two interruption points: `first` takes the partner's name (or the
 ///   partner takes `first`'s, when the partner has none).
 /// - A contact and a coil, in either order: the contact joins the coil's
-///   device. A contact whose old device is left with nothing drawn and no
+///   device. An unassigned coil linked to a contact joins the contact's
+///   device as its main function, which is refused when that device
+///   already has one ([`LinkError::DeviceHasMain`]). A contact whose old device is left with nothing drawn and no
 ///   data of its own is deleted with it. If the contact's connection
 ///   designations clash with a contact already on the device, it gets the
 ///   next free ones (`13-14`, then `23-24`).
@@ -116,9 +120,16 @@ pub fn link_command(
     };
     let target = target.ok_or(LinkError::NoDevice)?;
 
+    // A coil (anything that is not a contact) that joins a device becomes
+    // its main function; a device has only one.
+    let joins_as_main =
+        !ContactKind::classify(functions.function(&aux.symbol), &aux.symbol).is_contact();
+    if joins_as_main && device_has_main(project, target) {
+        return Err(LinkError::DeviceHasMain);
+    }
     let role = SymbolRole::Device {
         device: target,
-        main: false,
+        main: joins_as_main,
     };
     let mut moved = aux.clone();
     moved.role = role.clone();

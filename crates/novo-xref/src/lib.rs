@@ -13,7 +13,7 @@
 //!   occurrence ([`XrefIndex::all_references`]), Alt+Left/Right walk the
 //!   jump history.
 //! - [`XrefIndex::highlight`]: what selecting a coil lights up on its page,
-//!   and the status bar line for the rest.
+//!   and the dock hint line for the rest.
 //! - [`link_command`]: "Link cross reference", then click the partner.
 //!   Returns a model [`Command`](novo_core::Command) (`SetRole`), so it is
 //!   one undo step and scripts can do the same.

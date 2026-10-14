@@ -199,7 +199,7 @@ fn selecting_the_coil_highlights_its_contacts_on_the_page() {
     assert_eq!(h.on_page, [c1, c2]);
     assert_eq!(h.off_page.len(), 1);
     assert_eq!(h.off_page[0].symbol, c3);
-    assert_eq!(h.status_text(), "-K1 elsewhere: NO 33-34 3.4");
+    assert_eq!(h.dock_hint(), "-K1 elsewhere: NO 33-34 3.4");
 
     // Selecting the device from the project tree while page 3 is shown.
     let h = x.highlight_device(f.k1, f.pages[2]);
@@ -357,6 +357,8 @@ fn link_a_lone_contact_to_a_coil() {
     let p = f.doc.project();
     let sym = p.symbol(lone).unwrap();
     assert_eq!(sym.device(), Some(f.k1));
+    // A contact joins as a secondary function, never as the main one.
+    assert!(matches!(sym.role, SymbolRole::Device { main: false, .. }));
     // -K2 existed only for this contact, so it is gone.
     assert_eq!(p.devices().count(), devices_before - 1);
     // 13-14 was taken on -K1 and so was 33-34; 21-22 used ordinal 2.
@@ -399,6 +401,82 @@ fn link_works_from_the_coil_side_too_and_keeps_free_numbers() {
     let sym = f.doc.project().symbol(lone).unwrap();
     assert_eq!(sym.device(), Some(f.k1));
     assert_eq!(sym.pins[0].name, "53");
+}
+
+/// An untagged coil placed on page 1, `Unassigned`.
+fn unassigned_coil(f: &mut Fixture) -> SymbolId {
+    let page = f.pages[0];
+    f.doc
+        .transact("Place", |tx| {
+            tx.place_symbol(
+                page,
+                "iec/coils/relay",
+                Placement::at(Point::new(20.0, 100.0)),
+                vec![Pin::new("A1", 0.0, -8.0), Pin::new("A2", 0.0, 8.0)],
+                SymbolRole::Unassigned,
+            )
+        })
+        .unwrap()
+        .0
+}
+
+#[test]
+fn unassigned_coil_becomes_the_main_function_of_a_contact_only_device() {
+    let mut f = fixture();
+    let page = f.pages[2];
+    // -K3 has only a contact on page 3.
+    let ((k3, k3_contact), _) = f
+        .doc
+        .transact("Place", |tx| {
+            let k3 = tx.add_device(DeviceTag::parse("-K3")?, "Relay")?;
+            Ok((
+                k3,
+                contact(tx, page, 300.0, "iec/contacts/no", ["13", "14"], k3),
+            ))
+        })
+        .unwrap();
+    let coil_sym = unassigned_coil(&mut f);
+    let x = XrefIndex::build(f.doc.project(), &FromKey);
+    assert!(x.issues().iter().any(|i| matches!(i, Issue::NoMain { .. })));
+
+    // Right click on the coil, "Link cross reference", click the contact.
+    let cmd = link_command(f.doc.project(), &FromKey, coil_sym, k3_contact).unwrap();
+    f.doc.execute(cmd).unwrap();
+
+    let p = f.doc.project();
+    assert_eq!(
+        p.symbol(coil_sym).unwrap().role,
+        SymbolRole::Device {
+            device: k3,
+            main: true
+        }
+    );
+    let x = XrefIndex::build(p, &FromKey);
+    assert_eq!(x.label(coil_sym).unwrap().lines, ["NO 13-14 3.8"]);
+    assert_eq!(x.label(k3_contact).unwrap().lines, ["1.1"]);
+    assert!(x.issues().is_empty());
+
+    // G on the coil finds the contact.
+    let mut nav = Navigator::default();
+    let at_coil = Place {
+        page: f.pages[0],
+        symbol: Some(coil_sym),
+    };
+    let go = nav.go(&x, at_coil).unwrap();
+    assert_eq!(go.to.symbol, Some(k3_contact));
+}
+
+#[test]
+fn coil_onto_a_device_that_has_a_main_function_is_refused() {
+    let mut f = fixture();
+    let coil_sym = unassigned_coil(&mut f);
+    let p = f.doc.project();
+    for (a, b) in [(coil_sym, f.k1_contacts[2]), (f.k1_contacts[2], coil_sym)] {
+        assert_eq!(
+            link_command(p, &FromKey, a, b),
+            Err(LinkError::DeviceHasMain)
+        );
+    }
 }
 
 #[test]
@@ -598,7 +676,7 @@ fn structure_prefix_only_when_it_differs() {
     assert_eq!(x.label(near).unwrap().lines, ["1.1"]);
     assert_eq!(x.label(far).unwrap().lines, ["=A1/1.1"]);
     assert_eq!(
-        x.highlight(coil_sym).status_text(),
+        x.highlight(coil_sym).dock_hint(),
         "=A1-K1 elsewhere: NO 13-14 2.1, NC 21-22 =A2/3.1"
     );
 }

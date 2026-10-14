@@ -83,12 +83,12 @@ impl Reference {
 }
 
 /// What to highlight when a symbol or device is selected: related symbols
-/// on the same page, and the rest for the status bar.
+/// on the same page, and the rest for the tool dock hint (DESIGN.md §3).
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Highlight {
     pub on_page: Vec<SymbolId>,
     pub off_page: Vec<Reference>,
-    /// Device tag or interruption name, for the status bar.
+    /// Device tag or interruption name, for the dock hint.
     pub name: String,
     /// Structure of the page being read, for the reference format.
     pub reader: String,
@@ -99,9 +99,9 @@ impl Highlight {
         self.on_page.is_empty() && self.off_page.is_empty()
     }
 
-    /// Status bar text: `-K1 elsewhere: NO 13-14 3.4, NC 21-22 5.2`.
+    /// Dock hint text: `-K1 elsewhere: NO 13-14 3.4, NC 21-22 5.2`.
     /// Empty when nothing is off the page.
-    pub fn status_text(&self) -> String {
+    pub fn dock_hint(&self) -> String {
         if self.off_page.is_empty() {
             return String::new();
         }
