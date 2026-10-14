@@ -1430,4 +1430,22 @@ mod tests {
         assert!(h.doc.project().symbol(sym).is_some());
         assert_eq!(h.doc.undo_depth(), depth);
     }
+
+    #[test]
+    fn a_single_click_on_a_symbol_selects_it() {
+        let mut h = Harness::new();
+        h.view.editor.begin_place("iec/contactors/main_3p", None);
+        h.click(60.0, 80.0, egui::PointerButton::Primary);
+        h.key(Key::Escape);
+        let sym = h.doc.project().symbols().next().unwrap().id;
+        let body = h
+            .view
+            .editor
+            .body(h.doc.project().symbol(sym).unwrap())
+            .unwrap();
+        let (x, y) = ((body.0.x + body.1.x) / 2.0, (body.0.y + body.1.y) / 2.0);
+        h.click(x, y, egui::PointerButton::Primary);
+        h.frame(Vec::new());
+        assert_eq!(h.view.selection(), [AnyId::Symbol(sym)]);
+    }
 }

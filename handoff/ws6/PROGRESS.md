@@ -13,3 +13,4 @@
 2026-10-14 UTC (fixer session_017LndnL4fiT5rRPkqy3R36S): for WS-28 (#65): new feature `art` in novo-editor gives art::LibraryArt with novo-canvas's model only (no egui, no canvas widget); `egui` (default) implies it. novo-canvas itself still links wgpu unconditionally (WS-03). PR claude/fix-editor-art-feature.
 2026-10-14 21:37 UTC #38 merged; branch restarted from main 7bb466d. Proposals follow DESIGN.md §5 after #80 (pointer-follow highlight, Tab hold 24 px, solid highlighted proposal with hint, Delete declines); edit::place refuses a second main symbol (reviewer-c note). fmt, clippy, 627 tests clean.
 2026-10-14 21:38 UTC PR #91 opened, head f73279d; sent to main and design reviewers.
+2026-10-14 21:38 UTC Single click selects a symbol in the editor harness (new test); the Xvfb failure is outside SchematicView's input path; asked WS-03.
