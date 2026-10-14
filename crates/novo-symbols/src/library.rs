@@ -22,6 +22,8 @@ pub enum LoadError {
     },
     /// A symbol's `id` field does not match its file path.
     IdMismatch { path: String, id: String },
+    /// Two sources define the same id.
+    Duplicate { id: String },
     /// Symbols parsed but broke validation rules.
     Invalid(Vec<Issue>),
 }
@@ -34,6 +36,7 @@ impl fmt::Display for LoadError {
             LoadError::IdMismatch { path, id } => {
                 write!(f, "{path}: id '{id}' does not match the file path")
             }
+            LoadError::Duplicate { id } => write!(f, "{id}: defined more than once"),
             LoadError::Invalid(issues) => {
                 write!(f, "{} symbol issue(s)", issues.len())?;
                 for issue in issues {
@@ -60,52 +63,83 @@ impl Library {
     }
 
     /// Loads every `*.toml` file below `dir`; ids are the paths relative to
-    /// `dir` without the extension, using `/` separators.
+    /// `dir` without the extension, using `/` separators. Fails on the first
+    /// problem in any file.
     pub fn load_dir(dir: &Path) -> Result<Library, LoadError> {
-        let mut files = Vec::new();
-        walk(dir, &mut files)?;
-        let mut sources = Vec::new();
-        for file in files {
-            let text = fs::read_to_string(&file).map_err(|error| LoadError::Io {
-                path: file.clone(),
-                error,
-            })?;
-            let rel = file.strip_prefix(dir).unwrap_or(&file).with_extension("");
-            let id: Vec<_> = rel
-                .components()
-                .map(|c| c.as_os_str().to_string_lossy().into_owned())
-                .collect();
-            sources.push((id.join("/"), text));
-        }
+        let sources = read_dir_sources(dir)?;
         Library::from_sources(sources.iter().map(|(id, text)| (id.clone(), text.as_str())))
     }
 
+    /// Like [`Library::load_dir`], but keeps every valid symbol and returns
+    /// the problems with the others alongside, so one bad file in a company
+    /// library does not hide the rest. Fails only if a directory or file
+    /// can't be read.
+    pub fn load_dir_lenient(dir: &Path) -> Result<(Library, Vec<LoadError>), LoadError> {
+        let sources = read_dir_sources(dir)?;
+        Ok(Library::from_sources_lenient(
+            sources.iter().map(|(id, text)| (id.clone(), text.as_str())),
+        ))
+    }
+
     /// Builds a library from `(expected id, TOML text)` pairs, parsing and
-    /// validating each one.
+    /// validating each one. Fails if any source has a problem.
     pub fn from_sources<'a>(
         sources: impl IntoIterator<Item = (String, &'a str)>,
     ) -> Result<Library, LoadError> {
+        let (library, mut problems) = Library::from_sources_lenient(sources);
+        if problems.is_empty() {
+            return Ok(library);
+        }
+        if let Some(i) = problems
+            .iter()
+            .position(|p| !matches!(p, LoadError::Invalid(_)))
+        {
+            return Err(problems.swap_remove(i));
+        }
+        let issues = problems
+            .into_iter()
+            .flat_map(|p| match p {
+                LoadError::Invalid(issues) => issues,
+                _ => Vec::new(),
+            })
+            .collect();
+        Err(LoadError::Invalid(issues))
+    }
+
+    /// Builds a library from `(expected id, TOML text)` pairs, keeping the
+    /// valid symbols and returning one problem per rejected source.
+    pub fn from_sources_lenient<'a>(
+        sources: impl IntoIterator<Item = (String, &'a str)>,
+    ) -> (Library, Vec<LoadError>) {
         let mut symbols = BTreeMap::new();
-        let mut issues = Vec::new();
+        let mut problems = Vec::new();
         for (path, text) in sources {
-            let symbol = Symbol::from_toml(text).map_err(|error| LoadError::Parse {
-                path: path.clone(),
-                error,
-            })?;
+            let symbol = match Symbol::from_toml(text) {
+                Ok(symbol) => symbol,
+                Err(error) => {
+                    problems.push(LoadError::Parse { path, error });
+                    continue;
+                }
+            };
             if symbol.id != path {
-                return Err(LoadError::IdMismatch {
+                problems.push(LoadError::IdMismatch {
                     path,
                     id: symbol.id,
                 });
+                continue;
             }
-            issues.extend(validate(&symbol));
+            if symbols.contains_key(&symbol.id) {
+                problems.push(LoadError::Duplicate { id: symbol.id });
+                continue;
+            }
+            let issues = validate(&symbol);
+            if !issues.is_empty() {
+                problems.push(LoadError::Invalid(issues));
+                continue;
+            }
             symbols.insert(symbol.id.clone(), symbol);
         }
-        if issues.is_empty() {
-            Ok(Library { symbols })
-        } else {
-            Err(LoadError::Invalid(issues))
-        }
+        (Library { symbols }, problems)
     }
 
     /// Looks up a symbol by id.
@@ -138,6 +172,25 @@ impl Library {
     pub fn is_empty(&self) -> bool {
         self.symbols.is_empty()
     }
+}
+
+fn read_dir_sources(dir: &Path) -> Result<Vec<(String, String)>, LoadError> {
+    let mut files = Vec::new();
+    walk(dir, &mut files)?;
+    let mut sources = Vec::new();
+    for file in files {
+        let text = fs::read_to_string(&file).map_err(|error| LoadError::Io {
+            path: file.clone(),
+            error,
+        })?;
+        let rel = file.strip_prefix(dir).unwrap_or(&file).with_extension("");
+        let id: Vec<_> = rel
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy().into_owned())
+            .collect();
+        sources.push((id.join("/"), text));
+    }
+    Ok(sources)
 }
 
 fn walk(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), LoadError> {

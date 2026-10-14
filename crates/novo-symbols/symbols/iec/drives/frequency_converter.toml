@@ -22,6 +22,8 @@ anchors = [
   { role = "tag", at = [-6, 12], align = "right" },
 ]
 
+bridges = [["PE", "PE2"]]
+
 graphics = [
   { kind = "line", from = [0, 0], to = [0, 4] },
   { kind = "line", from = [8, 0], to = [8, 4] },
@@ -42,4 +44,4 @@ graphics = [
 kind = "converter"
 input = "ac"
 output = "ac"
-poles = [["L1", "L2", "L3"], ["U", "V", "W"]]
+ports = [["L1", "L2", "L3"], ["U", "V", "W"]]

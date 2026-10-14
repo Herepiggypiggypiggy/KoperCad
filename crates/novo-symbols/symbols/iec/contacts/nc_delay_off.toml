@@ -23,7 +23,7 @@ graphics = [
   { kind = "line", from = [0, 11], to = [4, 4] },
   { kind = "line", from = [1.714, 7.2], to = [-2.286, 7.2] },
   { kind = "line", from = [1.714, 8.8], to = [-2.286, 8.8] },
-  { kind = "arc", center = [-2.286, 8], r = 1.5, start = 90, end = 270 },
+  { kind = "arc", center = [-3.786, 8], r = 1.5, start = -90, end = 90 },
 ]
 
 [behavior]

@@ -7,8 +7,8 @@ use std::fmt;
 
 use crate::symbol::{FORMAT_VERSION, GRID, Graphic, Point, Symbol};
 
-/// Behavior kinds the library uses. The simulation workstream owns their
-/// meaning; this list only catches typos.
+/// Behavior kinds the library accepts. The simulation workstream owns
+/// their meaning; see [`behavior_keys`] for each kind's parameters.
 pub const BEHAVIOR_KINDS: &[&str] = &[
     "none",
     "conductor",
@@ -156,49 +156,256 @@ pub fn validate(symbol: &Symbol) -> Vec<Issue> {
     }
 
     for (i, g) in symbol.graphics.iter().enumerate() {
+        let pos = |v: f64| v.is_finite() && v > 0.0;
         let ok = match g {
             Graphic::Line { from, to, .. } => finite(*from) && finite(*to) && !same(*from, *to),
             Graphic::Polyline { points, .. } => {
                 points.len() >= 2 && points.iter().all(|p| finite(*p))
             }
-            Graphic::Rect { at, size, .. } => finite(*at) && size[0] > 0.0 && size[1] > 0.0,
-            Graphic::Circle { center, r, .. } => finite(*center) && *r > 0.0,
-            Graphic::Ellipse { center, rx, ry, .. } => finite(*center) && *rx > 0.0 && *ry > 0.0,
+            Graphic::Rect { at, size, .. } => finite(*at) && pos(size[0]) && pos(size[1]),
+            Graphic::Circle { center, r, .. } => finite(*center) && pos(*r),
+            Graphic::Ellipse { center, rx, ry, .. } => finite(*center) && pos(*rx) && pos(*ry),
             Graphic::Arc {
                 center,
                 r,
                 start,
                 end,
                 ..
-            } => finite(*center) && *r > 0.0 && end > start && end - start <= 360.0,
-            Graphic::Text { at, text, size, .. } => finite(*at) && !text.is_empty() && *size > 0.0,
+            } => {
+                finite(*center)
+                    && pos(*r)
+                    && start.is_finite()
+                    && end.is_finite()
+                    && end > start
+                    && end - start <= 360.0
+            }
+            Graphic::Text { at, text, size, .. } => finite(*at) && !text.is_empty() && pos(*size),
         };
         if !ok {
             fail(format!("graphic #{} is degenerate or invalid", i + 1));
         }
     }
 
-    let kind = symbol.behavior.kind.as_str();
-    if !BEHAVIOR_KINDS.contains(&kind) {
-        fail(format!("unknown behavior kind '{kind}'"));
-    }
-    if let Some(poles) = symbol.behavior.params.get("poles") {
-        let refs: Vec<&str> = poles
-            .as_array()
-            .into_iter()
-            .flatten()
-            .flat_map(|p| p.as_array().into_iter().flatten())
-            .filter_map(|v| v.as_str())
-            .collect();
-        if refs.is_empty() {
-            fail("behavior.poles must be a list of lists of connection ids".into());
+    let mut bridged = HashSet::new();
+    for group in &symbol.bridges {
+        if group.len() < 2 {
+            fail("each bridges group needs at least two connections".into());
         }
-        for r in refs {
-            if !ids.contains(r) {
-                fail(format!("behavior.poles names unknown connection '{r}'"));
+        for id in group {
+            if !ids.contains(id.as_str()) {
+                fail(format!("bridges names unknown connection '{id}'"));
+            }
+            if !bridged.insert(id.as_str()) {
+                fail(format!(
+                    "connection '{id}' is in more than one bridges group"
+                ));
             }
         }
     }
 
+    for message in check_behavior(symbol, &ids) {
+        fail(message);
+    }
+
     issues
+}
+
+/// Parameter keys each behavior kind accepts. The simulation workstream
+/// owns their meaning; this table catches typos and stray keys.
+const BEHAVIOR_SCHEMA: &[(&str, &[&str])] = &[
+    ("none", &[]),
+    ("conductor", &["poles"]),
+    ("contact", &["poles", "normally", "latching", "delay"]),
+    ("coil", &["poles", "delay"]),
+    ("fuse", &["poles", "switched"]),
+    ("breaker", &["poles", "trip", "adjustable"]),
+    ("overload", &["poles"]),
+    ("motor", &["ports", "phases", "speeds"]),
+    ("lamp", &["poles"]),
+    ("signal", &["poles"]),
+    ("source", &["poles", "ports", "type", "phases"]),
+    ("load", &["poles", "type"]),
+    ("passive", &["poles", "type", "wiper"]),
+    ("transformer", &["ports"]),
+    ("converter", &["ports", "input", "output"]),
+    ("meter", &["poles", "quantity"]),
+    ("plc_input", &["signal"]),
+    ("plc_output", &["signal"]),
+];
+
+/// Keys that must be present for a kind.
+const BEHAVIOR_REQUIRED: &[(&str, &[&str])] = &[
+    ("conductor", &["poles"]),
+    ("contact", &["poles", "normally"]),
+    ("coil", &["poles"]),
+    ("fuse", &["poles"]),
+    ("breaker", &["poles", "trip"]),
+    ("overload", &["poles"]),
+    ("motor", &["ports", "phases"]),
+    ("transformer", &["ports"]),
+    ("converter", &["ports", "input", "output"]),
+    ("plc_input", &["signal"]),
+    ("plc_output", &["signal"]),
+];
+
+/// The parameter keys a behavior kind accepts, or `None` for an unknown
+/// kind.
+pub fn behavior_keys(kind: &str) -> Option<&'static [&'static str]> {
+    BEHAVIOR_SCHEMA
+        .iter()
+        .find(|(k, _)| *k == kind)
+        .map(|(_, keys)| *keys)
+}
+
+fn check_behavior(symbol: &Symbol, ids: &HashSet<&str>) -> Vec<String> {
+    let mut out = Vec::new();
+    let behavior = &symbol.behavior;
+    let kind = behavior.kind.as_str();
+    let Some(allowed) = behavior_keys(kind) else {
+        out.push(format!("unknown behavior kind '{kind}'"));
+        return out;
+    };
+    for key in behavior.params.keys() {
+        if !allowed.contains(&key.as_str()) {
+            out.push(format!("behavior kind '{kind}' has no parameter '{key}'"));
+        }
+    }
+    let required = BEHAVIOR_REQUIRED
+        .iter()
+        .find(|(k, _)| *k == kind)
+        .map_or(&[][..], |(_, keys)| *keys);
+    for key in required {
+        if !behavior.params.contains_key(*key) {
+            out.push(format!("behavior kind '{kind}' needs '{key}'"));
+        }
+    }
+
+    let params = &behavior.params;
+    let string_in = |key: &str, options: &[&str], out: &mut Vec<String>| {
+        if let Some(v) = params.get(key) {
+            match v.as_str() {
+                Some(s) if options.contains(&s) => {}
+                _ => out.push(format!(
+                    "behavior.{key} must be one of {}",
+                    options.join(", ")
+                )),
+            }
+        }
+    };
+    string_in("normally", &["open", "closed", "changeover"], &mut out);
+    string_in("delay", &["on", "off"], &mut out);
+    string_in("input", &["ac", "dc"], &mut out);
+    string_in("output", &["ac", "dc"], &mut out);
+    string_in("signal", &["digital", "analog"], &mut out);
+    for key in ["latching", "adjustable", "switched"] {
+        if params.get(key).is_some_and(|v| v.as_bool().is_none()) {
+            out.push(format!("behavior.{key} must be true or false"));
+        }
+    }
+    for key in ["type", "quantity"] {
+        if params.get(key).is_some_and(|v| v.as_str().is_none()) {
+            out.push(format!("behavior.{key} must be a string"));
+        }
+    }
+    if let Some(v) = params.get("phases")
+        && !matches!(v.as_integer(), Some(0 | 1 | 3))
+    {
+        out.push("behavior.phases must be 0 (DC), 1 or 3".into());
+    }
+    if let Some(v) = params.get("speeds")
+        && !v.as_integer().is_some_and(|n| n >= 1)
+    {
+        out.push("behavior.speeds must be a positive integer".into());
+    }
+    if let Some(v) = params.get("trip") {
+        let ok = v.as_array().is_some_and(|a| {
+            !a.is_empty()
+                && a.iter().all(|t| {
+                    t.as_str()
+                        .is_some_and(|t| ["thermal", "magnetic", "residual"].contains(&t))
+                })
+        });
+        if !ok {
+            out.push("behavior.trip must list thermal, magnetic and/or residual".into());
+        }
+    }
+    if let Some(v) = params.get("wiper")
+        && !v.as_str().is_some_and(|w| ids.contains(w))
+    {
+        out.push("behavior.wiper must name a connection".into());
+    }
+
+    // A changeover lists [common, break, make]; a conductor (terminal side,
+    // bridge bar) joins two or more connections; every other path joins two.
+    let pole_len = if kind == "conductor" {
+        None
+    } else if params.get("normally").and_then(|v| v.as_str()) == Some("changeover") {
+        Some(3)
+    } else {
+        Some(2)
+    };
+    let pole_min = if kind == "conductor" { 2 } else { 1 };
+    check_groups(
+        params.get("poles"),
+        "poles",
+        pole_len,
+        pole_min,
+        ids,
+        &mut out,
+    );
+    check_groups(params.get("ports"), "ports", None, 1, ids, &mut out);
+    out
+}
+
+/// Checks a list of connection-id groups: well formed, every id known, no
+/// id in two groups, at least `min` ids per group and (when given) the
+/// exact group size.
+fn check_groups(
+    value: Option<&toml::Value>,
+    key: &str,
+    len: Option<usize>,
+    min: usize,
+    ids: &HashSet<&str>,
+    out: &mut Vec<String>,
+) {
+    let Some(value) = value else { return };
+    let malformed = || format!("behavior.{key} must be a list of lists of connection ids");
+    let Some(groups) = value.as_array().filter(|g| !g.is_empty()) else {
+        out.push(malformed());
+        return;
+    };
+    let mut seen = HashSet::new();
+    for group in groups {
+        let Some(items) = group.as_array() else {
+            out.push(malformed());
+            continue;
+        };
+        let names: Vec<_> = items.iter().filter_map(|v| v.as_str()).collect();
+        if names.len() != items.len() || names.is_empty() {
+            out.push(malformed());
+            continue;
+        }
+        if names.len() < min {
+            out.push(format!(
+                "behavior.{key} group {names:?} needs at least {min} connections"
+            ));
+        }
+        if let Some(len) = len
+            && names.len() != len
+        {
+            out.push(format!(
+                "behavior.{key} group {names:?} must have {len} connections"
+            ));
+        }
+        for name in names {
+            if !ids.contains(name) {
+                out.push(format!("behavior.{key} names unknown connection '{name}'"));
+            }
+            if !seen.insert(name) {
+                out.push(format!(
+                    "behavior.{key} uses connection '{name}' more than once"
+                ));
+            }
+        }
+    }
 }

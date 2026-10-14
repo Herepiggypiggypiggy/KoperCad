@@ -249,6 +249,7 @@ impl<'p> Tx<'p> {
             role,
             pins,
             bridges: Vec::new(),
+            pass_through: Vec::new(),
             properties: Default::default(),
         })
     }
@@ -292,7 +293,8 @@ impl<'p> Tx<'p> {
     /// Splits a wire with a new junction at the point of the wire closest to
     /// `at`, for branching off (T-junction). The original wire keeps its id,
     /// number and cable core and now ends on the junction; a new unnumbered
-    /// wire with the same properties runs on from it.
+    /// wire with the same properties runs on from it. A split that would land
+    /// on either end of the wire is refused with [`ModelError::SplitAtEnd`].
     pub fn split_wire(&mut self, wire: WireId, at: Point) -> Result<(JunctionId, WireId)> {
         let original = self
             .project
@@ -312,6 +314,10 @@ impl<'p> Tx<'p> {
             })
             .unwrap_or(0);
         let at = closest_on_segment(at, points[segment], points[segment + 1]);
+        // Splitting at an end would leave a zero-length wire.
+        if at.approx_eq(start, 1e-9) || at.approx_eq(end, 1e-9) {
+            return Err(ModelError::SplitAtEnd(wire));
+        }
         let junction = self.add_junction(original.page, at)?;
         let mut tail = original.clone();
         self.update::<Wire>(wire, |w| {

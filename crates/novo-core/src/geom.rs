@@ -110,6 +110,42 @@ impl Rotation {
     }
 }
 
+/// The direction a wire leaves a connection point, as seen on the page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+impl Direction {
+    /// Unit vector of the direction (y grows downwards).
+    pub fn vector(self) -> Point {
+        match self {
+            Direction::Up => Point::new(0.0, -1.0),
+            Direction::Down => Point::new(0.0, 1.0),
+            Direction::Left => Point::new(-1.0, 0.0),
+            Direction::Right => Point::new(1.0, 0.0),
+        }
+    }
+
+    fn from_vector(v: Point) -> Direction {
+        if v.x.abs() > v.y.abs() {
+            if v.x > 0.0 {
+                Direction::Right
+            } else {
+                Direction::Left
+            }
+        } else if v.y > 0.0 {
+            Direction::Down
+        } else {
+            Direction::Up
+        }
+    }
+}
+
 /// Where and how a symbol sits on its page: mirror (about the symbol's
 /// vertical axis) first, then rotate, then move to `origin`.
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
@@ -127,6 +163,18 @@ impl Placement {
             origin,
             ..Placement::default()
         }
+    }
+
+    /// Maps a direction in symbol coordinates to page coordinates: mirrored
+    /// and rotated like the symbol, not moved.
+    pub fn apply_direction(&self, local: Direction) -> Direction {
+        let v = local.vector();
+        let v = if self.mirrored {
+            Point::new(-v.x, v.y)
+        } else {
+            v
+        };
+        Direction::from_vector(self.rotation.apply(v))
     }
 
     /// Maps a point in symbol coordinates to page coordinates.
@@ -182,6 +230,24 @@ mod tests {
         assert_eq!(
             placement.apply(Point::new(2.0, 0.0)),
             Point::new(100.0, 52.0)
+        );
+        // Right mirrors to left, then turns a quarter counter-clockwise to down.
+        assert_eq!(placement.apply_direction(Direction::Right), Direction::Down);
+        assert_eq!(placement.apply_direction(Direction::Up), Direction::Left);
+    }
+
+    #[test]
+    fn directions_follow_rotation() {
+        let turned = Placement {
+            rotation: Rotation::R90,
+            ..Placement::default()
+        };
+        assert_eq!(turned.apply_direction(Direction::Up), Direction::Left);
+        assert_eq!(turned.apply_direction(Direction::Down), Direction::Right);
+        assert_eq!(turned.apply_direction(Direction::Right), Direction::Up);
+        assert_eq!(
+            Placement::default().apply_direction(Direction::Left),
+            Direction::Left
         );
     }
 }

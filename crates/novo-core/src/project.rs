@@ -254,6 +254,9 @@ impl Project {
                 if self.info != *before {
                     return Err(ModelError::InfoConflict);
                 }
+                if !crate::record::properties_finite(&after.properties) {
+                    return Err(ModelError::NonFiniteInfo);
+                }
                 self.info = after.clone();
             }
         }
@@ -309,6 +312,12 @@ impl Project {
                 .flatten()
                 .copied()
         };
+        if let Some(field) = record.non_finite_field() {
+            return Err(ModelError::NonFinite {
+                id: record.id(),
+                field,
+            });
+        }
         match record {
             Record::Device(device) => device.tag.validate()?,
             Record::Cable(cable) => cable.tag.validate()?,
@@ -316,7 +325,22 @@ impl Project {
         }
         match record {
             Record::Symbol(symbol) => {
-                for group in &symbol.bridges {
+                if let SymbolRole::Terminal { terminals } = &symbol.role
+                    && (terminals.is_empty()
+                        || ((terminals.len() > 1 || symbol.bridges.len() > 1)
+                            && terminals.len() != symbol.bridges.len())
+                        || terminals
+                            .iter()
+                            .enumerate()
+                            .any(|(i, t)| terminals[..i].contains(t)))
+                {
+                    return Err(ModelError::TerminalLevels {
+                        symbol: symbol.id,
+                        terminals: terminals.len(),
+                        bridges: symbol.bridges.len(),
+                    });
+                }
+                for group in symbol.bridges.iter().chain(&symbol.pass_through) {
                     for &pin in group {
                         if usize::from(pin) >= symbol.pins.len() {
                             return Err(ModelError::InvalidPin {
@@ -509,6 +533,9 @@ impl Project {
         next_id: u64,
         records: impl IntoIterator<Item = Record>,
     ) -> Result<Project> {
+        if !crate::record::properties_finite(&info.properties) {
+            return Err(ModelError::NonFiniteInfo);
+        }
         let mut records: Vec<Record> = records.into_iter().collect();
         records.sort_by_key(|r| (Record::rank(r.kind()), r.id()));
         let mut project = Project {
@@ -764,7 +791,9 @@ impl Project {
         let name = &symbol.pins.get(usize::from(pin.pin))?.name;
         Some(match &symbol.role {
             SymbolRole::Device { device, .. } => format!("{}:{}", self.devices[device].tag, name),
-            SymbolRole::Terminal { terminal } => self.terminal_designation(*terminal)?,
+            SymbolRole::Terminal { .. } => {
+                self.terminal_designation(symbol.terminal_of_pin(pin.pin)?)?
+            }
             _ => name.clone(),
         })
     }

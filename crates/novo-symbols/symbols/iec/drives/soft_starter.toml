@@ -35,4 +35,4 @@ graphics = [
 kind = "converter"
 input = "ac"
 output = "ac"
-poles = [["1L1", "2T1"], ["3L2", "4T2"], ["5L3", "6T3"]]
+ports = [["1L1", "3L2", "5L3"], ["2T1", "4T2", "6T3"]]

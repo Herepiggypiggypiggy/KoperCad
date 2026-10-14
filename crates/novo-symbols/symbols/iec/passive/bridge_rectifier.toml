@@ -32,4 +32,4 @@ graphics = [
 kind = "converter"
 input = "ac"
 output = "dc"
-poles = [["~1", "~2"], ["+", "-"]]
+ports = [["~1", "~2"], ["+", "-"]]

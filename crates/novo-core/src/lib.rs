@@ -30,6 +30,13 @@
 //! Typed ids serialize as bare numbers and [`DeviceTag`] as its text form
 //! (`"=A1+CAB1-K1"`).
 //!
+//! A saved project (`Project::to_json`) carries `"format":`
+//! [`JSON_FORMAT_VERSION`]. `tests/fixtures/format_v1.json` pins that format:
+//! a build must load every earlier fixture, and a change to what is written
+//! fails `tests/format.rs` until the fixture is updated on purpose. New
+//! optional fields with serde defaults keep the version; anything an older
+//! build could not read bumps it.
+//!
 //! ```
 //! use novo_core::{Document, DeviceTag, Endpoint, Pin, Placement, Point, SymbolRole};
 //!
@@ -73,7 +80,7 @@ pub use entity::{
     SymbolInstance, SymbolKey, SymbolRole, Terminal, TerminalKind, Value, Wire,
 };
 pub use error::{ModelError, Result};
-pub use geom::{Placement, Point, Rotation};
+pub use geom::{Direction, Placement, Point, Rotation};
 pub use graph::{Net, NetId, Netlist};
 pub use id::{
     AnyId, CableId, DeviceId, EntityKind, JunctionId, PageId, PartId, PotentialId, SymbolId,

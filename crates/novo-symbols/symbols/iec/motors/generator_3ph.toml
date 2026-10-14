@@ -35,4 +35,4 @@ graphics = [
 kind = "source"
 type = "ac"
 phases = 3
-poles = [["U1", "V1", "W1"]]
+ports = [["U1", "V1", "W1"]]

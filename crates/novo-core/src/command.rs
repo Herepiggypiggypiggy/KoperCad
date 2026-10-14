@@ -56,6 +56,8 @@ pub enum Command {
         pins: Vec<Pin>,
         #[serde(default)]
         bridges: Vec<Vec<u16>>,
+        #[serde(default)]
+        pass_through: Vec<Vec<u16>>,
     },
     MoveSymbol {
         symbol: SymbolId,
@@ -206,12 +208,22 @@ impl Tx<'_> {
                 role,
                 pins,
                 bridges,
+                pass_through,
             } => {
-                let id = self.place_symbol(page, symbol, placement, pins, role)?;
-                if !bridges.is_empty() {
-                    self.update::<crate::SymbolInstance>(id, |s| s.bridges = bridges)?;
-                }
-                id.into()
+                // Inserted in one step: a multi-level terminal is only valid
+                // together with its bridges.
+                self.insert(|id| crate::SymbolInstance {
+                    id,
+                    page,
+                    symbol,
+                    placement,
+                    role,
+                    pins,
+                    bridges,
+                    pass_through,
+                    properties: Default::default(),
+                })?
+                .into()
             }
             Command::MoveSymbol { symbol, placement } => {
                 self.move_symbol(symbol, placement)?;

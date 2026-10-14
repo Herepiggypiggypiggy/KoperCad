@@ -14,9 +14,18 @@ novo-canvas = { path = "crates/novo-canvas" }
 novo-symbols = { path = "crates/novo-symbols" }
 novo-storage = { path = "crates/novo-storage" }
 novo-sim = { path = "crates/novo-sim" }
+bytemuck = { version = "1", features = ["derive"] }
+egui = "0.36"
+egui-wgpu = "0.36"
+glam = { version = "0.30", features = ["bytemuck"] }
+# Must match the wgpu version egui-wgpu uses.
+wgpu = "30"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+toml = "1"
 thiserror = "2"
+rusqlite = { version = "0.40", features = ["bundled", "backup"] }
+tempfile = "3"
 eframe = { version = "0.36", default-features = false, features = ["wgpu", "default_fonts", "x11", "wayland"] }
 
 [workspace.lints.rust]

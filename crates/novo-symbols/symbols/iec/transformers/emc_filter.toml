@@ -22,6 +22,8 @@ anchors = [
   { role = "tag", at = [-6, 12], align = "right" },
 ]
 
+bridges = [["L1", "L1'"], ["L2", "L2'"], ["L3", "L3'"], ["PE", "PE'"]]
+
 graphics = [
   { kind = "line", from = [0, 0], to = [0, 4] },
   { kind = "line", from = [8, 0], to = [8, 4] },
@@ -40,4 +42,3 @@ graphics = [
 [behavior]
 kind = "passive"
 type = "filter"
-poles = [["L1", "L1'"], ["L2", "L2'"], ["L3", "L3'"]]
