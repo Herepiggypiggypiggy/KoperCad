@@ -40,7 +40,7 @@ fn canvas_style_from(p: &CanvasPalette) -> CanvasStyle {
         },
         band_window: color(p.rubber_band),
         band_crossing: color(p.connection_point),
-        snap_marker: color(p.selection),
+        snap_marker: color(p.snap_marker),
         // Marks (DESIGN.md §5), from the palette. None is copper: that hue
         // belongs to the selection.
         proposal: color(p.proposal),
@@ -68,6 +68,8 @@ fn model_style_from(p: &CanvasPalette) -> ModelStyle {
         tag_color: color(p.text),
         sheet_fill: Some(color(p.sheet)),
         frame_color: color(p.sheet_frame),
+        note_color: color(p.cross_reference),
+        note_warning_color: color(p.warning),
         ..defaults
     }
 }

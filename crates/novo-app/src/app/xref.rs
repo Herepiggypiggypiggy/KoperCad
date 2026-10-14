@@ -2,11 +2,11 @@
 //! and contacts, G / Shift+G, Alt+Left / Alt+Right and jumps to a device.
 
 use eframe::egui;
-use novo_canvas::model::item_id;
-use novo_core::{AnyId, DeviceId, PageId, Project, SymbolId};
+use novo_canvas::model::{SymbolNote, item_id};
+use novo_core::{AnyId, DeviceId, PageId, SymbolId};
 use novo_xref::{Label, LiveXref, Place, Reference, XrefIndex};
+use std::collections::BTreeMap;
 
-use super::workbench::Overlay;
 use super::{Level, NovoApp};
 
 impl NovoApp {
@@ -30,6 +30,27 @@ impl NovoApp {
         xref_of(&*self.backend, &*self.canvas, &mut self.wb.xref)
             .map(|index| index.labels_on_page(page))
             .unwrap_or_default()
+    }
+
+    /// The cross-reference labels of a page, as notes for the page scene.
+    pub(super) fn xref_notes(&mut self, page: PageId) -> Vec<SymbolNote> {
+        self.xref_labels(page).into_iter().map(note).collect()
+    }
+
+    /// Every page's cross-reference notes, for the PDF.
+    pub(super) fn xref_notes_by_page(&mut self) -> BTreeMap<PageId, Vec<SymbolNote>> {
+        let pages: Vec<PageId> = self
+            .backend
+            .document()
+            .map(|d| d.project().pages().map(|p| p.id).collect())
+            .unwrap_or_default();
+        let Some(index) = self.xref() else {
+            return BTreeMap::new();
+        };
+        pages
+            .into_iter()
+            .map(|p| (p, index.labels_on_page(p).into_iter().map(note).collect()))
+            .collect()
     }
 
     pub(super) fn xref(&mut self) -> Option<&XrefIndex> {
@@ -110,7 +131,7 @@ impl NovoApp {
         let reader = self
             .current_page
             .and_then(|p| self.backend.document().and_then(|d| d.project().page(p)))
-            .map(novo_xref::page_structure)
+            .map(|p| p.structure.clone())
             .unwrap_or_default();
         let mut chosen = None;
         let mut close = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
@@ -161,42 +182,11 @@ pub(super) fn xref_of<'a>(
     })
 }
 
-/// Cross-reference text next to each symbol, scaled with the drawing and
-/// hidden when too small to read.
-pub(super) fn paint_labels(
-    overlay: &Overlay,
-    project: &Project,
-    editor: &novo_editor::Editor,
-    labels: &[Label],
-) {
-    // Like the drawing's own tags: readable from page-fit zoom up, and
-    // gone when zoomed so far out that they would be noise.
-    let drawn = 2.5 * overlay.viewport.zoom;
-    if drawn < 4.0 {
-        return;
-    }
-    let size = drawn.clamp(9.0, 14.0);
-    let palette = &novo_theme::CANVAS_DARK;
-    let color = |c: [u8; 4]| egui::Color32::from_rgba_unmultiplied(c[0], c[1], c[2], c[3]);
-    for label in labels {
-        let Some(sym) = project.symbol(label.symbol) else {
-            continue;
-        };
-        let Some((min, max)) = editor.body(sym) else {
-            continue;
-        };
-        let c = if label.warning {
-            color(palette.warning)
-        } else {
-            color(palette.cross_reference)
-        };
-        overlay.painter.text(
-            // Above the symbol's top right corner, clear of its own tag.
-            overlay.to_screen(max.x + 1.0, min.y - 0.5),
-            egui::Align2::LEFT_BOTTOM,
-            label.lines.join("\n"),
-            egui::FontId::monospace(size),
-            c,
-        );
+/// A cross-reference label as a note drawn next to its symbol.
+pub(crate) fn note(label: Label) -> SymbolNote {
+    SymbolNote {
+        symbol: label.symbol,
+        lines: label.lines,
+        warning: label.warning,
     }
 }

@@ -26,7 +26,8 @@
 //!   than the device has, lone interruption points (for WS-14).
 //!
 //! References read `page.column` (`3.4`), prefixed with the target page's
-//! structure when it differs from the reader's page (`=A2/3.4`).
+//! structure ([`Page::structure`](novo_core::Page::structure)) when it
+//! differs from the reader's page (`=A2/3.4`).
 //! Locations and reading order come from the model
 //! ([`Project::location_of`](novo_core::Project::location_of),
 //! [`PageFormat::columns`](novo_core::PageFormat::columns)).
@@ -66,8 +67,7 @@ mod nav;
 pub use actions::XrefAction;
 pub use function::{ContactKind, FromKey, Functions};
 pub use index::{
-    Highlight, Issue, Label, LiveXref, Owner, PAGE_FUNCTION_PROPERTY, PAGE_LOCATION_PROPERTY,
-    Reference, TagJump, XrefIndex, contact_limit_property, page_structure,
+    Highlight, Issue, Label, LiveXref, Owner, Reference, TagJump, XrefIndex, contact_limit_property,
 };
 pub use link::{LINK_LABEL, LinkError, can_link, link_command};
 pub use nav::{Go, JumpHistory, Navigator, Place};

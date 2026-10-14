@@ -4,7 +4,8 @@
 use std::time::Instant;
 
 use novo_core::{
-    Command, DeviceId, DeviceTag, Document, PageId, Pin, Placement, Point, SymbolId, SymbolRole, Tx,
+    Command, DeviceId, DeviceTag, Document, Page, PageId, Pin, Placement, Point, SymbolId,
+    SymbolRole, Tx,
 };
 use novo_xref::{
     ContactKind, FromKey, Issue, LinkError, LiveXref, Navigator, Place, XrefAction, XrefIndex,
@@ -659,7 +660,8 @@ fn structure_prefix_only_when_it_differs() {
             let p2 = tx.add_page("2")?;
             let p3 = tx.add_page("3")?;
             for (p, f) in [(p1, "A1"), (p2, "A1"), (p3, "A2")] {
-                tx.set_property(p, novo_xref::PAGE_FUNCTION_PROPERTY, Some(f.into()))?;
+                let structure = DeviceTag::parse(&format!("={f}"))?;
+                tx.update::<Page>(p, |page| page.structure = structure)?;
             }
             let k1 = tx.add_device(DeviceTag::parse("=A1-K1")?, "")?;
             let c = coil(tx, p1, 10.0, k1);
@@ -692,4 +694,31 @@ fn exact_tag_jumps_to_the_main_location() {
     assert_eq!(jump.others.len(), 3);
     assert!(x.go_to_tag(p, "-K").is_none()); // only a prefix
     assert!(x.go_to_tag(p, "-Q9").is_none());
+}
+
+#[test]
+fn link_renumbers_when_the_ordinal_is_taken() {
+    // -K1 has 13-14, 21-22 and 33-34; a 23-24 shares no pin name with them,
+    // but ordinal 2 is taken by the NC contact (EN 50005).
+    let mut f = fixture();
+    let page = f.pages[0];
+    let (lone, _) = f
+        .doc
+        .transact("Place", |tx| {
+            let k2 = tx.add_device(DeviceTag::parse("-K2")?, "")?;
+            Ok(contact(tx, page, 20.0, "iec/contacts/no", ["23", "24"], k2))
+        })
+        .unwrap();
+    let cmd = link_command(f.doc.project(), &FromKey, lone, f.k1_coil).unwrap();
+    f.doc.execute(cmd).unwrap();
+    let names: Vec<String> = f
+        .doc
+        .project()
+        .symbol(lone)
+        .unwrap()
+        .pins
+        .iter()
+        .map(|p| p.name.clone())
+        .collect();
+    assert_eq!(names, ["43", "44"]);
 }

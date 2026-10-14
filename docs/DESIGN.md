@@ -442,6 +442,20 @@ user has edited:
   block) detach the instance, and the inspector says why;
 - an update previews what changes and which overrides stay.
 
+**Where blocks live.** A definition lives in the project, so a `.novo` file
+is always complete on its own. Libraries are sources to copy from: the
+user's own `%APPDATA%\NovoElectric\Blocks` and, optionally, a company
+folder the user points at (any readable path, no admin rights). A project
+copy remembers its source and version, so a newer library version is
+offered as an update, never applied silently.
+
+**What a block substitutes.** Tags are allocated, not substituted: each
+member keeps its letter code and gets the next free number from the
+numbering rule (`dol 4kW x3` places three instances, not one with a count).
+Property values (power, current) and texts that name a parameter
+("{power} kW") are filled in. Parts are not parameters: after placement the
+part proposals run on the members' sizing, automatic where one part fits.
+
 ## 8. Decided alternatives
 
 | Question | Options considered | Decision |
@@ -545,7 +559,6 @@ Checklist for every UI pull request:
 - A light theme for review in bright rooms. Dark stays the default; tokens
   are named by role, so a light set can be added without touching screens.
 - How much of the structure board is a form and how much is drawing?
-- Should blocks live in the project, a shared company library, or both?
 - The inspector flips sides when the selection is under it, which is the
   one place the window moves under the eye. Would a fixed right-hand
   inspector that turns compact or translucent over the selection be

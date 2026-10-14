@@ -12,3 +12,5 @@
 2026-10-14 17:18 UTC Merged main (DESIGN.md), added structure-prefixed references and go_to_tag; pushed cd8482a; sent SHA to reviewer and Workflow; asked WS-02 for page structure + freeze.
 2026-10-14 17:24 UTC Workflow: #31 meets DESIGN.md; dropped leading slash (3.4); pushed 2c9f74f; SHA sent to reviewer.
 2026-10-14 17:15 UTC WS-02: Page.structure (DeviceTag) + Location.structure/qualified() coming in a PR after #35; then switch page_structure() to it and drop the function/location page props. Freeze comes later on WS-02's roadmap.
+2026-10-14 19:22 UTC #31 READY on 92e1d01 (coordinator fixed the unassigned-coil link) and merged.
+2026-10-14 23:30 UTC Follow-up from main: references use core Page.structure and Location::qualified; dropped the page `function`/`location` props and page_structure(); EN 50005 ordinal clash check; negative contacts.* ignored.

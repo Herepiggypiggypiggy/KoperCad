@@ -1897,6 +1897,7 @@ dependencies = [
  "novo-py",
  "novo-reports",
  "novo-storage",
+ "novo-xref",
  "serde_json",
  "tempfile",
 ]
