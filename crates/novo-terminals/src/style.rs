@@ -99,7 +99,7 @@ pub fn overrides(project: &Project, strip: DeviceId) -> Vec<TerminalId> {
         .collect()
 }
 
-fn draws_only_inherited(project: &Project, symbol: &SymbolInstance) -> bool {
+pub(crate) fn draws_only_inherited(project: &Project, symbol: &SymbolInstance) -> bool {
     let SymbolRole::Terminal { terminals } = &symbol.role else {
         return false;
     };
