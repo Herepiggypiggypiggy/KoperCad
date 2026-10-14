@@ -188,9 +188,12 @@ fn terminal_kinds_match_their_use() {
 fn every_device_has_a_part_and_the_cable_its_cores() {
     let (doc, s) = starter();
     let p = doc.project();
-    for device in p.devices() {
+    // The strip carries no part itself: its terminals' articles are the
+    // strip style (see bom_counts_every_terminal_the_strip_shows).
+    for device in p.devices().filter(|d| d.id != s.x1) {
         assert_eq!(device.parts.len(), 1, "{} has a part", device.tag);
     }
+    assert!(novo_parts::missing_parts(p).is_empty());
     let cable = p.cable(s.w1).unwrap();
     assert!(cable.part.is_some());
     assert_eq!(cable.cores.len(), 4);
@@ -275,4 +278,50 @@ fn deleting_the_contactor_takes_its_symbols_and_wires_and_undo_restores_them() {
     assert!(!p.unconnected_pins().is_empty());
     doc.undo().unwrap();
     assert_eq!(state(doc.project()), built);
+}
+
+/// Terminal articles come from one place (`novo_terminals::terminal_part`):
+/// the -X1 terminal blocks are the strip's style, so the strip editor shows
+/// them on every row, the bill of materials counts one per terminal (not one
+/// against -X1), and the missing-parts check agrees.
+#[test]
+fn bom_counts_every_terminal_the_strip_shows() {
+    use novo_reports::{BillOfMaterials, Report};
+
+    let (doc, s) = starter();
+    let p = doc.project();
+    assert!(p.device(s.x1).unwrap().parts.is_empty());
+
+    let rows = novo_terminals::strip_view(p, s.x1).rows;
+    assert_eq!(rows.len(), 4);
+    assert!(rows.iter().all(|r| r.part.is_some()));
+    for row in &rows {
+        assert_eq!(novo_parts::terminal_part(p, row.terminals[0]), row.part);
+    }
+
+    let bom = BillOfMaterials.generate(p);
+    let parts = bom.sections.iter().find(|s| s.key == "parts").unwrap();
+    let terminal_rows: Vec<_> = parts
+        .rows
+        .iter()
+        .filter(|r| r.sources.iter().any(|id| matches!(id, AnyId::Terminal(_))))
+        .collect();
+    let quantity: usize = terminal_rows
+        .iter()
+        .map(|r| {
+            r.sources
+                .iter()
+                .filter(|id| matches!(id, AnyId::Terminal(_)))
+                .count()
+        })
+        .sum();
+    assert_eq!(quantity, 4, "one terminal block per terminal");
+    assert!(
+        parts
+            .rows
+            .iter()
+            .all(|r| !r.sources.contains(&AnyId::from(s.x1)))
+    );
+    assert!(bom.sections.iter().all(|s| s.key != "without_parts"));
+    assert!(novo_parts::missing_parts(p).is_empty());
 }

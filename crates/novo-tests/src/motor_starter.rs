@@ -15,7 +15,7 @@
 use novo_core::{
     CableCore, CableId, ChangeSet, Device, DeviceId, DeviceTag, Document, Endpoint, JunctionId,
     PageId, Pin, Placement, Point, PotentialId, PotentialKind, Result, SymbolId, SymbolInstance,
-    SymbolRole, Terminal, TerminalKind, Tx, WireId,
+    SymbolRole, Terminal, TerminalKind, Tx, Value, WireId,
 };
 
 /// Handles to the objects of the Gate 1 project.
@@ -334,11 +334,13 @@ fn build(tx: &mut Tx<'_>) -> Result<MotorStarter> {
 
     // ----- parts ----------------------------------------------------------
     // Fixture data: plausible catalogue entries, not a verified parts list.
-    let parts: [(DeviceId, &str, &str); DEVICE_COUNT] = [
+    // The terminal strip -X1 carries no part itself: its terminal blocks are
+    // the strip's style per terminal kind (novo-terminals stores the style
+    // as the `terminal_part.<kind>` property, holding the part id).
+    let parts: [(DeviceId, &str, &str); DEVICE_COUNT - 1] = [
         (f1, "Siemens", "3NW7033"),
         (k1, "Siemens", "3RT2016-1AP01"),
         (f2, "Siemens", "3RU2116-1FB0"),
-        (x1, "Phoenix Contact", "3044076"),
         (m1, "Siemens", "1LE1003-0EB42-2AA4"),
         (f3, "Siemens", "5SY6106-7"),
         (s0, "Siemens", "3SU1100-0AB20-1CA0"),
@@ -347,6 +349,15 @@ fn build(tx: &mut Tx<'_>) -> Result<MotorStarter> {
     for (device, manufacturer, order_number) in parts {
         let part = tx.add_part(manufacturer, order_number)?;
         tx.assign_part(device, part)?;
+    }
+    for (kind, order_number) in [("feedthrough", "3044076"), ("protective_earth", "3044089")] {
+        let part = tx.add_part("Phoenix Contact", order_number)?;
+        tx.update::<Device>(x1, |d| {
+            d.properties.insert(
+                format!("terminal_part.{kind}"),
+                Value::Int(i64::try_from(part.0).expect("small id")),
+            );
+        })?;
     }
     let cable_part = tx.add_part("Lapp", "1119304")?;
     tx.update::<novo_core::Cable>(w1, |c| {

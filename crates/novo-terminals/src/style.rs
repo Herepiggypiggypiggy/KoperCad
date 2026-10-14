@@ -89,6 +89,18 @@ pub fn style_of(project: &Project, terminal: TerminalId) -> Option<Style> {
     })
 }
 
+/// The article a terminal is built with, the one answer every crate uses
+/// (strip editor, bill of materials, missing parts): the terminal's own
+/// `Terminal.part`, else its style ([`style_of`]: its own `part` override,
+/// else its strip's part for its kind). The strip device's own parts (end
+/// plates, accessories) are not the terminal's article.
+pub fn terminal_part(project: &Project, terminal: TerminalId) -> Option<PartId> {
+    let t = project.terminal(terminal)?;
+    t.part
+        .filter(|&p| project.part(p).is_some())
+        .or_else(|| style_of(project, terminal).and_then(|s| s.part))
+}
+
 /// Terminals that deliberately differ from their strip's style.
 pub fn overrides(project: &Project, strip: DeviceId) -> Vec<TerminalId> {
     project

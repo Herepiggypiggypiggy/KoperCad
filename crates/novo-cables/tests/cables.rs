@@ -80,7 +80,7 @@ fn gate1_motor_cable_is_proposed_as_4g_and_accepted() {
     assert_eq!(part.order_number, "1119304", "the fixture's part is reused");
     assert_eq!(
         doc.project().parts().count(),
-        9,
+        10,
         "no second copy of the part"
     );
     assert!(propose_cables(doc.project()).is_empty());

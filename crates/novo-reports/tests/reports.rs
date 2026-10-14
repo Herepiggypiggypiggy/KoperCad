@@ -59,16 +59,26 @@ fn bill_of_materials_groups_parts() {
             &["1", "1", "Lapp", "1119304", "", "", "12", "=A1-W1"],
             &[
                 "2",
-                "1",
+                "3",
                 "Phoenix Contact",
                 "3044076",
                 "",
                 "",
                 "",
-                "=A1+CAB-X1"
+                "=A1+CAB-X1:1, =A1+CAB-X1:2, =A1+CAB-X1:3"
             ],
             &[
                 "3",
+                "1",
+                "Phoenix Contact",
+                "3044089",
+                "",
+                "",
+                "",
+                "=A1+CAB-X1:PE"
+            ],
+            &[
+                "4",
                 "1",
                 "Siemens",
                 "1LE1003-0EB42-2AA4",
@@ -77,9 +87,9 @@ fn bill_of_materials_groups_parts() {
                 "",
                 "=A1+FLD-M1"
             ],
-            &["4", "1", "Siemens", "3NW7033", "", "", "", "=A1+CAB-F1"],
+            &["5", "1", "Siemens", "3NW7033", "", "", "", "=A1+CAB-F1"],
             &[
-                "5",
+                "6",
                 "1",
                 "Siemens",
                 "3RT2016-1AP01",
@@ -89,7 +99,7 @@ fn bill_of_materials_groups_parts() {
                 "=A1+CAB-K1"
             ],
             &[
-                "6",
+                "7",
                 "1",
                 "Siemens",
                 "3RU2116-1FB0",
@@ -99,7 +109,7 @@ fn bill_of_materials_groups_parts() {
                 "=A1+CAB-F2"
             ],
             &[
-                "7",
+                "8",
                 "1",
                 "Siemens",
                 "3SU1100-0AB20-1CA0",
@@ -109,7 +119,7 @@ fn bill_of_materials_groups_parts() {
                 "=A1+CAB-S0"
             ],
             &[
-                "8",
+                "9",
                 "1",
                 "Siemens",
                 "3SU1100-0AB40-1BA0",
@@ -118,7 +128,7 @@ fn bill_of_materials_groups_parts() {
                 "",
                 "=A1+CAB-S1"
             ],
-            &["9", "1", "Siemens", "5SY6106-7", "", "", "", "=A1+CAB-F3"],
+            &["10", "1", "Siemens", "5SY6106-7", "", "", "", "=A1+CAB-F3"],
         ])
     );
     // Every fixture device has a part.
@@ -250,8 +260,8 @@ fn device_list_has_structure_parts_and_locations() {
                 "+CAB",
                 "",
                 "Terminal strip",
-                "3044076",
-                "Phoenix Contact",
+                "",
+                "",
                 "1.1, 1.2"
             ],
             &[

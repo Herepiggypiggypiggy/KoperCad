@@ -2015,6 +2015,7 @@ dependencies = [
  "novo-canvas",
  "novo-core",
  "novo-parts",
+ "novo-reports",
  "novo-storage",
  "novo-symbols",
  "novo-terminals",

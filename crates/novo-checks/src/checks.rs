@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use novo_core::{
-    AnyId, DeviceId, DeviceTag, Endpoint, Netlist, PageId, Point, SameName, SymbolId,
+    AnyId, DeviceId, DeviceKind, DeviceTag, Endpoint, Netlist, PageId, Point, SameName, SymbolId,
     SymbolInstance, SymbolRole, Value,
 };
 
@@ -394,11 +394,24 @@ pub(crate) fn zero_length_wires(cx: &Context<'_>, out: &mut Vec<Problem>) {
 
 /// Devices and cables without a part. Info only: parts are assigned late
 /// (WS-07 proposes them), and DESIGN.md §6 step 7 lists them in Issues.
-/// Terminals are not checked: their article usually comes with the strip.
+/// A terminal strip's articles are its terminals' (their own part, or the
+/// strip's style per terminal kind, which novo-terminals keeps in the
+/// strip's `terminal_part.<kind>` properties), not the strip device's part
+/// list; it is flagged only when none of those is set.
+/// `novo_parts::missing_parts` lists the single terminals without one.
 pub(crate) fn missing_parts(cx: &Context<'_>, out: &mut Vec<Problem>) {
     let project = cx.project;
     for device in project.devices() {
-        if device.parts.is_empty() {
+        let strip_covered = device.kind == DeviceKind::TerminalStrip
+            && (device
+                .properties
+                .keys()
+                .any(|k| k.starts_with("terminal_part."))
+                || project
+                    .terminals_of_strip(device.id)
+                    .iter()
+                    .any(|t| t.part.is_some()));
+        if device.parts.is_empty() && !strip_covered {
             out.push(Problem::new(
                 ProblemKind::MissingPart,
                 vec![device_mark(cx, device.id)],

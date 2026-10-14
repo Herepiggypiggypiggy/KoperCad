@@ -214,19 +214,13 @@ pub fn assign_terminal_part(
     Some(Command::Batch { label, commands })
 }
 
-/// The part a terminal is built with: its own article (`Terminal.part`),
-/// else its terminal strip's style for its kind or its own style override
-/// (novo-terminals), else the strip device's part.
+/// The article a terminal is built with: its own `Terminal.part`, else
+/// its strip's style for its kind. This is [`novo_terminals::terminal_part`],
+/// the one answer the strip editor, the bill of materials and
+/// [`missing_parts`] share. The strip device's own parts (end plates,
+/// accessories) are never a terminal's article.
 pub fn terminal_part(project: &Project, terminal: TerminalId) -> Option<PartId> {
-    let t = project.terminal(terminal)?;
-    t.part
-        .filter(|&p| project.part(p).is_some())
-        .or_else(|| novo_terminals::style_of(project, terminal).and_then(|s| s.part))
-        .or_else(|| {
-            project
-                .device(t.strip)
-                .and_then(|d| d.parts.first().copied())
-        })
+    novo_terminals::terminal_part(project, terminal)
 }
 
 /// Every terminal kind, for the strip styles.
@@ -320,10 +314,15 @@ pub fn remove_unused_parts(project: &Project) -> Option<Command> {
 /// project ("every device carries a real part") and the input for the
 /// design check "missing parts" (WS-14).
 ///
-/// A terminal has a part when [`terminal_part`] finds one: its own, its
-/// strip's style, or its strip device's part.
+/// A terminal has a part when [`terminal_part`] finds one: its own or its
+/// strip's style. A terminal strip device is not listed itself: its
+/// terminals carry the articles.
 pub fn missing_parts(project: &Project) -> Vec<AnyId> {
-    let mut devices: Vec<&Device> = project.devices().filter(|d| d.parts.is_empty()).collect();
+    // A terminal strip is covered through its terminals, listed below.
+    let mut devices: Vec<&Device> = project
+        .devices()
+        .filter(|d| d.parts.is_empty() && d.kind != DeviceKind::TerminalStrip)
+        .collect();
     devices.sort_by(|a, b| novo_core::natural_cmp(&a.tag.to_string(), &b.tag.to_string()));
     let mut terminals: Vec<(String, TerminalId)> = project
         .terminals()
@@ -444,7 +443,8 @@ fn sized_for(part: &CatalogPart, device: &Device) -> bool {
 
 /// Part proposals for devices that have no part yet (all of them when
 /// `devices` is `None`), in tag order. A device for which no catalog part
-/// fits gets no proposal.
+/// fits gets no proposal. Terminal strips get none: a terminal block is the
+/// strip's style for a terminal kind, not a part of the strip device.
 pub fn propose_parts<'c>(
     catalog: &'c Catalog,
     project: &Project,
@@ -454,14 +454,11 @@ pub fn propose_parts<'c>(
         Some(ids) => ids.iter().filter_map(|&id| project.device(id)).collect(),
         None => project.devices().collect(),
     };
-    list.retain(|d| d.parts.is_empty());
+    list.retain(|d| d.parts.is_empty() && d.kind != DeviceKind::TerminalStrip);
     list.sort_by(|a, b| novo_core::natural_cmp(&a.tag.to_string(), &b.tag.to_string()));
     list.into_iter()
         .filter_map(|device| {
-            let code = match device.kind {
-                DeviceKind::TerminalStrip => "X",
-                _ => device.tag.letter_code(),
-            };
+            let code = device.tag.letter_code();
             if code.is_empty() {
                 return None;
             }

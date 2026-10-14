@@ -854,9 +854,9 @@ fn gap_assign_parts_from_the_catalog() {
     let dir = tempfile::tempdir().unwrap();
     let (mut flow, page) = new_flow(&library, dir.path());
     build(&mut flow, page, true);
-    // Five devices and the four -X1 terminals, which -X1's part covers once
-    // it has one.
-    assert_eq!(novo_parts::missing_parts(flow.project()).len(), 5 + 4);
+    // Four devices and the four -X1 terminals. The strip itself carries no
+    // article: its terminals do.
+    assert_eq!(novo_parts::missing_parts(flow.project()).len(), 4 + 4);
 
     let catalog = novo_parts::Catalog::starter();
     let devices: Vec<DeviceId> = flow.project().devices().map(|d| d.id).collect();
@@ -865,12 +865,13 @@ fn gap_assign_parts_from_the_catalog() {
             .into_iter()
             .next()
             .unwrap_or_else(|| panic!("no catalog part suggested for {device:?}"));
-        let command = novo_parts::assign_part(
-            flow.project(),
-            &[device],
-            part,
-            novo_parts::AssignMode::Replace,
-        )
+        let p = flow.project();
+        let command = if p.device(device).unwrap().kind == DeviceKind::TerminalStrip {
+            let terminals: Vec<_> = p.terminals_of_strip(device).iter().map(|t| t.id).collect();
+            novo_parts::assign_terminal_part(p, &terminals, part)
+        } else {
+            novo_parts::assign_part(p, &[device], part, novo_parts::AssignMode::Replace)
+        }
         .expect("the device had no part");
         let depth = flow.store.doc().undo_depth();
         flow.run(command);
