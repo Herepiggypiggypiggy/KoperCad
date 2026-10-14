@@ -137,21 +137,7 @@ pub struct PageScene {
 
 /// Item id of a model object.
 pub fn item_id(id: impl Into<AnyId>) -> ItemId {
-    ItemId(raw(id.into()))
-}
-
-fn raw(id: AnyId) -> u64 {
-    match id {
-        AnyId::Page(i) => i.0,
-        AnyId::Device(i) => i.0,
-        AnyId::Symbol(i) => i.0,
-        AnyId::Junction(i) => i.0,
-        AnyId::Wire(i) => i.0,
-        AnyId::Potential(i) => i.0,
-        AnyId::Terminal(i) => i.0,
-        AnyId::Cable(i) => i.0,
-        AnyId::Part(i) => i.0,
-    }
+    ItemId(id.into().raw())
 }
 
 impl PageScene {
@@ -240,12 +226,29 @@ impl PageScene {
                 AnyId::Junction(j) => {
                     dirty.extend(project.wires_at(Endpoint::junction(j)).map(AnyId::Wire));
                 }
-                // Tags are drawn on the device's symbols.
-                AnyId::Device(d) => dirty.extend(
+                // Tags are drawn on the device's symbols, and a strip's tag
+                // is part of its terminals' designations.
+                AnyId::Device(d) => {
+                    dirty.extend(
+                        project
+                            .symbols_of_device(d)
+                            .into_iter()
+                            .map(|s| AnyId::Symbol(s.id)),
+                    );
+                    for t in project.terminals_of_strip(d) {
+                        dirty.extend(
+                            project
+                                .symbols_of_terminal(t.id)
+                                .into_iter()
+                                .map(|s| AnyId::Symbol(s.id)),
+                        );
+                    }
+                }
+                // Feed symbols show the potential's name.
+                AnyId::Potential(_) => dirty.extend(
                     project
-                        .symbols_of_device(d)
-                        .into_iter()
-                        .map(|s| AnyId::Symbol(s.id)),
+                        .referrers(id)
+                        .filter(|r| matches!(r, AnyId::Symbol(_))),
                 ),
                 AnyId::Terminal(t) => dirty.extend(
                     project
@@ -327,20 +330,24 @@ impl PageScene {
             .map(|p| SnapPoint::connection(vec(p)))
             .collect();
         if let Some(text) = symbol_text(project, sym) {
-            // To the right of the symbol body, vertically centred on it.
-            let b = crate::Aabb::from_points(sym.pins.iter().map(|p| vec(p.offset)));
+            // To the right of the placed symbol, vertically centred on its
+            // pins, whatever its rotation or mirroring.
+            let origin = vec(sym.placement.origin);
+            let b = crate::Aabb::from_points(
+                (0..sym.pins.len() as u16)
+                    .filter_map(|i| sym.pin_position(i))
+                    .map(vec),
+            );
             let anchor = if b.is_empty() {
-                Vec2::new(5.0, 0.0)
+                origin + Vec2::new(5.0, 0.0)
             } else {
-                Vec2::new(b.max.x.max(2.5) + 5.0, b.center().y)
+                Vec2::new(b.max.x.max(origin.x + 2.5) + 5.0, b.center().y)
             };
-            let label = Label::new(anchor, text, self.style.tag_height)
-                .anchored(Anchor::CenterLeft)
-                .colored(self.style.tag_color);
-            item.labels.push(label.transformed(&Placement {
-                rotation: 0.0,
-                ..place
-            }));
+            item.labels.push(
+                Label::new(anchor, text, self.style.tag_height)
+                    .anchored(Anchor::CenterLeft)
+                    .colored(self.style.tag_color),
+            );
         }
         self.put(id.into(), item);
     }
@@ -651,6 +658,82 @@ mod tests {
         assert!(doc.project().wire(w).is_none());
         assert!(!ps.scene().contains(item_id(w)));
         assert_eq!(ps.scene().len(), 2);
+    }
+
+    #[test]
+    fn renaming_a_potential_relabels_its_feeds() {
+        let (mut doc, page, ..) = doc();
+        let ((pot, feed), _) = doc
+            .transact("feed", |tx| {
+                let pot = tx.add_potential("L+", novo_core::PotentialKind::default())?;
+                let feed = tx.place_symbol(
+                    page,
+                    "iec/feed",
+                    MPlacement::at(Point::new(40.0, 40.0)),
+                    vec![Pin::new("1", 0.0, 5.0)],
+                    SymbolRole::PotentialFeed { potential: pot },
+                )?;
+                Ok((pot, feed))
+            })
+            .unwrap();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        assert_eq!(ps.scene().get(item_id(feed)).unwrap().labels[0].text, "L+");
+        let (_, changes) = doc
+            .transact("rename", |tx| {
+                tx.update::<novo_core::Potential>(pot, |p| p.name = "24V".into())
+            })
+            .unwrap();
+        assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
+        assert_eq!(ps.scene().get(item_id(feed)).unwrap().labels[0].text, "24V");
+    }
+
+    #[test]
+    fn retagging_a_strip_relabels_its_terminals() {
+        let (mut doc, page, ..) = doc();
+        let ((strip, sym), _) = doc
+            .transact("strip", |tx| {
+                let strip = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+                let t = tx.add_terminal(strip, "3")?;
+                let sym = tx.place_symbol(
+                    page,
+                    "iec/terminal",
+                    MPlacement::at(Point::new(60.0, 40.0)),
+                    vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                    SymbolRole::Terminal { terminal: t },
+                )?;
+                Ok((strip, sym))
+            })
+            .unwrap();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let before = ps.scene().get(item_id(sym)).unwrap().labels[0].text.clone();
+        assert!(before.contains("X1"), "{before}");
+        let (_, changes) = doc
+            .transact("retag", |tx| tx.set_tag(strip, DeviceTag::parse("-X9")?))
+            .unwrap();
+        assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
+        let after = &ps.scene().get(item_id(sym)).unwrap().labels[0].text;
+        assert!(after.contains("X9") && !after.contains("X1"), "{after}");
+    }
+
+    #[test]
+    fn tag_stays_right_of_mirrored_symbols() {
+        let (mut doc, page, k1, ..) = doc();
+        let (_, _) = doc
+            .transact("mirror", |tx| {
+                tx.move_symbol(
+                    k1,
+                    MPlacement {
+                        origin: Point::new(100.0, 100.0),
+                        rotation: Rotation::R0,
+                        mirrored: true,
+                    },
+                )
+            })
+            .unwrap();
+        let ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let label = &ps.scene().get(item_id(k1)).unwrap().labels[0];
+        assert_eq!(label.anchor, Anchor::CenterLeft);
+        assert!(label.pos.x > 100.0, "{label:?}");
     }
 
     #[test]

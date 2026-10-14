@@ -28,14 +28,24 @@ use crate::viewport::Viewport;
 use glam::Vec2;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::{Duration, Instant};
+
+/// Set once [`install_with`] has registered the pipeline.
+static INSTALLED: AtomicBool = AtomicBool::new(false);
+
+/// GPU buffers of a canvas not painted for this long are freed (a closed or
+/// long hidden page tab). They are rebuilt if the canvas shows again.
+const IDLE_CANVAS_TTL: Duration = Duration::from_secs(30);
 
 /// Registers the canvas pipeline with egui's wgpu renderer. Call once at
-/// start-up with the same MSAA sample count given to eframe.
+/// start-up. `msaa_samples` must be the sample count eframe renders with,
+/// i.e. `NativeOptions::multisampling` (`0` and `1` both mean off), or
+/// pipeline creation fails validation.
 pub fn install(render_state: &egui_wgpu::RenderState, msaa_samples: u32) {
     let target = TargetConfig {
         format: render_state.target_format,
-        msaa_samples,
+        msaa_samples: msaa_samples.max(1),
         depth_format: None,
     };
     install_with(render_state, target);
@@ -52,11 +62,19 @@ pub fn install_with(render_state: &egui_wgpu::RenderState, target: TargetConfig)
             renderer,
             canvases: HashMap::new(),
         });
+    INSTALLED.store(true, Ordering::Relaxed);
+}
+
+/// Whether the canvas renderer is installed. Without it (no wgpu adapter,
+/// or `install` never called) [`CanvasView::show`] paints an error notice
+/// instead of the drawing.
+pub fn is_installed() -> bool {
+    INSTALLED.load(Ordering::Relaxed)
 }
 
 struct CanvasResources {
     renderer: CanvasRenderer,
-    canvases: HashMap<u64, GpuCanvas>,
+    canvases: HashMap<u64, (GpuCanvas, Instant)>,
 }
 
 struct CanvasCallback {
@@ -75,10 +93,13 @@ impl egui_wgpu::CallbackTrait for CanvasCallback {
     ) -> Vec<wgpu::CommandBuffer> {
         if let Some(res) = resources.get_mut::<CanvasResources>() {
             let CanvasResources { renderer, canvases } = res;
-            canvases
+            let now = Instant::now();
+            canvases.retain(|&id, (_, used)| id == self.id || now - *used < IDLE_CANVAS_TTL);
+            let (canvas, used) = canvases
                 .entry(self.id)
-                .or_insert_with(|| renderer.create_canvas(device))
-                .prepare(device, queue, &self.frame);
+                .or_insert_with(|| (renderer.create_canvas(device), now));
+            *used = now;
+            canvas.prepare(device, queue, &self.frame);
         }
         Vec::new()
     }
@@ -90,7 +111,7 @@ impl egui_wgpu::CallbackTrait for CanvasCallback {
         resources: &egui_wgpu::CallbackResources,
     ) {
         if let Some(res) = resources.get::<CanvasResources>()
-            && let Some(canvas) = res.canvases.get(&self.id)
+            && let Some((canvas, _)) = res.canvases.get(&self.id)
         {
             res.renderer.paint(pass, canvas);
         }
@@ -338,12 +359,24 @@ impl CanvasView {
         self.selection.retain_existing(scene);
         selection_changed |= self.selection.revision() != rev;
 
-        let frame = self.build_frame(ui.ctx().pixels_per_point(), scene, cursor, cursor_raw);
-        ui.painter().add(egui_wgpu::Callback::new_paint_callback(
-            rect,
-            CanvasCallback { id: self.id, frame },
-        ));
-        self.paint_labels(ui, rect, scene);
+        if is_installed() {
+            let frame = self.build_frame(ui.ctx().pixels_per_point(), scene, cursor, cursor_raw);
+            ui.painter().add(egui_wgpu::Callback::new_paint_callback(
+                rect,
+                CanvasCallback { id: self.id, frame },
+            ));
+            self.paint_labels(ui, rect, scene);
+        } else {
+            ui.painter().text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                "The drawing cannot be shown: no graphics adapter was found.\n\
+                 NovoElectric needs Direct3D 12, Vulkan or Metal \
+                 (on Linux, install the Mesa Vulkan drivers).",
+                egui::FontId::proportional(15.0),
+                ui.visuals().error_fg_color,
+            );
+        }
 
         CanvasOutput {
             response,
