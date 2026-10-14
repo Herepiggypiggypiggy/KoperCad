@@ -1,7 +1,7 @@
 # WS-28 Python API and CLI: handoff
 
 ## State (2026-10-14 20:00 UTC)
-- Branch `claude/ws28-python-cli`, PR: see PROGRESS.md (last line has number and head).
+- Branch `claude/ws28-python-cli`, PR #56. Head SHA: last line of PROGRESS.md.
 - Phase 1 (headless) is complete and locally green; waiting on the main reviewer.
 - Nothing half-done in the working tree.
 
