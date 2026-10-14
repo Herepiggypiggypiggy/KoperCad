@@ -66,6 +66,10 @@ impl Net {
 }
 
 /// The connectivity graph of one project revision.
+///
+/// Building one is a full pass (about 15 ms for 10k symbols in a release
+/// build; see `examples/scale.rs`). Keep it and rebuild only when
+/// [`Netlist::is_current`] says the project changed, never per frame.
 #[derive(Debug, Clone)]
 pub struct Netlist {
     revision: u64,
