@@ -53,6 +53,16 @@ PRs are skipped; if the combined build fails it falls back to main). The
 owner's desktop shortcut runs `scripts/run-latest.ps1`, which always starts
 the newest of these builds. Keep main and open PRs buildable on Windows.
 
+## No admin rights, ever
+
+Everything must install, run, update and be scripted by a standard Windows
+user without admin rights. That covers the app, its installer
+(`PrivilegesRequired=lowest`, per-user install), launchers, the Python layer
+(WS-28) and any helper tool. Write only under the user's profile
+(`%LOCALAPPDATA%`, `%APPDATA%`, Documents) and `HKCU`; never `Program Files`,
+`HKLM`, services, drivers or system-wide installs, and never require a tool
+that needs elevation to install.
+
 ## Conventions
 
 - Device tags follow IEC 81346: `=plant +location -device`.
