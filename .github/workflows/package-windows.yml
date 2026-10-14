@@ -1,0 +1,56 @@
+name: Windows installer
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "packaging/windows/**"
+      - "assets/icon/**"
+      - "crates/novo-app/build.rs"
+      - ".github/workflows/package-windows.yml"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release
+      - run: cargo build --release -p novo-app
+      - name: Install Inno Setup if missing
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y }
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $version = ((cargo pkgid -p novo-app) -split '[#@]')[-1]
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" packaging\windows\novoelectric.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Smoke-test the installer
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist\NovoElectric-*-setup.exe | Select-Object -First 1
+          $dir = "$env:RUNNER_TEMP\novo-install"
+          $p = Start-Process $setup.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER", "/DIR=$dir" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "installer exited with $($p.ExitCode)" }
+          if (-not (Test-Path "$dir\novoelectric.exe")) { throw "novoelectric.exe was not installed" }
+          $app = Start-Process "$dir\novoelectric.exe" -PassThru
+          Start-Sleep -Seconds 10
+          if ($app.HasExited) { throw "novoelectric.exe exited at startup with code $($app.ExitCode)" }
+          Stop-Process -Id $app.Id
+          $size = [math]::Round($setup.Length / 1MB, 1)
+          "Installer: $($setup.Name), $size MB" >> $env:GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NovoElectric-windows-installer
+          path: dist/*.exe
+          if-no-files-found: error
