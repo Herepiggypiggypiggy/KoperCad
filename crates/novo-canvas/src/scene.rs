@@ -136,12 +136,33 @@ impl Item {
 
     /// Distance from `p` to the item's ink.
     pub fn distance(&self, p: Vec2, zoom: f32) -> f32 {
-        let d = self
+        self.nearest_part(p, zoom).0
+    }
+
+    /// Distance from `p` to the item's ink or text, and the index of the
+    /// label when text is nearest.
+    pub fn nearest_part(&self, p: Vec2, zoom: f32) -> (f32, Option<usize>) {
+        let (ink, text) = self.parts_distance(p, zoom);
+        match text {
+            Some((d, i)) if d < ink => (d, Some(i)),
+            _ => (ink, None),
+        }
+    }
+
+    /// Distance to the ink, and to the nearest label with its index.
+    fn parts_distance(&self, p: Vec2, zoom: f32) -> (f32, Option<(f32, usize)>) {
+        let ink = self
             .primitives
             .iter()
             .map(|prim| prim.distance(p, zoom))
             .fold(f32::INFINITY, f32::min);
-        self.labels.iter().map(|l| l.distance(p)).fold(d, f32::min)
+        let text = self
+            .labels
+            .iter()
+            .enumerate()
+            .map(|(i, l)| (l.distance(p), i))
+            .min_by(|a, b| a.0.total_cmp(&b.0));
+        (ink, text)
     }
 
     /// True when any ink or text touches `rect`.
@@ -189,8 +210,11 @@ impl BoxMode {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Hit {
     pub id: ItemId,
-    /// Distance from the pick point to the item's ink, in world units.
+    /// Distance from the pick point to the nearest of the item's lines
+    /// or label boxes, in world units.
     pub distance: f32,
+    /// The label that was hit, when text was nearer than any line.
+    pub label: Option<usize>,
 }
 
 pub struct Scene {
@@ -392,7 +416,7 @@ impl Scene {
     pub fn pick_all(&self, p: Vec2, tolerance: f32, zoom: f32) -> Vec<Hit> {
         let reach = tolerance + self.max_screen_half_width / zoom.max(f32::EPSILON);
         let rect = Aabb::from_center(p, Vec2::splat(reach));
-        let mut hits: Vec<(Hit, i32, u32)> = self
+        let mut hits: Vec<(Hit, f32, i32, u32)> = self
             .query_slots(&rect)
             .into_iter()
             .filter_map(|s| {
@@ -400,25 +424,32 @@ impl Scene {
                 if !self.pickable(slot) {
                     return None;
                 }
-                let d = slot.item.distance(p, zoom);
+                // Ink beats text: a label counts as `tolerance` further away
+                // than it is, so a tag running over a neighbour's body never
+                // steals the click from that body. Text still wins where no
+                // line is near.
+                let (ink, text) = slot.item.parts_distance(p, zoom);
+                let (score, d, label) = match text {
+                    Some((t, i)) if t <= tolerance && (ink > tolerance || t + tolerance < ink) => {
+                        (t + tolerance, t, Some(i))
+                    }
+                    _ => (ink, ink, None),
+                };
                 (d <= tolerance).then(|| {
                     (
                         Hit {
                             id: slot.id,
                             distance: d,
+                            label,
                         },
+                        score,
                         self.layer_order(slot.item.layer),
                         s,
                     )
                 })
             })
             .collect();
-        hits.sort_by(|a, b| {
-            a.0.distance
-                .total_cmp(&b.0.distance)
-                .then(b.1.cmp(&a.1))
-                .then(b.2.cmp(&a.2))
-        });
+        hits.sort_by(|a, b| a.1.total_cmp(&b.1).then(b.2.cmp(&a.2)).then(b.3.cmp(&a.3)));
         hits.into_iter().map(|h| h.0).collect()
     }
 
@@ -703,5 +734,31 @@ mod tests {
             )
             .is_empty()
         );
+    }
+}
+
+#[cfg(test)]
+mod label_pick_tests {
+    use super::*;
+    use crate::shape::{Primitive, Shape};
+    use crate::style::Stroke;
+    use crate::text::Label;
+
+    #[test]
+    fn picking_reports_the_label() {
+        let mut scene = Scene::new();
+        scene.insert(
+            ItemId(1),
+            Item::new(LayerId(0))
+                .with(Primitive::stroked(
+                    Shape::line(Vec2::ZERO, Vec2::new(0.0, 10.0)),
+                    Stroke::default(),
+                ))
+                .with_label(Label::new(Vec2::new(5.0, 5.0), "-K1", 2.5)),
+        );
+        let on_text = scene.pick(Vec2::new(6.0, 4.0), 0.5, 2.0).unwrap();
+        assert_eq!((on_text.id, on_text.label), (ItemId(1), Some(0)));
+        let on_line = scene.pick(Vec2::new(0.1, 8.0), 0.5, 2.0).unwrap();
+        assert_eq!(on_line.label, None);
     }
 }

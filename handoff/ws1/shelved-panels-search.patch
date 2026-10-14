@@ -1,0 +1,1796 @@
+From 335a4a1aeec0c2e843c4137403bd84d65d31b386 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 14 Oct 2026 16:35:57 +0000
+Subject: [PATCH] novo-app: object panels, tag search, properties and go to all
+ references
+
+- The left dock has named panels: Pages, Devices, Terminals, Cables and
+  Potentials, each with a filter box and each reachable from the palette
+  and the View menu.
+- Ctrl+K searches commands and the project's pages, devices, terminals,
+  cables and potentials in one box; a tag typed in full (k1 or -K1)
+  ranks first, and picking an object selects it and shows its page.
+- The properties panel shows the selected object's common fields first
+  (tag, description, pages, part), then its own properties, narrowed by
+  a filter box.
+- Shift+G (Go menu) lists every drawing of the selected object in the
+  palette; picking one jumps there with it selected.
+- Selecting on the canvas selects the device or terminal behind the
+  symbol.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AYuFPxz6eQReQdtzYKLMmW
+---
+ crates/novo-app/src/actions.rs      |  65 +++-
+ crates/novo-app/src/app.rs          | 531 ++++++++++++++++++++++++--
+ crates/novo-app/src/browse.rs       | 561 ++++++++++++++++++++++++++++
+ crates/novo-app/src/canvas.rs       |  12 +-
+ crates/novo-app/src/lib.rs          |   1 +
+ crates/novo-app/src/model_canvas.rs |  80 +++-
+ crates/novo-app/src/palette.rs      |  73 +++-
+ crates/novo-app/src/settings.rs     |   3 +
+ docs/WORKFLOW.md                    |   1 +
+ 9 files changed, 1265 insertions(+), 62 deletions(-)
+ create mode 100644 crates/novo-app/src/browse.rs
+
+diff --git a/crates/novo-app/src/actions.rs b/crates/novo-app/src/actions.rs
+index 30b8b87..4e97288 100644
+--- a/crates/novo-app/src/actions.rs
++++ b/crates/novo-app/src/actions.rs
+@@ -18,6 +18,12 @@ pub enum Action {
+     TogglePropertiesPanel,
+     ToggleMessagesPanel,
+     CommandPalette,
++    ShowPages,
++    ShowDevices,
++    ShowTerminals,
++    ShowCables,
++    ShowPotentials,
++    GoToReferences,
+     ThemeSystem,
+     ThemeLight,
+     ThemeDark,
+@@ -39,6 +45,12 @@ impl Action {
+         Action::TogglePropertiesPanel,
+         Action::ToggleMessagesPanel,
+         Action::CommandPalette,
++        Action::ShowPages,
++        Action::ShowDevices,
++        Action::ShowTerminals,
++        Action::ShowCables,
++        Action::ShowPotentials,
++        Action::GoToReferences,
+         Action::ThemeSystem,
+         Action::ThemeLight,
+         Action::ThemeDark,
+@@ -62,6 +74,12 @@ impl Action {
+             Action::TogglePropertiesPanel => "view.properties_panel",
+             Action::ToggleMessagesPanel => "view.messages_panel",
+             Action::CommandPalette => "view.command_palette",
++            Action::ShowPages => "view.pages",
++            Action::ShowDevices => "view.devices",
++            Action::ShowTerminals => "view.terminals",
++            Action::ShowCables => "view.cables",
++            Action::ShowPotentials => "view.potentials",
++            Action::GoToReferences => "go.references",
+             Action::ThemeSystem => "view.theme_system",
+             Action::ThemeLight => "view.theme_light",
+             Action::ThemeDark => "view.theme_dark",
+@@ -88,6 +106,12 @@ impl Action {
+             Action::TogglePropertiesPanel => "Properties panel",
+             Action::ToggleMessagesPanel => "Messages panel",
+             Action::CommandPalette => "Command palette…",
++            Action::ShowPages => "Pages panel",
++            Action::ShowDevices => "Devices panel",
++            Action::ShowTerminals => "Terminals panel",
++            Action::ShowCables => "Cables panel",
++            Action::ShowPotentials => "Potentials panel",
++            Action::GoToReferences => "Go to all references…",
+             Action::ThemeSystem => "Theme: follow system",
+             Action::ThemeLight => "Theme: light",
+             Action::ThemeDark => "Theme: dark",
+@@ -105,11 +129,17 @@ impl Action {
+             | Action::CloseProject
+             | Action::Quit => "File",
+             Action::Undo | Action::Redo => "Edit",
++            Action::GoToReferences => "Go",
+             Action::ZoomToFit
+             | Action::ToggleProjectPanel
+             | Action::TogglePropertiesPanel
+             | Action::ToggleMessagesPanel
+             | Action::CommandPalette
++            | Action::ShowPages
++            | Action::ShowDevices
++            | Action::ShowTerminals
++            | Action::ShowCables
++            | Action::ShowPotentials
+             | Action::ThemeSystem
+             | Action::ThemeLight
+             | Action::ThemeDark => "View",
+@@ -134,7 +164,16 @@ impl Action {
+             Action::TogglePropertiesPanel => (cmd, Key::Num2),
+             Action::ToggleMessagesPanel => (cmd, Key::Num3),
+             Action::CommandPalette => (cmd, Key::K),
+-            Action::ThemeSystem | Action::ThemeLight | Action::ThemeDark | Action::About => {
++            Action::GoToReferences => (Modifiers::SHIFT, Key::G),
++            Action::ShowPages
++            | Action::ShowDevices
++            | Action::ShowTerminals
++            | Action::ShowCables
++            | Action::ShowPotentials
++            | Action::ThemeSystem
++            | Action::ThemeLight
++            | Action::ThemeDark
++            | Action::About => {
+                 return None;
+             }
+         };
+@@ -151,10 +190,26 @@ impl Action {
+         all
+     }
+ 
+-    /// True for shortcuts a focused text field needs for itself: plain keys
+-    /// such as Home, and Ctrl+Z / Ctrl+Y for the field's own undo.
++    /// True for shortcuts a focused text field needs for itself: plain and
++    /// shifted keys such as Home or Shift+G (a capital G), and Ctrl+Z /
++    /// Ctrl+Y for the field's own undo.
+     pub fn yields_to_text_input(self, shortcut: &KeyboardShortcut) -> bool {
+-        shortcut.modifiers.is_none() || matches!(self, Action::Undo | Action::Redo)
++        let m = shortcut.modifiers;
++        let typed = !(m.ctrl || m.command || m.mac_cmd || m.alt);
++        typed || matches!(self, Action::Undo | Action::Redo)
++    }
++
++    /// The object panel this action shows, for the panel actions.
++    pub fn panel(self) -> Option<crate::browse::Panel> {
++        use crate::browse::Panel;
++        Some(match self {
++            Action::ShowPages => Panel::Pages,
++            Action::ShowDevices => Panel::Devices,
++            Action::ShowTerminals => Panel::Terminals,
++            Action::ShowCables => Panel::Cables,
++            Action::ShowPotentials => Panel::Potentials,
++            _ => return None,
++        })
+     }
+ 
+     /// Actions with shortcuts, most modifiers first.
+@@ -241,7 +296,7 @@ mod tests {
+     #[test]
+     fn plain_key_shortcuts_yield_to_text_fields() {
+         for (action, s) in Action::by_shortcut_specificity() {
+-            if s.modifiers.is_none() {
++            if s.modifiers.is_none() || s.modifiers == Modifiers::SHIFT {
+                 assert!(action.yields_to_text_input(&s), "{action:?}");
+             }
+         }
+diff --git a/crates/novo-app/src/app.rs b/crates/novo-app/src/app.rs
+index ce7e262..bfc0b8b 100644
+--- a/crates/novo-app/src/app.rs
++++ b/crates/novo-app/src/app.rs
+@@ -6,7 +6,8 @@ use std::time::{Duration, Instant, SystemTime};
+ use eframe::egui;
+ 
+ use crate::actions::Action;
+-use novo_core::PageId;
++use crate::browse::{self, Panel};
++use novo_core::{AnyId, PageId};
+ 
+ use crate::backend::{BackendError, ProjectBackend, page_labels};
+ use crate::canvas::{CanvasView, OpenPage};
+@@ -27,6 +28,15 @@ pub struct Message {
+     pub text: String,
+ }
+ 
++/// What the palette is listing.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++enum PaletteMode {
++    /// Commands and the project's objects.
++    Everything,
++    /// The places an object is drawn.
++    References(AnyId),
++}
++
+ /// An action that throws away the open project, so it first asks about
+ /// unsaved changes.
+ #[derive(Clone, Debug, PartialEq, Eq)]
+@@ -54,6 +64,13 @@ pub struct NovoApp {
+     window_title: String,
+     /// Opened on the first frame, so errors show in the window.
+     open_on_start: Option<PathBuf>,
++    /// The object the properties panel shows and "go to all references"
++    /// starts from: picked on the canvas, in a panel or by search.
++    focus: Option<AnyId>,
++    palette_mode: PaletteMode,
++    /// Filter text of the object panel in the left dock.
++    panel_filter: String,
++    properties_filter: String,
+     /// When to give the backend its next chance to autosave.
+     next_tick: Instant,
+     /// The last autosave failed; reported once until it works again.
+@@ -96,6 +113,10 @@ impl NovoApp {
+             quitting: false,
+             window_title: String::new(),
+             open_on_start: None,
++            focus: None,
++            palette_mode: PaletteMode::Everything,
++            panel_filter: String::new(),
++            properties_filter: String::new(),
+             next_tick: Instant::now(),
+             autosave_failing: false,
+         }
+@@ -143,6 +164,61 @@ impl NovoApp {
+         if !pages.iter().any(|(id, _)| Some(*id) == self.current_page) {
+             self.current_page = pages.first().map(|(id, _)| *id);
+         }
++        let exists = |id| {
++            self.backend
++                .document()
++                .is_some_and(|d| d.project().contains(id))
++        };
++        if self.focus.is_some_and(|id| !exists(id)) {
++            self.focus = None;
++        }
++    }
++
++    /// Shows `page` with `items` selected and in view.
++    fn jump(&mut self, page: PageId, items: &[AnyId]) {
++        let Some(document) = self.backend.document() else {
++            return;
++        };
++        if document.project().page(page).is_none() {
++            return;
++        }
++        self.current_page = Some(page);
++        self.canvas.reveal(document, page, items);
++    }
++
++    /// Selects `id` and shows the first place it is drawn.
++    fn go_to(&mut self, id: AnyId) {
++        let Some(project) = self.backend.document().map(|d| d.project()) else {
++            return;
++        };
++        self.focus = Some(id);
++        let name = browse::name(project, id);
++        match browse::places(project, id).into_iter().next() {
++            Some(place) => self.jump(place.page, &place.items),
++            None => self.message(Level::Info, format!("{name} is not drawn on any page yet")),
++        }
++    }
++
++    fn pick(&mut self, ctx: &egui::Context, target: Target) {
++        match target {
++            Target::Action(action) => self.run(ctx, action),
++            Target::Object(id) => self.go_to(id),
++            Target::Place(page, items) => self.jump(page, &items),
++        }
++    }
++
++    fn show_references(&mut self) {
++        let (Some(id), Some(project)) = (self.focus, self.backend.document().map(|d| d.project()))
++        else {
++            return;
++        };
++        let name = browse::name(project, id);
++        if browse::places(project, id).is_empty() {
++            self.message(Level::Info, format!("{name} is not drawn on any page yet"));
++            return;
++        }
++        self.palette_mode = PaletteMode::References(id);
++        self.palette.open(format!("Where {name} is drawn"));
+     }
+ 
+     fn undo_redo(&mut self, redo: bool) {
+@@ -174,6 +250,7 @@ impl NovoApp {
+             | Action::ZoomToFit => open,
+             Action::Undo => doc.is_some_and(|d| d.can_undo()),
+             Action::Redo => doc.is_some_and(|d| d.can_redo()),
++            Action::GoToReferences => open && self.focus.is_some(),
+             _ => true,
+         }
+     }
+@@ -209,7 +286,24 @@ impl NovoApp {
+             Action::ToggleMessagesPanel => {
+                 self.settings.show_messages_panel ^= true;
+             }
+-            Action::CommandPalette => self.palette.open(),
++            Action::CommandPalette => {
++                self.palette_mode = PaletteMode::Everything;
++                self.palette.open("Type a command, page, tag or name");
++            }
++            Action::ShowPages
++            | Action::ShowDevices
++            | Action::ShowTerminals
++            | Action::ShowCables
++            | Action::ShowPotentials => {
++                if let Some(panel) = action.panel() {
++                    if self.settings.left_panel != panel {
++                        self.panel_filter.clear();
++                    }
++                    self.settings.left_panel = panel;
++                    self.settings.show_project_panel = true;
++                }
++            }
++            Action::GoToReferences => self.show_references(),
+             Action::ThemeSystem => self.set_theme(ctx, Theme::System),
+             Action::ThemeLight => self.set_theme(ctx, Theme::Light),
+             Action::ThemeDark => self.set_theme(ctx, Theme::Dark),
+@@ -268,6 +362,7 @@ impl NovoApp {
+             Ok(()) => {
+                 self.project_path = None;
+                 self.current_page = None;
++                self.focus = None;
+                 self.canvas.document_replaced();
+                 self.fix_current_page();
+             }
+@@ -280,6 +375,7 @@ impl NovoApp {
+             Ok(report) => {
+                 self.project_path = Some(path.to_owned());
+                 self.current_page = None;
++                self.focus = None;
+                 self.canvas.document_replaced();
+                 self.fix_current_page();
+                 self.settings.remember_recent(path);
+@@ -312,6 +408,7 @@ impl NovoApp {
+         }
+         self.project_path = None;
+         self.current_page = None;
++        self.focus = None;
+         self.canvas.document_replaced();
+     }
+ 
+@@ -418,7 +515,7 @@ impl NovoApp {
+             egui::Panel::right("properties")
+                 .resizable(true)
+                 .default_size(260.0)
+-                .show(ui, properties_panel);
++                .show(ui, |ui| self.properties_panel(ui));
+         }
+         egui::CentralPanel::no_frame().show(ui, |ui| {
+             let open = self
+@@ -426,7 +523,14 @@ impl NovoApp {
+                 .and_then(|page| OpenPage::new(&mut *self.backend, page));
+             self.canvas.show(ui, open);
+         });
++        if let Some(selected) = self.canvas.take_selection() {
++            let project = self.backend.document().map(|d| d.project());
++            self.focus = project
++                .zip(selected.first())
++                .map(|(project, &id)| browse::owner(project, id));
++        }
+ 
++        let mut target = None;
+         if self.palette.is_open() {
+             let entries = self.palette_entries();
+             let recent: Vec<Target> = self
+@@ -436,10 +540,7 @@ impl NovoApp {
+                 .filter_map(|id| Action::from_id(id))
+                 .map(Target::Action)
+                 .collect();
+-            match self.palette.show(&ctx, &entries, &recent) {
+-                Some(Target::Action(action)) => picked.push(action),
+-                None => {}
+-            }
++            target = self.palette.show(&ctx, &entries, &recent);
+         }
+         self.recovery_dialog(&ctx);
+         self.unsaved_dialog(&ctx);
+@@ -448,17 +549,39 @@ impl NovoApp {
+         for action in picked {
+             self.run(&ctx, action);
+         }
++        if let Some(target) = target {
++            self.pick(&ctx, target);
++        }
+     }
+ 
+-    /// What the command palette searches: every enabled action for now;
+-    /// pages, devices and symbols join later as new `Target`s.
++    /// What the palette searches: every enabled action and every page,
++    /// device, terminal, cable and potential; or the places one object is
++    /// drawn.
+     fn palette_entries(&self) -> Vec<Entry> {
+-        Action::ALL
++        let project = self.backend.document().map(|d| d.project());
++        if let (PaletteMode::References(id), Some(project)) = (self.palette_mode, project) {
++            return reference_entries(project, id);
++        }
++        let mut entries: Vec<Entry> = Action::ALL
+             .iter()
+             .copied()
+             .filter(|&a| a != Action::CommandPalette && self.is_enabled(a))
+             .map(Entry::action)
+-            .collect()
++            .collect();
++        if let Some(project) = project {
++            entries.extend(
++                browse::searchable(project)
++                    .into_iter()
++                    .map(|(panel, row)| Entry {
++                        target: Target::Object(row.id),
++                        group: kind_label(row.id).unwrap_or(panel.label()).to_owned(),
++                        label: row.text,
++                        detail: row.detail,
++                        shortcut: None,
++                    }),
++            );
++        }
++        entries
+     }
+ 
+     fn modal_open(&self) -> bool {
+@@ -478,8 +601,9 @@ impl NovoApp {
+                 continue;
+             }
+             let hit = ctx.input_mut(|i| {
+-                if shortcut.modifiers.is_none() {
+-                    consume_bare_key(i, shortcut.logical_key)
++                let m = shortcut.modifiers;
++                if !(m.ctrl || m.command || m.mac_cmd) {
++                    consume_exact(i, m, shortcut.logical_key)
+                 } else {
+                     i.consume_shortcut(&shortcut)
+                 }
+@@ -572,6 +696,12 @@ impl NovoApp {
+                     self.toggle_button(ui, a, on, picked);
+                 }
+                 ui.separator();
++                for panel in Panel::ALL {
++                    let a = panel_action(panel);
++                    let on = self.settings.show_project_panel && self.settings.left_panel == panel;
++                    self.toggle_button(ui, a, on, picked);
++                }
++                ui.separator();
+                 for (a, theme) in [
+                     (Action::ThemeSystem, Theme::System),
+                     (Action::ThemeLight, Theme::Light),
+@@ -580,6 +710,9 @@ impl NovoApp {
+                     self.toggle_button(ui, a, self.settings.theme == theme, picked);
+                 }
+             });
++            ui.menu_button("Go", |ui| {
++                self.action_button(ui, Action::GoToReferences, picked);
++            });
+             ui.menu_button("Help", |ui| {
+                 self.action_button(ui, Action::About, picked);
+             });
+@@ -641,30 +774,163 @@ impl NovoApp {
+         });
+     }
+ 
++    /// The left dock: the project, then one object panel at a time
++    /// (pages, devices, terminals, cables, potentials) with a filter box.
+     fn project_panel(&mut self, ui: &mut egui::Ui) {
+         ui.set_min_width(ui.available_width());
+-        ui.strong("Project");
+-        ui.separator();
+         let Some(name) = self.project_name() else {
++            ui.strong("Project");
++            ui.separator();
+             ui.weak("No project open");
+             return;
+         };
+-        ui.heading(name);
+-        if let Some(path) = &self.project_path {
+-            ui.weak(path.display().to_string());
+-        } else {
+-            ui.weak("Not saved yet");
+-        }
++        ui.strong(name);
++        match &self.project_path {
++            Some(path) => ui.weak(path.display().to_string()),
++            None => ui.weak("Not saved yet"),
++        };
+         ui.separator();
+-        ui.strong("Pages");
+-        egui::ScrollArea::vertical().show(ui, |ui| {
+-            for (id, label) in self.pages() {
+-                let selected = self.current_page == Some(id);
+-                if ui.selectable_label(selected, label).clicked() {
+-                    self.current_page = Some(id);
++        ui.horizontal_wrapped(|ui| {
++            for panel in Panel::ALL {
++                let on = self.settings.left_panel == panel;
++                if ui.selectable_label(on, panel.label()).clicked() && !on {
++                    self.settings.left_panel = panel;
++                    self.panel_filter.clear();
++                }
++            }
++        });
++        let panel = self.settings.left_panel;
++        ui.add(
++            egui::TextEdit::singleline(&mut self.panel_filter)
++                .hint_text(format!("Filter {}", panel.label().to_lowercase()))
++                .desired_width(f32::INFINITY),
++        );
++        ui.add_space(2.0);
++
++        let Some(project) = self.backend.document().map(|d| d.project()) else {
++            return;
++        };
++        let filter = self.panel_filter.trim().to_lowercase();
++        let rows: Vec<browse::Row> = browse::rows(project, panel)
++            .into_iter()
++            .filter(|r| {
++                filter.is_empty()
++                    || r.text.to_lowercase().contains(&filter)
++                    || r.detail.to_lowercase().contains(&filter)
++            })
++            .collect();
++        let mut clicked = None;
++        egui::ScrollArea::vertical().auto_shrink(false).show_rows(
++            ui,
++            ui.text_style_height(&egui::TextStyle::Body) + 4.0,
++            rows.len(),
++            |ui, range| {
++                for row in &rows[range] {
++                    let selected = match row.id {
++                        AnyId::Page(p) => self.current_page == Some(p),
++                        id => self.focus == Some(id),
++                    };
++                    let mut text = egui::text::LayoutJob::default();
++                    let font = egui::TextStyle::Body.resolve(ui.style());
++                    let strong =
++                        row.id.kind() == novo_core::EntityKind::Device && panel == Panel::Terminals;
++                    text.append(
++                        &row.text,
++                        0.0,
++                        egui::TextFormat {
++                            font_id: font.clone(),
++                            color: if strong {
++                                ui.visuals().strong_text_color()
++                            } else {
++                                ui.visuals().text_color()
++                            },
++                            ..Default::default()
++                        },
++                    );
++                    if !row.detail.is_empty() {
++                        text.append(
++                            &format!("  {}", row.detail),
++                            0.0,
++                            egui::TextFormat {
++                                font_id: font,
++                                color: ui.visuals().weak_text_color(),
++                                ..Default::default()
++                            },
++                        );
++                    }
++                    let response = ui.add(
++                        egui::Button::selectable(selected, text)
++                            .min_size(egui::vec2(ui.available_width(), 0.0)),
++                    );
++                    if response.clicked() {
++                        clicked = Some(row.id);
++                    }
+                 }
++            },
++        );
++        if rows.is_empty() {
++            ui.weak(if filter.is_empty() {
++                "None yet"
++            } else {
++                "No match"
++            });
++        }
++        if let Some(id) = clicked {
++            self.go_to(id);
++        }
++    }
++
++    /// Short and searchable: the fields people look for first, then the
++    /// rest, all narrowed by the filter box.
++    fn properties_panel(&mut self, ui: &mut egui::Ui) {
++        ui.set_min_width(ui.available_width());
++        ui.strong("Properties");
++        ui.separator();
++        let project = self.backend.document().map(|d| d.project());
++        let (Some(project), Some(id)) = (project, self.focus) else {
++            ui.weak("Nothing selected");
++            return;
++        };
++        ui.horizontal(|ui| {
++            ui.heading(browse::name(project, id));
++            if let Some(kind) = kind_label(id) {
++                ui.weak(kind);
+             }
+         });
++        ui.add(
++            egui::TextEdit::singleline(&mut self.properties_filter)
++                .hint_text("Filter properties")
++                .desired_width(f32::INFINITY),
++        );
++        ui.add_space(4.0);
++        let filter = self.properties_filter.trim().to_lowercase();
++        let fields: Vec<_> = browse::fields(project, id)
++            .into_iter()
++            .filter(|(k, v)| {
++                filter.is_empty()
++                    || k.to_lowercase().contains(&filter)
++                    || v.to_lowercase().contains(&filter)
++            })
++            .collect();
++        if fields.is_empty() {
++            ui.weak("No match");
++            return;
++        }
++        egui::ScrollArea::vertical()
++            .auto_shrink(false)
++            .show(ui, |ui| {
++                egui::Grid::new("properties")
++                    .num_columns(2)
++                    .striped(true)
++                    .spacing([12.0, 4.0])
++                    .show(ui, |ui| {
++                        for (k, v) in fields {
++                            ui.weak(k);
++                            ui.add(egui::Label::new(v).wrap());
++                            ui.end_row();
++                        }
++                    });
++            });
+     }
+ 
+     fn messages_panel(&mut self, ui: &mut egui::Ui) {
+@@ -870,25 +1136,90 @@ fn ago(t: SystemTime) -> String {
+     }
+ }
+ 
+-/// Consumes a press of `key` with no modifiers held. egui's own matching is
+-/// loose, so a bare Home would also fire on Shift+Home.
+-fn consume_bare_key(input: &mut egui::InputState, key: egui::Key) -> bool {
++/// Consumes a press of `key` with exactly `modifiers` held. egui's own
++/// matching is loose, so a bare Home would also fire on Shift+Home.
++fn consume_exact(input: &mut egui::InputState, modifiers: egui::Modifiers, key: egui::Key) -> bool {
+     let before = input.events.len();
+     input.events.retain(|event| {
+         !matches!(
+             event,
+-            egui::Event::Key { key: k, pressed: true, modifiers, .. }
+-                if *k == key && modifiers.is_none()
++            egui::Event::Key { key: k, pressed: true, modifiers: m, .. }
++                if *k == key && *m == modifiers
+         )
+     });
+     input.events.len() != before
+ }
+ 
+-fn properties_panel(ui: &mut egui::Ui) {
+-    ui.set_min_width(ui.available_width());
+-    ui.strong("Properties");
+-    ui.separator();
+-    ui.weak("Nothing selected");
++/// Singular kind name shown before a search result, such as "Device".
++fn kind_label(id: AnyId) -> Option<&'static str> {
++    Some(match id {
++        AnyId::Page(_) => "Page",
++        AnyId::Device(_) => "Device",
++        AnyId::Terminal(_) => "Terminal",
++        AnyId::Cable(_) => "Cable",
++        AnyId::Potential(_) => "Potential",
++        AnyId::Symbol(_) => "Symbol",
++        AnyId::Wire(_) => "Wire",
++        AnyId::Part(_) => "Part",
++        AnyId::Junction(_) => return None,
++    })
++}
++
++fn panel_action(panel: Panel) -> Action {
++    match panel {
++        Panel::Pages => Action::ShowPages,
++        Panel::Devices => Action::ShowDevices,
++        Panel::Terminals => Action::ShowTerminals,
++        Panel::Cables => Action::ShowCables,
++        Panel::Potentials => Action::ShowPotentials,
++    }
++}
++
++/// One palette row per drawing of `id`, page by page.
++fn reference_entries(project: &novo_core::Project, id: AnyId) -> Vec<Entry> {
++    let mut entries = Vec::new();
++    for place in browse::places(project, id) {
++        let page = project
++            .page(place.page)
++            .map(|p| format!("Page {}", p.name))
++            .unwrap_or_default();
++        if place.items.is_empty() {
++            entries.push(Entry {
++                target: Target::Place(place.page, Vec::new()),
++                group: page.clone(),
++                label: browse::name(project, id),
++                detail: String::new(),
++                shortcut: None,
++            });
++        }
++        for item in place.items {
++            let (label, detail) = match item {
++                AnyId::Symbol(s) => {
++                    let sym = project.symbol(s);
++                    let main = sym.is_some_and(|s| {
++                        matches!(s.role, novo_core::SymbolRole::Device { main: true, .. })
++                    });
++                    (
++                        sym.map(|s| s.symbol.0.clone()).unwrap_or_default(),
++                        if main {
++                            "main function".to_owned()
++                        } else {
++                            String::new()
++                        },
++                    )
++                }
++                other => (browse::name(project, other), String::new()),
++            };
++            entries.push(Entry {
++                target: Target::Place(place.page, vec![item]),
++                group: page.clone(),
++                label,
++                detail,
++                shortcut: None,
++            });
++        }
++    }
++    entries
+ }
+ 
+ #[cfg(test)]
+@@ -1210,6 +1541,132 @@ mod tests {
+         assert!(text.contains("already open"), "{text}");
+     }
+ 
++    /// `new_project` loads the canvas demo's motor starter.
++    #[derive(Default)]
++    struct DemoBackend {
++        document: Option<Document>,
++    }
++
++    impl ProjectBackend for DemoBackend {
++        fn new_project(&mut self, _name: &str) -> Result<(), crate::BackendError> {
++            self.document = Some(novo_canvas::model::demo_document()?.0);
++            Ok(())
++        }
++        fn open(&mut self, _path: &Path) -> Result<OpenReport, crate::BackendError> {
++            Err(crate::BackendError::Unavailable("open"))
++        }
++        fn save(&mut self, _path: &Path) -> Result<(), crate::BackendError> {
++            Ok(())
++        }
++        fn close(&mut self) -> Result<(), crate::BackendError> {
++            self.document = None;
++            Ok(())
++        }
++        fn document(&self) -> Option<&Document> {
++            self.document.as_ref()
++        }
++        fn document_mut(&mut self) -> Option<&mut Document> {
++            self.document.as_mut()
++        }
++    }
++
++    fn demo_app() -> (egui::Context, NovoApp) {
++        let ctx = egui::Context::default();
++        let mut app = app_with(DemoBackend::default());
++        app.run(&ctx, Action::NewProject);
++        (ctx, app)
++    }
++
++    fn device(app: &NovoApp, tag: &str) -> AnyId {
++        let project = app.backend.document().unwrap().project();
++        project.devices_by_tag(&novo_core::DeviceTag::parse(tag).unwrap())[0].into()
++    }
++
++    #[test]
++    fn the_palette_finds_devices_by_tag() {
++        let (ctx, mut app) = demo_app();
++        app.run(&ctx, Action::CommandPalette);
++        let entries = app.palette_entries();
++        let order = crate::palette::rank("k1", &entries, &[]);
++        assert_eq!(
++            entries[order[0]].target,
++            Target::Object(device(&app, "-K1"))
++        );
++        // Commands share the box.
++        let order = crate::palette::rank("save", &entries, &[]);
++        assert_eq!(
++            entries[order[0]].target,
++            Target::Action(Action::SaveProject)
++        );
++    }
++
++    #[test]
++    fn picking_a_device_selects_it_and_shows_its_page() {
++        let (ctx, mut app) = demo_app();
++        let k1 = device(&app, "-K1");
++        app.current_page = None;
++        app.pick(&ctx, Target::Object(k1));
++        assert_eq!(app.focus, Some(k1));
++        assert!(app.current_page.is_some());
++        assert!(app.is_enabled(Action::GoToReferences));
++    }
++
++    #[test]
++    fn references_list_every_drawing() {
++        let (ctx, mut app) = demo_app();
++        assert!(!app.is_enabled(Action::GoToReferences));
++        app.go_to(device(&app, "-K1"));
++        app.run(&ctx, Action::GoToReferences);
++        assert!(app.palette.is_open());
++        let entries = app.palette_entries();
++        let labels: Vec<_> = entries.iter().map(|e| e.label.as_str()).collect();
++        assert_eq!(labels, ["iec/coil", "iec/contactor3", "iec/no"]);
++        assert_eq!(entries[0].detail, "main function");
++        assert!(matches!(&entries[0].target, Target::Place(_, items) if items.len() == 1));
++    }
++
++    #[test]
++    fn shift_g_goes_to_references_unless_typing() {
++        let (_, mut app) = demo_app();
++        app.go_to(device(&app, "-K1"));
++        assert_eq!(
++            fired_by(&app, egui::Key::G, egui::Modifiers::SHIFT),
++            vec![Action::GoToReferences]
++        );
++        assert!(fired_by(&app, egui::Key::G, egui::Modifiers::NONE).is_empty());
++        assert!(
++            fired_by(
++                &app,
++                egui::Key::G,
++                egui::Modifiers::SHIFT | egui::Modifiers::COMMAND
++            )
++            .is_empty()
++        );
++    }
++
++    #[test]
++    fn panel_actions_switch_the_left_dock() {
++        let (ctx, mut app) = demo_app();
++        app.settings.show_project_panel = false;
++        app.run(&ctx, Action::ShowTerminals);
++        assert!(app.settings().show_project_panel);
++        assert_eq!(app.settings().left_panel, Panel::Terminals);
++        for panel in Panel::ALL {
++            app.settings.left_panel = panel;
++            frame(&ctx, &mut app, Default::default());
++        }
++    }
++
++    #[test]
++    fn the_properties_panel_follows_the_focus() {
++        let (ctx, mut app) = demo_app();
++        app.go_to(device(&app, "-M1"));
++        frame(&ctx, &mut app, Default::default());
++        assert!(app.focus.is_some());
++        app.close_project();
++        assert_eq!(app.focus, None);
++    }
++
+     #[test]
+     fn panel_toggles_flip_settings() {
+         let ctx = egui::Context::default();
+diff --git a/crates/novo-app/src/browse.rs b/crates/novo-app/src/browse.rs
+new file mode 100644
+index 0000000..3ad4741
+--- /dev/null
++++ b/crates/novo-app/src/browse.rs
+@@ -0,0 +1,561 @@
++//! What the object panels list, what search finds and where an object is
++//! drawn: read-only queries over the project, kept apart from the UI so they
++//! can be tested without a window.
++
++use std::collections::BTreeMap;
++
++use novo_core::{AnyId, PageId, Project, SymbolRole, Value};
++use serde::{Deserialize, Serialize};
++
++/// The object panels in the left dock, each with its own name.
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
++pub enum Panel {
++    #[default]
++    Pages,
++    Devices,
++    Terminals,
++    Cables,
++    Potentials,
++}
++
++impl Panel {
++    pub const ALL: [Panel; 5] = [
++        Panel::Pages,
++        Panel::Devices,
++        Panel::Terminals,
++        Panel::Cables,
++        Panel::Potentials,
++    ];
++
++    pub fn label(self) -> &'static str {
++        match self {
++            Panel::Pages => "Pages",
++            Panel::Devices => "Devices",
++            Panel::Terminals => "Terminals",
++            Panel::Cables => "Cables",
++            Panel::Potentials => "Potentials",
++        }
++    }
++}
++
++/// One line in an object panel or the search list.
++#[derive(Clone, Debug, PartialEq)]
++pub struct Row {
++    pub id: AnyId,
++    /// The tag or name, which search matches first.
++    pub text: String,
++    /// Description or other secondary text, shown weaker.
++    pub detail: String,
++}
++
++/// The rows of `panel`, in the order a reader expects: pages in page order,
++/// everything else by name.
++pub fn rows(project: &Project, panel: Panel) -> Vec<Row> {
++    let mut rows: Vec<Row> = match panel {
++        Panel::Pages => {
++            return project
++                .pages_in_order()
++                .into_iter()
++                .map(|p| Row {
++                    id: p.id.into(),
++                    text: p.name.clone(),
++                    detail: p.title.clone(),
++                })
++                .collect();
++        }
++        Panel::Devices => project
++            .devices()
++            .filter(|d| d.kind != novo_core::DeviceKind::TerminalStrip)
++            .map(|d| Row {
++                id: d.id.into(),
++                text: d.tag.to_string(),
++                detail: d.description.clone(),
++            })
++            .collect(),
++        Panel::Terminals => {
++            // Strips with their terminals, in strip order.
++            let mut strips: Vec<_> = project
++                .devices()
++                .filter(|d| d.kind == novo_core::DeviceKind::TerminalStrip)
++                .collect();
++            strips.sort_by_cached_key(|d| d.tag.to_string());
++            let mut rows = Vec::new();
++            for strip in strips {
++                rows.push(Row {
++                    id: strip.id.into(),
++                    text: strip.tag.to_string(),
++                    detail: strip.description.clone(),
++                });
++                for t in project.terminals_of_strip(strip.id) {
++                    rows.push(Row {
++                        id: t.id.into(),
++                        text: format!("{}:{}", strip.tag, t.name),
++                        detail: String::new(),
++                    });
++                }
++            }
++            return rows;
++        }
++        Panel::Cables => project
++            .cables()
++            .map(|c| Row {
++                id: c.id.into(),
++                text: c.tag.to_string(),
++                detail: join_nonempty([c.description.clone(), format!("{} cores", c.cores.len())]),
++            })
++            .collect(),
++        Panel::Potentials => project
++            .potentials()
++            .map(|p| Row {
++                id: p.id.into(),
++                text: p.name.clone(),
++                detail: join_nonempty([
++                    format!("{:?}", p.kind),
++                    p.voltage.map(|v| format!("{v} V")).unwrap_or_default(),
++                ]),
++            })
++            .collect(),
++    };
++    rows.sort_by(|a, b| natural_cmp(&a.text, &b.text));
++    rows
++}
++
++/// Every object worth finding by name, across all panels.
++pub fn searchable(project: &Project) -> Vec<(Panel, Row)> {
++    Panel::ALL
++        .iter()
++        .flat_map(|&panel| rows(project, panel).into_iter().map(move |r| (panel, r)))
++        .collect()
++}
++
++/// A short name for any object: its tag, designation or name.
++pub fn name(project: &Project, id: AnyId) -> String {
++    match id {
++        AnyId::Page(p) => project
++            .page(p)
++            .map(|p| format!("Page {}", p.name))
++            .unwrap_or_default(),
++        AnyId::Device(d) => project
++            .device(d)
++            .map(|d| d.tag.to_string())
++            .unwrap_or_default(),
++        AnyId::Terminal(t) => project.terminal_designation(t).unwrap_or_default(),
++        AnyId::Cable(c) => project
++            .cable(c)
++            .map(|c| c.tag.to_string())
++            .unwrap_or_default(),
++        AnyId::Potential(p) => project
++            .potential(p)
++            .map(|p| p.name.clone())
++            .unwrap_or_default(),
++        AnyId::Symbol(s) => match owner(project, id) {
++            owner if owner != id => name(project, owner),
++            _ => project
++                .symbol(s)
++                .map(|s| s.symbol.0.clone())
++                .unwrap_or_default(),
++        },
++        AnyId::Wire(w) => project
++            .wire(w)
++            .and_then(|w| w.number.clone())
++            .map(|n| format!("Wire {n}"))
++            .unwrap_or_else(|| "Wire".to_owned()),
++        AnyId::Junction(_) => "Junction".to_owned(),
++        AnyId::Part(p) => project
++            .part(p)
++            .map(|p| p.order_number.clone())
++            .unwrap_or_default(),
++    }
++}
++
++/// The object a user means when they pick a drawn item: a device or
++/// terminal for its symbol, the item itself otherwise.
++pub fn owner(project: &Project, id: AnyId) -> AnyId {
++    let AnyId::Symbol(s) = id else {
++        return id;
++    };
++    match project.symbol(s).map(|s| &s.role) {
++        Some(SymbolRole::Device { device, .. }) => (*device).into(),
++        Some(SymbolRole::Terminal { terminals }) if terminals.len() == 1 => terminals[0].into(),
++        _ => id,
++    }
++}
++
++/// Where an object appears in the drawing: one entry per page, in page
++/// order, with the drawn items on it.
++#[derive(Clone, Debug, PartialEq, Eq)]
++pub struct Place {
++    pub page: PageId,
++    pub items: Vec<AnyId>,
++}
++
++pub fn places(project: &Project, id: AnyId) -> Vec<Place> {
++    let drawn: Vec<(PageId, AnyId)> = match id {
++        AnyId::Page(p) => {
++            return project
++                .page(p)
++                .map(|_| {
++                    vec![Place {
++                        page: p,
++                        items: Vec::new(),
++                    }]
++                })
++                .unwrap_or_default();
++        }
++        AnyId::Device(d) => project
++            .symbols_of_device(d)
++            .into_iter()
++            .map(|s| (s.page, s.id.into()))
++            .collect(),
++        AnyId::Terminal(t) => project
++            .symbols_of_terminal(t)
++            .into_iter()
++            .map(|s| (s.page, s.id.into()))
++            .collect(),
++        AnyId::Cable(c) => project
++            .cable(c)
++            .into_iter()
++            .flat_map(|c| c.cores.iter().filter_map(|core| core.wire))
++            .filter_map(|w| project.wire(w))
++            .map(|w| (w.page, w.id.into()))
++            .collect(),
++        AnyId::Potential(p) => {
++            let netlist = project.netlist();
++            netlist
++                .nets_with_potential(p)
++                .flat_map(|net| net.wires.iter())
++                .filter_map(|&w| project.wire(w))
++                .map(|w| (w.page, w.id.into()))
++                .collect()
++        }
++        AnyId::Symbol(s) => project
++            .symbol(s)
++            .map(|s| (s.page, id))
++            .into_iter()
++            .collect(),
++        AnyId::Wire(w) => project.wire(w).map(|w| (w.page, id)).into_iter().collect(),
++        AnyId::Junction(j) => project
++            .junction(j)
++            .map(|j| (j.page, id))
++            .into_iter()
++            .collect(),
++        AnyId::Part(part) => project
++            .devices()
++            .filter(|d| d.parts.contains(&part))
++            .flat_map(|d| project.symbols_of_device(d.id))
++            .map(|s| (s.page, s.id.into()))
++            .collect(),
++    };
++    let order: BTreeMap<PageId, usize> = project
++        .pages_in_order()
++        .iter()
++        .enumerate()
++        .map(|(i, p)| (p.id, i))
++        .collect();
++    let mut by_page: BTreeMap<usize, Place> = BTreeMap::new();
++    for (page, item) in drawn {
++        let Some(&index) = order.get(&page) else {
++            continue;
++        };
++        let place = by_page.entry(index).or_insert_with(|| Place {
++            page,
++            items: Vec::new(),
++        });
++        if !place.items.contains(&item) {
++            place.items.push(item);
++        }
++    }
++    by_page.into_values().collect()
++}
++
++/// Name and value pairs for the properties panel, the fields people look
++/// for most first, then the object's free-form properties by name.
++pub fn fields(project: &Project, id: AnyId) -> Vec<(String, String)> {
++    let mut out: Vec<(String, String)> = Vec::new();
++    let mut add = |k: &str, v: String| {
++        if !v.is_empty() {
++            out.push((k.to_owned(), v));
++        }
++    };
++    let pages = |id: AnyId| {
++        places(project, id)
++            .iter()
++            .filter_map(|p| project.page(p.page).map(|p| p.name.clone()))
++            .collect::<Vec<_>>()
++            .join(", ")
++    };
++    let properties = match id {
++        AnyId::Page(p) => {
++            let Some(p) = project.page(p) else {
++                return Vec::new();
++            };
++            add("Name", p.name.clone());
++            add("Title", p.title.clone());
++            add("Kind", format!("{:?}", p.kind));
++            add("Format", format!("{:?}", p.format));
++            &p.properties
++        }
++        AnyId::Device(d) => {
++            let Some(d) = project.device(d) else {
++                return Vec::new();
++            };
++            add("Tag", d.tag.to_string());
++            add("Description", d.description.clone());
++            add("Pages", pages(id));
++            let parts: Vec<String> = d
++                .parts
++                .iter()
++                .filter_map(|&p| project.part(p))
++                .map(|p| format!("{} {}", p.manufacturer, p.order_number))
++                .collect();
++            add("Part", parts.join(", "));
++            add("Kind", format!("{:?}", d.kind));
++            &d.properties
++        }
++        AnyId::Terminal(t) => {
++            let Some(term) = project.terminal(t) else {
++                return Vec::new();
++            };
++            add(
++                "Designation",
++                project.terminal_designation(t).unwrap_or_default(),
++            );
++            add("Pages", pages(id));
++            add("Kind", format!("{:?}", term.kind));
++            add("Level", term.level.to_string());
++            if let Some(j) = term.jumper {
++                add("Jumper", j.to_string());
++            }
++            &term.properties
++        }
++        AnyId::Cable(c) => {
++            let Some(c) = project.cable(c) else {
++                return Vec::new();
++            };
++            add("Tag", c.tag.to_string());
++            add("Description", c.description.clone());
++            add("Pages", pages(id));
++            add("Cores", c.cores.len().to_string());
++            if let Some(l) = c.length_m {
++                add("Length", format!("{l} m"));
++            }
++            &c.properties
++        }
++        AnyId::Potential(p) => {
++            let Some(p) = project.potential(p) else {
++                return Vec::new();
++            };
++            add("Name", p.name.clone());
++            add("Pages", pages(id));
++            add("Kind", format!("{:?}", p.kind));
++            if let Some(v) = p.voltage {
++                add("Voltage", format!("{v} V"));
++            }
++            &p.properties
++        }
++        AnyId::Wire(w) => {
++            let Some(w) = project.wire(w) else {
++                return Vec::new();
++            };
++            add("Number", w.number.clone().unwrap_or_default());
++            add("Colour", w.color.clone().unwrap_or_default());
++            if let Some(cs) = w.cross_section_mm2 {
++                add("Cross section", format!("{cs} mm²"));
++            }
++            if let Some((cable, core)) = project.core_of_wire(w.id) {
++                add(
++                    "Cable",
++                    format!("{} core {}", name(project, cable.into()), core + 1),
++                );
++            }
++            &w.properties
++        }
++        AnyId::Symbol(s) => {
++            let Some(s) = project.symbol(s) else {
++                return Vec::new();
++            };
++            add("Symbol", s.symbol.0.clone());
++            &s.properties
++        }
++        AnyId::Part(p) => {
++            let Some(p) = project.part(p) else {
++                return Vec::new();
++            };
++            add("Manufacturer", p.manufacturer.clone());
++            add("Order number", p.order_number.clone());
++            add("Type", p.type_number.clone());
++            add("Description", p.description.clone());
++            &p.properties
++        }
++        AnyId::Junction(_) => return Vec::new(),
++    };
++    for (k, v) in properties {
++        let v = match v {
++            Value::Bool(b) => b.to_string(),
++            Value::Int(i) => i.to_string(),
++            Value::Float(f) => f.to_string(),
++            Value::Text(t) => t.clone(),
++        };
++        out.push((k.clone(), v));
++    }
++    out
++}
++
++fn join_nonempty<const N: usize>(parts: [String; N]) -> String {
++    parts
++        .into_iter()
++        .filter(|s| !s.is_empty())
++        .collect::<Vec<_>>()
++        .join(" · ")
++}
++
++/// Orders "-K2" before "-K10".
++pub fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
++    fn chunks(s: &str) -> Vec<(bool, &str)> {
++        let mut out = Vec::new();
++        let mut start = 0;
++        let bytes = s.as_bytes();
++        for i in 1..=bytes.len() {
++            if i == bytes.len() || bytes[i].is_ascii_digit() != bytes[start].is_ascii_digit() {
++                out.push((bytes[start].is_ascii_digit(), &s[start..i]));
++                start = i;
++            }
++        }
++        out
++    }
++    let (ca, cb) = (chunks(a), chunks(b));
++    for ((da, x), (db, y)) in ca.iter().zip(&cb) {
++        let ord = if *da && *db {
++            let (x, y) = (x.trim_start_matches('0'), y.trim_start_matches('0'));
++            x.len().cmp(&y.len()).then_with(|| x.cmp(y))
++        } else {
++            x.to_lowercase().cmp(&y.to_lowercase())
++        };
++        if ord.is_ne() {
++            return ord;
++        }
++    }
++    ca.len().cmp(&cb.len())
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use novo_core::{CableCore, DeviceTag, Document, PotentialKind};
++
++    /// The canvas demo's motor starter plus a terminal strip, a cable on
++    /// the motor wires and a potential.
++    fn project() -> (Document, PageId) {
++        let (mut doc, page) = novo_canvas::model::demo_document().unwrap();
++        doc.transact("Extras", |tx| {
++            let x1 = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
++            tx.add_terminal(x1, "2")?;
++            tx.add_terminal(x1, "10")?;
++            tx.add_terminal(x1, "1")?;
++            let w1 = tx.add_cable(
++                DeviceTag::parse("-W1")?,
++                vec![CableCore::new("1"), CableCore::new("2")],
++            )?;
++            let wires: Vec<_> = tx.project().wires().map(|w| w.id).take(2).collect();
++            tx.assign_core(w1, 0, Some(wires[0]))?;
++            tx.assign_core(w1, 1, Some(wires[1]))?;
++            tx.add_potential("L1", PotentialKind::Line)?;
++            Ok(())
++        })
++        .unwrap();
++        (doc, page)
++    }
++
++    fn texts(rows: &[Row]) -> Vec<&str> {
++        rows.iter().map(|r| r.text.as_str()).collect()
++    }
++
++    #[test]
++    fn panels_list_their_objects_in_natural_order() {
++        let (doc, _) = project();
++        let p = doc.project();
++        assert_eq!(texts(&rows(p, Panel::Pages)), ["1"]);
++        assert_eq!(
++            texts(&rows(p, Panel::Devices)),
++            ["-K1", "-M1", "-Q1", "-S1", "-S2"]
++        );
++        assert_eq!(
++            texts(&rows(p, Panel::Terminals)),
++            ["-X1", "-X1:1", "-X1:2", "-X1:10"]
++        );
++        assert_eq!(texts(&rows(p, Panel::Cables)), ["-W1"]);
++        assert_eq!(rows(p, Panel::Cables)[0].detail, "2 cores");
++        assert_eq!(texts(&rows(p, Panel::Potentials)), ["L1"]);
++    }
++
++    #[test]
++    fn a_device_is_found_on_every_drawing() {
++        let (doc, page) = project();
++        let p = doc.project();
++        let k1 = p.devices_by_tag(&DeviceTag::parse("-K1").unwrap())[0];
++        let found = places(p, k1.into());
++        assert_eq!(found.len(), 1);
++        assert_eq!(found[0].page, page);
++        // Coil, main contacts and the hold contact.
++        assert_eq!(found[0].items.len(), 3);
++        // The main function comes first.
++        let AnyId::Symbol(first) = found[0].items[0] else {
++            panic!("not a symbol");
++        };
++        assert_eq!(p.symbol(first).unwrap().symbol.0, "iec/coil");
++    }
++
++    #[test]
++    fn a_symbol_stands_for_its_device() {
++        let (doc, _) = project();
++        let p = doc.project();
++        let coil = p.symbols().find(|s| s.symbol.0 == "iec/coil").unwrap();
++        let owner = owner(p, coil.id.into());
++        assert!(matches!(owner, AnyId::Device(_)));
++        assert_eq!(name(p, coil.id.into()), "-K1");
++    }
++
++    #[test]
++    fn cable_places_are_its_wires() {
++        let (doc, _) = project();
++        let p = doc.project();
++        let cable = p.cables().next().unwrap().id;
++        assert_eq!(places(p, cable.into())[0].items.len(), 2);
++    }
++
++    #[test]
++    fn device_fields_put_the_common_ones_first() {
++        let (mut doc, _) = project();
++        let k1 = doc
++            .project()
++            .devices_by_tag(&DeviceTag::parse("-K1").unwrap())[0];
++        doc.transact("Note", |tx| {
++            tx.set_property(k1, "Coil voltage", Some("24 V DC".into()))
++        })
++        .unwrap();
++        let f = fields(doc.project(), k1.into());
++        let keys: Vec<&str> = f.iter().map(|(k, _)| k.as_str()).collect();
++        assert_eq!(
++            keys,
++            ["Tag", "Description", "Pages", "Kind", "Coil voltage"]
++        );
++        assert_eq!(f[0].1, "-K1");
++        assert_eq!(f[2].1, "1");
++    }
++
++    #[test]
++    fn potential_places_follow_its_nets() {
++        let (doc, _) = project();
++        let p = doc.project();
++        let l1 = p.potentials().next().unwrap().id;
++        // Not defined anywhere in the drawing yet.
++        assert!(places(p, l1.into()).is_empty());
++    }
++
++    #[test]
++    fn natural_order_compares_numbers_by_value() {
++        let mut v = vec!["-K10", "-K2", "-K1", "-k3"];
++        v.sort_by(|a, b| natural_cmp(a, b));
++        assert_eq!(v, ["-K1", "-K2", "-k3", "-K10"]);
++    }
++}
+diff --git a/crates/novo-app/src/canvas.rs b/crates/novo-app/src/canvas.rs
+index 6ecb7b1..5b8dc9a 100644
+--- a/crates/novo-app/src/canvas.rs
++++ b/crates/novo-app/src/canvas.rs
+@@ -4,7 +4,7 @@
+ //! (WS-03) provides the real one; [`PlaceholderCanvas`] stands in until then.
+ 
+ use eframe::egui;
+-use novo_core::{ChangeSet, Command, Document, ModelError, Outcome, PageId, Tx};
++use novo_core::{AnyId, ChangeSet, Command, Document, ModelError, Outcome, PageId, Tx};
+ 
+ use crate::backend::ProjectBackend;
+ 
+@@ -79,6 +79,16 @@ pub trait CanvasView {
+     fn status_text(&self) -> Option<String> {
+         None
+     }
++
++    /// Selects `items` on `page` and brings them into view (the whole page
++    /// when `items` is empty). The shell has already switched to `page`.
++    fn reveal(&mut self, _document: &Document, _page: PageId, _items: &[AnyId]) {}
++
++    /// The model objects the user selected on the canvas, when the
++    /// selection changed during the last [`Self::show`].
++    fn take_selection(&mut self) -> Option<Vec<AnyId>> {
++        None
++    }
+ }
+ 
+ /// What the central area shows while no project is open.
+diff --git a/crates/novo-app/src/lib.rs b/crates/novo-app/src/lib.rs
+index d3310a6..61669a2 100644
+--- a/crates/novo-app/src/lib.rs
++++ b/crates/novo-app/src/lib.rs
+@@ -16,6 +16,7 @@
+ mod actions;
+ mod app;
+ mod backend;
++mod browse;
+ mod canvas;
+ mod model_canvas;
+ mod palette;
+diff --git a/crates/novo-app/src/model_canvas.rs b/crates/novo-app/src/model_canvas.rs
+index 5765d36..bdbb3a7 100644
+--- a/crates/novo-app/src/model_canvas.rs
++++ b/crates/novo-app/src/model_canvas.rs
+@@ -8,10 +8,10 @@
+ use std::collections::HashMap;
+ 
+ use eframe::egui;
+-use novo_canvas::model::{PageScene, PlaceholderArt};
++use novo_canvas::model::{PageScene, PlaceholderArt, item_id};
+ use novo_canvas::widget::{self, CanvasView as View};
+-use novo_canvas::{Snapped, Vec2};
+-use novo_core::{ChangeSet, Document, PageId};
++use novo_canvas::{Aabb, SelectOp, Snapped, Vec2};
++use novo_core::{AnyId, ChangeSet, Document, PageId};
+ 
+ use crate::canvas::{CanvasView, OpenPage, empty_state};
+ 
+@@ -26,21 +26,21 @@ pub struct ModelCanvas {
+     /// The page drawn last frame, for zoom to fit.
+     shown: Option<PageId>,
+     cursor: Option<Snapped>,
++    /// Items to frame once the page's view knows its size.
++    reveal: Option<(PageId, Vec<AnyId>)>,
++    /// The user changed the selection during the last frame.
++    selection: Option<Vec<AnyId>>,
+ }
+ 
++/// Margin around revealed items, in screen points.
++const REVEAL_MARGIN: f32 = 80.0;
++
+ impl ModelCanvas {
+     /// Registers the GPU pipeline. Call once, when eframe has started with
+     /// the wgpu renderer; `msaa_samples` is `NativeOptions::multisampling`.
+     pub fn install(render_state: &eframe::egui_wgpu::RenderState, msaa_samples: u32) {
+         widget::install(render_state, msaa_samples);
+     }
+-
+-    fn page_canvas(&mut self, document: &Document, page: PageId) -> &mut PageCanvas {
+-        self.pages.entry(page).or_insert_with(|| PageCanvas {
+-            scene: PageScene::new(document.project(), page, &PlaceholderArt),
+-            view: View::new(),
+-        })
+-    }
+ }
+ 
+ impl CanvasView for ModelCanvas {
+@@ -53,9 +53,26 @@ impl CanvasView for ModelCanvas {
+         };
+         let page = open.page();
+         self.shown = Some(page);
+-        let canvas = self.page_canvas(open.document(), page);
++        let canvas = page_canvas(&mut self.pages, open.document(), page);
+         let output = canvas.view.show(ui, canvas.scene.scene());
+         self.cursor = output.cursor;
++        if output.selection_changed {
++            let scene = &canvas.scene;
++            self.selection = Some(
++                canvas
++                    .view
++                    .selection
++                    .ids()
++                    .iter()
++                    .filter_map(|&item| scene.model_id(item))
++                    .collect(),
++            );
++        }
++        // After show, so a new view has its size and its first fit is done.
++        if let Some((_, items)) = self.reveal.take_if(|(p, _)| *p == page) {
++            frame_items(canvas, &items);
++            ui.ctx().request_repaint();
++        }
+     }
+ 
+     fn document_changed(&mut self, document: &Document, changes: &ChangeSet) {
+@@ -78,6 +95,17 @@ impl CanvasView for ModelCanvas {
+         }
+     }
+ 
++    fn reveal(&mut self, document: &Document, page: PageId, items: &[AnyId]) {
++        let canvas = page_canvas(&mut self.pages, document, page);
++        let ids: Vec<_> = items.iter().map(|&id| item_id(id)).collect();
++        canvas.view.selection.apply(ids, SelectOp::Replace);
++        self.reveal = Some((page, items.to_vec()));
++    }
++
++    fn take_selection(&mut self) -> Option<Vec<AnyId>> {
++        self.selection.take()
++    }
++
+     fn status_text(&self) -> Option<String> {
+         self.cursor.map(|c| {
+             let Vec2 { x, y } = c.point;
+@@ -86,6 +114,36 @@ impl CanvasView for ModelCanvas {
+     }
+ }
+ 
++fn page_canvas<'a>(
++    pages: &'a mut HashMap<PageId, PageCanvas>,
++    document: &Document,
++    page: PageId,
++) -> &'a mut PageCanvas {
++    pages.entry(page).or_insert_with(|| PageCanvas {
++        scene: PageScene::new(document.project(), page, &PlaceholderArt),
++        view: View::new(),
++    })
++}
++
++/// Zooms to the items, or to the whole page when none of them is drawn.
++fn frame_items(canvas: &mut PageCanvas, items: &[AnyId]) {
++    let scene = canvas.scene.scene();
++    let bounds = items
++        .iter()
++        .filter_map(|&id| scene.item_bounds(item_id(id)))
++        .reduce(|a, b| a.union(&b));
++    match bounds {
++        Some(b) => {
++            // Small items would fill the screen; keep some context.
++            let min = Vec2::splat(100.0);
++            let grow = (min - b.size()).max(Vec2::ZERO) * 0.5;
++            let b = Aabb::new(b.min - grow, b.max + grow);
++            canvas.view.viewport.fit(&b, REVEAL_MARGIN);
++        }
++        None => canvas.view.viewport.fit(&scene.bounds(), 24.0),
++    }
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+diff --git a/crates/novo-app/src/palette.rs b/crates/novo-app/src/palette.rs
+index ba38885..ef846c6 100644
+--- a/crates/novo-app/src/palette.rs
++++ b/crates/novo-app/src/palette.rs
+@@ -1,16 +1,21 @@
+ //! Command palette: type a few letters, press Enter to run the pick.
+ //!
+-//! The palette searches a list of [`Entry`]s rather than the [`Action`] enum
+-//! itself, so pages, devices and symbols can join the same search box later
+-//! as new [`Target`] variants.
++//! The palette searches a list of [`Entry`]s: commands, and the project's
++//! pages, devices, terminals, cables and potentials, all in one box. The same
++//! box lists the places an object is drawn for "go to all references".
+ 
+ use crate::actions::Action;
+ use eframe::egui;
++use novo_core::{AnyId, PageId};
+ 
+ /// What picking an entry does.
+ #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+ pub enum Target {
+     Action(Action),
++    /// Select the object and show where it is drawn.
++    Object(AnyId),
++    /// Show this page with these items selected.
++    Place(PageId, Vec<AnyId>),
+ }
+ 
+ /// One searchable row.
+@@ -20,6 +25,9 @@ pub struct Entry {
+     /// Shown before the label and searched with it, such as "File".
+     pub group: String,
+     pub label: String,
++    /// Secondary text after the label (a description, a page title);
++    /// searched too.
++    pub detail: String,
+     pub shortcut: Option<egui::KeyboardShortcut>,
+ }
+ 
+@@ -29,6 +37,7 @@ impl Entry {
+             target: Target::Action(action),
+             group: action.category().to_owned(),
+             label: action.label().to_owned(),
++            detail: String::new(),
+             shortcut: action.shortcut(),
+         }
+     }
+@@ -39,13 +48,16 @@ pub struct Palette {
+     open: bool,
+     query: String,
+     selected: usize,
++    hint: String,
+ }
+ 
+ impl Palette {
+-    pub fn open(&mut self) {
++    /// Opens an empty search box; `hint` is the greyed text in it.
++    pub fn open(&mut self, hint: impl Into<String>) {
+         self.open = true;
+         self.query.clear();
+         self.selected = 0;
++        self.hint = hint.into();
+     }
+ 
+     pub fn is_open(&self) -> bool {
+@@ -92,7 +104,7 @@ impl Palette {
+                 ui.set_width(460.0);
+                 let edit = ui.add(
+                     egui::TextEdit::singleline(&mut self.query)
+-                        .hint_text("Type a command")
++                        .hint_text(self.hint.as_str())
+                         .desired_width(f32::INFINITY),
+                 );
+                 edit.request_focus();
+@@ -112,7 +124,20 @@ impl Palette {
+                                 .shortcut
+                                 .map(|s| ui.ctx().format_shortcut(&s))
+                                 .unwrap_or_default();
+-                            let text = format!("{}: {}", entry.group, entry.label);
++                            let mut text = egui::text::LayoutJob::default();
++                            let style = ui.style();
++                            let plain = |color| egui::TextFormat {
++                                font_id: egui::TextStyle::Button.resolve(style),
++                                color,
++                                ..Default::default()
++                            };
++                            let weak = plain(ui.visuals().weak_text_color());
++                            let strong = plain(ui.visuals().text_color());
++                            text.append(&format!("{}  ", entry.group), 0.0, weak.clone());
++                            text.append(&entry.label, 0.0, strong);
++                            if !entry.detail.is_empty() {
++                                text.append(&format!("  {}", entry.detail), 0.0, weak);
++                            }
+                             let response = ui.add(
+                                 egui::Button::selectable(row == self.selected, text)
+                                     .shortcut_text(shortcut)
+@@ -150,8 +175,13 @@ pub fn rank(query: &str, entries: &[Entry], recent: &[Target]) -> Vec<usize> {
+         .iter()
+         .enumerate()
+         .filter_map(|(index, entry)| {
+-            let haystack = format!("{} {}", entry.group, entry.label);
+-            let score = fuzzy_score(query, &haystack)?;
++            let haystack = format!("{} {} {}", entry.group, entry.label, entry.detail);
++            let mut score = fuzzy_score(query, &haystack)?;
++            // A tag typed in full beats every partial match.
++            let named = !matches!(entry.target, Target::Action(_));
++            if named && !query.is_empty() && tag_eq(&entry.label, query) {
++                score += 1000;
++            }
+             let recency = recent
+                 .iter()
+                 .position(|t| *t == entry.target)
+@@ -163,6 +193,19 @@ pub fn rank(query: &str, entries: &[Entry], recent: &[Target]) -> Vec<usize> {
+     scored.into_iter().map(|(_, _, index)| index).collect()
+ }
+ 
++/// Equal ignoring case, spaces and a leading `-`, so `k1` finds `-K1`.
++fn tag_eq(label: &str, query: &str) -> bool {
++    let norm = |s: &str| -> String {
++        s.trim()
++            .trim_start_matches('-')
++            .chars()
++            .filter(|c| !c.is_whitespace())
++            .flat_map(char::to_lowercase)
++            .collect()
++    };
++    norm(label) == norm(query)
++}
++
+ /// Scores `haystack` against `query` when every query character appears in
+ /// order (case-insensitive). Consecutive runs and word starts score higher.
+ pub fn fuzzy_score(query: &str, haystack: &str) -> Option<i32> {
+@@ -237,6 +280,20 @@ mod tests {
+         assert_eq!(entries[order[1]].target, recent[1]);
+     }
+ 
++    #[test]
++    fn an_exact_tag_beats_longer_tags() {
++        let device = |raw, tag: &str| Entry {
++            target: Target::Object(AnyId::Device(novo_core::DeviceId(raw))),
++            group: "Device".into(),
++            label: tag.into(),
++            detail: String::new(),
++            shortcut: None,
++        };
++        let entries = [device(1, "-K10"), device(2, "-K1"), device(3, "-K11")];
++        assert_eq!(top("k1", &entries, &[]), Some(entries[1].target.clone()));
++        assert_eq!(top("-K1", &entries, &[]), Some(entries[1].target.clone()));
++    }
++
+     #[test]
+     fn recency_breaks_ties_but_not_better_matches() {
+         // "save" matches Save and Save as equally; the recent one wins.
+diff --git a/crates/novo-app/src/settings.rs b/crates/novo-app/src/settings.rs
+index 5c28f21..0d2cdc8 100644
+--- a/crates/novo-app/src/settings.rs
++++ b/crates/novo-app/src/settings.rs
+@@ -29,6 +29,8 @@ impl Theme {
+ pub struct Settings {
+     pub theme: Theme,
+     pub show_project_panel: bool,
++    /// The object panel shown in the left dock.
++    pub left_panel: crate::browse::Panel,
+     pub show_properties_panel: bool,
+     pub show_messages_panel: bool,
+     /// Most recently used project files, newest first.
+@@ -42,6 +44,7 @@ impl Default for Settings {
+         Self {
+             theme: Theme::default(),
+             show_project_panel: true,
++            left_panel: crate::browse::Panel::default(),
+             show_properties_panel: true,
+             show_messages_panel: false,
+             recent_projects: Vec::new(),
+diff --git a/docs/WORKFLOW.md b/docs/WORKFLOW.md
+index d75d3b6..bed65f9 100644
+--- a/docs/WORKFLOW.md
++++ b/docs/WORKFLOW.md
+@@ -83,6 +83,7 @@ pick from this table or extend it here first.
+ | R | Rotate 90° | While placing, moving or on the selection |
+ | X | Mirror | While placing, moving or on the selection |
+ | G | Go to partner | Coil to contact, contact to coil, arrow to arrow |
++| Shift+G | Go to all references | Every drawing of the selected device, terminal, cable or potential, in the palette |
+ | Alt+Left / Alt+Right | Back / forward through jumps | Like a browser |
+ | Page Up / Page Down | Previous / next page | |
+ | Home | Zoom to fit page | Double middle click does the same |
+-- 
+2.43.0
+

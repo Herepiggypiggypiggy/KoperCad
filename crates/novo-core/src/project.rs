@@ -104,6 +104,22 @@ pub struct PageContents {
     pub wires: Vec<WireId>,
 }
 
+/// Reading order of pages: structure, then name; see
+/// [`Project::pages_in_order`].
+pub(crate) fn page_cmp(a: &Page, b: &Page) -> Ordering {
+    let levels = |a: &[String], b: &[String]| {
+        a.iter()
+            .zip(b)
+            .map(|(a, b)| natural_cmp(a, b))
+            .find(|o| o.is_ne())
+            .unwrap_or_else(|| a.len().cmp(&b.len()))
+    };
+    levels(&a.structure.function, &b.structure.function)
+        .then_with(|| levels(&a.structure.location, &b.structure.location))
+        .then_with(|| natural_cmp(&a.name, &b.name))
+        .then(a.id.cmp(&b.id))
+}
+
 /// Compares strings so that embedded numbers sort by value: `2` before `10`.
 pub fn natural_cmp(a: &str, b: &str) -> Ordering {
     let (mut a, mut b) = (a, b);
@@ -496,7 +512,16 @@ impl Project {
                     }
                 }
             }
-            Record::Page(_) | Record::Potential(_) | Record::Part(_) => {}
+            Record::Page(page) => {
+                page.structure.validate()?;
+                if !page.structure.product.is_empty() {
+                    return Err(ModelError::InvalidValue {
+                        id: page.id.into(),
+                        field: "structure",
+                    });
+                }
+            }
+            Record::Potential(_) | Record::Part(_) => {}
         }
         // Texts attached to this object must stay on its page.
         if current.is_some()
@@ -700,10 +725,12 @@ impl Project {
 
     // ----- queries ---------------------------------------------------------
 
-    /// Pages in reading order: natural order of their names (`2` before `10`).
+    /// Pages in reading order: by structure (function levels, then
+    /// location levels, each in natural order; pages without a structure
+    /// first), then by name in natural order (`2` before `10`).
     pub fn pages_in_order(&self) -> Vec<&Page> {
         let mut pages: Vec<&Page> = self.pages.values().collect();
-        pages.sort_by(|a, b| natural_cmp(&a.name, &b.name).then(a.id.cmp(&b.id)));
+        pages.sort_by(|a, b| page_cmp(a, b));
         pages
     }
 
