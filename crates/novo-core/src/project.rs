@@ -5,14 +5,14 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::entity::{
     Cable, Device, DeviceKind, Endpoint, Junction, Page, Part, PinRef, Potential, ProjectInfo,
-    SymbolInstance, SymbolRole, Terminal, Wire,
+    SameName, SymbolInstance, SymbolRole, Terminal, Text, Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::Point;
 use crate::graph::Netlist;
 use crate::id::{
     AnyId, CableId, DeviceId, EntityKind, JunctionId, PageId, PartId, PotentialId, SymbolId,
-    TerminalId, WireId,
+    TerminalId, TextId, WireId,
 };
 use crate::record::{Entity, Op, Record, Transaction, sealed::Token};
 use crate::tag::DeviceTag;
@@ -24,6 +24,10 @@ use crate::tx::Tx;
 /// Changing goes through [`Project::transact`] (or a [`Document`](crate::Document)
 /// when undo is wanted), which validates every primitive op, so a project can
 /// never hold a dangling reference.
+///
+/// `Project::default()` has every rule off, which is what a file without
+/// rules loads as. The app and scripts create projects with
+/// [`Project::new`], which starts from the recommended rules.
 #[derive(Debug, Clone, Default)]
 pub struct Project {
     pub(crate) info: ProjectInfo,
@@ -33,6 +37,7 @@ pub struct Project {
     pub(crate) devices: BTreeMap<DeviceId, Device>,
     pub(crate) symbols: BTreeMap<SymbolId, SymbolInstance>,
     pub(crate) junctions: BTreeMap<JunctionId, Junction>,
+    pub(crate) texts: BTreeMap<TextId, Text>,
     pub(crate) wires: BTreeMap<WireId, Wire>,
     pub(crate) potentials: BTreeMap<PotentialId, Potential>,
     pub(crate) terminals: BTreeMap<TerminalId, Terminal>,
@@ -95,6 +100,7 @@ impl Index {
 pub struct PageContents {
     pub symbols: Vec<SymbolId>,
     pub junctions: Vec<JunctionId>,
+    pub texts: Vec<TextId>,
     pub wires: Vec<WireId>,
 }
 
@@ -132,11 +138,13 @@ pub fn natural_cmp(a: &str, b: &str) -> Ordering {
 }
 
 impl Project {
-    /// An empty project.
+    /// A new, empty project with the recommended rules
+    /// ([`ProjectRules::recommended`](crate::ProjectRules::recommended)).
     pub fn new(name: impl Into<String>) -> Self {
         Project {
             info: ProjectInfo {
                 name: name.into(),
+                rules: crate::entity::ProjectRules::recommended(),
                 ..ProjectInfo::default()
             },
             next_id: 1,
@@ -257,6 +265,11 @@ impl Project {
                 if !crate::record::properties_finite(&after.properties) {
                     return Err(ModelError::NonFiniteInfo);
                 }
+                if after.rules.terminals.same_name == SameName::Refuse
+                    && let Some(group) = self.terminal_designation_groups().first()
+                {
+                    return Err(ModelError::DuplicateTerminal(group[1]));
+                }
                 self.info = after.clone();
             }
         }
@@ -272,6 +285,7 @@ impl Project {
             Record::Device(r) => put(self, r),
             Record::Symbol(r) => put(self, r),
             Record::Junction(r) => put(self, r),
+            Record::Text(r) => put(self, r),
             Record::Wire(r) => put(self, r),
             Record::Potential(r) => put(self, r),
             Record::Terminal(r) => put(self, r),
@@ -289,6 +303,7 @@ impl Project {
             AnyId::Device(id) => take::<Device>(self, id),
             AnyId::Symbol(id) => take::<SymbolInstance>(self, id),
             AnyId::Junction(id) => take::<Junction>(self, id),
+            AnyId::Text(id) => take::<Text>(self, id),
             AnyId::Wire(id) => take::<Wire>(self, id),
             AnyId::Potential(id) => take::<Potential>(self, id),
             AnyId::Terminal(id) => take::<Terminal>(self, id),
@@ -416,6 +431,18 @@ impl Project {
                 if self.devices[&terminal.strip].kind != DeviceKind::TerminalStrip {
                     return Err(ModelError::NotATerminalStrip(terminal.strip));
                 }
+                if self.info.rules.terminals.same_name == SameName::Refuse
+                    && self.referrers(terminal.strip).any(|id| match id {
+                        AnyId::Terminal(t) => self.terminals.get(&t).is_some_and(|other| {
+                            other.id != terminal.id
+                                && other.name == terminal.name
+                                && other.level == terminal.level
+                        }),
+                        _ => false,
+                    })
+                {
+                    return Err(ModelError::DuplicateTerminal(terminal.id));
+                }
             }
             Record::Device(device) => {
                 if device.kind != DeviceKind::TerminalStrip
@@ -440,7 +467,51 @@ impl Project {
                     }
                 }
             }
+            Record::Text(text) => {
+                if text.height_mm <= 0.0 {
+                    return Err(ModelError::InvalidValue {
+                        id: text.id.into(),
+                        field: "height_mm",
+                    });
+                }
+                if let Some(target) = text.attached_to {
+                    if !matches!(
+                        target,
+                        AnyId::Symbol(_) | AnyId::Junction(_) | AnyId::Wire(_)
+                    ) {
+                        return Err(ModelError::InvalidAttachment {
+                            text: text.id,
+                            target,
+                        });
+                    }
+                    let page = self.record(target).and_then(|r| r.page());
+                    if let Some(page) = page
+                        && page != text.page
+                    {
+                        return Err(ModelError::WrongPage {
+                            id: text.id.into(),
+                            expected: page,
+                            found: text.page,
+                        });
+                    }
+                }
+            }
             Record::Page(_) | Record::Potential(_) | Record::Part(_) => {}
+        }
+        // Texts attached to this object must stay on its page.
+        if current.is_some()
+            && let Some(page) = record.page()
+            && !matches!(record, Record::Page(_))
+            && let Some(text) = referrers().find_map(|r| match r {
+                AnyId::Text(t) => self.texts.get(&t).filter(|t| t.page != page),
+                _ => None,
+            })
+        {
+            return Err(ModelError::WrongPage {
+                id: record.id(),
+                expected: text.page,
+                found: page,
+            });
         }
         Ok(())
     }
@@ -478,6 +549,7 @@ impl Project {
             AnyId::Device(id) => self.devices.contains_key(&id),
             AnyId::Symbol(id) => self.symbols.contains_key(&id),
             AnyId::Junction(id) => self.junctions.contains_key(&id),
+            AnyId::Text(id) => self.texts.contains_key(&id),
             AnyId::Wire(id) => self.wires.contains_key(&id),
             AnyId::Potential(id) => self.potentials.contains_key(&id),
             AnyId::Terminal(id) => self.terminals.contains_key(&id),
@@ -493,6 +565,7 @@ impl Project {
             AnyId::Device(id) => self.devices.get(&id).cloned().map(Record::Device),
             AnyId::Symbol(id) => self.symbols.get(&id).cloned().map(Record::Symbol),
             AnyId::Junction(id) => self.junctions.get(&id).cloned().map(Record::Junction),
+            AnyId::Text(id) => self.texts.get(&id).cloned().map(Record::Text),
             AnyId::Wire(id) => self.wires.get(&id).cloned().map(Record::Wire),
             AnyId::Potential(id) => self.potentials.get(&id).cloned().map(Record::Potential),
             AnyId::Terminal(id) => self.terminals.get(&id).cloned().map(Record::Terminal),
@@ -515,6 +588,7 @@ impl Project {
         let junctions = self.junctions.values().cloned().map(Record::Junction);
         let wires = self.wires.values().cloned().map(Record::Wire);
         let cables = self.cables.values().cloned().map(Record::Cable);
+        let texts = self.texts.values().cloned().map(Record::Text);
         parts
             .chain(potentials)
             .chain(pages)
@@ -524,6 +598,7 @@ impl Project {
             .chain(junctions)
             .chain(wires)
             .chain(cables)
+            .chain(texts)
     }
 
     /// Rebuilds a project from stored records, in any order, checking every
@@ -583,6 +658,12 @@ impl Project {
     pub fn junction(&self, id: JunctionId) -> Option<&Junction> {
         self.junctions.get(&id)
     }
+    pub fn text(&self, id: TextId) -> Option<&Text> {
+        self.texts.get(&id)
+    }
+    pub fn texts(&self) -> impl Iterator<Item = &Text> {
+        self.texts.values()
+    }
     pub fn junctions(&self) -> impl Iterator<Item = &Junction> {
         self.junctions.values()
     }
@@ -633,6 +714,7 @@ impl Project {
             match id {
                 AnyId::Symbol(s) => contents.symbols.push(s),
                 AnyId::Junction(j) => contents.junctions.push(j),
+                AnyId::Text(t) => contents.texts.push(t),
                 AnyId::Wire(w) => contents.wires.push(w),
                 _ => {}
             }
@@ -666,6 +748,37 @@ impl Project {
                 _ => None,
             })
             .collect()
+    }
+
+    /// Groups of two or more terminals on one strip with the same name and
+    /// level (two `-X2:1` on level 1), each in strip order, groups by strip,
+    /// name and level. Levels of a multi-level terminal may share a name and
+    /// are never grouped. With [`SameName::Off`](crate::SameName) these are
+    /// design check findings; under `Join` each group is one point, and
+    /// `Refuse` keeps the list empty.
+    pub fn terminal_designation_groups(&self) -> Vec<Vec<TerminalId>> {
+        let mut by_name: BTreeMap<(DeviceId, &str, u8), Vec<&Terminal>> = BTreeMap::new();
+        for terminal in self.terminals.values() {
+            by_name
+                .entry((terminal.strip, terminal.name.as_str(), terminal.level))
+                .or_default()
+                .push(terminal);
+        }
+        type Key<'a> = (DeviceId, &'a str, u8);
+        let mut groups: Vec<(Key<'_>, Vec<TerminalId>)> = by_name
+            .into_iter()
+            .filter(|(_, ts)| ts.len() > 1)
+            .map(|(key, mut ts)| {
+                ts.sort_by_key(|t| (t.order, t.id));
+                (key, ts.into_iter().map(|t| t.id).collect())
+            })
+            .collect();
+        groups.sort_by(|(a, _), (b, _)| {
+            a.0.cmp(&b.0)
+                .then_with(|| natural_cmp(a.1, b.1))
+                .then(a.2.cmp(&b.2))
+        });
+        groups.into_iter().map(|(_, g)| g).collect()
     }
 
     /// Terminals of a strip in strip order (by `order`, then name).
