@@ -5,7 +5,7 @@
 //! [`SchematicView::show`] with the open document and page. Keys follow the
 //! WORKFLOW.md shortcut map and act only while the drawing has the keyboard
 //! (principle 10): I insert, W wire, M move, R rotate, X mirror, F2 rename,
-//! Delete, Enter repeat, Escape ladder. Ctrl chords (undo, save, palette)
+//! Delete, Enter repeat, Page Up / Page Down, Escape ladder. Ctrl chords (undo, save, palette)
 //! stay with the shell.
 
 use egui::{Key, Modifiers};
@@ -47,6 +47,7 @@ struct ContextMenu {
     wires: Vec<WireId>,
     suggestions: Vec<Suggestion>,
     device: Option<DeviceId>,
+    page: PageId,
     opened: bool,
 }
 
@@ -62,6 +63,9 @@ pub struct SchematicView {
     rename: Option<RenameBox>,
     menu: Option<ContextMenu>,
     status: Option<String>,
+    /// A page the view wants the shell to open (Page Up / Page Down, a new
+    /// page).
+    goto: Option<PageId>,
     /// Where the canvas was drawn last frame, in screen points.
     rect: egui::Rect,
 }
@@ -103,6 +107,7 @@ impl SchematicView {
             rename: None,
             menu: None,
             status: None,
+            goto: None,
             rect: egui::Rect::NOTHING,
         }
     }
@@ -126,6 +131,12 @@ impl SchematicView {
         self.rename = None;
         self.menu = None;
         self.canvas.zoom_to_fit();
+    }
+
+    /// The page the user asked to open (Page Up / Page Down, "New page").
+    /// The shell opens it and passes it to the next [`show`](Self::show).
+    pub fn take_page_request(&mut self) -> Option<PageId> {
+        self.goto.take()
     }
 
     pub fn zoom_to_fit(&mut self) {
@@ -290,7 +301,7 @@ impl SchematicView {
         let keyboard =
             !focus_elsewhere && !self.popup_open() && (response.has_focus() || response.hovered());
         if keyboard {
-            self.handle_keys(&ctx, document, &out, rect);
+            self.handle_keys(&ctx, document, page, &out, rect);
         }
 
         // Right click: select what is under the pointer, then the menu.
@@ -312,6 +323,7 @@ impl SchematicView {
                 wires,
                 suggestions,
                 device,
+                page,
                 opened: true,
             });
         }
@@ -328,11 +340,20 @@ impl SchematicView {
         &mut self,
         ctx: &egui::Context,
         document: &mut Document,
+        page: PageId,
         out: &novo_canvas::widget::CanvasOutput,
         rect: egui::Rect,
     ) {
         let pressed = |key: Key| ctx.input_mut(|i| i.consume_key(Modifiers::NONE, key));
         let selection = self.selection();
+        for (key, step) in [(Key::PageUp, -1), (Key::PageDown, 1)] {
+            if pressed(key)
+                && let Some(p) = crate::pages::neighbour(document.project(), page, step)
+            {
+                self.editor.leave_tool();
+                self.goto = Some(p);
+            }
+        }
         if pressed(Key::Escape) {
             self.canvas.escape_with(Some(&mut Ladder(&mut self.editor)));
         }
@@ -611,6 +632,10 @@ impl SchematicView {
                             chosen = Some(choice);
                         }
                     }
+                    ui.separator();
+                    if ui.button("New page after this").clicked() {
+                        chosen = Some(MenuChoice::NewPage);
+                    }
                 });
             });
         let clicked_outside = !menu.opened
@@ -620,6 +645,7 @@ impl SchematicView {
         let anchor = menu.anchor;
         let wires = menu.wires.clone();
         let device = menu.device;
+        let page = menu.page;
         let suggestion = |i: usize| menu.suggestions.get(i).cloned();
         let choice_suggestion = match chosen {
             Some(MenuChoice::Potential(i)) => suggestion(i),
@@ -654,6 +680,11 @@ impl SchematicView {
             Some(MenuChoice::Key(k)) => {
                 self.editor.key(document, k, &selection);
             }
+            Some(MenuChoice::NewPage) => {
+                if let Some(p) = self.editor.new_page(document, page) {
+                    self.goto = Some(p);
+                }
+            }
             None => {}
         }
     }
@@ -665,6 +696,7 @@ enum MenuChoice {
     Potential(usize),
     Rename,
     Key(EditorKey),
+    NewPage,
 }
 
 /// A symbol name cut to a short favourite label.
@@ -886,5 +918,28 @@ mod tests {
         h.click(48.0, 88.0, egui::PointerButton::Secondary);
         let menu = h.view.menu.as_ref().expect("context menu");
         assert_eq!(menu.suggestions[0].label, "Three phase 400 V (L1, L2, L3)");
+    }
+
+    #[test]
+    fn new_page_then_page_up_and_down() {
+        let mut h = Harness::new();
+        let first = h.page;
+        h.click(100.0, 100.0, egui::PointerButton::Secondary);
+        assert_eq!(h.view.menu.as_ref().map(|m| m.page), Some(first));
+        h.view.menu = None;
+        let page = h.view.editor.new_page(&mut h.doc, first).unwrap();
+        assert_eq!(h.doc.project().page(page).unwrap().name, "2");
+        h.hover(100.0, 100.0);
+        h.key(Key::PageDown);
+        assert_eq!(h.view.take_page_request(), Some(page));
+        h.page = page;
+        h.frame(Vec::new());
+        h.hover(100.0, 100.0);
+        h.key(Key::PageUp);
+        assert_eq!(h.view.take_page_request(), Some(first));
+        h.page = first;
+        h.frame(Vec::new());
+        h.key(Key::PageUp);
+        assert_eq!(h.view.take_page_request(), None);
     }
 }

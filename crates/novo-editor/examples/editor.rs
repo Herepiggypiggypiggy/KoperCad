@@ -80,11 +80,23 @@ impl eframe::App for EditorApp {
             self.view.document_changed(&self.doc, &changes);
         }
         egui::Panel::bottom("status").show(ui, |ui| {
-            ui.label(self.view.status_text().unwrap_or_default());
+            let name = self
+                .doc
+                .project()
+                .page(self.page)
+                .map_or("", |p| p.name.as_str());
+            ui.label(format!(
+                "Page {name}   {}",
+                self.view.status_text().unwrap_or_default()
+            ));
         });
         egui::CentralPanel::no_frame().show(ui, |ui| {
             self.view.show(ui, &mut self.doc, self.page);
         });
+        // Page Up / Page Down and "New page after this" open another page.
+        if let Some(page) = self.view.take_page_request() {
+            self.page = page;
+        }
     }
 }
 

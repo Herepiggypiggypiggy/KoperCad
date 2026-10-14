@@ -200,6 +200,23 @@ impl Editor {
         std::mem::take(&mut self.changes)
     }
 
+    /// Adds a schematic page after `after`, named and formatted to follow
+    /// it (`3` after `2`), as one undo step. Leaves any tool first.
+    pub fn new_page(&mut self, document: &mut Document, after: PageId) -> Option<PageId> {
+        self.leave_tool();
+        match document.transact("New page", |tx| crate::pages::add_page(tx, Some(after))) {
+            Ok((page, changes)) => {
+                self.changes.merge(&changes);
+                self.notice = None;
+                Some(page)
+            }
+            Err(e) => {
+                self.notice = Some(e.to_string());
+                None
+            }
+        }
+    }
+
     /// A selection the editor wants shown (the device just placed).
     pub fn take_selection(&mut self) -> Option<Vec<AnyId>> {
         self.select.take()
