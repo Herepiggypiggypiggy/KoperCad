@@ -1,0 +1,32 @@
+format = 1
+id = "iec/operators/pushbutton_changeover"
+name = "Push button, changeover contact"
+description = "Push button with a changeover contact: common 11, break 12, make 14."
+standard = "IEC 60617"
+category = "operators"
+function = "contact.co.push"
+keywords = ["push button", "changeover", "co", "button"]
+
+connections = [
+  { id = "11", at = [0, 16], dir = "down" },
+  { id = "12", at = [4, 0], dir = "up" },
+  { id = "14", at = [-4, 0], dir = "up" },
+]
+
+anchors = [
+  { role = "tag", at = [-10, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 16], to = [0, 11] },
+  { kind = "line", from = [0, 11], to = [3.4, 4.5] },
+  { kind = "polyline", points = [[-4, 0], [-4, 5], [-1.5, 5]] },
+  { kind = "polyline", points = [[4, 0], [4, 5], [1.5, 5]] },
+  { kind = "line", from = [1.569, 8], to = [-8, 8], stroke = "dashed" },
+  { kind = "polyline", points = [[-6.5, 6], [-8, 6], [-8, 10], [-6.5, 10]] },
+]
+
+[behavior]
+kind = "contact"
+normally = "changeover"
+poles = [["11", "12", "14"]]

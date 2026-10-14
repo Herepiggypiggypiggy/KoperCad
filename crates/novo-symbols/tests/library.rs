@@ -10,7 +10,7 @@ fn builtin() -> Library {
 #[test]
 fn builtin_library_loads_and_validates() {
     let lib = builtin();
-    assert!(lib.len() >= 80, "only {} symbols", lib.len());
+    assert!(lib.len() >= 120, "only {} symbols", lib.len());
     for symbol in lib.iter() {
         assert_eq!(validate(symbol), vec![], "{}", symbol.id);
     }
