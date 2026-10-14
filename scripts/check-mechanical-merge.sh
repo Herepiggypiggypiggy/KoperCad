@@ -27,9 +27,20 @@ for c in $(git rev-list --first-parent --reverse "$reviewed..$head"); do
     git diff --stat "$auto" "$c" -- . ':(exclude)Cargo.lock' ':(exclude)CLAUDE.md' ':(exclude)Cargo.toml' >&2; exit 1
   fi
   # The mechanical files may differ from git's merge only in crate-list lines and resolved conflict markers.
-  if git diff "$auto" "$c" -- CLAUDE.md Cargo.toml | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) ' |
-     grep -vqE '^[+-](\| `novo-[a-z-]+` \||novo-[a-z-]+ = \{ path = |<<<<<<< |=======$|>>>>>>> )'; then
-    echo "DIFFERENT: $c edits CLAUDE.md/Cargo.toml beyond crate-list lines" >&2; exit 1
+  if git diff "$auto" "$c" -- CLAUDE.md | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) ' |
+     grep -vqE '^[+-](\| `novo-[a-z-]+` \||<<<<<<< |=======$|>>>>>>> )'; then
+    echo "DIFFERENT: $c edits CLAUDE.md beyond crate-list lines" >&2; exit 1
+  fi
+  # In Cargo.toml, every line the resolution adds or drops must be a conflict
+  # marker or a line taken verbatim from one of the two parents (keeping both
+  # sides' dependency lines is mechanical; inventing a new line is not).
+  parents_toml=$( { git show "$p1:Cargo.toml"; git show "$p2:Cargo.toml"; } 2>/dev/null )
+  bad=$(git diff "$auto" "$c" -- Cargo.toml | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) ' |
+        grep -vE '^[+-](<<<<<<< |=======$|>>>>>>> )' | cut -c2- |
+        while IFS= read -r line; do grep -qxF -- "$line" <<<"$parents_toml" || printf '%s\n' "$line"; done || true)
+  if [ -n "$bad" ]; then
+    echo "DIFFERENT: $c puts lines in Cargo.toml that neither parent has:" >&2
+    printf '%s\n' "$bad" >&2; exit 1
   fi
   prev=$c
 done
