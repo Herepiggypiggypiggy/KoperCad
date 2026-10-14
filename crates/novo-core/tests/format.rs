@@ -148,6 +148,7 @@ fn build() -> Project {
         )?;
 
         let junction = tx.add_junction(power, Point::new(10.0, 25.0))?;
+        tx.set_junction_style(junction, JunctionStyle::TRight)?;
         let w1 = tx.connect(Endpoint::pin(feed, 0), Endpoint::junction(junction))?;
         tx.update::<Wire>(w1, |w| {
             w.route = vec![Point::new(10.0, 20.0)];

@@ -12,7 +12,7 @@
 {"record":"symbol","id":12,"page":1,"symbol":"iec/connectivity/interruption","placement":{"origin":{"x":100.0,"y":10.0},"rotation":"0","mirrored":false},"role":{"type":"interruption","name":"A"},"pins":[{"name":"1","offset":{"x":0.0,"y":0.0}}],"bridges":[],"properties":{}}
 {"record":"symbol","id":13,"page":2,"symbol":"iec/connectivity/interruption","placement":{"origin":{"x":100.0,"y":10.0},"rotation":"0","mirrored":false},"role":{"type":"interruption","name":"A"},"pins":[{"name":"1","offset":{"x":0.0,"y":0.0}}],"bridges":[],"properties":{}}
 {"record":"symbol","id":14,"page":2,"symbol":"iec/general/note","placement":{"origin":{"x":0.0,"y":0.0},"rotation":"0","mirrored":false},"role":{"type":"unassigned"},"pins":[],"bridges":[],"properties":{}}
-{"record":"junction","id":15,"page":1,"position":{"x":10.0,"y":25.0}}
+{"record":"junction","id":15,"page":1,"position":{"x":10.0,"y":25.0},"style":"t_right"}
 {"record":"wire","id":16,"page":1,"from":{"type":"pin","symbol":9,"pin":0},"to":{"type":"junction","junction":15},"route":[{"x":10.0,"y":20.0}],"number":"101","color":"BK","cross_section_mm2":2.5,"potential":8,"properties":{"twisted":false}}
 {"record":"wire","id":17,"page":1,"from":{"type":"junction","junction":15},"to":{"type":"pin","symbol":10,"pin":0},"route":[],"number":null,"color":null,"cross_section_mm2":null,"properties":{}}
 {"record":"wire","id":18,"page":1,"from":{"type":"pin","symbol":10,"pin":2},"to":{"type":"pin","symbol":12,"pin":0},"route":[],"number":null,"color":null,"cross_section_mm2":null,"properties":{}}
