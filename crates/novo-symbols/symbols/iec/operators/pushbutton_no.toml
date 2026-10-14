@@ -1,0 +1,30 @@
+format = 1
+id = "iec/operators/pushbutton_no"
+name = "Push button, make contact"
+description = "Manually operated push button with a normally open contact, such as a start button."
+standard = "IEC 60617"
+category = "operators"
+function = "contact.no.push"
+keywords = ["push button", "start", "no", "button"]
+
+connections = [
+  { id = "13", at = [0, 0], dir = "up" },
+  { id = "14", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-10, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 5] },
+  { kind = "line", from = [0, 16], to = [0, 11] },
+  { kind = "line", from = [0, 11], to = [-4, 4] },
+  { kind = "line", from = [-1.714, 8], to = [-8, 8], stroke = "dashed" },
+  { kind = "polyline", points = [[-6.5, 6], [-8, 6], [-8, 10], [-6.5, 10]] },
+]
+
+[behavior]
+kind = "contact"
+normally = "open"
+poles = [["13", "14"]]

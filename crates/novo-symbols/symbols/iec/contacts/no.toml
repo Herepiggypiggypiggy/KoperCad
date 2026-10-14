@@ -1,0 +1,28 @@
+format = 1
+id = "iec/contacts/no"
+name = "Make contact (NO)"
+description = "Normally open contact, used for auxiliary contacts of relays and contactors."
+standard = "IEC 60617"
+category = "contacts"
+function = "contact.no"
+keywords = ["no", "make", "normally open", "auxiliary"]
+
+connections = [
+  { id = "13", at = [0, 0], dir = "up" },
+  { id = "14", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 5] },
+  { kind = "line", from = [0, 16], to = [0, 11] },
+  { kind = "line", from = [0, 11], to = [-4, 4] },
+]
+
+[behavior]
+kind = "contact"
+normally = "open"
+poles = [["13", "14"]]

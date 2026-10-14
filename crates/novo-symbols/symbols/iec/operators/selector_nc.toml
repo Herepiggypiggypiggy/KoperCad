@@ -1,0 +1,32 @@
+format = 1
+id = "iec/operators/selector_nc"
+name = "Selector switch, break contact"
+description = "Rotary selector or key switch with a normally closed contact that stays in position."
+standard = "IEC 60617"
+category = "operators"
+function = "contact.nc.turn"
+keywords = ["selector", "rotary", "switch", "key", "nc"]
+
+connections = [
+  { id = "11", at = [0, 0], dir = "up" },
+  { id = "12", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-11, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 5] },
+  { kind = "line", from = [0, 5], to = [3.5, 5] },
+  { kind = "line", from = [0, 16], to = [0, 11] },
+  { kind = "line", from = [0, 11], to = [4, 4] },
+  { kind = "line", from = [1.714, 8], to = [-8, 8], stroke = "dashed" },
+  { kind = "polyline", points = [[-6.8, 6], [-8, 6], [-8, 10], [-9.2, 10]] },
+]
+
+[behavior]
+kind = "contact"
+normally = "closed"
+latching = true
+poles = [["11", "12"]]

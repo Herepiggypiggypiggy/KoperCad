@@ -1,0 +1,30 @@
+format = 1
+id = "iec/passive/heater"
+name = "Heating element"
+description = "Heating element or heater."
+standard = "IEC 60617"
+category = "passive"
+function = "load.heater"
+keywords = ["heater", "heating", "resistor", "element"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-4.5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "rect", at = [-3, 4], size = [6, 8] },
+  { kind = "line", from = [-1, 4], to = [-1, 12] },
+  { kind = "line", from = [1, 4], to = [1, 12] },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+]
+
+[behavior]
+kind = "load"
+type = "resistive"
+poles = [["1", "2"]]

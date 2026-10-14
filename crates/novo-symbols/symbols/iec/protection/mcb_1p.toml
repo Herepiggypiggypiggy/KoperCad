@@ -1,0 +1,33 @@
+format = 1
+id = "iec/protection/mcb_1p"
+name = "Miniature circuit breaker, 1-pole"
+description = "1-pole miniature circuit breaker (MCB) with thermal and magnetic trip."
+standard = "IEC 60617"
+category = "protection"
+function = "protection.mcb"
+keywords = ["mcb", "circuit breaker", "breaker", "1p", "b curve", "c curve"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-18.5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 5] },
+  { kind = "line", from = [-1.2, 3.8], to = [1.2, 6.2] },
+  { kind = "line", from = [-1.2, 6.2], to = [1.2, 3.8] },
+  { kind = "line", from = [0, 16], to = [0, 11] },
+  { kind = "line", from = [0, 11], to = [-4, 4] },
+  { kind = "line", from = [-1.714, 8], to = [-8, 8], stroke = "dashed" },
+  { kind = "polyline", points = [[-8, 8], [-8, 6], [-10, 6], [-10, 10], [-12, 10], [-12, 8]] },
+  { kind = "text", at = [-14, 8], text = "I>", size = 2.2, align = "right" },
+]
+
+[behavior]
+kind = "breaker"
+trip = ["thermal", "magnetic"]
+poles = [["1", "2"]]

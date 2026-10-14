@@ -1,0 +1,28 @@
+format = 1
+id = "iec/plc/power_supply"
+name = "PLC power supply connection"
+description = "Supply connection of a PLC or I/O card (L+ and M)."
+standard = "IEC 60617"
+category = "plc"
+function = "plc.supply"
+keywords = ["plc", "supply", "l+", "m", "24v"]
+
+connections = [
+  { id = "L+", at = [0, 0], dir = "up" },
+  { id = "M", at = [8, 0], dir = "up" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 7], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "line", from = [8, 0], to = [8, 4] },
+  { kind = "rect", at = [-4, 4], size = [16, 6] },
+  { kind = "text", at = [4, 7], text = "24 V DC", size = 2.2 },
+]
+
+[behavior]
+kind = "load"
+poles = [["L+", "M"]]
