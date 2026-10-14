@@ -20,6 +20,7 @@
 pub mod demo;
 pub mod geom;
 pub mod grid;
+pub mod marks;
 #[cfg(feature = "model")]
 pub mod model;
 pub mod render;
@@ -37,6 +38,7 @@ pub mod widget;
 pub use geom::Aabb;
 pub use glam::{Vec2, vec2};
 pub use grid::{Grid, GridStyle};
+pub use marks::{Mark, MarkKind, MarkTarget, Marks};
 pub use scene::{BoxMode, Hit, Item, ItemId, Layer, LayerId, Scene, SnapPoint};
 pub use selection::{SelectOp, Selection};
 pub use shape::{Placement, Primitive, Shape};

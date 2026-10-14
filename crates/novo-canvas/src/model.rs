@@ -257,6 +257,12 @@ fn quarter_of(d: Vec2) -> u8 {
     }
 }
 
+/// Width of the page frame margin, in mm.
+pub const FRAME_MARGIN: f32 = 10.0;
+const TITLE_BLOCK_WIDTH: f32 = 140.0;
+const TITLE_ROW: f32 = 6.0;
+const TITLE_ROWS: usize = 6;
+
 /// Length of the orientation stubs on oriented junctions, in mm.
 pub const JUNCTION_STUB: f32 = 1.5;
 
@@ -414,6 +420,7 @@ impl PageScene {
             return changed;
         }
         let mut dirty: BTreeSet<AnyId> = BTreeSet::new();
+        let mut frame_dirty = changes.info;
         for &id in changes
             .added
             .iter()
@@ -482,9 +489,8 @@ impl PageScene {
                         .into_iter()
                         .map(|s| AnyId::Symbol(s.id)),
                 ),
-                AnyId::Page(p) if p == self.page => {
-                    self.frame(project);
-                }
+                // Any page coming, going or changing can change "n of m".
+                AnyId::Page(_) => frame_dirty = true,
                 _ => {}
             }
         }
@@ -513,6 +519,9 @@ impl PageScene {
             dirty.extend(project.texts_of(host).into_iter().map(AnyId::Text));
         }
         let rev = self.scene.revision();
+        if frame_dirty {
+            self.frame(project);
+        }
         for id in dirty {
             match id {
                 AnyId::Symbol(s) => self.sync_symbol(project, s, art),
@@ -543,28 +552,126 @@ impl PageScene {
         };
         let (w, h) = page.format.size_mm();
         let size = Vec2::new(w as f32, h as f32);
-        let ink = Stroke::world(0.5, self.style.frame_color);
-        let thin = Stroke::world(0.25, self.style.frame_color);
+        let color = self.style.frame_color;
+        let ink = Stroke::world(0.5, color);
+        let thin = Stroke::world(0.25, color);
         let mut sheet = Primitive::stroked(Shape::rect(Vec2::ZERO, size), thin);
         sheet.fill = self.style.sheet_fill;
+        let inner_min = Vec2::splat(FRAME_MARGIN);
+        let inner_max = size - Vec2::splat(FRAME_MARGIN);
         let mut item = Item::new(self.layers.frame)
             .with(sheet)
-            .with(Primitive::stroked(
-                Shape::rect(Vec2::splat(10.0), size - Vec2::splat(10.0)),
-                ink,
-            ))
+            .with(Primitive::stroked(Shape::rect(inner_min, inner_max), ink))
             .unselectable();
-        let title = if page.title.is_empty() {
+
+        // Column numbers in the top and bottom margins, on the same grid as
+        // PageFormat::column_at, so a cross reference like 3.4 reads off
+        // the page.
+        let columns = page.format.columns.max(1);
+        let col_w = size.x / f32::from(columns);
+        for c in 0..columns {
+            let x0 = f32::from(c) * col_w;
+            let x1 = x0 + col_w;
+            if c > 0 {
+                for (y0, y1) in [(0.0, FRAME_MARGIN), (inner_max.y, size.y)] {
+                    item.primitives.push(Primitive::stroked(
+                        Shape::line(Vec2::new(x0, y0), Vec2::new(x0, y1)),
+                        thin,
+                    ));
+                }
+            }
+            let cx = (x0 + x1) * 0.5;
+            for cy in [FRAME_MARGIN * 0.5, size.y - FRAME_MARGIN * 0.5] {
+                item.labels.push(
+                    Label::new(Vec2::new(cx, cy), (c + 1).to_string(), 3.0)
+                        .anchored(Anchor::Center)
+                        .colored(color),
+                );
+            }
+        }
+
+        self.title_block(project, page, inner_max, &mut item);
+        self.scene.insert(item_id(self.page), item);
+    }
+
+    /// The title block in the bottom-right corner of the inner frame
+    /// (docs/DESIGN.md §3): project, page name and title, "n of m", the
+    /// page's `=function +location`, revision and drawn / checked by.
+    ///
+    /// Until novo-core has revisions these come from properties: the page's
+    /// `structure`, and the project's `revision`, `revision_date`,
+    /// `drawn_by` and `checked_by`.
+    fn title_block(
+        &self,
+        project: &Project,
+        page: &novo_core::Page,
+        corner: Vec2,
+        item: &mut Item,
+    ) {
+        let color = self.style.frame_color;
+        let thin = Stroke::world(0.25, color);
+        let size = Vec2::new(TITLE_BLOCK_WIDTH, TITLE_ROW * TITLE_ROWS as f32);
+        let min = corner - size;
+        item.primitives
+            .push(Primitive::stroked(Shape::rect(min, corner), thin));
+        for r in 1..TITLE_ROWS {
+            let y = min.y + TITLE_ROW * r as f32;
+            item.primitives.push(Primitive::stroked(
+                Shape::line(Vec2::new(min.x, y), Vec2::new(corner.x, y)),
+                thin,
+            ));
+        }
+        let order = project.pages_in_order();
+        let n = order
+            .iter()
+            .position(|p| p.id == page.id)
+            .map_or(0, |i| i + 1);
+        let text = |props: &novo_core::Properties, key: &str| match props.get(key) {
+            Some(novo_core::Value::Text(t)) => t.clone(),
+            Some(novo_core::Value::Int(i)) => i.to_string(),
+            _ => String::new(),
+        };
+        let info = &project.info().properties;
+        // TODO(#45): read `Page.structure` once WS-02's page structure field
+        // merges; until then the page property "structure" carries it.
+        let structure = text(&page.properties, "structure");
+        let revision = [text(info, "revision"), text(info, "revision_date")]
+            .into_iter()
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join("  ");
+        let people = match (text(info, "drawn_by"), text(info, "checked_by")) {
+            (d, c) if d.is_empty() && c.is_empty() => String::new(),
+            (d, c) => format!("{d} / {c}"),
+        };
+        let page_line = if page.title.is_empty() {
             page.name.clone()
         } else {
             format!("{}  {}", page.name, page.title)
         };
-        item.labels.push(
-            Label::new(size - Vec2::new(14.0, 14.0), title, 3.5)
-                .anchored(Anchor::BottomRight)
-                .colored(self.style.frame_color),
-        );
-        self.scene.insert(item_id(self.page), item);
+        let rows = [
+            ("Project", project.info().name.clone()),
+            ("Page", page_line),
+            ("Sheet", format!("{n} of {}", order.len())),
+            ("Structure", structure),
+            ("Revision", revision),
+            ("Drawn / checked", people),
+        ];
+        for (r, (caption, value)) in rows.into_iter().enumerate() {
+            let y = min.y + TITLE_ROW * (r as f32 + 0.5);
+            item.labels.push(
+                Label::new(Vec2::new(min.x + 2.0, y), caption, 2.0)
+                    .anchored(Anchor::CenterLeft)
+                    .colored(color),
+            );
+            if !value.is_empty() {
+                item.labels.push(
+                    Label::new(Vec2::new(min.x + 24.0, y), value, 3.0)
+                        .anchored(Anchor::CenterLeft)
+                        .colored(color),
+                );
+            }
+        }
     }
 
     fn sync_symbol(&mut self, project: &Project, id: SymbolId, art: &dyn SymbolArt) {
@@ -1426,6 +1533,73 @@ mod tests {
         // Text is pickable on its own.
         let hit = ps.scene().pick(Vec2::new(100.0, 101.0), 0.5, 2.0).unwrap();
         assert_eq!(hit.label, Some(1));
+    }
+
+    #[test]
+    fn frame_has_columns_and_title_block() {
+        let (mut doc, page, ..) = doc();
+        doc.transact("info", |tx| {
+            tx.set_info(|i| {
+                i.name = "Pump station".into();
+                i.properties
+                    .insert("revision".into(), novo_core::Value::Text("B".into()));
+                i.properties
+                    .insert("drawn_by".into(), novo_core::Value::Text("TT".into()));
+            })?;
+            tx.update::<novo_core::Page>(page, |p| {
+                p.title = "Power".into();
+                p.properties.insert(
+                    "structure".into(),
+                    novo_core::Value::Text("=A1+CAB1".into()),
+                );
+            })
+        })
+        .unwrap();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let texts = |ps: &PageScene| -> Vec<String> {
+            ps.scene()
+                .get(item_id(page))
+                .unwrap()
+                .labels
+                .iter()
+                .map(|l| l.text.clone())
+                .collect()
+        };
+        let t = texts(&ps);
+        let columns = doc.project().page(page).unwrap().format.columns as usize;
+        // Each column number appears top and bottom.
+        assert_eq!(t.iter().filter(|s| *s == "1").count(), 2);
+        assert!(t.contains(&columns.to_string()));
+        for want in [
+            "Pump station",
+            "1  Power",
+            "1 of 1",
+            "=A1+CAB1",
+            "B",
+            "TT / ",
+        ] {
+            assert!(t.iter().any(|s| s == want), "{want} missing from {t:?}");
+        }
+        // Column numbers sit on PageFormat::column_at's grid.
+        let format = doc.project().page(page).unwrap().format;
+        let frame = ps.scene().get(item_id(page)).unwrap();
+        for l in frame
+            .labels
+            .iter()
+            .filter(|l| l.text.parse::<u16>().is_ok())
+        {
+            assert_eq!(format.column_at(f64::from(l.pos.x)).to_string(), l.text);
+        }
+
+        // Adding a page changes "n of m"; info changes redraw too.
+        let (_, changes) = doc.transact("page", |tx| tx.add_page("2")).unwrap();
+        assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
+        assert!(texts(&ps).iter().any(|s| s == "1 of 2"));
+        let (_, changes) = doc
+            .transact("rename", |tx| tx.set_info(|i| i.name = "Mill".into()))
+            .unwrap();
+        assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
+        assert!(texts(&ps).iter().any(|s| s == "Mill"));
     }
 
     #[test]
