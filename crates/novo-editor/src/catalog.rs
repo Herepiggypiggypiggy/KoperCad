@@ -110,7 +110,8 @@ pub fn letter_code(function: &str) -> &'static str {
     }
 }
 
-/// Short names that rank first in the insert search (WORKFLOW.md J2).
+/// Short names that rank first in the insert search (WORKFLOW.md J2), on
+/// top of the `aliases` each library symbol carries.
 pub const MNEMONICS: &[(&str, &str)] = &[
     ("no", "iec/contacts/no"),
     ("nc", "iec/contacts/nc"),
@@ -296,7 +297,12 @@ impl Catalog {
         let joined = words.join(" ");
         let mut best = 0i64;
         let mut hint = String::new();
-        for &(mnemonic, id) in MNEMONICS {
+        // The library's own aliases (WS-05) count the same as the editor's.
+        let library_aliases = symbol
+            .aliases
+            .iter()
+            .map(|a| (a.as_str(), symbol.id.as_str()));
+        for (mnemonic, id) in MNEMONICS.iter().copied().chain(library_aliases) {
             if id == symbol.id {
                 if mnemonic == joined {
                     best = best.max(1000);
