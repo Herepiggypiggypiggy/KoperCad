@@ -138,11 +138,29 @@ pub fn suggest_terminals(project: &Project) -> Vec<Suggestion> {
 }
 
 /// Accepts suggestions: puts the terminals on their strips (created when
-/// missing), grouped per strip in suggestion order, numbered next free.
+/// missing), numbered next free in drawing order on each strip: page by
+/// page, then left to right, then top to bottom, the way a drag across the
+/// wires would number them. The order the suggestions were listed or
+/// picked in does not matter.
 pub fn accept_suggestions(tx: &mut Tx<'_>, suggestions: &[Suggestion]) -> Result<Vec<Placed>> {
+    let pages: Vec<_> = tx.project().pages_in_order().iter().map(|p| p.id).collect();
+    let page_of = |wire: WireId| {
+        tx.project()
+            .wire(wire)
+            .and_then(|w| pages.iter().position(|&p| p == w.page))
+    };
+    let mut ordered: Vec<(Option<usize>, &Suggestion)> =
+        suggestions.iter().map(|s| (page_of(s.wire), s)).collect();
+    ordered.sort_by(|(pa, a), (pb, b)| {
+        pa.cmp(pb)
+            .then(a.at.x.total_cmp(&b.at.x))
+            .then(a.at.y.total_cmp(&b.at.y))
+            .then(a.wire.cmp(&b.wire))
+    });
+    let suggestions: Vec<&Suggestion> = ordered.into_iter().map(|(_, s)| s).collect();
     let mut placed = Vec::with_capacity(suggestions.len());
     let mut tags: Vec<&DeviceTag> = Vec::new();
-    for s in suggestions {
+    for s in &suggestions {
         if !tags.contains(&&s.strip) {
             tags.push(&s.strip);
         }
