@@ -4,6 +4,7 @@
 
 use novo_core::*;
 
+#[path = "common/scale_project.rs"]
 mod scale_project;
 use scale_project::{PAGES, SYMBOLS_PER_PAGE, build};
 

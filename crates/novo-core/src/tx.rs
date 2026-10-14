@@ -259,6 +259,13 @@ impl<'p> Tx<'p> {
         self.update::<SymbolInstance>(symbol, |s| s.placement = placement)
     }
 
+    /// Changes what a symbol stands for: links a contact to its coil's device
+    /// (`SymbolRole::Device`), a terminal block to its terminals, and so on.
+    /// This is the "cross reference" action on a symbol.
+    pub fn set_role(&mut self, symbol: SymbolId, role: SymbolRole) -> Result<()> {
+        self.update::<SymbolInstance>(symbol, |s| s.role = role)
+    }
+
     /// Adds a junction (connection dot).
     pub fn add_junction(&mut self, page: PageId, position: Point) -> Result<JunctionId> {
         self.insert(|id| Junction { id, page, position })

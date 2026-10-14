@@ -69,8 +69,10 @@ mod id;
 mod json;
 mod project;
 mod record;
+mod search;
 mod tag;
 mod tx;
+mod xref;
 
 pub use command::Command;
 pub use document::{DEFAULT_HISTORY_LIMIT, Document, Outcome};
@@ -89,8 +91,10 @@ pub use id::{
 pub use json::JSON_FORMAT_VERSION;
 pub use project::{PageContents, Project, natural_cmp};
 pub use record::{ChangeSet, Entity, Op, Record, Transaction};
+pub use search::{Match, SearchHit};
 pub use tag::{Aspect, DeviceTag, TagError, split_code};
 pub use tx::Tx;
+pub use xref::{CrossReference, Location};
 
 /// Version of the public model API. Bumped when a frozen API changes.
 pub const MODEL_VERSION: u32 = 0;
