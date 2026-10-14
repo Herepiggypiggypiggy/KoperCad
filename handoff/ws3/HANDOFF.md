@@ -64,3 +64,6 @@ GPU tests (tests/gpu.rs) skip when no adapter.
 - Reviewer cse_016C9nTT8cN7voW8t1NQUG4W. WS-06 editor cse_019siuxbyyRNZRgBBww1KocJ.
 - WS-10 xref cse_01KrbvfWtr3dmZqL1bwwyKWF. WS-02 model cse_01B1jpjzeDiXvWoBCsv1BWt9.
 - Layout/theme cse_01UXbCeQW22y6tv74F2Xvbvm. WS-08 keyboard cse_01TAFG6LPGy2WMwhJYXmxqxF.
+
+## Lead fixes waiting (read first)
+See lead-fixes/README.md: junction dot and #35 text drawing fixed locally at a3302fc by the integration lead; apply with the bundle, check, push, ping the reviewer.

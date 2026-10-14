@@ -15,3 +15,4 @@
 2026-10-14 17:20 UTC #28: fixed tester F2 (terminal name only, ink beats text); head 924be9b; reviewer + tester notified. frame.patch rebased (4faa2b8).
 2026-10-14 17:35 UTC Marks (DESIGN §5) and DESIGN §3 title block done locally on canvas-marks; patches in next-pr/. Waiting for #28 review and #35.
 2026-10-14 17:16 UTC Gate 0 passed on Quadro P1000 (10k: 1135 fps avg / 222 1% low). 100k: 113 avg / 38.5 1% low, stutter queued.
+2026-10-14 18:20 UTC Integration lead fixed PR #28 locally (junction dot for 3+ wires, Text records, potential labels; merged main) at a3302fc; bundle and patch in lead-fixes/, not pushed.

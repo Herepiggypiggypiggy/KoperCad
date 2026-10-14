@@ -1,0 +1,565 @@
+From a3302fc5f4c48673433b2093db1f15a3e5d4d217 Mon Sep 17 00:00:00 2001
+From: local <x@x>
+Date: Wed, 14 Oct 2026 17:49:22 +0000
+Subject: [PATCH] Canvas: count wires at junctions; draw text records
+
+Junctions: JunctionGlyph::from_directions counted sides, not wires, so a
+node where three wires leave on two sides (right, down, down) became a
+Corner without a dot. It now counts wires: three or more always get a
+dot (a T when they use exactly three sides), and Corner is only for
+exactly two wires at a right angle. A wire that never leaves the point
+still counts.
+
+Text records (#35): PageScene draws each Text on its page on a new
+Texts layer, at Project::text_position with its anchor, rotation and
+height, showing Project::text_string. apply() redraws texts when they
+change and when their host symbol, wire or junction (or the host's
+device, terminal or potential) changes. A symbol with a DeviceTag text
+no longer draws its implicit tag, so no tag is drawn twice; adding or
+removing that text redraws the symbol. Potential labels follow a wire's
+potential being set, cleared or renamed.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01DZ68tTULUv7Uhe8ecKbC47
+---
+ crates/novo-canvas/src/model.rs | 360 +++++++++++++++++++++++++++++---
+ crates/novo-canvas/src/scene.rs |   3 +-
+ 2 files changed, 335 insertions(+), 28 deletions(-)
+
+diff --git a/crates/novo-canvas/src/model.rs b/crates/novo-canvas/src/model.rs
+index d80d1f4..64b6496 100644
+--- a/crates/novo-canvas/src/model.rs
++++ b/crates/novo-canvas/src/model.rs
+@@ -2,9 +2,10 @@
+ //! `model`). This is the only part of the crate that knows the model; the
+ //! rest of the canvas stays model-agnostic.
+ //!
+-//! A [`PageScene`] mirrors one page: every symbol, wire and junction becomes
+-//! an item whose [`ItemId`] is the model's raw id (ids are unique across the
+-//! project), so canvas picks and selections map straight back to model ids.
++//! A [`PageScene`] mirrors one page: every symbol, wire, junction and text
++//! record becomes an item whose [`ItemId`] is the model's raw id (ids are
++//! unique across the project), so canvas picks and selections map straight
++//! back to model ids.
+ //! After each edit, pass the edit's [`ChangeSet`] to [`PageScene::apply`] and
+ //! only the affected items are rebuilt.
+ //!
+@@ -19,7 +20,7 @@ use crate::text::{Anchor, Label};
+ use glam::Vec2;
+ use novo_core::{
+     AnyId, ChangeSet, Endpoint, JunctionId, PageId, Point, Project, Rotation, SymbolId,
+-    SymbolInstance, SymbolKey, SymbolRole, WireId,
++    SymbolInstance, SymbolKey, SymbolRole, TextAnchor, TextContent, TextId, WireId,
+ };
+ use std::collections::{BTreeSet, HashMap};
+ use std::f32::consts::FRAC_PI_2;
+@@ -33,12 +34,7 @@ pub fn vec(p: Point) -> Vec2 {
+ /// first and then rotate; the model's rotations are counter-clockwise on the
+ /// page, canvas angles are clockwise on screen.
+ pub fn placement(p: &novo_core::Placement) -> Placement {
+-    let rotation = match p.rotation {
+-        Rotation::R0 => 0.0,
+-        Rotation::R90 => -FRAC_PI_2,
+-        Rotation::R180 => -2.0 * FRAC_PI_2,
+-        Rotation::R270 => -3.0 * FRAC_PI_2,
+-    };
++    let rotation = angle(p.rotation);
+     Placement {
+         offset: vec(p.origin),
+         rotation,
+@@ -47,6 +43,32 @@ pub fn placement(p: &novo_core::Placement) -> Placement {
+     }
+ }
+ 
++/// A model rotation (counter-clockwise on the page) as a canvas angle
++/// (clockwise on screen).
++pub fn angle(r: Rotation) -> f32 {
++    match r {
++        Rotation::R0 => 0.0,
++        Rotation::R90 => -FRAC_PI_2,
++        Rotation::R180 => -2.0 * FRAC_PI_2,
++        Rotation::R270 => -3.0 * FRAC_PI_2,
++    }
++}
++
++/// A model text anchor as a canvas anchor.
++pub fn anchor(a: TextAnchor) -> Anchor {
++    match a {
++        TextAnchor::TopLeft => Anchor::TopLeft,
++        TextAnchor::TopCenter => Anchor::TopCenter,
++        TextAnchor::TopRight => Anchor::TopRight,
++        TextAnchor::MiddleLeft => Anchor::CenterLeft,
++        TextAnchor::MiddleCenter => Anchor::Center,
++        TextAnchor::MiddleRight => Anchor::CenterRight,
++        TextAnchor::BottomLeft => Anchor::BottomLeft,
++        TextAnchor::BottomCenter => Anchor::BottomCenter,
++        TextAnchor::BottomRight => Anchor::BottomRight,
++    }
++}
++
+ /// Artwork for a symbol in symbol coordinates (mm, y down, unplaced).
+ pub trait SymbolArt {
+     /// Primitives for the symbol, or `None` to fall back to the placeholder.
+@@ -191,26 +213,30 @@ pub enum JunctionGlyph {
+ }
+ 
+ impl JunctionGlyph {
+-    /// The glyph for wires leaving a point in `dirs` (any length; they are
+-    /// snapped to the nearest of the four axes). Three directions make a T,
+-    /// two at a right angle a corner, anything else (a straight run, a
+-    /// crossing, a loose end) a dot.
++    /// The glyph for wires leaving a point in `dirs`, one entry per wire
++    /// (any length; they are snapped to the nearest of the four axes).
++    /// Wires are counted, not sides: three or more wires are an electrical
++    /// node and always get a dot (a T when they use exactly three sides).
++    /// Exactly two wires at a right angle make a corner; anything else (a
++    /// straight run, a loose end) is a dot.
+     pub fn from_directions(dirs: impl IntoIterator<Item = Vec2>) -> Self {
+         let mut sides = [false; 4];
++        let mut wires = 0usize;
+         for d in dirs {
++            wires += 1;
+             if d.length_squared() > 1e-12 {
+                 sides[quarter_of(d) as usize] = true;
+             }
+         }
+-        let count = sides.iter().filter(|s| **s).count();
+-        match count {
+-            3 => {
++        let used = sides.iter().filter(|s| **s).count();
++        match (wires, used) {
++            (3.., 3) => {
+                 let missing = sides.iter().position(|s| !s).unwrap_or(0) as u8;
+                 JunctionGlyph::Tee {
+                     stem: (missing + 2) % 4,
+                 }
+             }
+-            2 => (0..4u8)
++            (2, 2) => (0..4u8)
+                 .find(|&q| sides[q as usize] && sides[((q + 3) % 4) as usize])
+                 .map_or(JunctionGlyph::Dot, |q| JunctionGlyph::Corner {
+                     quarter_turns: q,
+@@ -277,6 +303,8 @@ pub struct ModelLayers {
+     pub frame: LayerId,
+     pub wires: LayerId,
+     pub symbols: LayerId,
++    /// Text records (free texts and labels), above the symbols.
++    pub texts: LayerId,
+ }
+ 
+ /// The canvas scene of one model page, kept in sync with the project.
+@@ -288,6 +316,9 @@ pub struct PageScene {
+     art_cache: HashMap<ArtKey, LocalArt>,
+     /// Junction ends of each drawn wire, to redraw them when it goes.
+     wire_junctions: HashMap<WireId, [Option<JunctionId>; 2]>,
++    /// What each drawn text is attached to, to redraw it when the text goes
++    /// (a device tag text hides the symbol's own tag).
++    text_hosts: HashMap<TextId, AnyId>,
+     pub style: ModelStyle,
+ }
+ 
+@@ -304,6 +335,7 @@ impl PageScene {
+             frame: scene.add_layer(Layer::new("Frame", -10)),
+             wires: scene.add_layer(Layer::new("Wires", 0)),
+             symbols: scene.add_layer(Layer::new("Symbols", 10)),
++            texts: scene.add_layer(Layer::new("Texts", 20)),
+         };
+         let mut s = Self {
+             page,
+@@ -312,6 +344,7 @@ impl PageScene {
+             ids: HashMap::new(),
+             art_cache: HashMap::new(),
+             wire_junctions: HashMap::new(),
++            text_hosts: HashMap::new(),
+             style: ModelStyle::default(),
+         };
+         s.rebuild(project, art);
+@@ -353,6 +386,7 @@ impl PageScene {
+         self.ids.clear();
+         self.art_cache.clear();
+         self.wire_junctions.clear();
++        self.text_hosts.clear();
+         self.frame(project);
+         let contents = project.page_contents(self.page);
+         for id in contents.symbols {
+@@ -364,6 +398,9 @@ impl PageScene {
+         for id in contents.wires {
+             self.sync_wire(project, id);
+         }
++        for id in contents.texts {
++            self.sync_text(project, id);
++        }
+     }
+ 
+     /// Updates the scene after an edit. Returns whether anything changed.
+@@ -372,6 +409,8 @@ impl PageScene {
+             let changed = !self.scene.is_empty();
+             self.scene.clear();
+             self.ids.clear();
++            self.wire_junctions.clear();
++            self.text_hosts.clear();
+             return changed;
+         }
+         let mut dirty: BTreeSet<AnyId> = BTreeSet::new();
+@@ -411,12 +450,32 @@ impl PageScene {
+                         );
+                     }
+                 }
+-                // Feed symbols show the potential's name.
+-                AnyId::Potential(_) => dirty.extend(
+-                    project
+-                        .referrers(id)
+-                        .filter(|r| matches!(r, AnyId::Symbol(_))),
+-                ),
++                // Feed symbols show the potential's name, and so do the
++                // potential labels of the wires that define it.
++                AnyId::Potential(_) => {
++                    for r in project.referrers(id) {
++                        match r {
++                            AnyId::Symbol(_) => {
++                                dirty.insert(r);
++                            }
++                            AnyId::Wire(w) => {
++                                dirty.extend(project.texts_of(w).into_iter().map(AnyId::Text));
++                            }
++                            _ => {}
++                        }
++                    }
++                }
++                // A text's host draws its own tag only while no device tag
++                // text is attached to it, before and after the edit.
++                AnyId::Text(t) => {
++                    let old = self.text_hosts.get(&t).copied();
++                    let new = project.text(t).and_then(|t| t.attached_to);
++                    dirty.extend(
++                        old.into_iter()
++                            .chain(new)
++                            .filter(|h| matches!(h, AnyId::Symbol(_))),
++                    );
++                }
+                 AnyId::Terminal(t) => dirty.extend(
+                     project
+                         .symbols_of_terminal(t)
+@@ -443,12 +502,23 @@ impl PageScene {
+             let new = project.wire(w).map(junctions_of).unwrap_or_default();
+             dirty.extend(old.into_iter().chain(new).flatten().map(AnyId::Junction));
+         }
++        // Labels move with their host and show its values (a wire's number
++        // or potential, a symbol's tag).
++        let hosts: Vec<AnyId> = dirty
++            .iter()
++            .copied()
++            .filter(|id| matches!(id, AnyId::Symbol(_) | AnyId::Junction(_) | AnyId::Wire(_)))
++            .collect();
++        for host in hosts {
++            dirty.extend(project.texts_of(host).into_iter().map(AnyId::Text));
++        }
+         let rev = self.scene.revision();
+         for id in dirty {
+             match id {
+                 AnyId::Symbol(s) => self.sync_symbol(project, s, art),
+                 AnyId::Junction(j) => self.sync_junction(project, j),
+                 AnyId::Wire(w) => self.sync_wire(project, w),
++                AnyId::Text(t) => self.sync_text(project, t),
+                 _ => {}
+             }
+         }
+@@ -530,7 +600,13 @@ impl PageScene {
+             .filter_map(|i| sym.pin_position(i))
+             .map(|p| SnapPoint::connection(vec(p)))
+             .collect();
+-        if let Some(text) = symbol_text(project, sym) {
++        // A device tag text record draws the tag itself; never draw it twice.
++        let tag_text = project.texts_of(id).into_iter().any(|t| {
++            project
++                .text(t)
++                .is_some_and(|t| t.content == TextContent::DeviceTag)
++        });
++        if let Some(text) = symbol_text(project, sym).filter(|_| !tag_text) {
+             // To the right of the placed symbol, vertically centred on its
+             // pins, whatever its rotation or mirroring.
+             let origin = vec(sym.placement.origin);
+@@ -569,13 +645,14 @@ impl PageScene {
+         let dirs: Vec<Vec2> = project
+             .wires_at(Endpoint::junction(id))
+             .filter_map(|w| self.wire_points(project, w))
+-            .filter_map(|pts| {
++            .map(|pts| {
+                 let next = if pts[0].distance(p) < 1e-4 {
+                     pts.iter().find(|q| q.distance(p) > 1e-4)
+                 } else {
+                     pts.iter().rev().find(|q| q.distance(p) > 1e-4)
+                 };
+-                next.map(|q| *q - p)
++                // A wire that never leaves the point still counts.
++                next.map_or(Vec2::ZERO, |q| *q - p)
+             })
+             .collect();
+         let mut item = Item::new(self.layers.wires).with_snap(SnapPoint::connection(p));
+@@ -583,6 +660,38 @@ impl PageScene {
+         self.put(id.into(), item);
+     }
+ 
++    fn sync_text(&mut self, project: &Project, id: TextId) {
++        let Some(text) = project.text(id).filter(|t| t.page == self.page) else {
++            self.text_hosts.remove(&id);
++            self.remove(id.into());
++            return;
++        };
++        match text.attached_to {
++            Some(host) => self.text_hosts.insert(id, host),
++            None => self.text_hosts.remove(&id),
++        };
++        // A label whose source is missing (an unnumbered wire) shows nothing
++        // and has nothing to pick.
++        let shown = project.text_string(id).unwrap_or_default();
++        let Some(pos) = project.text_position(id).filter(|_| !shown.is_empty()) else {
++            self.remove(id.into());
++            return;
++        };
++        let color = match text.content {
++            TextContent::DeviceTag => self.style.tag_color,
++            TextContent::WireNumber | TextContent::Potential => self.style.wire.color,
++            TextContent::Literal { .. } | TextContent::Property { .. } => self.style.symbol.color,
++        };
++        let mut item = Item::new(self.layers.texts);
++        item.labels.push(
++            Label::new(vec(pos), shown, text.height_mm as f32)
++                .anchored(anchor(text.placement.anchor))
++                .rotated(angle(text.placement.rotation))
++                .colored(color),
++        );
++        self.put(id.into(), item);
++    }
++
+     /// A wire's polyline: start, route bends, end.
+     fn wire_points(&self, project: &Project, id: WireId) -> Option<Vec<Vec2>> {
+         let w = project.wire(id)?;
+@@ -1046,6 +1155,34 @@ mod tests {
+         assert_eq!(JunctionGlyph::from_directions([x, -x]), Dot);
+         assert_eq!(JunctionGlyph::from_directions([x, -x, y, -y]), Dot);
+ 
++        // Wires are counted, not sides: three or more wires always get a
++        // dot, even when they leave on only two sides.
++        let dotted = |g: JunctionGlyph| {
++            junction_glyph(g, Vec2::ZERO, &ModelStyle::default())
++                .iter()
++                .any(|p| matches!(p.shape, Shape::Circle { .. }))
++        };
++        assert_eq!(JunctionGlyph::from_directions([x, y, y]), Dot);
++        assert_eq!(JunctionGlyph::from_directions([x, x, y, y]), Dot);
++        assert_eq!(JunctionGlyph::from_directions([x, y, Vec2::ZERO]), Dot);
++        assert_eq!(
++            JunctionGlyph::from_directions([x, -x, y, y]),
++            Tee { stem: 0 }
++        );
++        for dirs in [
++            vec![x, y, y],
++            vec![x, x, y, y],
++            vec![x, -x, y],
++            vec![x, -x, y, y],
++            vec![x, -x, y, -y],
++        ] {
++            assert!(
++                dotted(JunctionGlyph::from_directions(dirs.clone())),
++                "{dirs:?}"
++            );
++        }
++        assert!(!dotted(JunctionGlyph::from_directions([x, y])));
++
+         // The demo's self-hold branch: both junctions are Ts, and removing
+         // the branch wire leaves a straight run, drawn as a plain dot.
+         let (mut doc, page) = demo_document().unwrap();
+@@ -1090,6 +1227,175 @@ mod tests {
+         assert_eq!(lines(&ps, j), 0, "a straight run is a dot");
+     }
+ 
++    #[test]
++    fn three_wires_on_two_sides_keep_their_dot() {
++        let mut doc = Document::default();
++        let ((page, j), _) = doc
++            .transact("node", |tx| {
++                let page = tx.add_page("1")?;
++                let j = tx.add_junction(page, Point::new(50.0, 50.0))?;
++                // One wire leaves right, two leave down.
++                let a = tx.place_symbol(
++                    page,
++                    "iec/x",
++                    MPlacement::at(Point::new(60.0, 50.0)),
++                    vec![Pin::new("1", 0.0, 0.0)],
++                    SymbolRole::Unassigned,
++                )?;
++                let b = tx.place_symbol(
++                    page,
++                    "iec/x",
++                    MPlacement::at(Point::new(50.0, 60.0)),
++                    vec![Pin::new("1", 0.0, 0.0), Pin::new("2", 0.0, 10.0)],
++                    SymbolRole::Unassigned,
++                )?;
++                tx.connect(Endpoint::junction(j), Endpoint::pin(a, 0))?;
++                tx.connect(Endpoint::junction(j), Endpoint::pin(b, 0))?;
++                tx.connect(Endpoint::junction(j), Endpoint::pin(b, 1))?;
++                Ok((page, j))
++            })
++            .unwrap();
++        let ps = PageScene::new(doc.project(), page, &PlaceholderArt);
++        let node = ps.scene().get(item_id(j)).unwrap();
++        assert!(
++            node.primitives
++                .iter()
++                .any(|p| matches!(p.shape, Shape::Circle { .. })),
++            "a three-wire node must show its dot"
++        );
++    }
++
++    #[test]
++    fn text_records_are_drawn_and_follow_their_hosts() {
++        use novo_core::{TextPlacement, Wire};
++        let (mut doc, page, k1, _s1, w) = doc();
++        let at = |x: f64, y: f64| TextPlacement {
++            offset: Point::new(x, y),
++            ..Default::default()
++        };
++        let ((note, tag, pot_text), _) = doc
++            .transact("texts", |tx| {
++                let note = tx.add_text(
++                    page,
++                    TextContent::Literal {
++                        text: "Note".into(),
++                    },
++                    at(30.0, 40.0),
++                    None,
++                )?;
++                let tag = tx.add_text(
++                    page,
++                    TextContent::DeviceTag,
++                    TextPlacement {
++                        offset: Point::new(-8.0, 0.0),
++                        rotation: Rotation::R90,
++                        anchor: TextAnchor::MiddleRight,
++                    },
++                    Some(k1.into()),
++                )?;
++                let pot_text =
++                    tx.add_text(page, TextContent::Potential, at(2.0, 0.0), Some(w.into()))?;
++                Ok((note, tag, pot_text))
++            })
++            .unwrap();
++        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
++        let label =
++            |ps: &PageScene, t: TextId| ps.scene().get(item_id(t)).map(|i| i.labels[0].clone());
++        let note_label = label(&ps, note).unwrap();
++        assert_eq!(note_label.text, "Note");
++        assert_eq!(note_label.pos, Vec2::new(30.0, 40.0));
++        let tag_label = label(&ps, tag).unwrap();
++        assert_eq!(tag_label.text, "-K1");
++        assert_eq!(tag_label.pos, Vec2::new(92.0, 100.0));
++        assert_eq!(tag_label.anchor, Anchor::CenterRight);
++        assert_eq!(tag_label.rotation, -FRAC_PI_2);
++        // The tag text replaces the symbol's own tag: never drawn twice.
++        let coil = ps.scene().get(item_id(k1)).unwrap();
++        assert!(
++            coil.labels.iter().all(|l| l.text != "-K1"),
++            "{:?}",
++            coil.labels
++        );
++        // The wire defines no potential yet, so its label shows nothing.
++        assert!(label(&ps, pot_text).is_none());
++        // Picking a text gives back the text record.
++        let hit = ps.scene().pick(Vec2::new(31.0, 39.0), 0.5, 2.0).unwrap();
++        assert_eq!(ps.model_id(hit.id), Some(AnyId::Text(note)));
++
++        // Moving the text, retagging the device and moving the symbol all
++        // redraw the tag text.
++        let device = doc.project().symbol(k1).unwrap().device().unwrap();
++        let (_, changes) = doc
++            .transact("edit", |tx| {
++                tx.move_text(note, at(35.0, 45.0))?;
++                tx.set_tag(device, DeviceTag::parse("-K9")?)?;
++                tx.move_symbol(k1, MPlacement::at(Point::new(120.0, 100.0)))
++            })
++            .unwrap();
++        assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
++        assert_eq!(label(&ps, note).unwrap().pos, Vec2::new(35.0, 45.0));
++        let tag_label = label(&ps, tag).unwrap();
++        assert_eq!(tag_label.text, "-K9");
++        assert_eq!(tag_label.pos, Vec2::new(112.0, 100.0));
++
++        // Assigning and renaming the wire's potential relabels it.
++        let (pot, changes) = doc
++            .transact("potential", |tx| {
++                let pot = tx.add_potential("L1", novo_core::PotentialKind::Line)?;
++                tx.set_wire_potential(w, Some(pot))?;
++                Ok(pot)
++            })
++            .unwrap();
++        assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
++        assert_eq!(label(&ps, pot_text).unwrap().text, "L1");
++        let (_, changes) = doc
++            .transact("rename", |tx| {
++                tx.update::<novo_core::Potential>(pot, |p| p.name = "L2".into())
++            })
++            .unwrap();
++        assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
++        assert_eq!(label(&ps, pot_text).unwrap().text, "L2");
++        let (_, changes) = doc
++            .transact("clear", |tx| tx.update::<Wire>(w, |w| w.potential = None))
++            .unwrap();
++        assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
++        assert!(label(&ps, pot_text).is_none());
++
++        // Removing the tag text brings the symbol's own tag back.
++        let (_, changes) = doc.transact("untag", |tx| tx.remove(tag)).unwrap();
++        assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
++        assert!(!ps.scene().contains(item_id(tag)));
++        assert_eq!(ps.scene().get(item_id(k1)).unwrap().labels[0].text, "-K9");
++
++        // Adding one back hides it again; deleting the symbol deletes both.
++        let (tag, changes) = doc
++            .transact("retag", |tx| {
++                tx.add_text(page, TextContent::DeviceTag, at(5.0, 0.0), Some(k1.into()))
++            })
++            .unwrap();
++        assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
++        assert!(
++            ps.scene()
++                .get(item_id(k1))
++                .unwrap()
++                .labels
++                .iter()
++                .all(|l| l.text != "-K9")
++        );
++        let (_, changes) = doc.transact("delete", |tx| tx.remove(k1)).unwrap();
++        assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
++        assert!(!ps.scene().contains(item_id(tag)));
++        assert!(!ps.scene().contains(item_id(k1)));
++        assert!(!ps.scene().contains(item_id(pot_text)));
++        assert!(ps.scene().contains(item_id(note)));
++        assert!(ps.model_id(item_id(tag)).is_none());
++
++        // Undo restores the texts with their hosts.
++        let changes = doc.undo().unwrap().unwrap();
++        assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
++        assert_eq!(label(&ps, tag).unwrap().text, "-K9");
++    }
++
+     #[test]
+     fn artwork_text_and_tag_anchor() {
+         struct Motor;
+diff --git a/crates/novo-canvas/src/scene.rs b/crates/novo-canvas/src/scene.rs
+index 45ec276..6745c11 100644
+--- a/crates/novo-canvas/src/scene.rs
++++ b/crates/novo-canvas/src/scene.rs
+@@ -210,7 +210,8 @@ impl BoxMode {
+ #[derive(Clone, Copy, Debug, PartialEq)]
+ pub struct Hit {
+     pub id: ItemId,
+-    /// Distance from the pick point to the item's ink, in world units.
++    /// Distance from the pick point to the nearest of the item's lines
++    /// or label boxes, in world units.
+     pub distance: f32,
+     /// The label that was hit, when text was nearer than any line.
+     pub label: Option<usize>,
+-- 
+2.43.0
+

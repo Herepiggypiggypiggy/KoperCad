@@ -3,6 +3,25 @@
 For a fresh cloud session that takes over as **integration lead**: the role that coordinates the threads and merges PRs.
 Last updated 2026-10-14 17:17 UTC (final from the first lead session) by the integration lead (session_011PfTJ1QaP1JQJPwXcFnxBE).
 
+## 0. Current state (2026-10-14 18:20 UTC, cloud lead session_01DZ68tTULUv7Uhe8ecKbC47)
+Sections 6 and 11 below are the 17:17 snapshot; this section supersedes them.
+- Every project thread hit its session limit (resets 21:20 UTC). This cloud session is the lead meanwhile. It may push only to `claude/youthful-franklin-aey18d`, and merges only on a reviewer's READY (auto-mode refuses unreviewed merges).
+- Merged since: #35 (2e0fad6, by the old lead's job), #20 (6d10ab4, READY 2d60fdd, CI green).
+- `handoff/` (this folder) is now in the repo on `claude/youthful-franklin-aey18d`; CLAUDE.md points threads at it. Needs a PR + READY to reach main.
+- #35 fallout found by merging each PR with main: #36 did not compile (Text matches), #29 and #30 had one failing test each. #20, #28, #31, #34, #38, #41, #42 pass on main.
+- Lead fixes done locally, saved as `handoff/<thread>/lead-fixes/` (git bundle that fast-forwards the PR branch + readable patch + README with apply steps):
+  | PR | Thread folder | Fixed head | What |
+  | --- | --- | --- | --- |
+  | #28 | ws3 | a3302fc | junction dot for 3+ wires; Text records, no double tags, potential labels |
+  | #29 | ws8 | c3f4d7f | undo yields to text fields; copied main poles get a new device; duplicate copies texts; PE join test |
+  | #30 | ws11 | 351d8cc | core terminal rule (own Settings removed), PEN, pin refit, rename/level validation |
+  | #36 | ws7 | 2a43650 | Text compile fix, Terminal.part, lossless bulk table (3 data-loss bugs) |
+  Each owner (or a session allowed to push to that branch) applies the bundle, re-runs checks, pushes, pings the reviewer.
+- Still waiting on reviewers: #31, #34, #41 (workflow-only; merge on main reviewer READY), #42; #38 waits on the design reviewer's recheck at 904aae0.
+- Experimental build: run 166 failed before getting a runner and cancelled main's run; lead re-ran it by workflow_dispatch at ~18:00 UTC. With #36 broken on main, the old workflow falls back to main only until #41 merges or #36 is fixed.
+- Crate-row conflicts: #29, #31, #36, #38 each add a row to CLAUDE.md and Cargo.toml at the same spot; whichever merges first, the others need a main merge (keep both rows).
+- Trap: agents sharing one CARGO_TARGET_DIR across worktrees can run another worktree's stale test binary (false green). Give each worktree its own target dir.
+
 ## 1. What this is
 NovoElectric is a local-first electrical CAD program in Rust: egui/eframe 0.36, wgpu, SQLite, with PyO3 as the scripting layer.
 - Repository: `Herepiggypiggypiggy/NovoElectric`, default branch `main`.
