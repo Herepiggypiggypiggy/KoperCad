@@ -64,10 +64,10 @@ pub(crate) struct Workbench {
     /// Design-check results for one project revision.
     pub(super) problems: Option<(u64, Vec<Problem>)>,
     /// Where the issue pill was drawn, so its own click does not close
-    /// the list it opens.
+    /// the outline it opens.
     pub(super) pill_rect: egui::Rect,
-    /// The issue list under the pill is open.
-    pub(super) issues_open: bool,
+    /// The outline's Issues filter chips: errors, warnings, infos shown.
+    pub(super) issue_filter: [bool; 3],
     /// F8 position in the problem list.
     pub(super) problem_at: Option<usize>,
     /// The last PDF written, for tests and the toast.
@@ -104,7 +104,7 @@ impl Default for Workbench {
             marks: true,
             problems: None,
             pill_rect: egui::Rect::NOTHING,
-            issues_open: false,
+            issue_filter: [true; 3],
             problem_at: None,
             last_export: None,
         }
@@ -303,18 +303,18 @@ impl NovoApp {
         }
     }
 
-    /// Escape closes the command field or a list over the canvas first.
-    /// Taken before the canvas runs, which would read it as its own Escape
-    /// ladder while the pointer is over the drawing.
+    /// Escape closes the command field, a list or the outline flyout over
+    /// the canvas first. Taken before the canvas runs, which would read it
+    /// as its own Escape ladder while the pointer is over the drawing.
     pub(super) fn escape_popups(&mut self, ctx: &egui::Context) {
-        let open = self.wb.field.is_open() || self.wb.occurrences.is_some() || self.wb.issues_open;
+        let open = self.wb.field.is_open() || self.wb.occurrences.is_some() || self.outline_open;
         if open && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
             if self.wb.field.is_open() {
                 self.wb.field.close();
             } else if self.wb.occurrences.is_some() {
                 self.wb.occurrences = None;
             } else {
-                self.wb.issues_open = false;
+                self.outline_open = false;
             }
         }
     }
@@ -400,7 +400,7 @@ impl NovoApp {
             "view.cables_drawer" => self.toggle_drawer(Drawer::Cables),
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
             "view.toggle_marks" => self.wb.marks ^= true,
-            "check.problems" => self.wb.issues_open = true,
+            "check.problems" => self.show_issues(false),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),
             "export.pdf" => {

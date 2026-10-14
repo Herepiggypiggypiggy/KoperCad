@@ -29,6 +29,22 @@ use novo_theme::widgets::{primary_button, section_label, segment};
 use workbench::Workbench;
 pub(crate) use workbench::app_runs;
 
+/// What the outline lists (docs/DESIGN.md §3). Changes comes later.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OutlineMode {
+    Pages,
+    Issues,
+}
+
+impl OutlineMode {
+    fn label(self) -> &'static str {
+        match self {
+            OutlineMode::Pages => "Pages",
+            OutlineMode::Issues => "Issues",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Level {
     Info,
@@ -94,6 +110,8 @@ pub struct NovoApp {
     focus_mode: bool,
     /// The outline flyout is showing over the canvas.
     outline_open: bool,
+    /// What the outline lists.
+    outline_mode: OutlineMode,
     /// The breadcrumb's page link this frame. A click on it toggles the
     /// flyout, so the flyout must not count it as a click elsewhere.
     breadcrumb_link: Option<egui::Response>,
@@ -148,6 +166,7 @@ impl NovoApp {
             autosave_failing: false,
             focus_mode: false,
             outline_open: false,
+            outline_mode: OutlineMode::Pages,
             breadcrumb_link: None,
             page_filter: String::new(),
             recent_pages: Vec::new(),
@@ -614,7 +633,6 @@ impl NovoApp {
         self.toasts(&ctx, canvas_rect);
 
         self.occurrences_popup(&ctx, canvas_rect);
-        self.issues_popup(&ctx, canvas_rect);
         self.command_field(&ctx, canvas_rect);
         self.recovery_dialog(&ctx);
         self.about_dialog(&ctx);
@@ -789,16 +807,21 @@ impl NovoApp {
         }
     }
 
-    /// The outline's content: mode tabs, then the page list. Picking a page
-    /// closes the flyout.
+    /// The outline's content: mode tabs, then the pages or the issues.
+    /// Picking a page or an issue closes the flyout.
     fn outline(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
         ui.set_min_width(ui.available_width());
         ui.horizontal(|ui| {
-            let _ = ui.selectable_label(true, "Pages");
-            for mode in ["Issues", "Changes"] {
-                ui.add_enabled(false, egui::Button::selectable(false, mode))
-                    .on_disabled_hover_text("Comes later");
+            for mode in [OutlineMode::Pages, OutlineMode::Issues] {
+                if ui
+                    .selectable_label(self.outline_mode == mode, mode.label())
+                    .clicked()
+                {
+                    self.outline_mode = mode;
+                }
             }
+            ui.add_enabled(false, egui::Button::selectable(false, "Changes"))
+                .on_disabled_hover_text("Comes later");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let pinned = self.outline_pinned();
                 let pin = egui::Button::selectable(pinned, "Pin");
@@ -815,6 +838,12 @@ impl NovoApp {
                 }
             });
         });
+        if self.outline_mode == OutlineMode::Issues {
+            if self.issues_list(ui) {
+                self.outline_open = false;
+            }
+            return;
+        }
         ui.add(
             egui::TextEdit::singleline(&mut self.page_filter)
                 .hint_text("Filter pages")
@@ -885,7 +914,10 @@ impl NovoApp {
             .fixed_pos(canvas.left_top() + egui::vec2(8.0, 8.0))
             .show(ctx, |ui| {
                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-                ui.add(egui::Button::selectable(self.outline_open, "Pages"))
+                ui.add(egui::Button::selectable(
+                    self.outline_open,
+                    self.outline_mode.label(),
+                ))
             })
             .inner;
         if toggle.clicked() {
@@ -912,8 +944,13 @@ impl NovoApp {
         // The "Pages" toggle and the breadcrumb's page link open and close
         // the flyout themselves; a click on either is not a click elsewhere.
         let opener = |r: &egui::Response| r.clicked() || r.hovered();
+        // The issue pill opens it in Issues mode.
+        let on_pill = ctx
+            .pointer_interact_pos()
+            .is_some_and(|p| self.wb.pill_rect.contains(p));
         let elsewhere = area.response.clicked_elsewhere()
             && !opener(&toggle)
+            && !on_pill
             && !self.breadcrumb_link.as_ref().is_some_and(opener);
         if escape || elsewhere {
             self.outline_open = false;
@@ -1694,6 +1731,33 @@ mod tests {
         frame(&ctx, &mut app, click_at(egui::pos2(1000.0, 500.0)));
         frame(&ctx, &mut app, sized(1366.0));
         assert!(!app.outline_open);
+    }
+
+    #[test]
+    fn the_issue_pill_opens_the_outline_in_issues_mode() {
+        let ctx = themed_ctx();
+        let mut app = app_with(MemoryBackend::default());
+        app.run(&ctx, Action::NewProject);
+        frame(&ctx, &mut app, sized(1366.0));
+        assert!(!app.outline_pinned());
+        let pill = app.wb.pill_rect;
+        assert!(pill.is_positive(), "the pill is drawn");
+
+        frame(&ctx, &mut app, click_at(pill.center()));
+        frame(&ctx, &mut app, sized(1366.0));
+        assert!(app.outline_open, "the pill opens the flyout");
+        assert_eq!(app.outline_mode, OutlineMode::Issues);
+
+        // A second click on the pill closes it again.
+        frame(&ctx, &mut app, click_at(pill.center()));
+        frame(&ctx, &mut app, sized(1366.0));
+        assert!(!app.outline_open);
+
+        // F8-style requests (check.problems) open it, never close it.
+        app.show_issues(false);
+        assert!(app.outline_open);
+        app.show_issues(false);
+        assert!(app.outline_open, "without toggle it stays open");
     }
 
     #[test]
