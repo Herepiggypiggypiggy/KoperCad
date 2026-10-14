@@ -33,6 +33,7 @@ Work is split into workstreams (WS-xx), each run by its own Claude thread.
 | `novo-terminals` | WS-11 | Terminal strips, same-name join rule, terminal connection screens |
 | `novo-parts` | WS-07 | Part catalog, part assignment, property sheet model, bulk edit |
 | `novo-workflow` | WS-08 | Keyboard workflow: keymap, commands, palette search, Tab orientation, smart duplicate |
+| `novo-checks` | WS-14 | Design checks: problems with severity and location |
 | `novo-sim` | WS-19 | Simulation engine (Phase 4) |
 | `novo-theme` | Layout and branding | Dark theme, design tokens, icons, logo (`assets/branding`) |
 | `novo-app` | WS-01 | Application shell, wiring crates together |

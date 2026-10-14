@@ -17,6 +17,7 @@ novo-sim = { path = "crates/novo-sim" }
 novo-parts = { path = "crates/novo-parts" }
 novo-workflow = { path = "crates/novo-workflow" }
 novo-theme = { path = "crates/novo-theme" }
+novo-checks = { path = "crates/novo-checks" }
 bytemuck = { version = "1", features = ["derive"] }
 egui = "0.36"
 egui-wgpu = "0.36"
