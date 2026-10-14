@@ -3,7 +3,7 @@
 For a fresh cloud session that takes over as **integration lead**: the role that coordinates the threads and merges PRs.
 Last updated 2026-10-14 17:17 UTC (final from the first lead session) by the integration lead (session_011PfTJ1QaP1JQJPwXcFnxBE).
 
-## 0. Current state (2026-10-14 19:35 UTC, coordinator session_01DZ68tTULUv7Uhe8ecKbC47)
+## 0. Current state (2026-10-14 20:05 UTC, coordinator session_01DZ68tTULUv7Uhe8ecKbC47)
 Sections 6 and 11 below are the 17:17 snapshot; this section supersedes them.
 - **Who runs the project:** Tadjiro handed full coordination to the cloud coordinator session above. Project threads resume at **23:20 UTC**; each was sent a briefing and must `git fetch` and read its own `handoff/<thread>/` on main first.
 - **Sessions:** see `handoff/coordinator/cloud-roster.md` (reviewers A, B, C, design reviewer, fixer, workers WS-12/13/28, Gate 1 integration).
@@ -13,20 +13,18 @@ Sections 6 and 11 below are the 17:17 snapshot; this section supersedes them.
   - Any CHANGES NEEDED blocks a merge, whoever else said READY. The coordinator never approves work it or its helpers wrote.
   - After READY, a head that moved only by mechanical main merges keeps READY if `scripts/check-mechanical-merge.sh <ready> <head>` prints OK and `cargo test --workspace` passes on the new head; paste the output on the PR. Anything else goes back to the reviewer.
 - **CI is down:** GitHub Actions starts no jobs on this account (billing / spending limit; owner to check, or making the repo public gives free minutes). The reviewers' local fmt + clippy -D warnings + tests are the CI signal; Windows is unverified.
-- **Merged today (19):** #20 theme, #41 CI/experimental, #34 app storage+canvas, #28 canvas, #29 workflow, #42 Gate 1 tests, #45 core SetText/Page.structure, #44 handoffs, #36 parts, #30 terminals, #48 tester gaps, #47 marks+page frame, #50 design checks, #31 xref, #57 tester gaps + F3, #51 fixed crate list, #52 pre-public scrub, #38 schematic editor, #54 cables.
+- **Merged today (28):** #20 theme, #41 CI/experimental, #34 app storage+canvas, #28 canvas, #29 workflow, #42 Gate 1 tests, #45 core SetText/Page.structure, #44 handoffs, #36 parts, #30 terminals, #48 tester gaps, #47 marks+page frame, #50 design checks, #31 xref, #57 tester gaps + F3, #51 fixed crate list, #52 pre-public scrub, #38 schematic editor, #54 cables, #58 + #61 merge-main.sh, #59 example rename, #49 PDF export, #46 Workbench window, #60 handoff, #56 CLI + Python, #64, #55 reports.
 - **Open PRs:**
   | PR | What | State |
   | --- | --- | --- |
-  | #46 | WS-01 Workbench window | design READY at 1fb64af; reviewer A pending |
-  | #49 | WS-09 PDF export | READY 95d4749; main merge ad4fd1e re-placed pdf-writer dep → B confirming |
-  | #53 | Gate 1 integration (draft, stacked) | worker hosting editor/command field/terminals/xref/PDF in novo-app |
-  | #55 | WS-13 reports | B READY 37f684f (CSV injection fixed); C pending; main merge must re-add rust_xlsxwriter + calamine deps |
-  | #56 | WS-28 CLI + Python | C CHANGES NEEDED (create/save_as deletes recovery file); worker fixing on 0089b7c |
-  | #58 | merge-main.sh keeps main's crate list | C re-checking 42e9b02 |
-  | #59 | rename novo-xref scale example | B pending |
-- **Crate list:** fixed in CLAUDE.md and `[workspace.dependencies]` since #51; PRs never edit those lines. Merge main with `scripts/merge-main.sh` (#58 makes it keep main's list exactly). Branches older than #51 that add external deps need those dep lines re-added by hand after taking main's Cargo.toml.
+  | #53 | Gate 1 integration (editor, command field, terminals, xref, PDF in novo-app) | A's data-loss finding fixed at 84eff50; design CHANGES NEEDED: Enter-target proposal drawn solid, no problem marks on the drawing, PDF can collide/overwrite in Documents\NovoElectric |
+  | #62 | `coil K1` places -K1's coil | reviewer C |
+  | #63 | `accept all` runs accept-all; natural tag order | reviewer C |
+  | #65 | WS-28 export pdf / check on real engines | reviewers B and C |
+- **Queued:** fixer: WS-07 follow-up (#36 notes, Terminal.part), then `novo_editor::art` behind a light feature (only `novo-canvas/model`) for novo-cli, reviewer A. WS-13: follow-up PR. WS-28: Excel BOM export, pytest done-criterion.
+- **Crate list:** fixed in CLAUDE.md and `[workspace.dependencies]` since #51; PRs never edit those lines. Merge main with `scripts/merge-main.sh` (#58 makes it keep main's list exactly). Since #61 it also keeps a branch's external dependency lines and rejects duplicate keys, so nothing is re-added by hand.
 - **Going public:** no secrets anywhere in history; personal paths/ids scrubbed from current files (#52); the owner's Windows user name and an EPLAN folder name remain in older commits. Owner decides (accept, or fresh repo) and flips visibility in Settings.
-- **Next for Gate 1:** #46 and #49 merge → #53 rebases and lands → tester drives the Gate 1 scenario through `NovoApp::execute`.
+- **Next for Gate 1:** #53 lands → tester drives the Gate 1 scenario through `NovoApp::execute`.
 - **Traps:** worktrees sharing one CARGO_TARGET_DIR run stale test binaries; give each its own and delete when done (disk ~40 GB). Example names must be unique across crates (cargo output collision, #50/#59).
 
 ## 1. What this is
