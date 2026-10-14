@@ -1,0 +1,30 @@
+format = 1
+id = "iec/passive/capacitor_polarized"
+name = "Polarised capacitor"
+description = "Polarised (electrolytic) capacitor."
+standard = "IEC 60617"
+category = "passive"
+function = "passive.capacitor.polarized"
+keywords = ["capacitor", "electrolytic", "polarized", "polarised"]
+
+connections = [
+  { id = "+", at = [0, 0], dir = "up" },
+  { id = "-", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-4.5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 7] },
+  { kind = "line", from = [-3, 7], to = [3, 7] },
+  { kind = "rect", at = [-3, 9], size = [6, 0.8], fill = true },
+  { kind = "text", at = [3, 5], text = "+" },
+  { kind = "line", from = [0, 9.8], to = [0, 16] },
+]
+
+[behavior]
+kind = "passive"
+type = "capacitor"
+poles = [["+", "-"]]

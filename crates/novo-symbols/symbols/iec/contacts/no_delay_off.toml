@@ -1,0 +1,32 @@
+format = 1
+id = "iec/contacts/no_delay_off"
+name = "Make contact, delayed on opening"
+description = "Timer contact that opens after the off-delay of its timer relay."
+standard = "IEC 60617"
+category = "contacts"
+function = "contact.no.delay_off"
+keywords = ["timer", "delay", "no", "delay off"]
+
+connections = [
+  { id = "17", at = [0, 0], dir = "up" },
+  { id = "18", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-9, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 5] },
+  { kind = "line", from = [0, 16], to = [0, 11] },
+  { kind = "line", from = [0, 11], to = [-4, 4] },
+  { kind = "line", from = [-1.714, 7.2], to = [-5.714, 7.2] },
+  { kind = "line", from = [-1.714, 8.8], to = [-5.714, 8.8] },
+  { kind = "arc", center = [-5.714, 8], r = 1.5, start = 90, end = 270 },
+]
+
+[behavior]
+kind = "contact"
+normally = "open"
+delay = "off"
+poles = [["17", "18"]]

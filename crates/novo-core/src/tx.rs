@@ -83,6 +83,9 @@ impl<'p> Tx<'p> {
             .clone();
         let mut after = before.clone();
         edit(&mut after);
+        if after.id() != id {
+            return Err(ModelError::IdChanged(id.into()));
+        }
         self.replace(after.into())
     }
 
@@ -286,9 +289,10 @@ impl<'p> Tx<'p> {
         }
     }
 
-    /// Splits a wire at the point closest to `at` with a new junction, for
-    /// branching off (T-junction). The original wire keeps its id, number and
-    /// cable core and now ends on the junction; a copy runs on from it.
+    /// Splits a wire with a new junction at the point of the wire closest to
+    /// `at`, for branching off (T-junction). The original wire keeps its id,
+    /// number and cable core and now ends on the junction; a new unnumbered
+    /// wire with the same properties runs on from it.
     pub fn split_wire(&mut self, wire: WireId, at: Point) -> Result<(JunctionId, WireId)> {
         let original = self
             .project
@@ -307,6 +311,7 @@ impl<'p> Tx<'p> {
                 da.total_cmp(&db)
             })
             .unwrap_or(0);
+        let at = closest_on_segment(at, points[segment], points[segment + 1]);
         let junction = self.add_junction(original.page, at)?;
         let mut tail = original.clone();
         self.update::<Wire>(wire, |w| {
@@ -317,6 +322,7 @@ impl<'p> Tx<'p> {
             tail.id = id;
             tail.from = Endpoint::junction(junction);
             tail.route = original.route[segment..].to_vec();
+            tail.number = None;
             tail
         })?;
         Ok((junction, second))
@@ -401,13 +407,17 @@ impl<'p> Tx<'p> {
     }
 }
 
-fn distance_to_segment(p: Point, a: Point, b: Point) -> f64 {
+fn closest_on_segment(p: Point, a: Point, b: Point) -> Point {
     let ab = b - a;
     let len2 = ab.x * ab.x + ab.y * ab.y;
     if len2 == 0.0 {
-        return p.distance(a);
+        return a;
     }
     let ap = p - a;
     let t = ((ap.x * ab.x + ap.y * ab.y) / len2).clamp(0.0, 1.0);
-    p.distance(Point::new(a.x + ab.x * t, a.y + ab.y * t))
+    Point::new(a.x + ab.x * t, a.y + ab.y * t)
+}
+
+fn distance_to_segment(p: Point, a: Point, b: Point) -> f64 {
+    p.distance(closest_on_segment(p, a, b))
 }

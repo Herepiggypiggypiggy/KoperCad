@@ -1,0 +1,45 @@
+format = 1
+id = "iec/protection/fuse_switch_3p"
+name = "Fuse switch-disconnector, 3-pole"
+description = "3-pole switch-disconnector whose moving contacts carry the fuse links."
+standard = "IEC 60617"
+category = "protection"
+function = "protection.fuse_switch"
+keywords = ["fuse switch", "fuse disconnector", "nh", "3p"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+  { id = "3", at = [8, 0], dir = "up" },
+  { id = "4", at = [8, 16], dir = "down" },
+  { id = "5", at = [16, 0], dir = "up" },
+  { id = "6", at = [16, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 5] },
+  { kind = "line", from = [-1.5, 5], to = [1.5, 5] },
+  { kind = "line", from = [0, 16], to = [0, 11] },
+  { kind = "line", from = [0, 11], to = [-4, 4] },
+  { kind = "polyline", points = [[-1.764, 10.13], [-4.146, 5.962], [-2.236, 4.87], [0.146, 9.038]], closed = true },
+  { kind = "line", from = [8, 0], to = [8, 5] },
+  { kind = "line", from = [6.5, 5], to = [9.5, 5] },
+  { kind = "line", from = [8, 16], to = [8, 11] },
+  { kind = "line", from = [8, 11], to = [4, 4] },
+  { kind = "polyline", points = [[6.236, 10.13], [3.854, 5.962], [5.764, 4.87], [8.146, 9.038]], closed = true },
+  { kind = "line", from = [16, 0], to = [16, 5] },
+  { kind = "line", from = [14.5, 5], to = [17.5, 5] },
+  { kind = "line", from = [16, 16], to = [16, 11] },
+  { kind = "line", from = [16, 11], to = [12, 4] },
+  { kind = "polyline", points = [[14.236, 10.13], [11.854, 5.962], [13.764, 4.87], [16.146, 9.038]], closed = true },
+  { kind = "line", from = [-1.714, 8], to = [14.286, 8], stroke = "dashed" },
+]
+
+[behavior]
+kind = "fuse"
+switched = true
+poles = [["1", "2"], ["3", "4"], ["5", "6"]]

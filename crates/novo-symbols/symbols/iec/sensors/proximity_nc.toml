@@ -1,0 +1,32 @@
+format = 1
+id = "iec/sensors/proximity_nc"
+name = "Proximity switch, break contact"
+description = "Inductive or capacitive proximity sensor with a normally closed switching output."
+standard = "IEC 60617"
+category = "sensors"
+function = "contact.nc.proximity"
+keywords = ["proximity", "sensor", "inductive", "nc"]
+
+connections = [
+  { id = "21", at = [0, 0], dir = "up" },
+  { id = "22", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-16, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 5] },
+  { kind = "line", from = [0, 5], to = [3.5, 5] },
+  { kind = "line", from = [0, 16], to = [0, 11] },
+  { kind = "line", from = [0, 11], to = [4, 4] },
+  { kind = "line", from = [1.714, 8], to = [-8, 8], stroke = "dashed" },
+  { kind = "polyline", points = [[-8, 8], [-10, 6], [-12, 8], [-10, 10]], closed = true },
+  { kind = "polyline", points = [[-14, 6], [-14, 10], [-12.5, 10]] },
+]
+
+[behavior]
+kind = "contact"
+normally = "closed"
+poles = [["21", "22"]]
