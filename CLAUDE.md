@@ -30,6 +30,7 @@ Work is split into workstreams (WS-xx), each run by its own Claude thread.
 | `novo-canvas` | WS-03 | GPU canvas: pan, zoom, snap, hit testing, selection |
 | `novo-storage` | WS-04 | SQLite project file, autosave, migrations |
 | `novo-symbols` | WS-05 | IEC 60617 symbols, connection points, behavior slots |
+| `novo-parts` | WS-07 | Part catalog, part assignment, property sheet model, bulk edit |
 | `novo-workflow` | WS-08 | Keyboard workflow: keymap, commands, palette search, Tab orientation, smart duplicate |
 | `novo-sim` | WS-19 | Simulation engine (Phase 4) |
 | `novo-theme` | Layout and branding | Dark theme, design tokens, icons, logo (`assets/branding`) |

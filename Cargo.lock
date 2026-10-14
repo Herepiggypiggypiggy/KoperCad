@@ -1518,6 +1518,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-parts"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-tests",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "novo-sim"
 version = "0.1.0"
 
