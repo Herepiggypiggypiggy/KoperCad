@@ -1605,6 +1605,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-xref"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-symbols",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "num-traits"
 version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
