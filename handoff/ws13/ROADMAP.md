@@ -2,33 +2,44 @@
 
 Roadmap scope: generated-page framework, bill of materials, device list, wire
 list, table of contents, report templates, Excel export. Done when reports
-regenerate within a second of any edit.
+regenerate within a second of any edit (met: ~145 ms debug on 10k objects,
+6 reports, 291 pages).
 
-Crate: `crates/novo-reports` (owner WS-13). Engine only; no UI.
+Crate: `crates/novo-reports` (owner WS-13). Engine only, no UI.
 
-## Done (first PR, branch `claude/ws13-reports`)
-- Typed table model: ReportOutput → Section → Row → Cell (Text/Int/Number/Empty), Column (header, align, relative width), row `sources` (model ids, for jump-to later).
-- `Report` trait (pure fn Project → ReportOutput, `dependencies()` by EntityKind + info) = the seam for WS-11 terminal diagrams and WS-12 cable diagrams. Documented in lib.rs.
-- `LiveReports`: notify(ChangeSet) invalidates only affected reports, `get` regenerates lazily; a missed notification can't leave a stale report (rolls forward only from revision-1).
-- Reports: toc, bom (grouped by article; device, terminal and cable parts; cable lengths; "devices without parts" section), devices (=function, +location, parts, page.column locations), wires (pin-to-pin connections; junctions, interruption points, potential feeds collapsed; T-junctions as daisy chains; potential via netlist; cross-section from wire or cable core; cable core).
-- Paging (`paginate`: header repeated, each section on a new page) and `layout_page` → text boxes + rules in mm for WS-03/WS-09 to draw.
-- Excel (rust_xlsxwriter, one sheet per report, numbers as numbers) and CSV (RFC 4180, `;` + decimal comma option, BOM).
-- Tests: exact contents on the Gate 1 fixture, paging, determinism, xlsx round trip (calamine), CSV, timing (10k objects: ~170 ms debug for a worst-case edit + all reports paged and laid out).
-
-## Next, in order
-1. Command-field verbs `export xlsx` / `export csv` / `bom` etc. in novo-workflow (WS-08) or novo-app (WS-01), reading `LiveReports`. Ask those threads; keep this crate engine-only.
-2. App wiring (WS-01): one `LiveReports` per Document, notify on every transaction/undo/redo, `clear()` on project open.
-3. Canvas/PDF drawing of `PageLayout` (WS-03 / WS-09 #49): agree PageSetup margins/title block with their frame.
-4. Report templates: user-chosen columns/order/headers per report (a `Template` that filters and renames `Column.key`s), stored in project info properties or a profile file.
-5. WS-11 adapter: `TerminalDiagram: Report` in novo-terminals once #30 merges (one Section per strip from `screen()`).
-6. BOM: joined terminals' connectors/jumpers (JoinLink) as accessory lines; quantities per structure (=A1 / +CAB) as an option.
-7. Wire list: sort by wire number option; frozen page.column after revision (DESIGN "pinned flow").
+## Done
+- #55 (merged ea47b10):
+  - typed table model and the `Report` trait (the seam for generated pages);
+  - LiveReports (ChangeSet-driven, never stale);
+  - toc, bom, devices and wires reports;
+  - paging plus mm layout;
+  - xlsx (deterministic) and CSV (Excel formula-safe) export.
+- #68 (open; B READY, C pending):
+  - TerminalDiagram and CableDiagram reports;
+  - generated-page sheets (`20`, or `20.1`, `20.2`, ...);
+  - PageSetup aligned to the canvas frame;
+  - project-identity stamp in LiveReports;
+  - xlsx cell-limit cut;
+  - timing-test slack;
+  - empty reports still print one page.
 
 ## Decisions
-- 2026-10-14 (coordinator, from DESIGN.md §2 "automatic and live"): report pages ARE pages. Use `PageKind::Generated { generator }` page records: they appear in the outline, print, and get page numbers and cross-reference columns like any page, while their content is computed from the report on demand and never stored. Command-only views (export xlsx/csv) stay as a convenience. Follow-up: a report with N paged sheets maps onto its Generated page record (sub-page naming such as `20.1`, `20.2` to be agreed with WS-03/WS-09 and the workflow thread).
+- Report pages are `PageKind::Generated { generator }` page records with live content (coordinator, from DESIGN.md §2). Command-only exports (xlsx/csv) stay as a convenience.
+- Multi-sheet naming: the page's own name for a single sheet, `<name>.k` otherwise (proposed in #68; WS-03 and WS-09 still need to adopt it).
 
-## Follow-up PR (from main, after #55 merges): reviewer C notes
-- LiveReports: also key cached output by project identity, not only revision (guards a forgotten `clear()`).
-- xlsx: truncate text over 32,767 chars instead of failing the export.
-- tests/live.rs: debug-build slack factor like novo-canvas/tests/perf.rs.
-- CableDiagram report over `novo_cables::cable_screens` (#54) and TerminalDiagram over novo-terminals `screen()`.
+## Next, in order
+1. Get #68 merged (wait for C; fix only what C asks).
+2. After #72 merges: a BOM test with a strip-level terminal article.
+3. B's #68 notes:
+   - a sheet-name collision rule for `20.1` vs a real page `20.1`;
+   - CableDiagram building screens once.
+4. Coordinate the drawing of generated sheets:
+   - WS-03: canvas draws `layout_sheet` and the sheet name in the title block;
+   - WS-09: PDF emits one page per sheet, with label and bookmark = sheet name;
+   - WS-01: app owns one LiveReports per Document and calls notify/clear.
+5. Report templates: column selection, order, headers and widths per report, stored in project info properties or a profile file.
+6. BOM: joined-terminal accessories (connectors/jumpers from `rules.terminals.join_link`); an option for quantities per structure (=A1 / +CAB).
+7. Wire list:
+   - an option to sort by wire number;
+   - freeze `page.column` after a revision or export (DESIGN "pinned flow").
+8. Command-field verbs (`bom`, `wires`, `export xlsx`) in novo-workflow or novo-app; WS-28 already covers the CLI and Python (#65).
