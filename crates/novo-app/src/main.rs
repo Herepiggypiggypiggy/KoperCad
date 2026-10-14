@@ -14,12 +14,29 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "NovoElectric",
         options,
-        Box::new(|_cc| Ok(Box::<App>::default())),
+        Box::new(|cc| {
+            if let Some(rs) = cc.wgpu_render_state.as_ref() {
+                novo_canvas::widget::install(rs, 1);
+            }
+            Ok(Box::<App>::default())
+        }),
     )
 }
 
-#[derive(Default)]
-struct App;
+struct App {
+    /// Placeholder page until the schematic editor (WS-06) draws real ones.
+    page: novo_canvas::Scene,
+    canvas: novo_canvas::widget::CanvasView,
+}
+
+impl Default for App {
+    fn default() -> Self {
+        Self {
+            page: novo_canvas::demo::sample_page(),
+            canvas: novo_canvas::widget::CanvasView::new(),
+        }
+    }
+}
 
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
@@ -29,10 +46,10 @@ impl eframe::App for App {
                 ui.label(format!("model v{}", novo_core::MODEL_VERSION));
             });
         });
-        egui::CentralPanel::default().show(ui, |ui| {
-            ui.centered_and_justified(|ui| {
-                ui.label("Canvas arrives with WS-03");
+        egui::CentralPanel::default()
+            .frame(egui::Frame::NONE)
+            .show(ui, |ui| {
+                self.canvas.show(ui, &self.page);
             });
-        });
     }
 }

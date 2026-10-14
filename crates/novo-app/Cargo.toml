@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 eframe.workspace = true
+novo-canvas.workspace = true
 novo-core.workspace = true
 
 [lints]
