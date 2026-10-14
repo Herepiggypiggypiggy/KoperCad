@@ -33,5 +33,6 @@ python -m pytest -p no:cacheprovider crates/novo-py/python/tests
 - No novo-core API changes were needed.
 
 ## People
-- Coordinator: session_01DZ68tTULUv7Uhe8ecKbC47. Main reviewer: session_01XEdxpvQFh4HWmurh72tKwp (message it with every new head SHA).
+- Coordinator: session_01DZ68tTULUv7Uhe8ecKbC47. Reviewer for new-crate PRs: main reviewer B session_01QSnXFBDRyvwwzhT1S1gFGN (message it with every new head SHA); reviewer A session_01XEdxpvQFh4HWmurh72tKwp was pinged first.
+- PR #51 pre-registers novo-cli/novo-py rows in Cargo.toml and CLAUDE.md: after it merges, merge main (scripts/merge-main.sh if present), keep one row each. #50 novo-checks, #49 novo-pdf, #55 WS-13 reports (Excel BOM): use them once merged.
 - Roster: /mnt/project-files/coordination/threads.md.
