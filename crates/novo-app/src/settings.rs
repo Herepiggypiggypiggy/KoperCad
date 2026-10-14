@@ -6,28 +6,16 @@ use std::path::{Path, PathBuf};
 const MAX_RECENT: usize = 10;
 const MAX_RECENT_ACTIONS: usize = 20;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
-    pub show_project_panel: bool,
-    pub show_properties_panel: bool,
-    pub show_messages_panel: bool,
+    /// Whether the outline takes space beside the canvas. `None` pins it
+    /// on wide windows only (docs/DESIGN.md §3).
+    pub outline_pinned: Option<bool>,
     /// Most recently used project files, newest first.
     pub recent_projects: Vec<PathBuf>,
     /// Ids of recently run actions, newest first; the palette lists them first.
     pub recent_actions: Vec<String>,
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            show_project_panel: true,
-            show_properties_panel: true,
-            show_messages_panel: false,
-            recent_projects: Vec::new(),
-            recent_actions: Vec::new(),
-        }
-    }
 }
 
 impl Settings {
@@ -68,10 +56,12 @@ mod tests {
 
     #[test]
     fn settings_from_older_versions_still_load() {
-        // Older settings had a theme choice; the app is dark only now.
-        let old = r#"(theme: Light, show_messages_panel: true)"#;
+        // Older settings had a theme choice and panel toggles; both are gone.
+        // Panel toggles went with the Workbench (docs/DESIGN.md §3).
+        let old = r#"(theme: Light, show_messages_panel: true, recent_actions: ["view.fit"])"#;
         let s: Settings = ron::from_str(old).unwrap();
-        assert!(s.show_messages_panel);
+        assert_eq!(s.recent_actions, vec!["view.fit"]);
+        assert_eq!(s.outline_pinned, None);
     }
 
     #[test]

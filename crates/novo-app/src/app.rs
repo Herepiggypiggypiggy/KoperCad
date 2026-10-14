@@ -1,4 +1,7 @@
-//! The main window: menus, panels, status bar, dialogs and action dispatch.
+//! The main window, laid out as the Workbench of docs/DESIGN.md §3: a thin
+//! top bar, the page outline (pinned or a flyout), the canvas with its HUD,
+//! toasts for messages, the dialogs and action dispatch. There is no menu
+//! bar and no status bar.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -13,7 +16,7 @@ use crate::canvas::{CanvasView, OpenPage};
 use crate::palette::{Entry, Palette, Target};
 use crate::settings::Settings;
 use crate::{APP_NAME, PROJECT_EXTENSION};
-use novo_theme::widgets::{primary_button, section_label};
+use novo_theme::widgets::{primary_button, section_label, segment};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Level {
@@ -26,7 +29,24 @@ pub enum Level {
 pub struct Message {
     pub level: Level,
     pub text: String,
+    /// When it was raised; info toasts fade after [`TOAST_INFO`].
+    pub at: Instant,
+    /// Clicked away; warnings and errors stay until then.
+    pub dismissed: bool,
 }
+
+/// How long an info toast stays up.
+const TOAST_INFO: Duration = Duration::from_secs(5);
+/// Most toasts shown at once; older ones wait in [`NovoApp::messages`].
+const MAX_TOASTS: usize = 3;
+/// Height of the top bar.
+const TOP_BAR: f32 = 42.0;
+/// Width of the outline, pinned or as a flyout.
+const OUTLINE_WIDTH: f32 = 248.0;
+/// Windows at least this wide pin the outline unless the user chose.
+const PIN_OUTLINE_FROM: f32 = 1700.0;
+/// Pages listed under "Recent" in the outline.
+const MAX_RECENT_PAGES: usize = 5;
 
 /// An action that throws away the open project, so it first asks about
 /// unsaved changes.
@@ -61,6 +81,16 @@ pub struct NovoApp {
     next_tick: Instant,
     /// The last autosave failed; reported once until it works again.
     autosave_failing: bool,
+    /// Focus mode (Ctrl+Shift+F) hides everything that is not pinned.
+    focus_mode: bool,
+    /// The outline flyout is showing over the canvas.
+    outline_open: bool,
+    /// Text in the outline's page filter.
+    page_filter: String,
+    /// Pages visited this session, newest first.
+    recent_pages: Vec<PageId>,
+    /// Window width last frame, which decides whether the outline pins.
+    window_width: f32,
 }
 
 /// How long to wait before retrying a failed autosave.
@@ -101,6 +131,11 @@ impl NovoApp {
             started: false,
             next_tick: Instant::now(),
             autosave_failing: false,
+            focus_mode: false,
+            outline_open: false,
+            page_filter: String::new(),
+            recent_pages: Vec::new(),
+            window_width: 0.0,
         }
     }
 
@@ -143,6 +178,8 @@ impl NovoApp {
     /// Keeps the shown page valid after undo, redo or a reload removed it.
     fn fix_current_page(&mut self) {
         let pages = self.pages();
+        self.recent_pages
+            .retain(|r| pages.iter().any(|(id, _)| id == r));
         if !pages.iter().any(|(id, _)| Some(*id) == self.current_page) {
             self.current_page = pages.first().map(|(id, _)| *id);
         }
@@ -175,6 +212,7 @@ impl NovoApp {
             | Action::SaveProjectAs
             | Action::CloseProject
             | Action::ZoomToFit => open,
+            Action::ShowCabinet => false,
             Action::Undo => doc.is_some_and(|d| d.can_undo()),
             Action::Redo => doc.is_some_and(|d| d.can_redo()),
             _ => true,
@@ -203,14 +241,20 @@ impl NovoApp {
             Action::Undo => self.undo_redo(false),
             Action::Redo => self.undo_redo(true),
             Action::ZoomToFit => self.canvas.zoom_to_fit(),
-            Action::ToggleProjectPanel => {
-                self.settings.show_project_panel ^= true;
+            // The only canvas so far; Cabinet stays disabled until it exists.
+            Action::ShowSchematic | Action::ShowCabinet => {}
+            Action::PinOutline => {
+                let pinned = !self.outline_pinned();
+                self.settings.outline_pinned = Some(pinned);
+                self.outline_open = false;
             }
-            Action::TogglePropertiesPanel => {
-                self.settings.show_properties_panel ^= true;
+            Action::FocusMode => {
+                self.focus_mode ^= true;
+                self.outline_open = false;
             }
-            Action::ToggleMessagesPanel => {
-                self.settings.show_messages_panel ^= true;
+            Action::FullScreen => {
+                let full = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!full));
             }
             Action::CommandPalette => self.palette.open(),
             Action::About => self.show_about = true,
@@ -224,7 +268,12 @@ impl NovoApp {
             Level::Warning => log::warn!("{text}"),
             Level::Error => log::error!("{text}"),
         }
-        self.messages.push(Message { level, text });
+        self.messages.push(Message {
+            level,
+            text,
+            at: Instant::now(),
+            dismissed: false,
+        });
     }
 
     // ------------------------------------------------------------------
@@ -416,32 +465,38 @@ impl NovoApp {
             picked.extend(self.consume_shortcuts(&ctx));
         }
 
-        egui::Panel::top("menu_bar").show(ui, |ui| self.menu_bar(ui, &mut picked));
-        egui::Panel::bottom("status_bar").show(ui, |ui| self.status_bar(ui));
-        if self.settings.show_messages_panel {
-            egui::Panel::bottom("messages")
-                .resizable(true)
-                .default_size(140.0)
-                .show(ui, |ui| self.messages_panel(ui));
+        self.window_width = ctx.content_rect().width();
+        let pinned = self.outline_pinned() && !self.focus_mode;
+        if pinned {
+            self.outline_open = false;
         }
-        if self.settings.show_project_panel {
-            egui::Panel::left("project")
-                .resizable(true)
-                .default_size(220.0)
-                .show(ui, |ui| self.project_panel(ui));
+
+        egui::Panel::top("top_bar")
+            .exact_size(TOP_BAR)
+            .show(ui, |ui| self.top_bar(ui, &mut picked));
+        if pinned && self.is_open() {
+            egui::Panel::left("outline")
+                .exact_size(OUTLINE_WIDTH)
+                .resizable(false)
+                .show(ui, |ui| self.outline(ui, &mut picked));
         }
-        if self.settings.show_properties_panel {
-            egui::Panel::right("properties")
-                .resizable(true)
-                .default_size(260.0)
-                .show(ui, properties_panel);
+        let canvas_rect = egui::CentralPanel::no_frame()
+            .show(ui, |ui| {
+                let open = self
+                    .current_page
+                    .and_then(|page| OpenPage::new(&mut *self.backend, page));
+                self.canvas.show(ui, open);
+            })
+            .response
+            .rect;
+
+        if !self.focus_mode {
+            if !pinned && self.is_open() {
+                self.outline_flyout(&ctx, canvas_rect, &mut picked);
+            }
+            self.hud(&ctx, canvas_rect);
         }
-        egui::CentralPanel::no_frame().show(ui, |ui| {
-            let open = self
-                .current_page
-                .and_then(|page| OpenPage::new(&mut *self.backend, page));
-            self.canvas.show(ui, open);
-        });
+        self.toasts(&ctx, canvas_rect);
 
         if self.palette.is_open() {
             let entries = self.palette_entries();
@@ -530,172 +585,335 @@ impl NovoApp {
     }
 
     // ------------------------------------------------------------------
-    // Panels
+    // Workbench chrome
 
-    fn menu_bar(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
-        egui::MenuBar::new().ui(ui, |ui| {
-            ui.menu_button("File", |ui| {
-                for a in [Action::NewProject, Action::OpenProject] {
-                    self.action_button(ui, a, picked);
-                }
-                ui.add_enabled_ui(!self.settings.recent_projects.is_empty(), |ui| {
-                    ui.menu_button("Open recent", |ui| {
-                        for path in self.settings.recent_projects.clone() {
-                            if ui.button(path.display().to_string()).clicked() {
-                                let ctx = ui.ctx().clone();
-                                self.discard_then(&ctx, Discarding::OpenPath(path));
-                            }
-                        }
-                    });
-                });
-                ui.separator();
-                for a in [
-                    Action::SaveProject,
-                    Action::SaveProjectAs,
-                    Action::CloseProject,
-                ] {
-                    self.action_button(ui, a, picked);
-                }
-                ui.separator();
-                self.action_button(ui, Action::Quit, picked);
+    /// Whether the outline takes space beside the canvas: the user's
+    /// choice, otherwise only on wide windows.
+    fn outline_pinned(&self) -> bool {
+        self.settings
+            .outline_pinned
+            .unwrap_or(self.window_width >= PIN_OUTLINE_FROM)
+    }
+
+    /// Shows `page` on the canvas and puts it first under "Recent".
+    fn show_page(&mut self, page: PageId) {
+        self.current_page = Some(page);
+        self.recent_pages.retain(|&p| p != page);
+        self.recent_pages.insert(0, page);
+        self.recent_pages.truncate(MAX_RECENT_PAGES);
+    }
+
+    /// Autosave state for the top bar.
+    fn saved_state(&self) -> &'static str {
+        if !self.is_open() {
+            ""
+        } else if self.project_path.is_none() {
+            "Not saved yet"
+        } else if self.is_dirty() {
+            "Unsaved changes"
+        } else {
+            "Saved"
+        }
+    }
+
+    /// Mark (project menu), Schematic | Cabinet, breadcrumb, then "Search
+    /// or run" and the saved state on the right.
+    fn top_bar(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
+        ui.horizontal_centered(|ui| {
+            ui.menu_button(egui::RichText::new(APP_NAME).strong(), |ui| {
+                self.project_menu(ui, picked)
             });
-            ui.menu_button("Edit", |ui| {
-                let doc = self.backend.document();
-                let undo = doc
-                    .and_then(|d| d.undo_label())
-                    .map(|l| format!("Undo {l}"));
-                let redo = doc
-                    .and_then(|d| d.redo_label())
-                    .map(|l| format!("Redo {l}"));
-                self.labeled_button(ui, Action::Undo, undo, picked);
-                self.labeled_button(ui, Action::Redo, redo, picked);
-            });
-            ui.menu_button("View", |ui| {
-                self.action_button(ui, Action::CommandPalette, picked);
-                self.action_button(ui, Action::ZoomToFit, picked);
-                ui.separator();
-                for (a, on) in [
-                    (Action::ToggleProjectPanel, self.settings.show_project_panel),
-                    (
-                        Action::TogglePropertiesPanel,
-                        self.settings.show_properties_panel,
-                    ),
-                    (
-                        Action::ToggleMessagesPanel,
-                        self.settings.show_messages_panel,
-                    ),
-                ] {
-                    self.toggle_button(ui, a, on, picked);
+            ui.separator();
+            for (action, label) in [
+                (Action::ShowSchematic, "Schematic"),
+                (Action::ShowCabinet, "Cabinet"),
+            ] {
+                let selected = action == Action::ShowSchematic;
+                let response = ui
+                    .add_enabled_ui(self.is_enabled(action), |ui| {
+                        segment(ui, label, selected)
+                    })
+                    .inner;
+                let response = if action == Action::ShowCabinet {
+                    response.on_disabled_hover_text("The cabinet canvas comes later")
+                } else {
+                    response
+                };
+                if response.clicked() {
+                    picked.push(action);
                 }
-            });
-            ui.menu_button("Help", |ui| {
-                self.action_button(ui, Action::About, picked);
+            }
+            ui.separator();
+            self.breadcrumb(ui);
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.weak(self.saved_state());
+                let shortcut = Action::CommandPalette
+                    .shortcut()
+                    .map(|s| ui.ctx().format_shortcut(&s))
+                    .unwrap_or_default();
+                let search = egui::Button::new("Search or run")
+                    .shortcut_text(shortcut)
+                    .min_size(egui::vec2(240.0, 0.0));
+                if ui.add(search).clicked() {
+                    picked.push(Action::CommandPalette);
+                }
             });
         });
     }
 
-    fn action_button(&self, ui: &mut egui::Ui, action: Action, picked: &mut Vec<Action>) {
-        self.labeled_button(ui, action, None, picked);
+    /// The short project menu behind the mark. Everything in it is also in
+    /// the command palette.
+    fn project_menu(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
+        for a in [Action::NewProject, Action::OpenProject] {
+            self.action_button(ui, a, picked);
+        }
+        ui.add_enabled_ui(!self.settings.recent_projects.is_empty(), |ui| {
+            ui.menu_button("Recent", |ui| {
+                for path in self.settings.recent_projects.clone() {
+                    if ui.button(path.display().to_string()).clicked() {
+                        let ctx = ui.ctx().clone();
+                        self.discard_then(&ctx, Discarding::OpenPath(path));
+                    }
+                }
+            });
+        });
+        ui.separator();
+        for a in [
+            Action::SaveProject,
+            Action::SaveProjectAs,
+            Action::CloseProject,
+        ] {
+            self.action_button(ui, a, picked);
+        }
+        ui.separator();
+        for a in [Action::About, Action::Quit] {
+            self.action_button(ui, a, picked);
+        }
     }
 
-    fn labeled_button(
-        &self,
-        ui: &mut egui::Ui,
-        action: Action,
-        label: Option<String>,
+    /// project / page. A click on the page opens the outline.
+    fn breadcrumb(&mut self, ui: &mut egui::Ui) {
+        let Some(name) = self.project_name() else {
+            ui.weak("No project open");
+            return;
+        };
+        ui.label(name);
+        let page = self
+            .current_page
+            .and_then(|id| self.pages().into_iter().find(|(p, _)| *p == id));
+        if let Some((_, label)) = page {
+            ui.weak("/");
+            let link = ui.add(egui::Button::new(egui::RichText::new(label).strong()).frame(false));
+            if link.clicked() && !self.outline_pinned() {
+                self.outline_open ^= true;
+            }
+        }
+    }
+
+    /// The outline's content: mode tabs, then the page list. Picking a page
+    /// closes the flyout.
+    fn outline(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
+        ui.set_min_width(ui.available_width());
+        ui.horizontal(|ui| {
+            let _ = ui.selectable_label(true, "Pages");
+            for mode in ["Issues", "Changes"] {
+                ui.add_enabled(false, egui::Button::selectable(false, mode))
+                    .on_disabled_hover_text("Comes later");
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let pinned = self.outline_pinned();
+                let pin = egui::Button::selectable(pinned, "Pin");
+                if ui
+                    .add(pin)
+                    .on_hover_text(if pinned {
+                        "Unpin outline"
+                    } else {
+                        "Pin outline"
+                    })
+                    .clicked()
+                {
+                    picked.push(Action::PinOutline);
+                }
+            });
+        });
+        ui.add(
+            egui::TextEdit::singleline(&mut self.page_filter)
+                .hint_text("Filter pages")
+                .desired_width(f32::INFINITY),
+        );
+        ui.add_space(4.0);
+
+        let pages = self.pages();
+        let filter = self.page_filter.to_lowercase();
+        let mut chosen = None;
+        egui::ScrollArea::vertical()
+            .auto_shrink(false)
+            .show(ui, |ui| {
+                if filter.is_empty() {
+                    let recent: Vec<_> = self
+                        .recent_pages
+                        .iter()
+                        .filter_map(|id| pages.iter().find(|(p, _)| p == id))
+                        .collect();
+                    if !recent.is_empty() {
+                        section_label(ui, "Recent");
+                        for (id, label) in recent {
+                            if self.page_row(ui, *id, label) {
+                                chosen = Some(*id);
+                            }
+                        }
+                        ui.add_space(6.0);
+                    }
+                }
+                section_label(ui, "All pages");
+                let mut any = false;
+                for (id, label) in &pages {
+                    if filter.is_empty() || label.to_lowercase().contains(&filter) {
+                        any = true;
+                        if self.page_row(ui, *id, label) {
+                            chosen = Some(*id);
+                        }
+                    }
+                }
+                if !any {
+                    ui.weak("No page matches");
+                }
+            });
+        if let Some(page) = chosen {
+            self.show_page(page);
+            self.outline_open = false;
+        }
+    }
+
+    fn page_row(&self, ui: &mut egui::Ui, id: PageId, label: &str) -> bool {
+        let selected = self.current_page == Some(id);
+        ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
+            ui.add(egui::Button::selectable(selected, label).min_size(egui::vec2(0.0, 22.0)))
+        })
+        .inner
+        .clicked()
+    }
+
+    /// Below the pinning width the outline floats over the canvas, opened
+    /// from the "Pages" button at its top left, so the drawing never moves.
+    fn outline_flyout(
+        &mut self,
+        ctx: &egui::Context,
+        canvas: egui::Rect,
         picked: &mut Vec<Action>,
     ) {
-        let label = label.unwrap_or_else(|| action.label().to_owned());
-        let mut button = egui::Button::new(label);
+        let toggle = egui::Area::new(egui::Id::new("outline_toggle"))
+            .fixed_pos(canvas.left_top() + egui::vec2(8.0, 8.0))
+            .show(ctx, |ui| {
+                ui.add(egui::Button::selectable(self.outline_open, "Pages"))
+            })
+            .inner;
+        if toggle.clicked() {
+            self.outline_open ^= true;
+        }
+        if !self.outline_open {
+            return;
+        }
+        let top = canvas.top() + 8.0 + toggle.rect.height() + 4.0;
+        let height = (canvas.bottom() - top - 8.0).max(120.0);
+        let area = egui::Area::new(egui::Id::new("outline_flyout"))
+            .fixed_pos(egui::pos2(canvas.left() + 8.0, top))
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.set_width(OUTLINE_WIDTH);
+                    ui.set_height(height);
+                    self.outline(ui, picked);
+                });
+            });
+        let escape = ctx.input(|i| i.key_pressed(egui::Key::Escape));
+        let elsewhere = area.response.clicked_elsewhere() && !toggle.clicked() && !toggle.hovered();
+        if escape || elsewhere {
+            self.outline_open = false;
+        }
+    }
+
+    /// Cursor position and friends, faint, at the canvas's top right.
+    fn hud(&self, ctx: &egui::Context, canvas: egui::Rect) {
+        let Some(text) = self.canvas.status_text() else {
+            return;
+        };
+        egui::Area::new(egui::Id::new("hud"))
+            .pivot(egui::Align2::RIGHT_TOP)
+            .fixed_pos(canvas.right_top() + egui::vec2(-12.0, 10.0))
+            .interactable(false)
+            .show(ctx, |ui| {
+                ui.label(egui::RichText::new(text).monospace().weak());
+            });
+    }
+
+    /// The latest messages, bottom left over the canvas. Info fades on its
+    /// own; warnings and errors stay until clicked.
+    fn toasts(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
+        let now = Instant::now();
+        let mut fade_in: Option<Duration> = None;
+        let shown: Vec<usize> = self
+            .messages
+            .iter()
+            .enumerate()
+            .rev()
+            .filter(|(_, m)| {
+                if m.dismissed {
+                    return false;
+                }
+                if m.level != Level::Info {
+                    return true;
+                }
+                let left = TOAST_INFO.saturating_sub(now - m.at);
+                if !left.is_zero() {
+                    fade_in = Some(fade_in.map_or(left, |f| f.min(left)));
+                }
+                !left.is_zero()
+            })
+            .map(|(i, _)| i)
+            .take(MAX_TOASTS)
+            .collect();
+        if let Some(wait) = fade_in {
+            ctx.request_repaint_after(wait);
+        }
+        if shown.is_empty() {
+            return;
+        }
+        let mut dismiss = Vec::new();
+        egui::Area::new(egui::Id::new("toasts"))
+            .pivot(egui::Align2::LEFT_BOTTOM)
+            .fixed_pos(canvas.left_bottom() + egui::vec2(12.0, -12.0))
+            .show(ctx, |ui| {
+                ui.set_max_width(420.0);
+                for &i in shown.iter().rev() {
+                    let m = &self.messages[i];
+                    let color = match m.level {
+                        Level::Info => ui.visuals().text_color(),
+                        Level::Warning => ui.visuals().warn_fg_color,
+                        Level::Error => ui.visuals().error_fg_color,
+                    };
+                    let frame = egui::Frame::popup(ui.style()).show(ui, |ui| {
+                        ui.add(egui::Label::new(egui::RichText::new(&m.text).color(color)).wrap());
+                    });
+                    let response = frame.response.interact(egui::Sense::click());
+                    if response.on_hover_text("Click to dismiss").clicked() {
+                        dismiss.push(i);
+                    }
+                }
+            });
+        for i in dismiss {
+            self.messages[i].dismissed = true;
+        }
+    }
+
+    fn action_button(&self, ui: &mut egui::Ui, action: Action, picked: &mut Vec<Action>) {
+        let mut button = egui::Button::new(action.label());
         if let Some(s) = action.shortcut() {
             button = button.shortcut_text(ui.ctx().format_shortcut(&s));
         }
         if ui.add_enabled(self.is_enabled(action), button).clicked() {
             picked.push(action);
         }
-    }
-
-    fn toggle_button(&self, ui: &mut egui::Ui, action: Action, on: bool, picked: &mut Vec<Action>) {
-        let mut button = egui::Button::selectable(on, action.label());
-        if let Some(s) = action.shortcut() {
-            button = button.shortcut_text(ui.ctx().format_shortcut(&s));
-        }
-        if ui.add(button).clicked() {
-            picked.push(action);
-        }
-    }
-
-    fn status_bar(&self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            match self.messages.last() {
-                Some(m) if m.level == Level::Error => {
-                    ui.colored_label(ui.visuals().error_fg_color, &m.text);
-                }
-                Some(m) if m.level == Level::Warning => {
-                    ui.colored_label(ui.visuals().warn_fg_color, &m.text);
-                }
-                Some(m) => {
-                    ui.label(&m.text);
-                }
-                None => {
-                    ui.label("Ready");
-                }
-            }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if let Some(text) = self.canvas.status_text() {
-                    ui.monospace(text);
-                }
-            });
-        });
-    }
-
-    fn project_panel(&mut self, ui: &mut egui::Ui) {
-        ui.set_min_width(ui.available_width());
-        section_label(ui, "Project");
-        ui.separator();
-        let Some(name) = self.project_name() else {
-            ui.weak("No project open");
-            return;
-        };
-        ui.heading(name);
-        if let Some(path) = &self.project_path {
-            ui.weak(path.display().to_string());
-        } else {
-            ui.weak("Not saved yet");
-        }
-        ui.separator();
-        ui.strong("Pages");
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            for (id, label) in self.pages() {
-                let selected = self.current_page == Some(id);
-                if ui.selectable_label(selected, label).clicked() {
-                    self.current_page = Some(id);
-                }
-            }
-        });
-    }
-
-    fn messages_panel(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            section_label(ui, "Messages");
-            if ui.small_button("Clear").clicked() {
-                self.messages.clear();
-            }
-        });
-        ui.separator();
-        egui::ScrollArea::vertical()
-            .stick_to_bottom(true)
-            .auto_shrink(false)
-            .show(ui, |ui| {
-                for m in &self.messages {
-                    let color = match m.level {
-                        Level::Info => ui.visuals().text_color(),
-                        Level::Warning => ui.visuals().warn_fg_color,
-                        Level::Error => ui.visuals().error_fg_color,
-                    };
-                    ui.colored_label(color, &m.text);
-                }
-            });
     }
 
     // ------------------------------------------------------------------
@@ -897,13 +1115,6 @@ fn consume_bare_key(input: &mut egui::InputState, key: egui::Key) -> bool {
         )
     });
     input.events.len() != before
-}
-
-fn properties_panel(ui: &mut egui::Ui) {
-    ui.set_min_width(ui.available_width());
-    section_label(ui, "Properties");
-    ui.separator();
-    ui.weak("Nothing selected");
 }
 
 #[cfg(test)]
@@ -1255,13 +1466,101 @@ mod tests {
         assert!(text.contains("already open"), "{text}");
     }
 
+    fn sized(width: f32) -> egui::RawInput {
+        egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(width, 800.0),
+            )),
+            ..Default::default()
+        }
+    }
+
     #[test]
-    fn panel_toggles_flip_settings() {
+    fn the_outline_pins_on_wide_windows_unless_chosen() {
         let ctx = themed_ctx();
         let mut app = app_with(MemoryBackend::default());
-        let before = app.settings().show_messages_panel;
-        app.run(&ctx, Action::ToggleMessagesPanel);
-        assert_ne!(app.settings().show_messages_panel, before);
+        app.run(&ctx, Action::NewProject);
+        frame(&ctx, &mut app, sized(1366.0));
+        assert!(!app.outline_pinned());
+        frame(&ctx, &mut app, sized(1920.0));
+        assert!(app.outline_pinned());
+
+        app.run(&ctx, Action::PinOutline);
+        assert_eq!(app.settings().outline_pinned, Some(false));
+        frame(&ctx, &mut app, sized(1920.0));
+        assert!(!app.outline_pinned());
+    }
+
+    #[test]
+    fn focus_mode_toggles_and_closes_the_flyout() {
+        let ctx = themed_ctx();
+        let mut app = app_with(MemoryBackend::default());
+        app.run(&ctx, Action::NewProject);
+        app.outline_open = true;
+        frame(
+            &ctx,
+            &mut app,
+            key(
+                egui::Key::F,
+                egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+            ),
+        );
+        assert!(app.focus_mode);
+        assert!(!app.outline_open);
+        app.run(&ctx, Action::FocusMode);
+        assert!(!app.focus_mode);
+    }
+
+    #[test]
+    fn cabinet_waits_for_its_canvas() {
+        let app = app_with(MemoryBackend::default());
+        assert!(!app.is_enabled(Action::ShowCabinet));
+        assert!(app.is_enabled(Action::ShowSchematic));
+    }
+
+    #[test]
+    fn visited_pages_lead_the_recent_list_and_vanish_with_their_page() {
+        let ctx = themed_ctx();
+        let mut app = app_with(DirtyBackend::default());
+        app.run(&ctx, Action::NewProject);
+        let (one, two) = (app.pages()[0].0, app.pages()[1].0);
+        app.show_page(one);
+        app.show_page(two);
+        app.show_page(one);
+        assert_eq!(app.recent_pages, vec![one, two]);
+        app.run(&ctx, Action::Undo);
+        assert_eq!(app.recent_pages, vec![one]);
+    }
+
+    #[test]
+    fn info_toasts_fade_and_errors_stay_until_dismissed() {
+        let ctx = themed_ctx();
+        let mut app = app_with(MemoryBackend::default());
+        app.message(Level::Info, "Saved");
+        app.message(Level::Error, "Could not save");
+        app.messages[0].at -= TOAST_INFO;
+        app.messages[1].at -= TOAST_INFO;
         frame(&ctx, &mut app, Default::default());
+        let open = ctx.memory(|m| m.areas().visible_layer_ids());
+        assert!(open.iter().any(|l| l.id == egui::Id::new("toasts")));
+        app.messages[1].dismissed = true;
+        frame(&ctx, &mut app, Default::default());
+        frame(&ctx, &mut app, Default::default());
+        let open = ctx.memory(|m| m.areas().visible_layer_ids());
+        assert!(!open.iter().any(|l| l.id == egui::Id::new("toasts")));
+    }
+
+    #[test]
+    fn the_saved_state_follows_the_project() {
+        let ctx = themed_ctx();
+        let mut app = app_with(DirtyBackend::default());
+        assert_eq!(app.saved_state(), "");
+        app.run(&ctx, Action::NewProject);
+        assert_eq!(app.saved_state(), "Not saved yet");
+        assert!(app.save_to(Path::new("plant.novo")));
+        assert_eq!(app.saved_state(), "Saved");
+        app.run(&ctx, Action::Undo);
+        assert_eq!(app.saved_state(), "Unsaved changes");
     }
 }
