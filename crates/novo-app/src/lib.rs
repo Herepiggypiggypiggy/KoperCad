@@ -6,8 +6,8 @@
 //! - [`ProjectBackend`]: owns the open [`novo_core::Document`] and opens and
 //!   saves it. The project file (`novo-storage`) plugs in here.
 //! - [`CanvasView`]: draws and edits the open page through the same document,
-//!   so canvas edits share the undo history. The canvas (`novo-canvas`) plugs
-//!   in here.
+//!   so canvas edits share the undo history. The schematic editor
+//!   (`novo-editor` on `novo-canvas`) plugs in here as [`EditorCanvas`].
 //!
 //! [`StorageBackend`] keeps projects in `.novo` files with autosave and crash
 //! recovery. [`MemoryBackend`] and [`PlaceholderCanvas`] stand in for tests
@@ -17,6 +17,7 @@ mod actions;
 mod app;
 mod backend;
 mod canvas;
+mod editor_canvas;
 mod model_canvas;
 mod palette;
 mod settings;
@@ -29,6 +30,7 @@ pub use backend::{
     new_document, page_labels,
 };
 pub use canvas::{CanvasView, OpenPage, PlaceholderCanvas};
+pub use editor_canvas::EditorCanvas;
 pub use model_canvas::ModelCanvas;
 
 use eframe::egui;
@@ -63,15 +65,14 @@ pub fn run() -> eframe::Result {
         renderer: eframe::Renderer::Wgpu,
         ..Default::default()
     };
-    let msaa = u32::from(options.multisampling);
     eframe::run_native(
         APP_NAME,
         options,
         Box::new(move |cc| {
             let canvas: Box<dyn CanvasView> = match cc.wgpu_render_state.as_ref() {
                 Some(rs) => {
-                    ModelCanvas::install(rs, msaa);
-                    Box::new(ModelCanvas::default())
+                    EditorCanvas::install(rs);
+                    Box::new(EditorCanvas::default())
                 }
                 None => Box::new(PlaceholderCanvas::default()),
             };

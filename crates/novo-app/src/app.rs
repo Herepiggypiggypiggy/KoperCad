@@ -537,6 +537,7 @@ impl NovoApp {
                         .current_page
                         .and_then(|page| OpenPage::new(&mut *self.backend, page));
                     self.canvas.show(ui, open);
+                    self.after_canvas();
                 } else {
                     self.start_panel(ui, &mut picked);
                 }
@@ -571,6 +572,18 @@ impl NovoApp {
 
         for action in picked {
             self.run(&ctx, action);
+        }
+    }
+
+    /// Follows up on what the canvas did this frame: its edits reach the
+    /// other views, and a page it asked for is opened.
+    fn after_canvas(&mut self) {
+        let changes = self.canvas.take_changes();
+        if !changes.is_empty() {
+            self.fix_current_page();
+        }
+        if let Some(page) = self.canvas.take_page_request() {
+            self.show_page(page);
         }
     }
 
