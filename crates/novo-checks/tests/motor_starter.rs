@@ -241,3 +241,24 @@ fn stress_page_checks_in_reasonable_time() {
             .all(|p| p.kind == ProblemKind::UnconnectedPin)
     );
 }
+
+/// A strip styled for feed-through terminals only still flags its PE
+/// terminal, as the parts list does.
+#[test]
+fn a_strip_without_a_pe_block_is_flagged() {
+    let (mut doc, s) = starter();
+    doc.execute(Command::SetProperty {
+        target: s.x1.into(),
+        key: "terminal_part.protective_earth".into(),
+        value: None,
+    })
+    .unwrap();
+    let problems = check(doc.project());
+    assert_eq!(problems.len(), 1, "{problems:#?}");
+    assert_eq!(problems[0].kind, ProblemKind::MissingPart);
+    assert!(
+        problems[0].message.contains("PE"),
+        "{}",
+        problems[0].message
+    );
+}

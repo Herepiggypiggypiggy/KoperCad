@@ -394,24 +394,30 @@ pub(crate) fn zero_length_wires(cx: &Context<'_>, out: &mut Vec<Problem>) {
 
 /// Devices and cables without a part. Info only: parts are assigned late
 /// (WS-07 proposes them), and DESIGN.md §6 step 7 lists them in Issues.
-/// A terminal strip's articles are its terminals' (their own part, or the
-/// strip's style per terminal kind, which novo-terminals keeps in the
-/// strip's `terminal_part.<kind>` properties), not the strip device's part
-/// list; it is flagged only when none of those is set.
-/// `novo_parts::missing_parts` lists the single terminals without one.
+/// A terminal strip is judged by its terminals: their article is their own
+/// part or the strip's style for their kind
+/// ([`novo_terminals::terminal_part`], the rule the strip editor, the bill
+/// of materials and `novo_parts::missing_parts` share), never the strip
+/// device's own part list. A strip is flagged once, naming its terminals
+/// without an article.
 pub(crate) fn missing_parts(cx: &Context<'_>, out: &mut Vec<Problem>) {
     let project = cx.project;
     for device in project.devices() {
-        let strip_covered = device.kind == DeviceKind::TerminalStrip
-            && (device
-                .properties
-                .keys()
-                .any(|k| k.starts_with("terminal_part."))
-                || project
-                    .terminals_of_strip(device.id)
-                    .iter()
-                    .any(|t| t.part.is_some()));
-        if device.parts.is_empty() && !strip_covered {
+        if device.kind == DeviceKind::TerminalStrip {
+            let bare: Vec<String> = project
+                .terminals_of_strip(device.id)
+                .iter()
+                .filter(|t| novo_terminals::terminal_part(project, t.id).is_none())
+                .map(|t| t.name.clone())
+                .collect();
+            if !bare.is_empty() {
+                out.push(Problem::new(
+                    ProblemKind::MissingPart,
+                    vec![device_mark(cx, device.id)],
+                    format!("{} terminals {} have no part", device.tag, bare.join(", ")),
+                ));
+            }
+        } else if device.parts.is_empty() {
             out.push(Problem::new(
                 ProblemKind::MissingPart,
                 vec![device_mark(cx, device.id)],
