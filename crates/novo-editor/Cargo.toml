@@ -1,0 +1,29 @@
+[package]
+name = "novo-editor"
+description = "Schematic editor: placing, wiring, tagging and potentials on top of the canvas"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = ["egui"]
+# The interactive editor view: canvas widget, symbol artwork, insert search,
+# in-place rename and context menu. Without it the crate is the headless
+# editing logic only (what tests, scripts and the AI assistant drive).
+egui = ["dep:egui", "dep:novo-canvas"]
+
+[dependencies]
+novo-core.workspace = true
+novo-symbols.workspace = true
+novo-canvas = { workspace = true, optional = true }
+egui = { workspace = true, optional = true }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+eframe.workspace = true
+
+[[example]]
+name = "editor"
+required-features = ["egui"]
