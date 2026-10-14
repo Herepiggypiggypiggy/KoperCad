@@ -18,7 +18,7 @@ Done criterion: the Gate 1 circuit can be drawn in under 5 minutes (about 73 act
 - Proposals follow DESIGN.md §5 (#80): highlight follows pointer, Tab holds (24 px), solid highlighted proposal with hint, Delete declines. `edit::place` refuses a second main symbol (scripts too).
 
 ## Next, in order
-1. Letter codes per DESIGN.md (#80): contactor Q, mpcb Q, mcb F, with a per-class rule. Cross-crate (novo-workflow `insert::letter_code`, Gate 1 tests use -K), so agree with WS-08 and the lead first.
+1. Letter codes (lead's call, DESIGN.md via #92): contactors and relays K by default, MCB F, MPCB Q, overload F; the editor already does this (catalog test). Still to do: the "Contactors are coded [K | Q]" project rule. Contactor and relay share the coil symbol, so the rule needs a contactor marker (part, or the device's main contacts) and a project-rule store; agree with WS-08 and WS-02.
 2. Move catalog search / tags onto novo-workflow (#29): `InsertSearch`, `next_tag`, `duplicate`, `renumber`, `keymap`; delete the editor's duplicates.
 3. #35 potentials (Wire.potential override, AssignPotentials) and tag texts (AddText DeviceTag, MoveText).
 4. SymbolArt labels/tag_anchor (#28) in art.rs.

@@ -14,3 +14,4 @@
 2026-10-14 21:37 UTC #38 merged; branch restarted from main 7bb466d. Proposals follow DESIGN.md §5 after #80 (pointer-follow highlight, Tab hold 24 px, solid highlighted proposal with hint, Delete declines); edit::place refuses a second main symbol (reviewer-c note). fmt, clippy, 627 tests clean.
 2026-10-14 21:38 UTC PR #91 opened, head f73279d; sent to main and design reviewers.
 2026-10-14 21:38 UTC Single click selects a symbol in the editor harness (new test); the Xvfb failure is outside SchematicView's input path; asked WS-03.
+2026-10-14 21:40 UTC Lead's letter-code call (K default, rule K|Q; MCB F, MPCB Q, overload F): editor already matches; pinned in catalog test. K|Q rule left for a later PR (needs a project-rule store and a contactor marker).
