@@ -315,8 +315,8 @@ fn write_record(stmt: &mut rusqlite::CachedStatement<'_>, record: &Record) -> Re
 }
 
 /// The record's object as JSON, without the record wrapper: the `kind`
-/// column says what it is. (The object itself may have a `kind` field, such
-/// as a page's kind, which is why the record's own tagged form is not used.)
+/// column already says what it is, so the row holds the plain `Page`,
+/// `Wire`, ... and the type is stored only once.
 fn encode(record: &Record) -> String {
     match record {
         Record::Page(r) => to_json(r),
