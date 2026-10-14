@@ -133,30 +133,39 @@ pub fn plan(project: &Project, scope: &Scope) -> Vec<Renaming> {
         });
         let taken = taken.remove(&group).unwrap_or_default();
         let mut next = 1;
-        // Old number of a suffixed sub-device to its new number.
+        // Old number of a device family (`-K7`, `-K7.1`, `-K7.2`) to its new
+        // number, and the old numbers a plain tag already claimed: a second
+        // plain `-K7` is a duplicate and gets a number of its own.
         let mut shared: BTreeMap<u32, u32> = BTreeMap::new();
+        let mut plain: BTreeSet<u32> = BTreeSet::new();
         for (_, id) in devices {
             let Some(device) = project.device(id) else {
                 continue;
             };
-            let suffixed = device
+            let (old, suffixed) = device
                 .tag
                 .device_code()
                 .map(split_code)
-                .and_then(|(_, n, suffix)| n.filter(|_| !suffix.is_empty()));
-            let number = match suffixed.and_then(|old| shared.get(&old)) {
-                Some(&n) => n,
+                .map_or((None, false), |(_, n, suffix)| (n, !suffix.is_empty()));
+            let joins = old
+                .filter(|o| suffixed || !plain.contains(o))
+                .and_then(|o| shared.get(&o).copied());
+            let number = match joins {
+                Some(n) => n,
                 None => {
                     while taken.contains(&next) {
                         next += 1;
                     }
                     next += 1;
-                    if let Some(old) = suffixed {
+                    if let Some(old) = old {
                         shared.insert(old, next - 1);
                     }
                     next - 1
                 }
             };
+            if let Some(old) = old.filter(|_| !suffixed) {
+                plain.insert(old);
+            }
             let new = device.tag.with_number(number);
             if new != device.tag {
                 out.push(Renaming {
@@ -262,6 +271,27 @@ mod tests {
             .map(|r| format!("{} {}", r.old, r.new))
             .collect();
         assert_eq!(preview, ["-K7.1 -K1.1", "-K7.2 -K1.2", "-K3 -K2"]);
+    }
+
+    #[test]
+    fn a_device_and_its_sub_devices_stay_one_family() {
+        let mut doc = Document::default();
+        doc.transact("Draw", |tx| {
+            let p1 = tx.add_page("1")?;
+            place(tx, p1, "-K7.1", 10.0, 10.0)?;
+            place(tx, p1, "-K7", 50.0, 10.0)?;
+            place(tx, p1, "-K4", 90.0, 10.0)?;
+            place(tx, p1, "-K4", 130.0, 10.0)?;
+            Ok(())
+        })
+        .unwrap();
+        let preview: Vec<String> = plan(doc.project(), &Scope::Project)
+            .iter()
+            .map(|r| format!("{} {}", r.old, r.new))
+            .collect();
+        // -K7.1 and -K7 share a number; the two plain -K4 are duplicates
+        // and are pulled apart.
+        assert_eq!(preview, ["-K7.1 -K1.1", "-K7 -K1", "-K4 -K2", "-K4 -K3"]);
     }
 
     #[test]

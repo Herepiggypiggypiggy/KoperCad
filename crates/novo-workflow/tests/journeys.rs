@@ -86,6 +86,14 @@ fn pages_by_number_and_title() {
         palette.search("control circuit", &src)[0].target,
         Target::Page(gate.control_page)
     );
+    // "page 2" and "pagina 2" go to page 2; they don't add a page.
+    for query in ["page 2", "pagina 2"] {
+        assert_eq!(
+            palette.search(query, &src)[0].target,
+            Target::Page(gate.control_page),
+            "{query}"
+        );
+    }
 }
 
 #[test]

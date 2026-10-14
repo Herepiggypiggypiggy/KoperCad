@@ -199,6 +199,12 @@ impl Palette {
         if mode == Mode::All {
             if let Some(project) = sources.project {
                 project_rows(project, query, &mut rows);
+                // `page 2`, `pagina 2`: the page named after the word.
+                if let Some(name) = page_query(query) {
+                    let mut pages = Vec::new();
+                    project_rows(project, name, &mut pages);
+                    rows.extend(pages.into_iter().filter(|r| r.kind == Kind::Page));
+                }
             }
             command_rows(query, wants_next, sources, &mut rows);
         }
@@ -507,6 +513,17 @@ fn project_rows(project: &Project, query: &str, rows: &mut Vec<Row>) {
             _ => {}
         }
     }
+}
+
+/// Words that name a page, in English and Dutch.
+const PAGE_WORDS: [&str; 4] = ["page", "pagina", "blad", "sheet"];
+
+/// What follows a page word (`page 2` gives `2`), if the query starts with
+/// one.
+fn page_query(query: &str) -> Option<&str> {
+    let (word, rest) = query.split_once(char::is_whitespace)?;
+    let rest = rest.trim();
+    (PAGE_WORDS.iter().any(|w| w.eq_ignore_ascii_case(word)) && !rest.is_empty()).then_some(rest)
 }
 
 fn location_rows(project: &Project, device: DeviceId, tag: &str, base: i32, rows: &mut Vec<Row>) {

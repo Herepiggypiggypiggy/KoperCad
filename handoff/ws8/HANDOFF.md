@@ -1,6 +1,7 @@
 # WS-08 Keyboard workflow: handoff
 
-## State (2026-10-14 21:50 UTC)
+## State (2026-10-14 22:30 UTC)
+- #29 and #90 merged. Open: the review follow-up PR from `claude/project-thread-9lkslj` (renumber families, page words).
 - #29 merged (5a73f86). Follow-up PR from branch `claude/project-thread-9lkslj`, restarted from main 7bb466d: MPCB coded Q (DESIGN §6, tester O1), `?` overlay and Shift+O (held) keys, Ctrl+Y shown first for redo, Escape yields to text fields, Dutch command words (language.rs), Keep-mode paste keeps terminal names, renumber keeps sub-device numbers shared, split_verb byte-offset fix.
 - novo-app maps keys (WS-01, crates/novo-app/src/keys.rs): it still needs to map `?` to `Key::Char('?')` and to treat Shift+O as held. Engine side is done.
 - Open: the per-class letter-code rule sentence (DESIGN §6) and contactor as Q (DESIGN says Q; the Gate 1 fixture and #62 use -K1). Ask the Workflow thread before changing contactors.
