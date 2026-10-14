@@ -476,3 +476,29 @@ fn catalog_file_round_trips() {
     std::fs::write(&path, r#"{"format": 99, "parts": []}"#).unwrap();
     assert!(Catalog::load(&path).is_err());
 }
+
+#[test]
+fn empty_optional_numbers_take_whole_and_decimal_values() {
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let terminal = doc.project().terminals().next().unwrap().id;
+    let sheet = PropertySheet::build(doc.project(), &[terminal.into()]);
+    let command = sheet
+        .edit(doc.project(), &RowKey::Field("jumper".into()), "2")
+        .unwrap();
+    run(&mut doc, command);
+    assert_eq!(doc.project().terminal(terminal).unwrap().jumper, Some(2));
+    let wire = gate.motor_wires[1];
+    let sheet = PropertySheet::build(doc.project(), &[wire.into()]);
+    let key = RowKey::Field("number".into());
+    let command = sheet.edit(doc.project(), &key, "101").unwrap();
+    run(&mut doc, command);
+    assert_eq!(
+        doc.project().wire(wire).unwrap().number.as_deref(),
+        Some("101")
+    );
+    let sheet = PropertySheet::build(doc.project(), &[wire.into()]);
+    let command = sheet.edit(doc.project(), &key, "").unwrap();
+    run(&mut doc, command);
+    assert_eq!(doc.project().wire(wire).unwrap().number, None);
+}

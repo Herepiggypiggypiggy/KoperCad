@@ -974,7 +974,7 @@ impl PropertySheet {
                 Json::Number(n) => vec![number_json(text, n.is_f64(), label)?],
                 Json::Null if text.is_empty() => vec![Json::Null],
                 Json::Null if spec.is_some_and(|s| s.numeric) => {
-                    vec![number_json(text, true, label)?]
+                    vec![number_json(text, false, label)?]
                 }
                 Json::Null => vec![Json::String(text.into())],
                 Json::String(_) if text.is_empty() => {
