@@ -38,6 +38,8 @@ try {
         Remove-Item -Recurse -Force $next -ErrorAction SilentlyContinue
         Expand-Archive -Path (Join-Path $tmp 'novoelectric-experimental-windows.zip') -DestinationPath $next
         Remove-Item -Recurse -Force $Current -ErrorAction SilentlyContinue
+        # A running novoelectric.exe cannot be deleted; keep it and retry next start.
+        if (Test-Path $Current) { throw 'NovoElectric is running; keeping the current build' }
         Move-Item $next $Current
         Set-Content -NoNewline -Path $Stamp -Value $remote
     }
