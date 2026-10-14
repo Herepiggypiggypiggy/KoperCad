@@ -606,3 +606,49 @@ fn marks_keys_and_export_follow_the_design() {
     let last = &d.app.messages().last().unwrap().text;
     assert!(last.starts_with("Replaced "), "{last}");
 }
+
+#[test]
+fn keys_go_to_a_focused_panel_button_not_the_canvas() {
+    use novo_workflow::keymap::Focus;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert_eq!(d.app.key_focus(&ctx), Focus::Canvas, "nothing focused");
+
+    // A click on the drawing focuses the canvas widget: still the canvas.
+    let (_, rect) = d.app.wb.canvas_area.expect("the canvas was shown");
+    let at = rect.center();
+    let button = |pressed| egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    d.frame_with(vec![egui::Event::PointerMoved(at), button(true)]);
+    d.frame_with(vec![button(false)]);
+    d.frame();
+    assert!(
+        ctx.memory(|m| m.focused()).is_some(),
+        "the canvas took focus"
+    );
+    assert_eq!(d.app.key_focus(&ctx), Focus::Canvas);
+
+    // A button over the window (another layer) with focus is a panel.
+    let id = egui::Id::new("panel_button");
+    for _ in 0..2 {
+        let app = &mut d.app;
+        let mut output = ctx.run_ui(Default::default(), |ui| {
+            app.show(ui);
+            egui::Area::new(egui::Id::new("panel"))
+                .fixed_pos(egui::pos2(10.0, 60.0))
+                .show(ui.ctx(), |ui| ui.push_id(id, |ui| ui.button("Panel")))
+                .inner
+                .inner
+                .request_focus();
+        });
+        output.textures_delta.clear();
+    }
+    assert_eq!(d.app.key_focus(&ctx), Focus::Panel);
+}
