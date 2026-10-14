@@ -1,0 +1,9 @@
+2026-10-14 16:49 UTC PR #38 opened (novo-editor: place, wire, tag, potentials), head 6a42111.
+2026-10-14 16:52 UTC Merged origin/main (#25, #3, #27, #26) at 20b5d73; all checks pass locally.
+2026-10-14 16:55 UTC a4da520: insert search also matches novo-symbols aliases.
+2026-10-14 16:58 UTC 6d48a89: pages (next_page_name, add_page, Page Up/Down, "New page after this").
+2026-10-14 17:00 UTC 81c0caa: SchematicView::show returns the frame's ChangeSet (WS-01 storage ask). Sent to design reviewer.
+2026-10-14 17:01 UTC Decision: SymbolArt labels/tag_anchor (#28) and model potentials/texts (#35) go in follow-up PRs from main after those merge.
+2026-10-14 17:02 UTC Split agreed with WS-08: novo-editor will consume novo-workflow (#29) search, next_tag, duplicate, renumber, keymap after it merges.
+2026-10-14 17:20 UTC 09ca513: applied workflow thread's DESIGN.md review (no Enter repeat, menu order, Declare source potentials, facing wires only as previewed + Alt, Numbering rule, DESIGN.md citations). Sent to workflow thread and design reviewer.
+2026-10-14 17:35 UTC 904aae0: design reviewer's 6 items + workflow #43 delta: facing pins are proposals (Enter/Tab), drag-from-pin, 6px pin radius, crossing joins one wire, K1 no completes structure + refuses missing parent, no dot on dead stub, popup-closing click swallowed, Shift+R fixed. Recheck requested.

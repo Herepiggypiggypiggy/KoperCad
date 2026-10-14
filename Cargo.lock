@@ -1744,6 +1744,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-parts"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-tests",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "novo-pdf"
 version = "0.1.0"
 dependencies = [
@@ -1780,13 +1792,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-terminals"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-symbols",
+ "novo-tests",
+]
+
+[[package]]
 name = "novo-tests"
 version = "0.1.0"
 dependencies = [
+ "novo-app",
  "novo-canvas",
  "novo-core",
  "novo-storage",
  "novo-symbols",
+ "novo-workflow",
  "serde_json",
  "tempfile",
 ]

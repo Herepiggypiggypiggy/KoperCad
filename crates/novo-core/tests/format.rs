@@ -53,6 +53,7 @@ fn build() -> Project {
                 size: PaperSize::A4,
                 ..p.format
             };
+            p.structure = tag("=A2+CAB1");
             p.properties.insert("approved".into(), Value::Bool(true));
         })?;
 

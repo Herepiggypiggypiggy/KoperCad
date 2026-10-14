@@ -87,6 +87,14 @@ pub enum Command {
         text: TextId,
         placement: TextPlacement,
     },
+    /// Changes what a text shows and/or its height; see [`Tx::set_text`].
+    SetText {
+        text: TextId,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        content: Option<TextContent>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        height_mm: Option<f64>,
+    },
     Connect {
         from: Endpoint,
         to: Endpoint,
@@ -186,6 +194,7 @@ impl Command {
             Command::AddJunction { .. } => "Add junction".into(),
             Command::AddText { .. } => "Add text".into(),
             Command::MoveText { .. } => "Move text".into(),
+            Command::SetText { .. } => "Edit text".into(),
             Command::Connect { .. } => "Draw wire".into(),
             Command::SplitWire { .. } => "Branch wire".into(),
             Command::SetWireNumber { .. } => "Number wire".into(),
@@ -280,6 +289,14 @@ impl Tx<'_> {
             } => self.add_text(page, content, placement, attached_to)?.into(),
             Command::MoveText { text, placement } => {
                 self.move_text(text, placement)?;
+                return Ok(Vec::new());
+            }
+            Command::SetText {
+                text,
+                content,
+                height_mm,
+            } => {
+                self.set_text(text, content, height_mm)?;
                 return Ok(Vec::new());
             }
             Command::Connect { from, to, route } => {
