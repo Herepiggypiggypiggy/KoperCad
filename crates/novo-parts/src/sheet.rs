@@ -411,7 +411,10 @@ const UNIT_SUFFIXES: &[(&str, &str)] = &[
 
 /// `rated_current_a` → (`Rated current`, `A`).
 pub fn property_label(key: &str) -> (String, Option<&'static str>) {
-    let lower = key.to_lowercase();
+    // ASCII-only lowering keeps byte offsets equal to `key`'s, so slicing
+    // `key` below stays on a char boundary (`to_lowercase` maps e.g. the
+    // Kelvin sign U+212A, 3 bytes, to `k`, 1 byte).
+    let lower = key.to_ascii_lowercase();
     let (stem, unit) = UNIT_SUFFIXES
         .iter()
         .find(|(suffix, _)| lower.ends_with(suffix) && lower.len() > suffix.len())

@@ -841,3 +841,21 @@ fn texts_have_no_part_and_terminals_show_theirs() {
     run(&mut doc, command);
     assert!(!novo_parts::unused_parts(doc.project()).contains(&k1_part));
 }
+
+#[test]
+fn property_labels_handle_non_ascii_keys() {
+    // U+212A KELVIN SIGN lowercases to a 1-byte `k`; slicing the original
+    // key at an offset from the lowercased one used to panic.
+    assert_eq!(
+        novo_parts::property_label("temp_\u{212A}_a"),
+        ("Temp \u{212A}".to_string(), Some("A"))
+    );
+    assert_eq!(
+        novo_parts::property_label("\u{212A}"),
+        ("\u{212A}".to_string(), None)
+    );
+    assert_eq!(
+        novo_parts::property_label("rated_current_A"),
+        ("Rated current".to_string(), Some("A"))
+    );
+}
