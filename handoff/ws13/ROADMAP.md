@@ -24,5 +24,5 @@ Crate: `crates/novo-reports` (owner WS-13). Engine only; no UI.
 6. BOM: joined terminals' connectors/jumpers (JoinLink) as accessory lines; quantities per structure (=A1 / +CAB) as an option.
 7. Wire list: sort by wire number option; frozen page.column after revision (DESIGN "pinned flow").
 
-## Open questions
-- Should generated report pages appear in the model as `PageKind::Generated` page records (so they get page names and appear in the TOC), or stay command-only views (DESIGN says "reports are commands")? Current code supports both: `LiveReports::report_of_page`.
+## Decisions
+- 2026-10-14 (coordinator, from DESIGN.md §2 "automatic and live"): report pages ARE pages. Use `PageKind::Generated { generator }` page records: they appear in the outline, print, and get page numbers and cross-reference columns like any page, while their content is computed from the report on demand and never stored. Command-only views (export xlsx/csv) stay as a convenience. Follow-up: a report with N paged sheets maps onto its Generated page record (sub-page naming such as `20.1`, `20.2` to be agreed with WS-03/WS-09 and the workflow thread).
