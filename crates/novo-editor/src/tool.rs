@@ -330,8 +330,9 @@ impl Editor {
         }
     }
 
-    /// Escape, second rung: leaves the tool.
+    /// Escape, second rung: leaves the tool. Proposals go with it.
     pub fn leave_tool(&mut self) -> bool {
+        self.clear_proposals();
         if matches!(self.tool, Tool::Select) {
             return false;
         }
@@ -538,6 +539,14 @@ impl Editor {
         &self.proposals
     }
 
+    /// Drops the proposals of the last drop. They belong to that drop only:
+    /// a page change, undo or redo, or any other edit ends them, so Enter
+    /// never draws a line the preview no longer shows.
+    pub fn clear_proposals(&mut self) {
+        self.proposals.clear();
+        self.proposal = 0;
+    }
+
     /// Tab: highlights the next proposal.
     pub fn next_proposal(&mut self) -> bool {
         if self.proposals.is_empty() {
@@ -556,6 +565,11 @@ impl Editor {
         let proposal = self.proposals.remove(i);
         if self.proposal >= self.proposals.len() {
             self.proposal = 0;
+        }
+        // The pins moved or got a wire since the drop: what was shown is no
+        // longer what Enter would draw, so the proposal just goes.
+        if !edit::proposal_holds(doc.project(), &proposal) {
+            return false;
         }
         let result = doc.transact("Connect", |tx| edit::accept(tx, &proposal));
         self.finish(result.map(|(_, c)| c), None) == Clicked::Edited
@@ -674,6 +688,9 @@ impl Editor {
         label: &str,
         edit: impl FnOnce(&mut novo_core::Tx<'_>) -> novo_core::Result<()>,
     ) -> bool {
+        // Rotating, mirroring, moving or deleting changes what the last drop
+        // faced.
+        self.clear_proposals();
         let result = doc.transact(label, edit);
         self.finish(result.map(|(_, c)| c), None) == Clicked::Edited
     }

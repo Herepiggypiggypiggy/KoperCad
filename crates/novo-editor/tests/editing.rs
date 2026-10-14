@@ -954,3 +954,126 @@ fn turning_a_moved_coil_connects_where_it_lands_not_where_it_was() {
     // was split by the turned pins.
     assert_eq!(doc.project().wires().count(), before + 1);
 }
+
+/// The review's steps: a wire W from -K1:A2 to -K2:A1, then a second wire
+/// from -K1:A2 to a point on W. The junction that splits W has two wires
+/// back to -K1:A2 and one on to -K2.
+fn loop_back_to_one_pin() -> (Document, PageId, Editor) {
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/coils/relay", None);
+    for (x, y) in [(40.0, 40.0), (40.0, 160.0)] {
+        editor.click(&mut doc, page, p(x, y), TOL);
+    }
+    editor.leave_tool();
+    let k1 = symbol_at(&doc, page, p(40.0, 40.0));
+    let k2 = symbol_at(&doc, page, p(40.0, 160.0));
+    editor.begin_wire();
+    click_pin(&mut editor, &mut doc, page, k1, "A2");
+    click_pin(&mut editor, &mut doc, page, k2, "A1");
+    click_pin(&mut editor, &mut doc, page, k1, "A2");
+    let on_w = Point::new(pin_pos(&doc, k1, "A2").x, 100.0);
+    assert_eq!(editor.click(&mut doc, page, on_w, TOL), Clicked::Edited);
+    editor.leave_tool();
+    assert_eq!(doc.project().junctions().count(), 1);
+    assert_eq!(doc.project().wires().count(), 3);
+    (doc, page, editor)
+}
+
+#[test]
+fn deleting_the_far_symbol_of_a_loop_back_finishes_and_leaves_no_stub() {
+    let (mut doc, page, mut editor) = loop_back_to_one_pin();
+    let k1 = symbol_at(&doc, page, p(40.0, 40.0));
+    let k2 = symbol_at(&doc, page, p(40.0, 160.0));
+    assert!(editor.delete(&mut doc, &[AnyId::Symbol(k2)]));
+    // The two wires left both run from -K1:A2 to a dot that reaches nothing
+    // else: a dead loop, so it goes with its dot. -K1 stays.
+    assert_eq!(doc.project().junctions().count(), 0);
+    assert_eq!(doc.project().wires().count(), 0);
+    assert!(doc.project().symbol(k1).is_some());
+    assert_eq!(tags(&doc), ["-K1"]);
+    // One undo step brings it all back.
+    doc.undo().unwrap();
+    assert_eq!(doc.project().junctions().count(), 1);
+    assert_eq!(doc.project().wires().count(), 3);
+}
+
+#[test]
+fn deleting_the_wire_on_to_the_far_symbol_of_a_loop_back_finishes() {
+    let (mut doc, page, mut editor) = loop_back_to_one_pin();
+    let k2 = symbol_at(&doc, page, p(40.0, 160.0));
+    let w2 = doc.project().wires_at(pin(&doc, k2, "A1")).next().unwrap();
+    assert!(editor.delete(&mut doc, &[AnyId::Wire(w2)]));
+    assert_eq!(doc.project().junctions().count(), 0);
+    assert_eq!(doc.project().wires().count(), 0);
+    assert_eq!(tags(&doc), ["-K1", "-K2"]);
+}
+
+#[test]
+fn deleting_tidies_only_the_junctions_it_touches() {
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/coils/relay", None);
+    for (x, y) in [(40.0, 40.0), (200.0, 40.0)] {
+        editor.click(&mut doc, page, p(x, y), TOL);
+    }
+    editor.leave_tool();
+    let k1 = symbol_at(&doc, page, p(40.0, 40.0));
+    let k2 = symbol_at(&doc, page, p(200.0, 40.0));
+    // A wire from -K1:A2 to a lone dot, made by a script.
+    let end = Point::new(pin_pos(&doc, k1, "A2").x, 100.0);
+    let a2 = pin(&doc, k1, "A2");
+    doc.transact("Stub", |tx| {
+        let j = tx.add_junction(page, end)?;
+        tx.connect(a2, Endpoint::junction(j))
+    })
+    .unwrap();
+    assert!(editor.delete(&mut doc, &[AnyId::Symbol(k2)]));
+    assert_eq!(doc.project().junctions().count(), 1);
+    assert_eq!(doc.project().wires().count(), 1);
+}
+
+#[test]
+fn turning_or_moving_the_selection_drops_the_proposals() {
+    let (mut doc, page, mut editor) = setup();
+    editor.begin_place("iec/protection/fuse_3p", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.begin_place("iec/contactors/main_3p", None);
+    editor.click(&mut doc, page, p(40.0, 120.0), TOL);
+    assert_eq!(editor.proposals().len(), 3);
+    let k = AnyId::Symbol(symbol_at(&doc, page, p(40.0, 120.0)));
+    assert!(editor.rotate_selection(&mut doc, &[k]));
+    assert!(editor.proposals().is_empty());
+    assert!(!editor.accept_proposal(&mut doc));
+    assert_eq!(doc.project().wires().count(), 0);
+    // Leaving the tool drops them too.
+    doc.undo().unwrap();
+    editor.click(&mut doc, page, p(120.0, 120.0), TOL);
+    editor.begin_place("iec/protection/fuse_3p", None);
+    editor.click(&mut doc, page, p(120.0, 40.0), TOL);
+    assert!(!editor.proposals().is_empty());
+    editor.leave_tool();
+    assert!(editor.proposals().is_empty());
+}
+
+#[test]
+fn a_proposal_whose_pin_moved_is_dropped_on_enter() {
+    let (mut doc, page, mut editor) = setup();
+    editor.begin_place("iec/protection/fuse_3p", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.begin_place("iec/contactors/main_3p", None);
+    editor.click(&mut doc, page, p(40.0, 120.0), TOL);
+    assert_eq!(editor.proposals().len(), 3);
+    // Something other than the editor (a script) moves the contactor.
+    let k = symbol_at(&doc, page, p(40.0, 120.0));
+    doc.transact("Script move", |tx| {
+        edit::transform(tx, &[AnyId::Symbol(k)], edit::Transform::Move(p(8.0, 0.0)))
+    })
+    .unwrap();
+    let depth = doc.undo_depth();
+    // Enter draws nothing the preview did not show; the proposal goes.
+    assert!(!editor.accept_proposal(&mut doc));
+    assert_eq!(editor.proposals().len(), 2);
+    assert_eq!(doc.project().wires().count(), 0);
+    assert_eq!(doc.undo_depth(), depth);
+}

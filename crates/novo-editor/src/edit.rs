@@ -302,11 +302,23 @@ fn connect_touching(tx: &mut Tx<'_>, symbol: SymbolId) -> Result<()> {
     Ok(())
 }
 
-/// Accepts a proposed facing wire: draws it if both pins are still free.
+/// Whether a proposal still holds: both pins exist, are free and are still
+/// where the preview showed them, so the wire drawn is the line that was
+/// shown.
+pub fn proposal_holds(project: &Project, proposal: &FacingWire) -> bool {
+    let ok = |e: Endpoint, at: Point| {
+        project
+            .endpoint_position(e)
+            .is_some_and(|p| p.approx_eq(at, EPS))
+            && is_free(project, e)
+    };
+    ok(proposal.from, proposal.a) && ok(proposal.to, proposal.b)
+}
+
+/// Accepts a proposed facing wire: draws it if the proposal still holds
+/// ([`proposal_holds`]), and otherwise changes nothing.
 pub fn accept(tx: &mut Tx<'_>, proposal: &FacingWire) -> Result<Option<WireId>> {
-    let project = tx.project();
-    let ok = |e: Endpoint| project.endpoint_position(e).is_some() && is_free(project, e);
-    if ok(proposal.from) && ok(proposal.to) {
+    if proposal_holds(tx.project(), proposal) {
         tx.connect(proposal.from, proposal.to).map(Some)
     } else {
         Ok(None)
@@ -784,16 +796,23 @@ pub fn reroute(tx: &mut Tx<'_>, wire: WireId) -> Result<()> {
 /// none disappears, and devices and terminals no longer drawn anywhere are
 /// removed.
 pub fn delete(tx: &mut Tx<'_>, ids: &[AnyId]) -> Result<()> {
-    let mut pages: BTreeSet<PageId> = BTreeSet::new();
+    let pages: BTreeSet<PageId> = ids
+        .iter()
+        .filter_map(|&id| tx.project().record(id).and_then(|r| r.page()))
+        .collect();
+    // The wires at each junction before the delete: only junctions the
+    // delete touches are tidied, never others elsewhere on the page.
+    let before: BTreeMap<JunctionId, BTreeSet<WireId>> = pages
+        .iter()
+        .flat_map(|&page| tx.project().page_contents(page).junctions)
+        .map(|j| (j, tx.project().wires_at(Endpoint::junction(j)).collect()))
+        .collect();
     let mut devices: BTreeSet<DeviceId> = BTreeSet::new();
     let mut terminals: BTreeSet<TerminalId> = BTreeSet::new();
     for id in ids {
         let project = tx.project();
         if !project.contains(*id) {
             continue;
-        }
-        if let Some(record) = project.record(*id) {
-            pages.extend(record.page());
         }
         match *id {
             AnyId::Symbol(s) => {
@@ -815,9 +834,15 @@ pub fn delete(tx: &mut Tx<'_>, ids: &[AnyId]) -> Result<()> {
         }
         tx.remove(*id)?;
     }
-    for page in pages {
-        tidy_junctions(tx, page)?;
-    }
+    let touched: Vec<JunctionId> = pages
+        .iter()
+        .flat_map(|&page| tx.project().page_contents(page).junctions)
+        .filter(|j| {
+            let now: BTreeSet<WireId> = tx.project().wires_at(Endpoint::junction(*j)).collect();
+            before.get(j) != Some(&now)
+        })
+        .collect();
+    tidy_junctions(tx, &touched)?;
     let mut strips: BTreeSet<DeviceId> = BTreeSet::new();
     for t in terminals {
         let project = tx.project();
@@ -875,40 +900,80 @@ fn keep_wires_through(tx: &mut Tx<'_>, symbol: SymbolId) -> Result<()> {
     Ok(())
 }
 
-/// Removes junctions without wires and joins the two wires of a junction
-/// that is no longer a T.
-pub fn tidy_junctions(tx: &mut Tx<'_>, page: PageId) -> Result<()> {
-    // Removing a dead stub can leave the junction at its other end with
-    // one or two wires, so repeat until nothing changes.
-    loop {
-        let mut changed = false;
-        for j in tx.project().page_contents(page).junctions {
-            if tx.project().junction(j).is_none() {
+/// Tidies the given junctions and whatever that tidy-up reaches: a
+/// junction without wires goes, a junction left with two wires joins them
+/// into one, and a junction left with one wire is a dead stub, so that wire
+/// goes too and the junction at its other end is looked at in turn. Two
+/// wires that both run from the junction back to the same point lead
+/// nowhere either and go the same way.
+///
+/// Every step removes at least one object, so this always ends.
+pub fn tidy_junctions(tx: &mut Tx<'_>, junctions: &[JunctionId]) -> Result<()> {
+    let mut work: Vec<JunctionId> = junctions.to_vec();
+    while let Some(j) = work.pop() {
+        if tx.project().junction(j).is_none() {
+            continue;
+        }
+        let end = Endpoint::junction(j);
+        let mut wires: Vec<WireId> = tx.project().wires_at(end).collect();
+        wires.sort();
+        wires.dedup();
+        // A wire with both ends here connects nothing.
+        let (looped, wires): (Vec<WireId>, Vec<WireId>) = wires
+            .into_iter()
+            .partition(|&w| far_end(tx.project(), w, end).is_none());
+        if !looped.is_empty() {
+            for w in looped {
+                tx.remove(w)?;
+            }
+            work.push(j);
+            continue;
+        }
+        let far: Vec<Endpoint> = wires
+            .iter()
+            .filter_map(|&w| far_end(tx.project(), w, end))
+            .collect();
+        match far.as_slice() {
+            // No wires, or a dot on a dead stub: removed below.
+            [] | [_] => {}
+            // Two wires that both go back to the same point: a loop that
+            // reaches nothing else, removed below.
+            [a, b] if a == b => {}
+            [_, _] => {
+                join_wires(tx, j, wires[0], wires[1])?;
                 continue;
             }
-            let end = Endpoint::junction(j);
-            let wires: Vec<WireId> = tx.project().wires_at(end).collect();
-            match wires.as_slice() {
-                [] => tx.remove(j)?,
-                // A dot on a dead stub: the stub is a dangling connection.
-                [a] => {
-                    tx.remove(*a)?;
-                    if tx.project().junction(j).is_some() {
-                        tx.remove(j)?;
-                    }
-                }
-                [a, b] if a != b => join_wires(tx, j, *a, *b)?,
-                _ => continue,
+            // A real T or more: nothing to tidy.
+            _ => continue,
+        }
+        for (w, far) in wires.iter().zip(&far) {
+            tx.remove(*w)?;
+            if let Endpoint::Junction { junction } = far {
+                work.push(*junction);
             }
-            changed = true;
         }
-        if !changed {
-            return Ok(());
+        if tx.project().junction(j).is_some() {
+            tx.remove(j)?;
         }
+    }
+    Ok(())
+}
+
+/// The end of `wire` that is not `at` (`None` for a wire with both ends
+/// there, or no such wire).
+fn far_end(project: &Project, wire: WireId, at: Endpoint) -> Option<Endpoint> {
+    let w = project.wire(wire)?;
+    match (w.from == at, w.to == at) {
+        (true, false) => Some(w.to),
+        (false, true) => Some(w.from),
+        _ => None,
     }
 }
 
-fn join_wires(tx: &mut Tx<'_>, junction: JunctionId, keep: WireId, other: WireId) -> Result<()> {
+/// Joins the two wires of a junction into one and removes the junction.
+/// Returns whether it did: two wires whose far ends are the same point are
+/// left alone.
+fn join_wires(tx: &mut Tx<'_>, junction: JunctionId, keep: WireId, other: WireId) -> Result<bool> {
     let project = tx.project();
     let at = Endpoint::junction(junction);
     let jpos = project
@@ -935,7 +1000,7 @@ fn join_wires(tx: &mut Tx<'_>, junction: JunctionId, keep: WireId, other: WireId
         (o.from, o.route.iter().rev().copied().collect())
     };
     if k_from == o_to {
-        return Ok(()); // a loop back to the same point; leave it alone
+        return Ok(false); // a loop back to the same point; leave it alone
     }
     k_route.push(jpos);
     k_route.extend(o_route);
@@ -951,7 +1016,8 @@ fn join_wires(tx: &mut Tx<'_>, junction: JunctionId, keep: WireId, other: WireId
             w.number = o.number.clone();
         }
     })?;
-    tx.remove(junction)
+    tx.remove(junction)?;
+    Ok(true)
 }
 
 /// Renames a device after checking the new tag, so a refused rename never

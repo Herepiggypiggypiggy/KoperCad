@@ -125,6 +125,8 @@ impl SchematicView {
 
     /// The shell changed the document outside the view (undo, redo).
     pub fn document_changed(&mut self, document: &Document, changes: &ChangeSet) {
+        // Undo and redo move things the proposals were measured against.
+        self.editor.clear_proposals();
         if let Some(scene) = &mut self.scene {
             scene.apply(document.project(), changes, &self.art);
             self.revision = Some(document.project().revision());
@@ -194,6 +196,8 @@ impl SchematicView {
             }
             self.previews.clear();
             if fresh {
+                // Proposals belong to the page they were made on.
+                self.editor.clear_proposals();
                 self.canvas.selection.clear();
                 self.canvas.zoom_to_fit();
             }
@@ -1048,6 +1052,56 @@ mod tests {
             "Declare source: 3~ 400 V (L1, L2, L3)"
         );
         assert!(!menu.empty);
+    }
+
+    /// Places a fuse and a contactor facing it at `x`, which leaves
+    /// proposals.
+    fn with_proposals(h: &mut Harness, x: f64) {
+        h.view.editor.begin_place("iec/protection/fuse_3p", None);
+        h.click(x, 40.0, egui::PointerButton::Primary);
+        h.view.editor.begin_place("iec/contactors/main_3p", None);
+        h.click(x, 120.0, egui::PointerButton::Primary);
+        assert_eq!(h.view.editor.proposals().len(), 3);
+        assert_eq!(h.doc.project().wires().count(), 0);
+    }
+
+    #[test]
+    fn a_page_change_drops_the_proposals() {
+        let mut h = Harness::new();
+        let first = h.page;
+        let page = h.view.editor.new_page(&mut h.doc, first).unwrap();
+        with_proposals(&mut h, 40.0);
+        h.hover(150.0, 150.0);
+        h.key(Key::PageDown);
+        assert_eq!(h.view.take_page_request(), Some(page));
+        assert!(h.view.editor.proposals().is_empty());
+        h.page = page;
+        h.frame(Vec::new());
+        h.key(Key::Enter);
+        assert_eq!(h.doc.project().wires().count(), 0);
+        // A page the shell opens some other way (the page list) does too.
+        h.page = first;
+        h.frame(Vec::new());
+        with_proposals(&mut h, 120.0);
+        h.page = page;
+        h.frame(Vec::new());
+        assert!(h.view.editor.proposals().is_empty());
+        h.key(Key::Enter);
+        assert_eq!(h.doc.project().wires().count(), 0);
+    }
+
+    #[test]
+    fn undo_drops_the_proposals() {
+        let mut h = Harness::new();
+        with_proposals(&mut h, 40.0);
+        let changes = h.doc.undo().unwrap().unwrap();
+        h.view.document_changed(&h.doc, &changes);
+        assert!(h.view.editor.proposals().is_empty());
+        let changes = h.doc.redo().unwrap().unwrap();
+        h.view.document_changed(&h.doc, &changes);
+        h.frame(Vec::new());
+        h.key(Key::Enter);
+        assert_eq!(h.doc.project().wires().count(), 0);
     }
 
     #[test]
