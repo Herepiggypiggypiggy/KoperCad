@@ -140,9 +140,13 @@ impl NovoApp {
             return;
         };
         let result = if redo { doc.redo() } else { doc.undo() };
-        if let Err(e) = result {
-            let what = if redo { "redo" } else { "undo" };
-            self.message(Level::Error, format!("Could not {what}: {e}"));
+        match result {
+            Ok(Some(changes)) => self.canvas.document_changed(doc, &changes),
+            Ok(None) => {}
+            Err(e) => {
+                let what = if redo { "redo" } else { "undo" };
+                self.message(Level::Error, format!("Could not {what}: {e}"));
+            }
         }
         self.fix_current_page();
     }
@@ -248,6 +252,7 @@ impl NovoApp {
             Ok(()) => {
                 self.project_path = None;
                 self.current_page = None;
+                self.canvas.document_replaced();
                 self.fix_current_page();
             }
             Err(e) => self.message(Level::Error, format!("Could not create a project: {e}")),
@@ -259,6 +264,7 @@ impl NovoApp {
             Ok(()) => {
                 self.project_path = Some(path.to_owned());
                 self.current_page = None;
+                self.canvas.document_replaced();
                 self.fix_current_page();
                 self.settings.remember_recent(path);
                 self.message(Level::Info, format!("Opened {}", path.display()));
@@ -280,6 +286,7 @@ impl NovoApp {
         self.backend.close();
         self.project_path = None;
         self.current_page = None;
+        self.canvas.document_replaced();
     }
 
     /// Saves to the current file, asking for one if there is none.
@@ -389,10 +396,23 @@ impl NovoApp {
         self.palette.is_open() || self.unsaved_prompt.is_some() || self.show_about
     }
 
+    /// Takes the key presses that trigger enabled actions, leaving the rest
+    /// (and anything a focused text field needs) to the widgets.
     fn consume_shortcuts(&self, ctx: &egui::Context) -> Vec<Action> {
+        let typing = ctx.egui_wants_keyboard_input();
         let mut fired = Vec::new();
         for (action, shortcut) in Action::by_shortcut_specificity() {
-            if ctx.input_mut(|i| i.consume_shortcut(&shortcut)) {
+            if !self.is_enabled(action) || (typing && action.yields_to_text_input(&shortcut)) {
+                continue;
+            }
+            let hit = ctx.input_mut(|i| {
+                if shortcut.modifiers.is_none() {
+                    consume_bare_key(i, shortcut.logical_key)
+                } else {
+                    i.consume_shortcut(&shortcut)
+                }
+            });
+            if hit {
                 fired.push(action);
             }
         }
@@ -452,8 +472,15 @@ impl NovoApp {
                 self.action_button(ui, Action::Quit, picked);
             });
             ui.menu_button("Edit", |ui| {
-                self.action_button(ui, Action::Undo, picked);
-                self.action_button(ui, Action::Redo, picked);
+                let doc = self.backend.document();
+                let undo = doc
+                    .and_then(|d| d.undo_label())
+                    .map(|l| format!("Undo {l}"));
+                let redo = doc
+                    .and_then(|d| d.redo_label())
+                    .map(|l| format!("Redo {l}"));
+                self.labeled_button(ui, Action::Undo, undo, picked);
+                self.labeled_button(ui, Action::Redo, redo, picked);
             });
             ui.menu_button("View", |ui| {
                 self.action_button(ui, Action::CommandPalette, picked);
@@ -488,7 +515,18 @@ impl NovoApp {
     }
 
     fn action_button(&self, ui: &mut egui::Ui, action: Action, picked: &mut Vec<Action>) {
-        let mut button = egui::Button::new(action.label());
+        self.labeled_button(ui, action, None, picked);
+    }
+
+    fn labeled_button(
+        &self,
+        ui: &mut egui::Ui,
+        action: Action,
+        label: Option<String>,
+        picked: &mut Vec<Action>,
+    ) {
+        let label = label.unwrap_or_else(|| action.label().to_owned());
+        let mut button = egui::Button::new(label);
         if let Some(s) = action.shortcut() {
             button = button.shortcut_text(ui.ctx().format_shortcut(&s));
         }
@@ -660,6 +698,20 @@ impl eframe::App for NovoApp {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, Settings::STORAGE_KEY, &self.settings);
     }
+}
+
+/// Consumes a press of `key` with no modifiers held. egui's own matching is
+/// loose, so a bare Home would also fire on Shift+Home.
+fn consume_bare_key(input: &mut egui::InputState, key: egui::Key) -> bool {
+    let before = input.events.len();
+    input.events.retain(|event| {
+        !matches!(
+            event,
+            egui::Event::Key { key: k, pressed: true, modifiers, .. }
+                if *k == key && modifiers.is_none()
+        )
+    });
+    input.events.len() != before
 }
 
 fn properties_panel(ui: &mut egui::Ui) {
@@ -850,6 +902,55 @@ mod tests {
         assert!(!app.is_dirty());
         frame(&ctx, &mut app, Default::default());
         assert_eq!(app.window_title, "Untitled - NovoElectric");
+    }
+
+    /// Which actions a single key press would trigger.
+    fn fired_by(app: &NovoApp, key_: egui::Key, modifiers: egui::Modifiers) -> Vec<Action> {
+        let ctx = egui::Context::default();
+        let mut fired = Vec::new();
+        let mut output = ctx.run_ui(key(key_, modifiers), |ui| {
+            fired = app.consume_shortcuts(ui.ctx());
+        });
+        output.textures_delta.clear();
+        fired
+    }
+
+    #[test]
+    fn bare_shortcuts_ignore_extra_modifiers() {
+        let ctx = egui::Context::default();
+        let mut app = app_with(MemoryBackend::default());
+        app.run(&ctx, Action::NewProject);
+        assert_eq!(
+            fired_by(&app, egui::Key::Home, egui::Modifiers::NONE),
+            vec![Action::ZoomToFit]
+        );
+        assert!(fired_by(&app, egui::Key::Home, egui::Modifiers::SHIFT).is_empty());
+    }
+
+    #[test]
+    fn disabled_actions_leave_their_keys_alone() {
+        let app = app_with(MemoryBackend::default());
+        assert!(fired_by(&app, egui::Key::S, egui::Modifiers::COMMAND).is_empty());
+    }
+
+    #[test]
+    fn ctrl_y_redoes() {
+        let ctx = egui::Context::default();
+        let mut app = app_with(DirtyBackend::default());
+        app.run(&ctx, Action::NewProject);
+        app.run(&ctx, Action::Undo);
+        assert_eq!(
+            fired_by(&app, egui::Key::Y, egui::Modifiers::COMMAND),
+            vec![Action::Redo]
+        );
+        assert_eq!(
+            fired_by(
+                &app,
+                egui::Key::Z,
+                egui::Modifiers::COMMAND | egui::Modifiers::SHIFT
+            ),
+            vec![Action::Redo]
+        );
     }
 
     #[test]

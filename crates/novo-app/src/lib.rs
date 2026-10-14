@@ -42,7 +42,11 @@ fn window_icon() -> egui::IconData {
 /// A project file passed as the first argument (as Windows does when a
 /// `.novo` file is double-clicked) is opened on start.
 pub fn run() -> eframe::Result {
-    let startup_file = std::env::args_os().nth(1).map(std::path::PathBuf::from);
+    let startup_file = std::env::args_os().nth(1).map(|arg| {
+        let path = std::path::PathBuf::from(arg);
+        // absolute() rather than canonicalize(): no \\?\ prefix on Windows.
+        std::path::absolute(&path).unwrap_or(path)
+    });
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title(APP_NAME)

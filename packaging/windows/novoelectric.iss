@@ -23,6 +23,8 @@ AppPublisherURL=https://github.com/Herepiggypiggypiggy/NovoElectric
 DefaultDirName={localappdata}\Programs\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
+; A per-user install always goes to the user's own folder.
+DisableDirPage=yes
 PrivilegesRequired=lowest
 UsedUserAreasWarning=no
 ArchitecturesAllowed=x64compatible

@@ -56,7 +56,8 @@ pub trait ProjectBackend {
     /// Opens a project file, replacing any open project.
     fn open(&mut self, path: &Path) -> Result<(), BackendError>;
 
-    /// Writes the open project to `path` and marks it saved.
+    /// Writes the open project to `path`. On success the implementation must
+    /// call `Document::mark_saved`, which clears the unsaved-changes flag.
     fn save(&mut self, path: &Path) -> Result<(), BackendError>;
 
     fn close(&mut self);

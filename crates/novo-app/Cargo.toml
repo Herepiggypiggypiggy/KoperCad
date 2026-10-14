@@ -14,11 +14,11 @@ path = "src/main.rs"
 eframe = { workspace = true, features = ["persistence"] }
 novo-core.workspace = true
 log = "0.4"
-env_logger = { version = "0.11", default-features = false, features = ["auto-color", "humantime"] }
+env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
 rfd = "0.17"
-serde = { version = "1", features = ["derive"] }
+serde.workspace = true
 
-[target.'cfg(windows)'.build-dependencies]
+[build-dependencies]
 winresource = "0.1"
 
 [package.metadata.winresource]

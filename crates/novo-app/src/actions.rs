@@ -113,6 +113,22 @@ impl Action {
         Some(KeyboardShortcut::new(modifiers, key))
     }
 
+    /// Every shortcut for the action; the first is the one menus show.
+    pub fn shortcuts(self) -> Vec<KeyboardShortcut> {
+        let mut all: Vec<_> = self.shortcut().into_iter().collect();
+        if self == Action::Redo {
+            // Windows convention, next to Ctrl+Shift+Z.
+            all.push(KeyboardShortcut::new(Modifiers::COMMAND, Key::Y));
+        }
+        all
+    }
+
+    /// True for shortcuts a focused text field needs for itself: plain keys
+    /// such as Home, and Ctrl+Z / Ctrl+Y for the field's own undo.
+    pub fn yields_to_text_input(self, shortcut: &KeyboardShortcut) -> bool {
+        shortcut.modifiers.is_none() || matches!(self, Action::Undo | Action::Redo)
+    }
+
     /// Actions with shortcuts, most modifiers first.
     ///
     /// egui matches shortcuts loosely (Ctrl+Shift+S also matches Ctrl+S), so
@@ -120,7 +136,7 @@ impl Action {
     pub fn by_shortcut_specificity() -> Vec<(Action, KeyboardShortcut)> {
         let mut list: Vec<_> = Action::ALL
             .iter()
-            .filter_map(|&a| a.shortcut().map(|s| (a, s)))
+            .flat_map(|&a| a.shortcuts().into_iter().map(move |s| (a, s)))
             .collect();
         list.sort_by_key(|(_, s)| std::cmp::Reverse(modifier_count(s.modifiers)));
         list
@@ -159,5 +175,15 @@ mod tests {
         let pos = |a| order.iter().position(|(x, _)| *x == a).unwrap();
         assert!(pos(Action::SaveProjectAs) < pos(Action::SaveProject));
         assert!(pos(Action::Redo) < pos(Action::Undo));
+    }
+
+    #[test]
+    fn redo_also_answers_to_ctrl_y() {
+        let keys: Vec<_> = Action::Redo
+            .shortcuts()
+            .iter()
+            .map(|s| s.logical_key)
+            .collect();
+        assert_eq!(keys, vec![Key::Z, Key::Y]);
     }
 }

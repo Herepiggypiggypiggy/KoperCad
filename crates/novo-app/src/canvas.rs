@@ -4,7 +4,7 @@
 //! (WS-03) provides the real one; [`PlaceholderCanvas`] stands in until then.
 
 use eframe::egui;
-use novo_core::{Document, PageId};
+use novo_core::{ChangeSet, Document, PageId};
 
 /// The open page, handed to the canvas each frame.
 pub struct OpenPage<'a> {
@@ -17,6 +17,14 @@ pub struct OpenPage<'a> {
 pub trait CanvasView {
     /// Draws `open` (or an empty state when `None`) into the whole of `ui`.
     fn show(&mut self, ui: &mut egui::Ui, open: Option<OpenPage<'_>>);
+
+    /// Called after the shell changed the document outside the canvas
+    /// (undo, redo), so cached drawing state can update just what changed.
+    fn document_changed(&mut self, _document: &Document, _changes: &ChangeSet) {}
+
+    /// Called when a different project was opened, created or closed; drop
+    /// anything cached for the old one.
+    fn document_replaced(&mut self) {}
 
     /// Fits the open page into the view.
     fn zoom_to_fit(&mut self) {}

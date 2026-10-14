@@ -7,7 +7,10 @@ on:
     paths:
       - "packaging/windows/**"
       - "assets/icon/**"
-      - "crates/novo-app/build.rs"
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".cargo/**"
       - ".github/workflows/package-windows.yml"
   workflow_dispatch:
 
@@ -33,6 +36,9 @@ jobs:
         shell: pwsh
         run: |
           $version = ((cargo pkgid -p novo-app) -split '[#@]')[-1]
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne "v$version") {
+            throw "tag $env:GITHUB_REF_NAME does not match the crate version $version"
+          }
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" packaging\windows\novoelectric.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Check no admin rights are requested
@@ -43,7 +49,11 @@ jobs:
             $text = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($exe))
             if ($text -match 'requireAdministrator|highestAvailable') { throw "$exe asks for admin rights" }
           }
-      - name: Install and launch as a standard (non-admin) user
+          # A dynamically linked MSVC runtime would need the machine-wide VC++
+          # Redistributable, which a standard user cannot install.
+          $app = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes("target\release\novoelectric.exe"))
+          if ($app -match '(?i)vcruntime140|msvcp140|api-ms-win-crt-') { throw "novoelectric.exe links the MSVC runtime dynamically" }
+      - name: Install as a standard (non-admin) user, then launch
         shell: pwsh
         run: |
           $user = "novotest"
@@ -74,12 +84,16 @@ jobs:
           if (Test-Path "HKLM:\Software\Classes\NovoElectric.Project") { throw "file association was written machine-wide" }
           if (Test-Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{AEB465B9-04F0-475B-AD7F-091D638587B5}_is1") { throw "uninstall entry was written machine-wide" }
 
-          $app = Start-Process $exe -Credential $cred -LoadUserProfile -WorkingDirectory $work -PassThru
+          # A GUI started with -Credential from the runner's service session
+          # has no desktop to attach to, so the launch check runs the
+          # installed exe as the runner; its asInvoker manifest (checked
+          # above) means it runs with whatever rights its user has.
+          $app = Start-Process $exe -WorkingDirectory $work -PassThru
           Start-Sleep -Seconds 10
           if ($app.HasExited) { throw "novoelectric.exe exited at startup with code $($app.ExitCode)" }
           Stop-Process -Id $app.Id
           $size = [math]::Round($setup.Length / 1MB, 1)
-          "Installer: $($setup.Name), $size MB, installed and launched as a standard user" >> $env:GITHUB_STEP_SUMMARY
+          "Installer: $($setup.Name), $size MB, installed as a standard user, app launched" >> $env:GITHUB_STEP_SUMMARY
       - uses: actions/upload-artifact@v4
         with:
           name: NovoElectric-windows-installer
