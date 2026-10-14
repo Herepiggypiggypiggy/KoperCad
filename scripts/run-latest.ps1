@@ -14,6 +14,10 @@ $Stamp = Join-Path $Root 'build-info.json'
 $Exe = Join-Path $Current 'novoelectric.exe'
 
 New-Item -ItemType Directory -Force -Path $Root | Out-Null
+# The portable gh that scripts/setup-new-pc.ps1 unpacks, in case the
+# shortcut starts before Explorer has picked up the new user PATH.
+$PortableGh = Join-Path $env:LOCALAPPDATA 'NovoElectric\gh\bin'
+if (Test-Path (Join-Path $PortableGh 'gh.exe')) { $env:Path += ";$PortableGh" }
 
 function Show-Error($text) {
     Add-Type -AssemblyName PresentationFramework
