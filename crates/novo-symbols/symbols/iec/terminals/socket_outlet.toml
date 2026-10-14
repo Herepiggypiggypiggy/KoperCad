@@ -1,0 +1,32 @@
+format = 1
+id = "iec/terminals/socket_outlet"
+name = "Socket outlet with earth"
+description = "Single-phase socket outlet with protective earth contact."
+standard = "IEC 60617"
+category = "terminals"
+function = "connector.outlet"
+keywords = ["socket outlet", "receptacle", "schuko", "power outlet"]
+
+connections = [
+  { id = "L", at = [0, 0], dir = "up" },
+  { id = "N", at = [8, 0], dir = "up", role = "n" },
+  { id = "PE", at = [16, 0], dir = "up", role = "pe" },
+]
+
+anchors = [
+  { role = "tag", at = [-5, 10], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 8] },
+  { kind = "line", from = [8, 0], to = [8, 6] },
+  { kind = "line", from = [16, 0], to = [16, 8] },
+  { kind = "arc", center = [8, 12], r = 6, start = 180, end = 360 },
+  { kind = "line", from = [2, 12], to = [14, 12] },
+  { kind = "line", from = [0, 8], to = [3, 8] },
+  { kind = "line", from = [16, 8], to = [13, 8] },
+]
+
+[behavior]
+kind = "load"
+poles = [["L", "N"]]

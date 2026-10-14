@@ -1,0 +1,46 @@
+format = 1
+id = "iec/motors/motor_3ph_6t"
+name = "Three-phase motor, 6 terminals"
+description = "Three-phase motor with both winding ends brought out (U1-W2), for star-delta starting."
+standard = "IEC 60617"
+category = "motors"
+function = "motor.ac3"
+keywords = ["motor", "star delta", "6 terminals", "wye delta"]
+
+connections = [
+  { id = "U1", at = [0, 0], dir = "up" },
+  { id = "V1", at = [8, 0], dir = "up" },
+  { id = "W1", at = [16, 0], dir = "up" },
+  { id = "U2", at = [0, 32], dir = "down" },
+  { id = "V2", at = [8, 32], dir = "down" },
+  { id = "W2", at = [16, 32], dir = "down" },
+  { id = "PE", at = [24, 0], dir = "up", role = "pe" },
+]
+
+anchors = [
+  { role = "tag", at = [-3, 16], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "line", from = [0, 4], to = [3.6, 10.556] },
+  { kind = "line", from = [8, 0], to = [8, 4] },
+  { kind = "line", from = [8, 4], to = [8, 9] },
+  { kind = "line", from = [16, 0], to = [16, 4] },
+  { kind = "line", from = [16, 4], to = [12.4, 10.556] },
+  { kind = "circle", center = [8, 16], r = 7 },
+  { kind = "text", at = [8, 14.5], text = "M", size = 4 },
+  { kind = "text", at = [8, 19], text = "3~" },
+  { kind = "line", from = [3.6, 21.444], to = [0, 28] },
+  { kind = "line", from = [0, 28], to = [0, 32] },
+  { kind = "line", from = [8, 23], to = [8, 28] },
+  { kind = "line", from = [8, 28], to = [8, 32] },
+  { kind = "line", from = [12.4, 21.444], to = [16, 28] },
+  { kind = "line", from = [16, 28], to = [16, 32] },
+  { kind = "polyline", points = [[24, 0], [24, 16], [15, 16]] },
+]
+
+[behavior]
+kind = "motor"
+phases = 3
+poles = [["U1", "V1", "W1"], ["U2", "V2", "W2"]]

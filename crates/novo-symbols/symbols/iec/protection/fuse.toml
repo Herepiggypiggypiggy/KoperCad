@@ -1,0 +1,28 @@
+format = 1
+id = "iec/protection/fuse"
+name = "Fuse"
+description = "Fuse (general symbol), for cartridge fuses and fuse links."
+standard = "IEC 60617"
+category = "protection"
+function = "protection.fuse"
+keywords = ["fuse", "f", "cartridge"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-4, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "rect", at = [-1.5, 4], size = [3, 8] },
+  { kind = "line", from = [0, 4], to = [0, 12] },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+]
+
+[behavior]
+kind = "fuse"
+poles = [["1", "2"]]

@@ -1,0 +1,28 @@
+format = 1
+id = "iec/terminals/plug_socket"
+name = "Plug and socket, mated"
+description = "A mated contact pair of a plug connector."
+standard = "IEC 60617"
+category = "terminals"
+function = "connector.pair"
+keywords = ["plug", "socket", "connector", "mated"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 12], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-3.5, 5], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 2] },
+  { kind = "arc", center = [0, 4], r = 2, start = 180, end = 360 },
+  { kind = "rect", at = [-0.8, 3.5], size = [1.6, 3], fill = true },
+  { kind = "line", from = [0, 6.5], to = [0, 12] },
+]
+
+[behavior]
+kind = "conductor"
+poles = [["1", "2"]]

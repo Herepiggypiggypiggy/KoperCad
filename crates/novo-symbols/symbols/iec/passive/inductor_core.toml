@@ -1,0 +1,32 @@
+format = 1
+id = "iec/passive/inductor_core"
+name = "Inductor with core"
+description = "Inductor with a magnetic core."
+standard = "IEC 60617"
+category = "passive"
+function = "passive.inductor"
+keywords = ["inductor", "choke", "core", "ferrite"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-4, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "arc", center = [0, 5], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [0, 7], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [0, 9], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [0, 11], r = 1, start = -90, end = 90 },
+  { kind = "line", from = [2.5, 4.5], to = [2.5, 11.5] },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+]
+
+[behavior]
+kind = "passive"
+type = "inductor"
+poles = [["1", "2"]]

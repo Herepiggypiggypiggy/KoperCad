@@ -46,6 +46,8 @@ pub struct Project {
 struct Index {
     /// For each object, the objects that refer to it.
     referrers: HashMap<AnyId, BTreeSet<AnyId>>,
+    /// The object holding each raw id, to keep ids unique across kinds.
+    ids: HashMap<u64, AnyId>,
     /// Wires ending on each endpoint.
     wires_at: HashMap<Endpoint, BTreeSet<WireId>>,
 }
@@ -53,6 +55,7 @@ struct Index {
 impl Index {
     fn add(&mut self, record: &Record) {
         let id = record.id();
+        self.ids.insert(id.raw(), id);
         for target in record.refs() {
             self.referrers.entry(target).or_default().insert(id);
         }
@@ -65,6 +68,7 @@ impl Index {
 
     fn remove(&mut self, record: &Record) {
         let id = record.id();
+        self.ids.remove(&id.raw());
         for target in record.refs() {
             if let Some(set) = self.referrers.get_mut(&target) {
                 set.remove(&id);
@@ -145,6 +149,10 @@ impl Project {
     /// Runs `edit` as one atomic edit. If `edit` returns an error, every op it
     /// applied is rolled back and the project is unchanged. On success the
     /// returned [`Transaction`] can be inverted for undo.
+    ///
+    /// This records no history. Interactive edits, scripts and AI edits go
+    /// through [`Document`](crate::Document) so they can be undone; use this
+    /// directly only where no undo applies (loaders, storage, tests).
     pub fn transact<R>(
         &mut self,
         label: impl Into<String>,
@@ -188,9 +196,11 @@ impl Project {
         }
     }
 
+    /// Hands out the next id. Once the counter reaches the reserved
+    /// `u64::MAX` it stays there, and inserting with it is refused.
     pub(crate) fn alloc_id(&mut self) -> u64 {
         let id = self.next_id.max(1);
-        self.next_id = id + 1;
+        self.next_id = id.saturating_add(1);
         id
     }
 
@@ -199,8 +209,12 @@ impl Project {
         match op {
             Op::Insert { record } => {
                 let id = record.id();
-                if self.contains(id) {
-                    return Err(ModelError::AlreadyExists(id));
+                // 0 is never allocated and u64::MAX would overflow the counter.
+                if id.raw() == 0 || id.raw() == u64::MAX {
+                    return Err(ModelError::InvalidId(id.raw()));
+                }
+                if let Some(&existing) = self.index.ids.get(&id.raw()) {
+                    return Err(ModelError::AlreadyExists(existing));
                 }
                 self.check(record, None)?;
                 self.index.add(record);
@@ -236,7 +250,12 @@ impl Project {
                 self.index.add(after);
                 self.store(after.clone());
             }
-            Op::SetInfo { after, .. } => self.info = after.clone(),
+            Op::SetInfo { before, after } => {
+                if self.info != *before {
+                    return Err(ModelError::InfoConflict);
+                }
+                self.info = after.clone();
+            }
         }
         Ok(())
     }
@@ -290,6 +309,11 @@ impl Project {
                 .flatten()
                 .copied()
         };
+        match record {
+            Record::Device(device) => device.tag.validate()?,
+            Record::Cable(cable) => cable.tag.validate()?,
+            _ => {}
+        }
         match record {
             Record::Symbol(symbol) => {
                 for group in &symbol.bridges {

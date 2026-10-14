@@ -1,0 +1,33 @@
+format = 1
+id = "iec/contacts/nc_delay_on"
+name = "Break contact, delayed on opening"
+description = "Timer contact that opens after the on-delay of its timer relay."
+standard = "IEC 60617"
+category = "contacts"
+function = "contact.nc.delay_on"
+keywords = ["timer", "delay", "nc", "delay on"]
+
+connections = [
+  { id = "15", at = [0, 0], dir = "up" },
+  { id = "16", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-9, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 5] },
+  { kind = "line", from = [0, 5], to = [3.5, 5] },
+  { kind = "line", from = [0, 16], to = [0, 11] },
+  { kind = "line", from = [0, 11], to = [4, 4] },
+  { kind = "line", from = [1.714, 7.2], to = [-2.286, 7.2] },
+  { kind = "line", from = [1.714, 8.8], to = [-2.286, 8.8] },
+  { kind = "arc", center = [-3.786, 8], r = 1.5, start = -90, end = 90 },
+]
+
+[behavior]
+kind = "contact"
+normally = "closed"
+delay = "on"
+poles = [["15", "16"]]

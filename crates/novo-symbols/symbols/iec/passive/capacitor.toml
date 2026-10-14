@@ -1,0 +1,29 @@
+format = 1
+id = "iec/passive/capacitor"
+name = "Capacitor"
+description = "Capacitor, general symbol."
+standard = "IEC 60617"
+category = "passive"
+function = "passive.capacitor"
+keywords = ["capacitor", "c", "condenser"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-4.5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 7] },
+  { kind = "line", from = [-3, 7], to = [3, 7] },
+  { kind = "line", from = [-3, 9], to = [3, 9] },
+  { kind = "line", from = [0, 9], to = [0, 16] },
+]
+
+[behavior]
+kind = "passive"
+type = "capacitor"
+poles = [["1", "2"]]

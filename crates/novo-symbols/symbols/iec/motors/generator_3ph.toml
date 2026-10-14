@@ -1,0 +1,38 @@
+format = 1
+id = "iec/motors/generator_3ph"
+name = "Three-phase generator"
+description = "Three-phase AC generator with terminals U1, V1, W1 and protective earth."
+standard = "IEC 60617"
+category = "motors"
+function = "source.generator"
+keywords = ["generator", "genset", "alternator", "g"]
+
+connections = [
+  { id = "U1", at = [0, 0], dir = "up" },
+  { id = "V1", at = [8, 0], dir = "up" },
+  { id = "W1", at = [16, 0], dir = "up" },
+  { id = "PE", at = [24, 0], dir = "up", role = "pe" },
+]
+
+anchors = [
+  { role = "tag", at = [-3, 16], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "line", from = [0, 4], to = [3.6, 10.556] },
+  { kind = "line", from = [8, 0], to = [8, 4] },
+  { kind = "line", from = [8, 4], to = [8, 9] },
+  { kind = "line", from = [16, 0], to = [16, 4] },
+  { kind = "line", from = [16, 4], to = [12.4, 10.556] },
+  { kind = "circle", center = [8, 16], r = 7 },
+  { kind = "text", at = [8, 14.5], text = "G", size = 4 },
+  { kind = "text", at = [8, 19], text = "3~" },
+  { kind = "polyline", points = [[24, 0], [24, 16], [15, 16]] },
+]
+
+[behavior]
+kind = "source"
+type = "ac"
+phases = 3
+poles = [["U1", "V1", "W1"]]

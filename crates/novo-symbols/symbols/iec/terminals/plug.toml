@@ -1,0 +1,27 @@
+format = 1
+id = "iec/terminals/plug"
+name = "Plug (male contact)"
+description = "Male contact of a plug connector."
+standard = "IEC 60617"
+category = "terminals"
+function = "connector.male"
+keywords = ["plug", "connector", "pin", "male"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 8], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-3, 4], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "rect", at = [-0.8, 4], size = [1.6, 3], fill = true },
+  { kind = "line", from = [0, 7], to = [0, 8] },
+]
+
+[behavior]
+kind = "conductor"
+poles = [["1", "2"]]

@@ -13,6 +13,11 @@ pub enum ModelError {
     NotFound(AnyId),
     #[error("{0} already exists")]
     AlreadyExists(AnyId),
+    #[error("id {0} is reserved and cannot be used")]
+    InvalidId(u64),
+    #[error("the recorded project info no longer matches the project")]
+    InfoConflict,
+
     #[error("{id} is still used by {} other object(s)", by.len())]
     StillReferenced { id: AnyId, by: Vec<AnyId> },
     #[error("{symbol} has no pin {pin}")]

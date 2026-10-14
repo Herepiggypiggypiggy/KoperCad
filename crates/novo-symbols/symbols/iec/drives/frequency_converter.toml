@@ -1,0 +1,45 @@
+format = 1
+id = "iec/drives/frequency_converter"
+name = "Frequency converter"
+description = "Variable frequency drive (VFD) feeding a three-phase motor."
+standard = "IEC 60617"
+category = "drives"
+function = "converter.vfd"
+keywords = ["vfd", "frequency converter", "inverter", "drive", "speed"]
+
+connections = [
+  { id = "L1", at = [0, 0], dir = "up" },
+  { id = "L2", at = [8, 0], dir = "up" },
+  { id = "L3", at = [16, 0], dir = "up" },
+  { id = "PE", at = [24, 0], dir = "up", role = "pe" },
+  { id = "U", at = [0, 24], dir = "down" },
+  { id = "V", at = [8, 24], dir = "down" },
+  { id = "W", at = [16, 24], dir = "down" },
+  { id = "PE2", at = [24, 24], dir = "down", role = "pe" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 12], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "line", from = [8, 0], to = [8, 4] },
+  { kind = "line", from = [16, 0], to = [16, 4] },
+  { kind = "line", from = [24, 0], to = [24, 4] },
+  { kind = "line", from = [0, 20], to = [0, 24] },
+  { kind = "line", from = [8, 20], to = [8, 24] },
+  { kind = "line", from = [16, 20], to = [16, 24] },
+  { kind = "line", from = [24, 20], to = [24, 24] },
+  { kind = "rect", at = [-4, 4], size = [32, 16] },
+  { kind = "line", from = [-4, 20], to = [28, 4] },
+  { kind = "text", at = [4, 8], text = "~", size = 3.5 },
+  { kind = "text", at = [20, 16], text = "~", size = 3.5 },
+  { kind = "text", at = [18.4, 8.8], text = "f", size = 3 },
+]
+
+[behavior]
+kind = "converter"
+input = "ac"
+output = "ac"
+poles = [["L1", "L2", "L3"], ["U", "V", "W"]]
