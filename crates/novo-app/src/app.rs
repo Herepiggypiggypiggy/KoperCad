@@ -9,7 +9,7 @@ use std::time::{Duration, Instant, SystemTime};
 use eframe::egui;
 
 use crate::actions::Action;
-use novo_core::PageId;
+use novo_core::{Command, ModelError, Outcome, PageId};
 
 use crate::backend::{BackendError, ProjectBackend, page_labels};
 use crate::canvas::{CanvasView, OpenPage};
@@ -348,20 +348,64 @@ impl NovoApp {
     }
 
     /// Offers back an unsaved new project from a session that crashed.
-    fn restore_untitled(&mut self) {
+    /// Returns true when it opened one.
+    fn restore_untitled(&mut self) -> bool {
         match self.backend.restore_untitled() {
             Ok(true) => {
                 self.project_path = None;
                 self.current_page = None;
                 self.canvas.document_replaced();
                 self.fix_current_page();
+                true
             }
-            Ok(false) => {}
-            Err(e) => self.message(
-                Level::Warning,
-                format!("Could not check for unsaved work from the last session: {e}"),
-            ),
+            Ok(false) => false,
+            Err(e) => {
+                self.message(
+                    Level::Warning,
+                    format!("Could not check for unsaved work from the last session: {e}"),
+                );
+                false
+            }
         }
+    }
+
+    /// Start-up: the file named on the command line, else unsaved work a
+    /// crash left behind, else the last project, where it was left. There
+    /// is no start screen.
+    fn start(&mut self) {
+        if let Some(path) = self.open_on_start.take() {
+            self.open_path(&path);
+        } else if !self.restore_untitled()
+            && let Some(last) = self.settings.recent_projects.first().cloned()
+            && last.is_file()
+        {
+            self.open_path(&last);
+        }
+    }
+
+    /// Runs a model command on the open project the way the editor does:
+    /// the canvas updates and the change reaches storage. For scripts and
+    /// tests that drive the whole window. `None` when no project is open.
+    pub fn execute(&mut self, command: Command) -> Option<Result<Outcome, ModelError>> {
+        let doc = self.backend.document_mut()?;
+        let outcome = match doc.execute(command) {
+            Ok(outcome) => outcome,
+            Err(e) => return Some(Err(e)),
+        };
+        self.canvas.document_changed(doc, &outcome.changes);
+        self.backend.record(&outcome.changes);
+        self.fix_current_page();
+        Some(Ok(outcome))
+    }
+
+    /// The open project, if any.
+    pub fn document(&self) -> Option<&novo_core::Document> {
+        self.backend.document()
+    }
+
+    /// The page on the canvas.
+    pub fn current_page(&self) -> Option<PageId> {
+        self.current_page
     }
 
     fn close_project(&mut self) {
@@ -450,10 +494,7 @@ impl NovoApp {
         let ctx = ui.ctx().clone();
         if !self.started {
             self.started = true;
-            match self.open_on_start.take() {
-                Some(path) => self.open_path(&path),
-                None => self.restore_untitled(),
-            }
+            self.start();
         }
         self.fix_current_page();
         self.tick(&ctx);
@@ -482,10 +523,14 @@ impl NovoApp {
         }
         let canvas_rect = egui::CentralPanel::no_frame()
             .show(ui, |ui| {
-                let open = self
-                    .current_page
-                    .and_then(|page| OpenPage::new(&mut *self.backend, page));
-                self.canvas.show(ui, open);
+                if self.is_open() {
+                    let open = self
+                        .current_page
+                        .and_then(|page| OpenPage::new(&mut *self.backend, page));
+                    self.canvas.show(ui, open);
+                } else {
+                    self.start_panel(ui, &mut picked);
+                }
             })
             .response
             .rect;
@@ -831,6 +876,47 @@ impl NovoApp {
         if escape || elsewhere {
             self.outline_open = false;
         }
+    }
+
+    /// With no project open the canvas area offers the ways in: new, open
+    /// and the recent projects.
+    fn start_panel(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
+        let rect = ui.max_rect();
+        ui.painter()
+            .rect_filled(rect, 0.0, ui.visuals().extreme_bg_color);
+        let width = 320.0_f32.min(rect.width() - 32.0);
+        let top = rect.top() + (rect.height() * 0.25).min(200.0);
+        let column = egui::Rect::from_min_size(
+            egui::pos2(rect.center().x - width / 2.0, top),
+            egui::vec2(width, rect.bottom() - top),
+        );
+        ui.scope_builder(egui::UiBuilder::new().max_rect(column), |ui| {
+            ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
+                ui.weak("No project open");
+                ui.add_space(8.0);
+                for a in [Action::NewProject, Action::OpenProject] {
+                    self.action_button(ui, a, picked);
+                }
+                let recent = self.settings.recent_projects.clone();
+                if !recent.is_empty() {
+                    ui.add_space(16.0);
+                    ui.small("RECENT");
+                    for path in recent {
+                        let name = path
+                            .file_stem()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or_else(|| path.display().to_string());
+                        let row = ui
+                            .add(egui::Button::new(name).frame(false))
+                            .on_hover_text(path.display().to_string());
+                        if row.clicked() {
+                            let ctx = ui.ctx().clone();
+                            self.discard_then(&ctx, Discarding::OpenPath(path));
+                        }
+                    }
+                }
+            });
+        });
     }
 
     /// Cursor position and friends, faint, at the canvas's top right.
@@ -1562,5 +1648,53 @@ mod tests {
         assert_eq!(app.saved_state(), "Saved");
         app.run(&ctx, Action::Undo);
         assert_eq!(app.saved_state(), "Unsaved changes");
+    }
+
+    #[test]
+    fn start_up_reopens_the_last_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plant.novo");
+        let ctx = egui::Context::default();
+        let mut first = storage_app();
+        first.run(&ctx, Action::NewProject);
+        assert!(first.save_to(&path));
+        first.run(&ctx, Action::CloseProject);
+
+        let mut next = app_with(StorageBackend::default());
+        next.settings = first.settings().clone();
+        frame(&ctx, &mut next, Default::default());
+        assert_eq!(next.project_path, Some(path));
+
+        // A last project that is gone leaves the start panel, quietly.
+        let mut gone = storage_app();
+        gone.settings.remember_recent(&dir.path().join("gone.novo"));
+        frame(&ctx, &mut gone, Default::default());
+        assert!(!gone.is_open());
+        assert!(gone.messages().is_empty());
+    }
+
+    #[test]
+    fn commands_run_through_the_window_reach_storage() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plant.novo");
+        let ctx = egui::Context::default();
+        let mut app = storage_app();
+        let add = || Command::AddPage {
+            name: "2".into(),
+            title: String::new(),
+            kind: Default::default(),
+            format: Default::default(),
+        };
+        assert!(app.execute(add()).is_none());
+        app.run(&ctx, Action::NewProject);
+        assert!(app.save_to(&path));
+        app.execute(add()).unwrap().unwrap();
+        assert_eq!(page_count(&app), 2);
+        assert!(app.save_to(&path));
+        app.run(&ctx, Action::CloseProject);
+
+        let mut reopened = storage_app();
+        reopened.open_path(&path);
+        assert_eq!(page_count(&reopened), 2);
     }
 }

@@ -185,6 +185,9 @@ pub const RESERVED_SHORTCUTS: &[(Modifiers, Key, &str)] = &[
     (Modifiers::ALT, Key::ArrowLeft, "jump back"),
     (Modifiers::ALT, Key::ArrowRight, "jump forward"),
     (Modifiers::COMMAND, Key::D, "smart duplicate"),
+    (Modifiers::COMMAND, Key::Num3, "drawer: terminals"),
+    (Modifiers::COMMAND, Key::Num4, "drawer: cables"),
+    (Modifiers::COMMAND, Key::Num5, "drawer: devices"),
 ];
 
 fn modifier_count(m: Modifiers) -> u8 {
