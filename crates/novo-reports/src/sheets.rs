@@ -10,11 +10,21 @@
 //!   are already the model's convention for sub-pages, and they sort
 //!   naturally between `20` and `21`.
 //!
+//! A printed name never repeats another page's name. When a real page is
+//! already called `20.1` (or `20.2`, ...), the generated page's sheets use
+//! the next separator that is free for all of them: `20/1`, `20/2`, ...,
+//! then `20-1`, then `20_1`. The separator is chosen per generated page, so
+//! its sheets always read as one family; if every separator is taken, each
+//! sheet still gets a free name by adding `'` marks (`20.1'`). The real
+//! page keeps its name: the user named it, the report did not.
+//!
 //! Each sheet is laid out with [`PageSetup::for_format`] of the page's
 //! format, so it fits the same frame and title block as the schematic
 //! pages. The canvas (WS-03) and the PDF export (WS-09) draw a sheet's
 //! [`PageLayout`](crate::PageLayout) inside their frame and print the
 //! sheet name where they print the page name.
+
+use std::collections::BTreeSet;
 
 use novo_core::{Page, PageId, PageKind, Project};
 
@@ -29,6 +39,40 @@ pub fn sheet_name(page_name: &str, index: usize, count: usize) -> String {
     } else {
         format!("{page_name}.{}", index + 1)
     }
+}
+
+/// Separators tried, in order, for the sheets of a generated page.
+const SEPARATORS: [char; 4] = ['.', '/', '-', '_'];
+
+/// The names of the `count` sheets of a generated page named `page_name`,
+/// avoiding every name `taken` reports as used by another page (see the
+/// module docs for the rule). Always `count` distinct names, none taken.
+pub fn sheet_names(page_name: &str, count: usize, taken: impl Fn(&str) -> bool) -> Vec<String> {
+    if count <= 1 {
+        // The page's own name: it is already the page's, not another's.
+        return (0..count).map(|_| page_name.to_owned()).collect();
+    }
+    let with = |sep: char| -> Vec<String> {
+        (1..=count)
+            .map(|k| format!("{page_name}{sep}{k}"))
+            .collect()
+    };
+    if let Some(names) = SEPARATORS
+        .iter()
+        .map(|&sep| with(sep))
+        .find(|names| names.iter().all(|n| !taken(n)))
+    {
+        return names;
+    }
+    with(SEPARATORS[0])
+        .into_iter()
+        .map(|mut name| {
+            while taken(&name) {
+                name.push('\'');
+            }
+            name
+        })
+        .collect()
 }
 
 /// One printed sheet of a generated page.
@@ -60,14 +104,20 @@ impl LiveReports {
             return Vec::new();
         };
         let sheets = paginate(output, &setup);
-        let count = sheets.len();
+        // Every other page's name is taken, generated pages' own names too.
+        let others: BTreeSet<&str> = project
+            .pages()
+            .filter(|p| p.id != page.id)
+            .map(|p| p.name.as_str())
+            .collect();
+        let names = sheet_names(&page.name, sheets.len(), |n| others.contains(n));
         sheets
             .into_iter()
-            .enumerate()
-            .map(|(i, sheet)| GeneratedSheet {
+            .zip(names)
+            .map(|(sheet, name)| GeneratedSheet {
                 page: page.id,
                 report: generator.clone(),
-                name: sheet_name(&page.name, i, count),
+                name,
                 sheet,
             })
             .collect()
