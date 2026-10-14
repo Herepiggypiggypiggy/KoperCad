@@ -3,27 +3,31 @@
 For a fresh cloud session that takes over as **integration lead**: the role that coordinates the threads and merges PRs.
 Last updated 2026-10-14 17:17 UTC (final from the first lead session) by the integration lead (session_011PfTJ1QaP1JQJPwXcFnxBE).
 
-## 0. Current state (2026-10-14 18:55 UTC, coordinator session_01DZ68tTULUv7Uhe8ecKbC47)
+## 0. Current state (2026-10-14 19:35 UTC, coordinator session_01DZ68tTULUv7Uhe8ecKbC47)
 Sections 6 and 11 below are the 17:17 snapshot; this section supersedes them.
-- **Who runs the project:** Tadjiro handed full coordination to the cloud coordinator session above (branch `claude/youthful-franklin-aey18d` for handoff updates; it may push thread branches and merge). The project threads hit their session limit and resume at **23:20 UTC**; when they do, each must `git fetch` and read its own `handoff/<thread>/` first, because the coordinator has pushed to their branches.
-- **Reviewer:** independent cloud session `session_01XEdxpvQFh4HWmurh72tKwp` ("NovoElectric main reviewer (cloud)"). PRs merge only on its READY on the exact head. The coordinator never approves work it or its helper agents wrote. After a READY, a main-merge push (crate rows / Cargo.lock only) is sent back to the reviewer to confirm before merging.
-- **CI is down:** GitHub Actions starts no jobs on this account (every job fails in ~3 s without a runner, Linux too; likely minutes or spending limit; Tadjiro to check billing). Interim rule: the reviewer's local fmt + clippy -D warnings + cargo test --workspace on the PR merged with main is the CI signal. Windows is unverified until Actions returns.
-- **Merged today (this session):** #20 theme, #41 CI/experimental fixes, #34 app storage + canvas, #28 canvas follow-up, #29 novo-workflow, #42 Gate 1 scenario, #45 core SetText + Page.structure, #44 handoffs.
+- **Who runs the project:** Tadjiro handed full coordination to the cloud coordinator session above. Project threads resume at **23:20 UTC**; each was sent a briefing and must `git fetch` and read its own `handoff/<thread>/` on main first.
+- **Sessions:** see `handoff/coordinator/cloud-roster.md` (reviewers A, B, C, design reviewer, fixer, workers WS-12/13/28, Gate 1 integration).
+- **Review policy:**
+  - Original threads' PRs: main reviewer A (correctness); UI PRs also need the design reviewer.
+  - Cloud workers' new-crate PRs: BOTH reviewers B and C (their overlap caught two real bugs the other missed: CSV formula injection in #55, recovery-file deletion in #56).
+  - Any CHANGES NEEDED blocks a merge, whoever else said READY. The coordinator never approves work it or its helpers wrote.
+  - After READY, a head that moved only by mechanical main merges keeps READY if `scripts/check-mechanical-merge.sh <ready> <head>` prints OK and `cargo test --workspace` passes on the new head; paste the output on the PR. Anything else goes back to the reviewer.
+- **CI is down:** GitHub Actions starts no jobs on this account (billing / spending limit; owner to check, or making the repo public gives free minutes). The reviewers' local fmt + clippy -D warnings + tests are the CI signal; Windows is unverified.
+- **Merged today (19):** #20 theme, #41 CI/experimental, #34 app storage+canvas, #28 canvas, #29 workflow, #42 Gate 1 tests, #45 core SetText/Page.structure, #44 handoffs, #36 parts, #30 terminals, #48 tester gaps, #47 marks+page frame, #50 design checks, #31 xref, #57 tester gaps + F3, #51 fixed crate list, #52 pre-public scrub, #38 schematic editor, #54 cables.
 - **Open PRs:**
-  | PR | Thread | Head | State |
-  | --- | --- | --- | --- |
-  | #30 terminals | WS-11 | 4bd64c2 | READY at ac067ff; main merge sent to reviewer to confirm |
-  | #31 xref (draft) | WS-10 | caf760c | READY; needs main merge (crate row) after #30, then mark ready-for-review |
-  | #36 parts | WS-07 | 8cc6e0e | Kelvin-sign fix + main merge; reviewer verdict pending |
-  | #38 editor | WS-06 | 581dcbd | blocker fixes pushed; reviewer (incl. DESIGN.md) pending |
-  | #46 Workbench | WS-01 | 73e8194 | new; reviewer pending |
-  | #47 marks + frame | WS-03 | 09fe4a9 | new; reviewer pending |
-  | #48 Gate 1 gaps | Tester | bbe2a24 | new; reviewer pending |
-- **In progress (coordinator helper agents, not yet PRs):** WS-09 PDF export (`claude/ws09-pdf-export`, crate novo-pdf; Gate 1 needs PDF) and WS-14 design checks (`claude/ws14-design-checks`, crate novo-checks; feeds the issue pill).
-- **Crate-row conflicts:** every new crate adds a row after `novo-symbols` in CLAUDE.md and Cargo.toml, so each merge makes the next PR conflict. Resolution is always "keep both rows"; send the merge sha to the reviewer.
-- **Next for Gate 1:** after #38 and #46 merge, WS-01 hosts `SchematicView` (#38) in the Workbench, wires #29's palette/keymap, #30 terminals and #31 xref; WS-09 PDF; then the tester drives the scenario through `NovoApp::execute`.
-- **Going public (owner's request):** no secrets anywhere in history (gitleaks + regex over all branches, PR refs, comments). Personal paths/ids were scrubbed from current files (#52), but the owner's Windows user name and an EPLAN folder name remain in older commits (#44 d3bd761 and earlier). Owner decides: accept that, or start a fresh repository from current main. Visibility is switched by the owner in Settings (no tool here can).
-- **Traps:** worktrees sharing one CARGO_TARGET_DIR run stale test binaries (false green): one target dir per worktree. Disk is ~40 GB: build with CARGO_INCREMENTAL=0 and debug info off, delete target dirs when done.
+  | PR | What | State |
+  | --- | --- | --- |
+  | #46 | WS-01 Workbench window | design READY at 1fb64af; reviewer A pending |
+  | #49 | WS-09 PDF export | READY 95d4749; main merge ad4fd1e re-placed pdf-writer dep → B confirming |
+  | #53 | Gate 1 integration (draft, stacked) | worker hosting editor/command field/terminals/xref/PDF in novo-app |
+  | #55 | WS-13 reports | B READY 37f684f (CSV injection fixed); C pending; main merge must re-add rust_xlsxwriter + calamine deps |
+  | #56 | WS-28 CLI + Python | C CHANGES NEEDED (create/save_as deletes recovery file); worker fixing on 0089b7c |
+  | #58 | merge-main.sh keeps main's crate list | C re-checking 42e9b02 |
+  | #59 | rename novo-xref scale example | B pending |
+- **Crate list:** fixed in CLAUDE.md and `[workspace.dependencies]` since #51; PRs never edit those lines. Merge main with `scripts/merge-main.sh` (#58 makes it keep main's list exactly). Branches older than #51 that add external deps need those dep lines re-added by hand after taking main's Cargo.toml.
+- **Going public:** no secrets anywhere in history; personal paths/ids scrubbed from current files (#52); the owner's Windows user name and an EPLAN folder name remain in older commits. Owner decides (accept, or fresh repo) and flips visibility in Settings.
+- **Next for Gate 1:** #46 and #49 merge → #53 rebases and lands → tester drives the Gate 1 scenario through `NovoApp::execute`.
+- **Traps:** worktrees sharing one CARGO_TARGET_DIR run stale test binaries; give each its own and delete when done (disk ~40 GB). Example names must be unique across crates (cargo output collision, #50/#59).
 
 ## 1. What this is
 NovoElectric is a local-first electrical CAD program in Rust: egui/eframe 0.36, wgpu, SQLite, with PyO3 as the scripting layer.
