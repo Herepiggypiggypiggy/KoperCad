@@ -35,8 +35,9 @@ Work is split into workstreams (WS-xx), each run by its own Claude thread.
 
 Rules:
 
-- One branch and one pull request per workstream (`ws-02-data-model`,
-  `ws-03-canvas`, ...). Keep pull requests focused on your own crate.
+- One branch and one pull request per workstream (the thread's assigned
+  branch is fine); name the workstream (WS-xx) in the PR title. Keep pull
+  requests focused on your own crate.
 - Only the WS-02 thread changes the public API of `novo-core`. Other threads
   that need a model change describe it in their pull request or ask WS-02.
 - Other crates read the model through queries and change it only through
