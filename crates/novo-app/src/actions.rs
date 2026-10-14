@@ -1,5 +1,6 @@
-//! Every user-facing action. Menus, keyboard shortcuts and the command palette
-//! all dispatch the same [`Action`], so each one is reachable from the keyboard.
+//! Every user-facing action. The project menu, keyboard shortcuts and the
+//! command palette all dispatch the same [`Action`], so each one is reachable
+//! from the keyboard.
 
 use eframe::egui::{Key, KeyboardShortcut, Modifiers};
 
@@ -14,13 +15,12 @@ pub enum Action {
     Undo,
     Redo,
     ZoomToFit,
-    ToggleProjectPanel,
-    TogglePropertiesPanel,
-    ToggleMessagesPanel,
+    ShowSchematic,
+    ShowCabinet,
+    PinOutline,
+    FocusMode,
+    FullScreen,
     CommandPalette,
-    ThemeSystem,
-    ThemeLight,
-    ThemeDark,
     About,
 }
 
@@ -35,13 +35,12 @@ impl Action {
         Action::Undo,
         Action::Redo,
         Action::ZoomToFit,
-        Action::ToggleProjectPanel,
-        Action::TogglePropertiesPanel,
-        Action::ToggleMessagesPanel,
+        Action::ShowSchematic,
+        Action::ShowCabinet,
+        Action::PinOutline,
+        Action::FocusMode,
+        Action::FullScreen,
         Action::CommandPalette,
-        Action::ThemeSystem,
-        Action::ThemeLight,
-        Action::ThemeDark,
         Action::About,
     ];
 
@@ -58,13 +57,12 @@ impl Action {
             Action::Undo => "edit.undo",
             Action::Redo => "edit.redo",
             Action::ZoomToFit => "view.fit",
-            Action::ToggleProjectPanel => "view.project_panel",
-            Action::TogglePropertiesPanel => "view.properties_panel",
-            Action::ToggleMessagesPanel => "view.messages_panel",
+            Action::ShowSchematic => "view.schematic",
+            Action::ShowCabinet => "view.cabinet",
+            Action::PinOutline => "view.pin_outline",
+            Action::FocusMode => "view.focus",
+            Action::FullScreen => "view.full_screen",
             Action::CommandPalette => "view.command_palette",
-            Action::ThemeSystem => "view.theme_system",
-            Action::ThemeLight => "view.theme_light",
-            Action::ThemeDark => "view.theme_dark",
             Action::About => "help.about",
         }
     }
@@ -84,18 +82,18 @@ impl Action {
             Action::Undo => "Undo",
             Action::Redo => "Redo",
             Action::ZoomToFit => "Zoom to fit",
-            Action::ToggleProjectPanel => "Project panel",
-            Action::TogglePropertiesPanel => "Properties panel",
-            Action::ToggleMessagesPanel => "Messages panel",
+            Action::ShowSchematic => "Schematic",
+            Action::ShowCabinet => "Cabinet",
+            Action::PinOutline => "Pin outline",
+            Action::FocusMode => "Focus mode",
+            Action::FullScreen => "Full screen",
             Action::CommandPalette => "Command palette…",
-            Action::ThemeSystem => "Theme: follow system",
-            Action::ThemeLight => "Theme: light",
-            Action::ThemeDark => "Theme: dark",
             Action::About => "About NovoElectric",
         }
     }
 
-    /// Menu the action belongs to; the palette shows it as a prefix.
+    /// Group the action belongs to (docs/DESIGN.md §4); the palette shows it
+    /// as a prefix.
     pub fn category(self) -> &'static str {
         match self {
             Action::NewProject
@@ -103,17 +101,16 @@ impl Action {
             | Action::SaveProject
             | Action::SaveProjectAs
             | Action::CloseProject
-            | Action::Quit => "File",
+            | Action::Quit
+            | Action::About => "Project",
             Action::Undo | Action::Redo => "Edit",
             Action::ZoomToFit
-            | Action::ToggleProjectPanel
-            | Action::TogglePropertiesPanel
-            | Action::ToggleMessagesPanel
-            | Action::CommandPalette
-            | Action::ThemeSystem
-            | Action::ThemeLight
-            | Action::ThemeDark => "View",
-            Action::About => "Help",
+            | Action::ShowSchematic
+            | Action::ShowCabinet
+            | Action::PinOutline
+            | Action::FocusMode
+            | Action::FullScreen
+            | Action::CommandPalette => "View",
         }
     }
 
@@ -130,18 +127,17 @@ impl Action {
             Action::Undo => (cmd, Key::Z),
             Action::Redo => (cmd_shift, Key::Z),
             Action::ZoomToFit => (Modifiers::NONE, Key::Home),
-            Action::ToggleProjectPanel => (cmd, Key::Num1),
-            Action::TogglePropertiesPanel => (cmd, Key::Num2),
-            Action::ToggleMessagesPanel => (cmd, Key::Num3),
+            Action::ShowSchematic => (cmd, Key::Num1),
+            Action::ShowCabinet => (cmd, Key::Num2),
+            Action::FocusMode => (cmd_shift, Key::F),
+            Action::FullScreen => (Modifiers::NONE, Key::F11),
             Action::CommandPalette => (cmd, Key::K),
-            Action::ThemeSystem | Action::ThemeLight | Action::ThemeDark | Action::About => {
-                return None;
-            }
+            Action::PinOutline | Action::About => return None,
         };
         Some(KeyboardShortcut::new(modifiers, key))
     }
 
-    /// Every shortcut for the action; the first is the one menus show.
+    /// Every shortcut for the action; the first is the one shown.
     pub fn shortcuts(self) -> Vec<KeyboardShortcut> {
         let mut all: Vec<_> = self.shortcut().into_iter().collect();
         if self == Action::Redo {
@@ -189,6 +185,9 @@ pub const RESERVED_SHORTCUTS: &[(Modifiers, Key, &str)] = &[
     (Modifiers::ALT, Key::ArrowLeft, "jump back"),
     (Modifiers::ALT, Key::ArrowRight, "jump forward"),
     (Modifiers::COMMAND, Key::D, "smart duplicate"),
+    (Modifiers::COMMAND, Key::Num3, "drawer: terminals"),
+    (Modifiers::COMMAND, Key::Num4, "drawer: cables"),
+    (Modifiers::COMMAND, Key::Num5, "drawer: devices"),
 ];
 
 fn modifier_count(m: Modifiers) -> u8 {

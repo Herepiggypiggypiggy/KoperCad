@@ -14,6 +14,7 @@ use novo_canvas::{Snapped, Vec2};
 use novo_core::{ChangeSet, Document, PageId};
 
 use crate::canvas::{CanvasView, OpenPage, empty_state};
+use crate::theme;
 
 struct PageCanvas {
     scene: PageScene,
@@ -36,9 +37,13 @@ impl ModelCanvas {
     }
 
     fn page_canvas(&mut self, document: &Document, page: PageId) -> &mut PageCanvas {
-        self.pages.entry(page).or_insert_with(|| PageCanvas {
-            scene: PageScene::new(document.project(), page, &PlaceholderArt),
-            view: View::new(),
+        self.pages.entry(page).or_insert_with(|| {
+            let project = document.project();
+            let mut scene = PageScene::new(project, page, &PlaceholderArt);
+            scene.set_style(theme::model_style(), project, &PlaceholderArt);
+            let mut view = View::new();
+            view.style = theme::canvas_style();
+            PageCanvas { scene, view }
         })
     }
 }

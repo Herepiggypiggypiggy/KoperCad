@@ -51,6 +51,9 @@ thiserror = "2"
 egui-phosphor = "0.14"
 rusqlite = { version = "0.40", features = ["bundled", "backup"] }
 tempfile = "3"
+# Known-folder lookup for Documents (SHGetKnownFolderPath on Windows), so
+# redirected or OneDrive Documents folders resolve without our own unsafe.
+dirs = "6"
 eframe = { version = "0.36", default-features = false, features = ["wgpu", "default_fonts", "x11", "wayland"] }
 pdf-writer = "0.15"
 
