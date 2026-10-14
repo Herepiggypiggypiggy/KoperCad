@@ -9,3 +9,4 @@
 2026-10-14 19:45 UTC B withdrew READY (CHANGES NEEDED on 0089b7c, same blocker as C). Coordinator's main merge 0089b7c (post-#51 crate list) is in. Added overwrite=False guard on create/save_as (B's note 1; recovery refused even with overwrite). Remaining follow-ups: plain clap errors, novo_checks (#50 merged), novo-pdf (#49), no panic in execute_one, atomic export write, venv-first README.
 2026-10-14 19:50 UTC C READY on ac037dc. Merged main (#49 pdf-writer) into e5bb8ae: Cargo.toml keep-both, main's Cargo.lock + cargo metadata; checks green.
 2026-10-14 19:50 UTC #56 READY from B and C on e5bb8ae; merged as 67c3591. Branch restarted from main for the review follow-ups (pdf on novo-pdf, check on novo-checks, export guard + atomic write, plain clap errors, NothingCreated, venv README).
+2026-10-14 20:05 UTC Opened PR #65 (follow-ups); head is the commit adding this line. Pinged B, C, coordinator.
