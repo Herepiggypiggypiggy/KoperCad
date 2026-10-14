@@ -474,3 +474,113 @@ fn command_edits_are_saved_without_another_frame() {
     assert_eq!(project.symbol(k1).unwrap().placement.rotation, rotated);
     assert_eq!(summary(project), before, "every command edit was written");
 }
+
+/// The marks on the drawing, keys and export details the reviews asked
+/// for: proposals and problems as canvas marks, Shift+P, a tapped Space,
+/// commands that come later, and where the PDF goes.
+#[test]
+fn marks_keys_and_export_follow_the_design() {
+    use novo_canvas::{MarkKind, MarkTarget};
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("Plant 2.novo");
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert!(d.app.save_to(&file));
+    let k = d.place("km3", 80.0, 96.0);
+    let m = d.place("m3", 80.0, 172.0);
+    {
+        let device = novo_editor::edit::device_of(d.doc().project(), AnyId::Symbol(m)).unwrap();
+        let ok = d
+            .app
+            .with_editor(|editor, doc| editor.rename(doc, device, "+FIELD-M1"));
+        assert_eq!(ok, Some(Ok(())));
+    }
+    d.frame();
+    d.frame();
+
+    // Terminal proposals are dashed Proposal marks on areas; the one Enter
+    // takes is marked twice (heavier), never solid, and carries the note.
+    let marks = d.app.canvas.schematic_ref().unwrap().canvas.marks.clone();
+    let proposals: Vec<_> = marks
+        .list
+        .iter()
+        .filter(|m| m.kind == MarkKind::Proposal)
+        .collect();
+    assert_eq!(proposals.len(), 4, "three proposals, the current one twice");
+    assert!(
+        proposals
+            .iter()
+            .all(|m| matches!(m.target, MarkTarget::Area(_)))
+    );
+    assert_eq!(
+        proposals
+            .iter()
+            .filter(|m| m.text.contains("↵ accept"))
+            .count(),
+        1
+    );
+    // Problems sit on their objects: the motor's PE and the unwired
+    // contactor poles are warnings on those symbols.
+    let problems: Vec<_> = marks
+        .list
+        .iter()
+        .filter(|m| m.kind == MarkKind::Warning || m.kind == MarkKind::Error)
+        .collect();
+    assert!(!problems.is_empty(), "problems are marked on the drawing");
+    assert!(problems.iter().all(|m| !m.text.is_empty()), "hover text");
+    let on = |s: SymbolId| MarkTarget::Item(novo_canvas::model::item_id(AnyId::Symbol(s)));
+    assert!(
+        problems
+            .iter()
+            .any(|p| p.target == on(k) || p.target == on(m))
+    );
+
+    // Shift+P hides the marks; the cross-reference labels are drawing
+    // content and stay.
+    d.key(egui::Key::P, egui::Modifiers::SHIFT);
+    d.frame();
+    assert!(d.app.canvas.schematic_ref().unwrap().canvas.marks.hidden);
+    d.key(egui::Key::P, egui::Modifiers::SHIFT);
+    d.frame();
+    assert!(!d.app.canvas.schematic_ref().unwrap().canvas.marks.hidden);
+
+    // A tapped Space opens the field on release, not on press.
+    let space = |pressed| egui::Event::Key {
+        key: egui::Key::Space,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    };
+    let at = egui::Event::PointerMoved(egui::pos2(700.0, 400.0));
+    d.frame_with(vec![at.clone(), space(true)]);
+    d.frame();
+    assert!(!d.app.wb.field.is_open(), "not on the press");
+    d.frame_with(vec![space(false)]);
+    d.frame();
+    assert!(d.app.wb.field.is_open(), "on the release");
+    d.key(egui::Key::Escape, egui::Modifiers::NONE);
+    assert!(!d.app.wb.field.is_open());
+
+    // A command the app cannot run yet is listed greyed, with a reason.
+    d.app.wb.field.open(Mode::All, None);
+    d.app.wb.field.type_text("rules");
+    let rows = d.app.with_field(|field, sources| field.rows(sources));
+    let rules = rows
+        .iter()
+        .find(|r| r.target == novo_workflow::palette::Target::Command("project.rules"))
+        .expect("the rules command is listed");
+    assert_eq!(rules.disabled, Some("Comes later"));
+    d.app.wb.field.close();
+
+    // A saved project's PDF goes next to its file, named after it; a second
+    // export says it replaced the first.
+    let pdf = d.app.export_pdf().expect("exported");
+    assert_eq!(pdf, dir.path().join("Plant 2.pdf"));
+    assert!(pdf.is_file());
+    d.app.export_pdf().expect("exported again");
+    let last = &d.app.messages().last().unwrap().text;
+    assert!(last.starts_with("Replaced "), "{last}");
+}

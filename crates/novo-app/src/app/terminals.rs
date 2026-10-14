@@ -4,10 +4,11 @@
 //! moves to the next, `accept all` takes every one).
 
 use eframe::egui;
+use novo_canvas::{Aabb, Mark, MarkKind, MarkTarget, Vec2};
 use novo_core::{AnyId, DeviceId, SymbolRole};
 use novo_terminals::Suggestion;
 
-use super::workbench::{DRAWER_SHARE, Drawer, Overlay};
+use super::workbench::{DRAWER_SHARE, Drawer};
 use super::{Level, NovoApp};
 
 impl NovoApp {
@@ -23,19 +24,47 @@ impl NovoApp {
             .collect()
     }
 
+    /// Enter: accepts the highlighted proposal, but only while it is on
+    /// screen; otherwise it is brought into view first, so nothing is
+    /// accepted that the user cannot see.
     pub(super) fn accept_proposal(&mut self) {
         let proposals = self.page_proposals();
         let Some(s) = proposals.get(self.wb.proposal.min(proposals.len().saturating_sub(1))) else {
             return;
         };
+        if !self.in_view(s) {
+            self.bring_into_view(s);
+            return;
+        }
         self.accept_terminals("Accept terminal", std::slice::from_ref(s));
         self.wb.proposal = 0;
     }
 
+    /// Tab: the next proposal, brought into view when it is off screen.
     pub(super) fn next_proposal(&mut self) {
-        let n = self.page_proposals().len();
-        if n > 0 {
-            self.wb.proposal = (self.wb.proposal + 1) % n;
+        let proposals = self.page_proposals();
+        if proposals.is_empty() {
+            return;
+        }
+        self.wb.proposal = (self.wb.proposal + 1) % proposals.len();
+        let s = &proposals[self.wb.proposal];
+        if !self.in_view(s) {
+            self.bring_into_view(s);
+        }
+    }
+
+    fn in_view(&self, s: &Suggestion) -> bool {
+        let Some(view) = self.canvas.schematic_ref() else {
+            return true;
+        };
+        let seen = view.canvas.viewport.visible_world();
+        let (x, y) = (s.at.x as f32, s.at.y as f32);
+        (seen.min.x..=seen.max.x).contains(&x) && (seen.min.y..=seen.max.y).contains(&y)
+    }
+
+    fn bring_into_view(&mut self, s: &Suggestion) {
+        if let Some(view) = self.canvas.schematic() {
+            view.canvas.viewport.center = Vec2::new(s.at.x as f32, s.at.y as f32);
         }
     }
 
@@ -189,47 +218,36 @@ pub(super) fn strip_table(ui: &mut egui::Ui, view: &novo_terminals::StripView) {
     });
 }
 
-/// Terminal proposals: dashed steel blue; the one Enter takes is solid and
-/// carries the hint (DESIGN.md §5).
-pub(super) fn paint_proposals(overlay: &Overlay, proposals: &[Suggestion], current: usize) {
-    let painter = &overlay.painter;
-    let zoom = overlay.viewport.zoom;
-    let steel = egui::Color32::from_rgb(70, 130, 180);
-    let faint = steel.gamma_multiply(0.55);
+/// The world area a proposed terminal would take, around its spot.
+fn proposal_area(s: &Suggestion) -> Aabb {
+    let (x, y) = (s.at.x as f32, s.at.y as f32);
+    Aabb::new(Vec2::new(x - 2.0, y - 3.0), Vec2::new(x + 2.0, y + 3.0))
+}
+
+/// Terminal proposals as canvas marks (DESIGN.md §5): every one dashed at
+/// the proposal colour. The one Enter takes is marked twice, so it reads
+/// heavier by opacity only, and carries the "↵ accept · Tab next" note,
+/// which the canvas shows on the proposal nearest the pointer.
+pub(super) fn proposal_marks(proposals: &[Suggestion], current: usize) -> Vec<Mark> {
     let current = current.min(proposals.len().saturating_sub(1));
+    let mut marks = Vec::with_capacity(proposals.len() + 1);
     for (i, s) in proposals.iter().enumerate() {
-        let centre = overlay.to_screen(s.at.x, s.at.y);
-        let half = egui::vec2((2.0 * zoom).max(5.0), (3.0 * zoom).max(7.0));
-        let r = egui::Rect::from_center_size(centre, half * 2.0);
+        let mark = Mark {
+            kind: MarkKind::Proposal,
+            target: MarkTarget::Area(proposal_area(s)),
+            text: if i == current {
+                format!("{} terminal · ↵ accept · Tab next", s.strip)
+            } else {
+                String::new()
+            },
+        };
         if i == current {
-            painter.rect_stroke(
-                r,
-                0.0,
-                egui::Stroke::new(1.5, steel),
-                egui::StrokeKind::Middle,
-            );
-            painter.text(
-                r.right_center() + egui::vec2(6.0, 0.0),
-                egui::Align2::LEFT_CENTER,
-                format!("{} terminal · ↵ accept · Tab next", s.strip),
-                egui::FontId::proportional(12.0),
-                steel,
-            );
-        } else {
-            let corners = [
-                r.left_top(),
-                r.right_top(),
-                r.right_bottom(),
-                r.left_bottom(),
-            ];
-            for k in 0..4 {
-                painter.add(egui::Shape::dashed_line(
-                    &[corners[k], corners[(k + 1) % 4]],
-                    egui::Stroke::new(1.0, faint),
-                    4.0,
-                    3.0,
-                ));
-            }
+            marks.push(Mark {
+                text: String::new(),
+                ..mark.clone()
+            });
         }
+        marks.push(mark);
     }
+    marks
 }

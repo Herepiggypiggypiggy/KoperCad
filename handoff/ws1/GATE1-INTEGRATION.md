@@ -14,13 +14,17 @@ Done by a Gate 1 integration worker (session_01QtW6E2sY3dMnhYDgX3zXge) while WS-
 | `canvas.rs` | | `OpenPage::edit`, trait methods `take_changes`, `take_page_request`, `schematic`, `schematic_ref` |
 | `keys.rs`, `command_field.rs`, `app/workbench.rs` | novo-workflow (main) | egui key -> `Chord`, focus -> `Focus`, `Keymap::resolve`; the field shows `Palette::search_in` rows (Ctrl+K top, I place mode and Space at the pointer); `run_command(id, arg)` and `run_target`; `type_command` for tests/scripts. app/palette.rs removed |
 | `app/xref.rs` | novo-xref (#31) | labels (overlay painter), related highlight, G / Shift+G / Alt+Left/Right, device jump |
-| `app/terminals.rs` | novo-terminals (main) | Ctrl+3 drawer (strip of the selection), dashed proposals, Enter/Tab, accept all |
-| `app/checks.rs` | novo-checks (#50) | issue pill, problem list, F8 / Shift+F8 |
-| `app/pdf.rs` | novo-pdf (#49) | Export PDF (mark menu, `export pdf`) to `Documents\NovoElectric\<project>.pdf` |
+| `app/terminals.rs` | novo-terminals (main) | Ctrl+3 drawer (strip of the selection); proposals as canvas `Mark`s (Proposal, Area; the Enter target marked twice = heavier, never solid); Enter/Tab bring an off-screen proposal into view first; accept all |
+| `app/checks.rs` | novo-checks (#50) | issue pill, problem list (by severity), F8 / Shift+F8, Warning/Error marks on each problem's drawn objects |
+| `app/pdf.rs` | novo-pdf (#49) | Export PDF next to the .novo, named after it; untitled to `Documents\NovoElectric` under a free name; replacing is said in the toast |
 | `app/gate1_tests.rs` | all | headless Gate 1: new project, starter over 2 pages via command field + editor, L1-L3, terminals, xref, save/reopen/compare, 2-page PDF |
 - Also one commit in novo-editor: `SchematicView::set_style` (54bbc83), needed so symbols show on the dark canvas. #38 merged without it, so it ships in this PR; WS-06 was told.
 
 ## Keys
+- Marks: `update_marks()` fills `view.canvas.marks` before the canvas draws each frame; Shift+P sets `marks.hidden` (xref labels stay).
+- Space: the press is noted, the field opens on release if the pointer moved <= 4 px (`space_released`).
+- Command-field rows for commands the app doesn't run are greyed "Comes later" (`app_runs`, `APP_COMMANDS` in workbench.rs). Add an id there when you wire a command.
+- Shell-side editor edits go through `with_editor`, which records at once (reviewer A's data-loss finding).
 - The shell claims a key only when it runs the command itself (`claims_key`); W, R, X, F2, Delete, Escape, Page Up/Down stay with the editor (`EDITOR_KEYS`). Enter/Tab go to the editor while it has wire proposals, else to terminal proposals.
 - Escape for the command field and lists is taken before the canvas (`escape_popups`), else the editor eats it while the pointer is on the drawing.
 

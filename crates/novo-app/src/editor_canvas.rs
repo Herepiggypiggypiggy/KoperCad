@@ -57,6 +57,8 @@ impl CanvasView for EditorCanvas {
 
     fn document_replaced(&mut self) {
         self.view.document_replaced();
+        // Nothing the editor did to the old project may reach the new one.
+        drop(self.view.editor.take_changes());
         self.changes = ChangeSet::default();
     }
 

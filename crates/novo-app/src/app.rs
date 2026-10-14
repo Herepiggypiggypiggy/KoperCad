@@ -26,6 +26,7 @@ use crate::settings::Settings;
 use crate::{APP_NAME, PROJECT_EXTENSION};
 use novo_theme::widgets::{primary_button, section_label, segment};
 use workbench::Workbench;
+pub(crate) use workbench::app_runs;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Level {
@@ -129,13 +130,14 @@ impl NovoApp {
         canvas: Box<dyn CanvasView>,
         settings: Settings,
     ) -> Self {
+        let wb = Workbench::with_recent(&settings.recent_actions);
         Self {
             backend,
             canvas,
             settings,
             project_path: None,
             current_page: None,
-            wb: Workbench::default(),
+            wb,
             messages: Vec::new(),
             show_about: false,
             window_title: String::new(),
@@ -535,6 +537,7 @@ impl NovoApp {
 
         let mut picked: Vec<Action> = Vec::new();
         self.escape_popups(&ctx);
+        self.space_released(&ctx);
         let commands = if self.modal_open() {
             Vec::new()
         } else {
@@ -561,6 +564,7 @@ impl NovoApp {
         let canvas_rect = egui::CentralPanel::no_frame()
             .show(ui, |ui| {
                 if self.is_open() {
+                    self.update_marks();
                     let open = self
                         .current_page
                         .and_then(|page| OpenPage::new(&mut *self.backend, page));

@@ -5,7 +5,7 @@
 
 use eframe::egui;
 use novo_workflow::keymap::Focus;
-use novo_workflow::palette::{Mode, Palette, Row, Sources, Target};
+use novo_workflow::palette::{Kind, Mode, Palette, Row, Sources, Target};
 
 /// Rows shown at once; the rest scroll.
 const MAX_HEIGHT: f32 = 380.0;
@@ -66,10 +66,22 @@ impl CommandField {
 
     /// The rows for what is typed now.
     pub fn rows(&self, sources: &Sources<'_>) -> Vec<Row> {
-        match &self.open {
-            Some(open) => self.palette.search_in(open.mode, &open.query, sources),
-            None => Vec::new(),
+        let Some(open) = &self.open else {
+            return Vec::new();
+        };
+        let mut rows = self.palette.search_in(open.mode, &open.query, sources);
+        // Commands the app cannot run yet are listed, greyed with a reason
+        // (DESIGN.md §4), instead of answering with a toast.
+        for row in &mut rows {
+            let id = match &row.target {
+                Target::Command(id) | Target::Run { command: id, .. } => *id,
+                _ => continue,
+            };
+            if row.disabled.is_none() && !crate::app::app_runs(id) {
+                row.disabled = Some("Comes later");
+            }
         }
+        rows
     }
 
     /// Picks the row with this key (favourites 1 to 9 in an empty place
@@ -252,6 +264,7 @@ fn row_ui(ui: &mut egui::Ui, row: &Row, selected: bool) -> egui::Response {
     let right = match (row.disabled, &row.shortcut) {
         (Some(reason), _) => reason.to_owned(),
         (None, Some(key)) => key.clone(),
+        (None, None) if row.kind == Kind::Command => String::new(),
         (None, None) => row.kind.label().to_owned(),
     };
     let button = egui::Button::selectable(selected, job)

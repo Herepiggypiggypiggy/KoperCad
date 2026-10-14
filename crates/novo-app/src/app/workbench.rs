@@ -21,7 +21,6 @@ use novo_workflow::keymap::{FAVOURITE_COMMANDS, Focus, Keymap};
 use novo_workflow::palette::{Mode, Sources, Target};
 use novo_xref::{LiveXref, Navigator, Place, Reference};
 
-use super::terminals::paint_proposals;
 use super::xref::paint_labels;
 use super::{Level, NovoApp};
 use crate::actions::Action;
@@ -50,7 +49,9 @@ pub(crate) struct Workbench {
     pub(super) drawer: Option<Drawer>,
     /// The terminal proposal Enter accepts, an index into this page's.
     pub(super) proposal: usize,
-    /// Shift+P hides cross-reference labels and proposal marks.
+    /// Where the pointer was when Space went down, until it comes up.
+    pub(super) space_down: Option<egui::Pos2>,
+    /// Shift+P: false hides the marks on the drawing (counters stay).
     pub(super) marks: bool,
     /// Design-check results for one project revision.
     pub(super) problems: Option<(u64, Vec<Problem>)>,
@@ -65,6 +66,18 @@ pub(crate) struct Workbench {
     pub(super) last_export: Option<PathBuf>,
 }
 
+impl Workbench {
+    /// The command field remembers the commands run in earlier sessions
+    /// (newest first), so they lead its empty menu again.
+    pub(super) fn with_recent(ids: &[String]) -> Self {
+        let mut wb = Workbench::default();
+        wb.field
+            .palette
+            .restore_recent_commands(ids.iter().map(String::as_str));
+        wb
+    }
+}
+
 impl Default for Workbench {
     fn default() -> Self {
         Workbench {
@@ -76,6 +89,7 @@ impl Default for Workbench {
             occurrences: None,
             drawer: None,
             proposal: 0,
+            space_down: None,
             marks: true,
             problems: None,
             pill_rect: egui::Rect::NOTHING,
@@ -98,6 +112,41 @@ const EDITOR_KEYS: &[&str] = &[
     "nav.previous_page",
     "nav.next_page",
 ];
+
+/// Commands the app runs besides the shell actions (`Action`) and the
+/// favourites; the command field shows the rest as "Comes later".
+const APP_COMMANDS: &[&str] = &[
+    "tool.place",
+    "tool.repeat",
+    "tool.connect",
+    "view.command_field_here",
+    "edit.rotate",
+    "edit.mirror",
+    "edit.delete",
+    "edit.rename",
+    "edit.escape",
+    "nav.next_page",
+    "nav.previous_page",
+    "page.new",
+    "nav.partner",
+    "nav.all_references",
+    "nav.back",
+    "nav.forward",
+    "proposal.accept",
+    "proposal.next",
+    "proposal.accept_all",
+    "view.terminals_drawer",
+    "view.toggle_marks",
+    "check.problems",
+    "check.next_problem",
+    "check.previous_problem",
+    "export.pdf",
+];
+
+/// Whether the app can run a command now (not "comes later").
+pub(crate) fn app_runs(id: &str) -> bool {
+    APP_COMMANDS.contains(&id) || FAVOURITE_COMMANDS.contains(&id) || Action::from_id(id).is_some()
+}
 
 impl NovoApp {
     pub(super) fn library(&self) -> Option<&Library> {
@@ -240,12 +289,19 @@ impl NovoApp {
                 Some(text) => self.wb.field.open_with(Mode::Place, text, pointer),
                 None => self.wb.field.open(Mode::Place, pointer),
             },
+            // A tapped Space opens the field at the pointer: the press is
+            // noted here and the field opens on the release, unless the
+            // pointer moved more than 4 px in between (a held Space pans).
+            "view.command_field_here" if argument.is_none() => {
+                self.wb.space_down = pointer.or(Some(egui::Pos2::ZERO));
+            }
             "view.command_field_here" => self.wb.field.open(Mode::All, pointer),
             "tool.connect" => {
                 if let Some(view) = self.canvas.schematic() {
                     view.editor.begin_wire();
                 }
             }
+            "tool.repeat" => self.editor_key(EditorKey::Repeat),
             "edit.rotate" => self.editor_key(EditorKey::Rotate),
             "edit.mirror" => self.editor_key(EditorKey::Mirror),
             "edit.delete" => self.editor_key(EditorKey::Delete),
@@ -298,7 +354,10 @@ impl NovoApp {
     /// Does what picking a command field row asks.
     pub(super) fn run_target(&mut self, ctx: &egui::Context, target: Target) {
         match target {
-            Target::Command(id) => self.run_command(ctx, id, None),
+            Target::Command(id) => {
+                self.settings.remember_action(id);
+                self.run_command(ctx, id, None);
+            }
             Target::Run { command, argument } => self.run_command(ctx, command, Some(&argument)),
             Target::Page(page) => self.show_page(page),
             Target::Device(device) => {
@@ -470,14 +529,10 @@ impl NovoApp {
 
     /// Cross-reference labels and terminal proposals over the drawing.
     pub(super) fn paint_overlays(&mut self, ui: &egui::Ui, rect: egui::Rect) {
-        if !self.wb.marks {
-            return;
-        }
         let Some(page) = self.current_page else {
             return;
         };
         let labels = self.xref_labels(page);
-        let proposals = self.page_proposals();
         let Some(view) = self.canvas.schematic_ref() else {
             return;
         };
@@ -490,7 +545,49 @@ impl NovoApp {
             rect,
         };
         paint_labels(&overlay, doc.project(), &view.editor, &labels);
-        paint_proposals(&overlay, &proposals, self.wb.proposal);
+    }
+
+    /// Fills the canvas marks for the shown page before it draws: terminal
+    /// proposals and problems. Shift+P hides them (the counters stay).
+    pub(super) fn update_marks(&mut self) {
+        let Some(page) = self.current_page else {
+            return;
+        };
+        let mut list = super::terminals::proposal_marks(&self.page_proposals(), self.wb.proposal);
+        list.extend(self.problem_marks(page));
+        let hidden = !self.wb.marks;
+        if let Some(view) = self.canvas.schematic() {
+            view.canvas.marks.list = list;
+            view.canvas.marks.hidden = hidden;
+        }
+    }
+
+    /// Opens the field for a tapped Space once it is released.
+    pub(super) fn space_released(&mut self, ctx: &egui::Context) {
+        let Some(down) = self.wb.space_down else {
+            return;
+        };
+        let (released, pointer) = ctx.input(|i| {
+            let up = i.events.iter().any(|e| {
+                matches!(
+                    e,
+                    egui::Event::Key {
+                        key: egui::Key::Space,
+                        pressed: false,
+                        ..
+                    }
+                )
+            });
+            (up, i.pointer.latest_pos())
+        });
+        if !released {
+            return;
+        }
+        self.wb.space_down = None;
+        let moved = pointer.map_or(0.0, |p| p.distance(down));
+        if moved <= 4.0 {
+            self.wb.field.open(Mode::All, pointer.or(Some(down)));
+        }
     }
 }
 
