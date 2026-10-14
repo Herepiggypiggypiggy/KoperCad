@@ -2,7 +2,7 @@
 
 The project-mount roster is `/mnt/project-files/coordination/threads.md`; cloud sessions can't
 read it. These sessions were started from the coordinator cloud session on 2026-10-14. All run in
-environment `env_01AL913YkMhxzrWWVepJ3KQH` (Default). Message them with
+the Default cloud environment. Message them with
 `mcp__claude-code-remote__send_message` (session id below).
 
 | Role | Session | Branch | Notes |
@@ -19,3 +19,6 @@ design checks (claude/ws14-design-checks), and the fixes pushed to #28-#31, #36,
 
 The original project threads (coordination/threads.md) resume at 23:20 UTC and keep their own
 branches; the cloud workers above took workstreams no project thread owns.
+| Main reviewer B | session_01QSnXFBDRyvwwzhT1S1gFGN | (none) | New-crate PRs: #49, #50, WS-12/13/28 |
+| Fixer | session_017LndnL4fiT5rRPkqy3R36S | PR branches of paused threads | Fixes CHANGES NEEDED findings |
+| Gate 1 integration | session_01QtW6E2sY3dMnhYDgX3zXge | claude/gate1-integration | Hosts editor, command field, terminals, xref, PDF in novo-app (stacked on #46 + #38) |

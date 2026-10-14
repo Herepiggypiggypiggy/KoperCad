@@ -32,7 +32,7 @@ NovoElectric is a local-first electrical CAD program in Rust: egui/eframe 0.36, 
 
 ## 2. Owner's standing instructions (hard rules)
 1. **No admin rights, ever.** Everything must install, run, update and be scripted as a standard Windows user: per-user install, HKCU and %LOCALAPPDATA% only.
-2. **Never modify** `C:\Users\tvelzel\Documents\Standaard eplan Coen - kopie voor v2022` on his PC.
+2. **Never modify** the owner's existing EPLAN project folder on their PC (path kept on the project mount, not in the repo).
 3. **It is its own program, not an EPLAN copy.** Be critical, design creatively, and let the layout, workflow and review threads critique each other. Fix the EPLAN pain points without copying EPLAN. The pain points are in the roadmap doc under "Lessons from EPLAN".
 4. **Don't wait on him.** Pick reasonable defaults and keep moving. He trusts the lead to run the project efficiently and to re-examine the setup routinely.
 5. The integration lead merges PRs itself. Never ask Tadjiro to review or merge.
@@ -58,7 +58,7 @@ gh api -X PUT $R/pulls/N/merge -f merge_method=squash -f sha=<sha>
 - **Other threads.** Layout/branding, Workflow (owns DESIGN.md), Tester.
 - **Release/build thread** (cse_01UuGC6jT84yVrbcwGaSJ5Df) owns `.github/workflows`, the installer, run-latest.ps1, the launcher and the GPU check. It has #41.
 - **Design and workflow reviewer** (cse_0114emQ5fSFrzcALbR4S18TU).
-- **Remote Control session on Tadjiro's PC** (cse_01PHrCqUwsyohsQLFPdQoxBG). It only takes his own typed messages; you cannot message it.
+- **Remote Control session on Tadjiro's PC** (id on the project mount: coordination/threads.md). It only takes his own typed messages; you cannot message it.
 
 Working rules, also in CLAUDE.md via #39:
 - A PR is frozen once READY; follow-ups go in a new PR from main.
