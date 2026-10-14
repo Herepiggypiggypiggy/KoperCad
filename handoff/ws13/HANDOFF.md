@@ -3,7 +3,7 @@
 Updated: 2026-10-14 (first session)
 
 ## State
-- Branch `claude/ws13-reports` from origin/main (9fa18ed). PR: see PROGRESS.md for number and head SHA.
+- Branch `claude/ws13-reports` from origin/main (9fa18ed). PR #55; reviewed head 5512392 (later commits are handoff-only).
 - Review: head SHA sent to the main reviewer (session_01XEdxpvQFh4HWmurh72tKwp) and coordinator (session_01DZ68tTULUv7Uhe8ecKbC47).
 - GitHub Actions does not run on this account: local fmt/clippy/test are the CI signal.
 
