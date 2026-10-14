@@ -732,3 +732,27 @@ fn read_does_not_write_and_works_on_read_only_files() {
     perms.set_readonly(false);
     std::fs::set_permissions(&path, perms).unwrap();
 }
+
+#[test]
+fn a_recovery_file_for_a_replaced_file_is_not_offered() {
+    let (_dir, path) = temp();
+    let mut doc = Document::default();
+    let mut session = Session::create(&path, doc.project()).unwrap();
+    let (_, c) = doc.transact("Add page", |tx| tx.add_page("1")).unwrap();
+    session.record(&c);
+    session.autosave(doc.project()).unwrap();
+    crash(session);
+
+    // A different project is written to the same path; both files are at
+    // their first save, so only the file id tells them apart.
+    let stale = path.with_file_name("stale");
+    std::fs::copy(autosave_path(&path), &stale).unwrap();
+    let other = Project::new("Other");
+    ProjectFile::create(&path, &other).unwrap().close().unwrap();
+    std::fs::rename(&stale, autosave_path(&path)).unwrap();
+
+    let opened = Session::open(&path).unwrap();
+    assert!(opened.recovered.is_none());
+    assert!(!autosave_path(&path).exists());
+    assert_same(&opened.project, &other);
+}

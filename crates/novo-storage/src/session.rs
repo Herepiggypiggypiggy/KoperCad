@@ -230,15 +230,16 @@ impl Session {
             Some(file) => self.unautosaved.write(file, project)?,
             None => {
                 let base = self.file.save_seq()?.to_string();
+                let base_file = self.file.file_id()?.unwrap_or_default();
                 self.autosave = Some(ProjectFile::create_as(
                     &autosave_path(self.file.path()),
                     project,
                     Role::Autosave,
                     |tx| {
-                        tx.execute(
-                            "INSERT OR REPLACE INTO meta (key, value) VALUES ('base_seq', ?1)",
-                            [&base],
-                        )?;
+                        let mut set =
+                            tx.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?1, ?2)")?;
+                        set.execute(["base_seq", &base])?;
+                        set.execute(["base_file", &base_file])?;
                         Ok(())
                     },
                 )?);
@@ -291,7 +292,8 @@ fn same_file(a: &Path, b: &Path) -> bool {
 }
 
 /// Reads the recovery file next to `file`. One made against an older save
-/// of the project is deleted; one that cannot be read is renamed aside.
+/// of the project, or against a different file at the same path, is
+/// deleted; one that cannot be read is renamed aside.
 fn read_recovery(file: &ProjectFile) -> Result<(Option<Recovered>, Option<SetAside>)> {
     let path = autosave_path(file.path());
     if !path.exists() {
@@ -302,7 +304,8 @@ fn read_recovery(file: &ProjectFile) -> Result<(Option<Recovered>, Option<SetAsi
         let base = autosave
             .meta("base_seq")?
             .and_then(|v| v.parse::<u64>().ok());
-        if base != Some(file.save_seq()?) {
+        let base_file = autosave.meta("base_file")?;
+        if base != Some(file.save_seq()?) || base_file.is_none() || base_file != file.file_id()? {
             autosave.close()?;
             return Ok(None);
         }

@@ -56,6 +56,10 @@ impl ProjectFile {
     /// into place only once complete, so an existing file is never left half
     /// overwritten. A file that is open elsewhere is not replaced:
     /// [`StorageError::Locked`].
+    ///
+    /// On Unix, another program could open the new file in the instant
+    /// between moving it into place and opening it here; the file is then
+    /// written but this returns `Locked`.
     pub fn create(path: impl AsRef<Path>, project: &Project) -> Result<ProjectFile> {
         Self::create_as(path.as_ref(), project, Role::Project, |_| Ok(()))
     }
@@ -116,26 +120,24 @@ impl ProjectFile {
             let tx = file.conn.transaction()?;
             set_meta(&tx, "role", role.as_str())?;
             set_meta(&tx, "created_at", &now_millis().to_string())?;
+            set_meta(&tx, "file_id", &new_file_id())?;
             write_all(&tx, project)?;
             finish_save(&tx)?;
             extra(&tx)?;
             tx.commit()?;
             // Close before moving: Windows cannot rename an open file.
             file.close()?;
-            if role == Role::Project {
-                // A recovery file left by a crash belongs to the file being
-                // replaced; it must not be offered against the new one.
-                remove_if_exists(&sibling(path, AUTOSAVE_SUFFIX))?;
-            }
-            if let Some(lock) = lock {
-                lock.close().map_err(|(_, e)| StorageError::from(e))?;
-            }
-            std::fs::rename(&temp, path)?;
-            Ok(())
+            replace(&temp, path, lock)
         })();
         if let Err(err) = written {
             let _ = std::fs::remove_file(&temp);
             return Err(err);
+        }
+        if role == Role::Project {
+            // A recovery file left by a crash belonged to the replaced file.
+            // It names that file's id, so it would never be offered against
+            // the new one; this only tidies it away.
+            let _ = remove_if_exists(&sibling(path, AUTOSAVE_SUFFIX));
         }
         Self::open_as(path, role)
     }
@@ -300,6 +302,12 @@ impl ProjectFile {
             .map(|ms| UNIX_EPOCH + Duration::from_millis(ms)))
     }
 
+    /// A random id given to the file when it is created, so a recovery file
+    /// can tell this file from another one written to the same path.
+    pub(crate) fn file_id(&self) -> Result<Option<String>> {
+        self.meta("file_id")
+    }
+
     /// Counts the saves made to this file; identifies a saved state.
     pub(crate) fn save_seq(&self) -> Result<u64> {
         Ok(self
@@ -376,6 +384,32 @@ fn lock_existing(path: &Path) -> Result<Option<Connection>> {
         Err(e) if is_not_a_database(&e) => Ok(None),
         Err(e) => Err(classify(e, path)),
     }
+}
+
+/// Moves the finished `temp` file over `path` without a moment in which
+/// another program could open the old file and then lose it to the rename.
+///
+/// On Unix a file can be renamed over while open, so the target's lock is
+/// held until the new file is in place: anyone trying to open the old file
+/// meanwhile gets `Locked`. On Windows a file open in another program cannot
+/// be replaced, so the lock is released first; if something opens the
+/// target in that instant, the rename fails and nothing is replaced.
+fn replace(temp: &Path, path: &Path, lock: Option<Connection>) -> Result<()> {
+    let release = |lock: Option<Connection>| -> Result<()> {
+        if let Some(lock) = lock {
+            lock.close().map_err(|(_, e)| StorageError::from(e))?;
+        }
+        Ok(())
+    };
+    if cfg!(windows) {
+        release(lock)?;
+        std::fs::rename(temp, path)?;
+    } else {
+        std::fs::rename(temp, path)?;
+        // The lock now refers to the replaced file; closing it releases it.
+        let _ = release(lock);
+    }
+    Ok(())
 }
 
 fn classify(err: rusqlite::Error, path: &Path) -> StorageError {
@@ -476,6 +510,24 @@ pub(crate) fn kind_name(kind: EntityKind) -> &'static str {
         EntityKind::Cable => "cable",
         EntityKind::Part => "part",
     }
+}
+
+fn new_file_id() -> String {
+    use std::hash::{BuildHasher, Hasher};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    // RandomState is seeded randomly per process; mixing in the time and a
+    // counter keeps ids distinct within a process as well.
+    let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
+    hasher.write_u128(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0),
+    );
+    hasher.write_u32(std::process::id());
+    hasher.write_u64(COUNTER.fetch_add(1, Ordering::Relaxed));
+    format!("{:016x}", hasher.finish())
 }
 
 fn now_millis() -> u64 {
