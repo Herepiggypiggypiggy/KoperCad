@@ -108,3 +108,126 @@ fn grid_columns() {
     let old: PageFormat = serde_json::from_str(r#"{"size": "A3", "landscape": true}"#).unwrap();
     assert_eq!(old.columns, 10);
 }
+
+#[test]
+fn linking_a_contact_and_what_the_relay_switches() {
+    let mut doc = Document::default();
+    let ((page, k1, coil, contact, x1, block), _) = doc
+        .transact("Relay", |tx| {
+            let page = tx.add_page("1")?;
+            let k1 = tx.add_device(DeviceTag::parse("-K1")?, "Relay")?;
+            let coil = tx.place_symbol(
+                page,
+                "iec/coils/relay",
+                Placement::at(Point::new(20.0, 50.0)),
+                vec![Pin::new("A1", 0.0, 0.0), Pin::new("A2", 0.0, 10.0)],
+                SymbolRole::Device {
+                    device: k1,
+                    main: true,
+                },
+            )?;
+            let contact = tx.place_symbol(
+                page,
+                "iec/contacts/no",
+                Placement::at(Point::new(200.0, 50.0)),
+                vec![Pin::new("13", 0.0, 0.0), Pin::new("14", 0.0, 10.0)],
+                SymbolRole::Unassigned,
+            )?;
+            tx.update::<SymbolInstance>(contact, |s| s.pass_through = vec![vec![0, 1]])?;
+            let x1 = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+            let t1 = tx.add_terminal(x1, "1")?;
+            let block = tx.place_symbol(
+                page,
+                "iec/terminals/terminal",
+                Placement::at(Point::new(300.0, 50.0)),
+                vec![Pin::new("1", 0.0, 0.0), Pin::new("2", 0.0, 8.0)],
+                SymbolRole::Terminal {
+                    terminals: vec![t1],
+                },
+            )?;
+            tx.connect(Endpoint::pin(contact, 1), Endpoint::pin(block, 0))?;
+            Ok((page, k1, coil, contact, x1, block))
+        })
+        .unwrap();
+    // Not linked yet: the contact is no reference of -K1.
+    assert_eq!(doc.project().cross_references(k1).len(), 1);
+
+    // Right-click, Cross reference: one command links the contact.
+    doc.execute(Command::SetRole {
+        symbol: contact,
+        role: SymbolRole::Device {
+            device: k1,
+            main: false,
+        },
+    })
+    .unwrap();
+    let project = doc.project();
+    let refs = project.cross_references(k1);
+    assert_eq!(
+        refs.iter().map(|r| (r.symbol, r.main)).collect::<Vec<_>>(),
+        [(coil, true), (contact, false)]
+    );
+    assert!(refs.iter().all(|r| r.location.page == page));
+
+    // Highlight what -K1 switches: the contact's two nets, not the coil's.
+    let net = project.netlist();
+    let switched = net.switched_by(project, k1);
+    let contact_nets = [0, 1].map(|p| net.net_of(Endpoint::pin(contact, p)).unwrap());
+    assert_eq!(switched, {
+        let mut n = contact_nets.to_vec();
+        n.sort();
+        n
+    });
+    assert_eq!(net.nets_of_device(project, k1).len(), 4);
+
+    // A terminal strip's references are its terminals' symbols.
+    let strip_refs = project.cross_references(x1);
+    assert_eq!(strip_refs.len(), 1);
+    assert_eq!(strip_refs[0].symbol, block);
+    assert!(strip_refs[0].terminal.is_some());
+    assert!(net.nets_of_device(project, x1).contains(&contact_nets[1]));
+
+    // Undo unlinks.
+    doc.undo().unwrap();
+    assert_eq!(doc.project().cross_references(k1).len(), 1);
+}
+
+#[test]
+fn search_finds_devices_terminals_and_pages() {
+    let mut doc = Document::default();
+    doc.transact("Search", |tx| {
+        let p = tx.add_page("1")?;
+        tx.update::<Page>(p, |page| page.title = "Main circuit".into())?;
+        tx.add_page("12")?;
+        for tag in ["=A1+CAB1-K1", "-K12", "-K2", "-Q1"] {
+            tx.add_device(DeviceTag::parse(tag)?, "")?;
+        }
+        let x2 = tx.add_terminal_strip(DeviceTag::parse("-X2")?)?;
+        tx.add_terminal(x2, "1")?;
+        tx.add_terminal(x2, "PE")?;
+        tx.add_cable(DeviceTag::parse("-W1")?, Vec::new())?;
+        Ok(())
+    })
+    .unwrap();
+    let project = doc.project();
+    let texts = |query: &str| -> Vec<(String, Match)> {
+        project
+            .search(query)
+            .into_iter()
+            .map(|h| (h.text, h.quality))
+            .collect()
+    };
+    assert_eq!(
+        texts("k1"),
+        [
+            ("=A1+CAB1-K1".to_string(), Match::Exact),
+            ("-K12".to_string(), Match::Prefix),
+        ]
+    );
+    assert_eq!(texts("-X2:PE"), [("-X2:PE".to_string(), Match::Exact)]);
+    assert_eq!(texts("x2").len(), 3); // the strip and both terminals
+    assert_eq!(texts("main")[0].0, "1 Main circuit");
+    assert_eq!(texts("w1"), [("-W1".to_string(), Match::Exact)]);
+    assert!(texts("  ").is_empty());
+    assert!(texts("zz").is_empty());
+}

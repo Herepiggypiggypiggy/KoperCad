@@ -7,8 +7,9 @@
 
 use std::fmt;
 
-use crate::entity::{SymbolInstance, SymbolRole};
-use crate::id::{DeviceId, PageId, SymbolId};
+use crate::entity::{Endpoint, SymbolInstance, SymbolRole};
+use crate::graph::{NetId, Netlist};
+use crate::id::{DeviceId, PageId, SymbolId, TerminalId};
 use crate::project::{Project, natural_cmp};
 
 /// Where a symbol is drawn: its page and the grid column of its origin.
@@ -35,6 +36,8 @@ pub struct CrossReference {
     /// The device's main symbol (usually the coil), as opposed to its
     /// contacts and other parts.
     pub main: bool,
+    /// For a terminal strip: the terminal (first level) the symbol draws.
+    pub terminal: Option<TerminalId>,
     pub location: Location,
 }
 
@@ -50,18 +53,29 @@ impl Project {
         })
     }
 
-    /// Every symbol of a device in reading order (pages in natural order,
-    /// then column, then left to right), main symbols included and marked.
-    /// A coil shows the entries with `main == false` as its contact image;
-    /// each contact points back to the entry with `main == true`.
+    /// Every place a device is drawn, in reading order (pages in natural
+    /// order, then left to right, then top to bottom): its main symbol and
+    /// contacts, or for a terminal strip the symbols of all its terminals.
+    /// This is "go to all references"; the pages are in each entry. A coil
+    /// shows the entries with `main == false` as its contact image, and each
+    /// contact points back to the entry with `main == true`.
     pub fn cross_references(&self, device: DeviceId) -> Vec<CrossReference> {
-        let symbols = self.symbols_of_device(device);
+        let mut symbols = self.symbols_of_device(device);
+        for terminal in self.terminals_of_strip(device) {
+            symbols.extend(self.symbols_of_terminal(terminal.id));
+        }
+        symbols.sort_by_key(|s| s.id);
+        symbols.dedup_by_key(|s| s.id);
         self.in_reading_order(symbols)
             .into_iter()
             .filter_map(|symbol| {
                 Some(CrossReference {
                     symbol: symbol.id,
                     main: matches!(symbol.role, SymbolRole::Device { main: true, .. }),
+                    terminal: match &symbol.role {
+                        SymbolRole::Terminal { terminals } => terminals.first().copied(),
+                        _ => None,
+                    },
                     location: self.location_of(symbol.id)?,
                 })
             })
@@ -88,6 +102,7 @@ impl Project {
                 Some(CrossReference {
                     symbol: s.id,
                     main: false,
+                    terminal: None,
                     location: self.location_of(s.id)?,
                 })
             })
@@ -107,5 +122,42 @@ impl Project {
                 .then(a.id.cmp(&b.id))
         });
         symbols
+    }
+}
+
+impl Netlist {
+    /// Nets touching any pin of the device's symbols (or, for a terminal
+    /// strip, of its terminals' symbols), sorted, each once.
+    pub fn nets_of_device(&self, project: &Project, device: DeviceId) -> Vec<NetId> {
+        let mut nets: Vec<NetId> = project
+            .cross_references(device)
+            .iter()
+            .filter_map(|r| project.symbol(r.symbol))
+            .flat_map(|s| (0..s.pins.len()).map(move |pin| Endpoint::pin(s.id, pin as u16)))
+            .filter_map(|end| self.net_of(end))
+            .collect();
+        nets.sort();
+        nets.dedup();
+        nets
+    }
+
+    /// Nets on the switched poles of the device's symbols (pins in
+    /// `SymbolInstance::pass_through`): what this relay or breaker switches.
+    /// Coil and auxiliary-supply pins are not included. Sorted, each once.
+    pub fn switched_by(&self, project: &Project, device: DeviceId) -> Vec<NetId> {
+        let mut nets: Vec<NetId> = project
+            .symbols_of_device(device)
+            .into_iter()
+            .flat_map(|s| {
+                s.pass_through
+                    .iter()
+                    .flatten()
+                    .map(move |&pin| Endpoint::pin(s.id, pin))
+            })
+            .filter_map(|end| self.net_of(end))
+            .collect();
+        nets.sort();
+        nets.dedup();
+        nets
     }
 }
