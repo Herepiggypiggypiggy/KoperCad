@@ -316,6 +316,16 @@ impl Project {
         }
         match record {
             Record::Symbol(symbol) => {
+                if let SymbolRole::Terminal { terminals } = &symbol.role
+                    && (terminals.is_empty()
+                        || (terminals.len() > 1 && terminals.len() != symbol.bridges.len()))
+                {
+                    return Err(ModelError::TerminalLevels {
+                        symbol: symbol.id,
+                        terminals: terminals.len(),
+                        bridges: symbol.bridges.len(),
+                    });
+                }
                 for group in &symbol.bridges {
                     for &pin in group {
                         if usize::from(pin) >= symbol.pins.len() {
@@ -764,7 +774,9 @@ impl Project {
         let name = &symbol.pins.get(usize::from(pin.pin))?.name;
         Some(match &symbol.role {
             SymbolRole::Device { device, .. } => format!("{}:{}", self.devices[device].tag, name),
-            SymbolRole::Terminal { terminal } => self.terminal_designation(*terminal)?,
+            SymbolRole::Terminal { .. } => {
+                self.terminal_designation(symbol.terminal_of_pin(pin.pin)?)?
+            }
             _ => name.clone(),
         })
     }

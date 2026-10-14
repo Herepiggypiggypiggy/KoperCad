@@ -30,6 +30,14 @@ pub enum ModelError {
     },
     #[error("{0} connects an endpoint to itself")]
     SelfConnection(WireId),
+    #[error(
+        "{symbol} lists {terminals} terminal(s) but has {bridges} bridge group(s); a multi-level terminal needs one group per terminal"
+    )]
+    TerminalLevels {
+        symbol: SymbolId,
+        terminals: usize,
+        bridges: usize,
+    },
     #[error("{0} is not a terminal strip")]
     NotATerminalStrip(DeviceId),
     #[error("{cable} has no core {core}")]

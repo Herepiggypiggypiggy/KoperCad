@@ -73,7 +73,9 @@ impl Record {
                 out.push(r.page.into());
                 match &r.role {
                     SymbolRole::Device { device, .. } => out.push((*device).into()),
-                    SymbolRole::Terminal { terminal } => out.push((*terminal).into()),
+                    SymbolRole::Terminal { terminals } => {
+                        out.extend(terminals.iter().map(|&t| AnyId::from(t)));
+                    }
                     SymbolRole::PotentialFeed { potential } => out.push((*potential).into()),
                     SymbolRole::Unassigned | SymbolRole::Interruption { .. } => {}
                 }
