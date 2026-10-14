@@ -1,5 +1,7 @@
 //! Editing: the only way to change a project.
 
+use std::collections::BTreeSet;
+
 use crate::entity::{
     Cable, CableCore, Device, DeviceKind, Endpoint, Junction, Page, Part, Pin, PinFeed, Potential,
     PotentialKind, PotentialSet, PotentialSpec, PotentialSystem, ProjectInfo, SymbolInstance,
@@ -211,6 +213,137 @@ impl<'p> Tx<'p> {
             structure: Default::default(),
             properties: Default::default(),
         })
+    }
+
+    /// Moves symbols and junctions to `page` (which may be their own page),
+    /// shifted by `offset`, with the wires between them and every text
+    /// attached to any of them; `items` may also name free texts. A wire
+    /// from a moved object to one that stays is refused
+    /// ([`ModelError::WireLeavesSelection`]): move both ends or delete it.
+    /// Ids stay the same, so cables and cross references keep
+    /// pointing at the moved objects.
+    pub fn move_to_page(&mut self, items: &[AnyId], page: PageId, offset: Point) -> Result<()> {
+        if !self.project.contains(page.into()) {
+            return Err(ModelError::NotFound(page.into()));
+        }
+        let mut moved: BTreeSet<AnyId> = BTreeSet::new();
+        let mut texts: BTreeSet<TextId> = BTreeSet::new();
+        for &item in items {
+            match item {
+                AnyId::Symbol(_) | AnyId::Junction(_) => {
+                    if !self.project.contains(item) {
+                        return Err(ModelError::NotFound(item));
+                    }
+                    moved.insert(item);
+                }
+                AnyId::Text(t) if self.project.text(t).is_some() => {
+                    texts.insert(t);
+                }
+                other => return Err(ModelError::NotFound(other)),
+            }
+        }
+        let mut wires: BTreeSet<WireId> = BTreeSet::new();
+        for &item in &moved {
+            for referrer in self.project.referrers(item) {
+                if let AnyId::Wire(w) = referrer {
+                    wires.insert(w);
+                }
+            }
+        }
+        for &w in &wires {
+            let wire = self.project.wire(w).ok_or(ModelError::NotFound(w.into()))?;
+            let owner = |end: Endpoint| -> AnyId {
+                match end {
+                    Endpoint::Pin { symbol, .. } => symbol.into(),
+                    Endpoint::Junction { junction } => junction.into(),
+                }
+            };
+            if !moved.contains(&owner(wire.from)) || !moved.contains(&owner(wire.to)) {
+                return Err(ModelError::WireLeavesSelection(w));
+            }
+        }
+        let carried = moved.iter().copied().chain(wires.iter().map(|&w| w.into()));
+        for id in carried.collect::<Vec<_>>() {
+            for referrer in self.project.referrers(id) {
+                if let AnyId::Text(t) = referrer {
+                    texts.insert(t);
+                }
+            }
+        }
+
+        // Lift out what must change page together: texts, then wires (with
+        // the cable cores that name them), then put them
+        // back on the new page around the moved symbols and junctions.
+        let text_records: Vec<Text> = texts
+            .iter()
+            .filter_map(|&t| self.project.text(t).cloned())
+            .collect();
+        for text in &text_records {
+            self.remove_exact(text.id.into())?;
+        }
+        let wire_records: Vec<Wire> = wires
+            .iter()
+            .filter_map(|&w| self.project.wire(w).cloned())
+            .collect();
+        let mut cables: Vec<Cable> = Vec::new();
+        for &w in &wires {
+            for referrer in self.project.referrers(w) {
+                if let AnyId::Cable(c) = referrer
+                    && let Some(cable) = self.project.cable(c)
+                    && !cables.iter().any(|k| k.id == c)
+                {
+                    cables.push(cable.clone());
+                }
+            }
+        }
+        for cable in &cables {
+            self.update::<Cable>(cable.id, |c| {
+                for core in &mut c.cores {
+                    if core.wire.is_some_and(|w| wires.contains(&w)) {
+                        core.wire = None;
+                    }
+                }
+            })?;
+        }
+        for wire in &wire_records {
+            self.remove_exact(wire.id.into())?;
+        }
+        for &item in &moved {
+            match item {
+                AnyId::Symbol(s) => self.update::<SymbolInstance>(s, |s| {
+                    s.page = page;
+                    s.placement.origin = s.placement.origin + offset;
+                })?,
+                AnyId::Junction(j) => self.update::<Junction>(j, |j| {
+                    j.page = page;
+                    j.position = j.position + offset;
+                })?,
+                _ => {}
+            }
+        }
+        for mut wire in wire_records {
+            wire.page = page;
+            for point in &mut wire.route {
+                *point = *point + offset;
+            }
+            self.insert_record(Record::Wire(wire))?;
+        }
+        for cable in cables {
+            self.replace(Record::Cable(cable))?;
+        }
+        for mut text in text_records {
+            text.page = page;
+            if text.attached_to.is_none() {
+                text.placement.offset = text.placement.offset + offset;
+            }
+            self.insert_record(Record::Text(text))?;
+        }
+        Ok(())
+    }
+
+    fn remove_exact(&mut self, id: AnyId) -> Result<()> {
+        let record = self.project.record(id).ok_or(ModelError::NotFound(id))?;
+        self.apply(Op::Remove { record })
     }
 
     /// Adds a device.

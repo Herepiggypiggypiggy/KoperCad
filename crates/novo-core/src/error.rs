@@ -43,6 +43,10 @@ pub enum ModelError {
     DuplicateTerminal(TerminalId),
     #[error("{0} connects an endpoint to itself")]
     SelfConnection(WireId),
+    #[error(
+        "{0} connects the moved objects to something that stays; move both ends or delete it first"
+    )]
+    WireLeavesSelection(WireId),
     #[error("{wires} wire(s) or pin(s) but only {potentials} potential(s) to assign")]
     TooFewPotentials { wires: usize, potentials: usize },
     #[error(

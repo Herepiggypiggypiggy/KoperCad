@@ -1805,3 +1805,87 @@ fn optional_pins_and_rated_current() {
     .unwrap();
     assert_eq!(doc.project().rated_current_a(q1), Some(10.0));
 }
+
+#[test]
+fn moving_to_another_page_carries_wires_and_labels() {
+    let mut doc = Document::default();
+    let ((p1, p2, a, b, stay, wire, label, cable), _) = doc
+        .transact("Circuit", |tx| {
+            let p1 = tx.add_page("1")?;
+            let p2 = tx.add_page("2")?;
+            let mut place = |x: f64| {
+                tx.place_symbol(
+                    p1,
+                    "x",
+                    Placement::at(Point::new(x, 0.0)),
+                    vec![Pin::new("1", 0.0, 0.0), Pin::new("2", 0.0, 10.0)],
+                    SymbolRole::Unassigned,
+                )
+            };
+            let (a, b, stay) = (place(0.0)?, place(20.0)?, place(40.0)?);
+            let wire = tx.connect(Endpoint::pin(a, 1), Endpoint::pin(b, 1))?;
+            tx.update::<Wire>(wire, |w| w.route = vec![Point::new(0.0, 20.0)])?;
+            let outside = tx.connect(Endpoint::pin(b, 0), Endpoint::pin(stay, 0))?;
+            tx.remove(outside)?;
+            let label = tx.add_text(
+                p1,
+                TextContent::WireNumber,
+                TextPlacement::default(),
+                Some(wire.into()),
+            )?;
+            let cable = tx.add_cable(
+                DeviceTag::parse("-W1")?,
+                vec![CableCore {
+                    name: "1".into(),
+                    cross_section_mm2: None,
+                    shield: false,
+                    wire: Some(wire),
+                }],
+            )?;
+            Ok((p1, p2, a, b, stay, wire, label, cable))
+        })
+        .unwrap();
+    doc.execute(Command::MoveToPage {
+        items: vec![a.into(), b.into()],
+        page: p2,
+        offset: Point::new(100.0, 0.0),
+    })
+    .unwrap();
+    let project = doc.project();
+    assert_eq!(project.symbol(a).unwrap().page, p2);
+    assert_eq!(
+        project.symbol(a).unwrap().placement.origin,
+        Point::new(100.0, 0.0)
+    );
+    assert_eq!(project.wire(wire).unwrap().page, p2);
+    assert_eq!(project.wire(wire).unwrap().route, [Point::new(100.0, 20.0)]);
+    assert_eq!(project.text(label).unwrap().page, p2);
+    assert_eq!(project.cable(cable).unwrap().cores[0].wire, Some(wire));
+    assert!(
+        project
+            .netlist()
+            .connected(Endpoint::pin(a, 1), Endpoint::pin(b, 1))
+    );
+    assert_eq!(project.symbol(stay).unwrap().page, p1);
+    // One undo step puts everything back.
+    doc.undo().unwrap();
+    assert_eq!(doc.project().wire(wire).unwrap().page, p1);
+    assert_eq!(doc.project().symbol(b).unwrap().page, p1);
+
+    // A wire to something that stays is refused, with nothing changed.
+    doc.transact("Wire out", |tx| {
+        tx.connect(Endpoint::pin(b, 0), Endpoint::pin(stay, 0))
+            .map(|_| ())
+    })
+    .unwrap();
+    let before = doc.project().to_json();
+    let err = doc
+        .execute(Command::MoveToPage {
+            items: vec![a.into(), b.into()],
+            page: p2,
+            offset: Point::default(),
+        })
+        .unwrap_err();
+    assert!(matches!(err, ModelError::WireLeavesSelection(_)));
+    assert_eq!(doc.project().to_json(), before);
+}
