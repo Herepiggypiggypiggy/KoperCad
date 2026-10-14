@@ -349,6 +349,14 @@ fn gate1_motor_starter_through_the_window() {
     d.key(egui::Key::Num3, egui::Modifiers::COMMAND);
     assert!(d.app.wb.drawer.is_some());
     assert_eq!(d.app.drawer_strip(), Some(strips[0]));
+    // Ctrl+4 and Ctrl+5 switch to Cables and Devices; Ctrl+5 again closes.
+    d.key(egui::Key::Num4, egui::Modifiers::COMMAND);
+    assert_eq!(d.app.wb.drawer, Some(super::workbench::Drawer::Cables));
+    d.key(egui::Key::Num5, egui::Modifiers::COMMAND);
+    assert_eq!(d.app.wb.drawer, Some(super::workbench::Drawer::Devices));
+    d.key(egui::Key::Num5, egui::Modifiers::COMMAND);
+    assert_eq!(d.app.wb.drawer, None);
+    d.key(egui::Key::Num3, egui::Modifiers::COMMAND);
 
     // Cross references: the coil lists its contacts, a contact points back
     // at the coil.

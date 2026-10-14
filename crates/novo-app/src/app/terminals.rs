@@ -7,9 +7,8 @@ use eframe::egui;
 use novo_canvas::{Aabb, Mark, MarkKind, MarkTarget, Vec2};
 use novo_core::{AnyId, DeviceId, SymbolRole};
 use novo_terminals::{Occurrence, Suggestion};
-use novo_xref::Place;
 
-use super::workbench::{DRAWER_SHARE, Drawer};
+use super::workbench::Drawer;
 use super::{Level, NovoApp};
 
 impl NovoApp {
@@ -175,64 +174,6 @@ impl NovoApp {
             .or_else(|| self.canvas.schematic_ref().and_then(|v| v.editor.strip))
             .filter(|s| project.device(*s).is_some())
             .or_else(|| novo_terminals::strips(project).first().copied())
-    }
-
-    /// The drawer, docked under the canvas while a tab is open.
-    pub(super) fn drawer(&mut self, ui: &mut egui::Ui) {
-        if self.wb.drawer.is_none() || !self.is_open() {
-            return;
-        }
-        let height = (ui.ctx().content_rect().height() * DRAWER_SHARE).max(120.0);
-        let strip = self.drawer_strip();
-        let selected = self.selection();
-        let mut close = false;
-        let mut go = None;
-        egui::Panel::bottom("drawer")
-            .exact_size(height)
-            .resizable(false)
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    let _ = ui.selectable_label(true, "Terminals");
-                    for tab in ["Cables", "Devices"] {
-                        ui.add_enabled(false, egui::Button::selectable(false, tab))
-                            .on_disabled_hover_text("Comes later");
-                    }
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.small_button("Close").clicked() {
-                            close = true;
-                        }
-                        let proposals = self
-                            .backend
-                            .document()
-                            .map_or(0, |d| novo_terminals::suggest_terminals(d.project()).len());
-                        if proposals > 0 {
-                            ui.weak(format!("{proposals} proposed"));
-                        }
-                    });
-                });
-                ui.separator();
-                let Some(doc) = self.backend.document() else {
-                    return;
-                };
-                let Some(strip) = strip else {
-                    ui.weak("No terminal strip yet. Place a terminal (I, terminal) or accept a proposal.");
-                    return;
-                };
-                let view = novo_terminals::strip_view(doc.project(), strip);
-                go = strip_table(ui, &view, &selected);
-            });
-        if close {
-            self.wb.drawer = None;
-        }
-        if let Some(o) = go {
-            self.jump(
-                Place {
-                    page: o.page,
-                    symbol: Some(o.symbol),
-                },
-                true,
-            );
-        }
     }
 }
 

@@ -1833,6 +1833,7 @@ dependencies = [
  "env_logger",
  "log",
  "lopdf",
+ "novo-cables",
  "novo-canvas",
  "novo-checks",
  "novo-core",
