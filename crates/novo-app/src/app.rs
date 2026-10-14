@@ -279,9 +279,12 @@ impl NovoApp {
         match next {
             Leaving::New => self.new_project(),
             Leaving::Open => {
-                let dialog = rfd::FileDialog::new()
+                let mut dialog = rfd::FileDialog::new()
                     .set_title("Open project")
                     .add_filter("NovoElectric project", &[PROJECT_EXTENSION]);
+                if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
+                    dialog = dialog.set_directory(dir);
+                }
                 if let Some(path) = dialog.pick_file() {
                     self.open_path(&path);
                 }
@@ -458,10 +461,19 @@ impl NovoApp {
 
     fn save_as(&mut self) -> bool {
         let name = self.project_name().unwrap_or_else(|| "Untitled".into());
-        let dialog = rfd::FileDialog::new()
+        let mut dialog = rfd::FileDialog::new()
             .set_title("Save project")
             .add_filter("NovoElectric project", &[PROJECT_EXTENSION])
-            .set_file_name(format!("{name}.{PROJECT_EXTENSION}"));
+            .set_file_name(project_file_name(&name));
+        // A project's first save goes to Documents\NovoElectric (DESIGN.md §3,
+        // §6); later "Save as" starts next to the current file.
+        let folder = match &self.project_path {
+            Some(path) => path.parent().map(Path::to_owned),
+            None => projects_dir().filter(|dir| std::fs::create_dir_all(dir).is_ok()),
+        };
+        if let Some(folder) = folder {
+            dialog = dialog.set_directory(folder);
+        }
         match dialog.save_file() {
             Some(path) => self.save_to(&path),
             None => false,
@@ -1148,6 +1160,29 @@ fn consume_bare_key(input: &mut egui::InputState, key: egui::Key) -> bool {
     input.events.len() != before
 }
 
+/// Where new projects are saved: `<Documents>\NovoElectric`. Documents comes
+/// from the known-folder lookup, because company PCs often redirect it to
+/// OneDrive; it is always inside the user's profile.
+fn projects_dir() -> Option<PathBuf> {
+    dirs::document_dir().map(|docs| docs.join(APP_NAME))
+}
+
+/// `<name>.novo`, with the characters Windows forbids in file names replaced.
+fn project_file_name(name: &str) -> String {
+    let name: String = name
+        .trim()
+        .chars()
+        .map(|c| match c {
+            '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => '_',
+            c if c.is_control() => '_',
+            c => c,
+        })
+        .collect();
+    let name = name.trim_end_matches(['.', ' ']);
+    let name = if name.is_empty() { "Untitled" } else { name };
+    format!("{name}.{PROJECT_EXTENSION}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1258,6 +1293,21 @@ mod tests {
         let mut app = app_with(MemoryBackend::default());
         app.run(&ctx, Action::SaveProject);
         assert!(app.messages().is_empty());
+    }
+
+    #[test]
+    fn project_file_names_are_safe_on_windows() {
+        assert_eq!(project_file_name("Pump station"), "Pump station.novo");
+        assert_eq!(project_file_name("A/B: C?"), "A_B_ C_.novo");
+        assert_eq!(project_file_name(" . "), "Untitled.novo");
+    }
+
+    #[test]
+    fn new_projects_are_saved_under_documents() {
+        if let Some(dir) = projects_dir() {
+            assert!(dir.ends_with(APP_NAME));
+            assert!(dir.parent().is_some_and(|p| p.is_absolute()));
+        }
     }
 
     #[test]

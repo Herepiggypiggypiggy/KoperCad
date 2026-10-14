@@ -20,6 +20,7 @@ log = "0.4"
 env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
 rfd = "0.17"
 serde.workspace = true
+dirs.workspace = true
 
 [dev-dependencies]
 ron = "0.12"
