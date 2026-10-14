@@ -197,7 +197,7 @@ fn build() -> Project {
             TextPlacement::default(),
             None,
         )?;
-        tx.add_potential_system("24 V DC", PotentialSet::Dc { voltage: 24.0 }, None)?;
+        tx.add_potential_system("24 V DC", PotentialSet::Dc { voltage: 24.0 }, None, "")?;
         Ok(())
     })
     .unwrap();

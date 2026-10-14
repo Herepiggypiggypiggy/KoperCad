@@ -27,3 +27,16 @@
 2026-10-14 21:38 UTC #88 READY on 774b5a9; lead told. Nits for next design PR: links into generated sheets point by name, never page.column; 'moves it to' not 'moves it as' (§3 Saving)
 2026-10-14 21:38 UTC #88 merged. No open PR of mine.
 2026-10-14 21:40 UTC Contactors stay K by default (rule K|Q); opened design PR with #88 nits; answered WS-08
+2026-10-14 21:41 UTC Opened #92 (head d89bf2b): contactors K default + K|Q rule, #88 nits, handoff sync; sent to design reviewer, lead, WS-08
+2026-10-14 21:40 UTC Lead confirmed contactor K default + Q rule is final; merges #92 on design READY
+2026-10-14 21:42 UTC Pushed e431274 to #92: highlighted proposal dashed full strength 2 px (not solid; reviewer's #91 finding). Re-sent to design reviewer; told WS-01
+2026-10-14 21:44 UTC #92 merged at e431274; told WS-06, WS-11 (WS-01 earlier) about dashed 2 px highlight. No open PR of mine.
+2026-10-14 21:45 UTC WS-06: dashed 2 px highlight committed (5089dde), PR after #91 merges
+2026-10-14 21:53 UTC Answered WS-02 on blocks (use BlockDefinition/Instance in Gate 1; project-first storage + libraries; tags allocated, properties/texts substituted, parts proposed). Recording in DESIGN §7 PR
+2026-10-14 21:55 UTC Opened #100 (blocks storage/substitution, head 34eca56); sent to design reviewer and lead
+2026-10-14 21:55 UTC #100 merged. No open PR of mine.
+2026-10-14 22:04 UTC Lead asked: n of m per section (confirmed by design reviewer on #96); opening docs PR
+2026-10-14 22:05 UTC Opened #106 (n of m per section, head 9f5e0fb); sent to design reviewer and lead
+2026-10-14 22:04 UTC WS-03: junction rule done locally (105d8ff, canvas-drawing; dots only at 3+); PR head to follow
+- 2026-10-14: WS-02 confirmed the blocks model (BlockDefinition in project, BlockInstance per placement, per-member overridden fields plus detached/reason); Gate 1 covers place_block and parameter edits; lands after #107, Structure+Dismissal and page freeze.
+2026-10-14 22:05 UTC #106 merged. No open PR of mine.

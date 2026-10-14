@@ -764,7 +764,9 @@ impl Project {
     pub fn potential_systems(&self) -> impl Iterator<Item = &PotentialSystem> {
         self.potential_systems.values()
     }
-    /// The supply system a potential belongs to, if any.
+    /// The supply system a potential belongs to, if any. Systems can share
+    /// members (N and PE in a TN network); then this is the one with the
+    /// lowest id, and [`Project::potential_systems`] lists them all.
     pub fn system_of(&self, potential: PotentialId) -> Option<&PotentialSystem> {
         self.referrers(potential).find_map(|id| match id {
             AnyId::PotentialSystem(s) => self.potential_systems.get(&s),

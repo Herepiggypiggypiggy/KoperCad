@@ -65,6 +65,17 @@ impl Reference {
         self.row_from(&DeviceTag::default())
     }
 
+    /// One row of a contact image drawn on the page: [`Reference::row_from`]
+    /// without the kind when the contact numbers already say it, so
+    /// `13-14 3.4` but `NO A-B 3.4`.
+    pub fn image_row_from(&self, reader: &DeviceTag) -> String {
+        if self.kind.numbered_as(&self.pins) {
+            format!("{} {}", self.pins, self.target_from(reader))
+        } else {
+            self.row_from(reader)
+        }
+    }
+
     /// [`Reference::row`] as read from a page with structure `reader`.
     pub fn row_from(&self, reader: &DeviceTag) -> String {
         [self.kind.label(), &self.pins, &self.target_from(reader)]
@@ -118,10 +129,23 @@ pub struct TagJump<'i> {
     pub others: Vec<&'i Reference>,
 }
 
+/// Where a [`Label`] goes relative to its symbol.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LabelAnchor {
+    /// Under the symbol, left-aligned with it: a coil's contact image
+    /// (IEC 61082), clear of the incoming wire and of the top-right
+    /// warning mark.
+    Below,
+    /// Right of the symbol, on its centre line: a contact's single
+    /// reference, an interruption point's partners.
+    Right,
+}
+
 /// Cross-reference text to draw next to a symbol.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Label {
     pub symbol: SymbolId,
+    pub anchor: LabelAnchor,
     /// One line per row; a coil's contact image has one row per contact.
     pub lines: Vec<String>,
     /// The device has more contacts of some kind drawn than it has
@@ -410,7 +434,7 @@ impl XrefIndex {
                 let mut lines: Vec<String> = self
                     .contact_image(*device)
                     .into_iter()
-                    .map(|r| r.row_from(&me.location.structure))
+                    .map(|r| r.image_row_from(&me.location.structure))
                     .collect();
                 for &(kind, drawn, available) in &self.groups[&me.owner].over {
                     warning = true;
@@ -435,8 +459,14 @@ impl XrefIndex {
                 }
             }
         };
+        let anchor = if me.main {
+            LabelAnchor::Below
+        } else {
+            LabelAnchor::Right
+        };
         (!lines.is_empty()).then_some(Label {
             symbol,
+            anchor,
             lines,
             warning,
         })

@@ -7,7 +7,8 @@
 //! [`XrefIndex`] (or let [`LiveXref`] do it) and every reference is current.
 //!
 //! - [`XrefIndex::label`]: text drawn next to a symbol. A coil shows its
-//!   contact image (`NO 13-14 3.4`), a contact the coil location (`2.5`),
+//!   contact image below it (`13-14 3.4`), a contact the coil location
+//!   (`2.5`) at its right,
 //!   an interruption point its partners.
 //! - [`Navigator`]: G jumps coil to contact and back, Shift+G lists every
 //!   occurrence ([`XrefIndex::all_references`]), Alt+Left/Right walk the
@@ -53,7 +54,7 @@
 //! })?.0;
 //!
 //! let xref = XrefIndex::build(doc.project(), &FromKey);
-//! assert_eq!(xref.label(coil).unwrap().lines, ["NO 13-14 3.4"]);
+//! assert_eq!(xref.label(coil).unwrap().lines, ["13-14 3.4"]);
 //! assert_eq!(xref.label(contact).unwrap().lines, ["2.5"]);
 //! # Ok::<(), novo_core::ModelError>(())
 //! ```
@@ -67,7 +68,8 @@ mod nav;
 pub use actions::XrefAction;
 pub use function::{ContactKind, FromKey, Functions};
 pub use index::{
-    Highlight, Issue, Label, LiveXref, Owner, Reference, TagJump, XrefIndex, contact_limit_property,
+    Highlight, Issue, Label, LabelAnchor, LiveXref, Owner, Reference, TagJump, XrefIndex,
+    contact_limit_property,
 };
 pub use link::{LINK_LABEL, LinkError, can_link, link_command};
 pub use nav::{Go, JumpHistory, Navigator, Place};

@@ -13,7 +13,8 @@
 //! - [`snap()`]: connection, geometry and grid snapping.
 //! - [`Selection`]: the selection set.
 //! - [`Tessellator`]: primitives to triangles; zoom-independent meshes.
-//! - [`render::CanvasRenderer`]: wgpu pipeline that draws meshes.
+//! - `render::CanvasRenderer`: wgpu pipeline that draws meshes (feature
+//!   `gpu`, on by default through `egui`).
 //! - [`widget`] (feature `egui`): an egui widget wiring all of it together.
 //! - [`model`] (feature `model`): keeps a scene in sync with a `novo-core` page.
 
@@ -23,6 +24,7 @@ pub mod grid;
 pub mod marks;
 #[cfg(feature = "model")]
 pub mod model;
+#[cfg(feature = "gpu")]
 pub mod render;
 pub mod scene;
 pub mod selection;
