@@ -3,28 +3,51 @@
 For a fresh cloud session that takes over as **integration lead**: the role that coordinates the threads and merges PRs.
 Last updated 2026-10-14 17:17 UTC (final from the first lead session) by the integration lead (session_011PfTJ1QaP1JQJPwXcFnxBE).
 
-## 0. Current state (2026-10-14 20:05 UTC, coordinator session_01DZ68tTULUv7Uhe8ecKbC47)
-Sections 6 and 11 below are the 17:17 snapshot; this section supersedes them.
-- **Who runs the project:** Tadjiro handed full coordination to the cloud coordinator session above. Project threads resume at **23:20 UTC**; each was sent a briefing and must `git fetch` and read its own `handoff/<thread>/` on main first.
-- **Sessions:** see `handoff/coordinator/cloud-roster.md` (reviewers A, B, C, design reviewer, fixer, workers WS-12/13/28, Gate 1 integration).
+## 0. Current state (2026-10-14 20:30 UTC, wrap-up by cloud coordinator session_01DZ68tTULUv7Uhe8ecKbC47)
+Sections 6 and 11 below are the 17:17 snapshot; this section supersedes them. **Project threads resuming at 23:20 UTC: read `handoff/RESUME-2320.md` next.**
+- **Who runs the project:** from 17:30 to 20:30 UTC a cloud coordinator ran it (see `handoff/cloud-coordinator/`). It has stopped, as have all cloud reviewers and workers (`handoff/coordinator/cloud-roster.md`); the owner is near their credit limit. Coordination returns to the project's integration lead thread.
 - **Review policy:**
-  - Original threads' PRs: main reviewer A (correctness); UI PRs also need the design reviewer.
-  - Cloud workers' new-crate PRs: BOTH reviewers B and C (their overlap caught two real bugs the other missed: CSV formula injection in #55, recovery-file deletion in #56).
-  - Any CHANGES NEEDED blocks a merge, whoever else said READY. The coordinator never approves work it or its helpers wrote.
+  - Original threads' PRs: main reviewer (correctness); UI PRs also need the design reviewer.
+  - New-crate PRs: two correctness reviewers where available.
+  - Any CHANGES NEEDED blocks a merge. Merge only on the *named* reviewer's READY on the *current* head; #64 broke this rule and shipped a regression. The lead never approves work it or its helpers wrote.
   - After READY, a head that moved only by mechanical main merges keeps READY if `scripts/check-mechanical-merge.sh <ready> <head>` prints OK and `cargo test --workspace` passes on the new head; paste the output on the PR. Anything else goes back to the reviewer.
-- **CI is down:** GitHub Actions starts no jobs on this account (billing / spending limit; owner to check, or making the repo public gives free minutes). The reviewers' local fmt + clippy -D warnings + tests are the CI signal; Windows is unverified.
-- **Merged today (28):** #20 theme, #41 CI/experimental, #34 app storage+canvas, #28 canvas, #29 workflow, #42 Gate 1 tests, #45 core SetText/Page.structure, #44 handoffs, #36 parts, #30 terminals, #48 tester gaps, #47 marks+page frame, #50 design checks, #31 xref, #57 tester gaps + F3, #51 fixed crate list, #52 pre-public scrub, #38 schematic editor, #54 cables, #58 + #61 merge-main.sh, #59 example rename, #49 PDF export, #46 Workbench window, #60 handoff, #56 CLI + Python, #64, #55 reports.
-- **Open PRs:**
-  | PR | What | State |
-  | --- | --- | --- |
-  | #53 | Gate 1 integration (editor, command field, terminals, xref, PDF in novo-app) | A's data-loss finding fixed at 84eff50; design CHANGES NEEDED: Enter-target proposal drawn solid, no problem marks on the drawing, PDF can collide/overwrite in Documents\NovoElectric |
-  | #62 | `coil K1` places -K1's coil | reviewer C |
-  | #63 | `accept all` runs accept-all; natural tag order | reviewer C |
-  | #65 | WS-28 export pdf / check on real engines | reviewers B and C |
-- **Queued:** fixer: WS-07 follow-up (#36 notes, Terminal.part), then `novo_editor::art` behind a light feature (only `novo-canvas/model`) for novo-cli, reviewer A. WS-13: follow-up PR. WS-28: Excel BOM export, pytest done-criterion.
-- **Crate list:** fixed in CLAUDE.md and `[workspace.dependencies]` since #51; PRs never edit those lines. Merge main with `scripts/merge-main.sh` (#58 makes it keep main's list exactly). Since #61 it also keeps a branch's external dependency lines and rejects duplicate keys, so nothing is re-added by hand.
-- **Going public:** no secrets anywhere in history; personal paths/ids scrubbed from current files (#52); the owner's Windows user name and an EPLAN folder name remain in older commits. Owner decides (accept, or fresh repo) and flips visibility in Settings.
-- **Next for Gate 1:** #53 lands → tester drives the Gate 1 scenario through `NovoApp::execute`.
+- **CI is down:** GitHub Actions starts no jobs on this account (billing / spending limit; owner to check, or making the repo public gives free minutes). The reviewers' local fmt + clippy -D warnings + tests are the CI signal. **Windows is unverified** for everything merged today.
+- **Merged today since 17:20 UTC: 44 PRs (34 code/process, 10 handoff, counting this #69):**
+  - Code: #20 theme, #41 CI/experimental, #34 app storage+canvas, #28 canvas, #29 workflow, #42 Gate 1 tests, #45 core SetText/Page.structure, #36 parts, #30 terminals, #48 tester gaps, #47 marks+page frame, #50 design checks, #31 xref, #57 tester gaps + F3, #51 fixed crate list, #52 pre-public scrub, #38 schematic editor, #54 cables, #58 + #61 merge-main.sh, #59 example rename, #49 PDF export, #46 Workbench window, #56 CLI + Python, #64 accept-all order (regression, fixed by #71), #55 reports, #67 parts follow-ups, #62 coil K1, #63 accept all, #65 WS-28 report exports, #70 editor `art` feature, #71 accept-all axis order, #68 terminal/cable diagram reports, **#53 Gate 1 in the app** (editor, command field, terminals drawer, xref, checks, PDF hosted in novo-app).
+  - Handoffs: #44, #60, #66, #69 (this wrap-up, which also carries the reviewer-a, reviewer-c and ws13 handoffs), #74 fixer, #75 ws12, #76 gate1-integration, #77 ws28, #78 reviewer-b, #79 design-reviewer.
+- **Last verified main:** main + #53 gave fmt clean, clippy -D warnings clean and `cargo test --workspace` 625 passed, 0 failed (Linux). Windows has not been verified.
+- **Open PRs at wrap-up:**
+  | PR | What | Reviewer | State |
+  | --- | --- | --- | --- |
+  | #72 | One terminal article source: strip row, BOM and missing-parts agree (fixer) | main reviewer | **not reviewed yet**; checklist in `handoff/reviewer-a/ROADMAP.md`. It touches novo-reports/Cargo.toml, which #68 also changed, so expect a trivial conflict: keep one `novo-terminals` line. |
+  | #73 | ws13 handoff | | superseded: its files went into #69. Close it. |
+- **Follow-ups owed (not in any open PR).** The full lists are in `handoff/reviewer-a/ROADMAP.md`, `handoff/reviewer-c/ROADMAP.md`, `handoff/design-reviewer/HANDOFF.md` (10 UI notes) and `handoff/gate1-integration/HANDOFF.md`. Main items:
+  - WS-01:
+    - Don't overwrite a user's own PDF next to the .novo (`/Producer` check, or temp file + rename).
+    - Focus::Canvas applies while a panel button has focus.
+    - Remove the app's accept-all workaround that #63 made redundant.
+    - Drawers, Issues outline mode, inspector, dock, Space-held pan.
+  - WS-02, WS-11 and WS-07: pick one terminal-article store (core `Terminal.part` vs novo-terminals properties).
+  - WS-03:
+    - Make wgpu optional in novo-canvas.
+    - Draw multi-sheet generated pages, with WS-09.
+    - Put xref labels into the scene.
+  - WS-13:
+    - "20.1" sheet names can collide with real sub-pages.
+    - The cable diagram builds cable screens twice.
+    - Pinned flow vs growing generated pages.
+  - WS-12: the `choose_type` break bug (L+PE → numbered 3G); shield connected to a deleted terminal.
+  - WS-28:
+    - `execute_one` rollback on NothingCreated; exit-2 help text.
+    - Switch novo-cli to novo-editor's `art` feature (#70).
+    - Python `place(main=...)` default; check()/export_pdf()/batch(); then the Workbench console.
+  - Lead: move `lopdf` (dev-dep in novo-app and novo-pdf) into `[workspace.dependencies]`.
+  - Lead: close #73.
+  - Tester: with #53 merged, drive the Gate 1 scenario through `NovoApp::execute` and flip the ignored tests.
+  - Windows: single click doesn't select a symbol under Xvfb (box select works); check on Windows.
+- **Going public:** no secrets anywhere in history; personal paths/ids scrubbed from current files (#52); the owner's Windows user name and an EPLAN folder name remain in older commits. Owner decides (accept, or fresh repo) and switches visibility in Settings.
+- **Crate list:** fixed in CLAUDE.md and `[workspace.dependencies]` since #51; PRs never edit those lines. Merge main with `scripts/merge-main.sh` (#58 makes it keep main's list exactly). Since #61 it also keeps a branch's external dependency lines and rejects duplicate keys, so nothing is re-added by hand. It still aborts on any other conflict (code, or handoff/*/PROGRESS.md as on #70). Resolve those by hand, keep both log lines, and send the new SHA to the reviewer, because check-mechanical-merge.sh will not pass a hand resolution.
+- **Gate 1:** #53 put the first real flow in the app. The tester now drives the Gate 1 scenario through `NovoApp::execute`, and Tadjiro tries it on Windows from the experimental build (once CI runs).
 - **Traps:** worktrees sharing one CARGO_TARGET_DIR run stale test binaries; give each its own and delete when done (disk ~40 GB). Example names must be unique across crates (cargo output collision, #50/#59).
 
 ## 1. What this is
