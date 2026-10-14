@@ -154,10 +154,9 @@ impl Default for ModelStyle {
     }
 }
 
-/// How a junction is drawn. Until novo-core stores a junction's
-/// orientation every junction is a [`JunctionGlyph::Dot`]; the oriented
-/// glyphs are ready for when it does (Tab cycles them, see
-/// `widget::CanvasOutput::cycle_orientation`).
+/// How a junction is drawn. Wiring is pin to pin, so a junction's shape is
+/// never placed by hand: [`JunctionGlyph::from_directions`] derives it from
+/// the directions its wires leave in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum JunctionGlyph {
     /// A connection dot.
@@ -169,6 +168,47 @@ pub enum JunctionGlyph {
     /// A corner joining two sides; `quarter_turns` rotates the default
     /// (right and down) clockwise.
     Corner { quarter_turns: u8 },
+}
+
+impl JunctionGlyph {
+    /// The glyph for wires leaving a point in `dirs` (any length; they are
+    /// snapped to the nearest of the four axes). Three directions make a T,
+    /// two at a right angle a corner, anything else (a straight run, a
+    /// crossing, a loose end) a dot.
+    pub fn from_directions(dirs: impl IntoIterator<Item = Vec2>) -> Self {
+        let mut sides = [false; 4];
+        for d in dirs {
+            if d.length_squared() > 1e-12 {
+                sides[quarter_of(d) as usize] = true;
+            }
+        }
+        let count = sides.iter().filter(|s| **s).count();
+        match count {
+            3 => {
+                let missing = sides.iter().position(|s| !s).unwrap_or(0) as u8;
+                JunctionGlyph::Tee {
+                    stem: (missing + 2) % 4,
+                }
+            }
+            2 => (0..4u8)
+                .find(|&q| sides[q as usize] && sides[((q + 3) % 4) as usize])
+                .map_or(JunctionGlyph::Dot, |q| JunctionGlyph::Corner {
+                    quarter_turns: q,
+                }),
+            _ => JunctionGlyph::Dot,
+        }
+    }
+}
+
+/// The quarter turn (see [`quarter_dir`]) nearest to a direction.
+fn quarter_of(d: Vec2) -> u8 {
+    if d.x.abs() >= d.y.abs() {
+        if d.x > 0.0 { 3 } else { 1 }
+    } else if d.y > 0.0 {
+        0
+    } else {
+        2
+    }
 }
 
 /// Length of the orientation stubs on oriented junctions, in mm.
@@ -226,6 +266,8 @@ pub struct PageScene {
     layers: ModelLayers,
     ids: HashMap<ItemId, AnyId>,
     art_cache: HashMap<ArtKey, std::sync::Arc<[Primitive]>>,
+    /// Junction ends of each drawn wire, to redraw them when it goes.
+    wire_junctions: HashMap<WireId, [Option<JunctionId>; 2]>,
     pub style: ModelStyle,
 }
 
@@ -249,6 +291,7 @@ impl PageScene {
             layers,
             ids: HashMap::new(),
             art_cache: HashMap::new(),
+            wire_junctions: HashMap::new(),
             style: ModelStyle::default(),
         };
         s.rebuild(project, art);
@@ -289,6 +332,7 @@ impl PageScene {
         self.scene.clear();
         self.ids.clear();
         self.art_cache.clear();
+        self.wire_junctions.clear();
         self.frame(project);
         let contents = project.page_contents(self.page);
         for id in contents.symbols {
@@ -364,6 +408,20 @@ impl PageScene {
                 }
                 _ => {}
             }
+        }
+        // A junction's glyph follows the wires leaving it, before and after
+        // the edit (a removed wire is gone from the project).
+        let wires: Vec<WireId> = dirty
+            .iter()
+            .filter_map(|id| match id {
+                AnyId::Wire(w) => Some(*w),
+                _ => None,
+            })
+            .collect();
+        for w in wires {
+            let old = self.wire_junctions.get(&w).copied().unwrap_or_default();
+            let new = project.wire(w).map(junctions_of).unwrap_or_default();
+            dirty.extend(old.into_iter().chain(new).flatten().map(AnyId::Junction));
         }
         let rev = self.scene.revision();
         for id in dirty {
@@ -470,26 +528,46 @@ impl PageScene {
             return;
         };
         let p = vec(j.position);
+        // Which way each wire leaves: towards its first bend or far end.
+        let dirs: Vec<Vec2> = project
+            .wires_at(Endpoint::junction(id))
+            .filter_map(|w| self.wire_points(project, w))
+            .filter_map(|pts| {
+                let next = if pts[0].distance(p) < 1e-4 {
+                    pts.iter().find(|q| q.distance(p) > 1e-4)
+                } else {
+                    pts.iter().rev().find(|q| q.distance(p) > 1e-4)
+                };
+                next.map(|q| *q - p)
+            })
+            .collect();
         let mut item = Item::new(self.layers.wires).with_snap(SnapPoint::connection(p));
-        item.primitives = junction_glyph(JunctionGlyph::Dot, p, &self.style);
+        item.primitives = junction_glyph(JunctionGlyph::from_directions(dirs), p, &self.style);
         self.put(id.into(), item);
+    }
+
+    /// A wire's polyline: start, route bends, end.
+    fn wire_points(&self, project: &Project, id: WireId) -> Option<Vec<Vec2>> {
+        let w = project.wire(id)?;
+        let a = project.endpoint_position(w.from)?;
+        let b = project.endpoint_position(w.to)?;
+        let mut pts = vec![vec(a)];
+        pts.extend(w.route.iter().map(|p| vec(*p)));
+        pts.push(vec(b));
+        Some(pts)
     }
 
     fn sync_wire(&mut self, project: &Project, id: WireId) {
         let Some(w) = project.wire(id).filter(|w| w.page == self.page) else {
+            self.wire_junctions.remove(&id);
             self.remove(id.into());
             return;
         };
-        let (Some(a), Some(b)) = (
-            project.endpoint_position(w.from),
-            project.endpoint_position(w.to),
-        ) else {
+        self.wire_junctions.insert(id, junctions_of(w));
+        let Some(pts) = self.wire_points(project, id) else {
             self.remove(id.into());
             return;
         };
-        let mut pts = vec![vec(a)];
-        pts.extend(w.route.iter().map(|p| vec(*p)));
-        pts.push(vec(b));
         let mut item = Item::new(self.layers.wires)
             .with(Primitive::stroked(
                 Shape::polyline(pts.clone(), false),
@@ -518,6 +596,13 @@ impl PageScene {
         }
         self.put(id.into(), item);
     }
+}
+
+fn junctions_of(w: &novo_core::Wire) -> [Option<JunctionId>; 2] {
+    w.ends().map(|e| match e {
+        Endpoint::Junction { junction } => Some(junction),
+        Endpoint::Pin { .. } => None,
+    })
 }
 
 /// The text shown next to a symbol: its device tag, terminal designation,
@@ -882,6 +967,70 @@ mod tests {
         assert_eq!(corner.len(), 2);
         assert!(corner.iter().any(|e| e.distance(Vec2::X) < 1e-6));
         assert!(corner.iter().any(|e| e.distance(Vec2::Y) < 1e-6));
+    }
+
+    #[test]
+    fn junction_glyph_follows_topology() {
+        use JunctionGlyph::*;
+        let (x, y) = (Vec2::X, Vec2::Y);
+        assert_eq!(
+            JunctionGlyph::from_directions([x, -x, y * 3.0]),
+            Tee { stem: 0 }
+        );
+        assert_eq!(JunctionGlyph::from_directions([-y, y, x]), Tee { stem: 3 });
+        assert_eq!(
+            JunctionGlyph::from_directions([x, y]),
+            Corner { quarter_turns: 0 }
+        );
+        assert_eq!(
+            JunctionGlyph::from_directions([-x, -y]),
+            Corner { quarter_turns: 2 }
+        );
+        assert_eq!(JunctionGlyph::from_directions([x, -x]), Dot);
+        assert_eq!(JunctionGlyph::from_directions([x, -x, y, -y]), Dot);
+
+        // The demo's self-hold branch: both junctions are Ts, and removing
+        // the branch wire leaves a straight run, drawn as a plain dot.
+        let (mut doc, page) = demo_document().unwrap();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let lines = |ps: &PageScene, j: JunctionId| {
+            ps.scene()
+                .get(item_id(j))
+                .unwrap()
+                .primitives
+                .iter()
+                .filter(|p| matches!(p.shape, Shape::Line { .. }))
+                .count()
+        };
+        let junctions = doc.project().page_contents(page).junctions;
+        assert_eq!(junctions.len(), 2);
+        for &j in &junctions {
+            assert_eq!(lines(&ps, j), 3, "a T has three stubs");
+        }
+        let j = junctions[0];
+        let pos = doc.project().junction(j).unwrap().position;
+        let branch = doc
+            .project()
+            .wires_at(Endpoint::junction(j))
+            .find(|&w| {
+                let wire = doc.project().wire(w).unwrap();
+                let other = if wire.from == Endpoint::junction(j) {
+                    wire.to
+                } else {
+                    wire.from
+                };
+                let first = wire
+                    .route
+                    .first()
+                    .copied()
+                    .or_else(|| doc.project().endpoint_position(other))
+                    .unwrap();
+                (first.y - pos.y).abs() < 1e-6
+            })
+            .expect("a horizontal branch");
+        let (_, changes) = doc.transact("cut", |tx| tx.remove(branch)).unwrap();
+        ps.apply(doc.project(), &changes, &PlaceholderArt);
+        assert_eq!(lines(&ps, j), 0, "a straight run is a dot");
     }
 
     #[test]

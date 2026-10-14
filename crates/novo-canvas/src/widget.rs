@@ -284,10 +284,11 @@ pub struct CanvasOutput {
     pub context_click: Option<Snapped>,
     /// What a built-in Escape press did (see [`Interaction::escape_on_hover`]).
     pub escape: Option<EscapeOutcome>,
-    /// Tab (forward) or Shift+Tab (back) was pressed over the canvas with a
-    /// selection: cycle the orientation of the selected junctions or
-    /// corners. The canvas consumes the key so egui focus does not move;
-    /// the app turns it into a model command.
+    /// Tab (forward) or Shift+Tab (back) was pressed over the canvas while a
+    /// tool runs (selection off) or with a selection: rotate the symbol being placed a quarter turn. The canvas
+    /// consumes the key so egui focus does not move; the placement tool
+    /// applies it. Junction shapes are never cycled by hand: they follow
+    /// the wires (see `model::JunctionGlyph::from_directions`).
     pub cycle_orientation: Option<Cycle>,
 }
 
@@ -483,7 +484,8 @@ impl CanvasView {
             self.band = None;
         }
         let mut cycle_orientation = None;
-        if response.hovered() && !self.selection.is_empty() {
+        // While a tool runs (selection switched off) or something is selected.
+        if response.hovered() && (!self.interaction.select || !self.selection.is_empty()) {
             cycle_orientation = ui.ctx().input_mut(|i| {
                 if i.consume_key(egui::Modifiers::SHIFT, egui::Key::Tab) {
                     Some(Cycle::Back)
