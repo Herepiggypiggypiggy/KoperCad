@@ -1,0 +1,35 @@
+format = 1
+id = "iec/passive/heater_3ph"
+name = "Heating element, 3-phase"
+description = "Three-phase heater with its elements connected in star."
+standard = "IEC 60617"
+category = "passive"
+function = "load.heater"
+keywords = ["heater", "3 phase", "heating", "star"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [8, 0], dir = "up" },
+  { id = "3", at = [16, 0], dir = "up" },
+]
+
+anchors = [
+  { role = "tag", at = [-4, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "rect", at = [-1.5, 4], size = [3, 8] },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+  { kind = "line", from = [8, 0], to = [8, 4] },
+  { kind = "rect", at = [6.5, 4], size = [3, 8] },
+  { kind = "line", from = [8, 12], to = [8, 16] },
+  { kind = "line", from = [16, 0], to = [16, 4] },
+  { kind = "rect", at = [14.5, 4], size = [3, 8] },
+  { kind = "line", from = [16, 12], to = [16, 16] },
+  { kind = "line", from = [0, 16], to = [16, 16] },
+]
+
+[behavior]
+kind = "load"
+type = "resistive"

@@ -335,24 +335,36 @@ fn check_behavior(symbol: &Symbol, ids: &HashSet<&str>) -> Vec<String> {
         out.push("behavior.wiper must name a connection".into());
     }
 
-    // A changeover lists [common, break, make]; every other path joins two
-    // connections.
-    let pole_len = if params.get("normally").and_then(|v| v.as_str()) == Some("changeover") {
-        3
+    // A changeover lists [common, break, make]; a conductor (terminal side,
+    // bridge bar) joins two or more connections; every other path joins two.
+    let pole_len = if kind == "conductor" {
+        None
+    } else if params.get("normally").and_then(|v| v.as_str()) == Some("changeover") {
+        Some(3)
     } else {
-        2
+        Some(2)
     };
-    check_groups(params.get("poles"), "poles", Some(pole_len), ids, &mut out);
-    check_groups(params.get("ports"), "ports", None, ids, &mut out);
+    let pole_min = if kind == "conductor" { 2 } else { 1 };
+    check_groups(
+        params.get("poles"),
+        "poles",
+        pole_len,
+        pole_min,
+        ids,
+        &mut out,
+    );
+    check_groups(params.get("ports"), "ports", None, 1, ids, &mut out);
     out
 }
 
 /// Checks a list of connection-id groups: well formed, every id known, no
-/// id in two groups, and (when given) the exact group size.
+/// id in two groups, at least `min` ids per group and (when given) the
+/// exact group size.
 fn check_groups(
     value: Option<&toml::Value>,
     key: &str,
     len: Option<usize>,
+    min: usize,
     ids: &HashSet<&str>,
     out: &mut Vec<String>,
 ) {
@@ -372,6 +384,11 @@ fn check_groups(
         if names.len() != items.len() || names.is_empty() {
             out.push(malformed());
             continue;
+        }
+        if names.len() < min {
+            out.push(format!(
+                "behavior.{key} group {names:?} needs at least {min} connections"
+            ));
         }
         if let Some(len) = len
             && names.len() != len

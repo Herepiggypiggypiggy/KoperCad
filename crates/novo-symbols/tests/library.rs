@@ -10,7 +10,7 @@ fn builtin() -> Library {
 #[test]
 fn builtin_library_loads_and_validates() {
     let lib = builtin();
-    assert!(lib.len() >= 120, "only {} symbols", lib.len());
+    assert!(lib.len() >= 145, "only {} symbols", lib.len());
     for symbol in lib.iter() {
         assert_eq!(validate(symbol), vec![], "{}", symbol.id);
     }
@@ -205,6 +205,10 @@ fn bridges_join_terminal_sides_but_not_contacts() {
         lib.get("iec/terminals/terminal_2level").unwrap().bridges(),
         vec![vec![0, 1], vec![2, 3]]
     );
+    assert_eq!(
+        lib.get("iec/connectivity/bridge_4").unwrap().bridges(),
+        vec![vec![0, 1, 2, 3]]
+    );
     assert!(lib.get("iec/contacts/no").unwrap().bridges().is_empty());
     assert!(
         lib.get("iec/connectivity/interruption_point")
@@ -248,7 +252,7 @@ fn rejects_malformed_poles() {
     let has = |needle: &str| m.iter().any(|s| s.contains(needle));
     assert!(has("must be a list of lists"), "{m:?}");
     assert!(has("more than once"), "{m:?}");
-    assert!(has("must have 2 connections"), "{m:?}");
+    assert!(has("needs at least 2 connections"), "{m:?}");
 }
 
 #[test]

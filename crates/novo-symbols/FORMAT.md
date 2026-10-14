@@ -160,7 +160,8 @@ accepts exactly the keys below and the validator rejects anything else
 Two parameters name connections, and they mean different things:
 
 - `poles`: conducting **paths**. Each group lists the connections one path
-  joins: two ids, or `[common, break, make]` for a changeover. No id may
+  joins: two ids, `[common, break, make]` for a changeover, or two or more
+  for a `conductor` such as a bridge bar. No id may
   appear in two groups. Whether a path conducts depends on the kind: always
   for `conductor`, by switch state for `contact`, `breaker`, `fuse` and
   `overload`, through the load for `coil`, `lamp`, `signal`, `meter`,

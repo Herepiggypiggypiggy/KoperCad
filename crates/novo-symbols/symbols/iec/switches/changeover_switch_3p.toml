@@ -1,0 +1,48 @@
+format = 1
+id = "iec/switches/changeover_switch_3p"
+name = "Changeover switch, 3-pole (I-0-II)"
+description = "3-pole changeover switch, for example a manual mains/generator transfer switch."
+standard = "IEC 60617"
+category = "switches"
+function = "switch.changeover"
+keywords = ["changeover switch", "transfer switch", "i-0-ii", "3p", "selector"]
+
+connections = [
+  { id = "11", at = [0, 16], dir = "down" },
+  { id = "12", at = [4, 0], dir = "up" },
+  { id = "14", at = [-4, 0], dir = "up" },
+  { id = "21", at = [12, 16], dir = "down" },
+  { id = "22", at = [16, 0], dir = "up" },
+  { id = "24", at = [8, 0], dir = "up" },
+  { id = "31", at = [24, 16], dir = "down" },
+  { id = "32", at = [28, 0], dir = "up" },
+  { id = "34", at = [20, 0], dir = "up" },
+]
+
+anchors = [
+  { role = "tag", at = [-11, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 16], to = [0, 11] },
+  { kind = "line", from = [0, 11], to = [3.4, 4.5] },
+  { kind = "polyline", points = [[-4, 0], [-4, 5], [-1.5, 5]] },
+  { kind = "polyline", points = [[4, 0], [4, 5], [1.5, 5]] },
+  { kind = "line", from = [12, 16], to = [12, 11] },
+  { kind = "line", from = [12, 11], to = [15.4, 4.5] },
+  { kind = "polyline", points = [[8, 0], [8, 5], [10.5, 5]] },
+  { kind = "polyline", points = [[16, 0], [16, 5], [13.5, 5]] },
+  { kind = "line", from = [24, 16], to = [24, 11] },
+  { kind = "line", from = [24, 11], to = [27.4, 4.5] },
+  { kind = "polyline", points = [[20, 0], [20, 5], [22.5, 5]] },
+  { kind = "polyline", points = [[28, 0], [28, 5], [25.5, 5]] },
+  { kind = "line", from = [1.569, 8], to = [25.569, 8], stroke = "dashed" },
+  { kind = "line", from = [1.569, 8], to = [-8, 8], stroke = "dashed" },
+  { kind = "polyline", points = [[-6.8, 6], [-8, 6], [-8, 10], [-9.2, 10]] },
+]
+
+[behavior]
+kind = "contact"
+normally = "changeover"
+latching = true
+poles = [["11", "12", "14"], ["21", "22", "24"], ["31", "32", "34"]]
