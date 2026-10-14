@@ -1942,6 +1942,7 @@ dependencies = [
  "lopdf",
  "novo-canvas",
  "novo-core",
+ "novo-reports",
  "novo-tests",
  "pdf-writer",
  "thiserror 2.0.21",

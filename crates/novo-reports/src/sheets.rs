@@ -10,13 +10,19 @@
 //!   are already the model's convention for sub-pages, and they sort
 //!   naturally between `20` and `21`.
 //!
-//! A printed name never repeats another page's name. When a real page is
+//! A sheet name of a multi-sheet page never repeats another page's name
+//! (a single sheet is the page's own name, so it is unique when page names
+//! are). When a real page is
 //! already called `20.1` (or `20.2`, ...), the generated page's sheets use
 //! the next separator that is free for all of them: `20/1`, `20/2`, ...,
 //! then `20-1`, then `20_1`. The separator is chosen per generated page, so
 //! its sheets always read as one family; if every separator is taken, each
 //! sheet still gets a free name by adding `'` marks (`20.1'`). The real
-//! page keeps its name: the user named it, the report did not.
+//! page keeps its name: the user named it, the report did not. The choice
+//! is made for the family as a whole, so it can change as the report grows:
+//! a 2-sheet `20.1, 20.2` that grows to 3 next to a real `20.3` becomes
+//! `20/1 .. 20/3`. That is fine under DESIGN.md's rule for generated pages
+//! (they reflow, and nothing references a sheet's name).
 //!
 //! Each sheet is laid out with [`PageSetup::for_format`] of the page's
 //! format, so it fits the same frame and title block as the schematic
@@ -31,8 +37,9 @@ use novo_core::{Page, PageId, PageKind, Project};
 use crate::page::{PageLayout, PageSetup, ReportPage, layout_page, paginate};
 use crate::report::LiveReports;
 
-/// The name of sheet `index` (0-based) of `count` sheets of a generated
-/// page named `page_name`.
+/// The plain dotted name of sheet `index` (0-based) of `count` sheets of a
+/// generated page named `page_name`, ignoring other pages. Printed sheets
+/// use [`sheet_names`], which steps around names other pages already have.
 pub fn sheet_name(page_name: &str, index: usize, count: usize) -> String {
     if count <= 1 {
         page_name.to_owned()
@@ -82,7 +89,8 @@ pub struct GeneratedSheet {
     pub page: PageId,
     /// The report that fills it.
     pub report: String,
-    /// `20` or `20.3`.
+    /// `20`, `20.3`, or when a real page holds a dotted name, `20/3`, `20-3`,
+    /// `20_3` or, last resort, `20.3'` (see [`sheet_names`]).
     pub name: String,
     /// Which rows of which section the sheet holds.
     pub sheet: ReportPage,

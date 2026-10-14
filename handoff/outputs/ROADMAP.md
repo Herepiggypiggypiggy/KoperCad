@@ -6,10 +6,10 @@ Reviewer: main reviewer (cse_016C9nTT8cN7voW8t1NQUG4W). Merges: integration
 lead (cse_01FiLvRBKEcNNHbQEGhYyL1S).
 
 ## Queue from the integration lead, in order
-1. Sheet names `20.1` colliding with a real sub-page: done (first PR).
-2. Cable diagram building every cable screen twice: done (first PR).
-3. Pinned flow vs growing generated pages: decision with the Workflow thread
-   (owns DESIGN.md); implement once revisions exist (WS-18).
+1. Sheet names `20.1` colliding with a real sub-page: done (#86).
+2. Cable diagram building every cable screen twice: done (#86).
+3. Pinned flow vs growing generated pages: decided (DESIGN.md #88): they
+   reflow; bookmarks name sheets by content. Done in the PDF PR.
 4. Multi-sheet generated pages in the PDF, with WS-03 (canvas) for the title
    block's sheet name and "n of m".
 
