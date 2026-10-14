@@ -19,6 +19,7 @@ novo-workflow = { path = "crates/novo-workflow" }
 novo-editor = { path = "crates/novo-editor" }
 novo-xref = { path = "crates/novo-xref" }
 novo-theme = { path = "crates/novo-theme" }
+novo-pdf = { path = "crates/novo-pdf" }
 bytemuck = { version = "1", features = ["derive"] }
 egui = "0.36"
 egui-wgpu = "0.36"
@@ -35,6 +36,7 @@ tempfile = "3"
 # Known-folder lookup for Documents (SHGetKnownFolderPath on Windows), so
 # redirected or OneDrive Documents folders resolve without our own unsafe.
 dirs = "6"
+pdf-writer = "0.15"
 eframe = { version = "0.36", default-features = false, features = ["wgpu", "default_fonts", "x11", "wayland"] }
 
 [workspace.lints.rust]
