@@ -13,6 +13,7 @@ novo-core.workspace = true
 novo-app = { path = "../novo-app" }
 novo-canvas.workspace = true
 novo-parts.workspace = true
+novo-reports.workspace = true
 novo-storage.workspace = true
 tempfile.workspace = true
 novo-symbols.workspace = true

@@ -117,7 +117,7 @@ fn row(project: &Project, rules: TerminalRules, group: &[&Terminal]) -> Row {
         terminals: group.iter().map(|t| t.id).collect(),
         kind: first.kind,
         jumper: first.jumper,
-        part: style_of(project, first.id).and_then(|s| s.part),
+        part: crate::style::terminal_part(project, first.id),
         occurrences,
         build: Build {
             clamps,

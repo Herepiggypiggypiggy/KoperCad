@@ -64,13 +64,18 @@ fn gate1_devices_get_real_parts_from_suggestions() {
     let mut doc = Document::default();
     let gate = motor_starter(&mut doc).unwrap();
     let catalog = Catalog::starter();
-    let devices: Vec<DeviceId> = doc.project().devices().map(|d| d.id).collect();
+    // -X1 has no part of its own: its terminal blocks are the strip style.
+    let devices: Vec<DeviceId> = doc
+        .project()
+        .devices()
+        .filter(|d| d.id != gate.x1)
+        .map(|d| d.id)
+        .collect();
     let command = clear_parts(doc.project(), &devices);
     run(&mut doc, command);
     let command = remove_unused_parts(doc.project());
     run(&mut doc, command);
-    // The four -X1 terminals have no part either, now that -X1 has none.
-    assert_eq!(missing_parts(doc.project()).len(), devices.len() + 4);
+    assert_eq!(missing_parts(doc.project()).len(), devices.len());
 
     for &device in &devices {
         let top = suggest_for_device(&catalog, doc.project(), device, "", 1);
@@ -82,17 +87,14 @@ fn gate1_devices_get_real_parts_from_suggestions() {
             .tag
             .letter_code()
             .to_owned();
-        assert!(part.fits(&code) || code == "X", "{part} for -{code}");
+        assert!(part.fits(&code), "{part} for -{code}");
         let command = assign_part(doc.project(), &[device], part, AssignMode::Replace);
         run(&mut doc, command);
     }
     assert!(missing_parts(doc.project()).is_empty());
-    // The terminal strip gets terminal blocks, the motor a motor.
-    let x1 = doc.project().device(gate.x1).unwrap();
-    assert_eq!(
-        doc.project().part(x1.parts[0]).unwrap().properties["letter_codes"],
-        Value::Text("X".into())
-    );
+    // The terminal strip is offered terminal blocks (for its style).
+    let blocks = suggest_for_device(&catalog, doc.project(), gate.x1, "", 3);
+    assert!(!blocks.is_empty() && blocks.iter().all(|b| b.fits("X")));
     // Dimensions travel with the project copy for the cabinet layout.
     let k1 = doc.project().device(gate.k1).unwrap();
     let k1_part = doc.project().part(k1.parts[0]).unwrap();
@@ -612,7 +614,7 @@ fn certain_parts_are_assigned_and_the_rest_proposed() {
     run(&mut doc, command);
     assert_eq!(
         novo_parts::missing_parts_summary(doc.project()).as_deref(),
-        Some("8 devices and 4 terminals without a part")
+        Some("7 devices without a part")
     );
 
     // The 2.2 kW motor has exactly one fitting part; a contactor has several.
@@ -981,7 +983,7 @@ fn terminals_get_their_own_part_and_are_listed_when_missing() {
     let mut doc = Document::default();
     let gate = motor_starter(&mut doc).unwrap();
     let catalog = Catalog::starter();
-    // -X1 carries a terminal block, which covers its terminals.
+    // The -X1 strip style covers its terminals.
     assert!(missing_parts(doc.project()).is_empty());
     let terminals: Vec<novo_core::TerminalId> = doc
         .project()
@@ -989,10 +991,8 @@ fn terminals_get_their_own_part_and_are_listed_when_missing() {
         .iter()
         .map(|t| t.id)
         .collect();
-    let command = clear_parts(doc.project(), &[gate.x1]);
-    run(&mut doc, command);
-    let mut expected = vec![AnyId::from(gate.x1)];
-    expected.extend(terminals.iter().map(|&t| AnyId::from(t)));
+    clear_strip_style(&mut doc, gate.x1);
+    let expected: Vec<AnyId> = terminals.iter().map(|&t| AnyId::from(t)).collect();
     assert_eq!(missing_parts(doc.project()), expected);
 
     // Each terminal gets its own article in one step.
@@ -1007,7 +1007,7 @@ fn terminals_get_their_own_part_and_are_listed_when_missing() {
     for &t in &terminals {
         assert_eq!(novo_parts::terminal_part(p, t), Some(id));
     }
-    assert_eq!(missing_parts(p), vec![AnyId::from(gate.x1)]);
+    assert!(missing_parts(p).is_empty());
     assert!(!novo_parts::unused_parts(p).contains(&id));
     // Assigning it again changes nothing.
     assert!(novo_parts::assign_terminal_part(p, &terminals, &block).is_none());
@@ -1019,9 +1019,8 @@ fn a_strip_style_part_covers_its_kind_and_is_not_unused() {
     let gate = motor_starter(&mut doc).unwrap();
     let catalog = Catalog::starter();
     let block = suggest_for_device(&catalog, doc.project(), gate.x1, "", 1)[0].clone();
-    // The block is in the project but on no device: unused.
-    let command = clear_parts(doc.project(), &[gate.x1]);
-    run(&mut doc, command);
+    // Without the strip style the block is in the project but unused.
+    clear_strip_style(&mut doc, gate.x1);
     let id = novo_parts::find_project_part(doc.project(), &block.key()).unwrap();
     assert!(novo_parts::unused_parts(doc.project()).contains(&id));
 
@@ -1055,10 +1054,38 @@ fn a_strip_style_part_covers_its_kind_and_is_not_unused() {
     for t in &terminals[..3] {
         assert_eq!(novo_parts::terminal_part(p, t.id), Some(id));
     }
-    assert_eq!(
-        missing_parts(p),
-        vec![AnyId::from(gate.x1), AnyId::from(terminals[3].id)]
+    let pe = terminals[3].id;
+    assert_eq!(missing_parts(p), vec![AnyId::from(pe)]);
+    // The strip device's own part list (end plates, accessories) is never
+    // a terminal's article.
+    let mut x1 = p.device(gate.x1).unwrap().clone();
+    x1.parts = vec![id];
+    run(
+        &mut doc,
+        Some(novo_core::Command::Replace {
+            record: Record::Device(x1),
+        }),
     );
+    let p = doc.project();
+    assert_eq!(novo_parts::terminal_part(p, pe), None);
+    assert_eq!(missing_parts(p), vec![AnyId::from(pe)]);
+}
+
+/// Removes the strip's terminal articles per kind (its style), as the
+/// strip editor does.
+fn clear_strip_style(doc: &mut Document, strip: DeviceId) {
+    use novo_core::TerminalKind;
+    doc.transact("Clear style", |tx| {
+        for kind in [TerminalKind::Feedthrough, TerminalKind::ProtectiveEarth] {
+            let style = novo_terminals::Style {
+                symbol: novo_core::SymbolKey(novo_terminals::default_symbol(kind).into()),
+                part: None,
+            };
+            novo_terminals::set_strip_style(tx, strip, kind, &style)?;
+        }
+        Ok(())
+    })
+    .unwrap();
 }
 
 #[test]
@@ -1109,4 +1136,51 @@ fn bulk_paste_reports_what_it_cannot_read() {
         err,
         novo_parts::BulkError::Text(novo_parts::ParseError::UnterminatedQuote { line: 2 })
     );
+}
+
+#[test]
+fn a_terminal_block_given_to_a_strip_is_ordered_per_terminal() {
+    // Tester finding F4: the strip's top suggestion (UT 2,5) landed on the
+    // strip device, so the BOM ordered one block for four terminals while
+    // missing parts called every terminal covered.
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let catalog = Catalog::starter();
+    clear_strip_style(&mut doc, gate.x1);
+    let block = suggest_for_device(&catalog, doc.project(), gate.x1, "", 1)[0].clone();
+    assert_eq!(block.order_number, "3044076");
+    assert_eq!(
+        novo_parts::terminal_kind_of(&block),
+        novo_core::TerminalKind::Feedthrough
+    );
+    let depth = doc.undo_depth();
+    let command = assign_part(doc.project(), &[gate.x1], &block, AssignMode::Replace);
+    run(&mut doc, command);
+    assert_eq!(doc.undo_depth(), depth + 1);
+    let p = doc.project();
+    assert!(p.device(gate.x1).unwrap().parts.is_empty());
+    let terminals = p.terminals_of_strip(gate.x1);
+    let id = novo_parts::terminal_part(p, terminals[0].id).unwrap();
+    assert_eq!(p.part(id).unwrap().order_number, "3044076");
+    for t in &terminals[..3] {
+        assert_eq!(novo_parts::terminal_part(p, t.id), Some(id));
+    }
+    // PE is not a feed-through terminal: it is still missing its block.
+    let pe = terminals[3].id;
+    assert_eq!(missing_parts(p), vec![AnyId::from(pe)]);
+    // Assigning the same block again changes nothing.
+    assert!(assign_part(p, &[gate.x1], &block, AssignMode::Replace).is_none());
+
+    let pe_block = suggest_for_device(&catalog, p, gate.x1, "pe", 1)[0].clone();
+    assert_eq!(pe_block.order_number, "3044089");
+    let command = assign_part(p, &[gate.x1], &pe_block, AssignMode::Replace);
+    run(&mut doc, command);
+    let p = doc.project();
+    assert_eq!(
+        p.part(novo_parts::terminal_part(p, pe).unwrap())
+            .unwrap()
+            .order_number,
+        "3044089"
+    );
+    assert!(missing_parts(p).is_empty());
 }
