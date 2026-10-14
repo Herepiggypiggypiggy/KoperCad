@@ -60,3 +60,4 @@
 - Queued: A's terminal-part/BOM consistency finding (strip.rs reads style only, bom.rs reads Terminal.part only) → fixer, reviewer A. lopdf to [workspace.dependencies] after #53 → coordinator.
 - 20:15 Rebalanced: #70 (art feature) to B. Fixer opened #71 (regression fix, C) and #72 (one terminal article source, A).
 - 20:25 Owner near credit limit → wrap-up. All cloud sessions told to write handoffs and stop. Wrote handoff/cloud-coordinator/, handoff/RESUME-2320.md, MAIN-HANDOFF §0.
+- 20:30 Merged #65, #68 (after a combined-test fix on ce960a5, B READY), #70, #71, then #53 Gate 1 (A + design READY 67637b7; 625 tests green on main + #53). Handoff PRs #74-#79 merged; #73 superseded by #69. Open: #72 (not reviewed). Cloud sessions stopped.
