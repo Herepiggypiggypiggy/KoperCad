@@ -421,6 +421,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["problems", "proposals"],
         Needs::Page,
     ),
+    cmd(
+        "view.override_marks",
+        "Show override marks",
+        "View",
+        &["overrides", "manual"],
+        Needs::Page,
+    ),
+    cmd(
+        "view.shortcuts",
+        "Keyboard shortcuts",
+        "View",
+        &["keys", "help", "overlay"],
+        Needs::Nothing,
+    ),
     // Check
     verb(
         cmd(

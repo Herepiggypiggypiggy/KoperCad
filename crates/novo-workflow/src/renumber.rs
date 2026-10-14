@@ -7,12 +7,15 @@
 //! are skipped, so renumbering a page never collides with the rest of the
 //! project. Renaming a device renames all its symbols with it, since
 //! contacts and cross references point at the device, not at its tag.
-//! Terminal strips keep their tags.
+//! Terminal strips keep their tags. Sub-devices with a suffix keep sharing
+//! their number: `-K7.1` and `-K7.2` become `-K1.1` and `-K1.2`.
 
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 
-use novo_core::{DeviceId, DeviceKind, DeviceTag, PageId, Project, Result, Tx, natural_cmp};
+use novo_core::{
+    DeviceId, DeviceKind, DeviceTag, PageId, Project, Result, Tx, natural_cmp, split_code,
+};
 
 /// Which devices to renumber.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -130,15 +133,31 @@ pub fn plan(project: &Project, scope: &Scope) -> Vec<Renaming> {
         });
         let taken = taken.remove(&group).unwrap_or_default();
         let mut next = 1;
+        // Old number of a suffixed sub-device to its new number.
+        let mut shared: BTreeMap<u32, u32> = BTreeMap::new();
         for (_, id) in devices {
-            while taken.contains(&next) {
-                next += 1;
-            }
             let Some(device) = project.device(id) else {
                 continue;
             };
-            let new = device.tag.with_number(next);
-            next += 1;
+            let suffixed = device
+                .tag
+                .device_code()
+                .map(split_code)
+                .and_then(|(_, n, suffix)| n.filter(|_| !suffix.is_empty()));
+            let number = match suffixed.and_then(|old| shared.get(&old)) {
+                Some(&n) => n,
+                None => {
+                    while taken.contains(&next) {
+                        next += 1;
+                    }
+                    next += 1;
+                    if let Some(old) = suffixed {
+                        shared.insert(old, next - 1);
+                    }
+                    next - 1
+                }
+            };
+            let new = device.tag.with_number(number);
             if new != device.tag {
                 out.push(Renaming {
                     device: id,
@@ -225,6 +244,24 @@ mod tests {
             .map(|r| format!("{} {}", r.old, r.new))
             .collect();
         assert_eq!(preview, ["-K8 -K3", "-K5 -K4"]);
+    }
+
+    #[test]
+    fn sub_devices_keep_sharing_their_number() {
+        let mut doc = Document::default();
+        doc.transact("Draw", |tx| {
+            let p1 = tx.add_page("1")?;
+            place(tx, p1, "-K7.1", 10.0, 10.0)?;
+            place(tx, p1, "-K7.2", 50.0, 10.0)?;
+            place(tx, p1, "-K3", 90.0, 10.0)?;
+            Ok(())
+        })
+        .unwrap();
+        let preview: Vec<String> = plan(doc.project(), &Scope::Project)
+            .iter()
+            .map(|r| format!("{} {}", r.old, r.new))
+            .collect();
+        assert_eq!(preview, ["-K7.1 -K1.1", "-K7.2 -K1.2", "-K3 -K2"]);
     }
 
     #[test]

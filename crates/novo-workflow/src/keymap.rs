@@ -1,11 +1,16 @@
-//! The keys from docs/design/interaction-model.md: a small set for frequent
+//! The keys from docs/DESIGN.md section 4: a small set for frequent
 //! actions, everything else through the command field.
 //!
 //! Letters act only while the drawing has focus; Ctrl chords are commands
 //! that work anywhere. There are deliberately no keys for corners, T-pieces,
-//! terminals, cables or potentials: the user does not place those. A plain key never steals typing from a
-//! text field (principle 10): while a text field has focus only chords with
-//! Ctrl or Alt, function keys and Escape resolve.
+//! terminals, cables or potentials: the user does not place those. A plain
+//! key never steals typing from a text field (principle 10): while a text
+//! field has focus only chords with Ctrl or Alt and function keys resolve,
+//! and undo, redo and Escape stay with the field.
+//!
+//! Keys are logical characters, not physical positions: the app shell maps
+//! the character the keyboard layout produces, so `?`, Ctrl+Z and Ctrl+Y
+//! work on Dutch, German (QWERTZ) and US layouts alike.
 
 use std::fmt;
 
@@ -15,6 +20,10 @@ use std::fmt;
 pub enum Key {
     Letter(char),
     Digit(u8),
+    /// A punctuation character such as `?`. Whatever modifier the layout
+    /// needs to type it (Shift on most) is part of the character, so the
+    /// app reports it without Shift.
+    Char(char),
     F(u8),
     Enter,
     Escape,
@@ -42,7 +51,13 @@ impl Key {
     pub fn types_text(self) -> bool {
         matches!(
             self,
-            Key::Letter(_) | Key::Digit(_) | Key::Enter | Key::Tab | Key::Space | Key::Delete
+            Key::Letter(_)
+                | Key::Digit(_)
+                | Key::Char(_)
+                | Key::Enter
+                | Key::Tab
+                | Key::Space
+                | Key::Delete
         ) || matches!(
             self,
             Key::Home | Key::End | Key::ArrowLeft | Key::ArrowRight | Key::ArrowUp | Key::ArrowDown
@@ -55,6 +70,7 @@ impl fmt::Display for Key {
         match self {
             Key::Letter(ch) => write!(f, "{ch}"),
             Key::Digit(d) => write!(f, "{d}"),
+            Key::Char(ch) => write!(f, "{ch}"),
             Key::F(n) => write!(f, "F{n}"),
             Key::Enter => f.write_str("Enter"),
             Key::Escape => f.write_str("Esc"),
@@ -171,8 +187,12 @@ fn parse_key(text: &str) -> Option<Key> {
             if rest.is_empty() {
                 if first.is_ascii_alphabetic() {
                     Key::letter(first)
+                } else if let Some(d) = first.to_digit(10) {
+                    Key::Digit(u8::try_from(d).ok()?)
+                } else if first.is_ascii_punctuation() && first != '+' {
+                    Key::Char(first)
                 } else {
-                    Key::Digit(u8::try_from(first.to_digit(10)?).ok()?)
+                    return None;
                 }
             } else if first == 'f' {
                 let n: u8 = rest.parse().ok()?;
@@ -275,8 +295,7 @@ impl Default for Keymap {
 }
 
 impl Keymap {
-    /// The keys of docs/design/interaction-model.md (section 7). Provisional
-    /// until docs/DESIGN.md is final.
+    /// The keys of docs/DESIGN.md section 4.
     pub fn workflow() -> Keymap {
         use Key::*;
         use Scope::*;
@@ -305,8 +324,8 @@ impl Keymap {
         // only outside text. Clipboard and selection chords are
         // canvas-scoped for the same reason.
         bind(Chord::ctrl(l('z')), OutsideText, "edit.undo");
-        bind(Chord::ctrl_shift(l('z')), OutsideText, "edit.redo");
         bind(Chord::ctrl(l('y')), OutsideText, "edit.redo");
+        bind(Chord::ctrl_shift(l('z')), OutsideText, "edit.redo");
         bind(Chord::ctrl(l('c')), Canvas, "edit.copy");
         bind(Chord::ctrl(l('x')), Canvas, "edit.cut");
         bind(Chord::ctrl(l('v')), Canvas, "edit.paste");
@@ -315,7 +334,8 @@ impl Keymap {
         bind(Chord::ctrl(l('a')), Canvas, "edit.select_all");
         bind(Chord::plain(Delete), Canvas, "edit.delete");
         bind(Chord::plain(F(2)), Canvas, "edit.rename");
-        bind(Chord::plain(Escape), Anywhere, "edit.escape");
+        // A focused text field cancels first, so the ladder runs outside it.
+        bind(Chord::plain(Escape), OutsideText, "edit.escape");
 
         // Draw.
         bind(Chord::plain(l('i')), Canvas, "tool.place");
@@ -334,6 +354,8 @@ impl Keymap {
         bind(Chord::plain(Enter), Canvas, "proposal.accept");
         bind(Chord::plain(Tab), Canvas, "proposal.next");
         bind(Chord::shift(l('p')), Canvas, "view.toggle_marks");
+        // Held: the app shows override marks while Shift+O is down.
+        bind(Chord::shift(l('o')), Canvas, "view.override_marks");
         bind(Chord::plain(F(8)), Anywhere, "check.next_problem");
         bind(Chord::shift(F(8)), Anywhere, "check.previous_problem");
 
@@ -355,6 +377,7 @@ impl Keymap {
         bind(Chord::ctrl_shift(l('f')), Anywhere, "view.focus");
         bind(Chord::plain(F(11)), Anywhere, "view.full_screen");
         bind(Chord::ctrl(l('t')), Anywhere, "view.cabinet_table");
+        bind(Chord::plain(Char('?')), Canvas, "view.shortcuts");
         Keymap { bindings }
     }
 
@@ -480,6 +503,10 @@ mod tests {
             assert_eq!(map.resolve(chord, Focus::Canvas), Some(command), "{chord}");
             assert_eq!(map.resolve(chord, Focus::Panel), Some(command), "{chord}");
         }
+        // Escape too: a focused field cancels first.
+        let escape = Chord::plain(Key::Escape);
+        assert_eq!(map.resolve(escape, Focus::TextField), None);
+        assert_eq!(map.resolve(escape, Focus::Canvas), Some("edit.escape"));
     }
 
     #[test]
@@ -565,11 +592,8 @@ mod tests {
     fn redo_has_two_chords_and_shows_the_first() {
         let map = Keymap::workflow();
         assert_eq!(map.chords_for("edit.redo").len(), 2);
-        // Ctrl+Shift+Z first, as the app shell's menu shows it.
-        assert_eq!(
-            map.shortcut_text("edit.redo").as_deref(),
-            Some("Ctrl+Shift+Z")
-        );
+        // Ctrl+Y first, as DESIGN.md lists it.
+        assert_eq!(map.shortcut_text("edit.redo").as_deref(), Some("Ctrl+Y"));
     }
 
     #[test]
@@ -582,6 +606,7 @@ mod tests {
             "Page Down",
             "F2",
             "Ctrl+1",
+            "?",
         ] {
             let chord = Chord::parse(text).unwrap();
             assert_eq!(chord.to_string(), text);
@@ -589,6 +614,20 @@ mod tests {
         assert_eq!(Chord::parse("ctrl+k"), Some(Chord::ctrl(Key::letter('K'))));
         assert_eq!(Chord::parse("Ctrl+K+J"), None);
         assert_eq!(Chord::parse("F99"), None);
+    }
+
+    #[test]
+    fn question_mark_and_shift_o_follow_design() {
+        let map = Keymap::workflow();
+        let question = Chord::plain(Key::Char('?'));
+        assert_eq!(map.resolve(question, Focus::Canvas), Some("view.shortcuts"));
+        // A `?` typed into a field is text.
+        assert_eq!(map.resolve(question, Focus::TextField), None);
+        assert_eq!(
+            map.resolve(Chord::shift(Key::letter('o')), Focus::Canvas),
+            Some("view.override_marks")
+        );
+        assert_eq!(map.shortcut_text("view.shortcuts").as_deref(), Some("?"));
     }
 
     #[test]
