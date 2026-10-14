@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use novo_core::{
     AnyId, Device, DeviceId, DeviceKind, DeviceTag, Endpoint, JunctionId, ModelError, PageId,
     Placement, Point, PotentialId, PotentialKind, Project, Result, Rotation, SymbolId,
-    SymbolInstance, SymbolRole, Terminal, TerminalId, TerminalKind, Tx, Wire, WireId,
+    SymbolInstance, SymbolRole, Terminal, TerminalId, TerminalKind, Tx, Value, Wire, WireId,
 };
 use novo_symbols::Symbol;
 
@@ -521,6 +521,7 @@ pub fn facing_wires(
             };
             if facing
                 && is_free(project, to)
+                && !is_declined(project, sym, pin, to)
                 && !crosses_wire(project, page, p, len, v)
                 && !others.iter().any(|&s| through_body(s))
             {
@@ -534,6 +535,66 @@ pub fn facing_wires(
         }
     }
     out
+}
+
+/// Symbol property that remembers declined facing-pin proposals, so a
+/// declined proposal does not return (DESIGN.md §2). Its text lists
+/// `pin>symbol:pin` entries separated by `;`, one per declined partner,
+/// on both symbols.
+pub const DECLINED_KEY: &str = "connect.declined";
+
+fn declined_entry(pin: u16, other: SymbolId, other_pin: u16) -> String {
+    format!("{pin}>{}:{other_pin}", other.raw())
+}
+
+fn declined_list(sym: &SymbolInstance) -> &str {
+    match sym.properties.get(DECLINED_KEY) {
+        Some(Value::Text(t)) => t,
+        _ => "",
+    }
+}
+
+/// Whether the proposal from pin `pin` of `sym` to `to` was declined.
+fn is_declined(project: &Project, sym: &SymbolInstance, pin: u16, to: Endpoint) -> bool {
+    let Some(r) = to.as_pin() else {
+        return false;
+    };
+    let mine = declined_entry(pin, r.symbol, r.pin);
+    if declined_list(sym).split(';').any(|e| e == mine) {
+        return true;
+    }
+    let theirs = declined_entry(r.pin, sym.id, pin);
+    project
+        .symbol(r.symbol)
+        .is_some_and(|o| declined_list(o).split(';').any(|e| e == theirs))
+}
+
+/// Declines a proposed facing wire for good (undoable): it is not proposed
+/// again for these two pins.
+pub fn decline(tx: &mut Tx<'_>, proposal: &FacingWire) -> Result<()> {
+    let (Some(a), Some(b)) = (proposal.from.as_pin(), proposal.to.as_pin()) else {
+        return Ok(());
+    };
+    for (me, my_pin, other, other_pin) in [
+        (a.symbol, a.pin, b.symbol, b.pin),
+        (b.symbol, b.pin, a.symbol, a.pin),
+    ] {
+        let Some(sym) = tx.project().symbol(me) else {
+            continue;
+        };
+        let entry = declined_entry(my_pin, other, other_pin);
+        let list = declined_list(sym);
+        if list.split(';').any(|e| e == entry) {
+            continue;
+        }
+        let text = if list.is_empty() {
+            entry
+        } else {
+            format!("{list};{entry}")
+        };
+        tx.set_property(AnyId::from(me), DECLINED_KEY, Some(Value::Text(text)))?;
+    }
+    Ok(())
 }
 
 /// Whether an axis-aligned segment passes through the inside of a box.

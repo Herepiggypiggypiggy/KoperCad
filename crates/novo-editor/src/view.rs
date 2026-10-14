@@ -487,7 +487,7 @@ impl SchematicView {
                 self.editor.on_highlighted(point(w), tolerance)
             }) && pressed(Key::Delete)
             {
-                self.editor.decline_proposal();
+                self.editor.decline_proposal(document);
             }
         }
         let selection = self.selection();

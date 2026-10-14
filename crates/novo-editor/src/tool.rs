@@ -638,16 +638,18 @@ impl Editor {
         })
     }
 
-    /// Delete on the highlighted proposal: declines it, drawing nothing.
-    pub fn decline_proposal(&mut self) -> bool {
+    /// Delete on the highlighted proposal: declines it for good, as one
+    /// undo step, drawing nothing; it is not proposed again.
+    pub fn decline_proposal(&mut self, doc: &mut Document) -> bool {
         let Some(i) = self.highlighted() else {
             return false;
         };
-        self.proposals.remove(i);
+        let proposal = self.proposals.remove(i);
         if self.proposal >= self.proposals.len() {
             self.proposal = 0;
         }
-        true
+        let result = doc.transact("Decline connection", |tx| edit::decline(tx, &proposal));
+        self.finish(result.map(|(_, c)| c), None) == Clicked::Edited
     }
 
     /// Enter: accepts the highlighted proposal as one undo step.
