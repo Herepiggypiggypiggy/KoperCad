@@ -1150,19 +1150,35 @@ fn starter_with_parts<'a>(
     (flow, page, s)
 }
 
-/// The bill of materials as (quantity, used by) per part row.
-fn bom_uses(project: &Project) -> Vec<(u32, String)> {
+/// The bill of materials as (quantity, order number, used by) per part row.
+fn bom_rows(project: &Project) -> Vec<(u32, String, String)> {
     use novo_reports::Report;
     let bom = novo_reports::BillOfMaterials.generate(project);
     let parts = bom.section("parts").expect("a parts section");
-    let (quantity, used_by) = (
-        parts.column("quantity").unwrap(),
-        parts.column("used_by").unwrap(),
+    let column = |key| parts.column(key).unwrap();
+    let (quantity, order, used_by) = (
+        column("quantity"),
+        column("order_number"),
+        column("used_by"),
     );
     parts
         .text_rows()
         .into_iter()
-        .map(|row| (row[quantity].parse().unwrap(), row[used_by].clone()))
+        .map(|row| {
+            (
+                row[quantity].parse().unwrap(),
+                row[order].clone(),
+                row[used_by].clone(),
+            )
+        })
+        .collect()
+}
+
+/// The bill of materials as (quantity, used by) per part row.
+fn bom_uses(project: &Project) -> Vec<(u32, String)> {
+    bom_rows(project)
+        .into_iter()
+        .map(|(quantity, _, by)| (quantity, by))
         .collect()
 }
 
@@ -1242,12 +1258,13 @@ fn gap_pdf_names_the_terminal_strip() {
     assert!(String::from_utf8_lossy(&pdf).contains("-X1"));
 }
 
-/// F4: the starter catalog's part for -X1 is a feed-through terminal block,
-/// and assigning it puts it on the strip device. The missing-parts check
-/// then counts the four terminals as covered, but the bill of materials
-/// orders one terminal block for a strip of four (and the PE terminal gets
-/// a grey feed-through block). The BOM should count a terminal article for
-/// every terminal the strip shows.
+/// F4: the starter catalog's part for -X1 is a feed-through terminal block
+/// (UT 2,5), and assigning it puts it on the strip device. The missing-parts
+/// check then counts the four terminals as covered, but the bill of
+/// materials orders one terminal block for a strip of four, and nothing
+/// gives the PE terminal a protective conductor block. Expected: every
+/// feed-through terminal orders the UT 2,5, and the PE terminal either
+/// orders a PE block (UT 2,5-PE, 3044089) or is reported as missing a part.
 #[test]
 #[ignore = "known gap F4: a catalog part on a strip is ordered once, not per terminal (TEST_REPORT Round 10)"]
 fn gap_bom_orders_a_terminal_block_per_terminal() {
@@ -1255,12 +1272,29 @@ fn gap_bom_orders_a_terminal_block_per_terminal() {
     let dir = tempfile::tempdir().unwrap();
     let (flow, _, s) = starter_with_parts(&library, dir.path());
     let p = flow.project();
-    assert!(novo_parts::missing_parts(p).is_empty());
     let x1 = p.device(s.x1).unwrap().tag.to_string();
-    let terminal_blocks: u32 = bom_uses(p)
+    // The order numbers of the rows that name a terminal.
+    let ordered = |name: &str| -> Vec<String> {
+        let designation = format!("{x1}:{name}");
+        bom_rows(p)
+            .into_iter()
+            .filter(|(_, _, by)| by.split(", ").any(|d| d == designation))
+            .map(|(_, order, _)| order)
+            .collect()
+    };
+    for name in ["1", "2", "3"] {
+        assert_eq!(ordered(name), ["3044076"], "-X1:{name}");
+    }
+    let pe = p
+        .terminals_of_strip(s.x1)
         .into_iter()
-        .filter(|(_, by)| by.split(", ").any(|d| d.starts_with(&x1)))
-        .map(|(quantity, _)| quantity)
-        .sum();
-    assert_eq!(terminal_blocks as usize, p.terminals_of_strip(s.x1).len());
+        .find(|t| t.kind == TerminalKind::ProtectiveEarth)
+        .unwrap()
+        .id;
+    let pe_missing = novo_parts::missing_parts(p).contains(&AnyId::Terminal(pe));
+    let pe_ordered = ordered("PE");
+    assert!(
+        pe_ordered == ["3044089"] || (pe_ordered.is_empty() && pe_missing),
+        "-X1:PE orders {pe_ordered:?}, reported missing: {pe_missing}"
+    );
 }

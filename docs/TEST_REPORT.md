@@ -50,9 +50,11 @@ Findings:
   a strip of four, and the PE terminal would get a grey feed-through block
   instead of a PE block. #72 makes the strip row, BOM and missing-parts
   check read one terminal article, but a part on the strip device itself is
-  still not a terminal article there. Suggested fix: assigning a terminal
-  block to a strip sets the strip's terminal article for that kind (or each
-  terminal's part), not a device part. Sent to WS-07 and WS-13.
+  still not a terminal article there. Decided by the lead: WS-07 moves the
+  terminal article to the strip style (`terminal_part.<kind>`); the BOM
+  does not fall back to the strip device's part. The gap test expects
+  `-X1:1`, `:2`, `:3` each to order the UT 2,5 (3044076) and `-X1:PE` to
+  order the UT 2,5-PE (3044089) or be reported as missing a part.
 - **F5 (drawing and PDF, low):** terminals show only their own name (`1`,
   `2`, `3`, `PE`; that is how #28 fixed F2), and nothing on the page names
   the strip, so the printed page doesn't say which strip they belong to.
