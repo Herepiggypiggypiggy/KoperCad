@@ -141,9 +141,11 @@ fn read_pixels(gpu: &Gpu, t: &Target) -> Vec<[u8; 4]> {
     let mut out = Vec::with_capacity((t.size.0 * t.size.1) as usize);
     for row in 0..t.size.1 {
         let start = (row * t.padded_row) as usize;
-        for px in data[start..start + (t.size.0 * 4) as usize].chunks_exact(4) {
-            out.push([px[0], px[1], px[2], px[3]]);
-        }
+        out.extend_from_slice(
+            data[start..start + (t.size.0 * 4) as usize]
+                .as_chunks::<4>()
+                .0,
+        );
     }
     drop(data);
     t.readback.unmap();
