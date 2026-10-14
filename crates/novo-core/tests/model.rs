@@ -1653,3 +1653,75 @@ fn reversing_starter_switches_phases_without_a_short() {
     assert_eq!(l1_net.potentials, vec![l1]);
     assert!(l1_net.carried.is_empty());
 }
+
+#[test]
+fn star_delta_keeps_each_winding_on_its_nearest_phase() {
+    // KM: L1-U1, L2-V1, L3-W1. KD (delta): U1-W2, V1-U2, W1-V2.
+    // KY (star): W2, U2, V2 to the star point. One contact symbol per pole.
+    let mut doc = Document::default();
+    let ((phases, l1_feed, nets), _) = doc
+        .transact("Star-delta", |tx| {
+            let page = tx.add_page("1")?;
+            let mut phases = Vec::new();
+            let mut feeds = Vec::new();
+            for (i, name) in ["L1", "L2", "L3"].into_iter().enumerate() {
+                let potential = tx.add_potential(name, PotentialKind::Line)?;
+                let feed = tx.place_symbol(
+                    page,
+                    "iec/connectivity/potential_feed",
+                    at(10.0 * i as f64, 0.0),
+                    vec![Pin::new("1", 0.0, 0.0)],
+                    SymbolRole::PotentialFeed { potential },
+                )?;
+                phases.push(potential);
+                feeds.push(feed);
+            }
+            // Winding ends U1 V1 W1 U2 V2 W2 and the star point, as junctions.
+            let node = |tx: &mut Tx<'_>, x: f64| tx.add_junction(page, Point::new(x, 100.0));
+            let mut ends = Vec::new();
+            for i in 0..7 {
+                ends.push(node(tx, 10.0 * f64::from(i))?);
+            }
+            let [u1, v1, w1, u2, v2, w2, star] = ends[..] else {
+                unreachable!()
+            };
+            let pole = |tx: &mut Tx<'_>, from: Endpoint, to: Endpoint, y: f64| {
+                let contact = tx.place_symbol(
+                    page,
+                    "iec/contacts/main",
+                    at(0.0, y),
+                    two_pins(),
+                    SymbolRole::Unassigned,
+                )?;
+                tx.update::<SymbolInstance>(contact, |s| s.pass_through = vec![vec![0, 1]])?;
+                tx.connect(from, Endpoint::pin(contact, 0))?;
+                tx.connect(Endpoint::pin(contact, 1), to)?;
+                Ok::<_, ModelError>(())
+            };
+            let j = Endpoint::junction;
+            for (feed, end) in feeds.iter().zip([u1, v1, w1]) {
+                pole(tx, Endpoint::pin(*feed, 0), j(end), 20.0)?;
+            }
+            for (from, to) in [(u1, w2), (v1, u2), (w1, v2)] {
+                pole(tx, j(from), j(to), 40.0)?;
+            }
+            for from in [w2, u2, v2] {
+                pole(tx, j(from), j(star), 60.0)?;
+            }
+            Ok((phases, feeds[0], [u1, w2, u2, v2, star]))
+        })
+        .unwrap();
+    let [l1, l2, l3] = phases[..] else {
+        unreachable!()
+    };
+    let [u1, w2, u2, v2, star] = nets;
+    let net = doc.project().netlist();
+    let carried = |end: Endpoint| net.net(net.net_of(end).unwrap()).carried.clone();
+    assert_eq!(net.potential_conflicts().count(), 0);
+    assert_eq!(net.potential_of(Endpoint::pin(l1_feed, 0)), Some(l1));
+    assert_eq!(net.potential_of(Endpoint::junction(u1)), Some(l1));
+    assert_eq!(net.potential_of(Endpoint::junction(w2)), Some(l1));
+    assert_eq!(net.potential_of(Endpoint::junction(u2)), Some(l2));
+    assert_eq!(net.potential_of(Endpoint::junction(v2)), Some(l3));
+    assert_eq!(carried(Endpoint::junction(star)), vec![l1, l2, l3]);
+}

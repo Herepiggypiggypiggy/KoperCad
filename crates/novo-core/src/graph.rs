@@ -40,7 +40,8 @@ pub struct Net {
     /// More than one is a short.
     pub defined: Vec<PotentialId>,
     /// Potentials that reach this net through contacts, breakers and fuses,
-    /// sorted; empty when the net defines its own. More than one means the
+    /// sorted: those of the nearest feeds, counted in poles crossed. Empty
+    /// when the net defines its own. More than one means the
     /// net is switched between them (a changeover, a reversing starter), which
     /// is not a short.
     pub carried: Vec<PotentialId>,
@@ -76,40 +77,51 @@ struct PassEdge {
     to: usize,
 }
 
-/// Nets a potential reaches from the nets that define it, walking outward
-/// through switched poles. Having crossed a pole, the walk does not cross
-/// back out of the pin it arrived on or through the same pole again, so the
-/// break and make sides of a changeover contact stay apart (fed from the
-/// common, the potential still reaches both), while poles wired in series
-/// pass it on. The walk stops at nets that define their own potential.
-/// Returns the nets reached, starting nets excluded. Within one group every pin passes to every other, so a
-/// changeover needs two groups (`[common, break]`, `[common, make]`), not one.
-fn carried_nets(edges: &[Vec<PassEdge>], starts: &[usize], defines: &[bool]) -> Vec<usize> {
+/// How far a potential gets from the nets that define it, walking outward
+/// through switched poles: for each net reached, the fewest poles crossed.
+///
+/// Having crossed a pole, the walk does not cross back out of the pin it
+/// arrived on or through the same pole again, so the break and make sides of
+/// a changeover contact stay apart (fed from the common, the potential still
+/// reaches both), while poles wired in series pass it on. Within one group
+/// every pin passes to every other, so a changeover needs two groups
+/// (`[common, break]`, `[common, make]`), not one. The walk never enters a
+/// net that defines its own potential. Starting nets are not listed.
+fn carried_nets(edges: &[Vec<PassEdge>], starts: &[usize], defines: &[bool]) -> Vec<(usize, u32)> {
     type Arrival = Option<(SymbolId, usize, u16)>;
     let mut seen: std::collections::HashSet<(usize, Arrival)> = Default::default();
-    let mut reached = vec![false; edges.len()];
-    let mut stack: Vec<(usize, Arrival)> = starts.iter().map(|&n| (n, None)).collect();
-    while let Some(state) = stack.pop() {
-        if !seen.insert(state) {
+    let mut distance: Vec<Option<u32>> = vec![None; edges.len()];
+    let mut queue: std::collections::VecDeque<(usize, Arrival, u32)> =
+        starts.iter().map(|&n| (n, None, 0)).collect();
+    while let Some((net, arrival, steps)) = queue.pop_front() {
+        if !seen.insert((net, arrival)) {
             continue;
         }
-        let (net, arrival) = state;
         if arrival.is_some() {
             if defines[net] {
                 continue;
             }
-            reached[net] = true;
+            // Breadth first, so the first visit is the shortest.
+            distance[net].get_or_insert(steps);
         }
         for edge in &edges[net] {
             let blocked = arrival.is_some_and(|(symbol, group, pin)| {
                 symbol == edge.symbol && (group == edge.group || pin == edge.from_pin)
             });
             if !blocked {
-                stack.push((edge.to, Some((edge.symbol, edge.group, edge.to_pin))));
+                queue.push_back((
+                    edge.to,
+                    Some((edge.symbol, edge.group, edge.to_pin)),
+                    steps + 1,
+                ));
             }
         }
     }
-    (0..edges.len()).filter(|&n| reached[n]).collect()
+    distance
+        .into_iter()
+        .enumerate()
+        .filter_map(|(net, d)| Some((net, d?)))
+        .collect()
 }
 
 struct UnionFind {
@@ -285,10 +297,24 @@ impl Netlist {
                     feeds
                 });
         let defines: Vec<bool> = nets.iter().map(|n| !n.defined.is_empty()).collect();
+        // Each net keeps the potentials of its nearest feeds (fewest poles
+        // crossed). Paths that need several contacts closed at once, as
+        // around the loop of a star-delta starter, lose to the direct feed.
+        let mut nearest: Vec<(u32, Vec<PotentialId>)> = vec![(u32::MAX, Vec::new()); nets.len()];
         for (potential, starts) in feeds {
-            for net in carried_nets(&edges, &starts, &defines) {
-                nets[net].carried.push(potential);
+            for (net, steps) in carried_nets(&edges, &starts, &defines) {
+                let (best, potentials) = &mut nearest[net];
+                if steps < *best {
+                    *best = steps;
+                    potentials.clear();
+                }
+                if steps == *best {
+                    potentials.push(potential);
+                }
             }
+        }
+        for (net, (_, potentials)) in nets.iter_mut().zip(nearest) {
+            net.carried = potentials;
         }
         for net in &mut nets {
             net.endpoints.sort();
