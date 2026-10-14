@@ -26,11 +26,8 @@ use crate::tool::{Editor, EditorKey};
 
 /// Rows shown in the insert search.
 const SEARCH_ROWS: usize = 8;
-/// Colour of things that follow the pointer.
-const GHOST: Color = Color::rgba(0, 120, 215, 200);
-/// Proposal marks and the pin-hover ring (DESIGN.md §5, steel blue).
-const STEEL: Color = Color::rgb(70, 130, 180);
-const PROPOSAL: Color = Color::rgba(70, 130, 180, 140);
+/// Opacity of things that follow the pointer, in the hover colour.
+const GHOST_ALPHA: u8 = 200;
 /// The hint on the highlighted proposal (DESIGN.md §5).
 const PROPOSAL_HINT: &str = "↵ accept · Tab next";
 /// Hint text height, in screen points.
@@ -284,7 +281,8 @@ impl SchematicView {
             scene.scene_mut().remove(id);
         }
         let preview = self.editor.preview(document, page);
-        let ghost = Stroke::world(0.35, GHOST);
+        let ghost_color = opacity(self.canvas.style.hover.color, GHOST_ALPHA);
+        let ghost = Stroke::world(0.35, ghost_color);
         let mut items: Vec<Item> = Vec::new();
         for sym in &preview.symbols {
             let local = self
@@ -297,8 +295,11 @@ impl SchematicView {
                 .iter()
                 .map(|p| {
                     let mut p = p.transformed(&place);
-                    p.stroke = p.stroke.map(|s| Stroke { color: GHOST, ..s });
-                    p.fill = p.fill.map(|_| GHOST);
+                    p.stroke = p.stroke.map(|s| Stroke {
+                        color: ghost_color,
+                        ..s
+                    });
+                    p.fill = p.fill.map(|_| ghost_color);
                     p
                 })
                 .collect();
@@ -319,12 +320,13 @@ impl SchematicView {
                 &preview.proposals,
                 preview.current,
                 zoom,
+                self.canvas.style.proposal,
             ));
         }
         if let Some(t) = preview.target {
             items.push(Item::new(layer).unselectable().with(Primitive::stroked(
                 Shape::circle(model::vec(t), 1.2),
-                Stroke::screen(2.0, STEEL),
+                Stroke::screen(2.0, self.canvas.style.hover.color),
             )));
         }
         for (i, item) in items.into_iter().enumerate() {
@@ -860,36 +862,44 @@ fn short(name: &str) -> String {
     }
 }
 
-/// Proposal marks (DESIGN.md §5): proposals are dashed steel blue at about
-/// 55%; the highlighted one, which Enter takes, is solid steel blue and
-/// carries the "↵ accept · Tab next" hint, sized for the screen.
+/// `color` at `alpha`.
+fn opacity(color: Color, alpha: u8) -> Color {
+    let [r, g, b, _] = color.0;
+    Color::rgba(r, g, b, alpha)
+}
+
+/// Proposal marks (DESIGN.md §5), in the canvas style's proposal colour:
+/// dashed at that strength (about 55%) and 1 px; the highlighted one, which
+/// Enter takes, dashed at full strength and 2 px with the
+/// "↵ accept · Tab next" hint. Never solid, so none reads as a drawn wire.
 fn proposal_item(
     layer: novo_canvas::LayerId,
     proposals: &[(Point, Point)],
     current: Option<usize>,
     zoom: f32,
+    color: Color,
 ) -> Item {
     let mut item = Item::new(layer).unselectable();
+    let strong = opacity(color, 255);
     for (i, &(a, b)) in proposals.iter().enumerate() {
         let line = Shape::line(model::vec(a), model::vec(b));
-        if current == Some(i) {
-            item.primitives
-                .push(Primitive::stroked(line, Stroke::world(0.35, STEEL)));
+        let stroke = if current == Some(i) {
             let gap = 4.0 / zoom;
             let mid = model::vec(a).lerp(model::vec(b), 0.5);
             item.labels.push(
                 Label::new(mid + Vec2::new(gap, -gap), PROPOSAL_HINT, HINT_PX / zoom)
                     .anchored(Anchor::BottomLeft)
-                    .colored(STEEL),
+                    .colored(strong),
             );
+            Stroke::screen(2.0, strong)
         } else {
-            let stroke = Stroke::world(0.35, PROPOSAL);
-            item.primitives.extend(
-                crate::art::dashes(&line)
-                    .into_iter()
-                    .map(|dash| Primitive::stroked(dash, stroke)),
-            );
-        }
+            Stroke::screen(1.0, color)
+        };
+        item.primitives.extend(
+            crate::art::dashes(&line)
+                .into_iter()
+                .map(|dash| Primitive::stroked(dash, stroke)),
+        );
     }
     item
 }
@@ -899,13 +909,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_highlighted_proposal_is_solid_and_carries_the_hint() {
+    fn proposals_are_dashed_and_the_highlighted_one_stronger_with_the_hint() {
         let proposals = [
             (Point::new(0.0, 0.0), Point::new(40.0, 0.0)),
             (Point::new(0.0, 10.0), Point::new(40.0, 10.0)),
         ];
+        let color = Color::rgba(70, 110, 160, 140);
         for current in [None, Some(0), Some(1)] {
-            let item = proposal_item(novo_canvas::LayerId(0), &proposals, current, 4.0);
+            let item = proposal_item(novo_canvas::LayerId(0), &proposals, current, 4.0, color);
             for (i, &(a, b)) in proposals.iter().enumerate() {
                 let y = a.y as f32;
                 let mine: Vec<_> = item
@@ -916,24 +927,25 @@ mod tests {
                         _ => false,
                     })
                     .collect();
+                // Never solid: each 40 mm proposal is several dashes.
+                assert!(mine.len() > 1, "proposal {i} is not dashed ({current:?})");
                 let full = model::vec(a).distance(model::vec(b));
                 for p in &mine {
                     let Shape::Line { a, b } = &p.shape else {
                         unreachable!()
                     };
+                    assert!(a.distance(*b) < full * 0.5);
                     let s = p.stroke.unwrap();
-                    // Steel blue either way.
-                    assert_eq!(&s.color.0[..3], &[70, 130, 180]);
+                    assert_eq!(&s.color.0[..3], &color.0[..3]);
+                    assert_eq!(s.unit, novo_canvas::WidthUnit::Screen);
                     if current == Some(i) {
-                        assert_eq!(s.color, STEEL);
-                        assert_eq!(a.distance(*b), full);
+                        assert_eq!(s.color.0[3], 255);
+                        assert_eq!(s.width, 2.0);
                     } else {
-                        assert_eq!(s.color, PROPOSAL);
-                        assert!(a.distance(*b) < full * 0.5);
+                        assert_eq!(s.color, color);
+                        assert_eq!(s.width, 1.0);
                     }
                 }
-                let solid = current == Some(i);
-                assert_eq!(mine.len() == 1, solid, "proposal {i} ({current:?})");
             }
             // One hint, on the highlighted proposal only, 11 px at any zoom.
             assert_eq!(item.labels.len(), usize::from(current.is_some()));
@@ -944,6 +956,7 @@ mod tests {
             }
         }
     }
+
     use crate::tool::Tool;
     use novo_core::SymbolRole;
 
