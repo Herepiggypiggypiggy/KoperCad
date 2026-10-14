@@ -18,13 +18,13 @@ AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppName}
 AppPublisherURL=https://github.com/Herepiggypiggypiggy/NovoElectric
-DefaultDirName={autopf}\{#AppName}
+; Strictly per-user: no admin rights are ever requested, everything goes to
+; %LOCALAPPDATA% and HKCU.
+DefaultDirName={localappdata}\Programs\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
-; Installs for the current user without admin rights; the user can still
-; choose an all-users install in the dialog.
 PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog
+UsedUserAreasWarning=no
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#RepoRoot}\dist
@@ -44,14 +44,14 @@ Name: "associate"; Description: "Open .novo project files with {#AppName}"; Grou
 Source: "{#RepoRoot}\target\release\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
+Name: "{userprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
+Name: "{userdesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 [Registry]
-Root: HKA; Subkey: "Software\Classes\.novo"; ValueType: string; ValueName: ""; ValueData: "NovoElectric.Project"; Flags: uninsdeletevalue; Tasks: associate
-Root: HKA; Subkey: "Software\Classes\NovoElectric.Project"; ValueType: string; ValueName: ""; ValueData: "NovoElectric project"; Flags: uninsdeletekey; Tasks: associate
-Root: HKA; Subkey: "Software\Classes\NovoElectric.Project\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#AppExe},0"; Tasks: associate
-Root: HKA; Subkey: "Software\Classes\NovoElectric.Project\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""; Tasks: associate
+Root: HKCU; Subkey: "Software\Classes\.novo"; ValueType: string; ValueName: ""; ValueData: "NovoElectric.Project"; Flags: uninsdeletevalue; Tasks: associate
+Root: HKCU; Subkey: "Software\Classes\NovoElectric.Project"; ValueType: string; ValueName: ""; ValueData: "NovoElectric project"; Flags: uninsdeletekey; Tasks: associate
+Root: HKCU; Subkey: "Software\Classes\NovoElectric.Project\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#AppExe},0"; Tasks: associate
+Root: HKCU; Subkey: "Software\Classes\NovoElectric.Project\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""; Tasks: associate
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent

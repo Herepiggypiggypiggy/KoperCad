@@ -45,6 +45,9 @@ Rules:
 - New crates are added under `crates/` and picked up by the workspace glob;
   shared dependencies go in `[workspace.dependencies]`.
 - `unsafe` is denied workspace-wide; justify any exception in the pull request.
+- Everything must work without admin rights: install, run, update and file
+  associations stay per-user (`%LOCALAPPDATA%`, `HKCU`), and nothing may
+  request elevation.
 
 ## Conventions
 

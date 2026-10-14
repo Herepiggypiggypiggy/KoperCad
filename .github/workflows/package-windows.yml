@@ -35,20 +35,42 @@ jobs:
           $version = ((cargo pkgid -p novo-app) -split '[#@]')[-1]
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" packaging\windows\novoelectric.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Smoke-test the installer
+      - name: Check no admin rights are requested
         shell: pwsh
         run: |
-          $setup = Get-ChildItem dist\NovoElectric-*-setup.exe | Select-Object -First 1
-          $dir = "$env:RUNNER_TEMP\novo-install"
-          $p = Start-Process $setup.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER", "/DIR=$dir" -Wait -PassThru
+          # The installer and the app must run without elevation.
+          foreach ($exe in @((Get-ChildItem dist\NovoElectric-*-setup.exe)[0].FullName, "target\release\novoelectric.exe")) {
+            $text = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($exe))
+            if ($text -match 'requireAdministrator|highestAvailable') { throw "$exe asks for admin rights" }
+          }
+      - name: Install and launch as a standard (non-admin) user
+        shell: pwsh
+        run: |
+          $user = "novotest"
+          $pw = ConvertTo-SecureString ("Nv1!" + [guid]::NewGuid().ToString("N")) -AsPlainText -Force
+          New-LocalUser -Name $user -Password $pw -PasswordNeverExpires | Out-Null
+          Add-LocalGroupMember -Group Users -Member $user
+          if (Get-LocalGroupMember -Group Administrators | Where-Object Name -like "*\$user") { throw "test user is an admin" }
+          $cred = New-Object PSCredential("$env:COMPUTERNAME\$user", $pw)
+
+          $setup = (Get-ChildItem dist\NovoElectric-*-setup.exe)[0]
+          Copy-Item $setup.FullName C:\Users\Public\novo-setup.exe
+          $p = Start-Process C:\Users\Public\novo-setup.exe -Credential $cred -LoadUserProfile -WorkingDirectory C:\Users\Public `
+            -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=C:\Users\Public\novo-install.log" -Wait -PassThru
+          Get-Content C:\Users\Public\novo-install.log -ErrorAction SilentlyContinue | Select-Object -Last 15
           if ($p.ExitCode -ne 0) { throw "installer exited with $($p.ExitCode)" }
-          if (-not (Test-Path "$dir\novoelectric.exe")) { throw "novoelectric.exe was not installed" }
-          $app = Start-Process "$dir\novoelectric.exe" -PassThru
+
+          $exe = "C:\Users\$user\AppData\Local\Programs\NovoElectric\novoelectric.exe"
+          if (-not (Test-Path $exe)) { throw "novoelectric.exe is not in the user's %LOCALAPPDATA%\Programs" }
+          if (Test-Path "HKLM:\Software\Classes\NovoElectric.Project") { throw "file association was written machine-wide" }
+          if (Test-Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{AEB465B9-04F0-475B-AD7F-091D638587B5}_is1") { throw "uninstall entry was written machine-wide" }
+
+          $app = Start-Process $exe -Credential $cred -LoadUserProfile -WorkingDirectory C:\Users\Public -PassThru
           Start-Sleep -Seconds 10
           if ($app.HasExited) { throw "novoelectric.exe exited at startup with code $($app.ExitCode)" }
           Stop-Process -Id $app.Id
           $size = [math]::Round($setup.Length / 1MB, 1)
-          "Installer: $($setup.Name), $size MB" >> $env:GITHUB_STEP_SUMMARY
+          "Installer: $($setup.Name), $size MB, installed and launched as a standard user" >> $env:GITHUB_STEP_SUMMARY
       - uses: actions/upload-artifact@v4
         with:
           name: NovoElectric-windows-installer
