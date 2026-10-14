@@ -65,6 +65,9 @@ fn main_circuit_connectivity() {
     // join nets, so the motor is not on L1 in the netlist.
     assert!(!net.connected(Endpoint::pin(s.f1_sym, 0), Endpoint::pin(s.f1_sym, 1)));
     assert!(!net.connected(Endpoint::pin(s.k1_main, 0), Endpoint::pin(s.k1_main, 1)));
+    // Current behaviour: potentials stop at switched poles. Once #14 carries
+    // them through pass-through poles and the fixture sets those from the
+    // library, this becomes `Some(s.l1)`.
     assert_eq!(net.potential_of(Endpoint::pin(s.m1_sym, 0)), None);
 
     // Overload heaters (bridges) and terminals conduct, and the cable cores
