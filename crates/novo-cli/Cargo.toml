@@ -1,0 +1,23 @@
+[package]
+name = "novo-cli"
+description = "The `novo` command-line tool: project info, checks and batch export, read-only on project files"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "novo"
+path = "src/main.rs"
+
+[dependencies]
+novo-core.workspace = true
+novo-storage.workspace = true
+novo-py.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

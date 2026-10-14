@@ -1,0 +1,18 @@
+[package]
+name = "novo-reports"
+description = "Generated pages and reports: bill of materials, device list, wire list, table of contents, Excel and CSV export (WS-13)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+novo-core.workspace = true
+rust_xlsxwriter.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+novo-tests = { path = "../novo-tests" }
+calamine.workspace = true
+
+[lints]
+workspace = true

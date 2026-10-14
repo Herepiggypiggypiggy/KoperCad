@@ -198,6 +198,8 @@ pub enum BulkError {
     TagColumn,
     #[error("no device {0}")]
     UnknownDevice(String),
+    #[error("{0} comes with the part: change the Order number to pick another part")]
+    PartColumnAlone(String),
     #[error(
         "columns {first} and {second} both set {field}; rename one (properties as properties.<name>)"
     )]
@@ -217,6 +219,9 @@ pub struct BulkOutcome {
     pub changed: usize,
     /// Rows that were skipped (1-based line in the pasted text) and why.
     pub skipped: Vec<(usize, String)>,
+    /// Edited cells of applied rows that were not applied (1-based line)
+    /// and why, e.g. a Type number changed without the Order number.
+    pub ignored: Vec<(usize, String)>,
 }
 
 /// Finds the device a table row means: the exact tag, or, when the row
@@ -241,6 +246,30 @@ pub fn find_device(project: &Project, text: &str) -> Option<DeviceId> {
     }
 }
 
+/// The property key a pasted `properties.<key>` header means: a key the
+/// project already uses, as written or written differently
+/// (`Rated current` for `rated_current`), else the key in the normal form
+/// new properties get (`rated_current`).
+fn resolve_property(project: &Project, column: TableColumn) -> TableColumn {
+    let TableColumn::Property(key) = column else {
+        return column;
+    };
+    let in_use = |k: &str| project.devices().any(|d| d.properties.contains_key(k));
+    if in_use(&key) {
+        return TableColumn::Property(key);
+    }
+    let Some(normal) = property_key(&key) else {
+        return TableColumn::Property(key);
+    };
+    let existing = project
+        .devices()
+        .flat_map(|d| d.properties.keys())
+        .filter(|k| property_key(k).as_deref() == Some(normal.as_str()))
+        .min()
+        .cloned();
+    TableColumn::Property(existing.unwrap_or(normal))
+}
+
 /// Applies tab-separated (or `;`/`,`-separated) text with a header row to
 /// the devices it names, as one command. Columns: see [`TableColumn`]; the
 /// Tag column is required and only identifies the row. An empty cell
@@ -256,8 +285,10 @@ pub fn apply_table(
     let Some((header, body)) = rows.split_first() else {
         return Err(BulkError::Empty);
     };
-    let columns: Vec<Option<TableColumn>> =
-        header.iter().map(|h| TableColumn::from_header(h)).collect();
+    let columns: Vec<Option<TableColumn>> = header
+        .iter()
+        .map(|h| TableColumn::from_header(h).map(|c| resolve_property(project, c)))
+        .collect();
     // Two columns writing one field would make the later one win silently.
     for (i, column) in columns.iter().enumerate() {
         let Some(column) = column else { continue };
@@ -276,6 +307,8 @@ pub fn apply_table(
 
     let mut edits = Edits::new(project, catalog);
     let mut skipped = Vec::new();
+    let mut ignored = Vec::new();
+    let mut lines: BTreeMap<DeviceId, usize> = BTreeMap::new();
     for (index, row) in body.iter().enumerate() {
         let line = index + 2;
         let tag = row.get(tag_index).map_or("", |s| s.trim());
@@ -287,15 +320,25 @@ pub fn apply_table(
             skipped.push((line, format!("no device {tag}")));
             continue;
         };
+        // Two rows for one device would edit each other's result; the
+        // first one counts.
+        if let Some(&first) = lines.get(&device) {
+            skipped.push((line, format!("{tag} is already on line {first}")));
+            continue;
+        }
+        lines.insert(device, line);
         let cells: BTreeMap<&TableColumn, &str> = columns
             .iter()
             .zip(row)
             .filter_map(|(c, v)| c.as_ref().map(|c| (c, v.trim())))
             .collect();
-        edits.apply_row(device, &cells);
+        for note in edits.apply_row(device, &cells) {
+            ignored.push((line, note));
+        }
     }
     let mut outcome = edits.finish();
     outcome.skipped = skipped;
+    outcome.ignored = ignored;
     Ok(outcome)
 }
 
@@ -307,9 +350,7 @@ pub fn set_cell(
     column: &TableColumn,
     value: &str,
 ) -> Result<Option<Command>, BulkError> {
-    if column == &TableColumn::Tag {
-        return Err(BulkError::TagColumn);
-    }
+    check_single_column(column)?;
     if project.device(device).is_none() {
         return Err(BulkError::UnknownDevice(device.to_string()));
     }
@@ -329,9 +370,7 @@ pub fn fill(
     column: &TableColumn,
     value: &str,
 ) -> Result<Option<Command>, BulkError> {
-    if column == &TableColumn::Tag {
-        return Err(BulkError::TagColumn);
-    }
+    check_single_column(column)?;
     let mut edits = Edits::new(project, catalog);
     let mut cells = BTreeMap::new();
     cells.insert(column, value.trim());
@@ -339,6 +378,19 @@ pub fn fill(
         edits.apply_row(device, &cells);
     }
     Ok(edits.finish().command)
+}
+
+/// Columns one cell edit cannot change: the tag (renamed with F2), and the
+/// Manufacturer and Type number, which come with the part chosen by its
+/// Order number.
+fn check_single_column(column: &TableColumn) -> Result<(), BulkError> {
+    match column {
+        TableColumn::Tag => Err(BulkError::TagColumn),
+        TableColumn::Manufacturer | TableColumn::TypeNumber => {
+            Err(BulkError::PartColumnAlone(column.label()))
+        }
+        _ => Ok(()),
+    }
 }
 
 struct Edits<'a> {
@@ -360,23 +412,32 @@ impl<'a> Edits<'a> {
         }
     }
 
-    fn apply_row(&mut self, id: DeviceId, cells: &BTreeMap<&TableColumn, &str>) {
+    /// Applies one row; returns the edited cells it could not apply, and
+    /// why.
+    fn apply_row(&mut self, id: DeviceId, cells: &BTreeMap<&TableColumn, &str>) -> Vec<String> {
+        let mut notes = Vec::new();
         let Some(original) = self.project.device(id) else {
-            return;
+            return notes;
         };
         let mut device = self.devices.remove(&id).unwrap_or_else(|| original.clone());
+        // A cell that still shows the current value leaves it alone, so an
+        // unchanged paste changes nothing even where the text does not
+        // parse back to the same value (spaces, `4.0` vs `4`).
+        let changed = |column: &TableColumn| {
+            cells
+                .get(column)
+                .is_some_and(|&value| value != cell(self.project, original, column).trim())
+        };
         for (column, &value) in cells {
-            // A cell that still shows the current value leaves it alone, so
-            // an unchanged paste changes nothing even where the text does
-            // not parse back to the same value (spaces, `4.0` vs `4`).
-            if **column != TableColumn::OrderNumber
-                && value == cell(self.project, original, column).trim()
-            {
+            if !changed(column) {
                 continue;
             }
             match column {
-                TableColumn::Tag | TableColumn::Manufacturer | TableColumn::TypeNumber => {}
-                TableColumn::OrderNumber => {}
+                // The part columns are applied together below.
+                TableColumn::Tag
+                | TableColumn::Manufacturer
+                | TableColumn::OrderNumber
+                | TableColumn::TypeNumber => {}
                 TableColumn::Description => device.description = value.into(),
                 TableColumn::Property(key) => {
                     if value.is_empty() {
@@ -393,12 +454,28 @@ impl<'a> Edits<'a> {
                 }
             }
         }
-        if let Some(&order) = cells.get(&TableColumn::OrderNumber) {
-            let manufacturer = cells.get(&TableColumn::Manufacturer).copied();
-            let type_number = cells.get(&TableColumn::TypeNumber).copied();
-            self.set_part(&mut device, manufacturer, order, type_number);
+        let order_changed = changed(&TableColumn::OrderNumber);
+        let manufacturer_changed = changed(&TableColumn::Manufacturer);
+        let type_changed = changed(&TableColumn::TypeNumber);
+        match cells.get(&TableColumn::OrderNumber) {
+            Some(&order) if order_changed || manufacturer_changed => {
+                let manufacturer = cells.get(&TableColumn::Manufacturer).copied();
+                let type_number = cells.get(&TableColumn::TypeNumber).copied();
+                self.set_part(&mut device, manufacturer, order, type_number);
+            }
+            Some(_) if type_changed => notes.push(
+                "Type number not changed: it comes with the part; change the Order number \
+                 to pick another part"
+                    .to_owned(),
+            ),
+            None if manufacturer_changed || type_changed => notes.push(
+                "Manufacturer and Type number change only together with an Order number column"
+                    .to_owned(),
+            ),
+            _ => {}
         }
         self.devices.insert(id, device);
+        notes
     }
 
     fn set_part(
@@ -453,7 +530,12 @@ impl<'a> Edits<'a> {
             Some(first) => *first = id,
             None => device.parts.push(id),
         }
-        device.parts.dedup();
+        // The part is listed once, first.
+        let mut index = 0;
+        device.parts.retain(|&p| {
+            index += 1;
+            index == 1 || p != id
+        });
     }
 
     fn finish(self) -> BulkOutcome {
@@ -491,6 +573,7 @@ impl<'a> Edits<'a> {
             }),
             changed,
             skipped: Vec::new(),
+            ignored: Vec::new(),
         }
     }
 }

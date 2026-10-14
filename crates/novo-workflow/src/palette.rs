@@ -384,17 +384,22 @@ fn child_rows(
         });
     };
     if wants_next && let Some(symbol) = insert::mnemonic(library, query) {
-        // Devices that already have a main function (a coil) first, in tag
-        // order: those are the ones contacts belong to.
+        // Devices that already have a main function (a coil) first, in
+        // natural tag order (-K2 before -K10): those are the ones contacts
+        // belong to.
         let mut devices: Vec<_> = project
             .devices()
             .filter(|d| d.kind == novo_core::DeviceKind::General)
             .map(|d| {
                 let has_main = project.cross_references(d.id).iter().any(|r| r.main);
-                (!has_main, d.tag.clone(), d.id)
+                (!has_main, d.tag.to_string(), d.id)
             })
             .collect();
-        devices.sort();
+        devices.sort_by(|a, b| {
+            a.0.cmp(&b.0)
+                .then_with(|| novo_core::natural_cmp(&a.1, &b.1))
+                .then(a.2.cmp(&b.2))
+        });
         for (n, (_, _, id)) in devices.into_iter().enumerate() {
             push(symbol, id, EXACT + 400 - i32::try_from(n).unwrap_or(0));
         }
@@ -570,9 +575,18 @@ fn split_verb<'q>(info: &CommandInfo, query: &'q str) -> Option<(&'static str, &
 }
 
 fn command_rows(query: &str, wants_next: bool, sources: &Sources<'_>, rows: &mut Vec<Row>) {
+    // The longest verb phrase typed wins: `accept all` is the accept-all
+    // command, not `accept` with the argument `all`.
+    let longest = COMMANDS
+        .iter()
+        .filter_map(|info| split_verb(info, query))
+        .map(|(verb, _)| verb.len())
+        .max();
     for info in COMMANDS {
         // A verb: bare it runs, with words after it it runs on them.
-        if let Some((_, argument)) = split_verb(info, query) {
+        if let Some((verb, argument)) = split_verb(info, query)
+            && Some(verb.len()) == longest
+        {
             if argument.is_empty() {
                 rows.push(command_row(info, sources, "", EXACT + 200));
             } else {
