@@ -73,4 +73,7 @@ pub use strip::{
 pub use style::{
     Style, clear_override, default_symbol, overrides, set_strip_style, strip_style, style_of,
 };
-pub use suggest::{Suggestion, accept_suggestions, suggest_terminals};
+pub use suggest::{
+    DISMISS_KEY, Suggestion, accept_suggestions, dismiss_suggestion, restore_suggestion,
+    suggest_terminals,
+};

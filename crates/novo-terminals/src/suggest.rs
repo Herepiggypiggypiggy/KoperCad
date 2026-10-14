@@ -4,12 +4,21 @@
 //! user accepts them (all at once or one by one) instead of placing
 //! terminals by hand.
 //!
+//! The cabinet side is the location that already holds a terminal strip;
+//! when both or neither do, the location with more devices. A declined
+//! suggestion is remembered on the wire (`terminal.suggest = false`, see
+//! [`dismiss_suggestion`]) so it does not come back after every edit.
+//!
 //! The first cut looks at wires that run straight from one device pin to
 //! another. Wires through junctions are not suggested yet.
 
 use novo_core::{
-    DeviceId, DeviceKind, DeviceTag, Endpoint, Point, Project, Result, SymbolRole, Tx, WireId,
+    DeviceId, DeviceKind, DeviceTag, Endpoint, Point, Project, Result, SymbolRole, Tx, Value,
+    WireId,
 };
+
+/// Wire property that records a declined terminal suggestion.
+pub const DISMISS_KEY: &str = "terminal.suggest";
 
 use crate::place::{Drop, Placed, place_terminals};
 
@@ -74,16 +83,23 @@ fn midpoint_of_longest_stretch(project: &Project, wire: WireId) -> Option<Point>
         .map(|s| Point::new((s[0].x + s[1].x) / 2.0, (s[0].y + s[1].y) / 2.0))
 }
 
-/// Wires that cross a location boundary with no terminal on them, in page
-/// and wire order. The cabinet side is the location with more devices in
-/// the project; a tie goes to the wire's start.
+/// Wires that cross a location boundary with no terminal on them and no
+/// dismissal, in page and wire order. The cabinet side is the location that
+/// holds a terminal strip, else the one with more devices; a tie goes to the
+/// wire's start.
 pub fn suggest_terminals(project: &Project) -> Vec<Suggestion> {
+    let has_strip = |location: &[String]| {
+        project
+            .devices()
+            .any(|d| d.kind == DeviceKind::TerminalStrip && d.tag.location == location)
+    };
     let count_at = |location: &[String]| {
         project
             .devices()
             .filter(|d| d.tag.location == location)
             .count()
     };
+    let rank = |location: &[String]| (has_strip(location), count_at(location));
     let pages: Vec<_> = project.pages_in_order().iter().map(|p| p.id).collect();
     let mut wires: Vec<_> = project.wires().collect();
     wires.sort_by_key(|w| (pages.iter().position(|&p| p == w.page), w.id));
@@ -98,7 +114,10 @@ pub fn suggest_terminals(project: &Project) -> Vec<Suggestion> {
         if da.tag.location == db.tag.location {
             continue;
         }
-        let (internal, external) = if count_at(&db.tag.location) > count_at(&da.tag.location) {
+        if matches!(w.properties.get(DISMISS_KEY), Some(Value::Bool(false))) {
+            continue;
+        }
+        let (internal, external) = if rank(&db.tag.location) > rank(&da.tag.location) {
             (db, da)
         } else {
             (da, db)
@@ -149,4 +168,15 @@ pub fn accept_suggestions(tx: &mut Tx<'_>, suggestions: &[Suggestion]) -> Result
         placed.extend(place_terminals(tx, strip, &drops)?);
     }
     Ok(placed)
+}
+
+/// Declines the suggestion on a wire for good (undoable); clearing it with
+/// [`restore_suggestion`] brings the suggestion back.
+pub fn dismiss_suggestion(tx: &mut Tx<'_>, wire: WireId) -> Result<()> {
+    tx.set_property(wire, DISMISS_KEY, Some(Value::Bool(false)))
+}
+
+/// Forgets a declined suggestion on a wire.
+pub fn restore_suggestion(tx: &mut Tx<'_>, wire: WireId) -> Result<()> {
+    tx.set_property(wire, DISMISS_KEY, None)
 }

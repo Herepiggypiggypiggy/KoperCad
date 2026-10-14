@@ -740,3 +740,43 @@ fn wires_crossing_a_location_boundary_get_suggested_terminals() {
     // Accepted terminals end the suggestions.
     assert!(suggest_terminals(doc.project()).is_empty());
 }
+
+#[test]
+fn the_side_with_a_strip_is_the_cabinet_and_dismissals_stick() {
+    let mut doc = Document::default();
+    let (wires, _) = doc
+        .transact("Draw", |tx| {
+            let page = tx.add_page("1")?;
+            // A big field skid with more devices than the small cabinet.
+            let k1 = tx.add_device(tag("+CAB-K1"), "")?;
+            tx.add_terminal_strip(tag("+CAB-X5"))?;
+            let mut field = Vec::new();
+            for i in 1..=4 {
+                field.push(tx.add_device(tag(&format!("+SKID-M{i}")), "")?);
+            }
+            let ks = row_of_pins(tx, page, k1, &["2", "4"], 40.0, 20.0)?;
+            let m1 = row_of_pins(tx, page, field[0], &["U1", "V1"], 40.0, 100.0)?;
+            let a = tx.connect(Endpoint::pin(m1, 0), Endpoint::pin(ks, 0))?;
+            let b = tx.connect(Endpoint::pin(m1, 1), Endpoint::pin(ks, 1))?;
+            Ok([a, b])
+        })
+        .unwrap();
+    let suggestions = suggest_terminals(doc.project());
+    assert_eq!(suggestions.len(), 2);
+    assert_eq!(suggestions[0].strip.to_string(), "+CAB-X5");
+    assert_eq!(
+        doc.project()
+            .device(suggestions[0].internal)
+            .unwrap()
+            .tag
+            .to_string(),
+        "+CAB-K1"
+    );
+    doc.transact("Decline", |tx| dismiss_suggestion(tx, wires[0]))
+        .unwrap();
+    let left = suggest_terminals(doc.project());
+    assert_eq!(left.len(), 1);
+    assert_eq!(left[0].wire, wires[1]);
+    doc.undo().unwrap();
+    assert_eq!(suggest_terminals(doc.project()).len(), 2);
+}
