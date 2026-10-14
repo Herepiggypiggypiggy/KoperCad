@@ -33,3 +33,4 @@
 2026-10-14 18:33 UTC #30 fix pushed (ac067ff: renumber/rename under Refuse via temporary names); #31 fix pushed (caf760c: linked non-contact becomes main, DeviceHasMain); both sent to reviewer.
 2026-10-14 18:35 UTC Opened #46 (WS-01 Workbench window, graphite theme wiring, no save prompts, first save to Documents\NovoElectric; head 73e8194, rebuilt on main from WS-01's local patches). Sent to reviewer. Started WS-03 marks + page frame PR work.
 2026-10-14 18:37 UTC Reviewer: #42 READY (merged f6ee2f1); #36 CHANGES NEEDED (property_label panics on U+212A keys). Fixed (0f36bb3, ASCII lowering + test), merged main; checks running.
+2026-10-14 18:40 UTC Reviewer: #44 READY (eeb3aa6); #45 CHANGES NEEDED (NaN/inf height). Coordinator disputed #45 with evidence (record.rs non_finite_field rejects it first; texts.rs test covers NaN/inf and passes). Removed lead-fixes bundles/patches from handoff/ per reviewer note.

@@ -60,3 +60,7 @@ claude/data-model-amzaxu origin/main`, then new PR for new work.
   the two-group pass-through form.
 - PRs get squash-merged: rebase follow-ups with `git rebase --onto origin/main <old-head>`.
 - Commit trailers: Co-Authored-By Claude line + Claude-Session link (see git log).
+
+## Changed while this thread was paused (read first)
+- The coordinator session (session_01DZ68tTULUv7Uhe8ecKbC47) redid your lost `ws02-set-text` work from this file's description and pushed it to `claude/data-model-amzaxu` as PR #45 (head b0ad1b8): `Command::SetText`, `Tx::set_text`, `Page.structure`, `xref::Location.structure` + `Location::qualified`, `pages_in_order` by structure. This changed the novo-core public API without you: review #45 yourself when you resume and adjust anything you disagree with in a follow-up.
+- Open decision for you: a target page with no structure reads plainly (`3.4`) even from a structured reader page.
