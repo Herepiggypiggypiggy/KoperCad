@@ -2,17 +2,15 @@
 
 ## State (2026-10-14 20:20 UTC, written at cloud wrap-up)
 - PR #56 (phase 1: `novo-cli`, `novo-py`) **merged** as 67c3591.
-- PR #65 (follow-ups + reports), branch `claude/ws28-python-cli`, head **3354d4e**:
-  reviewer B READY and reviewer C READY, both on 3354d4e. Waits only on the
-  merge. Do **not** push to it again. CI red on it is the account-wide
-  "no runner assigned" problem (runner_id 0, no logs); the reviewers ran the
-  checks locally. If it ends up conflicting with main, ask the coordinator.
+- PR #65 (follow-ups + reports) **merged** at 20:22 UTC (READY from reviewers B
+  and C on 3354d4e). Branch `claude/ws28-python-cli` is spent; restart it from main
+  for new work.
 - This handoff PR (`claude/handoff-ws28`) only touches `handoff/ws28/`. If it
   conflicts with #65's copy of these files, keep this PR's version.
-- Nothing half-done in code. Next work starts as a **new PR from main after
-  #65 merges** (ROADMAP "Next").
+- Nothing half-done in code. Next work starts as a **new PR from main**
+  (ROADMAP "Next").
 
-## What exists (after #65)
+## What exists on main
 - `crates/novo-py/src/lib.rs`: `ScriptProject` = `novo_core::Document` + an optional
   `novo_storage::Session`. Each edit method builds one `Command` (one undo step) and
   `session.record`s the change set (also after undo/redo). Queries return
@@ -33,7 +31,7 @@
 
 ## Resume (no admin rights; Linux shown, Windows the same per user)
 ```
-git fetch origin && git checkout -B ws28-next origin/main   # after #65 merges
+git fetch origin && git checkout -B claude/ws28-python-cli origin/main
 export CARGO_TARGET_DIR=$HOME/target CARGO_INCREMENTAL=0
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings

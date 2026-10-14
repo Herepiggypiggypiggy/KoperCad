@@ -10,14 +10,14 @@ exports a BOM to Excel.
 - #56 (merged 67c3591): `novo-cli` and `novo-py` (`ScriptProject`, PyO3 shim behind
   `python`, abi3 wheel, `pip install --user` or venv). Crash-recovery guard and
   `overwrite=False` on `create`/`save_as`.
-- #65 (READY from B and C at 3354d4e, waiting to merge): `novo export pdf` on novo-pdf
+- #65 (merged 2026-10-14 20:22 UTC, READY from B and C at 3354d4e): `novo export pdf` on novo-pdf
   with library artwork (`--page`), `novo check` on novo-checks, report exports
   (`novo export bom|devices|wires|toc|reports`, Python `add_part`, `assign_part`,
   `report`, `export_bom`, `export_reports`), shared export guard and atomic write,
   plain clap errors, `NothingCreated` instead of panics, venv-first README.
   **The done-criterion passes headless** (`test_dol_bom_to_excel`).
 
-## Next, in order (one new PR from main after #65 merges)
+## Next, in order (one new PR from main)
 1. Review notes on #65 (all non-blocking):
    - `ScriptProject::execute_one`: on `NothingCreated`, undo the step first
      (`self.doc.undo()` and record the change set) so "a refused call changes

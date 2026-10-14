@@ -14,3 +14,4 @@
 2026-10-14 20:10 UTC Reviewer B READY on #65 at 3354d4e (4 small notes; reminder: no pushes after READY, new scope goes to a new PR).
 2026-10-14 20:18 UTC Reviewer C READY on #65 at 3354d4e (3 small notes). #65 has both READYs and waits on the coordinator's merge.
 2026-10-14 20:20 UTC Wrap-up: wrote this handoff on claude/handoff-ws28 (docs only). Cancelled my check-in. Nothing half-done in code.
+2026-10-14 20:23 UTC #65 merged. Merged main into the handoff branch (kept this branch's handoff/ws28) and marked #65 merged.
