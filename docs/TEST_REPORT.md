@@ -16,12 +16,13 @@ How a PR is tested: its branch is merged onto the current `main` (a
 | --- | --- | --- |
 | Model API v0 frozen, with full unit tests | Met | #1, #11, #14, #21 (saved JSON format pinned) and #26 merged. F1 (non-finite numbers) fixed in #11 and covered by `robustness.rs` |
 | Canvas draws model objects | Met | #4 merged; its `PageScene` adapter and headless GPU tests pass on main |
-| 10,000 objects at 60 fps | **Waiting on a real GPU** | Model side and CPU side pass at 10k (see Round 5). Only llvmpipe is available here: 53 ms/frame (debug). The release check is running on Tadjiro's PC |
+| 10,000 objects at 60 fps | Met | Release `canvas-demo` on Tadjiro's work PC (Quadro P1000, Vulkan, 2400x1350): at 10,000 objects 1135 fps average, 222 fps 1% low, 127 fps minimum. At 100,000 objects 113 fps average and 38.5 fps 1% low, with stutter while panning (not a Gate 0 criterion; worth a look before large projects) |
 | Save, close and reopen gives an identical project | Met | `gate0_storage.rs`: Gate 1 and a 10k page reopen with identical JSON, nets and potentials, also after incremental saves, undo and crash recovery |
 | Empty app installs and launches; CI green | Met | #3 merged. Its `installer` job on `798193a` built the installer, installed it as a standard (non-admin) user, found nothing in `HKLM`, and launched the app for 10 s. Linux launch verified under Xvfb |
 | No admin rights | Met | Per-user installer (`PrivilegesRequired=lowest`), `asInvoker` manifest checked in CI, standard-user install passes, no machine-wide paths anywhere in `crates/` or `scripts/` |
 
 main `11363c1` passes fmt, clippy and all 232 workspace tests on Linux.
+**Every Gate 0 criterion is met.**
 
 ## Round 6 (2026-10-14, main `9512822`): Gate 1 scenario
 
