@@ -1912,6 +1912,7 @@ name = "novo-parts"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+ "novo-terminals",
  "novo-tests",
  "serde",
  "serde_json",

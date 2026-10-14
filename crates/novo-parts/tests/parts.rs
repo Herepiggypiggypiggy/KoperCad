@@ -69,7 +69,8 @@ fn gate1_devices_get_real_parts_from_suggestions() {
     run(&mut doc, command);
     let command = remove_unused_parts(doc.project());
     run(&mut doc, command);
-    assert_eq!(missing_parts(doc.project()).len(), devices.len());
+    // The four -X1 terminals have no part either, now that -X1 has none.
+    assert_eq!(missing_parts(doc.project()).len(), devices.len() + 4);
 
     for &device in &devices {
         let top = suggest_for_device(&catalog, doc.project(), device, "", 1);
@@ -611,7 +612,7 @@ fn certain_parts_are_assigned_and_the_rest_proposed() {
     run(&mut doc, command);
     assert_eq!(
         novo_parts::missing_parts_summary(doc.project()).as_deref(),
-        Some("8 devices without a part")
+        Some("8 devices and 4 terminals without a part")
     );
 
     // The 2.2 kW motor has exactly one fitting part; a contactor has several.
@@ -857,5 +858,201 @@ fn property_labels_handle_non_ascii_keys() {
     assert_eq!(
         novo_parts::property_label("rated_current_A"),
         ("Rated current".to_string(), Some("A"))
+    );
+}
+
+// ----- Follow-ups from the #36 reviews and terminal parts (#35) ------------
+
+fn k1_part(doc: &Document, gate: &novo_tests::MotorStarter) -> novo_core::Part {
+    let k1 = doc.project().device(gate.k1).unwrap();
+    doc.project().part(k1.parts[0]).unwrap().clone()
+}
+
+#[test]
+fn part_cells_change_only_through_the_order_number() {
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let catalog = Catalog::starter();
+    let part = k1_part(&doc, &gate);
+
+    // A changed Type number with the same part is reported, not dropped.
+    let paste = format!(
+        "Tag\tManufacturer\tOrder number\tType number\n-K1\t{}\t{}\tSomething else\n",
+        part.manufacturer, part.order_number
+    );
+    let outcome = apply_table(doc.project(), &catalog, &paste).unwrap();
+    assert!(outcome.command.is_none());
+    assert_eq!(outcome.ignored.len(), 1);
+    assert_eq!(outcome.ignored[0].0, 2);
+    assert!(outcome.ignored[0].1.contains("Type number"));
+
+    // So is a Manufacturer change without an Order number column.
+    let outcome = apply_table(doc.project(), &catalog, "Tag\tManufacturer\n-K1\tABB\n").unwrap();
+    assert!(outcome.command.is_none());
+    assert_eq!(outcome.ignored.len(), 1);
+
+    // An unchanged Order number written differently changes nothing.
+    let paste = format!(
+        "Tag\tOrder number\n-K1\t{}\n",
+        part.order_number.to_lowercase()
+    );
+    let outcome = apply_table(doc.project(), &catalog, &paste).unwrap();
+    assert!(outcome.command.is_none());
+    assert!(outcome.ignored.is_empty());
+
+    // One cell or a fill of Manufacturer or Type number is refused.
+    for column in [
+        novo_parts::TableColumn::Manufacturer,
+        novo_parts::TableColumn::TypeNumber,
+    ] {
+        let err = novo_parts::set_cell(doc.project(), &catalog, gate.k1, &column, "x").unwrap_err();
+        assert!(matches!(err, novo_parts::BulkError::PartColumnAlone(_)));
+        let err = novo_parts::fill(doc.project(), &catalog, &[gate.k1], &column, "x").unwrap_err();
+        assert!(matches!(err, novo_parts::BulkError::PartColumnAlone(_)));
+    }
+
+    // A new Order number still picks another part.
+    let other = catalog
+        .suggest("K", "", 50)
+        .into_iter()
+        .find(|p| p.order_number != part.order_number)
+        .unwrap()
+        .clone();
+    let paste = format!(
+        "Tag\tManufacturer\tOrder number\n-K1\t{}\t{}\n",
+        other.manufacturer, other.order_number
+    );
+    let command = apply_table(doc.project(), &catalog, &paste)
+        .unwrap()
+        .command;
+    run(&mut doc, command);
+    assert_eq!(k1_part(&doc, &gate).order_number, other.order_number);
+}
+
+#[test]
+fn two_rows_for_one_device_keep_the_first() {
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let catalog = Catalog::starter();
+    let paste = "Tag\tDescription\n-K1\tfirst\n=A1+CAB-K1\tsecond\n";
+    let outcome = apply_table(doc.project(), &catalog, paste).unwrap();
+    assert_eq!(outcome.changed, 1);
+    assert_eq!(outcome.skipped.len(), 1);
+    assert_eq!(outcome.skipped[0].0, 3);
+    assert!(
+        outcome.skipped[0].1.contains("line 2"),
+        "{:?}",
+        outcome.skipped
+    );
+    run(&mut doc, outcome.command);
+    assert_eq!(doc.project().device(gate.k1).unwrap().description, "first");
+}
+
+#[test]
+fn property_headers_use_the_project_key_or_the_normal_form() {
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let catalog = Catalog::starter();
+    set_property(&mut doc, gate.k1, "rated_current_a", Value::Int(9));
+    let paste = "Tag\tproperties.Rated Current A\tproperties.Coil Voltage\n-K1\t12\t24 VDC\n";
+    let command = apply_table(doc.project(), &catalog, paste).unwrap().command;
+    run(&mut doc, command);
+    let k1 = doc.project().device(gate.k1).unwrap();
+    assert_eq!(k1.properties["rated_current_a"], Value::Int(12));
+    assert_eq!(k1.properties["coil_voltage"], Value::Text("24 VDC".into()));
+    assert!(!k1.properties.contains_key("Rated Current A"));
+    assert!(!k1.properties.contains_key("Coil Voltage"));
+    // Two headers that mean one property are refused.
+    let err = apply_table(
+        doc.project(),
+        &catalog,
+        "Tag\tproperties.coil_voltage\tproperties.Coil Voltage\n-K1\ta\tb\n",
+    )
+    .unwrap_err();
+    assert!(matches!(err, novo_parts::BulkError::DuplicateColumn { .. }));
+}
+
+#[test]
+fn terminals_get_their_own_part_and_are_listed_when_missing() {
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let catalog = Catalog::starter();
+    // -X1 carries a terminal block, which covers its terminals.
+    assert!(missing_parts(doc.project()).is_empty());
+    let terminals: Vec<novo_core::TerminalId> = doc
+        .project()
+        .terminals_of_strip(gate.x1)
+        .iter()
+        .map(|t| t.id)
+        .collect();
+    let command = clear_parts(doc.project(), &[gate.x1]);
+    run(&mut doc, command);
+    let mut expected = vec![AnyId::from(gate.x1)];
+    expected.extend(terminals.iter().map(|&t| AnyId::from(t)));
+    assert_eq!(missing_parts(doc.project()), expected);
+
+    // Each terminal gets its own article in one step.
+    let block = suggest_for_device(&catalog, doc.project(), gate.x1, "", 1)[0].clone();
+    let depth = doc.undo_depth();
+    let command = novo_parts::assign_terminal_part(doc.project(), &terminals, &block);
+    run(&mut doc, command);
+    assert_eq!(doc.undo_depth(), depth + 1);
+    let p = doc.project();
+    let id = p.terminal(terminals[0]).unwrap().part.unwrap();
+    assert_eq!(p.part(id).unwrap().order_number, block.order_number);
+    for &t in &terminals {
+        assert_eq!(novo_parts::terminal_part(p, t), Some(id));
+    }
+    assert_eq!(missing_parts(p), vec![AnyId::from(gate.x1)]);
+    assert!(!novo_parts::unused_parts(p).contains(&id));
+    // Assigning it again changes nothing.
+    assert!(novo_parts::assign_terminal_part(p, &terminals, &block).is_none());
+}
+
+#[test]
+fn a_strip_style_part_covers_its_kind_and_is_not_unused() {
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let catalog = Catalog::starter();
+    let block = suggest_for_device(&catalog, doc.project(), gate.x1, "", 1)[0].clone();
+    // The block is in the project but on no device: unused.
+    let command = clear_parts(doc.project(), &[gate.x1]);
+    run(&mut doc, command);
+    let id = novo_parts::find_project_part(doc.project(), &block.key()).unwrap();
+    assert!(novo_parts::unused_parts(doc.project()).contains(&id));
+
+    // The strip editor (novo-terminals) makes it the feed-through style.
+    doc.transact("Style", |tx| {
+        novo_terminals::set_strip_style(
+            tx,
+            gate.x1,
+            novo_core::TerminalKind::Feedthrough,
+            &novo_terminals::Style {
+                symbol: novo_core::SymbolKey(
+                    novo_terminals::default_symbol(novo_core::TerminalKind::Feedthrough).into(),
+                ),
+                part: Some(id),
+            },
+        )
+    })
+    .unwrap();
+    let p = doc.project();
+    assert!(!novo_parts::unused_parts(p).contains(&id));
+    assert!(novo_parts::remove_unused_parts(p).is_none_or(|c| {
+        match c {
+            novo_core::Command::Batch { commands, .. } => !commands.iter().any(
+                |c| matches!(c, novo_core::Command::Remove { id: r } if *r == AnyId::from(id)),
+            ),
+            _ => true,
+        }
+    }));
+    // Terminals 1 to 3 are feed-through and covered; PE is not.
+    let terminals = p.terminals_of_strip(gate.x1);
+    for t in &terminals[..3] {
+        assert_eq!(novo_parts::terminal_part(p, t.id), Some(id));
+    }
+    assert_eq!(
+        missing_parts(p),
+        vec![AnyId::from(gate.x1), AnyId::from(terminals[3].id)]
     );
 }
