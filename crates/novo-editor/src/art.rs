@@ -4,9 +4,9 @@
 use std::collections::HashMap;
 
 use novo_canvas::model::SymbolArt;
-use novo_canvas::{Color, Primitive, Shape, Stroke, Vec2};
+use novo_canvas::{Anchor, Color, Label, Primitive, Shape, Stroke, Vec2};
 use novo_core::SymbolInstance;
-use novo_symbols::{Graphic, Library, Symbol};
+use novo_symbols::{Align, Graphic, Library, Symbol};
 
 /// Dash and gap length of dashed artwork lines (mechanical links), in mm.
 const DASH: f32 = 1.5;
@@ -15,6 +15,8 @@ const GAP: f32 = 1.0;
 /// Symbol artwork from a symbol library, converted once per symbol.
 pub struct LibraryArt {
     shapes: HashMap<String, Vec<Primitive>>,
+    labels: HashMap<String, Vec<Label>>,
+    tags: HashMap<String, (Vec2, Anchor)>,
 }
 
 impl LibraryArt {
@@ -24,7 +26,23 @@ impl LibraryArt {
             .iter()
             .map(|s| (s.id.clone(), primitives(s, stroke)))
             .collect();
-        LibraryArt { shapes }
+        let labels = library
+            .iter()
+            .map(|s| (s.id.clone(), labels(s)))
+            .filter(|(_, l)| !l.is_empty())
+            .collect();
+        let tags = library
+            .iter()
+            .filter_map(|s| {
+                let a = s.anchors.iter().find(|a| a.role == "tag")?;
+                Some((s.id.clone(), (v(a.at), anchor(a.align))))
+            })
+            .collect();
+        LibraryArt {
+            shapes,
+            labels,
+            tags,
+        }
     }
 }
 
@@ -32,6 +50,45 @@ impl SymbolArt for LibraryArt {
     fn artwork(&self, symbol: &SymbolInstance) -> Option<Vec<Primitive>> {
         self.shapes.get(&symbol.symbol.0).cloned()
     }
+
+    fn labels(&self, symbol: &SymbolInstance) -> Vec<Label> {
+        self.labels
+            .get(&symbol.symbol.0)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    fn tag_anchor(&self, symbol: &SymbolInstance) -> Option<(Vec2, Anchor)> {
+        self.tags.get(&symbol.symbol.0).copied()
+    }
+}
+
+/// The library's text alignment as a canvas anchor: texts are vertically
+/// centred on their point (FORMAT.md).
+fn anchor(align: Align) -> Anchor {
+    match align {
+        Align::Left => Anchor::CenterLeft,
+        Align::Center => Anchor::Center,
+        Align::Right => Anchor::CenterRight,
+    }
+}
+
+/// Fixed artwork text (the M and 3~ of a motor) in symbol coordinates. The
+/// canvas places it with the symbol and draws it in the symbol colour.
+pub fn labels(symbol: &Symbol) -> Vec<Label> {
+    symbol
+        .graphics
+        .iter()
+        .filter_map(|g| match g {
+            Graphic::Text {
+                at,
+                text,
+                size,
+                align,
+            } => Some(Label::new(v(*at), text.clone(), *size as f32).anchored(anchor(*align))),
+            _ => None,
+        })
+        .collect()
 }
 
 fn v(p: [f64; 2]) -> Vec2 {
@@ -39,8 +96,7 @@ fn v(p: [f64; 2]) -> Vec2 {
 }
 
 /// The artwork of one symbol as canvas primitives in symbol coordinates.
-/// Fixed artwork text (the `M` of a motor) is not drawn yet: the canvas'
-/// `SymbolArt` hook returns primitives only.
+/// Its fixed text comes separately from [`labels`].
 pub fn primitives(symbol: &Symbol, stroke: Stroke) -> Vec<Primitive> {
     let mut out = Vec::new();
     let fill = |filled: bool| filled.then_some(stroke.color);
@@ -185,6 +241,26 @@ mod tests {
         for s in library.iter() {
             let prims = art.shapes.get(&s.id).unwrap();
             assert!(!prims.is_empty(), "{} has no artwork", s.id);
+        }
+    }
+
+    #[test]
+    fn motor_text_and_tag_anchor_come_from_the_library() {
+        let library = Library::builtin().unwrap();
+        let art = LibraryArt::new(&library, Stroke::default());
+        let motor = library.get("iec/motors/motor_3ph").unwrap();
+        let texts: Vec<String> = labels(motor).into_iter().map(|l| l.text).collect();
+        assert!(texts.iter().any(|t| t == "M"), "{texts:?}");
+        let tag = motor.anchors.iter().find(|a| a.role == "tag").unwrap();
+        assert_eq!(art.tags[&motor.id], (v(tag.at), anchor(tag.align)));
+        // Every Text graphic becomes one label, and only those.
+        for s in library.iter() {
+            let n = s
+                .graphics
+                .iter()
+                .filter(|g| matches!(g, Graphic::Text { .. }))
+                .count();
+            assert_eq!(art.labels.get(&s.id).map_or(0, Vec::len), n, "{}", s.id);
         }
     }
 
