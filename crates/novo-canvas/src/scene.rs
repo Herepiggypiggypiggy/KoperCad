@@ -140,9 +140,17 @@ impl Item {
     }
 
     /// Distance from `p` to the item's ink or text, and the index of the
-    /// label when text is nearest. Text wins ties, so a click inside a tag's
-    /// box picks the tag even where it overlaps a line.
+    /// label when text is nearest.
     pub fn nearest_part(&self, p: Vec2, zoom: f32) -> (f32, Option<usize>) {
+        let (ink, text) = self.parts_distance(p, zoom);
+        match text {
+            Some((d, i)) if d < ink => (d, Some(i)),
+            _ => (ink, None),
+        }
+    }
+
+    /// Distance to the ink, and to the nearest label with its index.
+    fn parts_distance(&self, p: Vec2, zoom: f32) -> (f32, Option<(f32, usize)>) {
         let ink = self
             .primitives
             .iter()
@@ -154,10 +162,7 @@ impl Item {
             .enumerate()
             .map(|(i, l)| (l.distance(p), i))
             .min_by(|a, b| a.0.total_cmp(&b.0));
-        match text {
-            Some((d, i)) if d <= ink => (d, Some(i)),
-            _ => (ink, None),
-        }
+        (ink, text)
     }
 
     /// True when any ink or text touches `rect`.
@@ -410,7 +415,7 @@ impl Scene {
     pub fn pick_all(&self, p: Vec2, tolerance: f32, zoom: f32) -> Vec<Hit> {
         let reach = tolerance + self.max_screen_half_width / zoom.max(f32::EPSILON);
         let rect = Aabb::from_center(p, Vec2::splat(reach));
-        let mut hits: Vec<(Hit, i32, u32)> = self
+        let mut hits: Vec<(Hit, f32, i32, u32)> = self
             .query_slots(&rect)
             .into_iter()
             .filter_map(|s| {
@@ -418,7 +423,17 @@ impl Scene {
                 if !self.pickable(slot) {
                     return None;
                 }
-                let (d, label) = slot.item.nearest_part(p, zoom);
+                // Ink beats text: a label counts as `tolerance` further away
+                // than it is, so a tag running over a neighbour's body never
+                // steals the click from that body. Text still wins where no
+                // line is near.
+                let (ink, text) = slot.item.parts_distance(p, zoom);
+                let (score, d, label) = match text {
+                    Some((t, i)) if t <= tolerance && (ink > tolerance || t + tolerance < ink) => {
+                        (t + tolerance, t, Some(i))
+                    }
+                    _ => (ink, ink, None),
+                };
                 (d <= tolerance).then(|| {
                     (
                         Hit {
@@ -426,18 +441,14 @@ impl Scene {
                             distance: d,
                             label,
                         },
+                        score,
                         self.layer_order(slot.item.layer),
                         s,
                     )
                 })
             })
             .collect();
-        hits.sort_by(|a, b| {
-            a.0.distance
-                .total_cmp(&b.0.distance)
-                .then(b.1.cmp(&a.1))
-                .then(b.2.cmp(&a.2))
-        });
+        hits.sort_by(|a, b| a.1.total_cmp(&b.1).then(b.2.cmp(&a.2)).then(b.3.cmp(&a.3)));
         hits.into_iter().map(|h| h.0).collect()
     }
 

@@ -647,11 +647,13 @@ fn junctions_of(w: &novo_core::Wire) -> [Option<JunctionId>; 2] {
 pub fn symbol_text(project: &Project, sym: &SymbolInstance) -> Option<String> {
     match &sym.role {
         SymbolRole::Device { device, .. } => project.device(*device).map(|d| d.tag.to_string()),
-        // One designation per level; levels of one terminal usually share it.
+        // Terminals sit a few mm apart on a strip, so they show only their
+        // own name (1, 2, ...); the full designation (-X1:2) would run over
+        // the neighbours. One name per level; levels usually share it.
         SymbolRole::Terminal { terminals } => {
             let mut names: Vec<String> = Vec::new();
             for t in terminals {
-                if let Some(n) = project.terminal_designation(*t)
+                if let Some(n) = project.terminal(*t).map(|t| t.name.clone())
                     && !names.contains(&n)
                 {
                     names.push(n);
@@ -929,31 +931,49 @@ mod tests {
     }
 
     #[test]
-    fn retagging_a_strip_relabels_its_terminals() {
+    fn terminals_show_their_name_and_never_steal_a_neighbours_click() {
         let (mut doc, page, ..) = doc();
-        let ((strip, sym), _) = doc
+        let ((t1, s1, s2), _) = doc
             .transact("strip", |tx| {
-                let strip = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
-                let t = tx.add_terminal(strip, "3")?;
-                let sym = tx.place_symbol(
-                    page,
-                    "iec/terminal",
-                    MPlacement::at(Point::new(60.0, 40.0)),
-                    vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
-                    SymbolRole::Terminal { terminals: vec![t] },
-                )?;
-                Ok((strip, sym))
+                let strip = tx.add_terminal_strip(DeviceTag::parse("=A1+CAB-X1")?)?;
+                let mut syms = Vec::new();
+                let mut first = None;
+                for (i, name) in ["1", "2"].into_iter().enumerate() {
+                    let t = tx.add_terminal(strip, name)?;
+                    first.get_or_insert(t);
+                    syms.push(tx.place_symbol(
+                        page,
+                        "iec/terminal",
+                        // 8 mm apart, as on the Gate 1 strip.
+                        MPlacement::at(Point::new(40.0 + 8.0 * i as f64, 140.0)),
+                        vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                        SymbolRole::Terminal { terminals: vec![t] },
+                    )?);
+                }
+                Ok((first.unwrap(), syms[0], syms[1]))
             })
             .unwrap();
         let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
-        let before = ps.scene().get(item_id(sym)).unwrap().labels[0].text.clone();
-        assert!(before.contains("X1"), "{before}");
+        assert_eq!(ps.scene().get(item_id(s1)).unwrap().labels[0].text, "1");
+        // Just inside -X1:2's outline, where -X1:1's tag box runs over it:
+        // the body wins over the neighbour's text.
+        let p = Vec2::new(48.0, 138.5);
+        let tag = &ps.scene().get(item_id(s1)).unwrap().labels[0];
+        assert!(
+            tag.distance(p) < 0.5,
+            "the repro needs the tag over the body"
+        );
+        let hit = ps.scene().pick(p, 1.0, 1.0).unwrap();
+        assert_eq!(hit.id, item_id(s2));
+        assert_eq!(hit.label, None);
+        // Renaming the terminal relabels its symbol.
         let (_, changes) = doc
-            .transact("retag", |tx| tx.set_tag(strip, DeviceTag::parse("-X9")?))
+            .transact("rename", |tx| {
+                tx.update::<novo_core::Terminal>(t1, |t| t.name = "PE".into())
+            })
             .unwrap();
         assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
-        let after = &ps.scene().get(item_id(sym)).unwrap().labels[0].text;
-        assert!(after.contains("X9") && !after.contains("X1"), "{after}");
+        assert_eq!(ps.scene().get(item_id(s1)).unwrap().labels[0].text, "PE");
     }
 
     #[test]
