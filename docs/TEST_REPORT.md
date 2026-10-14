@@ -26,6 +26,15 @@ ran on llvmpipe here rather than skipping.
   build.
 - **No admin rights:** #4 adds no machine-wide paths, registry access or
   elevation.
+- **Open PRs merged onto `af01a66`.** #3 (app shell, head `798193a`) merges
+  cleanly: fmt, clippy and 223 tests pass. #20 (theme and icons, head
+  `a98788e`) has a real conflict in `Cargo.toml` with main: both sides add
+  `egui` to `[workspace.dependencies]`. Main adds it with default
+  features, and #20 adds it with `default-features = false`. With main's
+  entry kept and #20's other additions (`novo-theme`, `egui-phosphor`), fmt,
+  clippy and 197 tests pass. #20 needs a rebase to pick one `egui` entry.
+  Neither PR adds machine-wide paths. #3's installer still asks for
+  `PrivilegesRequired=lowest`, and its CI fails if anything lands in `HKLM`.
 - **Storage tests tightened after review of #23.** The netlist comparison
   across a reload now covers each net's `defined`, `carried` and
   `reachable` potentials, not only the shown ones. A second crash-recovery
