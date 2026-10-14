@@ -11,9 +11,9 @@ Integration lead for 2026-10-14 17:30 to 20:30 UTC: merge on READY, staff the re
 - Handoffs in the repo (#44, #60, #66, this PR).
 
 ## Next for whoever leads (in order)
-1. Merge #71 as soon as C says READY; main has the #64 terminal-numbering regression.
-2. Land #53 (Gate 1 in the app). Then the tester drives the Gate 1 scenario through `NovoApp::execute` and flips its ignored tests.
-3. Merge #65, #68, #70 and #72 on their reviewers' READY. Merge the cloud sessions' handoff PRs after reading them.
-4. Coordinator chore: move `lopdf` (a dev-dependency in novo-app and novo-pdf after #53) into `[workspace.dependencies]`.
-5. Route the follow-ups listed in MAIN-HANDOFF §0 "Follow-ups owed" to their owning threads.
-6. Owner items: Actions billing; repo history decision and visibility; Windows check of single-click selection and the experimental build.
+1. Get #72 (one terminal article source) reviewed by the main reviewer and merged. Expect a trivial novo-reports/Cargo.toml conflict with #68: keep one `novo-terminals` line.
+2. Close #73 (superseded by #69).
+3. Tester: drive the Gate 1 scenario through `NovoApp::execute` now that #53 is in, and flip the ignored tests.
+4. Move `lopdf` (a dev-dependency in novo-app and novo-pdf) into `[workspace.dependencies]`.
+5. Route the follow-ups in MAIN-HANDOFF §0 to their owning threads.
+6. Owner items: Actions billing; repo history decision and visibility; a Windows check of single-click selection and of the experimental build.
