@@ -125,6 +125,63 @@ impl Default for ModelStyle {
     }
 }
 
+/// How a junction is drawn. Until novo-core stores a junction's
+/// orientation every junction is a [`JunctionGlyph::Dot`]; the oriented
+/// glyphs are ready for when it does (Tab cycles them, see
+/// `widget::CanvasOutput::cycle_orientation`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JunctionGlyph {
+    /// A connection dot.
+    Dot,
+    /// A T: the dot plus stubs on the three connected sides. `stem` is the
+    /// quarter turn (0 = down, 1 = left, 2 = up, 3 = right, clockwise on
+    /// screen) of the branch leaving the through line.
+    Tee { stem: u8 },
+    /// A corner joining two sides; `quarter_turns` rotates the default
+    /// (right and down) clockwise.
+    Corner { quarter_turns: u8 },
+}
+
+/// Length of the orientation stubs on oriented junctions, in mm.
+pub const JUNCTION_STUB: f32 = 1.5;
+
+/// Unit direction of a quarter turn, clockwise on screen from "down"
+/// (y grows downwards).
+fn quarter_dir(q: u8) -> Vec2 {
+    match q % 4 {
+        0 => Vec2::new(0.0, 1.0),
+        1 => Vec2::new(-1.0, 0.0),
+        2 => Vec2::new(0.0, -1.0),
+        _ => Vec2::new(1.0, 0.0),
+    }
+}
+
+/// The primitives of a junction glyph at `pos`.
+pub fn junction_glyph(glyph: JunctionGlyph, pos: Vec2, style: &ModelStyle) -> Vec<Primitive> {
+    let dot = Primitive::filled(Shape::circle(pos, style.junction_radius), style.wire.color);
+    let stubs = |dirs: &[Vec2]| {
+        dirs.iter()
+            .map(|d| Primitive::stroked(Shape::line(pos, pos + *d * JUNCTION_STUB), style.wire))
+            .collect::<Vec<_>>()
+    };
+    match glyph {
+        JunctionGlyph::Dot => vec![dot],
+        JunctionGlyph::Tee { stem } => {
+            // The stem and the through line across it.
+            let mut out = stubs(&[
+                quarter_dir(stem),
+                quarter_dir(stem + 1),
+                quarter_dir(stem + 3),
+            ]);
+            out.push(dot);
+            out
+        }
+        JunctionGlyph::Corner { quarter_turns } => {
+            stubs(&[quarter_dir(quarter_turns + 3), quarter_dir(quarter_turns)])
+        }
+    }
+}
+
 /// Layers a page scene uses.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ModelLayers {
@@ -373,12 +430,8 @@ impl PageScene {
             return;
         };
         let p = vec(j.position);
-        let item = Item::new(self.layers.wires)
-            .with(Primitive::filled(
-                Shape::circle(p, self.style.junction_radius),
-                self.style.wire.color,
-            ))
-            .with_snap(SnapPoint::connection(p));
+        let mut item = Item::new(self.layers.wires).with_snap(SnapPoint::connection(p));
+        item.primitives = junction_glyph(JunctionGlyph::Dot, p, &self.style);
         self.put(id.into(), item);
     }
 
@@ -760,6 +813,35 @@ mod tests {
         let label = &ps.scene().get(item_id(k1)).unwrap().labels[0];
         assert_eq!(label.anchor, Anchor::CenterLeft);
         assert!(label.pos.x > 100.0, "{label:?}");
+    }
+
+    #[test]
+    fn junction_glyphs_point_where_they_say() {
+        let style = ModelStyle::default();
+        let ends = |g| -> Vec<Vec2> {
+            junction_glyph(g, Vec2::ZERO, &style)
+                .into_iter()
+                .filter_map(|p| match p.shape {
+                    Shape::Line { b, .. } => Some(b / JUNCTION_STUB),
+                    _ => None,
+                })
+                .collect()
+        };
+        // A T with its stem down: stem down, through line left and right.
+        let tee = ends(JunctionGlyph::Tee { stem: 0 });
+        assert_eq!(tee.len(), 3);
+        for d in [Vec2::Y, Vec2::X, -Vec2::X] {
+            assert!(tee.iter().any(|e| e.distance(d) < 1e-6), "{tee:?}");
+        }
+        // One quarter turn clockwise: the stem points left.
+        let turned = ends(JunctionGlyph::Tee { stem: 1 });
+        assert!(turned.iter().any(|e| e.distance(-Vec2::X) < 1e-6));
+        assert!(!turned.iter().any(|e| e.distance(Vec2::X) < 1e-6));
+        // The default corner joins right and down.
+        let corner = ends(JunctionGlyph::Corner { quarter_turns: 0 });
+        assert_eq!(corner.len(), 2);
+        assert!(corner.iter().any(|e| e.distance(Vec2::X) < 1e-6));
+        assert!(corner.iter().any(|e| e.distance(Vec2::Y) < 1e-6));
     }
 
     #[test]
