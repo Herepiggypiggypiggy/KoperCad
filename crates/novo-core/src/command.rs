@@ -9,12 +9,15 @@
 use serde::{Deserialize, Serialize};
 
 use crate::entity::{
-    CableCore, DeviceKind, Endpoint, PageFormat, PageKind, Pin, PotentialKind, PotentialSpec,
-    ProjectInfo, SymbolKey, SymbolRole, TextContent, TextPlacement, Value,
+    CableCore, DeviceKind, Endpoint, PageFormat, PageKind, Pin, PotentialKind, PotentialSet,
+    PotentialSpec, ProjectInfo, SymbolKey, SymbolRole, TextContent, TextPlacement, Value,
 };
 use crate::error::Result;
 use crate::geom::{Placement, Point};
-use crate::id::{AnyId, CableId, DeviceId, PageId, PartId, PotentialId, SymbolId, TextId, WireId};
+use crate::id::{
+    AnyId, CableId, DeviceId, PageId, PartId, PotentialId, PotentialSystemId, SymbolId, TerminalId,
+    TextId, WireId,
+};
 use crate::record::Record;
 use crate::tag::DeviceTag;
 use crate::tx::Tx;
@@ -121,6 +124,31 @@ pub enum Command {
         wires: Vec<WireId>,
         potentials: Vec<PotentialSpec>,
     },
+    /// Adds a supply system and its potentials; see
+    /// [`Tx::add_potential_system`].
+    AddPotentialSystem {
+        name: String,
+        set: PotentialSet,
+        #[serde(default)]
+        frequency_hz: Option<f64>,
+    },
+    /// Feeds a system's potentials from a source symbol's pins, in order.
+    FeedSystem {
+        symbol: SymbolId,
+        pins: Vec<u16>,
+        system: PotentialSystemId,
+    },
+    /// Sets or clears the potential one pin defines.
+    SetPinFeed {
+        symbol: SymbolId,
+        pin: u16,
+        potential: Option<PotentialId>,
+    },
+    /// Sets or clears the potential a terminal feeds.
+    SetTerminalFeed {
+        terminal: TerminalId,
+        potential: Option<PotentialId>,
+    },
     AddPotential {
         name: String,
         #[serde(default)]
@@ -202,6 +230,10 @@ impl Command {
             Command::SetWirePotential { .. } | Command::AssignPotentials { .. } => {
                 "Assign potential".into()
             }
+            Command::AddPotentialSystem { .. } => "Add supply system".into(),
+            Command::FeedSystem { .. }
+            | Command::SetPinFeed { .. }
+            | Command::SetTerminalFeed { .. } => "Feed potential".into(),
             Command::AddTerminal { .. } => "Add terminal".into(),
             Command::AddCable { .. } => "Add cable".into(),
             Command::AssignCore { .. } => "Assign cable core".into(),
@@ -268,6 +300,7 @@ impl Tx<'_> {
                     pins,
                     bridges,
                     pass_through,
+                    feeds: Vec::new(),
                     properties: Default::default(),
                 })?
                 .into()
@@ -321,6 +354,39 @@ impl Tx<'_> {
             Command::AssignPotentials { wires, potentials } => {
                 let created = self.assign_potentials(&wires, potentials)?;
                 return Ok(created.into_iter().map(AnyId::from).collect());
+            }
+            Command::AddPotentialSystem {
+                name,
+                set,
+                frequency_hz,
+            } => {
+                let (system, created) = self.add_potential_system(name, set, frequency_hz)?;
+                return Ok(std::iter::once(system.into())
+                    .chain(created.into_iter().map(AnyId::from))
+                    .collect());
+            }
+            Command::FeedSystem {
+                symbol,
+                pins,
+                system,
+            } => {
+                self.feed_system(symbol, &pins, system)?;
+                return Ok(Vec::new());
+            }
+            Command::SetPinFeed {
+                symbol,
+                pin,
+                potential,
+            } => {
+                self.set_pin_feed(symbol, pin, potential)?;
+                return Ok(Vec::new());
+            }
+            Command::SetTerminalFeed {
+                terminal,
+                potential,
+            } => {
+                self.set_terminal_feed(terminal, potential)?;
+                return Ok(Vec::new());
             }
             Command::AddPotential {
                 name,

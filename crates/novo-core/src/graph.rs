@@ -13,7 +13,8 @@
 //!
 //! Contacts never join nets: whether a contact conducts is simulation state.
 //! A potential is defined on a net by a potential definition point
-//! (`SymbolRole::PotentialFeed`), a wire with `Wire::potential`, or a
+//! (`SymbolRole::PotentialFeed`), a source pin (`SymbolInstance::feeds`), a
+//! supply terminal (`Terminal::feed`), a wire with `Wire::potential`, or a
 //! terminal named like a supply potential (`-X4:PE` defines `PE`) when
 //! [`PotentialRules::from_terminal_names`](crate::PotentialRules) is on. A
 //! potential carries on through switched poles (`SymbolInstance::pass_through`), so the
@@ -22,7 +23,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use crate::entity::{Endpoint, SameName, SymbolRole};
-use crate::id::{DeviceId, PageId, PotentialId, SymbolId, WireId};
+use crate::id::{AnyId, DeviceId, PageId, PotentialId, SymbolId, WireId};
 use crate::project::Project;
 
 /// Index of a net within one [`Netlist`]. Only meaningful for the netlist
@@ -57,9 +58,29 @@ pub struct Net {
     /// "which sources can feed this net" read this instead. Empty when the
     /// net defines its own potential.
     pub reachable: Vec<PotentialId>,
+    /// What defines each of `defined`, sorted: a feed symbol, a source
+    /// symbol's pin feed or a supply terminal, a wire, or a terminal named
+    /// like the potential. A short names both sides here.
+    pub sources: Vec<PotentialSource>,
+}
+
+/// One definition of a potential on a net.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct PotentialSource {
+    pub potential: PotentialId,
+    /// The symbol, wire or terminal that defines it.
+    pub by: AnyId,
 }
 
 impl Net {
+    fn define(&mut self, potential: PotentialId, by: impl Into<AnyId>) {
+        self.defined.push(potential);
+        self.sources.push(PotentialSource {
+            potential,
+            by: by.into(),
+        });
+    }
+
     /// The net's potential when exactly one applies; `None` for a net without
     /// one, a short, or a net switched between several.
     pub fn potential(&self) -> Option<PotentialId> {
@@ -276,6 +297,7 @@ impl Netlist {
                     defined: Vec::new(),
                     carried: Vec::new(),
                     reachable: Vec::new(),
+                    sources: Vec::new(),
                 });
                 id
             });
@@ -310,15 +332,23 @@ impl Netlist {
             if let SymbolRole::PotentialFeed { potential } = symbol.role {
                 for node in pins_of(symbol.id, symbol.pins.len()) {
                     let net = by_endpoint[&endpoints[node]].0 as usize;
-                    nets[net].defined.push(potential);
+                    nets[net].define(potential, symbol.id);
                 }
+            }
+        }
+        // Source pins define their potential on the pin's net.
+        for symbol in project.symbols() {
+            let base = first_pin[&symbol.id];
+            for feed in &symbol.feeds {
+                let net = by_endpoint[&endpoints[base + usize::from(feed.pin)]].0 as usize;
+                nets[net].define(feed.potential, symbol.id);
             }
         }
         // Wires with a potential define it on their net.
         for wire in project.wires() {
             if let Some(potential) = wire.potential {
                 let net = by_endpoint[&wire.from].0 as usize;
-                nets[net].defined.push(potential);
+                nets[net].define(potential, wire.id);
             }
         }
         // Under the rule, a terminal named like a supply potential
@@ -332,13 +362,22 @@ impl Netlist {
                 by_name
             });
         for terminal in project.terminals() {
+            if let (Some(potential), Some(&node)) = (
+                terminal.feed,
+                by_terminal.get(&terminal.id).and_then(|n| n.first()),
+            ) {
+                let net = by_endpoint[&endpoints[node]].0 as usize;
+                nets[net].define(potential, terminal.id);
+            }
             if let (Some(potentials), Some(nodes)) = (
                 supply.get(terminal.name.as_str()),
                 by_terminal.get(&terminal.id),
             ) && let Some(&node) = nodes.first()
             {
                 let net = by_endpoint[&endpoints[node]].0 as usize;
-                nets[net].defined.extend(potentials);
+                for &potential in potentials {
+                    nets[net].define(potential, terminal.id);
+                }
             }
         }
         let feeds: BTreeMap<PotentialId, Vec<usize>> =
@@ -378,6 +417,8 @@ impl Netlist {
             net.defined.dedup();
             net.carried.sort();
             net.carried.dedup();
+            net.sources.sort();
+            net.sources.dedup();
             net.potentials = if net.defined.is_empty() {
                 net.carried.clone()
             } else {

@@ -1758,3 +1758,50 @@ fn terminal_parts_are_referenced_and_cleared_with_the_part() {
         .is_err()
     );
 }
+
+#[test]
+fn optional_pins_and_rated_current() {
+    let mut doc = Document::default();
+    let ((q1, part), _) = doc
+        .transact("Breaker", |tx| {
+            let page = tx.add_page("1")?;
+            let q1 = tx.add_device(DeviceTag::parse("-Q1")?, "Breaker")?;
+            tx.place_symbol(
+                page,
+                "iec/protection/breaker",
+                Placement::at(Point::new(0.0, 0.0)),
+                vec![
+                    Pin::new("1", 0.0, 0.0),
+                    Pin::new("2", 0.0, 10.0),
+                    Pin::new("PE", 5.0, 10.0).optional(),
+                ],
+                SymbolRole::Device {
+                    device: q1,
+                    main: true,
+                },
+            )?;
+            let part = tx.add_part("Acme", "B16")?;
+            tx.update::<Part>(part, |p| {
+                p.properties
+                    .insert(RATED_CURRENT_A.into(), Value::Float(16.0));
+            })?;
+            Ok((q1, part))
+        })
+        .unwrap();
+    let json = doc.project().to_json();
+    assert_eq!(json.matches("\"optional\": true").count(), 1);
+    let loaded = Project::from_json(&json).unwrap();
+    let pins = &loaded.symbols().next().unwrap().pins;
+    assert_eq!(pins.iter().filter(|p| p.optional).count(), 1);
+
+    assert_eq!(doc.project().rated_current_a(q1), None);
+    doc.transact("Assign", |tx| tx.assign_part(q1, part))
+        .unwrap();
+    assert_eq!(doc.project().rated_current_a(q1), Some(16.0));
+    // A value on the device overrides its part.
+    doc.transact("Override", |tx| {
+        tx.set_property(q1, RATED_CURRENT_A, Some(Value::Int(10)))
+    })
+    .unwrap();
+    assert_eq!(doc.project().rated_current_a(q1), Some(10.0));
+}

@@ -17,7 +17,7 @@
       "revision": 3
     }
   },
-  "next_id": 24,
+  "next_id": 27,
   "parts": [
     {
       "id": 3,
@@ -44,6 +44,20 @@
       "name": "L1",
       "kind": "line",
       "voltage": 400.0,
+      "properties": {}
+    },
+    {
+      "id": 24,
+      "name": "L+",
+      "kind": "dc_positive",
+      "voltage": 24.0,
+      "properties": {}
+    },
+    {
+      "id": 25,
+      "name": "L-",
+      "kind": "dc_negative",
+      "voltage": null,
       "properties": {}
     }
   ],
@@ -508,6 +522,18 @@
         "anchor": "bottom_left"
       },
       "height_mm": 2.5,
+      "properties": {}
+    }
+  ],
+  "potential_systems": [
+    {
+      "id": 26,
+      "name": "24 V DC",
+      "voltage": 24.0,
+      "members": [
+        24,
+        25
+      ],
       "properties": {}
     }
   ]

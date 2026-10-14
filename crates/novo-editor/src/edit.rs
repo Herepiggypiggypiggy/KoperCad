@@ -153,6 +153,7 @@ pub fn place(
         pins,
         bridges,
         pass_through,
+        feeds: Vec::new(),
         properties: Default::default(),
     })?;
     if options.auto_connect {
