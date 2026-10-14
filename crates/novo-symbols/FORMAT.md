@@ -150,7 +150,9 @@ the symbol key and pins per instance, so they cannot drift apart. Variants
 (`terminal_n`, `terminal_pe`, multi-level, fused, disconnect) reuse the same
 clamp and add marks around it. Jumpers between clamps are the
 `connectivity/bridge_*` symbols; plug-in connector pieces are
-`terminals/plug`, `socket` and `plug_socket`.
+`terminals/plug`, `socket` and `plug_socket`. A strip is closed with
+`terminals/end_plate` and held on the rail by `terminals/end_bracket`;
+both are pure graphics (`behavior.kind = "none"`) with no connections.
 
 ## Function types
 
@@ -202,7 +204,7 @@ Two parameters name connections, and they mean different things:
 | --- | --- |
 | `none` | none (pure graphics: earth, interruption point, potential feed) |
 | `conductor` | **`poles`** (always joined: terminals, connectors, bridges) |
-| `contact` | **`poles`**, **`normally`** = `open` \| `closed` \| `changeover`, `latching` (bool; selector, E-stop), `delay` = `on` \| `off` |
+| `contact` | **`poles`**, **`normally`** = `open` \| `closed` \| `changeover`, `latching` (bool; selector, E-stop), `delay` = `on` \| `off`, `center_off` (bool, changeover only: a middle position where the common joins neither side, as on an I-0-II switch) |
 | `coil` | **`poles`**, `delay` = `on` \| `off` |
 | `fuse` | **`poles`**, `switched` (bool) |
 | `breaker` | **`poles`**, **`trip`** (non-empty subset of `thermal`, `magnetic`, `residual`), `adjustable` (bool) |

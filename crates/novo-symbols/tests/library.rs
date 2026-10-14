@@ -496,7 +496,10 @@ fn aliases_are_checked_and_unique_per_library() {
 fn terminal_clamps_share_one_drawing() {
     use novo_symbols::Graphic;
     let lib = builtin();
-    let terminals: Vec<_> = lib.by_function("terminal").collect();
+    let terminals: Vec<_> = lib
+        .by_function("terminal")
+        .filter(|s| !s.function.starts_with("terminal.accessory"))
+        .collect();
     assert!(terminals.len() >= 6);
     for symbol in terminals {
         let clamps: Vec<_> = symbol
@@ -518,6 +521,36 @@ fn terminal_clamps_share_one_drawing() {
             pitch.iter().all(|&y| y == 0.0 || y == 8.0 || y == 16.0),
             "{}: {pitch:?}",
             symbol.id
+        );
+    }
+}
+
+#[test]
+fn changeover_switch_has_an_off_position_and_strips_have_end_pieces() {
+    let lib = builtin();
+    let switch = lib.get("iec/switches/changeover_switch_3p").unwrap();
+    assert_eq!(
+        switch
+            .behavior
+            .params
+            .get("center_off")
+            .and_then(|v| v.as_bool()),
+        Some(true)
+    );
+    assert!(
+        behavior_messages("[behavior]\nkind = \"contact\"\nnormally = \"open\"\ncenter_off = true\npoles = [[\"1\", \"2\"]]")
+            .iter()
+            .any(|m| m.contains("center_off only applies"))
+    );
+    for (alias, id) in [
+        ("term", "iec/terminals/terminal"),
+        ("endplate", "iec/terminals/end_plate"),
+        ("endstop", "iec/terminals/end_bracket"),
+    ] {
+        assert_eq!(
+            lib.by_alias(alias).map(|s| s.id.as_str()),
+            Some(id),
+            "{alias}"
         );
     }
 }

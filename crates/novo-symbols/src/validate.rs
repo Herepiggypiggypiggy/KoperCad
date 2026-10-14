@@ -224,7 +224,10 @@ pub fn validate(symbol: &Symbol) -> Vec<Issue> {
 const BEHAVIOR_SCHEMA: &[(&str, &[&str])] = &[
     ("none", &[]),
     ("conductor", &["poles"]),
-    ("contact", &["poles", "normally", "latching", "delay"]),
+    (
+        "contact",
+        &["poles", "normally", "latching", "delay", "center_off"],
+    ),
     ("coil", &["poles", "delay"]),
     ("fuse", &["poles", "switched"]),
     ("breaker", &["poles", "trip", "adjustable"]),
@@ -306,7 +309,14 @@ fn check_behavior(symbol: &Symbol, ids: &HashSet<&str>) -> Vec<String> {
     string_in("input", &["ac", "dc"], &mut out);
     string_in("output", &["ac", "dc"], &mut out);
     string_in("signal", &["digital", "analog"], &mut out);
-    for key in ["latching", "adjustable", "switched"] {
+    if params
+        .get("center_off")
+        .is_some_and(|v| v.as_bool() == Some(true))
+        && params.get("normally").and_then(|v| v.as_str()) != Some("changeover")
+    {
+        out.push("behavior.center_off only applies to normally = \"changeover\"".into());
+    }
+    for key in ["latching", "adjustable", "switched", "center_off"] {
         if params.get(key).is_some_and(|v| v.as_bool().is_none()) {
             out.push(format!("behavior.{key} must be true or false"));
         }
