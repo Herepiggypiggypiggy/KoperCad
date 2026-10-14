@@ -4,6 +4,72 @@
 //! cabinet layout, reports, simulation) is a projection of the model defined
 //! here. Other crates read it through queries and change it only through
 //! commands, so undo/redo, scripting and AI edits all go through one door.
+//!
+//! # Shape of the API
+//!
+//! - [`Project`] holds every object in typed tables keyed by typed ids
+//!   ([`PageId`], [`DeviceId`], ...). Reads are plain method calls.
+//! - Edits run inside [`Project::transact`] or, with undo, [`Document::transact`].
+//!   The closure gets a [`Tx`]; each step is checked (no dangling references,
+//!   pins exist, wires stay on one page) and a failed edit leaves nothing behind.
+//! - [`Command`] is the same set of edits as serializable data, for macros,
+//!   Python (WS-28) and the AI assistant (WS-23).
+//! - [`Netlist`] is the connectivity graph, derived on demand.
+//!
+//! ```
+//! use novo_core::{Document, DeviceTag, Endpoint, Pin, Placement, Point, SymbolRole};
+//!
+//! let mut doc = Document::default();
+//! let (k1_a1, _) = doc.transact("Place coil", |tx| {
+//!     let page = tx.add_page("1")?;
+//!     let k1 = tx.add_device(DeviceTag::parse("-K1")?, "Main contactor")?;
+//!     let coil = tx.place_symbol(
+//!         page,
+//!         "iec/coil",
+//!         Placement::at(Point::new(100.0, 50.0)),
+//!         vec![Pin::new("A1", 0.0, -5.0), Pin::new("A2", 0.0, 5.0)],
+//!         SymbolRole::Device { device: k1, main: true },
+//!     )?;
+//!     Ok(Endpoint::pin(coil, 0))
+//! })?;
+//! assert_eq!(doc.project().endpoint_position(k1_a1), Some(Point::new(100.0, 45.0)));
+//! doc.undo()?;
+//! assert_eq!(doc.project().devices().count(), 0);
+//! # Ok::<(), novo_core::ModelError>(())
+//! ```
 
-/// Placeholder until WS-02 lands API v0.
+mod command;
+mod document;
+mod entity;
+mod error;
+mod geom;
+mod graph;
+mod id;
+mod json;
+mod project;
+mod record;
+mod tag;
+mod tx;
+
+pub use command::Command;
+pub use document::{DEFAULT_HISTORY_LIMIT, Document, Outcome};
+pub use entity::{
+    Cable, CableCore, Device, DeviceKind, Endpoint, Junction, Page, PageFormat, PageKind,
+    PaperSize, Part, Pin, PinRef, Potential, PotentialKind, ProjectInfo, Properties,
+    SymbolInstance, SymbolKey, SymbolRole, Terminal, TerminalKind, Value, Wire,
+};
+pub use error::{ModelError, Result};
+pub use geom::{Placement, Point, Rotation};
+pub use graph::{Net, NetId, Netlist};
+pub use id::{
+    AnyId, CableId, DeviceId, EntityKind, JunctionId, PageId, PartId, PotentialId, SymbolId,
+    TerminalId, WireId,
+};
+pub use json::JSON_FORMAT_VERSION;
+pub use project::{PageContents, Project, natural_cmp};
+pub use record::{ChangeSet, Entity, Op, Record, Transaction};
+pub use tag::{Aspect, DeviceTag, TagError, split_code};
+pub use tx::Tx;
+
+/// Version of the public model API. Bumped when a frozen API changes.
 pub const MODEL_VERSION: u32 = 0;
