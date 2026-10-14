@@ -104,6 +104,7 @@ impl Viewport {
     }
 
     /// Uniform data for the GPU: maps world to clip space.
+    #[cfg(feature = "gpu")]
     pub(crate) fn clip_transform(&self) -> (Vec2, Vec2) {
         // clip = (world - center) * scale, with y flipped for wgpu (y up in clip).
         let scale = Vec2::new(

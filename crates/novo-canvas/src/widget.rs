@@ -1098,6 +1098,90 @@ mod tests {
         (ctx, view, scene)
     }
 
+    fn left(x: f32, y: f32, pressed: bool) -> egui::Event {
+        egui::Event::PointerButton {
+            pos: egui::pos2(x, y),
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Default::default(),
+        }
+    }
+
+    /// However the press and release are spread over frames, with or
+    /// without a move first (X servers and test drivers differ), a click on
+    /// an item selects it.
+    #[test]
+    fn a_click_selects_whatever_the_event_timing() {
+        let seqs: Vec<(&str, Vec<Vec<egui::Event>>)> = vec![
+            (
+                "move, press, release frames",
+                vec![
+                    vec![moved(0.0, 0.0)],
+                    vec![left(0.0, 0.0, true)],
+                    vec![left(0.0, 0.0, false)],
+                ],
+            ),
+            (
+                "move then press+release same frame",
+                vec![
+                    vec![moved(0.0, 0.0)],
+                    vec![left(0.0, 0.0, true), left(0.0, 0.0, false)],
+                ],
+            ),
+            (
+                "move+press+release same frame",
+                vec![vec![
+                    moved(0.0, 0.0),
+                    left(0.0, 0.0, true),
+                    left(0.0, 0.0, false),
+                ]],
+            ),
+            (
+                "press+release, no move",
+                vec![vec![left(0.0, 0.0, true), left(0.0, 0.0, false)]],
+            ),
+            (
+                "press, release, no move",
+                vec![vec![left(0.0, 0.0, true)], vec![left(0.0, 0.0, false)]],
+            ),
+            (
+                "focus, move, press, release",
+                vec![
+                    vec![egui::Event::WindowFocused(true), moved(0.0, 0.0)],
+                    vec![left(0.0, 0.0, true)],
+                    vec![left(0.0, 0.0, false)],
+                ],
+            ),
+        ];
+        for (name, frames) in seqs {
+            let (ctx, mut view, scene) = setup();
+            let p = view.viewport.world_to_screen(Vec2::new(50.0, 0.0));
+            for evs in frames {
+                let evs = evs
+                    .into_iter()
+                    .map(|e| match e {
+                        egui::Event::PointerMoved(_) => moved(p.x, p.y),
+                        egui::Event::PointerButton {
+                            button,
+                            pressed,
+                            modifiers,
+                            ..
+                        } => egui::Event::PointerButton {
+                            pos: egui::pos2(p.x, p.y),
+                            button,
+                            pressed,
+                            modifiers,
+                        },
+                        e => e,
+                    })
+                    .collect();
+                frame(&ctx, &mut view, &scene, evs);
+            }
+            frame(&ctx, &mut view, &scene, vec![]);
+            assert_eq!(view.selection.ids(), &[ItemId(1)], "{name}");
+        }
+    }
+
     #[test]
     fn right_click_without_drag_is_a_context_click() {
         let (ctx, mut view, scene) = setup();
