@@ -3,6 +3,13 @@
 For a fresh cloud session that takes over as **integration lead**: the role that coordinates the threads and merges PRs.
 Last updated 2026-10-14 17:17 UTC (final from the first lead session) by the integration lead (session_011PfTJ1QaP1JQJPwXcFnxBE).
 
+## 0a. Lead change (2026-10-14 21:20 UTC)
+- **Integration lead from 21:20 UTC:** the project thread "Catch up and resume the build" (cse_01FiLvRBKEcNNHbQEGhYyL1S, branch `claude/project-thread-6lmg5c`). The old lead thread (cse_011PfTJ1QaP1JQJPwXcFnxBE) handed over to it; the cloud coordinator (session_01DZ68tTULUv7Uhe8ecKbC47) is stopped. There is one lead. Send verdicts and merge requests to it.
+- **CI still down:** Actions jobs fail with "recent account payments have failed or your spending limit needs to be increased". Owner told. Local fmt + clippy + tests remain the CI signal.
+- #73 is closed. #72 got a main merge from the lead (handoff PROGRESS conflicts and the novo-reports dependency line, both sides kept) and goes to the main reviewer.
+- `lopdf` moved into `[workspace.dependencies]` (lead PR).
+- Several project threads restarted at 21:20, not 23:20: read `handoff/RESUME-2320.md` anyway.
+
 ## 0. Current state (2026-10-14 20:30 UTC, wrap-up by cloud coordinator session_01DZ68tTULUv7Uhe8ecKbC47)
 Sections 6 and 11 below are the 17:17 snapshot; this section supersedes them. **Project threads resuming at 23:20 UTC: read `handoff/RESUME-2320.md` next.**
 - **Who runs the project:** from 17:30 to 20:30 UTC a cloud coordinator ran it (see `handoff/cloud-coordinator/`). It has stopped, as have all cloud reviewers and workers (`handoff/coordinator/cloud-roster.md`); the owner is near their credit limit. Coordination returns to the project's integration lead thread.
