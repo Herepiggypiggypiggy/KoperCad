@@ -7,8 +7,33 @@ click and keystroke budget and acceptance criteria that UI pull requests
 (WS-01, WS-06, WS-08, WS-10, WS-11, WS-12) are reviewed against.
 
 The EPLAN numbers are estimates from typical default EPLAN setups, not
-measurements; they are there to show the size of the gap and will be
-corrected as Tadjiro reports real pain points.
+measurements; they are there to show the size of the gap. The journeys are
+shaped by the EPLAN pain points Tadjiro listed, summarised in the next
+section.
+
+## EPLAN pain points this answers
+
+Tadjiro's list (2026-10-14), each mapped to where this spec fixes it and the
+workstream that builds it.
+
+| Pain point in EPLAN | What NovoElectric does instead | Where | Owner |
+| --- | --- | --- | --- |
+| Hundreds of panels all called "navigator" | One project tree with filters; every panel has a plain, distinct name | Principle 11 | WS-01, layout thread |
+| Single texts are hard to move, rotate and change | Click a text to grab it alone; drag, R, F2 | J11 | WS-06 |
+| Text and the same terminals look different everywhere | Styles come from one definition per kind; 400 identical terminals look identical | Principle 12 | WS-06, WS-11 |
+| Unclear when terminals connect and when not | Connection is drawn visibly; one project rule decides how same-named terminals join | J5 | WS-11 |
+| Same-named clamps (`-X2:1`) should join through 1-in/1-out terminals with a connector | Project setting "Join terminals with the same name", applied live | J5 | WS-11 |
+| Layout generator is manual and gives no heads-up | Unplaced devices listed live, auto-place with a preview, warnings before it does not fit | J13 | WS-15 |
+| Potential assignment is sluggish | Select L1, L2, L3, right click, pick the suggested "3~ 400 V"; PE, N and PEN inferred | J10 | WS-06 |
+| Numbering is painful | One numbering scheme per project, live on placement, preview before renumber | J4 | WS-06, WS-08 |
+| Long project build times | No build step; everything is live within budgets | Principle 15 | all |
+| Everything goes through a cryptic properties screen | Searchable properties panel, common fields first | J12 | WS-07 |
+| T-pieces cannot be rotated with Tab; corner and T shortcuts are scattered | One key for connection pieces, Tab cycles every orientation | J3 | WS-06 |
+| Cross references cannot simply be linked by right click | Right click, "Link cross reference", click the partner | J6 | WS-10 |
+| No reliable shortcut to all references of a relay | Shift+G lists every reference of the selected device | J6 | WS-10 |
+| Search cannot find a component's location by its exact name | An exact tag returns every location (page and column) first | J8 | WS-08 |
+| Selecting a relay does not highlight what it switches | Selecting a coil highlights its contacts on the page and lists the rest | J6 | WS-10 |
+| Common components need a trip to the Insert Center | Insert by mnemonic (`no`, `nc`, `coil`) or favourite keys 1 to 9 | J2 | WS-08 |
 
 ## How budgets are counted
 
@@ -52,6 +77,25 @@ These apply to every journey and every UI pull request.
    and checks are always current. No journey ends with a refresh step.
 10. **Single-letter keys only on the canvas.** Plain letter shortcuts work when
     the drawing has focus and never steal typing from a text field.
+11. **Plain names, no navigators.** Every panel and menu says what it holds
+    ("Devices", "Terminal strips", "Cables"), never a generic name shared by
+    many windows. One project tree with filters replaces a family of
+    separate navigators.
+12. **Same kind, same look.** The look of texts, terminals, wires and
+    symbols comes from one style per kind, set once for the project.
+    Changing the style changes every instance; an instance differs only when
+    the user overrides it on purpose, and the override is visible in the
+    properties panel.
+13. **Selection shows relations.** Selecting a device highlights everything
+    linked to it on the page (a coil's contacts, a terminal's other side, a
+    cable's cores) and the status bar lists the off-page ones.
+14. **The right click knows the selection.** The context menu offers the
+    commands that fit what is selected, best guess first (assign "3~ 400 V"
+    to three phase wires, link a cross reference to a lone contact).
+15. **No build step.** Opening a 50-page project takes under 2 seconds,
+    edits show in the same frame, and generated pages and reports update
+    within a second (WS-13). Nothing has to be "generated" or "updated" by
+    hand.
 
 ## Shortcut map
 
@@ -74,15 +118,19 @@ pick from this table or extend it here first.
 | Delete | Delete selection | Wires attached to deleted pins are removed too |
 | F2 | Edit tag of the selected device in place | Enter commits, Esc cancels |
 | Enter | Repeat the last tool | When nothing is in progress |
+| Tab | Next orientation | While placing a connection piece, symbol or text: cycles through every orientation |
 | I | Insert symbol | Opens symbol search at the cursor |
 | W | Wire | Pin to pin, orthogonal |
 | T | Terminals | Click or drag across wires |
 | C | Cable | Drag across wires |
 | P | Potential / interruption point | |
+| J | Connection piece (corner, T, cross) | Tab cycles all 9 shapes and orientations in a fixed order |
 | M | Move selection | Also by dragging |
-| R | Rotate 90° | While placing, moving or on the selection |
+| R | Rotate 90° | While placing, moving or on the selection, texts included |
 | X | Mirror | While placing, moving or on the selection |
 | G | Go to partner | Coil to contact, contact to coil, arrow to arrow |
+| Shift+G | All references | Lists every place the selected device occurs; Enter jumps |
+| 1 to 9 | Favourite symbols | While the insert search is open |
 | Alt+Left / Alt+Right | Back / forward through jumps | Like a browser |
 | Page Up / Page Down | Previous / next page | |
 | Home | Zoom to fit page | Double middle click does the same |
@@ -140,7 +188,12 @@ Behaviour:
 
 - I opens a search box at the cursor. It matches symbol names, synonyms
   (contactor, coil, K) and recently used symbols, recent first. Enter takes
-  the top match.
+  the top match. There is no separate insert centre to browse.
+- Short, obvious mnemonics rank first: `no` normally open contact, `nc`
+  normally closed, `coil`, `mcb`, `mpcb` motor protection breaker, `ol`
+  overload, `m3` three phase motor, `pb` push button, `lamp`, `term`.
+- The search box shows a row of nine favourites (the most used symbols,
+  editable); 1 to 9 picks one, so common parts are I then one digit.
 - The symbol follows the cursor with snap; R rotates and X mirrors before the
   click.
 - Each click places a new device with the next free tag for the symbol's
@@ -156,6 +209,7 @@ Behaviour:
 Acceptance:
 
 - [ ] Placing ten contactors in a row takes 3 actions plus 9 clicks.
+- [ ] A favourite symbol is in hand after 2 actions (I, digit).
 - [ ] Every placed device has a unique valid tag without user input.
 - [ ] No dialog opens; the properties panel shows the new device.
 - [ ] A contact placed with `K1 no` shows the coil's cross reference at once.
@@ -183,12 +237,20 @@ Behaviour:
   (WS-06 rules); conflicts show in the checker, not in a dialog.
 - Hovering a pin highlights it before the click; a wire never ends on
   nothing by accident (a dangling end is flagged live).
+- When a connection piece is wanted by hand, J picks it up and Tab cycles
+  through all of them in one fixed order (four corners, four Ts, cross); R
+  still rotates. No piece needs its own shortcut, so there is nothing to
+  remember beyond J and Tab.
+- A placed T-junction can be selected and re-oriented with Tab at any time;
+  the wires follow.
 
 Acceptance:
 
 - [ ] Wiring a three-phase main circuit (contactor to overload, 3 wires)
       takes 1 + 6 actions.
 - [ ] A T-junction never requires a choice from the user.
+- [ ] Every corner and T orientation is reachable from J with Tab, on a
+      new piece and on a selected one.
 - [ ] Each wire is one undo step; Escape mid-wire removes only the
       unfinished wire.
 
@@ -205,6 +267,9 @@ Acceptance:
 
 Behaviour:
 
+- The project has one numbering scheme, chosen once (sequential per letter
+  code like `-K1`, `-K2`, or page based like `-3K1` for page 3), and every
+  new device follows it the moment it is placed.
 - F2 edits the tag in place on the canvas. Typing only `-K5` keeps the page's
   function and location aspects. Tab moves between aspects when needed.
 - Renaming a coil renames its contacts and every cross reference with it.
@@ -241,6 +306,19 @@ Behaviour:
 - The strip in use is the last one used on the page, or a new `-X1`. Typing
   a strip tag right after T (`X2`) changes it.
 - PE wires get a PE terminal automatically, N wires an N terminal.
+- **When terminals connect is never a guess.** A terminal shows on the
+  schematic whether it passes through (both sides connected) or is a
+  single-sided end, and the checker flags a terminal whose sides are
+  connected differently than its type allows.
+- **Same name, same terminal.** A project setting decides what happens when
+  the same terminal name (`-X2:1`) is placed in several spots. The default
+  is "join them": the occurrences are one physical terminal, built from
+  1-in/1-out terminals linked with a jumper or connector, and the strip
+  editor shows them as one row with all their connections. The other option
+  is "refuse duplicates", which flags the second occurrence.
+- All terminals of one type on a strip share one style and one part, so 400
+  terminals look and report the same; changing the type changes all of
+  them.
 - The terminal strip page and connection screen (WS-11) update live.
 - Reordering, jumpers and spares are done in the strip editor table with
   keyboard editing, like a spreadsheet.
@@ -249,6 +327,9 @@ Acceptance:
 
 - [ ] Five terminals on five motor wires take 2 actions.
 - [ ] Terminal numbers are unique and continuous without user input.
+- [ ] With "join terminals with the same name" on, placing `-X2:1` on two
+      pages gives one terminal with both connections in the strip editor.
+- [ ] A terminal's through or end state is visible on the schematic.
 - [ ] The terminal screen shows internal and external targets with no extra
       step.
 
@@ -260,8 +341,10 @@ Acceptance:
 | --- | --- | --- |
 | Coil to contact or back | 1 (G with the pointer or selection on it, or double-click the reference) | 0 |
 | Back to where you were | 1 (Alt+Left) | 0 |
+| All references of a device | 1 (Shift+G) | 0 |
+| Link a cross reference by hand | 3 (right click, "Link cross reference", click the partner) | 0 |
 | Find any device | 2 (Ctrl+K, Enter) | the tag |
-| EPLAN estimate | 2 to 3 (right click, go to, pick in a list) | |
+| EPLAN estimate | 2 to 3 (right click, go to, pick in a list), and often no shortcut works | |
 
 Behaviour:
 
@@ -271,6 +354,13 @@ Behaviour:
   list to cycle with G again; on a contact it jumps to the coil.
 - Interruption points (off-page arrows) jump to their partner the same way.
 - Every jump goes into a back/forward history.
+- Shift+G always works on a selected device, coil or contact alike, and
+  lists every occurrence with page and column; arrow keys and Enter jump.
+- Selecting a coil highlights its contacts on the same page; contacts on
+  other pages are listed in the status bar with their locations.
+- Right click on a contact, coil or interruption point offers "Link cross
+  reference"; the next click on the partner links them, and both
+  references appear at once.
 - Ctrl+K with a tag lists every place the device occurs.
 
 Acceptance:
@@ -278,6 +368,8 @@ Acceptance:
 - [ ] G and Alt+Left round-trip between a coil and a contact on another
       page in 2 actions.
 - [ ] Moving a contact updates the coil's contact image in the same frame.
+- [ ] Selecting `-K1` highlights all its contacts on the page.
+- [ ] Shift+G lists every occurrence of the selected device.
 
 ### J7 Cable
 
@@ -322,6 +414,8 @@ Behaviour:
   and symbols. Each row shows its kind and the shortcut if it has one, so the
   palette teaches the shortcuts.
 - Recently used items rank first for an empty or short query.
+- An exact tag (`-K1`, `K1`, `=A1+CAB1-K1`) puts that device first, with
+  every location where it occurs (page and column) as rows to jump to.
 - Menus and the palette agree: a command unavailable right now is greyed in
   both, with the reason on hover, rather than shown in one and missing from
   the other.
@@ -331,6 +425,8 @@ Acceptance:
 - [ ] Every action in the menus is in the palette, and every palette command
       with a shortcut shows it.
 - [ ] The last command used is the first row when the palette opens.
+- [ ] Searching the exact name of any device returns its locations, every
+      time.
 
 ### J9 Undo
 
@@ -344,6 +440,112 @@ Acceptance:
 - [ ] Text fields keep their own Ctrl+Z while focused; the project undo
       takes over when focus leaves the field.
 - [ ] Undo history survives an autosave and a crash recovery (WS-04).
+
+### J10 Assign potentials
+
+**Goal:** give wires their potential (L1, L2, L3, N, PE, PEN) and voltage.
+
+| Path | Actions | Typed |
+| --- | --- | --- |
+| Three phase wires | 3 (select the three wires, right click, Enter on the suggestion) | 0 |
+| A wire on a terminal named `X4:PE` | 0 (inferred) | 0 |
+| EPLAN estimate | potential definition point or properties per wire, several dialogs | names |
+
+Behaviour:
+
+- Selecting three wires (a drag across them, or Shift-clicks) and right
+  clicking puts "Three phase 400 V (L1, L2, L3)" first in the menu; the
+  wires get L1, L2 and L3 in their order on the page. Other common systems
+  (230 V L/N, 24 V DC +/-) follow.
+- One wire suggests PE, N or PEN from what it touches: a terminal or pin
+  named PE, N or PEN, or a wire already known to be one.
+- A wire connected to a terminal named `X4:PE` is PE without asking; the
+  same holds for N and PEN.
+- Potentials flow through connected wires and through terminals; a
+  conflict (PE meeting L1) is flagged live, not in a dialog.
+
+Acceptance:
+
+- [ ] Three phase assignment takes 3 actions.
+- [ ] A wire to a terminal named `X4:PE` is PE with no user action.
+- [ ] Changing the potential of one wire updates every wire on the same
+      potential.
+
+### J11 Edit text
+
+**Goal:** move, rotate or change a single text without fighting the device
+it belongs to.
+
+| Path | Actions | Typed |
+| --- | --- | --- |
+| Move a text | 1 (drag the text) | 0 |
+| Rotate a text | 2 (click the text, R) | 0 |
+| Change a text | 2 (double-click, Enter) | the text |
+| Restyle every text of one kind | 3 (right click, "Select same kind", change the style once) | 0 |
+| EPLAN estimate | properties dialog, format tab, often several attempts | |
+
+Behaviour:
+
+- Clicking directly on a text selects that text alone; clicking the symbol
+  selects the device. A dragged text stays attached to its device and moves
+  with it afterwards.
+- Double-click or F2 edits a free text in place; for a tag it edits the
+  tag (J4).
+- Text styles (font, size, angle, position relative to the symbol) come
+  from the project style (principle 12). "Reset position" puts a moved text
+  back where the style says.
+
+Acceptance:
+
+- [ ] A device tag can be moved, rotated and reset without opening a
+      dialog.
+- [ ] Changing the project's tag style changes every tag that has not been
+      overridden.
+
+### J12 Properties
+
+**Goal:** find and change one property without a cryptic screen.
+
+| Path | Actions | Typed |
+| --- | --- | --- |
+| Change one property | 3 (Ctrl+2, type part of its name, Enter, then the value) | a few letters and the value |
+| Same change on many devices | same, with all of them selected | |
+| EPLAN estimate | properties dialog, find the right tab among many, find the field | |
+
+Behaviour:
+
+- The properties panel is non-modal and edits the selection. The common
+  fields for the selected kind come first (tag, description, part,
+  potential); the rest are grouped and collapsed.
+- A filter box at the top searches property names and values; typing
+  "cross" finds every cross-reference setting.
+- With several objects selected the panel shows shared values, and a change
+  applies to all of them as one undo step.
+
+Acceptance:
+
+- [ ] Any property is reachable by typing part of its name.
+- [ ] Editing 50 selected devices is one change and one undo step.
+
+### J13 Cabinet layout (Phase 3)
+
+**Goal:** get every device onto the mounting plate with warnings before
+problems, not after.
+
+Behaviour (WS-15):
+
+- Devices with a part appear live in an "Unplaced" list; the list counts
+  down as they are placed.
+- "Place all" puts unplaced devices onto rails in schematic order with a
+  preview the user accepts or adjusts; nothing moves without the preview.
+- The layout warns ahead of time: a rail that will overflow, a device
+  without dimensions, a duct over its fill limit.
+
+Acceptance:
+
+- [ ] Placing all devices of the Gate 1 project takes 3 actions (Ctrl+K,
+      "Place all", accept).
+- [ ] A rail that cannot hold its devices is flagged before placement.
 
 ## Scenario budget: Gate 1 motor starter
 
@@ -379,4 +581,8 @@ workflow bug.
 - Does the status bar say what the next click does?
 - Do plain letter shortcuts act only while the canvas has focus, and never
   steal typing from a text field?
+- Does a new panel or menu have a plain, distinct name (no "navigator")?
+- Does the look of a new object come from a project style?
+- Does selecting an object highlight what it is linked to?
+- Does the right-click menu offer what fits the selection first?
 - Does the journey stay within its budget?
