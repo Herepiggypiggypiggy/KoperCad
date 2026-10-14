@@ -143,13 +143,18 @@ impl StorageBackend {
     }
 
     fn close_session(&mut self) -> Result<(), BackendError> {
-        self.recovery = None;
+        // Undecided recovered work stays on disk (the session keeps its
+        // recovery file), so an untitled project's file must stay with it
+        // to be offered again on the next start.
+        let undecided = self.recovery.take().is_some();
         self.restored_unsaved = false;
         let closed = match self.session.take() {
             Some(session) => session.close(),
             None => Ok(()),
         };
-        if let Some(path) = self.untitled.take() {
+        if let Some(path) = self.untitled.take()
+            && !undecided
+        {
             remove_file_if_exists(&path);
         }
         Ok(closed?)
@@ -267,6 +272,7 @@ impl ProjectBackend for StorageBackend {
             self.restored_unsaved = true;
         } else if self.untitled.is_some() {
             // An untitled project is nothing without its unsaved work.
+            session.discard_recovery()?;
             self.close()?;
         } else {
             session.discard_recovery()?;
@@ -319,6 +325,12 @@ impl ProjectBackend for StorageBackend {
             };
             if opened.recovered.is_none() {
                 // Nothing was autosaved before the crash: nothing to offer.
+                if let Some(aside) = &opened.set_aside {
+                    log::warn!(
+                        "unreadable unsaved work from an untitled project kept at {}",
+                        aside.path.display()
+                    );
+                }
                 if let Err(e) = opened.session.close() {
                     log::warn!("could not close {}: {e}", path.display());
                 }
@@ -628,6 +640,24 @@ pub(crate) mod tests {
             files_in(dir.path())
         );
         assert!(!backend.restore_untitled().unwrap());
+    }
+
+    #[test]
+    fn quitting_before_answering_keeps_a_crashed_untitled_project() {
+        let dir = tempfile::tempdir().unwrap();
+        crash_untitled(dir.path());
+        let mut backend = StorageBackend::with_untitled_dir(dir.path());
+        assert!(backend.restore_untitled().unwrap());
+        backend.close().unwrap();
+        assert_eq!(
+            files_in(dir.path())
+                .iter()
+                .filter(|f| f.ends_with(".novo"))
+                .count(),
+            1,
+            "{:?}",
+            files_in(dir.path())
+        );
     }
 
     #[test]
