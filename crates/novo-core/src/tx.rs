@@ -188,6 +188,7 @@ impl<'p> Tx<'p> {
             title: String::new(),
             kind: Default::default(),
             format: Default::default(),
+            structure: Default::default(),
             properties: Default::default(),
         })
     }
@@ -304,6 +305,25 @@ impl<'p> Tx<'p> {
     /// attached to.
     pub fn move_text(&mut self, text: TextId, placement: TextPlacement) -> Result<()> {
         self.update::<Text>(text, |t| t.placement = placement)
+    }
+
+    /// Changes what a text shows and/or its character height; `None` keeps
+    /// the current value. The same rules as for a new text apply (a height
+    /// must be finite and above zero), so a refused edit changes nothing.
+    pub fn set_text(
+        &mut self,
+        text: TextId,
+        content: Option<TextContent>,
+        height_mm: Option<f64>,
+    ) -> Result<()> {
+        self.update::<Text>(text, |t| {
+            if let Some(content) = content {
+                t.content = content;
+            }
+            if let Some(height_mm) = height_mm {
+                t.height_mm = height_mm;
+            }
+        })
     }
 
     /// Draws a wire between two endpoints on the same page.
