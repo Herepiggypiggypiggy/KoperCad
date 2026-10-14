@@ -1014,8 +1014,10 @@ fn scenario_through_the_window() {
 /// `m3` stacked in one column, each placed with one click and its facing
 /// pins taken with Enter, gives the next free tags and the 9 main wires
 /// without a wire click, all saved. The breaker is -F1 and the overload
-/// relay -F2: a miniature circuit breaker protects (IEC 81346-2 class F);
-/// a motor protection breaker (`mpcb`) would be -Q1.
+/// relay -F2, as the editor codes a miniature circuit breaker today (class
+/// F, protecting; `mpcb` gives Q). Whether it should be -Q1 is the open
+/// letter-code question O1 (TEST_REPORT Round 7): this pins current
+/// behaviour, not a decided rule.
 #[test]
 fn gap_place_by_search_with_auto_tags_and_self_wiring() {
     let library = Library::builtin().unwrap();

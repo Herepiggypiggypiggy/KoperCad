@@ -74,8 +74,9 @@ are filled in. `gate1_scenario.rs` has no ignored test left.
 Notes:
 - The MCB is placed as `-F1`, not `-Q1`: novo-editor gives a miniature
   circuit breaker letter F (protecting, IEC 81346-2) and a motor protection
-  breaker (`mpcb`) letter Q. That matches the standard, so the test asserts
-  it. The overload relay is then `-F2`.
+  breaker (`mpcb`) letter Q. The test pins this current behaviour; whether
+  breakers should be Q is still the open question O1 (Round 7). The
+  overload relay is then `-F2`.
 - The window test uses `StorageBackend::default()` and default settings, so
   it writes only in its temp directory (no last-project or untitled files in
   the user profile).
