@@ -9,8 +9,11 @@
 //! suggestion is remembered on the wire (`terminal.suggest = false`, see
 //! [`dismiss_suggestion`]) so it does not come back after every edit.
 //!
-//! The first cut looks at wires that run straight from one device pin to
-//! another. Wires through junctions are not suggested yet.
+//! Wires are followed through junctions. The terminal goes on the one
+//! wire where the connection leaves its location: a wire with a device pin
+//! of one location at one end, and only devices of one other location
+//! beyond the other end. A branch that already reaches a terminal, or
+//! reaches both locations, gets no suggestion.
 
 use novo_core::{
     DeviceId, DeviceKind, DeviceTag, Endpoint, Point, Project, Result, SymbolRole, Tx, Value,
@@ -44,6 +47,51 @@ fn device_at(project: &Project, end: Endpoint) -> Option<DeviceId> {
         SymbolRole::Device { device, .. } => Some(device),
         _ => None,
     }
+}
+
+/// The devices one end of `wire` leads to: the device of a pin end, or
+/// every device pin reached through junctions without going back over
+/// `wire`. `None` when the way reaches a pin that is not a device's (a
+/// terminal is already there) or reaches nothing.
+fn devices_beyond(project: &Project, wire: WireId, end: Endpoint) -> Option<Vec<DeviceId>> {
+    let mut devices = Vec::new();
+    let mut seen = vec![end];
+    let mut todo = vec![end];
+    while let Some(at) = todo.pop() {
+        if at.as_pin().is_some() {
+            devices.push(device_at(project, at)?);
+            continue;
+        }
+        for next in project.wires_at(at).filter(|&w| w != wire) {
+            let Some(w) = project.wire(next) else {
+                continue;
+            };
+            let other = if w.from == at { w.to } else { w.from };
+            if !seen.contains(&other) {
+                seen.push(other);
+                todo.push(other);
+            }
+        }
+    }
+    devices.sort();
+    devices.dedup();
+    (!devices.is_empty()).then_some(devices)
+}
+
+/// The one location all of `devices` share, with the first of them.
+fn single_location<'a>(
+    project: &'a Project,
+    devices: &[DeviceId],
+) -> Option<&'a novo_core::Device> {
+    let first = project.device(*devices.first()?)?;
+    devices
+        .iter()
+        .all(|&d| {
+            project
+                .device(d)
+                .is_some_and(|d| d.tag.location == first.tag.location)
+        })
+        .then_some(first)
 }
 
 fn structure(tag: &DeviceTag) -> DeviceTag {
@@ -106,10 +154,17 @@ pub fn suggest_terminals(project: &Project) -> Vec<Suggestion> {
     wires.sort_by_key(|w| (pages.iter().position(|&p| p == w.page), w.id));
     let mut out = Vec::new();
     for w in wires {
-        let (Some(a), Some(b)) = (device_at(project, w.from), device_at(project, w.to)) else {
+        if w.from.as_pin().is_none() && w.to.as_pin().is_none() {
+            continue;
+        }
+        let (Some(a), Some(b)) = (
+            devices_beyond(project, w.id, w.from),
+            devices_beyond(project, w.id, w.to),
+        ) else {
             continue;
         };
-        let (Some(da), Some(db)) = (project.device(a), project.device(b)) else {
+        let (Some(da), Some(db)) = (single_location(project, &a), single_location(project, &b))
+        else {
             continue;
         };
         if da.tag.location == db.tag.location {

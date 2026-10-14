@@ -921,6 +921,68 @@ fn wires_crossing_a_location_boundary_get_suggested_terminals() {
 }
 
 #[test]
+fn wires_through_junctions_get_one_terminal_where_they_leave() {
+    // One cabinet contact feeds two field motors through a junction: the
+    // terminal goes on the wire from the contact to the junction, once.
+    let mut doc = Document::default();
+    let (feed, k1, m1, back, k2) = doc
+        .transact("Draw", |tx| {
+            let page = tx.add_page("1")?;
+            let k1 = tx.add_device(tag("=A1+CAB-K1"), "")?;
+            let m1 = tx.add_device(tag("=A1+FLD-M1"), "")?;
+            let m2 = tx.add_device(tag("=A1+FLD-M2"), "")?;
+            let ks = row_of_pins(tx, page, k1, &["2"], 40.0, 20.0)?;
+            let m1s = row_of_pins(tx, page, m1, &["U1"], 40.0, 100.0)?;
+            let m2s = row_of_pins(tx, page, m2, &["U1"], 80.0, 100.0)?;
+            let j = tx.add_junction(page, Point::new(40.0, 60.0))?;
+            let feed = tx.connect(Endpoint::pin(ks, 0), Endpoint::junction(j))?;
+            tx.connect(Endpoint::junction(j), Endpoint::pin(m1s, 0))?;
+            tx.connect(Endpoint::junction(j), Endpoint::pin(m2s, 0))?;
+            // Two cabinet contacts joined at a junction, one wire out to
+            // the field: the terminal goes on the wire that leaves.
+            let k2 = tx.add_device(tag("=A1+CAB-K2"), "")?;
+            let k3 = tx.add_device(tag("=A1+CAB-K3"), "")?;
+            let k2s = row_of_pins(tx, page, k2, &["4"], 120.0, 20.0)?;
+            let k3s = row_of_pins(tx, page, k3, &["4"], 160.0, 20.0)?;
+            let m1v = row_of_pins(tx, page, m1, &["V1"], 120.0, 100.0)?;
+            let j2 = tx.add_junction(page, Point::new(120.0, 40.0))?;
+            tx.connect(Endpoint::pin(k2s, 0), Endpoint::junction(j2))?;
+            tx.connect(Endpoint::pin(k3s, 0), Endpoint::junction(j2))?;
+            let back = tx.connect(Endpoint::junction(j2), Endpoint::pin(m1v, 0))?;
+            // Cabinet only, through a junction: nothing to suggest.
+            let k4 = tx.add_device(tag("=A1+CAB-K4"), "")?;
+            let k4s = row_of_pins(tx, page, k4, &["A1"], 200.0, 20.0)?;
+            let j3 = tx.add_junction(page, Point::new(200.0, 40.0))?;
+            tx.connect(Endpoint::pin(k4s, 0), Endpoint::junction(j3))?;
+            tx.connect(Endpoint::junction(j3), Endpoint::pin(k3s, 0))?;
+            Ok((feed, k1, m1, back, k2))
+        })
+        .unwrap()
+        .0;
+    let suggestions = suggest_terminals(doc.project());
+    let found: Vec<_> = suggestions
+        .iter()
+        .map(|s| (s.wire, s.internal, s.external, s.strip.to_string()))
+        .collect();
+    let m2 = doc
+        .project()
+        .devices()
+        .find(|d| d.tag.to_string() == "=A1+FLD-M2")
+        .unwrap()
+        .id;
+    assert_eq!(
+        found,
+        [
+            (feed, k1, m1.min(m2), "=A1+CAB-X1".into()),
+            (back, k2, m1, "=A1+CAB-X1".into()),
+        ]
+    );
+    doc.transact("Accept", |tx| accept_suggestions(tx, &suggestions))
+        .unwrap();
+    assert!(suggest_terminals(doc.project()).is_empty());
+}
+
+#[test]
 fn accepting_all_numbers_terminals_in_drawing_order() {
     // Wires drawn right to left, and suggestions handed over in reverse:
     // the terminals are still numbered left to right.
