@@ -31,26 +31,27 @@ fn every_placed_symbol_exists_with_the_same_connection_points() {
 }
 
 #[test]
-fn terminal_bridges_match_the_library() {
+fn bridges_match_the_library() {
+    // Includes the overload relay, whose heaters are permanent bridges
+    // since #12 (finding Q1 in docs/TEST_REPORT.md).
     let library = Library::builtin().unwrap();
     let mut doc = Document::default();
     motor_starter(&mut doc).unwrap();
-    let mut checked = 0;
     for placed in doc.project().symbols() {
-        let SymbolRole::Terminal { .. } = placed.role else {
-            continue;
-        };
+        let key = &placed.symbol.0;
         let expected: Vec<Vec<u16>> = library
-            .get(&placed.symbol.0.clone())
+            .get(key)
             .unwrap()
             .bridges()
             .into_iter()
-            .map(|g| g.into_iter().map(|i| i as u16).collect())
+            .map(|g| g.into_iter().map(|i| u16::try_from(i).unwrap()).collect())
             .collect();
-        // The model joins a terminal's sides through its role; the library
-        // states the same as a bridge.
-        assert_eq!(expected, vec![vec![0, 1]]);
-        checked += 1;
+        // The model joins a single terminal's sides through its role, so
+        // the fixture places terminals without bridges.
+        if matches!(placed.role, SymbolRole::Terminal { .. }) {
+            assert_eq!(expected, vec![vec![0, 1]], "`{key}`");
+        } else {
+            assert_eq!(placed.bridges, expected, "bridges of `{key}`");
+        }
     }
-    assert_eq!(checked, 4);
 }

@@ -10,11 +10,12 @@ How a PR is tested: its branch is merged onto the current `main` (a
 `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
 `cargo test --workspace`. Windows results come from the PR's own CI.
 
-## Round 2 (2026-10-14, main `7b9392e`)
+## Round 2 (2026-10-14, main `244c008`)
 
-main now has #6 (experimental builds) and #11 (non-finite numbers refused,
-pin directions, multi-level terminals). fmt, clippy and all 70 workspace
-tests pass with `novo-tests` merged in. `novo-tests` needed one change for
+main now has #6 (experimental builds), #11 (non-finite numbers refused,
+pin directions, multi-level terminals), #12 (symbol format hardening,
+pass-through) and #13 (canvas demo in the experimental build). fmt, clippy
+and all 80 workspace tests pass with `novo-tests` merged in. `novo-tests` needed one change for
 #11: `SymbolRole::Terminal` now takes `terminals: vec![...]`.
 
 - **F1 fixed by #11.** New test `robustness.rs` tries NaN, +inf and -inf in
@@ -22,6 +23,9 @@ tests pass with `novo-tests` merged in. `novo-tests` needed one change for
   properties, cable lengths and core cross-sections. Every one is refused,
   leaves the project and the undo history unchanged, and the project still
   round-trips. A hand-edited project file with `1e999` is refused on load.
+- **Q1 resolved by #12.** The overload relay's main circuit is now a
+  permanent bridge in the library. `fixture_matches_library.rs` now checks
+  that every symbol the fixture places carries the library's bridges.
 - **Multi-level terminals pass.** Every multi-level terminal in the symbol
   library (`iec/terminals/terminal_2level`) places through
   `Command::PlaceSymbol` with its library pins, directions and bridges. Each
@@ -99,7 +103,7 @@ Repro: `tx.move_symbol(id, Placement::at(Point::new(f64::NAN, 0.0)))`, then
 save and reopen. Suggested fix (WS-02): reject non-finite numbers in the
 integrity check for every geometry field and float property.
 
-**Q1 (question for WS-02/WS-05) Do overload relay heaters conduct in the netlist?**
+**Q1 (question for WS-02/WS-05, resolved in #12) Do overload relay heaters conduct in the netlist?**
 `novo_symbols::Symbol::bridges()` only returns bridges for `conductor`
 symbols, so `iec/protection/overload_relay` (`overload`) has none. Placed
 that way, the motor is not on the same net as the contactor outputs, and
