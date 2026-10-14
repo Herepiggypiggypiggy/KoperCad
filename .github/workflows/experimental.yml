@@ -11,8 +11,11 @@ name: Experimental build
 on:
   push:
     branches: [main]
+    paths-ignore: ["**/*.md", "docs/**"]
   pull_request:
     types: [opened, synchronize, reopened, closed]
+    # Docs-only PRs leave the binary unchanged.
+    paths-ignore: ["**/*.md", "docs/**"]
   workflow_dispatch:
 
 permissions:

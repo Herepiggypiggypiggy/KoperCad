@@ -3,14 +3,12 @@ name: Windows installer
 on:
   push:
     tags: ["v*"]
+  # Code changes are covered by CI's Windows job and the experimental build;
+  # the installer itself is rebuilt only when its own inputs change.
   pull_request:
     paths:
       - "packaging/windows/**"
       - "assets/icon/**"
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - ".cargo/**"
       - ".github/workflows/package-windows.yml"
   workflow_dispatch:
 
