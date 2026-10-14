@@ -149,8 +149,9 @@ struct Sheet<'a> {
     name: String,
     /// The report sheet drawn inside the frame of a generated page.
     generated: Option<GeneratedSheet>,
-    /// What the sheet shows (`=A1+CAB-X1`, `Devices without parts`), for
-    /// its bookmark; empty for one-table reports and schematic pages.
+    /// What the sheet shows, for its bookmark: its report section's title
+    /// (`=A1+CAB-X1`, `Devices without parts`), which one-table reports leave
+    /// empty; empty for schematic pages.
     section: String,
 }
 
@@ -292,9 +293,14 @@ pub fn export_pdf_with_reports(
                 scene.set_notes(project, notes.iter().cloned(), art);
             }
             let s = scene.scene();
+            // A report sheet shows its frame and table only: anything
+            // drawn on a generated page by accident would repeat on every
+            // sheet.
+            let frame = scene.layers().frame;
             let mut items: Vec<_> = s
                 .iter()
                 .filter(|(_, it)| s.layer(it.layer).is_none_or(|l| l.visible))
+                .filter(|(_, it)| sheet.generated.is_none() || it.layer == frame)
                 .collect();
             // Layer order, then id: independent of how the scene stores its
             // items, so exports are reproducible.

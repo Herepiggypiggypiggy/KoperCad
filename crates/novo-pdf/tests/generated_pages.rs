@@ -1,7 +1,7 @@
 //! Generated pages (reports) print as one PDF page per report sheet.
 
 use lopdf::{Document as Pdf, Object};
-use novo_core::{DeviceTag, Document, Page, PageId, PageKind};
+use novo_core::{DeviceTag, Document, Page, PageId, PageKind, Point, TextContent, TextPlacement};
 use novo_pdf::{PageSet, PdfOptions, export_pdf};
 use novo_reports::LiveReports;
 use novo_tests::motor_starter;
@@ -115,6 +115,30 @@ fn sheet_bookmarks_name_what_each_sheet_shows() {
     let last = &toc.toc.last().expect("bookmarks").title;
     // The starter's one strip: the sheet is named after it.
     assert_eq!(last, "30  Terminals · =A1+CAB-X1");
+}
+
+#[test]
+fn a_report_sheet_prints_only_its_frame_and_table() {
+    let (mut doc, devices, _) = project();
+    // A stray text placed on the generated page.
+    doc.transact("Stray", |tx| {
+        tx.add_text(
+            devices,
+            TextContent::Literal {
+                text: "stray note".into(),
+            },
+            TextPlacement {
+                offset: Point::new(50.0, 50.0),
+                ..TextPlacement::default()
+            },
+            None,
+        )
+    })
+    .expect("text");
+    let pdf = parse(&export_pdf(doc.project(), &PdfOptions::default()).unwrap());
+    for n in 3..=5 {
+        assert!(!content(&pdf, n).contains("(stray note) Tj"), "sheet {n}");
+    }
 }
 
 #[test]
