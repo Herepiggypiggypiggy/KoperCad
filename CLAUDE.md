@@ -45,6 +45,14 @@ Rules:
   shared dependencies go in `[workspace.dependencies]`.
 - `unsafe` is denied workspace-wide; justify any exception in the pull request.
 
+## Experimental builds
+
+Every push to main and every pull request update rebuilds the `experimental`
+pre-release: main plus all open pull requests merged in PR order (conflicting
+PRs are skipped; if the combined build fails it falls back to main). The
+owner's desktop shortcut runs `scripts/run-latest.ps1`, which always starts
+the newest of these builds. Keep main and open PRs buildable on Windows.
+
 ## Conventions
 
 - Device tags follow IEC 81346: `=plant +location -device`.

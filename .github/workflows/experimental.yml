@@ -1,0 +1,102 @@
+# Rolling "experimental" Windows build: main plus every open pull request,
+# merged in PR order. Published to the `experimental` pre-release, which the
+# desktop launcher (scripts/run-latest.ps1) downloads. It is deliberately
+# unverified: PRs that conflict are skipped, and if the combined build fails
+# it falls back to main alone.
+name: Experimental build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: experimental
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    # Forked PRs get a read-only token and must not publish.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: experimental
+
+      - name: Merge open pull requests
+        run: |
+          git config user.name "NovoElectric experimental build"
+          git config user.email "noreply@github.com"
+          main_sha=$(git rev-parse --short HEAD)
+          echo "main $main_sha" > merged.txt
+          : > skipped.txt
+          for n in $(gh api "repos/${{ github.repository }}/pulls?state=open&per_page=100" --jq '.[] | select(.head.repo.full_name == "${{ github.repository }}") | .number' | sort -n); do
+            git fetch -q origin "pull/$n/head"
+            title=$(gh api "repos/${{ github.repository }}/pulls/$n" --jq .title)
+            if git merge -q --no-edit FETCH_HEAD; then
+              echo "#$n $(git rev-parse --short FETCH_HEAD) $title" >> merged.txt
+            else
+              git merge --abort
+              echo "#$n $title (merge conflict)" >> skipped.txt
+            fi
+          done
+          cat merged.txt skipped.txt
+
+      - name: Build (main + open PRs)
+        id: combined
+        continue-on-error: true
+        run: cargo build --release -p novo-app
+
+      - name: Fall back to main alone
+        if: steps.combined.outcome == 'failure'
+        run: |
+          git reset -q --hard origin/main
+          echo "Combined build failed; this build is main only." >> skipped.txt
+          echo "main $(git rev-parse --short HEAD)" > merged.txt
+          cargo build --release -p novo-app
+
+      - name: Package
+        run: |
+          stamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          mkdir -p dist
+          cp target/release/novoelectric.exe dist/
+          {
+            echo "NovoElectric experimental build $stamp"
+            echo
+            echo "Included:"
+            cat merged.txt
+            if [ -s skipped.txt ]; then echo; echo "Skipped:"; cat skipped.txt; fi
+          } > dist/BUILD_INFO.txt
+          printf '{"built":"%s","run":"%s","tree":"%s"}\n' "$stamp" "${{ github.run_id }}" "$(git rev-parse HEAD)" > build-info.json
+          (cd dist && 7z a -tzip ../novoelectric-experimental-windows.zip . > /dev/null)
+
+      - name: Publish to the experimental pre-release
+        run: |
+          repo="${{ github.repository }}"
+          if ! gh release view experimental --repo "$repo" > /dev/null 2>&1; then
+            gh release create experimental --repo "$repo" --prerelease --target main \
+              --title "Experimental (latest, unverified)" --notes "Rolling build of main plus all open pull requests."
+          fi
+          gh release upload experimental --repo "$repo" --clobber \
+            novoelectric-experimental-windows.zip build-info.json
+          gh release edit experimental --repo "$repo" --notes-file dist/BUILD_INFO.txt
