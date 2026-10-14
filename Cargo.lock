@@ -1879,9 +1879,14 @@ dependencies = [
 name = "novo-cli"
 version = "0.1.0"
 dependencies = [
+ "calamine",
  "clap",
+ "novo-checks",
  "novo-core",
+ "novo-editor",
+ "novo-pdf",
  "novo-py",
+ "novo-reports",
  "novo-storage",
  "serde_json",
  "tempfile",
@@ -1936,7 +1941,9 @@ dependencies = [
 name = "novo-py"
 version = "0.1.0"
 dependencies = [
+ "calamine",
  "novo-core",
+ "novo-reports",
  "novo-storage",
  "novo-symbols",
  "pyo3",

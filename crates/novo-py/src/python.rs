@@ -5,7 +5,7 @@
 
 use std::path::PathBuf;
 
-use novo_core::{DeviceId, PageId, PotentialId, SymbolId, TerminalId, WireId};
+use novo_core::{DeviceId, PageId, PartId, PotentialId, SymbolId, TerminalId, WireId};
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 use pyo3::types::PyString;
@@ -180,6 +180,29 @@ impl PyProject {
             .raw())
     }
 
+    /// Adds a part (an article): ``add_part("Siemens", "3RT2015-1BB41")``.
+    #[pyo3(signature = (manufacturer, order_number, type_number = "", description = ""))]
+    fn add_part(
+        &mut self,
+        manufacturer: &str,
+        order_number: &str,
+        type_number: &str,
+        description: &str,
+    ) -> PyResult<u64> {
+        Ok(self
+            .get_mut()?
+            .add_part(manufacturer, order_number, type_number, description)
+            .map_err(err)?
+            .raw())
+    }
+
+    /// Adds a part to a device's part list.
+    fn assign_part(&mut self, device: u64, part: u64) -> PyResult<()> {
+        self.get_mut()?
+            .assign_part(DeviceId(device), PartId(part))
+            .map_err(err)
+    }
+
     /// Renames a device: ``set_tag(k1, "-K2")``.
     fn set_tag(&mut self, device: u64, tag: &str) -> PyResult<()> {
         self.get_mut()?.set_tag(DeviceId(device), tag).map_err(err)
@@ -315,6 +338,26 @@ impl PyProject {
     /// count, wire ids and potential names.
     fn nets<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         to_py(py, &self.get()?.nets())
+    }
+
+    /// A report as data: ``report("bom")`` gives its sections with column
+    /// headers and rows of text. Reports: toc, bom, devices, wires.
+    fn report<'py>(&self, py: Python<'py>, id: &str) -> PyResult<Bound<'py, PyAny>> {
+        to_py(py, &self.get()?.report(id).map_err(err)?)
+    }
+
+    /// Writes the bill of materials to ``path`` (``.xlsx`` or ``.csv``).
+    fn export_bom(&self, path: PathBuf) -> PyResult<()> {
+        self.get()?.export_reports(&["bom"], path).map_err(err)
+    }
+
+    /// Writes reports to ``path``: ``.xlsx`` (one sheet each; every report
+    /// when ``reports`` is None) or ``.csv`` (exactly one report).
+    #[pyo3(signature = (path, reports = None))]
+    fn export_reports(&self, path: PathBuf, reports: Option<Vec<String>>) -> PyResult<()> {
+        let ids = reports.unwrap_or_default();
+        let ids: Vec<&str> = ids.iter().map(String::as_str).collect();
+        self.get()?.export_reports(&ids, path).map_err(err)
     }
 
     /// The whole project as its diffable JSON text.

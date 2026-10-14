@@ -19,6 +19,7 @@ python = ["dep:pyo3", "pyo3/extension-module"]
 novo-core.workspace = true
 novo-storage.workspace = true
 novo-symbols.workspace = true
+novo-reports.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -26,6 +27,7 @@ pyo3 = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile.workspace = true
+calamine.workspace = true
 
 [lints]
 workspace = true
