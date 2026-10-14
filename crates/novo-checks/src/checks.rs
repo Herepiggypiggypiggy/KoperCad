@@ -36,8 +36,9 @@ fn plural(n: usize, one: &str, many: &str) -> String {
 /// is not a connection in the model (the editor draws a wire when pins
 /// touch, DESIGN.md §2), so it looks connected but is not.
 ///
-/// The model has no "optional connection point" flag yet, so every pin is
-/// expected to be wired.
+/// A spare point (`Pin::optional`, from the symbol library) may stay free;
+/// it is still reported when it touches another point without a wire,
+/// since that looks connected but is not.
 pub(crate) fn unconnected_pins(cx: &Context<'_>, out: &mut Vec<Problem>) {
     let project = cx.project;
     // Free pins first; most projects have few, so the position lookup below
@@ -51,7 +52,9 @@ pub(crate) fn unconnected_pins(cx: &Context<'_>, out: &mut Vec<Problem>) {
         .collect();
     wired.sort_unstable();
     wired.dedup();
-    let mut free: Vec<(&SymbolInstance, Vec<(&str, GridKey)>)> = Vec::new();
+    // Per free pin: its name, whether it is a spare point, where it is.
+    type FreePin<'a> = (&'a str, bool, GridKey);
+    let mut free: Vec<(&SymbolInstance, Vec<FreePin<'_>>)> = Vec::new();
     for symbol in project.symbols() {
         let start = wired.partition_point(|w| w.0 < symbol.id);
         let end = start + wired[start..].partition_point(|w| w.0 == symbol.id);
@@ -63,7 +66,7 @@ pub(crate) fn unconnected_pins(cx: &Context<'_>, out: &mut Vec<Problem>) {
             };
             if wired_here.binary_search(&(symbol.id, index)).is_err() {
                 let at = symbol.placement.apply(pin.offset);
-                pins.push((pin.name.as_str(), grid_key(symbol.page, at)));
+                pins.push((pin.name.as_str(), pin.optional, grid_key(symbol.page, at)));
             }
         }
         if !pins.is_empty() {
@@ -77,7 +80,7 @@ pub(crate) fn unconnected_pins(cx: &Context<'_>, out: &mut Vec<Problem>) {
     // point; more than one means it touches something.
     let mut points: HashMap<GridKey, u32> = free
         .iter()
-        .flat_map(|(_, pins)| pins.iter().map(|&(_, key)| (key, 0)))
+        .flat_map(|(_, pins)| pins.iter().map(|&(_, _, key)| (key, 0)))
         .collect();
     let mut count = |key| {
         if let Some(n) = points.get_mut(&key) {
@@ -94,10 +97,18 @@ pub(crate) fn unconnected_pins(cx: &Context<'_>, out: &mut Vec<Problem>) {
     }
     for (symbol, pins) in free {
         let (touching, alone): (Vec<_>, Vec<_>) =
-            pins.into_iter().partition(|(_, key)| points[key] > 1);
-        let names = |list: Vec<(&str, _)>| {
+            pins.into_iter().partition(|(_, _, key)| points[key] > 1);
+        // A spare point left free is fine.
+        let alone: Vec<_> = alone
+            .into_iter()
+            .filter(|(_, optional, _)| !optional)
+            .collect();
+        if touching.is_empty() && alone.is_empty() {
+            continue;
+        }
+        let names = |list: Vec<(&str, bool, _)>| {
             list.into_iter()
-                .map(|(name, _)| name)
+                .map(|(name, _, _)| name)
                 .collect::<Vec<_>>()
                 .join(", ")
         };
@@ -303,11 +314,12 @@ pub(crate) fn lone_interruptions(cx: &Context<'_>, out: &mut Vec<Problem>) {
 }
 
 /// Nets where two or more potentials are defined (`Netlist::potential_conflicts`).
-/// Marks what defines them: potential feeds, wires with a potential and,
-/// under the terminal-name rule, terminals named like a potential.
+/// Marks what defines them, as the netlist names it (`Net::sources`): feed
+/// symbols and source pins with a feed, wires with a potential, supply
+/// terminals and, under the terminal-name rule, terminals named like a
+/// potential (marked through their symbols on the net).
 pub(crate) fn potential_conflicts(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Problem>) {
     let project = cx.project;
-    let from_names = project.info().rules.potentials.from_terminal_names;
     for net in netlist.potential_conflicts() {
         let names: Vec<&str> = net
             .defined
@@ -315,31 +327,33 @@ pub(crate) fn potential_conflicts(cx: &Context<'_>, netlist: &Netlist, out: &mut
             .filter_map(|&p| project.potential(p).map(|p| p.name.as_str()))
             .collect();
         let mut symbols = BTreeSet::new();
-        for end in &net.endpoints {
-            let Some(pin) = end.as_pin() else { continue };
-            let Some(symbol) = project.symbol(pin.symbol) else {
-                continue;
-            };
-            let defines = match &symbol.role {
-                SymbolRole::PotentialFeed { potential } => net.defined.contains(potential),
-                SymbolRole::Terminal { .. } if from_names => symbol
-                    .terminal_of_pin(pin.pin)
-                    .and_then(|t| project.terminal(t))
-                    .is_some_and(|t| names.contains(&t.name.as_str())),
-                _ => false,
-            };
-            if defines {
-                symbols.insert(symbol.id);
+        let mut wires = BTreeSet::new();
+        for source in &net.sources {
+            match source.by {
+                AnyId::Symbol(s) => {
+                    symbols.insert(s);
+                }
+                AnyId::Wire(w) => {
+                    wires.insert(w);
+                }
+                // A terminal is drawn through its symbols; mark those on
+                // this net.
+                AnyId::Terminal(t) => symbols.extend(
+                    project
+                        .symbols_of_terminal(t)
+                        .into_iter()
+                        .map(|s| s.id)
+                        .filter(|s| {
+                            net.endpoints
+                                .iter()
+                                .any(|e| e.as_pin().is_some_and(|p| p.symbol == *s))
+                        }),
+                ),
+                _ => {}
             }
         }
-        let wires = net.wires.iter().filter(|&&w| {
-            project
-                .wire(w)
-                .and_then(|w| w.potential)
-                .is_some_and(|p| net.defined.contains(&p))
-        });
         let mut at: Vec<AnyId> = symbols.into_iter().map(AnyId::from).collect();
-        at.extend(wires.map(|&w| AnyId::from(w)));
+        at.extend(wires.into_iter().map(AnyId::from));
         if at.is_empty() {
             at.extend(net.wires.iter().map(|&w| AnyId::from(w)));
         }
@@ -434,4 +448,132 @@ pub(crate) fn missing_parts(cx: &Context<'_>, out: &mut Vec<Problem>) {
             ));
         }
     }
+}
+
+/// Current-carrying capacity of copper conductors with PVC insulation, in
+/// amperes, by cross-section in mm²: IEC 60204-1 (Table 6), installation
+/// method B2 (cable in conduit or a wiring duct, the usual case in a
+/// cabinet), 40 °C ambient. Smaller sections than listed scale down from
+/// the smallest; larger ones are not checked.
+const AMPACITY_B2: [(f64, f64); 10] = [
+    (0.75, 7.6),
+    (1.0, 9.6),
+    (1.5, 12.2),
+    (2.5, 16.5),
+    (4.0, 23.0),
+    (6.0, 29.0),
+    (10.0, 40.0),
+    (16.0, 53.0),
+    (25.0, 67.0),
+    (35.0, 83.0),
+];
+
+/// What a conductor of `mm2` carries (see [`AMPACITY_B2`]): the value for
+/// the largest listed section not above it. `None` above the table.
+fn ampacity(mm2: f64) -> Option<f64> {
+    let (smallest, smallest_a) = AMPACITY_B2[0];
+    let (largest, _) = AMPACITY_B2[AMPACITY_B2.len() - 1];
+    if mm2.is_nan() || mm2 <= 0.0 || mm2 > largest + EPS {
+        return None;
+    }
+    if mm2 < smallest - EPS {
+        return Some(smallest_a * mm2 / smallest);
+    }
+    AMPACITY_B2
+        .iter()
+        .rev()
+        .find(|(section, _)| *section <= mm2 + EPS)
+        .map(|&(_, amps)| amps)
+}
+
+/// Whether a symbol is an overcurrent protective device, by its library key
+/// (`iec/protection/...`): fuses, breakers (MCB, RCBO, motor protection) and
+/// overload relays. Residual-current devices, surge arresters and
+/// magnetic-only motor circuit protectors do not protect a wire against
+/// overload.
+fn protects_against_overload(symbol: &SymbolInstance) -> bool {
+    let key = symbol.symbol.0.as_str();
+    let Some(name) = key
+        .rsplit('/')
+        .next()
+        .filter(|_| key.contains("/protection/"))
+    else {
+        return false;
+    };
+    [
+        "fuse",
+        "mcb",
+        "rcbo",
+        "motor_protection_breaker",
+        "overload_relay",
+    ]
+    .iter()
+    .any(|kind| name.starts_with(kind))
+}
+
+/// Wires that end on an overcurrent protective device and are thinner than
+/// its rated current needs ([`Project::rated_current_a`]: the device's own
+/// `rated_current_a`, else its part's). A wire's cross-section is its own,
+/// else its cable core's; wires without one are not checked. One problem
+/// per device, marking the device's symbols and every such wire.
+pub(crate) fn undersized_wires(cx: &Context<'_>, out: &mut Vec<Problem>) {
+    let project = cx.project;
+    let section = |wire: &novo_core::Wire| {
+        wire.cross_section_mm2.or_else(|| {
+            let (cable, core) = project.core_of_wire(wire.id)?;
+            project.cable(cable)?.cores.get(core)?.cross_section_mm2
+        })
+    };
+    type Found = (BTreeSet<SymbolId>, BTreeSet<novo_core::WireId>, Option<f64>);
+    let mut by_device: BTreeMap<DeviceId, Found> = BTreeMap::new();
+    for symbol in project.symbols().filter(|s| protects_against_overload(s)) {
+        let SymbolRole::Device { device, .. } = symbol.role else {
+            continue;
+        };
+        let Some(rated) = project.rated_current_a(device).filter(|a| *a > 0.0) else {
+            continue;
+        };
+        for pin in 0..symbol.pins.len() {
+            let Ok(pin) = u16::try_from(pin) else { break };
+            for wire in project.wires_at(Endpoint::pin(symbol.id, pin)) {
+                let Some(wire) = project.wire(wire) else {
+                    continue;
+                };
+                let Some(mm2) = section(wire) else { continue };
+                let Some(amps) = ampacity(mm2) else { continue };
+                if amps + EPS < rated {
+                    let entry = by_device.entry(device).or_default();
+                    entry.0.insert(symbol.id);
+                    entry.1.insert(wire.id);
+                    entry.2 = Some(entry.2.map_or(mm2, |t| t.min(mm2)));
+                }
+            }
+        }
+    }
+    for (device, (symbols, wires, thinnest)) in by_device {
+        let Some(d) = project.device(device) else {
+            continue;
+        };
+        let rated = project.rated_current_a(device).unwrap_or_default();
+        let thinnest = thinnest.unwrap_or_default();
+        let carries = ampacity(thinnest).unwrap_or_default();
+        let mut at: Vec<AnyId> = symbols.into_iter().map(AnyId::from).collect();
+        at.extend(wires.into_iter().map(AnyId::from));
+        out.push(Problem::new(
+            ProblemKind::UndersizedWire,
+            at,
+            format!(
+                "{} is rated {} A, but a {} mm² wire on it carries about {} A",
+                d.tag,
+                number(rated),
+                number(thinnest),
+                number(carries)
+            ),
+        ));
+    }
+}
+
+/// `16`, `0.75`, `12.2`: at most two decimals, no trailing zeros.
+fn number(value: f64) -> String {
+    format!("{}", (value * 100.0).round() / 100.0)
 }

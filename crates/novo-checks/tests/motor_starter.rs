@@ -37,6 +37,8 @@ struct Broken {
     shorted_wire: WireId,
     zero_wire: WireId,
     extra_terminal: TerminalId,
+    f3_sym: SymbolId,
+    thin_wire: WireId,
 }
 
 fn break_it(doc: &mut Document, ms: &MotorStarter) -> Broken {
@@ -103,6 +105,15 @@ fn break_it(doc: &mut Document, ms: &MotorStarter) -> Broken {
             //    projects join same-name terminals).
             tx.set_info(|i| i.rules.terminals.same_name = SameName::Off)?;
             let extra_terminal = tx.add_terminal(ms.x1, "3")?;
+            // 11. The control circuit breaker rated 16 A feeding a 1 mm²
+            //     wire (about 9.6 A in a duct).
+            tx.set_property(ms.f3, RATED_CURRENT_A, Some(16i64.into()))?;
+            let thin_wire = tx
+                .project()
+                .wires_at(Endpoint::pin(ms.f3_sym, 1))
+                .next()
+                .expect("wire to -S0");
+            tx.update::<Wire>(thin_wire, |w| w.cross_section_mm2 = Some(1.0))?;
             Ok(Broken {
                 lamp,
                 s0_sym: ms.s0_sym,
@@ -114,6 +125,8 @@ fn break_it(doc: &mut Document, ms: &MotorStarter) -> Broken {
                 shorted_wire,
                 zero_wire,
                 extra_terminal,
+                f3_sym: ms.f3_sym,
+                thin_wire,
             })
         })
         .unwrap();
@@ -188,9 +201,19 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         "=A1+CAB-H1 has no part"
     );
 
+    let thin = one(ProblemKind::UndersizedWire);
+    assert_eq!(
+        thin.at,
+        vec![AnyId::from(b.f3_sym), AnyId::from(b.thin_wire)]
+    );
+    assert_eq!(
+        thin.message,
+        "=A1+CAB-F3 is rated 16 A, but a 1 mm² wire on it carries about 9.6 A"
+    );
+
     let summary = Summary::of(&problems);
-    assert_eq!((summary.errors, summary.warnings, summary.infos), (3, 6, 1));
-    assert_eq!(summary.pill_text(), "3 errors · 6 warnings");
+    assert_eq!((summary.errors, summary.warnings, summary.infos), (3, 7, 1));
+    assert_eq!(summary.pill_text(), "3 errors · 7 warnings");
 
     // Reading order: main circuit page, then control page.
     let pages: Vec<Option<PageId>> = problems.iter().map(|p| p.page).collect();
