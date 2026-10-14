@@ -646,6 +646,151 @@ fn certain_parts_are_assigned_and_the_rest_proposed() {
     assert!(doc.project().device(gate.k1).unwrap().parts.is_empty());
 }
 
+fn set_property(doc: &mut Document, target: DeviceId, key: &str, value: Value) {
+    doc.execute(novo_core::Command::SetProperty {
+        target: target.into(),
+        key: key.into(),
+        value: Some(value),
+    })
+    .unwrap();
+}
+
+#[test]
+fn bulk_table_property_named_like_a_column_round_trips() {
+    // Review of ea67da2, item 1: `text` read back as Description and
+    // `article` as Order number, so an unchanged paste rewrote 8 devices.
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    set_property(&mut doc, gate.k1, "text", Value::Text("hello".into()));
+    set_property(&mut doc, gate.m1, "article", Value::Text("12345".into()));
+    for key in ["name", "order", "model", "type", "manufacturer", "tag"] {
+        set_property(&mut doc, gate.k1, key, Value::Text(format!("{key} value")));
+    }
+    let before = doc.project().clone();
+    let catalog = Catalog::starter();
+    let tsv = BulkTable::devices(doc.project(), None).to_tsv();
+    let header = tsv.lines().next().unwrap();
+    assert!(header.contains("\tproperties.text"), "{header}");
+    assert!(header.contains("\tproperties.article"), "{header}");
+    let outcome = apply_table(doc.project(), &catalog, &tsv).unwrap();
+    assert_eq!(outcome.changed, 0);
+    assert!(outcome.command.is_none());
+    assert!(outcome.skipped.is_empty());
+
+    // Editing a prefixed property column edits that property only.
+    let edited = tsv.replace("\thello\t", "\tbye\t");
+    assert_ne!(edited, tsv);
+    let command = apply_table(doc.project(), &catalog, &edited)
+        .unwrap()
+        .command;
+    run(&mut doc, command);
+    let k1 = doc.project().device(gate.k1).unwrap();
+    assert_eq!(k1.properties["text"], Value::Text("bye".into()));
+    let k1_before = before.device(gate.k1).unwrap();
+    assert_eq!(k1.description, k1_before.description);
+    assert_eq!(k1.parts, k1_before.parts);
+    let m1 = doc.project().device(gate.m1).unwrap();
+    assert_eq!(m1.parts, before.device(gate.m1).unwrap().parts);
+    assert_eq!(doc.project().parts().count(), before.parts().count());
+}
+
+#[test]
+fn bulk_paste_with_two_columns_for_one_field_is_refused() {
+    let mut doc = Document::default();
+    motor_starter(&mut doc).unwrap();
+    let catalog = Catalog::starter();
+    // `Text` is a Description header; `Article` an Order number header.
+    for paste in [
+        "Tag\tDescription\tText\n-K1\ta\tb\n",
+        "Tag\tOrder number\tArticle\n-K1\t3RT2016-1BB41\t12345\n",
+        "Tag\tproperties.power_kw\tproperties.power_kw\n-M1\t1\t2\n",
+        "Tag\tBMK\n-K1\t-K1\n",
+    ] {
+        let err = apply_table(doc.project(), &catalog, paste).unwrap_err();
+        assert!(
+            matches!(err, novo_parts::BulkError::DuplicateColumn { .. }),
+            "{paste:?}: {err}"
+        );
+    }
+}
+
+#[test]
+fn bulk_paste_with_another_function_or_location_does_not_edit_a_namesake() {
+    // Review of ea67da2, item 2: `=ZZ9+ELSEWHERE-K1` edited `=A1+CAB-K1`.
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let catalog = Catalog::starter();
+    let project = doc.project();
+    assert_eq!(novo_parts::find_device(project, "=ZZ9+ELSEWHERE-K1"), None);
+    assert_eq!(novo_parts::find_device(project, "=ZZ9-K1"), None);
+    assert_eq!(novo_parts::find_device(project, "+ELSEWHERE-K1"), None);
+    assert_eq!(
+        novo_parts::find_device(project, "=A1+CAB-K1"),
+        Some(gate.k1)
+    );
+    // Only the product aspect still finds the one device with it.
+    assert_eq!(novo_parts::find_device(project, "-K1"), Some(gate.k1));
+
+    let outcome = apply_table(
+        project,
+        &catalog,
+        "Tag\tDescription\n=ZZ9+ELSEWHERE-K1\tWrong device\n",
+    )
+    .unwrap();
+    assert_eq!(outcome.changed, 0);
+    assert!(outcome.command.is_none());
+    assert_eq!(outcome.skipped.len(), 1);
+    assert!(outcome.skipped[0].1.contains("=ZZ9+ELSEWHERE-K1"));
+}
+
+#[test]
+fn bulk_table_keeps_tabs_line_breaks_and_quotes_in_cells() {
+    // Review of ea67da2, item 3: the TSV turned tabs and line breaks into
+    // spaces, so an unchanged paste rewrote multi-line descriptions.
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let mut k1 = doc.project().device(gate.k1).unwrap().clone();
+    let description = "Main contactor\nline 2\twith a tab, \"quoted\"\r\n24\" rack ";
+    k1.description = description.into();
+    doc.execute(novo_core::Command::Replace {
+        record: Record::Device(k1),
+    })
+    .unwrap();
+    set_property(
+        &mut doc,
+        gate.m1,
+        "note",
+        Value::Text("\"starts quoted\" then".into()),
+    );
+    let catalog = Catalog::starter();
+    let tsv = BulkTable::devices(doc.project(), None).to_tsv();
+    let outcome = apply_table(doc.project(), &catalog, &tsv).unwrap();
+    assert_eq!(outcome.changed, 0, "unchanged paste of\n{tsv}");
+
+    // Every row still has one field per column.
+    let rows = novo_parts::parse_delimited(&tsv);
+    assert_eq!(rows.len(), doc.project().devices().count() + 1);
+    assert!(rows.iter().all(|r| r.len() == rows[0].len()));
+    let k1_row = rows.iter().find(|r| r[0] == "=A1+CAB-K1").unwrap();
+    assert_eq!(k1_row[1], description);
+
+    // Editing a quoted cell on another row keeps the description intact.
+    let edited = tsv.replace("\"\"\"starts quoted\"\" then\"", "\"\"\"x\"\" then\"");
+    assert_ne!(edited, tsv);
+    let command = apply_table(doc.project(), &catalog, &edited)
+        .unwrap()
+        .command;
+    run(&mut doc, command);
+    assert_eq!(
+        doc.project().device(gate.m1).unwrap().properties["note"],
+        Value::Text("\"x\" then".into())
+    );
+    assert_eq!(
+        doc.project().device(gate.k1).unwrap().description,
+        description
+    );
+}
+
 #[test]
 fn texts_have_no_part_and_terminals_show_theirs() {
     let mut doc = Document::default();

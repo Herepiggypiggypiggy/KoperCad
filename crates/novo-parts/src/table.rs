@@ -6,6 +6,11 @@
 //! [`apply_table`] as one command: changing 200 rows in Excel and pasting
 //! them back is one undo step. The grid in the app edits single cells
 //! through [`set_cell`], the same path.
+//!
+//! Copying the table and pasting it back unchanged changes nothing: property
+//! columns are written as `properties.<key>`, so a property called `text`
+//! or `article` never reads back as the Description or Order number column,
+//! and cells holding tabs, line breaks or quotes are quoted.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -29,8 +34,12 @@ pub enum TableColumn {
     Property(String),
 }
 
+/// The header prefix of property columns on the clipboard.
+pub const PROPERTY_PREFIX: &str = "properties.";
+
 impl TableColumn {
-    /// The header as written to the clipboard.
+    /// The header as written to the clipboard: built-in columns by name,
+    /// properties as `properties.<key>` so they cannot collide with them.
     pub fn header(&self) -> String {
         match self {
             TableColumn::Tag => "Tag".into(),
@@ -38,7 +47,7 @@ impl TableColumn {
             TableColumn::Manufacturer => "Manufacturer".into(),
             TableColumn::OrderNumber => "Order number".into(),
             TableColumn::TypeNumber => "Type number".into(),
-            TableColumn::Property(key) => key.clone(),
+            TableColumn::Property(key) => format!("{PROPERTY_PREFIX}{key}"),
         }
     }
 
@@ -53,8 +62,18 @@ impl TableColumn {
         }
     }
 
-    /// Reads a header back; property columns accept the key or its label.
+    /// Reads a header back. `properties.<key>` is always that property,
+    /// with the key taken as written. Other headers are matched against the
+    /// built-in columns (in English, German and Dutch) first; what is left
+    /// becomes a property, from its key or its label (`Rated current [A]`).
     pub fn from_header(header: &str) -> Option<TableColumn> {
+        let trimmed = header.trim();
+        if let Some(prefix) = trimmed.get(..PROPERTY_PREFIX.len())
+            && prefix.eq_ignore_ascii_case(PROPERTY_PREFIX)
+        {
+            let key = trimmed[PROPERTY_PREFIX.len()..].trim();
+            return (!key.is_empty()).then(|| TableColumn::Property(key.to_owned()));
+        }
         let squashed = normalize_code(header);
         let column = match squashed.as_str() {
             "" => return None,
@@ -126,19 +145,29 @@ impl BulkTable {
         BulkTable { columns, rows }
     }
 
-    /// Tab-separated text with a header row, for the clipboard.
+    /// Tab-separated text with a header row, for the clipboard. A cell
+    /// holding a tab, a line break or a quote is quoted RFC 4180 style
+    /// (as Excel itself copies such cells), so it pastes back unchanged.
     pub fn to_tsv(&self) -> String {
-        let clean = |s: &str| s.replace(['\t', '\n', '\r'], " ");
         let mut out = String::new();
-        let header: Vec<String> = self.columns.iter().map(|c| clean(&c.header())).collect();
+        let header: Vec<String> = self.columns.iter().map(|c| quote(&c.header())).collect();
         out.push_str(&header.join("\t"));
         out.push('\n');
         for row in &self.rows {
-            let cells: Vec<String> = row.cells.iter().map(|c| clean(c)).collect();
+            let cells: Vec<String> = row.cells.iter().map(|c| quote(c)).collect();
             out.push_str(&cells.join("\t"));
             out.push('\n');
         }
         out
+    }
+}
+
+/// Quotes a TSV field when it needs it, doubling inner quotes.
+fn quote(field: &str) -> String {
+    if field.contains(['\t', '\n', '\r', '"']) {
+        format!("\"{}\"", field.replace('"', "\"\""))
+    } else {
+        field.to_owned()
     }
 }
 
@@ -169,6 +198,14 @@ pub enum BulkError {
     TagColumn,
     #[error("no device {0}")]
     UnknownDevice(String),
+    #[error(
+        "columns {first} and {second} both set {field}; rename one (properties as properties.<name>)"
+    )]
+    DuplicateColumn {
+        first: String,
+        second: String,
+        field: String,
+    },
 }
 
 /// The result of applying a table.
@@ -183,12 +220,16 @@ pub struct BulkOutcome {
 }
 
 /// Finds the device a table row means: the exact tag, or, when the row
-/// gives only the product aspect (`-K1`), the one device with that product
-/// designation.
+/// gives only the product aspect (`-K1`, no `=` or `+` levels), the one
+/// device with that product designation. A tag that names a function or
+/// location matches only exactly, so `=ZZ9-K1` never edits `=A1-K1`.
 pub fn find_device(project: &Project, text: &str) -> Option<DeviceId> {
     let tag = DeviceTag::parse(text.trim()).ok()?;
     if let [id] = project.devices_by_tag(&tag)[..] {
         return Some(id);
+    }
+    if !tag.levels(Aspect::Function).is_empty() || !tag.levels(Aspect::Location).is_empty() {
+        return None;
     }
     let product = tag.levels(Aspect::Product);
     let mut matches = project
@@ -217,6 +258,17 @@ pub fn apply_table(
     };
     let columns: Vec<Option<TableColumn>> =
         header.iter().map(|h| TableColumn::from_header(h)).collect();
+    // Two columns writing one field would make the later one win silently.
+    for (i, column) in columns.iter().enumerate() {
+        let Some(column) = column else { continue };
+        if let Some(j) = columns[..i].iter().position(|c| c.as_ref() == Some(column)) {
+            return Err(BulkError::DuplicateColumn {
+                first: header[j].trim().to_owned(),
+                second: header[i].trim().to_owned(),
+                field: column.label(),
+            });
+        }
+    }
     let tag_index = columns
         .iter()
         .position(|c| c == &Some(TableColumn::Tag))
@@ -314,6 +366,14 @@ impl<'a> Edits<'a> {
         };
         let mut device = self.devices.remove(&id).unwrap_or_else(|| original.clone());
         for (column, &value) in cells {
+            // A cell that still shows the current value leaves it alone, so
+            // an unchanged paste changes nothing even where the text does
+            // not parse back to the same value (spaces, `4.0` vs `4`).
+            if **column != TableColumn::OrderNumber
+                && value == cell(self.project, original, column).trim()
+            {
+                continue;
+            }
             match column {
                 TableColumn::Tag | TableColumn::Manufacturer | TableColumn::TypeNumber => {}
                 TableColumn::OrderNumber => {}
