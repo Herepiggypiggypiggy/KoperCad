@@ -488,13 +488,32 @@ impl Editor {
             numbering: self.numbering,
             ..PlaceOptions::default()
         };
-        if let Some(parent) = &options.parent
-            && matches!(classify(&symbol), SymbolClass::Child { .. })
-        {
+        if let Some(parent) = &options.parent {
             let tag = naming::complete_tag(doc.project(), page, parent);
-            if doc.project().devices_by_tag(&tag).is_empty() {
-                self.notice = Some(format!("No device {tag}; place it first"));
-                return Clicked::Refused;
+            let project = doc.project();
+            let device = project.devices_by_tag(&tag).first().copied();
+            match (classify(&symbol), device) {
+                (SymbolClass::Child { .. }, None) => {
+                    self.notice = Some(format!("No device {tag}; place it first"));
+                    return Clicked::Refused;
+                }
+                // A device has one main function (DESIGN.md: the coil is
+                // where its contacts are referenced from).
+                (SymbolClass::Main { .. }, Some(device)) => {
+                    if let Some(main) = project
+                        .symbols_of_device(device)
+                        .into_iter()
+                        .find(|s| matches!(s.role, SymbolRole::Device { main: true, .. }))
+                    {
+                        let page = project.page(main.page).map_or("", |p| p.name.as_str());
+                        self.notice = Some(format!(
+                            "{tag} already has its main function on page {page}; \
+                             place a contact with `no {tag}`"
+                        ));
+                        return Clicked::Refused;
+                    }
+                }
+                _ => {}
             }
         }
         let result = doc.transact(format!("Place {}", symbol.name), |tx| {
@@ -862,11 +881,9 @@ impl Editor {
                     .get(&p.symbol)
                     .map_or(p.symbol.as_str(), |s| s.name.as_str());
                 let tag = self.catalog.get(&p.symbol).and_then(|s| match classify(s) {
-                    SymbolClass::Main { letter } => Some(
-                        naming::new_device_tag(doc.project(), page, letter, self.numbering)
-                            .to_string(),
-                    ),
-                    SymbolClass::Child { letter } => Some(match &p.parent {
+                    SymbolClass::Main { letter } | SymbolClass::Child { letter } => Some(match &p
+                        .parent
+                    {
                         Some(t) => naming::complete_tag(doc.project(), page, t).to_string(),
                         None => naming::new_device_tag(doc.project(), page, letter, self.numbering)
                             .to_string(),

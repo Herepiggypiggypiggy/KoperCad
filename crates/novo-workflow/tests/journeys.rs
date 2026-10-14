@@ -214,6 +214,66 @@ fn grammar_verb_noun_and_bare_verb() {
 }
 
 #[test]
+fn accept_all_is_one_command_not_accept_with_an_argument() {
+    let mut doc = Document::default();
+    motor_starter(&mut doc).unwrap();
+    let library = Library::builtin().unwrap();
+    let keymap = Keymap::workflow();
+    let palette = Palette::default();
+    let src = sources(doc.project(), &library, &keymap);
+    for query in ["accept all", "Accept All", "accept all "] {
+        let rows = palette.search(query, &src);
+        assert_eq!(
+            rows[0].target,
+            Target::Command("proposal.accept_all"),
+            "{query}"
+        );
+        assert!(
+            !rows.iter().any(|r| r.target
+                == Target::Run {
+                    command: "proposal.accept",
+                    argument: "all".into()
+                }),
+            "{query}"
+        );
+    }
+    assert_eq!(
+        palette.search("accept", &src)[0].target,
+        Target::Command("proposal.accept")
+    );
+}
+
+#[test]
+fn the_device_list_after_a_contact_is_in_natural_tag_order() {
+    let mut doc = Document::default();
+    doc.transact("Devices", |tx| {
+        for tag in ["-K10", "-K2", "-K1"] {
+            tx.add_device(DeviceTag::parse(tag)?, "")?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let library = Library::builtin().unwrap();
+    let keymap = Keymap::workflow();
+    let palette = Palette::default();
+    let src = sources(doc.project(), &library, &keymap);
+    let labels: Vec<String> = palette
+        .search("no ", &src)
+        .into_iter()
+        .filter(|r| matches!(r.target, Target::Child { .. }))
+        .map(|r| r.label)
+        .collect();
+    assert_eq!(
+        labels,
+        [
+            "Make contact (NO) of -K1",
+            "Make contact (NO) of -K2",
+            "Make contact (NO) of -K10"
+        ]
+    );
+}
+
+#[test]
 fn duplicating_the_main_circuit_renumbers_without_asking() {
     let mut doc = Document::default();
     let gate = motor_starter(&mut doc).unwrap();
