@@ -9,8 +9,9 @@
 //!   so canvas edits share the undo history. The canvas (`novo-canvas`) plugs
 //!   in here.
 //!
-//! Until those land, [`MemoryBackend`] and [`PlaceholderCanvas`] keep the
-//! shell usable on its own.
+//! [`StorageBackend`] keeps projects in `.novo` files with autosave and crash
+//! recovery. [`MemoryBackend`] and [`PlaceholderCanvas`] stand in for tests
+//! and until the canvas is wired.
 
 mod actions;
 mod app;
@@ -21,7 +22,10 @@ mod settings;
 
 pub use actions::{Action, RESERVED_SHORTCUTS};
 pub use app::NovoApp;
-pub use backend::{BackendError, MemoryBackend, ProjectBackend, new_document, page_labels};
+pub use backend::{
+    BackendError, MemoryBackend, OpenReport, ProjectBackend, RecoveryOffer, StorageBackend,
+    new_document, page_labels,
+};
 pub use canvas::{CanvasView, OpenPage, PlaceholderCanvas};
 
 use eframe::egui;
@@ -30,7 +34,7 @@ use eframe::egui;
 pub const APP_NAME: &str = "NovoElectric";
 
 /// File extension of a NovoElectric project file, without the dot.
-pub const PROJECT_EXTENSION: &str = "novo";
+pub const PROJECT_EXTENSION: &str = novo_storage::PROJECT_EXTENSION;
 
 fn window_icon() -> egui::IconData {
     eframe::icon_data::from_png_bytes(include_bytes!("../../../assets/icon/novoelectric.png"))
@@ -63,7 +67,7 @@ pub fn run() -> eframe::Result {
         Box::new(|cc| {
             let mut app = NovoApp::new(
                 cc,
-                Box::new(MemoryBackend::default()),
+                Box::new(StorageBackend::default()),
                 Box::new(PlaceholderCanvas::default()),
             );
             if let Some(path) = startup_file {

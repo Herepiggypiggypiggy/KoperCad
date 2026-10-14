@@ -1476,8 +1476,10 @@ dependencies = [
  "env_logger",
  "log",
  "novo-core",
+ "novo-storage",
  "rfd",
  "serde",
+ "tempfile",
  "winresource",
 ]
 

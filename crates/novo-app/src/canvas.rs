@@ -4,14 +4,60 @@
 //! (WS-03) provides the real one; [`PlaceholderCanvas`] stands in until then.
 
 use eframe::egui;
-use novo_core::{ChangeSet, Document, PageId};
+use novo_core::{ChangeSet, Command, Document, ModelError, Outcome, PageId, Tx};
 
-/// The open page, handed to the canvas each frame.
+use crate::backend::ProjectBackend;
+
+/// The open page, handed to the canvas each frame. Edits go through
+/// [`OpenPage::transact`] or [`OpenPage::execute`], so they join the shared
+/// undo history and reach the project file's save and autosave.
 pub struct OpenPage<'a> {
-    /// Edit only through `Document::transact`, so edits join the shared undo
-    /// history.
-    pub document: &'a mut Document,
-    pub page: PageId,
+    backend: &'a mut dyn ProjectBackend,
+    page: PageId,
+}
+
+impl<'a> OpenPage<'a> {
+    /// `None` when no project is open.
+    pub fn new(backend: &'a mut dyn ProjectBackend, page: PageId) -> Option<Self> {
+        backend.document()?;
+        Some(OpenPage { backend, page })
+    }
+
+    pub fn page(&self) -> PageId {
+        self.page
+    }
+
+    pub fn document(&self) -> &Document {
+        self.backend
+            .document()
+            .expect("OpenPage exists only while a project is open")
+    }
+
+    /// Runs `edit` as one undo step, see `Document::transact`.
+    pub fn transact<R>(
+        &mut self,
+        label: impl Into<String>,
+        edit: impl FnOnce(&mut Tx<'_>) -> Result<R, ModelError>,
+    ) -> Result<(R, ChangeSet), ModelError> {
+        let document = self
+            .backend
+            .document_mut()
+            .expect("OpenPage exists only while a project is open");
+        let (value, changes) = document.transact(label, edit)?;
+        self.backend.record(&changes);
+        Ok((value, changes))
+    }
+
+    /// Runs a command as one undo step, see `Document::execute`.
+    pub fn execute(&mut self, command: Command) -> Result<Outcome, ModelError> {
+        let document = self
+            .backend
+            .document_mut()
+            .expect("OpenPage exists only while a project is open");
+        let outcome = document.execute(command)?;
+        self.backend.record(&outcome.changes);
+        Ok(outcome)
+    }
 }
 
 pub trait CanvasView {
