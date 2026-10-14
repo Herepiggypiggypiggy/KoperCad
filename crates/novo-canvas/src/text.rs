@@ -52,6 +52,9 @@ pub struct Label {
     pub anchor: Anchor,
     /// Radians, clockwise on screen (`-FRAC_PI_2` reads bottom to top).
     pub rotation: f32,
+    /// Keeps its own colour while its item is hovered or selected (a
+    /// warning should not disappear the moment the user looks at it).
+    pub keep_color: bool,
 }
 
 /// Average glyph advance relative to the font size, used for the estimated
@@ -67,7 +70,14 @@ impl Label {
             color: Color::BLACK,
             anchor: Anchor::BottomLeft,
             rotation: 0.0,
+            keep_color: false,
         }
+    }
+
+    /// See [`Label::keep_color`].
+    pub fn keeping_color(mut self) -> Self {
+        self.keep_color = true;
+        self
     }
 
     pub fn anchored(mut self, anchor: Anchor) -> Self {

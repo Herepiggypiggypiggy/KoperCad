@@ -38,7 +38,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 
 pub use draw::PT_PER_MM;
-pub use novo_canvas::model::SymbolNote;
+pub use novo_canvas::model::{NoteAnchor, SymbolNote};
 
 /// Which pages to export.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

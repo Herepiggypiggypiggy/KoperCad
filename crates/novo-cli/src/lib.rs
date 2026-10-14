@@ -14,7 +14,7 @@ use clap::{Parser, Subcommand};
 use novo_checks::{Problem, ProblemKind, Severity, Summary};
 use novo_core::Project;
 use novo_editor::art::LibraryArt;
-use novo_pdf::{PageSet, PdfOptions, SymbolNote};
+use novo_pdf::{NoteAnchor, PageSet, PdfOptions, SymbolNote};
 use novo_py::ReportFormat;
 use novo_reports::CsvOptions;
 use novo_storage::ProjectFile;
@@ -329,6 +329,10 @@ fn pdf(project: &Project, pages: &[String]) -> Result<Vec<u8>, Failure> {
                 symbol: l.symbol,
                 lines: l.lines,
                 warning: l.warning,
+                anchor: match l.anchor {
+                    novo_xref::LabelAnchor::Below => NoteAnchor::Below,
+                    novo_xref::LabelAnchor::Right => NoteAnchor::Right,
+                },
             });
             (p.id, notes.collect())
         })
