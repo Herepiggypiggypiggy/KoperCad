@@ -53,3 +53,8 @@
 - #53: A's command-field data-loss finding fixed at 84eff50; design reviewer still CHANGES NEEDED on 3 items, sent to the Gate 1 worker with suggested fixes.
 - #65 (WS-28) opened; its `art` light-feature request routed to the fixer as a separate novo-editor PR (reviewer A).
 - MAIN-HANDOFF §0 refreshed; stale "re-add deps by hand" line removed (#61 handles it).
+
+## 2026-10-14 20:10 UTC (coordinator session_01DZ68tTULUv7Uhe8ecKbC47)
+- 20:10 Merged #66, #67 (A READY), #62, #63 (C READY). 32 merged today.
+- Process miss: #64 was merged at 19:57 before reviewer C's verdict; C then found a regression (accept-all sorted by wire midpoint x → horizontal wires of different lengths numbered 2/1/3). Fixer fixing first (sort by cabinet-side pin), reviewer C. Rule kept: never merge without the named reviewer's READY on the head.
+- Queued: A's terminal-part/BOM consistency finding (strip.rs reads style only, bom.rs reads Terminal.part only) → fixer, reviewer A. lopdf to [workspace.dependencies] after #53 → coordinator.
