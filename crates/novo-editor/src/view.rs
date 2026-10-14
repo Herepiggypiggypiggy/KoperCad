@@ -3,21 +3,23 @@
 //!
 //! The app shell (WS-01) owns the window and gives the central area to
 //! [`SchematicView::show`] with the open document and page. Keys follow the
-//! WORKFLOW.md shortcut map and act only while the drawing has the keyboard
+//! DESIGN.md §4 key table and act only while the drawing has the keyboard
 //! (principle 10): I insert, W wire, M move, R rotate, X mirror, F2 rename,
-//! Delete, Enter repeat, Page Up / Page Down, Escape ladder. Ctrl chords (undo, save, palette)
+//! Delete, Page Up / Page Down, Escape ladder. Enter is kept for accepting
+//! proposals (DESIGN.md §4); repeat-last-tool is the first item of the
+//! context menu on empty canvas. Ctrl chords (undo, save, palette)
 //! stay with the shell.
 
 use egui::{Key, Modifiers};
 use novo_canvas::model::{self, PageScene, PlaceholderArt, SymbolArt, item_id};
 use novo_canvas::widget::{CanvasView, EscapeTarget};
 use novo_canvas::{Color, Item, ItemId, Primitive, SelectOp, Shape, Stroke, Vec2};
-use novo_core::{AnyId, ChangeSet, DeviceId, Document, PageId, Point, WireId};
+use novo_core::{AnyId, ChangeSet, DeviceId, Document, PageId, Point};
 
 use crate::art::LibraryArt;
 use crate::catalog::Match;
 use crate::edit::device_of;
-use crate::potential::Suggestion;
+use crate::potential::PotentialMenu;
 use crate::tool::{Editor, EditorKey};
 
 /// Rows shown in the insert search.
@@ -44,8 +46,9 @@ struct RenameBox {
 
 struct ContextMenu {
     anchor: egui::Pos2,
-    wires: Vec<WireId>,
-    suggestions: Vec<Suggestion>,
+    /// Nothing was selected: the menu is for the canvas itself.
+    empty: bool,
+    potentials: PotentialMenu,
     device: Option<DeviceId>,
     page: PageId,
     opened: bool,
@@ -242,6 +245,16 @@ impl SchematicView {
                     .with(Primitive::stroked(Shape::polyline(pts, false), ghost)),
             );
         }
+        if !preview.connections.is_empty() {
+            let mut item = Item::new(layer).unselectable();
+            for &(a, b) in &preview.connections {
+                item = item.with(Primitive::stroked(
+                    Shape::line(model::vec(a), model::vec(b)),
+                    ghost,
+                ));
+            }
+            items.push(item);
+        }
         if let Some(t) = preview.target {
             items.push(Item::new(layer).unselectable().with(Primitive::stroked(
                 Shape::circle(model::vec(t), 1.2),
@@ -285,6 +298,8 @@ impl SchematicView {
         if response.clicked() || response.secondary_clicked() {
             response.request_focus();
         }
+        // Alt held: this drop draws no facing wires (and the preview shows none).
+        self.editor.suppress_connect = ui.input(|i| i.modifiers.alt);
         let tolerance = f64::from(self.canvas.pick_tolerance / self.canvas.viewport.zoom);
         if let Some(w) = out.cursor_raw {
             self.editor.hover(document, page, point(w), tolerance);
@@ -317,15 +332,15 @@ impl SchematicView {
                 self.canvas.selection.apply([hovered], SelectOp::Replace);
             }
             let selection = self.selection();
-            let (wires, suggestions) = self.editor.potential_suggestions(document, &selection);
+            let potentials = self.editor.potential_menu(document, &selection);
             let device = selection
                 .iter()
                 .find_map(|&id| device_of(document.project(), id));
             let anchor = ctx.pointer_latest_pos().unwrap_or(rect.center());
             self.menu = Some(ContextMenu {
                 anchor,
-                wires,
-                suggestions,
+                empty: selection.is_empty(),
+                potentials,
                 device,
                 page,
                 opened: true,
@@ -397,7 +412,6 @@ impl SchematicView {
             (Key::R, EditorKey::Rotate),
             (Key::X, EditorKey::Mirror),
             (Key::Delete, EditorKey::Delete),
-            (Key::Enter, EditorKey::Repeat),
         ] {
             if pressed(key) {
                 if key == Key::M && out.cursor_raw.is_none() {
@@ -602,31 +616,39 @@ impl SchematicView {
             .show(ctx, |ui| {
                 egui::Frame::menu(ui.style()).show(ui, |ui| {
                     ui.set_min_width(220.0);
-                    if let Some(label) = &repeat
-                        && ui.button(format!("{label}   Enter")).clicked()
-                    {
-                        chosen = Some(MenuChoice::Repeat);
+                    // DESIGN.md §4: on an object its own actions come first;
+                    // on empty canvas, repeat-last-tool.
+                    if menu.empty {
+                        if let Some(label) = &repeat
+                            && ui.button(label.as_str()).clicked()
+                        {
+                            chosen = Some(MenuChoice::Repeat);
+                        }
+                        if ui.button("New page after this").clicked() {
+                            chosen = Some(MenuChoice::NewPage);
+                        }
+                        return;
                     }
-                    if !menu.suggestions.is_empty() {
-                        ui.separator();
-                        for (i, s) in menu.suggestions.iter().enumerate() {
-                            let text = if i == 0 {
-                                egui::RichText::new(&s.label).strong()
-                            } else {
-                                egui::RichText::new(&s.label)
-                            };
-                            if ui.button(text).clicked() {
-                                chosen = Some(MenuChoice::Potential(i));
-                            }
+                    let p = &menu.potentials;
+                    if let Some(carried) = &p.carried {
+                        ui.add_enabled(false, egui::Button::new(carried.as_str()));
+                    }
+                    for (i, s) in p.declare.iter().enumerate() {
+                        let text = if i == 0 {
+                            egui::RichText::new(&s.label).strong()
+                        } else {
+                            egui::RichText::new(&s.label)
+                        };
+                        if ui.button(text).clicked() {
+                            chosen = Some(MenuChoice::Potential(i));
                         }
                     }
-                    if menu.device.is_some() {
+                    if p.carried.is_some() || !p.declare.is_empty() {
                         ui.separator();
-                        if ui.button("Rename   F2").clicked() {
-                            chosen = Some(MenuChoice::Rename);
-                        }
                     }
-                    ui.separator();
+                    if menu.device.is_some() && ui.button("Rename   F2").clicked() {
+                        chosen = Some(MenuChoice::Rename);
+                    }
                     for (label, choice) in [
                         ("Move   M", MenuChoice::Key(EditorKey::Move)),
                         ("Rotate   R", MenuChoice::Key(EditorKey::Rotate)),
@@ -637,10 +659,6 @@ impl SchematicView {
                             chosen = Some(choice);
                         }
                     }
-                    ui.separator();
-                    if ui.button("New page after this").clicked() {
-                        chosen = Some(MenuChoice::NewPage);
-                    }
                 });
             });
         let clicked_outside = !menu.opened
@@ -648,10 +666,10 @@ impl SchematicView {
             && !area.response.contains_pointer();
         menu.opened = false;
         let anchor = menu.anchor;
-        let wires = menu.wires.clone();
+        let wires = menu.potentials.wires.clone();
         let device = menu.device;
         let page = menu.page;
-        let suggestion = |i: usize| menu.suggestions.get(i).cloned();
+        let suggestion = |i: usize| menu.potentials.declare.get(i).cloned();
         let choice_suggestion = match chosen {
             Some(MenuChoice::Potential(i)) => suggestion(i),
             _ => None,
@@ -933,7 +951,11 @@ mod tests {
         h.view.select(&wires);
         h.click(48.0, 88.0, egui::PointerButton::Secondary);
         let menu = h.view.menu.as_ref().expect("context menu");
-        assert_eq!(menu.suggestions[0].label, "Three phase 400 V (L1, L2, L3)");
+        assert_eq!(
+            menu.potentials.declare[0].label,
+            "Declare source: 3~ 400 V (L1, L2, L3)"
+        );
+        assert!(!menu.empty);
     }
 
     #[test]
@@ -957,5 +979,21 @@ mod tests {
         h.frame(Vec::new());
         h.key(Key::PageUp);
         assert_eq!(h.view.take_page_request(), None);
+    }
+
+    #[test]
+    fn enter_does_not_repeat_and_empty_canvas_menu_offers_repeat() {
+        let mut h = Harness::new();
+        h.view.editor.begin_wire();
+        h.hover(100.0, 100.0);
+        h.key(Key::Escape);
+        assert!(!h.view.editor.tool_active());
+        // Enter is for proposals, not repeat-last-tool.
+        h.key(Key::Enter);
+        assert!(!h.view.editor.tool_active());
+        h.click(100.0, 100.0, egui::PointerButton::Secondary);
+        let menu = h.view.menu.as_ref().expect("context menu");
+        assert!(menu.empty);
+        assert!(h.view.editor.repeat_label().is_some());
     }
 }

@@ -1,5 +1,5 @@
-//! Device tags and connection numbers given without asking (WORKFLOW.md
-//! principle 2, J2 and J4).
+//! Device tags and connection numbers given without asking (DESIGN.md §2
+//! and §7: numbering is a rule, applied on placement).
 
 use novo_core::{DeviceId, DeviceTag, PageId, Project, Value};
 
@@ -21,6 +21,28 @@ pub fn page_structure(project: &Project, page: PageId) -> DeviceTag {
             t
         })
         .unwrap_or_default()
+}
+
+/// How new devices are numbered: a project rule (DESIGN.md §7), so other
+/// schemes such as page based `-K301` (§6) are added here without touching
+/// placement.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Numbering {
+    /// `-K1`, `-K2`, ... per letter code within the page's structure.
+    #[default]
+    PerLetter,
+}
+
+/// The tag a new device with `letter` gets on `page` under `scheme`.
+pub fn new_device_tag(
+    project: &Project,
+    page: PageId,
+    letter: &str,
+    scheme: Numbering,
+) -> DeviceTag {
+    match scheme {
+        Numbering::PerLetter => next_device_tag(project, page, letter),
+    }
 }
 
 /// The next free tag for a letter code on a page: `-K3` when `-K1` and `-K2`

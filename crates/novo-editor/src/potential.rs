@@ -1,11 +1,14 @@
-//! Potentials on wires (WORKFLOW.md J10): select L1, L2 and L3, right click,
-//! take "Three phase 400 V". PE, N and PEN are suggested from what a wire
-//! touches.
+//! Potentials (DESIGN.md §2 and §9): declared once at a source and flowing
+//! from there, never assigned wire by wire. Select the three incoming
+//! conductors, right click, take "Declare source: 3~ 400 V (L1, L2, L3)".
 //!
-//! A potential is given to a net by a potential feed symbol on one of its
-//! wires (the model's potential definition point), so it flows through
-//! connected wires and terminals and changing it on one wire changes the
-//! whole net.
+//! A source is a potential feed symbol on a wire (the model's potential
+//! definition point), so the potential flows through connected wires,
+//! contacts and terminals, and changing the source changes everything
+//! downstream. Wires that already carry a potential from upstream show
+//! what they carry instead; overriding one conductor waits for the model's
+//! wire potential (WS-02). PE, N and PEN recognised from connection names
+//! (`-X4:PE`) are automatic under a switchable rule, not a menu choice.
 
 use novo_core::{
     Endpoint, Netlist, PageId, Placement, Point, PotentialKind, Project, Result, Rotation,
@@ -43,6 +46,87 @@ impl PotentialSpec {
 pub struct Suggestion {
     pub label: String,
     pub specs: Vec<PotentialSpec>,
+}
+
+/// The potential part of the context menu for selected wires.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct PotentialMenu {
+    /// The selected wires in page order; `Suggestion::specs` pair with them.
+    pub wires: Vec<WireId>,
+    /// What the wires carry, shown first when any carries something
+    /// ("Carries L1 · L2 · L3").
+    pub carried: Option<String>,
+    /// Sources to declare (or change, where the source sits on these very
+    /// wires), best first. Empty when a wire's potential flows in from
+    /// upstream: that is changed at its source.
+    pub declare: Vec<Suggestion>,
+}
+
+/// Builds the potential menu for wires. `supply_names` is the rule that
+/// recognises PE, N and PEN from connection names.
+pub fn menu(project: &Project, wires: &[WireId], supply_names: bool) -> PotentialMenu {
+    let wires = page_order(project, wires);
+    if wires.is_empty() {
+        return PotentialMenu::default();
+    }
+    let netlist = project.netlist();
+    let mut names = Vec::new();
+    let mut any = false;
+    let mut upstream = false;
+    let mut own_source = false;
+    for &w in &wires {
+        let has_feed = net_has_feed(project, &netlist, w);
+        if let Some(name) = wire_potential(project, &netlist, w) {
+            any = true;
+            own_source |= has_feed;
+            upstream |= !has_feed;
+            names.push(name);
+        } else if let Some(spec) = supply_names
+            .then(|| inferred(project, &netlist, w))
+            .flatten()
+        {
+            any = true;
+            upstream = true;
+            names.push(format!("{} (by name)", spec.name));
+        } else {
+            names.push("none".into());
+        }
+    }
+    let carried = any.then(|| format!("Carries {}", names.join(" · ")));
+    let declare = if upstream {
+        Vec::new()
+    } else {
+        let verb = if own_source {
+            "Change source"
+        } else {
+            "Declare source"
+        };
+        suggestions(wires.len())
+            .into_iter()
+            .map(|s| Suggestion {
+                label: format!("{verb}: {}", s.label),
+                ..s
+            })
+            .collect()
+    };
+    PotentialMenu {
+        wires,
+        carried,
+        declare,
+    }
+}
+
+/// Whether a wire's net holds a potential feed itself (its source is here).
+fn net_has_feed(project: &Project, netlist: &Netlist, wire: WireId) -> bool {
+    let Some(net) = project.wire(wire).and_then(|w| netlist.net_of(w.from)) else {
+        return false;
+    };
+    netlist.net(net).endpoints.iter().any(|e| match *e {
+        Endpoint::Pin { symbol, .. } => project
+            .symbol(symbol)
+            .is_some_and(|s| matches!(s.role, SymbolRole::PotentialFeed { .. })),
+        _ => false,
+    })
 }
 
 fn line(name: &str, v: f64) -> PotentialSpec {
@@ -123,45 +207,36 @@ pub fn inferred(project: &Project, netlist: &Netlist, wire: WireId) -> Option<Po
     None
 }
 
-/// Right-click suggestions for the selected wires, best first.
-pub fn suggestions(project: &Project, wires: &[WireId]) -> Vec<Suggestion> {
+/// The standard sets for a number of wires, best first, unlabelled by
+/// verb; [`menu`] decides whether they are offered.
+pub fn suggestions(wires: usize) -> Vec<Suggestion> {
     let s = |label: &str, specs: Vec<PotentialSpec>| Suggestion {
         label: label.into(),
         specs,
     };
-    match wires.len() {
-        1 => {
-            let netlist = project.netlist();
-            let mut out = Vec::new();
-            if let Some(spec) = inferred(project, &netlist, wires[0]) {
-                out.push(s(
-                    &format!("{} (from its connection)", spec.name),
-                    vec![spec],
-                ));
-            }
-            for (label, spec) in [
-                ("PE", pe()),
-                ("N", n()),
-                ("PEN", pen()),
-                ("L 230 V", line("L", 230.0)),
-                (
-                    "+24 V DC",
-                    PotentialSpec::new("24V", PotentialKind::DcPositive, Some(24.0)),
-                ),
-                (
-                    "0 V DC",
-                    PotentialSpec::new("0V", PotentialKind::DcNegative, Some(0.0)),
-                ),
-            ] {
-                if !out
-                    .iter()
-                    .any(|o: &Suggestion| o.specs[0].name == spec.name)
-                {
-                    out.push(s(label, vec![spec]));
-                }
-            }
-            out
-        }
+    match wires {
+        1 => vec![
+            s("PE", vec![pe()]),
+            s("N", vec![n()]),
+            s("PEN", vec![pen()]),
+            s("L 230 V", vec![line("L", 230.0)]),
+            s(
+                "+24 V DC",
+                vec![PotentialSpec::new(
+                    "24V",
+                    PotentialKind::DcPositive,
+                    Some(24.0),
+                )],
+            ),
+            s(
+                "0 V DC",
+                vec![PotentialSpec::new(
+                    "0V",
+                    PotentialKind::DcNegative,
+                    Some(0.0),
+                )],
+            ),
+        ],
         2 => vec![
             s("230 V (L, N)", vec![line("L", 230.0), n()]),
             s(
@@ -175,14 +250,14 @@ pub fn suggestions(project: &Project, wires: &[WireId]) -> Vec<Suggestion> {
         ],
         3 => vec![
             s(
-                "Three phase 400 V (L1, L2, L3)",
+                "3~ 400 V (L1, L2, L3)",
                 vec![line("L1", 400.0), line("L2", 400.0), line("L3", 400.0)],
             ),
             s("230 V (L, N, PE)", vec![line("L", 230.0), n(), pe()]),
         ],
         4 => vec![
             s(
-                "Three phase 400 V + PE (L1, L2, L3, PE)",
+                "3~ 400 V + PE (L1, L2, L3, PE)",
                 vec![
                     line("L1", 400.0),
                     line("L2", 400.0),
@@ -191,11 +266,11 @@ pub fn suggestions(project: &Project, wires: &[WireId]) -> Vec<Suggestion> {
                 ],
             ),
             s(
-                "Three phase 400 V + N (L1, L2, L3, N)",
+                "3~ 400 V + N (L1, L2, L3, N)",
                 vec![line("L1", 400.0), line("L2", 400.0), line("L3", 400.0), n()],
             ),
             s(
-                "Three phase 400 V, PEN (L1, L2, L3, PEN)",
+                "3~ 400 V, PEN (L1, L2, L3, PEN)",
                 vec![
                     line("L1", 400.0),
                     line("L2", 400.0),
@@ -205,7 +280,7 @@ pub fn suggestions(project: &Project, wires: &[WireId]) -> Vec<Suggestion> {
             ),
         ],
         5 => vec![s(
-            "Three phase 400 V + N + PE (L1, L2, L3, N, PE)",
+            "3~ 400 V + N + PE (L1, L2, L3, N, PE)",
             vec![
                 line("L1", 400.0),
                 line("L2", 400.0),

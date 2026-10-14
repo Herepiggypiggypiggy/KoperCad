@@ -14,8 +14,9 @@ use novo_core::{
 use crate::catalog::{Catalog, SymbolClass, classify, model_groups, model_pins};
 use crate::edit::{self, PlaceOptions, Transform};
 use crate::geometry::{Target, endpoint_direction, route_through, snap, target_at};
+use crate::naming::Numbering;
 use crate::naming::{next_device_tag, parse_tag_input, tag_conflict};
-use crate::potential::{self, FEED_SYMBOL, Suggestion};
+use crate::potential::{self, FEED_SYMBOL, PotentialMenu, Suggestion};
 
 /// Placing one symbol, over and over.
 #[derive(Debug, Clone, PartialEq)]
@@ -70,7 +71,7 @@ impl Tool {
 }
 
 /// Keys the editor understands while the drawing has focus. The view maps
-/// physical keys to these (WORKFLOW.md shortcut map).
+/// physical keys to these (DESIGN.md §4 keys).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EditorKey {
     /// R: rotate what is being placed or moved, else the selection.
@@ -83,7 +84,8 @@ pub enum EditorKey {
     Move,
     /// Delete.
     Delete,
-    /// Enter: repeat the last tool when nothing is in progress.
+    /// Repeat the last tool when nothing is in progress (the first item of
+    /// the context menu on empty canvas; Enter is for proposals).
     Repeat,
 }
 
@@ -111,6 +113,9 @@ pub struct Preview {
     pub wire: Vec<Point>,
     /// A pin, junction or wire point the next click would connect to.
     pub target: Option<Point>,
+    /// Straight wires the click would draw between facing free pins
+    /// ([`edit::facing_wires`]): what the preview shows is what you get.
+    pub connections: Vec<(Point, Point)>,
 }
 
 /// Id used for preview symbols; never a real model id.
@@ -127,6 +132,14 @@ pub struct Editor {
     pub grid: f64,
     /// Connect pins that land on wires or face free pins.
     pub auto_connect: bool,
+    /// How new devices are numbered (a project rule).
+    pub numbering: Numbering,
+    /// The rule that recognises PE, N and PEN from connection names
+    /// (`-X4:PE`) without any action (DESIGN.md §2). On by default.
+    pub supply_names: bool,
+    /// Held Alt: this drop draws no facing wires (pins dropped inside a
+    /// wire still connect, since that has one answer).
+    pub suppress_connect: bool,
     /// The terminal strip in use, once the user placed or chose one.
     pub strip: Option<DeviceId>,
     notice: Option<String>,
@@ -150,6 +163,9 @@ impl Editor {
             target: None,
             grid: novo_symbols::GRID,
             auto_connect: true,
+            suppress_connect: false,
+            supply_names: true,
+            numbering: Numbering::default(),
             strip: None,
             notice: None,
             changes: ChangeSet::default(),
@@ -167,7 +183,8 @@ impl Editor {
         !matches!(self.tool, Tool::Select)
     }
 
-    /// What Enter (or the first context menu row) would bring back.
+    /// What repeat-last-tool (the first context menu row on empty canvas)
+    /// would bring back.
     pub fn repeat_label(&self) -> Option<String> {
         match self.last.as_ref()? {
             Tool::Place(p) => Some(format!(
@@ -368,6 +385,12 @@ impl Editor {
             Tool::Move(m) => {
                 let delta = at - m.from;
                 let grid = self.grid;
+                // The facing wires the preview showed, decided before the move.
+                let facing = if self.connects_facing() {
+                    edit::facing_wires(doc.project(), &move_ghosts(doc.project(), &m, at, grid))
+                } else {
+                    Vec::new()
+                };
                 let result = doc.transact("Move", |tx| {
                     if delta != Point::ZERO {
                         edit::transform(tx, &m.ids, Transform::Move(delta))?;
@@ -380,6 +403,9 @@ impl Editor {
                         if m.mirrored {
                             edit::transform(tx, &m.ids, Transform::Mirror(c))?;
                         }
+                    }
+                    if self.auto_connect {
+                        edit::settle(tx, &edit::symbols_in(&m.ids), &facing)?;
                     }
                     Ok(())
                 });
@@ -410,6 +436,8 @@ impl Editor {
             parent: p.parent.clone(),
             strip: self.strip,
             auto_connect: self.auto_connect,
+            connect_facing: self.connects_facing(),
+            numbering: self.numbering,
             ..PlaceOptions::default()
         };
         let result = doc.transact(format!("Place {}", symbol.name), |tx| {
@@ -522,8 +550,14 @@ impl Editor {
         let Some(c) = edit::pivot(doc.project(), selection, self.grid) else {
             return false;
         };
+        let settle = self.auto_connect;
         self.run(doc, "Rotate", |tx| {
-            edit::transform(tx, selection, Transform::Rotate(c))
+            edit::transform(tx, selection, Transform::Rotate(c))?;
+            // No preview here, so only pins dropped inside wires connect.
+            if settle {
+                edit::settle(tx, &edit::symbols_in(selection), &[])?;
+            }
+            Ok(())
         })
     }
 
@@ -532,8 +566,14 @@ impl Editor {
         let Some(c) = edit::pivot(doc.project(), selection, self.grid) else {
             return false;
         };
+        let settle = self.auto_connect;
         self.run(doc, "Mirror", |tx| {
-            edit::transform(tx, selection, Transform::Mirror(c))
+            edit::transform(tx, selection, Transform::Mirror(c))?;
+            // No preview here, so only pins dropped inside wires connect.
+            if settle {
+                edit::settle(tx, &edit::symbols_in(selection), &[])?;
+            }
+            Ok(())
         })
     }
 
@@ -544,8 +584,14 @@ impl Editor {
         selection: &[AnyId],
         delta: Point,
     ) -> bool {
+        let settle = self.auto_connect;
         self.run(doc, "Move", |tx| {
-            edit::transform(tx, selection, Transform::Move(delta))
+            edit::transform(tx, selection, Transform::Move(delta))?;
+            // No preview here, so only pins dropped inside wires connect.
+            if settle {
+                edit::settle(tx, &edit::symbols_in(selection), &[])?;
+            }
+            Ok(())
         })
     }
 
@@ -613,11 +659,7 @@ impl Editor {
     }
 
     /// Right-click potential choices for the selected wires.
-    pub fn potential_suggestions(
-        &self,
-        doc: &Document,
-        selection: &[AnyId],
-    ) -> (Vec<WireId>, Vec<Suggestion>) {
+    pub fn potential_menu(&self, doc: &Document, selection: &[AnyId]) -> PotentialMenu {
         let wires: Vec<WireId> = selection
             .iter()
             .filter_map(|id| match id {
@@ -625,9 +667,7 @@ impl Editor {
                 _ => None,
             })
             .collect();
-        let ordered = potential::page_order(doc.project(), &wires);
-        let suggestions = potential::suggestions(doc.project(), &ordered);
-        (ordered, suggestions)
+        potential::menu(doc.project(), &wires, self.supply_names)
     }
 
     /// Applies a potential suggestion to wires in page order, as one step.
@@ -641,7 +681,7 @@ impl Editor {
             self.notice = Some("The symbol library has no potential feed".into());
             return false;
         };
-        let label = format!("Assign {}", suggestion.label);
+        let label = suggestion.label.clone();
         self.run(doc, &label, |tx| {
             potential::assign(tx, &feed, wires, &suggestion.specs)
         })
@@ -740,39 +780,61 @@ impl Editor {
                 }
             }
             Tool::Move(m) => {
-                let delta = cursor - m.from;
                 preview.moving = m.ids.clone();
-                let mut ghosts: Vec<SymbolInstance> = m
-                    .ids
-                    .iter()
-                    .filter_map(|id| match id {
-                        AnyId::Symbol(s) => project.symbol(*s).cloned(),
-                        _ => None,
-                    })
-                    .collect();
-                for g in &mut ghosts {
-                    g.placement.origin = g.placement.origin + delta;
-                }
-                let pivot = edit::pivot(project, &m.ids, self.grid).map(|c| c + delta);
-                if let Some(c) = pivot {
-                    for g in &mut ghosts {
-                        for _ in 0..m.turns {
-                            g.placement.origin = c + Rotation::R90.apply(g.placement.origin - c);
-                            g.placement.rotation = g.placement.rotation.then(Rotation::R90);
-                        }
-                        if m.mirrored {
-                            g.placement.origin =
-                                Point::new(2.0 * c.x - g.placement.origin.x, g.placement.origin.y);
-                            g.placement.rotation =
-                                Rotation::from_degrees(-i32::from(g.placement.rotation.degrees()))
-                                    .expect("quarter turn");
-                            g.placement.mirrored = !g.placement.mirrored;
-                        }
-                    }
-                }
-                preview.symbols = ghosts;
+                preview.symbols = move_ghosts(project, m, cursor, self.grid);
             }
+        }
+        if matches!(self.tool, Tool::Place(_) | Tool::Move(_)) && self.connects_facing() {
+            preview.connections = edit::facing_wires(project, &preview.symbols)
+                .into_iter()
+                .map(|f| (f.a, f.b))
+                .collect();
         }
         preview
     }
+
+    /// Whether the next drop draws facing wires (auto-connect on, Alt not
+    /// held).
+    fn connects_facing(&self) -> bool {
+        self.auto_connect && !self.suppress_connect
+    }
+}
+
+/// The moved symbols as they would be with the pointer at `cursor`.
+fn move_ghosts(
+    project: &novo_core::Project,
+    m: &MoveTool,
+    cursor: Point,
+    grid: f64,
+) -> Vec<SymbolInstance> {
+    let delta = cursor - m.from;
+    let mut ghosts: Vec<SymbolInstance> = m
+        .ids
+        .iter()
+        .filter_map(|id| match id {
+            AnyId::Symbol(s) => project.symbol(*s).cloned(),
+            _ => None,
+        })
+        .collect();
+    for g in &mut ghosts {
+        g.placement.origin = g.placement.origin + delta;
+    }
+    let pivot = edit::pivot(project, &m.ids, grid).map(|c| c + delta);
+    if let Some(c) = pivot {
+        for g in &mut ghosts {
+            for _ in 0..m.turns {
+                g.placement.origin = c + Rotation::R90.apply(g.placement.origin - c);
+                g.placement.rotation = g.placement.rotation.then(Rotation::R90);
+            }
+            if m.mirrored {
+                g.placement.origin =
+                    Point::new(2.0 * c.x - g.placement.origin.x, g.placement.origin.y);
+                g.placement.rotation =
+                    Rotation::from_degrees(-i32::from(g.placement.rotation.degrees()))
+                        .expect("quarter turn");
+                g.placement.mirrored = !g.placement.mirrored;
+            }
+        }
+    }
+    ghosts
 }

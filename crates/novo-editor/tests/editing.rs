@@ -1,4 +1,5 @@
-//! The WORKFLOW.md journeys the schematic editor owns (J2, J3, J4, J10),
+//! The DESIGN.md §6 journeys the schematic editor owns (place, connect,
+//! rename, potential sources),
 //! driven headless through the editor the way the canvas drives it: pointer
 //! positions, clicks and keys in, model edits out.
 
@@ -294,7 +295,7 @@ fn escape_mid_wire_drops_only_the_unfinished_wire() {
     assert!(!editor.leave_tool());
     assert_eq!(doc.undo_depth(), depth);
     assert_eq!(doc.project().wires().count(), 1);
-    // Enter brings the wire tool back.
+    // Repeat-last-tool brings the wire tool back.
     assert!(editor.key(&mut doc, EditorKey::Repeat, &[]));
     assert!(matches!(editor.tool(), Tool::Wire(_)));
 }
@@ -477,10 +478,14 @@ fn three_wires_suggest_three_phase_and_get_l1_l2_l3_in_page_order() {
     let mut wires = three_wires(&mut doc, page, &mut editor);
     wires.reverse(); // selection order must not matter
     let selection: Vec<AnyId> = wires.iter().map(|&w| AnyId::Wire(w)).collect();
-    let (ordered, suggestions) = editor.potential_suggestions(&doc, &selection);
-    assert_eq!(suggestions[0].label, "Three phase 400 V (L1, L2, L3)");
+    let menu = editor.potential_menu(&doc, &selection);
+    assert_eq!(menu.carried, None);
+    assert_eq!(
+        menu.declare[0].label,
+        "Declare source: 3~ 400 V (L1, L2, L3)"
+    );
     let depth = doc.undo_depth();
-    assert!(editor.assign_potentials(&mut doc, &ordered, &suggestions[0]));
+    assert!(editor.assign_potentials(&mut doc, &menu.wires, &menu.declare[0]));
     assert_eq!(doc.undo_depth(), depth + 1);
 
     let f = symbol_at(&doc, page, p(40.0, 40.0));
@@ -512,17 +517,22 @@ fn changing_a_wires_potential_changes_its_whole_net() {
     let (mut doc, page, mut editor) = setup();
     let wires = three_wires(&mut doc, page, &mut editor);
     let ordered = potential::page_order(doc.project(), &wires);
-    let (_, suggestions) = editor.potential_suggestions(
+    let menu = editor.potential_menu(
         &doc,
         &ordered.iter().map(|&w| AnyId::Wire(w)).collect::<Vec<_>>(),
     );
-    editor.assign_potentials(&mut doc, &ordered, &suggestions[0]);
+    editor.assign_potentials(&mut doc, &ordered, &menu.declare[0]);
 
     // Now take the first phase's wire (whichever piece of it) and make it N.
     let f = symbol_at(&doc, page, p(40.0, 40.0));
     let first = doc.project().wires_at(pin(&doc, f, "2")).next().unwrap();
-    let (_, single) = editor.potential_suggestions(&doc, &[AnyId::Wire(first)]);
+    // Its source sits on this wire, so the menu shows what it carries and
+    // offers to change the source.
+    let single = editor.potential_menu(&doc, &[AnyId::Wire(first)]);
+    assert_eq!(single.carried.as_deref(), Some("Carries L1"));
+    assert!(single.declare[0].label.starts_with("Change source: "));
     let n = single
+        .declare
         .iter()
         .find(|s| s.specs[0].name == "N")
         .unwrap()
@@ -537,7 +547,7 @@ fn changing_a_wires_potential_changes_its_whole_net() {
 }
 
 #[test]
-fn a_wire_to_a_pe_terminal_suggests_pe_first() {
+fn a_wire_to_a_pe_terminal_is_pe_by_rule_without_a_choice() {
     let (mut doc, page, mut editor) = setup();
     editor.auto_connect = false;
     editor.begin_place("iec/terminals/terminal_pe", None);
@@ -555,9 +565,14 @@ fn a_wire_to_a_pe_terminal_suggests_pe_first() {
         .pin_designation(pin(&doc, x, "2").as_pin().unwrap())
         .unwrap();
     assert_eq!(designation, "-X1:PE");
-    let (_, suggestions) = editor.potential_suggestions(&doc, &[AnyId::Wire(wire)]);
-    assert_eq!(suggestions[0].specs[0].name, "PE");
-    assert!(suggestions[0].label.contains("from its connection"));
+    let menu = editor.potential_menu(&doc, &[AnyId::Wire(wire)]);
+    assert_eq!(menu.carried.as_deref(), Some("Carries PE (by name)"));
+    assert!(menu.declare.is_empty());
+    // With the rule switched off it is an ordinary unassigned wire.
+    editor.supply_names = false;
+    let menu = editor.potential_menu(&doc, &[AnyId::Wire(wire)]);
+    assert_eq!(menu.carried, None);
+    assert_eq!(menu.declare[0].label, "Declare source: PE");
 }
 
 #[test]
@@ -606,4 +621,91 @@ fn scripts_can_place_without_auto_connect() {
         })
         .unwrap();
     assert!(doc.project().symbol(id).is_some());
+}
+
+/// Wires between facing pins are drawn only where the preview showed them.
+fn wire_ends(doc: &Document) -> Vec<(Point, Point)> {
+    let mut ends: Vec<(Point, Point)> = doc
+        .project()
+        .wires()
+        .map(|w| {
+            let a = doc.project().endpoint_position(w.from).unwrap();
+            let b = doc.project().endpoint_position(w.to).unwrap();
+            if (a.x, a.y) <= (b.x, b.y) {
+                (a, b)
+            } else {
+                (b, a)
+            }
+        })
+        .collect();
+    ends.sort_by(|x, y| x.0.x.total_cmp(&y.0.x));
+    ends
+}
+
+fn preview_ends(editor: &Editor, doc: &Document, page: PageId) -> Vec<(Point, Point)> {
+    let mut ends: Vec<(Point, Point)> = editor
+        .preview(doc, page)
+        .connections
+        .into_iter()
+        .map(|(a, b)| {
+            if (a.x, a.y) <= (b.x, b.y) {
+                (a, b)
+            } else {
+                (b, a)
+            }
+        })
+        .collect();
+    ends.sort_by(|x, y| x.0.x.total_cmp(&y.0.x));
+    ends
+}
+
+#[test]
+fn placing_draws_exactly_the_facing_wires_the_preview_showed() {
+    let (mut doc, page, mut editor) = setup();
+    editor.begin_place("iec/protection/fuse_3p", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.begin_place("iec/contactors/main_3p", None);
+    editor.hover(&doc, page, p(40.0, 120.0), TOL);
+    let shown = preview_ends(&editor, &doc, page);
+    assert_eq!(shown.len(), 3);
+    editor.click(&mut doc, page, p(40.0, 120.0), TOL);
+    assert_eq!(wire_ends(&doc), shown);
+}
+
+#[test]
+fn alt_drops_without_facing_wires() {
+    let (mut doc, page, mut editor) = setup();
+    editor.begin_place("iec/protection/fuse_3p", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.begin_place("iec/contactors/main_3p", None);
+    editor.suppress_connect = true;
+    editor.hover(&doc, page, p(40.0, 120.0), TOL);
+    assert!(preview_ends(&editor, &doc, page).is_empty());
+    editor.click(&mut doc, page, p(40.0, 120.0), TOL);
+    assert_eq!(doc.project().wires().count(), 0);
+}
+
+#[test]
+fn moving_connects_only_what_the_preview_showed() {
+    let (mut doc, page, mut editor) = setup();
+    editor.begin_place("iec/protection/fuse_3p", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.begin_place("iec/contactors/main_3p", None);
+    editor.click(&mut doc, page, p(80.0, 120.0), TOL);
+    editor.leave_tool();
+    assert_eq!(doc.project().wires().count(), 0);
+    let k = AnyId::Symbol(symbol_at(&doc, page, p(80.0, 120.0)));
+    // A move with no preview (arrow keys, scripts) lines the pins up but
+    // draws nothing.
+    assert!(editor.move_selection(&mut doc, &[k], p(-40.0, 0.0)));
+    assert_eq!(doc.project().wires().count(), 0);
+    assert!(editor.move_selection(&mut doc, &[k], p(40.0, 0.0)));
+    // The move tool shows the wires while dragging, and the drop draws them.
+    editor.hover(&doc, page, p(80.0, 120.0), TOL);
+    assert!(editor.begin_move(&[k]));
+    editor.hover(&doc, page, p(40.0, 120.0), TOL);
+    let shown = preview_ends(&editor, &doc, page);
+    assert_eq!(shown.len(), 3);
+    editor.click(&mut doc, page, p(40.0, 120.0), TOL);
+    assert_eq!(wire_ends(&doc), shown);
 }

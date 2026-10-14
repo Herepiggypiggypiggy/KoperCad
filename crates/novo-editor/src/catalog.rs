@@ -4,7 +4,7 @@
 //! needs on top: what kind of model object a symbol becomes when placed
 //! ([`SymbolClass`]), the IEC 81346-2 letter code of its device, short
 //! mnemonics (`no`, `nc`, `coil`, `m3`) and a search that ranks recently used
-//! symbols first (WORKFLOW.md J2).
+//! symbols first (DESIGN.md §4, I and the favourite digits).
 
 use novo_core::{Direction, Pin, TerminalKind};
 use novo_symbols::{Library, Symbol};
@@ -110,7 +110,7 @@ pub fn letter_code(function: &str) -> &'static str {
     }
 }
 
-/// Short names that rank first in the insert search (WORKFLOW.md J2), on
+/// Short names that rank first in the insert search (DESIGN.md §4), on
 /// top of the `aliases` each library symbol carries.
 pub const MNEMONICS: &[(&str, &str)] = &[
     ("no", "iec/contacts/no"),

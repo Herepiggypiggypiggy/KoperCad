@@ -1,5 +1,5 @@
 //! Multiple pages: new pages named in sequence and Page Up / Page Down
-//! (WORKFLOW.md shortcut map and the Gate 1 benchmark's "new page 2").
+//! (DESIGN.md §4 keys and the §6 Gate 1 benchmark).
 
 use std::cmp::Ordering;
 

@@ -1,14 +1,16 @@
 //! Schematic editor (owned by WS-06): placing symbols as tagged devices,
 //! wiring pin to pin with automatic T-junctions, moving, rotating, mirroring,
-//! deleting, renaming in place and assigning potentials, as specified in
-//! `docs/WORKFLOW.md` (J2, J3, J4, J10).
+//! deleting, renaming in place and declaring potential sources, as specified
+//! in `docs/DESIGN.md` (§2 what is derived, §4 commands and keys, §6
+//! journeys).
 //!
 //! The crate has two layers:
 //!
 //! - Headless editing logic, always built: [`catalog`] (symbol search and
 //!   classification), [`naming`] (automatic tags and contact numbers),
 //!   [`geometry`] (orthogonal routes, hit testing), [`edit`] (the edits,
-//!   each run inside a `novo_core::Tx`), [`potential`] (J10) and [`tool`]
+//!   each run inside a `novo_core::Tx`), [`potential`] (sources),
+//!   [`pages`] and [`tool`]
 //!   (the tool state machine, [`Editor`]). Tests, scripts (WS-28) and the AI
 //!   assistant (WS-23) drive this layer without a window.
 //! - The interactive view (feature `egui`, on by default): [`view::SchematicView`]

@@ -1,7 +1,7 @@
 //! Schematic edits: placing, wiring, moving, deleting and renaming.
 //!
 //! Each function runs inside a [`Tx`], so the caller decides what one undo
-//! step is (one user gesture, WORKFLOW.md principle 6). Everything goes
+//! step is (one gesture, one undo step: DESIGN.md §2). Everything goes
 //! through the `novo-core` edit API; nothing here touches the model
 //! directly.
 
@@ -19,7 +19,7 @@ use crate::geometry::{
     self, EPS, Target, arc_position, endpoint_direction, locate_on_polyline, route, route_through,
     simplify, wire_points, wires_through,
 };
-use crate::naming::{child_pin_names, next_device_tag, page_structure};
+use crate::naming::{Numbering, child_pin_names, new_device_tag, page_structure};
 
 /// What a placement attaches to, beyond the symbol itself.
 #[derive(Debug, Clone, Default)]
@@ -34,9 +34,14 @@ pub struct PlaceOptions {
     pub potential: Option<PotentialId>,
     /// Name of an interruption point; `None` gives the next free one.
     pub interruption: Option<String>,
-    /// Connect pins that land on wires or face a free pin (on by default in
-    /// the editor; scripts may turn it off).
+    /// Connect pins that land on wires (on by default; scripts may turn it
+    /// off).
     pub auto_connect: bool,
+    /// Also wire free pins that face a free pin ([`facing_wires`]). The
+    /// editor turns this on only while it shows those wires in the preview.
+    pub connect_facing: bool,
+    /// How a new device is numbered.
+    pub numbering: Numbering,
 }
 
 impl PlaceOptions {
@@ -62,7 +67,7 @@ pub fn place(
     let (bridges, pass_through) = model_groups(symbol);
     let role = match classify(symbol) {
         SymbolClass::Main { letter } => {
-            let tag = next_device_tag(tx.project(), page, letter);
+            let tag = new_device_tag(tx.project(), page, letter, options.numbering);
             let device = tx.add_device(tag, symbol.name.clone())?;
             SymbolRole::Device { device, main: true }
         }
@@ -73,7 +78,7 @@ pub fn place(
                     None => tx.add_device(tag.clone(), "")?,
                 },
                 None => {
-                    let tag = next_device_tag(tx.project(), page, letter);
+                    let tag = new_device_tag(tx.project(), page, letter, options.numbering);
                     tx.add_device(tag, symbol.name.clone())?
                 }
             };
@@ -134,7 +139,7 @@ pub fn place(
         properties: Default::default(),
     })?;
     if options.auto_connect {
-        auto_connect(tx, id)?;
+        auto_connect(tx, id, options.connect_facing)?;
     }
     Ok(id)
 }
@@ -242,16 +247,39 @@ pub fn find_or_add_potential(
     Ok(id)
 }
 
-/// Connects the pins of a symbol to what they land on (WORKFLOW.md J2):
+/// Connects the pins of a newly placed symbol to what they land on
+/// (DESIGN.md §2, "anything with exactly one correct answer happens on its
+/// own"):
 ///
 /// - pins inside a wire split it; a symbol with two pins on one wire is
 ///   inserted in series (the piece between its pins goes away), one pin on a
 ///   wire makes a T there;
-/// - a free pin that faces a free pin of another symbol on the same line is
-///   wired to it straight, like EPLAN's autoconnect.
-pub fn auto_connect(tx: &mut Tx<'_>, symbol: SymbolId) -> Result<()> {
-    insert_into_wires(tx, symbol)?;
-    connect_facing(tx, symbol)?;
+/// - with `facing`, a free pin that faces a free pin of another symbol on the
+///   same line is wired to it straight. The editor shows those wires as
+///   ghosts before the click ([`facing_wires`]), so what the preview shows
+///   is what you get.
+pub fn auto_connect(tx: &mut Tx<'_>, symbol: SymbolId, facing: bool) -> Result<()> {
+    let wires = match (facing, tx.project().symbol(symbol)) {
+        (true, Some(sym)) => facing_wires(tx.project(), std::slice::from_ref(sym)),
+        _ => Vec::new(),
+    };
+    settle(tx, &[symbol], &wires)
+}
+
+/// Finishes a placement or move: pins dropped inside wires split them, then
+/// the facing wires the preview showed are drawn where both ends are still
+/// free.
+pub fn settle(tx: &mut Tx<'_>, symbols: &[SymbolId], facing: &[FacingWire]) -> Result<()> {
+    for &s in symbols {
+        insert_into_wires(tx, s)?;
+    }
+    for f in facing {
+        let project = tx.project();
+        let exists = |e: Endpoint| project.endpoint_position(e).is_some();
+        if exists(f.from) && exists(f.to) && is_free(project, f.from) && is_free(project, f.to) {
+            tx.connect(f.from, f.to)?;
+        }
+    }
     Ok(())
 }
 
@@ -314,69 +342,89 @@ fn is_free(project: &Project, end: Endpoint) -> bool {
     project.wires_at(end).next().is_none()
 }
 
-fn connect_facing(tx: &mut Tx<'_>, symbol: SymbolId) -> Result<()> {
-    let Some(sym) = tx.project().symbol(symbol).cloned() else {
-        return Ok(());
-    };
-    let page = sym.page;
-    let others: Vec<SymbolId> = tx
-        .project()
-        .page_contents(page)
-        .symbols
-        .into_iter()
-        .filter(|&s| s != symbol)
-        .collect();
-    for pin in 0..sym.pins.len() as u16 {
-        let from = Endpoint::pin(symbol, pin);
-        let project = tx.project();
-        let (Some(p), Some(dir)) = (sym.pin_position(pin), sym.pin_direction(pin)) else {
-            continue;
-        };
-        if !is_free(project, from) {
-            continue;
-        }
-        let v = dir.vector();
-        // Every pin ahead on the same line, nearest first.
-        let mut ahead: Vec<(f64, Endpoint, Option<novo_core::Direction>)> = Vec::new();
-        for &o in &others {
-            let Some(os) = project.symbol(o) else {
+/// A straight wire that placing or moving would draw between a free pin of
+/// the symbol in hand and the free pin it faces.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FacingWire {
+    pub from: Endpoint,
+    pub to: Endpoint,
+    /// Where the wire would run, for the preview.
+    pub a: Point,
+    pub b: Point,
+}
+
+/// The facing wires for symbols at the placement they would get. `ghosts`
+/// are symbol instances as they would be (a placement preview, or moved
+/// symbols at their new place, keeping their ids); other ghosts are ignored
+/// as partners. A pin that already has a wire, or that lands inside a wire,
+/// gets none.
+pub fn facing_wires(project: &Project, ghosts: &[SymbolInstance]) -> Vec<FacingWire> {
+    let ignore: BTreeSet<SymbolId> = ghosts.iter().map(|g| g.id).collect();
+    let mut out = Vec::new();
+    for sym in ghosts {
+        let page = sym.page;
+        let others: Vec<SymbolId> = project
+            .page_contents(page)
+            .symbols
+            .into_iter()
+            .filter(|s| !ignore.contains(s))
+            .collect();
+        for pin in 0..sym.pins.len() as u16 {
+            let from = Endpoint::pin(sym.id, pin);
+            let (Some(p), Some(dir)) = (sym.pin_position(pin), sym.pin_direction(pin)) else {
                 continue;
             };
-            for opin in 0..os.pins.len() as u16 {
-                let Some(q) = os.pin_position(opin) else {
+            if !is_free(project, from) || !wires_through(project, page, p).is_empty() {
+                continue;
+            }
+            let v = dir.vector();
+            // Every pin ahead on the same line, nearest first.
+            let mut ahead: Vec<(f64, Endpoint, Point, Option<novo_core::Direction>)> = Vec::new();
+            for &o in &others {
+                let Some(os) = project.symbol(o) else {
                     continue;
                 };
-                let d = q - p;
-                let along = d.x * v.x + d.y * v.y;
-                let across = (d.x * v.y - d.y * v.x).abs();
-                if along > EPS && across < EPS {
-                    ahead.push((along, Endpoint::pin(o, opin), os.pin_direction(opin)));
+                for opin in 0..os.pins.len() as u16 {
+                    let Some(q) = os.pin_position(opin) else {
+                        continue;
+                    };
+                    let d = q - p;
+                    let along = d.x * v.x + d.y * v.y;
+                    let across = (d.x * v.y - d.y * v.x).abs();
+                    if along > EPS && across < EPS {
+                        ahead.push((along, Endpoint::pin(o, opin), q, os.pin_direction(opin)));
+                    }
                 }
             }
-        }
-        // Pins of this symbol in between block the line too.
-        let own_block = (0..sym.pins.len() as u16).filter(|&o| o != pin).any(|o| {
-            sym.pin_position(o).is_some_and(|q| {
-                let d = q - p;
-                (d.x * v.x + d.y * v.y) > EPS && (d.x * v.y - d.y * v.x).abs() < EPS
-            })
-        });
-        if own_block {
-            continue;
-        }
-        ahead.sort_by(|a, b| a.0.total_cmp(&b.0));
-        let Some(&(_, to, to_dir)) = ahead.first() else {
-            continue;
-        };
-        let facing = to_dir.is_some_and(|d| {
-            let w = d.vector();
-            (w.x + v.x).abs() < EPS && (w.y + v.y).abs() < EPS
-        });
-        if facing && is_free(project, to) && !crosses_wire(project, page, p, ahead[0].0, v) {
-            tx.connect(from, to)?;
+            // Pins of this symbol in between block the line too.
+            let own_block = (0..sym.pins.len() as u16).filter(|&o| o != pin).any(|o| {
+                sym.pin_position(o).is_some_and(|q| {
+                    let d = q - p;
+                    (d.x * v.x + d.y * v.y) > EPS && (d.x * v.y - d.y * v.x).abs() < EPS
+                })
+            });
+            if own_block {
+                continue;
+            }
+            ahead.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let Some(&(len, to, q, to_dir)) = ahead.first() else {
+                continue;
+            };
+            let facing = to_dir.is_some_and(|d| {
+                let w = d.vector();
+                (w.x + v.x).abs() < EPS && (w.y + v.y).abs() < EPS
+            });
+            if facing && is_free(project, to) && !crosses_wire(project, page, p, len, v) {
+                out.push(FacingWire {
+                    from,
+                    to,
+                    a: p,
+                    b: q,
+                });
+            }
         }
     }
-    Ok(())
+    out
 }
 
 /// Whether a straight line from `p` along `v` for `len` would cross or run
@@ -563,7 +611,8 @@ pub fn pivot(project: &Project, ids: &[AnyId], grid: f64) -> Option<Point> {
 
 /// Moves, turns or mirrors symbols and junctions. Wires between two
 /// transformed objects keep their shape; wires with one end left behind are
-/// re-routed. Pins that land on wires or face free pins connect afterwards.
+/// re-routed. Nothing new connects here: callers finish with [`settle`]
+/// once every step of the gesture is done.
 pub fn transform(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform) -> Result<()> {
     let mut symbols: BTreeSet<SymbolId> = BTreeSet::new();
     let mut junctions: BTreeSet<JunctionId> = BTreeSet::new();
@@ -619,10 +668,17 @@ pub fn transform(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform) -> Result<()> {
             reroute(tx, wire)?;
         }
     }
-    for s in symbols {
-        auto_connect(tx, s)?;
-    }
     Ok(())
+}
+
+/// The symbols among `ids`, for [`settle`].
+pub fn symbols_in(ids: &[AnyId]) -> Vec<SymbolId> {
+    ids.iter()
+        .filter_map(|id| match id {
+            AnyId::Symbol(s) => Some(*s),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Replaces a wire's bends with a fresh orthogonal route between its ends.

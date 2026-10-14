@@ -7,8 +7,9 @@
 //!
 //! I inserts a symbol (type `coil`, `no`, `m3`, `K1 no`, or a digit for a
 //! favourite), W draws wires, M moves, R rotates, X mirrors, F2 renames,
-//! Delete deletes, Enter repeats the last tool, Escape steps back, Ctrl+Z
-//! and Ctrl+Y undo and redo, right click on wires assigns potentials.
+//! Delete deletes, Escape steps back, Ctrl+Z and Ctrl+Y undo and redo. Right
+//! click on wires declares a potential source; on empty canvas it repeats
+//! the last tool. Hold Alt while placing to drop without facing wires.
 
 use eframe::egui;
 use novo_core::{Document, PageId};
@@ -143,8 +144,8 @@ fn demo(doc: &mut Document, page: PageId, view: &mut SchematicView) {
         .map(|w| w.id)
         .collect();
     let selection: Vec<AnyId> = wires.iter().map(|&w| AnyId::Wire(w)).collect();
-    let (ordered, suggestions) = editor.potential_suggestions(doc, &selection);
-    if let Some(first) = suggestions.first() {
-        editor.assign_potentials(doc, &ordered, first);
+    let menu = editor.potential_menu(doc, &selection);
+    if let Some(first) = menu.declare.first() {
+        editor.assign_potentials(doc, &menu.wires, first);
     }
 }
