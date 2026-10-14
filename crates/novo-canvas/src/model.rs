@@ -19,7 +19,7 @@ use crate::style::{Color, Stroke};
 use crate::text::{Anchor, Label};
 use glam::Vec2;
 use novo_core::{
-    AnyId, ChangeSet, Endpoint, JunctionId, PageId, Point, Project, Rotation, SymbolId,
+    AnyId, ChangeSet, Endpoint, JunctionId, PageId, PageKind, Point, Project, Rotation, SymbolId,
     SymbolInstance, SymbolKey, SymbolRole, TextAnchor, TextContent, TextId, WireId,
 };
 use std::collections::{BTreeSet, HashMap};
@@ -319,7 +319,6 @@ pub struct ModelLayers {
     pub texts: LayerId,
 }
 
-/// The canvas scene of one model page, kept in sync with the project.
 /// Text drawn next to a symbol that the model does not hold itself, such
 /// as a cross reference (`/2.3` under a contact, a coil's contact image).
 /// It is part of the printed drawing, so it lives in the scene: the canvas
@@ -333,6 +332,65 @@ pub struct SymbolNote {
     pub warning: bool,
 }
 
+/// One printed sheet of a generated page (a report): text boxes and rules
+/// laid out by its generator (novo-reports' `layout_sheet`), in page
+/// millimetres with the origin at the sheet's top left. The canvas stays
+/// independent of the report crate; callers convert.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SheetContent {
+    /// Printed where the page name goes: `20`, or `20.2` for the second
+    /// of several sheets.
+    pub name: String,
+    /// "n of m" for the title block when the caller counts sheets (a
+    /// generated page can print as several); `None` counts pages.
+    pub number: Option<(usize, usize)>,
+    pub texts: Vec<SheetText>,
+    pub lines: Vec<SheetLine>,
+}
+
+/// A line of text in a box; text wider than the box is cut to fit.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SheetText {
+    /// Top-left corner, mm.
+    pub min: Vec2,
+    pub size: Vec2,
+    pub text: String,
+    /// Character height, mm.
+    pub height: f32,
+    /// Where in the box: `CenterLeft`, `Center` or `CenterRight` (the text
+    /// is always centred vertically).
+    pub align: Anchor,
+}
+
+/// A rule of a sheet's table.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SheetLine {
+    pub from: Vec2,
+    pub to: Vec2,
+    /// The outline and header rule; thin between rows.
+    pub heavy: bool,
+}
+
+/// `text` cut with an ellipsis so that it fits `width` mm at `height`,
+/// by the same width estimate as [`Label::size`].
+fn fit_text(text: &str, width: f32, height: f32) -> String {
+    let advance = crate::text::ADVANCE * height;
+    if advance <= 0.0 {
+        return text.to_owned();
+    }
+    let max = (width / advance).floor().max(0.0) as usize;
+    if text.chars().count() <= max {
+        return text.to_owned();
+    }
+    if max == 0 {
+        return String::new();
+    }
+    let mut out: String = text.chars().take(max - 1).collect();
+    out.push('…');
+    out
+}
+
+/// The canvas scene of one model page, kept in sync with the project.
 pub struct PageScene {
     page: PageId,
     scene: Scene,
@@ -346,6 +404,8 @@ pub struct PageScene {
     text_hosts: HashMap<TextId, AnyId>,
     /// Notes by symbol, kept across rebuilds; see [`Self::set_notes`].
     notes: HashMap<SymbolId, SymbolNote>,
+    /// What a generated page shows; see [`Self::set_sheet`].
+    sheet: Option<SheetContent>,
     pub style: ModelStyle,
 }
 
@@ -373,6 +433,7 @@ impl PageScene {
             wire_junctions: HashMap::new(),
             text_hosts: HashMap::new(),
             notes: HashMap::new(),
+            sheet: None,
             style: ModelStyle::default(),
         };
         s.rebuild(project, art);
@@ -447,6 +508,24 @@ impl PageScene {
     /// The notes currently drawn, by symbol.
     pub fn notes(&self) -> impl Iterator<Item = &SymbolNote> {
         self.notes.values()
+    }
+
+    /// Shows `sheet` inside the frame: the content of a generated page
+    /// (a report) and its sheet name and number in the title block. `None`
+    /// goes back to the page alone. Kept across rebuilds. Returns whether
+    /// anything changed.
+    pub fn set_sheet(&mut self, project: &Project, sheet: Option<SheetContent>) -> bool {
+        if sheet == self.sheet {
+            return false;
+        }
+        self.sheet = sheet;
+        self.frame(project);
+        true
+    }
+
+    /// The sheet shown, if any.
+    pub fn sheet(&self) -> Option<&SheetContent> {
+        self.sheet.as_ref()
     }
 
     /// Rebuilds every item, for example after loading a file or changing
@@ -654,6 +733,30 @@ impl PageScene {
             }
         }
 
+        if let Some(sheet) = &self.sheet {
+            for l in &sheet.lines {
+                let stroke = if l.heavy { ink } else { thin };
+                item.primitives
+                    .push(Primitive::stroked(Shape::line(l.from, l.to), stroke));
+            }
+            for t in &sheet.texts {
+                let fx = t.align.fractions().x;
+                let pos = Vec2::new(t.min.x + fx * t.size.x, t.min.y + 0.5 * t.size.y);
+                let anchor = match fx {
+                    f if f < 0.25 => Anchor::CenterLeft,
+                    f if f > 0.75 => Anchor::CenterRight,
+                    _ => Anchor::Center,
+                };
+                let text = fit_text(&t.text, t.size.x, t.height);
+                if !text.is_empty() {
+                    item.labels.push(
+                        Label::new(pos, text, t.height)
+                            .anchored(anchor)
+                            .colored(self.style.tag_color),
+                    );
+                }
+            }
+        }
         self.title_block(project, page, inner_max, &mut item);
         self.scene.insert(item_id(self.page), item);
     }
@@ -685,20 +788,38 @@ impl PageScene {
                 thin,
             ));
         }
-        let order = project.pages_in_order();
-        let n = order
-            .iter()
-            .position(|p| p.id == page.id)
-            .map_or(0, |i| i + 1);
+        // Schematic pages count among themselves: generated pages (reports)
+        // number their own sheets, so a growing report never renumbers a
+        // frozen schematic page (DESIGN.md §8).
+        let generated = |p: &novo_core::Page| matches!(p.kind, PageKind::Generated { .. });
+        let order: Vec<_> = project
+            .pages_in_order()
+            .into_iter()
+            .filter(|p| generated(p) == generated(page))
+            .collect();
+        let (n, of) = self
+            .sheet
+            .as_ref()
+            .and_then(|s| s.number)
+            .unwrap_or_else(|| {
+                let n = order
+                    .iter()
+                    .position(|p| p.id == page.id)
+                    .map_or(0, |i| i + 1);
+                (n, order.len())
+            });
         let text = |props: &novo_core::Properties, key: &str| match props.get(key) {
             Some(novo_core::Value::Text(t)) => t.clone(),
             Some(novo_core::Value::Int(i)) => i.to_string(),
             _ => String::new(),
         };
         let info = &project.info().properties;
-        // TODO(#45): read `Page.structure` once WS-02's page structure field
-        // merges; until then the page property "structure" carries it.
-        let structure = text(&page.properties, "structure");
+        // The page's own structure; older files kept it in a property.
+        let structure = if page.structure.is_empty() {
+            text(&page.properties, "structure")
+        } else {
+            page.structure.to_string()
+        };
         let revision = [text(info, "revision"), text(info, "revision_date")]
             .into_iter()
             .filter(|s| !s.is_empty())
@@ -708,15 +829,16 @@ impl PageScene {
             (d, c) if d.is_empty() && c.is_empty() => String::new(),
             (d, c) => format!("{d} / {c}"),
         };
+        let name = self.sheet.as_ref().map_or(&page.name, |s| &s.name);
         let page_line = if page.title.is_empty() {
-            page.name.clone()
+            name.clone()
         } else {
-            format!("{}  {}", page.name, page.title)
+            format!("{name}  {}", page.title)
         };
         let rows = [
             ("Project", project.info().name.clone()),
             ("Page", page_line),
-            ("Sheet", format!("{n} of {}", order.len())),
+            ("Sheet", format!("{n} of {of}")),
             ("Structure", structure),
             ("Revision", revision),
             ("Drawn / checked", people),
@@ -1757,6 +1879,99 @@ mod tests {
             .unwrap();
         assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
         assert!(texts(&ps).iter().any(|s| s == "Mill"));
+    }
+
+    #[test]
+    fn generated_sheets_draw_inside_the_frame() {
+        let (mut doc, page, ..) = doc();
+        doc.transact("structure", |tx| {
+            tx.update::<novo_core::Page>(page, |p| {
+                p.title = "Bill of materials".into();
+                p.structure = DeviceTag::parse("=A1+CAB1").unwrap();
+            })
+        })
+        .unwrap();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let frame = |ps: &PageScene| ps.scene().get(item_id(page)).unwrap().clone();
+        let before = frame(&ps);
+        let texts = |ps: &PageScene| -> Vec<String> {
+            frame(ps).labels.iter().map(|l| l.text.clone()).collect()
+        };
+        assert!(texts(&ps).iter().any(|s| s == "=A1+CAB1"));
+
+        let cell = |x: f32, text: &str, align| SheetText {
+            min: Vec2::new(x, 20.0),
+            size: Vec2::new(30.0, 5.0),
+            text: text.into(),
+            height: 2.5,
+            align,
+        };
+        let sheet = SheetContent {
+            name: "20.2".into(),
+            number: Some((2, 3)),
+            texts: vec![
+                cell(15.0, "-K1", Anchor::CenterLeft),
+                cell(45.0, "12 pcs", Anchor::CenterRight),
+                cell(
+                    75.0,
+                    "A very long article description that cannot fit",
+                    Anchor::CenterLeft,
+                ),
+            ],
+            lines: vec![SheetLine {
+                from: Vec2::new(15.0, 25.0),
+                to: Vec2::new(105.0, 25.0),
+                heavy: true,
+            }],
+        };
+        assert!(ps.set_sheet(doc.project(), Some(sheet.clone())));
+        assert!(!ps.set_sheet(doc.project(), Some(sheet.clone())));
+        let f = frame(&ps);
+        assert_eq!(f.primitives.len(), before.primitives.len() + 1);
+        let label = |text: &str| f.labels.iter().find(|l| l.text == text).cloned();
+        let k1 = label("-K1").expect("left cell");
+        assert_eq!(
+            (k1.pos, k1.anchor),
+            (Vec2::new(15.0, 22.5), Anchor::CenterLeft)
+        );
+        let qty = label("12 pcs").expect("right cell");
+        assert_eq!(
+            (qty.pos, qty.anchor),
+            (Vec2::new(75.0, 22.5), Anchor::CenterRight)
+        );
+        // Too long for its box: cut with an ellipsis, inside the box.
+        let long = f
+            .labels
+            .iter()
+            .find(|l| l.text.starts_with("A very"))
+            .unwrap();
+        assert!(long.text.ends_with('…'));
+        assert!(long.size().x <= 30.0 + 1e-3, "{}", long.size().x);
+        // The title block names the sheet and counts sheets.
+        let t = texts(&ps);
+        for want in ["20.2  Bill of materials", "2 of 3"] {
+            assert!(t.iter().any(|s| s == want), "{want} missing from {t:?}");
+        }
+        // Kept across a rebuild; None goes back to the page alone.
+        ps.rebuild(doc.project(), &PlaceholderArt);
+        assert!(texts(&ps).iter().any(|s| s == "-K1"));
+        assert!(ps.set_sheet(doc.project(), None));
+        assert_eq!(frame(&ps).primitives.len(), before.primitives.len());
+        assert!(texts(&ps).iter().any(|s| s == "1  Bill of materials"));
+
+        // Generated pages never count among the schematic pages.
+        let (_, changes) = doc
+            .transact("report", |tx| {
+                let p = tx.add_page("20")?;
+                tx.update::<novo_core::Page>(p, |p| {
+                    p.kind = PageKind::Generated {
+                        generator: "bom".into(),
+                    }
+                })
+            })
+            .unwrap();
+        ps.apply(doc.project(), &changes, &PlaceholderArt);
+        assert!(texts(&ps).iter().any(|s| s == "1 of 1"), "{:?}", texts(&ps));
     }
 
     #[test]
