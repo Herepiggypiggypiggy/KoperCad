@@ -60,6 +60,26 @@ pub trait SymbolArt {
     fn cache_key(&self, symbol: &SymbolInstance) -> Option<ArtKey> {
         Some(ArtKey::of(symbol))
     }
+
+    /// Fixed text of the artwork (the M in a motor circle, 3~), in symbol
+    /// coordinates. The canvas applies the placement and keeps it readable
+    /// (mirroring never mirrors glyphs), and draws it in the symbol colour.
+    fn labels(&self, _symbol: &SymbolInstance) -> Vec<Label> {
+        Vec::new()
+    }
+
+    /// Where the device tag goes, in symbol coordinates, and which point of
+    /// the text box sits there. `None` puts it right of the pins.
+    fn tag_anchor(&self, _symbol: &SymbolInstance) -> Option<(Vec2, Anchor)> {
+        None
+    }
+}
+
+/// A cached symbol drawing in symbol coordinates.
+#[derive(Clone)]
+struct LocalArt {
+    primitives: std::sync::Arc<[Primitive]>,
+    labels: std::sync::Arc<[Label]>,
 }
 
 /// Identity of a symbol drawing: its symbol key and pin offsets.
@@ -265,7 +285,7 @@ pub struct PageScene {
     scene: Scene,
     layers: ModelLayers,
     ids: HashMap<ItemId, AnyId>,
-    art_cache: HashMap<ArtKey, std::sync::Arc<[Primitive]>>,
+    art_cache: HashMap<ArtKey, LocalArt>,
     /// Junction ends of each drawn wire, to redraw them when it goes.
     wire_junctions: HashMap<WireId, [Option<JunctionId>; 2]>,
     pub style: ModelStyle,
@@ -484,17 +504,28 @@ impl PageScene {
         };
         let place = placement(&sym.placement);
         let style = self.style.symbol;
-        let draw = || -> std::sync::Arc<[Primitive]> {
-            art.artwork(sym)
+        let draw = || LocalArt {
+            primitives: art
+                .artwork(sym)
                 .unwrap_or_else(|| PlaceholderArt::draw(sym, style))
-                .into()
+                .into(),
+            labels: art.labels(sym).into(),
         };
         let local = match art.cache_key(sym) {
             Some(key) => self.art_cache.entry(key).or_insert_with(draw).clone(),
             None => draw(),
         };
         let mut item = Item::new(self.layers.symbols);
-        item.primitives = local.iter().map(|p| p.transformed(&place)).collect();
+        item.primitives = local
+            .primitives
+            .iter()
+            .map(|p| p.transformed(&place))
+            .collect();
+        item.labels = local
+            .labels
+            .iter()
+            .map(|l| l.transformed(&place).colored(style.color))
+            .collect();
         item.snap_points = (0..sym.pins.len() as u16)
             .filter_map(|i| sym.pin_position(i))
             .map(|p| SnapPoint::connection(vec(p)))
@@ -508,14 +539,20 @@ impl PageScene {
                     .filter_map(|i| sym.pin_position(i))
                     .map(vec),
             );
-            let anchor = if b.is_empty() {
-                origin + Vec2::new(5.0, 0.0)
-            } else {
-                Vec2::new(b.max.x.max(origin.x + 2.5) + 5.0, b.center().y)
+            let (pos, anchor) = match art.tag_anchor(sym) {
+                Some((p, a)) => (place.affine().transform_point2(p), a),
+                None if b.is_empty() => (origin + Vec2::new(5.0, 0.0), Anchor::CenterLeft),
+                None => (
+                    Vec2::new(b.max.x.max(origin.x + 2.5) + 5.0, b.center().y),
+                    Anchor::CenterLeft,
+                ),
             };
-            item.labels.push(
-                Label::new(anchor, text, self.style.tag_height)
-                    .anchored(Anchor::CenterLeft)
+            // The tag is the device's own text: always horizontal, and
+            // always the item's first label.
+            item.labels.insert(
+                0,
+                Label::new(pos, text, self.style.tag_height)
+                    .anchored(anchor)
                     .colored(self.style.tag_color),
             );
         }
@@ -1031,6 +1068,38 @@ mod tests {
         let (_, changes) = doc.transact("cut", |tx| tx.remove(branch)).unwrap();
         ps.apply(doc.project(), &changes, &PlaceholderArt);
         assert_eq!(lines(&ps, j), 0, "a straight run is a dot");
+    }
+
+    #[test]
+    fn artwork_text_and_tag_anchor() {
+        struct Motor;
+        impl SymbolArt for Motor {
+            fn artwork(&self, _: &SymbolInstance) -> Option<Vec<Primitive>> {
+                Some(vec![Primitive::stroked(
+                    Shape::circle(Vec2::ZERO, 5.0),
+                    Stroke::default(),
+                )])
+            }
+            fn labels(&self, _: &SymbolInstance) -> Vec<Label> {
+                vec![Label::new(Vec2::new(0.0, 1.0), "M", 3.5).anchored(Anchor::Center)]
+            }
+            fn tag_anchor(&self, _: &SymbolInstance) -> Option<(Vec2, Anchor)> {
+                Some((Vec2::new(-7.0, 0.0), Anchor::CenterRight))
+            }
+        }
+        let (doc, page, k1, ..) = doc();
+        let ps = PageScene::new(doc.project(), page, &Motor);
+        let item = ps.scene().get(item_id(k1)).unwrap();
+        // The tag first, at the art's anchor; then the artwork text, placed.
+        assert_eq!(item.labels[0].text, "-K1");
+        assert_eq!(item.labels[0].pos, Vec2::new(93.0, 100.0));
+        assert_eq!(item.labels[0].anchor, Anchor::CenterRight);
+        assert_eq!(item.labels[1].text, "M");
+        assert_eq!(item.labels[1].pos, Vec2::new(100.0, 101.0));
+        assert_eq!(item.labels[1].color, ps.style.symbol.color);
+        // Text is pickable on its own.
+        let hit = ps.scene().pick(Vec2::new(100.0, 101.0), 0.5, 2.0).unwrap();
+        assert_eq!(hit.label, Some(1));
     }
 
     #[test]
