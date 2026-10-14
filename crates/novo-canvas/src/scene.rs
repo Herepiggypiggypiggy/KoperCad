@@ -210,7 +210,8 @@ impl BoxMode {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Hit {
     pub id: ItemId,
-    /// Distance from the pick point to the item's ink, in world units.
+    /// Distance from the pick point to the nearest of the item's lines
+    /// or label boxes, in world units.
     pub distance: f32,
     /// The label that was hit, when text was nearer than any line.
     pub label: Option<usize>,
