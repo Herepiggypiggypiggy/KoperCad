@@ -79,4 +79,23 @@ mod tests {
         assert!(grey(p.grid_major) < grey(p.sheet_frame));
         assert!(grey(p.grid_minor) < grey(p.grid_major));
     }
+
+    #[test]
+    fn drawing_colours_meet_wcag_aa_on_the_sheet() {
+        let p = CANVAS_DARK;
+        let sheet = to_color32(p.sheet);
+        for c in [
+            p.symbol,
+            p.wire,
+            p.text,
+            p.cross_reference,
+            p.connection_point,
+            p.selection,
+            p.error,
+            p.warning,
+        ] {
+            let ratio = crate::tokens::tests::contrast(to_color32(c), sheet);
+            assert!(ratio >= 4.5, "{c:?}: {ratio}");
+        }
+    }
 }

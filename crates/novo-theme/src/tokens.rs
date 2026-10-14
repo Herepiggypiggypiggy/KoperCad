@@ -36,8 +36,9 @@ pub const BORDER_STRONG: Color32 = Color32::from_rgb(0x3B, 0x3B, 0x41);
 pub const TEXT: Color32 = Color32::from_rgb(0xE3, 0xE1, 0xDC);
 /// Secondary text: hints, units, column headers.
 pub const TEXT_MUTED: Color32 = Color32::from_rgb(0x98, 0x96, 0x91);
-/// Disabled text and placeholders.
-pub const TEXT_FAINT: Color32 = Color32::from_rgb(0x6A, 0x69, 0x66);
+/// Placeholders, coordinates, margin labels and disabled text. Still 4.5:1
+/// on the panel and canvas surfaces, because people read it.
+pub const TEXT_FAINT: Color32 = Color32::from_rgb(0x85, 0x83, 0x80);
 /// Text drawn on an `ACCENT` fill.
 pub const TEXT_ON_ACCENT: Color32 = Color32::from_rgb(0x14, 0x10, 0x0D);
 
@@ -83,7 +84,7 @@ pub const RADIUS_CONTROL: u8 = 3;
 pub const RADIUS_WINDOW: u8 = 6;
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     /// WCAG relative luminance of an opaque colour.
@@ -99,7 +100,7 @@ mod tests {
         0.2126 * lin(c.r()) + 0.7152 * lin(c.g()) + 0.0722 * lin(c.b())
     }
 
-    fn contrast(a: Color32, b: Color32) -> f32 {
+    pub(crate) fn contrast(a: Color32, b: Color32) -> f32 {
         let (a, b) = (luminance(a), luminance(b));
         (a.max(b) + 0.05) / (a.min(b) + 0.05)
     }
@@ -115,7 +116,7 @@ mod tests {
     #[test]
     fn faint_text_and_status_colours_stay_readable() {
         for bg in [BG_0, BG_1, BG_2] {
-            assert!(contrast(TEXT_FAINT, bg) >= 3.0, "{bg:?}");
+            assert!(contrast(TEXT_FAINT, bg) >= 4.5, "{bg:?}");
             for c in [ACCENT, SUCCESS, WARNING, ERROR, INFO] {
                 assert!(contrast(c, bg) >= 4.5, "{c:?} on {bg:?}");
             }

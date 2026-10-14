@@ -43,7 +43,7 @@ until a light theme exists.
 | `BORDER_STRONG` | `#3B3B41` | Hovered or focused outlines |
 | `TEXT` | `#E3E1DC` | Body text |
 | `TEXT_MUTED` | `#989691` | Hints, units, section labels |
-| `TEXT_FAINT` | `#6A6966` | Disabled, placeholders |
+| `TEXT_FAINT` | `#858380` | Placeholders, coordinates, margin labels, disabled |
 | `ACCENT` | `#C88A5E` | Copper: focus, active tool, primary button, logo |
 | `ACCENT_SELECTION` | `#3A2E26` | Selected rows and selected text |
 | `INFO` | `#8FA8C8` | Links, cross references, hover on the canvas |
@@ -60,8 +60,19 @@ sections, `primary_button` (copper text and hairline, no solid fill) for the
 one main action in a dialog, and `tool_button` (frameless icon, copper with
 an underline when active) for the toolbar.
 
-Unit tests hold body text to WCAG AA (contrast 7:1 for `TEXT`, 4.5:1 for
-`TEXT_MUTED` and the status colours) on every surface.
+Unit tests hold every text colour to a contrast floor, so no text the user
+has to read is decorative:
+
+| Text | Minimum contrast | On |
+| --- | --- | --- |
+| `TEXT` | 7:1 | every surface |
+| `TEXT_MUTED` | 4.5:1 | every surface |
+| `TEXT_FAINT` | 4.5:1 | `BG_0` to `BG_2` (canvas, panels, cards) |
+| Accent and status colours | 4.5:1 | `BG_0` to `BG_2` |
+| Drawing colours | 4.5:1 | the sheet (`CANVAS_DARK`) |
+
+Faint text is not for disabled-looking decoration: the HUD, page numbers in
+the outline and column headers all use it, so it has to be readable.
 
 ## Layout and menus
 
