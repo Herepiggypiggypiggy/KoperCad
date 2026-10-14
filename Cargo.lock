@@ -1533,6 +1533,7 @@ dependencies = [
 name = "novo-tests"
 version = "0.1.0"
 dependencies = [
+ "novo-canvas",
  "novo-core",
  "novo-storage",
  "novo-symbols",
