@@ -70,6 +70,8 @@ pub enum ScriptError {
         .0.display()
     )]
     RecoveryPending(PathBuf),
+    #[error("{} already exists; pass overwrite to replace it", .0.display())]
+    Exists(PathBuf),
     #[error("this project has no file yet: use save_as(path)")]
     NoFile,
     #[error("the symbol library did not load: {0}")]
@@ -135,12 +137,11 @@ impl ScriptProject {
         }
     }
 
-    /// A new project saved at once to `path` (replacing a file there that is
-    /// not open elsewhere and has no unrecovered work from a crashed app
-    /// session).
-    pub fn create(path: impl AsRef<Path>, name: &str) -> Result<ScriptProject> {
+    /// A new project saved at once to `path`. An existing file is refused
+    /// unless `overwrite`; see [`ScriptProject::save_as`].
+    pub fn create(path: impl AsRef<Path>, name: &str, overwrite: bool) -> Result<ScriptProject> {
         let mut project = ScriptProject::new(name);
-        project.save_as(path)?;
+        project.save_as(path, overwrite)?;
         Ok(project)
     }
 
@@ -183,14 +184,21 @@ impl ScriptProject {
         Ok(())
     }
 
-    /// Writes the project to `path` and continues there. Another file with
-    /// unrecovered work from a crashed app session is refused, because
-    /// replacing it would delete that work.
-    pub fn save_as(&mut self, path: impl AsRef<Path>) -> Result<()> {
+    /// Writes the project to `path` and continues there. Another existing
+    /// file is refused unless `overwrite`, so a wrong path cannot wipe a real
+    /// project. A file with unrecovered work from a crashed app session is
+    /// refused even then, because replacing it would delete that work.
+    /// Saving onto the project's own file is always allowed.
+    pub fn save_as(&mut self, path: impl AsRef<Path>, overwrite: bool) -> Result<()> {
         let path = path.as_ref();
         let own_file = self.path().is_some_and(|own| same_file(own, path));
-        if !own_file && autosave_path(path).exists() {
-            return Err(ScriptError::RecoveryPending(path.to_path_buf()));
+        if !own_file {
+            if autosave_path(path).exists() {
+                return Err(ScriptError::RecoveryPending(path.to_path_buf()));
+            }
+            if !overwrite && path.exists() {
+                return Err(ScriptError::Exists(path.to_path_buf()));
+            }
         }
         match &mut self.session {
             Some(session) => session.save_as(path, self.doc.project())?,

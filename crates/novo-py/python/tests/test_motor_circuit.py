@@ -162,12 +162,26 @@ def test_create_refuses_a_file_with_crash_recovery(tmp_path):
     recovery = tmp_path / "crashed.novo.autosave"
     recovery.write_bytes(b"work the app has not offered back yet")
     with pytest.raises(ne.NovoError, match="did not close cleanly"):
-        ne.Project.create(path)
+        ne.Project.create(path, overwrite=True)
     p = ne.Project("Fresh")
     with pytest.raises(ne.NovoError, match="did not close cleanly"):
-        p.save_as(path)
+        p.save_as(path, overwrite=True)
     assert recovery.read_bytes() == b"work the app has not offered back yet"
     assert not path.exists()
+
+
+def test_existing_project_needs_overwrite(tmp_path):
+    path = tmp_path / "plant.novo"
+    ne.Project.create(path, name="Real plant").close()
+    with pytest.raises(ne.NovoError, match="already exists"):
+        ne.Project.create(path, name="Typo")
+    with pytest.raises(ne.NovoError, match="already exists"):
+        ne.Project("Other").save_as(path)
+    with ne.Project.open(path) as p:
+        assert p.info()["name"] == "Real plant"
+    ne.Project.create(path, name="Replacement", overwrite=True).close()
+    with ne.Project.open(path) as p:
+        assert p.info()["name"] == "Replacement"
 
 
 @pytest.mark.skip(reason="Excel BOM export waits for WS-13 (reports); see handoff/ws28/ROADMAP.md")

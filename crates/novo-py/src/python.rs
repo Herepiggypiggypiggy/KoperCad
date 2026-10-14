@@ -64,13 +64,14 @@ impl PyProject {
         }
     }
 
-    /// Creates a new project file at ``path`` (replacing a file there that
-    /// is not open elsewhere).
+    /// Creates a new project file at ``path``. An existing file is refused
+    /// unless ``overwrite=True``; a file with unrecovered work from a
+    /// crashed app session is always refused.
     #[staticmethod]
-    #[pyo3(signature = (path, name = "Untitled"))]
-    fn create(path: PathBuf, name: &str) -> PyResult<Self> {
+    #[pyo3(signature = (path, name = "Untitled", *, overwrite = false))]
+    fn create(path: PathBuf, name: &str, overwrite: bool) -> PyResult<Self> {
         Ok(PyProject {
-            inner: Some(ScriptProject::create(path, name).map_err(err)?),
+            inner: Some(ScriptProject::create(path, name, overwrite).map_err(err)?),
         })
     }
 
@@ -98,8 +99,12 @@ impl PyProject {
         self.get_mut()?.save().map_err(err)
     }
 
-    fn save_as(&mut self, path: PathBuf) -> PyResult<()> {
-        self.get_mut()?.save_as(path).map_err(err)
+    /// Saves to ``path`` and continues there. Another existing file is
+    /// refused unless ``overwrite=True``; a file with unrecovered work from a
+    /// crashed app session is always refused.
+    #[pyo3(signature = (path, *, overwrite = false))]
+    fn save_as(&mut self, path: PathBuf, overwrite: bool) -> PyResult<()> {
+        self.get_mut()?.save_as(path, overwrite).map_err(err)
     }
 
     /// Releases the file. Unsaved changes are dropped; ``save()`` first.

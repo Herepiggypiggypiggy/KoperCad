@@ -22,7 +22,7 @@ bindings: they live behind the `python` feature, which maturin turns on.
 ```python
 import novoelectric as ne
 
-with ne.Project.create("dol.novo", name="DOL starter") as p:
+with ne.Project.create("dol.novo", name="DOL starter", overwrite=True) as p:
     page = p.add_page("1", "Main circuit")
     l1 = p.add_potential("L1", "line", 400.0)
     k1 = p.add_device("-K1", "Motor contactor")
@@ -41,9 +41,10 @@ with ne.Project.create("dol.novo", name="DOL starter") as p:
 - Any model command in its JSON form: `p.execute({"command": "add_page",
   "name": "3"})`; a `{"command": "batch", ...}` is one undo step.
 - Errors raise `novoelectric.NovoError`; a refused call changes nothing.
+- `create` and `save_as` refuse an existing file unless `overwrite=True`.
 - A file stays locked against the app while it is open in a script. A file
   with unrecovered work from a crashed app session is refused by `open`,
-  `create` and `save_as`, never saved over.
+  `create` and `save_as` (even with `overwrite=True`), never saved over.
 
 ## Tests
 

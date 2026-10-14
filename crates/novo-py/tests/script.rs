@@ -55,7 +55,7 @@ fn build(p: &mut ScriptProject) -> Result<(), ScriptError> {
 fn dol_circuit_renamed_saved_and_reopened() -> Result<(), ScriptError> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("dol.novo");
-    let mut p = ScriptProject::create(&path, "DOL")?;
+    let mut p = ScriptProject::create(&path, "DOL", false)?;
     build(&mut p)?;
     let k1 = p.device_by_tag("-K1")?.unwrap();
     p.set_tag(k1, "=A1+CAB-K1")?;
@@ -94,7 +94,7 @@ fn dol_circuit_renamed_saved_and_reopened() -> Result<(), ScriptError> {
 fn every_call_is_one_undo_step_and_saves_follow_undo() -> Result<(), ScriptError> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("undo.novo");
-    let mut p = ScriptProject::create(&path, "Undo")?;
+    let mut p = ScriptProject::create(&path, "Undo", false)?;
     p.add_page("1", "")?;
     let k1 = p.add_device("-K1", "", "general")?;
     p.set_tag(k1, "-K2")?;
@@ -210,17 +210,17 @@ fn create_and_save_as_never_replace_a_file_with_recovered_work() -> Result<(), S
     let saved = std::fs::read(&path).unwrap();
 
     assert!(matches!(
-        ScriptProject::create(&path, "Generated"),
+        ScriptProject::create(&path, "Generated", true),
         Err(ScriptError::RecoveryPending(_))
     ));
-    let mut other = ScriptProject::create(dir.path().join("other.novo"), "Other")?;
+    let mut other = ScriptProject::create(dir.path().join("other.novo"), "Other", false)?;
     assert!(matches!(
-        other.save_as(&path),
+        other.save_as(&path, true),
         Err(ScriptError::RecoveryPending(_))
     ));
     let mut fresh = ScriptProject::new("Fresh");
     assert!(matches!(
-        fresh.save_as(&path),
+        fresh.save_as(&path, true),
         Err(ScriptError::RecoveryPending(_))
     ));
 
@@ -238,12 +238,44 @@ fn create_and_save_as_never_replace_a_file_with_recovered_work() -> Result<(), S
 fn save_as_onto_its_own_file_still_saves() -> Result<(), ScriptError> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("own.novo");
-    let mut p = ScriptProject::create(&path, "Own")?;
+    let mut p = ScriptProject::create(&path, "Own", false)?;
     p.add_page("1", "")?;
-    p.save_as(&path)?;
+    p.save_as(&path, false)?;
     assert!(!p.is_dirty());
     p.close()?;
     let p = ScriptProject::open(&path)?;
     assert_eq!(p.pages().as_array().unwrap().len(), 1);
+    p.close()
+}
+
+#[test]
+fn an_existing_project_is_replaced_only_on_request() -> Result<(), ScriptError> {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("plant.novo");
+    let mut real = ScriptProject::create(&path, "Real plant", false)?;
+    real.add_page("1", "")?;
+    real.save()?;
+    real.close()?;
+    let saved = std::fs::read(&path).unwrap();
+
+    assert!(matches!(
+        ScriptProject::create(&path, "Typo", false),
+        Err(ScriptError::Exists(_))
+    ));
+    let mut other = ScriptProject::new("Other");
+    assert!(matches!(
+        other.save_as(&path, false),
+        Err(ScriptError::Exists(_))
+    ));
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        saved,
+        "the file is untouched"
+    );
+
+    let replaced = ScriptProject::create(&path, "Replacement", true)?;
+    replaced.close()?;
+    let p = ScriptProject::open(&path)?;
+    assert_eq!(p.project().info().name, "Replacement");
     p.close()
 }

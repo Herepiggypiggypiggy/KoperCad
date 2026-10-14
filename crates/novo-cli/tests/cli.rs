@@ -29,7 +29,7 @@ fn novo(args: &[&str]) -> Run {
 /// A saved two-page project; with `duplicate`, two devices share `-K1`.
 fn project(dir: &Path, duplicate: bool) -> PathBuf {
     let path = dir.join("demo.novo");
-    let mut p = ScriptProject::create(&path, "Demo").unwrap();
+    let mut p = ScriptProject::create(&path, "Demo", false).unwrap();
     let page = p.add_page("1", "Main circuit").unwrap();
     p.add_page("2", "Control").unwrap();
     let k1 = p.add_device("-K1", "Contactor", "general").unwrap();
@@ -185,7 +185,7 @@ fn a_file_open_for_editing_is_reported() {
 fn check_reports_shorts_between_potentials() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("short.novo");
-    let mut p = ScriptProject::create(&path, "Short").unwrap();
+    let mut p = ScriptProject::create(&path, "Short", false).unwrap();
     let page = p.add_page("1", "").unwrap();
     let l1 = p.add_potential("L1", "line", None).unwrap();
     let l2 = p.add_potential("L2", "line", None).unwrap();
