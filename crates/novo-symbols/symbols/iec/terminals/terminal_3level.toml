@@ -1,0 +1,38 @@
+format = 1
+id = "iec/terminals/terminal_3level"
+name = "Triple-level terminal"
+description = "Three-level terminal: three independent terminals stacked in one block."
+standard = "IEC 60617"
+category = "terminals"
+function = "terminal.multilevel"
+keywords = ["terminal", "triple level", "three level", "3 tier"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 8], dir = "down" },
+  { id = "3", at = [8, 0], dir = "up" },
+  { id = "4", at = [8, 8], dir = "down" },
+  { id = "5", at = [16, 0], dir = "up" },
+  { id = "6", at = [16, 8], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-3.5, 4], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 2.8] },
+  { kind = "circle", center = [0, 4], r = 1.2 },
+  { kind = "line", from = [0, 5.2], to = [0, 8] },
+  { kind = "line", from = [8, 0], to = [8, 2.8] },
+  { kind = "circle", center = [8, 4], r = 1.2 },
+  { kind = "line", from = [8, 5.2], to = [8, 8] },
+  { kind = "line", from = [16, 0], to = [16, 2.8] },
+  { kind = "circle", center = [16, 4], r = 1.2 },
+  { kind = "line", from = [16, 5.2], to = [16, 8] },
+  { kind = "rect", at = [-2, 1.8], size = [20, 4.4], stroke = "dashed" },
+]
+
+[behavior]
+kind = "conductor"
+poles = [["1", "2"], ["3", "4"], ["5", "6"]]

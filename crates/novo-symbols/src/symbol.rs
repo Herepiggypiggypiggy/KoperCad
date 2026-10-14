@@ -24,7 +24,7 @@ pub const PASS_THROUGH: &[&str] = &["contact", "breaker", "fuse"];
 /// stored as netlist bridges by accident. Each group is a path; propagate a
 /// potential outward from the side it arrives on.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct PassThrough(pub Vec<Vec<usize>>);
+pub struct PassThrough(Vec<Vec<usize>>);
 
 impl PassThrough {
     /// The paths as connection-index groups.
