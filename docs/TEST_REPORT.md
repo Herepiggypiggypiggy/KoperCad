@@ -13,7 +13,7 @@ How a PR is tested: its branch is merged onto the current `main` (a
 ## Round 2 (2026-10-14, main `7b9392e`)
 
 main now has #6 (experimental builds) and #11 (non-finite numbers refused,
-pin directions, multi-level terminals). fmt, clippy and all 82 workspace
+pin directions, multi-level terminals). fmt, clippy and all 70 workspace
 tests pass with `novo-tests` merged in. `novo-tests` needed one change for
 #11: `SymbolRole::Terminal` now takes `terminals: vec![...]`.
 
