@@ -142,6 +142,9 @@ struct Sheet<'a> {
     name: String,
     /// The report sheet drawn inside the frame of a generated page.
     generated: Option<GeneratedSheet>,
+    /// What the sheet shows (`=A1+CAB-X1`, `Devices without parts`), for
+    /// its bookmark; empty for one-table reports and schematic pages.
+    section: String,
 }
 
 /// The printed sheets of `page`: itself, or one per sheet of its report. A
@@ -156,14 +159,23 @@ fn sheets_of<'a>(project: &Project, page: &'a Page, reports: &mut LiveReports) -
             page,
             name: page.name.clone(),
             generated: None,
+            section: String::new(),
         }];
     }
     generated
         .into_iter()
-        .map(|g| Sheet {
-            page,
-            name: g.name.clone(),
-            generated: Some(g),
+        .map(|g| {
+            let section = reports
+                .get(project, &g.report)
+                .and_then(|o| o.sections.get(g.sheet.section))
+                .map(|s| s.title.clone())
+                .unwrap_or_default();
+            Sheet {
+                page,
+                name: g.name.clone(),
+                generated: Some(g),
+                section,
+            }
         })
         .collect()
 }
@@ -418,13 +430,20 @@ fn draw_layout(writer: &mut draw::PageWriter, layout: &PageLayout, ink: Color) {
     }
 }
 
-/// `20.2  Bill of materials`: the sheet name, then the page title.
+/// `20.2  Terminal diagram · =A1+CAB-X1`: the sheet name, the page title,
+/// then what the sheet shows, so a reflowed sheet is found by name
+/// (docs/DESIGN.md, generated pages under pinned flow).
 fn sheet_bookmark(sheet: &Sheet) -> String {
-    if sheet.page.title.is_empty() {
-        sheet.name.clone()
-    } else {
-        format!("{}  {}", sheet.name, sheet.page.title)
+    let mut title = sheet.name.clone();
+    let what: Vec<&str> = [sheet.page.title.as_str(), sheet.section.as_str()]
+        .into_iter()
+        .filter(|s| !s.is_empty())
+        .collect();
+    if !what.is_empty() {
+        title.push_str("  ");
+        title.push_str(&what.join(" · "));
     }
+    title
 }
 
 /// `1  Main circuit`, or just the name for an untitled page.

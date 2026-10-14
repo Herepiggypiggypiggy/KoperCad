@@ -104,6 +104,26 @@ fn a_generated_page_prints_one_pdf_page_per_sheet() {
 }
 
 #[test]
+fn sheet_bookmarks_name_what_each_sheet_shows() {
+    let (mut doc, _, _) = project();
+    doc.transact("Terminal page", |tx| {
+        let page = tx.add_page("30")?;
+        tx.update::<Page>(page, |p| {
+            p.title = "Terminals".into();
+            p.kind = PageKind::Generated {
+                generator: "terminals".into(),
+            };
+        })
+    })
+    .expect("page");
+    let pdf = parse(&export_pdf(doc.project(), &PdfOptions::default()).unwrap());
+    let toc = pdf.get_toc().expect("outline");
+    let last = &toc.toc.last().expect("bookmarks").title;
+    // The starter's one strip: the sheet is named after it.
+    assert_eq!(last, "30  Terminals · =A1+CAB-X1");
+}
+
+#[test]
 fn a_page_set_with_a_generated_page_keeps_all_its_sheets() {
     let (doc, devices, _) = project();
     let options = PdfOptions {
