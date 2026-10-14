@@ -177,6 +177,45 @@ fn a_drag_across_motor_wires_places_a_numbered_strip_in_one_step() {
 }
 
 #[test]
+fn a_terminal_dropped_near_the_far_end_keeps_its_sides() {
+    // The motor wires run 80 mm down from -K1 to -M1; a drop close to the
+    // motor still has -K1 on pin 1 (internal) and -M1 on pin 2 (external),
+    // and no wire runs through the terminal.
+    let mut doc = Document::default();
+    let (motor, _) = doc.transact("Draw", motor_circuit).unwrap();
+    let ((strip, placed), _) = doc
+        .transact("Terminals", |tx| {
+            let strip = strip_in_use(tx, motor.page)?;
+            let d = drops(&motor.wires, 92.0, tx.project());
+            Ok((strip, place_terminals(tx, strip, &d)?))
+        })
+        .unwrap();
+    let p = doc.project();
+    let view = strip_view(p, strip);
+    for (row, (int, ext)) in view.rows.iter().zip([
+        ("-K1:2", "-M1:U1"),
+        ("-K1:4", "-M1:V1"),
+        ("-K1:6", "-M1:W1"),
+        ("PE", "-M1:PE"),
+    ]) {
+        assert_eq!(row.internal_targets()[0].designation, int);
+        assert_eq!(row.external_targets()[0].designation, ext);
+    }
+    for t in &placed {
+        let s = p.symbol(t.symbol).unwrap();
+        let (top, bottom) = (s.pin_position(0).unwrap(), s.pin_position(1).unwrap());
+        assert!(top.y < bottom.y);
+        // Each wire ends on the pin it reaches without crossing the symbol.
+        let int = p.wire(t.internal_wire).unwrap();
+        assert_eq!(int.to, Endpoint::pin(t.symbol, 0));
+        assert!(p.endpoint_position(int.from).unwrap().y <= top.y);
+        let ext = p.wire(t.external_wire).unwrap();
+        assert_eq!(ext.from, Endpoint::pin(t.symbol, 1));
+        assert!(p.endpoint_position(ext.to).unwrap().y >= bottom.y);
+    }
+}
+
+#[test]
 fn numbers_stay_unique_and_continuous() {
     let mut doc = Document::default();
     let (motor, _) = doc.transact("Draw", motor_circuit).unwrap();
@@ -811,21 +850,16 @@ fn gate1_terminal_screen_generates_with_no_manual_drawing() {
 }
 
 #[test]
-fn gate1_checks_flag_the_pe_terminal_kind() {
+fn gate1_checks_are_clean() {
     let mut doc = Document::default();
     let starter = novo_tests::motor_starter(&mut doc).unwrap();
+    // The fixture's X1:PE is a protective earth terminal, so nothing is
+    // flagged.
+    let pe = &doc.project().terminals_of_strip(starter.x1)[3];
+    assert_eq!(pe.kind, TerminalKind::ProtectiveEarth);
     let issues = check(doc.project(), &doc.project().netlist());
-    // The fixture adds X1:PE with the default (feed-through) kind.
-    let pe = doc.project().terminals_of_strip(starter.x1)[3].id;
-    assert!(issues.iter().any(|i| i.terminal == pe
-        && i.kind
-            == IssueKind::KindDiffersFromName {
-                expected: TerminalKind::ProtectiveEarth
-            }));
-    println!("{}", screen(doc.project(), starter.x1).to_text());
-    for i in &issues {
-        println!("{:?}: {}", i.severity, i.message);
-    }
+    let messages: Vec<_> = issues.iter().map(|i| &i.message).collect();
+    assert!(issues.is_empty(), "{messages:?}");
 }
 
 #[test]

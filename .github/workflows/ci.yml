@@ -14,6 +14,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Read-only token for every job: fork pull requests run this workflow too.
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
