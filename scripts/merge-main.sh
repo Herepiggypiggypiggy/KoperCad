@@ -26,6 +26,11 @@ if ! git rev-parse -q --verify MERGE_HEAD >/dev/null; then
 fi
 
 crate_line='^(\| `novo-[a-z-]+` \||novo-[a-z-]+ = \{ path = )'
+# External dependency lines in Cargo.toml ([workspace.dependencies]) and
+# comments above them: two PRs adding different crates next to each other
+# conflict, and keeping both is mechanical as long as no crate ends up with
+# two different entries (checked after the merge).
+dep_line='^([A-Za-z0-9_-]+ = |# )'
 
 mapfile -t unmerged < <(git diff --name-only --diff-filter=U)
 for f in "${unmerged[@]}"; do
@@ -36,15 +41,18 @@ for f in "${unmerged[@]}"; do
       git show ":1:$f" > "$tmp/base" 2>/dev/null || : > "$tmp/base"
       git show ":2:$f" > "$tmp/ours"
       git show ":3:$f" > "$tmp/theirs"
-      # Lines inside conflict blocks must all be crate-list lines.
+      # Lines inside conflict blocks must all be crate-list lines (and, in
+      # Cargo.toml, external dependency lines or comments).
+      allowed="$crate_line|^$"
+      [ "$f" = Cargo.toml ] && allowed="$allowed|$dep_line"
       git merge-file -p "$tmp/ours" "$tmp/base" "$tmp/theirs" > "$tmp/marked" || true
       if awk '
            /^<<<<<<< / { inside = 1; next }
            /^=======$/ && inside { next }
            /^>>>>>>> / { inside = 0; next }
            inside { print }
-         ' "$tmp/marked" | grep -vqE "$crate_line|^$"; then
-        echo "conflict in $f is not only crate-list lines; aborting" >&2
+         ' "$tmp/marked" | grep -vqE "$allowed"; then
+        echo "conflict in $f is not only crate-list or dependency lines; aborting" >&2
         rm -rf "$tmp"
         git merge --abort
         exit 1
@@ -84,8 +92,21 @@ for f in "${unmerged[@]}"; do
           if (!(key($0) in inmain) && !seen[key($0)]++) print
           next
         }
+        /^\[/ { indeps = ($0 == "[workspace.dependencies]") }
+        # Keep one copy of a dependency line or comment both sides added.
+        indeps && (/^[A-Za-z0-9_-]+ = / || /^# /) { if (seenl[$0]++) next }
         { print }
       ' "$tmp/merged" > "$f"
+      if [ "$f" = Cargo.toml ]; then
+        # The union must not leave one crate with two different entries.
+        dup=$(sed -n '/^\[workspace.dependencies\]/,/^\[/p' "$f" | grep -oE '^[A-Za-z0-9_-]+ = ' | sort | uniq -d)
+        if [ -n "$dup" ]; then
+          echo "Cargo.toml would list these twice with different entries: $dup; aborting" >&2
+          rm -rf "$tmp"
+          git merge --abort
+          exit 1
+        fi
+      fi
       rm -rf "$tmp"
       ;;
   esac
