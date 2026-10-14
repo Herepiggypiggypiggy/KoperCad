@@ -4,7 +4,7 @@ name = "Terminal end plate"
 description = "End plate closing the open side of the last terminal on a strip."
 standard = "IEC 60617"
 category = "terminals"
-function = "terminal.accessory.end_plate"
+function = "accessory.terminal.end_plate"
 keywords = ["end plate", "end cover", "terminal", "accessory"]
 aliases = ["endplate"]
 
