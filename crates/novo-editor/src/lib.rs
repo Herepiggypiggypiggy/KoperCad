@@ -13,6 +13,9 @@
 //!   [`pages`] and [`tool`]
 //!   (the tool state machine, [`Editor`]). Tests, scripts (WS-28) and the AI
 //!   assistant (WS-23) drive this layer without a window.
+//! - Library artwork (feature `art`): [`art::LibraryArt`] draws placed
+//!   symbols with their IEC graphics through `novo-canvas`'s page model,
+//!   without the widget or egui, for headless rendering (WS-28).
 //! - The interactive view (feature `egui`, on by default): [`view::SchematicView`]
 //!   puts the editor on a `novo-canvas` canvas with real IEC artwork
 //!   ([`art::LibraryArt`]), the insert search, in-place rename and the
@@ -43,7 +46,7 @@ pub mod pages;
 pub mod potential;
 pub mod tool;
 
-#[cfg(feature = "egui")]
+#[cfg(feature = "art")]
 pub mod art;
 #[cfg(feature = "egui")]
 pub mod view;
