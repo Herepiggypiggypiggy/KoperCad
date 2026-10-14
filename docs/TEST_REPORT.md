@@ -37,7 +37,14 @@ tests pass with `novo-tests` merged in. `novo-tests` needed one change for
 - **Observation (low):** a refused edit still uses up ids (`next_id` moves
   on). This is harmless, since ids are never reused, but worth knowing
   when comparing saved files.
-- #6 merged; the first `experimental` pre-release has not been checked yet.
+- **#6 passes.** The first `experimental` pre-release was published at
+  15:03 with `novoelectric-experimental-windows.zip` (5.9 MB) and
+  `build-info.json`. It included main `ae41e02` plus #2, #3 and #6. It
+  skipped #4 and #5 for merge conflicts, although each merges cleanly onto
+  main alone. The conflicts come from stacking PRs that all touch
+  `Cargo.lock` and `[workspace.dependencies]`. Suggestion for the workflow:
+  on a conflict limited to `Cargo.lock`, take main's lock and let cargo
+  regenerate it, which is how these tests merge PRs.
 
 ## Round 1 (2026-10-14)
 
