@@ -33,8 +33,13 @@
 //!   [`Cell`] (`Text`, `Int`, `Number`, `Empty`; numbers stay numbers for
 //!   Excel). [`Column`] carries the header, alignment and a relative width.
 //! - **Reports**: [`TableOfContents`] (`toc`), [`BillOfMaterials`] (`bom`),
-//!   [`DeviceList`] (`devices`), [`WireList`] (`wires`). Ids double as the
-//!   `generator` of a [`PageKind::Generated`](novo_core::PageKind) page.
+//!   [`DeviceList`] (`devices`), [`WireList`] (`wires`), [`TerminalDiagram`]
+//!   (`terminals`, from novo-terminals) and [`CableDiagram`] (`cables`, from
+//!   novo-cables). Ids double as the `generator` of a
+//!   [`PageKind::Generated`](novo_core::PageKind) page.
+//! - **Generated pages**: a generated page record prints as one sheet named
+//!   like the page (`20`), or as `20.1`, `20.2`, ... when its report needs
+//!   more ([`LiveReports::sheets_of_page`], [`LiveReports::layout_sheet`]).
 //! - **Live cache**: [`LiveReports`]. Call [`LiveReports::notify`] with every
 //!   transaction's change set; [`LiveReports::get`] regenerates only stale
 //!   reports. On the 10k-object stress project an edit plus regenerating and
@@ -45,16 +50,17 @@
 //! - **Export**: [`xlsx_bytes`] / [`save_xlsx`] (one sheet per report) and
 //!   [`to_csv`].
 //!
-//! # Plugging in a generated page (WS-11 terminals, WS-12 cables)
+//! # Plugging in a generated page
 //!
 //! Implement [`Report`] for the page type, returning one [`Section`] per
-//! strip or cable (key = its tag, title = `-X1`), with the rows it already
-//! computes (WS-11's `ScreenRow` maps to one [`Row`]; list-valued fields
-//! join with `, `). Name in [`Report::dependencies`] every record kind it
-//! reads, then register it: `reports.register(Box::new(TerminalDiagram))`.
-//! It is then paged, laid out, exported to Excel and kept live like the
-//! built-in reports. A report crate depends on `novo-reports`, never the
-//! other way round.
+//! independent table (key and title = the strip's or cable's tag), name in
+//! [`Report::dependencies`] every record kind it reads, and register it:
+//! `reports.register(Box::new(MyReport))`. It is then paged, laid out,
+//! exported to Excel and kept live like the built-in reports.
+//! [`TerminalDiagram`] and [`CableDiagram`] are written this way over the
+//! data WS-11 and WS-12 already compute (`novo_terminals::screen`,
+//! `novo_cables::cable_screens`), so the drawers and the printed pages show
+//! the same rows. Those two crates must never depend on `novo-reports`.
 //!
 //! # Drawing (WS-03 canvas, WS-09 PDF)
 //!
@@ -66,20 +72,24 @@
 
 mod bom;
 mod devices;
+mod diagrams;
 mod export;
 mod order;
 mod page;
 mod report;
+mod sheets;
 mod table;
 mod toc;
 mod wires;
 
 pub use bom::BillOfMaterials;
 pub use devices::DeviceList;
+pub use diagrams::{CableDiagram, TerminalDiagram};
 pub use export::{CsvOptions, ExportError, save_xlsx, to_csv, xlsx_bytes};
 pub use order::{function_of, location_of, location_text, tag_cmp};
 pub use page::{Line, Margins, PageLayout, PageSetup, ReportPage, TextBox, layout_page, paginate};
 pub use report::{Dependencies, LiveReports, Report};
+pub use sheets::{GeneratedSheet, sheet_name};
 pub use table::{Align, Cell, Column, ReportOutput, Row, Section};
 pub use toc::TableOfContents;
 pub use wires::WireList;
@@ -93,6 +103,8 @@ pub fn standard_reports() -> Vec<Box<dyn Report>> {
         Box::new(BillOfMaterials),
         Box::new(DeviceList),
         Box::new(WireList),
+        Box::new(TerminalDiagram),
+        Box::new(CableDiagram),
     ]
 }
 

@@ -78,12 +78,12 @@ pub fn xlsx_bytes(reports: &[&ReportOutput]) -> Result<Vec<u8>, ExportError> {
                 } else {
                     &section.title
                 };
-                sheet.write_string_with_format(row, 0, title, &bold)?;
+                sheet.write_string_with_format(row, 0, excel_text(title), &bold)?;
                 row += 1;
             }
             for (c, column) in section.columns.iter().enumerate() {
                 let c16 = col(c)?;
-                sheet.write_string_with_format(row, c16, &column.header, &bold)?;
+                sheet.write_string_with_format(row, c16, excel_text(&column.header), &bold)?;
                 widen(&mut widths, c, column.header.chars().count());
             }
             if !titled {
@@ -96,7 +96,7 @@ pub fn xlsx_bytes(reports: &[&ReportOutput]) -> Result<Vec<u8>, ExportError> {
                     match cell {
                         Cell::Empty => continue,
                         Cell::Text(text) => {
-                            sheet.write_string(row, c16, text)?;
+                            sheet.write_string(row, c16, excel_text(text))?;
                         }
                         Cell::Int(value) => {
                             sheet.write_number(row, c16, *value as f64)?;
@@ -135,6 +135,21 @@ pub fn save_xlsx(reports: &[&ReportOutput], path: impl AsRef<Path>) -> Result<()
         let _ = std::fs::remove_file(&temp);
     }
     Ok(written?)
+}
+
+/// Excel's limit on the characters in one cell.
+const EXCEL_CELL_CHARS: usize = 32_767;
+
+/// Text as Excel takes it: cut to the cell limit with a trailing `…`, so
+/// an oversized cell never blocks the export.
+fn excel_text(text: &str) -> String {
+    if text.chars().count() <= EXCEL_CELL_CHARS {
+        text.to_owned()
+    } else {
+        let mut cut: String = text.chars().take(EXCEL_CELL_CHARS - 1).collect();
+        cut.push('…');
+        cut
+    }
 }
 
 fn col(index: usize) -> Result<u16, XlsxError> {
