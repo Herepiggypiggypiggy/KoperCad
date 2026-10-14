@@ -692,6 +692,204 @@ fn gap_assign_potentials_to_selected_wires() {
     );
 }
 
+/// A new project file with its first page.
+fn new_flow<'a>(library: &'a Library, dir: &std::path::Path) -> (Flow<'a, FileStore>, PageId) {
+    let doc = Document::new(Project::new("Gate 1"));
+    let session = Session::create(dir.join("gate1.novo"), doc.project()).unwrap();
+    let mut flow = Flow::new(FileStore { doc, session }, library);
+    let page = created(
+        &flow.run(Command::AddPage {
+            name: "1".into(),
+            title: String::new(),
+            kind: PageKind::default(),
+            format: PageFormat::default(),
+        }),
+        |id| match id {
+            AnyId::Page(p) => Some(p),
+            _ => None,
+        },
+    );
+    (flow, page)
+}
+
+/// Step 5 as the user does it (#30): the starter is wired straight from
+/// the overload relay to the motor, then one drag across the four motor
+/// wires puts `-X1:1`, `:2`, `:3` and `:PE` into them (numbers next free,
+/// PE from the wire's potential). The connection screen lists them with
+/// both sides, and the terminal checks are clean.
+#[test]
+fn gap_place_terminals_on_wires_and_show_the_strip() {
+    let library = Library::builtin().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut flow, page) = new_flow(&library, dir.path());
+
+    // The supply over the motor's pins, so every wire runs straight down.
+    let phases = ["L1", "L2", "L3"].map(|name| flow.potential(name, PotentialKind::Line));
+    let pe = flow.potential("PE", PotentialKind::ProtectiveEarth);
+    let feeds: Vec<SymbolId> = phases
+        .iter()
+        .chain([&pe])
+        .zip([40.0, 48.0, 56.0, 64.0])
+        .map(|(&potential, x)| {
+            flow.place(
+                page,
+                "feed",
+                x,
+                12.0,
+                SymbolRole::PotentialFeed { potential },
+            )
+        })
+        .collect();
+    let q1 = flow.device("=A1+CAB-Q1", "Motor circuit breaker", DeviceKind::General);
+    let k1 = flow.device("=A1+CAB-K1", "Motor contactor", DeviceKind::General);
+    let f1 = flow.device("=A1+CAB-F1", "Overload relay", DeviceKind::General);
+    let m1 = flow.device("=A1+FLD-M1", "Pump motor", DeviceKind::General);
+    let q1_sym = flow.place(page, "mcb3", 40.0, 40.0, role(q1));
+    let k1_sym = flow.place(page, "main3", 40.0, 72.0, role(k1));
+    let f1_sym = flow.place(page, "ol", 40.0, 104.0, role(f1));
+    let m1_sym = flow.place(page, "m3", 40.0, 180.0, role(m1));
+    let mut motor_wires = Vec::new();
+    for (i, (top, bottom)) in [("1", "2"), ("3", "4"), ("5", "6")].into_iter().enumerate() {
+        let q1_in = flow.pin(q1_sym, top);
+        flow.wire(Endpoint::pin(feeds[i], 0), q1_in);
+        for (from, to) in [(q1_sym, k1_sym), (k1_sym, f1_sym)] {
+            let (a, b) = (flow.pin(from, bottom), flow.pin(to, top));
+            flow.wire(a, b);
+        }
+        let (a, b) = (flow.pin(f1_sym, bottom), flow.pin(m1_sym, MOTOR_PINS[i]));
+        motor_wires.push(flow.wire(a, b));
+    }
+    let motor_pe = flow.pin(m1_sym, "PE");
+    motor_wires.push(flow.wire(Endpoint::pin(feeds[3], 0), motor_pe));
+
+    // One drag across the four wires, left to right, as one undo step.
+    let depth = flow.store.doc().undo_depth();
+    let drops: Vec<novo_terminals::Drop> = motor_wires
+        .iter()
+        .zip([40.0, 48.0, 56.0, 64.0])
+        .map(|(&wire, x)| novo_terminals::Drop {
+            wire,
+            at: Point::new(x, 150.0),
+        })
+        .collect();
+    let ((x1, placed), changes) = flow
+        .store
+        .doc_mut()
+        .transact("Place terminals", |tx| {
+            let x1 = novo_terminals::strip_by_tag(tx, "=A1+CAB-X1")?;
+            let placed = novo_terminals::place_terminals(tx, x1, &drops)?;
+            Ok((x1, placed))
+        })
+        .unwrap();
+    flow.store.record(&changes);
+    assert_eq!(placed.len(), 4);
+    assert_eq!(flow.store.doc().undo_depth(), depth + 1);
+
+    let p = flow.project();
+    let strip: Vec<(String, TerminalKind)> = p
+        .terminals_of_strip(x1)
+        .into_iter()
+        .map(|t| (t.name.clone(), t.kind))
+        .collect();
+    assert_eq!(
+        strip,
+        [
+            ("1", TerminalKind::Feedthrough),
+            ("2", TerminalKind::Feedthrough),
+            ("3", TerminalKind::Feedthrough),
+            ("PE", TerminalKind::ProtectiveEarth),
+        ]
+        .map(|(n, k)| (n.to_string(), k))
+    );
+    // The motor still reads L1, L2, L3 and PE through the terminals.
+    let net = p.netlist();
+    let at_motor: Vec<Option<PotentialId>> = MOTOR_PINS
+        .map(|pin| net.potential_of(flow.pin(m1_sym, pin)))
+        .to_vec();
+    assert_eq!(
+        at_motor,
+        phases
+            .iter()
+            .chain([&pe])
+            .map(|&id| Some(id))
+            .collect::<Vec<_>>()
+    );
+
+    // The connection screen: inside the cabinet the overload relay (and the
+    // PE feed), in the field the motor.
+    let screen = novo_terminals::screen(p, x1);
+    assert_eq!(screen.tag, "=A1+CAB-X1");
+    let rows: Vec<(String, &str, String)> = screen
+        .rows
+        .iter()
+        .map(|r| {
+            (
+                r.internal.join(","),
+                r.terminal.as_str(),
+                r.external.join(","),
+            )
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            ("=A1+CAB-F1:2", "1", "=A1+FLD-M1:U1"),
+            ("=A1+CAB-F1:4", "2", "=A1+FLD-M1:V1"),
+            ("=A1+CAB-F1:6", "3", "=A1+FLD-M1:W1"),
+            ("PE", "PE", "=A1+FLD-M1:PE"),
+        ]
+        .map(|(i, t, e)| (i.to_string(), t, e.to_string()))
+    );
+    let issues = novo_terminals::check(p, &net);
+    let messages: Vec<&String> = issues.iter().map(|i| &i.message).collect();
+    assert!(issues.is_empty(), "{messages:?}");
+}
+
+/// Every device of the starter gets a part from the starter catalog (#36),
+/// picked from the suggestions for its letter code, one command each;
+/// nothing is left without a part, and the parts are saved with the file.
+#[test]
+fn gap_assign_parts_from_the_catalog() {
+    let library = Library::builtin().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut flow, page) = new_flow(&library, dir.path());
+    build(&mut flow, page, true);
+    assert_eq!(novo_parts::missing_parts(flow.project()).len(), 5);
+
+    let catalog = novo_parts::Catalog::starter();
+    let devices: Vec<DeviceId> = flow.project().devices().map(|d| d.id).collect();
+    for device in devices {
+        let part = novo_parts::suggest_for_device(&catalog, flow.project(), device, "", 1)
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| panic!("no catalog part suggested for {device:?}"));
+        let command = novo_parts::assign_part(
+            flow.project(),
+            &[device],
+            part,
+            novo_parts::AssignMode::Replace,
+        )
+        .expect("the device had no part");
+        let depth = flow.store.doc().undo_depth();
+        flow.run(command);
+        assert_eq!(flow.store.doc().undo_depth(), depth + 1);
+    }
+    assert_eq!(
+        novo_parts::missing_parts(flow.project()),
+        Vec::<AnyId>::new()
+    );
+    assert_eq!(novo_parts::missing_parts_summary(flow.project()), None);
+
+    // Saved and reopened, every device still has its part.
+    let before = flow.project().to_json();
+    let FileStore { doc, mut session } = flow.store;
+    session.save(doc.project()).unwrap();
+    session.close().unwrap();
+    let opened = Session::open(dir.path().join("gate1.novo")).unwrap();
+    assert_eq!(opened.project.to_json(), before);
+    assert!(novo_parts::missing_parts(&opened.project).is_empty());
+}
+
 // ----- Gaps whose pull request is still open ------------------------------
 
 #[test]
@@ -701,21 +899,6 @@ fn gap_place_by_search_with_auto_tags_and_self_wiring() {
     // stacked in one column gives -Q1, -K1, -F1, -M1 and the 9 main wires
     // without wire clicks.
     panic!("gap: closed by #38");
-}
-
-#[test]
-#[ignore = "known gap: putting terminals on wires in one call and the strip screen are in #30 (novo-terminals)"]
-fn gap_place_terminals_on_wires_and_show_the_strip() {
-    // Step 5 as the user does it: place_terminals on the four motor wires
-    // (numbers 1, 2, 3, PE, PE inferred), then screen() and check() clean.
-    panic!("gap: closed by #30");
-}
-
-#[test]
-#[ignore = "known gap: assigning catalog parts is in #36 (novo-parts)"]
-fn gap_assign_parts_from_the_catalog() {
-    // Every device gets a catalog part; missing_parts() is empty.
-    panic!("gap: closed by #36");
 }
 
 #[test]

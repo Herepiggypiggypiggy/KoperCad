@@ -47,6 +47,7 @@ gh api $R/commits/<sha>/check-runs --jq '[.check_runs[]|"\(.name)=\(.conclusion 
 gh api -X PUT $R/pulls/N/merge -f merge_method=squash -f sha=<sha>
 ```
 - Mark a draft PR ready: `gh api -X POST $R/pulls/N/ccr/ready_for_review`.
+- **Mechanical main merges keep READY (from #51):** when a PR's head moved after READY only by merging main (use `scripts/merge-main.sh`), run `scripts/check-mechanical-merge.sh <ready-sha> <new-head>`. If it prints `OK`, the READY carries over: re-run `cargo test --workspace` on the new head (a lock-only difference passes the script), paste the script output into a PR comment, then merge with the new head's full sha. Any other change after READY goes back to the reviewer.
 - If the head moved after READY: docs-only or trivial changes can merge after you read the diff yourself; anything else goes back to the reviewer.
 - After a core (#35-style) merge, check open PRs for build breaks: exhaustive matches, struct literals.
 - The repo is private on a free plan, so there is no branch protection and Actions capacity is limited. Keep CI load low.

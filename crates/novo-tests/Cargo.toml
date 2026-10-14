@@ -12,9 +12,11 @@ novo-core.workspace = true
 [dev-dependencies]
 novo-app = { path = "../novo-app" }
 novo-canvas.workspace = true
+novo-parts.workspace = true
 novo-storage.workspace = true
 tempfile.workspace = true
 novo-symbols.workspace = true
+novo-terminals = { path = "../novo-terminals" }
 novo-workflow.workspace = true
 serde_json.workspace = true
 
