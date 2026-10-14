@@ -237,6 +237,8 @@ pub struct CanvasView {
     pub wheel_zoom_step: f32,
     /// Labels smaller than this many screen points are not drawn.
     pub min_label_size: f32,
+    /// Keep the drawing on whole device pixels ([`Viewport::snap_to_pixels`]).
+    pub pixel_snap: bool,
     tessellator: Tessellator,
     mesh_cache: tessellate::ItemMeshCache,
     scene_mesh: Option<Arc<SceneMesh>>,
@@ -325,6 +327,7 @@ impl CanvasView {
             pick_tolerance: 5.0,
             wheel_zoom_step: 1.2,
             min_label_size: 4.0,
+            pixel_snap: true,
             tessellator: Tessellator::default(),
             mesh_cache: tessellate::ItemMeshCache::default(),
             scene_mesh: None,
@@ -505,6 +508,9 @@ impl CanvasView {
         self.selection.retain_existing(scene);
         selection_changed |= self.selection.revision() != rev;
 
+        if self.pixel_snap {
+            self.viewport.snap_to_pixels(ui.ctx().pixels_per_point());
+        }
         if is_installed() {
             let frame = self.build_frame(ui.ctx().pixels_per_point(), scene, cursor, cursor_raw);
             ui.painter().add(egui_wgpu::Callback::new_paint_callback(
