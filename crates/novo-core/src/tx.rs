@@ -155,6 +155,9 @@ impl<'p> Tx<'p> {
                 (AnyId::Cable(cable), AnyId::Part(_)) => {
                     self.update::<Cable>(cable, |c| c.part = None)?;
                 }
+                (AnyId::Terminal(terminal), AnyId::Part(_)) => {
+                    self.update::<Terminal>(terminal, |t| t.part = None)?;
+                }
                 (AnyId::Wire(wire), AnyId::Potential(_)) => {
                     self.update::<Wire>(wire, |w| w.potential = None)?;
                 }
@@ -232,6 +235,7 @@ impl<'p> Tx<'p> {
             level: 1,
             order: 0,
             jumper: None,
+            part: None,
             properties: Default::default(),
         })
     }

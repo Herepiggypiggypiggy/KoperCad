@@ -762,6 +762,11 @@ pub struct Terminal {
     /// Terminals of one strip with the same jumper group are bridged.
     #[serde(default)]
     pub jumper: Option<u32>,
+    /// The terminal's article. Terminals of one type on a strip usually
+    /// share one part; the strip device itself may carry the end plates
+    /// and accessories.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub part: Option<PartId>,
     #[serde(default)]
     pub properties: Properties,
 }

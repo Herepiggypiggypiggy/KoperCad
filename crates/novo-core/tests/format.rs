@@ -75,7 +75,11 @@ fn build() -> Project {
             t.order = 5;
             t.jumper = Some(1);
         })?;
-        tx.update::<Terminal>(upper, |t| t.jumper = Some(1))?;
+        let clamp = tx.add_part("Phoenix Contact", "3031212")?;
+        tx.update::<Terminal>(upper, |t| {
+            t.jumper = Some(1);
+            t.part = Some(clamp);
+        })?;
 
         let l1 = tx.add_potential("L1", PotentialKind::Line)?;
         tx.update::<Potential>(l1, |p| p.voltage = Some(400.0))?;

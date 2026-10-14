@@ -14,7 +14,7 @@
       "revision": 3
     }
   },
-  "next_id": 23,
+  "next_id": 24,
   "parts": [
     {
       "id": 3,
@@ -25,11 +25,19 @@
       "properties": {
         "width_mm": 45.0
       }
+    },
+    {
+      "id": 8,
+      "manufacturer": "Phoenix Contact",
+      "order_number": "3031212",
+      "type_number": "",
+      "description": "",
+      "properties": {}
     }
   ],
   "potentials": [
     {
-      "id": 8,
+      "id": 9,
       "name": "L1",
       "kind": "line",
       "voltage": 400.0,
@@ -100,6 +108,7 @@
       "level": 1,
       "order": 0,
       "jumper": 1,
+      "part": 8,
       "properties": {}
     },
     {
@@ -115,7 +124,7 @@
   ],
   "symbols": [
     {
-      "id": 9,
+      "id": 10,
       "page": 1,
       "symbol": "iec/connectivity/potential_feed",
       "placement": {
@@ -128,7 +137,7 @@
       },
       "role": {
         "type": "potential_feed",
-        "potential": 8
+        "potential": 9
       },
       "pins": [
         {
@@ -144,7 +153,7 @@
       "properties": {}
     },
     {
-      "id": 10,
+      "id": 11,
       "page": 1,
       "symbol": "iec/contacts/changeover",
       "placement": {
@@ -201,7 +210,7 @@
       }
     },
     {
-      "id": 11,
+      "id": 12,
       "page": 2,
       "symbol": "iec/terminals/terminal_2level",
       "placement": {
@@ -262,36 +271,8 @@
       "properties": {}
     },
     {
-      "id": 12,
-      "page": 1,
-      "symbol": "iec/connectivity/interruption",
-      "placement": {
-        "origin": {
-          "x": 100.0,
-          "y": 10.0
-        },
-        "rotation": "0",
-        "mirrored": false
-      },
-      "role": {
-        "type": "interruption",
-        "name": "A"
-      },
-      "pins": [
-        {
-          "name": "1",
-          "offset": {
-            "x": 0.0,
-            "y": 0.0
-          }
-        }
-      ],
-      "bridges": [],
-      "properties": {}
-    },
-    {
       "id": 13,
-      "page": 2,
+      "page": 1,
       "symbol": "iec/connectivity/interruption",
       "placement": {
         "origin": {
@@ -320,6 +301,34 @@
     {
       "id": 14,
       "page": 2,
+      "symbol": "iec/connectivity/interruption",
+      "placement": {
+        "origin": {
+          "x": 100.0,
+          "y": 10.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "interruption",
+        "name": "A"
+      },
+      "pins": [
+        {
+          "name": "1",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          }
+        }
+      ],
+      "bridges": [],
+      "properties": {}
+    },
+    {
+      "id": 15,
+      "page": 2,
       "symbol": "iec/general/note",
       "placement": {
         "origin": {
@@ -339,7 +348,7 @@
   ],
   "junctions": [
     {
-      "id": 15,
+      "id": 16,
       "page": 1,
       "position": {
         "x": 10.0,
@@ -349,16 +358,16 @@
   ],
   "wires": [
     {
-      "id": 16,
+      "id": 17,
       "page": 1,
       "from": {
         "type": "pin",
-        "symbol": 9,
+        "symbol": 10,
         "pin": 0
       },
       "to": {
         "type": "junction",
-        "junction": 15
+        "junction": 16
       },
       "route": [
         {
@@ -369,55 +378,17 @@
       "number": "101",
       "color": "BK",
       "cross_section_mm2": 2.5,
-      "potential": 8,
+      "potential": 9,
       "properties": {
         "twisted": false
       }
     },
     {
-      "id": 17,
-      "page": 1,
-      "from": {
-        "type": "junction",
-        "junction": 15
-      },
-      "to": {
-        "type": "pin",
-        "symbol": 10,
-        "pin": 0
-      },
-      "route": [],
-      "number": null,
-      "color": null,
-      "cross_section_mm2": null,
-      "properties": {}
-    },
-    {
       "id": 18,
       "page": 1,
       "from": {
-        "type": "pin",
-        "symbol": 10,
-        "pin": 2
-      },
-      "to": {
-        "type": "pin",
-        "symbol": 12,
-        "pin": 0
-      },
-      "route": [],
-      "number": null,
-      "color": null,
-      "cross_section_mm2": null,
-      "properties": {}
-    },
-    {
-      "id": 19,
-      "page": 2,
-      "from": {
-        "type": "pin",
-        "symbol": 13,
-        "pin": 0
+        "type": "junction",
+        "junction": 16
       },
       "to": {
         "type": "pin",
@@ -429,11 +400,49 @@
       "color": null,
       "cross_section_mm2": null,
       "properties": {}
+    },
+    {
+      "id": 19,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 11,
+        "pin": 2
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 13,
+        "pin": 0
+      },
+      "route": [],
+      "number": null,
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 20,
+      "page": 2,
+      "from": {
+        "type": "pin",
+        "symbol": 14,
+        "pin": 0
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 12,
+        "pin": 0
+      },
+      "route": [],
+      "number": null,
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
     }
   ],
   "cables": [
     {
-      "id": 20,
+      "id": 21,
       "tag": "+CAB1-W1",
       "description": "Control cable",
       "part": 3,
@@ -442,7 +451,7 @@
           "name": "1",
           "cross_section_mm2": 1.5,
           "shield": false,
-          "wire": 19
+          "wire": 20
         },
         {
           "name": "SH",
@@ -459,11 +468,11 @@
   ],
   "texts": [
     {
-      "id": 21,
+      "id": 22,
       "page": 1,
       "attached_to": {
         "kind": "symbol",
-        "id": 10
+        "id": 11
       },
       "content": {
         "type": "device_tag"
@@ -480,7 +489,7 @@
       "properties": {}
     },
     {
-      "id": 22,
+      "id": 23,
       "page": 2,
       "content": {
         "type": "literal",

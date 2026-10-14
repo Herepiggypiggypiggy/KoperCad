@@ -92,7 +92,10 @@ impl Record {
                 }
                 out.extend(r.potential.map(AnyId::from));
             }
-            Record::Terminal(r) => out.push(r.strip.into()),
+            Record::Terminal(r) => {
+                out.push(r.strip.into());
+                out.extend(r.part.map(AnyId::from));
+            }
             Record::Cable(r) => {
                 out.extend(r.part.map(AnyId::from));
                 out.extend(r.cores.iter().filter_map(|c| c.wire.map(AnyId::from)));
