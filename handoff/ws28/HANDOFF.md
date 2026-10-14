@@ -1,8 +1,7 @@
 # WS-28 Python API and CLI: handoff
 
 ## State (2026-10-14 20:00 UTC)
-- Branch `claude/ws28-python-cli`, PR #56. Head SHA: last line of PROGRESS.md.
-- Phase 1 (headless) is complete and locally green; waiting on the main reviewer.
+- PR #56 (phase 1) merged as 67c3591. Branch `claude/ws28-python-cli` restarted from main for the review follow-ups PR; number and head SHA are on the last line of PROGRESS.md.
 - Nothing half-done in the working tree.
 
 ## Layout
@@ -28,11 +27,12 @@ python -m pytest -p no:cacheprovider crates/novo-py/python/tests
 - Python is behind a cargo feature so CI (no Python) stays green; maturin turns it on. Use a separate CARGO_TARGET_DIR for maturin (it builds with other flags).
 - `ScriptProject::open`, `create` and `save_as` refuse a file with recovered autosave work (save_as onto the session's own file is allowed) and leave the recovery file, so scripts never save over crash work.
 - `create`/`save_as` refuse an existing file unless `overwrite` (Python keyword `overwrite=False`).
-- Remaining review notes for the follow-up PR from main: plain clap errors, `novo check` on novo_checks (#50 is on main), novo-pdf (#49), no panic in execute_one, atomic export write, venv-first README.
 - Reviewers: any CHANGES NEEDED blocks a merge; send every head to B and C and the coordinator.
 - Opening a file that is locked waits ~5 s (storage's SQLite busy timeout) before `Locked`; the CLI test for that takes 5 s.
 - Netlist names: device/terminal pins by designation (`-K1:13`); feeds `feed L1:1`, interruption points `ip NAME:1`, unlinked `symbol 12:1`.
-- `novo check` has two built-in checks until a checks engine is on main; `export pdf` exits 5 until novo-pdf (#49) merges.
+- `novo check` runs `novo_checks::check`; exit 1 when the summary is not clean (infos such as missing parts do not count). `--json` gives severity, snake_case kind, label, message, page name, ids.
+- `novo export pdf` uses `novo_pdf::export_pdf_with_art` with `novo_editor::art::LibraryArt` (needs novo-editor's `egui` feature, so the CLI links egui; see ROADMAP item 3). `--page NAME` repeats.
+- Exports go through `write_output`: refused onto the input, any `*.novo`, `*.novo.autosave` or any existing SQLite file; written to `<out>.novo-tmp` then renamed.
 - No novo-core API changes were needed.
 
 ## People

@@ -13,6 +13,10 @@ path = "src/main.rs"
 novo-core.workspace = true
 novo-storage.workspace = true
 novo-py.workspace = true
+novo-checks.workspace = true
+novo-pdf.workspace = true
+# Symbol artwork for PDF export (`art` lives behind the editor's egui feature).
+novo-editor = { workspace = true, features = ["egui"] }
 clap.workspace = true
 serde_json.workspace = true
 

@@ -7,12 +7,15 @@
 //!
 //! Exit codes are stable so batch files can test them; see [`exit`].
 
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
+use novo_checks::{Problem, ProblemKind, Severity, Summary};
 use novo_core::Project;
-use novo_storage::ProjectFile;
+use novo_editor::art::LibraryArt;
+use novo_pdf::{PageSet, PdfOptions};
+use novo_storage::{AUTOSAVE_SUFFIX, PROJECT_EXTENSION, ProjectFile};
 use serde_json::{Value, json};
 
 /// Process exit codes.
@@ -27,7 +30,9 @@ pub mod exit {
     pub const READ: i32 = 3;
     /// The output could not be written.
     pub const WRITE: i32 = 4;
-    /// The subcommand is not available in this build.
+    /// The subcommand is not available in this build (kept for scripts that
+    /// test for it; nothing returns it at the moment but a symbol library
+    /// that fails to load).
     pub const UNAVAILABLE: i32 = 5;
 }
 
@@ -39,7 +44,8 @@ pub mod exit {
     long_about = "NovoElectric command-line tool: inspect, check and export project files.\n\n\
                   Project files are only read, never changed.\n\
                   Exit codes: 0 done, 1 check found problems, 2 bad command line, \
-                  3 project not readable, 4 output not writable, 5 not available in this build."
+                  3 project not readable, 4 output not writable, 5 not available in this build.\n\
+                  An export is never written over a project file."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -58,7 +64,8 @@ enum Cmd {
     /// Export a project.
     #[command(subcommand)]
     Export(Export),
-    /// Run design checks; exits with 1 when there are problems.
+    /// Run the design checks; exits with 1 when there are errors or
+    /// warnings (infos such as missing parts do not count).
     Check {
         file: PathBuf,
         /// Print JSON instead of text.
@@ -76,12 +83,17 @@ enum Export {
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
-    /// The schematic pages as one PDF.
+    /// The schematic pages as one vector PDF, with bookmarks and
+    /// cross-reference links.
     Pdf {
         file: PathBuf,
         /// Output file.
         #[arg(short, long)]
         output: PathBuf,
+        /// Only this page (by name, e.g. `3`); repeat for several. All pages
+        /// when left out.
+        #[arg(long = "page", value_name = "NAME")]
+        pages: Vec<String>,
     },
 }
 
@@ -110,7 +122,8 @@ where
     let cli = match Cli::try_parse_from(args) {
         Ok(cli) => cli,
         Err(e) => {
-            let text = e.render().ansi().to_string();
+            // Plain text: batch logs and old consoles show escape codes raw.
+            let text = e.render().to_string();
             return if e.use_stderr() {
                 let _ = write!(err, "{text}");
                 exit::USAGE
@@ -152,34 +165,30 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             }
             Ok(exit::OK)
         }
-        Cmd::Export(Export::Pdf { file, output: _ }) => {
-            read(&file)?;
-            Err(Failure::new(
-                exit::UNAVAILABLE,
-                "PDF export is not in this build yet: it comes with novo-pdf \
-                 (pull request #49). Use `novo export json` meanwhile.",
-            ))
+        Cmd::Export(Export::Pdf {
+            file,
+            output,
+            pages,
+        }) => {
+            let project = read(&file)?;
+            let bytes = pdf(&project, &pages)?;
+            write_output(&file, &output, &bytes)?;
+            Ok(exit::OK)
         }
         Cmd::Check { file, json } => {
             let project = read(&file)?;
-            let problems = check(&project);
+            let problems = novo_checks::check(&project);
+            let summary = Summary::of(&problems);
             if json {
-                print(out, &format!("{:#}", Value::Array(problems.clone())))?;
-            } else if problems.is_empty() {
-                print(out, "No problems found.")?;
+                let list: Vec<Value> = problems.iter().map(|p| problem_json(&project, p)).collect();
+                print(out, &format!("{:#}", Value::Array(list)))?;
             } else {
                 for p in &problems {
-                    print(
-                        out,
-                        &format!(
-                            "{}: {}",
-                            p["check"].as_str().unwrap_or(""),
-                            p["message"].as_str().unwrap_or("")
-                        ),
-                    )?;
+                    print(out, &problem_text(&project, p))?;
                 }
+                print(out, &summary.pill_text())?;
             }
-            Ok(if problems.is_empty() {
+            Ok(if summary.is_clean() {
                 exit::OK
             } else {
                 exit::PROBLEMS
@@ -198,25 +207,80 @@ fn print(out: &mut dyn Write, text: &str) -> Result<(), Failure> {
         .map_err(|e| Failure::new(exit::WRITE, format!("cannot write output: {e}")))
 }
 
-/// Writes an output file, refusing to overwrite the project it came from.
+/// The first bytes of every SQLite database, so of every project file.
+const SQLITE_MAGIC: &[u8] = b"SQLite format 3\0";
+
+/// Whether `path` is, or looks like, a project or recovery file: an export
+/// must never land on one.
+fn is_project_path(path: &Path) -> bool {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    let ext = format!(".{PROJECT_EXTENSION}");
+    if name.ends_with(&ext) || name.ends_with(&format!("{ext}{AUTOSAVE_SUFFIX}")) {
+        return true;
+    }
+    let mut head = [0u8; 16];
+    std::fs::File::open(path)
+        .and_then(|mut f| f.read_exact(&mut head))
+        .is_ok_and(|()| head == SQLITE_MAGIC)
+}
+
+/// Writes an export, never over a project file (the input or any other).
+/// The bytes go to a temporary file next to `output` that is moved into
+/// place only once complete, so a failed write leaves an earlier export
+/// whole.
 fn write_output(input: &Path, output: &Path, bytes: &[u8]) -> Result<(), Failure> {
-    if let (Ok(a), Ok(b)) = (input.canonicalize(), output.canonicalize())
-        && a == b
-    {
+    let same_as_input = matches!(
+        (input.canonicalize(), output.canonicalize()),
+        (Ok(a), Ok(b)) if a == b
+    );
+    if same_as_input || is_project_path(output) {
         return Err(Failure::new(
             exit::WRITE,
             format!(
-                "refusing to overwrite the project file {} with the export",
-                input.display()
+                "refusing to write the export over {}: it is a project file",
+                output.display()
             ),
         ));
     }
-    std::fs::write(output, bytes).map_err(|e| {
+    let failed = |e: std::io::Error| {
         Failure::new(
             exit::WRITE,
             format!("cannot write {}: {e}", output.display()),
         )
-    })
+    };
+    let mut temp = output.as_os_str().to_owned();
+    temp.push(".novo-tmp");
+    let temp = PathBuf::from(temp);
+    let written = std::fs::write(&temp, bytes).and_then(|()| std::fs::rename(&temp, output));
+    if let Err(e) = written {
+        let _ = std::fs::remove_file(&temp);
+        return Err(failed(e));
+    }
+    Ok(())
+}
+
+/// The PDF of the given pages (all when empty), drawn with the symbol
+/// library's artwork.
+fn pdf(project: &Project, pages: &[String]) -> Result<Vec<u8>, Failure> {
+    let mut options = PdfOptions::default();
+    if !pages.is_empty() {
+        let mut ids = Vec::new();
+        for name in pages {
+            let page = project
+                .pages()
+                .find(|p| &p.name == name)
+                .ok_or_else(|| Failure::new(exit::USAGE, format!("there is no page `{name}`")))?;
+            ids.push(page.id);
+        }
+        options.pages = PageSet::Pages(ids);
+    }
+    let library = novo_py::library().map_err(|e| Failure::new(exit::UNAVAILABLE, e.to_string()))?;
+    let art = LibraryArt::new(library, options.style.symbol);
+    novo_pdf::export_pdf_with_art(project, &options, &art)
+        .map_err(|e| Failure::new(exit::WRITE, e.to_string()))
 }
 
 fn info_text(p: &Project, path: &Path) -> String {
@@ -247,38 +311,52 @@ fn info_text(p: &Project, path: &Path) -> String {
     lines.join("\n")
 }
 
-/// The design checks this tool runs until the checks engine lands on main,
-/// which will replace them: duplicate device tags and shorts between
-/// potentials.
-fn check(p: &Project) -> Vec<Value> {
-    let mut problems = Vec::new();
-    for (tag, ids) in p.duplicate_tags() {
-        problems.push(json!({
-            "check": "duplicate_tag",
-            "message": format!("{tag} is used by {} objects", ids.len()),
-            "objects": ids,
-        }));
+fn severity_name(severity: Severity) -> &'static str {
+    match severity {
+        Severity::Error => "error",
+        Severity::Warning => "warning",
+        Severity::Info => "info",
     }
-    let netlist = p.netlist();
-    for net in netlist.potential_conflicts() {
-        let mut names: Vec<String> = net
-            .defined
-            .iter()
-            .filter_map(|id| p.potential(*id).map(|pot| pot.name.clone()))
-            .collect();
-        names.sort();
-        let at: Vec<String> = net
-            .endpoints
-            .iter()
-            .filter(|e| e.as_pin().is_some())
-            .map(|&e| novo_py::endpoint_name(p, e))
-            .take(4)
-            .collect();
-        problems.push(json!({
-            "check": "potential_short",
-            "message": format!("short between {} at {}", names.join(" and "), at.join(", ")),
-            "wires": net.wires,
-        }));
+}
+
+/// `DuplicateTag` as `duplicate_tag`, a stable key for scripts.
+fn kind_key(kind: ProblemKind) -> String {
+    let mut key = String::new();
+    for (i, c) in format!("{kind:?}").chars().enumerate() {
+        if c.is_ascii_uppercase() && i > 0 {
+            key.push('_');
+        }
+        key.push(c.to_ascii_lowercase());
     }
-    problems
+    key
+}
+
+fn page_name(project: &Project, problem: &Problem) -> Option<String> {
+    problem
+        .page
+        .and_then(|id| project.page(id))
+        .map(|p| p.name.clone())
+}
+
+fn problem_text(project: &Project, problem: &Problem) -> String {
+    let at = page_name(project, problem)
+        .map(|name| format!(" (page {name})"))
+        .unwrap_or_default();
+    format!(
+        "{:<8}{}: {}{at}",
+        severity_name(problem.severity),
+        problem.kind.label(),
+        problem.message
+    )
+}
+
+fn problem_json(project: &Project, problem: &Problem) -> Value {
+    json!({
+        "severity": severity_name(problem.severity),
+        "kind": kind_key(problem.kind),
+        "label": problem.kind.label(),
+        "message": problem.message,
+        "page": page_name(project, problem),
+        "at": problem.at,
+    })
 }

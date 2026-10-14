@@ -1826,7 +1826,10 @@ name = "novo-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "novo-checks",
  "novo-core",
+ "novo-editor",
+ "novo-pdf",
  "novo-py",
  "novo-storage",
  "serde_json",
