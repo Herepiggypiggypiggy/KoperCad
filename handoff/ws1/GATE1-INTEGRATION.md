@@ -3,9 +3,9 @@
 Done by a Gate 1 integration worker (session_01QtW6E2sY3dMnhYDgX3zXge) while WS-01 was paused. Coordinator: session_01DZ68tTULUv7Uhe8ecKbC47.
 
 ## Where
-- Branch `claude/gate1-integration`, **draft PR #53**. It stacks on #46 (Workbench), #38 (novo-editor), #31 (novo-xref), #49 (novo-pdf), #50 (novo-checks): their heads are merged in as separate merge commits.
-- Mark it ready only when all five have merged and the branch is rebuilt on main (or split into per-dependency PRs, see below).
-- When a dependency's head moves: `git fetch origin && git merge origin/<branch>`; on a Cargo.toml/CLAUDE.md row conflict keep both rows, take main's Cargo.lock and let cargo regenerate.
+- Branch `claude/gate1-integration`, **PR #53**, based on main. Everything it stacked on (#46, #38, #31, #49, #50) has merged; main was merged in at 2026-10-14 19:55 UTC and the PR is marked ready for review (main reviewer A for correctness, the design reviewer for UI).
+- Merge main with `scripts/merge-main.sh`; never edit the crate list lines in CLAUDE.md or `[workspace.dependencies]`.
+- Once READY, no more pushes: follow-ups go in a new PR from main.
 
 ## What is in crates/novo-app (one file per engine, so it splits per dependency)
 | File | Engine | What |
@@ -18,7 +18,7 @@ Done by a Gate 1 integration worker (session_01QtW6E2sY3dMnhYDgX3zXge) while WS-
 | `app/checks.rs` | novo-checks (#50) | issue pill, problem list, F8 / Shift+F8 |
 | `app/pdf.rs` | novo-pdf (#49) | Export PDF (mark menu, `export pdf`) to `Documents\NovoElectric\<project>.pdf` |
 | `app/gate1_tests.rs` | all | headless Gate 1: new project, starter over 2 pages via command field + editor, L1-L3, terminals, xref, save/reopen/compare, 2-page PDF |
-- Also one commit in novo-editor: `SchematicView::set_style` (54bbc83), needed so symbols show on the dark canvas. It belongs in #38; WS-06 was told.
+- Also one commit in novo-editor: `SchematicView::set_style` (54bbc83), needed so symbols show on the dark canvas. #38 merged without it, so it ships in this PR; WS-06 was told.
 
 ## Keys
 - The shell claims a key only when it runs the command itself (`claims_key`); W, R, X, F2, Delete, Escape, Page Up/Down stay with the editor (`EDITOR_KEYS`). Enter/Tab go to the editor while it has wire proposals, else to terminal proposals.
