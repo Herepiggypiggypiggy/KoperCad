@@ -136,12 +136,28 @@ impl Item {
 
     /// Distance from `p` to the item's ink.
     pub fn distance(&self, p: Vec2, zoom: f32) -> f32 {
-        let d = self
+        self.nearest_part(p, zoom).0
+    }
+
+    /// Distance from `p` to the item's ink or text, and the index of the
+    /// label when text is nearest. Text wins ties, so a click inside a tag's
+    /// box picks the tag even where it overlaps a line.
+    pub fn nearest_part(&self, p: Vec2, zoom: f32) -> (f32, Option<usize>) {
+        let ink = self
             .primitives
             .iter()
             .map(|prim| prim.distance(p, zoom))
             .fold(f32::INFINITY, f32::min);
-        self.labels.iter().map(|l| l.distance(p)).fold(d, f32::min)
+        let text = self
+            .labels
+            .iter()
+            .enumerate()
+            .map(|(i, l)| (l.distance(p), i))
+            .min_by(|a, b| a.0.total_cmp(&b.0));
+        match text {
+            Some((d, i)) if d <= ink => (d, Some(i)),
+            _ => (ink, None),
+        }
     }
 
     /// True when any ink or text touches `rect`.
@@ -191,6 +207,8 @@ pub struct Hit {
     pub id: ItemId,
     /// Distance from the pick point to the item's ink, in world units.
     pub distance: f32,
+    /// The label that was hit, when text was nearer than any line.
+    pub label: Option<usize>,
 }
 
 pub struct Scene {
@@ -400,12 +418,13 @@ impl Scene {
                 if !self.pickable(slot) {
                     return None;
                 }
-                let d = slot.item.distance(p, zoom);
+                let (d, label) = slot.item.nearest_part(p, zoom);
                 (d <= tolerance).then(|| {
                     (
                         Hit {
                             id: slot.id,
                             distance: d,
+                            label,
                         },
                         self.layer_order(slot.item.layer),
                         s,
@@ -703,5 +722,31 @@ mod tests {
             )
             .is_empty()
         );
+    }
+}
+
+#[cfg(test)]
+mod label_pick_tests {
+    use super::*;
+    use crate::shape::{Primitive, Shape};
+    use crate::style::Stroke;
+    use crate::text::Label;
+
+    #[test]
+    fn picking_reports_the_label() {
+        let mut scene = Scene::new();
+        scene.insert(
+            ItemId(1),
+            Item::new(LayerId(0))
+                .with(Primitive::stroked(
+                    Shape::line(Vec2::ZERO, Vec2::new(0.0, 10.0)),
+                    Stroke::default(),
+                ))
+                .with_label(Label::new(Vec2::new(5.0, 5.0), "-K1", 2.5)),
+        );
+        let on_text = scene.pick(Vec2::new(6.0, 4.0), 0.5, 2.0).unwrap();
+        assert_eq!((on_text.id, on_text.label), (ItemId(1), Some(0)));
+        let on_line = scene.pick(Vec2::new(0.1, 8.0), 0.5, 2.0).unwrap();
+        assert_eq!(on_line.label, None);
     }
 }
