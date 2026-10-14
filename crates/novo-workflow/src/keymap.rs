@@ -343,8 +343,11 @@ impl Keymap {
         bind(Chord::plain(Home), Canvas, "view.fit");
         bind(Chord::ctrl(Digit(1)), Anywhere, "view.schematic");
         bind(Chord::ctrl(Digit(2)), Anywhere, "view.cabinet");
-        bind(Chord::ctrl(Digit(3)), Anywhere, "view.connections_drawer");
-        bind(Chord::ctrl(Digit(4)), Anywhere, "view.devices_drawer");
+        bind(Chord::ctrl(Digit(3)), Anywhere, "view.terminals_drawer");
+        bind(Chord::ctrl(Digit(4)), Anywhere, "view.cables_drawer");
+        bind(Chord::ctrl(Digit(5)), Anywhere, "view.devices_drawer");
+        bind(Chord::ctrl_shift(l('f')), Anywhere, "view.focus_mode");
+        bind(Chord::plain(F(11)), Anywhere, "view.full_screen");
         bind(Chord::ctrl(l('t')), Anywhere, "view.cabinet_table");
         Keymap { bindings }
     }
@@ -505,8 +508,9 @@ mod tests {
         let ctrl = |d| map.resolve(Chord::ctrl(Key::Digit(d)), Focus::Canvas);
         assert_eq!(ctrl(1), Some("view.schematic"));
         assert_eq!(ctrl(2), Some("view.cabinet"));
-        assert_eq!(ctrl(3), Some("view.connections_drawer"));
-        assert_eq!(ctrl(4), Some("view.devices_drawer"));
+        assert_eq!(ctrl(3), Some("view.terminals_drawer"));
+        assert_eq!(ctrl(4), Some("view.cables_drawer"));
+        assert_eq!(ctrl(5), Some("view.devices_drawer"));
         assert_eq!(
             map.resolve(Chord::plain(Key::F(8)), Focus::Panel),
             Some("check.next_problem")

@@ -84,6 +84,11 @@ pub struct Row {
     /// Heading the row sits under when the field lists by group (empty
     /// query); empty otherwise.
     pub group: &'static str,
+    /// Picking this row as a step puts this text in the field instead of
+    /// running it (`renumber `), so every typed form can also be built by
+    /// picking rows: verb, then object, then parameter. `None` for rows
+    /// that run or jump.
+    pub completion: Option<String>,
     /// The key, for commands and favourites that have one.
     pub shortcut: Option<String>,
     /// Why the row can't be picked now; `None` when it can.
@@ -176,8 +181,10 @@ impl Palette {
     }
 
     /// Rows for a query, best first.
-    pub fn search_in(&self, mode: Mode, query: &str, sources: &Sources<'_>) -> Vec<Row> {
-        let query = query.trim();
+    pub fn search_in(&self, mode: Mode, raw: &str, sources: &Sources<'_>) -> Vec<Row> {
+        // A trailing space after a verb asks for its objects or chips.
+        let wants_next = raw.ends_with(char::is_whitespace);
+        let query = raw.trim();
         if query.is_empty() {
             return match mode {
                 Mode::All => self.menu(sources),
@@ -186,13 +193,13 @@ impl Palette {
         }
         let mut rows: Vec<Row> = Vec::new();
         if let Some(project) = sources.project {
-            child_rows(project, sources, query, &mut rows);
+            child_rows(project, sources, query, wants_next, &mut rows);
         }
         if mode == Mode::All {
             if let Some(project) = sources.project {
                 project_rows(project, query, &mut rows);
             }
-            command_rows(query, sources, &mut rows);
+            command_rows(query, wants_next, sources, &mut rows);
         }
         if let Some(library) = sources.library {
             for hit in self.symbols.search(library, query).into_iter().take(10) {
@@ -204,11 +211,33 @@ impl Palette {
                         .mnemonic
                         .map_or_else(|| hit.symbol.category.clone(), |m| format!("`{m}`")),
                     group: "",
+                    completion: None,
                     shortcut: None,
                     disabled: (!sources.context.has_page).then_some("No page is open"),
                     // Symbols come after commands and devices of equal match.
                     score: hit.score.min(EXACT / 2) - 50,
                 });
+                // A contact can belong to a device: offer "of a device..."
+                // as a step, which completes to `no ` and lists devices.
+                if insert::is_child_function(hit.symbol)
+                    && let Some(alias) = hit.symbol.aliases.first()
+                    && sources.project.is_some()
+                {
+                    rows.push(Row {
+                        target: Target::Run {
+                            command: "tool.place",
+                            argument: format!("{alias} "),
+                        },
+                        kind: Kind::Symbol,
+                        label: format!("{} of a device…", hit.symbol.name),
+                        detail: format!("`{alias} K1`"),
+                        group: "",
+                        completion: Some(format!("{alias} ")),
+                        shortcut: None,
+                        disabled: (!sources.context.has_page).then_some("No page is open"),
+                        score: hit.score.min(EXACT / 2) - 60,
+                    });
+                }
             }
         }
 
@@ -274,6 +303,7 @@ impl Palette {
                     label: symbol.name.clone(),
                     detail: symbol.category.clone(),
                     group: FAVOURITES_GROUP,
+                    completion: None,
                     shortcut: Some(slot.to_string()),
                     disabled,
                     score: 0,
@@ -291,6 +321,7 @@ impl Palette {
                     label: symbol.name.clone(),
                     detail: symbol.category.clone(),
                     group: FAVOURITES_GROUP,
+                    completion: None,
                     shortcut: None,
                     disabled,
                     score: 0,
@@ -308,6 +339,7 @@ impl Palette {
                     label: symbol.name.clone(),
                     detail: symbol.category.clone(),
                     group: RECENT_GROUP,
+                    completion: None,
                     shortcut: None,
                     disabled,
                     score: 0,
@@ -318,11 +350,56 @@ impl Palette {
     }
 }
 
-/// `no K1`: a symbol mnemonic and an existing device place a child symbol.
-fn child_rows(project: &Project, sources: &Sources<'_>, query: &str, rows: &mut Vec<Row>) {
+/// `no K1`: a symbol alias and an existing device place a child symbol.
+/// `no ` (an alias and a space) lists the devices it can belong to, so the
+/// object can be picked instead of typed.
+fn child_rows(
+    project: &Project,
+    sources: &Sources<'_>,
+    query: &str,
+    wants_next: bool,
+    rows: &mut Vec<Row>,
+) {
     let Some(library) = sources.library else {
         return;
     };
+    let disabled = (!sources.context.has_page).then_some("No page is open");
+    let mut push = |symbol: &novo_symbols::Symbol, device: DeviceId, score: i32| {
+        let Some(d) = project.device(device) else {
+            return;
+        };
+        rows.push(Row {
+            target: Target::Child {
+                symbol: symbol.id.clone(),
+                device,
+            },
+            kind: Kind::Symbol,
+            label: format!("{} of {}", symbol.name, d.tag),
+            detail: d.description.clone(),
+            group: "",
+            completion: None,
+            shortcut: None,
+            disabled,
+            score,
+        });
+    };
+    if wants_next && let Some(symbol) = insert::mnemonic(library, query) {
+        // Devices that already have a main function (a coil) first, in tag
+        // order: those are the ones contacts belong to.
+        let mut devices: Vec<_> = project
+            .devices()
+            .filter(|d| d.kind == novo_core::DeviceKind::General)
+            .map(|d| {
+                let has_main = project.cross_references(d.id).iter().any(|r| r.main);
+                (!has_main, d.tag.clone(), d.id)
+            })
+            .collect();
+        devices.sort();
+        for (n, (_, _, id)) in devices.into_iter().enumerate() {
+            push(symbol, id, EXACT + 400 - i32::try_from(n).unwrap_or(0));
+        }
+        return;
+    }
     for child in insert::child_queries(query) {
         let Some(symbol) = insert::mnemonic(library, child.text) else {
             continue;
@@ -330,29 +407,15 @@ fn child_rows(project: &Project, sources: &Sources<'_>, query: &str, rows: &mut 
         let devices: Vec<DeviceId> = project
             .search(child.parent)
             .into_iter()
-            .filter(|h| h.quality == Match::Exact)
+            .filter(|h| h.quality != Match::Contains)
             .filter_map(|h| match h.id {
-                AnyId::Device(d) => Some(d),
+                AnyId::Device(d) => Some((h.quality, d)),
                 _ => None,
             })
+            .map(|(_, d)| d)
             .collect();
         for (n, device) in devices.into_iter().enumerate() {
-            let Some(d) = project.device(device) else {
-                continue;
-            };
-            rows.push(Row {
-                target: Target::Child {
-                    symbol: symbol.id.clone(),
-                    device,
-                },
-                kind: Kind::Symbol,
-                label: format!("{} of {}", symbol.name, d.tag),
-                detail: d.description.clone(),
-                group: "",
-                shortcut: None,
-                disabled: (!sources.context.has_page).then_some("No page is open"),
-                score: EXACT + 500 - i32::try_from(n).unwrap_or(0),
-            });
+            push(symbol, device, EXACT + 500 - i32::try_from(n).unwrap_or(0));
         }
     }
 }
@@ -384,6 +447,7 @@ fn project_rows(project: &Project, query: &str, rows: &mut Vec<Row>) {
                     label: device.tag.to_string(),
                     detail: join_detail(&device.description, &summary),
                     group: "",
+                    completion: None,
                     shortcut: None,
                     disabled: None,
                     score: base,
@@ -411,6 +475,7 @@ fn project_rows(project: &Project, query: &str, rows: &mut Vec<Row>) {
                         label: format!("{} /{location}", hit.text),
                         detail: "terminal".to_owned(),
                         group: "",
+                        completion: None,
                         shortcut: None,
                         disabled: None,
                         score: base - i32::try_from(i).unwrap_or(0),
@@ -427,6 +492,7 @@ fn project_rows(project: &Project, query: &str, rows: &mut Vec<Row>) {
                     label: format!("Page {}", page.name),
                     detail: page.title.clone(),
                     group: "",
+                    completion: None,
                     shortcut: None,
                     disabled: None,
                     score: base,
@@ -459,6 +525,7 @@ fn location_rows(project: &Project, device: DeviceId, tag: &str, base: i32, rows
             label: format!("{tag} {}", locate::reference(place)),
             detail: what,
             group: "",
+            completion: None,
             shortcut: None,
             disabled: None,
             score: base - 1 - i32::try_from(i).unwrap_or(0),
@@ -478,6 +545,7 @@ fn command_row(
         label: info.label.to_owned(),
         detail: info.group.to_owned(),
         group,
+        completion: None,
         shortcut: sources.keymap.shortcut_text(info.id),
         disabled: commands::availability(info, &sources.context).err(),
         score,
@@ -501,21 +569,24 @@ fn split_verb<'q>(info: &CommandInfo, query: &'q str) -> Option<(&'static str, &
         .map(|v| (*v, query[v.len()..].trim()))
 }
 
-fn command_rows(query: &str, sources: &Sources<'_>, rows: &mut Vec<Row>) {
+fn command_rows(query: &str, wants_next: bool, sources: &Sources<'_>, rows: &mut Vec<Row>) {
     for info in COMMANDS {
         // A verb: bare it runs, with words after it it runs on them.
         if let Some((_, argument)) = split_verb(info, query) {
             if argument.is_empty() {
                 rows.push(command_row(info, sources, "", EXACT + 200));
             } else {
-                rows.push(Row {
-                    target: Target::Run {
-                        command: info.id,
-                        argument: argument.to_owned(),
-                    },
-                    label: format!("{}: {argument}", info.label),
-                    ..command_row(info, sources, "", EXACT + 300)
-                });
+                rows.push(run_row(info, sources, argument, EXACT + 300));
+            }
+            // Chips: the arguments the command offers, matching what is typed.
+            if argument.is_empty() && !wants_next {
+                continue;
+            }
+            for (n, chip) in info.arguments.iter().enumerate() {
+                if chip.starts_with(&argument.to_lowercase()) && *chip != argument {
+                    let score = EXACT + 250 - i32::try_from(n).unwrap_or(0);
+                    rows.push(run_row(info, sources, chip, score));
+                }
             }
             continue;
         }
@@ -524,11 +595,28 @@ fn command_rows(query: &str, sources: &Sources<'_>, rows: &mut Vec<Row>) {
             query,
             [info.label, full.as_str()]
                 .into_iter()
-                .chain(info.keywords.iter().copied()),
+                .chain(info.keywords.iter().copied())
+                .chain(info.verbs.iter().copied()),
         );
         if let Some(score) = score {
-            rows.push(command_row(info, sources, "", score));
+            let mut row = command_row(info, sources, "", score);
+            // A verb that takes chips completes to itself first.
+            if !info.arguments.is_empty() {
+                row.completion = info.verbs.first().map(|v| format!("{v} "));
+            }
+            rows.push(row);
         }
+    }
+}
+
+fn run_row(info: &'static CommandInfo, sources: &Sources<'_>, argument: &str, score: i32) -> Row {
+    Row {
+        target: Target::Run {
+            command: info.id,
+            argument: argument.to_owned(),
+        },
+        label: format!("{}: {argument}", info.label),
+        ..command_row(info, sources, "", score)
     }
 }
 

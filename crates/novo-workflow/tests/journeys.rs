@@ -362,3 +362,77 @@ fn paste_with_original_tags_keeps_them() {
     );
     assert_eq!(project.duplicate_tags().len(), 1);
 }
+
+/// Picks rows the way a mouse user would: type a few letters, then follow
+/// completions until a row runs. Returns the target that runs.
+fn pick_path(palette: &Palette, src: &Sources<'_>, start: &str, picks: &[&str]) -> Target {
+    let mut field = start.to_owned();
+    for want in picks {
+        let rows = palette.search(&field, src);
+        let row = rows
+            .iter()
+            .find(|r| r.label.contains(want))
+            .unwrap_or_else(|| panic!("no row with {want:?} for {field:?}: {rows:#?}"));
+        match &row.completion {
+            Some(next) => field = next.clone(),
+            None => return row.target.clone(),
+        }
+    }
+    panic!("picks ended before a row ran");
+}
+
+#[test]
+fn every_grammar_form_can_be_picked_without_typing_syntax() {
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let library = Library::builtin().unwrap();
+    let keymap = Keymap::workflow();
+    let palette = Palette::default();
+    let src = sources(doc.project(), &library, &keymap);
+
+    // Verb, then parameter chip.
+    assert_eq!(
+        pick_path(
+            &palette,
+            &src,
+            "renum",
+            &["Renumber devices", "Renumber devices: page"]
+        ),
+        Target::Run {
+            command: "edit.renumber",
+            argument: "page".into()
+        }
+    );
+    // Symbol verb, then object.
+    assert_eq!(
+        pick_path(
+            &palette,
+            &src,
+            "make contact",
+            &["of a device", "of =A1+CAB-K1"]
+        ),
+        Target::Child {
+            symbol: "iec/contacts/no".into(),
+            device: gate.k1
+        }
+    );
+    // The object list offers every device, in tag order, before anything else.
+    let rows = palette.search("no ", &src);
+    assert_eq!(
+        rows[0].target,
+        Target::Child {
+            symbol: "iec/contacts/no".into(),
+            device: gate.f1
+        }
+    );
+    assert!(rows[..7].iter().all(|r| matches!(r.target, Target::Child { .. })));
+    // A bare verb and a noun run or jump on the first pick.
+    assert_eq!(
+        pick_path(&palette, &src, "probl", &["Problems"]),
+        Target::Command("check.problems")
+    );
+    assert_eq!(
+        pick_path(&palette, &src, "K1", &["=A1+CAB-K1"]),
+        Target::Device(gate.k1)
+    );
+}

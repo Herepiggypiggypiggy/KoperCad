@@ -19,6 +19,9 @@ pub struct CommandInfo {
     /// (`renumber page`, `export pdf`). Matched as whole words at the start
     /// of the query; what follows is the command's argument.
     pub verbs: &'static [&'static str],
+    /// Values the command field offers as chips after the verb, so the
+    /// command can be built by picking rows instead of typing.
+    pub arguments: &'static [&'static str],
     /// What it needs before it can run.
     pub needs: Needs,
 }
@@ -95,8 +98,14 @@ const fn cmd(
         group,
         keywords,
         verbs: &[],
+        arguments: &[],
         needs,
     }
+}
+
+const fn with_arguments(mut info: CommandInfo, arguments: &'static [&'static str]) -> CommandInfo {
+    info.arguments = arguments;
+    info
 }
 
 const fn verb(mut info: CommandInfo, verbs: &'static [&'static str]) -> CommandInfo {
@@ -259,15 +268,18 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["tag", "edit tag"],
         Needs::Device,
     ),
-    verb(
-        cmd(
-            "edit.renumber",
-            "Renumber devices",
-            "Edit",
-            &["numbering", "number"],
-            Needs::Project,
+    with_arguments(
+        verb(
+            cmd(
+                "edit.renumber",
+                "Renumber devices",
+                "Edit",
+                &["numbering", "number"],
+                Needs::Project,
+            ),
+            &["renumber"],
         ),
-        &["renumber"],
+        &["page", "selection", "project"],
     ),
     cmd("edit.escape", "Cancel", "Edit", &["escape"], Needs::Nothing),
     // Navigate
@@ -354,18 +366,39 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
-        "view.connections_drawer",
-        "Connections drawer",
+        "view.terminals_drawer",
+        "Terminals",
         "View",
-        &["terminals", "cables", "plugs"],
+        &["drawer", "strips", "connections"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.cables_drawer",
+        "Cables",
+        "View",
+        &["drawer", "cores", "connections"],
         Needs::Project,
     ),
     cmd(
         "view.devices_drawer",
-        "Devices drawer",
+        "Devices",
         "View",
-        &["parts", "locations"],
+        &["drawer", "parts", "locations"],
         Needs::Project,
+    ),
+    cmd(
+        "view.focus_mode",
+        "Focus mode",
+        "View",
+        &["distraction free"],
+        Needs::Nothing,
+    ),
+    cmd(
+        "view.full_screen",
+        "Full screen",
+        "View",
+        &[],
+        Needs::Nothing,
     ),
     cmd(
         "view.cabinet_table",
@@ -494,6 +527,7 @@ mod tests {
             "proposal.next",
             "check.next_problem",
             "view.devices_drawer",
+            "view.focus_mode",
         ] {
             assert!(map.shortcut_text(id).is_some(), "{id}");
         }
