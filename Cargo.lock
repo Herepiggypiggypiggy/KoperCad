@@ -1314,7 +1314,6 @@ name = "novo-app"
 version = "0.1.0"
 dependencies = [
  "eframe",
- "novo-canvas",
  "novo-core",
 ]
 

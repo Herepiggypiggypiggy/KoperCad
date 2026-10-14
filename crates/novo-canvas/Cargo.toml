@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-default = ["egui"]
+default = ["egui", "model"]
 # egui widget and paint callback for embedding the canvas in eframe.
 egui = ["dep:egui", "dep:egui-wgpu"]
 # Adapter that draws novo-core pages. The rest of the crate is model-agnostic.
@@ -22,12 +22,17 @@ wgpu = { workspace = true }
 
 [dev-dependencies]
 eframe = { workspace = true }
-naga = { version = "*", features = ["wgsl-in"] }
+novo-core = { workspace = true }
+naga = { version = "30", features = ["wgsl-in"] }
 pollster = "1"
 
 [[example]]
 name = "stress"
 required-features = ["egui"]
+
+[[example]]
+name = "demo"
+required-features = ["egui", "model"]
 
 [lints]
 workspace = true

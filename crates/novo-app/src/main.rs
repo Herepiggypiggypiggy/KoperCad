@@ -14,37 +14,12 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "NovoElectric",
         options,
-        Box::new(|cc| {
-            if let Some(rs) = cc.wgpu_render_state.as_ref() {
-                novo_canvas::widget::install(rs, 1);
-            }
-            Ok(Box::<App>::default())
-        }),
+        Box::new(|_cc| Ok(Box::<App>::default())),
     )
 }
 
-struct App {
-    /// Demo project until the schematic editor (WS-06) can draw real pages.
-    _doc: novo_core::Document,
-    page: novo_canvas::model::PageScene,
-    canvas: novo_canvas::widget::CanvasView,
-}
-
-impl Default for App {
-    fn default() -> Self {
-        let (doc, page) = novo_canvas::model::demo_document().expect("demo project builds");
-        let page = novo_canvas::model::PageScene::new(
-            doc.project(),
-            page,
-            &novo_canvas::model::PlaceholderArt,
-        );
-        Self {
-            _doc: doc,
-            page,
-            canvas: novo_canvas::widget::CanvasView::new(),
-        }
-    }
-}
+#[derive(Default)]
+struct App;
 
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
@@ -54,10 +29,10 @@ impl eframe::App for App {
                 ui.label(format!("model v{}", novo_core::MODEL_VERSION));
             });
         });
-        egui::CentralPanel::default()
-            .frame(egui::Frame::NONE)
-            .show(ui, |ui| {
-                self.canvas.show(ui, self.page.scene());
+        egui::CentralPanel::default().show(ui, |ui| {
+            ui.centered_and_justified(|ui| {
+                ui.label("Canvas arrives with WS-03");
             });
+        });
     }
 }
