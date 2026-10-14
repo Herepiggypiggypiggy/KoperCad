@@ -24,7 +24,11 @@ DESIGN.md merges, build engines and commands only, no UI layout.
 - egui panel REMOVED on purpose (design doc first)
 
 ## Next, in order
-1. Drive PR #36 to READY and merged (no pushes after READY; new PR from main)
+1. Done: PR #36 merged (9fa18ed); #67 (fixer) merged the first follow-ups
+1b. Done (this thread, claude/project-thread-6encdr): last #36 review notes:
+   unclosed CSV quote is an error, rows carry file line numbers, duplicate
+   catalog headers refused, typed cells that don't parse are reported,
+   Excel-formula tags skipped with advice
 2. Done (fixer, claude/ws07-followups): terminal parts. assign_terminal_part
    sets Terminal.part; terminal_part() = Terminal.part, else the
    novo-terminals style (override or strip per kind), else the strip

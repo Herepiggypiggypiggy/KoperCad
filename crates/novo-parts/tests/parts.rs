@@ -769,7 +769,11 @@ fn bulk_table_keeps_tabs_line_breaks_and_quotes_in_cells() {
     assert_eq!(outcome.changed, 0, "unchanged paste of\n{tsv}");
 
     // Every row still has one field per column.
-    let rows = novo_parts::parse_delimited(&tsv);
+    let rows: Vec<Vec<String>> = novo_parts::parse_delimited(&tsv)
+        .unwrap()
+        .into_iter()
+        .map(|r| r.fields)
+        .collect();
     assert_eq!(rows.len(), doc.project().devices().count() + 1);
     assert!(rows.iter().all(|r| r.len() == rows[0].len()));
     let k1_row = rows.iter().find(|r| r[0] == "=A1+CAB-K1").unwrap();
@@ -1054,5 +1058,55 @@ fn a_strip_style_part_covers_its_kind_and_is_not_unused() {
     assert_eq!(
         missing_parts(p),
         vec![AnyId::from(gate.x1), AnyId::from(terminals[3].id)]
+    );
+}
+
+#[test]
+fn bulk_paste_reports_what_it_cannot_read() {
+    // Follow-ups from the #36 reviews: typed cells, Excel formulas, file
+    // line numbers and unclosed quotes.
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    set_property(&mut doc, gate.k1, "spare", Value::Bool(false));
+    set_property(&mut doc, gate.m1, "power_kw", Value::Float(4.0));
+    let catalog = Catalog::starter();
+    let project = doc.project();
+
+    // `maybe` in a yes/no cell and `fast` in a number cell are reported,
+    // and the values keep their type.
+    let outcome = apply_table(
+        project,
+        &catalog,
+        "Tag\tproperties.spare\tproperties.power_kw\n-K1\tmaybe\t\n-M1\t\tfast\n",
+    )
+    .unwrap();
+    let notes: Vec<usize> = outcome.ignored.iter().map(|(line, _)| *line).collect();
+    assert_eq!(notes, vec![2, 3], "{:?}", outcome.ignored);
+    assert!(outcome.ignored[0].1.contains("yes or no"));
+    assert!(outcome.ignored[1].1.contains("a number"));
+
+    // A tag Excel turned into a formula is skipped with advice; a tag
+    // with Excel's text apostrophe still finds its device. Lines count in
+    // the pasted text, past blank lines and multi-line cells.
+    let outcome = apply_table(
+        project,
+        &catalog,
+        "Tag\tDescription\n#NAME?\tx\n\n'-K1\t\"two\nlines\"\nnone\ty\n",
+    )
+    .unwrap();
+    assert_eq!(outcome.changed, 1);
+    let skipped: Vec<usize> = outcome.skipped.iter().map(|(line, _)| *line).collect();
+    assert_eq!(skipped, vec![2, 6], "{:?}", outcome.skipped);
+    assert!(
+        outcome.skipped[0]
+            .1
+            .contains("format the Tag column as Text")
+    );
+
+    let err =
+        apply_table(project, &catalog, "Tag\tDescription\n-K1\t\"open\n-M1\tx\n").unwrap_err();
+    assert_eq!(
+        err,
+        novo_parts::BulkError::Text(novo_parts::ParseError::UnterminatedQuote { line: 2 })
     );
 }

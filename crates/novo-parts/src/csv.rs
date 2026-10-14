@@ -13,19 +13,57 @@ use novo_core::Value;
 use crate::catalog::{CatalogPart, Dimensions, split_list};
 use crate::sheet::{parse_number, property_key};
 
+/// One row of delimited text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DelimitedRow {
+    /// The 1-based line in the text where the row starts. A quoted cell
+    /// with line breaks makes a row span several lines, and blank lines are
+    /// skipped, so this is not the row's index.
+    pub line: usize,
+    pub fields: Vec<String>,
+}
+
+/// Why delimited text could not be read.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum ParseError {
+    #[error("the quote that opens a cell on line {line} is never closed")]
+    UnterminatedQuote { line: usize },
+}
+
 /// Splits delimited text into rows of fields. The delimiter is detected
 /// from the first line (tab, `;` or `,`, whichever occurs most outside
 /// quotes). Handles quoted fields with doubled quotes and line breaks, a
-/// leading byte order mark, and CRLF line ends. Blank lines are skipped.
-pub fn parse_delimited(text: &str) -> Vec<Vec<String>> {
+/// leading byte order mark, and CRLF line ends. Blank lines are skipped. A
+/// quote opens a quoted cell only at the start of a cell (`5"` is text). A
+/// quoted cell that is never closed is an error rather than a cell holding
+/// the rest of the file.
+///
+/// The text must already be decoded: a file saved by Excel as "CSV" is
+/// often Windows-1252, not UTF-8, and the caller converts it first.
+pub fn parse_delimited(text: &str) -> Result<Vec<DelimitedRow>, ParseError> {
     let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     let delimiter = detect_delimiter(text);
     let mut rows = Vec::new();
     let mut row = Vec::new();
     let mut field = String::new();
     let mut quoted = false;
+    let mut field_start = true;
+    let mut line = 1;
+    let mut row_line = 1;
+    let mut quote_line = 1;
     let mut chars = text.chars().peekable();
+    let mut finish_row = |row: &mut Vec<String>, row_line: usize| {
+        if row.iter().any(|f| !f.trim().is_empty()) {
+            rows.push(DelimitedRow {
+                line: row_line,
+                fields: std::mem::take(row),
+            });
+        } else {
+            row.clear();
+        }
+    };
     while let Some(c) = chars.next() {
+        let newline = c == '\n' || (c == '\r' && chars.peek() != Some(&'\n'));
         if quoted {
             if c == '"' {
                 if chars.peek() == Some(&'"') {
@@ -37,45 +75,67 @@ pub fn parse_delimited(text: &str) -> Vec<Vec<String>> {
             } else {
                 field.push(c);
             }
-        } else if c == '"' && field.is_empty() {
+        } else if c == '"' && field_start {
             quoted = true;
+            quote_line = line;
+            field_start = false;
         } else if c == delimiter {
             row.push(std::mem::take(&mut field));
+            field_start = true;
         } else if c == '\n' || c == '\r' {
             if c == '\r' && chars.peek() == Some(&'\n') {
                 chars.next();
             }
             row.push(std::mem::take(&mut field));
-            if row.iter().any(|f| !f.trim().is_empty()) {
-                rows.push(std::mem::take(&mut row));
-            } else {
-                row.clear();
-            }
+            finish_row(&mut row, row_line);
+            field_start = true;
+            line += 1;
+            row_line = line;
+            continue;
         } else {
             field.push(c);
+            field_start = false;
+        }
+        if newline {
+            line += 1;
         }
     }
-    row.push(field);
-    if row.iter().any(|f| !f.trim().is_empty()) {
-        rows.push(row);
+    if quoted {
+        return Err(ParseError::UnterminatedQuote { line: quote_line });
     }
-    rows
+    row.push(field);
+    finish_row(&mut row, row_line);
+    Ok(rows)
 }
 
 fn detect_delimiter(text: &str) -> char {
     let mut counts = [('\t', 0usize), (';', 0), (',', 0)];
     let mut quoted = false;
-    for c in text.chars() {
-        match c {
-            '"' => quoted = !quoted,
-            '\n' if !quoted => break,
-            _ if !quoted => {
-                if let Some(entry) = counts.iter_mut().find(|(d, _)| *d == c) {
-                    entry.1 += 1;
+    let mut field_start = true;
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if quoted {
+            if c == '"' {
+                if chars.peek() == Some(&'"') {
+                    chars.next();
+                } else {
+                    quoted = false;
                 }
             }
-            _ => {}
+            continue;
         }
+        match c {
+            '"' if field_start => quoted = true,
+            '\n' | '\r' => break,
+            _ => {
+                if let Some(entry) = counts.iter_mut().find(|(d, _)| *d == c) {
+                    entry.1 += 1;
+                    field_start = true;
+                    continue;
+                }
+            }
+        }
+        field_start = false;
     }
     // Ties go to the earlier entry: tab (Excel paste), then `;`.
     let mut best = (',', 0);
@@ -251,6 +311,10 @@ pub enum ImportError {
         "no order number column found; expected a header such as \"Order number\", \"Artikelnummer\" or \"Bestellnummer\""
     )]
     NoOrderNumber,
+    #[error("columns {first} and {second} both set the same field; rename or remove one")]
+    DuplicateColumn { first: String, second: String },
+    #[error(transparent)]
+    Text(#[from] ParseError),
 }
 
 /// Reads catalog parts from CSV text with a header row. Rows without an
@@ -258,11 +322,25 @@ pub enum ImportError {
 /// back to `default_manufacturer` (a price list from one maker often has no
 /// manufacturer column).
 pub fn import_catalog(text: &str, default_manufacturer: &str) -> Result<ImportReport, ImportError> {
-    let rows = parse_delimited(text);
+    let rows = parse_delimited(text)?;
     let Some((header, body)) = rows.split_first() else {
         return Err(ImportError::Empty);
     };
+    let header = &header.fields;
     let columns: Vec<Column> = header.iter().map(|h| column_for(h)).collect();
+    // Two columns for one field (`Text` and `Description`) would make the
+    // later one win silently.
+    for (i, column) in columns.iter().enumerate() {
+        if *column == Column::Ignored {
+            continue;
+        }
+        if let Some(j) = columns[..i].iter().position(|c| c == column) {
+            return Err(ImportError::DuplicateColumn {
+                first: header[j].trim().to_owned(),
+                second: header[i].trim().to_owned(),
+            });
+        }
+    }
     if !columns.contains(&Column::OrderNumber) {
         return Err(ImportError::NoOrderNumber);
     }
@@ -275,8 +353,8 @@ pub fn import_catalog(text: &str, default_manufacturer: &str) -> Result<ImportRe
             .collect(),
         ..Default::default()
     };
-    for (index, row) in body.iter().enumerate() {
-        let line = index + 2;
+    for record in body {
+        let (line, row) = (record.line, &record.fields);
         let mut part = CatalogPart::new(default_manufacturer, "");
         let mut dims = [None::<f64>; 3];
         for (column, raw) in columns.iter().zip(row) {
@@ -362,17 +440,63 @@ pub fn cell_value(text: &str) -> Value {
 mod tests {
     use super::*;
 
+    fn fields(text: &str) -> Vec<Vec<String>> {
+        parse_delimited(text)
+            .unwrap()
+            .into_iter()
+            .map(|r| r.fields)
+            .collect()
+    }
+
     #[test]
     fn detects_delimiters_and_quotes() {
-        let rows = parse_delimited("a;b;\"c;d\"\r\n1;\"say \"\"hi\"\"\";3\n\n");
+        let rows = fields("a;b;\"c;d\"\r\n1;\"say \"\"hi\"\"\";3\n\n");
         assert_eq!(
             rows,
             vec![vec!["a", "b", "c;d"], vec!["1", "say \"hi\"", "3"]]
         );
-        let rows = parse_delimited("a\tb,c\n1\t2,5");
+        let rows = fields("a\tb,c\n1\t2,5");
         assert_eq!(rows, vec![vec!["a", "b,c"], vec!["1", "2,5"]]);
-        let rows = parse_delimited("\u{feff}a,b\n\"multi\nline\",x");
+        let rows = fields("\u{feff}a,b\n\"multi\nline\",x");
         assert_eq!(rows, vec![vec!["a", "b"], vec!["multi\nline", "x"]]);
+        // An inch mark inside a cell neither opens a quote nor hides the
+        // delimiters after it.
+        let rows = fields("Size;Order\n5\";A1\n");
+        assert_eq!(rows, vec![vec!["Size", "Order"], vec!["5\"", "A1"]]);
+    }
+
+    #[test]
+    fn rows_know_their_lines() {
+        let text = "a;b\r\n\r\n\"two\nlines\";x\ny;z\rlast;row";
+        let lines: Vec<usize> = parse_delimited(text)
+            .unwrap()
+            .iter()
+            .map(|r| r.line)
+            .collect();
+        assert_eq!(lines, vec![1, 3, 5, 6]);
+    }
+
+    #[test]
+    fn unterminated_quote_is_an_error() {
+        assert_eq!(
+            parse_delimited("a;b\n1;\"open\n2;3\n"),
+            Err(ParseError::UnterminatedQuote { line: 2 })
+        );
+    }
+
+    #[test]
+    fn duplicate_catalog_columns_are_refused() {
+        let err = import_catalog("Order number;Text;Description\nA1;x;y", "M").unwrap_err();
+        assert!(matches!(err, ImportError::DuplicateColumn { .. }), "{err}");
+        let report = import_catalog("Order number;;\nA1;x;y", "M").unwrap();
+        assert_eq!(report.parts.len(), 1);
+    }
+
+    #[test]
+    fn skipped_rows_report_file_lines() {
+        let report =
+            import_catalog("Order number;Note\nA1;\"two\nlines\"\n\n;orphan", "M").unwrap();
+        assert_eq!(report.skipped, vec![(5, "no order number".into())]);
     }
 
     #[test]

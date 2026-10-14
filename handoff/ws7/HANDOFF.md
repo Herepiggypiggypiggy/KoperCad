@@ -1,12 +1,11 @@
 # WS-07 Parts and properties: handoff
 
-## State (2026-10-14 17:12 UTC)
-- Repo: github.com/Herepiggypiggypiggy/NovoElectric, clone at /home/claude/NovoElectric
-- Branch: claude/project-thread-6encdr (required by the session; not ws-07-*)
-- PR #36 "WS-07: Parts database, property schema and edit commands", open
-- Head: ea67da21bb3ab776a6c6db1141061229d01e04ae, sent to the main reviewer
-- CI: running on baabb8e at last check, nothing red yet; no reviews yet.
-- Nothing half-done locally; the working tree is clean and pushed.
+## State (2026-10-14 21:40 UTC)
+- #36 and #67 are merged. Branch claude/project-thread-6encdr was restarted
+  from main for the last #36 review notes (CSV parsing, line numbers,
+  duplicate catalog headers, typed cells, Excel formula tags); see PROGRESS.
+- CI (Actions) is down; reviewers' local fmt + clippy + tests are the signal.
+- Open question for WS-02/WS-11: one terminal-article store.
 
 ## What is in the PR
 - crates/novo-parts/: catalog.rs, search.rs, assign.rs, sheet.rs, table.rs,
