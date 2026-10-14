@@ -72,6 +72,14 @@ pub enum Command {
         symbol: SymbolId,
         role: SymbolRole,
     },
+    /// Moves symbols, junctions and free texts to a page with their wires
+    /// and labels; see [`Tx::move_to_page`].
+    MoveToPage {
+        items: Vec<AnyId>,
+        page: PageId,
+        #[serde(default)]
+        offset: Point,
+    },
     AddJunction {
         page: PageId,
         position: Point,
@@ -242,6 +250,7 @@ impl Command {
             Command::AddCable { .. } => "Add cable".into(),
             Command::AssignCore { .. } => "Assign cable core".into(),
             Command::AddPart { .. } => "Add part".into(),
+            Command::MoveToPage { .. } => "Move to page".into(),
             Command::AssignPart { .. } => "Assign part".into(),
             Command::SetProperty { .. } => "Set property".into(),
             Command::Replace { .. } => "Edit".into(),
@@ -409,6 +418,14 @@ impl Tx<'_> {
             Command::AddCable { tag, cores } => self.add_cable(tag, cores)?.into(),
             Command::AssignCore { cable, core, wire } => {
                 self.assign_core(cable, core, wire)?;
+                return Ok(Vec::new());
+            }
+            Command::MoveToPage {
+                items,
+                page,
+                offset,
+            } => {
+                self.move_to_page(&items, page, offset)?;
                 return Ok(Vec::new());
             }
             Command::AddPart {
