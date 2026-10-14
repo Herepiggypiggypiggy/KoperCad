@@ -28,17 +28,23 @@ fn main() {
                 html.push_str("</div>\n");
             }
             category = symbol.category.clone();
-            let _ = writeln!(html, "<h2>{category}</h2><div class=\"grid\">");
+            let _ = writeln!(html, "<h2>{}</h2><div class=\"grid\">", escape(&category));
         }
         let _ = writeln!(
             html,
             "<figure>{}<figcaption>{}<br><code>{}</code></figcaption></figure>",
             to_svg(symbol, &options),
-            symbol.name,
-            symbol.id
+            escape(&symbol.name),
+            escape(&symbol.id)
         );
     }
     html.push_str("</div>\n");
     std::fs::write(&out, html).expect("write gallery");
     println!("{} symbols written to {out}", lib.len());
+}
+
+fn escape(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }

@@ -18,7 +18,7 @@ mod validate;
 pub use library::{Library, LoadError};
 pub use svg::{SvgOptions, to_svg};
 pub use symbol::{
-    Align, Anchor, Behavior, Connection, Direction, FORMAT_VERSION, GRID, Graphic, Point, Stroke,
-    Symbol,
+    ALWAYS_CLOSED, Align, Anchor, Behavior, Connection, Direction, FORMAT_VERSION, GRID, Graphic,
+    PASS_THROUGH, Point, Stroke, Symbol,
 };
-pub use validate::{ANCHOR_ROLES, BEHAVIOR_KINDS, Issue, validate};
+pub use validate::{ANCHOR_ROLES, BEHAVIOR_KINDS, Issue, behavior_keys, validate};

@@ -13,7 +13,7 @@ connections = [
 ]
 
 anchors = [
-  { role = "tag", at = [-10.5, 8], align = "right" },
+  { role = "tag", at = [-9, 8], align = "right" },
 ]
 
 graphics = [
@@ -22,7 +22,7 @@ graphics = [
   { kind = "line", from = [0, 11], to = [-4, 4] },
   { kind = "line", from = [-1.714, 7.2], to = [-5.714, 7.2] },
   { kind = "line", from = [-1.714, 8.8], to = [-5.714, 8.8] },
-  { kind = "arc", center = [-7.214, 8], r = 1.5, start = -90, end = 90 },
+  { kind = "arc", center = [-5.714, 8], r = 1.5, start = 90, end = 270 },
 ]
 
 [behavior]
