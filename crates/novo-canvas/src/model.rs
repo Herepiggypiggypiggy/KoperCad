@@ -103,6 +103,11 @@ pub struct ModelStyle {
     pub tag_height: f32,
     pub tag_color: Color,
     pub wire_number_height: f32,
+    /// Fill of the sheet inside its outline (`None` leaves the canvas
+    /// background showing, as on paper).
+    pub sheet_fill: Option<Color>,
+    /// Sheet outline, drawing frame and title text.
+    pub frame_color: Color,
 }
 
 impl Default for ModelStyle {
@@ -114,6 +119,8 @@ impl Default for ModelStyle {
             tag_height: 2.5,
             tag_color: Color::rgb(20, 24, 32),
             wire_number_height: 2.0,
+            sheet_fill: None,
+            frame_color: Color::rgb(90, 90, 90),
         }
     }
 }
@@ -158,6 +165,12 @@ impl PageScene {
         };
         s.rebuild(project, art);
         s
+    }
+
+    /// Changes the colours and sizes and redraws every item.
+    pub fn set_style(&mut self, style: ModelStyle, project: &Project, art: &dyn SymbolArt) {
+        self.style = style;
+        self.rebuild(project, art);
     }
 
     pub fn page(&self) -> PageId {
@@ -292,10 +305,12 @@ impl PageScene {
         };
         let (w, h) = page.format.size_mm();
         let size = Vec2::new(w as f32, h as f32);
-        let ink = Stroke::world(0.5, Color::rgb(90, 90, 90));
-        let thin = Stroke::world(0.25, Color::rgb(90, 90, 90));
+        let ink = Stroke::world(0.5, self.style.frame_color);
+        let thin = Stroke::world(0.25, self.style.frame_color);
+        let mut sheet = Primitive::stroked(Shape::rect(Vec2::ZERO, size), thin);
+        sheet.fill = self.style.sheet_fill;
         let mut item = Item::new(self.layers.frame)
-            .with(Primitive::stroked(Shape::rect(Vec2::ZERO, size), thin))
+            .with(sheet)
             .with(Primitive::stroked(
                 Shape::rect(Vec2::splat(10.0), size - Vec2::splat(10.0)),
                 ink,
@@ -309,7 +324,7 @@ impl PageScene {
         item.labels.push(
             Label::new(size - Vec2::new(14.0, 14.0), title, 3.5)
                 .anchored(Anchor::BottomRight)
-                .colored(Color::rgb(90, 90, 90)),
+                .colored(self.style.frame_color),
         );
         self.scene.insert(item_id(self.page), item);
     }
