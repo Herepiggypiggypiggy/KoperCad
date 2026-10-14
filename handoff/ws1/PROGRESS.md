@@ -27,3 +27,4 @@
 2026-10-14 20:18 UTC #53: reviewer A READY at 53f0e00; design review: proposal hint never showed (empty duplicate first) - texted mark first, test asserts it via marks::layout + nearest_proposal; picked/scripted command_field_here opens at once (only the Space key arms it); merged main.
 2026-10-14 21:35 UTC Resumed after the pause; branch reset to main. PDF export only replaces PDFs NovoElectric wrote (/Producer), else takes '<stem> 2.pdf'; writes via a temp file and rename. Workspace fmt, clippy -D warnings, 627 tests green.
 2026-10-14 22:45 UTC #84 merged. Focus fix: keys go to a focused panel button (outline, drawer, top bar), not the canvas; canvas area recorded each frame. Workspace fmt, clippy -D warnings, 647 tests green.
+2026-10-15 03:13 UTC #105 merged. Bundle A (name fix, drop accept all, Delete declines with the pointer on the proposal, matching #113) from main f6bfe93; fmt, clippy -D warnings, 693 tests green.

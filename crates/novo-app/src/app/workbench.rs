@@ -53,6 +53,8 @@ pub(crate) struct Workbench {
     pub(super) proposal: usize,
     /// Where the pointer was when Space went down, until it comes up.
     pub(super) space_down: Option<egui::Pos2>,
+    /// The pointer on the drawing (mm), when it is over the canvas.
+    pub(super) pointer_world: Option<novo_core::Point>,
     /// Shift+P: false hides the marks on the drawing (counters stay).
     pub(super) marks: bool,
     /// Design-check results for one project revision.
@@ -93,6 +95,7 @@ impl Default for Workbench {
             drawer: None,
             proposal: 0,
             space_down: None,
+            pointer_world: None,
             marks: true,
             problems: None,
             pill_rect: egui::Rect::NOTHING,
@@ -237,21 +240,54 @@ impl NovoApp {
         }
     }
 
+    /// Enter, Tab and Delete belong to the editor's wire proposals while it
+    /// has any; otherwise to the terminal proposals shown on this page.
+    fn terminal_proposals_have_keys(&self) -> bool {
+        let wires = self
+            .canvas
+            .schematic_ref()
+            .is_some_and(|v| !v.editor.proposals().is_empty());
+        !wires && self.wb.marks && !self.page_proposals().is_empty()
+    }
+
+    /// Delete with the pointer on the highlighted terminal proposal
+    /// declines it rather than deleting anything; elsewhere Delete deletes
+    /// (as the editor does for wire proposals).
+    fn declines_proposal(&self) -> bool {
+        self.terminal_proposals_have_keys() && self.pointer_on_proposal()
+    }
+
+    /// Where the pointer is on the drawing, in millimetres, for the keys
+    /// that act on what is under it.
+    pub(super) fn track_pointer(&mut self, ctx: &egui::Context) {
+        let at = ctx.pointer_hover_pos();
+        self.wb.pointer_world = match (at, self.wb.canvas_area, self.canvas.schematic_ref()) {
+            (Some(at), Some((_, rect)), Some(view)) if rect.contains(at) => {
+                let local = at - rect.min;
+                let w = view
+                    .canvas
+                    .viewport
+                    .screen_to_world(novo_canvas::Vec2::new(local.x, local.y));
+                Some(novo_core::Point::new(f64::from(w.x), f64::from(w.y)))
+            }
+            _ => None,
+        };
+    }
+
     /// Whether the shell runs `command` from a key press itself.
     pub(super) fn claims_key(&self, command: &str) -> bool {
+        // Delete with the pointer on the highlighted terminal proposal
+        // declines it (DESIGN.md §5); otherwise it is the editor's.
+        if command == "edit.delete" {
+            return self.declines_proposal();
+        }
         if EDITOR_KEYS.contains(&command) {
             return false;
         }
         match command {
             // Enter and Tab belong to the editor's wire proposals while it
             // has any; otherwise to the terminal proposals on this page.
-            "proposal.accept" | "proposal.next" => {
-                let wires = self
-                    .canvas
-                    .schematic_ref()
-                    .is_some_and(|v| !v.editor.proposals().is_empty());
-                !wires && self.wb.marks && !self.page_proposals().is_empty()
-            }
+            "proposal.accept" | "proposal.next" => self.terminal_proposals_have_keys(),
             id if FAVOURITE_COMMANDS.contains(&id) => true,
             id => match Action::from_id(id) {
                 Some(action) => self.is_enabled(action),
@@ -327,6 +363,7 @@ impl NovoApp {
             "tool.repeat" => self.editor_key(EditorKey::Repeat),
             "edit.rotate" => self.editor_key(EditorKey::Rotate),
             "edit.mirror" => self.editor_key(EditorKey::Mirror),
+            "edit.delete" if self.declines_proposal() => self.dismiss_proposal(),
             "edit.delete" => self.editor_key(EditorKey::Delete),
             "nav.next_page" | "nav.previous_page" => {
                 let step = if id == "nav.next_page" { 1 } else { -1 };

@@ -562,6 +562,7 @@ impl NovoApp {
         let mut picked: Vec<Action> = Vec::new();
         self.escape_popups(&ctx);
         self.space_released(&ctx);
+        self.track_pointer(&ctx);
         let commands = if self.modal_open() {
             Vec::new()
         } else {
