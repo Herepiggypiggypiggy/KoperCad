@@ -173,7 +173,7 @@ pub const COMMANDS: &[CommandInfo] = &[
         "edit.next_orientation",
         "Next orientation",
         "Edit",
-        &["tab", "corner", "t piece"],
+        &["tab", "turn"],
         Needs::Selection,
     ),
     cmd(
@@ -218,13 +218,6 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Potential or interruption point",
         "Insert",
         &["arrow", "off page"],
-        Needs::Page,
-    ),
-    cmd(
-        "tool.connection_piece",
-        "Connection piece",
-        "Insert",
-        &["corner", "t piece", "junction", "cross"],
         Needs::Page,
     ),
     cmd("tool.move", "Move selection", "Edit", &[], Needs::Selection),
@@ -352,7 +345,6 @@ mod tests {
         for id in [
             "view.command_palette",
             "edit.duplicate",
-            "tool.connection_piece",
             "nav.all_references",
             "nav.back",
             "edit.next_orientation",

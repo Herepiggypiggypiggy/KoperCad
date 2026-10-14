@@ -285,8 +285,8 @@ impl Keymap {
         bind(Chord::ctrl(l('w')), Anywhere, "file.close");
         bind(Chord::ctrl(l('q')), Anywhere, "file.quit");
         bind(Chord::ctrl(l('z')), Anywhere, "edit.undo");
-        bind(Chord::ctrl(l('y')), Anywhere, "edit.redo");
         bind(Chord::ctrl_shift(l('z')), Anywhere, "edit.redo");
+        bind(Chord::ctrl(l('y')), Anywhere, "edit.redo");
         // Clipboard and selection chords belong to a text field while one
         // has focus, so they are canvas-scoped.
         bind(Chord::ctrl(l('c')), Canvas, "edit.copy");
@@ -305,7 +305,6 @@ impl Keymap {
         bind(Chord::plain(l('t')), Canvas, "tool.terminals");
         bind(Chord::plain(l('c')), Canvas, "tool.cable");
         bind(Chord::plain(l('p')), Canvas, "tool.potential");
-        bind(Chord::plain(l('j')), Canvas, "tool.connection_piece");
         bind(Chord::plain(l('m')), Canvas, "tool.move");
         bind(Chord::plain(l('r')), Canvas, "edit.rotate");
         bind(Chord::plain(l('x')), Canvas, "edit.mirror");
@@ -489,10 +488,25 @@ mod tests {
     }
 
     #[test]
+    fn no_typing_key_is_bound_anywhere() {
+        // A plain letter, digit, Tab or Delete bound outside the canvas
+        // would steal typing from a text field.
+        for b in Keymap::workflow().bindings() {
+            if b.chord.types_text() {
+                assert_ne!(b.scope, Scope::Anywhere, "{} {}", b.chord, b.command);
+            }
+        }
+    }
+
+    #[test]
     fn redo_has_two_chords_and_shows_the_first() {
         let map = Keymap::workflow();
         assert_eq!(map.chords_for("edit.redo").len(), 2);
-        assert_eq!(map.shortcut_text("edit.redo").as_deref(), Some("Ctrl+Y"));
+        // Ctrl+Shift+Z first, as the app shell's menu shows it.
+        assert_eq!(
+            map.shortcut_text("edit.redo").as_deref(),
+            Some("Ctrl+Shift+Z")
+        );
     }
 
     #[test]

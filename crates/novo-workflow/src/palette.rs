@@ -12,14 +12,14 @@
 //!
 //! The UI (WS-01) draws [`Row`]s and runs the picked [`Target`].
 
-use novo_core::{DeviceId, PageId, Project, SymbolId};
+use novo_core::{AnyId, DeviceId, Match, PageId, Project, SymbolId};
 use novo_symbols::Library;
 
 use crate::commands::{self, COMMANDS, Context};
 use crate::fuzzy;
 use crate::insert::InsertSearch;
 use crate::keymap::Keymap;
-use crate::locate::{self, Location};
+use crate::locate;
 
 /// What picking a row does.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -130,11 +130,7 @@ impl Palette {
         let mut rows: Vec<Row> = Vec::new();
 
         if let Some(project) = sources.project {
-            exact_device_rows(project, query, &mut rows);
-            page_rows(project, query, &mut rows);
-            if !query.is_empty() {
-                device_rows(project, query, &mut rows);
-            }
+            project_rows(project, query, &mut rows);
         }
         command_rows(query, sources, &mut rows);
         if let (Some(library), false) = (sources.library, query.is_empty()) {
@@ -179,99 +175,107 @@ impl Palette {
     }
 }
 
-fn exact_device_rows(project: &Project, query: &str, rows: &mut Vec<Row>) {
-    for (n, device_id) in locate::devices_named(project, query)
-        .into_iter()
-        .enumerate()
-    {
-        let Some(device) = project.device(device_id) else {
-            continue;
+/// Devices, terminals and pages from novo-core's search. Exact tag hits
+/// come first, each followed by every place the device is drawn.
+fn project_rows(project: &Project, query: &str, rows: &mut Vec<Row>) {
+    for (n, hit) in project.search(query).into_iter().enumerate() {
+        let order = i32::try_from(n).unwrap_or(i32::MAX / 2);
+        let base = match hit.quality {
+            Match::Exact => EXACT - order * 1_000,
+            Match::Prefix => 2_000 - order,
+            Match::Contains => 800 - order,
         };
-        let base = EXACT - i32::try_from(n).unwrap_or(0) * 1_000;
-        let places: Vec<Location> = locate::locations(project, device_id);
-        let summary = places
-            .iter()
-            .map(Location::reference)
-            .collect::<Vec<_>>()
-            .join("  ");
-        rows.push(Row {
-            target: Target::Device(device_id),
-            kind: Kind::Device,
-            label: device.tag.to_string(),
-            detail: join_detail(&device.description, &summary),
-            shortcut: None,
-            disabled: None,
-            score: base,
-        });
-        for (i, place) in places.iter().enumerate() {
-            let what = project
-                .symbol(place.symbol)
-                .map(|s| {
-                    s.symbol
-                        .0
-                        .rsplit('/')
-                        .next()
-                        .unwrap_or("")
-                        .replace('_', " ")
-                })
-                .unwrap_or_default();
-            rows.push(Row {
-                target: Target::Location {
-                    device: device_id,
-                    symbol: place.symbol,
-                },
-                kind: Kind::Location,
-                label: format!("{} {}", device.tag, place.reference()),
-                detail: what,
-                shortcut: None,
-                disabled: None,
-                score: base - 1 - i32::try_from(i).unwrap_or(0),
-            });
+        match hit.id {
+            AnyId::Device(device_id) => {
+                let Some(device) = project.device(device_id) else {
+                    continue;
+                };
+                let places = locate::locations(project, device_id);
+                let summary = places
+                    .iter()
+                    .map(locate::reference)
+                    .collect::<Vec<_>>()
+                    .join("  ");
+                rows.push(Row {
+                    target: Target::Device(device_id),
+                    kind: Kind::Device,
+                    label: device.tag.to_string(),
+                    detail: join_detail(&device.description, &summary),
+                    shortcut: None,
+                    disabled: None,
+                    score: base,
+                });
+                if hit.quality == Match::Exact {
+                    location_rows(project, device_id, &device.tag.to_string(), base, rows);
+                }
+            }
+            AnyId::Terminal(terminal) => {
+                let places: Vec<_> = project
+                    .symbols_of_terminal(terminal)
+                    .into_iter()
+                    .filter_map(|s| Some((s.id, project.location_of(s.id)?)))
+                    .collect();
+                let Some(strip) = project.terminal(terminal).map(|t| t.strip) else {
+                    continue;
+                };
+                for (i, (symbol, location)) in places.into_iter().enumerate() {
+                    rows.push(Row {
+                        target: Target::Location {
+                            device: strip,
+                            symbol,
+                        },
+                        kind: Kind::Location,
+                        label: format!("{} /{location}", hit.text),
+                        detail: "terminal".to_owned(),
+                        shortcut: None,
+                        disabled: None,
+                        score: base - i32::try_from(i).unwrap_or(0),
+                    });
+                }
+            }
+            AnyId::Page(page_id) => {
+                let Some(page) = project.page(page_id) else {
+                    continue;
+                };
+                rows.push(Row {
+                    target: Target::Page(page_id),
+                    kind: Kind::Page,
+                    label: format!("Page {}", page.name),
+                    detail: page.title.clone(),
+                    shortcut: None,
+                    disabled: None,
+                    score: base,
+                });
+            }
+            _ => {}
         }
     }
 }
 
-fn page_rows(project: &Project, query: &str, rows: &mut Vec<Row>) {
-    if query.is_empty() {
-        return;
-    }
-    for page in project.pages_in_order() {
-        let exact = page.name.eq_ignore_ascii_case(query) || page.title.eq_ignore_ascii_case(query);
-        let score = if exact {
-            Some(EXACT - 10)
-        } else {
-            fuzzy::best_score(query, [page.title.as_str(), &format!("page {}", page.name)])
-        };
-        if let Some(score) = score {
-            rows.push(Row {
-                target: Target::Page(page.id),
-                kind: Kind::Page,
-                label: format!("Page {}", page.name),
-                detail: page.title.clone(),
-                shortcut: None,
-                disabled: None,
-                score,
-            });
-        }
-    }
-}
-
-fn device_rows(project: &Project, query: &str, rows: &mut Vec<Row>) {
-    for device in project.devices() {
-        let tag = device.tag.to_string();
-        let code = device.tag.device_code().unwrap_or("");
-        let Some(score) = fuzzy::best_score(query, [tag.as_str(), code, &device.description])
-        else {
-            continue;
-        };
+fn location_rows(project: &Project, device: DeviceId, tag: &str, base: i32, rows: &mut Vec<Row>) {
+    for (i, place) in locate::locations(project, device).iter().enumerate() {
+        let what = project
+            .symbol(place.symbol)
+            .map(|s| {
+                s.symbol
+                    .0
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or("")
+                    .replace('_', " ")
+            })
+            .unwrap_or_default();
         rows.push(Row {
-            target: Target::Device(device.id),
-            kind: Kind::Device,
-            label: tag,
-            detail: device.description.clone(),
+            target: Target::Location {
+                device,
+                symbol: place.symbol,
+            },
+            kind: Kind::Location,
+            label: format!("{tag} {}", locate::reference(place)),
+            detail: what,
             shortcut: None,
             disabled: None,
-            score,
+            score: base - 1 - i32::try_from(i).unwrap_or(0),
         });
     }
 }

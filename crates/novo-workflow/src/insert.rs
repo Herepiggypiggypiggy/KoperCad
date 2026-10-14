@@ -10,6 +10,10 @@
 //! - A device tag in front (`K1 no`) places a child symbol of that device:
 //!   a contact of `-K1`.
 //!
+//! The mnemonic and favourite tables here are interim: once novo-symbols
+//! ships `Library::by_alias` and `favorites()` (WS-05, #25), this search
+//! reads them from the library instead of keeping its own.
+//!
 //! [`letter_code`] gives the IEC 81346-2 letter for the next free tag
 //! (`-K1`, `-K2`, ...) of a placed symbol.
 

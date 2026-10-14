@@ -62,7 +62,7 @@ fn locations_are_page_and_column() {
     let gate = motor_starter(&mut doc).unwrap();
     let refs: Vec<String> = locate::locations(doc.project(), gate.k1)
         .iter()
-        .map(|l| l.reference())
+        .map(locate::reference)
         .collect();
     assert_eq!(refs, ["/2.1", "/1.1", "/2.2"]);
 }
@@ -252,7 +252,7 @@ fn duplicating_a_coil_takes_its_contacts_along() {
     // K2 is found by the palette at its new location, two columns right.
     let refs: Vec<String> = locate::locations(project, k2)
         .iter()
-        .map(|l| l.reference())
+        .map(locate::reference)
         .collect();
     assert_eq!(refs, ["/2.3", "/2.4"]);
 }
