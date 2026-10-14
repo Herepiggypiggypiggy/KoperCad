@@ -53,7 +53,7 @@ jobs:
           # Redistributable, which a standard user cannot install.
           $app = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes("target\release\novoelectric.exe"))
           if ($app -match '(?i)vcruntime140|msvcp140|api-ms-win-crt-') { throw "novoelectric.exe links the MSVC runtime dynamically" }
-      - name: Install as a standard (non-admin) user, then launch
+      - name: Install as a standard (non-admin) user
         shell: pwsh
         run: |
           $user = "novotest"
@@ -71,6 +71,18 @@ jobs:
           icacls $work /grant "${user}:(OI)(CI)F" | Out-Null
           $env:TEMP = "$work\temp"
           $env:TMP = "$work\temp"
+          # The same goes for the profile variables the shell folder lookups
+          # expand ({localappdata} failed with access denied on the runner's).
+          $profileDir = "C:\Users\$user"
+          $env:USERPROFILE = $profileDir
+          $env:HOMEDRIVE = "C:"
+          $env:HOMEPATH = "\Users\$user"
+          $env:USERNAME = $user
+          $env:APPDATA = "$profileDir\AppData\Roaming"
+          $env:LOCALAPPDATA = "$profileDir\AppData\Local"
+          # Loading the profile once creates it.
+          Start-Process cmd.exe -Credential $cred -LoadUserProfile -WorkingDirectory $work -ArgumentList "/c", "exit" -Wait
+          if (-not (Test-Path $profileDir)) { throw "profile for $user was not created" }
 
           $setup = (Get-ChildItem dist\NovoElectric-*-setup.exe)[0]
           Copy-Item $setup.FullName "$work\novo-setup.exe"
@@ -84,14 +96,19 @@ jobs:
           if (Test-Path "HKLM:\Software\Classes\NovoElectric.Project") { throw "file association was written machine-wide" }
           if (Test-Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{AEB465B9-04F0-475B-AD7F-091D638587B5}_is1") { throw "uninstall entry was written machine-wide" }
 
+      - name: Launch the installed app
+        shell: pwsh
+        run: |
           # A GUI started with -Credential from the runner's service session
-          # has no desktop to attach to, so the launch check runs the
-          # installed exe as the runner; its asInvoker manifest (checked
-          # above) means it runs with whatever rights its user has.
-          $app = Start-Process $exe -WorkingDirectory $work -PassThru
+          # has no desktop to attach to, so this step runs the installed exe
+          # as the runner; its asInvoker manifest (checked above) means it
+          # runs with whatever rights its user has.
+          $exe = "C:\Users\novotest\AppData\Local\Programs\NovoElectric\novoelectric.exe"
+          $app = Start-Process $exe -WorkingDirectory C:\novotest -PassThru
           Start-Sleep -Seconds 10
           if ($app.HasExited) { throw "novoelectric.exe exited at startup with code $($app.ExitCode)" }
           Stop-Process -Id $app.Id
+          $setup = (Get-ChildItem dist\NovoElectric-*-setup.exe)[0]
           $size = [math]::Round($setup.Length / 1MB, 1)
           "Installer: $($setup.Name), $size MB, installed as a standard user, app launched" >> $env:GITHUB_STEP_SUMMARY
       - uses: actions/upload-artifact@v4

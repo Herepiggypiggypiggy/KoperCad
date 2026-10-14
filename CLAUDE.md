@@ -35,9 +35,8 @@ Work is split into workstreams (WS-xx), each run by its own Claude thread.
 
 Rules:
 
-- One branch and one pull request per workstream (the thread's assigned
-  branch is fine); name the workstream (WS-xx) in the PR title. Keep pull
-  requests focused on your own crate.
+- One branch and one pull request per workstream (`ws-02-data-model`,
+  `ws-03-canvas`, ...). Keep pull requests focused on your own crate.
 - Only the WS-02 thread changes the public API of `novo-core`. Other threads
   that need a model change describe it in their pull request or ask WS-02.
 - Other crates read the model through queries and change it only through
@@ -45,6 +44,24 @@ Rules:
 - New crates are added under `crates/` and picked up by the workspace glob;
   shared dependencies go in `[workspace.dependencies]`.
 - `unsafe` is denied workspace-wide; justify any exception in the pull request.
+
+## Experimental builds
+
+Every push to main and every pull request update rebuilds the `experimental`
+pre-release: main plus all open pull requests merged in PR order (conflicting
+PRs are skipped; if the combined build fails it falls back to main). The
+owner's desktop shortcut runs `scripts/run-latest.ps1`, which always starts
+the newest of these builds. Keep main and open PRs buildable on Windows.
+
+## No admin rights, ever
+
+Everything must install, run, update and be scripted by a standard Windows
+user without admin rights. That covers the app, its installer
+(`PrivilegesRequired=lowest`, per-user install), launchers, the Python layer
+(WS-28) and any helper tool. Write only under the user's profile
+(`%LOCALAPPDATA%`, `%APPDATA%`, Documents) and `HKCU`; never `Program Files`,
+`HKLM`, services, drivers or system-wide installs, and never require a tool
+that needs elevation to install.
 
 ## Conventions
 
