@@ -90,12 +90,6 @@ fn a_generated_page_prints_one_pdf_page_per_sheet() {
         // Every cell is clipped to its box.
         assert!(c.contains(" re\nW\nn\n"), "clip on sheet {k}");
     }
-    // The title block names the sheet and counts every printed sheet.
-    assert!(content(&pdf, 3).contains("(20.1  Devices) Tj"));
-    assert!(content(&pdf, 3).contains("(3 of 6) Tj"));
-    assert!(content(&pdf, 5).contains("(5 of 6) Tj"));
-    assert!(content(&pdf, 1).contains("(1 of 6) Tj"));
-    assert!(content(&pdf, 6).contains("(6 of 6) Tj"));
     assert!(content(&pdf, 3).contains("(=A9-K1) Tj"));
     assert!(content(&pdf, 5).contains("(=A9-K80) Tj"));
     assert!(!content(&pdf, 3).contains("(=A9-K80) Tj"));
@@ -132,8 +126,6 @@ fn a_page_set_with_a_generated_page_keeps_all_its_sheets() {
     };
     let pdf = parse(&export_pdf(doc.project(), &options).unwrap());
     assert_eq!(labels(&pdf), ["20.1", "20.2", "20.3"]);
-    // Numbered within the whole set, as in a full export.
-    assert!(content(&pdf, 2).contains("(4 of 6) Tj"));
 }
 
 #[test]

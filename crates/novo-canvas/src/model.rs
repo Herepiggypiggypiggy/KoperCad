@@ -313,17 +313,6 @@ pub struct ModelLayers {
     pub texts: LayerId,
 }
 
-/// What the title block says about the sheet it is on, for a page that
-/// prints as several sheets (a generated page's report sheets): the sheet's
-/// name (`20.2`) and its place among all printed sheets.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SheetLabel {
-    pub name: String,
-    /// 1-based.
-    pub number: usize,
-    pub total: usize,
-}
-
 /// The canvas scene of one model page, kept in sync with the project.
 pub struct PageScene {
     page: PageId,
@@ -336,8 +325,6 @@ pub struct PageScene {
     /// What each drawn text is attached to, to redraw it when the text goes
     /// (a device tag text hides the symbol's own tag).
     text_hosts: HashMap<TextId, AnyId>,
-    /// Overrides the title block's page name and "n of m".
-    sheet: Option<SheetLabel>,
     pub style: ModelStyle,
 }
 
@@ -364,7 +351,6 @@ impl PageScene {
             art_cache: HashMap::new(),
             wire_junctions: HashMap::new(),
             text_hosts: HashMap::new(),
-            sheet: None,
             style: ModelStyle::default(),
         };
         s.rebuild(project, art);
@@ -375,13 +361,6 @@ impl PageScene {
     pub fn set_style(&mut self, style: ModelStyle, project: &Project, art: &dyn SymbolArt) {
         self.style = style;
         self.rebuild(project, art);
-    }
-
-    /// Shows `sheet` in the title block instead of the page's own name and
-    /// its place among the project's pages; `None` goes back to those.
-    pub fn set_sheet(&mut self, project: &Project, sheet: Option<SheetLabel>) {
-        self.sheet = sheet;
-        self.frame(project);
     }
 
     pub fn page(&self) -> PageId {
@@ -665,19 +644,15 @@ impl PageScene {
             (d, c) if d.is_empty() && c.is_empty() => String::new(),
             (d, c) => format!("{d} / {c}"),
         };
-        let (name, n, total) = match &self.sheet {
-            Some(s) => (s.name.as_str(), s.number, s.total),
-            None => (page.name.as_str(), n, order.len()),
-        };
         let page_line = if page.title.is_empty() {
-            name.to_owned()
+            page.name.clone()
         } else {
-            format!("{name}  {}", page.title)
+            format!("{}  {}", page.name, page.title)
         };
         let rows = [
             ("Project", project.info().name.clone()),
             ("Page", page_line),
-            ("Sheet", format!("{n} of {total}")),
+            ("Sheet", format!("{n} of {}", order.len())),
             ("Structure", structure),
             ("Revision", revision),
             ("Drawn / checked", people),
@@ -1625,39 +1600,6 @@ mod tests {
             .unwrap();
         assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
         assert!(texts(&ps).iter().any(|s| s == "Mill"));
-    }
-
-    #[test]
-    fn a_sheet_label_replaces_the_page_name_and_count() {
-        let (mut doc, page, ..) = doc();
-        doc.transact("title", |tx| {
-            tx.update::<novo_core::Page>(page, |p| p.title = "Devices".into())
-        })
-        .unwrap();
-        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
-        let texts = |ps: &PageScene| -> Vec<String> {
-            let frame = ps.scene().get(item_id(page)).unwrap();
-            frame.labels.iter().map(|l| l.text.clone()).collect()
-        };
-        let sheet = SheetLabel {
-            name: "20.2".into(),
-            number: 4,
-            total: 6,
-        };
-        ps.set_sheet(doc.project(), Some(sheet));
-        let t = texts(&ps);
-        assert!(t.iter().any(|s| s == "20.2  Devices"), "{t:?}");
-        assert!(t.iter().any(|s| s == "4 of 6"), "{t:?}");
-        // The label survives a redraw of the frame.
-        let (_, changes) = doc
-            .transact("rename", |tx| tx.set_info(|i| i.name = "Mill".into()))
-            .unwrap();
-        ps.apply(doc.project(), &changes, &PlaceholderArt);
-        assert!(texts(&ps).iter().any(|s| s == "4 of 6"));
-        ps.set_sheet(doc.project(), None);
-        let t = texts(&ps);
-        assert!(t.iter().any(|s| s == "1  Devices"), "{t:?}");
-        assert!(t.iter().any(|s| s == "1 of 1"), "{t:?}");
     }
 
     #[test]
