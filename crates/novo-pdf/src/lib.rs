@@ -1,6 +1,12 @@
 //! Vector PDF export (owned by WS-09): one PDF page per project page, with
 //! bookmarks, page labels and clickable cross-reference links.
 //!
+//! A generated page (a [`PageKind::Generated`] record: bill of materials,
+//! terminal diagram, ...) prints as one PDF page per sheet of its report,
+//! each named like the sheet (`20`, or `20.1`, `20.2`, ...; see
+//! [`novo_reports::sheet_names`]) in the page labels and bookmarks, with
+//! the report's table drawn inside the page frame.
+//!
 //! The PDF is drawn from the same [`PageScene`] the canvas shows, so what
 //! prints is exactly what is on screen (symbols, wires, junction glyphs,
 //! tags, wire numbers, texts, the page frame and title block), restyled
@@ -24,7 +30,8 @@ mod font;
 
 use novo_canvas::model::{ModelStyle, PageScene, PlaceholderArt, SymbolArt};
 use novo_canvas::{Color, ItemId, Stroke};
-use novo_core::{AnyId, Page, PageId, Project, SymbolId, SymbolRole, TextContent};
+use novo_core::{AnyId, Page, PageId, PageKind, Project, SymbolId, SymbolRole, TextContent};
+use novo_reports::{GeneratedSheet, LiveReports, PageLayout};
 use pdf_writer::types::{ActionType, AnnotationType, PageMode};
 use pdf_writer::{Finish, Name, Pdf, Rect, Ref, TextStr};
 use std::collections::{BTreeSet, HashMap};
@@ -117,13 +124,64 @@ pub fn write_pdf(
 /// Exports the project to PDF bytes with the given symbol artwork.
 ///
 /// A project or page set without pages gives a one-page blank A3 PDF, so
-/// the result always opens in a reader.
+/// the result always opens in a reader. Generated pages are filled from a
+/// fresh [`LiveReports::standard`]; use [`export_pdf_with_reports`] to
+/// share the app's live reports instead.
 pub fn export_pdf_with_art(
     project: &Project,
     options: &PdfOptions,
     art: &dyn SymbolArt,
 ) -> Result<Vec<u8>, PdfError> {
-    let pages = select_pages(project, &options.pages)?;
+    export_pdf_with_reports(project, options, art, &mut LiveReports::standard())
+}
+
+/// One printed PDF page: a project page, or one sheet of a generated page.
+struct Sheet<'a> {
+    page: &'a Page,
+    /// Page label and bookmark name: the page name, or the sheet name.
+    name: String,
+    /// The report sheet drawn inside the frame of a generated page.
+    generated: Option<GeneratedSheet>,
+}
+
+/// The printed sheets of `page`: itself, or one per sheet of its report. A
+/// generated page whose report is unknown prints its empty frame.
+fn sheets_of<'a>(project: &Project, page: &'a Page, reports: &mut LiveReports) -> Vec<Sheet<'a>> {
+    let generated = match page.kind {
+        PageKind::Generated { .. } => reports.sheets_of_page(project, page.id),
+        _ => Vec::new(),
+    };
+    if generated.is_empty() {
+        return vec![Sheet {
+            page,
+            name: page.name.clone(),
+            generated: None,
+        }];
+    }
+    generated
+        .into_iter()
+        .map(|g| Sheet {
+            page,
+            name: g.name.clone(),
+            generated: Some(g),
+        })
+        .collect()
+}
+
+/// Exports the project to PDF bytes, filling generated pages from
+/// `reports` (the app's one [`LiveReports`] per document, kept current
+/// with every change set).
+pub fn export_pdf_with_reports(
+    project: &Project,
+    options: &PdfOptions,
+    art: &dyn SymbolArt,
+    reports: &mut LiveReports,
+) -> Result<Vec<u8>, PdfError> {
+    let selected = select_pages(project, &options.pages)?;
+    let pages: Vec<Sheet> = selected
+        .iter()
+        .flat_map(|page| sheets_of(project, page, reports))
+        .collect();
 
     let mut next = 1;
     let mut alloc = || {
@@ -145,7 +203,9 @@ pub fn export_pdf_with_art(
     let count = pages.len().max(1);
     let out: Vec<Out> = (0..count)
         .map(|i| {
-            let (w, h) = pages.get(i).map_or(BLANK_PAGE_MM, |p| p.format.size_mm());
+            let (w, h) = pages
+                .get(i)
+                .map_or(BLANK_PAGE_MM, |p| p.page.format.size_mm());
             Out {
                 page: alloc(),
                 content: alloc(),
@@ -153,8 +213,11 @@ pub fn export_pdf_with_art(
             }
         })
         .collect();
-    let index_of: HashMap<PageId, usize> =
-        pages.iter().enumerate().map(|(i, p)| (p.id, i)).collect();
+    // A link to a generated page lands on its first sheet.
+    let mut index_of: HashMap<PageId, usize> = HashMap::new();
+    for (i, sheet) in pages.iter().enumerate() {
+        index_of.entry(sheet.page.id).or_insert(i);
+    }
 
     let mut pdf = Pdf::new();
 
@@ -202,7 +265,8 @@ pub fn export_pdf_with_art(
         let (w, h) = o.size_mm;
         let mut writer = draw::PageWriter::new(h);
         let mut annotations = Vec::new();
-        if let Some(page) = pages.get(i) {
+        if let Some(sheet) = pages.get(i) {
+            let page = sheet.page;
             let mut scene = PageScene::new(project, page.id, art);
             scene.set_style(options.style, project, art);
             let s = scene.scene();
@@ -220,6 +284,13 @@ pub fn export_pdf_with_art(
                 for l in &item.labels {
                     writer.label(l);
                 }
+            }
+            if let Some(layout) = sheet
+                .generated
+                .as_ref()
+                .and_then(|g| reports.layout_sheet(project, g))
+            {
+                draw_layout(&mut writer, &layout, options.style.frame_color);
             }
             if options.links {
                 for (item, _) in &items {
@@ -277,10 +348,10 @@ pub fn export_pdf_with_art(
             .first(items[0])
             .last(items[items.len() - 1])
             .count(items.len() as i32);
-        for (i, page) in pages.iter().enumerate() {
+        for (i, sheet) in pages.iter().enumerate() {
             let mut item = pdf.outline_item(items[i]);
             item.parent(outline_id)
-                .title(TextStr(&bookmark_title(page)));
+                .title(TextStr(&sheet_bookmark(sheet)));
             if i > 0 {
                 item.prev(items[i - 1]);
             }
@@ -306,6 +377,33 @@ fn select_pages<'a>(project: &'a Project, set: &PageSet) -> Result<Vec<&'a Page>
             let wanted: BTreeSet<PageId> = ids.iter().copied().collect();
             Ok(all.into_iter().filter(|p| wanted.contains(&p.id)).collect())
         }
+    }
+}
+
+/// A report table, its rules and text boxes, in the frame colour.
+fn draw_layout(writer: &mut draw::PageWriter, layout: &PageLayout, ink: Color) {
+    use novo_canvas::{Primitive, Shape, Vec2};
+    let heavy = Stroke::world(0.35, ink);
+    let thin = Stroke::world(0.18, ink);
+    for line in &layout.lines {
+        let at = |(x, y): (f64, f64)| Vec2::new(x as f32, y as f32);
+        let stroke = if line.heavy { heavy } else { thin };
+        writer.primitive(&Primitive::stroked(
+            Shape::line(at(line.from), at(line.to)),
+            stroke,
+        ));
+    }
+    for text in &layout.texts {
+        writer.text_box(text, ink);
+    }
+}
+
+/// `20.2  Bill of materials`: the sheet name, then the page title.
+fn sheet_bookmark(sheet: &Sheet) -> String {
+    if sheet.page.title.is_empty() {
+        sheet.name.clone()
+    } else {
+        format!("{}  {}", sheet.name, sheet.page.title)
     }
 }
 
