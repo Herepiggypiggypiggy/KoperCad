@@ -9,15 +9,19 @@ the workflow thread.
 
 ## Principles
 
-1. **Dark, calm, dense.** One dark theme. The drawing is the brightest thing
-   on screen; chrome stays grey and quiet so the eye goes to the page.
-2. **One accent for interaction.** Blue (`ACCENT`) means "you can act here"
-   or "this is selected in a list". Amber (`BRAND`) is the logo and the
-   canvas selection, nothing else.
-3. **Status colours mean status.** Green, orange and red only for OK,
+1. **Graphite, calm, dense.** One dark theme of near-neutral greys with a
+   faint warm cast. The drawing is the brightest thing on screen; chrome
+   stays quiet so the eye goes to the page. Hierarchy comes from value and
+   spacing, not colour.
+2. **One accent, copper, used rarely.** Copper (the conductor) marks focus,
+   the active tool, the primary button and the logo. Nothing else is copper,
+   so it always means "here".
+3. **Status colours mean status.** Muted green, amber and red only for OK,
    warning and error, always with an icon or text, never colour alone.
-4. **Tokens, not hex.** Screens use `novo_theme::tokens::*`. A raw colour in
-   UI code is a review comment.
+4. **Labels, not headlines.** Panels open with a small spaced uppercase
+   section label (`widgets::section_label`), not a large bold heading.
+5. **Tokens, not hex.** Screens use `novo_theme::tokens::*` and
+   `novo_theme::widgets::*`. A raw colour in UI code is a review comment.
 
 ## Setup
 
@@ -30,25 +34,31 @@ until a light theme exists.
 
 | Token | Hex | Use |
 | --- | --- | --- |
-| `BG_0` | `#101216` | Text fields, lists, around the sheet |
-| `BG_1` | `#171A1F` | Panels, menu bar, status bar |
-| `BG_2` | `#1E2229` | Windows, dialogs, menus, tooltips |
-| `BG_3` | `#292E37` | Buttons and fields at rest |
-| `BG_4` | `#343A45` | Hovered controls |
-| `BORDER` | `#2C313A` | Panel and window hairlines |
-| `BORDER_STRONG` | `#464D5A` | Hovered or focused outlines |
-| `TEXT` | `#E4E7EC` | Body text |
-| `TEXT_MUTED` | `#9CA4B0` | Hints, units, headers |
-| `TEXT_FAINT` | `#6E7784` | Disabled, placeholders |
-| `ACCENT` | `#4C9EFF` | Focus, selection in lists, primary button, links |
-| `BRAND` | `#FFB81C` | Logo, canvas selection |
-| `SUCCESS` | `#3FB950` | OK |
-| `WARNING` | `#F09A3E` | Warning |
-| `ERROR` | `#F85149` | Error |
+| `BG_0` | `#0E0E10` | Text fields, lists, around the sheet |
+| `BG_1` | `#151517` | Panels, menu bar, status bar |
+| `BG_2` | `#1B1B1E` | Windows, dialogs, menus, tooltips |
+| `BG_3` | `#232327` | Buttons and fields at rest |
+| `BG_4` | `#2D2D32` | Hovered controls |
+| `BORDER` | `#252529` | Hairlines |
+| `BORDER_STRONG` | `#3B3B41` | Hovered or focused outlines |
+| `TEXT` | `#E3E1DC` | Body text |
+| `TEXT_MUTED` | `#989691` | Hints, units, section labels |
+| `TEXT_FAINT` | `#6A6966` | Disabled, placeholders |
+| `ACCENT` | `#C88A5E` | Copper: focus, active tool, primary button, logo |
+| `ACCENT_SELECTION` | `#3A2E26` | Selected rows and selected text |
+| `INFO` | `#8FA8C8` | Links, cross references, hover on the canvas |
+| `SUCCESS` | `#7FB086` | OK |
+| `WARNING` | `#D6A55C` | Warning |
+| `ERROR` | `#E0766C` | Error |
 
-Text sizes: body and buttons 13.5 pt, small 11.5 pt, headings 17 pt
-(Inter SemiBold), monospace 12.5 pt for device tags and part numbers.
-Controls are 24 pt high. Corners: 4 pt on controls, 8 pt on windows and menus.
+Text sizes: body and buttons 13 pt, small 11 pt, dialog titles 15 pt
+(Inter SemiBold), monospace 12 pt for device tags and part numbers.
+Controls are 22 pt high. Corners: 3 pt on controls, 6 pt on windows and menus.
+
+Building blocks in `novo_theme::widgets`: `section_label` for panel
+sections, `primary_button` (copper text and hairline, no solid fill) for the
+one main action in a dialog, and `tool_button` (frameless icon, copper with
+an underline when active) for the toolbar.
 
 Unit tests hold body text to WCAG AA (contrast 7:1 for `TEXT`, 4.5:1 for
 `TEXT_MUTED` and the status colours) on every surface.
@@ -114,9 +124,9 @@ label and shortcut in the tooltip.
 ## Canvas
 
 `novo_theme::CANVAS_DARK` is the proposed screen palette for `novo-canvas`
-(WS-03 owns rendering): light grey symbols and blue-grey wires on a near black sheet,
-amber selection, blue hover, green open connection points, blue cross
-references. Printing and PDF stay black on white.
+(WS-03 owns rendering): warm light grey symbols and blue-grey wires on a
+near black sheet, bright copper selection, steel blue hover and cross
+references, muted green open connection points. Printing and PDF stay black on white.
 
 The app maps it onto `novo_canvas::widget::CanvasStyle` (background, grid,
 selection, hover, rubber band, snap marker) and `novo_canvas::model::ModelStyle`
@@ -126,6 +136,6 @@ selection, hover, rubber band, snap marker) and `novo_canvas::model::ModelStyle`
 ## Branding
 
 - Name: NovoElectric, one word, capital N and E.
-- Mark: an "N" drawn as an open contact (`assets/branding/icon.svg`).
+- Mark: being chosen (round two: Nova, Phase or Ground).
 - Tagline: "Electrical design, without the weight".
 - Window icon and installer icon come from `assets/branding`; see its README.

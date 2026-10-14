@@ -12,6 +12,7 @@ pub mod fonts;
 pub mod icons;
 mod style;
 pub mod tokens;
+pub mod widgets;
 
 pub use canvas::{CANVAS_DARK, CanvasPalette};
 pub use style::{apply, style, visuals};

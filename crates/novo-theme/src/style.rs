@@ -6,6 +6,9 @@ use egui::{
     Visuals, style::Selection, style::WidgetVisuals, style::Widgets,
 };
 
+/// Text on hovered and pressed controls, a step above [`TEXT`].
+const TEXT_BRIGHT: Color32 = Color32::from_rgb(0xF4, 0xF2, 0xEE);
+
 /// The NovoElectric dark visuals.
 pub fn visuals() -> Visuals {
     let control = CornerRadius::same(RADIUS_CONTROL);
@@ -26,20 +29,20 @@ pub fn visuals() -> Visuals {
         widgets: Widgets {
             // Labels, separators, indent lines.
             noninteractive: widget(BG_1, BORDER, TEXT),
-            // Buttons and fields at rest: a fill and no outline.
-            inactive: widget(BG_3, Color32::TRANSPARENT, TEXT),
-            hovered: widget(BG_4, BORDER_STRONG, Color32::WHITE),
-            // Pressed or dragged.
-            active: widget(BG_4, ACCENT, Color32::WHITE),
+            // Buttons and fields at rest: a quiet fill and a hairline.
+            inactive: widget(BG_3, BORDER, TEXT),
+            hovered: widget(BG_4, BORDER_STRONG, TEXT_BRIGHT),
+            // Pressed or dragged: the only place a control turns copper.
+            active: widget(BG_4, ACCENT, TEXT_BRIGHT),
             // An open menu button or combo box.
-            open: widget(BG_3, BORDER_STRONG, TEXT),
+            open: widget(BG_4, BORDER_STRONG, TEXT),
         },
         selection: Selection {
             bg_fill: ACCENT_SELECTION,
-            stroke: Stroke::new(1.0, ACCENT_HOVER),
+            stroke: Stroke::new(1.0, TEXT_BRIGHT),
         },
-        hyperlink_color: ACCENT,
-        faint_bg_color: Color32::from_rgb(0x1B, 0x1E, 0x24),
+        hyperlink_color: INFO,
+        faint_bg_color: Color32::from_rgb(0x18, 0x18, 0x1A),
         extreme_bg_color: BG_0,
         text_edit_bg_color: Some(BG_0),
         code_bg_color: BG_3,
@@ -47,20 +50,20 @@ pub fn visuals() -> Visuals {
         error_fg_color: ERROR,
         window_corner_radius: window,
         window_shadow: Shadow {
-            offset: [0, 8],
-            blur: 24,
+            offset: [0, 6],
+            blur: 20,
             spread: 0,
-            color: Color32::from_black_alpha(120),
+            color: Color32::from_black_alpha(100),
         },
         window_fill: BG_2,
         window_stroke: Stroke::new(1.0, BORDER),
         menu_corner_radius: window,
         panel_fill: BG_1,
         popup_shadow: Shadow {
-            offset: [0, 4],
-            blur: 12,
+            offset: [0, 3],
+            blur: 10,
             spread: 0,
-            color: Color32::from_black_alpha(110),
+            color: Color32::from_black_alpha(90),
         },
         striped: true,
         ..Visuals::dark()
@@ -98,8 +101,8 @@ pub fn style() -> Style {
     .into();
 
     let s = &mut style.spacing;
-    s.item_spacing = Vec2::new(8.0, 6.0);
-    s.button_padding = Vec2::new(10.0, 4.0);
+    s.item_spacing = Vec2::new(8.0, 5.0);
+    s.button_padding = Vec2::new(9.0, 3.0);
     s.interact_size = Vec2::new(40.0, CONTROL_HEIGHT);
     s.window_margin = Margin::same(12);
     s.menu_margin = Margin::same(6);

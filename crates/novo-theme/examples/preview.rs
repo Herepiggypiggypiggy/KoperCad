@@ -30,6 +30,7 @@ struct Preview {
     voltage: f32,
     snap: bool,
     tab: usize,
+    tool: usize,
     selected: usize,
     show_about: bool,
 }
@@ -41,6 +42,7 @@ impl Default for Preview {
             voltage: 24.0,
             snap: true,
             tab: 0,
+            tool: 0,
             selected: 1,
             show_about: false,
         }
@@ -72,25 +74,28 @@ impl eframe::App for Preview {
         });
         egui::Panel::top("toolbar").show(ui, |ui| {
             ui.horizontal(|ui| {
-                for icon in [
-                    icons::action::SAVE,
-                    icons::action::UNDO,
-                    icons::action::REDO,
-                ] {
-                    let _ = ui.button(icon);
+                use novo_theme::widgets::tool_button;
+                tool_button(ui, icons::action::SAVE, false, "Save  Ctrl+S");
+                tool_button(ui, icons::action::UNDO, false, "Undo  Ctrl+Z");
+                tool_button(ui, icons::action::REDO, false, "Redo  Ctrl+Y");
+                ui.separator();
+                for (i, (icon, tip)) in [
+                    (icons::action::SELECT, "Select  Esc"),
+                    (icons::action::WIRE, "Wire  W"),
+                    (icons::action::SYMBOL, "Symbol  S"),
+                    (icons::action::TERMINAL, "Terminal  T"),
+                    (icons::action::TEXT, "Text"),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    if tool_button(ui, icon, self.tool == i, tip).clicked() {
+                        self.tool = i;
+                    }
                 }
                 ui.separator();
-                for icon in [
-                    icons::action::SELECT,
-                    icons::action::WIRE,
-                    icons::action::SYMBOL,
-                    icons::action::TERMINAL,
-                    icons::action::TEXT,
-                ] {
-                    let _ = ui.selectable_label(icon == icons::action::SELECT, icon);
-                }
-                ui.separator();
-                ui.toggle_value(&mut self.snap, format!("{} Snap", icons::action::SNAP));
+                tool_button(ui, icons::action::SNAP, self.snap, "Snap to grid");
+                tool_button(ui, icons::action::GRID, true, "Show grid");
             });
         });
         egui::Panel::bottom("status").show(ui, |ui| {
@@ -108,8 +113,9 @@ impl eframe::App for Preview {
         egui::Panel::left("project")
             .default_size(240.0)
             .show(ui, |ui| {
-                ui.heading("Project");
-                ui.add_space(4.0);
+                ui.add_space(6.0);
+                novo_theme::widgets::section_label(ui, "Project");
+                ui.add_space(2.0);
                 egui::CollapsingHeader::new(format!("{} Pages", icons::action::PAGE))
                     .default_open(true)
                     .show(ui, |ui| {
@@ -134,7 +140,9 @@ impl eframe::App for Preview {
         egui::Panel::right("properties")
             .default_size(280.0)
             .show(ui, |ui| {
-                ui.heading("Properties");
+                ui.add_space(6.0);
+                novo_theme::widgets::section_label(ui, "Properties");
+                ui.add_space(2.0);
                 egui::Grid::new("props")
                     .num_columns(2)
                     .striped(true)
@@ -165,12 +173,7 @@ impl eframe::App for Preview {
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
                     let _ = ui.button("Cancel");
-                    let _ = ui.add(
-                        egui::Button::new(
-                            egui::RichText::new("Apply").color(tokens::TEXT_ON_ACCENT),
-                        )
-                        .fill(tokens::ACCENT),
-                    );
+                    novo_theme::widgets::primary_button(ui, "Apply");
                 });
             });
         egui::CentralPanel::default()
@@ -188,12 +191,8 @@ impl eframe::App for Preview {
                         }
                     }
                 });
-                let rect = ui.available_rect_before_wrap().shrink(24.0);
-                brand::paint_mark(
-                    ui.painter(),
-                    Rect::from_center_size(rect.center(), egui::Vec2::splat(160.0)),
-                    true,
-                );
+                let rect = ui.available_rect_before_wrap().shrink(28.0);
+                mock_sheet(ui.painter(), rect);
             });
 
         if self.show_about {
@@ -214,4 +213,88 @@ impl eframe::App for Preview {
                 });
         }
     }
+}
+
+/// A few schematic strokes in the canvas palette: sheet, grid, three phases
+/// through a contactor to a motor.
+fn mock_sheet(painter: &egui::Painter, rect: Rect) {
+    use egui::{Pos2, Stroke, Vec2, pos2};
+    let p = novo_theme::CANVAS_DARK;
+    let c = novo_theme::canvas::to_color32;
+    let sheet = Rect::from_center_size(
+        rect.center(),
+        Vec2::new(rect.width(), rect.width() / 1.414).min(rect.size()),
+    );
+    painter.rect_filled(sheet, 0, c(p.sheet));
+    let step = 12.0;
+    let mut y = sheet.top() + step;
+    while y < sheet.bottom() {
+        let mut x = sheet.left() + step;
+        while x < sheet.right() {
+            let major = ((x - sheet.left()) / step).round() as i32 % 5 == 0
+                && ((y - sheet.top()) / step).round() as i32 % 5 == 0;
+            let color = if major { p.grid_major } else { p.grid_minor };
+            painter.circle_filled(pos2(x, y), if major { 1.2 } else { 0.8 }, c(color));
+            x += step;
+        }
+        y += step;
+    }
+    painter.rect_stroke(
+        sheet.shrink(10.0),
+        0,
+        Stroke::new(1.0, c(p.sheet_frame)),
+        egui::StrokeKind::Inside,
+    );
+
+    let at = |x: f32, y: f32| Pos2::new(sheet.left() + x * step, sheet.top() + y * step);
+    let wire = Stroke::new(1.4, c(p.wire));
+    let sym = Stroke::new(1.4, c(p.symbol));
+    let sel = Stroke::new(2.2, c(p.selection));
+    let font = egui::FontId::monospace(11.0);
+    for (i, label) in ["L1", "L2", "L3"].into_iter().enumerate() {
+        let x = 20.0 + i as f32 * 4.0;
+        painter.text(
+            at(x, 4.0),
+            egui::Align2::CENTER_BOTTOM,
+            label,
+            font.clone(),
+            c(p.text),
+        );
+        painter.line_segment([at(x, 5.0), at(x, 14.0)], wire);
+        painter.circle_filled(at(x, 14.0), 2.0, c(p.symbol));
+        // Open contact: blade from the lower terminal, gap at the top.
+        let stroke = if i == 1 { sel } else { sym };
+        painter.line_segment([at(x, 18.0), at(x - 1.6, 15.0)], stroke);
+        painter.line_segment([at(x, 18.0), at(x, 22.0)], wire);
+        painter.line_segment([at(x, 22.0), at(26.0 - (26.0 - x) * 0.5, 27.0)], wire);
+    }
+    painter.text(
+        at(30.0, 16.5),
+        egui::Align2::LEFT_CENTER,
+        "-Q1",
+        font.clone(),
+        c(p.text),
+    );
+    painter.circle_stroke(at(26.0, 30.0), 3.0 * step, sym);
+    painter.text(
+        at(26.0, 30.0),
+        egui::Align2::CENTER_CENTER,
+        "M\n3~",
+        egui::FontId::proportional(13.0),
+        c(p.symbol),
+    );
+    painter.text(
+        at(30.5, 30.0),
+        egui::Align2::LEFT_CENTER,
+        "-M1",
+        font.clone(),
+        c(p.text),
+    );
+    painter.text(
+        at(30.0, 18.0),
+        egui::Align2::LEFT_TOP,
+        "/4.2",
+        font,
+        c(p.cross_reference),
+    );
 }
