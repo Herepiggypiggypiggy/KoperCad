@@ -1,0 +1,2810 @@
+From 351d8cc061b302bfd869f44e19732b616bc9703c Mon Sep 17 00:00:00 2001
+From: local <x@x>
+Date: Wed, 14 Oct 2026 17:48:56 +0000
+Subject: [PATCH] novo-terminals: follow the core terminal rule; refit pins;
+ validate rename and set_level
+
+Core rule (#35):
+- Drop the crate's Settings/SameName/JoinLink and the terminals.* info
+  properties; read ProjectInfo.rules.terminals (rules()) and change it
+  through Command::SetProjectInfo (set_rules()). migrate_legacy_rules()
+  moves projects saved with the former property keys onto the typed rule.
+- Join: rows group exactly as the netlist joins records (same name and
+  level); the NotJoined check is gone. Refuse: place_named no longer makes
+  a second record, novo-core's DuplicateTerminal comes back. Off: one row
+  per record, duplicates listed as DuplicateName warnings.
+- Name-based PE/N recognition now follows rules.potentials
+  .from_terminal_names and the project's supply potentials (named_potential,
+  kind_for_name(project, name)); the pin-name fallback in place_terminals is
+  gone, the netlist potential decides. PotentialKind::Pen maps to a PE
+  terminal named PEN; potential_fits accepts PEN only on PE terminals.
+
+Review on 800680b:
+- set_kind, set_strip_style and clear_override redraw through redraw(),
+  which reads the new symbol's connection points from novo-symbols and
+  refits the instance pins; refused when the wire would fold or bend, or
+  for a symbol that is not a single-level terminal symbol.
+- rename_preview returns RenameChange with a problem (Empty, Taken);
+  rename refuses with InvalidValue/AlreadyExists and changes nothing.
+- set_level refuses level 0, a (name, level) already on the strip and more
+  levels than a multi-level drawing has.
+
+Also: user-facing text in one strings module (rule_sentence is for the
+Terminals drawer and the Rules document); explain under Refuse no longer
+says only the first drawing counts and no longer builds the whole strip
+view; join_duplicates carries jumper, part and properties over; set_jumper
+refuses terminals of several strips; strips sort -X2 before -X10; the
+screen deduplicates across drawings; next_free_* use a HashSet.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01DZ68tTULUv7Uhe8ecKbC47
+---
+ crates/novo-terminals/Cargo.toml         |   2 +-
+ crates/novo-terminals/src/check.rs       | 116 ++---
+ crates/novo-terminals/src/geometry.rs    | 133 +++++
+ crates/novo-terminals/src/lib.rs         |  29 +-
+ crates/novo-terminals/src/naming.rs      | 127 ++---
+ crates/novo-terminals/src/occurrence.rs  |   7 +-
+ crates/novo-terminals/src/place.rs       | 106 ++--
+ crates/novo-terminals/src/rules.rs       |  80 +++
+ crates/novo-terminals/src/screen.rs      |  74 ++-
+ crates/novo-terminals/src/settings.rs    | 115 -----
+ crates/novo-terminals/src/strings.rs     | 245 ++++++++++
+ crates/novo-terminals/src/strip.rs       | 372 +++++++++-----
+ crates/novo-terminals/src/style.rs       |  26 +-
+ crates/novo-terminals/src/suggest.rs     |   5 +-
+ crates/novo-terminals/tests/terminals.rs | 591 ++++++++++++++++++++---
+ 15 files changed, 1466 insertions(+), 562 deletions(-)
+ create mode 100644 crates/novo-terminals/src/geometry.rs
+ create mode 100644 crates/novo-terminals/src/rules.rs
+ delete mode 100644 crates/novo-terminals/src/settings.rs
+ create mode 100644 crates/novo-terminals/src/strings.rs
+
+diff --git a/crates/novo-terminals/Cargo.toml b/crates/novo-terminals/Cargo.toml
+index 4884d48..4095c7e 100644
+--- a/crates/novo-terminals/Cargo.toml
++++ b/crates/novo-terminals/Cargo.toml
+@@ -7,9 +7,9 @@ license.workspace = true
+ 
+ [dependencies]
+ novo-core.workspace = true
++novo-symbols.workspace = true
+ 
+ [dev-dependencies]
+-novo-symbols.workspace = true
+ novo-tests = { path = "../novo-tests" }
+ 
+ [lints]
+diff --git a/crates/novo-terminals/src/check.rs b/crates/novo-terminals/src/check.rs
+index 3844eeb..5381898 100644
+--- a/crates/novo-terminals/src/check.rs
++++ b/crates/novo-terminals/src/check.rs
+@@ -1,12 +1,13 @@
+ //! Live terminal checks for the checker panel (WS-14 lists them).
+ 
+-use std::collections::BTreeMap;
++use std::collections::HashMap;
+ 
+-use novo_core::{Netlist, PotentialKind, Project, SymbolId, TerminalId, TerminalKind};
++use novo_core::{Netlist, Project, SameName, SymbolId, TerminalId, TerminalKind};
+ 
+-use crate::naming::{kind_for_name, kind_label};
++use crate::naming::{kind_for_name, potential_fits};
+ use crate::occurrence::{State, occurrences};
+-use crate::settings::{SameName, Settings};
++use crate::rules::rules;
++use crate::strings;
+ use crate::strip::strips;
+ use crate::style::overrides;
+ 
+@@ -23,12 +24,12 @@ pub enum IssueKind {
+     Unwired,
+     /// A fuse or disconnect terminal wired on one side only.
+     SingleSided,
+-    /// The "refuse" rule is on and this name is already used on the strip.
++    /// The name is already used on the strip: another record with the same
++    /// name and level when no rule joins them (Off), or another drawing of
++    /// the terminal under the Refuse rule.
+     DuplicateName,
+-    /// The "join" rule is on, but several records carry the name, so the
+-    /// drawings are not connected yet. [`crate::join_duplicates`] fixes it.
+-    NotJoined,
+-    /// The name says PE or N but the terminal is another kind.
++    /// Under novo-core's `rules.potentials.from_terminal_names` the name
++    /// defines a PE, PEN or N potential, but the terminal is another kind.
+     KindDiffersFromName { expected: TerminalKind },
+     /// The wire's potential does not fit the terminal kind (an L1 wire on a
+     /// PE terminal, a PE wire on a feed-through terminal).
+@@ -48,28 +49,22 @@ pub struct Issue {
+     pub message: String,
+ }
+ 
+-fn potential_fits(kind: TerminalKind, potential: PotentialKind) -> bool {
+-    match kind {
+-        TerminalKind::ProtectiveEarth => potential == PotentialKind::ProtectiveEarth,
+-        TerminalKind::Neutral => potential == PotentialKind::Neutral,
+-        _ => potential != PotentialKind::ProtectiveEarth,
+-    }
+-}
+-
+ /// Checks every terminal of the project.
+ pub fn check(project: &Project, netlist: &Netlist) -> Vec<Issue> {
+-    let settings = Settings::of(project);
++    let rule = rules(project).same_name;
+     let mut issues = Vec::new();
+     for strip in strips(project) {
+-        let mut by_name: BTreeMap<(String, u8), Vec<TerminalId>> = BTreeMap::new();
++        let mut by_name: HashMap<(&str, u8), Vec<TerminalId>> = HashMap::new();
++        let mut names: Vec<(&str, u8)> = Vec::new();
+         for t in project.terminals_of_strip(strip) {
+             let designation = project
+                 .terminal_designation(t.id)
+                 .unwrap_or_else(|| t.name.clone());
+-            by_name
+-                .entry((t.name.to_ascii_uppercase(), t.level))
+-                .or_default()
+-                .push(t.id);
++            let ids = by_name.entry((t.name.as_str(), t.level)).or_default();
++            if ids.is_empty() {
++                names.push((t.name.as_str(), t.level));
++            }
++            ids.push(t.id);
+             let mut push = |symbol, kind, severity, message| {
+                 issues.push(Issue {
+                     terminal: t.id,
+@@ -79,18 +74,14 @@ pub fn check(project: &Project, netlist: &Netlist) -> Vec<Issue> {
+                     message,
+                 })
+             };
+-            if let Some(expected) = kind_for_name(&t.name)
++            if let Some(expected) = kind_for_name(project, &t.name)
+                 && expected != t.kind
+             {
+                 push(
+                     None,
+                     IssueKind::KindDiffersFromName { expected },
+                     Severity::Warning,
+-                    format!(
+-                        "{designation} is named like a {} terminal but is a {} terminal.",
+-                        kind_label(expected),
+-                        kind_label(t.kind)
+-                    ),
++                    strings::kind_differs_from_name(&designation, expected, t.kind),
+                 );
+             }
+             let drawings = occurrences(project, t.id);
+@@ -101,7 +92,7 @@ pub fn check(project: &Project, netlist: &Netlist) -> Vec<Issue> {
+                         Some(o.symbol),
+                         IssueKind::Unwired,
+                         Severity::Warning,
+-                        format!("{designation} is drawn but not wired."),
++                        strings::unwired(&designation),
+                     );
+                 } else if state != State::Through
+                     && matches!(t.kind, TerminalKind::Fuse | TerminalKind::Disconnect)
+@@ -110,20 +101,15 @@ pub fn check(project: &Project, netlist: &Netlist) -> Vec<Issue> {
+                         Some(o.symbol),
+                         IssueKind::SingleSided,
+                         Severity::Error,
+-                        format!(
+-                            "{designation} is a {} terminal but is wired on one side only.",
+-                            kind_label(t.kind)
+-                        ),
++                        strings::single_sided(&designation, t.kind),
+                     );
+                 }
+-                if i > 0 && settings.same_name == SameName::Refuse {
++                if i > 0 && rule == SameName::Refuse {
+                     push(
+                         Some(o.symbol),
+                         IssueKind::DuplicateName,
+                         Severity::Error,
+-                        format!(
+-                            "{designation} is drawn again; the project refuses duplicate terminal names."
+-                        ),
++                        strings::drawn_again_refused(&designation),
+                     );
+                 }
+             }
+@@ -151,40 +137,30 @@ pub fn check(project: &Project, netlist: &Netlist) -> Vec<Issue> {
+                         potential: potential.name.clone(),
+                     },
+                     Severity::Error,
+-                    format!(
+-                        "{designation} is a {} terminal on potential {}.",
+-                        kind_label(t.kind),
+-                        potential.name
+-                    ),
++                    strings::potential_differs_from_kind(&designation, t.kind, &potential.name),
+                 );
+             }
+         }
+-        for ids in by_name.values().filter(|ids| ids.len() > 1) {
+-            let designation = project.terminal_designation(ids[0]).unwrap_or_default();
+-            for &id in &ids[1..] {
+-                let (kind, severity, message) = match settings.same_name {
+-                    SameName::Refuse => (
+-                        IssueKind::DuplicateName,
+-                        Severity::Error,
+-                        format!(
+-                            "{designation} exists more than once; the project refuses duplicate terminal names."
+-                        ),
+-                    ),
+-                    SameName::Join => (
+-                        IssueKind::NotJoined,
+-                        Severity::Warning,
+-                        format!(
+-                            "{designation} exists as separate terminals that are not connected yet; join them."
+-                        ),
+-                    ),
++        // Under Join the netlist makes same-named records one terminal, so
++        // they need no finding. Refuse cannot have them (novo-core rejects
++        // the record), unless an older file was loaded without the check.
++        if rule != SameName::Join {
++            for key in &names {
++                let ids = &by_name[key];
++                let designation = project.terminal_designation(ids[0]).unwrap_or_default();
++                let severity = match rule {
++                    SameName::Refuse => Severity::Error,
++                    _ => Severity::Warning,
+                 };
+-                issues.push(Issue {
+-                    terminal: id,
+-                    symbol: None,
+-                    kind,
+-                    severity,
+-                    message,
+-                });
++                for &id in &ids[1..] {
++                    issues.push(Issue {
++                        terminal: id,
++                        symbol: None,
++                        kind: IssueKind::DuplicateName,
++                        severity,
++                        message: strings::duplicate_record(&designation, rule),
++                    });
++                }
+             }
+         }
+         for id in overrides(project, strip) {
+@@ -194,9 +170,7 @@ pub fn check(project: &Project, netlist: &Netlist) -> Vec<Issue> {
+                 symbol: None,
+                 kind: IssueKind::StyleOverride,
+                 severity: Severity::Info,
+-                message: format!(
+-                    "{designation} has its own symbol or part instead of its strip's."
+-                ),
++                message: strings::style_override(&designation),
+             });
+         }
+     }
+diff --git a/crates/novo-terminals/src/geometry.rs b/crates/novo-terminals/src/geometry.rs
+new file mode 100644
+index 0000000..4839d66
+--- /dev/null
++++ b/crates/novo-terminals/src/geometry.rs
+@@ -0,0 +1,133 @@
++//! Connection points of terminal symbols, read from the novo-symbols
++//! library, and redrawing a placed terminal with another symbol.
++//!
++//! A drawn terminal keeps its own copy of its symbol's connection points.
++//! When a kind change or a style swap gives it another symbol, the points
++//! are refitted to the new symbol, so the drawn connection points stay
++//! where the wires end. Pin `1` sits at the symbol origin in every
++//! single-level terminal symbol, so the internal wire never moves; pin `2`
++//! slides along the terminal's axis, and the wire on it gets shorter or
++//! longer. When that would fold or bend the wire, the change is refused.
++
++use std::sync::OnceLock;
++
++use novo_core::{
++    Direction, Endpoint, ModelError, Pin, Point, Result, SymbolId, SymbolInstance, SymbolKey, Tx,
++};
++use novo_symbols::Library;
++
++use crate::strings;
++
++fn library() -> Option<&'static Library> {
++    static LIBRARY: OnceLock<Option<Library>> = OnceLock::new();
++    LIBRARY.get_or_init(|| Library::builtin().ok()).as_ref()
++}
++
++fn direction(d: novo_symbols::Direction) -> Direction {
++    match d {
++        novo_symbols::Direction::Up => Direction::Up,
++        novo_symbols::Direction::Down => Direction::Down,
++        novo_symbols::Direction::Left => Direction::Left,
++        novo_symbols::Direction::Right => Direction::Right,
++    }
++}
++
++/// Connection points of a single-level terminal symbol from the library:
++/// `1` at the origin and `2` straight below it. Any other symbol, or one
++/// the library does not know, is refused, because a terminal could not be
++/// put into a wire with it.
++pub fn symbol_pins(symbol: &SymbolKey) -> Result<Vec<Pin>> {
++    let refuse = || ModelError::Format(strings::not_a_terminal_symbol(symbol));
++    let definition = library()
++        .and_then(|l| l.get(&symbol.0))
++        .ok_or_else(refuse)?;
++    let pins: Vec<Pin> = definition
++        .connections
++        .iter()
++        .map(|c| Pin::new(c.id.clone(), c.at[0], c.at[1]).with_direction(direction(c.dir)))
++        .collect();
++    match pins.as_slice() {
++        [one, two]
++            if one.offset == Point::new(0.0, 0.0) && two.offset.x == 0.0 && two.offset.y > 0.0 =>
++        {
++            Ok(pins)
++        }
++        _ => Err(refuse()),
++    }
++}
++
++/// Length of a terminal symbol from `1` to `2`, in millimetres.
++pub fn symbol_length(symbol: &SymbolKey) -> Result<f64> {
++    Ok(symbol_pins(symbol)?[1].offset.y)
++}
++
++/// The point next to an end of a wire: its first or last route point, or
++/// the other end.
++fn neighbour(tx: &Tx<'_>, wire: novo_core::WireId, end: Endpoint) -> Option<Point> {
++    let w = tx.project().wire(wire)?;
++    if w.from == end {
++        w.route
++            .first()
++            .copied()
++            .or_else(|| tx.project().endpoint_position(w.to))
++    } else {
++        w.route
++            .last()
++            .copied()
++            .or_else(|| tx.project().endpoint_position(w.from))
++    }
++}
++
++/// Whether moving a wire end from `old` to `new` keeps the wire's first
++/// segment straight and pointing the same way: the neighbour `q` lies on
++/// the line through `old` and `new`, beyond `new`.
++fn still_fits(old: Point, new: Point, q: Point) -> bool {
++    const EPS: f64 = 1e-9;
++    let (ax, ay) = (new.x - old.x, new.y - old.y);
++    let (bx, by) = (q.x - old.x, q.y - old.y);
++    let collinear = (ax * by - ay * bx).abs() < EPS;
++    let (cx, cy) = (q.x - new.x, q.y - new.y);
++    // `q` is on the far side of `new`, as seen from `old`'s segment.
++    collinear && cx * bx + cy * by > EPS
++}
++
++/// Redraws a placed terminal with another symbol and refits its connection
++/// points, as part of a transaction. Refused when the symbol is not a
++/// single-level terminal symbol or the wires leave no room.
++pub fn redraw(tx: &mut Tx<'_>, id: SymbolId, symbol: &SymbolKey) -> Result<()> {
++    let pins = symbol_pins(symbol)?;
++    let current = tx
++        .project()
++        .symbol(id)
++        .ok_or(ModelError::NotFound(id.into()))?
++        .clone();
++    if current.symbol == *symbol && current.pins == pins {
++        return Ok(());
++    }
++    if current.pins.len() != pins.len() {
++        return Err(ModelError::Format(strings::not_a_terminal_symbol(symbol)));
++    }
++    let refitted = SymbolInstance {
++        pins: pins.clone(),
++        ..current.clone()
++    };
++    for pin in 0..u16::try_from(pins.len()).unwrap_or(u16::MAX) {
++        let (Some(old), Some(new)) = (current.pin_position(pin), refitted.pin_position(pin)) else {
++            continue;
++        };
++        if old.distance(new) < 1e-9 {
++            continue;
++        }
++        let end = Endpoint::pin(id, pin);
++        for wire in tx.project().wires_at(end) {
++            let fits = neighbour(tx, wire, end).is_some_and(|q| still_fits(old, new, q));
++            if !fits {
++                return Err(ModelError::Format(strings::no_room_to_refit(symbol)));
++            }
++        }
++    }
++    tx.update::<SymbolInstance>(id, |s| {
++        s.symbol = symbol.clone();
++        s.pins = pins;
++    })
++}
+diff --git a/crates/novo-terminals/src/lib.rs b/crates/novo-terminals/src/lib.rs
+index be1c9ca..a7ceb5e 100644
+--- a/crates/novo-terminals/src/lib.rs
++++ b/crates/novo-terminals/src/lib.rs
+@@ -12,10 +12,13 @@
+ //!
+ //! - A terminal conducts end to end. Drawings of one terminal record are one
+ //!   node; jumpers join terminals with the same jumper group.
+-//! - The project rule [`Settings`] decides what one name in several places
+-//!   means. **Join** (default): the drawings are one terminal, built from
++//! - novo-core's project rule `ProjectInfo.rules.terminals` ([`rules`])
++//!   decides what one name in several places means. **Join** (new
++//!   projects): the drawings and records are one terminal, built from
+ //!   1-in/1-out clamps linked by connectors (or a jumper), one row in the
+-//!   strip editor. **Refuse**: later drawings are flagged as duplicates.
++//!   strip editor, one node in the netlist. **Refuse**: a second record
++//!   with the name is refused. **Off** (files without a rule): records stay
++//!   separate and [`check`] lists them.
+ //! - [`explain`] says in plain words which of these applies to a terminal.
+ //!
+ //! ```
+@@ -45,31 +48,37 @@
+ //! ```
+ 
+ mod check;
++mod geometry;
+ mod naming;
+ mod occurrence;
+ mod place;
++mod rules;
+ mod screen;
+-mod settings;
++pub mod strings;
+ mod strip;
+ mod style;
+ mod suggest;
+ 
+ pub use check::{Issue, IssueKind, Severity, check};
++pub use geometry::{redraw, symbol_length, symbol_pins};
+ pub use naming::{
+-    compare_names, kind_for_name, kind_for_potential, kind_key, kind_label, next_free_name,
+-    next_free_number, next_order, potential_kind_for_name,
++    base_name_for_potential, compare_names, kind_for_name, kind_for_potential, kind_key,
++    named_potential, next_free_name, next_free_number, next_order, potential_fits,
+ };
+ pub use occurrence::{Occurrence, Side, State, Target, occurrence_in, occurrences};
+ pub use place::{
+     Drop, Placed, place_named, place_terminals, strip_by_tag, strip_in_use, terminal_length,
+     terminal_pins,
+ };
++pub use rules::{
++    LEGACY_JOIN_LINK_KEY, LEGACY_SAME_NAME_KEY, migrate_legacy_rules, rules, set_rules,
++};
+ pub use screen::{Screen, ScreenRow, screen};
+-pub use settings::{JOIN_LINK_KEY, JoinLink, SAME_NAME_KEY, SameName, Settings};
++pub use strings::{kind_label, rule_sentence};
+ pub use strip::{
+-    Build, Row, StripView, add_spares, explain, free_jumper, join_duplicates, rename,
+-    rename_preview, renumber, renumber_preview, reorder, set_jumper, set_kind, set_level,
+-    strip_view, strips,
++    Build, RenameChange, RenameProblem, Row, StripView, add_spares, explain, free_jumper,
++    join_duplicates, rename, rename_preview, renumber, renumber_preview, reorder, set_jumper,
++    set_kind, set_level, strip_view, strips,
+ };
+ pub use style::{
+     Style, clear_override, default_symbol, overrides, set_strip_style, strip_style, style_of,
+diff --git a/crates/novo-terminals/src/naming.rs b/crates/novo-terminals/src/naming.rs
+index b9d7ab0..3df2fe5 100644
+--- a/crates/novo-terminals/src/naming.rs
++++ b/crates/novo-terminals/src/naming.rs
+@@ -1,42 +1,68 @@
+ //! Terminal names, numbers and the kinds they imply.
+ 
+-use novo_core::{DeviceId, PotentialKind, Project, TerminalKind, natural_cmp};
++use std::collections::HashSet;
+ 
+-/// The terminal kind a name implies: `PE`, `PE2` and `PEN` are protective
+-/// earth, `N` and `N2` neutral. Case does not matter. Other names imply
+-/// nothing.
+-pub fn kind_for_name(name: &str) -> Option<TerminalKind> {
+-    let upper = name.trim().to_ascii_uppercase();
+-    let numbered = |prefix: &str| {
+-        upper
+-            .strip_prefix(prefix)
+-            .is_some_and(|rest| rest.chars().all(|c| c.is_ascii_digit()))
+-    };
+-    if numbered("PEN") || numbered("PE") {
+-        Some(TerminalKind::ProtectiveEarth)
+-    } else if numbered("N") {
+-        Some(TerminalKind::Neutral)
+-    } else {
+-        None
++use novo_core::{DeviceId, Potential, PotentialKind, Project, TerminalKind, natural_cmp};
++
++/// The supply potential a terminal name defines under novo-core's rule
++/// `rules.potentials.from_terminal_names`: a potential of the project with
++/// exactly that name (`-X4:PE` and potential `PE`). `None` when the rule is
++/// off, so this never guesses more than the netlist does.
++pub fn named_potential<'p>(project: &'p Project, name: &str) -> Option<&'p Potential> {
++    if !project.info().rules.potentials.from_terminal_names {
++        return None;
+     }
++    project
++        .potentials()
++        .filter(|p| p.kind.is_supply() && p.name == name)
++        .min_by_key(|p| p.id)
+ }
+ 
+-/// The potential kind a terminal name implies, so a wire on `-X4:PE` is PE
+-/// without asking (WORKFLOW.md J10).
+-pub fn potential_kind_for_name(name: &str) -> Option<PotentialKind> {
+-    match kind_for_name(name)? {
+-        TerminalKind::ProtectiveEarth => Some(PotentialKind::ProtectiveEarth),
+-        TerminalKind::Neutral => Some(PotentialKind::Neutral),
+-        _ => None,
+-    }
++/// The terminal kind a name implies through [`named_potential`]: PE for a
++/// PE or PEN potential, N for a neutral one. Other names imply nothing.
++pub fn kind_for_name(project: &Project, name: &str) -> Option<TerminalKind> {
++    let kind = kind_for_potential(named_potential(project, name)?.kind);
++    (kind != TerminalKind::Feedthrough).then_some(kind)
+ }
+ 
+-/// The terminal kind that suits a wire of this potential kind.
++/// The terminal kind that suits a wire of this potential kind. A PEN
++/// conductor lands on a PE terminal: it must never be disconnected or
++/// fused, and it carries the protective function first (IEC 60364-5-54).
+ pub fn kind_for_potential(potential: PotentialKind) -> TerminalKind {
+     match potential {
+-        PotentialKind::ProtectiveEarth => TerminalKind::ProtectiveEarth,
++        PotentialKind::ProtectiveEarth | PotentialKind::Pen => TerminalKind::ProtectiveEarth,
+         PotentialKind::Neutral => TerminalKind::Neutral,
+-        _ => TerminalKind::Feedthrough,
++        PotentialKind::Line
++        | PotentialKind::DcPositive
++        | PotentialKind::DcNegative
++        | PotentialKind::Signal => TerminalKind::Feedthrough,
++    }
++}
++
++/// Whether a wire of this potential kind may land on a terminal of this
++/// kind: PE terminals take PE and PEN, N terminals take N, and every other
++/// terminal takes anything but PE and PEN.
++pub fn potential_fits(kind: TerminalKind, potential: PotentialKind) -> bool {
++    let protective = matches!(
++        potential,
++        PotentialKind::ProtectiveEarth | PotentialKind::Pen
++    );
++    match kind {
++        TerminalKind::ProtectiveEarth => protective,
++        TerminalKind::Neutral => potential == PotentialKind::Neutral,
++        TerminalKind::Feedthrough | TerminalKind::Fuse | TerminalKind::Disconnect => !protective,
++    }
++}
++
++/// The name a new terminal gets on a wire of this potential kind: `PE`,
++/// `PEN` or `N` (numbered `PE2`, ... when taken, see [`next_free_name`]),
++/// else `None` for the next free number.
++pub fn base_name_for_potential(potential: PotentialKind) -> Option<&'static str> {
++    match potential {
++        PotentialKind::ProtectiveEarth => Some("PE"),
++        PotentialKind::Pen => Some("PEN"),
++        PotentialKind::Neutral => Some("N"),
++        _ => None,
+     }
+ }
+ 
+@@ -51,22 +77,11 @@ pub fn kind_key(kind: TerminalKind) -> &'static str {
+     }
+ }
+ 
+-/// Plain name of a terminal kind for screens.
+-pub fn kind_label(kind: TerminalKind) -> &'static str {
+-    match kind {
+-        TerminalKind::Feedthrough => "feed-through",
+-        TerminalKind::ProtectiveEarth => "PE",
+-        TerminalKind::Neutral => "N",
+-        TerminalKind::Fuse => "fuse",
+-        TerminalKind::Disconnect => "disconnect",
+-    }
+-}
+-
+-fn names(project: &Project, strip: DeviceId) -> Vec<String> {
++fn names(project: &Project, strip: DeviceId) -> HashSet<String> {
+     project
+         .terminals_of_strip(strip)
+         .into_iter()
+-        .map(|t| t.name.to_ascii_uppercase())
++        .map(|t| t.name.clone())
+         .collect()
+ }
+ 
+@@ -84,13 +99,12 @@ pub fn next_free_number(project: &Project, strip: DeviceId) -> String {
+ /// (`PE`, `PE2`, ...).
+ pub fn next_free_name(project: &Project, strip: DeviceId, base: &str) -> String {
+     let used = names(project, strip);
+-    let upper = base.to_ascii_uppercase();
+-    if !used.contains(&upper) {
++    if !used.contains(base) {
+         return base.to_owned();
+     }
+     (2u32..)
+         .map(|n| format!("{base}{n}"))
+-        .find(|n| !used.contains(&n.to_ascii_uppercase()))
++        .find(|n| !used.contains(n))
+         .expect("some name is free")
+ }
+ 
+@@ -115,18 +129,21 @@ mod tests {
+     use super::*;
+ 
+     #[test]
+-    fn names_imply_kinds() {
+-        assert_eq!(kind_for_name("PE"), Some(TerminalKind::ProtectiveEarth));
+-        assert_eq!(kind_for_name("pe3"), Some(TerminalKind::ProtectiveEarth));
+-        assert_eq!(kind_for_name("PEN"), Some(TerminalKind::ProtectiveEarth));
+-        assert_eq!(kind_for_name("N"), Some(TerminalKind::Neutral));
+-        assert_eq!(kind_for_name("N2"), Some(TerminalKind::Neutral));
+-        assert_eq!(kind_for_name("1"), None);
+-        assert_eq!(kind_for_name("NO"), None);
+-        assert_eq!(kind_for_name("PEX"), None);
++    fn pen_is_mapped_like_pe() {
+         assert_eq!(
+-            potential_kind_for_name("PE"),
+-            Some(PotentialKind::ProtectiveEarth)
++            kind_for_potential(PotentialKind::Pen),
++            TerminalKind::ProtectiveEarth
+         );
++        assert!(potential_fits(
++            TerminalKind::ProtectiveEarth,
++            PotentialKind::Pen
++        ));
++        assert!(!potential_fits(
++            TerminalKind::Feedthrough,
++            PotentialKind::Pen
++        ));
++        assert!(!potential_fits(TerminalKind::Neutral, PotentialKind::Pen));
++        assert!(potential_fits(TerminalKind::Fuse, PotentialKind::Line));
++        assert_eq!(base_name_for_potential(PotentialKind::Pen), Some("PEN"));
+     }
+ }
+diff --git a/crates/novo-terminals/src/occurrence.rs b/crates/novo-terminals/src/occurrence.rs
+index 4aef4fc..29d48eb 100644
+--- a/crates/novo-terminals/src/occurrence.rs
++++ b/crates/novo-terminals/src/occurrence.rs
+@@ -67,12 +67,7 @@ impl State {
+ 
+     /// Short text for the schematic and the strip editor.
+     pub fn label(self) -> &'static str {
+-        match self {
+-            State::Through => "through",
+-            State::InternalEnd => "end (internal side)",
+-            State::ExternalEnd => "end (external side)",
+-            State::Open => "not wired",
+-        }
++        crate::strings::state_label(self)
+     }
+ }
+ 
+diff --git a/crates/novo-terminals/src/place.rs b/crates/novo-terminals/src/place.rs
+index e06452f..e745f66 100644
+--- a/crates/novo-terminals/src/place.rs
++++ b/crates/novo-terminals/src/place.rs
+@@ -8,14 +8,17 @@
+ 
+ use novo_core::{
+     DeviceId, DeviceKind, DeviceTag, Direction, Endpoint, ModelError, Netlist, PageId, Pin,
+-    Placement, Point, PotentialKind, Project, Result, Rotation, SymbolKey, SymbolRole, Terminal,
+-    TerminalId, TerminalKind, Tx, Wire, WireId,
++    Placement, Point, PotentialKind, Project, Result, Rotation, SameName, SymbolKey, SymbolRole,
++    Terminal, TerminalId, TerminalKind, Tx, Wire, WireId,
+ };
+ 
++use crate::geometry::symbol_pins;
+ use crate::naming::{
+-    kind_for_name, kind_for_potential, next_free_name, next_free_number, next_order,
++    base_name_for_potential, kind_for_name, kind_for_potential, next_free_name, next_free_number,
++    next_order,
+ };
+-use crate::settings::{SameName, Settings};
++use crate::rules::rules;
++use crate::strings;
+ use crate::style::strip_style;
+ 
+ /// A click on a wire, or one wire crossed by a drag.
+@@ -42,6 +45,8 @@ pub struct Placed {
+ 
+ /// Connection points of a terminal symbol: `1` at the origin pointing up,
+ /// `2` straight below it at `length` pointing down (novo-symbols geometry).
++/// Placing and redrawing read the actual symbol with
++/// [`crate::symbol_pins`]; this is for drawing a terminal by hand.
+ pub fn terminal_pins(length: f64) -> Vec<Pin> {
+     vec![
+         Pin::new("1", 0.0, 0.0).with_direction(Direction::Up),
+@@ -49,7 +54,8 @@ pub fn terminal_pins(length: f64) -> Vec<Pin> {
+     ]
+ }
+ 
+-/// Length of a terminal symbol from `1` to `2`, in millimetres.
++/// Length of the built-in terminal symbol of a kind from `1` to `2`, in
++/// millimetres.
+ pub fn terminal_length(kind: TerminalKind) -> f64 {
+     match kind {
+         TerminalKind::Fuse | TerminalKind::Disconnect => 16.0,
+@@ -98,34 +104,12 @@ pub fn strip_by_tag(tx: &mut Tx<'_>, tag: &str) -> Result<DeviceId> {
+     }
+ }
+ 
+-/// The kind a terminal on this wire should be: PE on a PE wire or a wire to
+-/// a pin named PE, N likewise, otherwise feed-through.
+-fn kind_for_wire(project: &Project, netlist: &Netlist, wire: &Wire) -> TerminalKind {
+-    let Some(net) = netlist.net_of(wire.from) else {
+-        return TerminalKind::Feedthrough;
+-    };
+-    let net = netlist.net(net);
+-    if let Some(potential) = net.potential().and_then(|p| project.potential(p)) {
+-        let kind = kind_for_potential(potential.kind);
+-        if kind != TerminalKind::Feedthrough || potential.kind != PotentialKind::Signal {
+-            return kind;
+-        }
+-    }
+-    net.endpoints
+-        .iter()
+-        .filter_map(|e| e.as_pin())
+-        .filter_map(|pin| {
+-            let symbol = project.symbol(pin.symbol)?;
+-            if matches!(symbol.role, SymbolRole::Terminal { .. }) {
+-                project
+-                    .terminal(symbol.terminal_of_pin(pin.pin)?)
+-                    .and_then(|t| kind_for_name(&t.name))
+-            } else {
+-                kind_for_name(&symbol.pins.get(usize::from(pin.pin))?.name)
+-            }
+-        })
+-        .next()
+-        .unwrap_or(TerminalKind::Feedthrough)
++/// The potential kind of a wire's net, as the netlist assigns it. Under
++/// novo-core's `rules.potentials.from_terminal_names` that includes a
++/// terminal named like a supply potential (`-X4:PE`) on the net.
++fn potential_of_wire(project: &Project, netlist: &Netlist, wire: &Wire) -> Option<PotentialKind> {
++    let net = netlist.net(netlist.net_of(wire.from)?);
++    project.potential(net.potential()?).map(|p| p.kind)
+ }
+ 
+ fn polyline(project: &Project, wire: &Wire) -> Option<Vec<Point>> {
+@@ -159,9 +143,7 @@ fn fit(points: &[Point], at: Point, length: f64, wire: WireId) -> Result<(usize,
+     let vertical = (a.x - b.x).abs() < 1e-9;
+     let horizontal = (a.y - b.y).abs() < 1e-9;
+     if !vertical && !horizontal || a.distance(b) <= length {
+-        return Err(ModelError::Format(format!(
+-            "no room for a terminal on {wire}: it needs a straight stretch longer than {length} mm"
+-        )));
++        return Err(ModelError::Format(strings::no_room(wire, length)));
+     }
+     let centre = closest_on_segment(at, a, b);
+     // Keep both pins on the segment.
+@@ -197,8 +179,9 @@ fn insert_into_wire(
+     drop: Drop,
+     terminal: TerminalId,
+     symbol: SymbolKey,
+-    length: f64,
+ ) -> Result<(novo_core::SymbolId, WireId, WireId)> {
++    let pins = symbol_pins(&symbol)?;
++    let length = pins[1].offset.y;
+     let original = tx
+         .project()
+         .wire(drop.wire)
+@@ -210,7 +193,7 @@ fn insert_into_wire(
+         original.page,
+         symbol,
+         placement,
+-        terminal_pins(length),
++        pins,
+         SymbolRole::Terminal {
+             terminals: vec![terminal],
+         },
+@@ -238,35 +221,41 @@ fn insert_into_wire(
+ 
+ /// Puts one terminal per drop on `strip`, in drop order (the order a drag
+ /// crossed the wires), numbered next free. PE wires get a PE terminal named
+-/// `PE` (`PE2`, ... when taken), N wires an N terminal.
++/// `PE` (`PE2`, ... when taken), PEN wires a PE terminal named `PEN`, N
++/// wires an N terminal named `N`.
+ pub fn place_terminals(tx: &mut Tx<'_>, strip: DeviceId, drops: &[Drop]) -> Result<Vec<Placed>> {
+     let netlist = tx.project().netlist();
+-    let kinds: Vec<TerminalKind> = drops
++    let potentials: Vec<Option<PotentialKind>> = drops
+         .iter()
+         .map(|d| {
+             tx.project()
+                 .wire(d.wire)
+-                .map_or(TerminalKind::Feedthrough, |w| {
+-                    kind_for_wire(tx.project(), &netlist, w)
+-                })
++                .and_then(|w| potential_of_wire(tx.project(), &netlist, w))
+         })
+         .collect();
+     let mut placed = Vec::with_capacity(drops.len());
+-    for (&drop, kind) in drops.iter().zip(kinds) {
+-        let name = match kind {
+-            TerminalKind::ProtectiveEarth => next_free_name(tx.project(), strip, "PE"),
+-            TerminalKind::Neutral => next_free_name(tx.project(), strip, "N"),
+-            _ => next_free_number(tx.project(), strip),
++    for (&drop, potential) in drops.iter().zip(potentials) {
++        let kind = potential.map_or(TerminalKind::Feedthrough, kind_for_potential);
++        let name = match potential.and_then(base_name_for_potential) {
++            Some(base) => next_free_name(tx.project(), strip, base),
++            None => next_free_number(tx.project(), strip),
+         };
+         placed.push(place_named(tx, strip, drop, &name, Some(kind))?);
+     }
+     Ok(placed)
+ }
+ 
+-/// Puts a terminal with a given name into a wire. With the "join" rule a
+-/// terminal of that name already on the strip is reused, so the drawings are
+-/// one terminal; with "refuse" a second record is made and flagged by
+-/// [`crate::check`]. The kind comes from `kind`, else from the name.
++/// Puts a terminal with a given name into a wire, following the project's
++/// terminal rule ([`crate::rules`]):
++///
++/// - **Join**: a terminal of that name and level 1 already on the strip is
++///   reused, so the drawings are one terminal record.
++/// - **Refuse**: a name already on the strip is refused with novo-core's
++///   [`ModelError::DuplicateTerminal`]; nothing is created.
++/// - **Off**: a separate record is made, and [`crate::check`] lists it.
++///
++/// The kind of a new record comes from `kind`, else from the name
++/// ([`crate::kind_for_name`]).
+ pub fn place_named(
+     tx: &mut Tx<'_>,
+     strip: DeviceId,
+@@ -274,23 +263,23 @@ pub fn place_named(
+     name: &str,
+     kind: Option<TerminalKind>,
+ ) -> Result<Placed> {
+-    let settings = Settings::of(tx.project());
+-    let existing = match settings.same_name {
++    let existing = match rules(tx.project()).same_name {
+         SameName::Join => tx
+             .project()
+             .terminals_of_strip(strip)
+             .into_iter()
+-            .find(|t| t.level == 1 && t.name.eq_ignore_ascii_case(name))
++            .find(|t| t.level == 1 && t.name == name)
+             .map(|t| t.id),
+-        SameName::Refuse => None,
++        SameName::Refuse | SameName::Off => None,
+     };
+     let (terminal, joined) = match existing {
+         Some(t) => (t, true),
+         None => {
+             let kind = kind
+-                .or_else(|| kind_for_name(name))
++                .or_else(|| kind_for_name(tx.project(), name))
+                 .unwrap_or(TerminalKind::Feedthrough);
+             let order = next_order(tx.project(), strip);
++            // Under Refuse, novo-core rejects the record if the name is taken.
+             let t = tx.add_terminal(strip, name)?;
+             tx.update::<Terminal>(t, |t| {
+                 t.kind = kind;
+@@ -307,8 +296,7 @@ pub fn place_named(
+         || strip_style(tx.project(), strip, kind).symbol,
+         |s| s.symbol,
+     );
+-    let (symbol, internal_wire, external_wire) =
+-        insert_into_wire(tx, drop, terminal, symbol, terminal_length(kind))?;
++    let (symbol, internal_wire, external_wire) = insert_into_wire(tx, drop, terminal, symbol)?;
+     Ok(Placed {
+         terminal,
+         symbol,
+diff --git a/crates/novo-terminals/src/rules.rs b/crates/novo-terminals/src/rules.rs
+new file mode 100644
+index 0000000..8ff5b1d
+--- /dev/null
++++ b/crates/novo-terminals/src/rules.rs
+@@ -0,0 +1,80 @@
++//! The project rule for terminals that share a name.
++//!
++//! The rule is novo-core's typed [`TerminalRules`] in
++//! `ProjectInfo.rules.terminals`, so it is saved with the project, undoable,
++//! readable from scripts, and the netlist follows it:
++//!
++//! - [`SameName::Join`] (new projects): records with the same name and level
++//!   on a strip are one electrical point. The strip editor shows them as one
++//!   row built from 1-in/1-out clamps linked by [`JoinLink`].
++//! - [`SameName::Refuse`]: novo-core refuses a second record with a name
++//!   already on the strip ([`novo_core::ModelError::DuplicateTerminal`]).
++//! - [`SameName::Off`] (files without a rule): same-named records stay
++//!   separate terminals, and [`crate::check`] lists them.
++//!
++//! Before novo-core had the typed rule, this crate kept it in two project
++//! info properties. [`migrate_legacy_rules`] moves a project saved that way
++//! onto the typed rule.
++
++use novo_core::{Command, JoinLink, Project, Result, SameName, TerminalRules, Tx, Value};
++
++/// Former property key of the same-name rule (`join` or `refuse`). Only
++/// read by [`migrate_legacy_rules`].
++pub const LEGACY_SAME_NAME_KEY: &str = "terminals.same_name";
++/// Former property key of the join link (`connector` or `jumper`). Only
++/// read by [`migrate_legacy_rules`].
++pub const LEGACY_JOIN_LINK_KEY: &str = "terminals.join_link";
++
++/// The terminal rules of a project.
++pub fn rules(project: &Project) -> TerminalRules {
++    project.info().rules.terminals
++}
++
++/// Sets the terminal rules through novo-core's project info command, as
++/// part of a transaction. Switching to [`SameName::Refuse`] while a strip
++/// has same-named records is refused by novo-core; [`crate::join_duplicates`]
++/// merges them first.
++pub fn set_rules(tx: &mut Tx<'_>, rules: TerminalRules) -> Result<()> {
++    let mut info = tx.project().info().clone();
++    if info.rules.terminals == rules {
++        return Ok(());
++    }
++    info.rules.terminals = rules;
++    tx.execute(Command::SetProjectInfo { info }).map(|_| ())
++}
++
++/// Moves the rule from the former project info properties
++/// ([`LEGACY_SAME_NAME_KEY`], [`LEGACY_JOIN_LINK_KEY`]) onto the typed rule
++/// and removes the properties. Returns whether anything changed. A project
++/// without those properties is left alone.
++pub fn migrate_legacy_rules(tx: &mut Tx<'_>) -> Result<bool> {
++    let props = &tx.project().info().properties;
++    let text = |key: &str| match props.get(key) {
++        Some(Value::Text(t)) => Some(t.trim().to_ascii_lowercase()),
++        Some(_) => Some(String::new()),
++        None => None,
++    };
++    let (same_name, join_link) = (text(LEGACY_SAME_NAME_KEY), text(LEGACY_JOIN_LINK_KEY));
++    if same_name.is_none() && join_link.is_none() {
++        return Ok(false);
++    }
++    let mut rules = rules(tx.project());
++    match same_name.as_deref() {
++        Some("refuse") => rules.same_name = SameName::Refuse,
++        // The former rule had no "off": a missing or unknown value was join.
++        Some(_) | None => rules.same_name = SameName::Join,
++    }
++    if let Some(link) = join_link {
++        rules.join_link = if link == "jumper" {
++            JoinLink::Jumper
++        } else {
++            JoinLink::Connector
++        };
++    }
++    let mut info = tx.project().info().clone();
++    info.properties.remove(LEGACY_SAME_NAME_KEY);
++    info.properties.remove(LEGACY_JOIN_LINK_KEY);
++    info.rules.terminals = rules;
++    tx.execute(Command::SetProjectInfo { info })?;
++    Ok(true)
++}
+diff --git a/crates/novo-terminals/src/screen.rs b/crates/novo-terminals/src/screen.rs
+index 4c6f695..478dd77 100644
+--- a/crates/novo-terminals/src/screen.rs
++++ b/crates/novo-terminals/src/screen.rs
+@@ -9,9 +9,8 @@ use std::fmt::Write as _;
+ 
+ use novo_core::{DeviceId, Project};
+ 
+-use crate::naming::kind_label;
+ use crate::occurrence::Target;
+-use crate::settings::JoinLink;
++use crate::strings;
+ use crate::strip::strip_view;
+ 
+ /// One line of a terminal connection screen.
+@@ -44,10 +43,17 @@ pub struct Screen {
+     pub rows: Vec<ScreenRow>,
+ }
+ 
++/// Distinct items in first-seen order.
++fn distinct(items: impl IntoIterator<Item = String>) -> Vec<String> {
++    let mut seen = std::collections::HashSet::new();
++    items
++        .into_iter()
++        .filter(|item| seen.insert(item.clone()))
++        .collect()
++}
++
+ fn designations(targets: &[&Target]) -> Vec<String> {
+-    let mut out: Vec<String> = targets.iter().map(|t| t.designation.clone()).collect();
+-    out.dedup();
+-    out
++    distinct(targets.iter().map(|t| t.designation.clone()))
+ }
+ 
+ /// Builds the connection screen of a strip from the model.
+@@ -58,42 +64,26 @@ pub fn screen(project: &Project, strip: DeviceId) -> Screen {
+         .iter()
+         .map(|row| {
+             let external = row.external_targets();
+-            let mut cables: Vec<String> = row
+-                .occurrences
+-                .iter()
+-                .flat_map(|o| &o.external.wires)
+-                .filter_map(|&w| {
+-                    let (cable, core) = project.core_of_wire(w)?;
+-                    let cable = project.cable(cable)?;
+-                    Some(format!("{} {}", cable.tag, cable.cores[core].name))
+-                })
+-                .collect();
+-            cables.dedup();
+-            let mut pages: Vec<String> = row
+-                .occurrences
+-                .iter()
+-                .filter_map(|o| project.page(o.page).map(|p| p.name.clone()))
+-                .collect();
+-            pages.dedup();
+-            let build = if row.build.clamps <= 1 {
+-                "1 clamp".to_owned()
+-            } else {
+-                let link = match row.build.link {
+-                    JoinLink::Connector => "connector",
+-                    JoinLink::Jumper => "jumper",
+-                };
+-                format!(
+-                    "{} clamps + {} {}{}",
+-                    row.build.clamps,
+-                    row.build.links,
+-                    link,
+-                    if row.build.links == 1 { "" } else { "s" }
+-                )
+-            };
++            let cables = distinct(
++                row.occurrences
++                    .iter()
++                    .flat_map(|o| &o.external.wires)
++                    .filter_map(|&w| {
++                        let (cable, core) = project.core_of_wire(w)?;
++                        let cable = project.cable(cable)?;
++                        Some(format!("{} {}", cable.tag, cable.cores[core].name))
++                    }),
++            );
++            let pages = distinct(
++                row.occurrences
++                    .iter()
++                    .filter_map(|o| project.page(o.page).map(|p| p.name.clone())),
++            );
++            let build = strings::build(row.build.clamps, row.build.links, row.build.link);
+             ScreenRow {
+                 internal: designations(&row.internal_targets()),
+                 terminal: row.name.clone(),
+-                kind: kind_label(row.kind).to_owned(),
++                kind: strings::kind_label(row.kind).to_owned(),
+                 external: designations(&external),
+                 cables,
+                 jumper: row.jumper,
+@@ -121,7 +111,7 @@ impl Screen {
+                 [
+                     r.internal.join(", "),
+                     if r.spare {
+-                        format!("{} (spare)", r.terminal)
++                        strings::screen_spare(&r.terminal)
+                     } else {
+                         r.terminal.clone()
+                     },
+@@ -132,9 +122,7 @@ impl Screen {
+                 ]
+             })
+             .collect();
+-        let header = [
+-            "Internal", "Terminal", "External", "Cable", "Jumper", "Pages",
+-        ];
++        let header = strings::SCREEN_HEADER;
+         let mut widths = header.map(|h| h.chars().count());
+         for row in &cells {
+             for (w, c) in widths.iter_mut().zip(row) {
+@@ -142,7 +130,7 @@ impl Screen {
+             }
+         }
+         let mut out = String::new();
+-        let _ = writeln!(out, "Terminal strip {}", self.tag);
++        let _ = writeln!(out, "{}", strings::screen_title(&self.tag));
+         let line = |out: &mut String, row: &[String]| {
+             let padded: Vec<String> = row
+                 .iter()
+diff --git a/crates/novo-terminals/src/settings.rs b/crates/novo-terminals/src/settings.rs
+deleted file mode 100644
+index 1ed045e..0000000
+--- a/crates/novo-terminals/src/settings.rs
++++ /dev/null
+@@ -1,115 +0,0 @@
+-//! The project rule for terminals that share a name.
+-//!
+-//! The rule lives in the project info properties, so it is saved with the
+-//! project, undoable, and readable from scripts:
+-//!
+-//! | Key | Values | Default |
+-//! | --- | --- | --- |
+-//! | `terminals.same_name` | `join`, `refuse` | `join` |
+-//! | `terminals.join_link` | `connector`, `jumper` | `connector` |
+-
+-use novo_core::{Project, Result, Tx, Value};
+-
+-/// Property key of [`SameName`] in the project info.
+-pub const SAME_NAME_KEY: &str = "terminals.same_name";
+-/// Property key of [`JoinLink`] in the project info.
+-pub const JOIN_LINK_KEY: &str = "terminals.join_link";
+-
+-/// What happens when one terminal name (`-X2:1`) is used in several places.
+-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+-pub enum SameName {
+-    /// The occurrences are one terminal: one row in the strip editor, one
+-    /// node electrically, built from 1-in/1-out clamps linked together.
+-    #[default]
+-    Join,
+-    /// Every occurrence after the first is flagged as a duplicate.
+-    Refuse,
+-}
+-
+-/// How the clamps of a joined terminal are linked.
+-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+-pub enum JoinLink {
+-    /// A connector piece between neighbouring clamps.
+-    #[default]
+-    Connector,
+-    /// A plug-in jumper bar across the clamps.
+-    Jumper,
+-}
+-
+-impl SameName {
+-    fn as_str(self) -> &'static str {
+-        match self {
+-            SameName::Join => "join",
+-            SameName::Refuse => "refuse",
+-        }
+-    }
+-}
+-
+-impl JoinLink {
+-    fn as_str(self) -> &'static str {
+-        match self {
+-            JoinLink::Connector => "connector",
+-            JoinLink::Jumper => "jumper",
+-        }
+-    }
+-
+-    /// Plain name for screens and reports.
+-    pub fn label(self) -> &'static str {
+-        match self {
+-            JoinLink::Connector => "connector",
+-            JoinLink::Jumper => "jumper",
+-        }
+-    }
+-}
+-
+-/// The terminal rules of a project.
+-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+-pub struct Settings {
+-    pub same_name: SameName,
+-    pub join_link: JoinLink,
+-}
+-
+-impl Settings {
+-    /// Reads the rules from the project. Missing or unknown values give the
+-    /// defaults, so an old project behaves like a new one.
+-    pub fn of(project: &Project) -> Settings {
+-        let props = &project.info().properties;
+-        let text = |key: &str| match props.get(key) {
+-            Some(Value::Text(t)) => t.trim().to_ascii_lowercase(),
+-            _ => String::new(),
+-        };
+-        Settings {
+-            same_name: match text(SAME_NAME_KEY).as_str() {
+-                "refuse" => SameName::Refuse,
+-                _ => SameName::Join,
+-            },
+-            join_link: match text(JOIN_LINK_KEY).as_str() {
+-                "jumper" => JoinLink::Jumper,
+-                _ => JoinLink::Connector,
+-            },
+-        }
+-    }
+-
+-    /// Stores the rules in the project as part of a transaction.
+-    pub fn store(self, tx: &mut Tx<'_>) -> Result<()> {
+-        tx.set_info(|info| {
+-            info.properties
+-                .insert(SAME_NAME_KEY.into(), self.same_name.as_str().into());
+-            info.properties
+-                .insert(JOIN_LINK_KEY.into(), self.join_link.as_str().into());
+-        })
+-    }
+-}
+-
+-impl Settings {
+-    /// The rule as one plain sentence, for the Terminals drawer.
+-    pub fn sentence(self) -> String {
+-        match self.same_name {
+-            SameName::Join => format!(
+-                "Terminals with the same name are one terminal, joined with {}s.",
+-                self.join_link.label()
+-            ),
+-            SameName::Refuse => "Each terminal name may be used once per strip.".to_owned(),
+-        }
+-    }
+-}
+diff --git a/crates/novo-terminals/src/strings.rs b/crates/novo-terminals/src/strings.rs
+new file mode 100644
+index 0000000..2cc616a
+--- /dev/null
++++ b/crates/novo-terminals/src/strings.rs
+@@ -0,0 +1,245 @@
++//! Every user-facing sentence and label of this crate, in one place so they
++//! can be translated later. Nothing else in the crate builds text for people
++//! to read; identifiers and property keys are not here.
++
++use novo_core::{JoinLink, SameName, SymbolKey, TerminalKind, TerminalRules, WireId};
++
++use crate::occurrence::State;
++
++/// Plain name of a terminal kind for screens.
++pub fn kind_label(kind: TerminalKind) -> &'static str {
++    match kind {
++        TerminalKind::Feedthrough => "feed-through",
++        TerminalKind::ProtectiveEarth => "PE",
++        TerminalKind::Neutral => "N",
++        TerminalKind::Fuse => "fuse",
++        TerminalKind::Disconnect => "disconnect",
++    }
++}
++
++/// Short text for a wiring state, for the schematic and the strip editor.
++pub fn state_label(state: State) -> &'static str {
++    match state {
++        State::Through => "through",
++        State::InternalEnd => "end (internal side)",
++        State::ExternalEnd => "end (external side)",
++        State::Open => "not wired",
++    }
++}
++
++/// Plain name of the piece that links the clamps of a joined terminal.
++pub fn link_label(link: JoinLink) -> &'static str {
++    match link {
++        JoinLink::Connector => "connector",
++        JoinLink::Jumper => "jumper",
++    }
++}
++
++fn plural(word: &str, n: usize) -> String {
++    if n == 1 {
++        word.to_owned()
++    } else {
++        format!("{word}s")
++    }
++}
++
++/// The terminal rule as one plain sentence, for the Terminals drawer and
++/// the Rules document.
++pub fn rule_sentence(rules: TerminalRules) -> String {
++    match rules.same_name {
++        SameName::Join => format!(
++            "Terminals with the same name are one terminal, joined with {}.",
++            plural(link_label(rules.join_link), 2)
++        ),
++        SameName::Refuse => "Each terminal name may be used once per strip.".to_owned(),
++        SameName::Off => {
++            "Terminals with the same name are separate terminals; the checker lists them."
++                .to_owned()
++        }
++    }
++}
++
++// ----- checks ----------------------------------------------------------------
++
++pub fn kind_differs_from_name(
++    designation: &str,
++    expected: TerminalKind,
++    actual: TerminalKind,
++) -> String {
++    format!(
++        "{designation} is named like a {} terminal but is a {} terminal.",
++        kind_label(expected),
++        kind_label(actual)
++    )
++}
++
++pub fn unwired(designation: &str) -> String {
++    format!("{designation} is drawn but not wired.")
++}
++
++pub fn single_sided(designation: &str, kind: TerminalKind) -> String {
++    format!(
++        "{designation} is a {} terminal but is wired on one side only.",
++        kind_label(kind)
++    )
++}
++
++pub fn drawn_again_refused(designation: &str) -> String {
++    format!("{designation} is drawn again; the project refuses duplicate terminal names.")
++}
++
++pub fn duplicate_record(designation: &str, rule: SameName) -> String {
++    match rule {
++        SameName::Refuse => format!(
++            "{designation} exists more than once; the project refuses duplicate terminal names."
++        ),
++        _ => format!(
++            "{designation} exists more than once as separate terminals; no project rule joins them."
++        ),
++    }
++}
++
++pub fn potential_differs_from_kind(
++    designation: &str,
++    kind: TerminalKind,
++    potential: &str,
++) -> String {
++    format!(
++        "{designation} is a {} terminal on potential {potential}.",
++        kind_label(kind)
++    )
++}
++
++pub fn style_override(designation: &str) -> String {
++    format!("{designation} has its own symbol or part instead of its strip's.")
++}
++
++// ----- explain -------------------------------------------------------------
++
++pub fn explain_kind_and_state(designation: &str, kind: TerminalKind, state: State) -> String {
++    format!(
++        "{designation} is a {} terminal, {}.",
++        kind_label(kind),
++        state_label(state)
++    )
++}
++
++pub fn explain_spare(designation: &str) -> String {
++    format!("{designation} is a spare: it is not drawn on any page.")
++}
++
++pub fn explain_drawn_once(designation: &str, page: &str) -> String {
++    format!("{designation} is drawn once, on page {page}.")
++}
++
++pub fn explain_drawn_joined(
++    designation: &str,
++    pages: &[String],
++    clamps: usize,
++    links: usize,
++    link: JoinLink,
++) -> String {
++    format!(
++        "{designation} is drawn {} times (pages {}). The project joins terminals with the same name, so these are one terminal: {clamps} clamps linked by {links} {}.",
++        pages.len(),
++        pages.join(", "),
++        plural(link_label(link), links),
++    )
++}
++
++pub fn explain_drawn_refused(designation: &str, pages: &[String]) -> String {
++    format!(
++        "{designation} is drawn {} times (pages {}). All drawings are this one terminal and are connected, but the project refuses duplicate terminal names, so the extra drawings are flagged.",
++        pages.len(),
++        pages.join(", ")
++    )
++}
++
++pub fn explain_drawn_one_record(designation: &str, pages: &[String]) -> String {
++    format!(
++        "{designation} is drawn {} times (pages {}). All drawings are this one terminal and are connected.",
++        pages.len(),
++        pages.join(", ")
++    )
++}
++
++pub fn explain_records_joined(records: usize) -> String {
++    format!(
++        "{records} separate records carry this name; the project joins them, so they are connected."
++    )
++}
++
++pub fn explain_records_separate(records: usize) -> String {
++    format!(
++        "{records} separate records carry this name and are not connected; no project rule joins them."
++    )
++}
++
++pub fn explain_jumpered(others: &[String], group: u32) -> String {
++    format!("Jumpered to {} (jumper {group}).", others.join(", "))
++}
++
++// ----- screen ----------------------------------------------------------------
++
++pub fn screen_title(tag: &str) -> String {
++    format!("Terminal strip {tag}")
++}
++
++pub const SCREEN_HEADER: [&str; 6] = [
++    "Internal", "Terminal", "External", "Cable", "Jumper", "Pages",
++];
++
++pub fn screen_spare(name: &str) -> String {
++    format!("{name} (spare)")
++}
++
++/// How a terminal is built, e.g. `2 clamps + 1 connector`.
++pub fn build(clamps: usize, links: usize, link: JoinLink) -> String {
++    if clamps <= 1 {
++        "1 clamp".to_owned()
++    } else {
++        format!(
++            "{clamps} clamps + {links} {}",
++            plural(link_label(link), links)
++        )
++    }
++}
++
++// ----- suggestions -----------------------------------------------------------
++
++pub fn terminals_on(count: usize, strip: &str) -> String {
++    format!("{count} {} on {strip}", plural("terminal", count))
++}
++
++// ----- refusals ----------------------------------------------------------------
++
++pub fn no_room(wire: WireId, length: f64) -> String {
++    format!("no room for a terminal on {wire}: it needs a straight stretch longer than {length} mm")
++}
++
++pub fn not_a_terminal_symbol(symbol: &SymbolKey) -> String {
++    format!(
++        "{} is not a known single-level terminal symbol (two connection points, 1 at the origin and 2 straight below it)",
++        symbol.0
++    )
++}
++
++pub fn no_room_to_refit(symbol: &SymbolKey) -> String {
++    format!(
++        "the wires at the terminal leave no room to redraw it as {}; move them first",
++        symbol.0
++    )
++}
++
++pub fn not_on_one_strip() -> String {
++    "a jumper can only bridge terminals of one strip".to_owned()
++}
++
++/// Why a rename cannot be applied, for the find-and-replace preview.
++/// `taken_by` is the designation of the terminal that has the name.
++pub fn rename_problem(new: &str, problem: crate::RenameProblem, taken_by: &str) -> String {
++    match problem {
++        crate::RenameProblem::Empty => "The new name would be empty.".to_owned(),
++        crate::RenameProblem::Taken(_) => format!("{new} is already used by {taken_by}."),
++    }
++}
+diff --git a/crates/novo-terminals/src/strip.rs b/crates/novo-terminals/src/strip.rs
+index 567204f..ae0a93c 100644
+--- a/crates/novo-terminals/src/strip.rs
++++ b/crates/novo-terminals/src/strip.rs
+@@ -1,16 +1,18 @@
+ //! The terminal strip editor's model: one row per physical terminal, in
+ //! strip order, with what it is built from and where it is wired.
+ 
+-use std::collections::BTreeMap;
++use std::collections::HashMap;
+ 
+ use novo_core::{
+-    DeviceId, DeviceKind, PartId, Project, Result, SymbolInstance, SymbolRole, Terminal,
+-    TerminalId, TerminalKind, Tx,
++    DeviceId, DeviceKind, JoinLink, ModelError, PartId, Project, Result, SameName, SymbolInstance,
++    SymbolRole, Terminal, TerminalId, TerminalKind, TerminalRules, Tx, natural_cmp,
+ };
+ 
+-use crate::naming::{kind_label, next_free_number, next_order};
++use crate::geometry::redraw;
++use crate::naming::{next_free_number, next_order};
+ use crate::occurrence::{Occurrence, State, Target, occurrences};
+-use crate::settings::{JoinLink, SameName, Settings};
++use crate::rules::rules;
++use crate::strings;
+ use crate::style::style_of;
+ 
+ /// What a terminal row is physically built from.
+@@ -29,9 +31,9 @@ pub struct Build {
+ pub struct Row {
+     pub name: String,
+     pub level: u8,
+-    /// The terminal records behind the row. More than one only when the
+-    /// project joins same-named terminals and several records carry the
+-    /// name (see [`join_duplicates`]).
++    /// The terminal records behind the row. More than one only under the
++    /// Join rule when several records carry the name; the netlist joins
++    /// them, and [`join_duplicates`] tidies them into one record.
+     pub terminals: Vec<TerminalId>,
+     pub kind: TerminalKind,
+     pub jumper: Option<u32>,
+@@ -86,17 +88,19 @@ pub struct StripView {
+     pub rows: Vec<Row>,
+ }
+ 
+-/// Terminal strip devices, sorted by tag.
++/// Terminal strip devices, sorted by tag with numbers by value (`-X2`
++/// before `-X10`).
+ pub fn strips(project: &Project) -> Vec<DeviceId> {
+     let mut strips: Vec<_> = project
+         .devices()
+         .filter(|d| d.kind == DeviceKind::TerminalStrip)
++        .map(|d| (d.tag.to_string(), d.id))
+         .collect();
+-    strips.sort_by(|a, b| a.tag.cmp(&b.tag).then(a.id.cmp(&b.id)));
+-    strips.into_iter().map(|d| d.id).collect()
++    strips.sort_by(|a, b| natural_cmp(&a.0, &b.0).then(a.1.cmp(&b.1)));
++    strips.into_iter().map(|(_, id)| id).collect()
+ }
+ 
+-fn row(project: &Project, settings: Settings, group: &[&Terminal]) -> Row {
++fn row(project: &Project, rules: TerminalRules, group: &[&Terminal]) -> Row {
+     let first = group[0];
+     let occurrences: Vec<Occurrence> = group
+         .iter()
+@@ -118,28 +122,29 @@ fn row(project: &Project, settings: Settings, group: &[&Terminal]) -> Row {
+         build: Build {
+             clamps,
+             links: clamps.saturating_sub(1),
+-            link: settings.join_link,
++            link: rules.join_link,
+         },
+     }
+ }
+ 
+-/// The strip editor rows of a strip. With the "join" rule, terminals that
+-/// share a name and level are one row; with "refuse" each record is its own
+-/// row and [`crate::check`] flags the duplicates.
++/// The strip editor rows of a strip. Under the Join rule, records that
++/// share a name and level are one row, exactly as the netlist joins them;
++/// under Refuse and Off each record is its own row.
+ pub fn strip_view(project: &Project, strip: DeviceId) -> StripView {
+-    let settings = Settings::of(project);
++    let rules = rules(project);
+     let terminals = project.terminals_of_strip(strip);
+     let mut groups: Vec<Vec<&Terminal>> = Vec::new();
+-    match settings.same_name {
+-        SameName::Refuse => groups.extend(terminals.into_iter().map(|t| vec![t])),
++    match rules.same_name {
++        SameName::Refuse | SameName::Off => {
++            groups.extend(terminals.into_iter().map(|t| vec![t]));
++        }
+         SameName::Join => {
+-            let mut index: BTreeMap<(String, u8), usize> = BTreeMap::new();
++            let mut index: HashMap<(&str, u8), usize> = HashMap::new();
+             for t in terminals {
+-                let key = (t.name.to_ascii_uppercase(), t.level);
+-                match index.get(&key) {
++                match index.get(&(t.name.as_str(), t.level)) {
+                     Some(&i) => groups[i].push(t),
+                     None => {
+-                        index.insert(key, groups.len());
++                        index.insert((t.name.as_str(), t.level), groups.len());
+                         groups.push(vec![t]);
+                     }
+                 }
+@@ -152,7 +157,7 @@ pub fn strip_view(project: &Project, strip: DeviceId) -> StripView {
+             .device(strip)
+             .map(|d| d.tag.to_string())
+             .unwrap_or_default(),
+-        rows: groups.iter().map(|g| row(project, settings, g)).collect(),
++        rows: groups.iter().map(|g| row(project, rules, g)).collect(),
+     }
+ }
+ 
+@@ -163,81 +168,69 @@ pub fn explain(project: &Project, terminal: TerminalId) -> Vec<String> {
+     let Some(t) = project.terminal(terminal) else {
+         return Vec::new();
+     };
+-    let settings = Settings::of(project);
++    let rules = rules(project);
+     let designation = project
+         .terminal_designation(terminal)
+         .unwrap_or_else(|| t.name.clone());
+-    let view = strip_view(project, t.strip);
+-    let Some(row) = view.rows.iter().find(|r| r.terminals.contains(&terminal)) else {
+-        return Vec::new();
++    let on_strip = project.terminals_of_strip(t.strip);
++    let same_name: Vec<&Terminal> = on_strip
++        .iter()
++        .copied()
++        .filter(|o| o.name == t.name && o.level == t.level)
++        .collect();
++    let group = if rules.same_name == SameName::Join {
++        same_name.clone()
++    } else {
++        vec![t]
+     };
++    let row = row(project, rules, &group);
+     let page_name = |o: &Occurrence| {
+         project
+             .page(o.page)
+             .map(|p| p.name.clone())
+             .unwrap_or_default()
+     };
+-    let mut out = vec![format!(
+-        "{designation} is a {} terminal, {}.",
+-        kind_label(row.kind),
+-        row.state().label()
++    let mut out = vec![strings::explain_kind_and_state(
++        &designation,
++        row.kind,
++        row.state(),
+     )];
+-    match row.occurrences.len() {
+-        0 => out.push(format!(
+-            "{designation} is a spare: it is not drawn on any page."
+-        )),
+-        1 => out.push(format!(
+-            "{designation} is drawn once, on page {}.",
+-            page_name(&row.occurrences[0])
+-        )),
+-        n => {
+-            let pages: Vec<String> = row.occurrences.iter().map(page_name).collect();
+-            out.push(match settings.same_name {
+-                SameName::Join => format!(
+-                    "{designation} is drawn {n} times (pages {}). The project joins terminals with the same name, so these are one terminal: {} clamps linked by {} {}.",
+-                    pages.join(", "),
+-                    row.build.clamps,
+-                    row.build.links,
+-                    plural(settings.join_link.label(), row.build.links),
+-                ),
+-                SameName::Refuse => format!(
+-                    "{designation} is drawn {n} times (pages {}). The project refuses duplicate terminal names, so only the first counts.",
+-                    pages.join(", ")
+-                ),
+-            });
+-        }
++    let pages: Vec<String> = row.occurrences.iter().map(page_name).collect();
++    match pages.as_slice() {
++        [] => out.push(strings::explain_spare(&designation)),
++        [page] => out.push(strings::explain_drawn_once(&designation, page)),
++        _ => out.push(match rules.same_name {
++            SameName::Join => strings::explain_drawn_joined(
++                &designation,
++                &pages,
++                row.build.clamps,
++                row.build.links,
++                rules.join_link,
++            ),
++            SameName::Refuse => strings::explain_drawn_refused(&designation, &pages),
++            SameName::Off => strings::explain_drawn_one_record(&designation, &pages),
++        }),
+     }
+-    if row.terminals.len() > 1 && settings.same_name == SameName::Join {
+-        out.push(format!(
+-            "{} separate records carry this name; joining them makes the electrical connection match the strip.",
+-            row.terminals.len()
+-        ));
++    if same_name.len() > 1 {
++        out.push(match rules.same_name {
++            SameName::Join => strings::explain_records_joined(same_name.len()),
++            SameName::Refuse | SameName::Off => strings::explain_records_separate(same_name.len()),
++        });
+     }
+-    if let Some(group) = row.jumper {
+-        let others: Vec<String> = view
+-            .rows
++    if let Some(group) = t.jumper {
++        let mut others: Vec<String> = on_strip
+             .iter()
+-            .filter(|r| r.jumper == Some(group) && r.name != row.name)
+-            .map(|r| r.name.clone())
++            .filter(|o| o.jumper == Some(group) && o.name != t.name)
++            .map(|o| o.name.clone())
+             .collect();
++        others.dedup();
+         if !others.is_empty() {
+-            out.push(format!(
+-                "Jumpered to {} (jumper {group}).",
+-                others.join(", ")
+-            ));
++            out.push(strings::explain_jumpered(&others, group));
+         }
+     }
+     out
+ }
+ 
+-fn plural(word: &str, n: usize) -> String {
+-    if n == 1 {
+-        word.to_owned()
+-    } else {
+-        format!("{word}s")
+-    }
+-}
+-
+ // ----- strip editor edits ----------------------------------------------------
+ 
+ /// Puts terminals in this order on their strip. Terminals not listed keep
+@@ -283,12 +276,24 @@ pub fn free_jumper(project: &Project, strip: DeviceId) -> u32 {
+ }
+ 
+ /// Bridges terminals of one strip with a new jumper, or removes them from
+-/// any jumper with `None`. Returns the jumper group used.
++/// any jumper with `None`. Returns the jumper group used. Terminals of
++/// several strips are refused: the netlist bridges jumper groups per strip.
+ pub fn set_jumper(
+     tx: &mut Tx<'_>,
+     terminals: &[TerminalId],
+     jumper: Option<u32>,
+ ) -> Result<Option<u32>> {
++    let mut strip = None;
++    for &id in terminals {
++        let t = tx
++            .project()
++            .terminal(id)
++            .ok_or(ModelError::NotFound(id.into()))?;
++        if jumper.is_some() && strip.is_some_and(|s| s != t.strip) {
++            return Err(ModelError::Format(strings::not_on_one_strip()));
++        }
++        strip = Some(t.strip);
++    }
+     for &id in terminals {
+         tx.update::<Terminal>(id, |t| t.jumper = jumper)?;
+     }
+@@ -296,7 +301,9 @@ pub fn set_jumper(
+ }
+ 
+ /// Changes the kind of a terminal and redraws it with its strip's symbol for
+-/// that kind.
++/// that kind (or its own override), refitting the connection points to the
++/// new symbol. Refused, with nothing changed, when a drawing's wires leave
++/// no room for the new symbol (see [`crate::redraw`]).
+ pub fn set_kind(tx: &mut Tx<'_>, terminal: TerminalId, kind: TerminalKind) -> Result<()> {
+     tx.update::<Terminal>(terminal, |t| t.kind = kind)?;
+     if let Some(style) = style_of(tx.project(), terminal) {
+@@ -310,48 +317,68 @@ pub fn set_kind(tx: &mut Tx<'_>, terminal: TerminalId, kind: TerminalKind) -> Re
+             .map(|s| s.id)
+             .collect();
+         for id in symbols {
+-            tx.update::<SymbolInstance>(id, |s| s.symbol = style.symbol.clone())?;
++            redraw(tx, id, &style.symbol)?;
+         }
+     }
+     Ok(())
+ }
+ 
+ /// Merges terminal records that share a name and level on a strip into the
+-/// first of them, so the drawings become one terminal electrically as well.
++/// first of them in strip order, so each name is one record. Under the Join
++/// rule the netlist already treats them as one terminal; merging is the
++/// tidy-up before switching to Refuse, and under Off it is how the user
++/// joins them on purpose. The kept record takes a removed record's jumper,
++/// part and properties where it has none of its own; its kind wins.
+ /// Returns the records removed.
+ pub fn join_duplicates(tx: &mut Tx<'_>, strip: DeviceId) -> Result<Vec<TerminalId>> {
+-    let mut keep: BTreeMap<(String, u8), TerminalId> = BTreeMap::new();
+-    let mut merges: Vec<(TerminalId, TerminalId)> = Vec::new();
+-    for t in tx.project().terminals_of_strip(strip) {
+-        let key = (t.name.to_ascii_uppercase(), t.level);
+-        match keep.get(&key) {
+-            Some(&into) => merges.push((t.id, into)),
+-            None => {
+-                keep.insert(key, t.id);
+-            }
+-        }
+-    }
+-    for &(gone, into) in &merges {
+-        let symbols: Vec<_> = tx
+-            .project()
+-            .symbols_of_terminal(gone)
+-            .into_iter()
+-            .map(|s| s.id)
+-            .collect();
+-        for symbol in symbols {
+-            tx.update::<SymbolInstance>(symbol, |s| {
+-                if let SymbolRole::Terminal { terminals } = &mut s.role {
+-                    for t in terminals.iter_mut() {
+-                        if *t == gone {
+-                            *t = into;
++    let groups: Vec<Vec<TerminalId>> = tx
++        .project()
++        .terminal_designation_groups()
++        .into_iter()
++        .filter(|g| {
++            tx.project()
++                .terminal(g[0])
++                .is_some_and(|t| t.strip == strip)
++        })
++        .collect();
++    let mut removed = Vec::new();
++    for group in groups {
++        let into = group[0];
++        for &gone in &group[1..] {
++            let old = tx
++                .project()
++                .terminal(gone)
++                .ok_or(ModelError::NotFound(gone.into()))?
++                .clone();
++            let symbols: Vec<_> = tx
++                .project()
++                .symbols_of_terminal(gone)
++                .into_iter()
++                .map(|s| s.id)
++                .collect();
++            for symbol in symbols {
++                tx.update::<SymbolInstance>(symbol, |s| {
++                    if let SymbolRole::Terminal { terminals } = &mut s.role {
++                        for t in terminals.iter_mut() {
++                            if *t == gone {
++                                *t = into;
++                            }
+                         }
+                     }
++                })?;
++            }
++            tx.remove(gone)?;
++            tx.update::<Terminal>(into, |t| {
++                t.jumper = t.jumper.or(old.jumper);
++                t.part = t.part.or(old.part);
++                for (key, value) in old.properties {
++                    t.properties.entry(key).or_insert(value);
+                 }
+             })?;
++            removed.push(gone);
+         }
+-        tx.remove(gone)?;
+     }
+-    Ok(merges.into_iter().map(|(gone, _)| gone).collect())
++    Ok(removed)
+ }
+ 
+ /// What [`renumber`] would do: each numbered terminal with its current and
+@@ -397,35 +424,142 @@ pub fn renumber(tx: &mut Tx<'_>, strip: DeviceId) -> Result<()> {
+ }
+ 
+ /// Moves a terminal to another level of a multi-level terminal (from 1).
++/// Refused when the level is 0, when another terminal of the strip already
++/// has this name on that level, or when a multi-level drawing of the
++/// terminal has fewer levels.
+ pub fn set_level(tx: &mut Tx<'_>, terminal: TerminalId, level: u8) -> Result<()> {
+-    tx.update::<Terminal>(terminal, |t| t.level = level.max(1))
++    let t = tx
++        .project()
++        .terminal(terminal)
++        .ok_or(ModelError::NotFound(terminal.into()))?;
++    if level == 0 {
++        return Err(ModelError::InvalidValue {
++            id: terminal.into(),
++            field: "level",
++        });
++    }
++    if t.level == level {
++        return Ok(());
++    }
++    if let Some(other) = tx
++        .project()
++        .terminals_of_strip(t.strip)
++        .into_iter()
++        .find(|o| o.id != terminal && o.name == t.name && o.level == level)
++    {
++        return Err(ModelError::AlreadyExists(other.id.into()));
++    }
++    for symbol in tx.project().symbols_of_terminal(terminal) {
++        let SymbolRole::Terminal { terminals } = &symbol.role else {
++            continue;
++        };
++        let mut distinct = terminals.clone();
++        distinct.sort();
++        distinct.dedup();
++        if distinct.len() > 1 && usize::from(level) > distinct.len() {
++            return Err(ModelError::InvalidValue {
++                id: terminal.into(),
++                field: "level",
++            });
++        }
++    }
++    tx.update::<Terminal>(terminal, |t| t.level = level)
++}
++
++/// Why a name in a [`rename_preview`] cannot be applied.
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum RenameProblem {
++    /// The new name would be empty.
++    Empty,
++    /// Another terminal of the strip has (or would get) this name on the
++    /// same level. Under the Join rule that would silently connect them.
++    Taken(TerminalId),
++}
++
++/// One terminal [`rename`] would change.
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct RenameChange {
++    pub terminal: TerminalId,
++    pub old: String,
++    pub new: String,
++    /// Set when the change cannot be applied; [`rename`] then refuses the
++    /// whole edit.
++    pub problem: Option<RenameProblem>,
+ }
+ 
+ /// What [`rename`] would do: terminals of the strip whose name contains
+-/// `find`, with the name after replacing every occurrence by `replace`.
+-/// Case-sensitive; an empty `find` matches nothing.
++/// `find`, with the name after replacing every occurrence by `replace`, and
++/// any problem with the result (shown before the edit is applied).
++/// Case-sensitive; an empty `find` matches nothing; names that would not
++/// change are left out.
+ pub fn rename_preview(
+     project: &Project,
+     strip: DeviceId,
+     find: &str,
+     replace: &str,
+-) -> Vec<(TerminalId, String, String)> {
++) -> Vec<RenameChange> {
+     if find.is_empty() {
+         return Vec::new();
+     }
+-    project
+-        .terminals_of_strip(strip)
+-        .into_iter()
++    let terminals = project.terminals_of_strip(strip);
++    let renamed: HashMap<TerminalId, String> = terminals
++        .iter()
+         .filter(|t| t.name.contains(find))
+-        .map(|t| (t.id, t.name.clone(), t.name.replace(find, replace)))
++        .map(|t| (t.id, t.name.replace(find, replace)))
++        .filter(|(id, new)| project.terminal(*id).is_some_and(|t| t.name != *new))
++        .collect();
++    let final_name = |t: &Terminal| renamed.get(&t.id).unwrap_or(&t.name).clone();
++    terminals
++        .iter()
++        .filter_map(|t| {
++            let new = renamed.get(&t.id)?.clone();
++            let problem = if new.trim().is_empty() {
++                Some(RenameProblem::Empty)
++            } else {
++                terminals
++                    .iter()
++                    .find(|o| {
++                        o.id != t.id
++                            && o.level == t.level
++                            && final_name(o) == new
++                            // Records that already shared a name may keep
++                            // sharing it.
++                            && o.name != t.name
++                    })
++                    .map(|o| RenameProblem::Taken(o.id))
++            };
++            Some(RenameChange {
++                terminal: t.id,
++                old: t.name.clone(),
++                new,
++                problem,
++            })
++        })
+         .collect()
+ }
+ 
+-/// Find and replace in the terminal names of a strip, as one edit.
++/// Find and replace in the terminal names of a strip, as one edit. Refused
++/// with nothing changed when [`rename_preview`] shows a problem: an empty
++/// name ([`ModelError::InvalidValue`]) or a name taken by another terminal
++/// ([`ModelError::AlreadyExists`] naming it).
+ pub fn rename(tx: &mut Tx<'_>, strip: DeviceId, find: &str, replace: &str) -> Result<usize> {
+     let changes = rename_preview(tx.project(), strip, find, replace);
+-    for (id, _, name) in &changes {
+-        tx.update::<Terminal>(*id, |t| t.name = name.clone())?;
++    for change in &changes {
++        match change.problem {
++            Some(RenameProblem::Empty) => {
++                return Err(ModelError::InvalidValue {
++                    id: change.terminal.into(),
++                    field: "name",
++                });
++            }
++            Some(RenameProblem::Taken(other)) => {
++                return Err(ModelError::AlreadyExists(other.into()));
++            }
++            None => {}
++        }
++    }
++    for change in &changes {
++        tx.update::<Terminal>(change.terminal, |t| t.name = change.new.clone())?;
+     }
+     Ok(changes.len())
+ }
+diff --git a/crates/novo-terminals/src/style.rs b/crates/novo-terminals/src/style.rs
+index 47931bd..ae5c15f 100644
+--- a/crates/novo-terminals/src/style.rs
++++ b/crates/novo-terminals/src/style.rs
+@@ -20,6 +20,7 @@ use novo_core::{
+     TerminalKind, Tx, Value,
+ };
+ 
++use crate::geometry::{redraw, symbol_pins};
+ use crate::naming::kind_key;
+ 
+ /// The built-in symbol for a terminal kind (novo-symbols keys).
+@@ -109,34 +110,39 @@ fn draws_only_inherited(project: &Project, symbol: &SymbolInstance) -> bool {
+ }
+ 
+ /// Sets the style of one terminal kind on a strip and redraws every terminal
+-/// of that kind that has no override of its own with the new symbol.
++/// of that kind that has no override of its own with the new symbol,
++/// refitting its connection points (see [`crate::redraw`]). Refused, with
++/// nothing changed, for a symbol that is not a single-level terminal symbol
++/// or when a drawing's wires leave no room for it.
+ pub fn set_strip_style(
+     tx: &mut Tx<'_>,
+     strip: DeviceId,
+     kind: TerminalKind,
+     style: &Style,
+ ) -> Result<()> {
++    symbol_pins(&style.symbol)?;
+     tx.set_property(strip, symbol_key(kind), Some(style.symbol.0.clone().into()))?;
+     let part = style
+         .part
+         .map(|p| Value::Int(i64::try_from(p.raw()).unwrap_or(i64::MAX)));
+     tx.set_property(strip, part_key(kind), part)?;
+-    let redraw: Vec<_> = tx
++    let symbols: Vec<_> = tx
+         .project()
+         .terminals_of_strip(strip)
+         .into_iter()
+         .filter(|t| t.kind == kind)
+         .flat_map(|t| tx.project().symbols_of_terminal(t.id))
+-        .filter(|s| draws_only_inherited(tx.project(), s) && s.symbol != style.symbol)
++        .filter(|s| draws_only_inherited(tx.project(), s))
+         .map(|s| s.id)
+         .collect();
+-    for symbol in redraw {
+-        tx.update::<SymbolInstance>(symbol, |s| s.symbol = style.symbol.clone())?;
++    for symbol in symbols {
++        redraw(tx, symbol, &style.symbol)?;
+     }
+     Ok(())
+ }
+ 
+-/// Removes a terminal's own symbol and part, so it follows its strip again.
++/// Removes a terminal's own symbol and part, so it follows its strip again,
++/// and redraws it with the strip's symbol (see [`crate::redraw`]).
+ pub fn clear_override(tx: &mut Tx<'_>, terminal: TerminalId) -> Result<()> {
+     tx.set_property(terminal, "symbol", None)?;
+     tx.set_property(terminal, "part", None)?;
+@@ -144,15 +150,15 @@ pub fn clear_override(tx: &mut Tx<'_>, terminal: TerminalId) -> Result<()> {
+         return Ok(());
+     };
+     let symbol = strip_style(tx.project(), t.strip, t.kind).symbol;
+-    let redraw: Vec<_> = tx
++    let symbols: Vec<_> = tx
+         .project()
+         .symbols_of_terminal(terminal)
+         .into_iter()
+-        .filter(|s| draws_only_inherited(tx.project(), s) && s.symbol != symbol)
++        .filter(|s| draws_only_inherited(tx.project(), s))
+         .map(|s| s.id)
+         .collect();
+-    for id in redraw {
+-        tx.update::<SymbolInstance>(id, |s| s.symbol = symbol.clone())?;
++    for id in symbols {
++        redraw(tx, id, &symbol)?;
+     }
+     Ok(())
+ }
+diff --git a/crates/novo-terminals/src/suggest.rs b/crates/novo-terminals/src/suggest.rs
+index a121933..03e79bc 100644
+--- a/crates/novo-terminals/src/suggest.rs
++++ b/crates/novo-terminals/src/suggest.rs
+@@ -21,6 +21,7 @@ use novo_core::{
+ pub const DISMISS_KEY: &str = "terminal.suggest";
+ 
+ use crate::place::{Drop, Placed, place_terminals};
++use crate::strings;
+ 
+ /// One suggested terminal.
+ #[derive(Debug, Clone, PartialEq)]
+@@ -61,7 +62,7 @@ fn strip_tag(project: &Project, location: &DeviceTag) -> DeviceTag {
+         .filter(|d| d.kind == DeviceKind::TerminalStrip && structure(&d.tag) == *location)
+         .map(|d| &d.tag)
+         .collect();
+-    strips.sort();
++    strips.sort_by(|a, b| novo_core::natural_cmp(&a.to_string(), &b.to_string()).then(a.cmp(b)));
+     match strips.first() {
+         Some(tag) => (*tag).clone(),
+         None => {
+@@ -193,7 +194,7 @@ pub fn summarize_suggestions(suggestions: &[Suggestion]) -> String {
+     }
+     counts
+         .into_iter()
+-        .map(|(tag, n)| format!("{n} terminal{} on {tag}", if n == 1 { "" } else { "s" }))
++        .map(|(tag, n)| strings::terminals_on(n, &tag.to_string()))
+         .collect::<Vec<_>>()
+         .join(", ")
+ }
+diff --git a/crates/novo-terminals/tests/terminals.rs b/crates/novo-terminals/tests/terminals.rs
+index 19c65ce..5952b59 100644
+--- a/crates/novo-terminals/tests/terminals.rs
++++ b/crates/novo-terminals/tests/terminals.rs
+@@ -2,11 +2,27 @@
+ //! terminals.
+ 
+ use novo_core::{
+-    DeviceId, DeviceTag, Document, Endpoint, PageId, Pin, Placement, Point, PotentialKind, Project,
+-    Result, SymbolId, SymbolRole, TerminalKind, Tx, WireId,
++    DeviceId, DeviceTag, Document, Endpoint, JoinLink, ModelError, PageId, Pin, Placement, Point,
++    PotentialKind, Project, Result, SameName, SymbolId, SymbolRole, TerminalKind, TerminalRules,
++    Tx, Value, WireId,
+ };
+ use novo_terminals::*;
+ 
++/// The records an edit could touch, to show a refused edit changed nothing.
++fn snapshot(
++    p: &Project,
++) -> (
++    Vec<novo_core::Terminal>,
++    Vec<novo_core::SymbolInstance>,
++    Vec<novo_core::Wire>,
++) {
++    (
++        p.terminals().cloned().collect(),
++        p.symbols().cloned().collect(),
++        p.wires().cloned().collect(),
++    )
++}
++
+ fn tag(text: &str) -> DeviceTag {
+     DeviceTag::parse(text).unwrap()
+ }
+@@ -296,103 +312,184 @@ fn same_name_on_two_pages_joins_into_one_terminal() {
+     );
+ }
+ 
++fn drop_at(wire: WireId) -> Drop {
++    Drop {
++        wire,
++        at: Point::new(40.0, 60.0),
++    }
++}
++
+ #[test]
+-fn refuse_rule_flags_the_second_drawing() {
++fn refuse_rule_refuses_a_second_record_and_flags_a_second_drawing() {
+     let mut doc = Document::default();
+     let (pages, _) = doc.transact("Draw", two_pages).unwrap();
+-    let (strip, _) = doc
++    let ((strip, first), _) = doc
+         .transact("Terminals", |tx| {
+-            Settings {
+-                same_name: SameName::Refuse,
+-                join_link: JoinLink::Jumper,
+-            }
+-            .store(tx)?;
+-            let strip = strip_by_tag(tx, "-X2")?;
+-            place_named(
+-                tx,
+-                strip,
+-                Drop {
+-                    wire: pages[0].1,
+-                    at: Point::new(40.0, 60.0),
+-                },
+-                "1",
+-                None,
+-            )?;
+-            place_named(
++            set_rules(
+                 tx,
+-                strip,
+-                Drop {
+-                    wire: pages[1].1,
+-                    at: Point::new(40.0, 60.0),
++                TerminalRules {
++                    same_name: SameName::Refuse,
++                    join_link: JoinLink::Jumper,
+                 },
+-                "1",
+-                None,
+             )?;
+-            Ok(strip)
++            let strip = strip_by_tag(tx, "-X2")?;
++            let first = place_named(tx, strip, drop_at(pages[0].1), "1", None)?;
++            Ok((strip, first))
+         })
+         .unwrap();
+-    assert_eq!(Settings::of(doc.project()).same_name, SameName::Refuse);
+-    let view = strip_view(doc.project(), strip);
+-    assert_eq!(view.rows.len(), 2);
++    assert_eq!(rules(doc.project()).same_name, SameName::Refuse);
++    assert_eq!(
++        rule_sentence(rules(doc.project())),
++        "Each terminal name may be used once per strip."
++    );
++    // A second record with the name is refused by novo-core; nothing changes.
++    let before = doc.project().clone();
++    let err = doc
++        .transact("Again", |tx| {
++            place_named(tx, strip, drop_at(pages[1].1), "1", None)
++        })
++        .unwrap_err();
++    assert!(matches!(err, ModelError::DuplicateTerminal(_)), "{err:?}");
++    assert_eq!(doc.project().terminals().count(), 1);
++    assert_eq!(doc.project().wires().count(), before.wires().count());
++    // Drawing the same record a second time is connected but flagged.
++    doc.transact("Copy", |tx| {
++        tx.place_symbol(
++            pages[1].0,
++            "iec/terminals/terminal",
++            Placement::at(Point::new(120.0, 40.0)),
++            terminal_pins(8.0),
++            SymbolRole::Terminal {
++                terminals: vec![first.terminal],
++            },
++        )
++    })
++    .unwrap();
+     let issues = check(doc.project(), &doc.project().netlist());
+-    assert_eq!(issues.len(), 1, "{issues:?}");
+-    assert_eq!(issues[0].kind, IssueKind::DuplicateName);
+-    assert_eq!(issues[0].terminal, view.rows[1].terminals[0]);
++    let duplicates: Vec<_> = issues
++        .iter()
++        .filter(|i| i.kind == IssueKind::DuplicateName)
++        .collect();
++    assert_eq!(duplicates.len(), 1, "{issues:?}");
++    assert_eq!(duplicates[0].terminal, first.terminal);
++    assert_ne!(duplicates[0].symbol, Some(first.symbol));
++    let why = explain(doc.project(), first.terminal).join(" ");
++    assert!(
++        why.contains("All drawings are this one terminal and are connected"),
++        "{why}"
++    );
++    assert!(!why.contains("only the first counts"), "{why}");
+ }
+ 
+ #[test]
+-fn duplicate_records_are_flagged_and_joined_under_the_join_rule() {
+-    let mut doc = Document::default();
++fn duplicate_records_follow_the_core_rule() {
++    // A project without a rule (an old file): same-named records are
++    // separate terminals and the checker lists them.
++    let mut doc = Document::new(Project::default());
+     let (pages, _) = doc.transact("Draw", two_pages).unwrap();
+-    // As if pasted from another project with the refuse rule: two records.
++    assert_eq!(rules(doc.project()).same_name, SameName::Off);
+     let (strip, _) = doc
+         .transact("Terminals", |tx| {
+-            Settings {
+-                same_name: SameName::Refuse,
+-                ..Settings::default()
+-            }
+-            .store(tx)?;
+             let strip = strip_by_tag(tx, "-X2")?;
+             for (_, wire) in pages {
+-                place_named(
+-                    tx,
+-                    strip,
+-                    Drop {
+-                        wire,
+-                        at: Point::new(40.0, 60.0),
+-                    },
+-                    "7",
+-                    None,
+-                )?;
++                let placed = place_named(tx, strip, drop_at(wire), "7", None)?;
++                assert!(!placed.joined);
+             }
+-            Settings::default().store(tx)?;
+             Ok(strip)
+         })
+         .unwrap();
+     let view = strip_view(doc.project(), strip);
+-    assert_eq!(view.rows.len(), 1);
+-    assert_eq!(view.rows[0].terminals.len(), 2);
++    assert_eq!(view.rows.len(), 2);
+     let issues = check(doc.project(), &doc.project().netlist());
+     assert_eq!(
+         issues.iter().map(|i| &i.kind).collect::<Vec<_>>(),
+-        [&IssueKind::NotJoined]
++        [&IssueKind::DuplicateName]
+     );
+-    let symbols: Vec<_> = view.rows[0].occurrences.iter().map(|o| o.symbol).collect();
+-    assert!(
+-        !doc.project()
++    assert_eq!(issues[0].severity, Severity::Warning);
++    assert_eq!(issues[0].terminal, view.rows[1].terminals[0]);
++    let symbols: Vec<_> = view.rows.iter().map(|r| r.occurrences[0].symbol).collect();
++    let connected = |doc: &Document| {
++        doc.project()
+             .netlist()
+             .connected(Endpoint::pin(symbols[0], 0), Endpoint::pin(symbols[1], 0))
++    };
++    assert!(!connected(&doc));
++    assert!(
++        explain(doc.project(), view.rows[0].terminals[0])
++            .iter()
++            .any(|l| l.contains("not connected"))
+     );
++
++    // Join: the netlist joins the records; one row, no finding.
++    doc.transact("Join rule", |tx| {
++        set_rules(
++            tx,
++            TerminalRules {
++                same_name: SameName::Join,
++                join_link: JoinLink::Connector,
++            },
++        )
++    })
++    .unwrap();
++    assert!(connected(&doc));
++    let view = strip_view(doc.project(), strip);
++    assert_eq!(view.rows.len(), 1);
++    assert_eq!(view.rows[0].terminals.len(), 2);
++    assert_eq!(view.rows[0].build.clamps, 2);
++    assert!(check(doc.project(), &doc.project().netlist()).is_empty());
++
++    // Refuse is refused while the strip has two records with the name.
++    let refuse = TerminalRules {
++        same_name: SameName::Refuse,
++        join_link: JoinLink::Connector,
++    };
++    let err = doc
++        .transact("Refuse rule", |tx| set_rules(tx, refuse))
++        .unwrap_err();
++    assert!(matches!(err, ModelError::DuplicateTerminal(_)), "{err:?}");
++
++    // Merging the records keeps them connected and makes Refuse possible.
+     let (removed, _) = doc
+         .transact("Join", |tx| join_duplicates(tx, strip))
+         .unwrap();
+     assert_eq!(removed.len(), 1);
+-    assert!(
+-        doc.project()
+-            .netlist()
+-            .connected(Endpoint::pin(symbols[0], 0), Endpoint::pin(symbols[1], 0))
+-    );
+-    assert!(check(doc.project(), &doc.project().netlist()).is_empty());
++    assert_eq!(doc.project().terminals_of_strip(strip).len(), 1);
++    assert!(connected(&doc));
++    doc.transact("Refuse rule", |tx| set_rules(tx, refuse))
++        .unwrap();
++    // Under Refuse the one record drawn twice is still flagged once.
++    let issues = check(doc.project(), &doc.project().netlist());
++    assert_eq!(issues.len(), 1, "{issues:?}");
++    assert_eq!(issues[0].kind, IssueKind::DuplicateName);
++    assert_eq!(issues[0].symbol, Some(symbols[1]));
++}
++
++#[test]
++fn join_duplicates_carries_jumper_part_and_properties_over() {
++    let mut doc = Document::new(Project::default());
++    let (pages, _) = doc.transact("Draw", two_pages).unwrap();
++    let ((strip, keep, gone, part), _) = doc
++        .transact("Terminals", |tx| {
++            let strip = strip_by_tag(tx, "-X2")?;
++            let a = place_named(tx, strip, drop_at(pages[0].1), "7", None)?.terminal;
++            let b = place_named(tx, strip, drop_at(pages[1].1), "7", None)?.terminal;
++            let part = tx.add_part("Phoenix Contact", "3209510")?;
++            tx.update::<novo_core::Terminal>(b, |t| {
++                t.jumper = Some(3);
++                t.part = Some(part);
++            })?;
++            tx.set_property(b, "note", Some("from b".into()))?;
++            Ok((strip, a, b, part))
++        })
++        .unwrap();
++    let (removed, _) = doc
++        .transact("Join", |tx| join_duplicates(tx, strip))
++        .unwrap();
++    assert_eq!(removed, [gone]);
++    let t = doc.project().terminal(keep).unwrap();
++    assert_eq!(t.jumper, Some(3));
++    assert_eq!(t.part, Some(part));
++    assert_eq!(t.properties.get("note"), Some(&Value::from("from b")));
+ }
+ 
+ #[test]
+@@ -442,6 +539,7 @@ fn a_wire_on_a_pe_named_terminal_gets_a_pe_terminal() {
+     let ((strip, wire), _) = doc
+         .transact("Draw", |tx| {
+             let page = tx.add_page("1")?;
++            tx.add_potential("PE", PotentialKind::ProtectiveEarth)?;
+             let x4 = strip_by_tag(tx, "X4")?;
+             let pe = tx.add_terminal(x4, "PE")?;
+             tx.update::<novo_core::Terminal>(pe, |t| t.kind = TerminalKind::ProtectiveEarth)?;
+@@ -461,9 +559,32 @@ fn a_wire_on_a_pe_named_terminal_gets_a_pe_terminal() {
+         })
+         .unwrap();
+     assert_eq!(
+-        potential_kind_for_name("PE"),
+-        Some(PotentialKind::ProtectiveEarth)
++        kind_for_name(doc.project(), "PE"),
++        Some(TerminalKind::ProtectiveEarth)
+     );
++    // With novo-core's rule off, the name defines nothing.
++    doc.transact("Rule off", |tx| {
++        tx.set_info(|i| i.rules.potentials.from_terminal_names = false)
++    })
++    .unwrap();
++    assert_eq!(kind_for_name(doc.project(), "PE"), None);
++    let (placed, _) = doc
++        .transact("T", |tx| {
++            place_terminals(
++                tx,
++                strip,
++                &[Drop {
++                    wire,
++                    at: Point::new(40.0, 60.0),
++                }],
++            )
++        })
++        .unwrap();
++    let t = doc.project().terminal(placed[0].terminal).unwrap();
++    assert_eq!(t.kind, TerminalKind::Feedthrough);
++    assert_eq!(t.name, "1");
++    doc.undo().unwrap();
++    doc.undo().unwrap();
+     let (placed, _) = doc
+         .transact("T", |tx| {
+             place_terminals(
+@@ -545,10 +666,23 @@ fn one_style_per_kind_changes_every_terminal() {
+             Ok((strip, part))
+         })
+         .unwrap();
+-    let style = Style {
++    // A symbol the library does not know is refused.
++    let unknown = Style {
+         symbol: "iec/terminals/terminal_2".into(),
+         part: Some(part),
+     };
++    assert!(
++        doc.transact("Style", |tx| {
++            set_strip_style(tx, strip, TerminalKind::Feedthrough, &unknown)
++        })
++        .is_err()
++    );
++    // A longer symbol: the connection points are refitted, pin 2 moves down
++    // the wire and the wire still ends on it.
++    let style = Style {
++        symbol: "iec/terminals/terminal_disconnect".into(),
++        part: Some(part),
++    };
+     doc.transact("Style", |tx| {
+         set_strip_style(tx, strip, TerminalKind::Feedthrough, &style)
+     })
+@@ -557,7 +691,14 @@ fn one_style_per_kind_changes_every_terminal() {
+     for row in &view.rows {
+         assert_eq!(row.part, Some(part));
+         let s = doc.project().symbol(row.occurrences[0].symbol).unwrap();
+-        assert_eq!(s.symbol.0, "iec/terminals/terminal_2");
++        assert_eq!(s.symbol.0, "iec/terminals/terminal_disconnect");
++        assert_eq!(s.pin_position(0).unwrap().y, 56.0);
++        assert_eq!(s.pin_position(1).unwrap().y, 72.0);
++        let ext = doc
++            .project()
++            .wire(row.occurrences[0].external.wires[0])
++            .unwrap();
++        assert_eq!(doc.project().endpoint_position(ext.from).unwrap().y, 72.0);
+     }
+     assert!(overrides(doc.project(), strip).is_empty());
+     // One terminal overridden on purpose is listed, and the check says so.
+@@ -787,11 +928,15 @@ fn the_side_with_a_strip_is_the_cabinet_and_dismissals_stick() {
+ 
+ #[test]
+ fn rule_sentence_summary_and_rename_by_pattern() {
++    let mut doc = Document::default();
+     assert_eq!(
+-        Settings::default().sentence(),
++        rule_sentence(rules(doc.project())),
+         "Terminals with the same name are one terminal, joined with connectors."
+     );
+-    let mut doc = Document::default();
++    assert_eq!(
++        rule_sentence(TerminalRules::default()),
++        "Terminals with the same name are separate terminals; the checker lists them."
++    );
+     let (motor, _) = doc.transact("Draw", motor_circuit).unwrap();
+     let (strip, _) = doc
+         .transact("T", |tx| {
+@@ -805,6 +950,7 @@ fn rule_sentence_summary_and_rename_by_pattern() {
+         .unwrap();
+     let preview = rename_preview(doc.project(), strip, "A", "B");
+     assert_eq!(preview.len(), 3);
++    assert!(preview.iter().all(|c| c.problem.is_none()));
+     let (n, _) = doc
+         .transact("Rename", |tx| rename(tx, strip, "A", "B"))
+         .unwrap();
+@@ -818,3 +964,306 @@ fn rule_sentence_summary_and_rename_by_pattern() {
+     doc.undo().unwrap();
+     assert_eq!(strip_view(doc.project(), strip).rows[0].name, "A1");
+ }
++
++/// Review item 1: a kind change redraws with the new symbol and refits its
++/// connection points, so the drawn point still meets the wire.
++#[test]
++fn a_kind_change_refits_the_connection_points() {
++    let mut doc = Document::default();
++    let (pages, _) = doc.transact("Draw", two_pages).unwrap();
++    let ((strip, placed), _) = doc
++        .transact("T", |tx| {
++            let strip = strip_by_tag(tx, "-X1")?;
++            let p = place_named(tx, strip, drop_at(pages[0].1), "1", None)?;
++            Ok((strip, p))
++        })
++        .unwrap();
++    let pin2 = |doc: &Document| {
++        let s = doc.project().symbol(placed.symbol).unwrap();
++        (s.symbol.0.clone(), s.pin_position(1).unwrap())
++    };
++    let wire_end = |doc: &Document| {
++        let w = doc.project().wire(placed.external_wire).unwrap();
++        doc.project().endpoint_position(w.from).unwrap()
++    };
++    assert_eq!(pin2(&doc).1, Point::new(40.0, 64.0));
++    doc.transact("Kind", |tx| {
++        set_kind(tx, placed.terminal, TerminalKind::Fuse)
++    })
++    .unwrap();
++    let (symbol, at) = pin2(&doc);
++    assert_eq!(symbol, "iec/terminals/terminal_fused");
++    assert_eq!(at, Point::new(40.0, 72.0));
++    assert_eq!(wire_end(&doc), at);
++    assert_eq!(
++        strip_view(doc.project(), strip).rows[0].state(),
++        State::Through
++    );
++    // And back.
++    doc.transact("Kind", |tx| {
++        set_kind(tx, placed.terminal, TerminalKind::Feedthrough)
++    })
++    .unwrap();
++    assert_eq!(pin2(&doc).1, Point::new(40.0, 64.0));
++    assert_eq!(wire_end(&doc), Point::new(40.0, 64.0));
++    // The geometry comes from the library for every built-in kind.
++    for kind in [
++        TerminalKind::Feedthrough,
++        TerminalKind::ProtectiveEarth,
++        TerminalKind::Neutral,
++        TerminalKind::Fuse,
++        TerminalKind::Disconnect,
++    ] {
++        let key = novo_core::SymbolKey(default_symbol(kind).into());
++        assert_eq!(symbol_length(&key).unwrap(), terminal_length(kind));
++    }
++}
++
++/// Review item 1: when the wire leaves no room for the longer symbol, the
++/// change is refused and nothing moves.
++#[test]
++fn a_kind_change_without_room_is_refused() {
++    let mut doc = Document::default();
++    let (terminal, _) = doc
++        .transact("Draw", |tx| {
++            let page = tx.add_page("1")?;
++            let k = tx.add_device(tag("-K1"), "")?;
++            let m = tx.add_device(tag("-M1"), "")?;
++            let ks = row_of_pins(tx, page, k, &["14"], 40.0, 20.0)?;
++            let ms = row_of_pins(tx, page, m, &["1"], 40.0, 42.0)?;
++            let strip = strip_by_tag(tx, "X1")?;
++            let t = tx.add_terminal(strip, "1")?;
++            let s = tx.place_symbol(
++                page,
++                default_symbol(TerminalKind::Feedthrough),
++                Placement::at(Point::new(40.0, 30.0)),
++                terminal_pins(8.0),
++                SymbolRole::Terminal { terminals: vec![t] },
++            )?;
++            tx.connect(Endpoint::pin(ks, 0), Endpoint::pin(s, 0))?;
++            // Only 4 mm below the terminal: a fuse terminal needs 8 more.
++            tx.connect(Endpoint::pin(s, 1), Endpoint::pin(ms, 0))?;
++            Ok(t)
++        })
++        .unwrap();
++    let before = doc.project().clone();
++    assert!(
++        doc.transact("Kind", |tx| set_kind(tx, terminal, TerminalKind::Fuse))
++            .is_err()
++    );
++    assert_eq!(snapshot(doc.project()), snapshot(&before));
++}
++
++/// Review item 2: find and replace refuses empty names and names that are
++/// taken, and the preview shows why before anything is applied.
++#[test]
++fn rename_refuses_empty_and_taken_names() {
++    let mut doc = Document::default();
++    let ((strip, ids), _) = doc
++        .transact("Spares", |tx| {
++            let strip = strip_by_tag(tx, "X1")?;
++            let ids = add_spares(tx, strip, 3)?;
++            tx.update::<novo_core::Terminal>(ids[2], |t| t.name = "21".into())?;
++            Ok((strip, ids))
++        })
++        .unwrap();
++    // "1" -> "" empties terminal 1 and turns 21 into 2, which is taken.
++    let preview = rename_preview(doc.project(), strip, "1", "");
++    let problems: Vec<_> = preview
++        .iter()
++        .map(|c| (c.old.as_str(), c.problem))
++        .collect();
++    assert_eq!(
++        problems,
++        [
++            ("1", Some(RenameProblem::Empty)),
++            ("21", Some(RenameProblem::Taken(ids[1]))),
++        ]
++    );
++    assert_eq!(
++        strings::rename_problem("2", RenameProblem::Taken(ids[1]), "-X1:2"),
++        "2 is already used by -X1:2."
++    );
++    let before = doc.project().clone();
++    let err = doc
++        .transact("Rename", |tx| rename(tx, strip, "1", ""))
++        .unwrap_err();
++    assert!(
++        matches!(err, ModelError::InvalidValue { field: "name", .. }),
++        "{err:?}"
++    );
++    assert_eq!(snapshot(doc.project()), snapshot(&before));
++    let err = doc
++        .transact("Rename", |tx| rename(tx, strip, "21", "2"))
++        .unwrap_err();
++    assert_eq!(err, ModelError::AlreadyExists(ids[1].into()));
++    // Two renamed terminals may not end up with the same name either.
++    let ((x2, other), _) = doc
++        .transact("Strip", |tx| {
++            let x2 = strip_by_tag(tx, "X2")?;
++            let ids = add_spares(tx, x2, 2)?;
++            tx.update::<novo_core::Terminal>(ids[0], |t| t.name = "aa1".into())?;
++            tx.update::<novo_core::Terminal>(ids[1], |t| t.name = "a1".into())?;
++            Ok((x2, ids))
++        })
++        .unwrap();
++    let preview = rename_preview(doc.project(), x2, "a", "");
++    assert_eq!(preview[0].problem, Some(RenameProblem::Taken(other[1])));
++    assert_eq!(preview[1].problem, Some(RenameProblem::Taken(other[0])));
++    let before = doc.project().clone();
++    assert!(
++        doc.transact("Rename", |tx| rename(tx, x2, "a", ""))
++            .is_err()
++    );
++    assert_eq!(snapshot(doc.project()), snapshot(&before));
++    // A clean rename still works.
++    doc.transact("Rename", |tx| rename(tx, strip, "21", "5"))
++        .unwrap();
++    assert_eq!(doc.project().terminal(ids[2]).unwrap().name, "5");
++}
++
++/// Review item 2: `set_level` refuses level 0, a name already on that
++/// level, and more levels than a multi-level drawing has.
++#[test]
++fn set_level_refuses_duplicates_and_missing_levels() {
++    let mut doc = Document::default();
++    let ((a, b), _) = doc
++        .transact("Draw", |tx| {
++            let page = tx.add_page("1")?;
++            let strip = strip_by_tag(tx, "X1")?;
++            let a = tx.add_terminal(strip, "1")?;
++            let b = tx.add_terminal(strip, "1")?;
++            tx.update::<novo_core::Terminal>(b, |t| t.level = 2)?;
++            let s = tx.place_symbol(
++                page,
++                "iec/terminals/terminal_2level",
++                Placement::at(Point::new(40.0, 30.0)),
++                vec![
++                    Pin::new("1", 0.0, 0.0),
++                    Pin::new("2", 0.0, 8.0),
++                    Pin::new("3", 8.0, 0.0),
++                    Pin::new("4", 8.0, 8.0),
++                ],
++                SymbolRole::Terminal { terminals: vec![a] },
++            )?;
++            tx.update::<novo_core::SymbolInstance>(s, |s| {
++                s.role = SymbolRole::Terminal {
++                    terminals: vec![a, b],
++                };
++                s.bridges = vec![vec![0, 1], vec![2, 3]];
++            })?;
++            Ok((a, b))
++        })
++        .unwrap();
++    let before = doc.project().clone();
++    let err = doc.transact("Level", |tx| set_level(tx, a, 0)).unwrap_err();
++    assert!(matches!(
++        err,
++        ModelError::InvalidValue { field: "level", .. }
++    ));
++    let err = doc.transact("Level", |tx| set_level(tx, a, 2)).unwrap_err();
++    assert_eq!(err, ModelError::AlreadyExists(b.into()));
++    let err = doc.transact("Level", |tx| set_level(tx, b, 3)).unwrap_err();
++    assert!(matches!(
++        err,
++        ModelError::InvalidValue { field: "level", .. }
++    ));
++    assert_eq!(snapshot(doc.project()), snapshot(&before));
++}
++
++/// Review item 3: the rule lives in novo-core's typed rule; projects saved
++/// with the former property keys are migrated onto it.
++#[test]
++fn legacy_rule_properties_are_migrated_to_the_core_rule() {
++    let mut doc = Document::new(Project::default());
++    doc.transact("Old file", |tx| {
++        tx.set_info(|i| {
++            i.properties
++                .insert(LEGACY_SAME_NAME_KEY.into(), "refuse".into());
++            i.properties
++                .insert(LEGACY_JOIN_LINK_KEY.into(), "jumper".into());
++        })
++    })
++    .unwrap();
++    let (changed, _) = doc.transact("Migrate", migrate_legacy_rules).unwrap();
++    assert!(changed);
++    assert_eq!(
++        rules(doc.project()),
++        TerminalRules {
++            same_name: SameName::Refuse,
++            join_link: JoinLink::Jumper,
++        }
++    );
++    assert!(doc.project().info().properties.is_empty());
++    let (changed, _) = doc.transact("Migrate", migrate_legacy_rules).unwrap();
++    assert!(!changed);
++    // One undo step brings the old properties back.
++    doc.undo().unwrap();
++    assert_eq!(rules(doc.project()).same_name, SameName::Off);
++}
++
++#[test]
++fn a_pen_wire_gets_a_pe_terminal_named_pen() {
++    let mut doc = Document::default();
++    let (wire, _) = doc
++        .transact("Draw", |tx| {
++            let page = tx.add_page("1")?;
++            let pen = tx.add_potential("PEN", PotentialKind::Pen)?;
++            let m = tx.add_device(tag("-M1"), "")?;
++            let f = feed(tx, page, pen, 40.0, 20.0)?;
++            let ms = row_of_pins(tx, page, m, &["PEN"], 40.0, 100.0)?;
++            tx.connect(Endpoint::pin(f, 0), Endpoint::pin(ms, 0))
++        })
++        .unwrap();
++    let (placed, _) = doc
++        .transact("T", |tx| {
++            let strip = strip_by_tag(tx, "X1")?;
++            place_terminals(tx, strip, &[drop_at(wire)])
++        })
++        .unwrap();
++    let t = doc.project().terminal(placed[0].terminal).unwrap();
++    assert_eq!(t.name, "PEN");
++    assert_eq!(t.kind, TerminalKind::ProtectiveEarth);
++    assert_eq!(
++        doc.project().symbol(placed[0].symbol).unwrap().symbol.0,
++        "iec/terminals/terminal_pe"
++    );
++    assert!(check(doc.project(), &doc.project().netlist()).is_empty());
++    // A PEN conductor on a feed-through terminal is flagged.
++    doc.transact("Kind", |tx| {
++        set_kind(tx, placed[0].terminal, TerminalKind::Feedthrough)
++    })
++    .unwrap();
++    let issues = check(doc.project(), &doc.project().netlist());
++    assert!(issues.iter().any(|i| matches!(
++        &i.kind,
++        IssueKind::PotentialDiffersFromKind { potential } if potential == "PEN"
++    )));
++}
++
++#[test]
++fn jumpers_stay_on_one_strip_and_strips_sort_by_number() {
++    let mut doc = Document::default();
++    let ((x2, x10), _) = doc
++        .transact("Strips", |tx| {
++            let x10 = strip_by_tag(tx, "X10")?;
++            let x2 = strip_by_tag(tx, "X2")?;
++            Ok((x2, x10))
++        })
++        .unwrap();
++    assert_eq!(strips(doc.project()), [x2, x10]);
++    let (ids, _) = doc
++        .transact("Spares", |tx| {
++            let mut ids = add_spares(tx, x2, 1)?;
++            ids.extend(add_spares(tx, x10, 1)?);
++            Ok(ids)
++        })
++        .unwrap();
++    assert!(
++        doc.transact("Jumper", |tx| set_jumper(tx, &ids, Some(1)))
++            .is_err()
++    );
++    // Removing jumpers needs no common strip.
++    doc.transact("Jumper", |tx| set_jumper(tx, &ids, None))
++        .unwrap();
++}
+-- 
+2.43.0
+

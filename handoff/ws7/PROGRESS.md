@@ -11,3 +11,4 @@
 2026-10-14 17:00 UTC Handoff files written
 2026-10-14 17:12 UTC DESIGN.md on main; pushed ea67da2: propose_parts, auto_assign_parts, missing_parts_summary; head sent to reviewer
 2026-10-14 17:13 UTC Workflow thread: #36 at ea67da2 meets DESIGN.md criteria, no blockers; editor (WS-06) to call auto_assign_parts on sizing changes
+2026-10-14 18:15 UTC Integration lead fixed PR #36 locally (review items + #35 merge) at 2a43650; bundle and patches in lead-fixes/, not pushed.

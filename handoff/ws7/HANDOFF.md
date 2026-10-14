@@ -44,3 +44,6 @@ READY. After each push, send the new head SHA to the main reviewer.
 - stress_page(doc, n) makes n/3 devices, not n.
 - Starter catalog is example data; order numbers should be verified.
 - Bool/num parsing accepts decimal comma; types follow the existing value or part value.
+
+## Lead fixes waiting (read first)
+See lead-fixes/README.md: review items and #35 fallout fixed locally at 2a43650 by the integration lead; apply with the bundle, check, push, ping the reviewer.

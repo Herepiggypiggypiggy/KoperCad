@@ -12,3 +12,4 @@
 2026-10-14 17:12 UTC WS-01 is renaming its action ids: focus mode is "view.focus" (mine is view.focus_mode) and it adds view.pin_outline. Align these in the follow-up PR.
 
 - 2026-10-14: CI fmt check red on 01d8023 (journeys.rs). Pushed 946d8ed (cargo fmt only). Reviewer and coordinator told.
+2026-10-14 18:15 UTC Integration lead fixed PR #29 locally (review items + #35 merge) at c3f4d7f; bundle and patches in lead-fixes/, not pushed.

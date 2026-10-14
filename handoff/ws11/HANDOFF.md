@@ -34,3 +34,6 @@ After each push, send_message the reviewer the new head SHA. Check the PR is sti
 - The Gate 1 fixture's X1:PE has kind feed-through; the checker flags it on purpose (tester informed).
 - Reviewer for PRs: GitHub refuses Tadjiro as reviewer (he is the author); he is assigned instead.
 - Keep UI out of #30 (lead rule 4/5).
+
+## Lead fixes waiting (read first)
+See lead-fixes/README.md: review items and #35 fallout fixed locally at 351d8cc by the integration lead; apply with the bundle, check, push, ping the reviewer.
