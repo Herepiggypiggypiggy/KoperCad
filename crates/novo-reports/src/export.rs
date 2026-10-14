@@ -25,18 +25,24 @@ fn sheet_name(title: &str, taken: &[String]) -> String {
         .chars()
         .map(|c| if "[]:*?/\\".contains(c) { '_' } else { c })
         .collect();
-    let clean = clean.trim_matches('\'').trim();
-    let base: String = if clean.is_empty() {
-        "Report".into()
+    // Excel rejects a leading or trailing apostrophe (also after cutting to
+    // 31 characters) and the reserved name `History`.
+    let tidy = |s: &str| s.trim().trim_matches('\'').trim().to_owned();
+    let clean = tidy(&clean.chars().take(31).collect::<String>());
+    let base: String = if clean.is_empty() || clean.eq_ignore_ascii_case("history") {
+        format!(
+            "{} report",
+            if clean.is_empty() { "Untitled" } else { &clean }
+        )
     } else {
-        clean.chars().take(31).collect()
+        clean
     };
     let mut name = base.clone();
     let mut n = 2;
     while taken.iter().any(|t| t.eq_ignore_ascii_case(&name)) {
         let suffix = format!(" ({n})");
         let keep = 31 - suffix.chars().count();
-        name = base.chars().take(keep).collect::<String>() + &suffix;
+        name = tidy(&base.chars().take(keep).collect::<String>()) + &suffix;
         n += 1;
     }
     name
@@ -109,10 +115,20 @@ pub fn xlsx_bytes(reports: &[&ReportOutput]) -> Result<Vec<u8>, ExportError> {
     Ok(workbook.save_to_buffer()?)
 }
 
-/// [`xlsx_bytes`] written to a file.
+/// [`xlsx_bytes`] written to a file. The workbook is written next to the
+/// target first and then renamed over it, so a failed export never leaves a
+/// truncated file in place of the previous one.
 pub fn save_xlsx(reports: &[&ReportOutput], path: impl AsRef<Path>) -> Result<(), ExportError> {
-    std::fs::write(path, xlsx_bytes(reports)?)?;
-    Ok(())
+    let path = path.as_ref();
+    let bytes = xlsx_bytes(reports)?;
+    let mut temp = path.as_os_str().to_owned();
+    temp.push(".partial");
+    let temp = std::path::PathBuf::from(temp);
+    let written = std::fs::write(&temp, bytes).and_then(|()| std::fs::rename(&temp, path));
+    if written.is_err() {
+        let _ = std::fs::remove_file(&temp);
+    }
+    Ok(written?)
 }
 
 fn col(index: usize) -> Result<u16, XlsxError> {
@@ -134,6 +150,12 @@ pub struct CsvOptions {
     pub delimiter: char,
     /// Start with a UTF-8 byte order mark so Excel reads `mm²` correctly.
     pub bom: bool,
+    /// Keep spreadsheets from evaluating text as a formula: a text field
+    /// starting with `=`, `+`, `-`, `@`, tab or CR (every IEC 81346 tag:
+    /// `=A1+CAB-K1`, `-K1`) gets a leading `'`. Excel shows that apostrophe
+    /// in the cell; for clean cells use the xlsx export. Turn this off for
+    /// CSV read by other programs. Numbers are never changed.
+    pub excel_safe: bool,
 }
 
 impl Default for CsvOptions {
@@ -141,6 +163,7 @@ impl Default for CsvOptions {
         CsvOptions {
             delimiter: ',',
             bom: true,
+            excel_safe: true,
         }
     }
 }
@@ -148,6 +171,15 @@ impl Default for CsvOptions {
 fn csv_field(text: &str, delimiter: char) -> String {
     if text.contains([delimiter, '"', '\n', '\r']) {
         format!("\"{}\"", text.replace('"', "\"\""))
+    } else {
+        text.to_owned()
+    }
+}
+
+/// A text field as written, neutralised when `excel_safe` asks for it.
+fn csv_text(text: &str, options: &CsvOptions) -> String {
+    if options.excel_safe && text.starts_with(['=', '+', '-', '@', '\t', '\r']) {
+        format!("'{text}")
     } else {
         text.to_owned()
     }
@@ -164,7 +196,7 @@ fn csv_line(fields: impl IntoIterator<Item = String>, options: &CsvOptions, out:
 
 fn csv_section(section: &Section, options: &CsvOptions, out: &mut String) {
     csv_line(
-        section.columns.iter().map(|c| c.header.clone()),
+        section.columns.iter().map(|c| csv_text(&c.header, options)),
         options,
         out,
     );
@@ -175,6 +207,7 @@ fn csv_section(section: &Section, options: &CsvOptions, out: &mut String) {
             .map(|cell| match (cell, options.delimiter) {
                 // With `;` as the delimiter the locale writes decimals with a comma.
                 (Cell::Number(value), ';') => value.to_string().replace('.', ","),
+                (Cell::Text(text), _) => csv_text(text, options),
                 _ => cell.to_string(),
             });
         csv_line(fields, options, out);
@@ -199,7 +232,7 @@ pub fn to_csv(report: &ReportOutput, options: &CsvOptions) -> String {
             } else {
                 section.title.clone()
             };
-            csv_line([title], options, &mut out);
+            csv_line([csv_text(&title, options)], options, &mut out);
         }
         csv_section(section, options, &mut out);
     }

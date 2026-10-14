@@ -30,6 +30,9 @@ fn edits_regenerate_only_affected_reports() {
     assert_eq!(stale, ["wires"]);
     for id in ["toc", "bom", "devices"] {
         assert!(reports.is_current(doc.project(), id), "{id}");
+        // Rolled forward, so the output itself says it is current.
+        let output = reports.get(doc.project(), id).expect("built in");
+        assert_eq!(output.revision, doc.project().revision(), "{id}");
     }
     assert!(!reports.is_current(doc.project(), "wires"));
     let wires = reports.get(doc.project(), "wires").expect("wires");

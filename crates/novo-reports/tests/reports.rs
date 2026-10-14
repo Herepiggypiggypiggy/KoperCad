@@ -601,17 +601,116 @@ fn csv_quotes_and_localises() {
     let devices = report(&doc, "devices");
     let csv = to_csv(&devices, &CsvOptions::default());
     assert!(csv.starts_with("\u{feff}Tag,Function,Location,Description,"));
-    assert!(csv.contains("=A1+FLD-M1,=A1,+FLD,\"Pump, \"\"main\"\"\",Device,"));
+    assert!(csv.contains("'=A1+FLD-M1,'=A1,'+FLD,\"Pump, \"\"main\"\"\",Device,"));
     assert!(csv.ends_with("\r\n"));
 
     let wires = report(&doc, "wires");
     let semicolon = CsvOptions {
         delimiter: ';',
         bom: false,
+        excel_safe: false,
     };
     let csv = to_csv(&wires, &semicolon);
     assert!(csv.starts_with("Wire no.;From;To;"));
     assert!(csv.contains(";1,5;=A1-W1 BK;"));
     let toc = to_csv(&report(&doc, "toc"), &semicolon);
     assert!(toc.contains("1;\"Main; power\";;Schematic\r\n"));
+}
+
+#[test]
+fn csv_for_excel_never_starts_a_text_field_with_a_formula_character() {
+    let (mut doc, h) = starter();
+    doc.transact("Hostile", |tx| {
+        tx.update::<Device>(h.m1, |d| d.description = "@SUM(1+1)".into())?;
+        tx.add_device(DeviceTag::parse("-K1")?, "-24 V relay")?;
+        Ok(())
+    })
+    .expect("edit");
+    for delimiter in [',', ';'] {
+        let options = CsvOptions {
+            delimiter,
+            ..CsvOptions::default()
+        };
+        assert!(options.excel_safe, "on by default");
+        for output in generate_all(doc.project()) {
+            let csv = to_csv(&output, &options);
+            for line in csv.trim_start_matches('\u{feff}').lines() {
+                for field in line.split(delimiter) {
+                    let field = field.trim_start_matches('"');
+                    assert!(
+                        !field.starts_with(['=', '+', '-', '@', '\t']),
+                        "{}: {field:?} in {line:?}",
+                        output.title
+                    );
+                }
+            }
+        }
+    }
+    let devices = report(&doc, "devices");
+    let csv = to_csv(&devices, &CsvOptions::default());
+    assert!(csv.contains("\r\n'-K1,,,'-24 V relay,"));
+    assert!(csv.contains(",'@SUM(1+1),"));
+    // Numbers stay numbers, even negative ones.
+    let mut section =
+        novo_reports::Section::new("n", "", vec![novo_reports::Column::new("v", "Value", 1.0)]);
+    section.push(vec![Cell::Number(-1.5)], vec![]);
+    let output = ReportOutput {
+        report: "n".into(),
+        title: "Numbers".into(),
+        revision: 0,
+        sections: vec![section],
+    };
+    assert_eq!(
+        to_csv(&output, &CsvOptions::default()),
+        "\u{feff}Value\r\n-1.5\r\n"
+    );
+    // Raw values for machine readers.
+    let raw = CsvOptions {
+        excel_safe: false,
+        ..CsvOptions::default()
+    };
+    assert!(to_csv(&devices, &raw).contains("\r\n-K1,,,-24 V relay,"));
+}
+
+#[test]
+fn xlsx_sheet_names_are_always_valid() {
+    let named = |title: &str| ReportOutput {
+        report: "x".into(),
+        title: title.into(),
+        revision: 0,
+        sections: Vec::new(),
+    };
+    // 30 characters then an apostrophe that ends up last after cutting.
+    let long = format!("{}'{}", "a".repeat(30), "b".repeat(5));
+    let outputs = [named("History"), named(&long), named(&long), named("'")];
+    let refs: Vec<&ReportOutput> = outputs.iter().collect();
+    let bytes = xlsx_bytes(&refs).expect("valid names");
+    let book: Xlsx<_> = open_workbook_from_rs(Cursor::new(bytes)).expect("opens");
+    let names = book.sheet_names();
+    assert_eq!(names.len(), 4);
+    for name in &names {
+        assert!(name.chars().count() <= 31, "{name}");
+        assert!(!name.starts_with('\'') && !name.ends_with('\''), "{name}");
+        assert!(!name.eq_ignore_ascii_case("history"), "{name}");
+    }
+}
+
+#[test]
+fn save_xlsx_replaces_the_file_whole() {
+    let (doc, _) = starter();
+    let outputs = generate_all(doc.project());
+    let refs: Vec<&ReportOutput> = outputs.iter().collect();
+    let dir = std::env::temp_dir().join(format!("novo-reports-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("dir");
+    let path = dir.join("reports.xlsx");
+    std::fs::write(&path, b"old").expect("old file");
+    novo_reports::save_xlsx(&refs, &path).expect("saved");
+    let bytes = std::fs::read(&path).expect("read");
+    assert_eq!(bytes, xlsx_bytes(&refs).expect("xlsx"));
+    assert!(!dir.join("reports.xlsx.partial").exists());
+    // A failed write leaves the previous file alone.
+    let missing = dir.join("no-such-dir").join("reports.xlsx");
+    assert!(novo_reports::save_xlsx(&refs, &missing).is_err());
+    assert_eq!(std::fs::read(&path).expect("still there"), bytes);
+    std::fs::remove_dir_all(&dir).expect("cleanup");
 }

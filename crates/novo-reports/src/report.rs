@@ -205,14 +205,17 @@ impl LiveReports {
         let revision = project.revision();
         let mut stale = Vec::new();
         for entry in &mut self.entries {
-            let Some((at, _)) = &mut entry.output else {
+            let Some((at, output)) = &mut entry.output else {
                 continue;
             };
             if *at == revision {
                 continue;
             }
             if *at == since && !entry.report.affected_by(changes) {
+                // Still correct for the new revision: say so, so readers of
+                // `ReportOutput::revision` see it as current.
                 *at = revision;
+                output.revision = revision;
             } else {
                 entry.output = None;
                 stale.push(entry.report.id());

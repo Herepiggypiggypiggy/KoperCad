@@ -173,7 +173,10 @@ pub struct ReportOutput {
     /// The report's id ([`Report::id`](crate::Report::id)).
     pub report: String,
     pub title: String,
-    /// The project revision this was generated from.
+    /// The project revision this output matches: the one it was generated
+    /// from, moved forward by [`LiveReports`](crate::LiveReports) across
+    /// edits that cannot change it. Equal to `project.revision()` means
+    /// current.
     pub revision: u64,
     pub sections: Vec<Section>,
 }
