@@ -92,7 +92,13 @@ impl NovoApp {
             } else {
                 String::new()
             };
-            self.message(Level::Info, format!("Exported {what}{count}"));
+            let tool = match format {
+                LinkFormat::PlcOpen => ". Not yet tried in CODESYS",
+                LinkFormat::Tia => ". Not yet tried in TIA Portal",
+                LinkFormat::Studio5000 => ". Not yet tried in Studio 5000",
+                _ => "",
+            };
+            self.message(Level::Info, format!("Exported {what}{count}{tool}"));
             self.wb.last_export = Some(last.clone());
         }
         if let Some(first) = out.warnings.first() {
@@ -201,7 +207,10 @@ impl NovoApp {
             ui.add_space(8.0);
             ui.horizontal(|ui| {
                 let apply = ui
-                    .add_enabled(!plan.is_empty(), egui::Button::new("Apply (Enter)"))
+                    .add_enabled_ui(!plan.is_empty(), |ui| {
+                        novo_theme::widgets::primary_button(ui, "Apply (Enter)")
+                    })
+                    .inner
                     .clicked();
                 let cancel = ui.button("Cancel (Esc)").clicked();
                 (apply, cancel)
