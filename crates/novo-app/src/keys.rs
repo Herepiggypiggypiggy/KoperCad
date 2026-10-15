@@ -86,8 +86,10 @@ pub fn take_commands(
             };
             match keymap.resolve(chord, focus) {
                 Some(command) if wants(command) => {
-                    // A held Shift+W would flip the mode on every repeat.
-                    if !(*repeat && command == "wire.mode") {
+                    // A held Shift+W would flip the mode on every repeat, and
+                    // a held place key would re-arm its hold and, on the
+                    // release, open the part search under the wheel.
+                    if !(*repeat && matches!(command, "wire.mode" | "tool.place")) {
                         fired.push(command);
                     }
                     typed_key |= chord.types_text();

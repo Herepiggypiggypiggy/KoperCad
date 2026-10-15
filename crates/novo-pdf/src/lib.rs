@@ -103,6 +103,7 @@ pub fn print_style() -> ModelStyle {
         pin_joint_color: ink,
         wire_end_color: ink,
         unconnected_color: ink,
+        corner_half: 0.0,
         ..ModelStyle::default()
     }
 }
