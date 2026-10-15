@@ -1,7 +1,8 @@
 # Two wiring modes: engine plan and test list
 
-The behaviour is specified in docs/DESIGN.md section 4 ("Wiring modes" and
-"Wires never overlap"); this file is the build order and the tests.
+The behaviour is specified in docs/DESIGN.md (the wiring modes paragraph,
+PR #169); this file holds only the engine plan, build order and tests. If
+they differ, DESIGN wins.
 
 ## Engine
 
@@ -18,8 +19,10 @@ The behaviour is specified in docs/DESIGN.md section 4 ("Wiring modes" and
   the commit. Deterministic, so undo and redo do not drift.
   - Router-chosen legs: flip or shift one grid step; at a pin the stub leaves
     along `endpoint_direction` for one step, then shifts.
-  - User-placed corners and Lines segments are never moved: refused live
-    (`Clicked::Refused`), `draw_wire` returns `Err` with the other wire named.
+  - Corners nudges (up to 3 snap steps); Lines never nudges and refuses.
+    The refusal is typed data (`Refusal { other: WireId, stretch }`) returned
+    by the engine entry, so tests assert on it; the UI draws it live
+    (`Clicked::Refused`).
   - Same conductor: merge (survivor keeps number and text; two different
     explicit numbers refuse). Same pin and direction: derived junction.
   - Move with no room: accepted, reported by `wire.overlap`.
@@ -27,13 +30,16 @@ The behaviour is specified in docs/DESIGN.md section 4 ("Wiring modes" and
 - `novo-checks`: `wire.overlap`, error level, for projects that already
   contain overlaps (raw `Command::AddWire`/`SetRoute`, imports). Core never
   rejects.
+- Headless hooks for the tester: readable `wiring_mode` on the app and editor,
+  mode loaded from Settings (not the project), and a tool-event API on the
+  editor to inject press/drag/release.
 - Keyboard thread: Shift+W (key repeat ignored), `EditorKey::Backspace`,
   command `wire.mode` with aliases eplan, autocad, corners, draw. Enter
   finishes a Lines wire only when no proposal is highlighted.
 
 ## Build order
 
-1. This PR: DESIGN.md and this file.
+1. This PR: this file (DESIGN text is #169).
 2. `geometry::overlaps`, `settle_wire`, wired into the existing (Corners)
    paths, with tests.
 3. `WiringMode`, Lines behaviour, `draw_wire_exact`.
@@ -48,8 +54,9 @@ The behaviour is specified in docs/DESIGN.md section 4 ("Wiring modes" and
 3. AutoCAD journey (Lines): click pin, three clicks, click pin; exactly the
    axis-locked segments, no router; Backspace removes the last segment.
 4. A pin-to-pin drag gives the same wire in both modes.
-5. Router leg that would overlap is adjusted; a placed corner or Lines segment
-   that would overlap is refused, nothing is placed, undo depth unchanged.
+5. Corners: an overlapping leg is nudged and the preview shows the nudge
+   before the click. Lines: the overlapping segment is refused with a typed
+   reason, nothing is placed, undo depth unchanged.
 6. A route through another conductor's pin or junction is refused.
 7. Two wires leaving one pin: derived junction, potentials and cross
    references unchanged, one undo step.

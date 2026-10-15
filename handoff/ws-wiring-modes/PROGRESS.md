@@ -1,2 +1,3 @@
 2026-10-15 07:50 UTC design doc written, roster entry added, proposal sent to Workflow/Layout/editor/keyboard/tester/reviewers
 2026-10-15 07:55 UTC Workflow's #169 (Auto/Draw, W again) conflicts with #168. Proposed convergence on #169 with states Corners|Lines; will close #168 once Workflow agrees. Keyboard asked to hold Shift+W. Editor seams: mode on Editor, line mode ortho-locked.
+2026-10-15 08:10 UTC Layout, design reviewer back Corners|Lines + Shift+W. Pushed 86c3c39 to #168 with DESIGN.md text (modes, no-overlap, dock switch) and engine plan/tests. Asked Workflow to close #169; main+design reviewers to re-check. Diagonals out of v1.
