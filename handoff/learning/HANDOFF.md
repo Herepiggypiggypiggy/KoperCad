@@ -2,7 +2,9 @@
 
 ## State
 - Repo herepiggypiggypiggy/kopercad, branch `claude/project-thread-7lpw0d` (restart from main after each merge).
-- Design merged (#456). Open now: PR with `assets/lessons/tracks.toml` and `glossary.toml` (content threads need them). Engine crate `novo-learn` is written and tested (37 tests) on a local branch, to go in the next PR once the tracks PR merges; backup patch in /mnt/project-files/handoff/learning/.
+- Merged: design (#456), tracks and glossary (#474). Open: engine PR (crate `novo-learn`: markup, lesson format, checks, runner, catalog, lint, progress; 46 unit tests plus `tests/repo_lessons.rs`) with `assets/lessons/README.md`.
+- Next: app shell (card, pointer overlay, Learn window, entries, event funnel and signals, anchors), after #428 merges (it owns `onboarding.rs`; do not edit it before then). The crate is not yet in `[workspace.dependencies]`; the lead registers it when `novo-app` needs it.
+- Content threads write lessons as drafts against `assets/lessons/README.md`.
 
 ## Resume
 ```
