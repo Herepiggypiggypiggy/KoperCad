@@ -1,6 +1,6 @@
 # Autosave and crash recovery
 
-Owner: Autosave thread (novo-storage). Status: storage side implemented; app wiring is a follow-up PR.
+Owner: Autosave thread (novo-storage). Status: storage (#375) and app wiring implemented.
 
 ## What already exists (WS-04)
 
@@ -50,9 +50,21 @@ and a derived schema-1 file: contents identical after upgrade, backup kept, read
 writes, newer files refused, recovery from an old-version autosave survives the upgrade. Every
 future migration adds its fixture there.
 
+## App wiring
+
+`StorageBackend::with_recovery_dir` is set from `recovery_dir()` in `novo-app/src/lib.rs`:
+`%LOCALAPPDATA%\KoperCAD\recovery`. Untitled projects already live in app data and keep their
+recovery file beside them. Saving an untitled project (`save_as`) switches its session to the
+folder (`Session::set_recovery_dir`). No recovery folder existed under the old NovoElectric name, so
+only the beside-the-project legacy location needs reading, and it still is.
+
+## Known limits
+
+- The path hash is lowercased (right for Windows). On a case-sensitive file system two projects in
+  one folder that differ only by case would share a recovery name; the file-id check then drops the
+  other's file as foreign. Very unlikely.
+
 ## Follow-ups
 
-- App: pass the folder from `data_dir()/recovery` in `StorageBackend` (App shell thread owns
-  `backend.rs`).
 - UI: show where leftover `.broken` files are. Remove recovery files whose project no longer exists
   (needs the project path in the recovery meta).
