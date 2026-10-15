@@ -76,6 +76,48 @@ pub(crate) fn section_commands(
         .collect()
 }
 
+/// Rows the menu puts first, in this order; the rest follow in registry
+/// order.
+const PREFERRED: &[&str] = &["project.rules", "project.standard", "app.preferences"];
+
+/// The row's label inside a submenu, where the section name already says
+/// what it does: "Export PDF" is "PDF" under Export.
+fn short_label(section: Section, label: &str) -> String {
+    let verb = section.label();
+    let rest = label
+        .strip_prefix(verb)
+        .map(str::trim_start)
+        .filter(|r| !r.is_empty());
+    match rest {
+        Some(r) => {
+            let mut chars = r.chars();
+            let first = chars.next().map(|c| c.to_uppercase().to_string());
+            // Keep acronyms (PDF, BOM) as they are.
+            let keep = r.chars().nth(1).is_some_and(char::is_uppercase);
+            match first {
+                Some(f) if !keep => f + chars.as_str(),
+                _ => r.to_owned(),
+            }
+        }
+        None => label.to_owned(),
+    }
+}
+
+/// Whether the section's rows go into a submenu: only when it holds two or
+/// more, so a single export stays one click.
+fn is_submenu(section: Section, count: usize) -> bool {
+    matches!(section, Section::Import | Section::Export) && count >= 2
+}
+
+fn sort_preferred(items: &mut [&'static CommandInfo]) {
+    items.sort_by_key(|c| {
+        PREFERRED
+            .iter()
+            .position(|p| *p == c.id)
+            .unwrap_or(usize::MAX)
+    });
+}
+
 impl NovoApp {
     /// The menu sections below the project entries. Sections with nothing
     /// the app runs are left out. Clicks are returned, not run, because
@@ -84,39 +126,55 @@ impl NovoApp {
         let mut picked = Vec::new();
         let context = self.command_context();
         for section in Section::ALL {
-            let items = section_commands(section, commands::COMMANDS, app_runs);
+            let mut items = section_commands(section, commands::COMMANDS, app_runs);
             if items.is_empty() {
                 continue;
             }
+            sort_preferred(&mut items);
             ui.separator();
-            if matches!(section, Section::Import | Section::Export) {
+            if is_submenu(section, items.len()) {
                 ui.menu_button(section.label(), |ui| {
-                    command_buttons(ui, &items, &context, &mut picked)
+                    self.command_buttons(ui, section, &items, &context, true, &mut picked)
                 });
             } else {
-                command_buttons(ui, &items, &context, &mut picked);
+                if items.len() > 1 || !matches!(section, Section::Import | Section::Export) {
+                    novo_theme::widgets::section_label(ui, section.label());
+                }
+                self.command_buttons(ui, section, &items, &context, false, &mut picked);
             }
         }
         picked
     }
-}
 
-fn command_buttons(
-    ui: &mut egui::Ui,
-    items: &[&'static CommandInfo],
-    context: &commands::Context,
-    picked: &mut Vec<&'static str>,
-) {
-    for command in items {
-        let state = availability(command, context);
-        let response = ui.add_enabled(state.is_ok(), egui::Button::new(command.label));
-        let response = match state {
-            Err(reason) => response.on_disabled_hover_text(reason),
-            Ok(()) => response,
-        };
-        if response.clicked() {
-            picked.push(command.id);
-            ui.close();
+    fn command_buttons(
+        &self,
+        ui: &mut egui::Ui,
+        section: Section,
+        items: &[&'static CommandInfo],
+        context: &commands::Context,
+        short: bool,
+        picked: &mut Vec<&'static str>,
+    ) {
+        for command in items {
+            let state = availability(command, context);
+            let label = if short {
+                short_label(section, command.label)
+            } else {
+                command.label.to_owned()
+            };
+            let mut button = egui::Button::new(label);
+            if let Some(keys) = self.wb.keymap.shortcut_text(command.id) {
+                button = button.shortcut_text(keys);
+            }
+            let response = ui.add_enabled(state.is_ok(), button);
+            let response = match state {
+                Err(reason) => response.on_disabled_hover_text(reason),
+                Ok(()) => response,
+            };
+            if response.clicked() {
+                picked.push(command.id);
+                ui.close();
+            }
         }
     }
 }
@@ -164,5 +222,33 @@ mod tests {
                 .iter()
                 .any(|c| c.id == "app.preferences")
         );
+    }
+
+    #[test]
+    fn labels_in_a_submenu_drop_the_repeated_verb() {
+        assert_eq!(short_label(Section::Export, "Export PDF"), "PDF");
+        assert_eq!(
+            short_label(Section::Export, "Export bill of materials"),
+            "Bill of materials"
+        );
+        assert_eq!(short_label(Section::Import, "Spreadsheet"), "Spreadsheet");
+    }
+
+    #[test]
+    fn one_export_is_a_plain_row_and_two_make_a_submenu() {
+        assert!(!is_submenu(Section::Export, 1));
+        assert!(is_submenu(Section::Export, 2));
+        assert!(!is_submenu(Section::Settings, 5));
+    }
+
+    #[test]
+    fn settings_rows_follow_the_preferred_order() {
+        let mut items = section_commands(Section::Settings, commands::COMMANDS, app_runs);
+        sort_preferred(&mut items);
+        let ids: Vec<_> = items.iter().map(|c| c.id).collect();
+        let at = |id| ids.iter().position(|i| *i == id);
+        if let (Some(std), Some(prefs)) = (at("project.standard"), at("app.preferences")) {
+            assert!(std < prefs);
+        }
     }
 }
