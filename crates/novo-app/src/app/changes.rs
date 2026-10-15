@@ -7,7 +7,7 @@ use eframe::egui;
 use novo_canvas::marks::{Mark, MarkKind, MarkTarget};
 use novo_canvas::model::item_id;
 use novo_core::{AnyId, PageId, Project, RevisionId};
-use novo_revisions::{Change, ChangeKind, ChangeSet, diff};
+use novo_revisions::{Change, ChangeKind, ChangeRow, ChangeSet, diff, list_of};
 use novo_theme::widgets::{self, section_label};
 
 use super::{Level, NovoApp};
@@ -20,6 +20,8 @@ pub(crate) struct ChangesMode {
     snapshot: Project,
     /// The comparison with the project as of `.0` (its revision counter).
     changes: Option<(u64, ChangeSet)>,
+    /// The named rows of that comparison, for the outline's list.
+    rows: Option<(u64, Vec<ChangeRow>)>,
     /// The dashed marks for what was removed on a page, kept for the
     /// project revision and page they were worked out for: building them
     /// draws the page of the older state.
@@ -27,6 +29,11 @@ pub(crate) struct ChangesMode {
 }
 
 impl ChangesMode {
+    /// The index of the revision Changes mode compares with.
+    pub(super) fn base_index(&self) -> &str {
+        &self.index
+    }
+
     fn changes(&mut self, project: &Project) -> &ChangeSet {
         if self
             .changes
@@ -37,11 +44,26 @@ impl ChangesMode {
         }
         &self.changes.as_ref().expect("just computed").1
     }
+
+    /// The rows of the Changes list, worked out once per project revision.
+    pub(super) fn rows(&mut self, project: &Project) -> &[ChangeRow] {
+        if self
+            .rows
+            .as_ref()
+            .is_none_or(|(r, _)| *r != project.revision())
+        {
+            self.changes(project);
+            let set = &self.changes.as_ref().expect("computed above").1;
+            let rows = list_of(set, &self.snapshot, project);
+            self.rows = Some((project.revision(), rows));
+        }
+        &self.rows.as_ref().expect("just computed").1
+    }
 }
 
 /// The objects a change shows as on `page` in `project`: the object itself,
 /// or the symbols and wires that draw a device, terminal or cable.
-fn shown_on(project: &Project, id: AnyId, page: PageId) -> Vec<AnyId> {
+pub(super) fn shown_on(project: &Project, id: AnyId, page: PageId) -> Vec<AnyId> {
     match id {
         AnyId::Symbol(_) | AnyId::Wire(_) | AnyId::Text(_) | AnyId::Junction(_) => project
             .record(id)
@@ -171,6 +193,7 @@ impl NovoApp {
             index,
             snapshot,
             changes: None,
+            rows: None,
             ghosts: None,
         });
     }
@@ -255,6 +278,7 @@ impl NovoApp {
         let elsewhere = set.project.len() + usize::from(!set.info.is_empty());
         let mut pick = None;
         let mut leave = false;
+        let mut compare = false;
         // Below the live potentials card when both are on.
         let live = self.wb.live.on;
         egui::Area::new(egui::Id::new("changes_card"))
@@ -270,6 +294,13 @@ impl NovoApp {
                         }
                     });
                     pick = base_picker(ui, &revisions, mode.base);
+                    if ui
+                        .small_button("Compare…")
+                        .on_hover_text("List what changed, field by field")
+                        .clicked()
+                    {
+                        compare = true;
+                    }
                     if nothing_here {
                         ui.weak("Nothing changed on this page");
                     } else {
@@ -297,6 +328,9 @@ impl NovoApp {
         }
         if leave {
             self.wb.changes = None;
+        }
+        if compare {
+            self.open_compare_from_changes();
         }
     }
 
@@ -337,7 +371,7 @@ impl NovoApp {
             .map(|r| (r.id, format!("{} · {}", r.index, r.date)))
             .collect();
         let base = mode.base;
-        mode.changes(project);
+        let all_rows = mode.rows(project).to_vec();
         let mode = &*mode;
         let set = &mode.changes.as_ref().expect("computed above").1;
         let name = |id: PageId| match project.page(id) {
@@ -369,6 +403,7 @@ impl NovoApp {
         let info = set.info.join(", ");
         let pick = base_picker(ui, &revisions, base);
         let mut chosen = None;
+        let mut reveal = None;
         egui::ScrollArea::vertical()
             .auto_shrink(false)
             .show(ui, |ui| {
@@ -388,6 +423,27 @@ impl NovoApp {
                     ui.weak(format!("    {counts}"));
                     if response.clicked() && project.page(*id).is_some() {
                         chosen = Some(*id);
+                    }
+                    response.context_menu(|ui| {
+                        let exists = project.page(*id).is_some();
+                        if ui
+                            .add_enabled(exists, egui::Button::new("Open page"))
+                            .on_disabled_hover_text("The page was removed since the revision")
+                            .clicked()
+                        {
+                            chosen = Some(*id);
+                            ui.close();
+                        }
+                        if ui.button("Copy summary").clicked() {
+                            ui.ctx().copy_text(format!("{label}  {counts}"));
+                            ui.close();
+                        }
+                    });
+                    for row in all_rows.iter().filter(|r| r.page == Some(*id)) {
+                        let text = format!("{} {}", kind_mark(&row.kind), row.label);
+                        if ui.selectable_label(false, text).clicked() {
+                            reveal = Some(row.clone());
+                        }
                     }
                 }
                 if elsewhere > 0 || !info.is_empty() {
@@ -410,11 +466,36 @@ impl NovoApp {
             self.wb.changes = None;
             self.toggle_changes(Some(&index));
         }
+        if let Some(row) = reveal {
+            self.reveal_change(&row);
+            return true;
+        }
         if let Some(page) = chosen {
             self.show_page(page);
             return true;
         }
         false
+    }
+
+    /// Opens the page a row of the Changes list is on and selects the
+    /// object there. A removed object is not in the project any more, so
+    /// only its page opens (its dashed ghost shows where it was).
+    pub(super) fn reveal_change(&mut self, row: &ChangeRow) {
+        let (Some(page), Some(doc)) = (row.page, self.backend.document()) else {
+            return;
+        };
+        let target = shown_on(doc.project(), row.id, page).first().copied();
+        self.show_page(page);
+        self.wb.pending_item = target.map(|id| (page, id));
+    }
+}
+
+/// The mark in front of a row of the Changes list.
+fn kind_mark(kind: &ChangeKind) -> &'static str {
+    match kind {
+        ChangeKind::Added => "+",
+        ChangeKind::Removed => "−",
+        ChangeKind::Changed { .. } => "~",
     }
 }
 

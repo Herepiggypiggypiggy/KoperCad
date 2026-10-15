@@ -33,7 +33,7 @@
 //!   [`Cell`] (`Text`, `Int`, `Number`, `Empty`; numbers stay numbers for
 //!   Excel). [`Column`] carries the header, alignment and a relative width.
 //! - **Reports**: [`TableOfContents`] (`toc`), [`BillOfMaterials`] (`bom`),
-//!   [`DeviceList`] (`devices`), [`WireList`] (`wires`), [`TerminalDiagram`]
+//!   [`DeviceList`] (`devices`), [`WireList`] (`wires`), [`CutList`] (`cutlist`), [`TerminalDiagram`]
 //!   (`terminals`, from novo-terminals) and [`CableDiagram`] (`cables`, from
 //!   novo-cables). Ids double as the `generator` of a
 //!   [`PageKind::Generated`](novo_core::PageKind) page.
@@ -75,21 +75,31 @@
 //! title block, clipping text to its box. Set [`PageSetup::margins`] and
 //! [`PageSetup::title_block_mm`] to match that frame.
 
+mod assembly;
 mod bom;
+pub mod commissioning;
+mod cutlist;
 mod defaults;
 mod devices;
 mod diagrams;
 mod export;
 mod io;
+mod labels;
+mod lengths;
 mod order;
 mod page;
+mod plugs;
 mod report;
+mod schedule;
 mod sheets;
+mod strip_diagram;
 mod table;
 mod toc;
 mod wires;
 
+pub use assembly::{AssemblyChecklist, BOX as ASSEMBLY_BOX};
 pub use bom::BillOfMaterials;
+pub use cutlist::CutList;
 pub use defaults::{
     GeneratedPageSpec, add_generated_pages, default_generated_pages, default_generated_pages_with,
 };
@@ -97,10 +107,16 @@ pub use devices::DeviceList;
 pub use diagrams::{CableDiagram, TerminalDiagram};
 pub use export::{CsvOptions, ExportError, save_xlsx, to_csv, xlsx_bytes};
 pub use io::IoList;
+pub use labels::{LABEL_LINES, LabelLayout, Labels, labels_csv};
 pub use order::{function_of, location_of, location_text, tag_cmp};
 pub use page::{Line, Margins, PageLayout, PageSetup, ReportPage, TextBox, layout_page, paginate};
+pub use plugs::PlugList;
 pub use report::{Dependencies, LiveReports, Report, Reports};
+pub use schedule::CableSchedule;
 pub use sheets::{GeneratedSheet, SheetFingerprint, fingerprint, sheet_name, sheet_names};
+pub use strip_diagram::{
+    sheet_count as strip_sheet_count, strip_diagram, strip_sheet, terminals_per_sheet,
+};
 pub use table::{Align, Cell, Column, ReportOutput, Row, Section};
 pub use toc::{PanelContents, TableOfContents};
 pub use wires::WireList;
@@ -114,9 +130,13 @@ pub fn standard_reports() -> Vec<Box<dyn Report>> {
         Box::new(BillOfMaterials),
         Box::new(DeviceList),
         Box::new(WireList),
+        Box::new(CutList::default()),
         Box::new(TerminalDiagram),
         Box::new(CableDiagram),
         Box::new(IoList),
+        Box::new(CableSchedule),
+        Box::new(PlugList),
+        Box::new(Labels),
     ]
 }
 

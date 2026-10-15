@@ -127,12 +127,29 @@ impl LiveReports {
         sheet: &GeneratedSheet,
     ) -> Option<PageLayout> {
         let format = project.page(sheet.page)?.format;
+        let setup = PageSetup::for_format(format);
         let output = self.get(project, &sheet.report)?;
-        Some(layout_page(
-            output,
-            &sheet.sheet,
-            &PageSetup::for_format(format),
-        ))
+        // Terminal diagrams print as drawn strips, not as tables.
+        if sheet.report == crate::TerminalDiagram::ID
+            && let Some(section) = output.sections.get(sheet.sheet.section)
+            && let Some(strip) = project.devices().find(|d| {
+                d.kind == novo_core::DeviceKind::TerminalStrip && d.tag.to_string() == section.key
+            })
+        {
+            let count = output
+                .sections
+                .get(sheet.sheet.section)
+                .map_or(1, |s| s.rows.len().div_ceil(setup.rows_per_page()).max(1));
+            let index = sheet.sheet.rows.start / setup.rows_per_page().max(1);
+            return Some(crate::strip_diagram::strip_sheet(
+                project,
+                strip.id,
+                sheet.sheet.rows.clone(),
+                (index, count),
+                &setup,
+            ));
+        }
+        Some(layout_page(output, &sheet.sheet, &setup))
     }
 }
 

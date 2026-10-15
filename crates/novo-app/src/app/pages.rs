@@ -4,7 +4,7 @@
 //! under different page groups share one panel, hence one cabinet layout.
 
 use eframe::egui;
-use novo_core::{Aspect, Command, DeviceTag, PageId, Project};
+use novo_core::{Aspect, Command, DeviceTag, PageId, PageKind, Project, panel_contents_generator};
 
 use super::{Level, NovoApp};
 
@@ -21,32 +21,22 @@ pub(super) enum PageView {
 impl PageView {
     pub fn label(self) -> &'static str {
         match self {
-            PageView::Function => "Function",
-            PageView::Location => "Location",
+            PageView::Function => "Groups",
+            PageView::Location => "Cabinets",
         }
     }
 
     pub fn hover(self) -> &'static str {
         match self {
-            PageView::Function => "Pages by page group",
-            PageView::Location => "Pages by panel, across page groups",
+            PageView::Function => "Page groups, with their cabinets inside",
+            PageView::Location => "Cabinets, with their page groups inside",
         }
     }
-}
-
-/// What the form was opened for; only the heading and the first focus differ.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum FormKind {
-    Pages,
-    Group,
-    Panel,
-    Move(PageId),
 }
 
 /// The creation form's fields.
 #[derive(Debug, Clone)]
 pub(super) struct PageForm {
-    pub kind: FormKind,
     pub group: String,
     /// Panel names separated by commas.
     pub panels: String,
@@ -58,27 +48,24 @@ pub(super) struct PageForm {
 }
 
 impl PageForm {
-    pub fn new(kind: FormKind, group: &str, panels: &str) -> Self {
+    pub fn new(group: &str, panels: &str) -> Self {
         Self {
-            kind,
             group: group.trim_start_matches('=').into(),
             panels: panels.trim_start_matches('+').into(),
-            count: match kind {
-                FormKind::Pages | FormKind::Panel => 1,
-                FormKind::Group | FormKind::Move(_) => 0,
-            },
+            count: 1,
             title: String::new(),
             focused: false,
         }
     }
+}
 
-    fn heading(&self) -> &'static str {
-        match self.kind {
-            FormKind::Pages => "New pages",
-            FormKind::Group => "New page group",
-            FormKind::Panel => "New panel",
-            FormKind::Move(_) => "Move page",
-        }
+/// The tidy form of a group (`=G1`) or cabinet (`+A1`) name typed by the
+/// person, or an empty string when it is empty or not a plain name.
+pub(super) fn clean_level(text: &str, aspect: Aspect) -> String {
+    let prefix = if aspect == Aspect::Function { '=' } else { '+' };
+    match level(text, prefix) {
+        Ok(Some(tag)) => tag.to_string(),
+        _ => String::new(),
     }
 }
 
@@ -179,6 +166,41 @@ pub(super) fn order_after_step(
     order_after_drop(siblings, page, *neighbour, down)
 }
 
+/// Whether `panel` already has its own contents page.
+pub(super) fn has_panel_contents(project: &Project, panel: &DeviceTag) -> bool {
+    let id = panel_contents_generator(&panel.location);
+    project
+        .pages()
+        .any(|p| matches!(&p.kind, PageKind::Generated { generator } if *generator == id))
+}
+
+/// The command that adds the contents page of `panel`: a generated page in
+/// the panel (no page group) that lists the panel's pages. One per panel.
+pub(super) fn panel_contents_command(
+    project: &Project,
+    panel: &DeviceTag,
+) -> Result<Command, String> {
+    if panel.location.is_empty() {
+        return Err("Name a panel".into());
+    }
+    if has_panel_contents(project, panel) {
+        return Err(format!("{panel} already has a contents page"));
+    }
+    let structure = DeviceTag {
+        location: panel.location.clone(),
+        ..Default::default()
+    };
+    Ok(Command::AddPage {
+        name: "0".into(),
+        title: format!("Contents {structure}"),
+        kind: PageKind::Generated {
+            generator: panel_contents_generator(&structure.location),
+        },
+        format: Default::default(),
+        structure,
+    })
+}
+
 /// What a rename of `from` touches, for the line that reports it:
 /// "6 pages, 41 devices, 3 cables".
 pub(super) fn level_users(project: &Project, aspect: Aspect, from: &DeviceTag) -> String {
@@ -194,29 +216,6 @@ pub(super) fn level_users(project: &Project, aspect: Aspect, from: &DeviceTag) -
         count(project.devices().filter(|d| uses(&d.tag)).count(), "device"),
         count(project.cables().filter(|c| uses(&c.tag)).count(), "cable"),
     )
-}
-
-/// What the rename box did this frame.
-pub(super) enum LevelEdit {
-    Editing,
-    Commit,
-    Cancel,
-}
-
-/// A group or panel header being renamed: Enter or clicking away keeps the
-/// name, Esc drops it.
-pub(super) fn level_edit(ui: &mut egui::Ui, text: &mut String) -> LevelEdit {
-    let edit = ui.add(egui::TextEdit::singleline(text).desired_width(f32::INFINITY));
-    if !edit.has_focus() && !edit.lost_focus() {
-        edit.request_focus();
-    }
-    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-        LevelEdit::Cancel
-    } else if edit.lost_focus() {
-        LevelEdit::Commit
-    } else {
-        LevelEdit::Editing
-    }
 }
 
 /// The one undoable command a form makes: the group and panel nodes that do
@@ -258,19 +257,6 @@ pub(super) fn form_command(project: &Project, form: &PageForm) -> Result<Command
         location: panel.map(|p| p.location.clone()).unwrap_or_default(),
         product: Vec::new(),
     };
-    if let FormKind::Move(page) = form.kind {
-        if panels.len() > 1 {
-            return Err("A page goes to one panel".into());
-        }
-        commands.push(Command::SetPageStructure {
-            page,
-            structure: structure_of(panels.first()),
-        });
-        return Ok(Command::Batch {
-            label: "Move page".into(),
-            commands,
-        });
-    }
     if group.is_none() && panels.is_empty() {
         return Err("Name a page group or a panel".into());
     }
@@ -301,7 +287,7 @@ pub(super) fn form_command(project: &Project, form: &PageForm) -> Result<Command
         return Err("Nothing new to add".into());
     }
     Ok(Command::Batch {
-        label: form.heading().into(),
+        label: "New pages".into(),
         commands,
     })
 }
@@ -335,7 +321,7 @@ impl NovoApp {
             .unwrap_or_default();
         let modal = egui::Modal::new(egui::Id::new("page_form")).show(ctx, |ui| {
             ui.set_width(360.0);
-            ui.heading(form.heading());
+            ui.heading("New pages");
             ui.add_space(4.0);
             egui::Grid::new("page_form_grid").num_columns(2).show(ui, |ui| {
                 ui.label("Page group");
@@ -344,7 +330,7 @@ impl NovoApp {
                         .hint_text("10D41")
                         .desired_width(200.0),
                 );
-                if !form.focused && matches!(form.kind, FormKind::Group | FormKind::Pages) {
+                if !form.focused {
                     group.request_focus();
                 }
                 ui.end_row();
@@ -359,18 +345,14 @@ impl NovoApp {
                     });
                     ui.end_row();
                 }
-                let single = matches!(form.kind, FormKind::Move(_));
-                ui.label(if single { "Panel" } else { "Panels" });
-                let panel = ui
+                ui.label("Panels");
+                ui
                     .add(
                         egui::TextEdit::singleline(&mut form.panels)
-                            .hint_text(if single { "K1B1G1" } else { "K1B1G1, K2" })
+                            .hint_text("K1B1G1, K2")
                             .desired_width(200.0),
                     )
                     .on_hover_text("Pages with the same panel name in different page groups share one cabinet layout");
-                if !form.focused && matches!(form.kind, FormKind::Panel | FormKind::Move(_)) {
-                    panel.request_focus();
-                }
                 ui.end_row();
                 if !panels.is_empty() {
                     ui.label("");
@@ -383,14 +365,12 @@ impl NovoApp {
                     });
                     ui.end_row();
                 }
-                if !matches!(form.kind, FormKind::Move(_)) {
-                    ui.label("Pages per panel");
-                    ui.add(egui::DragValue::new(&mut form.count).range(0..=99));
-                    ui.end_row();
-                    ui.label("Title");
-                    ui.add(egui::TextEdit::singleline(&mut form.title).desired_width(200.0));
-                    ui.end_row();
-                }
+                ui.label("Pages per panel");
+                ui.add(egui::DragValue::new(&mut form.count).range(0..=99));
+                ui.end_row();
+                ui.label("Title");
+                ui.add(egui::TextEdit::singleline(&mut form.title).desired_width(200.0));
+                ui.end_row();
             });
             ui.add_space(8.0);
             ui.horizontal(|ui| {
@@ -438,7 +418,7 @@ mod tests {
     fn two_pages_in_a_panel_under_two_groups_make_one_panel() {
         let mut doc = Document::default();
         for group in ["10D41", "=11D21"] {
-            let mut form = PageForm::new(FormKind::Pages, group, "K1B1G1");
+            let mut form = PageForm::new(group, "K1B1G1");
             form.count = 2;
             run(&mut doc, &form).unwrap();
         }
@@ -450,7 +430,7 @@ mod tests {
         let nodes: Vec<_> = doc.project().structures().collect();
         assert_eq!(nodes.iter().filter(|s| s.enclosure).count(), 1);
         // More pages carry on numbering.
-        let mut more = PageForm::new(FormKind::Pages, "10D41", "K1B1G1");
+        let mut more = PageForm::new("10D41", "K1B1G1");
         more.count = 1;
         run(&mut doc, &more).unwrap();
         assert!(doc.project().pages().any(|p| p.name == "3"));
@@ -461,7 +441,7 @@ mod tests {
     #[test]
     fn a_panel_renames_from_the_outline_text() {
         let mut doc = Document::default();
-        let mut form = PageForm::new(FormKind::Pages, "10D41", "K1B1G1");
+        let mut form = PageForm::new("10D41", "K1B1G1");
         form.count = 2;
         run(&mut doc, &form).unwrap();
         let panel = DeviceTag::parse("+K1B1G1").unwrap();
@@ -488,7 +468,7 @@ mod tests {
     #[test]
     fn a_drop_or_step_moves_one_page_and_nothing_else() {
         let mut doc = Document::default();
-        let mut form = PageForm::new(FormKind::Pages, "10D41", "K1B1G1");
+        let mut form = PageForm::new("10D41", "K1B1G1");
         form.count = 4;
         run(&mut doc, &form).unwrap();
         let first = doc.project().pages_in_order()[0].id;
@@ -501,7 +481,7 @@ mod tests {
         assert_eq!(order_after_drop(&ids, b, a, true), None);
         assert_eq!(order_after_drop(&ids, b, b, true), None);
         // A page of another group and panel is not a sibling.
-        run(&mut doc, &PageForm::new(FormKind::Pages, "11D21", "K9")).unwrap();
+        run(&mut doc, &PageForm::new("11D21", "K9")).unwrap();
         let other = doc.project().pages_in_order().last().unwrap().id;
         assert_eq!(order_after_drop(&ids, b, other, true), None);
         assert_eq!(order_after_step(&ids, a, false), None);
@@ -519,7 +499,7 @@ mod tests {
     fn a_rename_onto_a_name_in_use_is_a_merge() {
         let mut doc = Document::default();
         for panel in ["K1", "K2"] {
-            run(&mut doc, &PageForm::new(FormKind::Pages, "10D41", panel)).unwrap();
+            run(&mut doc, &PageForm::new("10D41", panel)).unwrap();
         }
         let k1 = DeviceTag::parse("+K1").unwrap();
         assert!(merges_with_existing(
@@ -543,13 +523,55 @@ mod tests {
     }
 
     #[test]
-    fn groups_alone_and_bad_input() {
+    fn a_panel_gets_one_contents_page_that_lists_its_pages() {
         let mut doc = Document::default();
-        run(&mut doc, &PageForm::new(FormKind::Group, "12A", "")).unwrap();
+        let mut form = PageForm::new("10D41", "K1B1G1");
+        form.count = 2;
+        run(&mut doc, &form).unwrap();
+        let panel = DeviceTag::parse("+K1B1G1").unwrap();
+        assert!(!has_panel_contents(doc.project(), &panel));
+        let command = panel_contents_command(doc.project(), &panel).unwrap();
+        doc.execute(command).unwrap();
+        assert!(has_panel_contents(doc.project(), &panel));
+        assert!(panel_contents_command(doc.project(), &panel).is_err());
+        assert!(panel_contents_command(doc.project(), &DeviceTag::default()).is_err());
+        // It reads first, ahead of the drawn pages, shows in the outline with
+        // the panel's pages in it, and follows a rename.
+        let first = doc.project().pages_in_order()[0];
+        assert_eq!(first.title, "Contents +K1B1G1");
+        let mut reports = novo_reports::LiveReports::standard();
+        let rows = crate::backend::page_rows(doc.project(), &mut reports);
+        assert!(rows.iter().any(|r| r.page == first.id), "{rows:?}");
+        assert_eq!(
+            reports.get(doc.project(), "toc@+K1B1G1").unwrap().sections[0]
+                .rows
+                .len(),
+            3
+        );
+        let rename = rename_level_command(Aspect::Location, &panel, "K2")
+            .unwrap()
+            .unwrap();
+        doc.execute(rename).unwrap();
+        let moved = DeviceTag::parse("+K2").unwrap();
+        assert!(has_panel_contents(doc.project(), &moved));
+        assert!(!has_panel_contents(doc.project(), &panel));
+    }
+
+    #[test]
+    fn bad_input_is_refused() {
+        let doc = Document::default();
+        assert!(form_command(doc.project(), &PageForm::new("", "")).is_err());
+        assert!(form_command(doc.project(), &PageForm::new("A/B", "")).is_err());
+        // A group alone, with no pages, is just the group.
+        let mut group = PageForm::new("12A", "");
+        group.count = 0;
+        let mut doc = doc;
+        run(&mut doc, &group).unwrap();
         assert_eq!(doc.project().page_groups().len(), 1);
         assert_eq!(doc.project().pages().count(), 0);
-        assert!(form_command(doc.project(), &PageForm::new(FormKind::Pages, "", "")).is_err());
-        assert!(form_command(doc.project(), &PageForm::new(FormKind::Pages, "A/B", "")).is_err());
-        assert!(form_command(doc.project(), &PageForm::new(FormKind::Group, "12A", "")).is_err());
+        assert!(
+            form_command(doc.project(), &group).is_err(),
+            "nothing new the second time"
+        );
     }
 }

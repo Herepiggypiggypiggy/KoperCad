@@ -1,6 +1,7 @@
 //! The `place all` planner: proposes rails and positions for devices on an
 //! empty plate. It only proposes; accepting the plan is one undo step.
 
+use crate::rules::Class;
 use crate::{DEFAULT_CLEARANCE_MM, Plate, Rail, Size};
 
 /// Vertical space left between rail rows for wiring ducts.
@@ -24,10 +25,27 @@ pub struct Proposed {
     pub rail: u64,
 }
 
+/// A wiring duct the planner proposes between two rows. `(x, y)` is the
+/// start of its centre line; it runs `length` to the right, or down when
+/// `vertical`. `width` lies in the plate, `height` stands off it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlannedDuct {
+    pub x: f64,
+    pub y: f64,
+    pub length: f64,
+    pub vertical: bool,
+    pub width: f64,
+    pub height: f64,
+    /// The wiring it serves; power and signal ducts are kept apart.
+    pub class: Class,
+}
+
 /// The planner's proposal.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Plan {
     pub rails: Vec<Rail>,
+    /// Ducts between the rows (rules-based plans only).
+    pub ducts: Vec<PlannedDuct>,
     pub placements: Vec<Proposed>,
     /// Devices that do not fit on the plate (too wide, or no room for another row).
     pub unplaced: Vec<u64>,
@@ -86,6 +104,7 @@ pub fn place_all_below(
                 x: usable.x,
                 y,
                 length: usable.w,
+                vertical: false,
             });
             row_open = true;
         } else {

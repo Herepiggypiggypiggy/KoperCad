@@ -159,7 +159,8 @@ fn downloads_watcher_waits_for_a_finished_matching_file() {
     assert!(w.poll().is_empty(), "first sight: size not yet seen twice");
     let ready = w.poll();
     assert_eq!(ready.len(), 1);
-    assert!(ready[0].ends_with("WAGO_9000_0001.stp"));
+    assert!(ready[0].names_the_part);
+    assert!(ready[0].path.ends_with("WAGO_9000_0001.stp"));
 
     // A file that is older than the click is ignored.
     let late = SystemTime::now() + Duration::from_secs(3600);
@@ -284,7 +285,10 @@ fn imports_a_portal_zip_with_one_step_file_and_keeps_the_terms_link() {
         "2002-1201",
     );
     w.poll();
-    assert_eq!(w.poll(), vec![path.clone()]);
+    assert_eq!(
+        w.poll().iter().map(|a| a.path.clone()).collect::<Vec<_>>(),
+        vec![path.clone()]
+    );
 
     let f = ScriptedFetcher::default();
     let src = SourceTable::default();
@@ -346,7 +350,10 @@ fn imports_an_edz_package_unchanged_and_hands_out_its_xml() {
         "3044076-x",
     );
     w.poll();
-    assert_eq!(w.poll(), vec![path.clone()]);
+    assert_eq!(
+        w.poll().iter().map(|a| a.path.clone()).collect::<Vec<_>>(),
+        vec![path.clone()]
+    );
 
     let f = ScriptedFetcher::default();
     let src = sources(false);
@@ -419,4 +426,121 @@ fn the_built_in_sources_never_fetch_and_label_unconfirmed_pages() {
             .page_for("3RT2016-1BB41")
             .is_none()
     );
+}
+
+#[test]
+fn reserved_windows_names_are_prefixed() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = LocalLibrary::at(dir.path());
+    for (given, want) in [
+        ("nul.step", "_nul.step"),
+        ("COM1", "_COM1"),
+        ("com10.stp", "com10.stp"),
+        ("console.stp", "console.stp"),
+    ] {
+        let r = lib.store(&new_source(given), b"x").unwrap();
+        assert_eq!(r.file_name, want, "{given}");
+    }
+}
+
+#[test]
+fn a_newer_records_file_leaves_no_orphan_file() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("records.json"), r#"{"format": 99}"#).unwrap();
+    let lib = LocalLibrary::at(dir.path());
+    assert!(lib.store(&new_source("a.stp"), b"x").is_err());
+    assert!(!dir.path().join("sources").exists());
+}
+
+#[test]
+fn a_zip_with_many_xml_members_reads_at_most_sixteen() {
+    use std::io::Write;
+    let big = vec![0u8; 1024 * 1024];
+    let mut buf = std::io::Cursor::new(Vec::new());
+    {
+        let mut w = zip::ZipWriter::new(&mut buf);
+        let opts = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        // 20 members of 1 MB: only 16 are read. (The 256 MB total budget is not tested: it needs a 256 MB archive.)
+        for i in 0..20 {
+            w.start_file(format!("m{i}.xml"), opts).unwrap();
+            w.write_all(&big).unwrap();
+        }
+        w.finish().unwrap();
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let lib = LocalLibrary::at(dir.path());
+    let p = dir.path().join("pack.zip");
+    fs::write(&p, buf.into_inner()).unwrap();
+    let f = ScriptedFetcher::default();
+    let src = SourceTable::default();
+    let mut job = ImportJob::new(&lib, &src, &f, "M", "1", "d");
+    let ImportState::Done(out) = job.import_file(&p, ImportFlow::Manual).clone() else {
+        panic!()
+    };
+    assert!(
+        out.xml_members.len() <= 16,
+        "at most 16 xml members are read"
+    );
+}
+
+struct FlakyFetcher;
+
+impl Fetcher for FlakyFetcher {
+    fn resolve(&self, _: &PartKey) -> Result<Vec<RemoteFile>, FetchError> {
+        Ok(["a.stp", "b.stp"]
+            .iter()
+            .map(|n| RemoteFile {
+                kind: FileKind::Step,
+                url: format!("https://example.invalid/{n}"),
+                file_name: (*n).into(),
+            })
+            .collect())
+    }
+
+    fn fetch(&self, file: &RemoteFile) -> Result<Vec<u8>, FetchError> {
+        if file.file_name == "a.stp" {
+            Ok(STEP.as_bytes().to_vec())
+        } else {
+            Err(FetchError::Network("connection reset".into()))
+        }
+    }
+}
+
+#[test]
+fn a_failed_job_still_lists_what_it_stored() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = LocalLibrary::at(dir.path());
+    lib.accept_notice("Example Maker").unwrap();
+    let src = sources(true);
+    let mut job = ImportJob::new(&lib, &src, &FlakyFetcher, "Example Maker", "9000-0001", "d");
+    assert_eq!(job.run(), &ImportState::Failed("connection reset".into()));
+    assert_eq!(job.stored_so_far().records.len(), 1);
+    assert!(job.stored_so_far().dimensions.is_some());
+    assert_eq!(lib.records().unwrap().len(), 1);
+}
+
+#[test]
+fn a_file_saved_right_at_the_click_is_not_missed_to_rounded_file_times() {
+    let downloads = tempfile::tempdir().unwrap();
+    let click = SystemTime::now();
+    let path = downloads.path().join("9000-0001.stp");
+    fs::write(&path, STEP).unwrap();
+    // The file system stamped it a little before the click's clock reading.
+    let f = fs::File::options().write(true).open(&path).unwrap();
+    f.set_modified(click - Duration::from_millis(900)).unwrap();
+    let mut w = DownloadsWatcher::new(downloads.path(), click, "9000-0001");
+    w.poll();
+    assert_eq!(w.poll().len(), 1);
+
+    // A file well before the click is still ignored.
+    let old = downloads.path().join("9000-0001-old.stp");
+    fs::write(&old, STEP).unwrap();
+    let f = fs::File::options().write(true).open(&old).unwrap();
+    f.set_modified(click - Duration::from_secs(30)).unwrap();
+    let mut w = DownloadsWatcher::new(downloads.path(), click, "9000-0001");
+    w.poll();
+    let got = w.poll();
+    assert_eq!(got.len(), 1);
+    assert!(got[0].path.ends_with("9000-0001.stp"));
 }

@@ -30,6 +30,8 @@
 mod draw;
 mod font;
 mod inter;
+pub mod plate;
+mod report;
 
 use novo_canvas::model::{
     ModelStyle, PageScene, PlaceholderArt, SheetContent, SheetLine, SheetText, SymbolArt,
@@ -45,6 +47,7 @@ use std::path::Path;
 
 pub use draw::PT_PER_MM;
 pub use novo_canvas::model::{NoteAnchor, SymbolNote};
+pub use report::{ReportPdfOptions, export_report_pdf};
 
 /// Which pages to export.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -79,6 +82,70 @@ pub struct PdfOptions {
     /// Pages with changes since the latest revision: their bookmark is
     /// marked with a dot (docs/DESIGN.md §5).
     pub changed_pages: BTreeSet<PageId>,
+    /// Plain text pages printed after the drawing (design checks report).
+    pub appendix: Option<Appendix>,
+}
+
+/// Text printed on A4 pages after the drawing: a title, then lines, wrapped
+/// and continued on further pages as needed.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Appendix {
+    /// The bookmark and page label.
+    pub title: String,
+    pub lines: Vec<AppendixLine>,
+}
+
+/// One line of an [`Appendix`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct AppendixLine {
+    pub text: String,
+    pub bold: bool,
+}
+
+impl AppendixLine {
+    pub fn plain(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            bold: false,
+        }
+    }
+    pub fn bold(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            bold: true,
+        }
+    }
+}
+
+const APPENDIX_PAGE_MM: (f32, f32) = (210.0, 297.0);
+const APPENDIX_MARGIN_MM: f32 = 15.0;
+const APPENDIX_TEXT_MM: f32 = 3.2;
+const APPENDIX_LEADING_MM: f32 = 4.6;
+const APPENDIX_WRAP_CHARS: usize = 95;
+
+/// The appendix split into pages of (text, bold) lines. Long lines wrap at a
+/// word; continuation lines are indented.
+fn appendix_pages(appendix: &Appendix) -> Vec<Vec<(String, bool)>> {
+    let mut lines: Vec<(String, bool)> = Vec::new();
+    for line in &appendix.lines {
+        let mut current = String::new();
+        let mut first = true;
+        for word in line.text.split(' ') {
+            let limit = APPENDIX_WRAP_CHARS - if first { 0 } else { 4 };
+            if !current.is_empty() && current.chars().count() + 1 + word.chars().count() > limit {
+                lines.push((std::mem::take(&mut current), line.bold));
+                first = false;
+                current = "    ".into();
+            }
+            if !current.is_empty() && !current.ends_with(' ') {
+                current.push(' ');
+            }
+            current.push_str(word);
+        }
+        lines.push((current, line.bold));
+    }
+    let per_page = ((APPENDIX_PAGE_MM.1 - 2.0 * APPENDIX_MARGIN_MM) / APPENDIX_LEADING_MM) as usize;
+    lines.chunks(per_page).map(<[_]>::to_vec).collect()
 }
 
 impl Default for PdfOptions {
@@ -92,6 +159,7 @@ impl Default for PdfOptions {
             notes: BTreeMap::new(),
             title_revisions: BTreeMap::new(),
             changed_pages: BTreeSet::new(),
+            appendix: None,
         }
     }
 }
@@ -232,6 +300,17 @@ pub fn export_pdf_with_reports(
         .flat_map(|page| sheets_of(project, page, reports))
         .collect();
 
+    let app: Vec<Vec<(String, bool)>> = options
+        .appendix
+        .as_ref()
+        .map(appendix_pages)
+        .unwrap_or_default();
+    let app_title = options
+        .appendix
+        .as_ref()
+        .map(|a| a.title.clone())
+        .unwrap_or_default();
+
     let mut next = 1;
     let mut alloc = || {
         let r = Ref::new(next);
@@ -249,16 +328,26 @@ pub fn export_pdf_with_reports(
         content: Ref,
         size_mm: (f32, f32),
     }
-    let count = pages.len().max(1);
+    let count = (pages.len() + app.len()).max(1);
     let out: Vec<Out> = (0..count)
         .map(|i| {
-            let (w, h) = pages
-                .get(i)
-                .map_or(BLANK_PAGE_MM, |p| p.page.format.size_mm());
+            let (w, h) = pages.get(i).map_or_else(
+                || {
+                    if i < pages.len() + app.len() {
+                        APPENDIX_PAGE_MM
+                    } else {
+                        (BLANK_PAGE_MM.0 as f32, BLANK_PAGE_MM.1 as f32)
+                    }
+                },
+                |p| {
+                    let (w, h) = p.page.format.size_mm();
+                    (w as f32, h as f32)
+                },
+            );
             Out {
                 page: alloc(),
                 content: alloc(),
-                size_mm: (w as f32, h as f32),
+                size_mm: (w, h),
             }
         })
         .collect();
@@ -272,12 +361,12 @@ pub fn export_pdf_with_reports(
 
     let mut catalog = pdf.catalog(catalog_id);
     catalog.pages(tree_id);
-    if options.bookmarks && !pages.is_empty() {
+    if options.bookmarks && pages.len() + app.len() > 0 {
         catalog.outlines(outline_id);
         catalog.page_mode(PageMode::UseOutlines);
     }
-    let label_ids: Vec<Ref> = pages.iter().map(|_| alloc()).collect();
-    if !pages.is_empty() {
+    let label_ids: Vec<Ref> = (0..pages.len() + app.len()).map(|_| alloc()).collect();
+    if !label_ids.is_empty() {
         let mut labels = catalog.page_labels();
         let mut nums = labels.nums();
         for (i, id) in label_ids.iter().enumerate() {
@@ -285,10 +374,11 @@ pub fn export_pdf_with_reports(
         }
     }
     catalog.finish();
-    for (page, id) in pages.iter().zip(&label_ids) {
+    for (i, id) in label_ids.iter().enumerate() {
+        let name = pages.get(i).map_or(app_title.as_str(), |p| p.name.as_str());
         pdf.indirect(*id)
             .start::<pdf_writer::writers::PageLabel>()
-            .prefix(TextStr(&page.name));
+            .prefix(TextStr(name));
     }
 
     pdf.pages(tree_id)
@@ -319,6 +409,21 @@ pub fn export_pdf_with_reports(
         let (w, h) = o.size_mm;
         let mut writer = draw::PageWriter::new(h, &mut inter);
         let mut annotations = Vec::new();
+        if let Some(lines) = i.checked_sub(pages.len()).and_then(|k| app.get(k)) {
+            let x = APPENDIX_MARGIN_MM;
+            for (k, (text, bold)) in lines.iter().enumerate() {
+                writer.label(&novo_canvas::Label {
+                    pos: Vec2::new(x, APPENDIX_MARGIN_MM + k as f32 * APPENDIX_LEADING_MM),
+                    text: text.clone(),
+                    height: APPENDIX_TEXT_MM,
+                    color: Color::BLACK,
+                    anchor: Anchor::TopLeft,
+                    rotation: 0.0,
+                    keep_color: false,
+                    bold: *bold,
+                });
+            }
+        }
         if let Some(sheet) = pages.get(i) {
             let page = sheet.page;
             let mut scene = PageScene::new(project, page.id, art);
@@ -435,16 +540,18 @@ pub fn export_pdf_with_reports(
             .encoding_predefined(Name(b"WinAnsiEncoding"));
     }
 
-    if options.bookmarks && !pages.is_empty() {
-        let items: Vec<Ref> = pages.iter().map(|_| alloc()).collect();
+    if options.bookmarks && !label_ids.is_empty() {
+        let items: Vec<Ref> = label_ids.iter().map(|_| alloc()).collect();
         pdf.outline(outline_id)
             .first(items[0])
             .last(items[items.len() - 1])
             .count(items.len() as i32);
-        for (i, sheet) in pages.iter().enumerate() {
+        for i in 0..items.len() {
             let mut item = pdf.outline_item(items[i]);
-            item.parent(outline_id)
-                .title(TextStr(&bookmark_text(sheet, options)));
+            let title = pages
+                .get(i)
+                .map_or_else(|| app_title.clone(), |sheet| bookmark_text(sheet, options));
+            item.parent(outline_id).title(TextStr(&title));
             if i > 0 {
                 item.prev(items[i - 1]);
             }
