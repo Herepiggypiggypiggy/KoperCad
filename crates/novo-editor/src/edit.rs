@@ -36,7 +36,8 @@ pub struct PlaceOptions {
     /// terminal is drawn next to, else starts a strip with the next free
     /// `-X` number (see [`adjacent_strip`]).
     pub strip: Option<DeviceId>,
-    /// Potential of a potential feed; `None` uses `L1`.
+    /// Potential of a potential feed; `None` gives the first of `L1`, `L2`,
+    /// `L3`, ... that no feed on the page carries yet (see [`next_feed_name`]).
     pub potential: Option<PotentialId>,
     /// Name of an interruption point; `None` gives the next free one.
     pub interruption: Option<String>,
@@ -148,7 +149,10 @@ pub fn place(
         SymbolClass::PotentialFeed => {
             let potential = match options.potential {
                 Some(p) if tx.project().potential(p).is_some() => p,
-                _ => find_or_add_potential(tx, "L1", PotentialKind::Line, None)?,
+                _ => {
+                    let name = next_feed_name(tx.project(), page);
+                    find_or_add_potential(tx, &name, PotentialKind::Line, None)?
+                }
             };
             SymbolRole::PotentialFeed { potential }
         }
@@ -177,6 +181,26 @@ pub fn place(
         auto_connect(tx, id)?;
     }
     Ok(id)
+}
+
+/// The name a new potential feed gets: the first of `L1`, `L2`, `L3`, ...
+/// that no feed on `page` carries yet, so a row of feeds reads L1, L2, L3.
+/// (Same rule as `novo_workflow::insert::next_feed_name`.)
+pub fn next_feed_name(project: &Project, page: PageId) -> String {
+    let taken: Vec<&str> = project
+        .symbols()
+        .filter(|s| s.page == page)
+        .filter_map(|s| match s.role {
+            SymbolRole::PotentialFeed { potential } => {
+                project.potential(potential).map(|p| p.name.as_str())
+            }
+            _ => None,
+        })
+        .collect();
+    (1u32..)
+        .map(|n| format!("L{n}"))
+        .find(|name| !taken.iter().any(|t| t.eq_ignore_ascii_case(name)))
+        .expect("an unbounded range has a free name")
 }
 
 fn strip_exists(project: &Project, strip: DeviceId) -> bool {
