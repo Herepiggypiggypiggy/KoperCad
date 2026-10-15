@@ -769,6 +769,20 @@ fn one_style_per_kind_changes_every_terminal() {
     doc.transact("Clear", |tx| clear_override(tx, other))
         .unwrap();
     assert_eq!(doc.project().terminal(other).unwrap().part, None);
+    // A part property left by an older script is tidied away too.
+    doc.transact("Old part", |tx| {
+        tx.set_property(other, "part", Some(Value::Int(1)))
+    })
+    .unwrap();
+    doc.transact("Clear", |tx| clear_override(tx, other))
+        .unwrap();
+    assert!(
+        !doc.project()
+            .terminal(other)
+            .unwrap()
+            .properties
+            .contains_key("part")
+    );
     assert_eq!(terminal_part(doc.project(), other), Some(part));
     assert!(overrides(doc.project(), strip).is_empty());
 }
@@ -1028,7 +1042,9 @@ fn wires_through_junctions_get_one_terminal_where_they_leave() {
             .iter()
             .all(|s| s.internal != k5)
     );
-    doc.transact("Restore", |tx| restore_suggestion(tx, out))
+    // Restoring from another wire of the connection (the chosen one, as a
+    // list of declines would) brings the connection back.
+    doc.transact("Restore", |tx| restore_suggestion(tx, through))
         .unwrap();
     assert_eq!(suggest_terminals(doc.project()), suggestions);
     assert_eq!(doc.project().dismissals().count(), 0);
@@ -1673,4 +1689,47 @@ fn kind_change_leaves_a_terminal_with_its_own_symbol_drawn_as_it_is() {
     let t = doc.project().terminal(placed.terminal).unwrap();
     assert_eq!(t.kind, TerminalKind::Fuse);
     assert_eq!(doc.project().symbol(placed.symbol).unwrap(), &before);
+}
+
+#[test]
+fn enclosures_decide_the_cabinet_side() {
+    // The field has more devices than the cabinet, but +CAB is marked as an
+    // enclosure: its side gets the strip. A door inside the cabinet is the
+    // same enclosure, so a wire from the door to the cabinet needs no
+    // terminal, and a wire from the door to the field gets one on the
+    // cabinet's strip.
+    let mut doc = Document::default();
+    let (ids, _) = doc
+        .transact("Draw", |tx| {
+            tx.add_structure(tag("+CAB"), "Cabinet", true)?;
+            let page = tx.add_page("1")?;
+            let k1 = tx.add_device(tag("+CAB-K1"), "")?;
+            let s1 = tx.add_device(tag("+CAB+DOOR-S1"), "")?;
+            let m: Vec<DeviceId> = (1..=3)
+                .map(|i| tx.add_device(tag(&format!("+FLD-M{i}")), ""))
+                .collect::<Result<_>>()?;
+            let ks = row_of_pins(tx, page, k1, &["2", "4"], 40.0, 20.0)?;
+            let ss = row_of_pins(tx, page, s1, &["13", "14"], 120.0, 20.0)?;
+            let ms = row_of_pins(tx, page, m[0], &["U1", "V1"], 40.0, 100.0)?;
+            row_of_pins(tx, page, m[1], &["U1"], 200.0, 100.0)?;
+            row_of_pins(tx, page, m[2], &["U1"], 240.0, 100.0)?;
+            let to_field = tx.connect(Endpoint::pin(ks, 0), Endpoint::pin(ms, 0))?;
+            let door = tx.connect(Endpoint::pin(ks, 1), Endpoint::pin(ss, 0))?;
+            let door_field = tx.connect(Endpoint::pin(ss, 1), Endpoint::pin(ms, 1))?;
+            Ok((k1, s1, m[0], to_field, door, door_field))
+        })
+        .unwrap();
+    let (k1, s1, m1, to_field, door, door_field) = ids;
+    let found: Vec<_> = suggest_terminals(doc.project())
+        .iter()
+        .map(|s| (s.wire, s.internal, s.external, s.strip.to_string()))
+        .collect();
+    assert_eq!(
+        found,
+        [
+            (to_field, k1, m1, "+CAB-X1".into()),
+            (door_field, s1, m1, "+CAB-X1".into()),
+        ]
+    );
+    assert!(found.iter().all(|f| f.0 != door));
 }

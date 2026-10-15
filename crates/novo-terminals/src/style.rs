@@ -162,8 +162,13 @@ pub fn clear_override(tx: &mut Tx<'_>, terminal: TerminalId) -> Result<()> {
     let Some(t) = tx.project().terminal(terminal) else {
         return Ok(());
     };
+    let legacy = t.properties.contains_key("part");
     if t.part.is_some() {
         tx.update::<Terminal>(terminal, |t| t.part = None)?;
+    }
+    // A part property left from before the article moved to `Terminal.part`.
+    if legacy {
+        tx.set_property(terminal, "part", None)?;
     }
     let Some(t) = tx.project().terminal(terminal) else {
         return Ok(());
