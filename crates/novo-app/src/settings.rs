@@ -35,6 +35,8 @@ pub struct Settings {
     /// Whether the live view skips its animations: states switch at once
     /// and a running motor shows an arrow instead of spinning.
     pub reduce_motion: bool,
+    /// Commissioning's large touch buttons: a tablet user sets it once.
+    pub large_buttons: bool,
     /// The workspace shown when the app last ran (`Workspace::id`),
     /// reopened with the project when it is available again
     /// (docs/design/workspaces.md §4.1).

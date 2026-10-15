@@ -304,8 +304,8 @@ pub(crate) fn read(project: &Project, id: AnyId, field: &Field) -> Cell {
 /// A cell understood for its column.
 // `Part` is rare and short-lived (one per edited cell), so boxing it would
 // only add a pointer chase everywhere the enum is matched.
-#[derive(Debug, Clone, PartialEq)]
 #[allow(clippy::large_enum_variant)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Parsed {
     Text(String),
     /// A text that may be cleared (`None`).
