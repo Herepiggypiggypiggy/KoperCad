@@ -229,6 +229,8 @@ pub fn progress(input: &CommissioningInput) -> Progress {
 /// Whether the machine can be signed off, and what stands in the way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Readiness {
+    /// Checks recorded in all.
+    pub checks_total: usize,
     pub checks_pending: usize,
     pub checks_failed: usize,
     /// Punch items still open or fixed but not verified.
@@ -238,10 +240,14 @@ pub struct Readiness {
 }
 
 impl Readiness {
-    /// Every check settled and no blocking punch item open. Open minor and
+    /// At least one check, every check settled and no blocking punch item
+    /// open (a project with nothing recorded is not ready). Open minor and
     /// major items are listed on the report but do not stop the sign-off.
     pub fn ready(&self) -> bool {
-        self.checks_pending == 0 && self.checks_failed == 0 && self.punch_blocking == 0
+        self.checks_total > 0
+            && self.checks_pending == 0
+            && self.checks_failed == 0
+            && self.punch_blocking == 0
     }
 }
 
@@ -249,6 +255,7 @@ pub fn readiness(input: &CommissioningInput) -> Readiness {
     let p = progress(input);
     let open = || input.punch.iter().filter(|x| x.state.is_open());
     Readiness {
+        checks_total: p.total,
         checks_pending: p.pending,
         checks_failed: p.failed,
         punch_open: open().count(),
@@ -391,7 +398,8 @@ fn punch_section(input: &CommissioningInput) -> Section {
         ],
     );
     let mut rows: Vec<&PunchRow> = input.punch.iter().collect();
-    // Open items first, worst first, then in the order they were raised.
+    // Open items first, worst first, then by number (callers keep numbers
+    // unique; equal numbers keep their input order).
     rows.sort_by(|a, b| {
         (!a.state.is_open())
             .cmp(&!b.state.is_open())
@@ -609,7 +617,7 @@ mod tests {
         let report = commissioning_report(&CommissioningInput::default());
         let keys: Vec<_> = report.sections.iter().map(|s| s.key.as_str()).collect();
         assert_eq!(keys, ["summary", "signoff"]);
-        assert!(readiness(&CommissioningInput::default()).ready());
+        assert!(!readiness(&CommissioningInput::default()).ready());
     }
 
     #[test]

@@ -86,3 +86,16 @@ fn every_section_has_a_bookmark() {
     assert_eq!(marks.len(), report.sections.len());
     assert!(marks.iter().any(|m| m.title.contains("Sign-off")));
 }
+
+#[test]
+fn cells_starting_with_page_are_printed() {
+    let mut i = input(1);
+    i.checks[0].what = "page 3 wiring".into();
+    i.checks[0].note = "page 9 see drawing".into();
+    let report = commissioning_report(&i);
+    let bytes = export_report_pdf(&[&report], &options());
+    let pdf = Pdf::load_mem(&bytes).expect("parses");
+    let all = page_texts(&pdf).join("\n");
+    assert!(all.contains("page 3 wiring"), "{all}");
+    assert!(all.contains("page 9 see drawing"));
+}

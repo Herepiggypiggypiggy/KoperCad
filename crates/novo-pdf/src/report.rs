@@ -149,9 +149,14 @@ pub fn export_report_pdf(reports: &[&ReportOutput], options: &ReportPdfOptions) 
             let pages = paginate(&single, &setup);
             for (n, page) in pages.iter().enumerate() {
                 let mut layout = layout_page(&single, page, &setup);
-                // layout_page numbers pages within the one-section report;
-                // the footer carries the document number instead.
-                layout.texts.retain(|t| !t.text.starts_with("page "));
+                // layout_page prints "page n / m" within the one-section
+                // report; the footer carries the document number instead.
+                // Drop exactly that heading box, never a table cell.
+                let heading_number = format!("page {} / {}", page.number, page.count);
+                let heading_y = setup.margins.top;
+                layout
+                    .texts
+                    .retain(|t| !(t.text == heading_number && t.y == heading_y && !t.bold));
                 let title = if section.title.is_empty() {
                     report.title.clone()
                 } else {
@@ -219,12 +224,17 @@ pub fn export_report_pdf(reports: &[&ReportOutput], options: &ReportPdfOptions) 
                 l
             };
             let right = sheet.layout.width as f32 - 15.0;
-            writer.label(&footer(15.0, options.title.clone(), Anchor::CenterLeft));
+            let half = (sheet.layout.width as f32 - 30.0) / 2.0;
+            writer.label(&footer(
+                15.0,
+                fit(&options.title, half, 2.5, false),
+                Anchor::CenterLeft,
+            ));
             writer.label(&footer(
                 right,
                 format!(
                     "{}{}page {} / {}",
-                    options.footer_right,
+                    fit(&options.footer_right, half - 30.0, 2.5, false),
                     if options.footer_right.is_empty() {
                         ""
                     } else {
