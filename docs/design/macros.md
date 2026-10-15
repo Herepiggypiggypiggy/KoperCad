@@ -57,10 +57,11 @@ newer `version` is refused with the file untouched; a file that fails validation
 - **Tags.** Already handled by `place_block`: each device keeps its letter code and takes the next
   free number from the numbering rule in the target page's structure. Placing three starters gives
   three distinct sets; no tag from the source project survives.
-- **Wire numbers.** Wire numbers in a macro are dropped on save and handed out by the project's wire
-  numbering rule on placement, so they continue the target project's series. A macro can opt in to
-  keeping fixed numbers (for a vendor panel with fixed labels); a clash with an existing number is
-  reported in the preview, never silently renumbered.
+- **Wire numbers.** The project has no wire numbering engine yet, so a macro's numbers are cleared on
+  placement by default and the wires stay unnumbered until one numbers them. A macro can opt in to
+  keeping its numbers (for a vendor panel with fixed labels); a number another wire already carries is
+  dropped and reported as a clash in the preview, never kept twice. Implemented in
+  `novo_workflow::macro_place` (`WireNumbers::Clear` / `Keep`).
 - **Potentials, feeds, interruptions, terminals.** As for blocks: the first three cannot be part of a
   macro (they join nets across the project). Terminals are allowed in a macro as devices in a strip
   (the same-name join rule then applies in the target project); this needs a core check and is the last step

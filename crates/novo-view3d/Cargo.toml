@@ -1,0 +1,13 @@
+[package]
+name = "novo-view3d"
+description = "3D cabinet view: scene, camera, picking, culling and a light wgpu renderer (WS-29)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+bytemuck = { workspace = true }
+glam = { workspace = true }
+
+[lints]
+workspace = true
