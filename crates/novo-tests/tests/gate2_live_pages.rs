@@ -137,10 +137,17 @@ fn reports_follow_every_edit() {
         !row[spare].is_empty(),
         "an unwired terminal is marked spare"
     );
+    let output = reports.get(doc.project(), "bom").unwrap();
+    let (order, quantity, used_by) = (
+        column(output, "parts", "order_number"),
+        column(output, "parts", "quantity"),
+        column(output, "parts", "used_by"),
+    );
     let bom = rows(&doc, &mut reports, "bom", "parts");
     assert!(
-        bom.iter()
-            .any(|r| r[3] == "3044076" && r[1] == "4" && r[7].contains(&format!("{x1}:4"))),
+        bom.iter().any(|r| r[order] == "3044076"
+            && r[quantity] == "4"
+            && r[used_by].contains(&format!("{x1}:4"))),
         "{bom:?}"
     );
 
@@ -165,9 +172,8 @@ fn reports_follow_every_edit() {
         (overview[0][used].as_str(), overview[0][cores].as_str()),
         ("4", "5")
     );
-    let w1 = reports.get(doc.project(), "cables").unwrap().sections[1]
-        .key
-        .clone();
+    // Each cable's table is keyed by its tag.
+    let w1 = doc.project().cable(s.w1).unwrap().tag.to_string();
     assert!(
         rows(&doc, &mut reports, "cables", &w1)
             .iter()

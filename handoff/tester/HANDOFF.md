@@ -5,7 +5,7 @@ Updated: 2026-10-15 04:15 UTC (Round 12)
 ## Where things are
 - Repo: Herepiggypiggypiggy/NovoElectric. Branch: `claude/project-thread-dft1m7` (the only branch this thread pushes), restarted from main `f3534dc` after #87 merged.
 - Gate 1: no open gap. #87 merged (window scenario, outputs, F4), #99 closed F4, #126 closed F5.
-- Gate 2 (Round 12, this branch's PR): `crates/novo-tests/tests/gate2_live_pages.rs`. Engine tests pass (LiveReports follows terminal, core, device and wire edits; new strip gets a sheet; PDF prints edits). Gaps G2-1 (nothing adds generated pages) and G2-2 (project panel lists sheets) are ignored tests; G2-3 (app shows generated pages empty, no LiveReports in novo-app) and G2-4 (Cables/Devices drawers "come later") are by inspection. The list went to the lead to route.
+- Gate 2 (Round 12, merged in #146): `crates/novo-tests/tests/gate2_live_pages.rs`. Engine tests pass (LiveReports follows terminal, core, device and wire edits; new strip gets a sheet; PDF prints edits). Gaps G2-1 (nothing adds generated pages) and G2-2 (project panel lists sheets) are ignored tests; G2-3 (app shows generated pages empty, no LiveReports in novo-app) and G2-4 (Cables/Devices drawers "come later") are by inspection. The list went to the lead to route.
 - When a gap's fix merges: un-ignore its test in a new PR from main.
 
 ## How to resume
