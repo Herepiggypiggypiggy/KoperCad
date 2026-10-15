@@ -223,7 +223,7 @@ lives only in a menu, and nothing opens a modal dialog in the drawing loop.
    connect; drag a symbol, a junction dot or a text to move it (a drag that
    starts on a text moves only that text); drop a contact on a coil to give
    it its device; drag a device onto a location in the outline.
-2. **The command surface.** Ctrl+K opens it at the top; I and a tapped
+2. **The command surface.** Ctrl+K opens it at the top; Q and a tapped
    Space open it at the pointer, acting on what is under it. Empty, it
    lists every command grouped (Project, Draw, Edit, Navigate, View, Check,
    Export) with shortcuts and disabled reasons: this is the menu, and there
@@ -292,7 +292,7 @@ clear the selection.
 | Ctrl+3 / Ctrl+4 / Ctrl+5 | Terminals / Cables / Devices drawer |
 | Ctrl+T | Table face of the Cabinet canvas |
 | Ctrl+Shift+F / F11 | Focus mode / full screen |
-| I | Place (command surface in place mode at the pointer) |
+| Q | Place (command surface in place mode at the pointer); held, the place wheel |
 | 1 to 9 | Favourite symbols, only while the place query is empty |
 | W | Connect, for chains (one connection is a drag from a pin); Shift+W switches Corners / Lines, also in the middle of a wire |
 | R / X | Rotate / mirror while placing or on the selection |
@@ -491,8 +491,8 @@ On a selection of several objects the rows act on all of them, and the
 top row is the action common to all.
 
 **Place wheel.** "Place component" opens a radial picker at the pointer,
-the fast way for a mouse hand to put down the common parts. Holding I
-(over 250 ms) opens the same wheel; a tap of I stays the command surface
+the fast way for a mouse hand to put down the common parts. Holding Q
+(over 250 ms) opens the same wheel; a tap of Q stays the command surface
 in place mode. The wheel has two rings and no hidden level.
 
 - Inner ring, five sectors: **Terminal**, **Switch** (switches, buttons,
@@ -582,7 +582,7 @@ Acceptance:
     on the first menu.
 13. Place component, then Relays, then coil: a coil follows the pointer
     with an auto tag; click places it; R and X work; Esc cancels. The same
-    through I held, keys 3 then 1, and a flick.
+    through Q held, keys 3 then 1, and a flick.
 14. Double click on empty canvas mid-wire: the wire ends there with the
     end cap and the Unconnected flag, one new corner at most, and a
     `wire.open` warning in Issues. Dragging the cap onto a pin connects it
@@ -681,7 +681,7 @@ connected circuit and finds a command without a menu bar:
 | --- | --- | --- | --- |
 | 1. Launch | The canvas area shows New project, Open, Open example and Recent. Click New project, type a name, Enter. | 2 | name |
 | 2. Structure | The board's hint reads "Add a page under a function". Click Add page. | 1 | |
-| 3. First symbol | The empty page reads "Press I or Space to place a symbol · ? for keys". I, type `contactor`, Enter, click. | 3 | `contactor` |
+| 3. First symbol | The empty page reads "Press Q or Space to place a symbol · ? for keys". Q, type `contactor`, Enter, click. | 3 | `contactor` |
 | 4. Second symbol | The dock hint reads "Click to place another · Esc stop"; click once more (tools are sticky). | 1 | |
 | 5. Connect | Hovering a pin shows the connect ring and the dock hint "Drag from a pin to connect"; drag. | 1 | |
 | 6. Keys | ? shows the shortcut overlay; ? or Esc closes it. | 2 | |
@@ -703,7 +703,7 @@ connections by drag, one proposal accept). With a block: 11.
 | Task | Actions |
 | --- | --- |
 | Place a further device of the same kind | 1 click (tools are sticky) |
-| Place a contact of `-K1` | 3 (I, `no K1`, Enter, click) |
+| Place a contact of `-K1` | 3 (Q, `no K1`, Enter, click) |
 | Connect two pins | 1 drag |
 | T-junction onto a connection | 1 drag onto the line |
 | Rename a device | 2 (F2, Enter) plus the tag; renaming a coil renames its contacts |
