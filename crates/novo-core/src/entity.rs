@@ -4,7 +4,7 @@
 //! [`Tx`](crate::Tx) (or a [`Command`](crate::Command)), which validates every
 //! edit and records it for undo.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -90,6 +90,11 @@ pub struct ProjectRules {
     pub terminals: TerminalRules,
     #[serde(default, skip_serializing_if = "PotentialRules::is_off")]
     pub potentials: PotentialRules,
+    /// The generated-page kinds the project wants, by generator id
+    /// (`bom`, `terminals`, `cables`, ...). `None`, the default, wants
+    /// every kind.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub generated_pages: Option<BTreeSet<String>>,
 }
 
 impl ProjectRules {
@@ -104,11 +109,19 @@ impl ProjectRules {
             potentials: PotentialRules {
                 from_terminal_names: true,
             },
+            generated_pages: None,
         }
     }
 
     pub fn is_default(&self) -> bool {
         *self == ProjectRules::default()
+    }
+
+    /// Whether the project wants generated pages from `generator`.
+    pub fn wants_generated(&self, generator: &str) -> bool {
+        self.generated_pages
+            .as_ref()
+            .is_none_or(|kinds| kinds.contains(generator))
     }
 }
 

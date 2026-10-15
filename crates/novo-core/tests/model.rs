@@ -766,6 +766,61 @@ fn page_order_is_natural() {
 }
 
 #[test]
+fn generated_pages_follow_every_drawn_page() {
+    let mut doc = Document::default();
+    doc.transact("pages", |tx| {
+        for (name, structure, generated) in [
+            ("1", "=A1", false),
+            ("20", "", true),
+            ("2", "=A2", false),
+            ("21", "=A1", true),
+        ] {
+            let page = tx.add_page(name)?;
+            tx.update::<Page>(page, |p| {
+                p.structure = if structure.is_empty() {
+                    DeviceTag::default()
+                } else {
+                    tag(structure)
+                };
+                if generated {
+                    p.kind = PageKind::Generated {
+                        generator: "bom".into(),
+                    };
+                }
+            })?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let names: Vec<&str> = doc
+        .project()
+        .pages_in_order()
+        .iter()
+        .map(|p| p.name.as_str())
+        .collect();
+    // A report without a structure no longer jumps ahead of the drawing.
+    assert_eq!(names, ["1", "2", "20", "21"]);
+}
+
+#[test]
+fn a_project_picks_its_generated_page_kinds() {
+    let mut rules = ProjectRules::default();
+    assert!(rules.wants_generated("bom"));
+    rules.generated_pages = Some(["terminals".to_string()].into());
+    assert!(!rules.wants_generated("bom"));
+    assert!(rules.wants_generated("terminals"));
+
+    let mut doc = Document::default();
+    let mut info = doc.project().info().clone();
+    info.rules = rules.clone();
+    doc.execute(Command::SetProjectInfo { info }).unwrap();
+    let back = Project::from_json(&doc.project().to_json()).unwrap();
+    assert_eq!(back.info().rules, rules);
+    // Projects without the rule keep wanting every kind.
+    assert!(!Project::default().to_json().contains("generated_pages"));
+}
+
+#[test]
 fn change_sets_name_touched_pages() {
     let mut doc = Document::default();
     let s = build_starter(&mut doc);
