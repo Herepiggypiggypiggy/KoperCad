@@ -85,6 +85,11 @@ Rules the unit tests hold:
   light.
 - Controls step away from the panel in both themes: hover is further from the panel's lightness than a resting control, which is further than the panel.
 - No mark colour on the canvas equals the selection colour.
+- The 3D view's room follows the theme through `Palette::room` (`Room3d`):
+  background gradient (the sunken pair in dark, `#ECEAE6` to `#DEDCD7` in light),
+  ground grid, label chip (fill at 85%, outline, text at 7:1), selection = accent,
+  hover = info, edge darkening 45% dark and 55% light. Physical materials stay
+  in `novo-view3d`; problems use the status colours with a glyph (docs/design/3d-look.md).
 
 ### 2.2 Type
 

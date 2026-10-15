@@ -60,6 +60,33 @@ pub struct Palette {
     /// light surface, so the light theme uses less of it; its surfaces are
     /// close in value, so the shadow still does the lifting.
     pub shadow_alpha: u8,
+    /// The 3D view's room and overlays (docs/design/3d-look.md).
+    pub room: Room3d,
+}
+
+/// The roles of the 3D cabinet view that follow the theme: the room around
+/// the cabinet and the overlays on it. Physical materials (plate, rail, duct,
+/// wire colours) are the same in both themes and live in `novo-view3d`.
+/// Problems are the status colours, drawn as glyphs and never colour alone.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Room3d {
+    /// Background gradient, top.
+    pub background_top: Color32,
+    /// Background gradient, bottom.
+    pub background_bottom: Color32,
+    /// Ground grid lines.
+    pub grid: Color32,
+    /// Label chip fill, drawn at `label_alpha` (85%), outline and text.
+    pub label_fill: Color32,
+    pub label_alpha: u8,
+    pub label_border: Color32,
+    pub label_text: Color32,
+    /// Selected item outline: the accent.
+    pub selection: Color32,
+    /// Hovered item outline: the info colour.
+    pub hover: Color32,
+    /// How much darker an edge line is than its face, in percent.
+    pub edge_percent: u8,
 }
 
 /// One channel of `fg` over `bg`, `pct` percent of `fg`.
@@ -104,6 +131,18 @@ impl Palette {
         warning_wash: mix(tokens::WARNING, tokens::BG_1, 12),
         error_wash: mix(tokens::ERROR, tokens::BG_1, 12),
         shadow_alpha: 100,
+        room: Room3d {
+            background_top: tokens::BG_0,
+            background_bottom: tokens::BG_1,
+            grid: tokens::BORDER,
+            label_fill: tokens::BG_2,
+            label_alpha: 217,
+            label_border: tokens::BORDER_STRONG,
+            label_text: tokens::TEXT,
+            selection: tokens::ACCENT,
+            hover: tokens::INFO,
+            edge_percent: 45,
+        },
     };
 
     /// The warm paper theme. Panels sit a touch below the floating
@@ -141,6 +180,18 @@ impl Palette {
             warning_wash: mix(WARNING, PANEL, 12),
             error_wash: mix(ERROR, PANEL, 12),
             shadow_alpha: 46,
+            room: Room3d {
+                background_top: Color32::from_rgb(0xEC, 0xEA, 0xE6),
+                background_bottom: Color32::from_rgb(0xDE, 0xDC, 0xD7),
+                grid: Color32::from_rgb(0xC9, 0xC6, 0xC0),
+                label_fill: Color32::from_rgb(0xFF, 0xFF, 0xFF),
+                label_alpha: 217,
+                label_border: Color32::from_rgb(0xB5, 0xB1, 0xAA),
+                label_text: Color32::from_rgb(0x1E, 0x1D, 0x1B),
+                selection: Color32::from_rgb(0x9A, 0x54, 0x27),
+                hover: INFO,
+                edge_percent: 55,
+            },
         }
     };
 
@@ -250,6 +301,31 @@ mod tests {
             // Fully mixed is the status colour, not mixed is the surface.
             assert_eq!(mix(p.error, p.panel, 100), p.error);
             assert_eq!(mix(p.error, p.panel, 0), p.panel);
+        }
+    }
+
+    #[test]
+    fn the_3d_room_keeps_labels_and_outlines_readable() {
+        for p in BOTH {
+            let r = p.room;
+            // A label chip over either end of the background gradient.
+            for room in [r.background_top, r.background_bottom] {
+                let a = r.label_alpha as u32;
+                let blend = |f: u8, b: u8| ((f as u32 * a + b as u32 * (255 - a)) / 255) as u8;
+                let chip = Color32::from_rgb(
+                    blend(r.label_fill.r(), room.r()),
+                    blend(r.label_fill.g(), room.g()),
+                    blend(r.label_fill.b(), room.b()),
+                );
+                assert!(contrast(r.label_text, chip) >= 7.0, "{p:?} on {room:?}");
+                assert!(contrast(r.label_border, chip) >= 1.5, "{p:?}");
+            }
+            for outline in [r.selection, r.hover] {
+                assert!(contrast(outline, r.background_top) >= 3.0, "{p:?}");
+                assert!(contrast(outline, r.background_bottom) >= 3.0, "{p:?}");
+            }
+            assert_ne!(r.selection, r.hover);
+            assert!(r.grid != r.background_bottom);
         }
     }
 
