@@ -70,7 +70,10 @@ pub struct Source {
 impl Source {
     /// From a stated three-phase short-circuit current `ik_ka` (kA) at the
     /// incoming point, as a distribution board's label or the supplier
-    /// gives it: `Z = c·Un / (√3·Ik)`, `R = 0.1·X`.
+    /// gives it: `Z = c_max·Un / (√3·Ik)`, `R = 0.1·X`. Give the maximum
+    /// current for [`ik3_max`]; for the minimum earth-fault current
+    /// ([`ik1_min`]) give the minimum the supply can deliver (a weak or
+    /// distant supply), since the source impedance is taken from it.
     pub fn from_ik(ik_ka: f64, voltage: f64) -> Option<Source> {
         if !(ik_ka.is_finite() && ik_ka > 0.0 && voltage.is_finite() && voltage > 0.0) {
             return None;
@@ -83,9 +86,10 @@ impl Source {
     }
 
     /// From a transformer of `sn_kva` and short-circuit voltage `uk_percent`
-    /// on a stiff network: `Z = uk/100 · Un²/Sn`, `R = 0.2·X` (typical
-    /// distribution transformer; the correction factor `KT` of IEC 60909 is
-    /// left out, which errs on the side of the larger current).
+    /// on a stiff network: `Z = KT · uk/100 · Un²/Sn` with `R = 0.2·X` (a
+    /// typical distribution transformer) and the correction factor of IEC
+    /// 60909-0 §3.3.3, `KT = 0.95·c_max / (1 + 0.6·x_T)`, which is below 1
+    /// and so raises the maximum short-circuit current by a few percent.
     pub fn from_transformer(sn_kva: f64, uk_percent: f64, voltage: f64) -> Option<Source> {
         if !(sn_kva.is_finite()
             && sn_kva > 0.0
@@ -97,8 +101,11 @@ impl Source {
             return None;
         }
         let z = uk_percent / 100.0 * voltage * voltage / (sn_kva * 1000.0);
+        // Relative reactance of the transformer: X = Z / sqrt(1 + 0.2²).
+        let x_t = uk_percent / 100.0 / (1.0 + 0.2_f64 * 0.2).sqrt();
+        let kt = 0.95 * C_MAX / (1.0 + 0.6 * x_t);
         Some(Source {
-            impedance: from_magnitude(z, 0.2),
+            impedance: from_magnitude(z * kt, 0.2),
             voltage,
         })
     }
@@ -128,14 +135,15 @@ pub fn ik3_max(source: &Source, phase: &[Impedance]) -> f64 {
 /// Minimum single-phase short-circuit (earth-fault) current in amperes at
 /// the end of the run: the loop goes out on the phase conductor and back on
 /// the protective conductor. `phase` and `protective` are the cable
-/// impedances with resistance at the hot conductor temperature; the source
-/// counts twice (a transformer's zero-sequence impedance is about its
-/// positive-sequence one). `U0 = Un/√3`.
+/// impedances with resistance at the hot conductor temperature. The source
+/// counts once: a transformer's zero-sequence impedance is about its
+/// positive-sequence one, so `(Z1 + Z2 + Z0) / 3` is the source impedance
+/// itself. `U0 = Un/√3`.
 pub fn ik1_min(source: &Source, phase: &[Impedance], protective: &[Impedance]) -> f64 {
     let loop_z = phase
         .iter()
         .chain(protective)
-        .fold(source.impedance.scaled(2.0), |acc, z| acc + *z);
+        .fold(source.impedance, |acc, z| acc + *z);
     C_MIN * source.voltage / 3.0_f64.sqrt() / loop_z.magnitude()
 }
 
@@ -262,16 +270,16 @@ mod tests {
 
     #[test]
     fn transformer_secondary_current() {
-        // 630 kVA, uk 4 %, 400 V: In = 909 A, Ik ≈ 22.7 kA (without c);
-        // with c 1.05 about 23.8 kA.
+        // 630 kVA, uk 4 %, 400 V: Z = 10.16 mΩ, Ik without c or KT 22.7 kA.
+        // KT = 0.95·1.05 / (1 + 0.6·0.0392) = 0.9746, so Z = 9.90 mΩ and
+        // Ik = 1.05·400 / (√3·Z) ≈ 24.5 kA.
         let source = Source::from_transformer(630.0, 4.0, 400.0).unwrap();
-        near(
-            source.impedance.magnitude(),
-            0.04 * 400.0 * 400.0 / 630_000.0,
-            1e-9,
-        );
+        let z_uncorrected = 0.04 * 400.0 * 400.0 / 630_000.0;
+        near(source.impedance.magnitude() / z_uncorrected, 0.9746, 0.001);
         let ik = ik3_max(&source, &[]);
-        near(ik, 1.05 * 22_746.0, 0.01);
+        near(ik, 24_540.0, 0.01);
+        // Larger than without the correction factor.
+        assert!(ik > 1.05 * 22_746.0);
     }
 
     #[test]

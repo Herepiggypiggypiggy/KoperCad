@@ -5,7 +5,9 @@
 //! These are the rules a panel builder checks first, not a coordination
 //! study: manufacturers' type 1 and type 2 tables decide the last word and
 //! are entered here as the one number they give, the largest short-circuit
-//! protective device the starter may be fused with.
+//! protective device the starter may be fused with. The contactor's AC-3
+//! current is compared as stated, without regard to the voltage it is
+//! quoted at (usually 400 V; at 690 V ratings are lower).
 
 use super::{Finding, Rule, num, within};
 
@@ -151,7 +153,7 @@ pub fn check_starter(starter: &Starter) -> Vec<Finding> {
                         out.push(Finding::warning(
                             Rule::MotorStarter,
                             format!(
-                                "a {} A fuse may blow when the {} A motor starts; use at least {} A",
+                                "a {} A fuse may blow when the {} A motor starts (rule of thumb: at least {} A)",
                                 num(rated),
                                 num(fla),
                                 num((FUSE_MIN_FACTOR * fla).ceil())
@@ -167,7 +169,7 @@ pub fn check_starter(starter: &Starter) -> Vec<Finding> {
                         out.push(Finding::warning(
                             Rule::MotorStarter,
                             format!(
-                                "the breaker trips at once at {} A, which a {} A motor's starting current can reach; set it above {} A",
+                                "the breaker trips at once at {} A, which a {} A motor's starting current can reach (rule of thumb: set it above {} A)",
                                 num(instantaneous_a),
                                 num(fla),
                                 num(INSTANTANEOUS_MIN_FACTOR * fla)
