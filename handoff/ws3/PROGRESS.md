@@ -28,3 +28,12 @@
 2026-10-15 03:20 UTC Drawing rebased on #120 (ffca612, local branch canvas-drawing-next, patch in next-pr/canvas-drawing/); un-ignores F5 gap_pdf_names_the_terminal_strip (passes). Local CI 683 passed. Opens as a PR once #120 merges.
 2026-10-15 03:40 UTC canvas-reveal ready (451904b on drawing; patch next-pr/canvas-reveal/): CanvasView::reveal for jumps, moves only when the target is off screen; app jump + terminal proposals use it. 686 passed.
 2026-10-15 03:10 UTC #120 READY (reviewer B) and merged as dca9a9a. Drawing PR rebased on main d7f70b8.
+2026-10-15 03:20 UTC #126 READY from reviewer B (design review pending). Its 2 non-blocking notes fixed on canvas-reveal (plain junction pickable; tag label kept explicitly). Patches next-pr/canvas-reveal/.
+2026-10-15 03:30 UTC #126 READY from design reviewer too. Its note 2 (two-row strips) fixed on canvas-reveal (3 commits). Plain junctions are pickable at their point only; a move tool that drags bends would need more.
+2026-10-15 03:25 UTC Main reviewer CHANGES NEEDED on #126 (two-row strips). Fixed and pushed 1bf0920 (also pickable plain junctions). canvas-reveal now just the reveal commit on top.
+2026-10-15 03:40 UTC #126 merged (READY from main reviewer, B, design). #144 opened (head c54805f on main 511cd18): jump reveal. Reviewer B, design, lead told.
+2026-10-15 03:50 UTC #144 head 6eabbdf: added SheetText.bold/Label.bold (faux bold on canvas) for the outputs thread's report headers. novo-pdf maps TextBox::bold after merge.
+2026-10-15 03:55 UTC #144 READY (B, design) on c54805f; pushed 6eabbdf (bold) + 87614b9 (reveal waits for target, reveal_area, reveal_margin). Delta re-checks requested.
+2026-10-15 04:00 UTC #144 head 4f842a6 (bold 4%, fits cells). Delta re-checks requested. Outputs thread has the novo-pdf Helvetica-Bold side staged for after merge.
+2026-10-15 04:10 UTC #144 merged. #154 opened (head bdc9043 on main 6fa1492): CanvasView::bold_family, app uses novo-theme strong family (Inter SemiBold).
+2026-10-15 04:15 UTC #154 merged (bold face). Nothing open.
