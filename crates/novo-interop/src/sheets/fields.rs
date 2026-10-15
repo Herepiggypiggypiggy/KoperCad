@@ -306,6 +306,7 @@ pub(crate) fn read(project: &Project, id: AnyId, field: &Field) -> Cell {
 // only add a pointer chase everywhere the enum is matched.
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::large_enum_variant)] // one short-lived value per cell; boxing would touch the sheet planner
 pub(crate) enum Parsed {
     Text(String),
     /// A text that may be cleared (`None`).
