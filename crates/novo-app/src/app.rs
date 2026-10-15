@@ -20,6 +20,9 @@ mod inspector;
 mod link;
 mod live;
 mod live_anim;
+mod macro_actions;
+#[cfg(test)]
+mod macro_actions_tests;
 mod menu_bar;
 mod onboarding;
 mod pages;
@@ -32,6 +35,7 @@ mod preferences;
 mod project_settings;
 mod reports;
 mod revisions;
+mod sheets;
 mod sizing;
 mod terminals;
 mod title_revisions;
@@ -62,6 +66,9 @@ use std::time::{Duration, Instant, SystemTime};
 use eframe::egui;
 
 use crate::actions::Action;
+
+/// Hover text of the bulk-edit exports (the data to edit, not the reports).
+const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel. Export only: bringing the edited file back comes with the import dialog. The generated reports are under Export all reports to Excel.";
 use novo_core::{Aspect, Command, DeviceTag, ModelError, Outcome, PageId, PageKind};
 use pages::{FormKind, PageForm, PageView};
 
@@ -784,6 +791,7 @@ impl NovoApp {
             self.hud(&ctx, canvas_rect);
             self.sync_wiring_mode();
             self.sync_connect_mode();
+            self.sync_catalog();
             self.tool_dock(&ctx, canvas_rect);
             self.inspector(&ctx, canvas_rect);
             self.live_view(&ctx, canvas_rect);
@@ -801,6 +809,8 @@ impl NovoApp {
         self.preferences_dialog(&ctx);
         self.parts_window(&ctx);
         self.project_settings_dialog(&ctx);
+        self.macro_save_dialog(&ctx);
+        self.macro_place_window(&ctx);
         self.issue_revision_dialog(&ctx);
         self.compare_window(&ctx);
         self.page_form_dialog(&ctx);
