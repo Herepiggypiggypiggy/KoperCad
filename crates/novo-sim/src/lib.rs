@@ -16,10 +16,12 @@
 
 mod coupling;
 mod loads;
+mod plc;
 
 pub use coupling::{
     Clock, DEFAULT_DELAY, Settled, delay_seconds, is_coil, is_timer_contact, settle, settle_timed,
 };
+pub use plc::{inputs_seen, is_plc_input, is_plc_output, output_drives};
 
 pub use loads::{is_load, loads_on};
 
@@ -106,6 +108,18 @@ impl Solution {
 /// defined potential then flows breadth first through closed poles into
 /// nets with no definition of their own.
 pub fn solve(project: &Project, netlist: &Netlist, state: &PoleState) -> Solution {
+    solve_driven(project, netlist, state, &[])
+}
+
+/// [`solve`] with outputs switched on: each `(pin, potential)` puts that
+/// potential on the pin's net, as a source, unless the net defines potentials
+/// of its own.
+pub fn solve_driven(
+    project: &Project,
+    netlist: &Netlist,
+    state: &PoleState,
+    drives: &[(Endpoint, PotentialId)],
+) -> Solution {
     let count = netlist.nets().len();
     // net -> (neighbour net) for every closed pole, both directions.
     let mut edges: Vec<Vec<usize>> = vec![Vec::new(); count];
@@ -142,6 +156,14 @@ pub fn solve(project: &Project, netlist: &Netlist, state: &PoleState) -> Solutio
     let mut sources: Vec<(PotentialId, usize)> = Vec::new();
     for (i, net) in netlist.nets().iter().enumerate() {
         sources.extend(net.defined.iter().map(|&p| (p, i)));
+    }
+    for &(pin, potential) in drives {
+        if let Some(net) = netlist.net_of(pin).map(|n| n.0 as usize)
+            && !defines[net]
+        {
+            found[net].push(potential);
+            sources.push((potential, net));
+        }
     }
     for (potential, start) in sources {
         let mut seen = vec![false; count];
