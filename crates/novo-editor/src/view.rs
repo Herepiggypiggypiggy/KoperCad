@@ -603,6 +603,19 @@ impl SchematicView {
             self.handle_keys(&ctx, document, page, &out, rect);
         }
 
+        // Double click on a device with nothing in hand opens its
+        // properties, the cursor in the tag (DESIGN.md §4); the first click
+        // of the pair has selected it. The shell owns the properties.
+        if response.double_clicked_by(egui::PointerButton::Primary)
+            && !self.editor.tool_active()
+            && !self.popup_open()
+            && let (Some(hovered), Some(scene)) = (out.hovered, &self.scene)
+            && let Some(id) = scene.model_id(hovered)
+            && device_of(document.project(), id).is_some()
+        {
+            self.commands.push("edit.properties");
+        }
+
         // Right click: select what is under the pointer, then the menu.
         if out.context_click.is_some() {
             if let (Some(hovered), Some(scene)) = (out.hovered, &self.scene)

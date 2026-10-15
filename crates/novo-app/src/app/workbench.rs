@@ -439,6 +439,18 @@ impl NovoApp {
             "check.problems" => self.show_issues(false),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),
+            "edit.properties" => {
+                // The inspector shows with the selection; the cursor goes in
+                // its tag.
+                let selection = self.selection();
+                let device = self
+                    .backend
+                    .document()
+                    .and_then(|d| super::inspector::selected_device(d.project(), &selection));
+                if device.is_some() {
+                    ctx.memory_mut(|m| m.request_focus(egui::Id::new("inspector_tag")));
+                }
+            }
             "tool.place_wheel" => self.open_wheel(ctx, Vec::new()),
             "wire.mode" => {
                 let mode = match self.settings.wiring_mode() {

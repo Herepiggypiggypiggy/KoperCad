@@ -1366,3 +1366,42 @@ fn the_inspector_edits_the_selected_device_in_one_undo_step() {
         before
     );
 }
+
+#[test]
+fn a_double_click_on_a_device_puts_the_cursor_in_its_tag() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let coil = d.place("coil", 200.0, 144.0);
+    d.frame();
+
+    // The coil's body, on screen.
+    let origin = d.doc().project().symbol(coil).unwrap().placement.origin;
+    let view = d.app.canvas.schematic().unwrap();
+    let at = view.canvas.viewport.world_to_screen(novo_canvas::Vec2::new(
+        origin.x as f32 + 4.0,
+        origin.y as f32 + 8.0,
+    ));
+    let rect = d.app.wb.canvas_area.unwrap().1;
+    let pos = rect.min + egui::vec2(at.x, at.y);
+
+    let button = |pressed| egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    frame_at(&mut d, 50.0, vec![egui::Event::PointerMoved(pos)]);
+    for (i, t) in [50.1, 50.15, 50.2, 50.25].into_iter().enumerate() {
+        frame_at(&mut d, t, vec![button(i % 2 == 0)]);
+    }
+    frame_at(&mut d, 50.3, vec![]);
+    frame_at(&mut d, 50.35, vec![]);
+    assert_eq!(
+        ctx.memory(|m| m.focused()),
+        Some(egui::Id::new("inspector_tag")),
+        "the tag field has the cursor"
+    );
+}
