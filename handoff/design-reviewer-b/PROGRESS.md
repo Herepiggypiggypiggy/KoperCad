@@ -19,3 +19,4 @@
 17:30 UTC #288 fb31b87 READY (Corners mode squares slanted wire on corner drag; follow-up to #269)
 17:45 UTC #291 d4c586d READY (Preferences Connections/Moving follow-ups to #259/#261)
 17:55 UTC #293 d26979c READY (feed names L1,L2,L3 per page; editing.rs test conflict keep both)
+18:10 UTC #295 285a31c READY; #297 8efb31a READY; #290 a88ec39 CHANGES (fmt gate1_tests.rs:1859; design OK)
