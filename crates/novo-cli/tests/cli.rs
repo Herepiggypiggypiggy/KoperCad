@@ -1,4 +1,4 @@
-//! The `novo` tool, driven through `novo_cli::run` like the binary.
+//! The `kopercad-cli` tool, driven through `novo_cli::run` like the binary.
 
 use std::path::{Path, PathBuf};
 
@@ -15,7 +15,7 @@ fn novo(args: &[&str]) -> Run {
     let mut out = Vec::new();
     let mut err = Vec::new();
     let code = novo_cli::run(
-        std::iter::once("novo").chain(args.iter().copied()),
+        std::iter::once("kopercad-cli").chain(args.iter().copied()),
         &mut out,
         &mut err,
     );

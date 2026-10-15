@@ -1,7 +1,7 @@
 # KoperCAD
 
-Product KoperCAD, maker KoperVonk (formerly NovoElectric; the `novo-*` crates, `novoelectric.exe` and the
-data folders keep the old name, see README; the repository is `kopercad`).
+Product KoperCAD, maker KoperVonk (formerly NovoElectric; the `novo-*` crates, the `novoelectric` Python
+module and the release asset name keep the old name, see README; the repository is `kopercad`).
 
 A lightweight, local-first electrical CAD program (schematics, terminal and
 cable connection screens, cross references, cabinet layout, simulation).
@@ -55,7 +55,7 @@ coordinator in its own small PR first.
 | `novo-sim` | WS-19 | Simulation engine (Phase 4) |
 | `novo-ai` | WS-23 | AI assistant (Phase 5) |
 | `novo-interop` | WS-24 | Import and export: DXF, EPLAN parts, Excel round trip (Phase 5) |
-| `novo-cli` | WS-28 | `novo` command-line tool |
+| `novo-cli` | WS-28 | `kopercad-cli` command-line tool |
 | `novo-py` | WS-28 | Python bindings (PyO3) |
 | `novo-theme` | Layout and branding | Dark theme, design tokens, icons, logo (`assets/branding`) |
 | `novo-tests` | Tester | Cross-crate tests and the Gate 1 fixture |

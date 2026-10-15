@@ -54,14 +54,14 @@ jobs:
         shell: pwsh
         run: |
           # The installer and the app must run without elevation.
-          foreach ($exe in @((Get-ChildItem dist\KoperCAD-*-setup.exe)[0].FullName, "target\release\novoelectric.exe")) {
+          foreach ($exe in @((Get-ChildItem dist\KoperCAD-*-setup.exe)[0].FullName, "target\release\kopercad.exe")) {
             $text = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($exe))
             if ($text -match 'requireAdministrator|highestAvailable') { throw "$exe asks for admin rights" }
           }
           # A dynamically linked MSVC runtime would need the machine-wide VC++
           # Redistributable, which a standard user cannot install.
-          $app = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes("target\release\novoelectric.exe"))
-          if ($app -match '(?i)vcruntime140|msvcp140|api-ms-win-crt-') { throw "novoelectric.exe links the MSVC runtime dynamically" }
+          $app = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes("target\release\kopercad.exe"))
+          if ($app -match '(?i)vcruntime140|msvcp140|api-ms-win-crt-') { throw "kopercad.exe links the MSVC runtime dynamically" }
       - name: Install as a standard (non-admin) user
         shell: pwsh
         run: |
@@ -100,8 +100,8 @@ jobs:
           Get-Content "$work\install.log" -ErrorAction SilentlyContinue | Select-Object -Last 20
           if ($p.ExitCode -ne 0) { throw "installer exited with $($p.ExitCode)" }
 
-          $exe = "C:\Users\$user\AppData\Local\Programs\KoperCAD\novoelectric.exe"
-          if (-not (Test-Path $exe)) { throw "novoelectric.exe is not in the user's %LOCALAPPDATA%\Programs" }
+          $exe = "C:\Users\$user\AppData\Local\Programs\KoperCAD\kopercad.exe"
+          if (-not (Test-Path $exe)) { throw "kopercad.exe is not in the user's %LOCALAPPDATA%\Programs" }
           if (Test-Path "HKLM:\Software\Classes\KoperCAD.Project") { throw "file association was written machine-wide" }
           if (Test-Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{AEB465B9-04F0-475B-AD7F-091D638587B5}_is1") { throw "uninstall entry was written machine-wide" }
 
@@ -112,10 +112,10 @@ jobs:
           # has no desktop to attach to, so this step runs the installed exe
           # as the runner; its asInvoker manifest (checked above) means it
           # runs with whatever rights its user has.
-          $exe = "C:\Users\novotest\AppData\Local\Programs\KoperCAD\novoelectric.exe"
+          $exe = "C:\Users\novotest\AppData\Local\Programs\KoperCAD\kopercad.exe"
           $app = Start-Process $exe -WorkingDirectory C:\novotest -PassThru
           Start-Sleep -Seconds 10
-          if ($app.HasExited) { throw "novoelectric.exe exited at startup with code $($app.ExitCode)" }
+          if ($app.HasExited) { throw "kopercad.exe exited at startup with code $($app.ExitCode)" }
           Stop-Process -Id $app.Id
           $setup = (Get-ChildItem dist\KoperCAD-*-setup.exe)[0]
           $size = [math]::Round($setup.Length / 1MB, 1)
