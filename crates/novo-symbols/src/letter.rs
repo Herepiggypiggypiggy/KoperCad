@@ -6,7 +6,10 @@
 //! can change them ([`LetterRules`]); a typed tag always wins over both.
 
 /// How contactors are coded: K (the default most panel builders use) or Q
-/// (IEC 81346-2:2019, a power contactor switches energy).
+/// (IEC 81346-2:2019, a power contactor switches energy). Only main-circuit
+/// contacts (`contact.main`) are a contactor by function; coils and
+/// auxiliary contacts stay K, as 81346-2 codes auxiliary relays, so a
+/// device takes Q from its main contacts rather than from its coil.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ContactorCode {
     #[default]
@@ -64,8 +67,7 @@ pub fn letter_code_with(function: &str, rules: LetterRules) -> Option<&'static s
         "connectivity" | "earth" | "accessory" => return None,
         "terminal" | "connector" => "X",
         "coil" if has("valve") => "M",
-        "coil" if has("timer") => "K",
-        "coil" => contactor,
+        "coil" => "K",
         "contact" if ["push", "key", "turn", "estop"].iter().any(|p| has(p)) => "S",
         "contact"
             if ["position", "proximity", "pressure", "float", "temperature"]
@@ -76,7 +78,8 @@ pub fn letter_code_with(function: &str, rules: LetterRules) -> Option<&'static s
         }
         "contact" if has("thermal") => "F",
         "contact" if has("delay_on") || has("delay_off") => "K",
-        "contact" => contactor,
+        "contact" if has("main") => contactor,
+        "contact" => "K",
         "protection" => match parts.get(1).copied() {
             Some("mpcb" | "mcp") => breaker("Q"),
             Some("mcb" | "rcbo") => breaker("F"),
@@ -273,9 +276,9 @@ mod tests {
             contactors: ContactorCode::Q,
             ..LetterRules::default()
         };
-        assert_eq!(letter_code_with("coil.relay", q), Some("Q"));
+        assert_eq!(letter_code_with("coil.relay", q), Some("K"));
         assert_eq!(letter_code_with("contact.main", q), Some("Q"));
-        assert_eq!(letter_code_with("contact.no", q), Some("Q"));
+        assert_eq!(letter_code_with("contact.no", q), Some("K"));
         assert_eq!(letter_code_with("coil.timer.on_delay", q), Some("K"));
         assert_eq!(letter_code_with("contact.no.push", q), Some("S"));
 
