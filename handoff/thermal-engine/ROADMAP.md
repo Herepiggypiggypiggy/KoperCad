@@ -18,3 +18,17 @@ Next
 
 Open questions
 - Which part properties carry the maker's temperature limits.
+
+## Full CFD plan (scope from Tadjiro, 2026-10-15)
+
+Design: `docs/design/thermal-cfd.md` (method choice, model, progressive fidelity,
+result contract, validation, lanes). Not started in code; the 2D engine is the
+instant preview. Lanes:
+- A flow core (3D MAC, projection, Boussinesq, multigrid pressure; lid cavity, de Vahl Davis, heated plate)
+- B turbulence (k-omega SST, k-epsilon, wall functions)
+- C meshing and conjugate solids (cut-cell mesh, CHT, fans, vents, porous ducts)
+- D radiation (surface-to-surface, radiosity)
+- E performance (rayon, background progressive scheduler, cancel, optional wgpu)
+- F results and visuals (visuals thread; `CfdSnapshot` contract)
+- G validation and honest accuracy report
+Registration needs (integration lead): crate `novo-cfd` (pure, depends on novo-thermal) and `rayon` in `[workspace.dependencies]`. No threads started yet (usage limit).

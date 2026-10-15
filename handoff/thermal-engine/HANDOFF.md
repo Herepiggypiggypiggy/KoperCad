@@ -1,7 +1,7 @@
 # Thermal engine handoff
 
-State (2026-10-15 20:10 UTC): engine complete and tested on branch
-`claude/project-thread-cegdth` (kopercad), draft PR #505. Not yet READY.
+State (2026-10-15 20:15 UTC): 2D engine plus CFD design note on branch
+`claude/project-thread-cegdth` (kopercad), PR #505 un-drafted, with Main reviewer B. CFD is design only; see ROADMAP lanes.
 
 Resume
 - `cargo test -p novo-thermal` (about 5 s), `cargo clippy -p novo-thermal --all-targets -- -D warnings`.
