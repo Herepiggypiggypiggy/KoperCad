@@ -67,6 +67,7 @@ impl Field {
             self.slot,
             Slot::DeviceTag
                 | Slot::DeviceDescription
+                | Slot::DeviceOrderNumber
                 | Slot::TerminalName
                 | Slot::TerminalLevel
                 | Slot::TerminalOrder
@@ -309,9 +310,20 @@ pub(crate) enum Parsed {
     Tag(DeviceTag),
     Number(Option<f64>),
     Property(Option<Value>),
+    /// A device's part by order number (`None` removes it). The catalog
+    /// entry and the manufacturer are added by the planner.
+    Part(Option<super::create::PartRef>),
 }
 
 impl Parsed {
+    /// The property value, if this is one that sets a value.
+    pub fn value(&self) -> Option<Value> {
+        match self {
+            Parsed::Property(v) => v.clone(),
+            _ => None,
+        }
+    }
+
     /// The value as one comparable string: two cells that mean the same
     /// thing (`2,5`, 2.5 and `2.50`) give the same string.
     pub fn canon(&self) -> String {
@@ -321,6 +333,11 @@ impl Parsed {
             Parsed::Tag(t) => t.to_string(),
             Parsed::Number(n) => n.map(number_text).unwrap_or_default(),
             Parsed::Property(v) => v.as_ref().map(ToString::to_string).unwrap_or_default(),
+            // Order numbers compare without spaces, dashes and case.
+            Parsed::Part(p) => p
+                .as_ref()
+                .map(|p| novo_parts::normalize_code(&p.order_number))
+                .unwrap_or_default(),
         }
     }
 
@@ -328,6 +345,10 @@ impl Parsed {
     pub fn shown(&self) -> String {
         match self {
             Parsed::Property(Some(v)) => display_value(v),
+            Parsed::Part(p) => p
+                .as_ref()
+                .map(|p| p.order_number.clone())
+                .unwrap_or_default(),
             other => other.canon(),
         }
     }
@@ -396,6 +417,13 @@ pub(crate) fn parse(field: &Field, cell: &Cell, like: Option<&Value>) -> Result<
                 None => Err(format!("{header}: '{text}' is not a number")),
             }
         }
+        Slot::DeviceOrderNumber => Ok(Parsed::Part((!text.is_empty()).then(|| {
+            super::create::PartRef {
+                order_number: text,
+                manufacturer: String::new(),
+                catalog: None,
+            }
+        }))),
         Slot::Property(_) => {
             if text.is_empty() {
                 return Ok(Parsed::Property(None));
