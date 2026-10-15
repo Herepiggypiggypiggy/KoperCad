@@ -667,6 +667,7 @@ impl SchematicView {
             && !self.popup_open()
             && matches!(self.editor.tool(), crate::tool::Tool::Select)
             && out.hit.is_none()
+            && !self.wire_under(document, out.cursor_raw)
             && response.double_clicked_by(egui::PointerButton::Primary)
         {
             // A double click on bare grid starts a wire there, without the
@@ -813,6 +814,17 @@ impl SchematicView {
         let changes = self.apply_changes(document);
         self.status = Some(self.editor.status(document, page));
         changes
+    }
+
+    /// Whether a wire's line is under the pointer. Wires are not canvas
+    /// hits, so "bare grid" has to ask.
+    fn wire_under(&self, document: &Document, at: Option<Vec2>) -> bool {
+        let tol = self
+            .canvas
+            .viewport
+            .screen_to_world_len(self.canvas.pick_tolerance);
+        at.zip(self.scene.as_ref())
+            .is_some_and(|(w, scene)| scene.wire_part_at(document.project(), w, tol).is_some())
     }
 
     /// Wires are picked by part: a click selects the corner or the run
@@ -964,15 +976,20 @@ impl SchematicView {
                     continue;
                 }
                 // Delete on a selected corner takes that bend out; on a run
-                // it waits for a double click to select the whole wire.
+                // it deletes the wire (DESIGN.md §4).
                 if key == Key::Delete
                     && selection.is_empty()
                     && let Some(part) = self.wire_part
                 {
-                    if let WirePartKind::Corner(i) = part.kind {
-                        self.editor.remove_corner(document, part.wire, i);
-                        self.wire_part = None;
+                    match part.kind {
+                        WirePartKind::Corner(i) => {
+                            self.editor.remove_corner(document, part.wire, i);
+                        }
+                        WirePartKind::Segment(_) => {
+                            self.editor.delete(document, &[AnyId::Wire(part.wire)]);
+                        }
                     }
+                    self.wire_part = None;
                     continue;
                 }
                 self.editor.key(document, action, &selection);
@@ -1977,14 +1994,42 @@ mod tests {
     }
 
     #[test]
+    fn delete_on_a_selected_run_deletes_the_wire() {
+        let mut h = Harness::new();
+        let (wire, corner) = wire_with_a_corner(&mut h);
+        h.click(corner.x + 20.0, corner.y, egui::PointerButton::Primary);
+        h.key(Key::Delete);
+        assert!(h.doc.project().wire(wire).is_none());
+        assert_eq!(h.view.wire_part, None);
+    }
+
+    #[test]
+    fn a_double_click_on_a_wire_does_not_start_a_new_one() {
+        let mut h = Harness::new();
+        let (_, corner) = wire_with_a_corner(&mut h);
+        for _ in 0..60 {
+            h.frame(Vec::new());
+        }
+        let pos = h.screen(corner.x + 20.0, corner.y);
+        h.frame(vec![egui::Event::PointerMoved(pos)]);
+        for pressed in [true, false, true, false] {
+            h.frame(vec![egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Modifiers::NONE,
+            }]);
+        }
+        h.frame(Vec::new());
+        assert!(!h.view.editor.tool_active());
+        assert_eq!(h.doc.project().wires().count(), 1);
+    }
+
+    #[test]
     fn delete_on_a_selected_corner_takes_the_bend_out() {
         let mut h = Harness::new();
         let (wire, corner) = wire_with_a_corner(&mut h);
         let depth = h.doc.undo_depth();
-        // Delete on a run does nothing: that takes the whole wire.
-        h.click(corner.x + 20.0, corner.y, egui::PointerButton::Primary);
-        h.key(Key::Delete);
-        assert_eq!(h.doc.project().wire(wire).unwrap().route.len(), 1);
         h.click(corner.x, corner.y, egui::PointerButton::Primary);
         h.key(Key::Delete);
         assert!(h.doc.project().wire(wire).unwrap().route.is_empty());
