@@ -262,7 +262,7 @@ fn the_contents_list_reuses_the_cached_reports() {
         o.sections[0]
             .text_rows()
             .into_iter()
-            .filter(|r| r[3] != "Generated: counted")
+            .filter(|r| r[4] != "Generated: counted")
             .collect()
     };
     assert_eq!(without(&toc), without(&standalone));
