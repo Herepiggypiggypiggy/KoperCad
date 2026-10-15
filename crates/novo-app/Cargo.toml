@@ -15,6 +15,7 @@ eframe = { workspace = true, features = ["persistence"] }
 novo-core.workspace = true
 novo-storage.workspace = true
 novo-canvas.workspace = true
+novo-layout.workspace = true
 novo-cables.workspace = true
 novo-theme.workspace = true
 novo-symbols.workspace = true
