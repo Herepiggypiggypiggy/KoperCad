@@ -30,6 +30,7 @@
 mod draw;
 mod font;
 mod inter;
+pub mod plate;
 mod report;
 
 use novo_canvas::model::{
