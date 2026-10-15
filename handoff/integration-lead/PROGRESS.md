@@ -92,3 +92,4 @@
 - 03:55 Merged #131 (WS-02 block/freeze follow-ups with geometry check; main READY on 544b628; combined 713 passed). WS-02 queue empty.
 - 03:58 Phase 3 kickoff: WS-02 thread also owns WS-18 Revisions (DESIGN first). Tester assessing Gate 2 (live terminal/cable/report pages). Asked coordinator for a WS-17 PLC thread.
 - 04:05 Merged #126 (WS-03 drawing; main + B + design READY 1bf0920), #136 (WS-08 coil.contactor + DESIGN §6; B + design READY 2e81fe6), #139 (WS-11 optional terminal pins; B READY dd70b21); combined 719 passed. Gate 1 gap tests closed. WS-17 PLC thread started by coordinator (cse_01Bi8FsQAFfTyaeodSes9dKi).
+- 10:45 Merged #197 (WS-06 wiring: refused final click keeps the wire, interactive moves refuse overlaps; main READY 7cbbf5a); combined 864 passed. #198 brand::NAME with design; #193 plc.* mapping with design.
