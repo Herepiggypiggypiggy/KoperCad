@@ -28,6 +28,9 @@ pub struct Settings {
     /// The initials a revision is issued under (docs/DESIGN.md §7),
     /// asked once and remembered.
     pub initials: String,
+    /// Whether moving a symbol takes its wires along by default (Shift
+    /// does the other one): a per-user preference.
+    pub move_carries: bool,
 }
 
 impl Settings {

@@ -1859,7 +1859,11 @@ fn the_issue_revision_window_proposes_everything_and_issues_in_one_step() {
     draft.author = "TV".into();
     d.app.submit_issue(draft);
     d.frame();
-    assert!(d.app.wb.issue.is_none(), "the window closes: {:?}", d.app.wb.issue);
+    assert!(
+        d.app.wb.issue.is_none(),
+        "the window closes: {:?}",
+        d.app.wb.issue
+    );
     assert_eq!(d.app.settings.initials, "TV", "the initials are remembered");
     let project = d.app.backend.document().unwrap().project();
     let latest = project.latest_revision().unwrap();
@@ -2152,4 +2156,48 @@ fn a_pe_terminal_set_by_hand_carries_the_override_diamond() {
         marks.iter().any(|m| m.kind == MarkKind::Override),
         "a by-hand PE terminal carries the override diamond"
     );
+}
+
+#[test]
+fn the_moving_preference_and_shift_choose_whether_wires_go_along() {
+    use novo_editor::Tool;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let k = d.place("km3", 80.0, 96.0);
+    d.editor_leave();
+    d.select(k);
+    d.frame();
+    let carry = |d: &mut Drive| match d.app.canvas.schematic().unwrap().editor.tool() {
+        Tool::Move(m) => m.carry,
+        other => panic!("expected a move, got {other:?}"),
+    };
+    let hint = |d: &mut Drive| d.app.canvas.schematic().unwrap().status_text().unwrap();
+
+    // Default: leave the wires; the hint offers Shift for the other one.
+    d.app
+        .canvas
+        .schematic()
+        .unwrap()
+        .editor
+        .begin_move(&[AnyId::Symbol(k)]);
+    d.frame();
+    assert!(!carry(&mut d));
+    assert!(hint(&mut d).contains("Shift: take the wires along"));
+    d.app.canvas.schematic().unwrap().editor.leave_tool();
+
+    // Preference "takes its wires along": the hint flips.
+    d.app.settings.move_carries = true;
+    d.frame();
+    d.app
+        .canvas
+        .schematic()
+        .unwrap()
+        .editor
+        .begin_move(&[AnyId::Symbol(k)]);
+    d.frame();
+    assert!(carry(&mut d));
+    assert!(hint(&mut d).contains("Shift: leave the wires"));
 }
