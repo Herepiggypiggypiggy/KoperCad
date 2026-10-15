@@ -268,7 +268,7 @@ impl MacroLibrary {
         for item in read.flatten() {
             let path = item.path();
             let name = item.file_name().to_string_lossy().into_owned();
-            if name.starts_with('.') {
+            if name.starts_with('.') || item.file_type().is_ok_and(|t| t.is_symlink()) {
                 continue;
             }
             if path.is_dir() {
@@ -304,7 +304,9 @@ impl MacroLibrary {
         fn go(dir: &Path, prefix: &str, out: &mut BTreeSet<String>) {
             let Ok(read) = fs::read_dir(dir) else { return };
             for item in read.flatten() {
-                if item.path().is_dir() && !item.file_name().to_string_lossy().starts_with('.') {
+                if item.file_type().is_ok_and(|t| t.is_dir())
+                    && !item.file_name().to_string_lossy().starts_with('.')
+                {
                     let name = join(prefix, &item.file_name().to_string_lossy());
                     out.insert(name.clone());
                     go(&item.path(), &name, out);
