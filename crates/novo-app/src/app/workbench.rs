@@ -199,6 +199,7 @@ const APP_COMMANDS: &[&str] = &[
     "plc.renumber_io",
     "xref.link",
     "app.preferences",
+    "terminal.toggle_pe",
     "wire.mode",
 ];
 
@@ -445,6 +446,7 @@ impl NovoApp {
             }
             "proposal.accept_all" => self.accept_all_proposals(),
             "terminal.connect"
+            | "terminal.toggle_pe"
             | "terminal.disconnect"
             | "terminal.strip_up"
             | "terminal.strip_down"

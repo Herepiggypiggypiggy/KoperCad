@@ -714,6 +714,7 @@ impl NovoApp {
         let changes = self.canvas.take_changes();
         if !changes.is_empty() {
             self.reports_heard(&changes);
+            self.mark_earthed_terminals(&changes);
             self.fix_current_page();
         }
         if let Some(page) = self.canvas.take_page_request() {
@@ -721,6 +722,30 @@ impl NovoApp {
         }
         let asked = self.canvas.take_commands();
         self.wb.queued.extend(asked);
+    }
+
+    /// A wire drawn to ground or a PE potential earths the terminals on
+    /// its net (DESIGN.md §4, PE terminals). Runs only when a wire was
+    /// added, never on every edit, and joins the edit's undo step; a
+    /// terminal toggled by hand is left alone.
+    fn mark_earthed_terminals(&mut self, changes: &novo_core::ChangeSet) {
+        if !changes
+            .added
+            .iter()
+            .any(|id| matches!(id, novo_core::AnyId::Wire(_)))
+        {
+            return;
+        }
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let netlist = novo_core::Netlist::build(doc.project());
+        if novo_terminals::earthed_terminals(doc.project(), &netlist).is_empty() {
+            return;
+        }
+        if let Ok((_, extra)) = doc.amend_last("Mark PE terminals", novo_terminals::mark_earthed) {
+            self.changed_outside_canvas(&extra);
+        }
     }
 
     fn modal_open(&self) -> bool {
