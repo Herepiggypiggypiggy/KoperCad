@@ -1611,6 +1611,10 @@ fn strip_heads(project: &Project, page: PageId) -> HashMap<SymbolId, String> {
         }
         for i in 0..syms.len() {
             for j in i + 1..syms.len() {
+                // Sorted by x: nothing further right can be near either.
+                if syms[j].0.x - syms[i].0.x > STRIP_RUN_GAP {
+                    break;
+                }
                 if near(syms[i].0, syms[j].0) {
                     let (a, b) = (root(&mut run, i), root(&mut run, j));
                     // The earlier terminal stays the root, so it heads the run.
