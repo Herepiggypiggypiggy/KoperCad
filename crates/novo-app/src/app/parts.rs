@@ -149,27 +149,6 @@ impl PartsWindow {
         Some(service.geometry(key))
     }
 
-    /// Forgets a failed model so the next frame builds it again.
-    fn retry_model(&self, key: &PartKey) {
-        let (Some(part), Some(service)) = (self.catalog.get(key), self.geometry.as_ref()) else {
-            return;
-        };
-        let records = self.records(key);
-        if let Some(record) = records
-            .iter()
-            .find(|r| FileKind::of_file_name(&r.file_name) == FileKind::Step)
-        {
-            let library = self.library.as_ref();
-            if let Some(library) = library {
-                let job = model_job(part, record, library);
-                service.forget(novo_interop::part3d::geometry_key(
-                    &job.part_id,
-                    &job.content_id,
-                ));
-            }
-        }
-    }
-
     /// The makers in the catalog, sorted, each once.
     pub(crate) fn makers(&self) -> Vec<String> {
         let mut makers: Vec<String> = Vec::new();
@@ -474,7 +453,6 @@ enum PartsAction {
     OpenPage(String),
     ChooseFile,
     ChooseModel,
-    RetryModel(PartKey),
     ChooseFolder,
     StopImport,
     ConfirmFile(PathBuf),
@@ -596,7 +574,6 @@ impl NovoApp {
                     }
                 }
                 PartsAction::ChooseModel => win.choose_model(),
-                PartsAction::RetryModel(key) => win.retry_model(&key),
                 PartsAction::ChooseFolder => {
                     if let Some(dir) = rfd::FileDialog::new()
                         .set_title("Folder to watch for downloads")
@@ -892,14 +869,10 @@ fn detail_ui(ui: &mut egui::Ui, win: &PartsWindow, actions: &mut Vec<PartsAction
         }
         ui.add_space(8.0);
         ui.strong("3D model");
-        let (text, retry) = model_status(win.model_state(part, &records).as_ref());
-        ui.label(text);
+        ui.label(model_status(win.model_state(part, &records).as_ref()));
         ui.horizontal(|ui| {
             if ui.small_button("Import 3D model (STEP)...").clicked() {
                 actions.push(PartsAction::ChooseModel);
-            }
-            if retry && ui.small_button("Retry").clicked() {
-                actions.push(PartsAction::RetryModel(key.clone()));
             }
         });
         if !records.is_empty() {
@@ -931,33 +904,21 @@ fn model_job(part: &CatalogPart, record: &SourceRecord, library: &LocalLibrary) 
     }
 }
 
-/// The status line of a part's 3D model and whether Retry is offered.
-pub(crate) fn model_status(state: Option<&GeometryState>) -> (String, bool) {
+/// The status line of a part's 3D model.
+pub(crate) fn model_status(state: Option<&GeometryState>) -> String {
     match state {
-        None => (
-            "No 3D model. The part is drawn as a box from its catalog size.".into(),
-            false,
-        ),
-        Some(GeometryState::None | GeometryState::Pending) => {
-            ("Building the 3D model...".into(), false)
-        }
-        Some(GeometryState::Failed(why)) => (why.clone(), false),
+        None => "No 3D model. The part is drawn as a box from its catalog size.".into(),
+        Some(GeometryState::None | GeometryState::Pending) => "Building the 3D model...".into(),
+        Some(GeometryState::Failed(why)) => why.clone(),
         Some(GeometryState::Ready(geometry)) => match &geometry.origin {
-            MeshOrigin::Step { .. } => (
-                format!(
-                    "3D model: STEP, {} triangles",
-                    geometry.detail().triangle_count()
-                ),
-                false,
+            MeshOrigin::Step { .. } => format!(
+                "3D model: STEP, {} triangles",
+                geometry.detail().triangle_count()
             ),
-            MeshOrigin::Box => (
-                "No 3D model. The part is drawn as a box from its catalog size.".into(),
-                false,
-            ),
-            MeshOrigin::Fallback(why) => (
-                fallback_text(why).to_owned(),
-                matches!(why, Fallback::TimedOut),
-            ),
+            MeshOrigin::Box => {
+                "No 3D model. The part is drawn as a box from its catalog size.".into()
+            }
+            MeshOrigin::Fallback(why) => fallback_text(why).to_owned(),
         },
     }
 }
@@ -1183,23 +1144,21 @@ mod tests {
     }
 
     #[test]
-    fn model_status_says_what_is_drawn_and_offers_retry_only_after_a_timeout() {
-        assert!(model_status(None).0.starts_with("No 3D model"));
+    fn model_status_says_what_is_drawn() {
+        assert!(model_status(None).starts_with("No 3D model"));
         assert_eq!(
-            model_status(Some(&GeometryState::Pending)).0,
+            model_status(Some(&GeometryState::Pending)),
             "Building the 3D model..."
         );
         let timed_out = novo_interop::part3d::fallback_box(None, Fallback::TimedOut);
         let state = GeometryState::Ready(std::sync::Arc::new(timed_out));
-        let (text, retry) = model_status(Some(&state));
-        assert!(text.contains("too long") && retry);
+        assert!(model_status(Some(&state)).contains("too long"));
         let unreadable = novo_interop::part3d::fallback_box(None, Fallback::Unreadable);
         let state = GeometryState::Ready(std::sync::Arc::new(unreadable));
-        let (text, retry) = model_status(Some(&state));
-        assert!(text.contains("Import a different export") && !retry);
+        assert!(model_status(Some(&state)).contains("Import a different export"));
         let boxed = GeometryState::Ready(std::sync::Arc::new(novo_interop::part3d::box_mesh([
             18.0, 90.0, 60.0,
         ])));
-        assert!(model_status(Some(&boxed)).0.starts_with("No 3D model"));
+        assert!(model_status(Some(&boxed)).starts_with("No 3D model"));
     }
 }
