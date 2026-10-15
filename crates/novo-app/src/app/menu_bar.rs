@@ -201,7 +201,10 @@ impl NovoApp {
                 "Not in the app yet"
             });
         }
-        if matches!(info.id, "file.remove_background" | "view.background") && !self.has_background()
+        if matches!(
+            info.id,
+            "file.remove_background" | "view.background" | "view.background_place"
+        ) && !self.has_background()
         {
             return Some("This page has no DXF background");
         }

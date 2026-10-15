@@ -233,7 +233,7 @@ impl NovoApp {
         });
     }
 
-    fn run_background(&mut self, command: Command) {
+    pub(super) fn run_background(&mut self, command: Command) {
         if let Some(Err(e)) = self.execute(command) {
             self.message(
                 Level::Error,

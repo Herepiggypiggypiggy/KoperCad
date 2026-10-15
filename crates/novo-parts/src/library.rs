@@ -26,6 +26,9 @@ pub enum FileKind {
     Step,
     Dxf,
     Bmecat,
+    /// A price list or product table saved as CSV (a spreadsheet must be saved
+    /// as CSV first).
+    Csv,
     /// A ZIP holding a STEP or DXF file and a readme, as maker portals serve them.
     Zip,
     /// An EPLAN data package (`.edz`, a ZIP of part data and macros).
@@ -45,6 +48,7 @@ impl FileKind {
             Some("stp" | "step" | "p21") => FileKind::Step,
             Some("dxf") => FileKind::Dxf,
             Some("xml" | "bmecat") => FileKind::Bmecat,
+            Some("csv") => FileKind::Csv,
             Some("zip") => FileKind::Zip,
             Some("edz") => FileKind::Edz,
             _ => FileKind::Other,
