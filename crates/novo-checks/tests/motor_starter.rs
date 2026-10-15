@@ -36,6 +36,7 @@ struct Broken {
     lone: SymbolId,
     shorted_wire: WireId,
     zero_wire: WireId,
+    overlapping: Vec<WireId>,
     extra_terminal: TerminalId,
     f3_sym: SymbolId,
     thin_wire: WireId,
@@ -102,6 +103,13 @@ fn break_it(doc: &mut Document, ms: &MotorStarter) -> Broken {
             // 8. A junction dropped onto -S1:13 and wired to it.
             let j = tx.add_junction(page, Point::new(40.0, 104.0))?;
             let zero_wire = tx.connect(Endpoint::junction(j), Endpoint::pin(ms.s1_sym, 0))?;
+            // 8b. Two wires laid over each other in an empty corner.
+            let mut overlapping = Vec::new();
+            for (x0, x1) in [(300.0, 340.0), (320.0, 360.0)] {
+                let a = tx.add_junction(page, Point::new(x0, 400.0))?;
+                let b = tx.add_junction(page, Point::new(x1, 400.0))?;
+                overlapping.push(tx.connect(Endpoint::junction(a), Endpoint::junction(b))?);
+            }
             // 9. A second -X1:3 with the same-name rule switched off (new
             //    projects join same-name terminals).
             tx.set_info(|i| i.rules.terminals.same_name = SameName::Off)?;
@@ -160,6 +168,7 @@ fn break_it(doc: &mut Document, ms: &MotorStarter) -> Broken {
                 lone,
                 shorted_wire,
                 zero_wire,
+                overlapping,
                 extra_terminal,
                 f3_sym: ms.f3_sym,
                 thin_wire,
@@ -219,6 +228,15 @@ fn every_deliberate_error_is_flagged_exactly_once() {
     let short = one(ProblemKind::PotentialConflict);
     assert!(short.at.contains(&b.shorted_wire.into()));
     assert_eq!(short.message, "L and N are defined on one net: a short");
+    let overlap = one(ProblemKind::WireOverlap);
+    assert_eq!(
+        overlap.at,
+        b.overlapping
+            .iter()
+            .map(|&w| AnyId::from(w))
+            .collect::<Vec<_>>()
+    );
+    assert!(overlap.message.contains("share 20.0 mm of line"));
     assert_eq!(
         one(ProblemKind::ZeroLengthWire).at,
         vec![AnyId::from(b.zero_wire)]
@@ -277,9 +295,9 @@ fn every_deliberate_error_is_flagged_exactly_once() {
     let summary = Summary::of(&problems);
     assert_eq!(
         (summary.errors, summary.warnings, summary.infos),
-        (3, 11, 1)
+        (3, 12, 1)
     );
-    assert_eq!(summary.pill_text(), "3 errors · 11 warnings");
+    assert_eq!(summary.pill_text(), "3 errors · 12 warnings");
 
     // Reading order: main circuit page, then control page.
     let pages: Vec<Option<PageId>> = problems.iter().map(|p| p.page).collect();

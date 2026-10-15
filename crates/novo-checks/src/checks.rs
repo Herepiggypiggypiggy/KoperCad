@@ -782,3 +782,109 @@ pub(crate) fn plc(cx: &Context<'_>, out: &mut Vec<Problem>) {
         out.push(problem);
     }
 }
+
+/// Wires sharing a stretch of line on a page. Axis-aligned, positive length;
+/// touching, crossing and a wire ending on another's side are fine. Wires
+/// that leave one pin together may share the stretch chained from that pin.
+/// One problem per pair of wires.
+pub(crate) fn wire_overlaps(cx: &Context<'_>, out: &mut Vec<Problem>) {
+    /// Bucket size in mm.
+    const CELL: f64 = 50.0;
+    let project = cx.project;
+    // (wire, page, from, to) per segment, bucketed per page and cell.
+    let mut segments: Vec<(novo_core::WireId, Point, Point)> = Vec::new();
+    let mut buckets: HashMap<(PageId, i64, i64), Vec<usize>> = HashMap::new();
+    for wire in project.wires() {
+        let (Some(a), Some(b)) = (
+            project.endpoint_position(wire.from),
+            project.endpoint_position(wire.to),
+        ) else {
+            continue;
+        };
+        let mut pts = vec![a];
+        pts.extend(wire.route.iter().copied());
+        pts.push(b);
+        for seg in pts.windows(2) {
+            let i = segments.len();
+            segments.push((wire.id, seg[0], seg[1]));
+            let cell = |v: f64| (v / CELL).floor() as i64;
+            for cx_ in cell(seg[0].x.min(seg[1].x))..=cell(seg[0].x.max(seg[1].x)) {
+                for cy in cell(seg[0].y.min(seg[1].y))..=cell(seg[0].y.max(seg[1].y)) {
+                    buckets.entry((wire.page, cx_, cy)).or_default().push(i);
+                }
+            }
+        }
+    }
+    // Stretches per pair of wires.
+    let mut pairs: BTreeMap<(novo_core::WireId, novo_core::WireId), Vec<(Point, Point)>> =
+        BTreeMap::new();
+    for ids in buckets.values() {
+        for (n, &i) in ids.iter().enumerate() {
+            for &j in &ids[n + 1..] {
+                let ((wi, a1, a2), (wj, b1, b2)) = (segments[i], segments[j]);
+                if wi == wj {
+                    continue;
+                }
+                if let Some(stretch) = shared_stretch(a1, a2, b1, b2) {
+                    let list = pairs.entry((wi.min(wj), wi.max(wj))).or_default();
+                    if !list.contains(&stretch) {
+                        list.push(stretch);
+                    }
+                }
+            }
+        }
+    }
+    for ((w1, w2), mut stretches) in pairs {
+        // Drop the stretches chained from a pin both wires end on.
+        let (Some(a), Some(b)) = (project.wire(w1), project.wire(w2)) else {
+            continue;
+        };
+        for end in a.ends() {
+            if !matches!(end, Endpoint::Pin { .. }) || !b.ends().contains(&end) {
+                continue;
+            }
+            let Some(mut at) = project.endpoint_position(end) else {
+                continue;
+            };
+            while let Some(i) = stretches
+                .iter()
+                .position(|(f, t)| f.distance(at) <= EPS || t.distance(at) <= EPS)
+            {
+                let (f, t) = stretches.remove(i);
+                at = if f.distance(at) <= EPS { t } else { f };
+            }
+        }
+        if stretches.is_empty() {
+            continue;
+        }
+        let length: f64 = stretches.iter().map(|(f, t)| f.distance(*t)).sum();
+        out.push(Problem::new(
+            ProblemKind::WireOverlap,
+            vec![w1.into(), w2.into()],
+            format!(
+                "The wire from {} to {} and the wire from {} to {} share {length:.1} mm of line",
+                cx.endpoint_label(a.from),
+                cx.endpoint_label(a.to),
+                cx.endpoint_label(b.from),
+                cx.endpoint_label(b.to),
+            ),
+        ));
+    }
+}
+
+/// The stretch of positive length two horizontal or two vertical segments
+/// on one line share, ordered low to high.
+fn shared_stretch(a1: Point, a2: Point, b1: Point, b2: Point) -> Option<(Point, Point)> {
+    let same = |u: f64, v: f64| (u - v).abs() <= EPS;
+    if same(a1.y, a2.y) && same(b1.y, b2.y) && same(a1.y, b1.y) {
+        let lo = a1.x.min(a2.x).max(b1.x.min(b2.x));
+        let hi = a1.x.max(a2.x).min(b1.x.max(b2.x));
+        (hi - lo > EPS).then(|| (Point::new(lo, a1.y), Point::new(hi, a1.y)))
+    } else if same(a1.x, a2.x) && same(b1.x, b2.x) && same(a1.x, b1.x) {
+        let lo = a1.y.min(a2.y).max(b1.y.min(b2.y));
+        let hi = a1.y.max(a2.y).min(b1.y.max(b2.y));
+        (hi - lo > EPS).then(|| (Point::new(a1.x, lo), Point::new(a1.x, hi)))
+    } else {
+        None
+    }
+}

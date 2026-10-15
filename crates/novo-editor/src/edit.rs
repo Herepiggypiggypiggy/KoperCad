@@ -355,6 +355,8 @@ pub fn accept(tx: &mut Tx<'_>, proposal: &FacingWire) -> Result<Option<WireId>> 
     }
     // A facing wire is straight and the user never placed its route, but it
     // still may not run along another wire.
+    // Only pin to pin proposals exist (`FacingWire`), so the page is the
+    // symbol's; a non-pin start would skip the check.
     let project = tx.project();
     let page = proposal
         .from
@@ -908,29 +910,38 @@ fn transform_with(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform, refuse: bool) 
             junction.position = how.point(junction.position)
         })?;
     }
-    let moving: Vec<WireId> = wires.keys().copied().collect();
-    for (wire, both) in wires {
-        if both {
-            tx.update::<Wire>(wire, |w| {
-                for p in &mut w.route {
-                    *p = how.point(*p);
-                }
-            })?;
-            // Moved with its ends, the route keeps its shape: it is checked,
-            // not adjusted. Wires that move together never clash.
-            if refuse {
-                check_kept(tx.project(), wire, &moving)?;
+    // Rigidly moved wires first, so the re-routed ones and the checks all see
+    // every wire where it ends up, whatever the order of the ids.
+    let rigid: Vec<WireId> = wires
+        .iter()
+        .filter(|(_, both)| **both)
+        .map(|(&w, _)| w)
+        .collect();
+    for &wire in &rigid {
+        tx.update::<Wire>(wire, |w| {
+            for p in &mut w.route {
+                *p = how.point(*p);
             }
-        } else {
+        })?;
+    }
+    for (&wire, &both) in &wires {
+        if !both {
             reroute_with(tx, wire, refuse)?;
+        }
+    }
+    // A rigid route keeps its shape: it is checked, not adjusted. Wires that
+    // moved together with it never clash with it.
+    if refuse {
+        for &wire in &rigid {
+            check_kept(tx.project(), wire, &rigid)?;
         }
     }
     Ok(())
 }
 
 /// Fails if wire `wire` as it now lies shares a stretch with a wire that is
-/// not in `moving`.
-fn check_kept(project: &Project, wire: WireId, moving: &[WireId]) -> Result<()> {
+/// not in `together` (the wires that moved rigidly with it).
+fn check_kept(project: &Project, wire: WireId, together: &[WireId]) -> Result<()> {
     let (Some(w), Some(points)) = (project.wire(wire), wire_points(project, wire)) else {
         return Ok(());
     };
@@ -938,7 +949,7 @@ fn check_kept(project: &Project, wire: WireId, moving: &[WireId]) -> Result<()> 
         pin_wires(project, w.from, &[wire]),
         pin_wires(project, w.to, &[wire]),
     );
-    match route_refusal(project, w.page, &points, moving, &start, &end) {
+    match route_refusal(project, w.page, &points, together, &start, &end) {
         Some(r) => Err(refused(r)),
         None => Ok(()),
     }

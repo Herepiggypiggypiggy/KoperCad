@@ -665,3 +665,33 @@ fn several_thin_wires_are_counted_and_an_overload_relay_is_rated_up_to() {
         "-F1 is rated up to 16 A, but 2 wires on it are too thin; the thinnest, 1 mm², carries about 9.6 A"
     );
 }
+
+#[test]
+fn wires_sharing_a_stretch_are_flagged_but_touching_crossing_and_t_are_not() {
+    let (project, _) = build(|tx| {
+        let page = tx.add_page("1")?;
+        let line = |tx: &mut Tx<'_>, a: (f64, f64), b: (f64, f64)| -> Result<()> {
+            let a = tx.add_junction(page, Point::new(a.0, a.1))?;
+            let b = tx.add_junction(page, Point::new(b.0, b.1))?;
+            tx.connect(Endpoint::junction(a), Endpoint::junction(b))?;
+            Ok(())
+        };
+        // Along the same line: 10 mm shared.
+        line(tx, (0.0, 0.0), (30.0, 0.0))?;
+        line(tx, (20.0, 0.0), (50.0, 0.0))?;
+        // End to end, a crossing, a T onto the side, parallel apart.
+        line(tx, (0.0, 20.0), (10.0, 20.0))?;
+        line(tx, (10.0, 20.0), (20.0, 20.0))?;
+        line(tx, (30.0, 10.0), (30.0, 30.0))?;
+        line(tx, (25.0, 20.0), (35.0, 20.0))?;
+        line(tx, (30.0, 20.0), (30.0, 40.0))?;
+        line(tx, (0.0, 50.0), (30.0, 50.0))?;
+        line(tx, (0.0, 52.5), (30.0, 52.5))?;
+        Ok(())
+    });
+    let problems = check(&project);
+    let overlaps = of_kind(&problems, ProblemKind::WireOverlap);
+    assert_eq!(overlaps.len(), 2, "{overlaps:#?}");
+    assert_eq!(overlaps[0].severity, Severity::Warning);
+    assert!(overlaps[0].message.contains("10.0 mm"));
+}
