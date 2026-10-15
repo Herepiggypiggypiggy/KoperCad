@@ -10,6 +10,7 @@ mod dock;
 mod drawers;
 mod duplicate;
 mod example;
+mod file_menu;
 mod inspector;
 mod link;
 mod live;
@@ -934,10 +935,9 @@ impl NovoApp {
             self.action_button(ui, a, picked);
         }
         ui.separator();
-        let export = egui::Button::new("Export PDF");
-        if ui.add_enabled(self.is_open(), export).clicked() {
-            self.export_pdf();
-            ui.close();
+        let ctx = ui.ctx().clone();
+        for id in self.file_menu_sections(ui) {
+            self.run_command(&ctx, id, None);
         }
         ui.separator();
         for a in [Action::About, Action::Quit] {
