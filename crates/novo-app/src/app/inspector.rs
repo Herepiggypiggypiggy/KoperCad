@@ -32,7 +32,7 @@ pub(super) struct DeviceInfo {
     /// reading order.
     pub relations: Vec<Relation>,
     pub properties: Vec<(String, String)>,
-    /// The set time in seconds, for a device with a coil or a timer contact.
+    /// The set time in seconds, for a device with a timer contact.
     pub delay: Option<f64>,
 }
 
@@ -113,7 +113,7 @@ pub(super) fn device_info(
     let timed = project
         .symbols()
         .filter(|s| s.device() == Some(device))
-        .any(|s| novo_sim::is_coil(s) || novo_sim::is_timer_contact(s));
+        .any(novo_sim::is_timer_contact);
     let delay = timed.then(|| novo_sim::delay_seconds(project, device));
     Some(DeviceInfo {
         device,
