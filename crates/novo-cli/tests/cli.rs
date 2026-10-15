@@ -326,6 +326,25 @@ fn check_reports_shorts_between_potentials() {
 }
 
 #[test]
+fn export_wires_and_cut_list_carry_cut_lengths() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+
+    let run = novo(&["export", "wires", s(&path)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert!(
+        run.out.contains("Cut length mm,Length basis"),
+        "{}",
+        run.out
+    );
+
+    let run = novo(&["export", "cutlist", s(&path)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    // This project has no wire between two device pins, so no groups.
+    assert!(run.out.is_empty(), "{}", run.out);
+}
+
+#[test]
 fn export_reports_as_excel_and_csv() {
     use calamine::{Reader, Xlsx, open_workbook};
 
