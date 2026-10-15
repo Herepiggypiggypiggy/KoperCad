@@ -68,7 +68,12 @@ inspector, drawers and reports. A longer tour can reuse the same card and step l
 field). No change to `novo-core` or `novo-editor`. Tests: the six steps tick from driven commands in
 the `gate1_tests` style, the card persists and dismisses, and the example opens as one undo step.
 
-## Questions for the reviewers
+## Decisions (design reviewer)
 
-1. Example builder: use `novo-tests` directly (1) or move it into the app (2)?
-2. Practice project: fresh untitled project (proposed), or a "Practice" page added to the example?
+1. The example builder is `novo-tests::motor_starter`, called from `novo-app` (option 1). Later, when it
+   is cheap, the fixture can move into a small `novo-example` crate that both depend on.
+2. The practice project is a fresh untitled project, not a page in the example. Because a cable needs
+   two devices with terminals, it starts with a motor and a terminal strip already placed, in the same
+   single undo step as the project. Q and W stay free to draw.
+3. The card sits at the bottom right and steps aside, collapsed to a pill ("3 of 6"), while the live
+   view is on. The key on each step comes from the keymap. The Help menu item resets the progress.
