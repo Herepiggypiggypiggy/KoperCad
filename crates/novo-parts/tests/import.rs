@@ -28,6 +28,7 @@ fn sources(enabled: bool) -> SourceTable {
         manufacturer: "Example Maker".into(),
         fetch_enabled: enabled,
         page_url: Some("https://example.invalid/p/{order}".into()),
+        terms_url: Some("https://example.invalid/cloud-terms".into()),
     }])
 }
 
@@ -322,4 +323,48 @@ fn a_zip_without_step_or_not_a_zip_is_stored_with_a_note() {
         assert_eq!(out.records.len(), 1);
         assert!(out.dimensions.is_none() && !out.notes.is_empty());
     }
+}
+
+#[test]
+fn imports_an_edz_package_unchanged_and_hands_out_its_xml() {
+    let lib_dir = tempfile::tempdir().unwrap();
+    let downloads = tempfile::tempdir().unwrap();
+    let lib = LocalLibrary::at(lib_dir.path());
+    let edz = zip_of(&[
+        ("PXC.3044076.xml", b"<parts><part/></parts>"),
+        ("PXC.3044076.ema", b"macro data"),
+        ("PXC.3044076.pdf", b"%PDF"),
+    ]);
+    let path = downloads.path().join("3044076.edz");
+    fs::write(&path, &edz).unwrap();
+
+    // An EDZ is found by type, since generator output is not named after the article.
+    let mut w = DownloadsWatcher::new(
+        downloads.path(),
+        SystemTime::now() - Duration::from_secs(5),
+        "3044076-x",
+    );
+    w.poll();
+    assert_eq!(w.poll(), vec![path.clone()]);
+
+    let f = ScriptedFetcher::default();
+    let src = sources(false);
+    let mut job = ImportJob::new(&lib, &src, &f, "Example Maker", "3044076", "2026-10-15");
+    let ImportState::Done(out) = job.import_file(&path, ImportFlow::Downloads).clone() else {
+        panic!()
+    };
+    let r = &out.records[0];
+    assert_eq!(r.kind, FileKind::Edz);
+    assert_eq!(
+        r.terms_url.as_deref(),
+        Some("https://example.invalid/cloud-terms")
+    );
+    assert_eq!(out.xml_members.len(), 1);
+    assert_eq!(out.xml_members[0].0, "PXC.3044076.xml");
+    assert!(
+        out.dimensions.is_none() && out.notes.is_empty(),
+        "{:?}",
+        out.notes
+    );
+    assert_eq!(fs::read(lib.path_of(r)).unwrap(), edz, "stored unchanged");
 }

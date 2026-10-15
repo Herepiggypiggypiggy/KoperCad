@@ -71,6 +71,10 @@ pub struct MakerSource {
     /// The maker's page for a part; `{order}` stands for the order number.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub page_url: Option<String>,
+    /// Terms the maker's files come under, kept in the source record when a
+    /// file names none itself. Filled from data; never guessed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terms_url: Option<String>,
 }
 
 impl MakerSource {
@@ -121,6 +125,10 @@ pub struct ImportOutcome {
     pub parts: Vec<CatalogPart>,
     /// Size estimated from a STEP file.
     pub dimensions: Option<Dimensions>,
+    /// XML files found inside a ZIP or EDZ, as (name, text), for the app to
+    /// pass to the EPLAN parts reader in `novo-interop`. This crate does not
+    /// read them: that reader depends on this one.
+    pub xml_members: Vec<(String, String)>,
     /// Files that were stored but could not be read for data, with why.
     pub notes: Vec<String>,
 }
@@ -329,9 +337,13 @@ impl<'a> ImportJob<'a> {
     ) -> Result<(), String> {
         // A ZIP is read once here: its STEP file for the size, its readme for
         // the terms link. The ZIP itself is what gets stored.
-        let (inner_step, terms) = if FileKind::of_file_name(name) == FileKind::Zip {
+        let is_archive = matches!(FileKind::of_file_name(name), FileKind::Zip | FileKind::Edz);
+        let (inner_step, terms) = if is_archive {
             match read_zip(bytes) {
-                Ok(z) => (z.step, z.terms_url),
+                Ok(z) => {
+                    self.outcome.xml_members.extend(z.xml);
+                    (z.step, z.terms_url)
+                }
                 Err(e) => {
                     self.outcome.notes.push(format!("{name}: {e}"));
                     (None, None)
@@ -340,6 +352,11 @@ impl<'a> ImportJob<'a> {
         } else {
             (None, None)
         };
+        let terms = terms.or_else(|| {
+            self.sources
+                .get(&self.manufacturer)
+                .and_then(|s| s.terms_url.clone())
+        });
         let record = self
             .library
             .store(
@@ -376,7 +393,7 @@ impl<'a> ImportJob<'a> {
                     .notes
                     .push(format!("{name}: no parts read ({e})")),
             },
-            FileKind::Zip => {
+            FileKind::Zip | FileKind::Edz => {
                 if let Some((inner, text)) = inner_step {
                     match step_box(&text) {
                         Ok(b) => self.outcome.dimensions = Some(b.as_dimensions()),
@@ -385,7 +402,7 @@ impl<'a> ImportJob<'a> {
                             .notes
                             .push(format!("{name}: {inner}: no size read ({e})")),
                     }
-                } else {
+                } else if record.kind == FileKind::Zip {
                     self.outcome
                         .notes
                         .push(format!("{name}: no STEP file inside"));
@@ -407,8 +424,11 @@ struct ZipContent {
     step: Option<(String, String)>,
     /// The first link to terms of use found in a readme.
     terms_url: Option<String>,
+    /// XML members (name, text), at most [`ZIP_MAX_XML`].
+    xml: Vec<(String, String)>,
 }
 
+const ZIP_MAX_XML: usize = 16;
 const ZIP_MAX_ENTRIES: usize = 64;
 const ZIP_MAX_MEMBER_BYTES: u64 = 200 * 1024 * 1024;
 
@@ -427,6 +447,7 @@ fn read_zip(bytes: &[u8]) -> Result<ZipContent, String> {
     let mut out = ZipContent {
         step: None,
         terms_url: None,
+        xml: Vec::new(),
     };
     for i in 0..archive.len() {
         let Ok(file) = archive.by_index(i) else {
@@ -439,7 +460,8 @@ fn read_zip(bytes: &[u8]) -> Result<ZipContent, String> {
         let lower = name.to_ascii_lowercase();
         let is_step = FileKind::of_file_name(&name) == FileKind::Step;
         let is_text = lower.ends_with(".txt");
-        if !(is_step && out.step.is_none() || is_text && out.terms_url.is_none()) {
+        let is_xml = lower.ends_with(".xml") && out.xml.len() < ZIP_MAX_XML;
+        if !(is_step && out.step.is_none() || is_text && out.terms_url.is_none() || is_xml) {
             continue;
         }
         let mut raw = Vec::new();
@@ -449,6 +471,8 @@ fn read_zip(bytes: &[u8]) -> Result<ZipContent, String> {
         let text = String::from_utf8_lossy(&raw).into_owned();
         if is_step {
             out.step = Some((name, text));
+        } else if is_xml {
+            out.xml.push((name, text));
         } else {
             out.terms_url = find_terms_url(&text);
         }
@@ -551,7 +575,7 @@ impl DownloadsWatcher {
                 FileKind::Step | FileKind::Dxf | FileKind::Zip => {
                     crate::search::normalize_code(&name).contains(&self.order_code)
                 }
-                FileKind::Bmecat => true,
+                FileKind::Bmecat | FileKind::Edz => true,
                 FileKind::Other => false,
             };
             let Ok(meta) = entry.metadata() else { continue };

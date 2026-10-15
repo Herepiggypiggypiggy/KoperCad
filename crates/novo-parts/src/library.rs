@@ -28,6 +28,8 @@ pub enum FileKind {
     Bmecat,
     /// A ZIP holding a STEP or DXF file and a readme, as maker portals serve them.
     Zip,
+    /// An EPLAN data package (`.edz`, a ZIP of part data and macros).
+    Edz,
     Other,
 }
 
@@ -44,6 +46,7 @@ impl FileKind {
             Some("dxf") => FileKind::Dxf,
             Some("xml" | "bmecat") => FileKind::Bmecat,
             Some("zip") => FileKind::Zip,
+            Some("edz") => FileKind::Edz,
             _ => FileKind::Other,
         }
     }

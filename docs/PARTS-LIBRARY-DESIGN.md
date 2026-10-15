@@ -156,7 +156,7 @@ row turns to **In library**. No admin rights, no service.
 | Maker | Terms found | Flow now | Flow A when |
 | --- | --- | --- | --- |
 | WAGO | Silent on automated access. Captured: CAD comes from CADENAS PARTcommunity behind a WAGO login (section 3c) | B, permanently | Only a CADENAS/WAGO API agreement |
-| Phoenix Contact | Website terms not found; names EPLAN Data Portal and other portals as channels | B | Terms read and a documented feed or written OK |
+| Phoenix Contact | Website terms not found; names EPLAN Data Portal and other portals as channels. Captured: the Eplan portal needs an Eplan ID (section 3c) | B, permanently for the Eplan portal | Terms read and a documented feed or written OK |
 | Siemens | Clause text not read; the CAx tool is an interactive Java download manager | B | Terms read and a documented feed or written OK |
 | Schneider | Strictest: copying only for personal, non-commercial use; page-level terms may apply; automated access not addressed | B (opens the page, user downloads) | Written OK only |
 
@@ -259,6 +259,38 @@ product page leads to CADENAS PARTcommunity
    EPLAN; do not assume so.
 5. **Phoenix Contact** stays on flow B: its product page returned a server
    error on 2026-10-15, so there is no capture yet. Retry later.
+
+**Phoenix Contact UT 2,5 (3044076), captured by the owner 2026-10-15.**
+- The Phoenix product page returned an error page in his browser (en-us,
+  en-nl, en-gb), so there is no capture from Phoenix's own site.
+- Route tried: the Eplan Data Portal (`dataportal.eplan.com/part-details/PXC.3044076`,
+  which redirects to `.../PXC/PXC.3044076/id-416856`). The part page loads
+  without login (last updated 02/09/2026). The Download button redirects to
+  `login.eplan.com` (Eplan ID); signing in means accepting the Eplan Cloud
+  terms. No file request was seen.
+- Untried Phoenix routes: the EPLAN P8 file generator
+  (`phoenixcontact.com/en-gb/products/eplan-p8-file-generator`: item numbers
+  in, EDZ ZIP out), and the WSCAD, Zuken and AmpereSoft portals.
+
+**Consequences for Phoenix.**
+1. Flow B only, same as WAGO. We build **no automated access to the Eplan
+   portal**: it is EPLAN's platform behind an Eplan ID and Eplan Cloud terms.
+   Phoenix stays `fetch_enabled: false`.
+2. **The importer accepts an EDZ.** A `.edz` (or a `.zip`) is stored unchanged.
+   Its XML members are handed out as `ImportOutcome.xml_members` for the app to
+   pass to the EPLAN parts reader in `novo-interop` (#347). `novo-parts` cannot
+   call that reader itself: `novo-interop` depends on `novo-parts`. The inner
+   XML of an EDZ may not be the "parts management" export that reader was
+   written for. That is unverified, and the reader reports what it cannot read.
+3. The source record's `terms_url` comes from the file's readme when it has
+   one, otherwise from the maker's entry in the source table (data, filled in
+   by whoever verified the terms; nothing is guessed).
+4. The Downloads watch accepts an EDZ by type, since generator output is
+   probably not named after the article. Other ZIPs are still matched by the
+   order number in the file name.
+5. Untested, for a later capture: whether the P8 file generator needs a
+   login, and what is inside its EDZ. A real EDZ (any maker) in the project
+   files would let us test against it.
 
 ## 4. Offline and no admin rights
 
