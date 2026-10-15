@@ -2,7 +2,7 @@
 //! `Project.compare()` in Python and `kopercad-cli revisions`.
 
 use novo_core::{PageId, Project};
-use novo_revisions::{ChangeKind, Comparison, FieldChange, Group, group_of};
+use novo_revisions::{ChangeKind, Comparison, FieldChange, Group, SheetChangeKind, group_of};
 use serde_json::{Value, json};
 
 /// The lowercase name of a group, as used in the JSON.
@@ -69,7 +69,11 @@ pub fn comparison_json(project: &Project, from: &str, to: &str, c: &Comparison) 
             "page": page_label(project, Some(s.page)),
             "name": s.name,
             "report": s.report,
-            "kind": format!("{:?}", s.kind).to_lowercase(),
+            "kind": match s.kind {
+                SheetChangeKind::Added => "added",
+                SheetChangeKind::Removed => "removed",
+                SheetChangeKind::Changed => "changed",
+            },
         })).collect::<Vec<_>>(),
     })
 }

@@ -23,6 +23,7 @@ pub enum Action {
     SizeEnclosure,
     EnclosureList,
     Protection,
+    MotorStart,
     PinOutline,
     FocusMode,
     FullScreen,
@@ -49,6 +50,7 @@ impl Action {
         Action::SizeEnclosure,
         Action::EnclosureList,
         Action::Protection,
+        Action::MotorStart,
         Action::PinOutline,
         Action::FocusMode,
         Action::FullScreen,
@@ -77,6 +79,7 @@ impl Action {
             Action::SizeEnclosure => "cabinet.size-enclosure",
             Action::EnclosureList => "cabinet.enclosures",
             Action::Protection => "view.protection",
+            Action::MotorStart => "simulate.motor-start",
             Action::PinOutline => "view.pin_outline",
             Action::FocusMode => "view.focus",
             Action::FullScreen => "view.full_screen",
@@ -108,6 +111,7 @@ impl Action {
             Action::SizeEnclosure => "Size the enclosure…",
             Action::EnclosureList => "Enclosures…",
             Action::Protection => "Protection: curves, selectivity, rating…",
+            Action::MotorStart => "Simulate motor start…",
             Action::PinOutline => "Pin outline",
             Action::FocusMode => "Focus mode",
             Action::FullScreen => "Full screen",
@@ -136,6 +140,7 @@ impl Action {
             | Action::SizeEnclosure
             | Action::EnclosureList
             | Action::Protection
+            | Action::MotorStart
             | Action::PinOutline
             | Action::FocusMode
             | Action::FullScreen
@@ -169,7 +174,8 @@ impl Action {
             | Action::ShowWalkthrough
             | Action::SizeEnclosure
             | Action::EnclosureList
-            | Action::Protection => return None,
+            | Action::Protection
+            | Action::MotorStart => return None,
         };
         Some(KeyboardShortcut::new(modifiers, key))
     }
