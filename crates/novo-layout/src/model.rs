@@ -123,6 +123,9 @@ pub fn apply_plan(tx: &mut Tx<'_>, id: StructureId, plan: &Plan) -> Result<()> {
             y: rail.y,
             length: rail.length,
             kind: RailKind::DinRail,
+            vertical: false,
+            width: 0.0,
+            height: 0.0,
         })?;
         if let Some(novo_core::AnyId::Rail(model_id)) = created.first() {
             rails.insert(rail.id, (*model_id, rail.x));
