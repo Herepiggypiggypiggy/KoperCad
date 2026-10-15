@@ -64,4 +64,4 @@
 - 2026-10-15: live potentials colours are theme tokens (novo_theme::POTENTIALS_DARK, contrast-checked on the sheet); live.rs reads them.
 - 2026-10-15: live wires are drawn by the canvas (PageScene::set_wire_looks, WireLook, screen-width stroke) in the wire layer under symbols and text; the egui foreground layer is gone, hover text stays in live.rs.
 - 2026-10-15: perf: strip_heads grouped terminals pairwise (O(n^2)) on every terminal edit; now stops at the x gap. 3,000-terminal page: build 65 -> 20 ms, apply one moved symbol 43 -> 2.7 ms. New tests/model_perf.rs guards model-page timings.
-- 2026-10-15: tests/scene_golden.rs: platform-independent golden for the demo page (item, vertex and index counts, A3 bounds, deterministic mesh). Show where it goes needed nothing more from the canvas: #295 lights the potential through set_related, independent of selection.
+- 2026-10-15: tests/scene_golden.rs: platform-independent golden for the demo page (item count, A3 bounds, deterministic mesh). Show where it goes needed nothing more from the canvas: #295 lights the potential through set_related, independent of selection.
