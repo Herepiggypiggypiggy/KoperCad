@@ -9,9 +9,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::entity::{
-    BlockOverride, BlockParameter, CableCore, DeviceKind, Endpoint, PageFormat, PageKind, Pin,
-    PotentialKind, PotentialSet, PotentialSpec, ProjectInfo, SymbolKey, SymbolRole, TextContent,
-    TextPlacement, Value,
+    BlockOverride, BlockParameter, CableCore, DeviceKind, Endpoint, PageFormat, PageKind,
+    PeOverride, Pin, PotentialKind, PotentialSet, PotentialSpec, ProjectInfo, SymbolKey,
+    SymbolRole, TextContent, TextPlacement, Value,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::{Placement, Point};
@@ -198,6 +198,12 @@ pub enum Command {
         terminal: TerminalId,
         potential: Option<PotentialId>,
     },
+    /// Sets whether the terminals are PE terminals by rule or by hand
+    /// ("Toggle PE terminal"); see [`PeOverride`].
+    SetTerminalPe {
+        terminals: Vec<TerminalId>,
+        mode: PeOverride,
+    },
     AddPotential {
         name: String,
         #[serde(default)]
@@ -334,6 +340,7 @@ impl Command {
             Command::FeedSystem { .. }
             | Command::SetPinFeed { .. }
             | Command::SetTerminalFeed { .. } => "Feed potential".into(),
+            Command::SetTerminalPe { .. } => "Toggle PE terminal".into(),
             Command::AddTerminal { .. } => "Add terminal".into(),
             Command::AddCable { .. } => "Add cable".into(),
             Command::AssignCore { .. } => "Assign cable core".into(),
@@ -529,6 +536,10 @@ impl Tx<'_> {
                     self.update::<crate::Potential>(id, |p| p.voltage = voltage)?;
                 }
                 id.into()
+            }
+            Command::SetTerminalPe { terminals, mode } => {
+                self.set_terminal_pe(&terminals, mode)?;
+                return Ok(Vec::new());
             }
             Command::AddTerminal { strip, name } => self.add_terminal(strip, name)?.into(),
             Command::AddCable { tag, cores } => self.add_cable(tag, cores)?.into(),

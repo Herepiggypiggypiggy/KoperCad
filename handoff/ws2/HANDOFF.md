@@ -100,5 +100,9 @@ claude/data-model-amzaxu origin/main`, then new PR for new work.
   `Netlist::net_of_wire(&wire)` instead of `net_of(wire.from)`; a wire open at both
   ends has no net. `Command::Connect.page` / `Tx::connect_on` are needed only
   when both ends are open. Connecting an end = `update::<Wire>` replacing it.
+- PE terminals: `Terminal.pe_override` (`Auto`, `ForcedPe`, `ForcedNotPe`; file field only
+  when not Auto) and `Command::SetTerminalPe { terminals, mode }` (one undo step). The
+  model stores the choice only; novo-terminals applies the PE rule to `Auto` terminals and
+  changes `kind` and the symbol with a forced toggle.
 - PRs get squash-merged: rebase follow-ups with `git rebase --onto origin/main <old-head>`.
 - Commit trailers: Co-Authored-By Claude line + Claude-Session link (see git log).

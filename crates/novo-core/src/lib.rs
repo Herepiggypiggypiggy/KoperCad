@@ -81,10 +81,11 @@ pub use document::{DEFAULT_HISTORY_LIMIT, Document, Outcome};
 pub use entity::{
     BlockDefinition, BlockInstance, BlockMember, BlockOverride, BlockParameter, BlockSource, Cable,
     CableCore, Device, DeviceKind, Dismissal, Endpoint, JoinLink, Junction, Page, PageFormat,
-    PageFreeze, PageKind, PaperSize, Part, Pin, PinFeed, PinRef, Potential, PotentialKind,
-    PotentialRules, PotentialSet, PotentialSpec, PotentialSystem, ProjectInfo, ProjectRules,
-    Properties, Revision, SameName, Structure, SymbolInstance, SymbolKey, SymbolRole, Terminal,
-    TerminalKind, TerminalRules, Text, TextAnchor, TextContent, TextPlacement, Value, Wire,
+    PageFreeze, PageKind, PaperSize, Part, PeOverride, Pin, PinFeed, PinRef, Potential,
+    PotentialKind, PotentialRules, PotentialSet, PotentialSpec, PotentialSystem, ProjectInfo,
+    ProjectRules, Properties, Revision, SameName, Structure, SymbolInstance, SymbolKey, SymbolRole,
+    Terminal, TerminalKind, TerminalRules, Text, TextAnchor, TextContent, TextPlacement, Value,
+    Wire,
 };
 pub use error::{ModelError, Result};
 pub use geom::{Direction, Placement, Point, Rotation};
