@@ -2280,3 +2280,57 @@ fn joining_a_wire_lands_on_the_grid_not_where_the_pointer_crosses() {
     assert_eq!(at.x, x);
     assert_eq!(at.y % editor.grid, 0.0, "{at:?} is off the grid");
 }
+
+#[test]
+fn the_feed_menu_sets_every_selected_feed_in_one_step() {
+    use novo_core::{AnyId, Pin, Placement};
+    use novo_editor::potential_menu;
+    let (mut doc, page, mut editor) = setup();
+    let (feeds, _) = doc
+        .transact("Feeds", |tx| {
+            let l1 = tx.add_potential("L1", PotentialKind::Line)?;
+            let l2 = tx.add_potential("L2", PotentialKind::Line)?;
+            let mut ids = Vec::new();
+            for (i, pot) in [l1, l2].into_iter().enumerate() {
+                ids.push(tx.place_symbol(
+                    page,
+                    potential::FEED_SYMBOL,
+                    Placement::at(p(10.0 * i as f64, 0.0)),
+                    vec![Pin::new("1", 0.0, 8.0)],
+                    SymbolRole::PotentialFeed { potential: pot },
+                )?);
+            }
+            Ok(ids)
+        })
+        .unwrap();
+    let selection: Vec<AnyId> = feeds.iter().map(|&f| AnyId::Symbol(f)).collect();
+    let menu = potential_menu::feed_menu(doc.project(), &selection).unwrap();
+    assert_eq!(menu.current, None, "L1 and L2 differ");
+    let names: Vec<_> = menu.chips.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(names, ["L1", "L2", "L3", "N", "PE", "+24 V", "0 V"]);
+    let depth = doc.undo_depth();
+    let pe = menu.chips[4].clone();
+    assert!(editor.set_feed_potential(&mut doc, &menu.feeds, &pe));
+    assert_eq!(doc.undo_depth(), depth + 1);
+    let menu = potential_menu::feed_menu(doc.project(), &selection).unwrap();
+    assert_eq!(menu.current.as_deref(), Some("PE"));
+    // Not a feed: no menu.
+    assert!(potential_menu::feed_menu(doc.project(), &[]).is_none());
+}
+
+#[test]
+fn the_pe_menu_shows_the_state_and_the_override() {
+    use novo_editor::potential_menu;
+    let (mut doc, page, mut editor) = setup();
+    editor.begin_place("iec/terminals/terminal", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    let x = symbol_at(&doc, page, p(40.0, 40.0));
+    let sel = [AnyId::Symbol(x)];
+    let menu = potential_menu::pe_menu(doc.project(), &sel).unwrap();
+    assert!(!menu.all_pe && !menu.overridden);
+    let terminals = menu.terminals.clone();
+    doc.transact("pe", |tx| novo_terminals::toggle_pe(tx, &terminals))
+        .unwrap();
+    let menu = potential_menu::pe_menu(doc.project(), &sel).unwrap();
+    assert!(menu.all_pe && menu.overridden);
+}

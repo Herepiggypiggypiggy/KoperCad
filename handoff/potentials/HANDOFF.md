@@ -9,3 +9,5 @@ Decisions
 - Interruption names: whole numbers, lowest unused; an unnamed partner takes the other's name on link.
 
 Next: point 22 follow-ups, see ROADMAP design note. Resume: `cargo test -p novo-terminals -p novo-editor -p novo-xref -p novo-sim`.
+
+UI (PR 'after build'): menu rows live in `novo-editor/src/view.rs` (context_menu) fed by `potential_menu::{feed_menu, pe_menu}`; actions in `novo-app/src/app/terminals.rs`. Not done: "New…" potential from the chip grid, wire-level override row, Show where it goes.

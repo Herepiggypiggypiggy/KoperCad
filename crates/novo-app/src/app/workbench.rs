@@ -442,6 +442,8 @@ impl NovoApp {
             "proposal.accept_all" => self.accept_all_proposals(),
             "terminal.connect"
             | "terminal.disconnect"
+            | "terminal.toggle_pe"
+            | "terminal.reset_pe"
             | "terminal.strip_up"
             | "terminal.strip_down"
             | "terminal.strip_lowest" => self.terminal_command(id),
