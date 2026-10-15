@@ -68,3 +68,19 @@
 2026-10-15 08:25 UTC Layout's dock mock is PR #174 (docs/design/wiring-dock.png, a1f6e0a). #169 is READY so no push; link it from DESIGN in a follow-up after #169 and #174 merge, and give it to WS-01.
 2026-10-15 08:30 UTC #169 READY from main reviewer on d325e29 too. Follow-up DESIGN PR after merge: end-segment stretch adds a bend if pin leaves axis; R does nothing in Lines; link Layout's mock (#174). Then tell WS-06/03/01/08/02 to build.
 2026-10-15 08:35 UTC #169 merged. Follow-up DESIGN PR: end-segment bend and R in Lines.
+2026-10-15 08:40 UTC Opened #177 (head 60fbe26); told WS-06/03/01/08/02 and wiring thread to build against merged DESIGN §4.
+2026-10-15 08:45 UTC Lead: #169 merged (64415f3), #168 merged (669e0d3). Builders told. Open: #177 (design review).
+2026-10-15 08:50 UTC #177 READY from both (60fbe26). Nit for next DESIGN PR: 'at the corner next to the moved pin'; link Layout mock (#174).
+2026-10-15 08:53 UTC #177 merged. No open PR of mine. Pending: nit wording + mock link (#174) in a later DESIGN PR; watch engine PRs from the wiring thread against the ten acceptance checks.
+2026-10-15 09:00 UTC Opening the last DESIGN follow-up (corner wording, mock link; needs #174 merged first). Then stop per token rules.
+
+## 2026-10-15 UI feedback round (Tadjiro)
+- Merged in DESIGN: #204 (right-click menu, place wheel, open ends, pin grab zone, free-start wires), #206 (double-click per tool, drag-move without M, Place key Q), #211 (row placement by drag, link routes incl. rename-to-coil-tag, click on a pin).
+- Open: #215 (box selection live highlight, grid dots, + wider / - narrower wording).
+- Decisions: grab zone 10 px; junction dot 3.5 px flat; Place = Q (I alias); pitch via wheel or +/- only during a row drag; drag on a wire moves nothing; drag-to-link only when a contact ends over a coil.
+- Builders: WS-06 editor, WS-01 shell, WS-03 canvas, WS-08 keymap/link verb, WS-10 xref #212, WS-02 open ends #210.
+2026-10-15 15:30 UTC Lead task: revisions in the app on top of novo-revisions, in small PRs from main. DESIGN #247 merged earlier (6556dff).
+2026-10-15 15:50 UTC #290 Issue revision window and command `revision.issue` (head a88ec39). Issued gains `changes`; index rule read from the latest index.
+2026-10-15 16:05 UTC #298 title block revision fields (head 0833b27): page revision + "(set D)"; TitleRevisions in the canvas, set_revisions on the editor view.
+2026-10-15 16:10 UTC #301 DESIGN: 180 ms wheel dwell (timer contact line was already in Shift+L via #281).
+2026-10-15 16:30 UTC #305 Changes mode (draft, stacked on #290 and #298): `changes` / `changes B`, marks + dashed ghosts + card.
