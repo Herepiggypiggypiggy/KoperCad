@@ -233,6 +233,8 @@ impl Editor {
 
     /// Adds a schematic page after `after`, named and formatted to follow
     /// it (`3` after `2`), as one undo step. Leaves any tool first.
+    /// The change is buffered until [`Editor::take_changes`], as for
+    /// [`Editor::rename_page`].
     pub fn new_page(&mut self, document: &mut Document, after: PageId) -> Option<PageId> {
         self.leave_tool();
         match document.transact("New page", |tx| crate::pages::add_page(tx, Some(after))) {
@@ -250,6 +252,11 @@ impl Editor {
 
     /// Renames a page as one undo step. A dotted, empty or taken name is
     /// refused with the reason in the notice (DESIGN.md §3).
+    ///
+    /// Like [`Editor::new_page`], the change is buffered in the editor
+    /// until [`Editor::take_changes`]: a caller outside the canvas frame
+    /// (the page list, the command field) takes it at once so storage
+    /// records the rename in the same frame.
     pub fn rename_page(&mut self, document: &mut Document, page: PageId, name: &str) -> bool {
         let mut refused = None;
         let result = document.transact("Rename page", |tx| {

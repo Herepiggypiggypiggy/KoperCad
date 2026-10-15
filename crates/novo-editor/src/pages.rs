@@ -203,9 +203,9 @@ pub fn plan_insert(
     }
 }
 
-/// `3a` gives (`3`, index after `a`) and `Cover a` gives (`Cover `, index
-/// after `a`): one page letter after a number, or after a space that
-/// follows a name ending in a letter.
+/// `3a` gives (`3`, index after `a`), `3ba` gives (`3b`, index after `a`)
+/// and `Cover a` gives (`Cover `, index after `a`): a page letter after a
+/// number and any letters, or after a space that follows a word.
 fn letter_suffix(name: &str) -> Option<(String, usize)> {
     let last = name.chars().last()?;
     let head = &name[..name.len() - last.len_utf8()];
@@ -213,7 +213,11 @@ fn letter_suffix(name: &str) -> Option<(String, usize)> {
     let after_word = head
         .strip_suffix(' ')
         .is_some_and(|h| h.ends_with(|c: char| c.is_alphabetic()));
-    (head.ends_with(|c: char| c.is_ascii_digit()) || after_word).then(|| (head.to_string(), i + 1))
+    // `3ba` gives (`3b`, index after `a`): letters after a number.
+    let after_number = head
+        .trim_end_matches(|c: char| PAGE_LETTERS.contains(c))
+        .ends_with(|c: char| c.is_ascii_digit());
+    (after_number || after_word).then(|| (head.to_string(), i + 1))
 }
 
 /// `2` gives `3`, `A` gives `None`.
@@ -437,6 +441,14 @@ mod tests {
     }
 
     #[test]
+    fn after_a_two_letter_page_comes_its_next_letter() {
+        let (d, ids) = doc(&["3", "3a", "3b", "3ba", "3c"]);
+        assert_eq!(next_page_name(d.project(), Some(ids[3])), "3bb");
+        let (d, ids) = doc(&["3", "3a", "3ab", "3b"]);
+        assert_eq!(next_page_name(d.project(), Some(ids[2])), "3ac");
+    }
+
+    #[test]
     fn every_insert_gets_a_new_dotless_name() {
         let sets: [&[&str]; 6] = [
             &["3", "3a", "3b", "3ba", "3c"],
@@ -467,6 +479,10 @@ mod tests {
                         after.iter().all(|n| !n.contains('.')),
                         "{names:?} after {at}"
                     );
+                    // Numbered pages never gain a space (`3ba a`).
+                    if names.iter().all(|n| !n.contains(' ')) {
+                        assert!(!plan.name.contains(' '), "{names:?} after {at}: {plan:?}");
+                    }
                     let count = after.len();
                     after.sort();
                     after.dedup();
