@@ -232,7 +232,7 @@ impl NovoApp {
         egui::Area::new(egui::Id::new("walkthrough"))
             .order(egui::Order::Middle)
             .pivot(egui::Align2::RIGHT_BOTTOM)
-            .fixed_pos(canvas.right_bottom() - egui::vec2(12.0, 12.0))
+            .fixed_pos(canvas.right_bottom() - egui::vec2(12.0, 72.0))
             .show(ctx, |ui| {
                 egui::Frame::popup(ui.style()).show(ui, |ui| {
                     if pill {
