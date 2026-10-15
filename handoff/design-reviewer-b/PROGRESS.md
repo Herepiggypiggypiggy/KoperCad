@@ -3,3 +3,4 @@
 2026-10-15 13:40 UTC #252 388e9f8 READY (rebased with #254, fmt/clippy/tests pass). #254 merged.
 2026-10-15 13:50 UTC #251 72dccf0 READY (look matches Layout mock-up; 4 mm end overhang accepted).
 2026-10-15 14:05 UTC #259 b60400a READY (plain drag leaves wires as open ends, Shift carries). WS-01 follow-ups: Shift read at drop + dock hint, status line, Preferences default, tests.
+2026-10-15 14:15 UTC #261 6bc814c READY (Preferences window; checked from code and tests, not in a window). Nits: Connections heading, (default), mark menu + Ctrl+,.
