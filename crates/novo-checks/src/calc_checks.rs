@@ -19,7 +19,14 @@
 //! | `max_scpd_a` | contactor or relay | largest coordinated fuse, A |
 //! | `instantaneous_trip_a` | breaker | current for instant tripping, A |
 //! | `insulation` | wire or cable | `PVC` (default) or `XLPE` |
+//! | `install_method` | wire or cable | reference method `B1`, `B2` or `C` for the cable rating (silent without it) |
+//! | `ambient_c` | wire or cable | ambient air temperature, °C (30) |
+//! | `grouped_circuits` | wire or cable | circuits bunched together, this one included (1) |
 //! | `supply.short_circuit_ka` | project | prospective short-circuit current, kA |
+//! | `supply.min_short_circuit_ka` | project | smallest short-circuit current the supply can deliver, kA |
+//! | `supply.transformer_kva`, `supply.uk_percent` | project | feeding transformer; replaces `supply.short_circuit_ka` |
+//! | `supply.transformer_pk_w` | project | transformer load losses, W (else R/X 0.2) |
+//! | `supply.network_sk_mva_max`, `supply.network_sk_mva_min` | project | fault level of the network behind the transformer, MVA |
 //! | `supply.voltage_v` | project | line-to-line voltage for the loop, V (400) |
 //! | `check.voltage_drop_pct` | project | drop limit, percent (5) |
 
@@ -30,12 +37,13 @@ use novo_core::{
     SymbolInstance, SymbolRole, Value, Wire, WireId,
 };
 
+use crate::calc::cable::{Circuit, Loaded, Method, check_overload};
 use crate::calc::drop::{Run, Supply, check_drop};
 use crate::calc::motor::{ShortCircuitDevice, Starter, check_starter};
+use crate::calc::network::{Branch, Network, SourceModel, Transformer};
 use crate::calc::pe::check_pe_section;
 use crate::calc::short_circuit::{
-    Source, Trip, cable_impedance, check_breaking_capacity, check_disconnection, check_withstand,
-    ik1_min,
+    Trip, check_breaking_capacity, check_disconnection, check_withstand,
 };
 use crate::calc::{Finding, Insulation};
 use crate::checks::protects_against_overload;
@@ -53,13 +61,20 @@ pub const AC3_CURRENT_A: &str = "ac3_current_a";
 pub const MAX_SCPD_A: &str = "max_scpd_a";
 pub const INSTANTANEOUS_TRIP_A: &str = "instantaneous_trip_a";
 pub const INSULATION: &str = "insulation";
+pub const INSTALL_METHOD: &str = "install_method";
+pub const AMBIENT_C: &str = "ambient_c";
+pub const GROUPED_CIRCUITS: &str = "grouped_circuits";
+pub const SUPPLY_MIN_SHORT_CIRCUIT_KA: &str = "supply.min_short_circuit_ka";
+pub const SUPPLY_TRANSFORMER_KVA: &str = "supply.transformer_kva";
+pub const SUPPLY_UK_PERCENT: &str = "supply.uk_percent";
+pub const SUPPLY_TRANSFORMER_PK_W: &str = "supply.transformer_pk_w";
+pub const SUPPLY_NETWORK_SK_MVA_MAX: &str = "supply.network_sk_mva_max";
+pub const SUPPLY_NETWORK_SK_MVA_MIN: &str = "supply.network_sk_mva_min";
 pub const SUPPLY_SHORT_CIRCUIT_KA: &str = "supply.short_circuit_ka";
 pub const SUPPLY_VOLTAGE_V: &str = "supply.voltage_v";
 pub const VOLTAGE_DROP_PCT: &str = "check.voltage_drop_pct";
 
 const DEFAULT_SUPPLY_VOLTAGE: f64 = 400.0;
-/// Conductor temperature for the earth-fault loop, °C.
-const LOOP_TEMPERATURE_C: f64 = 80.0;
 
 pub(crate) fn run(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Problem>) {
     voltage_drop(cx, netlist, out);
@@ -67,6 +82,7 @@ pub(crate) fn run(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Problem>) {
     protected_wires_checks(cx, netlist, out);
     motor_starters(cx, netlist, out);
     protective_conductors(cx, out);
+    cable_rating(cx, netlist, out);
 }
 
 fn number(properties: &Properties, key: &str) -> Option<f64> {
@@ -173,6 +189,39 @@ fn supply_voltage(project: &Project) -> f64 {
         .unwrap_or(DEFAULT_SUPPLY_VOLTAGE)
 }
 
+/// The supply as a source model: a transformer (with the network behind it
+/// when stated) or a stated short-circuit current, with the smallest
+/// current the supply can deliver when given. `None` when neither is.
+fn supply_source(project: &Project) -> Option<SourceModel> {
+    let props = &project.info().properties;
+    let voltage = supply_voltage(project);
+    if let (Some(kva), Some(uk)) = (
+        number(props, SUPPLY_TRANSFORMER_KVA),
+        number(props, SUPPLY_UK_PERCENT),
+    ) {
+        let mut t = Transformer::new(kva, uk, voltage);
+        t.pk_w = number(props, SUPPLY_TRANSFORMER_PK_W);
+        if let (Some(max), Some(min)) = (
+            number(props, SUPPLY_NETWORK_SK_MVA_MAX),
+            number(props, SUPPLY_NETWORK_SK_MVA_MIN),
+        ) {
+            t.network_sk_mva = Some((max, min));
+        }
+        return SourceModel::from_transformer(&t);
+    }
+    let max = supply_ik_ka(project)?;
+    let min = number(props, SUPPLY_MIN_SHORT_CIRCUIT_KA).filter(|m| *m > 0.0 && *m <= max);
+    SourceModel::from_short_circuit(max, min, voltage)
+}
+
+/// The largest three-phase short-circuit current the supply can deliver at
+/// its terminals, kA.
+fn supply_max_ka(project: &Project) -> Option<f64> {
+    let source = supply_source(project)?;
+    let network = Network::new(supply_voltage(project), source);
+    network.fault(network.root()).map(|f| f.ik3_max_a / 1000.0)
+}
+
 /// Voltage drop of every wire with a length, a cross-section, a load and a
 /// net of known voltage. Neutral, earth and DC return carry the same
 /// current as the line they pair with and are counted there.
@@ -232,7 +281,7 @@ fn voltage_drop(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Problem>) {
 /// current is not reduced along cables, which errs on the safe side.
 fn breaking_capacity(cx: &Context<'_>, out: &mut Vec<Problem>) {
     let project = cx.project;
-    let Some(supply) = supply_ik_ka(project) else {
+    let Some(supply) = supply_max_ka(project) else {
         return;
     };
     for device in project.devices() {
@@ -282,7 +331,7 @@ fn protected_wires(
 /// the worst wire.
 fn protected_wires_checks(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Problem>) {
     let project = cx.project;
-    let supply_ka = supply_ik_ka(project);
+    let source = supply_source(project);
     let voltage = supply_voltage(project);
     let mut done: BTreeSet<DeviceId> = BTreeSet::new();
     for symbol in project.symbols().filter(|s| protects_against_overload(s)) {
@@ -323,9 +372,10 @@ fn protected_wires_checks(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Pro
         }
 
         // Disconnection: the wire with the weakest earth-fault current.
-        let (Some(supply_ka), Some(rated)) =
-            (supply_ka, device_number(project, device, "rated_current_a"))
-        else {
+        let (Some(source), Some(rated)) = (
+            source.clone(),
+            device_number(project, device, "rated_current_a"),
+        ) else {
             continue;
         };
         let trip = device_text(project, device, TRIP_CURVE)
@@ -335,9 +385,10 @@ fn protected_wires_checks(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Pro
                     .filter(|f| *f > 0.0)
                     .map(Trip::Factor)
             });
-        let (Some(trip), Some(source)) = (trip, Source::from_ik(supply_ka, voltage)) else {
+        let Some(trip) = trip else {
             continue;
         };
+        let network = Network::new(voltage, source);
         let mut worst: Option<(f64, WireId)> = None;
         for wire in wires.iter().filter_map(|id| project.wire(*id)) {
             let (Some(length), Some(section)) =
@@ -346,13 +397,20 @@ fn protected_wires_checks(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Pro
                 continue;
             };
             let pe_section = protective_section(project, wire).unwrap_or(section);
-            let (Some(phase), Some(pe)) = (
-                cable_impedance(section, length, LOOP_TEMPERATURE_C),
-                cable_impedance(pe_section, length, LOOP_TEMPERATURE_C),
+            let Some(branch) = Branch::cable(
+                section,
+                length,
+                1,
+                wire_insulation(project, wire),
+                Some(pe_section),
             ) else {
                 continue;
             };
-            let ik = ik1_min(&source, &[phase], &[pe]);
+            let mut net = network.clone();
+            let end = net.add_node(net.root(), "wire", branch);
+            let Some(ik) = net.fault(end).and_then(|f| f.ik1_min_a) else {
+                continue;
+            };
             if worst.is_none_or(|(w, _)| ik < w) {
                 worst = Some((ik, wire.id));
             }
@@ -365,6 +423,103 @@ fn protected_wires_checks(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Pro
             at.push(AnyId::Wire(wire));
             out.push(problem(ProblemKind::DisconnectionTime, finding, at));
         }
+    }
+}
+
+/// `Ib ≤ In ≤ Iz` for the wires behind each protective device whose
+/// installation is described (`install_method`, with `ambient_c` and
+/// `grouped_circuits` when they differ from the reference). A wire without
+/// an installation method says nothing: the rating depends on it, and a
+/// default would be a guess.
+fn cable_rating(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Problem>) {
+    let project = cx.project;
+    let mut done: BTreeSet<DeviceId> = BTreeSet::new();
+    for symbol in project.symbols().filter(|s| protects_against_overload(s)) {
+        let SymbolRole::Device { device, .. } = symbol.role else {
+            continue;
+        };
+        if !done.insert(device) {
+            continue;
+        }
+        let Some(rated) = device_number(project, device, "rated_current_a").filter(|a| *a > 0.0)
+        else {
+            continue;
+        };
+        let tag = project
+            .device(device)
+            .map(|d| d.tag.to_string())
+            .unwrap_or_default();
+        let wires: BTreeSet<WireId> = cx
+            .by_device
+            .get(&device)
+            .into_iter()
+            .flatten()
+            .flat_map(|s| protected_wires(project, netlist, s))
+            .collect();
+        for wire in wires.iter().filter_map(|id| project.wire(*id)) {
+            let Some(section) = wire_section(project, wire) else {
+                continue;
+            };
+            let Some(method) = wire_text(project, wire, INSTALL_METHOD)
+                .as_deref()
+                .and_then(Method::parse)
+            else {
+                continue;
+            };
+            let loaded = match wire_loaded(project, netlist, wire) {
+                Some(l) => l,
+                None => continue,
+            };
+            let circuit = Circuit {
+                design_current: number(&wire.properties, LOAD_CURRENT_A).unwrap_or(0.0),
+                device_rating: rated,
+                section_mm2: section,
+                insulation: wire_insulation(project, wire),
+                method,
+                loaded,
+                ambient_c: wire_number(project, wire, AMBIENT_C).unwrap_or(30.0),
+                grouped_circuits: wire_number(project, wire, GROUPED_CIRCUITS)
+                    .filter(|n| *n >= 1.0)
+                    .map_or(1, |n| n as u32),
+            };
+            for finding in check_overload(&circuit) {
+                let mut finding = finding;
+                finding.message = format!("{tag}: {}", finding.message);
+                let mut at = marks(cx, device);
+                at.push(AnyId::Wire(wire.id));
+                out.push(problem(ProblemKind::CableRating, finding, at));
+            }
+        }
+    }
+}
+
+/// A number on the wire, else on its cable.
+fn wire_number(project: &Project, wire: &Wire, key: &str) -> Option<f64> {
+    number(&wire.properties, key).or_else(|| {
+        let (cable, _) = project.core_of_wire(wire.id)?;
+        number(&project.cable(cable)?.properties, key)
+    })
+}
+
+fn wire_text(project: &Project, wire: &Wire, key: &str) -> Option<String> {
+    text(&wire.properties, key).map(str::to_owned).or_else(|| {
+        let (cable, _) = project.core_of_wire(wire.id)?;
+        text(&project.cable(cable)?.properties, key).map(str::to_owned)
+    })
+}
+
+/// Two loaded conductors for single-phase and DC nets, three for a 400 V
+/// line net. `None` when the net or its potential is not known.
+fn wire_loaded(project: &Project, netlist: &Netlist, wire: &Wire) -> Option<Loaded> {
+    let net = netlist.net_of_wire(wire)?;
+    let potential = project.potential(netlist.net(net).potential()?)?;
+    let voltage = potential.voltage?;
+    match potential.kind {
+        PotentialKind::Line if voltage >= 380.0 => Some(Loaded::Three),
+        PotentialKind::Line | PotentialKind::DcPositive | PotentialKind::Signal => {
+            Some(Loaded::Two)
+        }
+        _ => None,
     }
 }
 
