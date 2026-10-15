@@ -172,13 +172,17 @@ pub fn plan_insert(
     }
 }
 
-/// `3a` gives (`3`, index after `a`): a number followed by one page letter.
+/// `3a` gives (`3`, index after `a`) and `Cover a` gives (`Cover `, index
+/// after `a`): one page letter after a number, or after a space that
+/// follows a name ending in a letter.
 fn letter_suffix(name: &str) -> Option<(String, usize)> {
     let last = name.chars().last()?;
     let head = &name[..name.len() - last.len_utf8()];
     let i = PAGE_LETTERS.find(last)?;
-    head.ends_with(|c: char| c.is_ascii_digit())
-        .then(|| (head.to_string(), i + 1))
+    let after_word = head
+        .strip_suffix(' ')
+        .is_some_and(|h| h.ends_with(|c: char| c.is_alphabetic()));
+    (head.ends_with(|c: char| c.is_ascii_digit()) || after_word).then(|| (head.to_string(), i + 1))
 }
 
 /// `2` gives `3`, `A` gives `None`.
@@ -328,6 +332,8 @@ mod tests {
         assert_eq!(next_page_name(d.project(), Some(ids[2])), "3ba");
         let (d, ids) = doc(&["Cover", "1"]);
         assert_eq!(next_page_name(d.project(), Some(ids[0])), "Cover a");
+        let (d, ids) = doc(&["Cover", "Cover a", "1"]);
+        assert_eq!(next_page_name(d.project(), Some(ids[1])), "Cover b");
         // i, l and o are skipped.
         let (d, ids) = doc(&["5", "5h", "6"]);
         assert_eq!(next_page_name(d.project(), Some(ids[1])), "5j");
