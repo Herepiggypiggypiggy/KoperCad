@@ -45,6 +45,11 @@ pub const DUTCH: &[Aliases] = &[
         &["pagina", "blad"],
     ),
     nl("project.rules", &["regels"], &["nummering", "instellingen"]),
+    nl(
+        "app.preferences",
+        &["voorkeuren"],
+        &["instellingen", "opties"],
+    ),
     nl("file.quit", &[], &["afsluiten", "stoppen"]),
     // Draw
     nl(
