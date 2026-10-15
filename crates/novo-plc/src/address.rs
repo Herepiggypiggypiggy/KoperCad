@@ -74,6 +74,10 @@ pub struct Address {
     pub slot: Option<u16>,
     /// The channel number of its type on the card.
     pub number: u16,
+    /// The card's digital point in its space (its bit offset from the
+    /// card's start), which Rockwell digital addresses read, so `DQ4 RO4`
+    /// gives DQ 0-3 points 0-3 and RO 0-3 points 4-7 instead of colliding.
+    pub point: u32,
 }
 
 impl Address {
@@ -87,6 +91,7 @@ impl Address {
             bit,
             slot,
             number: channel.number,
+            point: channel.bit_offset,
         }
     }
 
@@ -114,7 +119,7 @@ impl Address {
                 if analog {
                     format!("Local:{slot}:{io}.Ch{}Data", self.number)
                 } else {
-                    format!("Local:{slot}:{io}.Data.{}", self.number)
+                    format!("Local:{slot}:{io}.Data.{}", self.point)
                 }
             }
         }
@@ -159,6 +164,15 @@ mod tests {
     fn relay_outputs_are_outputs() {
         let a = address("RO4", ChannelType::RelayOutput, 2, 0);
         assert_eq!(a.to_string(), "%QX0.2");
+    }
+
+    #[test]
+    fn rockwell_digital_outputs_do_not_collide() {
+        let dq = address("DQ4 RO4", ChannelType::DigitalOutput, 1, 0);
+        let ro = address("DQ4 RO4", ChannelType::RelayOutput, 1, 0);
+        assert_eq!(dq.format(AddressStyle::Rockwell), "Local:3:O.Data.1");
+        assert_eq!(ro.format(AddressStyle::Rockwell), "Local:3:O.Data.5");
+        assert_eq!(ro.format(AddressStyle::Iec), "%QX0.5");
     }
 
     #[test]
