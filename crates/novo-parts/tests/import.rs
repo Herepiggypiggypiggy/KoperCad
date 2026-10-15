@@ -368,3 +368,28 @@ fn imports_an_edz_package_unchanged_and_hands_out_its_xml() {
     );
     assert_eq!(fs::read(lib.path_of(r)).unwrap(), edz, "stored unchanged");
 }
+
+#[test]
+fn a_downloaded_dxf_or_zip_of_one_is_stored_and_handed_out() {
+    let lib_dir = tempfile::tempdir().unwrap();
+    let downloads = tempfile::tempdir().unwrap();
+    let lib = LocalLibrary::at(lib_dir.path());
+    let f = ScriptedFetcher::default();
+    let src = SourceTable::default();
+    let dxf = "0\nSECTION\n2\nENTITIES\n0\nLINE\n0\nENDSEC\n0\nEOF\n";
+
+    let direct = downloads.path().join("PXC.3044076.dxf");
+    fs::write(&direct, dxf).unwrap();
+    let zipped = downloads.path().join("3044076.zip");
+    fs::write(&zipped, zip_of(&[("outline.DXF", dxf.as_bytes())])).unwrap();
+
+    for path in [&direct, &zipped] {
+        let mut job = ImportJob::new(&lib, &src, &f, "Example Maker", "3044076", "d");
+        let ImportState::Done(out) = job.import_file(path, ImportFlow::Downloads).clone() else {
+            panic!()
+        };
+        assert_eq!(out.dxf_members.len(), 1, "{path:?}");
+        assert_eq!(out.dxf_members[0].1, dxf);
+    }
+    assert_eq!(lib.records().unwrap().len(), 2);
+}

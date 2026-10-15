@@ -129,6 +129,10 @@ pub struct ImportOutcome {
     /// pass to the EPLAN parts reader in `novo-interop`. This crate does not
     /// read them: that reader depends on this one.
     pub xml_members: Vec<(String, String)>,
+    /// DXF files, direct or inside a ZIP or EDZ, as (name, text), for the app
+    /// to pass to the DXF reader in `novo-interop` to make the part's 2D
+    /// outline or symbol candidate. Same reason as `xml_members`.
+    pub dxf_members: Vec<(String, String)>,
     /// Files that were stored but could not be read for data, with why.
     pub notes: Vec<String>,
 }
@@ -342,6 +346,7 @@ impl<'a> ImportJob<'a> {
             match read_zip(bytes) {
                 Ok(z) => {
                     self.outcome.xml_members.extend(z.xml);
+                    self.outcome.dxf_members.extend(z.dxf);
                     (z.step, z.terms_url)
                 }
                 Err(e) => {
@@ -408,7 +413,11 @@ impl<'a> ImportJob<'a> {
                         .push(format!("{name}: no STEP file inside"));
                 }
             }
-            FileKind::Dxf | FileKind::Other => {}
+            FileKind::Dxf => self
+                .outcome
+                .dxf_members
+                .push((name.to_owned(), String::from_utf8_lossy(bytes).into_owned())),
+            FileKind::Other => {}
         }
         self.outcome.records.push(record);
         Ok(())
@@ -426,8 +435,11 @@ struct ZipContent {
     terms_url: Option<String>,
     /// XML members (name, text), at most [`ZIP_MAX_XML`].
     xml: Vec<(String, String)>,
+    /// DXF members (name, text), at most [`ZIP_MAX_DXF`].
+    dxf: Vec<(String, String)>,
 }
 
+const ZIP_MAX_DXF: usize = 8;
 const ZIP_MAX_XML: usize = 16;
 const ZIP_MAX_ENTRIES: usize = 64;
 const ZIP_MAX_MEMBER_BYTES: u64 = 200 * 1024 * 1024;
@@ -448,6 +460,7 @@ fn read_zip(bytes: &[u8]) -> Result<ZipContent, String> {
         step: None,
         terms_url: None,
         xml: Vec::new(),
+        dxf: Vec::new(),
     };
     for i in 0..archive.len() {
         let Ok(file) = archive.by_index(i) else {
@@ -461,7 +474,12 @@ fn read_zip(bytes: &[u8]) -> Result<ZipContent, String> {
         let is_step = FileKind::of_file_name(&name) == FileKind::Step;
         let is_text = lower.ends_with(".txt");
         let is_xml = lower.ends_with(".xml") && out.xml.len() < ZIP_MAX_XML;
-        if !(is_step && out.step.is_none() || is_text && out.terms_url.is_none() || is_xml) {
+        let is_dxf = FileKind::of_file_name(&name) == FileKind::Dxf && out.dxf.len() < ZIP_MAX_DXF;
+        if !(is_step && out.step.is_none()
+            || is_text && out.terms_url.is_none()
+            || is_xml
+            || is_dxf)
+        {
             continue;
         }
         let mut raw = Vec::new();
@@ -473,6 +491,8 @@ fn read_zip(bytes: &[u8]) -> Result<ZipContent, String> {
             out.step = Some((name, text));
         } else if is_xml {
             out.xml.push((name, text));
+        } else if is_dxf {
+            out.dxf.push((name, text));
         } else {
             out.terms_url = find_terms_url(&text);
         }

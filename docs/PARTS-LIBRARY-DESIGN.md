@@ -292,6 +292,32 @@ product page leads to CADENAS PARTcommunity
    login, and what is inside its EDZ. A real EDZ (any maker) in the project
    files would let us test against it.
 
+**Phoenix UT 2,5, second capture (DXF route, owner, 2026-10-15).** On the
+Eplan Data Portal part page the Detail view menu offers "Download DXF data",
+"Add to my download list" (EDZ / EPLAN macro), "Download commercial data" and
+"Data sheet". The DXF download is `POST https://dataportal.eplan.com/api/download/dxf_data/part`
+(status 200, sent by the page's JavaScript, response about 16.6 KB, a DXF or a
+ZIP of one). It needs a free Eplan ID, and signing in accepts the Eplan Cloud
+terms. The request body has not been captured.
+
+**Decision unchanged: no automated access to the Eplan portal.** It is a
+logged-in service under terms we have not cleared, even though a single POST
+would be easy to script. What we use from it instead:
+1. **A user-downloaded DXF is a good 2D source.** The importer stores a DXF, or
+   a ZIP or EDZ holding one, and hands its text out as `ImportOutcome.dxf_members`.
+   The app passes it to the DXF reader in `novo-interop` to make the part's 2D
+   outline or symbol candidate (`novo-parts` cannot call it: `novo-interop`
+   depends on `novo-parts`). Turning the DXF into an outline is that reader's
+   work and is not done here; what a real portal DXF contains is unknown.
+2. **EDZ** from the portal's download list or the Phoenix generator goes
+   through the EDZ path above.
+3. **The Downloads watch matches a DXF by the order number in its file name.**
+   The portal's file name is unknown; if it carries no article number, the user
+   drops the file on the window instead. We do not import unrelated DXFs from
+   Downloads.
+4. Source record: kept as for any file; `terms_url` from the maker entry in the
+   source table.
+
 ## 4. Offline and no admin rights
 
 - The catalog is a file under `%LOCALAPPDATA%\KoperCAD\Catalog\` (already so in
