@@ -1856,3 +1856,35 @@ fn a_refusal_names_the_other_wire_and_says_why() {
     assert!(err.contains("not share its length"), "{err}");
     assert!(!err.contains("out of range"), "{err}");
 }
+
+#[test]
+fn renaming_a_contact_to_its_coils_tag_links_it_and_two_coils_are_refused() {
+    let (mut doc, page, mut editor) = setup();
+    editor.begin_place("iec/coils/relay", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.click(&mut doc, page, p(80.0, 40.0), TOL);
+    editor.begin_place("iec/contacts/no", None);
+    editor.click(&mut doc, page, p(120.0, 40.0), TOL);
+    editor.leave_tool();
+    assert_eq!(tags(&doc).len(), 3);
+    let contact = symbol_at(&doc, page, p(120.0, 40.0));
+    let own = doc.project().symbol(contact).unwrap().device().unwrap();
+    let k1 = doc.project().devices_by_tag(&"-K1".parse().unwrap())[0];
+    let k2 = doc.project().devices_by_tag(&"-K2".parse().unwrap())[0];
+
+    // Two coils with one tag stay refused, in plain words.
+    let reason = editor.rename(&mut doc, k2, "-K1").unwrap_err();
+    assert!(reason.contains("already used") && reason.contains("coil"));
+    assert_eq!(tags(&doc).len(), 3);
+
+    // The contact takes its coil's device: one undo step, no confirm.
+    assert!(editor.check_rename(&doc, own, "-K1").is_ok());
+    let depth = doc.undo_depth();
+    editor.rename(&mut doc, own, "-K1").unwrap();
+    assert_eq!(doc.undo_depth(), depth + 1);
+    assert_eq!(doc.project().symbol(contact).unwrap().device(), Some(k1));
+    assert_eq!(tags(&doc), ["-K1", "-K2"]);
+    assert_eq!(editor.notice(), Some("Linked to -K1"));
+    doc.undo().unwrap();
+    assert_eq!(tags(&doc).len(), 3);
+}
