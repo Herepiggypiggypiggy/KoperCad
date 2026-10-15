@@ -4,6 +4,7 @@ use novo_core::{CabinetPlacement, DeviceTag, Project, Rail, Value};
 
 use super::cabinet::Ask;
 use super::gate1_tests::Drive;
+use super::workspace::Workspace;
 use crate::actions::Action;
 
 fn add_cabinet(d: &mut Drive) {
@@ -43,7 +44,7 @@ fn place_all_previews_then_accepts_as_one_undo_step() {
     add_cabinet(&mut d);
     d.app.run(&ctx, Action::ShowCabinet);
     d.frame();
-    assert!(d.app.cabinet_open);
+    assert_eq!(d.app.workspace(), Workspace::Cabinet);
     assert_eq!(
         d.app.cabinet.location.as_ref().unwrap().to_string(),
         "+CAB1"
@@ -80,7 +81,7 @@ fn place_all_previews_then_accepts_as_one_undo_step() {
     assert_eq!(project(&d).all::<Rail>().count(), 0);
 
     d.app.run(&ctx, Action::ShowSchematic);
-    assert!(!d.app.cabinet_open);
+    assert_eq!(d.app.workspace(), Workspace::Schematic);
 }
 
 #[test]
@@ -135,9 +136,9 @@ fn picking_a_page_leaves_the_cabinet() {
     let page = d.app.current_page.expect("a page is shown");
     d.app.run(&ctx, Action::ShowCabinet);
     d.frame();
-    assert!(d.app.cabinet_open);
+    assert_eq!(d.app.workspace(), Workspace::Cabinet);
     d.app.show_page(page);
-    assert!(!d.app.cabinet_open);
+    assert_eq!(d.app.workspace(), Workspace::Schematic);
 }
 
 #[test]
@@ -173,10 +174,10 @@ fn the_table_face_toggles_and_problems_are_in_words() {
     d.app.run(&ctx, Action::NewProject);
     d.frame();
     d.app.run_command(&ctx, "view.cabinet_table", None);
-    assert!(d.app.cabinet_open && d.app.cabinet.table);
+    assert!(d.app.workspace() == Workspace::Cabinet && d.app.cabinet.table);
     d.frame();
     d.app.run_command(&ctx, "view.cabinet_table", None);
-    assert!(d.app.cabinet_open && !d.app.cabinet.table);
+    assert!(d.app.workspace() == Workspace::Cabinet && !d.app.cabinet.table);
     d.frame();
 
     // Rotate and delete from the palette go to the Cabinet, not the page.
@@ -288,6 +289,32 @@ fn inspector_sets_the_plate_size_and_lists_a_device_s_problems() {
 }
 
 #[test]
+fn a_problem_row_selects_its_device_on_the_plate() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    d.app.cabinet.table = true;
+    d.app.cabinet_ask(Ask::Select(7), None, None, &[]);
+    assert!(!d.app.cabinet.table);
+    assert_eq!(
+        d.app
+            .cabinet
+            .view
+            .selection
+            .ids()
+            .iter()
+            .filter_map(|i| novo_canvas::cabinet::box_of(*i))
+            .collect::<Vec<_>>(),
+        vec![7]
+    );
+}
+
+#[test]
 fn heat_commands_open_the_cabinet_and_toggle_the_layers() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
@@ -296,7 +323,7 @@ fn heat_commands_open_the_cabinet_and_toggle_the_layers() {
     d.frame();
     assert!(!d.app.cabinet.heat.on);
     d.app.run_command(&ctx, "heat.toggle", None);
-    assert!(d.app.cabinet_open && d.app.cabinet.heat.on);
+    assert!(d.app.workspace() == Workspace::Cabinet && d.app.cabinet.heat.on);
     d.frame();
     d.app.run_command(&ctx, "heat.airflow", None);
     assert!(d.app.cabinet.heat.airflow);

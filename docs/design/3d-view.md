@@ -46,11 +46,11 @@ assemblies, ray tracing, shadows from lights, VR.
 | Where it draws | **Offscreen**: the renderer draws into its own colour and depth textures in `CallbackTrait::prepare`, and the paint callback blits the result into egui's pass. | eframe's pass has no depth buffer by default and changing that would change the 2D canvas. Offscreen also gives free resolution scaling, our own MSAA and resolve, rendering only when something changed, and rendering to an image without egui (tests, PNG for reports and the PDF). |
 | Scene shape | **Flat list of items** with world transforms, plus a few hinge groups. | A cabinet is a flat set of boxes. The hierarchy (devices on a rail, parts on a door) lives in the model; the builder resolves it into world poses. One level of groups covers the door animation. |
 | Instancing | Every box is one instance of one unit-cube mesh scaled by the item size. Rails are instances of a profile mesh scaled along its length. Maker meshes are instanced per distinct part. | 1000 boxes are 1 draw call plus 1 for their edges. Instance data goes in **vertex buffers**, not storage buffers, so it runs on downlevel and old integrated adapters. |
-| Picking | **CPU**: ray against each item's oriented box, nearest wins, ties broken by a triangle test on the coarse mesh. Marquee by projecting the boxes. | A cabinet has hundreds of items, so a linear scan costs microseconds, is deterministic and unit-testable without a GPU, and has no read-back latency. A BVH is added when a scene passes about 20 000 items. |
+| Picking | **CPU**: ray against each item's oriented box, nearest opaque item wins (translucent door and shell only when nothing opaque is hit); a triangle test on the coarse mesh can refine this later. Marquee by projecting the boxes. | A cabinet has hundreds of items, so a linear scan costs microseconds, is deterministic and unit-testable without a GPU, and has no read-back latency. A BVH is added when a scene passes about 20 000 items. |
 | Culling | CPU frustum cull of item bounds, plus a screen-size level of detail for meshes (below 24 px the box, below 3 px nothing). | Cheap, and it is the lever that keeps imported meshes from costing frames. No occlusion culling: a closed door hides the inside by drawing it. |
 | Look of edges | Box and feature edges are drawn as lines over the shaded faces. | Crisp, readable and cheap, no post-process pass. |
 | Labels, view cube, dimensions | Drawn with the egui painter over the 3D image, from `View3d::project`. | No text rendering in wgpu, and the labels follow the app theme and font for free. |
-| Quality | Two tiers. **Interactive** (while the camera moves): no MSAA, render scale 0.75 on integrated or software adapters. **Settled** (a moment after input stops): full scale, 4x MSAA, one extra frame. | Fill rate is what an integrated GPU lacks, not triangles. Refine-on-settle gives a sharp still image and a smooth orbit. |
+| Quality | Two tiers, chosen from the adapter type (`Tier`: discrete, integrated, software). **Interactive** (while the camera moves): no MSAA, render scale 1.0 on discrete, 0.75 on integrated, 0.5 on software adapters. **Settled** (a moment after input stops): full scale, 4x MSAA, one extra frame. | Fill rate is what an integrated GPU lacks, not triangles. Refine-on-settle gives a sharp still image and a smooth orbit. |
 | Redraw | On demand. The view asks egui for a repaint only while the camera animates, input arrives, or the scene changes. | Idle cabinets cost nothing, so laptops stay quiet. |
 | Motion | Camera transitions ease over 250 ms; with the app's reduced-motion setting they jump. | Same rule as the Live view animation (#377). |
 | Dependencies at runtime | Pure Rust, no native library, no installer, no network. Works on whatever wgpu backend the app already runs (DX12 or Vulkan). | Hard requirement: no admin rights. |
@@ -143,10 +143,15 @@ pub enum Shape {
     /// Fills `Item::size`.
     Box,
     /// A rail or duct section extruded along local X; `size.x` is the length.
+    /// The section is drawn at its real size in mm (`size.y`, `size.z` are its
+    /// width and height, used for picking and, for `Channel`, for the shape).
     Profile(Profile),
     /// Maker or generated geometry from the `MeshLibrary`. Drawn as a box
     /// until the library has it, so the view never waits.
     Part(GeometryKey),
+    // Meshes are authored in the item's local frame, centred in x and y and
+    // starting at z = 0. The renderer scales each axis by size / lod.bounds.size,
+    // so the footprint wins whatever the mesh measures.
 }
 
 #[non_exhaustive]
@@ -252,7 +257,10 @@ amber tint are never the only difference.
   (`Mark::GuessedSize`), unknown duct section 40 x 60 mm, enclosure depth 250 mm
   until R2 gives real fields.
 - **Wires** are `Scene::wires` (polylines with a radius), not items, because
-  they are not boxes. They are selectable like items (kind `Wire`).
+  they are not boxes. They are selectable like items (kind `Wire`). The
+  renderer draws every segment as one thin box instance (`wire.rs`, culled and
+  skipped below 3 px), and picking and marquee test the same boxes, with a
+  minimum pick radius of 1.5 mm so a 1 mm wire stays clickable.
 - **How meshes reach the renderer.** STEP parsing lives in `novo-interop`,
   which returns its own neutral triangle mesh and knows nothing of 3D.
   `novo-view3d::geometry` (feature `import`) calls it, fits and reduces the
@@ -429,4 +437,31 @@ the pull request description and added to section 5 by this thread.
 
 ## Measured
 
-Filled in by the spike pull request.
+![The spike in the egui window on a software renderer](3d-view-spike.png)
+
+From the spike (`orbit` example, 2026-10-15). This container has no GPU, so the
+adapter is **llvmpipe**, a software Vulkan rasteriser on 4 CPU cores: the CPU
+column is the cost of the renderer itself and is valid anywhere; the wall
+column is the whole frame rasterised on the CPU, which an integrated GPU should
+beat. A run on the owner's Windows laptop is still the check for the GPU
+budgets in section 8.
+
+`cargo run --release -p novo-view3d --features gpu --example orbit -- --items N --size 1920x1080 --scale 1.0`
+
+| Scene | Items | Draw calls | Triangles | CPU ms/frame p50 (p95) | llvmpipe wall ms p50 (p95) |
+| --- | --- | --- | --- | --- | --- |
+| 150 devices | 166 | 11 | 2 500 | 0.05 (0.08) | 9.2 (17.4) |
+| 1000 devices | 1016 | 11 | 12 700 | 0.18 (0.24) | 12.0 (17.6) |
+| 3000 devices | 3016 | 11 | 36 700 | 0.45 (0.59) | 16.2 (20.8) |
+| 1000 devices, 4x MSAA (settled) | 1016 | 11 | 12 700 | 0.24 (0.34) | 37.8 (49.9) |
+
+- Draw calls stay at 11 whatever the device count: the boxes are instanced, so
+  the CPU cost grows only with the instance copy (0.18 ms for 1000 items,
+  inside the 0.5 ms budget up to 3000).
+- Even rasterised in software at full 1080p scale, 1000 devices orbit at 83
+  frames per second without MSAA. MSAA 4x on software costs three times as
+  much, which is why it is kept for the settled frame.
+- In the egui window (`window --items 1000 --bench 6`, 1400x860, interactive
+  tier at scale 0.5 on software, vsync off) the whole app, egui included, ran
+  at 35 frames per second on the CPU alone.
+- Not measured here: first-frame time, GPU time on real hardware, memory.

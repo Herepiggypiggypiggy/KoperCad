@@ -1924,6 +1924,7 @@ dependencies = [
  "novo-core",
  "novo-parts",
  "novo-plc",
+ "novo-routing",
  "novo-symbols",
  "novo-terminals",
  "novo-tests",
@@ -2196,9 +2197,16 @@ name = "novo-view3d"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "eframe",
+ "egui",
+ "egui-wgpu",
+ "flate2",
  "glam",
+ "naga",
  "novo-core",
  "novo-layout",
+ "pollster 1.0.1",
+ "wgpu",
 ]
 
 [[package]]

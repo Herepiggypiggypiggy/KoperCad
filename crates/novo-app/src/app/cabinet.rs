@@ -28,7 +28,7 @@ const DEFAULT_PLATE: MountingPlate = MountingPlate {
 };
 
 pub(super) struct CabinetState {
-    view: CanvasView,
+    pub(super) view: CanvasView,
     scene: CabinetScene,
     /// The panel shown, by its location (`+K1B1G1`).
     pub(super) location: Option<DeviceTag>,
@@ -96,6 +96,8 @@ pub(super) enum Ask {
     Cancel,
     ToggleTable,
     TogglePlateCard,
+    /// Select a placed device (from the problems list), on the plate.
+    Select(u64),
     /// Place or move a device with its top left at `(x, y)` mm.
     Drop(u64, f64, f64),
     Rotate(Vec<u64>),
@@ -399,10 +401,31 @@ impl NovoApp {
                 if ui.button("Size enclosure").clicked() {
                     self.sizing.panel_open = !self.sizing.panel_open;
                 }
-                ui.weak(format!(
-                    "{placed} placed, {unplaced} unplaced, {problems} {}",
+                ui.weak(format!("{placed} placed, {unplaced} unplaced"));
+                let label = format!(
+                    "{problems} {}",
                     if problems == 1 { "problem" } else { "problems" }
-                ));
+                );
+                if problems == 0 {
+                    ui.weak(label);
+                } else if let Some(shown) = &shown {
+                    // The count opens the list; a row selects its device.
+                    ui.menu_button(label, |ui| {
+                        for p in &shown.placements {
+                            let lines = problem_lines(shown, p.id, &tag_of);
+                            if lines.is_empty() {
+                                continue;
+                            }
+                            if ui
+                                .button(format!("{}: {}", tag_of(p.id), lines.join("; ")))
+                                .clicked()
+                            {
+                                ask = Some(Ask::Select(p.id));
+                                ui.close();
+                            }
+                        }
+                    });
+                }
             }
         });
         ui.separator();
@@ -707,6 +730,13 @@ impl NovoApp {
             Ask::Cancel => self.cabinet.preview = None,
             Ask::ToggleTable => self.cabinet.table ^= true,
             Ask::TogglePlateCard => self.cabinet.plate_card ^= true,
+            Ask::Select(device) => {
+                self.cabinet.table = false;
+                self.cabinet.view.selection.apply(
+                    [novo_canvas::cabinet::box_item(device)],
+                    novo_canvas::selection::SelectOp::Replace,
+                );
+            }
             Ask::PlaceAll => {
                 if let Some(layout) = layout {
                     let plan = layout.preview(cands);
