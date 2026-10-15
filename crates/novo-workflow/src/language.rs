@@ -51,6 +51,11 @@ pub const DUTCH: &[Aliases] = &[
         &["voorkeuren"],
         &["instellingen", "opties"],
     ),
+    nl(
+        "parts.browser",
+        &["onderdelen"],
+        &["artikelen", "onderdeel"],
+    ),
     nl("project.standard", &["tekennorm"], &["norm", "standaard"]),
     nl("terminal.toggle_pe", &["pe-klem"], &["aardklem", "aarde"]),
     nl(
@@ -193,6 +198,16 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("view.full_screen", &[], &["volledig scherm"]),
     nl("view.cabinet_table", &[], &["kast als tabel", "tabel"]),
+    nl(
+        "cabinet.size-enclosure",
+        &[],
+        &["kast dimensioneren", "kastmaat", "koeling", "warmte"],
+    ),
+    nl(
+        "cabinet.enclosures",
+        &[],
+        &["kasten", "kastenlijst", "behuizingen"],
+    ),
     nl("view.changes", &["wijzigingen"], &["vergelijk", "verschil"]),
     nl(
         "sim.live",

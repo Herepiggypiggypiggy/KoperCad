@@ -95,7 +95,9 @@ What the screen must do:
 **Top bar (42 px).**
 - The **mark** opens a short project menu: New, Open, Recent, Export PDF,
   Print, Project settings, Preferences, Quit. Every item is also in the
-  command surface; the mark is a shortcut list, not a second index.
+  command surface; the mark is a shortcut list, not a second index. The
+  Parts window (browse and import maker parts) is opened by the `parts`
+  command only for now; it is not in the mark menu.
 - **Schematic | Cabinet:** the two canvases, as a segmented switch.
 - **Breadcrumb:** project / `=function` / `+location` / page. A click on a
   segment filters the outline to it.
