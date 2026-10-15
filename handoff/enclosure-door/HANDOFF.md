@@ -2,8 +2,15 @@
 
 Updated 2026-10-15.
 
-- Branch `claude/project-thread-tv09ns`, stacked on #374, #376 and #378 (the
-  Cabinet canvas edits); retarget to main when they merge.
+- Branch `claude/project-thread-tv09ns`, PR #409, based on main (the Cabinet
+  canvas edit PRs have merged).
+- UI entry point: open a project, switch to the Cabinet canvas and use the
+  right panel "Inside and door" (form, Apply as one undo step, problem list,
+  top view with the door arc). Door problems count in the header strip.
+- Still missing in the UI: checks as `novo-checks` Problems (they show only in
+  this panel and the header count), front-view boxes coloured for depth,
+  door-mounted devices. Coordinate with "UI integration: cabinet, 3D,
+  enclosure".
 - Engine: `crates/novo-layout/src/enclosure.rs` (types, `check`, swing, arc).
   Storage: `novo_layout::model::{enclosure_of, set_enclosure, device_depth}`
   as Structure properties (keys in `model::keys`), no novo-core change.
