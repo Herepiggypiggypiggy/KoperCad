@@ -112,7 +112,7 @@ impl SizingState {
     }
 
     /// Reads the list file once, when the panel is first shown.
-    fn ensure_loaded(&mut self) {
+    pub(super) fn ensure_loaded(&mut self) {
         if self.loaded {
             return;
         }
