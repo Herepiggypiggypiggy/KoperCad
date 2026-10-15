@@ -183,6 +183,11 @@ const LEGACY_KEYS: &[(&str, &str)] = &[
 pub fn migrate_properties(properties: &mut Properties) -> bool {
     let mut changed = false;
     for (old, new) in LEGACY_KEYS {
+        // A loss written as text with a unit ("15 W") is left for a maker
+        // recipe to read; only plain numbers are renamed here.
+        if *new == keys::POWER_LOSS_W && matches!(properties.get(*old), Some(Value::Text(_))) {
+            continue;
+        }
         if let Some(value) = properties.remove(*old) {
             changed = true;
             properties.entry((*new).to_string()).or_insert(value);

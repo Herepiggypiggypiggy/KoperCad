@@ -84,6 +84,7 @@ mod devices;
 mod diagrams;
 mod export;
 mod io;
+mod labels;
 mod lengths;
 mod order;
 mod page;
@@ -106,6 +107,7 @@ pub use devices::DeviceList;
 pub use diagrams::{CableDiagram, TerminalDiagram};
 pub use export::{CsvOptions, ExportError, save_xlsx, to_csv, xlsx_bytes};
 pub use io::IoList;
+pub use labels::{LABEL_LINES, LabelLayout, Labels, labels_csv};
 pub use order::{function_of, location_of, location_text, tag_cmp};
 pub use page::{Line, Margins, PageLayout, PageSetup, ReportPage, TextBox, layout_page, paginate};
 pub use plugs::PlugList;
@@ -134,6 +136,7 @@ pub fn standard_reports() -> Vec<Box<dyn Report>> {
         Box::new(IoList),
         Box::new(CableSchedule),
         Box::new(PlugList),
+        Box::new(Labels),
     ]
 }
 

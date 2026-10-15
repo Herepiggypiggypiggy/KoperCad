@@ -31,6 +31,7 @@ mod import;
 mod library;
 mod macros;
 mod panel;
+mod recipes;
 mod schema;
 mod search;
 mod sheet;
@@ -68,6 +69,10 @@ pub use macros::{
     PackEntry, STARTER_FOLDER, starter_macros, user_macros_dir,
 };
 pub use panel::{Clearances, Mounting, PanelData, is_panel_number_key, migrate_properties};
+pub use recipes::{
+    ApplyContext, Dim, GENERIC, Login, MakerRecipe, Mapped, Quantity, RECIPES, RecipeReport, Route,
+    Skipped, Verified, local_keys, parse_quantity, recipe_for,
+};
 pub use schema::eng;
 pub use schema::{
     Asset, AssetKind, Classification, ConnectionKind, DataSource, LetThroughPoint, Lifecycle,
