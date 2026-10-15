@@ -139,3 +139,25 @@ fn picking_a_page_leaves_the_cabinet() {
     d.app.show_page(page);
     assert!(!d.app.cabinet_open);
 }
+
+#[test]
+fn a_ghost_is_drawn_but_never_stored() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    let device = novo_layout::model::candidates(project(&d), cab)[0].id;
+    d.app.cabinet.ghost = Some((device, 100.0, 100.0));
+    d.frame();
+    d.frame();
+    assert_eq!(project(&d).all::<CabinetPlacement>().count(), 0);
+    // Without a hovering payload the ghost is cleared again.
+    assert!(d.app.cabinet.ghost.is_none());
+}

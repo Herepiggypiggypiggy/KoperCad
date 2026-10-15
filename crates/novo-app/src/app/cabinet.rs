@@ -37,6 +37,9 @@ pub(super) struct CabinetState {
     fitted: Option<DeviceTag>,
     /// A placed device being dragged, with where it would land.
     drag: Option<Drag>,
+    /// An unplaced device being dragged over the plate, with the snapped
+    /// top left it would land on: drawn as the landing box.
+    pub(super) ghost: Option<(u64, f64, f64)>,
     /// Keys the shell left for the Cabinet this frame (`edit.rotate`,
     /// `edit.delete`).
     pub(super) keys: Vec<String>,
@@ -65,6 +68,7 @@ impl CabinetState {
             preview: None,
             fitted: None,
             drag: None,
+            ghost: None,
             keys: Vec::new(),
         }
     }
@@ -195,6 +199,12 @@ impl NovoApp {
         let shown = shown.map(|mut s| {
             if let (Some(d), None) = (self.cabinet.drag, &self.cabinet.preview) {
                 s.move_to(d.id, d.at.0, d.at.1);
+            }
+            if let (Some((id, x, y)), None) = (self.cabinet.ghost, &self.cabinet.preview)
+                && let Some(c) = cands.iter().find(|c| c.id == id)
+                && !s.placements.iter().any(|p| p.id == id)
+            {
+                s.drop_device(id, c.size, x, y);
             }
             s
         });
@@ -342,18 +352,43 @@ impl NovoApp {
                         );
                         ask = Some(Ask::Drop(*id, x, y));
                     }
-                    // Dragging a placed device.
-                    let hovered = out.hovered.and_then(novo_canvas::cabinet::box_of);
-                    if out.response.drag_started_by(egui::PointerButton::Primary)
-                        && let (Some(id), Some(at)) = (hovered, out.cursor_raw)
-                        && let Some(p) = layout.placements.iter().find(|p| p.id == id)
+                    // The landing box of a device dragged in from the list.
+                    self.cabinet.ghost = None;
+                    if let (Some(id), Some(at)) =
+                        (out.response.dnd_hover_payload::<u64>(), out.cursor_raw)
+                        && let Some(c) = cands.iter().find(|c| c.id == *id)
                     {
-                        let f = p.footprint();
-                        self.cabinet.drag = Some(Drag {
-                            id,
-                            grab: vec2(at.x - f.x as f32, at.y - f.y as f32),
-                            at: (f.x, f.y),
-                        });
+                        let (x, y) = layout.snapped(
+                            f64::from(at.x) - c.size.width / 2.0,
+                            f64::from(at.y) - c.size.height / 2.0,
+                        );
+                        self.cabinet.ghost = Some((*id, x, y));
+                    }
+                    // Dragging a placed device: egui starts a drag a few
+                    // points after the press, so the box is the one under
+                    // the press, not under the pointer now.
+                    let press = ui.input(|i| i.pointer.press_origin());
+                    if out.response.drag_started_by(egui::PointerButton::Primary)
+                        && let Some(press) = press
+                    {
+                        let rect = out.response.rect;
+                        let world = self
+                            .cabinet
+                            .view
+                            .viewport
+                            .screen_to_world(vec2(press.x - rect.min.x, press.y - rect.min.y));
+                        let (wx, wy) = (f64::from(world.x), f64::from(world.y));
+                        if let Some(p) = layout.placements.iter().rev().find(|p| {
+                            let f = p.footprint();
+                            wx >= f.x && wx <= f.right() && wy >= f.y && wy <= f.bottom()
+                        }) {
+                            let f = p.footprint();
+                            self.cabinet.drag = Some(Drag {
+                                id: p.id,
+                                grab: vec2(world.x - f.x as f32, world.y - f.y as f32),
+                                at: (f.x, f.y),
+                            });
+                        }
                     }
                     if let (Some(d), Some(at)) = (self.cabinet.drag.as_mut(), out.cursor_raw) {
                         let (x, y) =
@@ -387,6 +422,7 @@ impl NovoApp {
                     }
                 } else {
                     self.cabinet.drag = None;
+                    self.cabinet.ghost = None;
                     self.cabinet.keys.clear();
                 }
             }
