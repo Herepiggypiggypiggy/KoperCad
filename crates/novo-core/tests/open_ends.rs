@@ -206,3 +206,69 @@ fn moving_between_pages_carries_open_ends() {
     );
     assert_eq!(wire.route, [Point::new(5.0, 30.0)]);
 }
+
+#[test]
+fn an_open_end_must_be_a_finite_position() {
+    let (mut doc, page, a, _) = setup();
+    let depth = doc.undo_depth();
+    for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        for (from, to) in [
+            (
+                Endpoint::pin(a, 1),
+                Endpoint::Free {
+                    at: Point::new(bad, 0.0),
+                },
+            ),
+            (
+                Endpoint::Free {
+                    at: Point::new(0.0, bad),
+                },
+                Endpoint::pin(a, 1),
+            ),
+            (
+                Endpoint::Free {
+                    at: Point::new(bad, bad),
+                },
+                Endpoint::Free {
+                    at: Point::new(1.0, 1.0),
+                },
+            ),
+        ] {
+            let refused = doc.transact("Bad end", |tx| tx.connect_on(page, from, to));
+            assert!(
+                matches!(
+                    refused,
+                    Err(ModelError::NonFinite {
+                        field: "endpoint",
+                        ..
+                    })
+                ),
+                "{refused:?}"
+            );
+        }
+    }
+    assert_eq!(doc.undo_depth(), depth);
+    assert_eq!(doc.project().wires().count(), 0);
+
+    // Moving a good open end to a bad position is refused as well.
+    doc.execute(Command::Connect {
+        from: Endpoint::pin(a, 1),
+        to: Endpoint::Free {
+            at: Point::new(5.0, 5.0),
+        },
+        route: vec![],
+        page: None,
+    })
+    .unwrap();
+    let wire = doc.project().wires().next().unwrap().id;
+    let depth = doc.undo_depth();
+    let refused = doc.transact("Drag", |tx| {
+        tx.update::<Wire>(wire, |w| {
+            w.to = Endpoint::Free {
+                at: Point::new(f64::NAN, 5.0),
+            }
+        })
+    });
+    assert!(refused.is_err());
+    assert_eq!(doc.undo_depth(), depth);
+}

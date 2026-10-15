@@ -204,8 +204,14 @@ impl Record {
             }
             Record::Junction(r) => (!point(&r.position)).then_some("position"),
             Record::Wire(r) => {
+                let free = |e: crate::entity::Endpoint| match e {
+                    crate::entity::Endpoint::Free { at } => !point(&at),
+                    _ => false,
+                };
                 if !r.route.iter().all(point) {
                     Some("route")
+                } else if free(r.from) || free(r.to) {
+                    Some("endpoint")
                 } else if !opt(r.cross_section_mm2) {
                     Some("cross_section_mm2")
                 } else {
