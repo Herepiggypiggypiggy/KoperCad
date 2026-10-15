@@ -66,3 +66,4 @@
 - 2026-10-15: perf: strip_heads grouped terminals pairwise (O(n^2)) on every terminal edit; now stops at the x gap. 3,000-terminal page: build 65 -> 20 ms, apply one moved symbol 43 -> 2.7 ms. New tests/model_perf.rs guards model-page timings.
 - 2026-10-15: open-end ring is a screen-size Handle::ring (ModelStyle::wire_end_cap_px = 4 points), drawn by the view as a thin ring; the flag stays in world units.
 - 2026-10-15: PDF prints the open-end ring from Handle::ring at the style's world radius (tests/open_end.rs).
+- 2026-10-15: perf at 10,000 symbols (release): build 70 ms, one symbol move 12 ms (strip_heads 6 ms: now a grid, no pairwise scan), 10k notes unchanged 2.8 ms, pick 0.003 ms, box select 0.05 ms, wire part 0.55 ms. All guarded in tests/model_perf.rs.

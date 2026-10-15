@@ -33,6 +33,7 @@ mod inter;
 
 use novo_canvas::model::{
     ModelStyle, PageScene, PlaceholderArt, SheetContent, SheetLine, SheetText, SymbolArt,
+    TitleRevisions,
 };
 use novo_canvas::{Anchor, Color, ItemId, Primitive, Shape, Stroke, Vec2};
 use novo_core::{AnyId, Page, PageId, PageKind, Project, SymbolId, SymbolRole, TextContent};
@@ -71,6 +72,13 @@ pub struct PdfOptions {
     /// Text next to symbols, by page: the cross references the canvas
     /// shows (novo-xref's `labels_on_page`). Empty draws none.
     pub notes: BTreeMap<PageId, Vec<SymbolNote>>,
+    /// The revision row of each page's title block (docs/DESIGN.md §7),
+    /// worked out by the caller from the issued revisions. A page without
+    /// an entry prints the project's revision properties.
+    pub title_revisions: BTreeMap<PageId, TitleRevisions>,
+    /// Pages with changes since the latest revision: their bookmark is
+    /// marked with a dot (docs/DESIGN.md §5).
+    pub changed_pages: BTreeSet<PageId>,
 }
 
 impl Default for PdfOptions {
@@ -82,6 +90,8 @@ impl Default for PdfOptions {
             links: true,
             title: None,
             notes: BTreeMap::new(),
+            title_revisions: BTreeMap::new(),
+            changed_pages: BTreeSet::new(),
         }
     }
 }
@@ -316,6 +326,9 @@ pub fn export_pdf_with_reports(
             if let Some(notes) = options.notes.get(&page.id) {
                 scene.set_notes(project, notes.iter().cloned(), art);
             }
+            if let Some(revisions) = options.title_revisions.get(&page.id) {
+                scene.set_revisions(project, Some(revisions.clone()));
+            }
             if let Some(number) = sheet.number {
                 let layout = sheet
                     .generated
@@ -431,7 +444,7 @@ pub fn export_pdf_with_reports(
         for (i, sheet) in pages.iter().enumerate() {
             let mut item = pdf.outline_item(items[i]);
             item.parent(outline_id)
-                .title(TextStr(&sheet_bookmark(sheet)));
+                .title(TextStr(&bookmark_text(sheet, options)));
             if i > 0 {
                 item.prev(items[i - 1]);
             }
@@ -501,6 +514,17 @@ pub fn sheet_content(name: &str, number: (usize, usize), layout: &PageLayout) ->
 /// `20b  Terminal diagram · =A1+CAB-X1`: the sheet name, the page title,
 /// then what the sheet shows, so a reflowed sheet is found by name
 /// (docs/DESIGN.md, generated pages under pinned flow).
+/// The bookmark of a sheet: its title, with a dot in front when its page
+/// has changes since the latest revision.
+fn bookmark_text(sheet: &Sheet, options: &PdfOptions) -> String {
+    let title = sheet_bookmark(sheet);
+    if options.changed_pages.contains(&sheet.page.id) {
+        format!("● {title}")
+    } else {
+        title
+    }
+}
+
 fn sheet_bookmark(sheet: &Sheet) -> String {
     let mut title = sheet.name.clone();
     let what: Vec<&str> = [sheet.page.title.as_str(), sheet.section.as_str()]

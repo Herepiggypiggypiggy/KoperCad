@@ -104,5 +104,13 @@ claude/data-model-amzaxu origin/main`, then new PR for new work.
   when not Auto) and `Command::SetTerminalPe { terminals, mode }` (one undo step). The
   model stores the choice only; novo-terminals applies the PE rule to `Auto` terminals and
   changes `kind` and the symbol with a forced toggle.
+- Cabinet layout: `Structure.plate: Option<MountingPlate { width, height, margin }>` (enclosures
+  only; file field only when set), entities `Rail` (`structure`, `x`, `y`, `length`, `kind`
+  DinRail | Duct) and `CabinetPlacement` (`device`, `structure`, `x`, `y`, `rotated`, `rail`,
+  `rail_offset`; at most one per device). Commands `SetPlateSize`, `AddRail`, `PlaceDevice`
+  (places or moves; creates nothing when it moves), `RotatePlacement`, `RemovePlacement`;
+  `place all` = one `Command::Batch` of `PlaceDevice`. Deleting a device or enclosure deletes
+  its placements; deleting a rail leaves the devices on the plate, off the rail. A plate with
+  rails or devices on it cannot be removed. Clearances live in `novo-layout`, not the model.
 - PRs get squash-merged: rebase follow-ups with `git rebase --onto origin/main <old-head>`.
 - Commit trailers: Co-Authored-By Claude line + Claude-Session link (see git log).

@@ -727,7 +727,11 @@ impl SchematicView {
                 .viewport
                 .screen_to_world(Vec2::new(local.x, local.y));
             self.editor.hover(document, page, point(w), tolerance);
-            if self.editor.begin_drag() {
+            if self.editor.begin_drag()
+                || self
+                    .editor
+                    .begin_open_end(document, page, point(w), tolerance, true)
+            {
                 self.canvas.selection.clear();
                 // The canvas started a selection band on the same press; a
                 // wire drag must not also box-select on release.
