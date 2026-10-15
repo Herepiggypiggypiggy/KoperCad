@@ -1841,46 +1841,6 @@ fn the_preferences_window_sets_the_auto_connection_mode() {
 }
 
 #[test]
-fn the_title_block_prints_the_set_revision_after_an_issue() {
-    use novo_canvas::model::item_id;
-    let dir = tempfile::tempdir().unwrap();
-    let mut d = Drive::new(&dir.path().join("untitled"));
-    let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::NewProject);
-    d.frame();
-    let page = d.app.current_page.expect("a page is shown");
-    let texts = |d: &Drive| -> Vec<String> {
-        let view = d.app.canvas.schematic_ref().unwrap();
-        let scene = view.scene().unwrap().scene();
-        scene
-            .get(item_id(page))
-            .unwrap()
-            .labels
-            .iter()
-            .map(|l| l.text.clone())
-            .collect()
-    };
-    assert!(!texts(&d).iter().any(|t| t.contains("set A")));
-    let doc = d.app.backend.document_mut().unwrap();
-    let outcome = doc
-        .execute(novo_core::Command::IssueRevision {
-            index: "A".into(),
-            date: "2026-10-15".into(),
-            author: "TV".into(),
-            description: String::new(),
-        })
-        .unwrap();
-    d.app.changed_outside_canvas(&outcome.changes);
-    d.frame();
-    d.frame();
-    assert!(
-        texts(&d).iter().any(|t| t == "(set A)"),
-        "a page without a kept snapshot shows only the set: {:?}",
-        texts(&d)
-    );
-}
-
-#[test]
 fn the_issue_revision_window_proposes_everything_and_issues_in_one_step() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
@@ -1930,6 +1890,46 @@ fn the_issue_revision_window_proposes_everything_and_issues_in_one_step() {
     d.app.run(&ctx, Action::Undo);
     d.app.run(&ctx, Action::Undo);
     d.frame();
+}
+
+#[test]
+fn the_title_block_prints_the_set_revision_after_an_issue() {
+    use novo_canvas::model::item_id;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let page = d.app.current_page.expect("a page is shown");
+    let texts = |d: &Drive| -> Vec<String> {
+        let view = d.app.canvas.schematic_ref().unwrap();
+        let scene = view.scene().unwrap().scene();
+        scene
+            .get(item_id(page))
+            .unwrap()
+            .labels
+            .iter()
+            .map(|l| l.text.clone())
+            .collect()
+    };
+    assert!(!texts(&d).iter().any(|t| t.contains("set A")));
+    let doc = d.app.backend.document_mut().unwrap();
+    let outcome = doc
+        .execute(novo_core::Command::IssueRevision {
+            index: "A".into(),
+            date: "2026-10-15".into(),
+            author: "TV".into(),
+            description: String::new(),
+        })
+        .unwrap();
+    d.app.changed_outside_canvas(&outcome.changes);
+    d.frame();
+    d.frame();
+    assert!(
+        texts(&d).iter().any(|t| t == "(set A)"),
+        "a page without a kept snapshot shows only the set: {:?}",
+        texts(&d)
+    );
 }
 
 #[test]
@@ -2240,4 +2240,47 @@ fn the_moving_preference_and_shift_choose_whether_wires_go_along() {
     d.frame();
     assert!(carry(&mut d));
     assert!(hint(&mut d).contains("Shift: leave the wires"));
+}
+
+#[test]
+fn tab_and_q_steer_a_wire_in_progress_from_the_keyboard() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let a = d.place("mcb3", 80.0, 60.0);
+    let b = d.place("mcb3", 160.0, 60.0);
+    let wires = d.doc().project().wires().count();
+
+    // Start on a pin of A, then hold the pointer over the middle of B.
+    d.app.run_command(&ctx, "tool.connect", None);
+    let start = d.pin(a, true);
+    d.click(start);
+    let page = d.page();
+    let origin = d.doc().project().symbol(b).unwrap().placement.origin;
+    let body = Point::new(origin.x + 4.0, origin.y + 4.0);
+    {
+        let app = &mut d.app;
+        let view = app.canvas.schematic().expect("the editor canvas");
+        let doc = app.backend.document_mut().expect("a project");
+        view.editor.hover(doc, page, body, TOL);
+    }
+    assert!(d.app.canvas.schematic_ref().unwrap().editor.is_wiring());
+
+    // The keymap hands Q and Tab to the wire while it is in progress.
+    d.key(egui::Key::Tab, egui::Modifiers::NONE);
+    assert!(
+        matches!(
+            d.app.canvas.schematic_ref().unwrap().editor.target(),
+            Some(novo_editor::geometry::Target::Endpoint(
+                novo_core::Endpoint::Pin { symbol, .. },
+                _
+            )) if symbol == b
+        ),
+        "Tab aims at a pin of the part under the pointer"
+    );
+    d.key(egui::Key::Q, egui::Modifiers::NONE);
+    assert_eq!(d.doc().project().wires().count(), wires + 1);
+    assert!(!d.app.wb.field.is_open(), "Q did not open the part search");
 }
