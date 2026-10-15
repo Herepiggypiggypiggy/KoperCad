@@ -197,17 +197,17 @@ not restyle them.
 
 | Widget | Job |
 | --- | --- |
-| `button`, `button_ghost`, `button_primary`, `button_danger` | Actions. Ghost has no frame until hover (toolbars, row actions) |
-| `icon_button` | Square, 24 pt, icon only, tooltip required |
-| `segment` | Two to four exclusive options in a pill track |
+| `ui.button`, `ghost_button`, `primary_button`, `danger_button` | Actions. Ghost has no frame until hover (toolbars, row actions); primary is the copper fill, one per dialog |
+| `icon_button`, `icon_toggle`, `tool_button` | Icon only, tooltip required; a toggle fills with the copper wash when on; `tool_button` is the dock's |
+| `segmented` (`segment` for one option) | Two to four exclusive options in a pill track |
 | `tabs` | Switch a panel's content: text with a 2 pt accent underline under the current one |
 | `text_field`, `search_field`, `number_field` | Input on `sunken` with a hairline; search has the magnifier and a clear button; number fields right align and show the unit |
 | `select`, `toggle`, `checkbox`, `radio`, `slider` | As egui, restyled to the states above |
 | `section_label` | Opens a panel section |
-| `row` | List row: 24 pt, optional leading icon, title, trailing meta in `caption`; hover, selected and drag states |
+| `row` | List row: control height + 1 pt, optional leading icon, title, trailing meta in `caption`; hover, selected and drag states |
 | `table` | Header in `caption` caps on `panel`, 1 hairline per row, no zebra, numbers right aligned, sticky header, the selected row `accent.wash` |
 | `kbd` | A keycap: `radius::XS`, `surface.control`, `mono`; used for every shortcut hint |
-| `chip`, `status_pill` | Compact value or state: filter, count, "No issues" |
+| `chip`, `issue_pill` | Compact value or state: filter, count, "No issues" |
 | `banner` | Inline status in a panel: status icon, one sentence, optional action, status wash |
 | `toast` | Transient result at the bottom centre, stacks upward, never over the dock |
 | `menu`, `menu_item` | Rows with icon, label, right-aligned `kbd`; section labels between groups |
