@@ -11,8 +11,12 @@ use crate::table::{Cell, Column, ReportOutput, Section};
 /// their titles, structure and kind. A generated page lists each of its
 /// sheets (`20a`, `20b`, ...) with what the sheet shows (`Terminals ·
 /// =A1+CAB-X1`), as the PDF bookmarks do (DESIGN.md §8). A generated page
-/// of a report this crate does not know, and the contents page itself, are
-/// listed as one page.
+/// of an unknown report, and the contents page itself, are listed as one
+/// page. "Known" differs by path: inside [`LiveReports`](crate::LiveReports)
+/// it is every registered report, while a standalone
+/// [`Report::generate`] only knows [`crate::standard_reports`], so a
+/// report registered on top of those is listed per sheet live and as one
+/// page standalone.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct TableOfContents;
 
