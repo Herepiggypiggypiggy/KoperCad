@@ -1043,6 +1043,7 @@ impl Editor {
             Tool::Move(m) => {
                 let delta = at - m.from;
                 let grid = self.grid;
+                let open_before = edit::open_end_count(doc.project());
                 let result = doc.transact("Move", |tx| {
                     if delta != Point::ZERO {
                         let how = Transform::Move(delta);
@@ -1071,6 +1072,14 @@ impl Editor {
                 let r = self.finish(result.map(|(_, c)| c), None);
                 if r == Clicked::Edited {
                     self.propose(doc, &edit::symbols_in(&m.ids));
+                    let left = edit::open_end_count(doc.project()).saturating_sub(open_before);
+                    if left > 0 {
+                        self.notice = Some(if left == 1 {
+                            "1 wire end left open".into()
+                        } else {
+                            format!("{left} wire ends left open")
+                        });
+                    }
                 }
                 self.select = Some(m.ids);
                 r
@@ -2237,12 +2246,23 @@ impl Editor {
                     .into()
             }
             Tool::Move(m) => self.link_hint.clone().unwrap_or_else(|| {
+                let wires = if m.carry {
+                    String::new()
+                } else {
+                    match edit::detaching_ends(doc.project(), &m.ids) {
+                        0 => String::new(),
+                        1 => " · 1 wire end stays behind open".into(),
+                        n => format!(" · {n} wire ends stay behind open"),
+                    }
+                };
                 let shift = if m.carry {
                     "Shift: leave the wires"
                 } else {
                     "Shift: take the wires along"
                 };
-                format!("Click to drop · R rotate · X mirror · {shift} · Esc cancels the move")
+                format!(
+                    "Click to drop · R rotate · X mirror · {shift} · Esc cancels the move{wires}"
+                )
             }),
         };
         let text = if self.proposals.is_empty() {
