@@ -554,13 +554,13 @@ Acceptance:
     end cap and the Unconnected flag, one new corner at most, and a
     `wire.open` warning in Issues. Dragging the cap onto a pin connects it
     and clears the flag and the warning. Undo removes the whole wire.
+15. Free pins show a ring and connected pins a filled dot at every zoom; a
+    wire against its pins and the background meets 3:1.
 16. Connect tool, double click on empty canvas, click, double click: a
     wire open at both ends, two caps and two flags, in both modes, drawn
     in the mode's way. A double click on a pin starts connected. A single
     click on empty canvas starts nothing. Dragging either cap onto a pin
     connects it.
-15. Free pins show a ring and connected pins a filled dot at every zoom; a
-    wire against its pins and the background meets 3:1.
 
 Keys match the logical character, not the physical position, so `?`,
 Ctrl+Z and Ctrl+Y work on Dutch, German (QWERTZ) and US layouts alike.
