@@ -8,9 +8,9 @@
 //! tool, then the selection.
 
 use novo_core::{
-    AnyId, ChangeSet, DeviceId, DeviceTag, Document, Endpoint, PageId, Placement, Point, Project,
-    Rotation, SymbolId, SymbolInstance, SymbolKey, SymbolRole, TextAnchor, TextContent, TextId,
-    TextPlacement, WireId,
+    AnyId, ChangeSet, DeviceId, DeviceTag, Direction, Document, Endpoint, PageId, Placement, Point,
+    Project, Rotation, SymbolId, SymbolInstance, SymbolKey, SymbolRole, TextAnchor, TextContent,
+    TextId, TextPlacement, WireId,
 };
 
 use crate::catalog::{Catalog, SymbolClass, classify, model_groups, model_pins};
@@ -193,6 +193,68 @@ pub struct Preview {
     /// Lines: the stretch of another wire the next line would lie over, to
     /// tint; `wire` is then kept up to the last legal point (DESIGN.md §4).
     pub blocked: Vec<(Point, Point)>,
+    /// Corners: the corner or T piece the next click places, with the arms
+    /// it would have (DESIGN.md §4 "Wiring modes"). R flips the elbow.
+    pub piece: Option<WirePiece>,
+}
+
+/// A corner (two arms) or T (three arms) piece of a wire in progress.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WirePiece {
+    pub at: Point,
+    pub arms: Vec<Direction>,
+}
+
+/// The direction of the axis-parallel stretch from `a` towards `b`.
+fn arm(a: Point, b: Point) -> Option<Direction> {
+    if a.approx_eq(b, EPS) {
+        None
+    } else if (a.x - b.x).abs() < EPS {
+        Some(if b.y > a.y {
+            Direction::Down
+        } else {
+            Direction::Up
+        })
+    } else if (a.y - b.y).abs() < EPS {
+        Some(if b.x > a.x {
+            Direction::Right
+        } else {
+            Direction::Left
+        })
+    } else {
+        None
+    }
+}
+
+/// The piece at the last bend of `path` (start, bends, pointer), or the T
+/// piece at the pointer when it is on another wire: the branch points back
+/// the way the wire came, the other two arms run along the wire joined.
+fn pending_piece(
+    project: &Project,
+    page: PageId,
+    path: &[Point],
+    on: Option<Target>,
+) -> Option<WirePiece> {
+    let n = path.len();
+    if let Some(Target::Wire(w, at)) = on {
+        let branch = arm(at, *path.get(n.checked_sub(2)?)?)?;
+        let (_, seg) = geometry::wires_through(project, page, at)
+            .into_iter()
+            .find(|(id, _)| *id == w)?;
+        let pts = geometry::wire_points(project, w)?;
+        let (a, b) = (arm(at, pts[seg])?, arm(at, pts[seg + 1])?);
+        return Some(WirePiece {
+            at,
+            arms: vec![branch, a, b],
+        });
+    }
+    if n < 3 {
+        return None;
+    }
+    let (prev, at, next) = (path[n - 3], path[n - 2], path[n - 1]);
+    let arms = vec![arm(at, prev)?, arm(at, next)?];
+    // Two arms on one line are a straight stretch, not a corner.
+    (arms[0].vector() != -arms[1].vector()).then_some(WirePiece { at, arms })
 }
 
 /// The pin a target is, if it is one.
@@ -1970,6 +2032,7 @@ impl Editor {
                         let bends = route_through(a, from, &corners, cursor, to);
                         preview.wire.extend(bends);
                         preview.wire.push(cursor);
+                        preview.piece = pending_piece(project, page, &preview.wire, self.target);
                     }
                 }
             }
