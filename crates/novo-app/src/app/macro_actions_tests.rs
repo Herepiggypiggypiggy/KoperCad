@@ -69,3 +69,46 @@ fn a_saved_selection_is_previewed_and_placed_with_the_next_free_tag() {
     assert!(!d.app.wb.macro_place.open);
     assert_eq!(d.app.selection().len(), 1, "the placed symbol is selected");
 }
+
+#[test]
+fn replace_overwrites_the_macro_save_refused_even_with_a_slash_in_the_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let library = MacroLibrary::new(dir.path().join("Macros"), "user");
+    d.app.wb.macro_place = PlaceWindow::new(Some(library.clone()));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, crate::actions::Action::NewProject);
+    d.frame();
+    let breaker = d.place("mcb3", 80.0, 48.0);
+    d.frame();
+    d.app
+        .canvas
+        .schematic()
+        .unwrap()
+        .select_ids(&[AnyId::Symbol(breaker)]);
+
+    // An unrelated macro in a folder, and ours with a slash in its name.
+    d.app.run_command(&ctx, "macro.save", Some("sub/x"));
+    let ours = d.app.wb.macro_save.take().unwrap();
+    d.app.submit_macro_save(ours);
+    let other = {
+        let mut file = library.load("sub_x.kcmacro").unwrap();
+        file.name = "x".into();
+        file.definition.name = "x".into();
+        file.description = "unrelated".into();
+        file
+    };
+    library.save("sub", &other).unwrap();
+
+    d.app.run_command(&ctx, "macro.save", Some("sub/x"));
+    let again = d.app.wb.macro_save.take().unwrap();
+    d.app.submit_macro_save(again);
+    let refused = d.app.wb.macro_save.take().unwrap();
+    assert!(refused.exists);
+    d.app.submit_macro_replace(refused);
+    assert!(d.app.wb.macro_save.is_none());
+    assert_eq!(library.load("sub_x.kcmacro").unwrap().revision, 2);
+    let untouched = library.load("sub/x.kcmacro").unwrap();
+    assert_eq!(untouched.description, "unrelated");
+    assert_eq!(untouched.revision, 1);
+}

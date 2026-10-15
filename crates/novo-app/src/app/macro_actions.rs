@@ -220,7 +220,11 @@ impl NovoApp {
                 {
                     save = true;
                 }
-                if draft.exists && ui.button("Replace it").clicked() {
+                if draft.exists
+                    && ui
+                        .button(format!("Replace “{}”", draft.name.trim()))
+                        .clicked()
+                {
                     replace = true;
                 }
                 ui.weak("Enter saves · Esc cancels");
@@ -288,7 +292,15 @@ impl NovoApp {
             .ok_or_else(|| plain("There is no macro folder on this computer".into()))?;
         let file = MacroFile::new(definition).with_author(self.settings.initials.clone());
         if replace {
-            let path = format!("{}.{}", file.name, novo_parts::MACRO_EXTENSION);
+            // The file `save` refused is the top-level macro of this name;
+            // its path comes from the library, not from the raw name, which
+            // `save` cleans (a `/` becomes `_`).
+            let (entries, _) = library.list();
+            let path = entries
+                .into_iter()
+                .find(|e| e.folder.is_empty() && e.name == file.name)
+                .map(|e| e.path)
+                .ok_or_else(|| plain(format!("No macro called {name} to replace")))?;
             library
                 .replace(&path, &file)
                 .map_err(|e| plain(e.to_string()))?;
@@ -326,8 +338,12 @@ impl NovoApp {
             return;
         }
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            self.wb.macro_place.open = false;
-            return;
+            // Esc clears the search first, then closes the window.
+            if self.wb.macro_place.query.is_empty() {
+                self.wb.macro_place.open = false;
+                return;
+            }
+            self.wb.macro_place.query.clear();
         }
         let page = self.current_page;
         // Recompute the preview when the pick, the options or the drawing
