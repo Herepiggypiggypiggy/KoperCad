@@ -55,6 +55,9 @@ use std::time::{Duration, Instant, SystemTime};
 use eframe::egui;
 
 use crate::actions::Action;
+
+/// Hover text of the bulk-edit exports (the data to edit, not the reports).
+const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel. Export only: bringing the edited file back comes with the import dialog. The generated reports are under Export all reports to Excel.";
 use novo_core::{Aspect, Command, DeviceTag, ModelError, Outcome, PageId, PageKind};
 use pages::{FormKind, PageForm, PageView};
 
@@ -967,12 +970,22 @@ impl NovoApp {
             ui.close();
         }
         let sheets = egui::Button::new("Export for bulk edit (.xlsx)");
-        if ui.add_enabled(self.is_open(), sheets).clicked() {
+        if ui
+            .add_enabled(self.is_open(), sheets)
+            .on_hover_text(SHEETS_HINT)
+            .on_disabled_hover_text("Open a project first")
+            .clicked()
+        {
             self.export_spreadsheet();
             ui.close();
         }
         let csv = egui::Button::new("Export for bulk edit (CSV files)");
-        if ui.add_enabled(self.is_open(), csv).clicked() {
+        if ui
+            .add_enabled(self.is_open(), csv)
+            .on_hover_text(SHEETS_HINT)
+            .on_disabled_hover_text("Open a project first")
+            .clicked()
+        {
             self.export_spreadsheet_csv();
             ui.close();
         }
