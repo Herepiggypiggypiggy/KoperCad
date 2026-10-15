@@ -75,6 +75,7 @@ pub fn take_commands(
                 key,
                 pressed: true,
                 modifiers,
+                repeat,
                 ..
             } = event
             else {
@@ -85,7 +86,10 @@ pub fn take_commands(
             };
             match keymap.resolve(chord, focus) {
                 Some(command) if wants(command) => {
-                    fired.push(command);
+                    // A held Shift+W would flip the mode on every repeat.
+                    if !(*repeat && command == "wire.mode") {
+                        fired.push(command);
+                    }
                     typed_key |= chord.types_text();
                     false
                 }

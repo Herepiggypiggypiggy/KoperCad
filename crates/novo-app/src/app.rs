@@ -676,6 +676,7 @@ impl NovoApp {
                 self.outline_flyout(&ctx, canvas_rect, &mut picked);
             }
             self.hud(&ctx, canvas_rect);
+            self.sync_wiring_mode();
             self.tool_dock(&ctx, canvas_rect);
         }
         self.toasts(&ctx, canvas_rect);

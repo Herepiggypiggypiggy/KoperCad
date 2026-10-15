@@ -15,6 +15,7 @@ use novo_canvas::model::item_id;
 use novo_checks::Problem;
 use novo_core::{AnyId, ChangeSet, DeviceId, Document, SymbolId};
 use novo_editor::EditorKey;
+use novo_editor::tool::WiringMode;
 use novo_symbols::Library;
 use novo_workflow::commands::Context;
 use novo_workflow::keymap::{FAVOURITE_COMMANDS, Focus, Keymap};
@@ -173,6 +174,7 @@ const APP_COMMANDS: &[&str] = &[
     "plc.add_card",
     "plc.to_plc",
     "plc.renumber_io",
+    "wire.mode",
 ];
 
 /// Whether the app can run a command now (not "comes later").
@@ -422,6 +424,13 @@ impl NovoApp {
             "check.problems" => self.show_issues(false),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),
+            "wire.mode" => {
+                let mode = match self.settings.wiring_mode() {
+                    WiringMode::Corners => WiringMode::Lines,
+                    WiringMode::Lines => WiringMode::Corners,
+                };
+                self.set_wiring_mode(mode, false);
+            }
             "export.pdf" => {
                 self.export_pdf();
             }

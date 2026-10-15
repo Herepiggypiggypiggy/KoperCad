@@ -1133,3 +1133,60 @@ fn the_tool_dock_switches_tools_and_steps_aside_for_a_drag() {
     assert!(matches!(tool(&d), Tool::Select), "{:?}", tool(&d));
     assert!(centred(dock()), "back once the gesture ends");
 }
+
+#[test]
+fn shift_w_switches_the_wiring_mode_and_the_setting_keeps_it() {
+    use novo_editor::tool::WiringMode;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let mode = |d: &mut Drive| d.app.canvas.schematic().unwrap().editor.wire_mode();
+    assert_eq!(mode(&mut d), WiringMode::Corners, "Corners is the default");
+
+    let shift = egui::Modifiers::SHIFT;
+    d.key(egui::Key::W, shift);
+    d.frame();
+    assert_eq!(mode(&mut d), WiringMode::Lines);
+    assert_eq!(d.app.settings().wiring_mode(), WiringMode::Lines);
+
+    // A held key repeats; only the first press counts.
+    d.frame_with(vec![egui::Event::Key {
+        key: egui::Key::W,
+        physical_key: None,
+        pressed: true,
+        repeat: true,
+        modifiers: shift,
+    }]);
+    d.frame();
+    assert_eq!(mode(&mut d), WiringMode::Lines, "a repeat does not flip it");
+    d.frame_with(vec![egui::Event::Key {
+        key: egui::Key::W,
+        physical_key: None,
+        pressed: false,
+        repeat: false,
+        modifiers: shift,
+    }]);
+
+    d.key(egui::Key::W, shift);
+    d.frame();
+    assert_eq!(mode(&mut d), WiringMode::Corners);
+
+    // A new session starts in the saved mode.
+    let mut settings = Settings::default();
+    settings.set_wiring_mode(WiringMode::Lines);
+    let mut again = NovoApp::with_settings(
+        Box::new(StorageBackend::with_untitled_dir(dir.path().join("u2"))),
+        Box::new(EditorCanvas::default()),
+        settings,
+    );
+    let ctx2 = egui::Context::default();
+    novo_theme::apply(&ctx2);
+    let mut out = ctx2.run_ui(egui::RawInput::default(), |ui| again.show(ui));
+    out.textures_delta.clear();
+    assert_eq!(
+        again.canvas.schematic().map(|v| v.editor.wire_mode()),
+        Some(WiringMode::Lines)
+    );
+}

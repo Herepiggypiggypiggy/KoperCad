@@ -5,6 +5,7 @@
 
 use eframe::egui;
 use novo_editor::Tool;
+use novo_editor::tool::WiringMode;
 use novo_theme::{icons, widgets};
 
 use super::NovoApp;
@@ -24,6 +25,36 @@ const NEAR: f32 = 32.0;
 const MARGIN: f32 = 12.0;
 
 impl NovoApp {
+    /// Chooses the wiring mode: remembered for this person, applied to the
+    /// editor, and named in the status line. `begin` also starts Connect.
+    pub(super) fn set_wiring_mode(&mut self, mode: WiringMode, begin: bool) {
+        self.settings.set_wiring_mode(mode);
+        if let Some(view) = self.canvas.schematic() {
+            view.editor.set_wire_mode(mode);
+            if begin {
+                view.editor.begin_wire();
+            }
+        }
+        if !begin {
+            let name = match mode {
+                WiringMode::Corners => "Corners",
+                WiringMode::Lines => "Lines",
+            };
+            self.message(super::Level::Info, format!("Wiring mode: {name}"));
+        }
+    }
+
+    /// Keeps the editor on the person's wiring mode (the setting is read
+    /// on start and changes only here).
+    pub(super) fn sync_wiring_mode(&mut self) {
+        let mode = self.settings.wiring_mode();
+        if let Some(view) = self.canvas.schematic()
+            && view.editor.wire_mode() != mode
+        {
+            view.editor.set_wire_mode(mode);
+        }
+    }
+
     pub(super) fn tool_dock(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
         // With nothing in hand, a selected coil or contact names where the
         // rest of its device is drawn.
@@ -87,6 +118,8 @@ impl NovoApp {
             )
         };
 
+        let chosen = self.settings.wiring_mode();
+        let mut chip = None;
         let mut picked = None;
         let area = egui::Area::new(egui::Id::new("tool_dock"))
             .order(egui::Order::Middle)
@@ -98,7 +131,11 @@ impl NovoApp {
                         for (tool, icon, tip) in [
                             (DockTool::Select, icons::tool::SELECT, "Select · Esc"),
                             (DockTool::Place, icons::tool::PLACE, "Place symbol · I"),
-                            (DockTool::Connect, icons::tool::CONNECT, "Connect · W"),
+                            (
+                                DockTool::Connect,
+                                icons::tool::CONNECT,
+                                "Connect · W · Shift+W switches",
+                            ),
                         ] {
                             let response = widgets::tool_button(ui, icon, active == tool, tip);
                             if response.clicked() {
@@ -106,6 +143,25 @@ impl NovoApp {
                             }
                             // The dock never keeps the keyboard: keys stay
                             // with the drawing.
+                            response.surrender_focus();
+                        }
+                        // The wiring mode: always there, faint while another
+                        // tool is active; a click connects in that mode.
+                        for (mode, label) in [
+                            (WiringMode::Corners, "Corners"),
+                            (WiringMode::Lines, "Lines"),
+                        ] {
+                            let mut text = egui::RichText::new(label).small();
+                            if active != DockTool::Connect {
+                                text = text.weak();
+                            }
+                            let selected = active == DockTool::Connect && mode == chosen;
+                            let response = ui
+                                .selectable_label(selected, text)
+                                .on_hover_text("Wiring mode · Shift+W switches");
+                            if response.clicked() {
+                                chip = Some(mode);
+                            }
                             response.surrender_focus();
                         }
                         ui.add_enabled_ui(false, |ui| {
@@ -126,6 +182,9 @@ impl NovoApp {
             });
         self.wb.dock_size = area.response.rect.size();
 
+        if let Some(mode) = chip {
+            self.set_wiring_mode(mode, true);
+        }
         match picked {
             Some(DockTool::Select) => {
                 if let Some(view) = self.canvas.schematic() {
