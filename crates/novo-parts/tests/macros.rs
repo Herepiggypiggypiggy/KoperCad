@@ -181,3 +181,36 @@ fn the_user_folder_is_in_the_profile() {
         assert!(dir.ends_with("Macros") || dir.ends_with("macros"));
     }
 }
+
+#[test]
+fn unknown_fields_survive_a_round_trip() {
+    let (d, lib) = lib();
+    let mut value: serde_json::Value = serde_json::from_str(&file("Future").to_json()).unwrap();
+    value["cabinet"] = serde_json::json!({"width_mm": 120});
+    let src = d.path().join("future.kcmacro");
+    std::fs::write(&src, value.to_string()).unwrap();
+    let r = lib.import(&src, "", OnConflict::Skip).unwrap();
+    let Imported::Added(path) = &r[0] else {
+        panic!()
+    };
+    let out = d.path().join("out.kcmacro");
+    lib.export(path, &out).unwrap();
+    let back: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(out).unwrap()).unwrap();
+    assert_eq!(back["cabinet"]["width_mm"], 120);
+}
+
+#[test]
+fn trash_and_restore() {
+    let (_d, lib) = lib();
+    let p = lib.save("Motors", &file("DOL")).unwrap();
+    let t = lib.trash(&p).unwrap();
+    assert_eq!(t, ".trash/Motors - DOL.kcmacro");
+    assert!(lib.list().0.is_empty());
+    assert!(lib.folders().is_empty() || lib.folders() == vec!["Motors"]);
+    assert_eq!(lib.trashed(), vec![t.clone()]);
+    let back = lib.restore(&t, "Motors").unwrap();
+    assert_eq!(back, "Motors/DOL.kcmacro");
+    assert!(lib.trashed().is_empty());
+    assert_eq!(lib.list().0.len(), 1);
+}

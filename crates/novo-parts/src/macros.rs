@@ -85,6 +85,10 @@ pub struct MacroFile {
     #[serde(default = "first_revision")]
     pub revision: u32,
     pub definition: BlockDefinition,
+    /// Fields this version does not know (later additions such as `parts`
+    /// or `cabinet`): kept as read and written back unchanged.
+    #[serde(flatten)]
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 fn first_revision() -> u32 {
@@ -102,6 +106,7 @@ impl MacroFile {
             tags: Vec::new(),
             revision: 1,
             definition,
+            extra: Default::default(),
         }
     }
 
@@ -263,6 +268,9 @@ impl MacroLibrary {
         for item in read.flatten() {
             let path = item.path();
             let name = item.file_name().to_string_lossy().into_owned();
+            if name.starts_with('.') {
+                continue;
+            }
             if path.is_dir() {
                 let sub = join(folder, &name);
                 self.walk(&path, &sub, out, problems);
@@ -296,7 +304,7 @@ impl MacroLibrary {
         fn go(dir: &Path, prefix: &str, out: &mut BTreeSet<String>) {
             let Ok(read) = fs::read_dir(dir) else { return };
             for item in read.flatten() {
-                if item.path().is_dir() {
+                if item.path().is_dir() && !item.file_name().to_string_lossy().starts_with('.') {
                     let name = join(prefix, &item.file_name().to_string_lossy());
                     out.insert(name.clone());
                     go(&item.path(), &name, out);
@@ -404,12 +412,74 @@ impl MacroLibrary {
         Ok(new_path)
     }
 
+    /// Removes a macro for good. [`MacroLibrary::trash`] is the gentler way.
     pub fn delete(&self, path: &str) -> Result<()> {
         let full = self.resolve(path)?;
         fs::remove_file(&full).map_err(|e| match e.kind() {
             io::ErrorKind::NotFound => MacroError::NotFound(path.into()),
             _ => io_err(&full, e),
         })
+    }
+
+    /// Moves a macro into the library's hidden `.trash` folder, so a wrong
+    /// delete can be undone with [`MacroLibrary::restore`]. Returns the
+    /// trash path.
+    pub fn trash(&self, path: &str) -> Result<String> {
+        let full = self.resolve(path)?;
+        if !full.is_file() {
+            return Err(MacroError::NotFound(path.into()));
+        }
+        let stem = path
+            .trim_end_matches(&format!(".{MACRO_EXTENSION}"))
+            .replace('/', " - ");
+        let mut n = 1;
+        let slot = loop {
+            let name = if n == 1 {
+                format!("{stem}.{MACRO_EXTENSION}")
+            } else {
+                format!("{stem} {n}.{MACRO_EXTENSION}")
+            };
+            if !self.root.join(".trash").join(&name).exists() {
+                break name;
+            }
+            n += 1;
+        };
+        let to = self.root.join(".trash").join(&slot);
+        make_parent(&to)?;
+        fs::rename(&full, &to).map_err(|e| io_err(&full, e))?;
+        Ok(format!(".trash/{slot}"))
+    }
+
+    /// Macros in the trash, as library paths starting `.trash/`.
+    pub fn trashed(&self) -> Vec<String> {
+        let Ok(read) = fs::read_dir(self.root.join(".trash")) else {
+            return Vec::new();
+        };
+        let mut out: Vec<String> = read
+            .flatten()
+            .filter(|i| has_extension(&i.path(), MACRO_EXTENSION))
+            .map(|i| format!(".trash/{}", i.file_name().to_string_lossy()))
+            .collect();
+        out.sort();
+        out
+    }
+
+    /// Puts a trashed macro back into `folder`. Returns its new path.
+    pub fn restore(&self, trash_path: &str, folder: &str) -> Result<String> {
+        if !trash_path.starts_with(".trash/") {
+            return Err(MacroError::BadName(trash_path.into()));
+        }
+        let name = trash_path.trim_start_matches(".trash/");
+        let src = self.root.join(".trash").join(clean_name(name)?);
+        let file = read_macro(&src)?;
+        let new_path = self.target(folder, &file.name)?;
+        if self.resolve(&new_path)?.exists() {
+            return Err(MacroError::Exists(file.name));
+        }
+        let to = self.resolve(&new_path)?;
+        make_parent(&to)?;
+        fs::rename(&src, &to).map_err(|e| io_err(&src, e))?;
+        Ok(new_path)
     }
 
     pub fn create_folder(&self, folder: &str) -> Result<()> {
