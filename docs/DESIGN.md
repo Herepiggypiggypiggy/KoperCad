@@ -536,7 +536,7 @@ clear the selection.
 | Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z) | Undo / redo |
 | Ctrl+C / Ctrl+X / Ctrl+V | Copy, cut, paste with the next free tags |
 | Ctrl+Shift+V | Paste with the original tags |
-| Ctrl+D | Duplicate with the next free tags |
+| Ctrl+D | Duplicate with the next free tags: the copy lands two grid steps to the right of the selection and is selected, so Ctrl+D again repeats it (one undo step each) |
 | Ctrl+S / Ctrl+N / Ctrl+O | Name an untitled project (otherwise confirms Saved), new, open |
 | Ctrl+Shift+S / Ctrl+W / Ctrl+Q | Save a copy, close project, quit |
 | Delete | Delete the selection and its dangling connections |

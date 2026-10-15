@@ -485,6 +485,23 @@ impl SchematicView {
             .collect()
     }
 
+    /// Width and height in mm of the box around the selection.
+    pub fn selection_size(&self) -> Option<(f64, f64)> {
+        let scene = self.scene.as_ref()?;
+        let mut bounds = novo_canvas::Aabb::EMPTY;
+        for id in self.selection() {
+            let b = scene.scene().item_bounds(item_id(id))?;
+            bounds = bounds.union(&b);
+        }
+        let size = bounds.max - bounds.min;
+        (size.x >= 0.0 && size.y >= 0.0).then(|| (f64::from(size.x), f64::from(size.y)))
+    }
+
+    /// Selects exactly `ids` (the copy after a duplicate).
+    pub fn select_ids(&mut self, ids: &[AnyId]) {
+        self.select(ids);
+    }
+
     fn select(&mut self, ids: &[AnyId]) {
         self.canvas.selection.clear();
         self.canvas
