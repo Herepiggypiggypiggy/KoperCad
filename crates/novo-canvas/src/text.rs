@@ -64,11 +64,27 @@ pub struct Label {
 /// text box.
 pub const ADVANCE: f32 = 0.6;
 
-/// How far the second pass of a bold label is shifted along its baseline,
-/// relative to the font size; the text box grows by as much.
+/// Average glyph advance of bold text, relative to the font size. Bold
+/// faces run wider than regular ones (Helvetica-Bold about 10%, Inter
+/// SemiBold about 5%), and the faux-bold pass adds [`BOLD_SHIFT`]; this
+/// covers all three.
+pub const ADVANCE_BOLD: f32 = 0.66;
+
+/// How far the faux-bold second pass is shifted along the baseline,
+/// relative to the font size, when no bold face is loaded.
 pub const BOLD_SHIFT: f32 = 0.04;
 
+/// [`ADVANCE`], or [`ADVANCE_BOLD`] for bold text.
+pub fn advance(bold: bool) -> f32 {
+    if bold { ADVANCE_BOLD } else { ADVANCE }
+}
+
 impl Label {
+    /// [`ADVANCE`], or [`ADVANCE_BOLD`] for bold text.
+    pub fn advance(&self) -> f32 {
+        advance(self.bold)
+    }
+
     pub fn new(pos: impl Into<Vec2>, text: impl Into<String>, height: f32) -> Self {
         Self {
             pos: pos.into(),
@@ -119,12 +135,7 @@ impl Label {
             .max()
             .unwrap_or(0);
         Vec2::new(
-            cols as f32 * self.height * ADVANCE
-                + if self.bold {
-                    BOLD_SHIFT * self.height
-                } else {
-                    0.0
-                },
+            cols as f32 * self.height * self.advance(),
             lines as f32 * self.height,
         )
     }
@@ -228,6 +239,16 @@ mod tests {
         assert!((b.size().x - 3.0 * 2.5 * ADVANCE).abs() < 1e-5);
         let c = l.clone().anchored(Anchor::Center).bounds();
         assert!(c.center().distance(Vec2::new(10.0, 10.0)) < 1e-5);
+    }
+
+    /// Bold text is estimated wider, whichever way it is drawn (a bold
+    /// face or the faux-bold pass), and covers the faux shift.
+    #[test]
+    fn bold_text_is_estimated_wider() {
+        let l = Label::new(Vec2::ZERO, "Header", 2.5);
+        let b = l.clone().bolded(true);
+        assert!((b.size().x - 6.0 * 2.5 * ADVANCE_BOLD).abs() < 1e-5);
+        assert!(b.size().x - l.size().x >= BOLD_SHIFT * 2.5);
     }
 
     #[test]
