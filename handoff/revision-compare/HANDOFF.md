@@ -20,3 +20,20 @@ name the cache counter when the app caches, batch-move folding.
 Resume: `cargo test -p novo-revisions`; fmt and clippy as CLAUDE.md.
 Rules: PRs stay drafts, no builds, no push after READY, message the
 reviewer with the head SHA after each push.
+
+## App PR (claude/revision-compare-app)
+Compare window (`crates/novo-app/src/app/compare.rs`), command
+`revision.compare` ("Compare revisions", verb `compare`), and a "Compare…"
+button on the Changes card. Next: read-only revision view on the canvas,
+note field in the Issue window, `kind_name` match for sheet kinds in
+novo-py `comparison_json` (reviewer nit on #450).
+
+## How to reach it (user-visible entry points)
+
+- Terminal: `kopercad-cli revisions list <file>` and
+  `kopercad-cli revisions diff <file> <from> <to> [--json]` (#445).
+- Python: `Project.revisions()`, `Project.compare("A", "now")` (#450).
+- App (#468, merged): command `revision.compare` (Ctrl+K "compare
+  revisions", or `compare A B`) opens the Compare window; the Changes card
+  has a "Compare…" button. The clickable change list and PDF report are the
+  Revision diff thread's.

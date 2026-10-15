@@ -257,3 +257,71 @@ fn the_table_lists_every_device_and_reports_no_click_when_none_is_made() {
     out.textures_delta.clear();
     assert_eq!(clicked, None);
 }
+
+#[test]
+
+fn inspector_sets_the_plate_size_and_lists_a_device_s_problems() {
+    use super::cabinet_inspector::{Facts, gather};
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+
+    // The plate card is off until asked for, so the plate gets the window.
+    assert!(!d.app.cabinet.plate_card);
+    d.app
+        .cabinet_ask(Ask::TogglePlateCard, Some(cab), None, &[]);
+    assert!(d.app.cabinet.plate_card);
+
+    // The plate size comes from the inspector, as one undo step.
+    let plate = novo_core::MountingPlate {
+        width: 500.0,
+        height: 700.0,
+        margin: 15.0,
+    };
+    d.app
+        .cabinet_ask(Ask::SetPlateSize(cab, plate), Some(cab), None, &[]);
+    let stored = layout_of(&d, cab).unwrap();
+    assert_eq!((stored.plate.width, stored.plate.height), (500.0, 700.0));
+    d.app.run(&ctx, Action::Undo);
+    assert_eq!(layout_of(&d, cab).unwrap().plate.width, 600.0);
+
+    // Two devices on top of each other: each names the other.
+    let ids: Vec<u64> = novo_layout::model::candidates(project(&d), cab)
+        .iter()
+        .map(|c| c.id)
+        .collect();
+    for id in &ids[..2] {
+        let l = layout_of(&d, cab);
+        d.app
+            .cabinet_ask(Ask::Drop(*id, 100.0, 100.0), Some(cab), l, &[]);
+    }
+    let stored = layout_of(&d, cab).unwrap();
+    let Facts::Devices(facts) = gather(project(&d), cab, &stored, &stored, &ids[..1], &|id| {
+        id.to_string()
+    }) else {
+        panic!("a device is selected");
+    };
+    assert_eq!(facts.len(), 1);
+    assert!(facts[0].problems.iter().any(|p| p.starts_with("Overlaps")));
+    assert!(facts[0].part.as_deref().unwrap().starts_with("ACME"));
+    assert!(matches!(
+        gather(project(&d), cab, &stored, &stored, &[], &|id| id
+            .to_string()),
+        Facts::Plate { placed: 2, .. }
+    ));
+}
+
+#[test]
+fn table_rows_sort_numbers_by_value() {
+    let mut tags = ["-K10", "-K2", "-Q1", "-K1"];
+    tags.sort_by_key(|t| super::cabinet::natural_key(t));
+    assert_eq!(tags, ["-K1", "-K2", "-K10", "-Q1"]);
+}

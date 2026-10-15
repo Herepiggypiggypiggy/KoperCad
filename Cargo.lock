@@ -1845,14 +1845,17 @@ dependencies = [
  "novo-cables",
  "novo-canvas",
  "novo-checks",
+ "novo-commissioning",
  "novo-core",
  "novo-editor",
+ "novo-interop",
  "novo-layout",
  "novo-parts",
  "novo-pdf",
  "novo-plc",
  "novo-reports",
  "novo-revisions",
+ "novo-routing",
  "novo-sim",
  "novo-storage",
  "novo-symbols",
@@ -1919,10 +1922,23 @@ dependencies = [
  "novo-pdf",
  "novo-py",
  "novo-reports",
+ "novo-revisions",
  "novo-storage",
  "novo-xref",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "novo-commissioning"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-reports",
+ "novo-tests",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -2019,6 +2035,7 @@ dependencies = [
  "calamine",
  "novo-core",
  "novo-reports",
+ "novo-revisions",
  "novo-storage",
  "novo-symbols",
  "pyo3",
@@ -2132,6 +2149,14 @@ dependencies = [
  "eframe",
  "egui",
  "egui-phosphor",
+]
+
+[[package]]
+name = "novo-view3d"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "glam",
 ]
 
 [[package]]

@@ -88,6 +88,7 @@ mod order;
 mod page;
 mod report;
 mod sheets;
+mod strip_diagram;
 mod table;
 mod toc;
 mod wires;
@@ -105,6 +106,9 @@ pub use order::{function_of, location_of, location_text, tag_cmp};
 pub use page::{Line, Margins, PageLayout, PageSetup, ReportPage, TextBox, layout_page, paginate};
 pub use report::{Dependencies, LiveReports, Report, Reports};
 pub use sheets::{GeneratedSheet, SheetFingerprint, fingerprint, sheet_name, sheet_names};
+pub use strip_diagram::{
+    sheet_count as strip_sheet_count, strip_diagram, strip_sheet, terminals_per_sheet,
+};
 pub use table::{Align, Cell, Column, ReportOutput, Row, Section};
 pub use toc::{PanelContents, TableOfContents};
 pub use wires::WireList;

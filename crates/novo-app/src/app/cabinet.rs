@@ -16,6 +16,7 @@ use novo_layout::model::{
 use novo_layout::plan::Plan;
 use novo_layout::state::CabinetLayout;
 
+use super::cabinet_inspector;
 use super::{Level, NovoApp};
 use crate::theme;
 
@@ -45,6 +46,8 @@ pub(super) struct CabinetState {
     pub(super) keys: Vec<String>,
     /// The table face (Ctrl+T) is shown instead of the plate.
     pub(super) table: bool,
+    /// The plate card of the inspector is shown with nothing selected.
+    pub(super) plate_card: bool,
 }
 
 /// A placed device being dragged across the plate.
@@ -73,6 +76,7 @@ impl CabinetState {
             ghost: None,
             keys: Vec::new(),
             table: false,
+            plate_card: false,
         }
     }
 }
@@ -82,10 +86,13 @@ pub(super) enum Ask {
     Panel(DeviceTag),
     CreateCabinet(DeviceTag),
     SetPlate(StructureId),
+    /// Set the plate to new dimensions from the inspector.
+    SetPlateSize(StructureId, MountingPlate),
     PlaceAll,
     Accept,
     Cancel,
     ToggleTable,
+    TogglePlateCard,
     /// Place or move a device with its top left at `(x, y)` mm.
     Drop(u64, f64, f64),
     Rotate(Vec<u64>),
@@ -187,6 +194,25 @@ pub(super) fn problem_lines(
 
 /// The table face (Ctrl+T): every device of the panel with where it is and
 /// what is wrong.
+/// A sort key in which numbers count by value: -K2 comes before -K10.
+pub(super) fn natural_key(tag: &str) -> String {
+    let mut key = String::new();
+    let mut digits = String::new();
+    for ch in tag.chars().chain(std::iter::once(' ')) {
+        if ch.is_ascii_digit() {
+            digits.push(ch);
+            continue;
+        }
+        if !digits.is_empty() {
+            key.push_str(&format!("{digits:0>12}"));
+            digits.clear();
+        }
+        key.push(ch);
+    }
+    key.pop();
+    key
+}
+
 pub(super) fn cabinet_table(
     ui: &mut egui::Ui,
     layout: &CabinetLayout,
@@ -196,7 +222,7 @@ pub(super) fn cabinet_table(
 ) -> Option<u64> {
     let mut clicked = None;
     let mut rows: Vec<_> = cands.iter().collect();
-    rows.sort_by_key(|c| tag_of(c.id));
+    rows.sort_by_key(|c| natural_key(&tag_of(c.id)));
     // Numbers read best flush right.
     let num = |ui: &mut egui::Ui, text: String| {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -305,6 +331,9 @@ impl NovoApp {
         let cands = structure
             .map(|s| candidates(project, s))
             .unwrap_or_default();
+        let sizing_devices = structure
+            .map(|s| novo_layout::sizing_model::sizing_devices(project, s))
+            .unwrap_or_default();
         let tag_of = |id: u64| {
             project
                 .get::<Device>(DeviceId::from(id))
@@ -395,12 +424,23 @@ impl NovoApp {
                         ask = Some(Ask::PlaceAll);
                     }
                 }
+                if !self.cabinet.table
+                    && ui
+                        .selectable_label(self.cabinet.plate_card, "Plate")
+                        .on_hover_text("Size and fill of the mounting plate")
+                        .clicked()
+                {
+                    ask = Some(Ask::TogglePlateCard);
+                }
                 if ui
                     .selectable_label(self.cabinet.table, "Table")
                     .on_hover_text("Devices as a table (Ctrl+T)")
                     .clicked()
                 {
                     ask = Some(Ask::ToggleTable);
+                }
+                if ui.button("Size enclosure").clicked() {
+                    self.sizing.panel_open = !self.sizing.panel_open;
                 }
                 ui.weak(format!(
                     "{placed} placed, {unplaced} unplaced, {problems} {}",
@@ -465,6 +505,34 @@ impl NovoApp {
                         }
                     });
 
+                let selected: Vec<u64> = self
+                    .cabinet
+                    .view
+                    .selection
+                    .ids()
+                    .iter()
+                    .filter_map(|i| novo_canvas::cabinet::box_of(*i))
+                    .collect();
+                // The inspector: with a selection, or the plate card when it
+                // is switched on; otherwise the plate gets the whole window.
+                let inspector = match (&layout, structure) {
+                    (Some(stored), Some(s)) if !selected.is_empty() || self.cabinet.plate_card => {
+                        let facts = cabinet_inspector::gather(
+                            project, s, stored, &shown, &selected, &tag_of,
+                        );
+                        // On the side away from the selection.
+                        let centre = shown
+                            .placements
+                            .iter()
+                            .filter(|p| selected.contains(&p.id))
+                            .map(|p| p.footprint().x + p.footprint().w / 2.0)
+                            .sum::<f64>()
+                            / selected.len().max(1) as f64;
+                        Some((facts, centre > shown.plate.width / 2.0))
+                    }
+                    _ => None,
+                };
+
                 let view = cabinet_view(&shown, &tag_of);
                 self.cabinet.scene.set(&view);
                 if self.cabinet.fitted != location {
@@ -472,6 +540,12 @@ impl NovoApp {
                     self.cabinet.fitted = location.clone();
                 }
                 let out = self.cabinet.view.show(ui, self.cabinet.scene.scene());
+                if let Some((facts, left)) = &inspector
+                    && let Some(a) =
+                        cabinet_inspector::overlay(ui.ctx(), out.response.rect, *left, facts)
+                {
+                    ask = Some(a);
+                }
                 if let Some(id) = out.hovered.and_then(novo_canvas::cabinet::box_of) {
                     let lines = problem_lines(&shown, id, &tag_of);
                     out.response.clone().on_hover_ui_at_pointer(|ui| {
@@ -591,6 +665,9 @@ impl NovoApp {
             }
         }
 
+        super::sizing::show_window(ui.ctx(), &mut self.sizing, &sizing_devices);
+        super::sizing::show_editor(ui.ctx(), &mut self.sizing);
+
         if let Some(ask) = ask {
             self.cabinet_ask(ask, structure, layout, &cands);
         }
@@ -610,6 +687,7 @@ impl NovoApp {
             }
             Ask::Cancel => self.cabinet.preview = None,
             Ask::ToggleTable => self.cabinet.table ^= true,
+            Ask::TogglePlateCard => self.cabinet.plate_card ^= true,
             Ask::PlaceAll => {
                 if let Some(layout) = layout {
                     let plan = layout.preview(cands);
@@ -653,6 +731,9 @@ impl NovoApp {
                 self.cabinet_edit("Remove from plate", move |tx| {
                     devices.iter().try_for_each(|d| unplace_device(tx, *d))
                 });
+            }
+            Ask::SetPlateSize(s, plate) => {
+                self.cabinet_edit("Set plate size", move |tx| set_plate(tx, s, plate));
             }
             Ask::SetPlate(s) => {
                 self.cabinet_edit("Set plate", move |tx| set_plate(tx, s, DEFAULT_PLATE));
