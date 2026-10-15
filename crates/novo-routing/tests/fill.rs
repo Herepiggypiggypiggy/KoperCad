@@ -123,14 +123,3 @@ fn free_air_and_guessed_wires_are_reported() {
     );
     assert!(p.fill.is_empty());
 }
-
-#[test]
-fn a_zero_area_duct_does_not_make_wires_unroutable() {
-    let net = Network::new(&[duct(1, 100.0, 0.0, 0.0)]);
-    let p = plan(&net, &[job(1, 50.0, 350.0, 90.0, Some(3.0))], &RULES);
-    assert_eq!(p.routes[0].ducts, vec![1]);
-    assert!(matches!(
-        p.problems.as_slice(),
-        [Problem::OverfullDuct { duct: 1, .. }]
-    ));
-}

@@ -43,7 +43,8 @@ pub struct Network {
     runs: Vec<Run>,
     /// Per run, the positions along it where it is joined to another duct.
     splits: Vec<Vec<f64>>,
-    /// Ids of ducts that were not horizontal, vertical, finite or had no length.
+    /// Ids of ducts that were not horizontal, vertical, finite, had no length,
+    /// or repeated an earlier duct's id.
     pub ignored: Vec<u64>,
 }
 
@@ -106,7 +107,17 @@ impl Network {
                 ignored.push(d.id);
             }
         }
+        // Stable sort, then the first duct of a repeated id wins.
         runs.sort_by_key(|r| r.id);
+        let mut kept: Vec<Run> = Vec::with_capacity(runs.len());
+        for r in runs {
+            if kept.last().is_some_and(|k| k.id == r.id) {
+                ignored.push(r.id);
+            } else {
+                kept.push(r);
+            }
+        }
+        let runs = kept;
         ignored.sort();
 
         let mut splits: Vec<Vec<f64>> = runs.iter().map(|r| vec![r.lo, r.hi]).collect();
@@ -275,12 +286,22 @@ impl Network {
     /// Cost multiplier of a run: 1 until it would pass 80% of its allowed
     /// fill with this wire added, then rising steeply.
     fn penalty(&self, run: usize, rules: &Rules, load: Load) -> f64 {
+        if !self.sized(run) {
+            return 1.0;
+        }
         let cap = self.runs[run].area * rules.fill_limit;
         let after = (load.used[run] + load.wire_area) / cap;
         if !after.is_finite() {
             return PENALTY_CAP;
         }
         (1.0 + 4.0 * (after - PENALTY_FROM).max(0.0) / (1.0 - PENALTY_FROM)).min(PENALTY_CAP)
+    }
+
+    /// True when the duct has a known cross-section. An unsized duct is
+    /// neither penalised nor counted as overfull; it is reported instead.
+    pub(crate) fn sized(&self, run: usize) -> bool {
+        let a = self.runs[run].area;
+        a.is_finite() && a > 0.0
     }
 
     /// Number of ducts in the network (ignored ones are not counted).

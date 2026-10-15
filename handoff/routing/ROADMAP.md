@@ -10,6 +10,8 @@ Scope: crate `novo-routing`, pure engine that routes wires through ducts on the 
 - Fix PR: merge_collinear keeps a turn-back point (16 tests).
 
 - Fill PR: `plan` (longest first, fill penalty from 80%, DuctFill, Problem::{FreeAir, GuessedWire, OverfullDuct}), `Job.diameter_mm`, `Rules.fill_limit`. 21 tests.
+- Fill PR merged (#358). Follow-up PR: unsized ducts (UnsizedDuct problem, no penalty), duplicate duct ids ignored. 24 tests.
+- WS-02 stores ducts as `Rail { kind: Duct, x, y, length, vertical, width, height }` (0 = unknown size); the adapter to `Duct` is mine or the app's.
 
 ## Next
 1. Ask WS-02 for duct and pin storage; commands.
