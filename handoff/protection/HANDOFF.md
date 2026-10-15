@@ -17,3 +17,4 @@ Traps and decisions:
 - Upper-bound let-through (Ik² × guaranteed time) can prove a pass but never a fail: current-limiting devices let less through.
 - Selectivity from generic bands is conservative; back-up needs a maker table.
 - Overlaps: trip curves with "Simulation: faults, trip curves, waveforms" (cse_01NQC5mMueppdFcRDgtrhhwd), SCCR rule set and report with "Standards compliance checks" (cse_016Ck8MiWnPc2Jymjbqtu9u3), part fields with "Parts library at scale" (cse_01KA869tMQuWufRom7xSf4hF). All were messaged.
+Uncompiled `kopercad-cli starter` edit saved as starter-cli-UNCOMPILED.patch (git apply, then build and test).

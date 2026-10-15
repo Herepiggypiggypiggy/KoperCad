@@ -1,0 +1,175 @@
+diff --git a/crates/novo-cli/src/lib.rs b/crates/novo-cli/src/lib.rs
+index 59eb0e5..ee0a9b2 100644
+--- a/crates/novo-cli/src/lib.rs
++++ b/crates/novo-cli/src/lib.rs
+@@ -74,6 +74,43 @@ enum Cmd {
+         #[arg(long)]
+         json: bool,
+     },
++    /// Size a direct-on-line motor starter and its cable: motor current,
++    /// fuse, contactor, overload relay requirement and the smallest cable
++    /// that passes every check, with what was assumed. Parts come from the
++    /// standard ratings (no maker data), so coordination is reported as
++    /// unresolved.
++    Starter {
++        /// Motor shaft power, kW.
++        #[arg(long)]
++        kw: f64,
++        /// Nameplate current, A (else estimated from typical IE3 values).
++        #[arg(long)]
++        current: Option<f64>,
++        /// Line voltage, V.
++        #[arg(long, default_value_t = 400.0)]
++        voltage: f64,
++        /// Starting time to the end of the run-up, seconds.
++        #[arg(long)]
++        start_s: Option<f64>,
++        /// Prospective short-circuit current at the board, kA.
++        #[arg(long)]
++        supply_ka: f64,
++        /// Smallest short-circuit current the supply delivers, kA.
++        #[arg(long)]
++        min_supply_ka: Option<f64>,
++        /// Cable length, m.
++        #[arg(long)]
++        length_m: f64,
++        /// Cable insulation: PVC or XLPE.
++        #[arg(long, default_value = "PVC")]
++        insulation: String,
++        /// Installation method: B1, B2 or C.
++        #[arg(long, default_value = "C")]
++        method: String,
++        /// Ambient temperature, degrees Celsius.
++        #[arg(long, default_value_t = 30.0)]
++        ambient_c: f64,
++    },
+     /// Judge the circuits of a supply described in a JSON file: cable
+     /// rating, voltage drop, breaking capacity, short-circuit withstand,
+     /// disconnection and protective conductor, each Pass, Fail or Unknown.
+@@ -266,6 +303,32 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
+             export_dxf(&project, &file, &output, &pages)?;
+             Ok(exit::OK)
+         }
++        Cmd::Starter {
++            kw,
++            current,
++            voltage,
++            start_s,
++            supply_ka,
++            min_supply_ka,
++            length_m,
++            insulation,
++            method,
++            ambient_c,
++        } => starter(
++            &StarterArgs {
++                kw,
++                current,
++                voltage,
++                start_s,
++                supply_ka,
++                min_supply_ka,
++                length_m,
++                insulation,
++                method,
++                ambient_c,
++            },
++            out,
++        ),
+         Cmd::Calc {
+             file,
+             tables,
+@@ -294,6 +357,93 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
+     }
+ }
+ 
++struct StarterArgs {
++    kw: f64,
++    current: Option<f64>,
++    voltage: f64,
++    start_s: Option<f64>,
++    supply_ka: f64,
++    min_supply_ka: Option<f64>,
++    length_m: f64,
++    insulation: String,
++    method: String,
++    ambient_c: f64,
++}
++
++/// `kopercad-cli starter`: sizes a direct-on-line starter and its cable.
++fn starter(a: &StarterArgs, out: &mut dyn Write) -> Result<i32, Failure> {
++    use novo_checks::calc::Insulation;
++    use novo_checks::calc::cable::Method;
++    use novo_checks::calc::network::{Network, SourceModel};
++    use novo_checks::calc::starter::{
++        Catalog, Coordination, MotorSpec, Route, Scheme, SizingInput, size_starter,
++    };
++    use novo_checks::calc::tables::TableSet;
++
++    let usage = |m: String| Failure::new(exit::USAGE, m);
++    let insulation = match a.insulation.to_ascii_uppercase().as_str() {
++        "PVC" => Insulation::Pvc,
++        "XLPE" | "EPR" => Insulation::Xlpe,
++        _ => return Err(usage("--insulation is PVC or XLPE".into())),
++    };
++    let method = Method::parse(&a.method).ok_or_else(|| usage("--method is B1, B2 or C".into()))?;
++    let source = SourceModel::from_short_circuit(a.supply_ka, a.min_supply_ka, a.voltage)
++        .ok_or_else(|| usage("--supply-ka must be positive and --min-supply-ka not above it".into()))?;
++    let network = Network::new(a.voltage, source);
++    let motor = MotorSpec {
++        power_kw: a.kw,
++        voltage: a.voltage,
++        rated_current_a: a.current,
++        efficiency: None,
++        cos_phi: None,
++        start_time_s: a.start_s,
++    };
++    let tables = TableSet::builtin();
++    let catalog = Catalog::generic();
++    let result = size_starter(&SizingInput {
++        motor: &motor,
++        scheme: Scheme::FuseContactorRelay,
++        coordination: Coordination::Type1,
++        network: &network,
++        at: network.root(),
++        catalog: &catalog,
++        tables: &tables,
++        pairs: None,
++        route: Route {
++            length_m: a.length_m,
++            insulation,
++            method,
++            ambient_c: a.ambient_c,
++            grouped_circuits: 1,
++        },
++        name: "Motor",
++    });
++    match result {
++        Ok(p) => {
++            print(out, &format!("Motor current   {:.1} A", p.motor_current_a))?;
++            print(out, &format!("Short circuit   {}  ({})", p.short_circuit.id, p.short_circuit.why))?;
++            print(out, &format!("Contactor       {}", p.contactor.id))?;
++            print(out, &format!("Overload        {}", p.overload.id))?;
++            print(out, &format!("Cable           {} mm2, protective conductor {} mm2", p.cable_mm2, p.pe_mm2))?;
++            print(out, "")?;
++            print(out, p.report.to_text().trim_end())?;
++            if !p.unresolved.is_empty() {
++                print(out, "Unresolved (needs maker data):")?;
++                for u in &p.unresolved {
++                    print(out, &format!("  - {u}"))?;
++                }
++            }
++            Ok(exit::OK)
++        }
++        Err(e) => {
++            for r in &e.reasons {
++                print(out, &format!("No proposal: {r}"))?;
++            }
++            Ok(exit::PROBLEMS)
++        }
++    }
++}
++
+ /// `kopercad-cli calc`: reads the plant JSON, optionally the licensed
+ /// tables, and prints one report per circuit.
+ fn calc(
