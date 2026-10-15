@@ -36,6 +36,13 @@ by Tadjiro" line, ends with the Claude Code footer. Assign Herepiggypiggypiggy.
   WS-11 session_01AqzMrSLZaG8zin7Yf84RZP; WS-07 session_01H3m3ufThxMEzTtG41NrXaB;
   WS-10 session_01KrbvfWtr3dmZqL1bwwyKWF. Full list: coordination/threads.md.
 
+## Open work (revisions in the app)
+PRs #290 (Issue revision), #298 (title block), #301 (DESIGN dwell), #305 (Changes
+mode, draft, stacked on #290 and #298). Each needs the design/main reviewer on its
+head, then the lead merges. Not done: change marks in Pages and PDF bookmarks, ghosts
+drawn from the old artwork, a revision-table frame, reading the index rule from the
+project rules (the app infers it from the latest index), local date (the window uses UTC).
+
 ## Decisions already made (don't reopen)
 No menu bar; Ctrl+K command surface, I / tapped Space at pointer; Enter accepts
 proposal, Tab next proposal (no Enter=repeat); Ctrl+1/2 Schematic/Cabinet, Ctrl+3/4/5

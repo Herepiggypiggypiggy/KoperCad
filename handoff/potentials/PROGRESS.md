@@ -15,3 +15,6 @@
 2026-10-15 15:50 UTC Timers (on-delay and off-delay contacts) in the live view (PR 'Live potentials: timers'). Next: Show where it goes, live potential in wire hover.
 2026-10-15 15:31 UTC 'Show where it goes' says on hover that it covers this page only. Open: highlight instead of selection.
 2026-10-15 15:21 UTC Timer card shows the seconds left; DESIGN Shift+L row mentions timer contacts (follow-up to the timers PR).
+2026-10-15 15:42 UTC The inspector has a Time (s) field for a device with a coil or timer contact; it sets the device's delay property (one undo step).
+2026-10-15 15:40 UTC Show where it goes now lights the wires and terminals (related highlight) instead of selecting them; it goes out when the selection changes. Next: set a coil timer's delay from the UI.
+2026-10-15 16:45 UTC The Time (s) field shows only for a device with a timer contact (a plain relay coil has nothing to time).

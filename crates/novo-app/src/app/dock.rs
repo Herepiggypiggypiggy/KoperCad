@@ -58,10 +58,12 @@ impl NovoApp {
     /// Keeps the editor on the person's auto-connection mode.
     pub(super) fn sync_connect_mode(&mut self) {
         let mode = self.settings.connect_mode();
-        if let Some(view) = self.canvas.schematic()
-            && view.editor.connect_mode() != mode
-        {
-            view.editor.set_connect_mode(mode);
+        let carries = self.settings.move_carries;
+        if let Some(view) = self.canvas.schematic() {
+            if view.editor.connect_mode() != mode {
+                view.editor.set_connect_mode(mode);
+            }
+            view.move_carries = carries;
         }
     }
 
@@ -84,7 +86,7 @@ impl NovoApp {
         let active = match view.editor.tool() {
             Tool::Place(_) => DockTool::Place,
             Tool::Wire(_) => DockTool::Connect,
-            Tool::Select | Tool::Move(_) => DockTool::Select,
+            Tool::Select | Tool::Move(_) | Tool::Cable(_) => DockTool::Select,
         };
         let band = view.band_count();
         let hint = view
@@ -119,6 +121,7 @@ impl NovoApp {
             || match view.editor.tool() {
                 Tool::Wire(w) => w.start.is_some(),
                 Tool::Move(_) => true,
+                Tool::Cable(c) => !c.points.is_empty(),
                 Tool::Select | Tool::Place(_) => false,
             };
         let aside = busy

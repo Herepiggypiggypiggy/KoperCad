@@ -3,6 +3,15 @@
 For a fresh cloud session that takes over as **integration lead**: the role that coordinates the threads and merges PRs.
 Last updated 2026-10-14 17:17 UTC (final from the first lead session) by the integration lead (session_011PfTJ1QaP1JQJPwXcFnxBE).
 
+## 0e. State at 2026-10-15 16:40 UTC (integration lead)
+- **Main** has about 1022 tests passing (lead's combined local run); product KoperCAD. **No build is planned** until Tadjiro asks; Release is idle and must not dispatch one. Windows hands-on checklist: `docs/WINDOWS-CHECK.md`.
+- **Merged since 10:40 UTC (UI and engine):** wheel and table, wire corners and parts, Corners/Lines modes with plain drag moving only the component (Shift+M carries wires, Moving preference), terminals (strips, multi-pole drag, connect/disconnect, bridge bar per run), potentials and PE menus, live potentials (Shift+L, hover, timers with seconds left, theme tokens), Show where it goes (lights the potential), coil/contact coupling, Auto connections preference, pages navigator with groups/panels, contents list with panels, inline page rename (additive `Command::RenamePage`, accepted by the lead), feed numbering L1/L2/L3, Tab/Q while wiring, revisions (Issue window, title block fields, Changes mode), cabinet layout design and `novo-layout` geometry engine, data-folder migration to KoperCAD names, `kopercad.exe` with compat copy, Python module `kopercad` with `novoelectric` shim.
+- **Open at 16:40:** #311 (cable tool, WS-08 reopens from main), #300 (inspector Time field; author merges main).
+- **Threads busy:** Schematic editor, Canvas engine, App shell, Fast keyboard, Workflow, Layout, Pages, Terminals, Potentials. Release idle.
+- **Next on the 26-point list:** points 8 (wheel Other), 9 (rotate selection), 18 (search, Ctrl+K), 20 (cable), 22/23 follow-ups; hands-on checks for 14/16. Follow-ups noted on merged PRs: #266 PE state in menu row, #275 chips, #278 timer in Shift+L, highlight render path for Show where it goes.
+- **Rules unchanged;** new: put new tests in a new file, not appended to `tests/editing.rs` (it caused repeated conflicts). `claude/local-builds` branch could not be deleted by the lead (gate denied); content is on main.
+- The PROGRESS clock labels in `handoff/integration-lead/PROGRESS.md` before this entry are mixed local/UTC; entries from here on are UTC.
+
 ## 0d. State at 2026-10-15 10:40 UTC (integration lead)
 - **Main 2d5fff7**, about 919 tests passing (design reviewer's merged run), no open PRs. Product is **KoperCAD** by **KoperVonk** (#201); repo is `Herepiggypiggypiggy/kopercad` (old slug redirects; old-name API calls fail). Code, crates and data folders keep `novo-*` / NovoElectric for now.
 - **Builds:** experimental build 2 published 10:07Z on main 424234a. Build 3 waits for double-click text / wire-number rename (WS-01, on the label_hit query from #232). Release dispatches builds by manual dispatch (5-14 min).

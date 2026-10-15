@@ -57,4 +57,10 @@
 - 2026-10-15: drag a selected wire part: a corner moves alone, a run moves its two corners (inner run slides across itself, end run along itself), grid-snapped, ghost while dragging, Esc cancels (edit::move_wire_part, Editor::part_delta).
 - 2026-10-15: text-only drag. Press and drag on a label moves only the text: Editor::move_label (LabelSource Record or Drawn; a drawn tag gets a text record at the place it is drawn), view ghost while dragging, Esc puts it back.
 - 2026-10-15: wire part drag keeps stretches horizontal or vertical: edit::moved_route adds an elbow next to the fixed neighbour (DESIGN 4, 6); the part selection clears after a drag because bends may be added.
+- 2026-10-15: move follow-ups to #259: Shift at the drop takes the wires along (Editor::set_move_carry), the status line says how many wire ends stay behind open and, after the drop, how many were left open; tests for both ends moved.
+- 2026-10-15: live potentials colours are theme tokens (novo_theme::POTENTIALS_DARK, contrast-checked on the sheet); live.rs reads them.
 - 2026-10-15: a dragged wire part squares every stretch at a moved corner in Corners mode (edit::moved_route square flag, Editor::moved_route for the ghost); Lines mode leaves slanted stretches alone.
+- 2026-10-15: perf: wire_part_at skips wires by their drawn bounds before building points (3,000 wires: 0.87 -> 0.12 ms per call, measured with tests/model_perf.rs from #315).
+- 2026-10-15: live potentials colours are theme tokens (novo_theme::POTENTIALS_DARK, contrast-checked on the sheet); live.rs reads them.
+- 2026-10-15: live wires are drawn by the canvas (PageScene::set_wire_looks, WireLook, screen-width stroke) in the wire layer under symbols and text; the egui foreground layer is gone, hover text stays in live.rs.
+- 2026-10-15: perf: strip_heads grouped terminals pairwise (O(n^2)) on every terminal edit; now stops at the x gap. 3,000-terminal page: build 65 -> 20 ms, apply one moved symbol 43 -> 2.7 ms. New tests/model_perf.rs guards model-page timings.

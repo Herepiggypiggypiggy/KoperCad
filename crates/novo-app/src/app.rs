@@ -3,6 +3,7 @@
 //! toasts for messages, the dialogs and action dispatch. There is no menu
 //! bar and no status bar.
 
+mod changes;
 mod checks;
 mod dock;
 mod drawers;
@@ -15,7 +16,9 @@ mod plc;
 mod potentials;
 mod preferences;
 mod reports;
+mod revisions;
 mod terminals;
+mod title_revisions;
 mod wheel;
 mod workbench;
 mod xref;
@@ -35,8 +38,9 @@ use pages::{FormKind, PageForm, PageView};
 use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows};
 use crate::canvas::{CanvasView, OpenPage};
 use crate::settings::Settings;
-use crate::{APP_MAKER, APP_NAME, DATA_DIR_NAME, PROJECT_EXTENSION};
+use crate::{APP_MAKER, APP_NAME, PROJECT_EXTENSION};
 use novo_theme::widgets::{primary_button, section_label, segment};
+pub(crate) use revisions::index_rule;
 use workbench::Workbench;
 pub(crate) use workbench::app_runs;
 
@@ -128,6 +132,8 @@ pub struct NovoApp {
     page_filter: String,
     /// Whether the outline files pages by page group or by panel.
     page_view: PageView,
+    /// The page being renamed in the outline, with the text so far.
+    renaming_page: Option<(PageId, String)>,
     /// Window width last frame, which decides whether the outline pins.
     window_width: f32,
 }
@@ -179,6 +185,7 @@ impl NovoApp {
             breadcrumb_link: None,
             page_filter: String::new(),
             page_view: PageView::Function,
+            renaming_page: None,
             window_width: 0.0,
         }
     }
@@ -563,7 +570,7 @@ impl NovoApp {
             .set_title("Save project")
             .add_filter("KoperCAD project", &[PROJECT_EXTENSION])
             .set_file_name(project_file_name(&name));
-        // A project's first save goes to Documents\NovoElectric (DESIGN.md §3,
+        // A project's first save goes to Documents\KoperCAD (DESIGN.md §3,
         // §6); later "Save as" starts next to the current file.
         let folder = match &self.project_path {
             Some(path) => path.parent().map(Path::to_owned),
@@ -685,6 +692,7 @@ impl NovoApp {
             self.tool_dock(&ctx, canvas_rect);
             self.inspector(&ctx, canvas_rect);
             self.live_view(&ctx, canvas_rect);
+            self.changes_card(&ctx, canvas_rect);
         }
         self.toasts(&ctx, canvas_rect);
 
@@ -694,6 +702,7 @@ impl NovoApp {
         self.about_dialog(&ctx);
         self.renumber_dialog(&ctx);
         self.preferences_dialog(&ctx);
+        self.issue_revision_dialog(&ctx);
         self.page_form_dialog(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {
             self.run_command(&ctx, id, None);
@@ -723,6 +732,13 @@ impl NovoApp {
         }
         let asked = self.canvas.take_commands();
         self.wb.queued.extend(asked);
+        let cable = self
+            .canvas
+            .schematic()
+            .and_then(|v| v.editor.take_cable_request());
+        if let Some(wires) = cable {
+            self.make_cable(&wires);
+        }
     }
 
     /// A wire drawn to ground or a PE potential earths the terminals on
@@ -1164,7 +1180,43 @@ impl NovoApp {
         }
     }
 
+    /// A page row being renamed: Enter or clicking away keeps the name, Esc
+    /// drops it.
+    fn rename_row(&mut self, ui: &mut egui::Ui, page: PageId) {
+        let Some((_, text)) = self.renaming_page.as_mut() else {
+            return;
+        };
+        let edit = ui.add(egui::TextEdit::singleline(text).desired_width(f32::INFINITY));
+        if !edit.has_focus() && !edit.lost_focus() {
+            edit.request_focus();
+        }
+        let escape = ui.input(|i| i.key_pressed(egui::Key::Escape));
+        if escape {
+            self.renaming_page = None;
+        } else if edit.lost_focus() {
+            let name = text.clone();
+            self.renaming_page = None;
+            let unchanged = self
+                .backend
+                .document()
+                .and_then(|d| d.project().page(page).map(|p| p.name == name.trim()))
+                .unwrap_or(true);
+            if !unchanged && let Some(Err(e)) = self.execute(Command::RenamePage { page, name }) {
+                self.message(Level::Error, format!("Could not rename the page: {e}"));
+            }
+        }
+    }
+
     fn page_row(&mut self, ui: &mut egui::Ui, row: &PageRow) -> bool {
+        if row.sheet == 0
+            && self
+                .renaming_page
+                .as_ref()
+                .is_some_and(|(p, _)| *p == row.page)
+        {
+            self.rename_row(ui, row.page);
+            return false;
+        }
         let selected = self.current_page == Some(row.page) && self.wb.sheet == row.sheet;
         let label = row.label.as_str();
         let response = ui
@@ -1177,6 +1229,19 @@ impl NovoApp {
             })
             .inner;
         response.dnd_set_drag_payload(row.page);
+        let drawn = self.backend.document().is_some_and(|d| {
+            d.project()
+                .page(row.page)
+                .is_some_and(|p| !matches!(p.kind, PageKind::Generated { .. }))
+        });
+        if drawn && response.double_clicked() {
+            let name = self
+                .backend
+                .document()
+                .and_then(|d| d.project().page(row.page).map(|p| p.name.clone()))
+                .unwrap_or_default();
+            self.renaming_page = Some((row.page, name));
+        }
         let structure = self
             .backend
             .document()
@@ -1542,11 +1607,12 @@ fn ago(t: SystemTime) -> String {
     }
 }
 
-/// Where new projects are saved: `<Documents>\NovoElectric`. Documents comes
+/// Where new projects are saved: `<Documents>\KoperCAD` (or the old
+/// `NovoElectric` folder if that is where the projects already are). Documents comes
 /// from the known-folder lookup, because company PCs often redirect it to
 /// OneDrive; it is always inside the user's profile.
 fn projects_dir() -> Option<PathBuf> {
-    dirs::document_dir().map(|docs| docs.join(DATA_DIR_NAME))
+    dirs::document_dir().map(|docs| crate::migrate::projects_dir_in(&docs))
 }
 
 /// `<name>.novo`, with the characters Windows forbids in file names replaced.
@@ -1701,7 +1767,9 @@ mod tests {
     #[test]
     fn new_projects_are_saved_under_documents() {
         if let Some(dir) = projects_dir() {
-            assert!(dir.ends_with(DATA_DIR_NAME));
+            assert!(
+                dir.ends_with(crate::DATA_DIR_NAME) || dir.ends_with(crate::LEGACY_DATA_DIR_NAME)
+            );
             assert!(dir.parent().is_some_and(|p| p.is_absolute()));
         }
     }

@@ -89,7 +89,8 @@ impl NovoApp {
                     Drawer::Terminals => match strip {
                         Some(strip) => {
                             let view = novo_terminals::strip_view(project, strip);
-                            if let Some(o) = strip_table(ui, &view, &selected) {
+                            let screen = novo_terminals::screen(project, strip);
+                            if let Some(o) = strip_table(ui, &view, &screen, &selected) {
                                 actions.push(DrawerAction::Go(Place {
                                     page: o.page,
                                     symbol: Some(o.symbol),
@@ -119,6 +120,32 @@ impl NovoApp {
                 DrawerAction::Tab(t) => self.wb.drawer = Some(t),
                 DrawerAction::Close => self.wb.drawer = None,
             }
+        }
+    }
+
+    /// A cable drawn with C: the wires the line touched go on one cable, in
+    /// one undo step, on the smallest usual type they fit.
+    pub(super) fn make_cable(&mut self, wires: &[novo_core::WireId]) {
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let Some(proposal) = novo_cables::proposal_for_wires(doc.project(), wires) else {
+            self.message(Level::Warning, "None of those wires lands on a device");
+            return;
+        };
+        let (tag, name) = (proposal.tag.clone(), proposal.cable_type.name());
+        match doc.transact("Draw cable", |tx| {
+            novo_cables::accept_proposals(tx, &[proposal], None)
+        }) {
+            Ok((created, changes)) => {
+                self.wb.drawer_cable = created.first().copied();
+                self.changed_outside_canvas(&changes);
+                self.message(
+                    Level::Info,
+                    format!("Cable {tag}: {name} on {} wires", wires.len()),
+                );
+            }
+            Err(e) => self.message(Level::Error, format!("Could not add the cable: {e}")),
         }
     }
 

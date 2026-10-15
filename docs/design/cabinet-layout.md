@@ -26,9 +26,10 @@ a device with no part has no size so overlaps go unseen, and clearances
 | Placement | A device placed on the plate | x, y, rotation (0/90), optional rail | footprint, neighbours |
 | Footprint | From the device's part: `width_mm`, `height_mm`, `depth_mm` | part data | rectangle on the plate |
 
-A device without a part or without dimensions is **unsized**: it is listed
-first in the drawer (DESIGN), gets a default 45 x 90 mm footprint marked as a
-guess, and raises a check, never a silent zero.
+A device without a part or without dimensions is **unsized**: it gets a
+default 45 x 90 mm footprint marked "guessed size" and an Issues entry
+("devices without a part"), never a silent zero. The drawer lists *unplaced*
+devices first (DESIGN §3); unsized ones have no position of their own there.
 
 ## 3. Geometry rules
 
@@ -37,7 +38,8 @@ guess, and raises a check, never a silent zero.
 - A footprint is the part's width x height rectangle. Depth is not used on the
   plate, only against the enclosure depth (check).
 - Devices on a rail sit at a rail offset along it; across the rail they are
-  centred on it. Free placement (no rail) snaps to a 5 mm grid.
+  centred on it. Free placement (no rail) snaps to the Cabinet canvas grid (default 5 mm), a per-user setting like the
+  schematic grid, so the two never disagree silently.
 
 ## 4. Queries (the engine's first job)
 
@@ -58,6 +60,12 @@ them:
 `SetPlateSize`, `AddRail`. `place all` is a planner that proposes placements
 (sort by letter code and page order, fill rails left to right, new rail when
 full) and shows a preview; accepting it is one undo step.
+
+## 5a. Cabinet canvas controls
+
+Ctrl+2 opens the canvas, Ctrl+T switches to its Table face, `place all`
+shows a preview and Enter accepts it as one undo step, and selection syncs
+both ways with the drawer rows.
 
 ## 6. Out of scope here
 

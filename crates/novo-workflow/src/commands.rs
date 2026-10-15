@@ -176,6 +176,16 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["preferences", "prefs"],
     ),
+    verb(
+        cmd(
+            "revision.issue",
+            "Issue revision",
+            "Project",
+            &["release", "checkpoint", "new revision", "freeze"],
+            Needs::Project,
+        ),
+        &["issue", "revision"],
+    ),
     cmd("file.quit", "Quit", "Project", &["exit"], Needs::Nothing),
     // Draw
     cmd(
@@ -582,6 +592,16 @@ pub const COMMANDS: &[CommandInfo] = &[
         "View",
         &["problems", "proposals"],
         Needs::Page,
+    ),
+    verb(
+        cmd(
+            "view.changes",
+            "Show changes since a revision",
+            "View",
+            &["compare", "what changed", "diff", "revision marks"],
+            Needs::Project,
+        ),
+        &["changes"],
     ),
     cmd(
         "sim.live",

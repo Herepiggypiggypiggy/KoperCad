@@ -1841,6 +1841,164 @@ fn the_preferences_window_sets_the_auto_connection_mode() {
 }
 
 #[test]
+fn the_issue_revision_window_proposes_everything_and_issues_in_one_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert!(super::workbench::app_runs("revision.issue"));
+    d.app
+        .run_command(&ctx, "revision.issue", Some("Motor M3 added"));
+    d.frame();
+    let draft = d.app.wb.issue.take().expect("the window opens");
+    assert_eq!(draft.index, "A", "the first index of the rule");
+    assert_eq!(draft.description, "Motor M3 added", "text after the verb");
+    assert_eq!(draft.date.len(), 10);
+    let mut draft = draft;
+    draft.author = "TV".into();
+    d.app.submit_issue(draft);
+    d.frame();
+    assert!(
+        d.app.wb.issue.is_none(),
+        "the window closes: {:?}",
+        d.app.wb.issue
+    );
+    assert_eq!(d.app.settings.initials, "TV", "the initials are remembered");
+    let project = d.app.backend.document().unwrap().project();
+    let latest = project.latest_revision().unwrap();
+    assert_eq!(
+        (
+            latest.index.as_str(),
+            latest.author.as_str(),
+            latest.description.as_str()
+        ),
+        ("A", "TV", "Motor M3 added")
+    );
+    assert!(
+        project
+            .pages()
+            .all(|p| p.frozen.as_ref().is_some_and(|f| f.revision == "A"))
+    );
+    // The next proposal follows, and a taken index is refused in place.
+    d.app.run_command(&ctx, "revision.issue", None);
+    assert_eq!(d.app.wb.issue.as_ref().unwrap().index, "B");
+    let mut again = d.app.wb.issue.take().unwrap();
+    again.index = "A".into();
+    d.app.submit_issue(again);
+    assert!(d.app.wb.issue.as_ref().unwrap().error.is_some());
+    d.app.run(&ctx, Action::Undo);
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+}
+
+#[test]
+fn the_title_block_prints_the_set_revision_after_an_issue() {
+    use novo_canvas::model::item_id;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let page = d.app.current_page.expect("a page is shown");
+    let texts = |d: &Drive| -> Vec<String> {
+        let view = d.app.canvas.schematic_ref().unwrap();
+        let scene = view.scene().unwrap().scene();
+        scene
+            .get(item_id(page))
+            .unwrap()
+            .labels
+            .iter()
+            .map(|l| l.text.clone())
+            .collect()
+    };
+    assert!(!texts(&d).iter().any(|t| t.contains("set A")));
+    let doc = d.app.backend.document_mut().unwrap();
+    let outcome = doc
+        .execute(novo_core::Command::IssueRevision {
+            index: "A".into(),
+            date: "2026-10-15".into(),
+            author: "TV".into(),
+            description: String::new(),
+        })
+        .unwrap();
+    d.app.changed_outside_canvas(&outcome.changes);
+    d.frame();
+    d.frame();
+    assert!(
+        texts(&d).iter().any(|t| t == "(set A)"),
+        "a page without a kept snapshot shows only the set: {:?}",
+        texts(&d)
+    );
+}
+
+#[test]
+fn changes_mode_marks_added_changed_and_removed_objects_since_a_revision() {
+    use novo_canvas::marks::{MarkKind, MarkTarget};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    // Without a revision there is nothing to compare with.
+    d.app.run_command(&ctx, "view.changes", None);
+    assert!(d.app.wb.changes.is_none());
+    let kept = d.place("mcb3", 80.0, 48.0);
+    let gone = d.place("mcb3", 80.0, 120.0);
+    d.frame();
+    let issued = d
+        .app
+        .backend
+        .issue_revision(None, "2026-10-15", "TV", "First");
+    d.app.changed_outside_canvas(&issued.unwrap().changes);
+    let added = d.place("mcb3", 160.0, 48.0);
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Move", |tx| {
+            tx.update::<novo_core::SymbolInstance>(kept, |s| s.placement.origin.x += 10.0)
+        })
+        .unwrap();
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Delete", |tx| tx.remove(gone))
+        .unwrap();
+    d.frame();
+    d.app.run_command(&ctx, "view.changes", None);
+    d.frame();
+    d.frame();
+    assert!(d.app.wb.changes.is_some(), "the mode opens against A");
+    let marks = d
+        .app
+        .canvas
+        .schematic_ref()
+        .unwrap()
+        .canvas
+        .marks
+        .list
+        .clone();
+    let on = |kind, id: SymbolId| {
+        marks.iter().any(|m| {
+            m.kind == kind && m.target == MarkTarget::Item(novo_canvas::model::item_id(id))
+        })
+    };
+    assert!(on(MarkKind::Added, added), "{marks:?}");
+    assert!(on(MarkKind::Modified, kept));
+    assert!(
+        marks
+            .iter()
+            .any(|m| m.kind == MarkKind::Removed && matches!(m.target, MarkTarget::Area(_))),
+        "a dashed ghost where the removed symbol was"
+    );
+    d.app.run_command(&ctx, "view.changes", None);
+    d.frame();
+    assert!(d.app.wb.changes.is_none(), "the same command turns it off");
+}
+
+#[test]
 fn the_command_list_and_the_part_search_show_many_rows() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
@@ -2104,4 +2262,150 @@ fn a_pe_terminal_set_by_hand_carries_the_override_diamond() {
         marks.iter().any(|m| m.kind == MarkKind::Override),
         "a by-hand PE terminal carries the override diamond"
     );
+}
+
+#[test]
+fn the_moving_preference_and_shift_choose_whether_wires_go_along() {
+    use novo_editor::Tool;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let k = d.place("km3", 80.0, 96.0);
+    d.editor_leave();
+    d.select(k);
+    d.frame();
+    let carry = |d: &mut Drive| match d.app.canvas.schematic().unwrap().editor.tool() {
+        Tool::Move(m) => m.carry,
+        other => panic!("expected a move, got {other:?}"),
+    };
+    let hint = |d: &mut Drive| d.app.canvas.schematic().unwrap().status_text().unwrap();
+
+    // Default: leave the wires; the hint offers Shift for the other one.
+    d.app
+        .canvas
+        .schematic()
+        .unwrap()
+        .editor
+        .begin_move(&[AnyId::Symbol(k)]);
+    d.frame();
+    assert!(!carry(&mut d));
+    assert!(hint(&mut d).contains("Shift: take the wires along"));
+    d.app.canvas.schematic().unwrap().editor.leave_tool();
+
+    // Preference "takes its wires along": the hint flips.
+    d.app.settings.move_carries = true;
+    d.frame();
+    d.app
+        .canvas
+        .schematic()
+        .unwrap()
+        .editor
+        .begin_move(&[AnyId::Symbol(k)]);
+    d.frame();
+    assert!(carry(&mut d));
+    assert!(hint(&mut d).contains("Shift: leave the wires"));
+}
+
+#[test]
+fn tab_and_q_steer_a_wire_in_progress_from_the_keyboard() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let a = d.place("mcb3", 80.0, 60.0);
+    let b = d.place("mcb3", 160.0, 60.0);
+    let wires = d.doc().project().wires().count();
+
+    // Start on a pin of A, then hold the pointer over the middle of B.
+    d.app.run_command(&ctx, "tool.connect", None);
+    let start = d.pin(a, true);
+    d.click(start);
+    let page = d.page();
+    let origin = d.doc().project().symbol(b).unwrap().placement.origin;
+    let body = Point::new(origin.x + 4.0, origin.y + 4.0);
+    {
+        let app = &mut d.app;
+        let view = app.canvas.schematic().expect("the editor canvas");
+        let doc = app.backend.document_mut().expect("a project");
+        view.editor.hover(doc, page, body, TOL);
+    }
+    assert!(d.app.canvas.schematic_ref().unwrap().editor.is_wiring());
+
+    // The keymap hands Q and Tab to the wire while it is in progress.
+    d.key(egui::Key::Tab, egui::Modifiers::NONE);
+    assert!(
+        matches!(
+            d.app.canvas.schematic_ref().unwrap().editor.target(),
+            Some(novo_editor::geometry::Target::Endpoint(
+                novo_core::Endpoint::Pin { symbol, .. },
+                _
+            )) if symbol == b
+        ),
+        "Tab aims at a pin of the part under the pointer"
+    );
+    d.key(egui::Key::Q, egui::Modifiers::NONE);
+    assert_eq!(d.doc().project().wires().count(), wires + 1);
+    assert!(!d.app.wb.field.is_open(), "Q did not open the part search");
+}
+
+#[test]
+fn c_draws_a_line_and_the_wires_it_touches_become_one_cable() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let a = d.place("mcb3", 80.0, 60.0);
+    let b = d.place("mcb3", 200.0, 60.0);
+    let pins = |d: &Drive, s: SymbolId| {
+        let sym = d.doc().project().symbol(s).unwrap();
+        (0..sym.pins.len() as u16)
+            .map(|i| sym.pin_position(i).unwrap())
+            .collect::<Vec<_>>()
+    };
+    let (pa, pb) = (pins(&d, a), pins(&d, b));
+    // Bottom pins of A to top pins of B, three wires.
+    let mut lower: Vec<Point> = pa.iter().copied().filter(|p| p.y > 60.0).collect();
+    let mut upper: Vec<Point> = pb.iter().copied().filter(|p| p.y < 60.0 + 20.0).collect();
+    lower.sort_by(|p, q| p.x.total_cmp(&q.x));
+    upper.sort_by(|p, q| p.x.total_cmp(&q.x));
+    for (from, to) in lower.iter().zip(&upper) {
+        d.wire(*from, *to);
+    }
+    let wires: Vec<_> = d.doc().project().wires().map(|w| w.id).collect();
+    assert!(wires.len() >= 2, "wired: {}", wires.len());
+    assert_eq!(d.doc().project().cables().count(), 0);
+
+    // C, a line across the wires between the two parts, Enter.
+    d.app.run_command(&ctx, "tool.cable", None);
+    let (x, y0, y1) = (140.0, 40.0, 140.0);
+    d.click(Point::new(x, y0));
+    d.click(Point::new(x, y1));
+    {
+        let app = &mut d.app;
+        let view = app.canvas.schematic().expect("the editor canvas");
+        let doc = app.backend.document_mut().expect("a project");
+        assert!(view.editor.key(doc, novo_editor::EditorKey::Finish, &[]));
+    }
+    d.frame();
+
+    let project = d.doc().project();
+    assert_eq!(
+        project.cables().count(),
+        1,
+        "one cable for the touched wires"
+    );
+    let cable = project.cables().next().unwrap();
+    let on_cable = wires
+        .iter()
+        .filter(|&&w| project.cable_of_wire(w) == Some(cable.id))
+        .count();
+    assert_eq!(on_cable, wires.len());
+
+    // One undo step takes the cable away again.
+    d.app.backend.document_mut().unwrap().undo().unwrap();
+    assert_eq!(d.doc().project().cables().count(), 0);
 }
