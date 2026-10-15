@@ -15,6 +15,7 @@ Design: `docs/design/symbol-packs.md`. Format: `crates/novo-symbols/FORMAT.md`.
 
 ## Next, in order
 
+0. **Audit of literal `iec/` keys** (reviewer ask on #335, listed in the design doc Risks): 20 non-test files match `iec/...` keys and would ignore `nfpa/...` symbols. Switch each to `function` or a pack-independent key and add one test per engine on `nfpa` keys. Owners are the engine threads; the pack is not usable from the app before this.
 1. **NFPA breadth**, devices that exist in IEC but have no NFPA drawing yet (`gen_nfpa.py` has no entry): resistors and heaters (zigzag), inductors, potentiometers and variable passives, varistor, bell/buzzer/horn, 3-phase transformer, current transformer, emc filter, rcd/rcbo (GFCI), mcb with N, dahlander motor, changeover switch, surge arrester, sensors pt100 look.
 2. **Project standard setting** that picks the pack and `Catalog::new(Library::builtin_pack(pack))`. This is WS-01/WS-02 work; ask them.
 3. **Switch standard command** built on `Pack::counterpart`: rewrite symbol keys, report devices with no counterpart.
