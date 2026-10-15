@@ -257,11 +257,11 @@ never changes meaning in the middle of work.
 
 | Double click on | Select tool (default) | Connect tool (W) |
 | --- | --- | --- |
-| Text (tag, wire number, label) | Rename in place, as F2 | Nothing; leave the tool first |
-| A device | Open its properties: the inspector shows it and the cursor lands in the first field (the tag) | Nothing |
-| A wire | Edit its number in place | Ends or starts a wire (open ends, below) |
+| Text (tag, wire number, label) | Rename in place, as F2 | Nothing |
+| A device | Properties open, cursor in the tag | Nothing |
+| A wire | Edit its number in place | Ends or starts a wire |
 | A pin | Select the device | Starts a connection |
-| Empty canvas | Nothing (Home or double middle click fits the view) | Starts a free wire, or ends the one in progress |
+| Empty canvas | Nothing | Starts a free wire, or ends the one in progress |
 | A page tab | Rename the page | Rename the page |
 
 A double click in the Place mode places like a click and has no further
@@ -540,8 +540,9 @@ click adds no extra corner and no zero-length segment.
 - Pressing on the end cap and dragging pulls the end; releasing on a pin
   or a wire connects it and the flag disappears. W on the end cap resumes
   the wire. Backspace in a resumed wire takes back its last corner.
-- Double click on a finished wire does not end anything; it selects the
-  wire and opens its number for editing, as for any text.
+- In the Select tool a double click on a finished wire selects it and opens
+  its number for editing; in the Connect tool see the table under Double
+  click and drag.
 - The model needs a wire with a free end: WS-02 describes the flag
   (an endpoint that is a position, not a pin) in its pull request.
 
