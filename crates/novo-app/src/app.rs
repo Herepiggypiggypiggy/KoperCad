@@ -365,8 +365,8 @@ impl NovoApp {
             Action::ShowCabinet => self
                 .workspace_unavailable(workspace::Workspace::Cabinet)
                 .is_none(),
-            Action::Undo => doc.is_some_and(|d| d.can_undo()),
-            Action::Redo => doc.is_some_and(|d| d.can_redo()),
+            Action::Undo => !self.commissioning_locks_edits() && doc.is_some_and(|d| d.can_undo()),
+            Action::Redo => !self.commissioning_locks_edits() && doc.is_some_and(|d| d.can_redo()),
             _ => true,
         }
     }
@@ -828,7 +828,15 @@ impl NovoApp {
     /// other views, and a page it asked for is opened.
     fn after_canvas(&mut self) {
         let changes = self.canvas.take_changes();
-        if !changes.is_empty() {
+        if !changes.is_empty() && self.commissioning_locks_edits() {
+            // Commissioning mode checks the drawing against the machine; a
+            // stray touch must not move a wire. One undo takes it back.
+            self.undo_redo(false);
+            self.message(
+                Level::Info,
+                "Commissioning is read-only. Close it (Ctrl+K, Commissioning) to edit.",
+            );
+        } else if !changes.is_empty() {
             self.reports_heard(&changes);
             self.mark_earthed_terminals(&changes);
             self.fix_current_page();
