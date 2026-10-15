@@ -14,6 +14,7 @@
 //! A pole is one group of `SymbolInstance::pass_through`: with the group
 //! closed every pin of it conducts to every other.
 
+pub mod analog;
 mod coupling;
 mod devices;
 mod loads;
