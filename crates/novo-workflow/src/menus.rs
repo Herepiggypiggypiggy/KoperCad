@@ -68,6 +68,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("xref.link", at("Draw")),
     ("plc.add_card", under("Draw", "PLC")),
     ("plc.to_plc", under("Draw", "PLC")),
+    ("macro.save", under("Draw", "Macros")),
+    ("macro.place", under("Draw", "Macros")),
     ("terminal.connect", under("Draw", "Terminals")),
     ("terminal.disconnect", under("Draw", "Terminals")),
     ("terminal.toggle_pe", under("Draw", "Terminals")),
