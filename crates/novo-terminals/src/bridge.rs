@@ -7,17 +7,30 @@
 
 use novo_core::{
     Endpoint, ModelError, Placement, Result, Rotation, SymbolId, SymbolInstance, SymbolKey,
-    SymbolRole, TerminalId, Tx, Wire,
+    SymbolRole, TerminalId, Tx, Value, Wire,
 };
 
 use crate::geometry::{library_pins, symbol_pins};
 use crate::strings;
-use crate::strip::{free_jumper, set_jumper};
+use crate::strip::free_jumper;
 use crate::style::style_of;
 
 /// Distance between neighbouring terminals of a bridged symbol, in
 /// millimetres (the pitch of the multi-level terminals, on the 4 mm grid).
 pub const BRIDGE_PITCH: f64 = 8.0;
+
+/// Symbol properties recording what connecting changed, so disconnecting
+/// undoes only that.
+const ADDED_KEY: &str = "bridge.added";
+const GROUP_KEY: &str = "bridge.group";
+
+/// Sets the jumper of just these terminals (they may be a part of a group).
+fn set_jumper_of(tx: &mut Tx<'_>, terminals: &[TerminalId], group: Option<u32>) -> Result<()> {
+    for &t in terminals {
+        tx.update::<novo_core::Terminal>(t, |t| t.jumper = group)?;
+    }
+    Ok(())
+}
 
 /// The bridged symbol for `count` terminals (2 or 3).
 pub fn bridged_symbol(count: usize) -> Option<SymbolKey> {
@@ -120,20 +133,56 @@ pub fn connect(tx: &mut Tx<'_>, terminals: &[TerminalId]) -> Result<u32> {
         };
         ordered.push(terminals[0]);
     }
-    let group = terminals
+    // One existing group may be extended; two different ones would pull a
+    // terminal out of its own, so that is refused.
+    let mut groups: Vec<u32> = terminals
         .iter()
-        .find_map(|&t| tx.project().terminal(t).and_then(|t| t.jumper))
-        .unwrap_or_else(|| {
-            let strip = tx.project().terminal(terminals[0]).map(|t| t.strip);
-            strip.map_or(1, |s| free_jumper(tx.project(), s))
-        });
-    set_jumper(tx, terminals, Some(group))?;
+        .filter_map(|&t| tx.project().terminal(t).and_then(|t| t.jumper))
+        .collect();
+    groups.sort_unstable();
+    groups.dedup();
+    if groups.len() > 1 {
+        return Err(ModelError::Format(strings::cannot_connect(
+            "they are in different jumper groups already",
+        )));
+    }
+    let group = groups.first().copied().unwrap_or_else(|| {
+        let strip = tx.project().terminal(terminals[0]).map(|t| t.strip);
+        strip.map_or(1, |s| free_jumper(tx.project(), s))
+    });
+    // The terminals this joins to the group, so disconnecting takes out
+    // exactly these and leaves a group the user made alone.
+    let added: Vec<TerminalId> = terminals
+        .iter()
+        .copied()
+        .filter(|&t| tx.project().terminal(t).is_some_and(|t| t.jumper.is_none()))
+        .collect();
+    set_jumper_of(tx, &added, Some(group))?;
     let bridges = (0..terminals.len() as u16)
         .map(|i| vec![2 * i, 2 * i + 1])
         .collect();
     // The model checks a multi-terminal symbol when it is inserted, so its
     // bridges go in with it.
     let page = first.page;
+    let mut properties = novo_core::Properties::new();
+    for d in &order {
+        for (key, value) in &drawings[*d].properties {
+            properties
+                .entry(key.clone())
+                .or_insert_with(|| value.clone());
+        }
+    }
+    properties.insert(
+        ADDED_KEY.to_owned(),
+        Value::Text(
+            added
+                .iter()
+                .map(|t| t.raw().to_string())
+                .collect::<Vec<_>>()
+                .join(","),
+        ),
+    );
+    properties.insert(GROUP_KEY.to_owned(), Value::Int(i64::from(group)));
     let new = tx.insert::<SymbolInstance>(|id| SymbolInstance {
         id,
         page,
@@ -144,7 +193,7 @@ pub fn connect(tx: &mut Tx<'_>, terminals: &[TerminalId]) -> Result<u32> {
         bridges,
         pass_through: Vec::new(),
         feeds: Vec::new(),
-        properties: Default::default(),
+        properties,
     })?;
     for (i, &d) in order.iter().enumerate() {
         for pin in 0..2u16 {
@@ -205,7 +254,21 @@ pub fn disconnect(tx: &mut Tx<'_>, symbol: SymbolId) -> Result<bool> {
         }
     }
     tx.remove(symbol)?;
-    let terminals = terminals.clone();
-    set_jumper(tx, &terminals, None)?;
+    // Only what connecting joined leaves the group; a group the user made
+    // before keeps its other members (and these, if they were already in it).
+    let group = match current.properties.get(GROUP_KEY) {
+        Some(Value::Int(g)) => u32::try_from(*g).ok(),
+        _ => None,
+    };
+    let added: Vec<TerminalId> = match current.properties.get(ADDED_KEY) {
+        Some(Value::Text(text)) => terminals
+            .iter()
+            .copied()
+            .filter(|t| text.split(',').any(|id| id == t.raw().to_string()))
+            .filter(|&t| tx.project().terminal(t).is_some_and(|x| x.jumper == group))
+            .collect(),
+        _ => Vec::new(),
+    };
+    set_jumper_of(tx, &added, None)?;
     Ok(true)
 }

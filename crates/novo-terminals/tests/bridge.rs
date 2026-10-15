@@ -183,3 +183,38 @@ fn disconnecting_restores_single_terminals_without_a_jumper() {
         assert_eq!(project.terminal(t).unwrap().jumper, None);
     }
 }
+
+#[test]
+fn an_existing_jumper_group_is_kept_and_mixed_groups_are_refused() {
+    let mut doc = Document::default();
+    let s = three_terminals(&mut doc);
+    let [t0, t1, t2] = [s.terminals[0], s.terminals[1], s.terminals[2]];
+    doc.transact("Jumper", |tx| set_jumper(tx, &[t1, t2], Some(5)))
+        .unwrap();
+    doc.transact("Connect", |tx| connect(tx, &[t0, t1]))
+        .unwrap();
+    let group = |d: &Document, t: TerminalId| d.project().terminal(t).unwrap().jumper;
+    assert_eq!(
+        [group(&doc, t0), group(&doc, t1), group(&doc, t2)],
+        [Some(5); 3]
+    );
+    let bridged = symbols_of(doc.project(), t0)[0];
+    doc.transact("Disconnect", |tx| disconnect(tx, bridged))
+        .unwrap();
+    assert_eq!(
+        [group(&doc, t0), group(&doc, t1), group(&doc, t2)],
+        [None, Some(5), Some(5)],
+        "only the join connect made is taken out"
+    );
+
+    // Two different groups: refused, nothing changed.
+    doc.transact("Jumper", |tx| set_jumper(tx, &[t0], Some(9)))
+        .unwrap();
+    let before = doc.project().symbols().cloned().collect::<Vec<_>>();
+    let err = doc
+        .transact("Connect", |tx| connect(tx, &[t0, t1]))
+        .unwrap_err();
+    assert!(err.to_string().contains("different jumper groups"), "{err}");
+    assert_eq!(before, doc.project().symbols().cloned().collect::<Vec<_>>());
+    assert_eq!([group(&doc, t0), group(&doc, t1)], [Some(9), Some(5)]);
+}
