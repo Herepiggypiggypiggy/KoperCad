@@ -11,7 +11,10 @@ use std::collections::BTreeMap;
 
 use novo_canvas::{Anchor, Color, Label, Primitive, Shape, Stroke, Vec2};
 use novo_core::{PageFormat, PaperSize};
-use novo_reports::{Align, PageLayout, PageSetup, ReportOutput, layout_page, paginate};
+use novo_reports::{
+    Align, CsvOptions, ExportError, PageLayout, PageSetup, ReportOutput, layout_page, paginate,
+    to_csv, xlsx_bytes,
+};
 use pdf_writer::types::PageMode;
 use pdf_writer::{Finish, Name, Pdf, Rect, Ref, TextStr};
 
@@ -305,4 +308,40 @@ pub fn export_report_pdf(reports: &[&ReportOutput], options: &ReportPdfOptions) 
         }
     }
     pdf.finish()
+}
+
+/// A file format a single report can be written in.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ReportFileFormat {
+    Pdf,
+    Csv(CsvOptions),
+    Xlsx,
+}
+
+impl ReportFileFormat {
+    /// The format a file name asks for (`.pdf`, `.csv`, `.xlsx`); `None` for
+    /// anything else.
+    pub fn from_path(path: &std::path::Path) -> Option<ReportFileFormat> {
+        let ext = path.extension()?.to_string_lossy().to_ascii_lowercase();
+        match ext.as_str() {
+            "pdf" => Some(ReportFileFormat::Pdf),
+            "csv" => Some(ReportFileFormat::Csv(CsvOptions::default())),
+            "xlsx" => Some(ReportFileFormat::Xlsx),
+            _ => None,
+        }
+    }
+}
+
+/// One report as the bytes of a file in `format`. PDF uses `options`; CSV
+/// and Excel carry the same tables without the page layout.
+pub fn report_bytes(
+    report: &ReportOutput,
+    format: ReportFileFormat,
+    options: &ReportPdfOptions,
+) -> Result<Vec<u8>, ExportError> {
+    match format {
+        ReportFileFormat::Pdf => Ok(export_report_pdf(&[report], options)),
+        ReportFileFormat::Csv(csv) => Ok(to_csv(report, &csv).into_bytes()),
+        ReportFileFormat::Xlsx => xlsx_bytes(&[report]),
+    }
 }

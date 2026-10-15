@@ -13,6 +13,7 @@ pub mod lint;
 pub mod markup;
 pub mod progress;
 pub mod runner;
+pub mod ui;
 
 pub use catalog::{Catalog, Entry, Files, ProjectRef, Track};
 pub use check::{Check, Event, Facts};
@@ -21,3 +22,4 @@ pub use lint::{Finding, Registry, Report, Severity, lint};
 pub use markup::{Span, parse_markup};
 pub use progress::{Progress, Standing};
 pub use runner::{Phase, Run};
+pub use ui::UiStrings;

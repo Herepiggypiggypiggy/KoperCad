@@ -1870,6 +1870,7 @@ dependencies = [
  "novo-heatview",
  "novo-interop",
  "novo-layout",
+ "novo-learn",
  "novo-numbering",
  "novo-parts",
  "novo-pdf",
@@ -1938,6 +1939,7 @@ dependencies = [
  "calamine",
  "clap",
  "novo-checks",
+ "novo-commissioning",
  "novo-core",
  "novo-editor",
  "novo-interop",
@@ -2206,6 +2208,14 @@ dependencies = [
  "eframe",
  "egui",
  "egui-phosphor",
+]
+
+[[package]]
+name = "novo-thermal"
+version = "0.1.0"
+dependencies = [
+ "novo-layout",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

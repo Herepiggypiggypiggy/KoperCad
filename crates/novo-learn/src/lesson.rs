@@ -240,6 +240,9 @@ pub enum SolveOp {
     FeedRow(FeedRowOp),
     Select(SelectOp),
     Page(PageOp),
+    Cable(CableOp),
+    IssueRevision(IssueRevisionOp),
+    AssignPart(AssignPartOp),
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -267,6 +270,9 @@ pub struct PlaceArgs {
     /// image of `-K1`) instead of a new device.
     #[serde(default)]
     pub parent: Option<String>,
+    /// Quarter turns, as the R key gives them.
+    #[serde(default)]
+    pub turns: u8,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -317,6 +323,51 @@ pub struct FeedRowArgs {
 #[serde(deny_unknown_fields)]
 pub struct SelectOp {
     pub select: String,
+    /// Add to the selection instead of replacing it (Shift+click).
+    #[serde(default)]
+    pub add: bool,
+}
+
+/// A cable over the wires that join these pairs of pins.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CableOp {
+    pub cable: CableArgs,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CableArgs {
+    pub name: String,
+    pub wires: Vec<[String; 2]>,
+}
+
+/// Issues a revision of the project.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct IssueRevisionOp {
+    pub issue_revision: IssueRevisionArgs,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct IssueRevisionArgs {
+    pub description: String,
+}
+
+/// Assigns a catalog part, by maker and order number, to a device.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AssignPartOp {
+    pub assign_part: AssignPartArgs,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AssignPartArgs {
+    pub device: String,
+    pub manufacturer: String,
+    pub order_number: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -527,6 +578,23 @@ pub fn is_id(id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn newer_solve_ops_parse() {
+        let text = format!(
+            "{GOOD}\n[[step]]\nid = \"x\"\ntitle = \"X\"\ntext = \"x\"\nexpect = {{ tool = \"select\" }}\nsolve = [\n\
+             {{ place = {{ symbol = \"s\", page = \"1\", x = 1, y = 2, turns = 2 }} }},\n\
+             {{ select = \"-X1:7\", add = true }},\n\
+             {{ cable = {{ name = \"-W1\", wires = [[\"-X1:4\", \"-B1:+\"]] }} }},\n\
+             {{ issue_revision = {{ description = \"First issue\" }} }},\n\
+             {{ assign_part = {{ device = \"-P1\", manufacturer = \"M\", order_number = \"1\" }} }},\n]\n"
+        );
+        let lesson = Lesson::parse(&text).unwrap();
+        let ops = &lesson.steps.last().unwrap().solve;
+        assert_eq!(ops.len(), 5);
+        assert!(matches!(&ops[0], SolveOp::Place(p) if p.place.turns == 2));
+        assert!(matches!(&ops[1], SolveOp::Select(s) if s.add));
+    }
 
     const GOOD: &str = r#"
 format = 1

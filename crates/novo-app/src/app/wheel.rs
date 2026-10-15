@@ -211,6 +211,7 @@ impl NovoApp {
             return;
         }
         self.tour_tick("place");
+        self.learn_signal("wheel_opened");
         let screen = ctx.content_rect();
         let at = ctx.pointer_latest_pos().unwrap_or(screen.center());
         let room = screen.shrink(REACH + 8.0);
