@@ -5,16 +5,16 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::entity::{
     BlockDefinition, BlockInstance, Cable, Device, DeviceKind, Dismissal, Endpoint, Junction, Page,
-    Part, PinRef, Potential, PotentialSystem, ProjectInfo, SameName, Structure, SymbolInstance,
-    SymbolRole, Terminal, Text, Wire,
+    Part, PinRef, Potential, PotentialSystem, ProjectInfo, Revision, SameName, Structure,
+    SymbolInstance, SymbolRole, Terminal, Text, Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::Point;
 use crate::graph::Netlist;
 use crate::id::{
     AnyId, BlockDefinitionId, BlockInstanceId, CableId, DeviceId, DismissalId, EntityKind,
-    JunctionId, PageId, PartId, PotentialId, PotentialSystemId, StructureId, SymbolId, TerminalId,
-    TextId, WireId,
+    JunctionId, PageId, PartId, PotentialId, PotentialSystemId, RevisionId, StructureId, SymbolId,
+    TerminalId, TextId, WireId,
 };
 use crate::record::{Entity, Op, Record, Transaction, sealed::Token};
 use crate::tag::DeviceTag;
@@ -45,6 +45,7 @@ pub struct Project {
     pub(crate) dismissals: BTreeMap<DismissalId, Dismissal>,
     pub(crate) block_definitions: BTreeMap<BlockDefinitionId, BlockDefinition>,
     pub(crate) block_instances: BTreeMap<BlockInstanceId, BlockInstance>,
+    pub(crate) revisions: BTreeMap<RevisionId, Revision>,
     pub(crate) wires: BTreeMap<WireId, Wire>,
     pub(crate) potentials: BTreeMap<PotentialId, Potential>,
     pub(crate) terminals: BTreeMap<TerminalId, Terminal>,
@@ -320,6 +321,7 @@ impl Project {
             Record::Dismissal(r) => put(self, r),
             Record::BlockDefinition(r) => put(self, r),
             Record::BlockInstance(r) => put(self, r),
+            Record::Revision(r) => put(self, r),
             Record::Wire(r) => put(self, r),
             Record::Potential(r) => put(self, r),
             Record::Terminal(r) => put(self, r),
@@ -343,6 +345,7 @@ impl Project {
             AnyId::Dismissal(id) => take::<Dismissal>(self, id),
             AnyId::BlockDefinition(id) => take::<BlockDefinition>(self, id),
             AnyId::BlockInstance(id) => take::<BlockInstance>(self, id),
+            AnyId::Revision(id) => take::<Revision>(self, id),
             AnyId::Wire(id) => take::<Wire>(self, id),
             AnyId::Potential(id) => take::<Potential>(self, id),
             AnyId::Terminal(id) => take::<Terminal>(self, id),
@@ -631,6 +634,25 @@ impl Project {
                     return Err(bad("members"));
                 }
             }
+            Record::Revision(revision) => {
+                let bad = |field| ModelError::InvalidValue {
+                    id: revision.id.into(),
+                    field,
+                };
+                if revision.index.trim().is_empty() || revision.index.trim() != revision.index {
+                    return Err(bad("index"));
+                }
+                if !is_iso_date(&revision.date) {
+                    return Err(bad("date"));
+                }
+                if self
+                    .revisions
+                    .values()
+                    .any(|r| r.id != revision.id && r.index == revision.index)
+                {
+                    return Err(ModelError::DuplicateRevision(revision.index.clone()));
+                }
+            }
             Record::Potential(_) | Record::Part(_) => {}
         }
         // Texts attached to this object must stay on its page.
@@ -690,6 +712,7 @@ impl Project {
             AnyId::Dismissal(id) => self.dismissals.contains_key(&id),
             AnyId::BlockDefinition(id) => self.block_definitions.contains_key(&id),
             AnyId::BlockInstance(id) => self.block_instances.contains_key(&id),
+            AnyId::Revision(id) => self.revisions.contains_key(&id),
             AnyId::Wire(id) => self.wires.contains_key(&id),
             AnyId::Potential(id) => self.potentials.contains_key(&id),
             AnyId::Terminal(id) => self.terminals.contains_key(&id),
@@ -723,6 +746,7 @@ impl Project {
                 .get(&id)
                 .cloned()
                 .map(Record::BlockInstance),
+            AnyId::Revision(id) => self.revisions.get(&id).cloned().map(Record::Revision),
             AnyId::Wire(id) => self.wires.get(&id).cloned().map(Record::Wire),
             AnyId::Potential(id) => self.potentials.get(&id).cloned().map(Record::Potential),
             AnyId::Terminal(id) => self.terminals.get(&id).cloned().map(Record::Terminal),
@@ -763,6 +787,7 @@ impl Project {
             .values()
             .cloned()
             .map(Record::BlockInstance);
+        let revisions = self.revisions.values().cloned().map(Record::Revision);
         parts
             .chain(structures)
             .chain(potentials)
@@ -778,6 +803,7 @@ impl Project {
             .chain(dismissals)
             .chain(definitions)
             .chain(instances)
+            .chain(revisions)
     }
 
     /// Rebuilds a project from stored records, in any order, checking every
@@ -928,6 +954,26 @@ impl Project {
             }
         }
         Ok(())
+    }
+
+    /// The issued revisions, oldest first.
+    pub fn revisions(&self) -> impl Iterator<Item = &Revision> {
+        self.revisions.values()
+    }
+
+    /// An issued revision by id. Not [`Project::revision`], the edit
+    /// counter.
+    pub fn issued_revision(&self, id: RevisionId) -> Option<&Revision> {
+        self.revisions.get(&id)
+    }
+
+    /// The latest issued revision: the project's current index.
+    pub fn latest_revision(&self) -> Option<&Revision> {
+        self.revisions.values().next_back()
+    }
+
+    pub fn revision_by_index(&self, index: &str) -> Option<&Revision> {
+        self.revisions.values().find(|r| r.index == index)
     }
 
     pub fn structures(&self) -> impl Iterator<Item = &Structure> {
@@ -1310,6 +1356,23 @@ impl Project {
     pub fn netlist(&self) -> Netlist {
         Netlist::build(self)
     }
+}
+
+/// `YYYY-MM-DD` with a plausible month and day.
+fn is_iso_date(date: &str) -> bool {
+    let b = date.as_bytes();
+    if b.len() != 10 || b[4] != b'-' || b[7] != b'-' {
+        return false;
+    }
+    let num = |r: std::ops::Range<usize>| {
+        b[r].iter().try_fold(0u32, |n, &c| {
+            c.is_ascii_digit().then(|| n * 10 + u32::from(c - b'0'))
+        })
+    };
+    matches!(
+        (num(0..4), num(5..7), num(8..10)),
+        (Some(_), Some(1..=12), Some(1..=31))
+    )
 }
 
 #[cfg(test)]

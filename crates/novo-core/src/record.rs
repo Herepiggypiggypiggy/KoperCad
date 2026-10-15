@@ -11,8 +11,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::entity::{
     BlockDefinition, BlockInstance, Cable, Device, Dismissal, Junction, Page, Part, Potential,
-    PotentialSystem, ProjectInfo, Properties, Structure, SymbolInstance, SymbolRole, Terminal,
-    Text, Wire,
+    PotentialSystem, ProjectInfo, Properties, Revision, Structure, SymbolInstance, SymbolRole,
+    Terminal, Text, Wire,
 };
 use crate::geom::Point;
 use crate::id::{AnyId, EntityKind, PageId};
@@ -39,6 +39,7 @@ pub enum Record {
     Dismissal(Dismissal),
     BlockDefinition(BlockDefinition),
     BlockInstance(BlockInstance),
+    Revision(Revision),
 }
 
 impl Record {
@@ -59,6 +60,7 @@ impl Record {
             Record::Dismissal(r) => r.id.into(),
             Record::BlockDefinition(r) => r.id.into(),
             Record::BlockInstance(r) => r.id.into(),
+            Record::Revision(r) => r.id.into(),
         }
     }
 
@@ -130,6 +132,7 @@ impl Record {
                 out.push(r.definition.into());
                 out.push(r.page.into());
             }
+            Record::Revision(_) => {}
         }
         out.sort();
         out.dedup();
@@ -153,6 +156,7 @@ impl Record {
             Record::Dismissal(r) => &r.properties,
             Record::BlockDefinition(r) => &r.properties,
             Record::BlockInstance(r) => &r.properties,
+            Record::Revision(r) => &r.properties,
         }
     }
 
@@ -174,6 +178,7 @@ impl Record {
             Record::Dismissal(r) => &mut r.properties,
             Record::BlockDefinition(r) => &mut r.properties,
             Record::BlockInstance(r) => &mut r.properties,
+            Record::Revision(r) => &mut r.properties,
         })
     }
 
@@ -264,7 +269,8 @@ impl Record {
             | Record::Terminal(_)
             | Record::Part(_)
             | Record::Structure(_)
-            | Record::Dismissal(_) => None,
+            | Record::Dismissal(_)
+            | Record::Revision(_) => None,
         };
         bad.or_else(|| (!properties_finite(self.properties())).then_some("properties"))
     }
@@ -287,6 +293,7 @@ impl Record {
             EntityKind::Dismissal => 12,
             EntityKind::BlockDefinition => 13,
             EntityKind::BlockInstance => 14,
+            EntityKind::Revision => 15,
         }
     }
 }
@@ -530,4 +537,5 @@ impl_entity! {
     Dismissal => Dismissal, crate::id::DismissalId, dismissals;
     BlockDefinition => BlockDefinition, crate::id::BlockDefinitionId, block_definitions;
     BlockInstance => BlockInstance, crate::id::BlockInstanceId, block_instances;
+    Revision => Revision, crate::id::RevisionId, revisions;
 }

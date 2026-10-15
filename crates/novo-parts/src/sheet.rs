@@ -555,6 +555,7 @@ fn noun(kind: EntityKind) -> &'static str {
         EntityKind::Dismissal => "dismissal",
         EntityKind::BlockDefinition => "block definition",
         EntityKind::BlockInstance => "block",
+        EntityKind::Revision => "revision",
     }
 }
 
@@ -835,6 +836,7 @@ impl PropertySheet {
                 Record::Dismissal(d) => format!("Dismissed {}", d.proposal),
                 Record::BlockDefinition(d) => format!("Block definition {}", d.name),
                 Record::BlockInstance(b) => format!("Block {}", b.id),
+                Record::Revision(r) => format!("Revision {}", r.index),
             };
         }
         let kind = records[0].kind();

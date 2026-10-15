@@ -200,6 +200,7 @@ fn build() -> Project {
         tx.add_potential_system("24 V DC", PotentialSet::Dc { voltage: 24.0 }, None, "")?;
         tx.add_structure(tag("+CAB1"), "Main cabinet", true)?;
         tx.freeze_page(power, "A")?;
+        tx.issue_revision("A", "2026-10-15", "TV", "First issue")?;
         tx.dismiss("terminal.suggest", vec![feed.into()])?;
         let definition = tx.define_block(
             "contact",

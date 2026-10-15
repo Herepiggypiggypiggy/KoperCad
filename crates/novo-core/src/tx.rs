@@ -3,16 +3,16 @@
 use std::collections::BTreeSet;
 
 use crate::entity::{
-    Cable, CableCore, Device, DeviceKind, Dismissal, Endpoint, Junction, Page, PageFreeze, Part,
-    Pin, PinFeed, Potential, PotentialKind, PotentialSet, PotentialSpec, PotentialSystem,
-    ProjectInfo, Structure, SymbolInstance, SymbolKey, SymbolRole, Terminal, Text, TextContent,
-    TextPlacement, Value, Wire,
+    Cable, CableCore, Device, DeviceKind, Dismissal, Endpoint, Junction, Page, PageFreeze,
+    PageKind, Part, Pin, PinFeed, Potential, PotentialKind, PotentialSet, PotentialSpec,
+    PotentialSystem, ProjectInfo, Revision, Structure, SymbolInstance, SymbolKey, SymbolRole,
+    Terminal, Text, TextContent, TextPlacement, Value, Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::{Placement, Point};
 use crate::id::{
     AnyId, CableId, DeviceId, DismissalId, JunctionId, PageId, PartId, PotentialId,
-    PotentialSystemId, StructureId, SymbolId, TerminalId, TextId, WireId,
+    PotentialSystemId, RevisionId, StructureId, SymbolId, TerminalId, TextId, WireId,
 };
 use crate::project::Project;
 use crate::record::{Entity, Op, Record};
@@ -380,6 +380,40 @@ impl<'p> Tx<'p> {
     fn remove_exact(&mut self, id: AnyId) -> Result<()> {
         let record = self.project.record(id).ok_or(ModelError::NotFound(id))?;
         self.apply(Op::Remove { record })
+    }
+
+    /// Issues a revision (DESIGN §7, Revisions): records it and freezes
+    /// every drawn page (all but generated sheets, which reflow) with its
+    /// index, so references in the issued set never move. Issuing the next
+    /// revision re-takes every freeze. An index already issued is refused
+    /// ([`ModelError::DuplicateRevision`]); `date` is `YYYY-MM-DD`.
+    pub fn issue_revision(
+        &mut self,
+        index: impl Into<String>,
+        date: impl Into<String>,
+        author: impl Into<String>,
+        description: impl Into<String>,
+    ) -> Result<RevisionId> {
+        let index = index.into();
+        let (date, author, description) = (date.into(), author.into(), description.into());
+        let revision = self.insert(|id| Revision {
+            id,
+            index: index.clone(),
+            date,
+            author,
+            description,
+            properties: Default::default(),
+        })?;
+        let pages: Vec<PageId> = self
+            .project
+            .pages()
+            .filter(|p| !matches!(p.kind, PageKind::Generated { .. }))
+            .map(|p| p.id)
+            .collect();
+        for page in pages {
+            self.freeze_page(page, index.clone())?;
+        }
+        Ok(revision)
     }
 
     /// Freezes a page as issued with `revision`: its name, structure and

@@ -83,16 +83,16 @@ pub use entity::{
     CableCore, Device, DeviceKind, Dismissal, Endpoint, JoinLink, Junction, Page, PageFormat,
     PageFreeze, PageKind, PaperSize, Part, Pin, PinFeed, PinRef, Potential, PotentialKind,
     PotentialRules, PotentialSet, PotentialSpec, PotentialSystem, ProjectInfo, ProjectRules,
-    Properties, SameName, Structure, SymbolInstance, SymbolKey, SymbolRole, Terminal, TerminalKind,
-    TerminalRules, Text, TextAnchor, TextContent, TextPlacement, Value, Wire,
+    Properties, Revision, SameName, Structure, SymbolInstance, SymbolKey, SymbolRole, Terminal,
+    TerminalKind, TerminalRules, Text, TextAnchor, TextContent, TextPlacement, Value, Wire,
 };
 pub use error::{ModelError, Result};
 pub use geom::{Direction, Placement, Point, Rotation};
 pub use graph::{Net, NetId, Netlist, PotentialSource};
 pub use id::{
     AnyId, BlockDefinitionId, BlockInstanceId, CableId, DeviceId, DismissalId, EntityKind,
-    JunctionId, PageId, PartId, PotentialId, PotentialSystemId, StructureId, SymbolId, TerminalId,
-    TextId, WireId,
+    JunctionId, PageId, PartId, PotentialId, PotentialSystemId, RevisionId, StructureId, SymbolId,
+    TerminalId, TextId, WireId,
 };
 pub use json::JSON_FORMAT_VERSION;
 pub use project::{PageContents, Project, RATED_CURRENT_A, natural_cmp};
