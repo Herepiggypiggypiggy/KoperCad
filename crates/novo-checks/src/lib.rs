@@ -69,7 +69,7 @@ use novo_core::{
 };
 
 pub use contacts::{ContactKind, contact_limit_property};
-pub use waiver::{Waived, check_open, waive, waived_problems, waiver_of};
+pub use waiver::{Waived, check_open, report_lines, waive, waived_problems, waiver_of};
 
 /// How bad a problem is. Orders from most to least severe.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]

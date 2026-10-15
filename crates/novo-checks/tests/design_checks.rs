@@ -192,3 +192,18 @@ fn a_wire_between_placed_devices_without_a_duct_is_found() {
         "{problems:#?}"
     );
 }
+
+#[test]
+fn the_report_lists_open_and_waived_problems() {
+    let mut project = run(Some(100.0), 1.5, 10.0);
+    let lines = novo_checks::report_lines(&project);
+    assert!(lines.iter().any(|(_, t)| t == "1 warning"), "{lines:?}");
+    assert!(lines.iter().any(|(_, t)| t.starts_with("Voltage drop:")));
+    let problem = check(&project).remove(0);
+    project
+        .transact("w", |tx| waive(tx, &problem, "Short start").map(|_| ()))
+        .unwrap();
+    let lines = novo_checks::report_lines(&project);
+    assert!(lines.iter().any(|(_, t)| t == "No issues"));
+    assert!(lines.iter().any(|(_, t)| t.contains("Reason: Short start")));
+}

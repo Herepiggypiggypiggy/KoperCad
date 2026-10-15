@@ -63,3 +63,62 @@ pub fn waived_problems(project: &Project) -> Vec<Waived> {
         })
         .collect()
 }
+
+/// The design checks as lines of text for a printed report: a headline, the
+/// open problems by severity with their page, then the waived ones with
+/// their reasons. `(bold, text)` per line. Always says something, so a
+/// clean project prints "No issues".
+pub fn report_lines(project: &Project) -> Vec<(bool, String)> {
+    let page_of = |p: &Problem| {
+        p.page
+            .and_then(|id| project.page(id))
+            .map(|page| format!("  (page {})", page.name))
+            .unwrap_or_default()
+    };
+    let open = check_open(project);
+    let waived = waived_problems(project);
+    let mut lines = vec![
+        (true, "Design checks".to_owned()),
+        (false, crate::Summary::of(&open).pill_text()),
+    ];
+    for severity in [
+        crate::Severity::Error,
+        crate::Severity::Warning,
+        crate::Severity::Info,
+    ] {
+        let of: Vec<&Problem> = open.iter().filter(|p| p.severity == severity).collect();
+        if of.is_empty() {
+            continue;
+        }
+        lines.push((false, String::new()));
+        let name = match severity {
+            crate::Severity::Error => "Errors",
+            crate::Severity::Warning => "Warnings",
+            crate::Severity::Info => "Information",
+        };
+        lines.push((true, format!("{name} ({})", of.len())));
+        for p in of {
+            lines.push((
+                false,
+                format!("{}: {}{}", p.kind.label(), p.message, page_of(p)),
+            ));
+        }
+    }
+    if !waived.is_empty() {
+        lines.push((false, String::new()));
+        lines.push((true, format!("Waived ({})", waived.len())));
+        for w in &waived {
+            lines.push((
+                false,
+                format!(
+                    "{}: {}{}",
+                    w.problem.kind.label(),
+                    w.problem.message,
+                    page_of(&w.problem)
+                ),
+            ));
+            lines.push((false, format!("    Reason: {}", w.reason)));
+        }
+    }
+    lines
+}
