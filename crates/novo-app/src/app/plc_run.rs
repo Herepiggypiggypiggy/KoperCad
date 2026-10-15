@@ -554,7 +554,10 @@ mod tests {
         plc.run(p.doc.project(), &FromKey);
         assert!(!plc.is_running());
         let e = plc.error.as_deref().unwrap();
-        assert!(e.contains("line 2") && e.contains("`b` is not declared"), "{e}");
+        assert!(
+            e.contains("line 2") && e.contains("`b` is not declared"),
+            "{e}"
+        );
     }
 
     #[test]
