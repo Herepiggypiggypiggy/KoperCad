@@ -943,3 +943,44 @@ fn a_deleted_generated_page_stays_deleted() {
     d.app.add_generated_pages();
     assert_eq!(page_of(&d, "terminals"), None);
 }
+
+#[test]
+fn opening_an_issued_project_adds_no_generated_pages() {
+    use novo_core::{DeviceTag, PageKind};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let doc = d.app.backend.document_mut().unwrap();
+    let (_, changes) = doc
+        .transact("A strip and an issue", |tx| {
+            let strip = tx.add_terminal_strip(DeviceTag::parse("-X1").unwrap())?;
+            tx.add_terminal(strip, "1")?;
+            tx.issue_revision("A", "2026-10-15", "T", "First issue")
+                .map(drop)
+        })
+        .unwrap();
+    d.app.changed_outside_canvas(&changes);
+    assert!(
+        d.doc().project().pages().any(|p| p.frozen.is_some()),
+        "the issue froze the drawing page"
+    );
+
+    d.app.add_generated_pages();
+    let generated = d
+        .doc()
+        .project()
+        .pages()
+        .filter(|p| matches!(p.kind, PageKind::Generated { .. }))
+        .count();
+    assert_eq!(generated, 0, "an issued project is left as it is");
+    assert!(
+        d.app
+            .messages()
+            .iter()
+            .any(|m| m.text == "Generated pages not added: the project has frozen pages"),
+        "{:?}",
+        d.app.messages()
+    );
+}

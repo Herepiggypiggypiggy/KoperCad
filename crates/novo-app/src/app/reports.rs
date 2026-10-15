@@ -101,13 +101,24 @@ impl NovoApp {
     /// Adds the generated pages the project should have and lacks (DESIGN.md
     /// §2: automatic): the contents first, the reports after the drawing
     /// pages, each once it has something to list. Runs on new and open, as
-    /// one undo step. A kind the user turned off (deleting a generated page
+    /// one undo step (the project's first, so one undo takes them all back). A kind the user turned off (deleting a generated page
     /// does, in `ProjectRules::generated_pages_off`) is not added again.
     pub(super) fn add_generated_pages(&mut self) {
         let Some(doc) = self.backend.document_mut() else {
             return;
         };
         let project = doc.project();
+        // An issued project is not changed by opening it: its frozen pages
+        // are a record, and the file is not rewritten behind the user.
+        if project.pages().any(|p| p.frozen.is_some()) {
+            if !novo_reports::default_generated_pages(project).is_empty() {
+                self.message(
+                    super::Level::Info,
+                    "Generated pages not added: the project has frozen pages",
+                );
+            }
+            return;
+        }
         let rules = &project.info().rules;
         let specs =
             novo_reports::default_generated_pages_with(project, &|id| rules.wants_generated(id));

@@ -983,11 +983,6 @@ fn gap_assign_parts_from_the_catalog() {
     assert!(novo_parts::missing_parts(&opened.project).is_empty());
 }
 
-/// Steps 1 to 7 through the whole window (#53), headless, with the real
-/// schematic editor canvas: the file named on the command line opens on the
-/// first frame, every edit runs through `NovoApp::execute`, File > Save
-/// writes it and File > Close closes it. A fresh window opens the same
-/// starter, and nothing was reported along the way.
 /// A project's file content without its generated pages and the id counter,
 /// which opening a project may add to.
 fn drawing_json(project: &Project) -> serde_json::Value {
@@ -1000,6 +995,11 @@ fn drawing_json(project: &Project) -> serde_json::Value {
     json
 }
 
+/// Steps 1 to 7 through the whole window (#53), headless, with the real
+/// schematic editor canvas: the file named on the command line opens on the
+/// first frame, every edit runs through `NovoApp::execute`, File > Save
+/// writes it and File > Close closes it. A fresh window opens the same
+/// starter, and nothing was reported along the way.
 #[test]
 fn scenario_through_the_window() {
     let library = Library::builtin().unwrap();
