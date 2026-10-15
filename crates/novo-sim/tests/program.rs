@@ -632,3 +632,63 @@ fn program_lists_the_addresses_it_uses() {
     let list: Vec<String> = p.addresses.iter().map(ToString::to_string).collect();
     assert_eq!(list, ["%IX0.0", "%IX0.1", "%IX0.2", "%QX0.0"]);
 }
+
+#[test]
+fn pasted_depth_cannot_overflow_the_stack() {
+    let decl = "VAR x : BOOL; n : INT; END_VAR\n";
+    let cases = [
+        format!("{decl}x := {}x{};", "(".repeat(5000), ")".repeat(5000)),
+        format!("{decl}x := {}x;", "NOT ".repeat(5000)),
+        format!("{decl}n := {}1;", "-".repeat(5000)),
+        format!(
+            "{decl}{}x := TRUE;{}",
+            "IF x THEN ".repeat(5000),
+            " END_IF;".repeat(5000)
+        ),
+        format!(
+            "{decl}RUNG {}[x]{} -- (x);",
+            "{ ".repeat(5000),
+            " }".repeat(5000)
+        ),
+        format!("{decl}n := 1{};", " + 1".repeat(5000)),
+    ];
+    for src in cases {
+        let e = Program::parse(&src).expect_err("too deep");
+        let m = e.to_string();
+        assert!(m.contains("nested") || m.contains("operators"), "{m}");
+    }
+    // Ordinary depth is fine.
+    assert!(
+        Program::parse(&format!(
+            "{decl}n := {}1{};",
+            "(".repeat(50),
+            ")".repeat(50)
+        ))
+        .is_ok()
+    );
+}
+
+#[test]
+fn edge_cases_from_review() {
+    // A variable named P is a variable, not an edge contact.
+    let mut r = rt(r#"
+        VAR p AT %IX0.0 : BOOL; x AT %IX0.1 : BOOL; q AT %QX0.0 : BOOL; END_VAR
+        RUNG [P AND x] -- (q);
+    "#);
+    r.set_input_bool(a("%IX0.0"), true);
+    r.set_input_bool(a("%IX0.1"), true);
+    r.scan(1).unwrap();
+    assert!(r.output_bool(a("%QX0.0")));
+    // A negative exponent parses.
+    let mut r = rt("VAR y : REAL; END_VAR y := 2.0 ** -1;");
+    r.scan(1).unwrap();
+    assert_eq!(r.get("y"), Some(Value::Real(0.5)));
+    // Extreme values wrap instead of panicking.
+    let mut r = rt(r#"
+        VAR a : LINT := -9223372036854775807; b : LINT; i : LINT; END_VAR
+        a := a - 1;
+        b := ABS(a);
+        FOR i := 9223372036854775806 TO 9223372036854775807 DO b := b + 0; END_FOR;
+    "#);
+    r.scan(1).unwrap();
+}

@@ -393,7 +393,10 @@ impl Runtime {
                         Flow::Return => return Ok(Flow::Return),
                         _ => {}
                     }
-                    i += step;
+                    match i.checked_add(step) {
+                        Some(n) => i = n,
+                        None => break,
+                    }
                 }
             }
             StmtKind::While(cond, body) => {

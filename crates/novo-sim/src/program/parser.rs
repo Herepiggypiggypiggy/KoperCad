@@ -43,6 +43,9 @@ pub fn parse(source: &str) -> Res<Program> {
         scratch: Vec::new(),
         hidden_count: 0,
         addresses: BTreeSet::new(),
+        nest: 0,
+        expr_depth: 0,
+        expr_nodes: 0,
     };
     p.program()
 }
@@ -61,7 +64,18 @@ struct Parser<'a> {
     scratch: Vec<(usize, usize)>,
     hidden_count: usize,
     addresses: BTreeSet<Address>,
+    /// Current nesting of parentheses, NOT chains, statements and branches.
+    nest: usize,
+    expr_depth: usize,
+    /// Operators and calls built in the expression being read.
+    expr_nodes: usize,
 }
+
+/// Deepest nesting the parser accepts, and most operators in one
+/// expression: both keep the recursion of the parser and of the scan
+/// shallow whatever text is pasted in.
+const MAX_NEST: usize = 100;
+const MAX_EXPR_NODES: usize = 500;
 
 const BLOCK_END: &[&str] = &[
     "END_PROGRAM",
@@ -148,6 +162,28 @@ impl Parser<'_> {
         } else {
             self.err(format!("expected {what}, found {}", self.tok()))
         }
+    }
+
+    fn enter(&mut self) -> Res<()> {
+        self.nest += 1;
+        if self.nest > MAX_NEST {
+            return self.err(format!("nested more than {MAX_NEST} levels deep"));
+        }
+        Ok(())
+    }
+
+    fn leave(&mut self) {
+        self.nest -= 1;
+    }
+
+    fn node(&mut self) -> Res<()> {
+        self.expr_nodes += 1;
+        if self.expr_nodes > MAX_EXPR_NODES {
+            return self.err(format!(
+                "expression has more than {MAX_EXPR_NODES} operators; split it"
+            ));
+        }
+        Ok(())
     }
 
     fn at_block_end(&self) -> bool {
@@ -394,6 +430,13 @@ impl Parser<'_> {
     }
 
     fn statement(&mut self, out: &mut Vec<Stmt>) -> Res<()> {
+        self.enter()?;
+        let r = self.statement_inner(out);
+        self.leave();
+        r
+    }
+
+    fn statement_inner(&mut self, out: &mut Vec<Stmt>) -> Res<()> {
         let line = self.line();
         if self.accept(&Tok::Semi) {
             return Ok(());
@@ -647,7 +690,13 @@ impl Parser<'_> {
     // ---- expressions --------------------------------------------------
 
     fn expr(&mut self) -> Res<Expr> {
-        self.binary_level(0)
+        if self.expr_depth == 0 {
+            self.expr_nodes = 0;
+        }
+        self.expr_depth += 1;
+        let r = self.binary_level(0);
+        self.expr_depth -= 1;
+        r
     }
 
     /// Binary operator levels from loosest to tightest.
@@ -692,6 +741,7 @@ impl Parser<'_> {
         let mut left = self.binary_level(level + 1)?;
         while let Some(op) = self.op_at(level) {
             self.advance();
+            self.node()?;
             let right = self.binary_level(level + 1)?;
             left = Expr::Binary(op, Box::new(left), Box::new(right));
         }
@@ -699,7 +749,15 @@ impl Parser<'_> {
     }
 
     fn unary(&mut self) -> Res<Expr> {
+        self.enter()?;
+        let r = self.unary_inner();
+        self.leave();
+        r
+    }
+
+    fn unary_inner(&mut self) -> Res<Expr> {
         if self.accept(&Tok::Minus) {
+            self.node()?;
             let e = self.unary()?;
             return Ok(match e {
                 Expr::Lit(Value::Int(i)) => Expr::Lit(Value::Int(-i)),
@@ -712,6 +770,7 @@ impl Parser<'_> {
             return self.unary();
         }
         if self.accept_kw("NOT") {
+            self.node()?;
             return Ok(Expr::Unary(UnOp::Not, Box::new(self.unary()?)));
         }
         self.power()
@@ -719,8 +778,9 @@ impl Parser<'_> {
 
     fn power(&mut self) -> Res<Expr> {
         let mut left = self.primary()?;
-        while self.accept(&Tok::StarStar) {
-            let right = self.primary()?;
+        if self.accept(&Tok::StarStar) {
+            self.node()?;
+            let right = self.unary()?;
             left = Expr::Binary(BinOp::Pow, Box::new(left), Box::new(right));
         }
         Ok(left)
@@ -782,6 +842,7 @@ impl Parser<'_> {
                     && let Some((func, min, max)) = Func::parse(&name)
                 {
                     self.advance();
+                    self.node()?;
                     let saved = std::mem::replace(&mut self.no_gt, false);
                     let mut args = Vec::new();
                     while *self.tok() != Tok::RParen {
@@ -905,7 +966,16 @@ impl Parser<'_> {
         self.advance(); // [
         let negated = self.accept(&Tok::Slash);
         let edge = match (self.tok(), self.tok_at(1)) {
-            (Tok::Ident(w), Tok::Ident(_) | Tok::Addr(_))
+            (Tok::Ident(w), Tok::Ident(next))
+                if !negated
+                    && (w.eq_ignore_ascii_case("P") || w.eq_ignore_ascii_case("N"))
+                    && !["AND", "OR", "XOR", "MOD"]
+                        .iter()
+                        .any(|k| next.eq_ignore_ascii_case(k)) =>
+            {
+                Some(w.eq_ignore_ascii_case("P"))
+            }
+            (Tok::Ident(w), Tok::Addr(_))
                 if !negated && (w.eq_ignore_ascii_case("P") || w.eq_ignore_ascii_case("N")) =>
             {
                 Some(w.eq_ignore_ascii_case("P"))
@@ -1110,6 +1180,7 @@ impl Parser<'_> {
     fn branch(&mut self, flow: usize, depth: usize, out: &mut Vec<Stmt>) -> Res<ElementKind> {
         let line = self.line();
         self.advance(); // {
+        self.enter()?;
         let (save, acc) = self.scratch(depth);
         let var = |v| Expr::Var(v);
         out.push(self.stmt(line, StmtKind::Assign(Target::Var(save), var(flow))));
@@ -1133,6 +1204,7 @@ impl Parser<'_> {
             }
         }
         self.expect(&Tok::RBrace)?;
+        self.leave();
         out.push(self.stmt(line, StmtKind::Assign(Target::Var(flow), var(acc))));
         Ok(ElementKind::Branch(branches))
     }

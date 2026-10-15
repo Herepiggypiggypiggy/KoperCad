@@ -13,7 +13,7 @@ pub fn unary(op: UnOp, v: Value) -> OpResult {
         (UnOp::Not, Value::Int(i)) => Value::Int(!i),
         (UnOp::Neg, Value::Int(i)) => Value::Int(i.wrapping_neg()),
         (UnOp::Neg, Value::Real(r)) => Value::Real(-r),
-        (UnOp::Neg, Value::Time(t)) => Value::Time(-t),
+        (UnOp::Neg, Value::Time(t)) => Value::Time(t.wrapping_neg()),
         (UnOp::Not, other) => return Err(format!("NOT does not apply to {other}")),
         (UnOp::Neg, other) => return Err(format!("`-` does not apply to {other}")),
     })
@@ -128,8 +128,8 @@ pub fn call(func: &Func, args: &[Value]) -> OpResult {
     match func {
         Func::Abs => Ok(match args[0] {
             Value::Real(r) => Value::Real(r.abs()),
-            Value::Time(t) => Value::Time(t.abs()),
-            v => Value::Int(v.as_int().abs()),
+            Value::Time(t) => Value::Time(t.wrapping_abs()),
+            v => Value::Int(v.as_int().wrapping_abs()),
         }),
         Func::Sqrt => {
             if args[0].as_real() < 0.0 {
