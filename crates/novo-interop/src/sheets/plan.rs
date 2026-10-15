@@ -599,7 +599,7 @@ fn plan_table(project: &Project, workbook: &Workbook, table: &Table, plan: &mut 
         };
         // On the cores sheet the second half of the key: which core.
         let core = if kind == TableKind::Cores {
-            let n = core_col.map(&cell_at);
+            let n = core_col.map(cell_at);
             let count = match id {
                 AnyId::Cable(c) => project.cable(c).map_or(0, |c| c.cores.len()),
                 _ => 0,
