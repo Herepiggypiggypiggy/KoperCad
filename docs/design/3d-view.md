@@ -24,9 +24,9 @@ second copy that drifts from the layout, and the fan spins while nothing moves.
 
 Goals, in order:
 
-1. **Instant and light.** First frame with boxes in under a second, 60 frames
+1. **Instant and light.** First frame with boxes in under 200 ms, 60 frames
    per second while orbiting a cabinet of 1000 parts on an integrated GPU
-   (Intel UHD 620 class) at 1920x1080, and **zero GPU work while nothing moves**.
+   (Intel UHD 620 class) at 1920x1080, and **no GPU work while nothing moves** (one sharp frame after the camera stops).
 2. **Always true.** The scene is derived from the project on every change.
    Nothing about the cabinet is stored in 3D.
 3. **Elegant.** A calm technical-illustration look with crisp edges, not a
@@ -99,7 +99,7 @@ The 2D plate of `cabinet-layout.md` has the origin top left with y down.
 `PlateFrame` is the one conversion, used by every builder:
 
 ```rust
-pub struct PlateFrame { pub width: f32, pub height: f32 }   // mm
+pub struct PlateFrame { pub width: f32, pub height: f32 }   // the mounting plate, mm (not the enclosure)
 impl PlateFrame {
     /// 2D plate point (x right, y down) and height above the plate (z).
     pub fn world(&self, x: f64, y: f64, z: f64) -> Vec3 { Vec3::new(x as f32, self.height - y as f32, z as f32) }
@@ -127,8 +127,10 @@ may grow, and carry `CONTRACT_VERSION` (starts at 1). A change to them is a
 change to this section in the same pull request.
 
 ```rust
-/// Stable identity of a thing in the scene. `raw` is the model's raw id
-/// (unique across kinds, as in novo-layout), so a click maps back to the model.
+/// Stable identity of a thing in the scene. `raw` is the model's raw id, so a
+/// click maps back to the model. novo-layout's ids are unique across kinds; the
+/// key is still `(kind, raw)`, so a clash could never select the wrong kind, and
+/// the builder asserts that ids are unique in the scene.
 pub struct ItemId { pub kind: ItemKind, pub raw: u64 }
 
 #[non_exhaustive]
@@ -165,9 +167,15 @@ pub struct Item {
 /// A hinge: its items rotate by `angle` about `axis` through `pivot`.
 pub struct Group { pub id: GroupId, pub pivot: Vec3, pub axis: Vec3, pub angle: f32 }
 
+/// A wire or cable path in world mm, drawn as a thin tube. Wires are not boxes,
+/// so they live beside the items; their id has kind `ItemKind::Wire`.
+pub struct Wire { pub id: ItemId, pub points: Vec<Vec3>, pub radius: f32,
+                  pub tint: Option<[u8; 3]>, pub mark: Mark, pub label: Option<Arc<str>> }
+
 pub struct Scene {
     pub frame: PlateFrame,
     pub items: Vec<Item>,
+    pub wires: Vec<Wire>,
     pub groups: Vec<Group>,
     /// Bumped by the builder when items change; the renderer re-uploads on a change.
     pub revision: u64,
@@ -214,13 +222,13 @@ pub trait GeometryProvider {
 pub enum GeometryState { None, Pending, Ready(Arc<PartGeometry>), Failed(String) }
 ```
 
-- **Look** (visual design thread): `Look` is a plain struct of colours and constants, built from the app theme tokens, and the only thing that decides how things look. The renderer has no colour literals.
+- **Look** (visual design thread): `Look` is a plain data struct of colours and constants, rebuilt whenever the app theme changes (no function pointers, so a theme can fill it from its own state), and the only thing that decides how things look. The renderer has no colour literals.
 
 ```rust
 pub struct Look {
     pub background: [Color; 2],                 // top and bottom, behind the cabinet
-    pub surface: fn(ItemKind) -> SurfaceStyle,  // base colour, matte factor, edge colour and width
-    pub mark: fn(Mark) -> MarkStyle,            // tint, edge colour and glyph for collisions, too-close, guessed
+    pub surfaces: [SurfaceStyle; ItemKind::COUNT], // by ItemKind::index: colour, edge colour, alpha
+    pub marks: [MarkStyle; Mark::COUNT],           // by Mark::index: tint, edge colour and glyph
     pub selection: Highlight, pub hover: Highlight, pub related: Highlight,
     pub light: Vec3, pub ambient: f32,          // one directional light and a hemisphere term
     pub ground_shadow: f32,                     // soft contact shadow under the plate, 0 = off
@@ -229,9 +237,36 @@ pub struct Look {
 
 **Marks never rely on colour alone** (the same colour-blind rule as the 2D
 marks). Every `Mark` other than `None` also draws a glyph at the item, a cross
-for a collision, a bang for too close, outside and mismatch, a dashed edge for a
-guessed size, drawn by the overlay from `MarkStyle::glyph`, so a red and an
+for a collision or a device outside the plate (as in the 2D Cabinet), a bang for
+too close and mismatch, a dashed edge for a guessed size, drawn by the overlay from `MarkStyle::glyph`, so a red and an
 amber tint are never the only difference.
+
+### Decisions after the first reviews (2026-10-15)
+
+- **Who owns which types.** `novo-view3d` owns every scene type above. The
+  scene-model thread's code becomes `novo-view3d::build` (feature `model`),
+  `build::scene(project, structure, &Options) -> Scene`; it keeps no second set
+  of types and its `scene::diff` goes away, because a full rebuild is cheap and
+  `Scene::revision` is the change signal. Its defaults become `Options`: rail
+  35 x 7.5 mm, devices on a rail start at z = 7.5, unknown device depth 60 mm
+  (`Mark::GuessedSize`), unknown duct section 40 x 60 mm, enclosure depth 250 mm
+  until R2 gives real fields.
+- **Wires** are `Scene::wires` (polylines with a radius), not items, because
+  they are not boxes. They are selectable like items (kind `Wire`).
+- **How meshes reach the renderer.** STEP parsing lives in `novo-interop`,
+  which returns its own neutral triangle mesh and knows nothing of 3D.
+  `novo-view3d::geometry` (feature `import`) calls it, fits and reduces the
+  result into `MeshData` LODs, and implements `GeometryProvider`. The renderer
+  only ever sees `MeshLibrary`. Nothing starts a STEP importer before the owner
+  has decided that maker meshes are wanted (section 12).
+- **Look and renderer split.** The look thread owns GPU-free data and logic:
+  palette, light numbers, quality tiers, view cube, label layout and highlight
+  fades. This thread owns wgpu and applies those values as uniforms. What the
+  look thread asked for is answered without new GPU work: an object id per
+  selectable is the `ItemId` of a CPU pick; a depth at a pixel is the hit
+  distance and point of the same pick; the scene-changed signal is
+  `Scene::revision` and `pose_revision`. A GPU id buffer or depth read-back is
+  not built unless a CPU pick proves too slow.
 
 ## 6. Camera and input
 
@@ -309,7 +344,7 @@ file. A pull request that makes any row worse says so.
 | 1000 boxes + 200 rail/duct profiles, orbiting, 1920x1080, UHD 620 class | 60 fps, GPU frame at most 8 ms |
 | CPU per frame for that scene (cull, instance write, draw encode) | at most 0.5 ms |
 | Scene rebuild from the project for 1000 devices | at most 2 ms |
-| Camera idle | 0 frames submitted |
+| Camera idle | 0 frames submitted; one settled frame after input stops and one if the adaptive scale changes |
 | First frame after switching to the 3D face (boxes) | under 200 ms |
 | GPU memory, 1000 items, no maker meshes | under 64 MB |
 
@@ -377,10 +412,14 @@ the pull request description and added to section 5 by this thread.
 
 ## 12. Open questions for the owner
 
-- **Where it lives in the window.** Proposal: a third face of the Cabinet
-  canvas next to Plate and Table (a segmented switch, like Table), with a
-  command `cabinet.view3d` in the command surface. A key is for the Workflow
-  thread to assign, since Ctrl+1 to Ctrl+5 and Ctrl+T are taken.
+- **Where it lives in the window (the UI entry point).** A third face of the
+  Cabinet canvas: the face switch reads Plate / Table / 3D, and the command
+  `cabinet.view3d` in the command surface opens it; `view.fit` (Home, F) and
+  `view.iso` work inside it. No menu entry until hands-on tested. A key is for
+  the Workflow thread to assign, since Ctrl+1 to Ctrl+5 and Ctrl+T are taken.
+  The host side (the face, the install call, selection sync) belongs to the
+  "UI integration: cabinet, 3D, enclosure" thread; this crate gives it
+  `widget::install`, `View3d::new` and `View3d::show`.
 - **Are maker meshes wanted?** Box plus generated shapes is a day-one look
   that is accurate to the footprint. Real meshes cost an importer, a cache and
   a larger file budget. The geometry thread's first deliverable settles it

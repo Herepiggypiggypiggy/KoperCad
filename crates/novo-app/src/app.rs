@@ -4,8 +4,10 @@
 //! bar and no status bar.
 
 mod cabinet;
+mod cabinet_inspector;
 mod changes;
 mod checks;
+mod compare;
 mod dock;
 mod drawers;
 mod duplicate;
@@ -16,6 +18,8 @@ mod live;
 mod live_anim;
 mod menu_bar;
 mod pages;
+mod parts;
+mod parts_import;
 mod pdf;
 mod plc;
 mod potentials;
@@ -36,6 +40,8 @@ mod xref;
 mod cabinet_tests;
 #[cfg(test)]
 mod changes_tests;
+#[cfg(test)]
+mod compare_tests;
 #[cfg(test)]
 mod example_tests;
 #[cfg(test)]
@@ -161,6 +167,11 @@ pub struct NovoApp {
     renaming_level: Option<(Aspect, DeviceTag, String)>,
     /// Window width last frame, which decides whether the outline pins.
     window_width: f32,
+    /// Free room between the top bar's left and right groups last frame;
+    /// below zero they overlap. Read by the width test.
+    top_bar_gap: f32,
+    /// Width the menu names took last frame (`menu_bar`).
+    menu_bar_width: f32,
 }
 
 /// Most messages remembered; older ones are forgotten.
@@ -217,6 +228,8 @@ impl NovoApp {
             renaming_page: None,
             renaming_level: None,
             window_width: 0.0,
+            top_bar_gap: 0.0,
+            menu_bar_width: 380.0,
         };
         app.restore_layout_at_start();
         app
@@ -691,7 +704,7 @@ impl NovoApp {
                     self.cabinet.keys.push((*id).to_owned());
                 }
             }
-            commands.retain(|id| Action::from_id(id).is_some());
+            commands.retain(|id| Action::from_id(id).is_some() || *id == "view.cabinet_table");
         }
 
         self.window_width = ctx.content_rect().width();
@@ -753,8 +766,10 @@ impl NovoApp {
         self.about_dialog(&ctx);
         self.renumber_dialog(&ctx);
         self.preferences_dialog(&ctx);
+        self.parts_window(&ctx);
         self.project_settings_dialog(&ctx);
         self.issue_revision_dialog(&ctx);
+        self.compare_window(&ctx);
         self.page_form_dialog(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {
             self.run_command(&ctx, id, None);
@@ -882,24 +897,27 @@ impl NovoApp {
     /// Mark (project menu), Schematic | Cabinet, breadcrumb, then "Search
     /// or run" and the saved state on the right.
     fn top_bar(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
+        let fit = menu_bar::TopBarFit::at(self.window_width);
+        let focus = self.menu_key_pressed(ui.ctx());
         ui.horizontal_centered(|ui| {
-            ui.menu_button(egui::RichText::new(APP_NAME).strong(), |ui| {
-                self.mark_menu(ui)
-            });
             if self.menu_bar_wide() {
-                self.menu_bar(ui);
+                self.mark(ui, false);
+                self.menu_bar(ui, focus);
+            } else {
+                self.mark(ui, focus);
             }
             ui.separator();
-            if let Some(workspace) = self.workspace_switcher(ui) {
+            if let Some(workspace) = self.workspace_switcher(ui, fit.short_switcher) {
                 picked.push(match workspace {
                     workspace::Workspace::Cabinet => Action::ShowCabinet,
                     _ => Action::ShowSchematic,
                 });
             }
             ui.separator();
-            self.breadcrumb(ui);
+            self.breadcrumb(ui, fit.name_chars);
+            let left_end = ui.min_rect().right();
 
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let right = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if !self.status_bar_shown() {
                     ui.weak(self.saved_state());
                 }
@@ -908,23 +926,40 @@ impl NovoApp {
                     .shortcut()
                     .map(|s| ui.ctx().format_shortcut(&s))
                     .unwrap_or_default();
-                let search = egui::Button::new("Search or run")
-                    .shortcut_text(shortcut)
-                    .min_size(egui::vec2(240.0, 0.0));
-                if ui.add(search).clicked() {
+                let label = if fit.search.is_empty() {
+                    shortcut.clone()
+                } else {
+                    fit.search.to_owned()
+                };
+                let mut search =
+                    egui::Button::new(label).min_size(egui::vec2(fit.search_width, 0.0));
+                if !fit.search.is_empty() && fit.search_width > 0.0 {
+                    search = search.shortcut_text(shortcut.clone());
+                }
+                let search = ui
+                    .add(search)
+                    .on_hover_text(format!("Search or run ({shortcut})"));
+                if search.clicked() {
                     picked.push(Action::CommandPalette);
                 }
             });
+            self.top_bar_gap = right.response.rect.left() - left_end;
         });
     }
 
     /// project / page. A click on the page opens the outline.
-    fn breadcrumb(&mut self, ui: &mut egui::Ui) {
+    fn breadcrumb(&mut self, ui: &mut egui::Ui, name_chars: usize) {
         let Some(name) = self.project_name() else {
             ui.weak("No project open");
             return;
         };
-        ui.label(name);
+        let shown = if name.chars().count() > name_chars {
+            let cut: String = name.chars().take(name_chars.saturating_sub(1)).collect();
+            format!("{cut}…")
+        } else {
+            name.clone()
+        };
+        ui.label(shown).on_hover_text(name);
         let page = self.current_page.and_then(|id| {
             let sheet = self.wb.sheet;
             let rows = self.page_rows();
@@ -1102,6 +1137,8 @@ impl NovoApp {
         let drops =
             std::cell::RefCell::new(Vec::<(PageId, Option<DeviceTag>, Option<DeviceTag>)>::new());
         let forms = std::cell::RefCell::new(Vec::<PageForm>::new());
+        let contents = std::cell::RefCell::new(None::<DeviceTag>);
+        let has_contents = pages::has_panel_contents(project, &panel_of(&structure));
         // The header being renamed shows a text box; the rename starts from
         // a double click or the context menu.
         let editing = std::cell::RefCell::new(self.renaming_level.take());
@@ -1187,6 +1224,14 @@ impl NovoApp {
                         Some((Aspect::Location, panel.clone(), rename_text(&panel)));
                     ui.close();
                 }
+                if ui
+                    .add_enabled(!has_contents, egui::Button::new("Add contents page"))
+                    .on_disabled_hover_text("This panel already has a contents page")
+                    .clicked()
+                {
+                    *contents.borrow_mut() = Some(panel.clone());
+                    ui.close();
+                }
                 if ui.button("New pages in this panel…").clicked() {
                     forms.borrow_mut().push(PageForm::new(
                         FormKind::Pages,
@@ -1228,8 +1273,30 @@ impl NovoApp {
         for (page, g, p) in drops.into_inner() {
             self.move_page(page, g, p);
         }
+        if let Some(panel) = contents.into_inner() {
+            self.add_panel_contents(&panel);
+        }
         if let Some(form) = forms.into_inner().pop() {
             self.wb.page_form = Some(form);
+        }
+    }
+
+    /// Adds the contents page of a panel, which lists the panel's pages and
+    /// follows it when it is renamed.
+    fn add_panel_contents(&mut self, panel: &DeviceTag) {
+        let Some(project) = self.backend.document().map(|d| d.project()) else {
+            return;
+        };
+        match pages::panel_contents_command(project, panel) {
+            Ok(command) => {
+                if let Some(Err(e)) = self.execute(command) {
+                    self.message(
+                        Level::Error,
+                        format!("Could not add the contents page: {e}"),
+                    );
+                }
+            }
+            Err(e) => self.message(Level::Warning, e),
         }
     }
 

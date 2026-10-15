@@ -34,7 +34,11 @@ pub struct Migration {
 }
 
 /// Every schema step, oldest first.
-pub const MIGRATIONS: &[Migration] = &[Migration { to: 1, run: v1 }, Migration { to: 2, run: v2 }];
+pub const MIGRATIONS: &[Migration] = &[
+    Migration { to: 1, run: v1 },
+    Migration { to: 2, run: v2 },
+    Migration { to: 3, run: v3 },
+];
 
 pub(crate) const fn latest(migrations: &[Migration]) -> u32 {
     match migrations.last() {
@@ -78,6 +82,20 @@ fn v2(tx: &Transaction<'_>) -> rusqlite::Result<()> {
              format   INTEGER NOT NULL,
              data     BLOB NOT NULL
          );",
+    )
+}
+
+/// Version 3: named documents kept beside the model, such as the
+/// commissioning checks and punch list. `data` is JSON text owned by the
+/// crate that writes it; storage does not interpret it. They are not model
+/// records, so they are not undone with design edits and a save of the
+/// project leaves them alone.
+fn v3(tx: &Transaction<'_>) -> rusqlite::Result<()> {
+    tx.execute_batch(
+        "CREATE TABLE sidecar (
+             key  TEXT PRIMARY KEY,
+             data TEXT NOT NULL
+         ) WITHOUT ROWID;",
     )
 }
 

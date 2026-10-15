@@ -86,6 +86,7 @@ pub fn place_all_below(
                 x: usable.x,
                 y,
                 length: usable.w,
+                vertical: false,
             });
             row_open = true;
         } else {
