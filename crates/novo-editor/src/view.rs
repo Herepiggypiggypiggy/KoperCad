@@ -941,7 +941,8 @@ impl SchematicView {
             && !self.popup_open()
             && !self.editor.tool_active()
             && !self.editor.dragging()
-            && !self.drag_move;
+            && !self.drag_move
+            && self.label_drag.is_none();
         if idle
             && self.part_drag.is_none()
             && response.drag_started_by(egui::PointerButton::Primary)
