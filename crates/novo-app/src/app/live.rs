@@ -18,7 +18,10 @@ use novo_core::{
     NetId, Netlist, PageId, Potential, PotentialId, PotentialKind, Project, SymbolId, SymbolRole,
     WireId,
 };
-use novo_sim::{Clock, Live, PoleState, Settled, Solution, is_coil, settle_timed};
+use novo_sim::{
+    Clock, Live, PoleState, Settled, Solution, inputs_seen, is_coil, is_plc_input, is_plc_output,
+    settle_timed,
+};
 use novo_theme::{tokens, widgets};
 
 use super::{Level, NovoApp};
@@ -204,24 +207,59 @@ pub(super) struct CoilBadge {
     pub symbol: SymbolId,
     pub at: egui::Vec2,
     pub on: bool,
+    /// A PLC digital output rather than a coil.
+    pub output: bool,
 }
 
+/// The coils of the page and the PLC outputs, which are switched by hand
+/// just the same.
 pub(super) fn coil_badges(
     project: &Project,
     page: PageId,
     energized: &BTreeSet<SymbolId>,
+    forced: &BTreeSet<SymbolId>,
 ) -> Vec<CoilBadge> {
     project
         .symbols()
-        .filter(|s| s.page == page && is_coil(s))
+        .filter(|s| s.page == page)
+        .filter_map(|s| {
+            if is_coil(s) {
+                let a = s.pin_position(0)?;
+                let b = s.pin_position(1)?;
+                Some(CoilBadge {
+                    symbol: s.id,
+                    at: egui::vec2(((a.x + b.x) / 2.0) as f32, ((a.y + b.y) / 2.0) as f32),
+                    on: energized.contains(&s.id),
+                    output: false,
+                })
+            } else if is_plc_output(s) {
+                let a = s.pin_position(0)?;
+                Some(CoilBadge {
+                    symbol: s.id,
+                    at: egui::vec2(a.x as f32, (a.y - 5.0) as f32),
+                    on: forced.contains(&s.id),
+                    output: true,
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// The PLC inputs of the page with their pin positions, and whether the pin
+/// carries a potential.
+pub(super) fn input_marks(
+    project: &Project,
+    page: PageId,
+    seen: &BTreeSet<SymbolId>,
+) -> Vec<(egui::Vec2, bool)> {
+    project
+        .symbols()
+        .filter(|s| s.page == page && is_plc_input(s))
         .filter_map(|s| {
             let a = s.pin_position(0)?;
-            let b = s.pin_position(1)?;
-            Some(CoilBadge {
-                symbol: s.id,
-                at: egui::vec2(((a.x + b.x) / 2.0) as f32, ((a.y + b.y) / 2.0) as f32),
-                on: energized.contains(&s.id),
-            })
+            Some((egui::vec2(a.x as f32, a.y as f32), seen.contains(&s.id)))
         })
         .collect()
 }
@@ -343,7 +381,9 @@ impl NovoApp {
         let badges = pole_badges(project, page, &solved.settled.poles);
         let driven = solved.settled.driven.clone();
         let energized = solved.settled.energized.clone();
-        let coils = coil_badges(project, page, &energized);
+        let coils = coil_badges(project, page, &energized, &solved.forced);
+        let seen = inputs_seen(project, &solved.netlist, &solved.settled.solution);
+        let inputs = input_marks(project, page, &seen);
         let colors: BTreeMap<PotentialId, (String, egui::Color32)> = project
             .potentials()
             .map(|p| (p.id, (p.name.clone(), potential_color(p))))
@@ -491,12 +531,40 @@ impl NovoApp {
                     }
                     let name = symbol_name(project, badge.symbol);
                     let tip = format!(
-                        "{name} · coil {} · click to switch it {}",
+                        "{name} · {} {} · click to switch it {}",
+                        if badge.output { "output" } else { "coil" },
                         if badge.on { "on" } else { "off" },
                         if badge.on { "off" } else { "on" },
                     );
                     if response.on_hover_text(tip).clicked() {
                         coil_clicked = Some(badge.symbol);
+                    }
+                });
+        }
+
+        // PLC inputs: a dot that fills when the pin carries a potential.
+        for (n, (at, high)) in inputs.iter().enumerate() {
+            let at = to_screen(*at);
+            if !canvas.expand(BADGE).contains(at) {
+                continue;
+            }
+            egui::Area::new(egui::Id::new(("live_input", n)))
+                .order(egui::Order::Middle)
+                .pivot(egui::Align2::CENTER_CENTER)
+                .fixed_pos(at)
+                .interactable(false)
+                .show(ctx, |ui| {
+                    let (rect, _) = ui
+                        .allocate_exact_size(egui::Vec2::splat(BADGE * 1.6), egui::Sense::hover());
+                    let p = ui.painter();
+                    if *high {
+                        p.circle_filled(rect.center(), BADGE * 0.7, tokens::SUCCESS);
+                    } else {
+                        p.circle_stroke(
+                            rect.center(),
+                            BADGE * 0.7,
+                            egui::Stroke::new(1.5, tokens::TEXT_MUTED),
+                        );
                     }
                 });
         }
