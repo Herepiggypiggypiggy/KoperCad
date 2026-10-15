@@ -301,6 +301,16 @@ pub const DUTCH: &[Aliases] = &[
         &["draadsnijmachine", "adereindhulzen", "labels"],
     ),
     nl(
+        "export.wiring_dxf",
+        &["exporteer bedradingsplan"],
+        &["kanalen", "routes", "dxf"],
+    ),
+    nl(
+        "export.wirecut_page",
+        &["voeg draadproductiepagina toe"],
+        &["pdf", "afdrukken", "draadsnijden"],
+    ),
+    nl(
         "export.wirecut_xlsx",
         &["exporteer draadproductie"],
         &["draadsnijden", "adereindhulzen", "kanaalvulling"],

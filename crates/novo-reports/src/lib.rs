@@ -98,6 +98,7 @@ pub use bom::BillOfMaterials;
 pub use cutlist::CutList;
 pub use defaults::{
     GeneratedPageSpec, add_generated_pages, default_generated_pages, default_generated_pages_with,
+    generated_page_spec,
 };
 pub use devices::DeviceList;
 pub use diagrams::{CableDiagram, TerminalDiagram};

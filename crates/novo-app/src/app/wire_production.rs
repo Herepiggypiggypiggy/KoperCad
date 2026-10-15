@@ -11,6 +11,8 @@
 
 use std::path::{Path, PathBuf};
 
+use novo_core::StructureId;
+use novo_interop::dxf::write_dxf;
 use novo_reports::{CsvOptions, Report, WireCut, wire_cut_csv, wire_cut_jobs};
 
 use super::pdf::write_replacing;
@@ -75,6 +77,75 @@ impl NovoApp {
                 );
                 None
             }
+        }
+    }
+
+    /// Writes the wiring plan of a panel's plate as DXF next to the project:
+    /// plate, ducts with their fill, devices, every route and the wire table.
+    pub(super) fn export_wiring_dxf(&mut self, structure: StructureId) -> Option<PathBuf> {
+        let (dir, stem) = self.export_base()?;
+        let project = self.backend.document()?.project();
+        let tag = project
+            .get::<novo_core::Structure>(structure)
+            .map(|s| s.tag.to_string())
+            .unwrap_or_default();
+        let Some(drawing) = novo_interop::wiring::wiring_dxf(project, structure) else {
+            self.message(Level::Info, "Set the size of the mounting plate first");
+            return None;
+        };
+        let path = ours_or_free(
+            &dir,
+            &format!("{stem} wiring {}", tag.trim_start_matches('+')),
+            "dxf",
+            &self.wb.sheet_exports,
+        );
+        let text = write_dxf(&drawing);
+        self.write_production(&path, text.as_bytes(), "wiring plan")
+    }
+
+    /// The wiring plan of the panel the Cabinet shows (Ctrl+K).
+    pub(super) fn export_wiring_dxf_of_panel(&mut self) {
+        let Some(project) = self.backend.document().map(|d| d.project()) else {
+            return;
+        };
+        let structure = self.cabinet.location.as_ref().and_then(|l| {
+            project
+                .structures()
+                .find(|s| s.enclosure && &s.tag == l)
+                .map(|s| s.id)
+        });
+        match structure {
+            Some(s) => {
+                self.export_wiring_dxf(s);
+            }
+            None => self.message(Level::Info, "Open a cabinet in the Cabinet view first"),
+        }
+    }
+
+    /// Adds the wire production page, so the PDF export prints the cut
+    /// list, wire stock, ferrules and duct fill with the drawing.
+    pub(super) fn add_wire_production_page(&mut self) {
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let spec = match novo_reports::generated_page_spec(doc.project(), WireCut::ID) {
+            Ok(spec) => spec,
+            Err(why) => {
+                self.message(Level::Info, why);
+                return;
+            }
+        };
+        match doc.transact("Wire production page", |tx| {
+            novo_reports::add_generated_pages(tx, std::slice::from_ref(&spec))
+        }) {
+            Ok(((), changes)) => {
+                self.changed_outside_canvas(&changes);
+                self.message(
+                    Level::Info,
+                    format!("Added page {} {}", spec.name, spec.title),
+                );
+            }
+            Err(e) => self.message(Level::Error, format!("Could not add the page: {e}")),
         }
     }
 

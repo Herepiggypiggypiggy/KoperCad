@@ -284,7 +284,7 @@ fn fits(area: egui::Rect) -> bool {
 
 /// The route table beside the plate: the summary, what to look at, the
 /// export buttons and every wire with its length. Returns what was clicked.
-pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay) -> Option<Ask> {
+pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) -> Option<Ask> {
     let mut ask = None;
     egui::Panel::right("cabinet_routes")
         .exact_size(340.0)
@@ -315,6 +315,13 @@ pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay) -> Option<Ask> {
                     .clicked()
                 {
                     ask = Some(Ask::ExportWireProduction);
+                }
+                if ui
+                    .button("DXF plan")
+                    .on_hover_text("The plate with ducts, fill and routes as a DXF drawing")
+                    .clicked()
+                {
+                    ask = Some(Ask::ExportWiringDxf(plate));
                 }
             });
             ui.add_space(4.0);

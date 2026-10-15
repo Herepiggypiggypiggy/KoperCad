@@ -103,6 +103,7 @@ pub(super) enum Ask {
     ToggleRoutes,
     ExportWireCut,
     ExportWireProduction,
+    ExportWiringDxf(StructureId),
     /// Place or move a device with its top left at `(x, y)` mm.
     Drop(u64, f64, f64),
     Rotate(Vec<u64>),
@@ -472,7 +473,7 @@ impl NovoApp {
                     && let Some(s) = structure
                 {
                     let overlay = self.cabinet.routes_cache.get(project, s);
-                    if let Some(a) = cabinet_routes::panel(ui, overlay) {
+                    if let Some(a) = cabinet_routes::panel(ui, overlay, s) {
                         ask = Some(a);
                     }
                 }
@@ -685,6 +686,9 @@ impl NovoApp {
             }
             Ask::ExportWireProduction => {
                 self.export_wire_production();
+            }
+            Ask::ExportWiringDxf(s) => {
+                self.export_wiring_dxf(s);
             }
             Ask::PlaceAll => {
                 if let Some(layout) = layout {

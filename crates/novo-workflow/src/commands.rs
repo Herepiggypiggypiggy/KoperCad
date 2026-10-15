@@ -737,6 +737,16 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["underlay", "dxf", "reference drawing"],
         Needs::Page,
     ),
+    verb(
+        cmd(
+            "cabinet.routes",
+            "Route all wires (Cabinet)",
+            "View",
+            &["route", "wire length", "duct fill", "cut length"],
+            Needs::Project,
+        ),
+        &["route all", "route wires"],
+    ),
     // Check
     verb(
         cmd(
@@ -812,16 +822,6 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
-            "cabinet.routes",
-            "Route all wires (Cabinet)",
-            "View",
-            &["route", "wire length", "duct fill", "cut length"],
-            Needs::Project,
-        ),
-        &["route all", "route wires"],
-    ),
-    verb(
-        cmd(
             "export.wirecut",
             "Export wire cut list (CSV)",
             "Export",
@@ -845,6 +845,26 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export wire production"],
+    ),
+    verb(
+        cmd(
+            "export.wiring_dxf",
+            "Export wiring plan as DXF",
+            "Export",
+            &["routes", "ducts", "cabinet drawing"],
+            Needs::Project,
+        ),
+        &["export wiring plan"],
+    ),
+    verb(
+        cmd(
+            "export.wirecut_page",
+            "Add wire production page (PDF)",
+            "Export",
+            &["wire cut", "print", "pdf", "ferrule", "labels"],
+            Needs::Project,
+        ),
+        &["add wire production page"],
     ),
     verb(
         cmd(

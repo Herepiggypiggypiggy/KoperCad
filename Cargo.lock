@@ -1993,6 +1993,7 @@ dependencies = [
  "novo-core",
  "novo-layout",
  "novo-parts",
+ "novo-routing",
  "novo-tests",
  "rust_xlsxwriter",
  "tempfile",

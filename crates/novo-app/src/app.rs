@@ -1051,6 +1051,22 @@ impl NovoApp {
                     self.wb.queued.push("export.wirecut_xlsx");
                     ui.close();
                 }
+                if ui
+                    .button("Add page for PDF")
+                    .on_hover_text("A wire production page that the PDF export prints")
+                    .clicked()
+                {
+                    self.wb.queued.push("export.wirecut_page");
+                    ui.close();
+                }
+                if ui
+                    .button("Wiring plan (DXF)")
+                    .on_hover_text("The cabinet's plate with ducts, fill and routes")
+                    .clicked()
+                {
+                    self.wb.queued.push("export.wiring_dxf");
+                    ui.close();
+                }
             });
         });
         ui.add_enabled_ui(self.is_open(), |ui| {
