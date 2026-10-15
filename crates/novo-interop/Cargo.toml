@@ -12,6 +12,9 @@ novo-canvas = { path = "../novo-canvas", default-features = false, features = ["
 novo-layout.workspace = true
 novo-parts.workspace = true
 thiserror.workspace = true
+# Pure-Rust Excel writer and reader: no Excel install, nothing to elevate.
+rust_xlsxwriter.workspace = true
+calamine.workspace = true
 
 [dev-dependencies]
 novo-tests = { path = "../novo-tests" }

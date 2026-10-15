@@ -112,6 +112,12 @@ pub fn motor_starter_with_changes(doc: &mut Document) -> Result<(MotorStarter, C
     doc.transact("Draw Gate 1 motor starter", build)
 }
 
+/// [`motor_starter`] inside a transaction the caller owns, so it can be one
+/// undo step together with other edits (the app's example project).
+pub fn motor_starter_in(tx: &mut Tx<'_>) -> Result<MotorStarter> {
+    build(tx)
+}
+
 fn build(tx: &mut Tx<'_>) -> Result<MotorStarter> {
     tx.set_info(|i| i.name = "Gate 1 DOL starter".into())?;
     let main_page = tx.add_page("1")?;
