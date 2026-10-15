@@ -11,7 +11,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::fault::FaultKind;
-use crate::network::{Impedance, RadialNetwork};
+use crate::feeder::{Impedance, RadialNetwork};
 use crate::protection::{Band, ProtectiveDevice, TableCurve};
 use crate::scenario::{Action, Scenario, ScenarioResult, run};
 

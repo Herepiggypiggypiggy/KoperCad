@@ -104,12 +104,15 @@ pub fn contours_at(field: &Scalar, level: f32) -> Vec<Contour> {
                 4 => {
                     let centre = (v[0] + v[1] + v[2] + v[3]) / 4.0 >= level;
                     // Saddle: the centre value decides which corners join.
+                    // A centre on the same side as corner 0 joins corners 0
+                    // and 2 through the middle, so the other two corners
+                    // (top right and bottom left) are cut off one by one.
                     if centre == above[0] {
-                        link(edges[0], edges[3]);
-                        link(edges[1], edges[2]);
-                    } else {
                         link(edges[0], edges[1]);
                         link(edges[2], edges[3]);
+                    } else {
+                        link(edges[0], edges[3]);
+                        link(edges[1], edges[2]);
                     }
                 }
                 _ => {}
@@ -248,6 +251,32 @@ mod tests {
                 .flat_map(|l| &l.points)
                 .all(|p| (p.0 - cx).hypot(p.1 - cy) > 25.0)
         );
+    }
+
+    #[test]
+    fn a_saddle_cell_is_resolved_by_its_centre() {
+        let grid = Grid {
+            cols: 2,
+            rows: 2,
+            cell_w: 10.0,
+            cell_h: 10.0,
+        };
+        // Centres at (5,5) (15,5) / (5,15) (15,15). High corners top left
+        // and bottom right, mean 5 sits on the level, so the centre is high:
+        // the highs stay joined and the two low corners are cut off alone.
+        let high_centre = Scalar::new(grid, vec![10.0, 0.0, 0.0, 10.0]);
+        let lines = contours_at(&high_centre, 5.0);
+        assert_eq!(lines.len(), 2);
+        let near_top_right = |l: &Contour| l.points.iter().all(|p| p.0 >= 10.0 && p.1 <= 10.0);
+        let near_bottom_left = |l: &Contour| l.points.iter().all(|p| p.0 <= 10.0 && p.1 >= 10.0);
+        assert!(lines.iter().any(near_top_right) && lines.iter().any(near_bottom_left));
+        // Low corners 0 and 2 with a lower centre: the lows join instead.
+        let low_centre = Scalar::new(grid, vec![10.0, 0.0, 0.0, 10.0]);
+        let lines = contours_at(&low_centre, 5.5);
+        let near_top_left = |l: &Contour| l.points.iter().all(|p| p.0 <= 10.0 && p.1 <= 10.0);
+        let near_bottom_right = |l: &Contour| l.points.iter().all(|p| p.0 >= 10.0 && p.1 >= 10.0);
+        assert_eq!(lines.len(), 2);
+        assert!(lines.iter().any(near_top_left) && lines.iter().any(near_bottom_right));
     }
 
     #[test]

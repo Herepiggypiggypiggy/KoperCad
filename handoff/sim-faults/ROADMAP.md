@@ -7,7 +7,7 @@ Scope: fault scenarios, protection operating in time, timing diagram and wavefor
 - `novo_sim::fault`: IEC 60909 kappa, asymmetrical current i(t), interruption at the next current zero, let-through.
 - `novo_sim::protection`: `TripModel` trait (curve source), `Band` (fastest/typical/slowest), `TableCurve`, cumulative-heat thermal memory.
 - `novo_sim::scenario`: JSON scenario file, event-driven runner, selectivity result, `CircuitModel` trait.
-- `novo_sim::network`: radial feeder model (Ik3, Ik2, Ik1 phase-neutral/earth, open phase = x sqrt 3).
+- `novo_sim::feeder`: radial feeder model (Ik3, Ik2, Ik1 phase-neutral/earth, open phase = x sqrt 3).
 - `novo_sim::timing`: digital channels + analog rows, SVG and VCD export, `record_logic` for the drawing's own control logic.
 - `novo_sim::study`: `<project>.faults.json` study (network, devices, scenarios) with an example.
 - App: `sim.faults` "Fault scenarios" window.

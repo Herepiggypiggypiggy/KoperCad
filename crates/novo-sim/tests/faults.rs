@@ -2,7 +2,7 @@
 //! overload memory, reclosing.
 
 use novo_sim::fault::{FaultCurrent, FaultKind};
-use novo_sim::network::{Impedance, RadialNetwork};
+use novo_sim::feeder::{Impedance, RadialNetwork};
 use novo_sim::protection::{Band, ProtectiveDevice, TableCurve, ThermalMemory, TripModel};
 use novo_sim::scenario::{Action, EventKind, Scenario, run};
 use novo_sim::trace::Trace;

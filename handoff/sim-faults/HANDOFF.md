@@ -3,7 +3,7 @@
 Branch `claude/project-thread-an4tyc` (kopercad). PR: see PROGRESS.md for number and head SHA.
 
 ## State
-Engine and window are in one PR. Everything is under `crates/novo-sim` (modules `trace`, `fault`, `protection`, `scenario`, `network`, `timing`, `study`) plus `crates/novo-app/src/app/faults.rs`. The command is `sim.faults` (palette: "Fault scenarios"; Dutch words in language.rs).
+Engine and window are in one PR. Everything is under `crates/novo-sim` (modules `trace`, `fault`, `protection`, `scenario`, `feeder`, `timing`, `study`) plus `crates/novo-app/src/app/faults.rs`. The command is `sim.faults` (palette: "Fault scenarios"; Dutch words in language.rs).
 
 ## How to resume
 ```
