@@ -44,6 +44,8 @@ pub(crate) struct Workbench {
     pub(super) xref: LiveXref,
     /// The generated pages' reports, live.
     pub(super) reports: super::reports::Reports,
+    /// The `renumber io` preview waiting for Enter or Esc, per station.
+    pub(super) renumber: Option<Vec<novo_plc::commands::RenumberPlan>>,
     /// Which sheet of a generated page the canvas shows (0 for the first).
     pub(super) sheet: usize,
     pub(super) nav: Navigator,
@@ -97,6 +99,7 @@ impl Default for Workbench {
             keymap: Keymap::workflow(),
             xref: LiveXref::default(),
             reports: Default::default(),
+            renumber: None,
             sheet: 0,
             nav: Navigator::default(),
             pending: None,
@@ -160,6 +163,9 @@ const APP_COMMANDS: &[&str] = &[
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "plc.add_card",
+    "plc.to_plc",
+    "plc.renumber_io",
 ];
 
 /// Whether the app can run a command now (not "comes later").
@@ -412,6 +418,9 @@ impl NovoApp {
             "export.pdf" => {
                 self.export_pdf();
             }
+            "plc.add_card" => self.plc_add_card(argument),
+            "plc.to_plc" => self.plc_to_plc(),
+            "plc.renumber_io" => self.plc_renumber_io(),
             other => {
                 let label = novo_workflow::commands::get(other).map_or(other, |c| c.label);
                 self.message(Level::Info, format!("{label} is not in the app yet"));
