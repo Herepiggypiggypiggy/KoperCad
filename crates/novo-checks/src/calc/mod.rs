@@ -31,10 +31,15 @@
 //! for lengths, kilovoltamperes for transformers, degrees Celsius.
 
 pub mod cable;
+pub mod circuit;
+pub mod curves;
 pub mod drop;
 pub mod motor;
+pub mod network;
 pub mod pe;
+pub mod selectivity;
 pub mod short_circuit;
+pub mod tables;
 
 use crate::Severity;
 
