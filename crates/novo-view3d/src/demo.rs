@@ -15,14 +15,14 @@ pub const PANEL_WIDTH: f32 = 800.0;
 pub const PANEL_HEIGHT: f32 = 1000.0;
 /// Rail rows per panel.
 pub const ROWS: usize = 7;
-/// Devices per panel in the demo (a busy panel of narrow devices).
-pub const DEVICES_PER_PANEL: usize = 100;
+/// Devices per panel in the demo (a full panel of narrow devices).
+pub const DEVICES_PER_PANEL: usize = 150;
 
 pub const HINGE: GroupId = GroupId(1);
 
 #[derive(Debug, Clone)]
 pub struct DemoOptions {
-    /// Number of devices; panels are added side by side beyond 100.
+    /// Number of devices; panels are added side by side beyond 150.
     pub devices: usize,
     /// Draw about a quarter of the devices as shaped parts (stepped
     /// breakers) instead of boxes.

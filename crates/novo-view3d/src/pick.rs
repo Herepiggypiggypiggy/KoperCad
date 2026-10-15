@@ -55,17 +55,24 @@ pub fn pick(scene: &Scene, state: &ViewState, ray: &Ray, skip: usize) -> Option<
     }
 }
 
-/// The deepest item under the ray: the farthest opaque hit, ignoring
-/// everything in front of it (Alt + click). Translucent items count only when
-/// nothing opaque is hit.
-pub fn pick_deepest(scene: &Scene, state: &ViewState, ray: &Ray) -> Option<Hit> {
+/// Items counted from the back: `k = 0` is the deepest opaque item under the
+/// ray, `1` the one in front of it, and so on, wrapping (Alt + click, repeated
+/// at the same spot). Translucent items count only when nothing opaque is hit.
+pub fn pick_from_back(scene: &Scene, state: &ViewState, ray: &Ray, k: usize) -> Option<Hit> {
     let hits = pick_all(scene, state, ray);
     let opaque = |h: &Hit| scene.get(h.id).is_some_and(|i| !i.translucent);
-    hits.iter()
-        .rev()
-        .find(|h| opaque(h))
-        .or(hits.last())
-        .copied()
+    let n_opaque = hits.iter().filter(|h| opaque(h)).count();
+    let list = if n_opaque > 0 {
+        &hits[..n_opaque]
+    } else {
+        &hits[..]
+    };
+    (!list.is_empty()).then(|| list[list.len() - 1 - k % list.len()])
+}
+
+/// The deepest item under the ray (`pick_from_back` with `k = 0`).
+pub fn pick_deepest(scene: &Scene, state: &ViewState, ray: &Ray) -> Option<Hit> {
+    pick_from_back(scene, state, ray, 0)
 }
 
 /// Items whose projected box overlaps the screen rectangle given by two
@@ -184,6 +191,10 @@ mod tests {
         // Only a door in the way: it is the deepest there is.
         let only_door = pick_deepest(&s, &state, &front_ray(580.0, 780.0)).unwrap();
         assert_eq!(only_door.id.raw, 1);
+        let again = pick_from_back(&s, &state, &front_ray(100.0, 100.0), 1).unwrap();
+        assert_eq!(again.id.raw, 2, "the next click steps up to the device");
+        let wrapped = pick_from_back(&s, &state, &front_ray(100.0, 100.0), 2).unwrap();
+        assert_eq!(wrapped.id.raw, 1);
         s.items.remove(0);
         let door_only = pick_deepest(&s, &state, &front_ray(580.0, 780.0)).unwrap();
         assert_eq!(door_only.id.raw, 9);
