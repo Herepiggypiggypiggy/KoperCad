@@ -343,9 +343,11 @@ impl Tx<'_> {
     }
 
     /// Called at the end of every edit: a device outside any block whose
-    /// wires (two or more) all land on members of one placed block was
-    /// added inside it, a structural edit that detaches it. A device with
-    /// only its first wire in stays linked until it is clearly inside.
+    /// wires (two or more) all land on members of one placed block, and
+    /// that is drawn within the members' extent, was added inside it, a
+    /// structural edit that detaches it. A load drawn outside and wired to
+    /// the block's outputs is how the block is used and keeps the link; so
+    /// does a device with only its first wire in.
     pub(crate) fn detach_enclosed_devices(&mut self) -> Result<()> {
         let added = self.added_wires();
         if added.is_empty() || self.project().block_instances().next().is_none() {
@@ -412,9 +414,12 @@ impl Tx<'_> {
                 continue;
             }
             let block = blocks.into_iter().next().expect("one block");
+            // Wiring alone cannot tell a device inside from a load wired to
+            // the block's outputs: it must also be drawn within the block.
             if project
                 .block_instance(block)
                 .is_some_and(|b| b.detached.is_none())
+                && drawn_within(project, block, &symbols)
             {
                 let tag = project
                     .device(device)
@@ -599,5 +604,67 @@ fn remap_end(map: &BTreeMap<AnyId, AnyId>, end: Endpoint) -> Result<Endpoint> {
         Endpoint::Junction { junction } => Endpoint::Junction {
             junction: JunctionId(raw(map, junction.into())?),
         },
+    })
+}
+
+/// How far outside the members' extent a symbol still counts as drawn
+/// within a block, in millimetres.
+const WITHIN_MARGIN: f64 = 5.0;
+
+/// Whether all of `symbols` sit on one page, within the extent (inflated by
+/// [`WITHIN_MARGIN`]) of the block's member symbols and junctions there.
+fn drawn_within(
+    project: &crate::Project,
+    block: BlockInstanceId,
+    symbols: &BTreeSet<AnyId>,
+) -> bool {
+    let Some(instance) = project.block_instance(block) else {
+        return false;
+    };
+    let placed: Vec<(PageId, Point)> = symbols
+        .iter()
+        .filter_map(|&id| match id {
+            AnyId::Symbol(s) => project.symbol(s).map(|s| (s.page, s.placement.origin)),
+            _ => None,
+        })
+        .collect();
+    let Some(&(page, _)) = placed.first() else {
+        return false;
+    };
+    if placed.iter().any(|&(p, _)| p != page) {
+        return false;
+    }
+    let mut points = Vec::new();
+    for member in &instance.members {
+        match member.actual {
+            AnyId::Symbol(s) => {
+                if let Some(symbol) = project.symbol(s).filter(|s| s.page == page) {
+                    points.push(symbol.placement.origin);
+                    points.extend(
+                        (0..symbol.pins.len() as u16).filter_map(|i| symbol.pin_position(i)),
+                    );
+                }
+            }
+            AnyId::Junction(j) => {
+                if let Some(junction) = project.junction(j).filter(|j| j.page == page) {
+                    points.push(junction.position);
+                }
+            }
+            _ => {}
+        }
+    }
+    let Some(&first) = points.first() else {
+        return false;
+    };
+    let (mut lo, mut hi) = (first, first);
+    for p in &points {
+        lo = Point::new(lo.x.min(p.x), lo.y.min(p.y));
+        hi = Point::new(hi.x.max(p.x), hi.y.max(p.y));
+    }
+    placed.iter().all(|&(_, p)| {
+        p.x >= lo.x - WITHIN_MARGIN
+            && p.x <= hi.x + WITHIN_MARGIN
+            && p.y >= lo.y - WITHIN_MARGIN
+            && p.y <= hi.y + WITHIN_MARGIN
     })
 }

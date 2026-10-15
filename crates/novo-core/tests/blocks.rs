@@ -415,7 +415,6 @@ fn a_connection_inside_the_block_detaches_it() {
             .is_none()
     );
 
-    // A new device with its first wire in a member stays linked ...
     let detached = |doc: &Document| {
         doc.project()
             .block_instance(block)
@@ -423,13 +422,35 @@ fn a_connection_inside_the_block_detaches_it() {
             .detached
             .clone()
     };
+    // A load drawn outside and wired only to the block is how the block
+    // is used: a motor on the starter's outputs keeps the link.
+    doc.transact("Motor", |tx| {
+        let motor = tx.add_device(tag("=A1-M9"), "Motor")?;
+        let s = tx.place_symbol(
+            d.p2,
+            "x",
+            Placement::at(Point::new(20.0, 100.0)),
+            two_pins(),
+            SymbolRole::Device {
+                device: motor,
+                main: true,
+            },
+        )?;
+        tx.connect(Endpoint::pin(s, 0), Endpoint::pin(q, 1))?;
+        tx.connect(Endpoint::pin(s, 1), Endpoint::pin(m, 1))
+            .map(|_| ())
+    })
+    .unwrap();
+    assert_eq!(detached(&doc), None);
+    // A new device drawn within the block with its first wire in a member
+    // stays linked ...
     let k9 = doc
         .transact("Relay", |tx| {
             let k = tx.add_device(tag("=A1-K9"), "Relay")?;
             let s = tx.place_symbol(
                 d.p2,
                 "x",
-                Placement::at(Point::new(20.0, 40.0)),
+                Placement::at(Point::new(20.0, 5.0)),
                 two_pins(),
                 SymbolRole::Device {
                     device: k,
