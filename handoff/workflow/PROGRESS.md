@@ -59,3 +59,4 @@
 2026-10-15 03:46 UTC #148 READY (ae95b7e); lead merges
 2026-10-15 03:47 UTC #148 merged. No open PR of mine.
 2026-10-15 07:35 UTC Tadjiro asked for both wiring styles (EPLAN corners, AutoCAD lines), never overlapping, with a toggle + shortcut. Decided Auto + Draw (Draw = corners and lines as one gesture), W again toggles, dock switch, no-overlap rule; DESIGN PR opened, Layout to critique
+2026-10-15 07:50 UTC Reconciled with the Two wiring modes thread (PR #168): two modes Corners (default) | Lines, Shift+W toggles (also mid-wire), dock switch, no-overlap enforced in engine (Corners nudge, Lines refuse, reason as data). #169 reworked to carry it; #168 to close after folding its detail; diagonals in DESIGN §12
