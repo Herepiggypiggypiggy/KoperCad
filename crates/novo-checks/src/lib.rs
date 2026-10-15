@@ -20,12 +20,14 @@
 //! | [`SeveralMainFunctions`](ProblemKind::SeveralMainFunctions) | warning | A device drawn with more than one main function |
 //! | [`DuplicateTerminal`](ProblemKind::DuplicateTerminal) | warning | Two terminals with one name on a strip while the same-name rule is off |
 //! | [`ZeroLengthWire`](ProblemKind::ZeroLengthWire) | warning | A wire of zero length that is not two touching pins |
+//! | [`WrongTerminalBlock`](ProblemKind::WrongTerminalBlock) | warning | A PE terminal built with a block that is not a PE block, or another terminal built with a PE block |
+//! | [`UndersizedWire`](ProblemKind::UndersizedWire) | warning | A wire on an overcurrent protective device that carries less than the device's rated current |
 //! | [`MissingPart`](ProblemKind::MissingPart) | info | A device or cable without a part |
 //!
 //! Not checked here:
-//! - Wire cross-section against the protective device: the model has
-//!   `Wire::cross_section_mm2` but no rated current for protective devices
-//!   or their parts yet (see `handoff/ws14/ROADMAP.md`).
+//! - Wires further from a protective device than its own connection points
+//!   (through terminals, contactors, cable cores): the undersized-wire check
+//!   only looks at the wires that end on the device.
 //! - A wire on two cable cores: novo-core refuses it on every edit and load
 //!   (`ModelError::WireAlreadyOnCore`), so it cannot occur.
 //!
@@ -89,11 +91,20 @@ pub enum ProblemKind {
     ZeroLengthWire,
     /// A device or cable without a part.
     MissingPart,
+    /// A wire ending on an overcurrent protective device (fuse, breaker,
+    /// overload relay) whose cross-section carries less current than the
+    /// device is rated for.
+    UndersizedWire,
+    /// A terminal whose article does not suit its kind: a PE terminal built
+    /// with an ordinary (grey) block, which leaves the protective conductor
+    /// unbonded, or another terminal built with a PE block, which bonds a
+    /// live conductor to the rail.
+    WrongTerminalBlock,
 }
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 10] = [
+    pub const ALL: [ProblemKind; 12] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -103,6 +114,8 @@ impl ProblemKind {
         ProblemKind::SeveralMainFunctions,
         ProblemKind::DuplicateTerminal,
         ProblemKind::ZeroLengthWire,
+        ProblemKind::WrongTerminalBlock,
+        ProblemKind::UndersizedWire,
         ProblemKind::MissingPart,
     ];
 
@@ -116,7 +129,9 @@ impl ProblemKind {
             | ProblemKind::NoMainFunction
             | ProblemKind::SeveralMainFunctions
             | ProblemKind::DuplicateTerminal
-            | ProblemKind::ZeroLengthWire => Severity::Warning,
+            | ProblemKind::ZeroLengthWire
+            | ProblemKind::UndersizedWire
+            | ProblemKind::WrongTerminalBlock => Severity::Warning,
             ProblemKind::MissingPart => Severity::Info,
         }
     }
@@ -134,6 +149,8 @@ impl ProblemKind {
             ProblemKind::PotentialConflict => "Potential conflict",
             ProblemKind::ZeroLengthWire => "Zero-length wire",
             ProblemKind::MissingPart => "No part",
+            ProblemKind::UndersizedWire => "Undersized wire",
+            ProblemKind::WrongTerminalBlock => "Wrong terminal block",
         }
     }
 }
@@ -235,6 +252,8 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     checks::potential_conflicts(&cx, netlist, &mut problems);
     checks::zero_length_wires(&cx, &mut problems);
     checks::missing_parts(&cx, &mut problems);
+    checks::undersized_wires(&cx, &mut problems);
+    checks::wrong_terminal_blocks(&cx, &mut problems);
     cx.sort(&mut problems);
     problems
 }

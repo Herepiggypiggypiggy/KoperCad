@@ -571,6 +571,7 @@ impl NovoApp {
                     self.canvas.show(ui, open);
                     self.after_canvas();
                     self.after_canvas_frame();
+                    self.wb.canvas_area = Some((ui.layer_id(), ui.min_rect()));
                 } else {
                     self.start_panel(ui, &mut picked);
                 }

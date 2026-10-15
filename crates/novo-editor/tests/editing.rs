@@ -1154,3 +1154,40 @@ fn a_proposal_whose_pin_moved_is_dropped_on_enter() {
     assert_eq!(doc.project().wires().count(), 0);
     assert_eq!(doc.undo_depth(), depth);
 }
+
+#[test]
+fn a_declined_proposal_does_not_return() {
+    let (mut doc, page, mut editor) = setup();
+    editor.begin_place("iec/protection/fuse_3p", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.begin_place("iec/contactors/main_3p", None);
+    editor.click(&mut doc, page, p(40.0, 120.0), TOL);
+    assert_eq!(editor.proposals().len(), 3);
+    let declined = editor.proposals()[editor.highlighted().unwrap()];
+    let depth = doc.undo_depth();
+    assert!(editor.decline_proposal(&mut doc));
+    // One undo step, no wire, the other two still proposed.
+    assert_eq!(doc.undo_depth(), depth + 1);
+    assert_eq!(doc.project().wires().count(), 0);
+    assert_eq!(editor.proposals().len(), 2);
+    // Proposing the same symbols again (after a move, say) leaves it out,
+    // from either side.
+    let k = symbol_at(&doc, page, p(40.0, 120.0));
+    let f = symbol_at(&doc, page, p(40.0, 40.0));
+    for s in [k, f] {
+        let sym = doc.project().symbol(s).unwrap().clone();
+        let again = edit::facing_wires(doc.project(), &[sym], &|s| editor.body(s));
+        assert_eq!(again.len(), 2);
+        assert!(again.iter().all(|w| {
+            let pair = [w.from, w.to];
+            !(pair.contains(&declined.from) && pair.contains(&declined.to))
+        }));
+    }
+    // Undo forgets the decline.
+    doc.undo().unwrap();
+    let sym = doc.project().symbol(k).unwrap().clone();
+    assert_eq!(
+        edit::facing_wires(doc.project(), &[sym], &|s| editor.body(s)).len(),
+        3
+    );
+}

@@ -139,12 +139,32 @@ pub fn assign_part(
 /// connection points (`connections` in its technical data). End covers,
 /// end brackets, markers and other strip accessories are coded `X` too but
 /// connect nothing, so they stay in the strip device's own part list.
+///
+/// A catalog pasted without a `connections` column says nothing either
+/// way; such a part is a terminal block unless its description or keywords
+/// name an accessory ("end cover", "end bracket", "marker", ...).
 pub fn is_terminal_block(part: &CatalogPart) -> bool {
-    part.fits("X")
-        && part
-            .data
-            .get("connections")
-            .is_some_and(|v| !matches!(v, Value::Int(0)))
+    if !part.fits("X") {
+        return false;
+    }
+    match part.data.get("connections") {
+        Some(v) => !matches!(v, Value::Int(0)),
+        None => !names_an_accessory(part),
+    }
+}
+
+/// Words that mark a strip accessory rather than a terminal block.
+const ACCESSORY_WORDS: &[&str] = &[
+    "cover", "bracket", "plate", "stop", "marker", "marking", "bridge", "jumper",
+];
+
+fn names_an_accessory(part: &CatalogPart) -> bool {
+    let words = |text: &str| {
+        text.to_lowercase()
+            .split(|c: char| !c.is_alphanumeric())
+            .any(|w| ACCESSORY_WORDS.contains(&w))
+    };
+    words(&part.description) || part.keywords.iter().any(|k| words(k))
 }
 
 /// The terminal kind a terminal block is for: a protective conductor block

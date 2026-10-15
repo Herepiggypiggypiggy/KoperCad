@@ -43,6 +43,9 @@ pub(crate) struct Workbench {
     pub(super) nav: Navigator,
     /// Where to select and centre once the canvas shows its page.
     pub(super) pending: Option<Place>,
+    /// The drawing's layer and rect last frame: a focused widget there is
+    /// the canvas, anywhere else a panel.
+    pub(super) canvas_area: Option<(egui::LayerId, egui::Rect)>,
     /// Shift+G: every occurrence of the selection's device.
     pub(super) occurrences: Option<Vec<Reference>>,
     pub(super) drawer: Option<Drawer>,
@@ -85,6 +88,7 @@ impl Default for Workbench {
             xref: LiveXref::default(),
             nav: Navigator::default(),
             pending: None,
+            canvas_area: None,
             occurrences: None,
             drawer: None,
             proposal: 0,
@@ -211,10 +215,25 @@ impl NovoApp {
             focus
         } else if ctx.text_edit_focused() {
             Focus::TextField
-        } else if self.is_open() {
+        } else if self.is_open() && !self.panel_has_focus(ctx) {
             Focus::Canvas
         } else {
             Focus::Panel
+        }
+    }
+
+    /// A button or other widget outside the drawing has the keyboard, so
+    /// Enter, Tab and G go to it rather than to the canvas.
+    fn panel_has_focus(&self, ctx: &egui::Context) -> bool {
+        let Some(id) = ctx.memory(|m| m.focused()) else {
+            return false;
+        };
+        let Some(widget) = ctx.read_response(id) else {
+            return false;
+        };
+        match self.wb.canvas_area {
+            Some((layer, rect)) => widget.layer_id != layer || !rect.contains_rect(widget.rect),
+            None => true,
         }
     }
 

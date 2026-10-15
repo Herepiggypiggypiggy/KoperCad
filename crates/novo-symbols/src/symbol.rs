@@ -100,6 +100,10 @@ pub struct Connection {
     /// Optional special role of the point, such as `pe` or `n`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
+    /// A spare point that may stay unconnected (a second PE clamp), which
+    /// design checks do not report as open.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub optional: bool,
 }
 
 /// Direction a wire leaves a connection point (y is downwards).

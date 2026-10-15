@@ -38,7 +38,12 @@ pub const DUTCH: &[Aliases] = &[
     nl("file.save", &[], &["opslaan", "bewaren"]),
     nl("file.save_as", &[], &["opslaan als"]),
     nl("file.close", &[], &["project sluiten", "sluiten"]),
-    nl("page.new", &["nieuwe pagina", "pagina"], &["blad"]),
+    // Not a bare "pagina": `pagina 2` goes to page 2.
+    nl(
+        "page.new",
+        &["nieuwe pagina", "pagina toevoegen"],
+        &["pagina", "blad"],
+    ),
     nl("project.rules", &["regels"], &["nummering", "instellingen"]),
     nl("file.quit", &[], &["afsluiten", "stoppen"]),
     // Draw

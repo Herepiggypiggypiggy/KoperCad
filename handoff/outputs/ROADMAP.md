@@ -10,13 +10,19 @@ lead (cse_01FiLvRBKEcNNHbQEGhYyL1S).
 2. Cable diagram building every cable screen twice: done (#86).
 3. Pinned flow vs growing generated pages: decided (DESIGN.md #88): they
    reflow; bookmarks name sheets by content. Done in the PDF PR.
-4. Multi-sheet generated pages in the PDF, with WS-03 (canvas) for the title
-   block's sheet name and "n of m".
+4. Multi-sheet generated pages in the PDF: done (#96). Title block name
+   and per-page "n of m" via WS-03's set_sheet: staged (pdf-sheet-content).
 
 ## Later (from ws9/ws13/ws14 roadmaps)
 - PDF: embedded Inter subset for Unicode; per-entry xref links; compressed
   streams; OS print.
 - Reports: BOM test with a strip-level terminal article; report templates;
   wire list by wire number; xlsx "Created" from the project's save time.
-- Checks: optional pins, cross-section vs protective device (need WS-02),
-  shield landing on a deleted terminal (from reviewer C).
+- Checks: shield landing on a deleted terminal (from reviewer C).
+
+## Queued by the lead (21:56 UTC)
+- PE terminal on a non-PE block: in the checks PR (with #82 feeds and the
+  undersized-wire check).
+- Title-block numbering per generated page: staged, PR after the checks PR.
+- Sheet letters 20a, 20b (DESIGN #108/#110): done (#115).
+- Contents list names each generated sheet (DESIGN #88): staged (toc-sheets).

@@ -403,3 +403,174 @@ fn problems_come_in_reading_order() {
     // The same project checks the same way every time.
     assert_eq!(check(&project), problems);
 }
+
+#[test]
+fn spare_points_may_stay_free_but_not_touch() {
+    let (project, coil) = build(|tx| {
+        let page = tx.add_page("1")?;
+        let k1 = tx.add_device(tag("-K1"), "")?;
+        let part = tx.add_part("Acme", "RELAY")?;
+        tx.assign_part(k1, part)?;
+        // A1 wired, A2 wired, a spare PE clamp left free.
+        let coil = tx.place_symbol(
+            page,
+            "iec/coils/relay",
+            Placement::at(Point::new(40.0, 40.0)),
+            vec![
+                Pin::new("A1", 0.0, 0.0),
+                Pin::new("A2", 0.0, 16.0),
+                Pin::new("PE", 8.0, 16.0).optional(),
+            ],
+            device_role(k1, true),
+        )?;
+        for (pin, y) in [(0u16, 20.0), (1, 70.0)] {
+            let j = tx.add_junction(page, Point::new(40.0, y))?;
+            tx.connect(Endpoint::pin(coil, pin), Endpoint::junction(j))?;
+        }
+        Ok(coil)
+    });
+    assert!(check(&project).is_empty(), "{:#?}", check(&project));
+
+    // The same spare clamp lying on a junction without a wire is reported.
+    let mut project = project;
+    project
+        .transact("junction", |tx| {
+            tx.add_junction(project_page(tx), Point::new(48.0, 56.0))
+        })
+        .unwrap();
+    let problems = check(&project);
+    let free = of_kind(&problems, ProblemKind::UnconnectedPin);
+    assert_eq!(free.len(), 1);
+    assert_eq!(free[0].at, vec![AnyId::from(coil)]);
+    assert!(
+        free[0].message.contains("PE touches"),
+        "{}",
+        free[0].message
+    );
+}
+
+fn project_page(tx: &Tx<'_>) -> PageId {
+    tx.project().pages_in_order()[0].id
+}
+
+#[test]
+fn shorts_mark_pin_and_terminal_feeds() {
+    let (project, (supply, strip_symbol)) = build(|tx| {
+        let page = tx.add_page("1")?;
+        let l1 = tx.add_potential("L1", PotentialKind::Line)?;
+        let n = tx.add_potential("N", PotentialKind::Neutral)?;
+        // A supply whose output pin feeds L1.
+        let g1 = tx.add_device(tag("-G1"), "Supply")?;
+        let supply = tx.place_symbol(
+            page,
+            "iec/sources/ac",
+            Placement::at(Point::new(0.0, 0.0)),
+            vec![Pin::new("L", 0.0, 8.0)],
+            device_role(g1, true),
+        )?;
+        tx.set_pin_feed(supply, 0, Some(l1))?;
+        // A supply terminal feeding N into the same net.
+        let x1 = tx.add_terminal_strip(tag("-X1"))?;
+        let part = tx.add_part("Acme", "STRIP")?;
+        tx.assign_part(x1, part)?;
+        let t = tx.add_terminal(x1, "1")?;
+        tx.set_terminal_feed(t, Some(n))?;
+        let terminal = tx.place_symbol(
+            page,
+            "iec/terminals/feedthrough",
+            Placement::at(Point::new(0.0, 30.0)),
+            two_pin("1", "2"),
+            SymbolRole::Terminal { terminals: vec![t] },
+        )?;
+        tx.connect(Endpoint::pin(supply, 0), Endpoint::pin(terminal, 0))?;
+        Ok((supply, terminal))
+    });
+    let problems = check(&project);
+    let shorts = of_kind(&problems, ProblemKind::PotentialConflict);
+    assert_eq!(shorts.len(), 1, "{problems:#?}");
+    assert_eq!(
+        shorts[0].at,
+        vec![AnyId::from(supply), AnyId::from(strip_symbol)]
+    );
+    assert_eq!(
+        shorts[0].message,
+        "L1 and N are defined on one net: a short"
+    );
+}
+
+/// A breaker of `key` for `-F1` rated `amps` (on its part), feeding a wire
+/// of `mm2` (`None`: through a cable core of 1.5 mm²).
+fn breaker_with_wire(key: &str, amps: f64, mm2: Option<f64>) -> (Project, (SymbolId, WireId)) {
+    build(|tx| {
+        let page = tx.add_page("1")?;
+        let f1 = tx.add_device(tag("-F1"), "Breaker")?;
+        let part = tx.add_part("Acme", "MCB")?;
+        tx.update::<Part>(part, |p| {
+            p.properties
+                .insert(RATED_CURRENT_A.into(), Value::Float(amps));
+        })?;
+        tx.assign_part(f1, part)?;
+        let breaker = tx.place_symbol(
+            page,
+            key,
+            Placement::at(Point::new(0.0, 0.0)),
+            two_pin("1", "2"),
+            device_role(f1, true),
+        )?;
+        let j = tx.add_junction(page, Point::new(0.0, 40.0))?;
+        let wire = tx.connect(Endpoint::pin(breaker, 1), Endpoint::junction(j))?;
+        match mm2 {
+            Some(mm2) => tx.update::<Wire>(wire, |w| w.cross_section_mm2 = Some(mm2))?,
+            None => {
+                let mut core = CableCore::new("1");
+                core.cross_section_mm2 = Some(1.5);
+                core.wire = Some(wire);
+                let w1 = tx.add_cable(tag("-W1"), vec![core])?;
+                let cable_part = tx.add_part("Acme", "CABLE")?;
+                tx.update::<Cable>(w1, |c| c.part = Some(cable_part))?;
+            }
+        }
+        Ok((breaker, wire))
+    })
+}
+
+#[test]
+fn undersized_wires_on_protective_devices() {
+    // 16 A on 1.5 mm² (about 12.2 A): flagged on the breaker and the wire.
+    let (project, (breaker, wire)) = breaker_with_wire("iec/protection/mcb_1p", 16.0, Some(1.5));
+    let problems = check(&project);
+    let thin = of_kind(&problems, ProblemKind::UndersizedWire);
+    assert_eq!(thin.len(), 1, "{problems:#?}");
+    assert_eq!(thin[0].severity, Severity::Warning);
+    assert_eq!(thin[0].at, vec![AnyId::from(breaker), AnyId::from(wire)]);
+    assert_eq!(
+        thin[0].message,
+        "-F1 is rated 16 A, but a 1.5 mm² wire on it carries about 12.2 A"
+    );
+
+    // 10 A on 1.5 mm² is fine; 16 A on 2.5 mm² is fine.
+    for (amps, mm2) in [(10.0, 1.5), (16.0, 2.5)] {
+        let (project, _) = breaker_with_wire("iec/protection/mcb_1p", amps, Some(mm2));
+        assert!(
+            of_kind(&check(&project), ProblemKind::UndersizedWire).is_empty(),
+            "{amps} A on {mm2} mm²"
+        );
+    }
+    // A thin control wire scales down from 0.75 mm².
+    let (project, _) = breaker_with_wire("iec/protection/fuse", 6.0, Some(0.5));
+    let thin = check(&project);
+    let thin = of_kind(&thin, ProblemKind::UndersizedWire);
+    assert_eq!(
+        thin[0].message,
+        "-F1 is rated 6 A, but a 0.5 mm² wire on it carries about 5.07 A"
+    );
+    // A cable core's cross-section counts for its wire.
+    let (project, _) = breaker_with_wire("iec/protection/mcb_3p", 16.0, None);
+    assert_eq!(
+        of_kind(&check(&project), ProblemKind::UndersizedWire).len(),
+        1
+    );
+    // A residual-current device does not protect against overload.
+    let (project, _) = breaker_with_wire("iec/protection/rcd_2p", 40.0, Some(1.5));
+    assert!(of_kind(&check(&project), ProblemKind::UndersizedWire).is_empty());
+}
