@@ -56,6 +56,8 @@ pub(crate) struct Workbench {
     pub(super) renumber: Option<Vec<novo_plc::commands::RenumberPlan>>,
     /// The Preferences window is open.
     pub(super) preferences: bool,
+    /// The Parts window (browser and one-click import), while open.
+    pub(super) parts: Option<super::parts::PartsWindow>,
     /// The Project settings window (drawing standard) is open.
     pub(super) project_settings: bool,
     /// The Issue revision window, while it is open.
@@ -131,6 +133,7 @@ impl Default for Workbench {
             queued: Vec::new(),
             renumber: None,
             preferences: false,
+            parts: None,
             project_settings: false,
             issue: None,
             page_form: None,
@@ -213,6 +216,7 @@ const APP_COMMANDS: &[&str] = &[
     "plc.renumber_io",
     "xref.link",
     "app.preferences",
+    "parts.browser",
     "project.standard",
     "revision.issue",
     "terminal.toggle_pe",
@@ -530,6 +534,7 @@ impl NovoApp {
             "plc.renumber_io" => self.plc_renumber_io(),
             "xref.link" => self.xref_link(argument),
             "app.preferences" => self.wb.preferences = true,
+            "parts.browser" => self.open_parts_browser(),
             "project.standard" => self.wb.project_settings = true,
             "revision.issue" => self.open_issue_revision(argument),
             other => {

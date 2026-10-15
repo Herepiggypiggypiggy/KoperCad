@@ -1901,6 +1901,7 @@ dependencies = [
  "novo-core",
  "novo-parts",
  "novo-plc",
+ "novo-symbols",
  "novo-terminals",
  "novo-tests",
 ]
@@ -1953,6 +1954,7 @@ dependencies = [
  "calamine",
  "novo-canvas",
  "novo-core",
+ "novo-layout",
  "novo-parts",
  "novo-tests",
  "rust_xlsxwriter",
@@ -1991,6 +1993,7 @@ dependencies = [
  "lopdf",
  "novo-canvas",
  "novo-core",
+ "novo-layout",
  "novo-reports",
  "novo-tests",
  "pdf-writer",

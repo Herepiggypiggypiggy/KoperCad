@@ -53,8 +53,9 @@ pub use csv::{
     parse_delimited,
 };
 pub use import::{
-    DownloadsWatcher, FallbackReason, FetchError, Fetcher, ImportJob, ImportOutcome, ImportState,
-    MakerSource, RemoteFile, ScriptedAnswer, ScriptedFetcher, SourceTable, default_downloads_dir,
+    Arrival, DownloadsWatcher, FallbackReason, FetchError, Fetcher, ImportJob, ImportOutcome,
+    ImportState, MakerSource, RemoteFile, ScriptedAnswer, ScriptedFetcher, SourceTable,
+    default_downloads_dir,
 };
 pub use library::{
     FileKind, ImportFlow, LIBRARY_FORMAT_VERSION, LibraryError, LocalLibrary, NewSource,
