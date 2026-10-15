@@ -241,8 +241,9 @@ lives only in a menu, and nothing opens a modal dialog in the drawing loop.
 4. **Keys** (below). Letter keys act only while the drawing has focus.
 5. **The inspector** for properties of the selection.
 
-**Pin or body.** Pins win over the symbol body within 6 screen pixels of a
-pin, at every zoom. Hovering there shows the pin as the connect target (a
+**Pin or body.** Pins win over the symbol body within 10 screen pixels of
+a pin's connection point, at every zoom; "Grabbing a pin" below has the
+full rule. Hovering there shows the pin as the connect target (a
 steel-blue ring and the connect cursor) before the press, so a drag that
 starts there connects and a drag anywhere else on the symbol moves it.
 
@@ -317,8 +318,9 @@ other.
 - **Lines** (AutoCAD style): you draw the lines. Each click commits one
   straight segment from the previous point, locked to the axis the pointer
   is nearer to (a diagonal pointer snaps to the nearer axis), and nothing is
-  routed for you. Click a pin, a junction or a wire to finish; Enter or a
-  double click finishes on the last point when it is on a pin or a wire.
+  routed for you. Click a pin, a junction or a wire to finish; Enter
+  finishes on the last point when it is on a pin or a wire; a double click
+  ends the wire where it is (open ends, below).
 
 **A drag from a pin is not a mode.** In any tool and either mode, pressing
 on a pin and moving more than 4 px (the same threshold as pan) is the quick
@@ -435,6 +437,112 @@ Acceptance, for testers and reviewers, run in both modes unless marked:
    overlaps opens unchanged and shows them in Issues.
 10. Quit and reopen: the mode is the one last used, read from the user's
     Preferences and not from the project file.
+
+### Right-click menu, place wheel, open ends, grabbing a pin
+
+Four things the first real use showed. They are one section because they
+share a rule: the pointer should be able to do the common thing without
+the keyboard, and show its result before it happens.
+
+**The right-click menu.** At most nine rows in groups, the best guess
+first (§4, command 3). Every row shows its key on the right, so the menu
+teaches the keys. Rows that do not apply are left out, except Paste, which
+is greyed with its reason ("Clipboard is empty"). The menu opens under the
+pointer and never covers the object it is about.
+
+| Over | Rows, in order |
+| --- | --- |
+| Empty canvas | Repeat last tool · **Place component ▸** (opens the wheel) · Connect (W) · Add text · Paste (Ctrl+V) · Select all (Ctrl+A) · Zoom to fit (Home) · Page properties |
+| A device | Properties (F2) · Go to partner (G) · Rotate (R) · Mirror (X) · Duplicate (Ctrl+D) · Assign part · Copy / Cut · Delete |
+| A pin | Connect from here (W) · Go to partner (G) · Pin properties |
+| A wire | Properties (number, text) · Re-route (`tidy`) · Show potential · Delete wire |
+| An open wire end | Connect from here · Delete wire |
+| Text | Edit (F2) · Copy · Delete |
+
+On a selection of several objects the rows act on all of them, and the
+top row is the action common to all.
+
+**Place wheel.** "Place component" opens a radial picker at the pointer,
+the fast way for a mouse hand to put down the common parts. Holding I
+(over 250 ms) opens the same wheel; a tap of I stays the command surface
+in place mode. The wheel has two rings and no hidden level.
+
+- Inner ring, six sectors: **Terminals**, **Switches and buttons**,
+  **Relays and contactors**, **Breakers and protection**, **Loads and
+  sources** (motors, lamps, supplies), **Search** (opens the place
+  surface; also the centre).
+- Outer ring, up to eight items for the sector under the pointer, shown on
+  hover: the favourites used in this project first, then the defaults of
+  that category. Relays, for example: coil, normally open, normally
+  closed, changeover, timer coil.
+- Pick by clicking, by press-drag-release (a flick), or by keys 1 to 6
+  then 1 to 8; Backspace goes back a ring and Esc closes. Picking an
+  item attaches the symbol to the pointer exactly as the place mode does,
+  so R, X and the auto tag work the same.
+- Sectors are large (at least 56 px wide at the outer edge) and the wheel
+  never opens partly off-screen; it shifts to fit. The categories are
+  fixed in v1 so muscle memory forms; the items inside follow use.
+
+**Open ends.** A double click while drawing ends the wire where the
+pointer is, in either mode and on empty canvas, on a pin or on a wire (on
+a pin or wire it connects, as a click does; on nothing it leaves an open
+end). The first click of the double click is the last corner; a double
+click adds no extra corner and no zero-length segment.
+
+- An open end carries an end cap (a small ring, 6 px on screen at every
+  zoom, in the accent colour, never copper) and the Warning flag of §5
+  with the text "Unconnected" on hover. It is listed in Issues as
+  `wire.open`, a warning, not an error, so a half-drawn page can be saved
+  and printed with the flags visible.
+- Pressing on the end cap and dragging pulls the end; releasing on a pin
+  or a wire connects it and the flag disappears. W on the end cap resumes
+  the wire. Backspace in a resumed wire takes back its last corner.
+- Double click on a finished wire does not end anything; it selects the
+  wire and opens its number for editing, as for any text.
+- The model needs a wire with a free end: WS-02 describes the flag
+  (an endpoint that is a position, not a pin) in its pull request.
+
+**Grabbing a pin.** Starting a wire from a pin must work every time.
+
+- The grab zone is a circle of at least 10 screen pixels around the
+  connection point, plus the pin stub itself. In a dense strip the zone
+  shrinks to half the distance to the nearest neighbour but never below
+  6 px; the nearest pin wins. Pins beat the body, text and wires inside
+  the zone.
+- The hit test uses the position of the **press**, not the pointer's
+  position when the 4 px threshold is crossed. The wire starts at the pin,
+  not where the pointer was when it started to move, and the preview is
+  visible from the first pixel past the threshold.
+- A press in the zone either starts a connection or is a click that
+  selects the device; it never does nothing and never moves the device. A
+  drag released on empty canvas cancels as before.
+- Hovering the zone shows the ring and the connect cursor immediately (no
+  delay), so the user sees the grab before pressing.
+
+**Seeing the connection points.** A pin with a wire shows a filled accent
+dot where the wire attaches; a free pin shows a hollow ring of the same
+size, so every place a wire can start or end is visible without hovering.
+Wires keep a stroke of at least 1.5 px on screen at every zoom and differ
+from pins and from the background by at least a 3:1 contrast ratio; the
+exact colours are Layout's, checked against this ratio.
+
+Acceptance:
+
+11. Press 9 px from a pin, move 12 px, release on another pin: a wire, 20
+    times in 20 attempts, in both modes. Pressing 12 px from a pin on the
+    body moves the symbol.
+12. Right-click on empty canvas, a device, a pin, a wire, an open end and
+    text each give the rows above, with the keys shown; Place component is
+    on the first menu.
+13. Place component, then Relays, then coil: a coil follows the pointer
+    with an auto tag; click places it; R and X work; Esc cancels. The same
+    through I held, keys 3 then 1, and a flick.
+14. Double click on empty canvas mid-wire: the wire ends there with the
+    end cap and the Unconnected flag, one new corner at most, and a
+    `wire.open` warning in Issues. Dragging the cap onto a pin connects it
+    and clears the flag and the warning. Undo removes the whole wire.
+15. Free pins show a ring and connected pins a filled dot at every zoom; a
+    wire against its pins and the background meets 3:1.
 
 Keys match the logical character, not the physical position, so `?`,
 Ctrl+Z and Ctrl+Y work on Dutch, German (QWERTZ) and US layouts alike.
