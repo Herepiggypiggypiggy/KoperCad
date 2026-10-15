@@ -1,7 +1,7 @@
 //! Terminals in the app (novo-terminals, WS-11): the Terminals drawer
 //! (Ctrl+3) shows the selection's strip, and terminals where a wire crosses
 //! a location boundary are proposed on the drawing (Enter accepts, Tab
-//! moves to the next, `accept all` takes every one).
+//! moves to the next, Delete declines one, `accept all` takes every one).
 
 use eframe::egui;
 use novo_canvas::{Aabb, Mark, MarkKind, MarkTarget, Vec2};
@@ -38,6 +38,47 @@ impl NovoApp {
         }
         self.accept_terminals("Accept terminal", std::slice::from_ref(s));
         self.wb.proposal = 0;
+    }
+
+    /// Delete: declines the highlighted proposal for good (undo brings it
+    /// back). Like Enter, only while it is on screen.
+    pub(super) fn dismiss_proposal(&mut self) {
+        let proposals = self.page_proposals();
+        let Some(s) = proposals.get(self.wb.proposal.min(proposals.len().saturating_sub(1))) else {
+            return;
+        };
+        if !self.in_view(s) {
+            self.bring_into_view(s);
+            return;
+        }
+        let wire = s.wire;
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        match doc.transact("Decline terminal", |tx| {
+            novo_terminals::dismiss_suggestion(tx, wire)
+        }) {
+            Ok(((), changes)) => {
+                self.changed_outside_canvas(&changes);
+                self.wb.proposal = 0;
+            }
+            Err(e) => self.message(Level::Error, format!("Could not decline the terminal: {e}")),
+        }
+    }
+
+    /// Whether the pointer is on the highlighted terminal proposal.
+    pub(super) fn pointer_on_proposal(&self) -> bool {
+        let Some(at) = self.wb.pointer_world else {
+            return false;
+        };
+        let proposals = self.page_proposals();
+        proposals
+            .get(self.wb.proposal.min(proposals.len().saturating_sub(1)))
+            .is_some_and(|s| {
+                let area = proposal_area(s);
+                let (x, y) = (at.x as f32, at.y as f32);
+                (area.min.x..=area.max.x).contains(&x) && (area.min.y..=area.max.y).contains(&y)
+            })
     }
 
     /// Tab: the next proposal, brought into view when it is off screen.

@@ -706,3 +706,56 @@ fn a_click_on_a_symbol_selects_it() {
         .to_vec();
     assert_eq!(sel, vec![item]);
 }
+
+#[test]
+fn delete_declines_a_terminal_proposal_until_undone() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let _k = d.place("km3", 80.0, 96.0);
+    let m = d.place("m3", 80.0, 172.0);
+    {
+        let device = novo_editor::edit::device_of(d.doc().project(), AnyId::Symbol(m)).unwrap();
+        let ok = d
+            .app
+            .with_editor(|editor, doc| editor.rename(doc, device, "+FIELD-M1"));
+        assert_eq!(ok, Some(Ok(())));
+    }
+    d.frame();
+    d.editor_leave();
+    d.app.canvas.schematic().unwrap().canvas.selection.clear();
+    d.frame();
+    assert!(d.app.selection().is_empty(), "{:?}", d.app.selection());
+    let before = d.app.page_proposals().len();
+    assert!(before > 0);
+    let symbols = d.doc().project().symbols().count();
+
+    // Away from the proposal, Delete declines nothing.
+    let (_, rect) = d.app.wb.canvas_area.unwrap();
+    d.frame_with(vec![egui::Event::PointerMoved(
+        rect.left_top() + egui::vec2(2.0, 2.0),
+    )]);
+    d.key(egui::Key::Delete, egui::Modifiers::NONE);
+    assert_eq!(d.app.page_proposals().len(), before, "pointer elsewhere");
+
+    // With the pointer on the highlighted proposal, it declines it.
+    let at = d.app.page_proposals()[d.app.wb.proposal.min(before - 1)].at;
+    let view = &d.app.canvas.schematic_ref().unwrap().canvas.viewport;
+    let p = view.world_to_screen(novo_canvas::Vec2::new(at.x as f32, at.y as f32));
+    d.frame_with(vec![egui::Event::PointerMoved(
+        rect.min + egui::vec2(p.x, p.y),
+    )]);
+    d.key(egui::Key::Delete, egui::Modifiers::NONE);
+    assert_eq!(d.app.page_proposals().len(), before - 1, "declined");
+    assert_eq!(
+        d.doc().project().symbols().count(),
+        symbols,
+        "nothing deleted"
+    );
+
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(d.app.page_proposals().len(), before, "undo brings it back");
+}

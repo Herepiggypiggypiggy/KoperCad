@@ -175,14 +175,18 @@ impl NovoApp {
         self.backend.is_dirty()
     }
 
+    /// The project's name; a named file still called "Untitled" inside
+    /// (saved before naming set the name) shows its file name.
     fn project_name(&self) -> Option<String> {
         self.backend.document().map(|d| {
             let name = &d.project().info().name;
-            if name.is_empty() {
-                "Untitled".to_owned()
-            } else {
-                name.clone()
+            if !is_default_name(name) {
+                return name.clone();
             }
+            self.project_path
+                .as_deref()
+                .and_then(file_stem)
+                .unwrap_or_else(|| "Untitled".to_owned())
         })
     }
 
@@ -500,9 +504,29 @@ impl NovoApp {
             dialog = dialog.set_directory(folder);
         }
         match dialog.save_file() {
-            Some(path) => self.save_to(&path),
+            Some(path) => self.name_and_save(&path),
             None => false,
         }
+    }
+
+    /// Naming a project sets its name and its file together (DESIGN.md §3):
+    /// a project still called "Untitled", or named after its old file,
+    /// takes the new file's name, then is saved there.
+    fn name_and_save(&mut self, path: &Path) -> bool {
+        let old_stem = self.project_path.as_deref().and_then(file_stem);
+        if let (Some(stem), Some(doc)) = (file_stem(path), self.backend.document_mut()) {
+            let current = doc.project().info().name.clone();
+            if current != stem && (is_default_name(&current) || old_stem.as_ref() == Some(&current))
+            {
+                match doc.transact(format!("Name project {stem}"), |tx| {
+                    tx.set_info(|info| info.name = stem.clone())
+                }) {
+                    Ok(((), changes)) => self.changed_outside_canvas(&changes),
+                    Err(e) => self.message(Level::Error, format!("Could not name it: {e}")),
+                }
+            }
+        }
+        self.save_to(path)
     }
 
     fn save_to(&mut self, path: &Path) -> bool {
@@ -538,6 +562,7 @@ impl NovoApp {
         let mut picked: Vec<Action> = Vec::new();
         self.escape_popups(&ctx);
         self.space_released(&ctx);
+        self.track_pointer(&ctx);
         let commands = if self.modal_open() {
             Vec::new()
         } else {
@@ -1191,6 +1216,16 @@ fn project_file_name(name: &str) -> String {
     format!("{name}.{PROJECT_EXTENSION}")
 }
 
+/// The name a project has before anyone names it.
+fn is_default_name(name: &str) -> bool {
+    name.trim().is_empty() || name == "Untitled"
+}
+
+/// A file's name without its extension.
+fn file_stem(path: &Path) -> Option<String> {
+    path.file_stem().map(|s| s.to_string_lossy().into_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1381,7 +1416,10 @@ mod tests {
         assert!(app.save_to(Path::new("plant.novo")));
         assert!(!app.is_dirty());
         frame(&ctx, &mut app, Default::default());
-        assert_eq!(app.window_title, "Untitled - NovoElectric");
+        assert_eq!(
+            app.window_title, "plant - NovoElectric",
+            "named after its file"
+        );
     }
 
     /// Which commands a single key press would run.
@@ -1550,6 +1588,55 @@ mod tests {
             )),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn naming_a_project_sets_its_name_and_its_file_together() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = themed_ctx();
+        let mut app = app_with(crate::backend::StorageBackend::with_untitled_dir(
+            dir.path().join("untitled"),
+        ));
+        app.run(&ctx, Action::NewProject);
+        assert_eq!(app.project_name().as_deref(), Some("Untitled"));
+
+        let plant = dir.path().join("Plant.novo");
+        assert!(app.name_and_save(&plant));
+        let name = |app: &NovoApp| {
+            app.backend
+                .document()
+                .unwrap()
+                .project()
+                .info()
+                .name
+                .clone()
+        };
+        assert_eq!(name(&app), "Plant");
+        assert_eq!(app.project_name().as_deref(), Some("Plant"));
+
+        // Saved under another name, a project named after its file follows.
+        let mill = dir.path().join("Mill.novo");
+        assert!(app.name_and_save(&mill));
+        assert_eq!(name(&app), "Mill");
+
+        // A name the user chose is kept whatever the file is called.
+        app.backend
+            .document_mut()
+            .unwrap()
+            .transact("Rename", |tx| {
+                tx.set_info(|i| i.name = "Water works".into())
+            })
+            .unwrap();
+        assert!(app.name_and_save(&dir.path().join("copy.novo")));
+        assert_eq!(name(&app), "Water works");
+
+        // A file saved before naming set the name shows its file name.
+        app.backend
+            .document_mut()
+            .unwrap()
+            .transact("Reset", |tx| tx.set_info(|i| i.name = "Untitled".into()))
+            .unwrap();
+        assert_eq!(app.project_name().as_deref(), Some("copy"));
     }
 
     #[test]
