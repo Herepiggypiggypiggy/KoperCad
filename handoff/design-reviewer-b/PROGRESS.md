@@ -41,3 +41,4 @@
 18:25 UTC #393 e4a2ae4 READY (blade line width)
 18:30 UTC #395 8972e56 CHANGES (design): Home=fit, right-click vs orbit, Alt+click, Esc, Ctrl+T
 18:35 UTC #395 7717934 READY (3D view design doc)
+18:42 UTC #429 55ba22e CHANGES (design, draft): SUCCESS token, remove confirm, keyboard/Esc, truncation, drawer vs window, Import hint
