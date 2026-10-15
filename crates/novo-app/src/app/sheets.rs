@@ -20,7 +20,7 @@ use super::{Level, NovoApp, projects_dir};
 
 impl NovoApp {
     /// Directory and file stem for exports of the open project.
-    fn export_base(&mut self) -> Option<(PathBuf, String)> {
+    pub(super) fn export_base(&mut self) -> Option<(PathBuf, String)> {
         let name = self.project_name()?;
         let file = self.backend.file().filter(|_| !self.backend.is_untitled());
         match file {

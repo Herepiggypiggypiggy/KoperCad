@@ -71,6 +71,19 @@ enum Cmd {
     /// Revisions: list them, or compare two states of the project.
     #[command(subcommand)]
     Revisions(Revisions),
+    /// Convert a DWG to DXF with the free converter on this computer
+    /// (LibreDWG's dwg2dxf or the ODA File Converter), ready for the DXF
+    /// import. KoperCAD never bundles either one.
+    ConvertDwg {
+        /// The DWG file.
+        file: PathBuf,
+        /// Output `.dxf` file.
+        #[arg(short, long)]
+        output: PathBuf,
+        /// The converter program, when it is not found by itself.
+        #[arg(long, value_name = "PROGRAM")]
+        converter: Option<PathBuf>,
+    },
     /// Run the design checks; exits with 1 when there are errors or
     /// warnings (infos such as missing parts do not count).
     Check {
@@ -157,6 +170,28 @@ enum Export {
         /// when left out.
         #[arg(long = "page", value_name = "NAME")]
         pages: Vec<String>,
+    },
+    /// The cabinet as a STEP assembly (AP214, millimetres) for mechanical
+    /// CAD: housing, mounting plate, rails, ducts, devices and door, each a
+    /// named, coloured solid.
+    Step {
+        file: PathBuf,
+        /// Output: a `.stp` file for one enclosure, otherwise a directory
+        /// that gets one `<tag>.stp` per enclosure.
+        #[arg(short, long)]
+        output: PathBuf,
+        /// Only this enclosure (its tag, e.g. `+CAB1`); all with a mounting
+        /// plate when left out.
+        #[arg(long, value_name = "TAG")]
+        enclosure: Option<String>,
+    },
+    /// The plant (structure, devices, terminals, cables, nets) as
+    /// AutomationML (IEC 62714, CAEX 2.15).
+    Aml {
+        file: PathBuf,
+        /// Output file (`.aml`).
+        #[arg(short, long)]
+        output: PathBuf,
     },
     /// Schematic pages as DXF drawings (millimetres, y up), for CAD
     /// programs and laser or plotter shops.
@@ -283,6 +318,53 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
         }) => {
             let project = read(&file)?;
             export_dxf(&project, &file, &output, &pages)?;
+            Ok(exit::OK)
+        }
+        Cmd::Export(Export::Step {
+            file,
+            output,
+            enclosure,
+        }) => {
+            let project = read(&file)?;
+            export_step(&project, &file, &output, enclosure.as_deref(), out)?;
+            Ok(exit::OK)
+        }
+        Cmd::Export(Export::Aml { file, output }) => {
+            let project = read(&file)?;
+            let export = novo_interop::aml::export_project(
+                &project,
+                &novo_interop::aml::AmlOptions {
+                    created: novo_interop::step::iso_utc(now_secs()),
+                    ..Default::default()
+                },
+            );
+            write_output(&file, &output, export.text.as_bytes())?;
+            print(out, &export.report.text())?;
+            Ok(exit::OK)
+        }
+        Cmd::ConvertDwg {
+            file,
+            output,
+            converter,
+        } => {
+            let Some(conv) = novo_interop::dwg::find_installed(converter.as_deref()) else {
+                return Err(Failure::new(
+                    exit::UNAVAILABLE,
+                    format!("no DWG converter found; {}", novo_interop::dwg::guidance()),
+                ));
+            };
+            let work = std::env::temp_dir().join(format!("kopercad-dwg-{}", std::process::id()));
+            let result = conv
+                .convert(&file, &work, std::time::Duration::from_secs(180))
+                .map_err(|e| Failure::new(exit::READ, e.to_string()))
+                .and_then(|dxf| {
+                    let bytes = std::fs::read(&dxf)
+                        .map_err(|e| Failure::new(exit::READ, format!("{}: {e}", dxf.display())))?;
+                    write_output(&file, &output, &bytes)
+                });
+            let _ = std::fs::remove_dir_all(&work);
+            result?;
+            print(out, &format!("Converted with {}", conv.kind.label()))?;
             Ok(exit::OK)
         }
         Cmd::Revisions(Revisions::List { file, json }) => {
@@ -416,6 +498,66 @@ fn comparison_text(project: &Project, from: &str, to: &str, c: &Comparison) -> V
         lines.push(format!("sheet {} ({}): {:?}", s.name, s.report, s.kind));
     }
     lines
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
+
+/// STEP files of the project's enclosures: one `.stp` file, or a directory
+/// with one file per enclosure.
+fn export_step(
+    project: &Project,
+    input: &Path,
+    output: &Path,
+    only: Option<&str>,
+    out: &mut dyn Write,
+) -> Result<(), Failure> {
+    let options = novo_interop::step::StepOptions {
+        created: novo_interop::step::iso_utc(now_secs()),
+        ..Default::default()
+    };
+    let mut files = novo_interop::step::export_all(project, &options);
+    if let Some(tag) = only {
+        let wanted = novo_core::DeviceTag::parse(tag)
+            .map_err(|e| Failure::new(exit::USAGE, format!("--enclosure {tag}: {e}")))?
+            .to_string();
+        files.retain(|f| f.tag == wanted);
+    }
+    if files.is_empty() {
+        return Err(Failure::new(
+            exit::USAGE,
+            "no enclosure with a mounting plate to export (set its plate size first)",
+        ));
+    }
+    let is_file = output
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("stp") || e.eq_ignore_ascii_case("step"));
+    if is_file {
+        let [one] = files.as_slice() else {
+            return Err(Failure::new(
+                exit::USAGE,
+                "several enclosures: give a directory as output, or pick one with --enclosure",
+            ));
+        };
+        write_output(input, output, one.export.text.as_bytes())?;
+        print(out, &one.export.report.text())?;
+    } else {
+        std::fs::create_dir_all(output).map_err(|e| {
+            Failure::new(
+                exit::WRITE,
+                format!("cannot create {}: {e}", output.display()),
+            )
+        })?;
+        for f in &files {
+            let name = format!("{}.stp", file_stem(&f.tag));
+            write_output(input, &output.join(name), f.export.text.as_bytes())?;
+        }
+        print(out, &format!("{} STEP files written", files.len()))?;
+    }
+    Ok(())
 }
 
 fn print(out: &mut dyn Write, text: &str) -> Result<(), Failure> {

@@ -11,6 +11,8 @@ novo-core.workspace = true
 novo-canvas = { path = "../novo-canvas", default-features = false, features = ["model"] }
 novo-layout.workspace = true
 novo-parts.workspace = true
+novo-view3d.workspace = true
+glam.workspace = true
 thiserror.workspace = true
 # Polygon triangulation (port of Mapbox earcut), pure Rust.
 earcutr = "0.5"

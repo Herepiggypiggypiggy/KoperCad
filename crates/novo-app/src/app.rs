@@ -17,6 +17,7 @@ mod duplicate;
 mod dxf;
 mod example;
 mod inspector;
+mod interop;
 mod link;
 mod live;
 mod live_anim;
@@ -792,6 +793,8 @@ impl NovoApp {
         self.project_settings_dialog(&ctx);
         self.issue_revision_dialog(&ctx);
         self.compare_window(&ctx);
+        self.aml_import_dialog(&ctx);
+        self.poll_dwg(&ctx);
         self.page_form_dialog(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {
             self.run_command(&ctx, id, None);
@@ -1008,6 +1011,50 @@ impl NovoApp {
         }
         // The same commands as Ctrl+K: one code path.
         let has_page = self.current_page.is_some();
+        ui.menu_button("Import and export", |ui| {
+            let open = self.is_open();
+            for (id, label, hint, enabled) in [
+                (
+                    "export.step",
+                    "Cabinet as STEP...",
+                    "Every enclosure with a mounting plate, as a named assembly for mechanical CAD",
+                    open,
+                ),
+                (
+                    "export.aml",
+                    "Plant as AutomationML...",
+                    "Structure, devices, terminals, cables and nets (IEC 62714)",
+                    open,
+                ),
+                (
+                    "file.import_aml",
+                    "Import AutomationML...",
+                    "Add the plant from another tool's AutomationML file; you see what it would do first",
+                    open,
+                ),
+                (
+                    "file.import_dwg",
+                    "Import DWG as background...",
+                    "Converts with the free LibreDWG or ODA File Converter, then imports the DXF",
+                    has_page,
+                ),
+                (
+                    "file.choose_dwg_converter",
+                    "Choose DWG converter...",
+                    "Point KoperCAD at dwg2dxf or the ODA File Converter",
+                    true,
+                ),
+            ] {
+                if ui
+                    .add_enabled(enabled, egui::Button::new(label))
+                    .on_hover_text(hint)
+                    .clicked()
+                {
+                    self.wb.queued.push(id);
+                    ui.close();
+                }
+            }
+        });
         let has = self.has_background();
         ui.add_enabled_ui(has_page, |ui| {
             ui.menu_button("DXF background", |ui| {

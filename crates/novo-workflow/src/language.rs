@@ -266,6 +266,31 @@ pub const DUTCH: &[Aliases] = &[
         &["cad", "autocad", "pagina"],
     ),
     nl("export.dxf_all", &[], &["alle paginas", "cad", "autocad"]),
+    nl(
+        "export.step",
+        &["exporteer step"],
+        &["kast", "mechanisch", "3d", "stp"],
+    ),
+    nl(
+        "export.aml",
+        &["exporteer aml"],
+        &["installatie", "automationml", "uitwisselen"],
+    ),
+    nl(
+        "file.import_aml",
+        &["importeer aml"],
+        &["automationml", "installatie", "overnemen", "migreren"],
+    ),
+    nl(
+        "file.import_dwg",
+        &["importeer dwg"],
+        &["autocad", "converter", "achtergrond"],
+    ),
+    nl(
+        "file.choose_dwg_converter",
+        &[],
+        &["dwg converter", "dwg2dxf", "omzetter"],
+    ),
     // Export
     nl(
         "export.pdf",

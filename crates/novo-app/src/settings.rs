@@ -36,6 +36,9 @@ pub struct Settings {
     pub reduce_motion: bool,
     /// How far the fast-keys walk-through is (docs/ONBOARDING-DESIGN.md §2).
     pub onboarding: Onboarding,
+    /// The DWG converter program the person chose (`dwg2dxf` or the ODA File
+    /// Converter), tried before the ones KoperCAD finds itself.
+    pub dwg_converter: Option<PathBuf>,
 }
 
 /// The walk-through's progress, per user: kept so closing the app mid-way
