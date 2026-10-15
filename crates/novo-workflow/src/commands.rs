@@ -868,6 +868,23 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd(
+        "sim.faults",
+        "Fault scenarios",
+        "View",
+        &[
+            "short circuit",
+            "fault",
+            "trip",
+            "breaker",
+            "selectivity",
+            "protection",
+            "waveform",
+            "timing",
+            "overload",
+        ],
+        Needs::Project,
+    ),
+    cmd(
         "view.override_marks",
         "Show override marks",
         "View",

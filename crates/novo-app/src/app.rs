@@ -19,6 +19,7 @@ mod drawers;
 mod duplicate;
 mod dxf;
 mod example;
+mod faults;
 mod heat;
 mod inspector;
 mod learn;
@@ -853,6 +854,7 @@ impl NovoApp {
         self.generate_window(&ctx);
         self.issue_revision_dialog(&ctx);
         self.compare_window(&ctx);
+        self.faults_window(&ctx);
         self.numbering_window(&ctx);
         self.page_form_dialog(&ctx);
         self.outline_dialogs(&ctx);
