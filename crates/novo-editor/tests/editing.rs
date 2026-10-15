@@ -2257,3 +2257,26 @@ fn moving_a_device_leaves_its_wires_behind_as_open_ends() {
     assert_eq!(wire.to, Endpoint::Free { at: was });
     assert_ne!(pin_pos(&doc, b, "13"), was);
 }
+
+#[test]
+fn joining_a_wire_lands_on_the_grid_not_where_the_pointer_crosses() {
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/contacts/no", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.click(&mut doc, page, p(40.0, 120.0), TOL);
+    let a = symbol_at(&doc, page, p(40.0, 40.0));
+    let b = symbol_at(&doc, page, p(40.0, 120.0));
+    editor.begin_wire();
+    click_pin(&mut editor, &mut doc, page, a, "14");
+    click_pin(&mut editor, &mut doc, page, b, "13");
+    editor.leave_tool();
+    let x = pin_pos(&doc, a, "14").x;
+    let mid = (pin_pos(&doc, a, "14").y + pin_pos(&doc, b, "13").y) / 2.0;
+
+    editor.begin_wire();
+    editor.hover(&doc, page, p(x + 0.3, mid + 1.37), TOL);
+    let at = editor.cursor().unwrap();
+    assert_eq!(at.x, x);
+    assert_eq!(at.y % editor.grid, 0.0, "{at:?} is off the grid");
+}
