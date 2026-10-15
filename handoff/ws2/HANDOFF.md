@@ -3,7 +3,12 @@
 ## State (2026-10-14 22:25 UTC)
 - #35, #45, #82, #101, #107 merged. The repo copy of this handoff (handoff/ws2/)
   is refreshed with each PR; the shared-folder copy may be newer.
-- Open: page freeze PR (branch `claude/data-model-amzaxu`, rebased on main).
+- #119 page freeze merged 2026-10-15 03:03 UTC; WS-10 told.
+- Open: blocks PR (branch `claude/data-model-amzaxu`, on main d7f70b8). Review
+  notes 3-4 (blank revision, doc) done on ws02-followups. Notes 1-2 (a
+  frozen page edited since its revision; renaming a frozen page) are for
+  WS-06 to show; a `PageFreeze::is_stale` query is a possible follow-up.
+- WS-11 moved terminal declines to Dismissal in #122.
 - Queued locally, rebased on main 70248a3: `ws02-freeze` 3890938 (page
   freeze), then `ws02-blocks` 498e9a6 (blocks). One PR each, in that order,
   each after the previous merges. After Structure merges tell WS-11; after
@@ -16,8 +21,8 @@
   Adding a connection between two members of one instance, or a device
   wired only to members, should detach ("connection -K1:13 to -F2:1
   added"). A wire from a member out to the circuit keeps the link. Built
-  for connections (on ws02-blocks); a new device wired only to members is
-  not detected yet, since its first wire looks like a wire out.
+  for connections (on ws02-blocks) and for a device wired (2+ wires) only
+  to members, checked at the end of each edit (on ws02-followups).
 - Blocks follow-ups: definition update keeping overrides, marking overrides
   automatically from edits, instance.page after a move.
 - #107 review notes (non-blocking): a `wires_leaving(items)` query so the

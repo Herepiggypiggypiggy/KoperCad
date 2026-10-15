@@ -23,3 +23,6 @@
 2026-10-14 22:25 UTC #107 merged (READY at 105cef4). Opening Structure+Dismissal PR from main (670 tests pass). Freeze and blocks rebased onto main.
 2026-10-15 02:50 UTC #117 READY (CI no logs, Actions down; commented). ws02-followups committed locally (675 tests). Logged WS-08 detach-on-add gap for blocks.
 2026-10-15 02:58 UTC #117 merged. Page freeze rebased on main 27c2e17 (680 tests pass), opening PR.
+2026-10-15 03:10 UTC #119 opened (page freeze). Device-inside-block detach added on ws02-followups (676 tests).
+2026-10-15 03:08 UTC #119 READY. Review notes 3-4 committed on ws02-followups.
+2026-10-15 03:15 UTC #119 merged. Blocks rebased on main d7f70b8 (686 tests), opening PR. Follow-ups branch to rebase after.
