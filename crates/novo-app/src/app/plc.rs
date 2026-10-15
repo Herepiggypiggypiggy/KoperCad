@@ -115,7 +115,8 @@ impl NovoApp {
             self.message(Level::Info, "Every pin of that symbol is already wired");
             return;
         };
-        let key = channel_symbol(kind);
+        let key = view.editor.catalog.in_pack(channel_symbol(kind));
+        let key = key.as_str();
         let Some(channel) = library.get(key) else {
             return;
         };
