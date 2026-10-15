@@ -3,12 +3,14 @@
 //! driven headless through the editor the way the canvas drives it: pointer
 //! positions, clicks and keys in, model edits out.
 
-use novo_core::{AnyId, Document, Endpoint, PageId, Point, PotentialKind, SymbolRole};
+use novo_core::{
+    AnyId, Document, Endpoint, PageId, Point, PotentialKind, SymbolRole, TextAnchor, TextContent,
+};
 use novo_editor::edit::{self, PlaceOptions};
 use novo_editor::geometry::Target;
 use novo_editor::potential;
 use novo_editor::tool::{Clicked, Tool, WiringMode};
-use novo_editor::{Editor, EditorKey};
+use novo_editor::{Editor, EditorKey, LabelSource};
 
 /// Pick radius in millimetres, as at a normal zoom.
 const TOL: f64 = 1.5;
@@ -1940,6 +1942,48 @@ fn a_double_click_on_nothing_ends_the_wire_as_an_open_end_in_both_modes() {
             !editor.tool_active() || matches!(editor.tool(), Tool::Wire(w) if w.start.is_none())
         );
     }
+}
+
+#[test]
+fn dragging_a_label_moves_only_the_text_in_one_undo_step() {
+    let (mut doc, page, mut editor, [a, _, _]) = three_contacts();
+    let symbol_origin = doc.project().symbol(a).unwrap().placement.origin;
+    let depth = doc.undo_depth();
+
+    // A tag the canvas draws by itself gets a record at the place it is
+    // drawn, then moves by the distance dragged (grid-snapped).
+    let drawn = LabelSource::Drawn {
+        owner: AnyId::Symbol(a),
+        content: TextContent::DeviceTag,
+        at: p(48.0, 40.0),
+        anchor: TextAnchor::MiddleLeft,
+    };
+    let delta = editor.label_delta(p(48.2, 40.1), p(60.1, 52.2));
+    assert_eq!(delta, p(12.0, 12.0));
+    assert!(editor.move_label(&mut doc, page, &drawn, delta));
+    assert_eq!(doc.undo_depth(), depth + 1);
+    let record = doc
+        .project()
+        .texts_of(a)
+        .into_iter()
+        .next()
+        .expect("a record");
+    assert_eq!(doc.project().text_position(record), Some(p(60.0, 52.0)));
+    assert_eq!(
+        doc.project().symbol(a).unwrap().placement.origin,
+        symbol_origin
+    );
+
+    // The record then moves in place.
+    let again = LabelSource::Record(record);
+    assert!(editor.move_label(&mut doc, page, &again, p(-4.0, 2.0)));
+    assert_eq!(doc.project().text_position(record), Some(p(56.0, 54.0)));
+    assert_eq!(doc.project().texts_of(a).len(), 1);
+    assert!(!editor.move_label(&mut doc, page, &again, Point::ZERO));
+
+    doc.undo().unwrap();
+    doc.undo().unwrap();
+    assert!(doc.project().texts_of(a).is_empty());
 }
 
 #[test]
