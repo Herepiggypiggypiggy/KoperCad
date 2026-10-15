@@ -8,7 +8,8 @@
 use novo_layout::Rect;
 
 /// Note shown next to every result.
-pub const NOTE: &str = "Estimate from a reduced-order model. Check with the enclosure or cooling unit maker.";
+pub const NOTE: &str =
+    "Estimate from a reduced-order model. Check with the enclosure or cooling unit maker.";
 
 /// The grid every field lives on.
 #[derive(Debug, Clone, Copy, PartialEq)]
