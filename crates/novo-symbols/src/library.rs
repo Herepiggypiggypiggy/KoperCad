@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::{fs, io};
 
 use crate::pack::Pack;
@@ -84,6 +85,20 @@ impl Library {
             .flat_map(|(_, list)| list.iter())
             .map(|(id, text)| (id.to_string(), *text));
         Library::from_sources(sources)
+    }
+
+    /// The built-in library of `pack`, loaded once and shared, for engines
+    /// that look symbols up by key and have no library of their own.
+    pub fn shared(pack: Pack) -> &'static Library {
+        static IEC: OnceLock<Library> = OnceLock::new();
+        static NFPA: OnceLock<Library> = OnceLock::new();
+        let cell = match pack {
+            Pack::Iec => &IEC,
+            Pack::Nfpa => &NFPA,
+        };
+        cell.get_or_init(|| {
+            Library::builtin_pack(pack).expect("the built-in symbol library is valid")
+        })
     }
 
     /// Loads the files of one pack from `dir/<pack>/…`; ids stay relative to
@@ -230,6 +245,14 @@ impl Library {
     /// Symbols marked `favorite`, ordered by id.
     pub fn favorites(&self) -> impl Iterator<Item = &Symbol> {
         self.iter().filter(|s| s.favorite)
+    }
+
+    /// The pack all symbols belong to; `None` when the library is empty or
+    /// mixes packs or has ids outside every pack.
+    pub fn pack(&self) -> Option<Pack> {
+        let mut packs = self.symbols.keys().map(|id| Pack::of(id));
+        let first = packs.next()??;
+        packs.all(|p| p == Some(first)).then_some(first)
     }
 
     /// Number of symbols.

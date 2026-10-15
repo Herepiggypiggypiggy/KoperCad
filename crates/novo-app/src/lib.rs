@@ -92,10 +92,13 @@ pub fn run() -> eframe::Result {
                 }
                 None => Box::new(PlaceholderCanvas::default()),
             };
-            let backend = match data_dir() {
+            let mut backend = match data_dir() {
                 Some(dir) => StorageBackend::with_untitled_dir(dir.join("untitled")),
                 None => StorageBackend::default(),
             };
+            if let Some(dir) = recovery_dir() {
+                backend = backend.with_recovery_dir(dir);
+            }
             let mut app = NovoApp::new(cc, Box::new(backend), canvas);
             if let Some(path) = startup_file {
                 app.open_on_start(path);
@@ -124,6 +127,27 @@ fn data_dir() -> Option<std::path::PathBuf> {
         env("XDG_DATA_HOME").or_else(|| env("HOME").map(|h| h.join(".local/share")))?
     };
     Some(base.join(LEGACY_DATA_DIR_NAME))
+}
+
+/// The per-user folder for the recovery files of saved projects:
+/// `%LOCALAPPDATA%\KoperCAD\recovery` on Windows. Per user, never a system
+/// location. (Before this folder existed recovery files sat beside the
+/// project; those are still found.)
+fn recovery_dir() -> Option<std::path::PathBuf> {
+    use std::path::PathBuf;
+    let env = |name| {
+        std::env::var_os(name)
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+    };
+    let base = if cfg!(windows) {
+        env("LOCALAPPDATA")?
+    } else if cfg!(target_os = "macos") {
+        env("HOME")?.join("Library/Application Support")
+    } else {
+        env("XDG_DATA_HOME").or_else(|| env("HOME").map(|h| h.join(".local/share")))?
+    };
+    Some(base.join(DATA_DIR_NAME).join("recovery"))
 }
 
 #[cfg(test)]

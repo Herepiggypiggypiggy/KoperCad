@@ -25,6 +25,10 @@ fn add_cabinet(d: &mut Drive) {
         .unwrap();
 }
 
+fn layout_of(d: &Drive, cab: novo_core::StructureId) -> Option<novo_layout::state::CabinetLayout> {
+    novo_layout::model::load(project(d), cab)
+}
+
 fn project(d: &Drive) -> &Project {
     d.app.backend.document().unwrap().project()
 }
@@ -77,4 +81,83 @@ fn place_all_previews_then_accepts_as_one_undo_step() {
 
     d.app.run(&ctx, Action::ShowSchematic);
     assert!(!d.app.cabinet_open);
+}
+
+#[test]
+fn drop_move_rotate_and_remove_are_each_one_undo_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    let device = novo_layout::model::candidates(project(&d), cab)[0].id;
+
+    let l = layout_of(&d, cab);
+    d.app
+        .cabinet_ask(Ask::Drop(device, 100.0, 120.0), Some(cab), l, &[]);
+    let placed = |d: &Drive| {
+        let l = novo_layout::model::load(d.app.backend.document().unwrap().project(), cab).unwrap();
+        l.placements.first().map(|p| (p.x, p.y, p.rotated))
+    };
+    assert_eq!(placed(&d), Some((100.0, 120.0, false)));
+
+    let l = layout_of(&d, cab);
+    d.app
+        .cabinet_ask(Ask::Rotate(vec![device]), Some(cab), l, &[]);
+    assert_eq!(placed(&d), Some((100.0, 120.0, true)));
+
+    // Moving keeps the turn.
+    let l = layout_of(&d, cab);
+    d.app
+        .cabinet_ask(Ask::Drop(device, 200.0, 40.0), Some(cab), l, &[]);
+    assert_eq!(placed(&d), Some((200.0, 40.0, true)));
+
+    let l = layout_of(&d, cab);
+    d.app
+        .cabinet_ask(Ask::Remove(vec![device]), Some(cab), l, &[]);
+    assert_eq!(placed(&d), None);
+    d.app.run(&ctx, Action::Undo);
+    assert_eq!(placed(&d), Some((200.0, 40.0, true)));
+}
+
+#[test]
+fn picking_a_page_leaves_the_cabinet() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let page = d.app.current_page.expect("a page is shown");
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    assert!(d.app.cabinet_open);
+    d.app.show_page(page);
+    assert!(!d.app.cabinet_open);
+}
+
+#[test]
+fn a_ghost_is_drawn_but_never_stored() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    let device = novo_layout::model::candidates(project(&d), cab)[0].id;
+    d.app.cabinet.ghost = Some((device, 100.0, 100.0));
+    d.frame();
+    d.frame();
+    assert_eq!(project(&d).all::<CabinetPlacement>().count(), 0);
+    // Without a hovering payload the ghost is cleared again.
+    assert!(d.app.cabinet.ghost.is_none());
 }
