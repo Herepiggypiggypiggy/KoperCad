@@ -50,3 +50,4 @@
 2026-10-15 10:50 UTC PR from canvas-free-end: open wire ends draw ring + flag; PageScene::double_click_target (Text | Component | Wire | Empty) and PageScene::label_hit (owner, text record, LabelKind) for double-click rename.
 2026-10-15 12:50 UTC Wire parts (branch canvas-wire-parts): corners always drawn; PageScene::wire_part_at / set_wire_focus (WirePart Corner|Segment); ModelStyle.wires_pick_whole (default true until the editor picks parts, then false); CanvasOutput.clicked_hit (with label) and double_clicked for text-only selection and double-click-to-start-wire. Editor/app own the behaviours.
 2026-10-15 13:05 UTC Branch canvas-label-kinds (waits for #246 to merge): label_hit kinds follow the symbol role (TerminalName, InterruptionName, Potential for a feed) so the shell can rename terminals, interruption points and potentials on double click.
+- 2026-10-15: labels win picks over ink under them; label_hit kinds follow the symbol role (PR open).
