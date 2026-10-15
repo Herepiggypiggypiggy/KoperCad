@@ -3,12 +3,12 @@
 ## State
 - #417 merged (wire list Cut length mm / Length basis, `cutlist` report, docs/design/cut-list.md).
 - Follow-up PR on `claude/project-thread-qpde09`: `kopercad-cli export cutlist`.
-- Labels PR 1 (engine + CSV + CLI `export labels`) is committed locally on top of #437's commit, push after #437 merges (restart branch from main). Then PR 2: PDF label sheet with user sizes (novo-pdf), PR 3: app preview.
-- Labels export (asked by the coordinator) (wire, terminal, device, cable labels; CSV layouts, PDF sheet with user-set sizes, app preview, CLI).
+- Labels PR 1 (this PR, #482): engine, generic and Brother CSV layouts, `kopercad-cli export labels`. Next steps for a fresh session, in order: (2) PDF label sheet with user-set label sizes in novo-pdf, (3) app preview of labels in the Reports hub (#452).
+- Labels cover wires, terminals, devices and cables (asked by the coordinator).
 
 ## How the user opens it
 - Wire list with cut lengths: generated "Wire list" page (default page), `kopercad-cli export wires`, Excel via `export reports`.
-- Cut list: `kopercad-cli export cutlist` and Excel via `export reports`. App: not a default page; an "add Cut list page" command is to be agreed with "UI integration: reports and checks" (session_01TaTTPuTqhk8bHd277oJRFR), message sent, no answer yet.
+- Cut list: `kopercad-cli export cutlist` and Excel via `export reports`. App: the Reports hub (#452) lists every standard report and gets an "Add as page" button for reports without a generated page, so no separate "add Cut list page" command is needed (agreed with the UI integration thread).
 
 ## Resume
 ```
