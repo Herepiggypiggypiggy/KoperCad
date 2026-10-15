@@ -55,8 +55,8 @@ pub use csv::{
 };
 pub use import::{
     Arrival, DownloadsWatcher, FallbackReason, FetchError, Fetcher, ImportJob, ImportOutcome,
-    ImportState, MakerSource, RemoteFile, ScriptedAnswer, ScriptedFetcher, SourceTable,
-    default_downloads_dir,
+    ImportState, MTIME_SLACK, MakerSource, RemoteFile, ScriptedAnswer, ScriptedFetcher,
+    SourceTable, default_downloads_dir,
 };
 pub use library::{
     FileKind, ImportFlow, LIBRARY_FORMAT_VERSION, LibraryError, LocalLibrary, NewSource,
