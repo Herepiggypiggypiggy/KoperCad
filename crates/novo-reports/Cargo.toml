@@ -9,6 +9,7 @@ license.workspace = true
 novo-core.workspace = true
 novo-cables.workspace = true
 novo-plc.workspace = true
+novo-routing.workspace = true
 novo-terminals.workspace = true
 rust_xlsxwriter.workspace = true
 thiserror.workspace = true
