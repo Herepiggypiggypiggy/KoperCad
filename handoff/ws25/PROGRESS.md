@@ -4,3 +4,4 @@
 2026-10-15 17:50 UTC Growth: 18 new IEC symbols and NFPA twins (148), letter codes, gen_growth.py. Branch ws25-growth local, to be pushed after #351 merges.
 2026-10-15 18:10 UTC #351 merged. Growth PR opened from main; gate green (1146 tests).
 2026-10-15 18:20 UTC Reviewer asked (#335, #351): audit of literal iec/ keys added to design Risks and roadmap; lib.rs doc line wrapped.
+2026-10-15 18:45 UTC Audit PRs #380, #390, #407, #418, #424 merged one at a time; xref/checks tests PR is the last. WS-02 setting and SwitchStandard are on main; app wiring is WS-01.
