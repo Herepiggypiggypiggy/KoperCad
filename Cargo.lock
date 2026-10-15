@@ -2074,6 +2074,7 @@ dependencies = [
  "calamine",
  "novo-cables",
  "novo-core",
+ "novo-layout",
  "novo-plc",
  "novo-routing",
  "novo-terminals",

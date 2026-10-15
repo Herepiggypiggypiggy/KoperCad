@@ -75,6 +75,7 @@
 //! title block, clipping text to its box. Set [`PageSetup::margins`] and
 //! [`PageSetup::title_block_mm`] to match that frame.
 
+mod assembly;
 mod bom;
 pub mod commissioning;
 mod cutlist;
@@ -93,6 +94,7 @@ mod table;
 mod toc;
 mod wires;
 
+pub use assembly::{AssemblyChecklist, BOX as ASSEMBLY_BOX};
 pub use bom::BillOfMaterials;
 pub use cutlist::CutList;
 pub use defaults::{
