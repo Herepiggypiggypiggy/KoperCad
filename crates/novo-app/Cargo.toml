@@ -7,7 +7,7 @@ license.workspace = true
 build = "build.rs"
 
 [[bin]]
-name = "novoelectric"
+name = "kopercad"
 path = "src/main.rs"
 
 [dependencies]

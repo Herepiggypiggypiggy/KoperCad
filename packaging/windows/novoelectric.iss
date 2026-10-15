@@ -1,5 +1,5 @@
-; Inno Setup script for the KoperCAD Windows installer. (The exe and this file
-; keep their novoelectric names until the repository itself is renamed.)
+; Inno Setup script for the KoperCAD Windows installer. (This file keeps its
+; novoelectric name; the exe is kopercad.exe.)
 ;
 ; Build locally (after `cargo build --release -p novo-app`):
 ;   iscc /DAppVersion=0.1.0 packaging\windows\novoelectric.iss
@@ -12,7 +12,7 @@
 #define AppName "KoperCAD"
 #define AppMaker "KoperVonk"
 #define OldAppName "NovoElectric"
-#define AppExe "novoelectric.exe"
+#define AppExe "kopercad.exe"
 #define RepoRoot "..\.."
 
 [Setup]
@@ -65,6 +65,7 @@ Root: HKCU; Subkey: "Software\Classes\{#OldAppName}.Project"; Flags: dontcreatek
 [InstallDelete]
 Type: files; Name: "{userprograms}\{#OldAppName}.lnk"
 Type: files; Name: "{userdesktop}\{#OldAppName}.lnk"
+Type: files; Name: "{app}\novoelectric.exe"
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
