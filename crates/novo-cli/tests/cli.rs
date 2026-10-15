@@ -188,6 +188,36 @@ fn export_pdf_draws_every_page_or_the_ones_asked() {
 }
 
 #[test]
+fn export_dxf_writes_one_file_or_a_folder_of_pages() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+
+    let one = dir.path().join("page2.dxf");
+    let run = novo(&["export", "dxf", s(&path), "-o", s(&one), "--page", "2"]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    let text = std::fs::read_to_string(&one).unwrap();
+    assert!(text.starts_with("999\r\nWritten by KoperCAD"));
+    assert!(text.contains("ENTITIES"));
+
+    let folder = dir.path().join("dxf");
+    let run = novo(&["export", "dxf", s(&path), "-o", s(&folder)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    for name in ["demo - 1.dxf", "demo - 2.dxf"] {
+        let drawing = std::fs::read(folder.join(name)).unwrap();
+        assert!(novo_interop::dxf::is_written_by_us(&drawing), "{name}");
+        assert!(novo_interop::dxf::read_dxf(&drawing).is_ok(), "{name}");
+    }
+
+    let run = novo(&["export", "dxf", s(&path), "-o", s(&one), "--page", "9"]);
+    assert_eq!(run.code, exit::USAGE);
+    assert!(run.err.contains("no page `9`"));
+
+    // Never over a project file.
+    let run = novo(&["export", "dxf", s(&path), "-o", s(&path), "--page", "1"]);
+    assert_eq!(run.code, exit::WRITE);
+}
+
+#[test]
 fn check_runs_the_design_checks() {
     let dir = tempfile::tempdir().unwrap();
     let clean = dir.path().join("clean.novo");

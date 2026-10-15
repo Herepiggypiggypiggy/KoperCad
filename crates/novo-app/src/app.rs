@@ -8,6 +8,7 @@ mod checks;
 mod dock;
 mod drawers;
 mod duplicate;
+mod dxf;
 mod inspector;
 mod link;
 mod live;
@@ -913,6 +914,21 @@ impl NovoApp {
             self.export_pdf();
             ui.close();
         }
+        ui.add_enabled_ui(self.is_open(), |ui| {
+            ui.menu_button("Export DXF", |ui| {
+                if ui
+                    .add_enabled(self.current_page.is_some(), egui::Button::new("This page"))
+                    .clicked()
+                {
+                    self.export_dxf(dxf::DxfScope::CurrentPage);
+                    ui.close();
+                }
+                if ui.button("All pages").clicked() {
+                    self.export_dxf(dxf::DxfScope::AllPages);
+                    ui.close();
+                }
+            });
+        });
         ui.separator();
         for a in [Action::About, Action::Quit] {
             self.action_button(ui, a, picked);

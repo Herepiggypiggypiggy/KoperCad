@@ -125,6 +125,19 @@ enum Export {
         #[arg(long = "page", value_name = "NAME")]
         pages: Vec<String>,
     },
+    /// Schematic pages as DXF, millimetres, for mechanical colleagues. One
+    /// page goes to the output file; several (or all) go into the output
+    /// folder, one `<project> - <page>.dxf` each.
+    Dxf {
+        file: PathBuf,
+        /// Output file (one page) or folder (several pages).
+        #[arg(short, long)]
+        output: PathBuf,
+        /// Only this page (by name, e.g. `3`); repeat for several. All pages
+        /// when left out.
+        #[arg(long = "page", value_name = "NAME")]
+        pages: Vec<String>,
+    },
 }
 
 /// A failure with its exit code.
@@ -224,6 +237,15 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             let project = read(&file)?;
             let bytes = pdf(&project, &pages)?;
             write_output(&file, &output, &bytes)?;
+            Ok(exit::OK)
+        }
+        Cmd::Export(Export::Dxf {
+            file,
+            output,
+            pages,
+        }) => {
+            let project = read(&file)?;
+            export_dxf(&project, &file, &output, &pages)?;
             Ok(exit::OK)
         }
         Cmd::Check { file, json } => {
@@ -339,6 +361,60 @@ fn pdf(project: &Project, pages: &[String]) -> Result<Vec<u8>, Failure> {
         .collect();
     novo_pdf::export_pdf_with_art(project, &options, &art)
         .map_err(|e| Failure::new(exit::WRITE, e.to_string()))
+}
+
+/// Writes the DXF of the given pages (all when empty): to `output` itself
+/// for exactly one page, else one file per page inside the folder `output`.
+fn export_dxf(
+    project: &Project,
+    input: &Path,
+    output: &Path,
+    names: &[String],
+) -> Result<(), Failure> {
+    let mut pages = Vec::new();
+    if names.is_empty() {
+        pages.extend(project.pages_in_order());
+    } else {
+        for name in names {
+            let page = project
+                .pages()
+                .find(|p| &p.name == name)
+                .ok_or_else(|| Failure::new(exit::USAGE, format!("there is no page `{name}`")))?;
+            if !pages.iter().any(|p| p.id == page.id) {
+                pages.push(page);
+            }
+        }
+    }
+    if pages.is_empty() {
+        return Err(Failure::new(exit::USAGE, "the project has no pages"));
+    }
+    let library = novo_py::library().map_err(|e| Failure::new(exit::UNAVAILABLE, e.to_string()))?;
+    let style = novo_pdf::print_style();
+    let art = LibraryArt::new(library, style.symbol);
+    let stem = input
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let single = pages.len() == 1;
+    for page in pages {
+        let text = novo_interop::bridge::page_dxf(project, page.id, &art, style)
+            .ok_or_else(|| Failure::new(exit::WRITE, format!("page `{}` is gone", page.name)))?;
+        let path = if single {
+            output.to_path_buf()
+        } else {
+            output.join(novo_interop::bridge::page_file_name(&stem, &page.name))
+        };
+        if !single {
+            std::fs::create_dir_all(output).map_err(|e| {
+                Failure::new(
+                    exit::WRITE,
+                    format!("cannot create {}: {e}", output.display()),
+                )
+            })?;
+        }
+        write_output(input, &path, text.as_bytes())?;
+    }
+    Ok(())
 }
 
 fn info_text(p: &Project, path: &Path) -> String {

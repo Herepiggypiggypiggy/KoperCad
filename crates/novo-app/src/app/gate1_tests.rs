@@ -422,6 +422,25 @@ fn gate1_motor_starter_through_the_window() {
     assert!(bytes.starts_with(b"%PDF"));
     let pages = lopdf::Document::load_mem(&bytes).unwrap().get_pages().len();
     assert_eq!(pages, 2, "one PDF page per project page");
+    // DXF export: every page into a folder beside the project, drawn with
+    // geometry (the symbols are in it), reproducible on a second export.
+    let files = d
+        .app
+        .export_dxf_to(super::dxf::DxfScope::AllPages, dir.path(), "Starter");
+    assert_eq!(files.len(), 2, "one DXF per project page");
+    for f in &files {
+        assert_eq!(f.parent(), Some(dir.path().join("Starter DXF").as_path()));
+        let dxf = std::fs::read(f).unwrap();
+        assert!(novo_interop::dxf::is_written_by_us(&dxf));
+        let drawing = novo_interop::dxf::read_dxf(&dxf).unwrap();
+        assert!(!drawing.drawing.entities.is_empty(), "{}", f.display());
+    }
+    assert_eq!(
+        d.app
+            .export_dxf_to(super::dxf::DxfScope::AllPages, dir.path(), "Starter"),
+        files,
+        "a second export replaces the first"
+    );
     // NOVO_GATE1_OUT=<dir> keeps the project and the PDF, for screenshots.
     if let Some(out) = std::env::var_os("NOVO_GATE1_OUT") {
         let out = std::path::PathBuf::from(out);
