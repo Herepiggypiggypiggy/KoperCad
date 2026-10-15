@@ -1,7 +1,7 @@
 # KoperCAD
 
-Product KoperCAD, maker KoperVonk (formerly NovoElectric; the repository, `novo-*`
-crates, `novoelectric.exe` and the data folders keep the old name, see README).
+Product KoperCAD, maker KoperVonk (formerly NovoElectric; the `novo-*` crates, `novoelectric.exe` and the
+data folders keep the old name, see README; the repository is `kopercad`).
 
 A lightweight, local-first electrical CAD program (schematics, terminal and
 cable connection screens, cross references, cabinet layout, simulation).

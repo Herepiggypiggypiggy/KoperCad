@@ -10,7 +10,7 @@
 # a stale release, so it is kept until the release catches up.
 
 $ErrorActionPreference = 'Stop'
-$Repo = 'Herepiggypiggypiggy/NovoElectric'
+$Repo = 'Herepiggypiggypiggy/kopercad'
 $Root = Join-Path $env:LOCALAPPDATA 'NovoElectric\experimental'
 $Current = Join-Path $Root 'current'
 $Stamp = Join-Path $Root 'build-info.json'

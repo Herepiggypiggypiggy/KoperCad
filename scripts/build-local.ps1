@@ -31,7 +31,7 @@ trap {
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-$Repo = 'Herepiggypiggypiggy/NovoElectric'
+$Repo = 'Herepiggypiggypiggy/kopercad'
 $Base = Join-Path $env:LOCALAPPDATA 'NovoElectric'
 $Work = Join-Path $Base 'local-build'
 $Target = 'x86_64-pc-windows-gnu'

@@ -9,7 +9,7 @@ connection screens, cross references, generated reports, PLC and I/O, revisions,
 layout and circuit simulation. Native Rust, no web technology, fully offline, scriptable from Python.
 
 > **Name.** The product is KoperCAD and the maker is KoperVonk (decided 2026-10-15); it was called
-> NovoElectric before. Names people never see keep the old name for now: the repository, the `novo-*`
+> NovoElectric before. The repository is now `kopercad`. Names people never see keep the old name for now: the `novo-*`
 > crates, `novoelectric.exe`, the `novoelectric` Python module, the release asset name and the data
 > folders (`%LOCALAPPDATA%\NovoElectric`, `Documents\NovoElectric`, `%APPDATA%\NovoElectric`). Moving
 > the data folders needs a migration from the old location first.

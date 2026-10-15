@@ -6,7 +6,7 @@ members = ["crates/*"]
 version = "0.1.0"
 edition = "2024"
 license = "UNLICENSED"
-repository = "https://github.com/Herepiggypiggypiggy/NovoElectric"
+repository = "https://github.com/Herepiggypiggypiggy/kopercad"
 
 [workspace.dependencies]
 # Every roadmap crate is registered here once, in alphabetical order, so a
