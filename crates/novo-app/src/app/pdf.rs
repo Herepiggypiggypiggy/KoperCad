@@ -100,7 +100,7 @@ fn is_ours(path: &Path) -> bool {
 
 /// `path` itself when it is free or ours to replace, else the first free or
 /// ours of `<stem> 2.pdf`, `<stem> 3.pdf`...
-fn replaceable_path(path: &Path) -> PathBuf {
+pub(super) fn replaceable_path(path: &Path) -> PathBuf {
     let stem = path
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
