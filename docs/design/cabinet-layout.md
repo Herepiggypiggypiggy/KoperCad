@@ -140,9 +140,21 @@ rule T zone=bottom rail=own class=power gap=20 above=80 below=80
   when that saves a bar, spliced pieces longer than a bar, offcuts kept or
   scrapped by length.
 
-Not done here: the app uses the rules (a rules file, a small editor, the
-explanation in the inspector, the cut list report), rotating devices to fit,
-and vertical stacking of small devices.
+Where the user finds it (Cabinet view, Ctrl+2):
+
+- **Place all** follows the rules. The rule file is
+  `%APPDATA%\KoperCAD\place-rules.txt`; without it the standard rules apply.
+- **Rules** (header strip) opens the file as text, checked while typing, with
+  Save and Standard rules.
+- The **inspector** of a selected device shows the rule that applies, why
+  Place all put it there (until the next edit), and the rules a hand edit
+  broke; the header counts rule problems and lists them on hover.
+- **Cut list** (header strip) shows the bars of rail and duct to buy and cut,
+  and *Cut N rails to these lengths* trims the rails in one undo step.
+- Ducts planned by Place all are drawn once the duct drawing (#461) is in.
+
+Not done here: rotating devices to fit, stacking small devices, vertical side
+ducts, and a rail and duct cut list report/CLI command.
 
 ## 6. Out of scope here
 

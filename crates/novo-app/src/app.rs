@@ -7,6 +7,7 @@ mod cabinet;
 mod cabinet_inspector;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
+mod cabinet_rules;
 mod changes;
 mod checks;
 mod commissioning;
@@ -40,6 +41,8 @@ mod wheel;
 mod workbench;
 mod xref;
 
+#[cfg(test)]
+mod cabinet_rules_tests;
 #[cfg(test)]
 mod cabinet_tests;
 #[cfg(test)]

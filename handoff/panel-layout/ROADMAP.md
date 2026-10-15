@@ -3,8 +3,8 @@
 Gap #4 of `docs/AMBITION-REVIEW.md` (PR #504). Two lanes, one thread, one PR at a time (restart the branch from main after each merge).
 
 ## Lane A: rules-based placement
-1. [done, PR A1] Engine: classes, ducts, explanations, rule check, rail and duct cut optimiser (`novo-layout`: `rules`, `check`, `stock`).
-2. App: Place all uses the rules; rules file in the user's profile; Rules editor; "why here" in the Cabinet inspector; rule violations in Issues; cut list report and CLI.
+1. [done, PR A] Engine: classes, ducts, explanations, rule check, rail and duct cut optimiser (`novo-layout`: `rules`, `check`, `stock`).
+2. [done, PR A] App: Place all by the rules, `place-rules.txt`, Rules window, rule lines in the Cabinet inspector, Cut list window with trim-to-length. Next: cut list report and CLI, rule problems in the Issues list (after #486).
 3. Rotation to fit, stacking small devices, vertical side ducts.
 
 ## Lane B: mounting surfaces and collision

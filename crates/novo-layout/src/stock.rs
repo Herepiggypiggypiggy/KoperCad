@@ -78,6 +78,26 @@ impl Bar {
     pub fn offcut_kept(&self, stock: &Stock) -> bool {
         self.left >= stock.min_offcut
     }
+
+    /// One line for the workshop: `Rail 3 1000, Rail 4 940; 58 left (scrap)`.
+    pub fn line(&self, stock: &Stock, label: &dyn Fn(u64) -> String) -> String {
+        let cuts: Vec<String> = self
+            .cuts
+            .iter()
+            .map(|c| match c.part {
+                Some((n, of)) => format!("{} {:.0} (part {n} of {of})", label(c.id), c.length),
+                None => format!("{} {:.0}", label(c.id), c.length),
+            })
+            .collect();
+        let end = if self.left <= 0.0 {
+            String::new()
+        } else if self.offcut_kept(stock) {
+            format!("; {:.0} left, keep", self.left)
+        } else {
+            format!("; {:.0} left (scrap)", self.left)
+        };
+        format!("{}{end}", cuts.join(", "))
+    }
 }
 
 /// The answer for one kind of stock.
