@@ -344,8 +344,12 @@ one gesture, so nothing is chosen in advance.
 
 - **Live highlight.** While the pointer moves, every item the box would
   take is shown in the hover colour (steel blue, never copper) and the
-  hint counts them ("5 selected"). Release takes exactly what was
-  highlighted; Esc cancels and leaves the selection as it was.
+  hint counts them ("5 selected"). Release takes exactly what the
+  box covers; Esc cancels and leaves the selection as it was.
+  Above 2000 items in the box the highlight stops (the cap keeps a large
+  sheet responsive) but the box and the count go on updating, and release
+  still takes everything. The count shows once the box has started (past
+  the 4 px threshold), never as "0 selected" before it.
 - **Modifiers.** Shift adds to the selection and Ctrl toggles, both
   decided at release, so the highlight shows the result of the gesture.
 - **What counts as an item.** A device is taken as a whole (its tag and
@@ -647,6 +651,9 @@ click adds no extra corner and no zero-length segment.
 - A press in the zone always starts a wire (a click starts it, a drag
   connects); it never does nothing and never moves the device. A drag
   released on empty canvas cancels as before.
+- On a small symbol the zones never reach into the middle third of the
+  symbol's bounding box, so its body can always be clicked to select it;
+  box selection and Alt+click select it as well.
 - Hovering the zone shows the ring and the connect cursor immediately (no
   delay), so the user sees the grab before pressing.
 
