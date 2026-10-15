@@ -33,6 +33,17 @@ fn the_next_index() {
     })
     .unwrap();
     assert_eq!(rule.next(doc.project()).as_deref(), Some("B"));
+    // An index typed by hand ahead of the rule is skipped.
+    for index in ["C", "B"] {
+        doc.execute(Command::IssueRevision {
+            index: index.into(),
+            date: "2026-10-16".into(),
+            author: "TV".into(),
+            description: String::new(),
+        })
+        .unwrap();
+    }
+    assert_eq!(rule.next(doc.project()).as_deref(), Some("D"));
 }
 
 #[test]
@@ -104,6 +115,14 @@ fn changes_land_on_the_pages_that_show_them() {
     assert_eq!(changes.project.len(), 1);
     assert!(matches!(changes.project[0].id, AnyId::Part(_)));
     assert_eq!(changes.project[0].kind, ChangeKind::Added);
+    assert!(changes.info.is_empty());
+
+    // Project information is not a record but prints in title blocks.
+    let mut info = doc.project().info().clone();
+    info.description = "Pump station".into();
+    doc.execute(Command::SetProjectInfo { info }).unwrap();
+    let changes = diff(&issued, doc.project());
+    assert_eq!(changes.info, ["description"]);
 }
 
 #[test]
