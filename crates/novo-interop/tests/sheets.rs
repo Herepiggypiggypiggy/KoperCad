@@ -547,3 +547,23 @@ fn not_a_koper_workbook_is_an_error() {
 }
 
 use rust_xlsxwriter::Workbook as XlsxBook;
+
+#[test]
+fn ids_may_carry_their_kind_and_terminals_may_say_number() {
+    let (doc, h) = starter();
+    let csv = format!("Id,Description\r\nDevice#{},Via typed id\r\n", h.k1.raw());
+    let plan = plan_import(
+        doc.project(),
+        &read_csv(&csv, Some(TableKind::Devices)).unwrap(),
+    );
+    assert_eq!(plan.selected(), 1, "{}", plan.rejected_report());
+    let book = export_project(doc.project());
+    let t = book.table(TableKind::Terminals).unwrap();
+    let id = t.rows[0].cells[0].as_text();
+    let csv = format!("Id,Number\r\nTerminal#{id},77\r\n");
+    let plan = plan_import(
+        doc.project(),
+        &read_csv(&csv, Some(TableKind::Terminals)).unwrap(),
+    );
+    assert_eq!(plan.selected(), 1, "{}", plan.rejected_report());
+}

@@ -284,7 +284,11 @@ fn parse_id(cell: &Cell) -> Result<Option<u64>, String> {
     if text.is_empty() {
         return Ok(None);
     }
-    match parse_number(&text) {
+    // `12`, `#12` or `Device#12`.
+    let text = text
+        .trim_start_matches(|c: char| c.is_alphabetic())
+        .trim_start_matches('#');
+    match parse_number(text) {
         Some(n) if n >= 0.0 && n.fract() == 0.0 && n < 1e15 => Ok(Some(n as u64)),
         _ => Err(format!("Id: '{text}' is not an id")),
     }
@@ -392,7 +396,11 @@ fn current_value(project: &Project, id: AnyId, key: &str) -> Option<novo_core::V
 /// Header of a column, matched against the project's columns. A
 /// `properties.<key>` column nobody has yet is a new property.
 fn match_field(known: &[Field], header: &str) -> Option<Field> {
-    let h = header.trim();
+    let mut h = header.trim();
+    // `Number` is what a terminal's name is called on a terminal diagram.
+    if h.eq_ignore_ascii_case("number") && known.iter().any(|f| f.slot == Slot::TerminalName) {
+        h = "Name";
+    }
     if let Some(f) = known.iter().find(|f| f.header.eq_ignore_ascii_case(h)) {
         return Some(f.clone());
     }
