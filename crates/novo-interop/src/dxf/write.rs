@@ -66,12 +66,24 @@ impl Out {
     }
 }
 
+/// The first line of every DXF this crate writes (a `999` comment).
+pub const PRODUCER_COMMENT: &str = "Written by KoperCAD";
+
+/// Whether `bytes` start like a DXF this crate wrote, so replacing the file
+/// loses nothing the user made.
+pub fn is_written_by_us(bytes: &[u8]) -> bool {
+    let head = &bytes[..bytes.len().min(64)];
+    head.starts_with(format!("999\r\n{PRODUCER_COMMENT}\r\n").as_bytes())
+}
+
 /// Writes `drawing` as ASCII DXF. Lengths are written as they are and
 /// declared millimetres, so call [`Drawing::scaled_to_mm`] first for a
 /// drawing in other units.
 pub fn write_dxf(drawing: &Drawing) -> String {
     let mut o = Out(String::new());
 
+    // A comment, so a later export can tell its own files from the user's.
+    o.pair(999, PRODUCER_COMMENT);
     o.pair(0, "SECTION");
     o.pair(2, "HEADER");
     o.pair(9, "$ACADVER");

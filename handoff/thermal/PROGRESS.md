@@ -4,3 +4,4 @@
 2026-10-15 18:36 UTC Reviewer B READY at 99300c6 (nits 1-5 fixed in follow-up push); canvas overlay added after. Asked re-READY on new head.
 2026-10-15 18:43 UTC App Heat toggle and legend strip added with test; merged main.
 2026-10-15 19:16 UTC Reviewer changes: hot-device mark, heat cache, palette command cabinet.layer.heat (+Dutch words), DESIGN.md line, per-session note; merged main.
+2026-10-15 19:25 UTC Merged main again (sizing_model landed); resolved cabinet.rs and language.rs. Coordinator: no new heat features, land #406, answer physics/visuals threads.
