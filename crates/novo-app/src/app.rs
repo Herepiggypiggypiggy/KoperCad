@@ -17,6 +17,7 @@ mod preferences;
 mod reports;
 mod revisions;
 mod terminals;
+mod title_revisions;
 mod wheel;
 mod workbench;
 mod xref;

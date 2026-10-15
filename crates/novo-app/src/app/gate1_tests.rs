@@ -1893,6 +1893,46 @@ fn the_issue_revision_window_proposes_everything_and_issues_in_one_step() {
 }
 
 #[test]
+fn the_title_block_prints_the_set_revision_after_an_issue() {
+    use novo_canvas::model::item_id;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let page = d.app.current_page.expect("a page is shown");
+    let texts = |d: &Drive| -> Vec<String> {
+        let view = d.app.canvas.schematic_ref().unwrap();
+        let scene = view.scene().unwrap().scene();
+        scene
+            .get(item_id(page))
+            .unwrap()
+            .labels
+            .iter()
+            .map(|l| l.text.clone())
+            .collect()
+    };
+    assert!(!texts(&d).iter().any(|t| t.contains("set A")));
+    let doc = d.app.backend.document_mut().unwrap();
+    let outcome = doc
+        .execute(novo_core::Command::IssueRevision {
+            index: "A".into(),
+            date: "2026-10-15".into(),
+            author: "TV".into(),
+            description: String::new(),
+        })
+        .unwrap();
+    d.app.changed_outside_canvas(&outcome.changes);
+    d.frame();
+    d.frame();
+    assert!(
+        texts(&d).iter().any(|t| t == "(set A)"),
+        "a page without a kept snapshot shows only the set: {:?}",
+        texts(&d)
+    );
+}
+
+#[test]
 fn the_command_list_and_the_part_search_show_many_rows() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));

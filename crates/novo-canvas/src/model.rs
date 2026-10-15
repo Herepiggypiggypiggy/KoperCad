@@ -427,6 +427,38 @@ pub struct SymbolNote {
     pub anchor: NoteAnchor,
 }
 
+/// The revision fields a title block prints (DESIGN §7), worked out by the
+/// caller from the issued revisions: the canvas only draws them.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct TitleRevisions {
+    /// The page's own revision, `(index, date)`: the latest in which the
+    /// page changed. `None` for a page added since the latest revision.
+    pub page: Option<(String, String)>,
+    /// The project's revision, the latest index; `None` before the first.
+    pub project: Option<String>,
+}
+
+impl TitleRevisions {
+    /// The text of the title block's revision row: "B  2026-09-01", with
+    /// "(set D)" when the project is further on than the page.
+    pub fn text(&self) -> String {
+        let page = self
+            .page
+            .as_ref()
+            .map(|(index, date)| format!("{index}  {date}"));
+        let set = self
+            .project
+            .as_ref()
+            .filter(|p| self.page.as_ref().is_none_or(|(index, _)| index != *p))
+            .map(|p| format!("(set {p})"));
+        [page, set]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join("  ")
+    }
+}
+
 /// One printed sheet of a generated page (a report): text boxes and rules
 /// laid out by its generator (novo-reports' `layout_sheet`), in page
 /// millimetres with the origin at the sheet's top left. The canvas stays
@@ -517,6 +549,8 @@ pub struct PageScene {
     notes: HashMap<SymbolId, SymbolNote>,
     /// What a generated page shows; see [`Self::set_sheet`].
     sheet: Option<SheetContent>,
+    /// The revision fields of the title block; see [`Self::set_revisions`].
+    revisions: Option<TitleRevisions>,
     /// The first terminal symbol of each run of one strip on this page,
     /// with the strip's tag it shows (see [`strip_heads`]).
     strip_heads: HashMap<SymbolId, String>,
@@ -629,6 +663,7 @@ impl PageScene {
             text_hosts: HashMap::new(),
             notes: HashMap::new(),
             sheet: None,
+            revisions: None,
             strip_heads: HashMap::new(),
             focus: None,
             wire_looks: HashMap::new(),
@@ -868,6 +903,18 @@ impl PageScene {
             return false;
         }
         self.sheet = sheet;
+        self.frame(project);
+        true
+    }
+
+    /// Sets the revision fields of the title block (DESIGN §7): the page's
+    /// own revision and the project's. `None` goes back to the project
+    /// properties. Kept across rebuilds. Returns whether anything changed.
+    pub fn set_revisions(&mut self, project: &Project, revisions: Option<TitleRevisions>) -> bool {
+        if revisions == self.revisions {
+            return false;
+        }
+        self.revisions = revisions;
         self.frame(project);
         true
     }
@@ -1150,9 +1197,9 @@ impl PageScene {
     /// (docs/DESIGN.md §3): project, page name and title, "n of m", the
     /// page's `=function +location`, revision and drawn / checked by.
     ///
-    /// Until novo-core has revisions these come from properties: the page's
-    /// `structure`, and the project's `revision`, `revision_date`,
-    /// `drawn_by` and `checked_by`.
+    /// The revision row comes from [`Self::set_revisions`]; without it (and
+    /// for drawn by / checked by) it is read from the project's `revision`,
+    /// `revision_date`, `drawn_by` and `checked_by` properties.
     fn title_block(
         &self,
         project: &Project,
@@ -1205,11 +1252,14 @@ impl PageScene {
         } else {
             page.structure.to_string()
         };
-        let revision = [text(info, "revision"), text(info, "revision_date")]
-            .into_iter()
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join("  ");
+        let revision = match &self.revisions {
+            Some(revisions) => revisions.text(),
+            None => [text(info, "revision"), text(info, "revision_date")]
+                .into_iter()
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join("  "),
+        };
         let people = match (text(info, "drawn_by"), text(info, "checked_by")) {
             (d, c) if d.is_empty() && c.is_empty() => String::new(),
             (d, c) => format!("{d} / {c}"),
@@ -3121,6 +3171,40 @@ mod tests {
         // the grid dots.
         let frame = ps.scene().get(item_id(page)).unwrap();
         assert!(frame.primitives.iter().all(|p| p.fill.is_none()));
+    }
+
+    #[test]
+    fn the_title_block_prints_the_page_and_the_set_revision() {
+        let (doc, page, ..) = doc();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let texts = |ps: &PageScene| -> Vec<String> {
+            ps.scene()
+                .get(item_id(page))
+                .unwrap()
+                .labels
+                .iter()
+                .map(|l| l.text.clone())
+                .collect()
+        };
+        let revisions = |page: Option<(&str, &str)>, project: &str| TitleRevisions {
+            page: page.map(|(i, d)| (i.to_owned(), d.to_owned())),
+            project: Some(project.to_owned()),
+        };
+        // An untouched page keeps its own index while the set moves on.
+        let old = revisions(Some(("A", "2026-09-01")), "D");
+        assert_eq!(old.text(), "A  2026-09-01  (set D)");
+        assert!(ps.set_revisions(doc.project(), Some(old)));
+        assert!(texts(&ps).contains(&"A  2026-09-01  (set D)".to_owned()));
+        // A page changed in the latest revision shows just that.
+        let current = revisions(Some(("D", "2026-10-15")), "D");
+        assert_eq!(current.text(), "D  2026-10-15");
+        // A page added since the latest revision has none yet.
+        assert_eq!(revisions(None, "D").text(), "(set D)");
+        assert!(ps.set_revisions(doc.project(), Some(current)));
+        assert!(!ps.set_revisions(
+            doc.project(),
+            Some(revisions(Some(("D", "2026-10-15")), "D"))
+        ));
     }
 
     #[test]
