@@ -24,6 +24,25 @@ How a PR is tested: its branch is merged onto the current `main` (a
 main `11363c1` passes fmt, clippy and all 232 workspace tests on Linux.
 **Every Gate 0 criterion is met.**
 
+## Round 14 (2026-10-15, main `5a6f30f`): wires never overlap
+
+Tadjiro asked for two wiring modes with one hard rule: lines never overlap.
+Two designs were open (#168 Corners/Lines and #169 Auto/Draw); the #168
+owner is converging on #169 with the states named Corners | Lines. Both
+agree on the rule, so `crates/novo-tests/tests/wire_overlap.rs` tests it
+without waiting for the mode implementation.
+
+| Test | Checks | State |
+| --- | --- | --- |
+| `the_overlap_check_sees_what_it_should` | The checker: overlap either direction, touching ends, crossings and parallel runs | Passes |
+| `the_motor_starter_has_no_overlapping_wires` | The Gate 1 starter has no two wires of different nets sharing length | Passes |
+| `gap_random_moves_never_leave_overlapping_wires` | 200 random symbol moves (whole grid steps, fixed seed); after each, no overlap | **Ignored, fails**: step 2 already leaves four overlapping wire pairs. Needs the no-overlap rule in `edit::transform` (the editor engine PR) |
+
+Still to write when the implementation lands: Auto and Draw journeys
+(DESIGN §4 acceptance 1-8), the refusal reason as returned data, the
+toggle and its persistence, tidy and the router output under the same
+check, and the merge of same-conductor overlaps.
+
 ## Round 13 (2026-10-15, main `3cd3772`): G2-4 closed
 
 #138 (WS-01) added the Cables and Devices drawers (`view.cables_drawer`,
