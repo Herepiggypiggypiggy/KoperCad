@@ -1,0 +1,29 @@
+format = 1
+id = "nfpa/sources/ac_source"
+name = "AC voltage source"
+description = "AC voltage source, such as a supply feed."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "sources"
+function = "source.ac"
+keywords = ["ac source", "supply", "voltage source", "mains", "nfpa", "ansi"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-5.5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "circle", center = [0, 8], r = 4 },
+  { kind = "text", at = [0, 8], text = "~", size = 4 },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+]
+
+[behavior]
+kind = "source"
+type = "ac"
+poles = [["1", "2"]]

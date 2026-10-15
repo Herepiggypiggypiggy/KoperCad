@@ -1,0 +1,30 @@
+format = 1
+id = "nfpa/switches/switch_disconnector_1p"
+name = "Switch-disconnector, 1-pole"
+description = "1-pole load-break switch-disconnector."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "switches"
+function = "switch.switch_disconnector"
+keywords = ["switch disconnector", "load break", "isolator", "1p", "nfpa", "ansi"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 5] },
+  { kind = "line", from = [0, 16], to = [0, 11] },
+  { kind = "line", from = [0, 11], to = [-4, 4] },
+  { kind = "arc", center = [0, 3.5], r = 1.5, start = 180, end = 360 },
+]
+
+[behavior]
+kind = "contact"
+normally = "open"
+latching = true
+poles = [["1", "2"]]

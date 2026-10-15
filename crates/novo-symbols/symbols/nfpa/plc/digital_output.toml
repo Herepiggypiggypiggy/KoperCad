@@ -1,0 +1,28 @@
+format = 1
+id = "nfpa/plc/digital_output"
+name = "PLC digital output"
+description = "One digital output channel of a PLC card."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "plc"
+function = "plc.output.digital"
+keywords = ["plc", "output", "do", "dq", "digital", "uitgang", "i/o", "nfpa", "ansi"]
+aliases = ["do", "dq"]
+
+connections = [
+  { id = "1", at = [0, 8], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 3], align = "right" },
+  { role = "address", at = [6, 3], align = "left" },
+]
+
+graphics = [
+  { kind = "rect", at = [-4, 0], size = [8, 6] },
+  { kind = "text", at = [0, 3], text = "DO", size = 2.2 },
+  { kind = "line", from = [0, 6], to = [0, 8] },
+]
+
+[behavior]
+kind = "plc_output"
+signal = "digital"

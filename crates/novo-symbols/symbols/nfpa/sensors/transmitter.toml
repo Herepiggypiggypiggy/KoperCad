@@ -1,0 +1,29 @@
+format = 1
+id = "nfpa/sensors/transmitter"
+name = "Transmitter, 2-wire"
+description = "Two-wire measuring transmitter with a 4-20 mA loop output, such as a pressure transmitter."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "sensors"
+function = "sensor.transmitter"
+keywords = ["transmitter", "4-20ma", "pressure transmitter", "sensor", "loop", "nfpa", "ansi"]
+
+connections = [
+  { id = "+", at = [0, 0], dir = "up" },
+  { id = "-", at = [8, 0], dir = "up" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "line", from = [8, 0], to = [8, 4] },
+  { kind = "rect", at = [-4, 4], size = [16, 8] },
+  { kind = "text", at = [4, 8], text = "4-20 mA", size = 2.2 },
+]
+
+[behavior]
+kind = "load"
+type = "transmitter"
+poles = [["+", "-"]]

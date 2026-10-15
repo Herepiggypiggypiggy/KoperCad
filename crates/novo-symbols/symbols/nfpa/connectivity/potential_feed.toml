@@ -1,0 +1,26 @@
+format = 1
+id = "nfpa/connectivity/potential_feed"
+name = "Potential feed"
+description = "Potential definition point: names the potential (L1, N, 24V, ...) of the net it touches."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "connectivity"
+function = "connectivity.potential"
+keywords = ["potential", "feed", "supply", "net label", "l1", "24v", "nfpa", "ansi"]
+aliases = ["feed"]
+favorite = true
+
+connections = [
+  { id = "1", at = [0, 8], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-3.5, 2], align = "right" },
+]
+
+graphics = [
+  { kind = "polyline", points = [[-2, 0], [2, 0], [0, 3]], closed = true, fill = true },
+  { kind = "line", from = [0, 3], to = [0, 8] },
+]
+
+[behavior]
+kind = "none"
