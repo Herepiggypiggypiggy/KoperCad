@@ -185,16 +185,23 @@ const QUALIFIER_WORDS: &[&str] = &["with", "for", "mit", "für", "fur", "met", "
 ///
 /// A block is a PE block when its type number has `PE` as a word or a
 /// one-letter prefix to it (`UT 2,5-PE`, Weidmüller `WPE 2.5`), or its
-/// description or keywords say `PE`, protective or earth conductor, or
-/// green-yellow (WAGO `2002-1207`, "gn/ye").
+/// description or keywords name it (`PE`, protective) before any "with"
+/// or "for", or say green-yellow or earth conductor (WAGO `2002-1207`, "gn/ye").
 pub fn terminal_kind_of(part: &CatalogPart) -> TerminalKind {
     let type_number = part.type_number.to_lowercase();
     let pe_type = words(&type_number).any(|w| {
         w == "pe" || (w.len() == 3 && w.ends_with("pe") && w.chars().all(char::is_alphabetic))
     });
+    // PE words name the block only in the description's head, before a
+    // comma or "with"/"for" ("terminal block with protective cover" is not
+    // a PE block); the colour counts anywhere.
     let says_pe = |text: &str| {
         let text = text.to_lowercase();
-        words(&text).any(|w| PE_WORDS.contains(&w)) || PE_PHRASES.iter().any(|p| text.contains(p))
+        let head = text.split([',', ';', '(']).next().unwrap_or("");
+        words(head)
+            .take_while(|w| !QUALIFIER_WORDS.contains(w))
+            .any(|w| PE_WORDS.contains(&w))
+            || PE_PHRASES.iter().any(|p| text.contains(p))
     };
     if pe_type || says_pe(&part.description) || part.keywords.iter().any(|k| says_pe(k)) {
         TerminalKind::ProtectiveEarth
