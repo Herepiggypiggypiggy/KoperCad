@@ -1,0 +1,108 @@
+{
+  "notes": [],
+  "parts": [
+    {
+      "class": {
+        "etim": "EC000066"
+      },
+      "data": {
+        "coil_voltage_v": 24.0,
+        "commercial_status": "Commercialised",
+        "depth": "86 mm",
+        "height": "77 mm",
+        "ie_rated_operational_current": "9 A (at <= 60 °C) at 440 V AC-3 for power circuit",
+        "number_of_poles": "3P",
+        "poles": 3,
+        "power_dissipation_in_w": "1.2 W",
+        "power_loss_w": 1.2,
+        "rated_current_a": 9.0,
+        "rated_voltage_v": 690.0,
+        "uc_control_circuit_voltage": "24 V DC",
+        "ue_rated_operational_voltage": "690 V AC 25...400 Hz",
+        "width": "45 mm"
+      },
+      "description": "TeSys D contactor, 3 poles, AC-3 9 A, coil 24 V DC",
+      "dimensions": {
+        "depth_mm": 86.0,
+        "height_mm": 77.0,
+        "width_mm": 45.0
+      },
+      "function": "contactor",
+      "letter_codes": [
+        "K",
+        "Q"
+      ],
+      "lifecycle": "active",
+      "manufacturer": "Schneider Electric",
+      "order_number": "LC1D09BD",
+      "provenance": {
+        "file": "sample.xml",
+        "imported": "2026-10-15",
+        "licence_note": "user-supplied from Schneider Electric; not redistributable",
+        "source": "import:bmecat"
+      },
+      "sources": {
+        "coil_voltage_v": "maker_datasheet",
+        "poles": "maker_datasheet",
+        "power_loss_w": "maker_datasheet",
+        "rated_current_a": "maker_datasheet",
+        "rated_voltage_v": "maker_datasheet"
+      },
+      "type_number": "LC1D09BD"
+    },
+    {
+      "data": {
+        "commercial_status": "End of commercialisation",
+        "ie_rated_operational_current": "9 A",
+        "rated_current_a": 9.0,
+        "replacement_product": "LC1D09BD"
+      },
+      "description": "TeSys D contactor, 3 poles, AC-3 9 A, coil 24 V AC",
+      "function": "contactor",
+      "letter_codes": [
+        "K",
+        "Q"
+      ],
+      "lifecycle": "phasing_out",
+      "manufacturer": "Schneider Electric",
+      "order_number": "LC1D09B7",
+      "provenance": {
+        "file": "sample.xml",
+        "imported": "2026-10-15",
+        "licence_note": "user-supplied from Schneider Electric; not redistributable",
+        "source": "import:bmecat"
+      },
+      "replaced_by": {
+        "manufacturer": "Schneider Electric",
+        "order_number": "LC1D09BD"
+      },
+      "sources": {
+        "rated_current_a": "maker_datasheet"
+      },
+      "type_number": "LC1D09B7"
+    }
+  ],
+  "report": {
+    "mapped": [
+      "LC1D09BD: commercial_status -> lifecycle Active",
+      "LC1D09BD: depth -> size depth = 86 mm",
+      "LC1D09BD: height -> size height = 77 mm",
+      "LC1D09BD: ie_rated_operational_current -> rated_current_a = 9",
+      "LC1D09BD: number_of_poles -> poles = 3",
+      "LC1D09BD: power_dissipation_in_w -> power_loss_w = 1.2",
+      "LC1D09BD: uc_control_circuit_voltage -> coil_voltage_v = 24",
+      "LC1D09BD: ue_rated_operational_voltage -> rated_voltage_v = 690",
+      "LC1D09BD: width -> size width = 45 mm",
+      "LC1D09B7: commercial_status -> lifecycle PhasingOut",
+      "LC1D09B7: ie_rated_operational_current -> rated_current_a = 9",
+      "LC1D09B7: replacement_product -> replaced by LC1D09BD"
+    ],
+    "parts": 2,
+    "skipped": [],
+    "summary": [
+      "Read 12 value(s) into structured part data for 2 part(s), marked as from the maker's data."
+    ],
+    "unmapped": {},
+    "warnings": []
+  }
+}

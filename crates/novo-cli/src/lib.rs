@@ -200,6 +200,18 @@ enum Export {
         #[arg(long = "page", value_name = "NAME")]
         pages: Vec<String>,
     },
+    /// The mounting plate drawing of an enclosure as a PDF: plate, door
+    /// sheet when devices need one, and the drill table.
+    Plate {
+        file: PathBuf,
+        /// Output file (.pdf).
+        #[arg(short, long)]
+        output: PathBuf,
+        /// The enclosure by tag (e.g. `+CAB1`); not needed when the project
+        /// has exactly one enclosure with a plate.
+        #[arg(long, value_name = "TAG")]
+        enclosure: Option<String>,
+    },
     /// The PLC I/O as the file a PLC programming tool imports: one file per
     /// station for `plcopen`, `tia` and `studio5000`, one table for `csv`.
     Plc {
@@ -336,6 +348,16 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
         }) => {
             let project = read(&file)?;
             let bytes = pdf(&project, &pages)?;
+            write_output(&file, &output, &bytes)?;
+            Ok(exit::OK)
+        }
+        Cmd::Export(Export::Plate {
+            file,
+            output,
+            enclosure,
+        }) => {
+            let project = read(&file)?;
+            let bytes = plate_pdf(&project, enclosure.as_deref())?;
             write_output(&file, &output, &bytes)?;
             Ok(exit::OK)
         }
@@ -741,6 +763,43 @@ fn file_stem(name: &str) -> String {
     } else {
         stem
     }
+}
+
+/// The plate PDF of one enclosure: the one named by `tag`, or the only
+/// enclosure that has a plate.
+fn plate_pdf(project: &Project, tag: Option<&str>) -> Result<Vec<u8>, Failure> {
+    let usage = |text: String| Failure::new(exit::USAGE, text);
+    let with_plate: Vec<_> = project
+        .structures()
+        .filter(|s| s.enclosure && s.plate.is_some())
+        .collect();
+    let chosen = match tag {
+        Some(tag) => {
+            let wanted = tag.trim().to_lowercase();
+            let all = project.structures().filter(|s| s.enclosure);
+            let found = all
+                .into_iter()
+                .find(|s| s.tag.to_string().to_lowercase() == wanted);
+            found.ok_or_else(|| usage(format!("there is no enclosure `{tag}`")))?
+        }
+        None => match with_plate.as_slice() {
+            [one] => one,
+            [] => return Err(usage("no enclosure has a mounting plate".into())),
+            _ => {
+                let tags: Vec<String> = with_plate.iter().map(|s| s.tag.to_string()).collect();
+                return Err(usage(format!(
+                    "several enclosures have a plate, pick one with --enclosure: {}",
+                    tags.join(", ")
+                )));
+            }
+        },
+    };
+    let (docs, _table) = novo_layout::model::plate_documents(project, chosen.id)
+        .ok_or_else(|| usage(format!("{} has no mounting plate", chosen.tag)))?;
+    Ok(novo_pdf::plate::export_plate_pdf(
+        &docs,
+        &project.info().name,
+    ))
 }
 
 /// Writes the pages as DXF: one `.dxf` file when `output` ends in `.dxf`

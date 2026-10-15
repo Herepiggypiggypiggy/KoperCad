@@ -1942,6 +1942,7 @@ dependencies = [
  "novo-core",
  "novo-editor",
  "novo-interop",
+ "novo-layout",
  "novo-pdf",
  "novo-plc",
  "novo-py",
@@ -2205,6 +2206,14 @@ dependencies = [
  "eframe",
  "egui",
  "egui-phosphor",
+]
+
+[[package]]
+name = "novo-thermal"
+version = "0.1.0"
+dependencies = [
+ "novo-layout",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

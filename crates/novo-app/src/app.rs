@@ -4,10 +4,12 @@
 //! bar and no status bar.
 
 mod assembly;
+mod background_panel;
 mod cabinet;
 mod cabinet_inspector;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
+mod cabinet_rules;
 mod changes;
 mod checks;
 mod commissioning;
@@ -33,6 +35,7 @@ mod pages;
 mod parts;
 mod parts_import;
 mod pdf;
+mod plate_export;
 mod plc;
 mod plc_link;
 mod potentials;
@@ -53,6 +56,8 @@ mod xref;
 
 #[cfg(test)]
 mod assembly_tests;
+#[cfg(test)]
+mod cabinet_rules_tests;
 #[cfg(test)]
 mod cabinet_tests;
 #[cfg(test)]
@@ -821,6 +826,7 @@ impl NovoApp {
         self.renumber_dialog(&ctx);
         self.plc_import_dialog(&ctx);
         self.preferences_dialog(&ctx);
+        self.background_panel(&ctx);
         self.parts_window(&ctx);
         self.project_settings_dialog(&ctx);
         self.macro_save_dialog(&ctx);
@@ -1072,6 +1078,13 @@ impl NovoApp {
                 };
                 if ui.add_enabled(has, egui::Button::new(label)).clicked() {
                     self.wb.queued.push("view.background");
+                    ui.close();
+                }
+                if ui
+                    .add_enabled(has, egui::Button::new("Move and scale..."))
+                    .clicked()
+                {
+                    self.wb.queued.push("view.background_place");
                     ui.close();
                 }
                 if ui.add_enabled(has, egui::Button::new("Remove")).clicked() {
