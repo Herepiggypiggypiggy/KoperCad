@@ -1469,6 +1469,34 @@ impl Editor {
         })
     }
 
+    /// Drops a dragged wire part `delta` further on, one undo step.
+    pub fn move_wire_part(
+        &mut self,
+        doc: &mut Document,
+        wire: WireId,
+        kind: edit::PartKind,
+        delta: Point,
+    ) -> bool {
+        if delta == Point::ZERO {
+            return false;
+        }
+        self.run(doc, "Move wire", |tx| {
+            edit::move_wire_part(tx, wire, kind, delta)
+        })
+    }
+
+    /// How far a wire part dragged from `from` to `to` moves.
+    pub fn part_delta(
+        &self,
+        doc: &Document,
+        wire: WireId,
+        kind: edit::PartKind,
+        from: Point,
+        to: Point,
+    ) -> Point {
+        edit::part_delta(doc.project(), wire, kind, self.grid, from, to)
+    }
+
     /// Removes one corner of a wire's route, one undo step.
     pub fn remove_corner(&mut self, doc: &mut Document, wire: WireId, index: usize) -> bool {
         self.run(doc, "Delete corner", |tx| {

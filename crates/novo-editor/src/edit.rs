@@ -1222,6 +1222,81 @@ pub fn remove_corner(tx: &mut Tx<'_>, wire: WireId, index: usize) -> Result<()> 
     check_kept(tx.project(), wire, &[wire])
 }
 
+/// The part of a wire that is dragged (the canvas's `WirePartKind`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PartKind {
+    /// A bend: index into the route.
+    Corner(usize),
+    /// A straight run: 0 leaves the first end, the last reaches the second.
+    Segment(usize),
+}
+
+/// The route indices a dragged wire part moves: a corner moves itself; a
+/// run moves the corners at its ends (an end of the wire is not a corner).
+pub fn part_corners(kind: PartKind, route_len: usize) -> Vec<usize> {
+    match kind {
+        PartKind::Corner(i) => vec![i],
+        PartKind::Segment(k) => [k.checked_sub(1), Some(k)]
+            .into_iter()
+            .flatten()
+            .filter(|&i| i < route_len)
+            .collect(),
+    }
+}
+
+/// How far a wire part dragged from `from` to `to` moves, snapped to the
+/// grid. A corner is free. A run keeps its direction: an inner run slides
+/// across itself, a run that reaches an end of the wire along itself, so
+/// no slanted piece appears. A run with no corner to move stays put.
+pub fn part_delta(
+    project: &Project,
+    wire: WireId,
+    kind: PartKind,
+    grid: f64,
+    from: Point,
+    to: Point,
+) -> Point {
+    let delta = geometry::snap(to, grid) - geometry::snap(from, grid);
+    let PartKind::Segment(k) = kind else {
+        return delta;
+    };
+    let Some(pts) = wire_points(project, wire) else {
+        return Point::ZERO;
+    };
+    if k + 1 >= pts.len() || part_corners(kind, pts.len() - 2).is_empty() {
+        return Point::ZERO;
+    }
+    let (a, b) = (pts[k], pts[k + 1]);
+    let vertical = (a.x - b.x).abs() < 1e-6;
+    let horizontal = (a.y - b.y).abs() < 1e-6;
+    let end = k == 0 || k + 2 == pts.len();
+    match (vertical, horizontal, end) {
+        (true, _, false) | (_, true, true) => Point::new(delta.x, 0.0),
+        (_, true, false) | (true, _, true) => Point::new(0.0, delta.y),
+        _ => delta,
+    }
+}
+
+/// A wire's route with a dragged part moved by `delta`.
+pub fn moved_route(route: &[Point], kind: PartKind, delta: Point) -> Vec<Point> {
+    let mut moved = route.to_vec();
+    for i in part_corners(kind, route.len()) {
+        moved[i] = moved[i] + delta;
+    }
+    moved
+}
+
+/// Moves a dragged wire part by `delta`; a result that would share a
+/// stretch with another wire is refused.
+pub fn move_wire_part(tx: &mut Tx<'_>, wire: WireId, kind: PartKind, delta: Point) -> Result<()> {
+    let Some(w) = tx.project().wire(wire) else {
+        return Ok(());
+    };
+    let route = moved_route(&w.route, kind, delta);
+    tx.update::<Wire>(wire, |w| w.route = route)?;
+    check_kept(tx.project(), wire, &[wire])
+}
+
 /// The symbols among `ids`, for [`settle`].
 pub fn symbols_in(ids: &[AnyId]) -> Vec<SymbolId> {
     ids.iter()

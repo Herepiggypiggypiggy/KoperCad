@@ -1943,6 +1943,41 @@ fn a_double_click_on_nothing_ends_the_wire_as_an_open_end_in_both_modes() {
 }
 
 #[test]
+fn dragging_an_inner_run_slides_both_its_corners_across_it() {
+    use novo_editor::edit::PartKind;
+    let (mut doc, page, mut editor, [a, b, _]) = three_contacts();
+    let from = doc.project().symbol(a).unwrap().pin_position(0).unwrap();
+    let to = doc.project().symbol(b).unwrap().pin_position(0).unwrap();
+    // Up, across, down: the middle run is vertical-free, horizontal here.
+    let route = vec![p(from.x, 20.0), p(to.x, 20.0)];
+    let (wire, _) = doc
+        .transact("Wire", |tx| {
+            let wire = tx.connect(Endpoint::pin(a, 0), Endpoint::pin(b, 0))?;
+            tx.update::<novo_core::Wire>(wire, |w| w.route = route.clone())?;
+            Ok(wire)
+        })
+        .unwrap();
+    let run = PartKind::Segment(1);
+    // Dragged up and sideways, the run only slides up: it stays level.
+    let delta = editor.part_delta(&doc, wire, run, p(60.0, 20.0), p(75.0, 10.0));
+    assert_eq!(delta.x, 0.0);
+    assert!(delta.y < 0.0);
+    let depth = doc.undo_depth();
+    assert!(editor.move_wire_part(&mut doc, wire, run, delta));
+    assert_eq!(doc.undo_depth(), depth + 1);
+    let moved = &doc.project().wire(wire).unwrap().route;
+    assert_eq!(moved[0], p(from.x, 20.0 + delta.y));
+    assert_eq!(moved[1], p(to.x, 20.0 + delta.y));
+    // A corner is free; the run next to an end only follows itself.
+    let free = editor.part_delta(&doc, wire, PartKind::Corner(0), p(0.0, 0.0), p(10.0, 10.0));
+    assert!(free.x > 0.0 && free.y > 0.0);
+    let end = editor.part_delta(&doc, wire, PartKind::Segment(0), p(0.0, 0.0), p(10.0, 10.0));
+    assert_eq!(end.x, 0.0);
+    doc.undo().unwrap();
+    assert_eq!(doc.project().wire(wire).unwrap().route, route);
+}
+
+#[test]
 fn a_double_click_on_empty_canvas_starts_a_wire_open_at_that_end() {
     for lines in [false, true] {
         let (mut doc, page, mut editor, [a, _, _]) = three_contacts();
