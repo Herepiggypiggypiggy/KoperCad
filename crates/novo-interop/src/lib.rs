@@ -6,4 +6,5 @@
 //! Everything here is a pure function from text to values and back: no
 //! files, no dialogs, nothing that needs elevation. Callers own the disk.
 
+pub mod bridge;
 pub mod dxf;
