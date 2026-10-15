@@ -338,6 +338,9 @@ impl Keymap {
         bind(Chord::plain(Escape), OutsideText, "edit.escape");
 
         // Draw.
+        // E (element) sits with W and R under the left hand; I stays as the
+        // older alias. The first chord is the one the `?` table shows.
+        bind(Chord::plain(l('e')), Canvas, "tool.place");
         bind(Chord::plain(l('i')), Canvas, "tool.place");
         bind(Chord::plain(l('w')), Canvas, "tool.connect");
         // Corners / Lines (DESIGN §4): works mid-wire. The app shell ignores
@@ -532,6 +535,24 @@ mod tests {
             map.resolve(Chord::plain(Key::letter('x')), Focus::Canvas),
             Some("edit.mirror")
         );
+    }
+
+    #[test]
+    fn place_is_on_e_for_the_left_hand_and_i_still_works() {
+        let map = Keymap::workflow();
+        let place = |c| map.resolve(Chord::plain(Key::letter(c)), Focus::Canvas);
+        assert_eq!(place('e'), Some("tool.place"));
+        assert_eq!(place('i'), Some("tool.place"));
+        // The `?` table shows E first, and E types into a field.
+        assert_eq!(map.shortcut_text("tool.place").as_deref(), Some("E"));
+        assert_eq!(
+            map.resolve(Chord::plain(Key::letter('e')), Focus::TextField),
+            None
+        );
+        // W wire, E place, R rotate: the drawing keys sit side by side.
+        assert_eq!(place('w'), Some("tool.connect"));
+        assert_eq!(place('r'), Some("edit.rotate"));
+        assert!(map.conflicts().is_empty());
     }
 
     #[test]
