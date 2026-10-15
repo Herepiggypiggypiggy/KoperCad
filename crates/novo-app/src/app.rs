@@ -15,6 +15,8 @@ mod link;
 mod live;
 mod live_anim;
 mod pages;
+mod parts;
+mod parts_import;
 mod pdf;
 mod plc;
 mod potentials;
@@ -743,6 +745,7 @@ impl NovoApp {
         self.about_dialog(&ctx);
         self.renumber_dialog(&ctx);
         self.preferences_dialog(&ctx);
+        self.parts_window(&ctx);
         self.project_settings_dialog(&ctx);
         self.issue_revision_dialog(&ctx);
         self.page_form_dialog(&ctx);
