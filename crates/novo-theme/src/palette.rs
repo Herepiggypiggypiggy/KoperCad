@@ -130,7 +130,7 @@ impl Palette {
             text_tertiary: Color32::from_rgb(0x66, 0x64, 0x5F),
             accent: Color32::from_rgb(0x9A, 0x54, 0x27),
             accent_hover: Color32::from_rgb(0x82, 0x44, 0x1D),
-            accent_wash: Color32::from_rgb(0xF1, 0xDF, 0xD0),
+            accent_wash: Color32::from_rgb(0xF4, 0xE4, 0xD7),
             on_accent: Color32::from_rgb(0xFF, 0xFF, 0xFF),
             info: INFO,
             success: SUCCESS,
@@ -203,6 +203,9 @@ mod tests {
                 }
             }
             assert!(contrast(p.on_accent, p.accent) >= 4.5);
+            // Selected rows and toggles: accent icon and hover text on the wash.
+            assert!(contrast(p.accent, p.accent_wash) >= 4.5);
+            assert!(contrast(p.accent_hover, p.accent_wash) >= 4.5);
         }
     }
 
