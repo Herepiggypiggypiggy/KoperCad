@@ -73,3 +73,4 @@
 - 22:30 Merged #106, #108 (DESIGN), #99 (WS-07 terminal article; 653 pass on main), #91 (WS-06) + #90 (WS-08) after a combined run: 662 passed, 0 failed.
 - 22:40 Merged #107, #96 and #110 (DESIGN sheet letters). WS-01 asked to merge main into #105 (gate1_tests conflict).
 - 22:45 Merged #109 (WS-03 report sheets in frame; B + design READY on 3dfbc1f; combined 669 passed). Sent sheet_name 20a/20b fix to Outputs; WS-03 on to perf then drawing.
+- 02:50 Health review. Merged #87 (tester), #111 (WS-07), #117 (WS-02 Structure + Dismissal), #115 (sheet letters), all main-reviewer READY on their heads; combined 679 passed. Nudged five threads stopped since 22:30; Actions still billing-blocked. MAIN-HANDOFF §0b added.
