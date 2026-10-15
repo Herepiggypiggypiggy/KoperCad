@@ -545,8 +545,9 @@ impl<'p> Tx<'p> {
     /// the keys of that standard's pack, as one step. The caller works out
     /// the keys (the model does not know the packs) and reports symbols
     /// that have no counterpart; those are simply not listed. Pins stay as
-    /// they are. Refused as a whole for an unknown symbol, an empty key or
-    /// a bad standard id.
+    /// they are. Refused as a whole for an unknown symbol or an empty key,
+    /// and, where the project info is checked, for a bad standard id
+    /// ([`ProjectRules::is_standard_id`](crate::ProjectRules::is_standard_id)).
     pub fn switch_standard(
         &mut self,
         standard: &str,

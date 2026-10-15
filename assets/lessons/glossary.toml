@@ -1,0 +1,31 @@
+# Words explained once, for {tip:term} in lesson text.
+# Append-only: add a table per term, keep ids lowercase with hyphens, and
+# add `text_nl` when you have the Dutch. One term per table so additions
+# from different threads merge cleanly.
+
+[term.pin]
+text = "A connection point on a symbol. Wires start and end on pins."
+
+[term.potential]
+text = "A named level on a net, such as L1, N or 24 V. A wire carries the potential it is connected to."
+
+[term.tag]
+text = "The name of a device, written as a reference designation such as -K1 (IEC 81346)."
+
+[term.net]
+text = "All pins that are electrically joined by wires, junctions and terminals."
+
+[term.contactor]
+text = "A relay for switching a load. Its coil sits on the control circuit and its contacts on the main circuit."
+
+[term.cross-reference]
+text = "A pointer from a coil to its contacts on other pages, and back."
+
+[term.terminal-strip]
+text = "A row of terminals on a rail where field cables meet the wiring inside the cabinet."
+
+[term.core]
+text = "One conductor inside a cable, named by number or colour."
+
+[term.proposal]
+text = "A wire KoperCAD suggests between two facing pins. Tab jumps to the next one and Enter accepts it."
