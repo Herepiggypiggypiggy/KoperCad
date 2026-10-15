@@ -679,6 +679,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.plate",
+            "Export plate drawing",
+            "Export",
+            &["mounting plate", "drill table", "drilling"],
+            Needs::Project,
+        ),
+        &["export plate"],
+    ),
+    verb(
+        cmd(
             "export.bom",
             "Export bill of materials",
             "Export",

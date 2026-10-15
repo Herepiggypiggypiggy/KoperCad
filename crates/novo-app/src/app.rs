@@ -16,6 +16,7 @@ mod live;
 mod live_anim;
 mod pages;
 mod pdf;
+mod plate_export;
 mod plc;
 mod potentials;
 mod preferences;

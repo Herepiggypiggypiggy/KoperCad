@@ -161,3 +161,19 @@ fn a_ghost_is_drawn_but_never_stored() {
     // Without a hovering payload the ghost is cleared again.
     assert!(d.app.cabinet.ghost.is_none());
 }
+
+#[test]
+fn plate_export_says_why_when_the_enclosure_has_no_plate() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    assert!(d.app.export_plate_pdf().is_none());
+    let last = d.app.messages().last().unwrap();
+    assert!(last.text.contains("no mounting plate"), "{}", last.text);
+    assert!(crate::app::app_runs("export.plate"));
+}
