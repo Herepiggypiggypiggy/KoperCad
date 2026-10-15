@@ -1119,6 +1119,29 @@ pub enum TerminalKind {
     Disconnect,
 }
 
+/// Who decides that a terminal is a PE terminal. A terminal becomes one by
+/// rule when it is connected to a wire of PE potential or to a ground or PE
+/// symbol; a hand toggle is an override that the rule never undoes (DESIGN
+/// "PE terminals"). The model only stores the choice: whoever applies the
+/// rule (novo-terminals) leaves a terminal alone unless this is `Auto`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PeOverride {
+    /// The rule decides.
+    #[default]
+    Auto,
+    /// Set by hand: a PE terminal whatever it is connected to.
+    ForcedPe,
+    /// Set by hand: not a PE terminal whatever it is connected to.
+    ForcedNotPe,
+}
+
+impl PeOverride {
+    pub fn is_auto(&self) -> bool {
+        *self == PeOverride::Auto
+    }
+}
+
 /// A terminal on a terminal strip device.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Terminal {
@@ -1147,6 +1170,10 @@ pub struct Terminal {
     /// terminal), declared explicitly rather than read from its name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub feed: Option<PotentialId>,
+    /// Whether a hand toggle fixed this as a PE terminal (or not), so the
+    /// automatic rule leaves `kind` alone; shown as an override (diamond).
+    #[serde(default, skip_serializing_if = "PeOverride::is_auto")]
+    pub pe_override: PeOverride,
     #[serde(default)]
     pub properties: Properties,
 }
