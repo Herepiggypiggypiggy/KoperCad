@@ -1294,7 +1294,7 @@ impl SchematicView {
         // Shift+arrows nudge the selection one grid step (DESIGN.md §4: plain
         // arrows stay with the terminal strip keys). The wires follow the
         // "Moving a symbol" preference; Ctrl+Shift+arrow does the other.
-        if !selection.is_empty() && !matches!(self.editor.tool(), crate::tool::Tool::Move(_)) {
+        if !selection.is_empty() && matches!(self.editor.tool(), crate::tool::Tool::Select) {
             let step = self.editor.grid;
             for (key, delta) in [
                 (Key::ArrowLeft, Point::new(-step, 0.0)),
