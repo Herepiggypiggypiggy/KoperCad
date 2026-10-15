@@ -25,7 +25,7 @@ pub mod propose;
 pub mod screen;
 pub mod strings;
 
-pub use check::{Finding, check};
+pub use check::{Finding, check, check_with};
 pub use edit::{
     ShieldConnection, add_shield, assign_core, connect_shield, is_spare, set_spare,
     shield_connection, spare_cores, swap_cores, unassign_core, unassign_wire,

@@ -149,8 +149,16 @@ mod tests {
             env!("CARGO_MANIFEST_DIR"),
             "/../novo-symbols/symbols/iec/terminals/terminal.toml"
         ))
-        .unwrap()
-        .replace(r#"dir = "down" }"#, r#"dir = "down", optional = true }"#);
+        .unwrap();
+        let pin_two = r#"{ id = "2", at = [0, 8], dir = "down" }"#;
+        assert!(
+            text.contains(pin_two),
+            "terminal.toml no longer has {pin_two}"
+        );
+        let text = text.replace(
+            pin_two,
+            r#"{ id = "2", at = [0, 8], dir = "down", optional = true }"#,
+        );
         let symbol = Symbol::from_toml(&text).unwrap();
         let pins = terminal_pins(&symbol).unwrap();
         assert!(!pins[0].optional && pins[1].optional);

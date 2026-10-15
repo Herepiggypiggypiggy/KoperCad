@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use novo_core::{CableId, DeviceId, Project, Value, WireId};
+use novo_core::{CableId, DeviceId, Netlist, Project, Value, WireId};
 
 use crate::edit::{ShieldConnection, is_spare, shield_connection};
 use crate::ends;
@@ -119,7 +119,12 @@ fn cable_devices(project: &Project, cable: CableId) -> Option<BTreeSet<DeviceId>
 
 /// Checks every cable, in cable order.
 pub fn check(project: &Project) -> Vec<Finding> {
-    let netlist = project.netlist();
+    check_with(project, &project.netlist())
+}
+
+/// [`check`] with a netlist the caller already built from `project`, so a
+/// caller running several checks builds it once.
+pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Finding> {
     let mut findings = Vec::new();
     for c in project.cables() {
         let cable = c.id;
@@ -141,7 +146,7 @@ pub fn check(project: &Project) -> Vec<Finding> {
             if is_spare(c, core) {
                 findings.push(Finding::SpareInUse { cable, core });
             }
-            let protective = conductor(project, &netlist, wire) == Conductor::Protective;
+            let protective = conductor(project, netlist, wire) == Conductor::Protective;
             match (is_protective(&slot.name), protective) {
                 (true, false) => findings.push(Finding::ProtectiveCoreMisused {
                     cable,
