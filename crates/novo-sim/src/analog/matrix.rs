@@ -29,18 +29,25 @@ impl Matrix {
     pub fn factor(mut self) -> Option<Lu> {
         let n = self.n;
         let mut piv = (0..n).collect::<Vec<_>>();
-        // Scale for a relative singularity test.
-        let scale = self
-            .a
-            .iter()
-            .map(|x| x.abs())
-            .fold(0.0, f64::max)
-            .max(1e-300);
+        // Equilibrate: scale every row so its largest entry is 1. Circuit
+        // matrices mix 1e6 S contacts with 1e-12 S leakage; only after
+        // scaling does a tiny pivot mean a singular system.
+        let mut row_scale = vec![1.0; n];
+        for r in 0..n {
+            let m = (0..n).map(|c| self.a[r * n + c].abs()).fold(0.0, f64::max);
+            if m > 0.0 {
+                row_scale[r] = 1.0 / m;
+                for c in 0..n {
+                    self.a[r * n + c] = self.a[r * n + c] * row_scale[r];
+                }
+            }
+        }
+        let scale = 1.0;
         for k in 0..n {
             let (p, best) = (k..n)
                 .map(|r| (r, self.a[r * n + k].abs()))
                 .fold((k, -1.0), |m, x| if x.1 > m.1 { x } else { m });
-            if best <= scale * 1e-14 {
+            if best <= scale * 1e-13 {
                 return None;
             }
             if p != k {
@@ -62,7 +69,12 @@ impl Matrix {
                 }
             }
         }
-        Some(Lu { n, lu: self.a, piv })
+        Some(Lu {
+            n,
+            lu: self.a,
+            piv,
+            row_scale,
+        })
     }
 }
 
@@ -71,12 +83,13 @@ pub struct Lu {
     n: usize,
     lu: Vec<Complex>,
     piv: Vec<usize>,
+    row_scale: Vec<f64>,
 }
 
 impl Lu {
     pub fn solve(&self, b: &[Complex]) -> Vec<Complex> {
         let n = self.n;
-        let mut x: Vec<Complex> = self.piv.iter().map(|&p| b[p]).collect();
+        let mut x: Vec<Complex> = self.piv.iter().map(|&p| b[p] * self.row_scale[p]).collect();
         for r in 1..n {
             let mut s = x[r];
             for c in 0..r {

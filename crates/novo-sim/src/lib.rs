@@ -18,6 +18,7 @@ pub mod analog;
 mod coupling;
 mod devices;
 mod loads;
+pub mod network;
 mod plc;
 
 pub use coupling::{

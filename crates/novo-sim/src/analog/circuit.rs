@@ -126,7 +126,7 @@ pub enum Element {
 
 /// Resistance of a closed switch and conductance of an open one.
 pub const R_ON: f64 = 1e-6;
-pub const G_OFF: f64 = 1e-12;
+pub const G_OFF: f64 = 1e-10;
 
 #[derive(Debug, Clone, Default)]
 pub struct Circuit {

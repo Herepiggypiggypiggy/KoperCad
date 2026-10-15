@@ -8,7 +8,7 @@
 //!
 //! Honest limits: elements are linear and lumped. Saturation, diodes and
 //! other non-linear parts are not here; the motor model lives in
-//! [`motor`]. Each node gets 1 pS to ground so a floating sub-circuit
+//! [`motor`]. Each node gets 0.1 nS to ground so a floating sub-circuit
 //! solves to 0 V instead of failing.
 
 // Dense linear algebra reads best with index loops.
