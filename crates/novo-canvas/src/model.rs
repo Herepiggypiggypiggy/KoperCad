@@ -1225,7 +1225,7 @@ impl PageScene {
 fn junctions_of(w: &novo_core::Wire) -> [Option<JunctionId>; 2] {
     w.ends().map(|e| match e {
         Endpoint::Junction { junction } => Some(junction),
-        Endpoint::Pin { .. } => None,
+        Endpoint::Pin { .. } | Endpoint::Free { .. } => None,
     })
 }
 

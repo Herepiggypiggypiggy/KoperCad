@@ -94,5 +94,11 @@ claude/data-model-amzaxu origin/main`, then new PR for new work.
   `carried` (BFS through pass-through poles, nearest feed only, never into
   defining nets), `reachable`; conflicts only from `defined`. Changeovers need
   the two-group pass-through form.
+- Open wire ends: `Endpoint::Free { at }` (JSON `{"type":"free","at":{x,y}}`), a
+  position on the wire's page that joins no net. `Endpoint` is no longer
+  `Copy`-derived `Eq/Hash/Ord` by derive (manual, on `total_cmp`/bits). Use
+  `Netlist::net_of_wire(&wire)` instead of `net_of(wire.from)`; a wire open at both
+  ends has no net. `Command::Connect.page` / `Tx::connect_on` are needed only
+  when both ends are open. Connecting an end = `update::<Wire>` replacing it.
 - PRs get squash-merged: rebase follow-ups with `git rebase --onto origin/main <old-head>`.
 - Commit trailers: Co-Authored-By Claude line + Claude-Session link (see git log).

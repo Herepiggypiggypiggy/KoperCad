@@ -485,6 +485,7 @@ impl<'a> Context<'a> {
                 format!("{}:{name}", self.symbol_label(s))
             }
             Endpoint::Junction { .. } => "a junction".to_owned(),
+            Endpoint::Free { .. } => "an open end".to_owned(),
         }
     }
 }

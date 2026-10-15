@@ -261,11 +261,11 @@ pub fn wires_through(project: &Project, page: PageId, p: Point) -> Vec<(WireId, 
 }
 
 /// The exit direction of an endpoint: the pin's direction, or `None` for a
-/// junction.
+/// junction or an open end.
 pub fn endpoint_direction(project: &Project, end: Endpoint) -> Option<Direction> {
     match end {
         Endpoint::Pin { symbol, pin } => project.symbol(symbol)?.pin_direction(pin),
-        Endpoint::Junction { .. } => None,
+        Endpoint::Junction { .. } | Endpoint::Free { .. } => None,
     }
 }
 

@@ -160,8 +160,8 @@ pub fn duplicate(
     let wires: Vec<Wire> = selection.wires(tx.project());
     for original in wires {
         let (Some(from), Some(to)) = (
-            map_endpoint(&out, original.from),
-            map_endpoint(&out, original.to),
+            map_endpoint(&out, original.from, offset),
+            map_endpoint(&out, original.to, offset),
         ) else {
             continue;
         };
@@ -219,8 +219,9 @@ pub fn duplicate(
     Ok(out)
 }
 
-fn map_endpoint(out: &Duplicated, end: Endpoint) -> Option<Endpoint> {
+fn map_endpoint(out: &Duplicated, end: Endpoint, offset: Point) -> Option<Endpoint> {
     match end {
+        Endpoint::Free { at } => Some(Endpoint::Free { at: at + offset }),
         Endpoint::Pin { symbol, pin } => out
             .symbols
             .get(&symbol)
@@ -300,13 +301,19 @@ impl Selection {
             }
         }
         // Wires between copied objects come along.
+        // An open end comes along with the other end; a wire open at both
+        // ends is copied only when selected.
         let inside = |end: Endpoint| match end {
-            Endpoint::Pin { symbol, .. } => s.symbols.contains(&symbol),
-            Endpoint::Junction { junction } => s.junctions.contains(&junction),
+            Endpoint::Pin { symbol, .. } => Some(s.symbols.contains(&symbol)),
+            Endpoint::Junction { junction } => Some(s.junctions.contains(&junction)),
+            Endpoint::Free { .. } => None,
         };
         let extra: Vec<WireId> = project
             .wires()
-            .filter(|w| inside(w.from) && inside(w.to))
+            .filter(|w| {
+                let ends = [inside(w.from), inside(w.to)];
+                ends.iter().flatten().count() > 0 && ends.iter().flatten().all(|&i| i)
+            })
             .map(|w| w.id)
             .collect();
         s.wires.extend(extra);

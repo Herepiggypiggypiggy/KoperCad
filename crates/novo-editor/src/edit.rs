@@ -692,6 +692,7 @@ pub(crate) fn refusal_error(project: Option<&Project>, r: Refusal) -> ModelError
             })
             .unwrap_or_else(|| "a pin".into()),
         Endpoint::Junction { .. } => "a junction".into(),
+        Endpoint::Free { .. } => "an open end".into(),
     };
     let which = project.and_then(|p| p.wire(r.other)).map_or_else(
         || "another wire".to_string(),
@@ -815,10 +816,8 @@ pub fn draw_wire(
     let project = tx.project();
     let a = project
         .endpoint_position(from)
-        .ok_or(ModelError::NotFound(endpoint_id(from)))?;
-    let b = project
-        .endpoint_position(to)
-        .ok_or(ModelError::NotFound(endpoint_id(to)))?;
+        .ok_or_else(|| missing(from))?;
+    let b = project.endpoint_position(to).ok_or_else(|| missing(to))?;
     // Wires that leave the same pin may run together for their first stretch;
     // that case becomes a derived junction later. Everything else is checked.
     let bends = plan_route(
@@ -840,10 +839,17 @@ pub fn draw_wire(
     Ok(wire)
 }
 
-fn endpoint_id(end: Endpoint) -> AnyId {
+/// The error for an endpoint that has no position: it names the missing
+/// symbol or junction.
+pub(crate) fn missing(end: Endpoint) -> ModelError {
     match end {
-        Endpoint::Pin { symbol, .. } => symbol.into(),
-        Endpoint::Junction { junction } => junction.into(),
+        Endpoint::Pin { symbol, .. } => ModelError::NotFound(symbol.into()),
+        Endpoint::Junction { junction } => ModelError::NotFound(junction.into()),
+        // An open end is its own position.
+        Endpoint::Free { .. } => ModelError::Refused {
+            what: "Wire".into(),
+            reason: "an open end has no position".into(),
+        },
     }
 }
 
@@ -972,6 +978,7 @@ fn transform_with(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform, refuse: bool) 
     let moved = |e: &Endpoint| match *e {
         Endpoint::Pin { symbol, .. } => symbols.contains(&symbol),
         Endpoint::Junction { junction } => junctions.contains(&junction),
+        Endpoint::Free { .. } => false,
     };
     // Wires touching anything that moves, and whether both ends move.
     let mut wires: BTreeMap<WireId, bool> = BTreeMap::new();

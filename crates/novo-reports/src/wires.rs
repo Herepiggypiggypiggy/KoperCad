@@ -80,6 +80,8 @@ impl Report for WireList {
         let joint = |end: Endpoint| -> Option<Joint<'_>> {
             match end {
                 Endpoint::Junction { .. } => Some(Joint::End(end)),
+                // An open end joins nothing.
+                Endpoint::Free { .. } => None,
                 Endpoint::Pin { symbol, .. } => match &project.symbol(symbol)?.role {
                     SymbolRole::Device { .. } | SymbolRole::Terminal { .. } => None,
                     SymbolRole::Interruption { name } => Some(Joint::Interruption(name)),
