@@ -61,6 +61,7 @@ enum HubAsk {
     Section(usize),
     Go(AnyId),
     ShowPage(PageId),
+    AddPage(String, String),
     Export(Option<String>, Format),
     Semicolon(bool),
 }
@@ -144,6 +145,7 @@ impl NovoApp {
             HubAsk::Section(i) => self.hub.section = i,
             HubAsk::Semicolon(on) => self.settings.csv_semicolon = on,
             HubAsk::ShowPage(page) => self.show_page(page),
+            HubAsk::AddPage(report, title) => self.add_report_page(&report, &title),
             HubAsk::Go(id) => {
                 let place = match id {
                     AnyId::Device(device) => self.device_main(device),
@@ -163,6 +165,44 @@ impl NovoApp {
             HubAsk::Export(only, format) => {
                 self.export_reports_dialog(only.as_deref(), format);
             }
+        }
+    }
+
+    /// Adds a generated page for `report` after the highest section in use,
+    /// one undo step, and shows it.
+    pub(super) fn add_report_page(&mut self, report: &str, title: &str) {
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let project = doc.project();
+        if project.pages().any(|p| p.frozen.is_some()) {
+            self.message(
+                Level::Info,
+                "The project has frozen pages; no page was added",
+            );
+            return;
+        }
+        let highest = project
+            .pages()
+            .filter_map(|p| {
+                let digits: String = p.name.chars().take_while(char::is_ascii_digit).collect();
+                digits.parse::<u64>().ok()
+            })
+            .max()
+            .unwrap_or(0);
+        let spec = novo_reports::GeneratedPageSpec {
+            generator: report.to_owned(),
+            name: ((highest / 10 + 1) * 10).to_string(),
+            title: title.to_owned(),
+        };
+        match doc.transact("Add report page", |tx| {
+            novo_reports::add_generated_pages(tx, std::slice::from_ref(&spec))
+        }) {
+            Ok(((), changes)) => {
+                self.changed_outside_canvas(&changes);
+                self.message(Level::Info, format!("Added page {} ({title})", spec.name));
+            }
+            Err(e) => self.message(Level::Error, format!("Could not add the page: {e}")),
         }
     }
 
@@ -411,13 +451,25 @@ fn preview(
             if novo_theme::widgets::primary_button(ui, "Excel").clicked() {
                 asks.push(HubAsk::Export(Some(output.report.clone()), Format::Xlsx));
             }
-            if let Some(page) = page
-                && ui
-                    .button("Show page")
-                    .on_hover_text("The page of this report in the drawing set")
-                    .clicked()
-            {
-                asks.push(HubAsk::ShowPage(page));
+            match page {
+                Some(page) => {
+                    if ui
+                        .button("Show page")
+                        .on_hover_text("The page of this report in the drawing set")
+                        .clicked()
+                    {
+                        asks.push(HubAsk::ShowPage(page));
+                    }
+                }
+                None => {
+                    if ui
+                        .button("Add as page")
+                        .on_hover_text("Put this report in the drawing set as a live page")
+                        .clicked()
+                    {
+                        asks.push(HubAsk::AddPage(output.report.clone(), output.title.clone()));
+                    }
+                }
             }
         });
     });

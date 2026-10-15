@@ -124,3 +124,20 @@ fn a_row_goes_to_its_symbol() {
     assert_eq!(place.page, symbol.page);
     assert_eq!(place.symbol, Some(symbol.id));
 }
+
+#[test]
+fn a_report_without_a_page_can_be_added_as_one() {
+    let (_dir, mut d) = example();
+    let before = d.doc().project().pages().count();
+    d.app.add_report_page("cutlist", "Cut list");
+    let project = d.doc().project();
+    assert_eq!(project.pages().count(), before + 1);
+    let page = project
+        .pages()
+        .find(|p| matches!(&p.kind, novo_core::PageKind::Generated { generator } if generator == "cutlist"))
+        .expect("added");
+    assert!(page.name.parse::<u64>().unwrap() % 10 == 0);
+    // One undo takes it back.
+    d.app.undo_redo(false);
+    assert_eq!(d.doc().project().pages().count(), before);
+}
