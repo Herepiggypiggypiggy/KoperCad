@@ -8,4 +8,4 @@ Decisions
 - Menu placement is specced in DESIGN PR #238 (feed right-click: Set potential, terminal right-click: Toggle PE terminal / `pe`). App shell thread wires the menus.
 - Interruption names: whole numbers, lowest unused; an unnamed partner takes the other's name on link.
 
-Next: point 22 state-dependent potentials (evaluator in novo-sim over `Net::reachable` and contact state; netlist stays the declared view). Resume: `cargo test -p novo-terminals -p novo-editor -p novo-xref`.
+Next: point 22 follow-ups, see ROADMAP design note. Resume: `cargo test -p novo-terminals -p novo-editor -p novo-xref -p novo-sim`.
