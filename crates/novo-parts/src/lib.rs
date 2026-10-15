@@ -30,6 +30,7 @@ mod csv;
 mod import;
 mod library;
 mod macros;
+mod pins;
 mod schema;
 mod search;
 mod sheet;
@@ -65,6 +66,10 @@ pub use macros::{
     Imported, MACRO_EXTENSION, MACRO_FORMAT, MACRO_FORMAT_VERSION, MACRO_PACK_EXTENSION,
     MACRO_PACK_FORMAT, MacroEntry, MacroError, MacroFile, MacroLibrary, MacroPack, OnConflict,
     PackEntry, STARTER_FOLDER, starter_macros, user_macros_dir,
+};
+pub use pins::{
+    POSITIONS_SOURCE_KEY, POSITIONS_SOURCE_PROPERTY, placed_terminals, positions_estimated,
+    terminal_position, write_properties as write_terminal_positions,
 };
 pub use schema::eng;
 pub use schema::{
