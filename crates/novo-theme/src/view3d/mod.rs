@@ -6,10 +6,12 @@
 
 pub mod camera;
 pub mod cube;
+pub mod labels;
 pub mod palette;
 
 pub use camera::{Camera, Inertia, Projection, SavedView, StandardView, Transition};
 pub use cube::{CubeHit, view_cube_hit};
+pub use labels::{Fade, Highlight, LabelCandidate, highlight, visible_labels};
 pub use palette::{
     LightRig, Material, QualityTier, ThemeColors, View3dTheme, WireColor, wire_radius_mm, wire_rgba,
 };
