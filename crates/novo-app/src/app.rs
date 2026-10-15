@@ -10,6 +10,7 @@ mod pdf;
 mod plc;
 mod reports;
 mod terminals;
+mod wheel;
 mod workbench;
 mod xref;
 
@@ -686,6 +687,11 @@ impl NovoApp {
         self.recovery_dialog(&ctx);
         self.about_dialog(&ctx);
         self.renumber_dialog(&ctx);
+        for id in std::mem::take(&mut self.wb.queued) {
+            self.run_command(&ctx, id, None);
+        }
+        self.place_hold_tick(&ctx);
+        self.place_wheel(&ctx);
 
         for action in picked {
             self.run(&ctx, action);
@@ -706,10 +712,15 @@ impl NovoApp {
         if let Some(page) = self.canvas.take_page_request() {
             self.show_page(page);
         }
+        let asked = self.canvas.take_commands();
+        self.wb.queued.extend(asked);
     }
 
     fn modal_open(&self) -> bool {
-        self.show_about || self.wb.renumber.is_some() || self.backend.recovery_offer().is_some()
+        self.show_about
+            || self.wb.wheel.is_some()
+            || self.wb.renumber.is_some()
+            || self.backend.recovery_offer().is_some()
     }
 
     fn update_title(&mut self, ctx: &egui::Context) {

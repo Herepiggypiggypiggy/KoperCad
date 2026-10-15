@@ -109,6 +109,11 @@ pub trait CanvasView {
         None
     }
 
+    /// Commands the canvas asks the shell to run, by workflow id.
+    fn take_commands(&mut self) -> Vec<&'static str> {
+        Vec::new()
+    }
+
     /// The schematic editor, when this canvas is one.
     fn schematic(&mut self) -> Option<&mut SchematicView> {
         None

@@ -46,6 +46,13 @@ pub(crate) struct Workbench {
     /// The generated pages' reports, live.
     pub(super) reports: super::reports::Reports,
     /// The `renumber io` preview waiting for Enter or Esc, per station.
+    /// The place wheel, when open.
+    pub(super) wheel: Option<super::wheel::Wheel>,
+    /// A key that opens the wheel went down at this time (egui seconds),
+    /// with the keys then held: a tap runs Place, a hold opens the wheel.
+    pub(super) place_hold: Option<(f64, Vec<egui::Key>)>,
+    /// Commands the canvas asked for, run next frame by id.
+    pub(super) queued: Vec<&'static str>,
     pub(super) renumber: Option<Vec<novo_plc::commands::RenumberPlan>>,
     /// Which sheet of a generated page the canvas shows (0 for the first).
     pub(super) sheet: usize,
@@ -105,6 +112,9 @@ impl Default for Workbench {
             keymap: Keymap::workflow(),
             xref: LiveXref::default(),
             reports: Default::default(),
+            wheel: None,
+            place_hold: None,
+            queued: Vec::new(),
             renumber: None,
             sheet: 0,
             nav: Navigator::default(),
@@ -350,7 +360,9 @@ impl NovoApp {
     /// it opens on the release, unless the pointer moved more than 4 px in
     /// between (a held Space pans); every other key runs its command.
     pub(super) fn run_key_command(&mut self, ctx: &egui::Context, id: &str) {
-        if id == "view.command_field_here" {
+        if id == "tool.place" {
+            self.arm_place_hold(ctx);
+        } else if id == "view.command_field_here" {
             self.wb.space_down = ctx.pointer_latest_pos().or(Some(egui::Pos2::ZERO));
         } else {
             self.run_command(ctx, id, None);
@@ -424,6 +436,7 @@ impl NovoApp {
             "check.problems" => self.show_issues(false),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),
+            "tool.place_wheel" => self.open_wheel(ctx, Vec::new()),
             "wire.mode" => {
                 let mode = match self.settings.wiring_mode() {
                     WiringMode::Corners => WiringMode::Lines,

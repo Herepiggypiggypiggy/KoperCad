@@ -75,6 +75,10 @@ impl CanvasView for EditorCanvas {
         std::mem::take(&mut self.changes)
     }
 
+    fn take_commands(&mut self) -> Vec<&'static str> {
+        self.view.take_commands()
+    }
+
     fn take_page_request(&mut self) -> Option<PageId> {
         self.view.take_page_request()
     }
