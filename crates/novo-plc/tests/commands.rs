@@ -161,6 +161,66 @@ fn to_plc_places_and_connects_in_one_step() {
 }
 
 #[test]
+fn to_plc_refuses_to_run_along_another_wire() {
+    let mut doc = Document::default();
+    let (card, contact) = doc
+        .transact("Setup", |tx| {
+            let page = tx.add_page("1")?;
+            let card = add_card(tx, DeviceTag::parse("-K1")?, "", typed("DI8"), "", None)?;
+            let k9 = tx.add_device(DeviceTag::parse("-K9")?, "Pump running")?;
+            let contact = tx.place_symbol(
+                page,
+                "iec/contacts/no",
+                Placement::at(Point::new(50.0, 40.0)),
+                vec![Pin::new("13", 0.0, -5.0), Pin::new("14", 0.0, 5.0)],
+                SymbolRole::Device {
+                    device: k9,
+                    main: false,
+                },
+            )?;
+            // A wire lying on the straight line from the contact's pin 14
+            // down to where the channel will be.
+            let a = tx.place_symbol(
+                page,
+                "iec/terminals/terminal",
+                Placement::at(Point::new(50.0, 50.0)),
+                vec![Pin::new("1", 0.0, 0.0)],
+                SymbolRole::Unassigned,
+            )?;
+            let b = tx.place_symbol(
+                page,
+                "iec/terminals/terminal",
+                Placement::at(Point::new(50.0, 55.0)),
+                vec![Pin::new("1", 0.0, 0.0)],
+                SymbolRole::Unassigned,
+            )?;
+            tx.connect(Endpoint::pin(a, 0), Endpoint::pin(b, 0))?;
+            Ok((card, contact))
+        })
+        .unwrap()
+        .0;
+    let symbols = doc.project().symbols().count();
+    let wires = doc.project().wires().count();
+    let result = doc.transact("To PLC", |tx| {
+        to_plc(
+            tx,
+            &FromKey,
+            card,
+            Endpoint::pin(contact, 1),
+            ChannelType::DigitalInput,
+            "iec/plc/digital_input",
+            Placement::at(Point::new(50.0, 60.0)),
+            pin(),
+        )
+    });
+    let error = result.unwrap_err().to_string();
+    assert!(error.contains("run along the wire"), "{error}");
+    // Nothing was placed or drawn: the refusal rolls the whole step back.
+    assert_eq!(doc.project().symbols().count(), symbols);
+    assert_eq!(doc.project().wires().count(), wires);
+}
+
+#[test]
 fn renumber_io_repacks_in_slot_order() {
     let mut doc = Document::default();
     let (a, b, c) = doc

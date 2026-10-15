@@ -25,3 +25,7 @@
 2026-10-15 04:45 UTC #165 READY on 5b70aea. Follow-ups noted in ROADMAP (renumber preview names skipped bad-layout cards; ModelError variant for 'no free channel' is a WS-02 ask).
 2026-10-15 (after 04:45) UTC Follow-up: RenumberPlan{moves, skipped} built on ws17-follow, patch 0007; waits for #165 to merge.
 2026-10-15 04:16 UTC #165 merged as f74e14e (lead's combined run 799/0/3). Engine part of plc.md §10 complete. Follow-up PR for RenumberPlan opened from main.
+2026-10-15 07:39 UTC #170 READY on 8a93d92 (reviewer: fmt, clippy, 801/0/3). Frozen; no more pushes. Asked WS-02 about an InvalidValue-style ModelError variant. Next: wait for merge, then follow-ups from main.
+2026-10-15 07:41 UTC #170 merged. Nothing of WS-17 is open. Remaining: switch to a WS-02 error variant if one is added; support integration owners; PLC checks (#166) and I/O report are with Outputs.
+2026-10-15 07:51 UTC WS-02 will add ModelError::Refused{what, reason} (core PR after #179). Then: small novo-plc PR from main switching place_next 'no free channel' and add_card 'layout does not parse' from ModelError::Format to Refused.
+2026-10-15 (after 09:24) UTC to_plc now routes through novo_editor::edit::draw_wire (refused with the editor's reason when it would run along a wire); add_card/place_channel/to_plc errors use ModelError::Refused. novo-plc depends on novo-editor (default-features off). 884/0/3 locally.

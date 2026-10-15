@@ -8,6 +8,9 @@ use novo_core::{
     Result, SymbolId, SymbolRole, Tx, Value,
 };
 
+use novo_editor::edit::draw_wire;
+use novo_editor::geometry::Target;
+
 use crate::card::{CHANNEL, CHANNELS, Card, SLOT, STATION, allocate, cards, start_key};
 use crate::index::{Functions, PlcIndex, channel_key};
 use crate::layout::{CardLayout, ChannelType, Space};
@@ -51,7 +54,10 @@ pub fn add_card(
         .device(card)
         .ok_or(ModelError::NotFound(card.into()))?;
     let read = Card::read(tx.project(), device).ok_or(ModelError::NotFound(card.into()))?;
-    let layout = read.layout.map_err(|e| ModelError::Format(e.to_string()))?;
+    let layout = read.layout.map_err(|e| ModelError::Refused {
+        what: "add card".into(),
+        reason: e.to_string(),
+    })?;
     for (key, value) in allocate(tx.project(), station, &layout, Some(card)) {
         tx.set_property(card, key, Some(value))?;
     }
@@ -75,7 +81,10 @@ pub fn place_channel(
 ) -> Result<SymbolId> {
     let number = PlcIndex::build(tx.project(), functions)
         .next_channel(card, kind)
-        .ok_or_else(|| ModelError::Format(format!("the card has no free {kind} channel")))?;
+        .ok_or_else(|| ModelError::Refused {
+            what: "place channel".into(),
+            reason: format!("the card has no free {kind} channel"),
+        })?;
     let placed = tx.place_symbol(
         page,
         symbol,
@@ -125,9 +134,25 @@ pub fn to_plc(
         .as_pin()
         .and_then(|p| tx.project().symbol(p.symbol))
         .map(|s| s.page)
-        .ok_or_else(|| ModelError::Format("to plc needs a pin to connect".into()))?;
+        .ok_or_else(|| ModelError::Refused {
+            what: "to plc".into(),
+            reason: "it needs a pin to connect".into(),
+        })?;
     let placed = place_channel(tx, functions, card, kind, page, symbol, placement, pins)?;
-    tx.connect(signal, Endpoint::pin(placed, 0))?;
+    // Routed like a drawn wire, so it bends around other wires and is
+    // refused with the same reason when it would run along one.
+    let to = Endpoint::pin(placed, 0);
+    let target = |end: Endpoint| {
+        tx.project()
+            .endpoint_position(end)
+            .map(|at| Target::Endpoint(end, at))
+            .ok_or_else(|| ModelError::Refused {
+                what: "to plc".into(),
+                reason: "a pin has no position".into(),
+            })
+    };
+    let (from, to) = (target(signal)?, target(to)?);
+    draw_wire(tx, page, from, &[], to)?;
     Ok(placed)
 }
 
