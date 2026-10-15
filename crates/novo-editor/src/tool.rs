@@ -1469,6 +1469,13 @@ impl Editor {
         })
     }
 
+    /// Removes one corner of a wire's route, one undo step.
+    pub fn remove_corner(&mut self, doc: &mut Document, wire: WireId, index: usize) -> bool {
+        self.run(doc, "Delete corner", |tx| {
+            edit::remove_corner(tx, wire, index)
+        })
+    }
+
     /// Moves the selection by a distance in one step (arrow keys, scripts).
     pub fn move_selection(
         &mut self,

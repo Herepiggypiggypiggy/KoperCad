@@ -1206,6 +1206,22 @@ fn check_kept(project: &Project, wire: WireId, together: &[WireId]) -> Result<()
     }
 }
 
+/// Takes the bend at `index` out of a wire's route (a selected corner,
+/// Delete). The wire then runs straight between its neighbours; a result
+/// that would share a stretch with another wire is refused.
+pub fn remove_corner(tx: &mut Tx<'_>, wire: WireId, index: usize) -> Result<()> {
+    let Some(w) = tx.project().wire(wire) else {
+        return Ok(());
+    };
+    if index >= w.route.len() {
+        return Ok(());
+    }
+    tx.update::<Wire>(wire, |w| {
+        w.route.remove(index);
+    })?;
+    check_kept(tx.project(), wire, &[wire])
+}
+
 /// The symbols among `ids`, for [`settle`].
 pub fn symbols_in(ids: &[AnyId]) -> Vec<SymbolId> {
     ids.iter()
