@@ -158,3 +158,25 @@ potential feeds had disagreed). A terminal strip's own name sits left of the
 run, clear of the terminals' labels. Only the semiconductors with a control
 terminal on the left (thyristor, triac, transistors) keep their tag on the
 right, so it does not cross the gate.
+
+## Terminals, potentials and the pages navigator
+
+Mock-up: `docs/design/workflow-looks.png`.
+
+- **Connected terminals.** Terminals joined into a group keep their circles
+  and leads and get a bridge: a 3 px symbol-colour bar across the leads, 6 mm
+  above the circle centres, with a 2.5 px dot where it meets each lead. The
+  bar stays clear of the numbers on the left. Plain terminals have one
+  circle and one lead pair, as before.
+- **Potential menu** (right-click a feed): a "Potential" caption, a 4 by 2
+  grid of chips (L1, L2, L3, N, PE, +24 V, 0 V, Other...) 55 by 28 px, the
+  current one with a copper outline on BG_3; then "Number automatically",
+  "Rename..." (F2), "Show where it goes", and "Delete". One click on a chip
+  sets the potential and closes the menu.
+- **Pages navigator** (left panel, 300 px): rows 24 px high, group (=name),
+  panel (+name) and page rows indented 16 px per level, caret to fold, page
+  count at the right, the open page with a copper edge on BG_3. A panel name
+  that occurs under more than one group gets a link icon in INFO and a
+  footnote ("appears in two groups: one shared layout"). "+" in the header
+  and on a row's context menu adds a page group, panel or page.
+
