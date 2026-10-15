@@ -4,6 +4,7 @@
 | --- | --- |
 | `icon.svg` | Logo and app icon source. Edit this one. |
 | `icon-<size>.png` | Rendered app icon, 16 to 256 px. |
+| `lockup.svg`, `lockup.png` | Proposed KoperCAD lockup (mark, wordmark, "by KoperVonk"). Mock-up only: not used by the app yet; the PNG is rendered from the SVG with Inter. |
 | `icon.ico` | Windows icon (all sizes in one file) for the exe, installer and shortcuts. |
 
 The mark is "Nova": novo means new, and a nova is a new star. Four tapered

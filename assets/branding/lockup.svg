@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 200" width="640" height="200">
+  <rect width="640" height="200" fill="#151517"/>
+  <g transform="translate(24 24) scale(0.625)">
+    <g fill="#E3E1DC">
+      <path d="M128 38 L136 104 L128 112 L120 104 Z"/>
+      <path d="M128 218 L120 152 L128 144 L136 152 Z"/>
+      <path d="M38 128 L104 120 L112 128 L104 136 Z"/>
+      <path d="M218 128 L152 136 L144 128 L152 120 Z"/>
+      <circle cx="84" cy="84" r="5"/><circle cx="172" cy="84" r="5"/><circle cx="84" cy="172" r="5"/><circle cx="172" cy="172" r="5"/>
+    </g>
+    <circle cx="128" cy="128" r="11" fill="#C88A5E"/>
+  </g>
+  <text x="196" y="102" font-family="Inter, 'Segoe UI', sans-serif" font-size="64" font-weight="600" letter-spacing="-1.5" fill="#E3E1DC">Koper<tspan fill="#C88A5E" font-weight="500">CAD</tspan></text>
+  <text x="198" y="138" font-family="Inter, 'Segoe UI', sans-serif" font-size="17" font-weight="500" letter-spacing="3.4" fill="#989691">BY KOPERVONK</text>
+</svg>
