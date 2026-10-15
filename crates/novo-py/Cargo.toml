@@ -1,6 +1,6 @@
 [package]
 name = "novo-py"
-description = "Python API (the `novoelectric` module): open, edit and save project files headless through the same commands as the UI"
+description = "Python API (the `kopercad` module): open, edit and save project files headless through the same commands as the UI"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

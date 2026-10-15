@@ -512,7 +512,7 @@ fn move_and_rotate_keep_wires_connected_and_orthogonal() {
     // Shift+M picks the contact up with its wires, the pointer carries it,
     // a click drops it.
     editor.hover(&doc, page, p(80.0, 100.0), TOL);
-    assert!(editor.begin_move_with(&[AnyId::Symbol(b)], true));
+    assert!(editor.key(&mut doc, EditorKey::MoveWithWires, &[AnyId::Symbol(b)]));
     editor.hover(&doc, page, p(120.0, 120.0), TOL);
     let preview = editor.preview(&doc, page);
     assert_eq!(preview.symbols[0].placement.origin, p(120.0, 120.0));
@@ -2602,4 +2602,106 @@ fn a_wire_through_the_drawn_lines_of_another_device_is_not_made() {
 fn a_wire_past_only_the_bounding_box_of_a_device_is_made() {
     // Far from the column the lamp is out of the way entirely: all three.
     assert_eq!(wires_past_a_lamp_at(400.0), 3);
+}
+
+#[test]
+fn new_potential_feeds_count_up_from_l1_on_the_page() {
+    let (mut doc, page, _) = setup();
+    let lib = novo_symbols::Library::builtin().unwrap();
+    let sym = lib.get(potential::FEED_SYMBOL).unwrap().clone();
+    let mut names = Vec::new();
+    for i in 0..4 {
+        let (id, _) = doc
+            .transact("feed", |tx| {
+                edit::place(
+                    tx,
+                    page,
+                    &sym,
+                    novo_core::Placement::at(p(40.0 * i as f64, 0.0)),
+                    &PlaceOptions::new(),
+                )
+            })
+            .unwrap();
+        let SymbolRole::PotentialFeed { potential } = doc.project().symbol(id).unwrap().role else {
+            panic!("a feed")
+        };
+        names.push(doc.project().potential(potential).unwrap().name.clone());
+    }
+    assert_eq!(names, ["L1", "L2", "L3", "L4"]);
+    // An explicit potential is kept as given.
+    let l2 = doc
+        .project()
+        .potentials()
+        .find(|p| p.name == "L2")
+        .unwrap()
+        .id;
+    let (id, _) = doc
+        .transact("feed", |tx| {
+            let options = PlaceOptions {
+                potential: Some(l2),
+                ..PlaceOptions::new()
+            };
+            edit::place(
+                tx,
+                page,
+                &sym,
+                novo_core::Placement::at(p(400.0, 0.0)),
+                &options,
+            )
+        })
+        .unwrap();
+    assert!(matches!(
+        doc.project().symbol(id).unwrap().role,
+        SymbolRole::PotentialFeed { potential } if potential == l2
+    ));
+}
+
+#[test]
+fn tab_cycles_the_pins_of_a_part_and_q_ends_the_wire_there() {
+    let (mut doc, page, mut editor) = setup();
+    editor.begin_place("iec/protection/mcb_3p", None);
+    editor.click(&mut doc, page, p(40.0, 100.0), TOL);
+    editor.click(&mut doc, page, p(120.0, 100.0), TOL);
+    editor.leave_tool();
+    let a = symbol_at(&doc, page, p(40.0, 100.0));
+    let b = symbol_at(&doc, page, p(120.0, 100.0));
+    let pins_b = doc.project().symbol(b).unwrap().pins.len();
+    assert!(pins_b >= 4, "a three pole breaker has several pins");
+
+    // Start a wire on a pin of A, then move over the middle of B.
+    editor.begin_wire();
+    assert_eq!(
+        click_pin(&mut editor, &mut doc, page, a, "1"),
+        Clicked::Step
+    );
+    let body = doc.project().symbol(b).unwrap().placement.origin;
+    editor.hover(&doc, page, p(body.x + 4.0, body.y + 4.0), TOL);
+
+    // Tab picks a pin, and each further Tab moves to a different one.
+    let mut seen = Vec::new();
+    for _ in 0..pins_b {
+        assert!(editor.key(&mut doc, EditorKey::NextPin, &[]));
+        let Some(novo_editor::geometry::Target::Endpoint(Endpoint::Pin { symbol, pin }, _)) =
+            editor.target()
+        else {
+            panic!("Tab aims at a pin");
+        };
+        assert_eq!(symbol, b);
+        seen.push(pin);
+    }
+    let mut unique = seen.clone();
+    unique.sort_unstable();
+    unique.dedup();
+    assert_eq!(unique.len(), pins_b, "a full round visits every pin once");
+
+    // Q ends the wire on the pin Tab last picked: one wire, one undo step.
+    let aimed = *seen.last().unwrap();
+    let depth = doc.undo_depth();
+    assert!(editor.key(&mut doc, EditorKey::EndOnPart, &[]));
+    assert_eq!(doc.undo_depth(), depth + 1);
+    assert!(connected(&doc, pin(&doc, a, "1"), Endpoint::pin(b, aimed)));
+
+    // With nothing in progress the keys do nothing.
+    assert!(!editor.key(&mut doc, EditorKey::EndOnPart, &[]));
+    assert!(!editor.key(&mut doc, EditorKey::NextPin, &[]));
 }

@@ -80,6 +80,8 @@ pub struct Placement {
     pub size: Size,
     /// Extra gap this device needs on every side, if more than the default.
     pub clearance: Option<f64>,
+    /// The rail the device is mounted on, if any.
+    pub rail: Option<u64>,
 }
 
 impl Placement {
@@ -171,6 +173,39 @@ pub fn fits(plate: &Plate, placements: &[Placement]) -> (f64, f64) {
     (used, plate.usable().area() - used)
 }
 
+/// A horizontal DIN rail or duct on the plate; devices on it are lined up
+/// along `length`, starting at `x`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Rail {
+    pub id: u64,
+    pub x: f64,
+    pub y: f64,
+    pub length: f64,
+}
+
+/// Length used on a rail: the footprint widths of its devices plus the
+/// default gap between neighbours.
+pub fn rail_used(rail: &Rail, placements: &[Placement]) -> f64 {
+    let on: Vec<f64> = placements
+        .iter()
+        .filter(|p| p.rail == Some(rail.id))
+        .map(|p| p.footprint().w)
+        .collect();
+    let gaps = on.len().saturating_sub(1) as f64 * DEFAULT_CLEARANCE_MM;
+    on.iter().sum::<f64>() + gaps
+}
+
+/// Rails whose devices need more length than the rail has, with the excess.
+pub fn rail_overflows(rails: &[Rail], placements: &[Placement]) -> Vec<(u64, f64)> {
+    rails
+        .iter()
+        .filter_map(|r| {
+            let over = rail_used(r, placements) - r.length;
+            (over > 0.0).then_some((r.id, over))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -183,6 +218,7 @@ mod tests {
             rotated: false,
             size: Size::from_part(Some(w), Some(h)),
             clearance: None,
+            rail: None,
         }
     }
 
@@ -261,5 +297,24 @@ mod tests {
         };
         let (used, free) = fits(&plate, &[p(1, 10.0, 10.0, 50.0, 50.0)]);
         assert_eq!((used, free), (2500.0, 10000.0 - 2500.0));
+    }
+
+    #[test]
+    fn rail_overflow_counts_gaps() {
+        let rail = Rail {
+            id: 7,
+            x: 0.0,
+            y: 0.0,
+            length: 100.0,
+        };
+        let mut a = p(1, 0.0, 0.0, 45.0, 90.0);
+        let mut b = p(2, 55.0, 0.0, 45.0, 90.0);
+        a.rail = Some(7);
+        b.rail = Some(7);
+        assert_eq!(rail_used(&rail, &[a.clone(), b.clone()]), 100.0);
+        assert!(rail_overflows(std::slice::from_ref(&rail), &[a.clone(), b.clone()]).is_empty());
+        let mut c = p(3, 110.0, 0.0, 20.0, 90.0);
+        c.rail = Some(7);
+        assert_eq!(rail_overflows(&[rail], &[a, b, c]), vec![(7, 30.0)]);
     }
 }

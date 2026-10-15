@@ -729,6 +729,10 @@ in place mode. The wheel has two rings and no hidden level.
   hover: the favourites used in this project first, then the defaults of
   that category. Relays, for example: coil, normally open, normally
   closed, changeover, timer coil.
+  The first sector's items show at once; moving onto a different sector
+  switches the outer ring only after the pointer has rested there for
+  180 ms, so a sweep across the sectors toward an item never flickers or
+  swaps the items under the pointer.
 - Pick by clicking, by press-drag-release (a flick), or by keys 1 to 5 then
   1 to 8 (1 to 5 on the inner ring); Backspace goes back a ring and Esc
   closes. Picking an item attaches the symbol to the pointer exactly as the
