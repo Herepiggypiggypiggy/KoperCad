@@ -40,12 +40,16 @@ pub struct Highlight {
     pub edge: Rgb,
 }
 
+/// Plain data, rebuilt when the app theme changes (no function pointers, so a
+/// theme can fill it from its own state).
 #[derive(Debug, Clone, Copy)]
 pub struct Look {
     /// Top and bottom of the background gradient.
     pub background: [Rgb; 2],
-    pub surface: fn(ItemKind) -> SurfaceStyle,
-    pub mark: fn(Mark) -> MarkStyle,
+    /// Indexed by `ItemKind::index`.
+    pub surfaces: [SurfaceStyle; ItemKind::COUNT],
+    /// Indexed by `Mark::index`.
+    pub marks: [MarkStyle; Mark::COUNT],
     pub selection: Highlight,
     pub hover: Highlight,
     pub related: Highlight,
@@ -103,13 +107,41 @@ fn dark_mark(mark: Mark) -> MarkStyle {
     }
 }
 
+const KINDS: [ItemKind; ItemKind::COUNT] = [
+    ItemKind::Enclosure,
+    ItemKind::Plate,
+    ItemKind::Rail,
+    ItemKind::Duct,
+    ItemKind::Device,
+    ItemKind::Door,
+    ItemKind::Wire,
+    ItemKind::Other,
+];
+
+const MARKS: [Mark; Mark::COUNT] = [
+    Mark::None,
+    Mark::Collision,
+    Mark::TooClose,
+    Mark::Outside,
+    Mark::GuessedSize,
+    Mark::GeometryMismatch,
+];
+
 impl Look {
+    pub fn surface(&self, kind: ItemKind) -> SurfaceStyle {
+        self.surfaces[kind.index()]
+    }
+
+    pub fn mark(&self, mark: Mark) -> MarkStyle {
+        self.marks[mark.index()]
+    }
+
     /// Calm technical illustration on the dark app theme.
     pub fn dark() -> Self {
         Self {
             background: [[0x2d, 0x30, 0x35], [0x1b, 0x1d, 0x20]],
-            surface: dark_surface,
-            mark: dark_mark,
+            surfaces: KINDS.map(dark_surface),
+            marks: MARKS.map(dark_mark),
             selection: Highlight {
                 tint: [0xd9, 0x8b, 0x4b],
                 tint_amount: 0.35,

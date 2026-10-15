@@ -21,6 +21,6 @@ pub use math::{Aabb, Ray};
 pub use mesh::{GeometryKey, MeshData, MeshLibrary, PartGeometry};
 pub use scene::{
     CONTRACT_VERSION, Group, GroupId, Item, ItemId, ItemKind, Mark, PlateFrame, Pose, Profile,
-    Scene, Shape,
+    Scene, Shape, Wire,
 };
 pub use view_state::{Display, ViewState};

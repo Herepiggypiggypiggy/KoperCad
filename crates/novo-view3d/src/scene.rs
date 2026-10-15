@@ -23,6 +23,24 @@ pub enum ItemKind {
     Other,
 }
 
+impl ItemKind {
+    pub const COUNT: usize = 8;
+
+    /// Position in tables indexed by kind (`Look::surfaces`).
+    pub fn index(self) -> usize {
+        match self {
+            ItemKind::Enclosure => 0,
+            ItemKind::Plate => 1,
+            ItemKind::Rail => 2,
+            ItemKind::Duct => 3,
+            ItemKind::Device => 4,
+            ItemKind::Door => 5,
+            ItemKind::Wire => 6,
+            ItemKind::Other => 7,
+        }
+    }
+}
+
 /// Stable identity of a thing in the scene. `raw` is the model's raw id
 /// (unique across kinds, as in novo-layout), so a click maps back to the model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -101,6 +119,22 @@ pub enum Mark {
     Outside,
     GuessedSize,
     GeometryMismatch,
+}
+
+impl Mark {
+    pub const COUNT: usize = 6;
+
+    /// Position in tables indexed by mark (`Look::marks`).
+    pub fn index(self) -> usize {
+        match self {
+            Mark::None => 0,
+            Mark::Collision => 1,
+            Mark::TooClose => 2,
+            Mark::Outside => 3,
+            Mark::GuessedSize => 4,
+            Mark::GeometryMismatch => 5,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -182,10 +216,25 @@ impl PlateFrame {
     }
 }
 
+/// A wire or cable path through the cabinet, in world millimetres, drawn as
+/// a thin tube. Wires are not boxes, so they live beside the items; their
+/// `ItemId` has kind `ItemKind::Wire` so selection and picking work the same.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Wire {
+    pub id: ItemId,
+    pub points: Vec<Vec3>,
+    /// Tube radius, mm.
+    pub radius: f32,
+    pub tint: Option<[u8; 3]>,
+    pub mark: Mark,
+    pub label: Option<Arc<str>>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Scene {
     pub frame: PlateFrame,
     pub items: Vec<Item>,
+    pub wires: Vec<Wire>,
     pub groups: Vec<Group>,
     /// Bumped by the builder when items change; the renderer re-uploads.
     pub revision: u64,
@@ -198,6 +247,7 @@ impl Scene {
         Self {
             frame,
             items: Vec::new(),
+            wires: Vec::new(),
             groups: Vec::new(),
             revision: 0,
             pose_revision: 0,
@@ -245,6 +295,11 @@ impl Scene {
         for i in &self.items {
             b = b.union(&self.world_bounds(i));
         }
+        for w in &self.wires {
+            for p in &w.points {
+                b.extend(*p);
+            }
+        }
         b
     }
 }
@@ -291,6 +346,51 @@ mod tests {
         // Opened 90 degrees about Y at x = 0: the door now extends along z.
         assert!(after.size().z > before.size().z + 50.0);
         assert!(after.size().x < before.size().x);
+    }
+
+    #[test]
+    fn wires_count_towards_the_bounds() {
+        let mut s = Scene::new(PlateFrame {
+            width: 10.0,
+            height: 10.0,
+        });
+        s.wires.push(Wire {
+            id: ItemId::new(ItemKind::Wire, 1),
+            points: vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(100.0, 50.0, 20.0)],
+            radius: 1.0,
+            tint: None,
+            mark: Mark::None,
+            label: None,
+        });
+        assert_eq!(s.bounds().max, Vec3::new(100.0, 50.0, 20.0));
+    }
+
+    #[test]
+    fn kind_and_mark_indices_are_dense() {
+        use std::collections::HashSet;
+        let kinds = [
+            ItemKind::Enclosure,
+            ItemKind::Plate,
+            ItemKind::Rail,
+            ItemKind::Duct,
+            ItemKind::Device,
+            ItemKind::Door,
+            ItemKind::Wire,
+            ItemKind::Other,
+        ];
+        let set: HashSet<usize> = kinds.iter().map(|k| k.index()).collect();
+        assert_eq!(set.len(), ItemKind::COUNT);
+        assert!(set.iter().all(|&i| i < ItemKind::COUNT));
+        let marks = [
+            Mark::None,
+            Mark::Collision,
+            Mark::TooClose,
+            Mark::Outside,
+            Mark::GuessedSize,
+            Mark::GeometryMismatch,
+        ];
+        let set: HashSet<usize> = marks.iter().map(|m| m.index()).collect();
+        assert_eq!(set.len(), Mark::COUNT);
     }
 
     #[test]
