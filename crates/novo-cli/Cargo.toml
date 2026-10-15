@@ -10,12 +10,14 @@ name = "kopercad-cli"
 path = "src/main.rs"
 
 [dependencies]
+novo-commissioning.workspace = true
 novo-core.workspace = true
 novo-interop.workspace = true
 novo-storage.workspace = true
 novo-py.workspace = true
 novo-checks.workspace = true
 novo-pdf.workspace = true
+novo-layout.workspace = true
 novo-plc.workspace = true
 novo-reports.workspace = true
 novo-revisions.workspace = true

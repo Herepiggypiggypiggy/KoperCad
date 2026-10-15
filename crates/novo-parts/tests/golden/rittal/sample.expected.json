@@ -1,0 +1,70 @@
+{
+  "notes": [],
+  "parts": [
+    {
+      "data": {
+        "currency": "EUR",
+        "price": 123.45,
+        "price_date": "2026-01-01",
+        "price_unit": 1
+      },
+      "description": "Compact enclosure, sheet steel",
+      "dimensions": {
+        "depth_mm": 210.0,
+        "height_mm": 600.0,
+        "width_mm": 600.0
+      },
+      "function": "enclosure",
+      "manufacturer": "Rittal",
+      "order_number": "AE 1060.500",
+      "price": {
+        "amount": 123.45,
+        "currency": "EUR",
+        "date": "2026-01-01"
+      },
+      "provenance": {
+        "file": "sample.csv",
+        "imported": "2026-10-15",
+        "licence_note": "user-supplied from Rittal; not redistributable",
+        "source": "import:csv"
+      }
+    },
+    {
+      "description": "Terminal box, sheet steel",
+      "manufacturer": "Rittal",
+      "order_number": "SK 3209.500",
+      "provenance": {
+        "file": "sample.csv",
+        "imported": "2026-10-15",
+        "licence_note": "user-supplied from Rittal; not redistributable",
+        "source": "import:csv"
+      }
+    },
+    {
+      "description": "Short",
+      "manufacturer": "Rittal",
+      "order_number": "3209",
+      "provenance": {
+        "file": "sample.csv",
+        "imported": "2026-10-15",
+        "licence_note": "user-supplied from Rittal; not redistributable",
+        "source": "import:csv"
+      }
+    }
+  ],
+  "report": {
+    "mapped": [
+      "AE 1060.500: price -> price 123.45 EUR"
+    ],
+    "parts": 3,
+    "skipped": [],
+    "summary": [
+      "Read 1 value(s) into structured part data for 3 part(s), marked as from the maker's data.",
+      "3209: “3209” does not look like a Rittal order number (seven digits, such as 3209500 or 3209.500). Check that it is the order number and not a type name."
+    ],
+    "unmapped": {},
+    "warnings": [
+      "3209: “3209” does not look like a Rittal order number (seven digits, such as 3209500 or 3209.500). Check that it is the order number and not a type name."
+    ]
+  }
+}

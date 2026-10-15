@@ -1082,6 +1082,14 @@ pub(super) fn ampacity_rule(e: &Env<'_>, s: &mut Sink, set: StandardSet, id: &'s
     let rate = |mm2: f64| ampacity::ampacity(mm2, terminal_c);
     let mut unknown_wires: Vec<AnyId> = Vec::new();
     let mut unrated: Vec<AnyId> = Vec::new();
+    // Motor branch protectors are sized against the motor (NEC 430.52, rule
+    // `motor_branch_size`), not against the wire, so the wire comparison below
+    // leaves them to the motor loop (125 % of the full-load current).
+    let motor_branch: BTreeSet<SymbolId> = devices_of_class(e, |c| c == Class::Motor)
+        .into_values()
+        .flatten()
+        .filter_map(|sym| branch_protector(e, sym).map(|(p, _, _)| p))
+        .collect();
     // Protective devices: their load-side wires.
     for symbol in project.symbols() {
         let class = class_of(symbol);
@@ -1095,6 +1103,7 @@ pub(super) fn ampacity_rule(e: &Env<'_>, s: &mut Sink, set: StandardSet, id: &'s
             unrated.push(AnyId::Symbol(symbol.id));
             continue;
         };
+        let branch_device = motor_branch.contains(&symbol.id);
         let mut thinnest: Option<(f64, f64)> = None;
         let mut bad: Vec<WireId> = Vec::new();
         for (index, pin) in symbol.pins.iter().enumerate() {
@@ -1112,7 +1121,14 @@ pub(super) fn ampacity_rule(e: &Env<'_>, s: &mut Sink, set: StandardSet, id: &'s
                     None => unknown_wires.push(AnyId::Wire(w)),
                     Some(mm2) => match rate(mm2) {
                         None => unknown_wires.push(AnyId::Wire(w)),
-                        Some(amps) if amps + 1e-9 < rated => {
+                        // NEC 240.4(B): a device may be the next standard rating
+                        // above the wire's ampacity (800 A and below).
+                        Some(amps)
+                            if !branch_device
+                                && amps + 1e-9 < rated
+                                && !(rated <= 800.0
+                                    && next_standard_rating(amps) >= rated - 1e-9) =>
+                        {
                             bad.push(w);
                             if thinnest.is_none_or(|(m, _)| mm2 < m) {
                                 thinnest = Some((mm2, amps));

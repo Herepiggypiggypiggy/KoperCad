@@ -838,6 +838,44 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["tour", "tutorial", "walkthrough", "help"],
         Needs::Nothing,
     ),
+    verb(
+        cmd(
+            "help.learn",
+            "Learn…",
+            "View",
+            &["lesson", "tutorial", "training", "learn", "teach", "course"],
+            Needs::Nothing,
+        ),
+        &["learn", "lesson"],
+    ),
+    cmd(
+        "learn.next",
+        "Lesson: next step",
+        "View",
+        &["lesson", "tutorial", "training", "learn", "teach"],
+        Needs::Nothing,
+    ),
+    cmd(
+        "learn.back",
+        "Lesson: previous step",
+        "View",
+        &["lesson", "tutorial", "training", "learn", "teach"],
+        Needs::Nothing,
+    ),
+    cmd(
+        "learn.restart",
+        "Lesson: start over",
+        "View",
+        &["lesson", "tutorial", "training", "learn", "teach"],
+        Needs::Nothing,
+    ),
+    cmd(
+        "learn.close",
+        "Lesson: close",
+        "View",
+        &["lesson", "tutorial", "training", "learn", "teach"],
+        Needs::Nothing,
+    ),
     cmd(
         "view.shortcuts",
         "Keyboard shortcuts",
@@ -850,6 +888,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Show or hide the DXF background",
         "View",
         &["underlay", "dxf", "reference drawing"],
+        Needs::Page,
+    ),
+    cmd(
+        "view.background_place",
+        "Move and scale the DXF background",
+        "View",
+        &["underlay", "dxf", "reference drawing", "offset", "position"],
         Needs::Page,
     ),
     // Check
@@ -921,6 +966,26 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export pdf", "pdf"],
+    ),
+    verb(
+        cmd(
+            "export.commissioning",
+            "Export commissioning report",
+            "Export",
+            &["punch list", "sign-off", "handover", "inbedrijfstelling"],
+            Needs::Project,
+        ),
+        &["export commissioning", "commissioning report"],
+    ),
+    verb(
+        cmd(
+            "export.plate",
+            "Export plate drawing",
+            "Export",
+            &["mounting plate", "drill table", "drilling"],
+            Needs::Project,
+        ),
+        &["export plate"],
     ),
     verb(
         cmd(

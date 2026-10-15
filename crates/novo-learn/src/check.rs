@@ -32,8 +32,10 @@ pub enum Event {
 pub struct Facts {
     /// The tool in hand: `select`, `place`, `wire`, `cable` or `text`.
     pub tool: String,
-    /// Name or title of the page shown.
+    /// Name of the page shown.
     pub page: Option<String>,
+    /// Title of the page shown; a `page` check matches the name or the title.
+    pub page_title: Option<String>,
     /// Tags of the selected devices.
     pub selection: Vec<String>,
     /// View zoom, 1.0 at fit.
@@ -71,6 +73,7 @@ pub enum Check {
     Lit(String),
     PoleClosed(String),
     Potential(PotentialCheck),
+    Terminal(TerminalCheck),
     PotentialKind(PotentialKindCheck),
     Wire(WireCheck),
     Device(DeviceCheck),
@@ -88,8 +91,34 @@ pub enum Check {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PotentialCheck {
-    pub wire: String,
+    pub wire: PinOrPair,
     pub is: String,
+}
+
+/// A pin written `tag:pin`, or two pins that are on one net (a wire by its
+/// ends).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(untagged)]
+pub enum PinOrPair {
+    One(String),
+    Two([String; 2]),
+}
+
+impl PinOrPair {
+    pub fn pins(&self) -> Vec<&str> {
+        match self {
+            PinOrPair::One(a) => vec![a.as_str()],
+            PinOrPair::Two([a, b]) => vec![a.as_str(), b.as_str()],
+        }
+    }
+}
+
+/// A terminal with this name exists on the strip (`-X1`).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TerminalCheck {
+    pub strip: String,
+    pub name: String,
 }
 
 /// Some wire (on this page, when given) is on a net whose potential is of
@@ -166,8 +195,27 @@ pub struct FieldCheck {
     pub name: String,
     #[serde(default)]
     pub is_set: Option<bool>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "scalar_text")]
     pub equals: Option<String>,
+}
+
+/// A TOML string, integer, float or boolean, read as the text a property
+/// shows (`equals = 8` is the same as `equals = "8"`).
+fn scalar_text<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Scalar {
+        Text(String),
+        Int(i64),
+        Float(f64),
+        Bool(bool),
+    }
+    Ok(Option::<Scalar>::deserialize(d)?.map(|v| match v {
+        Scalar::Text(t) => t,
+        Scalar::Int(i) => i.to_string(),
+        Scalar::Float(f) => f.to_string(),
+        Scalar::Bool(b) => b.to_string(),
+    }))
 }
 
 /// A cable with this tag exists, optionally with this many cores.
@@ -196,7 +244,10 @@ impl Check {
             Check::Opened(id) => cx.events.contains(&Event::Opened(id.clone())),
             Check::Signal(id) => cx.events.contains(&Event::Signal(id.clone())),
             Check::Tool(tool) => cx.facts.tool == *tool,
-            Check::Page(name) => cx.facts.page.as_deref() == Some(name.as_str()),
+            Check::Page(name) => {
+                cx.facts.page.as_deref() == Some(name.as_str())
+                    || cx.facts.page_title.as_deref() == Some(name.as_str())
+            }
             Check::Selected(tag) => {
                 cx.facts.selection.len() == 1 && tag_matches_text(&cx.facts.selection[0], tag)
             }
@@ -217,6 +268,7 @@ impl Check {
             Check::PotentialKind(p) => potential_kind_holds(cx, p),
             Check::Lit(pin) => cx.facts.live_pins.iter().any(|have| same_pin(have, pin)),
             Check::Potential(p) => potential_holds(cx, p),
+            Check::Terminal(t) => terminal_exists(cx.project, t),
             Check::Wire(w) => wire_joined(cx, &w.from, &w.to),
             Check::Device(d) => device_present(cx.project, d),
             Check::Count(c) => count(cx.project, c) >= c.at_least,
@@ -354,11 +406,26 @@ fn potential_kind_holds(cx: &Context<'_>, check: &PotentialKindCheck) -> bool {
 }
 
 fn potential_holds(cx: &Context<'_>, check: &PotentialCheck) -> bool {
-    pins_named(cx.project, &check.wire).into_iter().any(|pin| {
+    let pins = check.wire.pins();
+    let carries = |pin| {
         cx.netlist
             .potential_of(pin)
             .and_then(|id| cx.project.potential(id))
             .is_some_and(|p| p.name == check.is)
+    };
+    match pins.as_slice() {
+        [one] => pins_named(cx.project, one).into_iter().any(carries),
+        [a, b] => wire_joined(cx, a, b) && pins_named(cx.project, a).into_iter().any(carries),
+        _ => false,
+    }
+}
+
+fn terminal_exists(project: &Project, check: &TerminalCheck) -> bool {
+    project.terminals().any(|t| {
+        t.name == check.name
+            && project
+                .device(t.strip)
+                .is_some_and(|strip| tag_matches(&strip.tag, &check.strip))
     })
 }
 
@@ -485,6 +552,47 @@ mod tests {
             facts,
             events: &events,
         })
+    }
+
+    #[test]
+    fn scalar_equals_pairs_of_pins_and_terminals_parse() {
+        let c = check(r#"{ field = { device = "-K1", name = "plc.start.i", equals = 8 } }"#);
+        let Check::Field(f) = c else { panic!() };
+        assert_eq!(f.equals.as_deref(), Some("8"));
+        let c = check(r#"{ potential = { wire = ["-X1:4", "-B1:+"], is = "+24 V" } }"#);
+        let Check::Potential(p) = c else { panic!() };
+        assert_eq!(p.wire.pins(), ["-X1:4", "-B1:+"]);
+        let c = check(r#"{ terminal = { strip = "-X1", name = "11" } }"#);
+        assert!(matches!(c, Check::Terminal(_)));
+    }
+
+    #[test]
+    fn a_terminal_check_reads_the_model() {
+        let doc = starter();
+        let project = doc.project();
+        let netlist = project.netlist();
+        let facts = Facts::default();
+        let events = BTreeSet::new();
+        let cx = Context {
+            project,
+            netlist: &netlist,
+            facts: &facts,
+            events: &events,
+        };
+        let first = project
+            .terminals()
+            .next()
+            .expect("the starter has terminals");
+        let strip = project.device(first.strip).unwrap().tag.to_string();
+        let holds = |name: &str| {
+            Check::Terminal(TerminalCheck {
+                strip: strip.clone(),
+                name: name.to_owned(),
+            })
+            .eval(&cx)
+        };
+        assert!(holds(&first.name));
+        assert!(!holds("no-such-terminal"));
     }
 
     #[test]

@@ -63,20 +63,31 @@ fn conductors_carry_what_their_protective_device_allows() {
         g.style(w, Some("BK"), Some(1.5));
     }
     g.prop(f1, RATED_CURRENT_A, 15.0);
-    assert_fails(&g, &id("conductor-ampacity"), "=A1+CAB-F1 is rated 15 A");
-    assert_fails(
-        &g,
-        "ul508a.conductor-ampacity",
-        "carries 10 A at 60 °C terminations",
-    );
-    // At 75 °C terminals 16 AWG is still 10 A: no help.
-    g.project_prop("standards.nfpa79.terminal_temp_c", Some(75.0.into()));
-    assert_fails(&g, &id("conductor-ampacity"), "=A1+CAB-F1");
-    // Bigger wire: 2.5 mm² is 14 AWG, 15 A at 60 °C.
+    // F1 is the motor's branch protector: the motor rule sizes it, and the
+    // wire is judged against 125 % of the motor current (6.25 A here).
+    assert_passes(&g, &id("conductor-ampacity"));
+}
+
+#[test]
+fn a_compliant_motor_branch_is_not_a_false_ampacity_error() {
+    let mut g = golden();
+    let (f1, m1) = (g.f1, g.m1);
+    // 11 A motor, time-delay fuse 175 % = 19.25 A, up to the next standard
+    // rating, 20 A. 14 AWG carries 15 A: the fuse is above the wire, which
+    // the motor branch rule allows; the wire still carries 125 % of 11 A.
+    g.prop(m1, "flc_a", 11.0);
+    g.prop(f1, RATED_CURRENT_A, 20.0);
     for w in g.power_wires.clone() {
         g.style(w, Some("BK"), Some(2.5));
     }
+    assert_passes(&g, &id("motor-branch-size"));
     assert_passes(&g, &id("conductor-ampacity"));
+    assert_passes(&g, "ul508a.conductor-ampacity");
+    // The wire is still held to the motor's current: 1.5 mm² (10 A) is below 13.75 A.
+    for w in g.power_wires.clone() {
+        g.style(w, Some("BK"), Some(1.5));
+    }
+    assert_fails(&g, &id("conductor-ampacity"), "needs 13.75 A (125 %)");
 }
 
 #[test]

@@ -515,6 +515,37 @@ fn revisions_list_and_diff() {
 }
 
 #[test]
+fn commissioning_report_writes_pdf_csv_and_xlsx() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = project(dir.path(), false);
+    let file = file.to_str().unwrap();
+
+    // Nothing ticked yet: every check is pending, and the report says so.
+    let csv = novo(&["commissioning-report", file]);
+    assert_eq!(csv.code, exit::OK, "{}", csv.err);
+    assert!(csv.out.contains("Progress per cabinet"), "{}", csv.out);
+    assert!(csv.out.contains("Pending"));
+    assert!(csv.out.contains("Customer"));
+
+    for name in ["report.pdf", "report.xlsx", "report.csv"] {
+        let target = dir.path().join(name);
+        let run = novo(&["commissioning-report", file, "-o", target.to_str().unwrap()]);
+        assert_eq!(run.code, exit::OK, "{name}: {}", run.err);
+        assert!(std::fs::metadata(&target).unwrap().len() > 0, "{name}");
+    }
+    let pdf = std::fs::read(dir.path().join("report.pdf")).unwrap();
+    assert!(pdf.starts_with(b"%PDF"));
+
+    let bad = novo(&[
+        "commissioning-report",
+        file,
+        "-o",
+        dir.path().join("report.txt").to_str().unwrap(),
+    ]);
+    assert_eq!(bad.code, exit::USAGE);
+}
+
+#[test]
 fn export_terminals_writes_the_strip_diagram_with_wire_and_bridge_columns() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("strip.novo");
@@ -570,4 +601,44 @@ fn export_plc_writes_the_address_plan_and_refuses_what_it_cannot() {
     let run = novo(&["export", "plc", s(&path), "--format", "s7", "-o", s(&out)]);
     assert_eq!(run.code, exit::USAGE);
     assert!(run.err.contains("unknown format"), "{}", run.err);
+}
+
+#[test]
+fn export_plate_writes_the_plate_pdf_of_the_enclosure() {
+    use novo_core::{DeviceTag, MountingPlate, Project};
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("cab.novo");
+    let mut p = Project::new("Cab");
+    p.transact("setup", |tx| {
+        let cab = tx.add_structure(DeviceTag::parse("+CAB1").unwrap(), "Cabinet", true)?;
+        novo_layout::model::set_plate(
+            tx,
+            cab,
+            MountingPlate {
+                width: 400.0,
+                height: 400.0,
+                margin: 10.0,
+            },
+        )
+    })
+    .unwrap();
+    novo_storage::ProjectFile::create(&path, &p).unwrap();
+
+    let out = dir.path().join("plate.pdf");
+    let run = novo(&["export", "plate", s(&path), "-o", s(&out)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert!(std::fs::read(&out).unwrap().starts_with(b"%PDF"));
+
+    let run = novo(&[
+        "export",
+        "plate",
+        s(&path),
+        "-o",
+        s(&out),
+        "--enclosure",
+        "+NOPE",
+    ]);
+    assert_eq!(run.code, exit::USAGE);
+    assert!(run.err.contains("no enclosure"), "{}", run.err);
 }

@@ -90,3 +90,8 @@ all = { level = "warn", priority = -1 }
 [profile.release]
 lto = "thin"
 codegen-units = 1
+
+# The thermal solver is numeric code: unoptimised it is about 30 times slower,
+# which makes its tests and the app's debug builds crawl.
+[profile.dev.package.novo-thermal]
+opt-level = 3
