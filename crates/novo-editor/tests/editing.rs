@@ -2528,3 +2528,20 @@ fn show_where_it_goes_finds_the_wires_and_terminals_on_the_potential() {
         "a motor is not a terminal"
     );
 }
+
+#[test]
+fn a_pin_drag_shows_no_corner_piece() {
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/contacts/no", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    let a = symbol_at(&doc, page, p(40.0, 40.0));
+    let from = pin_pos(&doc, a, "14");
+    editor.hover(&doc, page, from, TOL);
+    editor.leave_tool();
+    editor.hover(&doc, page, from, TOL);
+    assert!(editor.begin_drag());
+    editor.hover(&doc, page, p(from.x + 40.0, from.y - 20.0), TOL);
+    assert!(editor.preview(&doc, page).wire.len() >= 3);
+    assert!(editor.preview(&doc, page).piece.is_none());
+}

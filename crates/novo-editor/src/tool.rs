@@ -2104,7 +2104,12 @@ impl Editor {
                         let bends = route_through(a, from, &corners, cursor, to);
                         preview.wire.extend(bends);
                         preview.wire.push(cursor);
-                        preview.piece = pending_piece(project, page, &preview.wire, self.target);
+                        // A drag from a pin is the quick connection: the router
+                        // picks the route, so there is no piece to place.
+                        if !w.drag {
+                            preview.piece =
+                                pending_piece(project, page, &preview.wire, self.target);
+                        }
                     }
                 }
             }
