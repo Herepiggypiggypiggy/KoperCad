@@ -179,8 +179,13 @@ impl NovoApp {
     }
 }
 
-/// The strip editor's rows as a table: terminal, internal targets, external
-/// targets, state. A drawn terminal's name selects it on the drawing (its
+/// The strip table's columns, in the order a row writes its cells.
+const STRIP_HEADS: [&str; 7] = [
+    "Terminal", "Kind", "Jumper", "Internal", "External", "Cable", "State",
+];
+
+/// The strip editor's rows as a table: terminal, kind, jumper, internal
+/// targets, external targets, cable, state. A drawn terminal's name selects it on the drawing (its
 /// first drawing, centred); returns that drawing when one was clicked.
 /// Rows drawn by a selected symbol show as selected.
 pub(super) fn strip_table(
@@ -197,12 +202,10 @@ pub(super) fn strip_table(
     egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
         egui::Grid::new("strip")
             .striped(true)
-            .num_columns(7)
+            .num_columns(STRIP_HEADS.len())
             .spacing([24.0, 4.0])
             .show(ui, |ui| {
-                for head in [
-                    "Terminal", "Kind", "Jumper", "Internal", "External", "State",
-                ] {
+                for head in STRIP_HEADS {
                     ui.small(head);
                 }
                 ui.end_row();
@@ -450,6 +453,12 @@ mod tests {
         };
         assert_eq!(cable_cell(&screen, 0), "-W1 BK, -W2 BU");
         assert_eq!(cable_cell(&screen, 1), "");
+    }
+
+    #[test]
+    fn the_cable_column_sits_between_external_and_state() {
+        assert_eq!(STRIP_HEADS.len(), 7);
+        assert_eq!(STRIP_HEADS[4..], ["External", "Cable", "State"]);
     }
 
     #[test]
