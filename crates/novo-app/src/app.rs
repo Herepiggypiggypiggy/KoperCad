@@ -12,6 +12,7 @@ mod live;
 mod pages;
 mod pdf;
 mod plc;
+mod potentials;
 mod preferences;
 mod reports;
 mod terminals;

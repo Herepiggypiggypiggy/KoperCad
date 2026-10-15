@@ -107,6 +107,10 @@ struct ContextMenu {
     device: Option<DeviceId>,
     /// Drawn terminals in the selection (terminal actions show for these).
     terminals: usize,
+    /// Interruption points in the selection.
+    interruptions: usize,
+    /// The first of them, for Rename.
+    interruption: Option<novo_core::SymbolId>,
     page: PageId,
     opened: bool,
 }
@@ -926,6 +930,27 @@ impl SchematicView {
                     _ => false,
                 })
                 .count();
+            let interruptions = selection
+                .iter()
+                .filter(|&&id| match id {
+                    AnyId::Symbol(s) => document
+                        .project()
+                        .symbol(s)
+                        .is_some_and(|s| matches!(s.role, SymbolRole::Interruption { .. })),
+                    _ => false,
+                })
+                .count();
+            let interruption = selection.iter().find_map(|&id| match id {
+                AnyId::Symbol(s)
+                    if document
+                        .project()
+                        .symbol(s)
+                        .is_some_and(|s| matches!(s.role, SymbolRole::Interruption { .. })) =>
+                {
+                    Some(s)
+                }
+                _ => None,
+            });
             let anchor = ctx.pointer_latest_pos().unwrap_or(rect.center());
             self.menu = Some(ContextMenu {
                 anchor,
@@ -935,6 +960,8 @@ impl SchematicView {
                 pe: potential_menu::pe_menu(document.project(), &selection),
                 device,
                 terminals,
+                interruptions,
+                interruption,
                 page,
                 opened: true,
             });
@@ -1530,6 +1557,15 @@ impl SchematicView {
                     if menu.device.is_some() && ui.button("Go to partner   G").clicked() {
                         chosen = Some(MenuChoice::Command("nav.partner"));
                     }
+                    if menu.interruptions > 0 {
+                        if ui.button("Rename   F2").clicked() {
+                            chosen = Some(MenuChoice::RenameLabel);
+                        }
+                        if ui.button("Number automatically").clicked() {
+                            chosen = Some(MenuChoice::Command("interruption.renumber"));
+                        }
+                        ui.separator();
+                    }
                     if menu.terminals > 0 {
                         if menu.terminals > 1 {
                             if ui.button("Connect terminals").clicked() {
@@ -1569,6 +1605,7 @@ impl SchematicView {
         let anchor = menu.anchor;
         let wires = menu.potentials.wires.clone();
         let device = menu.device;
+        let interruption = menu.interruption;
         let page = menu.page;
         let suggestion = |i: usize| menu.potentials.declare.get(i).cloned();
         let feed_pick: Option<(Vec<novo_core::SymbolId>, PotentialSpec)> =
@@ -1616,6 +1653,22 @@ impl SchematicView {
                     });
                 }
             }
+            Some(MenuChoice::RenameLabel) => {
+                if let Some(symbol) = interruption
+                    && let Some(text) = document
+                        .project()
+                        .symbol(symbol)
+                        .and_then(|s| model::symbol_text(document.project(), s))
+                {
+                    self.rename = Some(RenameBox {
+                        target: RenameTarget::Label(symbol),
+                        text,
+                        anchor,
+                        error: None,
+                        focus: true,
+                    });
+                }
+            }
             Some(MenuChoice::Key(k)) => {
                 self.editor.key(document, k, &selection);
             }
@@ -1639,6 +1692,7 @@ enum MenuChoice {
     /// A project potential under Other…
     Other(usize),
     Rename,
+    RenameLabel,
     Key(EditorKey),
     NewPage,
     Command(&'static str),

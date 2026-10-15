@@ -10,6 +10,10 @@ Decisions
 
 Next: point 22 follow-ups, see ROADMAP design note. Resume: `cargo test -p novo-terminals -p novo-editor -p novo-xref -p novo-sim`.
 
+UI (branch `claude/project-thread-5fvoay`)
+- Interruption numbers already draw (LabelKind::InterruptionName, double-click renames). New: `novo_xref::renumber_interruptions` (reading order, pairs stay together, selection or whole project), command `interruption.renumber`, context-menu rows "Number automatically" and Rename on an interruption point.
+- Not done: outline/inspector entries (DESIGN lists none for these), PE chip on the inspector.
+- PE toggle, reset and menus live in main (#266) and #270; this PR only adds the override diamond (Shift+O) on hand-set PE terminals.
 Live potentials view (UI for #255): `crates/novo-app/src/app/live.rs`. Shift+L (`sim.live`, View) toggles it. A badge sits on every `pass_through` group of the page (open = ring, closed = green); click flips the pole, Shift+click flips every pole of the symbol. Wires are painted over the canvas from `novo_sim::solve`: potential colour (`potential_color`: kind first, L1/L2/L3 by digit), dimmed when dead, red when shorted. A card top left shows the legend, poles closed and All open. State lives in `Workbench.live`, never in the project. Not done: coil to contact coupling (clicking a coil), per-potential colours from the canvas engine instead of an app overlay, showing the live potential in wire labels, time stepping. Right-click menus, interruption points and the wheel belong to other threads.
 
 UI (PR #270): menu rows live in `novo-editor/src/view.rs` (context_menu) fed by `potential_menu::{feed_menu, pe_menu}`; actions in `novo-app/src/app/terminals.rs`. Not done: "New…" potential from the chip grid, wire-level override row, Show where it goes.
