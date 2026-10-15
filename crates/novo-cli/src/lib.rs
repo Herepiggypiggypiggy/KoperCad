@@ -84,6 +84,20 @@ enum Cmd {
         #[arg(long, value_name = "PROGRAM")]
         converter: Option<PathBuf>,
     },
+    /// The commissioning report: progress per cabinet and page, every
+    /// check, the punch list and a sign-off block. `.pdf`, `.csv` or
+    /// `.xlsx` by the output's extension; CSV on standard output when left
+    /// out.
+    CommissioningReport {
+        file: PathBuf,
+        /// Output file.
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// CSV field separator; `;` suits Excel in locales with a decimal
+        /// comma.
+        #[arg(long, default_value_t = ',')]
+        delimiter: char,
+    },
     /// Run the design checks; exits with 1 when there are errors or
     /// warnings (infos such as missing parts do not count).
     Check {
@@ -319,6 +333,11 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             }
             Ok(exit::OK)
         }
+        Cmd::CommissioningReport {
+            file,
+            output,
+            delimiter,
+        } => commissioning_report(&file, output.as_deref(), delimiter, out),
         Cmd::Export(Export::Json { file, output }) => {
             let project = read(&file)?;
             let text = project.to_json();
@@ -681,6 +700,71 @@ fn export_reports(
             let format = ReportFormat::Csv(CsvOptions { bom: false, ..csv });
             let bytes = novo_py::report_bytes(&project, ids, format).map_err(usage)?;
             out.write_all(&bytes)
+                .map_err(|e| Failure::new(exit::WRITE, format!("cannot write output: {e}")))?;
+        }
+    }
+    Ok(exit::OK)
+}
+
+/// The commissioning report of `file`: its ticked checks from the
+/// `commissioning` document, or an untouched list when nothing was ticked
+/// yet.
+fn commissioning_report(
+    file: &Path,
+    output: Option<&Path>,
+    delimiter: char,
+    out: &mut dyn Write,
+) -> Result<i32, Failure> {
+    let handle = ProjectFile::read_only(file).map_err(|e| read_failure(file, &e))?;
+    let project = handle.load().map_err(|e| read_failure(file, &e))?;
+    let json = handle
+        .sidecar("commissioning")
+        .map_err(|e| read_failure(file, &e))?;
+    let store = match json {
+        None => novo_commissioning::CommissioningStore::new(),
+        Some(json) => novo_commissioning::CommissioningStore::from_json(&json).map_err(|e| {
+            Failure::new(
+                exit::READ,
+                format!(
+                    "cannot read the commissioning data of {}: {e}",
+                    file.display()
+                ),
+            )
+        })?,
+    };
+    let input = novo_commissioning::to_report_input(
+        &project,
+        &store,
+        novo_reports::commissioning::default_sign_offs(""),
+    );
+    let report = novo_reports::commissioning::commissioning_report(&input);
+    let csv = CsvOptions {
+        delimiter,
+        ..CsvOptions::default()
+    };
+    let options = novo_pdf::ReportPdfOptions {
+        title: format!("{}, commissioning", project.info().name),
+        ..Default::default()
+    };
+    match output {
+        Some(path) => {
+            let format = match novo_pdf::ReportFileFormat::from_path(path) {
+                Some(novo_pdf::ReportFileFormat::Csv(_)) => novo_pdf::ReportFileFormat::Csv(csv),
+                Some(format) => format,
+                None => {
+                    return Err(Failure::new(
+                        exit::USAGE,
+                        "give an output ending in .pdf, .csv or .xlsx",
+                    ));
+                }
+            };
+            let bytes = novo_pdf::report_bytes(&report, format, &options)
+                .map_err(|e| Failure::new(exit::WRITE, e.to_string()))?;
+            write_output(file, path, &bytes)?;
+        }
+        None => {
+            let csv = CsvOptions { bom: false, ..csv };
+            out.write_all(novo_reports::to_csv(&report, &csv).as_bytes())
                 .map_err(|e| Failure::new(exit::WRITE, format!("cannot write output: {e}")))?;
         }
     }

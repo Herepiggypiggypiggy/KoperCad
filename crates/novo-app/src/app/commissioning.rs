@@ -8,6 +8,7 @@
 //! finger. On the drawing, passed objects get the "added" outline and failed
 //! ones the error mark.
 
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use eframe::egui;
@@ -18,11 +19,14 @@ use novo_commissioning::{
     Severity, Target, TargetInfo, progress, targets,
 };
 use novo_core::{PageId, Project};
+use novo_pdf::{ReportFileFormat, ReportPdfOptions};
+use novo_reports::CsvOptions;
 use novo_xref::Place;
 
 use super::changes::shown_on;
+use super::pdf::{replaceable_path, write_replacing};
 use super::revisions::iso_date;
-use super::{Level, NovoApp, OutlineMode};
+use super::{Level, NovoApp, OutlineMode, projects_dir};
 
 /// Minimum height of the buttons: comfortable for a finger on a tablet.
 const TOUCH: f32 = 44.0;
@@ -306,6 +310,7 @@ impl NovoApp {
         self.load_commissioning();
         let current = self.current_page;
         let mut go: Option<Place> = None;
+        let mut export: Option<ReportFileFormat> = None;
         {
             let (Some(mode), Some(doc)) = (self.wb.commissioning.as_mut(), self.backend.document())
             else {
@@ -338,6 +343,20 @@ impl NovoApp {
                     progress(project, &mode.store, Scope::Page(page)),
                 );
             }
+            ui.horizontal_wrapped(|ui| {
+                ui.weak("Report");
+                for (label, format) in [
+                    ("PDF", ReportFileFormat::Pdf),
+                    ("CSV", ReportFileFormat::Csv(CsvOptions::default())),
+                ] {
+                    if big_button(ui, mode.large, label)
+                        .on_hover_text("Write the commissioning report next to the project file")
+                        .clicked()
+                    {
+                        export = Some(format);
+                    }
+                }
+            });
             ui.add_space(4.0);
             match mode.tab {
                 Tab::Checks => checks_tab(ui, mode, project, current, &mut go),
@@ -352,7 +371,113 @@ impl NovoApp {
         if let Some(place) = go {
             self.jump(place, true);
         }
+        if let Some(format) = export {
+            self.export_commissioning_report(format);
+        }
         false
+    }
+
+    /// The `export.commissioning` command: the report as a PDF.
+    pub(super) fn export_commissioning_pdf(&mut self) {
+        self.export_commissioning_report(ReportFileFormat::Pdf);
+    }
+
+    /// Writes the commissioning report next to the project file (see
+    /// [`report_path`]) and says where it went. Returns the path.
+    pub(super) fn export_commissioning_report(
+        &mut self,
+        format: ReportFileFormat,
+    ) -> Option<PathBuf> {
+        let name = self.project_name()?;
+        let ext = match format {
+            ReportFileFormat::Pdf => "pdf",
+            ReportFileFormat::Csv(_) => "csv",
+            ReportFileFormat::Xlsx => "xlsx",
+        };
+        let file = self.backend.file().filter(|_| !self.backend.is_untitled());
+        let Some(path) = report_path(file.as_deref(), projects_dir().as_deref(), &name, ext) else {
+            self.message(Level::Error, "Could not find the Documents folder");
+            return None;
+        };
+        self.write_commissioning_report(format, &path)
+    }
+
+    /// Writes the commissioning report to `path`.
+    pub(super) fn write_commissioning_report(
+        &mut self,
+        format: ReportFileFormat,
+        path: &Path,
+    ) -> Option<PathBuf> {
+        let name = self.project_name()?;
+        self.load_commissioning();
+        let mode = self.wb.commissioning.as_ref()?;
+        let project = self.backend.document()?.project();
+        let input = novo_commissioning::to_report_input(
+            project,
+            &mode.store,
+            novo_reports::commissioning::default_sign_offs(&mode.who),
+        );
+        let report = novo_reports::commissioning::commissioning_report(&input);
+        let options = ReportPdfOptions {
+            title: format!("{name}, commissioning"),
+            footer_right: now().chars().take(10).collect(),
+            ..ReportPdfOptions::default()
+        };
+        let result = novo_pdf::report_bytes(&report, format, &options)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| write_replacing(path, &bytes).map_err(|e| e.to_string()));
+        match result {
+            Ok(()) => {
+                self.message(Level::Info, format!("Exported {}", path.display()));
+                self.wb.last_export = Some(path.to_owned());
+                Some(path.to_owned())
+            }
+            Err(e) => {
+                self.message(Level::Error, format!("Could not export the report: {e}"));
+                None
+            }
+        }
+    }
+}
+
+/// Where the commissioning report goes: `<project> commissioning.<ext>`
+/// beside the project file, or in the Documents folder for a project with no
+/// file yet. A PDF KoperCAD wrote is replaced; anything else that is already
+/// there stays and the report takes the next free `<name> 2.<ext>`.
+pub(super) fn report_path(
+    file: Option<&Path>,
+    dir: Option<&Path>,
+    name: &str,
+    ext: &str,
+) -> Option<PathBuf> {
+    let base = match file {
+        Some(file) => {
+            let stem = file.file_stem()?.to_string_lossy().into_owned();
+            file.with_file_name(format!("{stem} commissioning.{ext}"))
+        }
+        None => {
+            let stem = Path::new(&super::project_file_name(name))
+                .with_extension("")
+                .to_string_lossy()
+                .into_owned();
+            dir?.join(format!("{stem} commissioning.{ext}"))
+        }
+    };
+    if ext == "pdf" {
+        return Some(replaceable_path(&base));
+    }
+    let stem = base.file_stem()?.to_string_lossy().into_owned();
+    let mut n = 1;
+    loop {
+        let candidate = if n == 1 {
+            base.clone()
+        } else {
+            base.with_file_name(format!("{stem} {n}.{ext}"))
+        };
+        if !candidate.exists() {
+            return Some(candidate);
+        }
+        n += 1;
     }
 }
 
