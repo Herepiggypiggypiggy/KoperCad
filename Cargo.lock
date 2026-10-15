@@ -2023,6 +2023,9 @@ dependencies = [
 [[package]]
 name = "novo-sim"
 version = "0.1.0"
+dependencies = [
+ "novo-core",
+]
 
 [[package]]
 name = "novo-storage"
