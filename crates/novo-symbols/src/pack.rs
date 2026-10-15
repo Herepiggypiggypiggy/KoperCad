@@ -51,4 +51,22 @@ impl Pack {
         let (_, rest) = symbol_id.split_once('/')?;
         Some(format!("{}/{rest}", pack.id()))
     }
+
+    /// The id below the pack root: `path_of("nfpa/contacts/no")` and
+    /// `path_of("iec/contacts/no")` are both `contacts/no`. An id in no
+    /// known pack (a company library) is returned unchanged. Engines that
+    /// recognise a device by its key compare this, so a symbol of either
+    /// pack is found.
+    pub fn path_of(symbol_id: &str) -> &str {
+        match symbol_id.split_once('/') {
+            Some((first, rest)) if Pack::from_id(first).is_some() => rest,
+            _ => symbol_id,
+        }
+    }
+
+    /// Whether two ids are the same device drawn in the same or different
+    /// packs (`iec/contacts/no` and `nfpa/contacts/no`).
+    pub fn same_device(a: &str, b: &str) -> bool {
+        Pack::path_of(a) == Pack::path_of(b)
+    }
 }
