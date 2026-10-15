@@ -57,9 +57,24 @@ impl Workspace {
         }
     }
 
+    /// The command that opens it (`view.cabinet`), as the menu and the
+    /// switcher run it.
+    pub(crate) fn command(self) -> &'static str {
+        match self {
+            Workspace::Schematic => "view.schematic",
+            Workspace::Cabinet => "view.cabinet",
+            Workspace::View3d => "view.3d",
+            Workspace::Reports => "view.reports",
+            Workspace::Commissioning => "view.commissioning",
+        }
+    }
+
     /// Whether the workspace has any content yet.
     fn is_built(self) -> bool {
-        matches!(self, Workspace::Schematic | Workspace::Cabinet)
+        matches!(
+            self,
+            Workspace::Schematic | Workspace::Cabinet | Workspace::Reports
+        )
     }
 
     /// The panels a workspace starts with the first time it opens
@@ -120,8 +135,9 @@ impl NovoApp {
             Workspace::Schematic => None,
             Workspace::Cabinet if !self.is_open() => Some("Open a project first"),
             Workspace::Cabinet => None,
+            Workspace::Reports if !self.is_open() => Some("Open a project first"),
+            Workspace::Reports => None,
             Workspace::View3d => Some("The 3D view is not built yet"),
-            Workspace::Reports => Some("The Reports workspace is not built yet"),
             Workspace::Commissioning => Some("Commissioning is not built yet"),
         }
     }
@@ -230,11 +246,7 @@ mod tests {
         let ctx = d.ctx.clone();
         d.app.run(&ctx, Action::NewProject);
         d.frame();
-        for w in [
-            Workspace::View3d,
-            Workspace::Reports,
-            Workspace::Commissioning,
-        ] {
+        for w in [Workspace::View3d, Workspace::Commissioning] {
             assert!(d.app.workspace_unavailable(w).is_some(), "{w:?}");
             d.app.switch_workspace(w);
             assert_eq!(d.app.workspace(), Workspace::Schematic);

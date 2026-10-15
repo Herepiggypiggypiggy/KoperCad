@@ -497,7 +497,25 @@ impl NovoApp {
             "view.cables_drawer" => self.toggle_drawer(Drawer::Cables),
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
             "view.toggle_marks" => self.wb.marks ^= true,
+            "view.reports" => self.switch_workspace(super::workspace::Workspace::Reports),
+            "export.bom" => {
+                self.export_report("bom", super::reports_view::ReportFormat::Excel);
+            }
+            "export.reports" => {
+                self.export_all_reports();
+            }
             "sim.live" => self.toggle_live(),
+            _ if super::reports_view::REPORT_COMMANDS
+                .iter()
+                .any(|(c, _)| *c == id) =>
+            {
+                if let Some((_, report)) = super::reports_view::REPORT_COMMANDS
+                    .iter()
+                    .find(|(c, _)| *c == id)
+                {
+                    self.show_report(report);
+                }
+            }
             "view.changes" => self.toggle_changes(argument),
             "check.problems" => self.show_issues(false),
             "check.next_problem" => self.step_problem(true),

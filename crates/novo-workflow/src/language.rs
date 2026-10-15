@@ -221,11 +221,23 @@ pub const DUTCH: &[Aliases] = &[
         &["exporteer pdf", "pdf exporteren"],
         &["afdrukken"],
     ),
+    nl("export.bom", &["exporteer stuklijst"], &["onderdelenlijst"]),
     nl(
-        "export.bom",
-        &["exporteer stuklijst", "stuklijst"],
+        "export.reports",
+        &[],
+        &["alle rapporten", "excel exporteren"],
+    ),
+    nl("view.reports", &[], &["rapporten", "lijsten"]),
+    nl("report.toc", &["inhoud", "inhoudsopgave"], &["paginalijst"]),
+    nl(
+        "report.bom",
+        &["stuklijst", "materiaallijst"],
         &["onderdelenlijst"],
     ),
+    nl("report.devices", &["apparatenlijst"], &["apparaten"]),
+    nl("report.wires", &["draadlijst"], &["draden", "aders"]),
+    nl("report.terminals", &["klemmenlijst"], &["klemmenstrook"]),
+    nl("report.cables", &["kabellijst"], &["kabels"]),
 ];
 
 /// Dutch command arguments and the English chip each one stands for.

@@ -692,7 +692,82 @@ pub const COMMANDS: &[CommandInfo] = &[
             &["parts list"],
             Needs::Project,
         ),
-        &["export bom", "bom"],
+        &["export bom"],
+    ),
+    cmd(
+        "export.reports",
+        "Export all reports to Excel",
+        "Export",
+        &["excel", "xlsx", "spreadsheet", "all reports"],
+        Needs::Project,
+    ),
+    // Reports workspace (docs/design/workspaces.md section 3.4).
+    cmd(
+        "view.reports",
+        "Reports",
+        "View",
+        &["tables", "lists", "workspace"],
+        Needs::Project,
+    ),
+    verb(
+        cmd(
+            "report.toc",
+            "Contents",
+            "View",
+            &["table of contents", "index", "page list"],
+            Needs::Project,
+        ),
+        &["contents"],
+    ),
+    verb(
+        cmd(
+            "report.bom",
+            "Bill of materials",
+            "View",
+            &["parts list", "bom", "quantities"],
+            Needs::Project,
+        ),
+        &["bom", "bill of materials"],
+    ),
+    verb(
+        cmd(
+            "report.devices",
+            "Device list",
+            "View",
+            &["devices", "tags", "locations"],
+            Needs::Project,
+        ),
+        &["device list"],
+    ),
+    verb(
+        cmd(
+            "report.wires",
+            "Wire list",
+            "View",
+            &["wires", "cores", "connections"],
+            Needs::Project,
+        ),
+        &["wire list"],
+    ),
+    verb(
+        cmd(
+            "report.terminals",
+            "Terminal diagram",
+            "View",
+            &["terminal list", "strips", "klemmen"],
+            Needs::Project,
+        ),
+        &["terminal diagram"],
+    ),
+    verb(
+        cmd(
+            "report.cables",
+            "Cable diagram",
+            "View",
+            &["cable list", "cable schedule", "cores"],
+            Needs::Project,
+        ),
+        &["cable diagram"],
     ),
 ];
 

@@ -79,8 +79,15 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("view.cables_drawer", under("View", "Panels")),
     ("view.devices_drawer", under("View", "Panels")),
     ("view.pin_outline", under("View", "Panels")),
+    ("view.reports", under("View", "Workspace")),
     // Reports
-    ("export.bom", at("Reports")),
+    ("export.reports", at("Reports")),
+    ("report.toc", at("Reports")),
+    ("report.bom", at("Reports")),
+    ("report.devices", at("Reports")),
+    ("report.wires", at("Reports")),
+    ("report.terminals", at("Reports")),
+    ("report.cables", at("Reports")),
 ];
 
 /// Commands that are a key or a pointer gesture and have no menu row.
