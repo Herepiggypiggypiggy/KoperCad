@@ -28,3 +28,4 @@
 2026-10-15 03:15 UTC #119 merged. Blocks rebased on main d7f70b8 (686 tests), opening PR. Follow-ups branch to rebase after.
 2026-10-15 03:20 UTC #125 READY. Its review notes committed on ws02-followups (686 tests).
 2026-10-15 03:22 UTC #125 merged. Follow-ups rebased on main 64647d0 (696 tests), opening PR.
+- 2026-10-15 04:20 UTC: core PR for Outputs and WS-01: generated page order (contents first, reports after the drawing), `ProjectRules.generated_pages_off`, `DeletePage`, `Document::amend_last`, issued revisions undeletable.
