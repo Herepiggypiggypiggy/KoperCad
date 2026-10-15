@@ -19,10 +19,11 @@ use crate::style::style_of;
 /// millimetres (the pitch of the multi-level terminals, on the 4 mm grid).
 pub const BRIDGE_PITCH: f64 = 8.0;
 
-/// Symbol properties recording what connecting changed, so disconnecting
+/// Symbol properties (under `terminal.`, which the property sheet hides)
+/// recording what connecting changed, so disconnecting
 /// undoes only that.
-const ADDED_KEY: &str = "bridge.added";
-const GROUP_KEY: &str = "bridge.group";
+const ADDED_KEY: &str = "terminal.bridge_added";
+const GROUP_KEY: &str = "terminal.bridge_group";
 
 /// Sets the jumper of just these terminals (they may be a part of a group).
 fn set_jumper_of(tx: &mut Tx<'_>, terminals: &[TerminalId], group: Option<u32>) -> Result<()> {
@@ -94,6 +95,14 @@ pub fn connect(tx: &mut Tx<'_>, terminals: &[TerminalId]) -> Result<u32> {
             "select 2 or 3 terminals",
         )));
     };
+    let mut strips: Vec<_> = terminals
+        .iter()
+        .filter_map(|&t| tx.project().terminal(t).map(|t| t.strip))
+        .collect();
+    strips.dedup();
+    if strips.len() > 1 {
+        return Err(ModelError::Format(strings::not_on_one_strip()));
+    }
     let drawings = single_drawings(tx, terminals)?;
     let mut order: Vec<usize> = (0..drawings.len()).collect();
     order.sort_by(|&a, &b| {
@@ -234,6 +243,8 @@ pub fn disconnect(tx: &mut Tx<'_>, symbol: SymbolId) -> Result<bool> {
         }
         singles.push((t, key, pins));
     }
+    let mut kept = current.properties.clone();
+    kept.retain(|k, _| k != ADDED_KEY && k != GROUP_KEY);
     for (i, (t, key, pins)) in singles.into_iter().enumerate() {
         let placement = Placement {
             origin: novo_core::Point::new(
@@ -249,6 +260,10 @@ pub fn disconnect(tx: &mut Tx<'_>, symbol: SymbolId) -> Result<bool> {
             pins,
             SymbolRole::Terminal { terminals: vec![t] },
         )?;
+        if i == 0 && !kept.is_empty() {
+            let kept = std::mem::take(&mut kept);
+            tx.update::<SymbolInstance>(id, |s| s.properties = kept)?;
+        }
         for pin in 0..2u16 {
             move_wire_ends(tx, symbol, 2 * i as u16 + pin, id, pin)?;
         }

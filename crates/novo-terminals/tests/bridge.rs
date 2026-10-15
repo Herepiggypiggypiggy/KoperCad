@@ -218,3 +218,29 @@ fn an_existing_jumper_group_is_kept_and_mixed_groups_are_refused() {
     assert_eq!(before, doc.project().symbols().cloned().collect::<Vec<_>>());
     assert_eq!([group(&doc, t0), group(&doc, t1)], [Some(9), Some(5)]);
 }
+
+#[test]
+fn terminals_of_two_strips_are_refused_unchanged() {
+    let mut doc = Document::default();
+    let s = three_terminals(&mut doc);
+    doc.transact("Move", |tx| {
+        let other = strip_by_tag(tx, "-X9")?;
+        tx.update::<novo_core::Terminal>(s.terminals[1], |t| t.strip = other)
+    })
+    .unwrap();
+    let before = (
+        doc.project().symbols().cloned().collect::<Vec<_>>(),
+        doc.project().terminals().cloned().collect::<Vec<_>>(),
+    );
+    let err = doc
+        .transact("Connect", |tx| connect(tx, &s.terminals[..2]))
+        .unwrap_err();
+    assert!(err.to_string().contains("one strip"), "{err}");
+    assert_eq!(
+        before,
+        (
+            doc.project().symbols().cloned().collect::<Vec<_>>(),
+            doc.project().terminals().cloned().collect::<Vec<_>>(),
+        )
+    );
+}
