@@ -4,6 +4,7 @@ use novo_core::{CabinetPlacement, DeviceTag, Project, Rail, Value};
 
 use super::cabinet::Ask;
 use super::gate1_tests::Drive;
+use super::workspace::Workspace;
 use crate::actions::Action;
 
 fn add_cabinet(d: &mut Drive) {
@@ -43,7 +44,7 @@ fn place_all_previews_then_accepts_as_one_undo_step() {
     add_cabinet(&mut d);
     d.app.run(&ctx, Action::ShowCabinet);
     d.frame();
-    assert!(d.app.cabinet_open);
+    assert_eq!(d.app.workspace(), Workspace::Cabinet);
     assert_eq!(
         d.app.cabinet.location.as_ref().unwrap().to_string(),
         "+CAB1"
@@ -80,7 +81,7 @@ fn place_all_previews_then_accepts_as_one_undo_step() {
     assert_eq!(project(&d).all::<Rail>().count(), 0);
 
     d.app.run(&ctx, Action::ShowSchematic);
-    assert!(!d.app.cabinet_open);
+    assert_eq!(d.app.workspace(), Workspace::Schematic);
 }
 
 #[test]
@@ -135,9 +136,9 @@ fn picking_a_page_leaves_the_cabinet() {
     let page = d.app.current_page.expect("a page is shown");
     d.app.run(&ctx, Action::ShowCabinet);
     d.frame();
-    assert!(d.app.cabinet_open);
+    assert_eq!(d.app.workspace(), Workspace::Cabinet);
     d.app.show_page(page);
-    assert!(!d.app.cabinet_open);
+    assert_eq!(d.app.workspace(), Workspace::Schematic);
 }
 
 #[test]
@@ -173,10 +174,10 @@ fn the_table_face_toggles_and_problems_are_in_words() {
     d.app.run(&ctx, Action::NewProject);
     d.frame();
     d.app.run_command(&ctx, "view.cabinet_table", None);
-    assert!(d.app.cabinet_open && d.app.cabinet.table);
+    assert!(d.app.workspace() == Workspace::Cabinet && d.app.cabinet.table);
     d.frame();
     d.app.run_command(&ctx, "view.cabinet_table", None);
-    assert!(d.app.cabinet_open && !d.app.cabinet.table);
+    assert!(d.app.workspace() == Workspace::Cabinet && !d.app.cabinet.table);
     d.frame();
 
     // Rotate and delete from the palette go to the Cabinet, not the page.
@@ -228,6 +229,38 @@ fn keys_pressed_in_the_table_do_not_wait_for_the_plate() {
 }
 
 #[test]
+fn the_table_lists_every_device_and_reports_no_click_when_none_is_made() {
+    use eframe::egui;
+    use novo_layout::plan::Candidate;
+    use novo_layout::state::CabinetLayout;
+    use novo_layout::{Plate, Size};
+
+    let mut l = CabinetLayout::new(Plate {
+        width: 200.0,
+        height: 200.0,
+        margin: 10.0,
+    });
+    let size = Size::from_part(Some(45.0), Some(90.0));
+    l.drop_device(1, size, 50.0, 50.0);
+    let cands: Vec<Candidate> = (1..=2)
+        .map(|id| Candidate {
+            id,
+            size,
+            sort_key: String::new(),
+        })
+        .collect();
+    let name = |id: u64| format!("-K{id}");
+    let ctx = egui::Context::default();
+    let mut clicked = Some(0);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        clicked = super::cabinet::cabinet_table(ui, &l, &cands, &name, &[1]);
+    });
+    out.textures_delta.clear();
+    assert_eq!(clicked, None);
+}
+
+#[test]
+
 fn inspector_sets_the_plate_size_and_lists_a_device_s_problems() {
     use super::cabinet_inspector::{Facts, gather};
 
@@ -285,4 +318,71 @@ fn inspector_sets_the_plate_size_and_lists_a_device_s_problems() {
             .to_string()),
         Facts::Plate { placed: 2, .. }
     ));
+}
+
+#[test]
+fn table_rows_sort_numbers_by_value() {
+    let mut tags = ["-K10", "-K2", "-Q1", "-K1"];
+    tags.sort_by_key(|t| super::cabinet::natural_key(t));
+    assert_eq!(tags, ["-K1", "-K2", "-K10", "-Q1"]);
+}
+
+#[test]
+fn a_problem_row_selects_its_device_on_the_plate() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    d.app.cabinet.table = true;
+    d.app.cabinet_ask(Ask::Select(7), None, None, &[]);
+    assert!(!d.app.cabinet.table);
+    assert_eq!(
+        d.app
+            .cabinet
+            .view
+            .selection
+            .ids()
+            .iter()
+            .filter_map(|i| novo_canvas::cabinet::box_of(*i))
+            .collect::<Vec<_>>(),
+        vec![7]
+    );
+}
+
+#[test]
+fn heat_commands_open_the_cabinet_and_toggle_the_layers() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert!(!d.app.cabinet.heat.on);
+    d.app.run_command(&ctx, "heat.toggle", None);
+    assert!(d.app.workspace() == Workspace::Cabinet && d.app.cabinet.heat.on);
+    d.frame();
+    d.app.run_command(&ctx, "heat.airflow", None);
+    assert!(d.app.cabinet.heat.airflow);
+    d.frame();
+    d.app.run_command(&ctx, "heat.toggle", None);
+    assert!(!d.app.cabinet.heat.on);
+}
+
+#[test]
+fn plate_export_says_why_when_the_enclosure_has_no_plate() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    assert!(d.app.export_plate_pdf().is_none());
+    let last = d.app.messages().last().unwrap();
+    assert!(last.text.contains("no mounting plate"), "{}", last.text);
+    assert!(crate::app::app_runs("export.plate"));
 }

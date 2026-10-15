@@ -36,7 +36,17 @@ fn edits_regenerate_only_affected_reports() {
     // sheets of every report.
     assert_eq!(
         stale,
-        ["cables", "cutlist", "io", "terminals", "toc", "wires"]
+        [
+            "cables",
+            "cableschedule",
+            "cutlist",
+            "io",
+            "labels",
+            "plugs",
+            "terminals",
+            "toc",
+            "wires"
+        ]
     );
     for id in ["bom", "devices"] {
         assert!(reports.is_current(doc.project(), id), "{id}");
@@ -63,9 +73,12 @@ fn edits_regenerate_only_affected_reports() {
         stale,
         [
             "cables",
+            "cableschedule",
             "cutlist",
             "devices",
             "io",
+            "labels",
+            "plugs",
             "terminals",
             "toc",
             "wires"
@@ -157,7 +170,7 @@ fn reports_regenerate_within_a_second_on_10k_objects() {
     let slack = if cfg!(debug_assertions) { 3 } else { 1 };
     let start = Instant::now();
     let stale = reports.notify(doc.project(), &changes).len();
-    assert_eq!(stale, 8);
+    assert_eq!(stale, 11);
     let mut pages = 0;
     for output in reports.all(doc.project()) {
         let paged = paginate(output, &setup);

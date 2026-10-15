@@ -22,6 +22,8 @@ pub(crate) struct ChangesMode {
     changes: Option<(u64, ChangeSet)>,
     /// The named rows of that comparison, for the outline's list.
     rows: Option<(u64, Vec<ChangeRow>)>,
+    /// The row the next/previous change commands stand on.
+    cursor: Option<usize>,
     /// The dashed marks for what was removed on a page, kept for the
     /// project revision and page they were worked out for: building them
     /// draws the page of the older state.
@@ -63,7 +65,7 @@ impl ChangesMode {
 
 /// The objects a change shows as on `page` in `project`: the object itself,
 /// or the symbols and wires that draw a device, terminal or cable.
-fn shown_on(project: &Project, id: AnyId, page: PageId) -> Vec<AnyId> {
+pub(super) fn shown_on(project: &Project, id: AnyId, page: PageId) -> Vec<AnyId> {
     match id {
         AnyId::Symbol(_) | AnyId::Wire(_) | AnyId::Text(_) | AnyId::Junction(_) => project
             .record(id)
@@ -194,6 +196,7 @@ impl NovoApp {
             snapshot,
             changes: None,
             rows: None,
+            cursor: None,
             ghosts: None,
         });
     }
@@ -265,6 +268,8 @@ impl NovoApp {
             .revisions()
             .map(|r| (r.id, format!("{} · {}", r.index, r.date)))
             .collect();
+        let total = mode.rows(project).len();
+        let at = mode.cursor.filter(|i| *i < total);
         let set = mode.changes(project);
         let here = set.on_page(page);
         let count = |f: fn(&ChangeKind) -> bool| here.iter().filter(|c| f(&c.kind)).count();
@@ -279,6 +284,7 @@ impl NovoApp {
         let mut pick = None;
         let mut leave = false;
         let mut compare = false;
+        let mut step = None;
         // Below the live potentials card when both are on.
         let live = self.wb.live.on;
         egui::Area::new(egui::Id::new("changes_card"))
@@ -300,6 +306,29 @@ impl NovoApp {
                         .clicked()
                     {
                         compare = true;
+                    }
+                    legend(ui);
+                    if total > 0 {
+                        ui.horizontal(|ui| {
+                            if ui
+                                .small_button("◀")
+                                .on_hover_text("Previous change")
+                                .clicked()
+                            {
+                                step = Some(false);
+                            }
+                            if ui
+                                .small_button("Next")
+                                .on_hover_text("Next change")
+                                .clicked()
+                            {
+                                step = Some(true);
+                            }
+                            ui.weak(match at {
+                                Some(i) => format!("{} of {total}", i + 1),
+                                None => format!("{total} changes"),
+                            });
+                        });
                     }
                     if nothing_here {
                         ui.weak("Nothing changed on this page");
@@ -332,6 +361,35 @@ impl NovoApp {
         if compare {
             self.open_compare_from_changes();
         }
+        if let Some(forward) = step {
+            self.step_change(forward);
+        }
+    }
+
+    /// The next or previous change in page order: opens its page and
+    /// selects the object (`view.next_change`, `view.previous_change`).
+    /// Turns Changes mode on against the latest revision when it is off.
+    pub(super) fn step_change(&mut self, forward: bool) {
+        if self.wb.changes.is_none() {
+            self.toggle_changes(None);
+        }
+        let (Some(mode), Some(doc)) = (self.wb.changes.as_mut(), self.backend.document()) else {
+            return;
+        };
+        let rows = mode.rows(doc.project()).to_vec();
+        let n = rows.len();
+        if n == 0 {
+            self.message(Level::Info, "Nothing changed since then");
+            return;
+        }
+        let at = match (mode.cursor.filter(|i| *i < n), forward) {
+            (None, true) => 0,
+            (None, false) => n - 1,
+            (Some(i), true) => (i + 1) % n,
+            (Some(i), false) => (i + n - 1) % n,
+        };
+        mode.cursor = Some(at);
+        self.reveal_change(&rows[at]);
     }
 
     /// Whether Changes mode is on and `page` has changes since its
@@ -424,6 +482,21 @@ impl NovoApp {
                     if response.clicked() && project.page(*id).is_some() {
                         chosen = Some(*id);
                     }
+                    response.context_menu(|ui| {
+                        let exists = project.page(*id).is_some();
+                        if ui
+                            .add_enabled(exists, egui::Button::new("Open page"))
+                            .on_disabled_hover_text("The page was removed since the revision")
+                            .clicked()
+                        {
+                            chosen = Some(*id);
+                            ui.close();
+                        }
+                        if ui.button("Copy summary").clicked() {
+                            ui.ctx().copy_text(format!("{label}  {counts}"));
+                            ui.close();
+                        }
+                    });
                     for row in all_rows.iter().filter(|r| r.page == Some(*id)) {
                         let text = format!("{} {}", kind_mark(&row.kind), row.label);
                         if ui.selectable_label(false, text).clicked() {
@@ -469,10 +542,29 @@ impl NovoApp {
         let (Some(page), Some(doc)) = (row.page, self.backend.document()) else {
             return;
         };
+        if doc.project().page(page).is_none() {
+            // A deleted page cannot be shown; its changes stay in the list.
+            return;
+        }
         let target = shown_on(doc.project(), row.id, page).first().copied();
         self.show_page(page);
         self.wb.pending_item = target.map(|id| (page, id));
     }
+}
+
+/// What the three mark colours mean, in the card's own words.
+fn legend(ui: &mut egui::Ui) {
+    use novo_theme::canvas::{CANVAS_DARK, to_color32};
+    ui.horizontal(|ui| {
+        for (color, text) in [
+            (CANVAS_DARK.added, "added"),
+            (CANVAS_DARK.modified, "changed"),
+            (CANVAS_DARK.removed, "removed"),
+        ] {
+            ui.colored_label(to_color32(color), "■");
+            ui.weak(text);
+        }
+    });
 }
 
 /// The mark in front of a row of the Changes list.
