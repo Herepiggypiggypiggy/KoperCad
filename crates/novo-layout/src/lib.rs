@@ -6,6 +6,7 @@
 
 pub mod check;
 pub mod drill;
+pub mod enclosure;
 pub mod model;
 pub mod plan;
 pub mod plate_drawing;

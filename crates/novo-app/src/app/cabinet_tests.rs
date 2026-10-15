@@ -203,6 +203,41 @@ fn the_table_face_toggles_and_problems_are_in_words() {
 }
 
 #[test]
+fn a_device_too_deep_for_the_door_gets_its_own_mark_and_sentence() {
+    use novo_canvas::cabinet::BoxState;
+    use novo_layout::enclosure::Enclosure;
+    use novo_layout::state::CabinetLayout;
+    use novo_layout::{Plate, Size};
+    let mut l = CabinetLayout::new(Plate {
+        width: 300.0,
+        height: 300.0,
+        margin: 10.0,
+    });
+    let size = Size::from_part(Some(45.0), Some(90.0));
+    l.drop_device(1, size, 20.0, 20.0);
+    l.drop_device(2, size, 120.0, 20.0);
+    l.enclosure = Some(Enclosure {
+        width: 400.0,
+        height: 400.0,
+        depth: 200.0,
+        plate_setback: 20.0,
+        door: None,
+        front_clearance: None,
+        hinge_side_clearance: None,
+    });
+    l.depths.insert(1, 220.0);
+    l.depths.insert(2, 80.0);
+    let name = |id: u64| format!("-K{id}");
+    let view = super::cabinet::cabinet_view(&l, &name);
+    let state = |id| view.boxes.iter().find(|b| b.id == id).unwrap().state;
+    assert_eq!(state(1), BoxState::TooDeep);
+    assert_eq!(state(2), BoxState::Ok);
+    let lines = super::cabinet::problem_lines(&l, 1, &name);
+    assert!(lines.iter().any(|t| t.contains("40 mm too deep")));
+    assert!(super::cabinet::problem_lines(&l, 2, &name).is_empty());
+}
+
+#[test]
 fn keys_pressed_in_the_table_do_not_wait_for_the_plate() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
@@ -476,4 +511,56 @@ fn the_panel_data_section_draws_and_reads_the_devices_values() {
         out.textures_delta.clear();
     }
     assert!(edit.is_none(), "drawing alone changes nothing");
+}
+
+#[test]
+fn the_enclosure_is_set_in_one_undo_step_and_drawn_with_its_checks() {
+    use novo_layout::enclosure::{Door, Enclosure, Hinge};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    assert!(layout_of(&d, cab).unwrap().enclosure.is_none());
+
+    let e = Enclosure {
+        width: 650.0,
+        height: 850.0,
+        depth: 250.0,
+        plate_setback: 20.0,
+        door: Some(Door {
+            hinge: Hinge::Right,
+            max_angle: 110.0,
+            inner_depth: 0.0,
+        }),
+        front_clearance: Some(400.0),
+        hinge_side_clearance: None,
+    };
+    d.app
+        .cabinet_ask(Ask::SetEnclosure(e), Some(cab), None, &[]);
+    // Drawing the card with the form, the checks and the top view works.
+    d.app.cabinet.plate_card = true;
+    d.frame();
+    d.frame();
+    let layout = layout_of(&d, cab).unwrap();
+    assert_eq!(layout.enclosure, Some(e));
+    // 650 mm door at 110 degrees: 650 in front, 400 free is 250 short.
+    let report = layout.door_report().unwrap();
+    assert!((report.front_short.unwrap() - 250.0).abs() < 1e-6);
+    let lines = super::cabinet_door::sentences(&e, &report, &|id| format!("D{id}"));
+    assert!(
+        lines
+            .iter()
+            .any(|(bad, t)| *bad && t.contains("250 mm short"))
+    );
+
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert!(layout_of(&d, cab).unwrap().enclosure.is_none());
 }
