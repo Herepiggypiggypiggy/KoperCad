@@ -18,3 +18,4 @@
 2026-10-15 17:00 UTC #282 7eede6c READY (hover note on Show where it goes). #283 16f06d9 READY (no corner piece on pin drags; follow-up to #263).
 17:30 UTC #288 fb31b87 READY (Corners mode squares slanted wire on corner drag; follow-up to #269)
 17:45 UTC #291 d4c586d READY (Preferences Connections/Moving follow-ups to #259/#261)
+17:55 UTC #293 d26979c READY (feed names L1,L2,L3 per page; editing.rs test conflict keep both)
