@@ -220,6 +220,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "parts.import_step",
+            "Import 3D model (STEP)",
+            "Project",
+            &["step", "stp", "3d model", "mesh", "cad model"],
+            Needs::Nothing,
+        ),
+        &["import 3d", "import step"],
+    ),
+    verb(
+        cmd(
             "project.options",
             "Project options and variants",
             "Project",
