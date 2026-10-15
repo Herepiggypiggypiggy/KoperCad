@@ -26,6 +26,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::trace::Trace;
 
+/// Most samples one waveform holds.
+const MAX_SAMPLES: usize = 100_000;
+
 /// What kind of fault a scenario starts. Each kind needs a different loop
 /// impedance, so the solver is asked per kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -171,7 +174,12 @@ impl FaultCurrent {
         t_total: f64,
         per_cycle: usize,
     ) -> Trace {
-        let dt = 1.0 / (self.frequency * per_cycle.max(8) as f64);
+        let mut dt = 1.0 / (self.frequency * per_cycle.max(8) as f64);
+        // Never more than MAX_SAMPLES samples, however long the fault lasts.
+        if !(dt > 0.0 && dt.is_finite()) {
+            dt = (t_end - t_start).max(1e-6);
+        }
+        dt = dt.max((t_end - t_start) / MAX_SAMPLES as f64);
         let mut trace = Trace::new(name, "A");
         trace.push(0.0, 0.0);
         let mut t = t_start;

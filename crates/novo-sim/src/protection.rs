@@ -114,7 +114,9 @@ impl TripModel for TableCurve {
         let (Some(first), Some(last)) = (self.points.first(), self.points.last()) else {
             return (f64::INFINITY, f64::INFINITY);
         };
-        if m < first.0 {
+        // `!(m >= ..)` also catches NaN (a device carrying 0 A with a bad
+        // rating) and negative currents: the device holds.
+        if m.is_nan() || m < first.0 || !self_ok(first) {
             return (f64::INFINITY, f64::INFINITY);
         }
         if m >= last.0 {
@@ -126,6 +128,11 @@ impl TripModel for TableCurve {
         let lerp = |x: f64, y: f64| (x.ln() + f * (y.ln() - x.ln())).exp();
         (lerp(a.1, b.1), lerp(a.2, b.2))
     }
+}
+
+/// A point the log-log interpolation can use.
+fn self_ok(p: &(f64, f64, f64)) -> bool {
+    p.0 > 0.0 && p.1 > 0.0 && p.2 > 0.0 && p.0.is_finite()
 }
 
 /// One device in a run: a curve plus how it behaves in time.

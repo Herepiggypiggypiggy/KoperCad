@@ -115,6 +115,15 @@ impl Study {
     /// The network, or a sentence saying what is wrong with the file.
     pub fn network(&self) -> Result<RadialNetwork, String> {
         let s = &self.source;
+        let positive = |v: f64| v.is_finite() && v > 0.0;
+        if !positive(s.un) || !positive(s.frequency) || !positive(s.c) {
+            return Err(
+                "The source needs a voltage, frequency and voltage factor above zero".into(),
+            );
+        }
+        if !(s.r.is_finite() && s.x.is_finite() && s.r >= 0.0 && s.x >= 0.0 && s.r + s.x > 0.0) {
+            return Err("The source impedance must be zero or more, and not zero in total".into());
+        }
         let mut net = RadialNetwork::new(&s.busbar, s.un, s.frequency, Impedance::new(s.r, s.x))
             .with_voltage_factor(s.c);
         let mut known = vec![s.busbar.as_str()];
@@ -123,6 +132,17 @@ impl Study {
                 return Err(format!(
                     "{} hangs on {}, which is not above it in the list",
                     n.name, n.parent
+                ));
+            }
+            let finite = |v: f64| v.is_finite() && v >= 0.0;
+            if !finite(n.r)
+                || !finite(n.x)
+                || !n.loop_r.is_none_or(finite)
+                || !n.loop_x.is_none_or(finite)
+            {
+                return Err(format!(
+                    "{} has an impedance that is negative or not a number",
+                    n.name
                 ));
             }
             let z = Impedance::new(n.r, n.x);
@@ -139,12 +159,35 @@ impl Study {
         self.devices
             .iter()
             .map(|d| {
+                let positive = |v: f64| v.is_finite() && v > 0.0;
+                if !positive(d.opening_time_s + 1e-300)
+                    || d.opening_time_s < 0.0
+                    || !positive(d.cool_tau_s)
+                    || !d.initial_heat.is_finite()
+                {
+                    return Err(format!(
+                        "{} has an opening time, cooling time or starting heat that is not valid",
+                        d.label
+                    ));
+                }
                 let CurveSpec::Table { rated_a, points } = &d.curve else {
                     return Err(format!(
                         "{} has a named curve that needs the protection model",
                         d.label
                     ));
                 };
+                if !positive(*rated_a)
+                    || points.is_empty()
+                    || points
+                        .iter()
+                        .any(|p| !(positive(p.0) && positive(p.1) && positive(p.2) && p.2 >= p.1))
+                {
+                    return Err(format!(
+                        "{} needs a rated current above zero and curve points with positive \
+                         multiples and times (latest time not before earliest)",
+                        d.label
+                    ));
+                }
                 let mut dev = ProtectiveDevice::new(
                     d.key.clone(),
                     d.label.clone(),

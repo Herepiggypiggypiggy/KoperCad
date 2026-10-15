@@ -437,3 +437,65 @@ fn the_example_study_runs_all_its_scenarios_and_round_trips() {
     );
     assert!(study.run(9).is_err());
 }
+
+#[test]
+fn bad_study_numbers_are_refused_not_crashed_on() {
+    use novo_sim::study::{CurveSpec, Study};
+    let mut s = Study::example();
+    s.devices[1].curve = CurveSpec::Table {
+        rated_a: 0.0,
+        points: vec![(1.5, 1.0, 2.0)],
+    };
+    assert!(s.run(0).is_err(), "rated 0 A");
+    let mut s = Study::example();
+    s.source.frequency = -50.0;
+    assert!(s.run(0).is_err(), "negative frequency");
+    let mut s = Study::example();
+    s.devices[0].opening_time_s = f64::NAN;
+    assert!(s.run(0).is_err(), "NaN opening time");
+    let mut s = Study::example();
+    s.devices[0].curve = CurveSpec::Table {
+        rated_a: 10.0,
+        points: vec![(-1.0, 1.0, 2.0)],
+    };
+    assert!(s.run(0).is_err(), "negative multiple");
+    // The curve itself survives 0 A and NaN even when built by hand.
+    let c = c_breaker(0.0);
+    assert_eq!(c.trip_time_range(0.0).0, f64::INFINITY);
+    assert_eq!(c_breaker(16.0).trip_time_range(f64::NAN).0, f64::INFINITY);
+}
+
+#[test]
+fn a_long_fault_waveform_is_capped_and_a_bad_frequency_cannot_hang_it() {
+    let fc = FaultCurrent::new(1_000.0, 0.2, 50.0);
+    let w = fc.waveform("i", 0.0, 0.0, 3600.0, 3600.0, 64);
+    assert!(w.len() <= 100_010, "{}", w.len());
+    let bad = FaultCurrent::new(1_000.0, 0.2, -50.0);
+    let w = bad.waveform("i", 0.0, 0.0, 1.0, 1.0, 64);
+    assert!(w.len() < 100_010);
+}
+
+#[test]
+fn two_faults_get_their_own_clearing_device() {
+    let devices = [
+        ProtectiveDevice::new("Q1", "-Q1", gg_fuse(100.0)).with_opening_time(0.0),
+        ProtectiveDevice::new("F2", "-F2", c_breaker(16.0)),
+    ];
+    let net = network();
+    let fault = |id: &str, node: &str| Action::Fault {
+        id: id.into(),
+        node: node.into(),
+        kind: FaultKind::ThreePhase,
+        fault_ohm: 0.0,
+        inception_deg: None,
+    };
+    // A fault on the pump clears by F2; a later fault above it by Q1.
+    let s = Scenario::new("two", 2.0)
+        .at(0.1, fault("A", "pump"))
+        .at(1.0, fault("B", "mcc"));
+    let r = run(&net, &devices, &s);
+    let a = r.faults.iter().find(|f| f.fault == "A").unwrap();
+    let b = r.faults.iter().find(|f| f.fault == "B").unwrap();
+    assert_eq!(a.cleared_by.as_deref(), Some("F2"));
+    assert_eq!(b.cleared_by.as_deref(), Some("Q1"));
+}

@@ -246,6 +246,9 @@ fn export(
 }
 
 fn body(ui: &mut egui::Ui, win: &mut FaultsWindow, r: &ScenarioResult) {
+    for w in &r.warnings {
+        ui.colored_label(tokens::WARNING, w);
+    }
     for f in &r.faults {
         ui.add_space(2.0);
         ui.horizontal_wrapped(|ui| {

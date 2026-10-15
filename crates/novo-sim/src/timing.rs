@@ -108,6 +108,8 @@ pub struct TimingDiagram {
     pub duration: f64,
     pub channels: Vec<DigitalChannel>,
     pub analog: Vec<Trace>,
+    /// Things the user should know (the recording was cut short).
+    pub warnings: Vec<String>,
 }
 
 impl TimingDiagram {
@@ -395,6 +397,7 @@ pub fn record_logic(
     let mut held: BTreeSet<SymbolId> = BTreeSet::new();
     let mut next = 0;
     let mut t = 0.0_f64;
+    let mut finished = false;
     for _ in 0..200_000 {
         while let Some(s) = script.get(next) {
             if s.t > t + 1e-12 {
@@ -458,6 +461,7 @@ pub fn record_logic(
             );
         }
         if t >= duration - 1e-12 {
+            finished = true;
             break;
         }
         let mut step = max_step.min(duration - t);
@@ -472,6 +476,12 @@ pub fn record_logic(
         let step = if step <= 0.0 { 1e-9 } else { step };
         clock.advance(step);
         t += step;
+    }
+    if !finished {
+        diagram.warnings.push(format!(
+            "The recording stopped at {} before the end: too many steps (a very long run with short timers?)",
+            format_time(t)
+        ));
     }
     diagram
 }

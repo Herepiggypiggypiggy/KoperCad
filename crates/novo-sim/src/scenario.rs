@@ -31,7 +31,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::fault::{FaultCurrent, FaultKind};
 use crate::protection::{ProtectiveDevice, ThermalMemory};
-use crate::timing::{DigitalChannel, Level, TimingDiagram};
+use crate::timing::{DigitalChannel, Level, TimingDiagram, format_time};
 use crate::trace::{Trace, TraceSet};
 
 /// File format revision of [`Scenario`].
@@ -271,6 +271,8 @@ pub struct ScenarioResult {
     pub timing: TimingDiagram,
     /// Highest heat each device reached (1 = tripped).
     pub peak_heat: BTreeMap<String, f64>,
+    /// Things the user should know about the run (it was cut short).
+    pub warnings: Vec<String>,
 }
 
 impl ScenarioResult {
@@ -344,9 +346,14 @@ pub fn run(
 
     let mut t = 0.0_f64;
     let mut guard = 0usize;
+    let mut warnings: Vec<String> = Vec::new();
     loop {
         guard += 1;
         if guard > 200_000 {
+            warnings.push(format!(
+                "The run stopped at {} s: too many events (a circuit that keeps tripping and closing?)",
+                format_time(t)
+            ));
             break;
         }
         let cond = Conditions {
@@ -432,12 +439,29 @@ pub fn run(
         });
         let mut changed = !done.is_empty();
         for (key, ti) in done {
+            // The faults this device cuts off: fed before it opened, not after.
+            let before = Conditions {
+                faults: &faults,
+                loads: &loads,
+                open: &open,
+            };
+            let fed: Vec<bool> = faults
+                .iter()
+                .map(|f| model.fault_current(f, &before).is_some())
+                .collect();
             open.insert(key.clone());
+            let after = Conditions {
+                faults: &faults,
+                loads: &loads,
+                open: &open,
+            };
             if let Some(&c) = device_channel.get(&key) {
                 channels[c].set(ti, Level::Low);
             }
-            for f in &faults {
-                last_interrupt.insert(f.id.clone(), (key.clone(), ti));
+            for (f, was_fed) in faults.iter().zip(fed) {
+                if was_fed && model.fault_current(f, &after).is_none() {
+                    last_interrupt.insert(f.id.clone(), (key.clone(), ti));
+                }
             }
             events.push(TimelineEvent {
                 t: ti,
@@ -573,6 +597,7 @@ pub fn run(
         traces,
         timing,
         peak_heat,
+        warnings,
     }
 }
 
