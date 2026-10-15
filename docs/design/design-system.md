@@ -66,10 +66,10 @@ roles, so nothing breaks while screens migrate.)
 | `accent.hover` | `#DBA27C` | `#82441D` | Accent text and hairlines under the pointer |
 | `accent.wash` | `#3A2E26` | `#F1DFD0` | Selected rows, selected text |
 | `on.accent` | `#14100D` | `#FFFFFF` | Text on an accent fill |
-| `info` | `#8FA8C8` | `#2E5E99` | Links, cross references, hover on the canvas |
-| `success` | `#7FB086` | `#2F7A3F` | OK |
-| `warning` | `#D6A55C` | `#8F5F0A` | Warning |
-| `error` | `#E0766C` | `#B3362B` | Error |
+| `info` | `#8FA8C8` | `#285488` | Links, cross references, hover on the canvas |
+| `success` | `#7FB086` | `#276B36` | OK |
+| `warning` | `#D6A55C` | `#7F5408` | Warning |
+| `error` | `#E0766C` | `#A82F25` | Error |
 
 Each status role also has a **wash** (the colour at 12% on the surface) for
 inline banners and table row tints, so a banner never needs a new colour.
@@ -79,7 +79,7 @@ Rules the unit tests hold:
 - `text.primary` at least 7:1 on every surface, `text.secondary` and
   `text.tertiary` at least 4.5:1, accent and status colours at least 4.5:1 on
   `sunken`, `panel` and `raised`, in both themes.
-- Surfaces step in lightness in the same direction in both themes.
+- Controls step away from the panel in both themes: hover is further from the panel's lightness than a resting control, which is further than the panel.
 - No mark colour on the canvas equals the selection colour.
 
 ### 2.2 Type
