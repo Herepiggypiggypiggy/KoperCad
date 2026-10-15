@@ -82,12 +82,31 @@ pub trait Report: Send + Sync {
     /// Builds the report's tables from the project.
     fn generate(&self, project: &Project) -> ReportOutput;
 
+    /// Whether the report reads other reports' output (the table of
+    /// contents counts their sheets). [`LiveReports`] then hands it its
+    /// cached outputs through [`Report::generate_with`] instead of the
+    /// report building them a second time.
+    fn reads_reports(&self) -> bool {
+        false
+    }
+
+    /// Like [`Report::generate`], given the current output of other
+    /// reports by id (`None` for an id that is not registered). Only called
+    /// when [`Report::reads_reports`] is true; must return what `generate`
+    /// would.
+    fn generate_with(&self, project: &Project, _reports: Reports<'_>) -> ReportOutput {
+        self.generate(project)
+    }
+
     /// Whether an edit may change this report. The default reads
     /// [`Report::dependencies`]; override for a finer test.
     fn affected_by(&self, changes: &ChangeSet) -> bool {
         self.dependencies().affected_by(changes)
     }
 }
+
+/// Other reports' current output by id, for [`Report::generate_with`].
+pub type Reports<'a> = &'a dyn Fn(&str) -> Option<&'a ReportOutput>;
 
 /// Which project state an output matches: the revision, plus two cheap
 /// facts that tell projects apart when one replaces another in place (a
@@ -256,23 +275,58 @@ impl LiveReports {
     /// The current output of a report, regenerated if anything it reads
     /// changed. `None` for an unknown id.
     pub fn get(&mut self, project: &Project, id: &str) -> Option<&ReportOutput> {
-        let entry = self.entries.iter_mut().find(|e| e.report.id() == id)?;
-        Some(Self::refresh(entry, project))
+        let i = self.entries.iter().position(|e| e.report.id() == id)?;
+        self.refresh(i, project);
+        Some(self.output_at(i))
     }
 
     /// Every report's current output, in registration order.
     pub fn all(&mut self, project: &Project) -> Vec<&ReportOutput> {
-        self.entries
-            .iter_mut()
-            .map(|entry| Self::refresh(entry, project))
-            .collect()
+        for i in 0..self.entries.len() {
+            self.refresh(i, project);
+        }
+        (0..self.entries.len()).map(|i| self.output_at(i)).collect()
     }
 
-    fn refresh<'a>(entry: &'a mut Entry, project: &Project) -> &'a ReportOutput {
+    fn output_at(&self, i: usize) -> &ReportOutput {
+        &self.entries[i].output.as_ref().expect("refreshed").1
+    }
+
+    fn refresh(&mut self, i: usize, project: &Project) {
         let now = Stamp::of(project);
-        if !matches!(&entry.output, Some((at, _)) if *at == now) {
-            entry.output = Some((now, entry.report.generate(project)));
+        if matches!(&self.entries[i].output, Some((at, _)) if *at == now) {
+            return;
         }
-        &entry.output.as_ref().expect("just generated").1
+        let output = if self.entries[i].report.reads_reports() {
+            // Bring the reports it may read current first: those of the
+            // project's generated pages (all a contents list reads).
+            let generators: Vec<&str> = project
+                .pages()
+                .filter_map(|p| match &p.kind {
+                    PageKind::Generated { generator } => Some(generator.as_str()),
+                    _ => None,
+                })
+                .collect();
+            for j in 0..self.entries.len() {
+                let report = &self.entries[j].report;
+                if j != i && !report.reads_reports() && generators.contains(&report.id()) {
+                    self.refresh(j, project);
+                }
+            }
+            let entries = &self.entries;
+            let lookup = |id: &str| {
+                entries
+                    .iter()
+                    .enumerate()
+                    .find(|(j, e)| *j != i && e.report.id() == id)
+                    .and_then(|(_, e)| e.output.as_ref())
+                    .filter(|(at, _)| *at == now)
+                    .map(|(_, output)| output)
+            };
+            entries[i].report.generate_with(project, &lookup)
+        } else {
+            self.entries[i].report.generate(project)
+        };
+        self.entries[i].output = Some((now, output));
     }
 }

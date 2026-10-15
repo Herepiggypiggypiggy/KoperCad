@@ -89,7 +89,7 @@ pub use diagrams::{CableDiagram, TerminalDiagram};
 pub use export::{CsvOptions, ExportError, save_xlsx, to_csv, xlsx_bytes};
 pub use order::{function_of, location_of, location_text, tag_cmp};
 pub use page::{Line, Margins, PageLayout, PageSetup, ReportPage, TextBox, layout_page, paginate};
-pub use report::{Dependencies, LiveReports, Report};
+pub use report::{Dependencies, LiveReports, Report, Reports};
 pub use sheets::{GeneratedSheet, sheet_name, sheet_names};
 pub use table::{Align, Cell, Column, ReportOutput, Row, Section};
 pub use toc::TableOfContents;

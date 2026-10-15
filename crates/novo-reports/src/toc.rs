@@ -3,7 +3,7 @@
 
 use novo_core::{EntityKind, PageKind, Project};
 
-use crate::report::{Dependencies, Report};
+use crate::report::{Dependencies, Report, Reports};
 use crate::sheets::sheets_for;
 use crate::table::{Cell, Column, ReportOutput, Section};
 
@@ -43,6 +43,27 @@ impl Report for TableOfContents {
     }
 
     fn generate(&self, project: &Project) -> ReportOutput {
+        // Standalone: build each report a generated page shows, once.
+        let reports = crate::standard_reports();
+        let mut outputs: Vec<ReportOutput> = Vec::new();
+        for page in project.pages_in_order() {
+            if let PageKind::Generated { generator } = &page.kind
+                && generator != Self::ID
+                && !outputs.iter().any(|o| o.report == *generator)
+                && let Some(report) = reports.iter().find(|r| r.id() == generator)
+            {
+                outputs.push(report.generate(project));
+            }
+        }
+        let lookup = |id: &str| outputs.iter().find(|o| o.report == id);
+        self.generate_with(project, &lookup)
+    }
+
+    fn reads_reports(&self) -> bool {
+        true
+    }
+
+    fn generate_with(&self, project: &Project, reports: Reports<'_>) -> ReportOutput {
         let mut section = Section::new(
             "pages",
             "",
@@ -53,26 +74,11 @@ impl Report for TableOfContents {
                 Column::new("kind", "Kind", 25.0),
             ],
         );
-        // Built on demand, one output per report however many pages use it.
-        let mut reports: Vec<Box<dyn Report>> = Vec::new();
-        let mut outputs: Vec<ReportOutput> = Vec::new();
         for page in project.pages_in_order() {
             if let PageKind::Generated { generator } = &page.kind
                 && generator != Self::ID
             {
-                if reports.is_empty() {
-                    reports = crate::standard_reports();
-                }
-                let output = match outputs.iter().position(|o| o.report == *generator) {
-                    Some(i) => Some(&outputs[i]),
-                    None => match reports.iter().find(|r| r.id() == generator) {
-                        Some(r) => {
-                            outputs.push(r.generate(project));
-                            outputs.last()
-                        }
-                        None => None,
-                    },
-                };
+                let output = reports(generator);
                 if let Some(output) = output {
                     let sheets = sheets_for(project, page, generator, output);
                     let kind = format!("Generated: {generator}");
