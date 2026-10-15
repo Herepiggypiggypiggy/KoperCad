@@ -26,3 +26,5 @@
 2026-10-15 03:10 UTC #119 opened (page freeze). Device-inside-block detach added on ws02-followups (676 tests).
 2026-10-15 03:08 UTC #119 READY. Review notes 3-4 committed on ws02-followups.
 2026-10-15 03:15 UTC #119 merged. Blocks rebased on main d7f70b8 (686 tests), opening PR. Follow-ups branch to rebase after.
+2026-10-15 03:20 UTC #125 READY. Its review notes committed on ws02-followups (686 tests).
+2026-10-15 03:22 UTC #125 merged. Follow-ups rebased on main 64647d0 (696 tests), opening PR.

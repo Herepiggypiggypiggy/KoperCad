@@ -4,7 +4,11 @@
 - #35, #45, #82, #101, #107 merged. The repo copy of this handoff (handoff/ws2/)
   is refreshed with each PR; the shared-folder copy may be newer.
 - #119 page freeze merged 2026-10-15 03:03 UTC; WS-10 told.
-- Open: blocks PR (branch `claude/data-model-amzaxu`, on main d7f70b8). Review
+- #125 blocks merged 2026-10-15 03:11 UTC.
+- Open: follow-ups PR (branch `claude/data-model-amzaxu`): wires_leaving,
+  shared PE, detach on added device, #119 and #125 review notes.
+  Interruption points are refused in blocks; per-placement scoping is a
+  possible later change if users want them (DESIGN §7 call). Review
   notes 3-4 (blank revision, doc) done on ws02-followups. Notes 1-2 (a
   frozen page edited since its revision; renaming a frozen page) are for
   WS-06 to show; a `PageFreeze::is_stale` query is a possible follow-up.
