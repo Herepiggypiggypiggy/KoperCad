@@ -1945,8 +1945,10 @@ dependencies = [
 name = "novo-interop"
 version = "0.1.0"
 dependencies = [
+ "novo-canvas",
  "novo-core",
  "novo-parts",
+ "novo-tests",
  "thiserror 2.0.21",
 ]
 
