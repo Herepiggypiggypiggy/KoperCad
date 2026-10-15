@@ -11,3 +11,4 @@
 2026-10-15 15:30 UTC Coil to contact coupling built (novo-sim settle + live view coil badges). PR open.
 2026-10-15 15:25 UTC Changeover contacts follow their coil (PR 'Live potentials: changeover contacts'). Next: timers.
 2026-10-15 16:20 UTC Live potential in wire hover text (PR 'Live potentials: hover a wire').
+2026-10-15 15:50 UTC Timers (on-delay and off-delay contacts) in the live view (PR 'Live potentials: timers'). Next: Show where it goes, live potential in wire hover.
