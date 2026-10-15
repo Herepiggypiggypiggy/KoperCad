@@ -104,6 +104,11 @@ pub const DUTCH: &[Aliases] = &[
         &["hernummer io"],
         &["adressen hernummeren"],
     ),
+    nl(
+        "xref.link",
+        &["koppel", "koppelen"],
+        &["contact aan spoel koppelen", "kruisverwijzing koppelen"],
+    ),
     nl("edit.escape", &[], &["annuleren"]),
     // Navigate
     nl("nav.partner", &[], &["naar partner", "kruisverwijzing"]),

@@ -331,6 +331,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["renumber io"],
     ),
+    // Bare `link` asks for the contact, then the coil (LINK_PICK_CONTACT,
+    // LINK_PICK_COIL), previews and runs on Enter; `link -K3 -K1` names the
+    // devices (see `palette::link_tags`). The app shell runs it through
+    // novo-xref, which also gives the refusal text.
+    verb(
+        cmd(
+            "xref.link",
+            "Link cross reference",
+            "Edit",
+            &["contact", "coil", "join contact"],
+            Needs::Page,
+        ),
+        &["link"],
+    ),
     cmd("edit.escape", "Cancel", "Edit", &["escape"], Needs::Nothing),
     // Navigate
     cmd(
