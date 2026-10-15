@@ -2493,3 +2493,38 @@ fn a_wire_override_is_one_step_and_removable() {
             .overridden
     );
 }
+
+#[test]
+fn show_where_it_goes_finds_the_wires_and_terminals_on_the_potential() {
+    use novo_editor::potential_menu;
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/terminals/terminal", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.begin_place("iec/motors/motor_3ph", None);
+    editor.click(&mut doc, page, p(60.0, 100.0), TOL);
+    let x = symbol_at(&doc, page, p(40.0, 40.0));
+    let m = symbol_at(&doc, page, p(60.0, 100.0));
+    editor.begin_wire();
+    click_pin(&mut editor, &mut doc, page, x, "2");
+    click_pin(&mut editor, &mut doc, page, m, "U1");
+    let wire = doc.project().wires().next().unwrap().id;
+    let menu = editor.potential_menu(&doc, &[AnyId::Wire(wire)]);
+    assert!(editor.assign_potentials(&mut doc, &menu.wires, &menu.declare[0]));
+    let feed = doc
+        .project()
+        .symbols()
+        .find(|s| matches!(s.role, SymbolRole::PotentialFeed { .. }))
+        .expect("a feed was placed")
+        .id;
+    let found = potential_menu::where_it_goes(doc.project(), page, feed);
+    assert!(found.contains(&AnyId::Symbol(x)), "the terminal on the net");
+    assert!(
+        found.iter().any(|id| matches!(id, AnyId::Wire(_))),
+        "the wire on the net"
+    );
+    assert!(
+        !found.contains(&AnyId::Symbol(m)),
+        "a motor is not a terminal"
+    );
+}

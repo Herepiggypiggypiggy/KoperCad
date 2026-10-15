@@ -1556,6 +1556,9 @@ impl SchematicView {
                                 }
                             });
                         }
+                        if ui.button("Show where it goes").clicked() {
+                            chosen = Some(MenuChoice::ShowWhere);
+                        }
                         ui.separator();
                     }
                     if let Some(w) = &menu.wire_override {
@@ -1656,6 +1659,7 @@ impl SchematicView {
                 _ => None,
             };
         let wire_override = menu.wire_override.clone();
+        let menu_feed = menu.feed.clone();
         let choice_suggestion = match chosen {
             Some(MenuChoice::Potential(i)) => suggestion(i),
             _ => None,
@@ -1672,6 +1676,14 @@ impl SchematicView {
                 if let Some(s) = choice_suggestion {
                     self.editor.assign_potentials(document, &wires, &s);
                 }
+            }
+            Some(MenuChoice::ShowWhere) => {
+                let found = menu_feed
+                    .iter()
+                    .flat_map(|f| f.feeds.iter())
+                    .flat_map(|&feed| potential_menu::where_it_goes(document.project(), page, feed))
+                    .collect::<Vec<_>>();
+                self.select(&found);
             }
             Some(MenuChoice::WireOverride(i)) => {
                 if let Some(w) = &wire_override {
@@ -1740,6 +1752,8 @@ enum MenuChoice {
     Other(usize),
     /// The name typed under New…
     New,
+    /// Select everything on the feed's potential.
+    ShowWhere,
     /// A chip of Override potential (`usize::MAX`: remove the override).
     WireOverride(usize),
     Rename,
