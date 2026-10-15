@@ -131,6 +131,33 @@ pub struct Panel {
 /// opens the set rather than following the drawing.
 pub const CONTENTS_GENERATOR: &str = "toc";
 
+/// The generator id of the contents list of one panel: `toc@+K1B1G1`. The
+/// part after the `@` is the panel's location levels, so the list follows
+/// the panel when it is renamed ([`Tx::rename_level`](crate::Tx::rename_level)).
+pub fn panel_contents_generator(location: &[String]) -> String {
+    let panel = DeviceTag {
+        location: location.to_vec(),
+        ..Default::default()
+    };
+    format!("{CONTENTS_GENERATOR}@{panel}")
+}
+
+/// The panel (location levels only) a generator id lists, for
+/// `toc@+K1B1G1`; `None` for the project's contents list and for any other
+/// generator.
+pub fn contents_scope(generator: &str) -> Option<DeviceTag> {
+    let scope = generator
+        .strip_prefix(CONTENTS_GENERATOR)?
+        .strip_prefix('@')?;
+    let tag = DeviceTag::parse(scope).ok()?;
+    (!tag.location.is_empty() && tag.function.is_empty() && tag.product.is_empty()).then_some(tag)
+}
+
+/// Whether a generator id is a contents list, of the project or of a panel.
+pub fn is_contents_generator(generator: &str) -> bool {
+    generator == CONTENTS_GENERATOR || contents_scope(generator).is_some()
+}
+
 /// Reading order of pages: the contents list, drawn pages, then the other
 /// generated pages; within each, structure, then name. See
 /// [`Project::pages_in_order`].
@@ -162,7 +189,7 @@ fn page_order(page: &Page) -> i64 {
 /// contents list, drawn pages, then the other generated pages.
 fn page_section(page: &Page) -> u8 {
     match &page.kind {
-        PageKind::Generated { generator } if generator == CONTENTS_GENERATOR => 0,
+        PageKind::Generated { generator } if is_contents_generator(generator) => 0,
         PageKind::Generated { .. } => 2,
         _ => 1,
     }
