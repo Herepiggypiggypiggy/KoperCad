@@ -18,3 +18,5 @@ rules, #379 gap analysis.
 
 Rules: draft PRs, no builds, no push after READY, message the reviewer with
 the head SHA after each push.
+
+Update 19:45 UTC: #451 merged. The in-app entry is on branch ws-01-assembly-export (File menu + export.assembly); see docs/design/assembly-checklist.md section 3.

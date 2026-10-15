@@ -241,6 +241,7 @@ const APP_COMMANDS: &[&str] = &[
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "export.assembly",
     "export.sheets",
     "export.sheets_csv",
     "file.import_dxf_background",
@@ -582,6 +583,9 @@ impl NovoApp {
             }
             "export.pdf" => {
                 self.export_pdf();
+            }
+            "export.assembly" => {
+                self.export_assembly();
             }
             "export.sheets" => {
                 self.export_spreadsheet();

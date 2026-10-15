@@ -292,6 +292,11 @@ pub const DUTCH: &[Aliases] = &[
         ],
         &["excel"],
     ),
+    nl(
+        "export.assembly",
+        &["exporteer montagelijst", "montagelijst"],
+        &["werkplaats", "boren"],
+    ),
     nl("export.sheets_csv", &["exporteer csv"], &["csv"]),
 ];
 
