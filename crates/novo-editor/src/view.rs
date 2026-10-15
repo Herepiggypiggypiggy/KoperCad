@@ -459,7 +459,11 @@ impl SchematicView {
                 self.canvas.selection.apply(keep, SelectOp::Replace);
                 self.editor.hover(document, page, point(w), tolerance);
                 let selection = self.selection();
-                self.drag_move = self.editor.begin_move(&selection);
+                // Only devices drag; a wire is selected and nothing else
+                // (a moved wire would have to keep the no-overlap rule).
+                if matches!(scene.model_id(hit.id), Some(AnyId::Symbol(_))) {
+                    self.drag_move = self.editor.begin_move(&selection);
+                }
             }
         }
         if let Some(w) = out.cursor_raw {
@@ -591,7 +595,7 @@ impl SchematicView {
         if pressed(Key::Escape) {
             self.canvas.escape_with(Some(&mut Ladder(&mut self.editor)));
         }
-        if pressed(Key::I) {
+        if pressed(Key::I) || pressed(Key::Q) {
             let anchor = ctx
                 .pointer_latest_pos()
                 .filter(|p| rect.contains(*p))
