@@ -24,7 +24,7 @@ fn page_with_wire(open: bool) -> Document {
         let strip = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
         let mut pins = Vec::new();
         for (i, x) in [100.0, 160.0].into_iter().enumerate() {
-            let t = tx.add_terminal(strip, &(i + 1).to_string())?;
+            let t = tx.add_terminal(strip, (i + 1).to_string())?;
             pins.push(tx.place_symbol(
                 page,
                 "iec/terminal",
