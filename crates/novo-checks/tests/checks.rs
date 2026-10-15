@@ -634,7 +634,7 @@ fn several_thin_wires_are_counted_and_an_overload_relay_is_rated_up_to() {
         tx.set_property(f1, RATED_CURRENT_A, Some(Value::Float(16.0)))?;
         let relay = tx.place_symbol(
             page,
-            "iec/protection/overload_relay_1p",
+            "iec/protection/overload_relay",
             Placement::at(Point::new(0.0, 0.0)),
             two_pin("1", "2"),
             device_role(f1, true),
