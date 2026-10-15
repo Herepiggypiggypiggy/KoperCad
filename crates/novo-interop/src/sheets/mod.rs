@@ -31,6 +31,8 @@
 //! ignored on import. Property columns are `properties.<key>`; a property
 //! column the project does not have yet adds the property.
 
+mod create;
+mod decode;
 mod export;
 mod fields;
 mod files;
@@ -38,9 +40,13 @@ mod grid;
 mod plan;
 mod rejects;
 
+pub use create::NewDevice;
+pub use decode::decode_csv;
 pub use export::{export_project, export_table};
 pub use fields::PROPERTY_PREFIX;
 pub use files::{CsvOptions, FORMAT_VERSION, SheetError, read_csv, read_xlsx, to_csv, xlsx_bytes};
 pub use grid::{Cell, Meta, Row, Table, TableKind, Workbook, number_text};
-pub use plan::{ApplyError, Change, ImportPlan, Rejected, Resolution, plan_import};
+pub use plan::{
+    ApplyError, Change, ImportPlan, Rejected, Resolution, plan_import, plan_import_with,
+};
 pub use rejects::{WHY_HEADER, rejected_workbook};

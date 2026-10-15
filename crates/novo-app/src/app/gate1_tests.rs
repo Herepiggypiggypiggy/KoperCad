@@ -104,7 +104,7 @@ impl Drive {
         placed
     }
 
-    fn click(&mut self, at: Point) {
+    pub(super) fn click(&mut self, at: Point) {
         let page = self.page();
         let app = &mut self.app;
         let view = app.canvas.schematic().expect("the editor canvas");
@@ -415,13 +415,15 @@ fn gate1_motor_starter_through_the_window() {
     let file = dir.path().join("Starter.novo");
     assert!(d.app.save_to(&file));
     d.frame();
-    // PDF export: two pages, written where asked.
+    // PDF export: two pages, written where asked, then the design checks
+    // report while problems remain.
     let pdf = dir.path().join("Starter.pdf");
     assert_eq!(d.app.export_pdf_to(&pdf), Some(pdf.clone()));
     let bytes = std::fs::read(&pdf).unwrap();
     assert!(bytes.starts_with(b"%PDF"));
     let pages = lopdf::Document::load_mem(&bytes).unwrap().get_pages().len();
-    assert_eq!(pages, 2, "one PDF page per project page");
+    let report = usize::from(novo_checks::report_lines(d.doc().project()).len() > 2);
+    assert_eq!(pages, 2 + report, "one PDF page per project page");
     // DXF export: every page into a folder beside the project, drawn with
     // geometry (the symbols are in it), reproducible on a second export.
     let files = d
@@ -2708,4 +2710,68 @@ fn the_editor_catalog_follows_the_project_standard_and_the_wheel_hides_missing_t
         .favourites()
         .to_vec();
     assert_eq!(back, order, "the reordered row comes back");
+}
+
+#[test]
+fn plc_tags_leave_as_files_and_the_programmers_edits_come_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let last = |d: &Drive| d.app.messages().last().map(|m| m.text.clone()).unwrap();
+
+    // A project with no card says what to do instead of writing an empty file.
+    d.app
+        .export_plc_to(novo_plc::link::LinkFormat::Csv, dir.path(), "Plant");
+    assert!(last(&d).contains("no PLC cards"), "{}", last(&d));
+
+    d.app.run_command(&ctx, "plc.add_card", Some("DI4 DQ4"));
+    let sensor = d.place("pbnc", 40.0, 40.0);
+    d.select(sensor);
+    d.app.run_command(&ctx, "plc.to_plc", None);
+    let written = d
+        .app
+        .export_plc_to(novo_plc::link::LinkFormat::PlcOpen, dir.path(), "Plant");
+    assert_eq!(written.len(), 1);
+    assert_eq!(written[0].file_name().unwrap(), "Plant PLC.xml");
+    let xml = std::fs::read_to_string(&written[0]).unwrap();
+    assert!(xml.contains("address=\"%IX0.0\""), "{xml}");
+
+    // The programmer rewords the comment and renames the tag; the preview
+    // lists it, Esc leaves the project alone, Enter applies one undo step.
+    let csv = d
+        .app
+        .export_plc_to(novo_plc::link::LinkFormat::Csv, dir.path(), "Plant");
+    let text = std::fs::read_to_string(&csv[0]).unwrap();
+    let row = text.lines().nth(1).unwrap().to_owned();
+    let mut fields: Vec<String> = row.split(';').map(str::to_owned).collect();
+    fields[6] = "ESTOP_OK".into();
+    fields[8] = "Emergency stop healthy".into();
+    let edited = dir.path().join("edited.csv");
+    std::fs::write(&edited, text.replace(&row, &fields.join(";"))).unwrap();
+    assert!(d.app.plc_import_tags_from(&edited));
+    let plan = &d.app.wb.plc_import.as_ref().unwrap().1;
+    assert_eq!(plan.updates.len(), 1, "{plan:?}");
+    d.frame();
+    d.key(egui::Key::Escape, egui::Modifiers::NONE);
+    assert!(d.app.wb.plc_import.is_none());
+    let depth = d.doc().undo_depth();
+    assert!(d.app.plc_import_tags_from(&edited));
+    d.frame();
+    d.key(egui::Key::Enter, egui::Modifiers::NONE);
+    assert!(
+        last(&d).starts_with("Imported PLC tags: 1 channel"),
+        "{}",
+        last(&d)
+    );
+    assert_eq!(d.doc().undo_depth(), depth + 1);
+    let again = d
+        .app
+        .export_plc_to(novo_plc::link::LinkFormat::Csv, dir.path(), "Plant");
+    assert!(
+        std::fs::read_to_string(&again[0])
+            .unwrap()
+            .contains("ESTOP_OK;BOOL;Emergency stop healthy")
+    );
 }

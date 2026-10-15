@@ -5,16 +5,22 @@ This thread owns placement; the Macro library thread (session_01TWr8q1k7WUQn2qom
 handoff/macro-library) owns the .kcmacro file, the library folder and the browser window.
 
 ## State
-- `novo_workflow::macro_place` (place_macro, preview): adopts the definition into the project
-  (`Command::AdoptBlockDefinition`, #425), places it, settles wire numbers. Draft PR open for it.
-- Parts and cabinet carry-over: not started (design step 4). App ghost + commands: not started.
+- Merged: design (#396), `novo_workflow::macro_place` place_macro + preview (#473).
+- Draft PR: app entry points. `macro.save` (Save as macro window over `macro_place::capture`) and
+  `macro.place` (Place macro window: search, parameters, preview line, Place; lands right of the
+  drawing and selects the result). Code in `novo-app/src/app/macro_actions.rs`.
+- Parts carry-over: draft PR (parts saved in the macro file's `parts` field, assigned on placement).
+- Not started: cabinet offsets, a pointer-following ghost (the window
+  previews instead), terminals inside macros (WS-02), update from library.
+- Browser (`macro.browser`, import/export) is the Macro library thread's #455; its disabled Place
+  button can call `open_macro_place(Some(name))` once both are merged.
 
 ## How to reach it (user-visible entry points)
 Command ids agreed with UI integration (session_01MQYH2ZYReC8dTZsMHYf4pc): `macro.save` and
 `macro.place` (this thread, rows registered by this thread), `macro.browser`, `macro.import`,
 `macro.export` (Macro library thread). Menu: Tools, and Draw > Macros for place (Workspaces #438).
-Shortcut proposal Ctrl+Shift+M for macro.browser (check keymap). None of these exist in the app yet;
-the engine PRs say so under "How to reach it".
+Shortcut proposal Ctrl+Shift+M for macro.browser (check keymap). macro.save and macro.place exist
+in the app (Ctrl+K: "save macro", "place macro"); menu placement follows Workspaces #438.
 
 ## Resume
 Next: expose thin fns for macro.save (define_block + MacroLibrary save) and macro.place (ghost using

@@ -1867,6 +1867,7 @@ dependencies = [
  "novo-commissioning",
  "novo-core",
  "novo-editor",
+ "novo-heatview",
  "novo-interop",
  "novo-layout",
  "novo-parts",
@@ -1923,6 +1924,7 @@ dependencies = [
  "novo-core",
  "novo-parts",
  "novo-plc",
+ "novo-routing",
  "novo-symbols",
  "novo-terminals",
  "novo-tests",
@@ -1941,6 +1943,7 @@ dependencies = [
  "novo-editor",
  "novo-interop",
  "novo-pdf",
+ "novo-plc",
  "novo-py",
  "novo-reports",
  "novo-revisions",
@@ -1985,6 +1988,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-heatview"
+version = "0.1.0"
+
+[[package]]
 name = "novo-interop"
 version = "0.1.0"
 dependencies = [
@@ -2006,6 +2013,18 @@ name = "novo-layout"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+]
+
+[[package]]
+name = "novo-learn"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-tests",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "toml",
 ]
 
 [[package]]
@@ -2046,9 +2065,12 @@ dependencies = [
 name = "novo-plc"
 version = "0.1.0"
 dependencies = [
+ "calamine",
  "novo-core",
  "novo-editor",
  "novo-symbols",
+ "quick-xml",
+ "rust_xlsxwriter",
  "thiserror 2.0.21",
 ]
 
@@ -2181,9 +2203,16 @@ name = "novo-view3d"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "eframe",
+ "egui",
+ "egui-wgpu",
+ "flate2",
  "glam",
+ "naga",
  "novo-core",
  "novo-layout",
+ "pollster 1.0.1",
+ "wgpu",
 ]
 
 [[package]]
@@ -2193,6 +2222,7 @@ dependencies = [
  "novo-core",
  "novo-symbols",
  "novo-tests",
+ "serde_json",
 ]
 
 [[package]]

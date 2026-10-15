@@ -19,6 +19,7 @@ novo-layout.workspace = true
 novo-routing.workspace = true
 novo-cables.workspace = true
 novo-theme.workspace = true
+novo-heatview.workspace = true
 novo-symbols.workspace = true
 novo-editor.workspace = true
 novo-workflow.workspace = true

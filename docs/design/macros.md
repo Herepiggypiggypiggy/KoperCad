@@ -66,10 +66,13 @@ newer `version` is refused with the file untouched; a file that fails validation
   macro (they join nets across the project). Terminals are allowed in a macro as devices in a strip
   (the same-name join rule then applies in the target project); this needs a core check and is the last step
   (step 6).
-- **Parts.** A part id is project-scoped, so a macro stores manufacturer and order number. On
-  placement each is looked up in the project's catalog (then the user catalog); a hit is assigned, a
-  miss leaves the device unassigned and the preview names it, after which the normal part proposals
-  run. Carrying parts is a checkbox, on by default.
+- **Parts.** A part id is project-scoped, so the macro file keeps the part itself next to the id of the
+  device in the definition (`parts`: manufacturer, order number, type number, description). On
+  placement the project's part with that manufacturer and order number is used, or one is added when
+  the project has none, and it is assigned to the placed device. So a macro works in a project whose
+  parts list is empty, and the same part is added once however often the macro is placed. Carrying
+  parts is a checkbox in the Place window, on by default when the macro has parts. Implemented in
+  `novo_workflow::macro_place` (`PartRef`, `captured_parts`, `PlaceOptions::parts`).
 - **Cabinet placement.** Stored as offsets relative to the macro's first device on its plate. On
   placement, if the target structure has a plate, the devices are placed at the offsets through the
   layout engine's overlap and rail rules; whatever does not fit lands in the Unplaced list. Off by
