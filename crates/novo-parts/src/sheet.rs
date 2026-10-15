@@ -22,6 +22,8 @@ use serde_json::{Map, Number, Value as Json};
 use thiserror::Error;
 
 use crate::assign::count;
+use crate::catalog::keys;
+use crate::panel::{Mounting, is_panel_number_key};
 use crate::search::Matcher;
 
 /// Which panel section a row belongs to, in display order.
@@ -443,6 +445,24 @@ pub fn property_label(key: &str) -> (String, Option<&'static str>) {
     (humanize(stem), unit)
 }
 
+/// Panel-building keys shown on every part, in this order.
+const PANEL_KEYS: &[&str] = &[
+    keys::POWER_LOSS_W,
+    keys::MOUNTING,
+    keys::CLEARANCE_ABOVE_MM,
+    keys::CLEARANCE_BELOW_MM,
+    keys::CLEARANCE_LEFT_MM,
+    keys::CLEARANCE_RIGHT_MM,
+];
+
+fn panel_choices(key: &str) -> &'static [&'static str] {
+    if key == keys::MOUNTING {
+        &["din_rail", "screw", "plate", "door_cutout"]
+    } else {
+        &[]
+    }
+}
+
 fn humanize(key: &str) -> String {
     let words = key.replace(['_', '-'], " ");
     let mut chars = words.trim().chars();
@@ -803,9 +823,29 @@ impl PropertySheet {
                 value: RowValue::Same(display_value(value)),
                 editable: true,
                 unit,
-                choices: &[],
+                choices: panel_choices(key),
                 synonyms: &[],
                 order: 100,
+                overrides_part: false,
+            });
+        }
+        // The panel-building keys are always there to fill in, even when
+        // the maker data has none.
+        for key in PANEL_KEYS {
+            if part.properties.contains_key(*key) {
+                continue;
+            }
+            let (label, unit) = property_label(key);
+            rows.push(Row {
+                key: RowKey::PartData((*key).into()),
+                label,
+                group: Group::PartData,
+                value: RowValue::Same(String::new()),
+                editable: true,
+                unit,
+                choices: panel_choices(key),
+                synonyms: &[],
+                order: 101,
                 overrides_part: false,
             });
         }
@@ -1149,6 +1189,8 @@ impl PropertySheet {
                         .and_then(|&p| project.part(p))
                         .and_then(|p| p.properties.get(name).cloned())
                 });
+            let typed = panel_input(name, label, input)?;
+            let input = typed.as_deref().unwrap_or(input);
             let new = if input.trim().is_empty() {
                 None
             } else {
@@ -1171,6 +1213,36 @@ impl PropertySheet {
         }
         Ok(commands)
     }
+}
+
+/// Checks the panel-building keys: numbers must not be negative and the
+/// mounting type must be one of the known ones (stored in its canonical
+/// form). `None` when `name` is not such a key.
+fn panel_input(name: &str, label: &str, input: &str) -> Result<Option<String>, EditError> {
+    let t = input.trim();
+    if name == keys::MOUNTING && !t.is_empty() {
+        return match Mounting::parse(t) {
+            Some(m) => Ok(Some(m.as_str().into())),
+            None => Err(EditError::Invalid {
+                label: label.into(),
+                value: t.into(),
+                hint: "; choose din_rail, screw, plate, door_cutout".into(),
+            }),
+        };
+    }
+    if is_panel_number_key(name) && !t.is_empty() {
+        let v = parse_number(t).ok_or_else(|| EditError::NotANumber {
+            label: label.into(),
+        })?;
+        if v < 0.0 {
+            return Err(EditError::Invalid {
+                label: label.into(),
+                value: t.into(),
+                hint: "; it cannot be negative".into(),
+            });
+        }
+    }
+    Ok(None)
 }
 
 fn number_json(text: &str, float: bool, label: &str) -> Result<Json, EditError> {

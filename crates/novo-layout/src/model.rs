@@ -18,7 +18,7 @@ use crate::plan::{Candidate, Plan, PlannedDuct};
 use crate::plate_drawing::{PlateDocument, documents};
 use crate::rules::Class;
 use crate::state::CabinetLayout;
-use crate::{Placement, Plate, Rail, Size};
+use crate::{Margins, Placement, Plate, Rail, Size};
 
 /// Property of a duct: what its wiring carries (`power`, `signal`, `mixed`).
 pub const DUCT_CLASS_KEY: &str = "duct_class";
@@ -26,6 +26,10 @@ pub const DUCT_CLASS_KEY: &str = "duct_class";
 /// Part property keys, the same as `novo_parts::keys`.
 const WIDTH_KEY: &str = "width_mm";
 const HEIGHT_KEY: &str = "height_mm";
+const ABOVE_KEY: &str = "clearance_above_mm";
+const BELOW_KEY: &str = "clearance_below_mm";
+const LEFT_KEY: &str = "clearance_left_mm";
+const RIGHT_KEY: &str = "clearance_right_mm";
 
 fn number(value: &Value) -> Option<f64> {
     match value {
@@ -48,6 +52,32 @@ pub fn device_size(project: &Project, device: &Device) -> Size {
         }
     }
     Size::from_part(None, None)
+}
+
+/// The free space a device asks for on each side, from its own properties
+/// first, then from its first part that gives one (so a device can override
+/// its part). Negative or non-numeric values count as missing.
+pub fn device_margins(project: &Project, device: &Device) -> Margins {
+    let read = |key: &str| {
+        let usable = |v: &Value| number(v).filter(|v| v.is_finite() && *v >= 0.0);
+        let own = device.properties.get(key).and_then(usable);
+        let from_part = || {
+            device.parts.iter().find_map(|part| {
+                project
+                    .get::<novo_core::Part>(*part)?
+                    .properties
+                    .get(key)
+                    .and_then(usable)
+            })
+        };
+        own.or_else(from_part)
+    };
+    Margins {
+        above: read(ABOVE_KEY),
+        below: read(BELOW_KEY),
+        left: read(LEFT_KEY),
+        right: read(RIGHT_KEY),
+    }
 }
 
 fn structure(project: &Project, id: StructureId) -> Option<&Structure> {
@@ -86,6 +116,7 @@ pub fn load(project: &Project, id: StructureId) -> Option<CabinetLayout> {
                 rotated: p.rotated,
                 size: device_size(project, device),
                 clearance: None,
+                margins: device_margins(project, device),
                 rail: p.rail.map(RailId::raw),
             })
         })
