@@ -12,7 +12,7 @@
 
 use novo_core::{
     Endpoint, Netlist, PageId, Placement, Point, PotentialKind, Project, Result, Rotation,
-    SymbolRole, TerminalKind, Tx, WireId,
+    SymbolId, SymbolRole, TerminalKind, Tx, WireId,
 };
 use novo_symbols::Symbol;
 
@@ -118,7 +118,7 @@ pub fn menu(project: &Project, wires: &[WireId], supply_names: bool) -> Potentia
 
 /// Whether a wire's net holds a potential feed itself (its source is here).
 fn net_has_feed(project: &Project, netlist: &Netlist, wire: WireId) -> bool {
-    let Some(net) = project.wire(wire).and_then(|w| netlist.net_of(w.from)) else {
+    let Some(net) = project.wire(wire).and_then(|w| netlist.net_of_wire(w)) else {
         return false;
     };
     netlist.net(net).endpoints.iter().any(|e| match *e {
@@ -177,7 +177,7 @@ pub fn page_order(project: &Project, wires: &[WireId]) -> Vec<WireId> {
 /// `N` or `PEN` (`-X4:PE`), or a PE or N terminal.
 pub fn inferred(project: &Project, netlist: &Netlist, wire: WireId) -> Option<PotentialSpec> {
     let w = project.wire(wire)?;
-    let net = netlist.net(netlist.net_of(w.from)?);
+    let net = netlist.net(netlist.net_of_wire(w)?);
     for end in &net.endpoints {
         let Endpoint::Pin { symbol, pin } = *end else {
             continue;
@@ -310,7 +310,7 @@ pub fn assign(
         // Feeds already defining this net go; the new one replaces them.
         let netlist = tx.project().netlist();
         let w = tx.project().wire(wire).expect("checked above").clone();
-        if let Some(net) = netlist.net_of(w.from) {
+        if let Some(net) = netlist.net_of_wire(&w) {
             let old: Vec<_> = netlist
                 .net(net)
                 .endpoints
@@ -392,10 +392,34 @@ fn feed_placement(project: &Project, wire: WireId) -> Option<Placement> {
     })
 }
 
+/// Right-click a feed, Set potential: gives every feed in `feeds` the named
+/// potential (created from `spec` when missing). The wires and terminals on
+/// them follow through the netlist, so this is one undo step for the lot.
+/// Symbols that are not potential feeds are skipped; returns those changed.
+pub fn set_feed_potential(
+    tx: &mut Tx<'_>,
+    feeds: &[SymbolId],
+    spec: &PotentialSpec,
+) -> Result<Vec<SymbolId>> {
+    let potential = find_or_add_potential(tx, &spec.name, spec.kind, spec.voltage)?;
+    let mut changed = Vec::new();
+    for &feed in feeds {
+        let is_feed = matches!(
+            tx.project().symbol(feed).map(|s| &s.role),
+            Some(SymbolRole::PotentialFeed { potential: p }) if *p != potential
+        );
+        if is_feed {
+            tx.set_role(feed, SymbolRole::PotentialFeed { potential })?;
+            changed.push(feed);
+        }
+    }
+    Ok(changed)
+}
+
 /// The potential names of a wire's net, for status text.
 pub fn wire_potential(project: &Project, netlist: &Netlist, wire: WireId) -> Option<String> {
     let w = project.wire(wire)?;
-    let net = netlist.net(netlist.net_of(w.from)?);
+    let net = netlist.net(netlist.net_of_wire(w)?);
     let names: Vec<&str> = net
         .potentials
         .iter()

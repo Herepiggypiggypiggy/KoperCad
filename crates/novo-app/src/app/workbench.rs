@@ -15,6 +15,7 @@ use novo_canvas::model::item_id;
 use novo_checks::Problem;
 use novo_core::{AnyId, ChangeSet, DeviceId, Document, SymbolId};
 use novo_editor::EditorKey;
+use novo_editor::tool::WiringMode;
 use novo_symbols::Library;
 use novo_workflow::commands::Context;
 use novo_workflow::keymap::{FAVOURITE_COMMANDS, Focus, Keymap};
@@ -44,6 +45,21 @@ pub(crate) struct Workbench {
     pub(super) xref: LiveXref,
     /// The generated pages' reports, live.
     pub(super) reports: super::reports::Reports,
+    /// The place wheel, when open.
+    pub(super) wheel: Option<super::wheel::Wheel>,
+    /// A key that opens the wheel went down at this time (egui seconds),
+    /// with the keys then held: a tap runs Place, a hold opens the wheel.
+    pub(super) place_hold: Option<(f64, Vec<egui::Key>)>,
+    /// Commands the canvas asked for, run next frame by id.
+    pub(super) queued: Vec<&'static str>,
+    /// The `renumber io` preview waiting for Enter or Esc, per station.
+    pub(super) renumber: Option<Vec<novo_plc::commands::RenumberPlan>>,
+    /// The Preferences window is open.
+    pub(super) preferences: bool,
+    /// The Issue revision window, while it is open.
+    pub(super) issue: Option<super::revisions::IssueDraft>,
+    /// The new pages, group and panel form, while open.
+    pub(super) page_form: Option<super::pages::PageForm>,
     /// Which sheet of a generated page the canvas shows (0 for the first).
     pub(super) sheet: usize,
     pub(super) nav: Navigator,
@@ -63,6 +79,13 @@ pub(crate) struct Workbench {
     pub(super) space_down: Option<egui::Pos2>,
     /// The pointer on the drawing (mm), when it is over the canvas.
     pub(super) pointer_world: Option<novo_core::Point>,
+    /// Where a Space-held pan last moved the drawing from, once the
+    /// pointer has gone more than 4 px from `space_down`.
+    pub(super) space_pan: Option<egui::Pos2>,
+    /// The tool dock's size last frame, to tell where it would sit.
+    pub(super) dock_size: egui::Vec2,
+    /// The inspector's fields while they are edited.
+    pub(super) inspector: super::inspector::InspectorState,
     /// Shift+P: false hides the marks on the drawing (counters stay).
     pub(super) marks: bool,
     /// Design-check results for one project revision.
@@ -76,6 +99,10 @@ pub(crate) struct Workbench {
     pub(super) problem_at: Option<usize>,
     /// The last PDF written, for tests and the toast.
     pub(super) last_export: Option<PathBuf>,
+    /// The live potentials view (Shift+L).
+    pub(super) live: super::live::LiveView,
+    /// Changes mode, while it is on.
+    pub(super) changes: Option<super::changes::ChangesMode>,
 }
 
 impl Workbench {
@@ -97,6 +124,13 @@ impl Default for Workbench {
             keymap: Keymap::workflow(),
             xref: LiveXref::default(),
             reports: Default::default(),
+            wheel: None,
+            place_hold: None,
+            queued: Vec::new(),
+            renumber: None,
+            preferences: false,
+            issue: None,
+            page_form: None,
             sheet: 0,
             nav: Navigator::default(),
             pending: None,
@@ -107,12 +141,17 @@ impl Default for Workbench {
             proposal: 0,
             space_down: None,
             pointer_world: None,
+            space_pan: None,
+            dock_size: egui::Vec2::ZERO,
+            inspector: Default::default(),
             marks: true,
             problems: None,
             pill_rect: egui::Rect::NOTHING,
             issue_filter: [true; 3],
             problem_at: None,
             last_export: None,
+            live: Default::default(),
+            changes: None,
         }
     }
 }
@@ -136,10 +175,14 @@ const APP_COMMANDS: &[&str] = &[
     "tool.place",
     "tool.repeat",
     "tool.connect",
+    "tool.cable",
+    "wire.end_on_part",
+    "wire.next_pin",
     "view.command_field_here",
     "edit.rotate",
     "edit.mirror",
     "edit.delete",
+    "edit.duplicate",
     "edit.rename",
     "edit.escape",
     "nav.next_page",
@@ -156,10 +199,22 @@ const APP_COMMANDS: &[&str] = &[
     "view.cables_drawer",
     "view.devices_drawer",
     "view.toggle_marks",
+    "sim.live",
+    "view.changes",
     "check.problems",
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "plc.add_card",
+    "plc.to_plc",
+    "plc.renumber_io",
+    "xref.link",
+    "app.preferences",
+    "revision.issue",
+    "terminal.toggle_pe",
+    "terminal.reset_pe",
+    "wire.mode",
+    "interruption.renumber",
 ];
 
 /// Whether the app can run a command now (not "comes later").
@@ -328,14 +383,21 @@ impl NovoApp {
     /// The commands this frame's key presses run, taken out of the input.
     pub(super) fn key_commands(&self, ctx: &egui::Context) -> Vec<&'static str> {
         let focus = self.key_focus(ctx);
-        keys::take_commands(ctx, &self.wb.keymap, focus, |c| self.claims_key(c))
+        // A wire being drawn gives Q and Tab their own meaning.
+        let wiring = self
+            .canvas
+            .schematic_ref()
+            .is_some_and(|v| v.editor.is_wiring());
+        keys::take_commands(ctx, &self.wb.keymap, focus, wiring, |c| self.claims_key(c))
     }
 
     /// Runs a command from a key press. Space only arms the command field:
     /// it opens on the release, unless the pointer moved more than 4 px in
     /// between (a held Space pans); every other key runs its command.
     pub(super) fn run_key_command(&mut self, ctx: &egui::Context, id: &str) {
-        if id == "view.command_field_here" {
+        if id == "tool.place" {
+            self.arm_place_hold(ctx);
+        } else if id == "view.command_field_here" {
             self.wb.space_down = ctx.pointer_latest_pos().or(Some(egui::Pos2::ZERO));
         } else {
             self.run_command(ctx, id, None);
@@ -374,8 +436,25 @@ impl NovoApp {
                 }
             }
             "tool.repeat" => self.editor_key(EditorKey::Repeat),
+            "tool.cable" => {
+                if let Some(view) = self.canvas.schematic() {
+                    view.editor.begin_cable();
+                }
+            }
+            "wire.end_on_part" => self.editor_key(EditorKey::EndOnPart),
+            "wire.next_pin" => {
+                // Tab must not leave the drawing: egui's own focus move to
+                // the next widget is undone, as for the next proposal.
+                ctx.memory_mut(|m| {
+                    if let Some(id) = m.focused() {
+                        m.surrender_focus(id);
+                    }
+                });
+                self.editor_key(EditorKey::NextPin)
+            }
             "edit.rotate" => self.editor_key(EditorKey::Rotate),
             "edit.mirror" => self.editor_key(EditorKey::Mirror),
+            "edit.duplicate" => self.duplicate_selection(),
             "edit.delete" if self.declines_proposal() => self.dismiss_proposal(),
             "edit.delete" => self.editor_key(EditorKey::Delete),
             "nav.next_page" | "nav.previous_page" => {
@@ -402,16 +481,52 @@ impl NovoApp {
                 self.next_proposal();
             }
             "proposal.accept_all" => self.accept_all_proposals(),
+            "terminal.connect"
+            | "terminal.toggle_pe"
+            | "terminal.disconnect"
+            | "terminal.reset_pe"
+            | "terminal.strip_up"
+            | "terminal.strip_down"
+            | "terminal.strip_lowest" => self.terminal_command(id),
+            "interruption.renumber" => self.renumber_interruptions(),
             "view.terminals_drawer" => self.toggle_drawer(Drawer::Terminals),
             "view.cables_drawer" => self.toggle_drawer(Drawer::Cables),
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
             "view.toggle_marks" => self.wb.marks ^= true,
+            "sim.live" => self.toggle_live(),
+            "view.changes" => self.toggle_changes(argument),
             "check.problems" => self.show_issues(false),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),
+            "edit.properties" => {
+                // The inspector shows with the selection; the cursor goes in
+                // its tag.
+                let selection = self.selection();
+                let device = self
+                    .backend
+                    .document()
+                    .and_then(|d| super::inspector::selected_device(d.project(), &selection));
+                if device.is_some() {
+                    ctx.memory_mut(|m| m.request_focus(egui::Id::new("inspector_tag")));
+                }
+            }
+            "tool.place_wheel" => self.open_wheel(ctx, Vec::new()),
+            "wire.mode" => {
+                let mode = match self.settings.wiring_mode() {
+                    WiringMode::Corners => WiringMode::Lines,
+                    WiringMode::Lines => WiringMode::Corners,
+                };
+                self.set_wiring_mode(mode, false);
+            }
             "export.pdf" => {
                 self.export_pdf();
             }
+            "plc.add_card" => self.plc_add_card(argument),
+            "plc.to_plc" => self.plc_to_plc(),
+            "plc.renumber_io" => self.plc_renumber_io(),
+            "xref.link" => self.xref_link(argument),
+            "app.preferences" => self.wb.preferences = true,
+            "revision.issue" => self.open_issue_revision(argument),
             other => {
                 let label = novo_workflow::commands::get(other).map_or(other, |c| c.label);
                 self.message(Level::Info, format!("{label} is not in the app yet"));
@@ -595,6 +710,8 @@ impl NovoApp {
         };
         let mut list = super::terminals::proposal_marks(&self.page_proposals(), self.wb.proposal);
         list.extend(self.problem_marks(page));
+        list.extend(self.pe_override_marks(page));
+        list.extend(self.changes_marks(page));
         let hidden = !self.wb.marks;
         // Cross references are printed drawing content: they go into the
         // page scene, like the tags, so the PDF shows them the same way.
@@ -604,6 +721,32 @@ impl NovoApp {
             view.canvas.marks.hidden = hidden;
             view.set_notes(notes);
         }
+    }
+
+    /// Space held and dragged more than 4 px pans the drawing with the
+    /// pointer (DESIGN.md §4); a tap opens the field on release.
+    pub(super) fn space_pan(&mut self, ctx: &egui::Context) {
+        let Some(down) = self.wb.space_down else {
+            self.wb.space_pan = None;
+            return;
+        };
+        let Some(pointer) = ctx.input(|i| i.pointer.latest_pos()) else {
+            return;
+        };
+        let from = match self.wb.space_pan {
+            Some(from) => from,
+            None if pointer.distance(down) > 4.0 => down,
+            None => return,
+        };
+        let delta = pointer - from;
+        if let Some(view) = self.canvas.schematic() {
+            view.canvas
+                .viewport
+                .pan_by_screen(novo_canvas::Vec2::new(delta.x, delta.y));
+        }
+        self.wb.space_pan = Some(pointer);
+        ctx.set_cursor_icon(egui::CursorIcon::Grabbing);
+        ctx.request_repaint();
     }
 
     /// Opens the field for a tapped Space once it is released.
@@ -624,12 +767,16 @@ impl NovoApp {
             });
             (up, i.pointer.latest_pos())
         });
-        if !released {
+        // A Space let go while another window had the keyboard sends no
+        // release; it is no longer down either way.
+        let held = ctx.input(|i| i.key_down(egui::Key::Space));
+        if !released && held {
             return;
         }
         self.wb.space_down = None;
+        let panned = self.wb.space_pan.take().is_some();
         let moved = pointer.map_or(0.0, |p| p.distance(down));
-        if moved <= 4.0 {
+        if released && !panned && moved <= 4.0 {
             self.wb.field.open(Mode::All, pointer.or(Some(down)));
         }
     }

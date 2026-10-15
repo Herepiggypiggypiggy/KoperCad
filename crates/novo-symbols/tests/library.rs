@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use novo_symbols::{Library, SvgOptions, Symbol, to_svg, validate};
+use novo_symbols::{Library, Pack, SvgOptions, Symbol, to_svg, validate};
 
 fn builtin() -> Library {
     Library::builtin().unwrap_or_else(|e| panic!("built-in library failed to load: {e}"))
@@ -19,7 +19,7 @@ fn builtin_library_loads_and_validates() {
 #[test]
 fn directory_loader_matches_builtin() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("symbols");
-    let from_dir = Library::load_dir(&dir).unwrap();
+    let from_dir = Library::load_dir_pack(&dir, Pack::Iec).unwrap();
     let builtin = builtin();
     assert_eq!(from_dir.len(), builtin.len());
     for symbol in builtin.iter() {
@@ -429,7 +429,8 @@ fn palette_aliases_find_common_symbols() {
         ("coil", "iec/coils/relay"),
         ("mcb3", "iec/protection/mcb_3p"),
         ("motor3", "iec/motors/motor_3ph"),
-        ("x", "iec/terminals/terminal"),
+        ("x", "iec/terminals/terminal_end"),
+        ("term", "iec/terminals/terminal"),
         ("br2", "iec/connectivity/bridge_2"),
     ] {
         assert_eq!(
@@ -446,7 +447,7 @@ fn palette_aliases_find_common_symbols() {
 
     let favorites: Vec<_> = lib.favorites().map(|s| s.id.as_str()).collect();
     assert_eq!(favorites.len(), 20, "{favorites:?}");
-    assert!(favorites.contains(&"iec/terminals/terminal"));
+    assert!(favorites.contains(&"iec/terminals/terminal_end"));
     assert_eq!(lib.by_function("accessory.terminal").count(), 2);
 }
 
@@ -514,6 +515,15 @@ fn terminal_clamps_share_one_drawing() {
         assert!(!clamps.is_empty(), "{} has no clamp", symbol.id);
         for (center, r) in clamps {
             assert_eq!(r, 1.2, "{}", symbol.id);
+            // A one-ended terminal has its clamp at the end of the one wire.
+            if let [only] = symbol.connections.as_slice() {
+                assert!(
+                    only.at[0] == center[0] && only.at[1] < center[1],
+                    "{}: the clamp at {center:?} is not at the end of the wire",
+                    symbol.id
+                );
+                continue;
+            }
             // Each clamp sits on a conductor, between two of its connections.
             let xs: Vec<_> = symbol
                 .connections

@@ -54,14 +54,14 @@ jobs:
         shell: pwsh
         run: |
           # The installer and the app must run without elevation.
-          foreach ($exe in @((Get-ChildItem dist\NovoElectric-*-setup.exe)[0].FullName, "target\release\novoelectric.exe")) {
+          foreach ($exe in @((Get-ChildItem dist\KoperCAD-*-setup.exe)[0].FullName, "target\release\kopercad.exe")) {
             $text = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($exe))
             if ($text -match 'requireAdministrator|highestAvailable') { throw "$exe asks for admin rights" }
           }
           # A dynamically linked MSVC runtime would need the machine-wide VC++
           # Redistributable, which a standard user cannot install.
-          $app = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes("target\release\novoelectric.exe"))
-          if ($app -match '(?i)vcruntime140|msvcp140|api-ms-win-crt-') { throw "novoelectric.exe links the MSVC runtime dynamically" }
+          $app = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes("target\release\kopercad.exe"))
+          if ($app -match '(?i)vcruntime140|msvcp140|api-ms-win-crt-') { throw "kopercad.exe links the MSVC runtime dynamically" }
       - name: Install as a standard (non-admin) user
         shell: pwsh
         run: |
@@ -93,16 +93,16 @@ jobs:
           Start-Process cmd.exe -Credential $cred -LoadUserProfile -WorkingDirectory $work -ArgumentList "/c", "exit" -Wait
           if (-not (Test-Path $profileDir)) { throw "profile for $user was not created" }
 
-          $setup = (Get-ChildItem dist\NovoElectric-*-setup.exe)[0]
+          $setup = (Get-ChildItem dist\KoperCAD-*-setup.exe)[0]
           Copy-Item $setup.FullName "$work\novo-setup.exe"
           $p = Start-Process "$work\novo-setup.exe" -Credential $cred -LoadUserProfile -WorkingDirectory $work `
             -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=$work\install.log" -Wait -PassThru
           Get-Content "$work\install.log" -ErrorAction SilentlyContinue | Select-Object -Last 20
           if ($p.ExitCode -ne 0) { throw "installer exited with $($p.ExitCode)" }
 
-          $exe = "C:\Users\$user\AppData\Local\Programs\NovoElectric\novoelectric.exe"
-          if (-not (Test-Path $exe)) { throw "novoelectric.exe is not in the user's %LOCALAPPDATA%\Programs" }
-          if (Test-Path "HKLM:\Software\Classes\NovoElectric.Project") { throw "file association was written machine-wide" }
+          $exe = "C:\Users\$user\AppData\Local\Programs\KoperCAD\kopercad.exe"
+          if (-not (Test-Path $exe)) { throw "kopercad.exe is not in the user's %LOCALAPPDATA%\Programs" }
+          if (Test-Path "HKLM:\Software\Classes\KoperCAD.Project") { throw "file association was written machine-wide" }
           if (Test-Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{AEB465B9-04F0-475B-AD7F-091D638587B5}_is1") { throw "uninstall entry was written machine-wide" }
 
       - name: Launch the installed app
@@ -112,16 +112,16 @@ jobs:
           # has no desktop to attach to, so this step runs the installed exe
           # as the runner; its asInvoker manifest (checked above) means it
           # runs with whatever rights its user has.
-          $exe = "C:\Users\novotest\AppData\Local\Programs\NovoElectric\novoelectric.exe"
+          $exe = "C:\Users\novotest\AppData\Local\Programs\KoperCAD\kopercad.exe"
           $app = Start-Process $exe -WorkingDirectory C:\novotest -PassThru
           Start-Sleep -Seconds 10
-          if ($app.HasExited) { throw "novoelectric.exe exited at startup with code $($app.ExitCode)" }
+          if ($app.HasExited) { throw "kopercad.exe exited at startup with code $($app.ExitCode)" }
           Stop-Process -Id $app.Id
-          $setup = (Get-ChildItem dist\NovoElectric-*-setup.exe)[0]
+          $setup = (Get-ChildItem dist\KoperCAD-*-setup.exe)[0]
           $size = [math]::Round($setup.Length / 1MB, 1)
           "Installer: $($setup.Name), $size MB, installed as a standard user, app launched" >> $env:GITHUB_STEP_SUMMARY
       - uses: actions/upload-artifact@v4
         with:
-          name: NovoElectric-windows-installer
+          name: KoperCAD-windows-installer
           path: dist/*.exe
           if-no-files-found: error

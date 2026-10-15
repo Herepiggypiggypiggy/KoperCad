@@ -1,0 +1,39 @@
+format = 1
+id = "nfpa/protection/overload_relay"
+name = "Thermal overload relay, 3-pole"
+description = "Main circuit of a 3-pole thermal overload relay; its auxiliary contacts are 95-96 and 97-98."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "protection"
+function = "protection.overload"
+keywords = ["overload", "thermal relay", "bimetal", "ol", "nfpa", "ansi"]
+aliases = ["ol"]
+favorite = true
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+  { id = "3", at = [8, 0], dir = "up" },
+  { id = "4", at = [8, 16], dir = "down" },
+  { id = "5", at = [16, 0], dir = "up" },
+  { id = "6", at = [16, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "polyline", points = [[0, 4], [-2, 5], [2, 7], [-2, 9], [2, 11], [0, 12]] },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+  { kind = "line", from = [8, 0], to = [8, 4] },
+  { kind = "polyline", points = [[8, 4], [6, 5], [10, 7], [6, 9], [10, 11], [8, 12]] },
+  { kind = "line", from = [8, 12], to = [8, 16] },
+  { kind = "line", from = [16, 0], to = [16, 4] },
+  { kind = "polyline", points = [[16, 4], [14, 5], [18, 7], [14, 9], [18, 11], [16, 12]] },
+  { kind = "line", from = [16, 12], to = [16, 16] },
+]
+
+[behavior]
+kind = "overload"
+poles = [["1", "2"], ["3", "4"], ["5", "6"]]

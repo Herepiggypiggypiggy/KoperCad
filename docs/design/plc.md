@@ -1,6 +1,6 @@
 # PLC and I/O (WS-17)
 
-How NovoElectric handles PLC cards, their channels, I/O addresses, the I/O
+How KoperCAD handles PLC cards, their channels, I/O addresses, the I/O
 list and channel cross references. This extends `docs/DESIGN.md`; where the
 two disagree, DESIGN.md wins and this file is corrected. Engine code lives in
 `novo-plc`; the pieces other crates draw or print are listed in §8.
@@ -215,6 +215,18 @@ With the Rockwell style, addresses are slot and channel, so byte overlaps are
 not reported (§11).
 
 Spare channels are not a problem; they are a column in the I/O list.
+
+## 7a. Under simulation (Shift+L)
+
+There is no PLC program, so a channel is something you switch or watch by
+hand. A digital output (DQ) has a badge like a coil's: a click switches it on
+or off. While on, it puts the project's DC positive potential (else its first
+signal potential) on its pin; with no such potential in the project it drives
+nothing. A digital input (DI) shows a dot that fills while its pin carries any
+potential, so a DQ wired to a DI, or a contact chain fed from one, can be
+followed on the drawing. Relay outputs are make contacts and are switched
+like any other pole; analog channels do nothing yet. A PLC program or logic
+model would replace the hand switch later without changing what DI shows.
 
 ## 8. Who builds what
 

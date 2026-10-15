@@ -241,6 +241,10 @@ pub fn no_room_to_refit(symbol: &SymbolKey) -> String {
     )
 }
 
+pub fn connect_needs_two() -> String {
+    "select two or more terminals to connect".to_owned()
+}
+
 pub fn not_on_one_strip() -> String {
     "a jumper can only bridge terminals of one strip".to_owned()
 }

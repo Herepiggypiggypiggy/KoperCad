@@ -1,4 +1,4 @@
-# Builds NovoElectric on this PC and refreshes the "NovoElectric (latest)"
+# Builds KoperCAD on this PC and refreshes the "KoperCAD (latest)"
 # shortcut's copy, so the newest build needs no GitHub Actions minutes.
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\build-local.ps1 [-Ref main] [-NoLaunch]
@@ -31,7 +31,7 @@ trap {
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-$Repo = 'Herepiggypiggypiggy/NovoElectric'
+$Repo = 'Herepiggypiggypiggy/kopercad'
 $Base = Join-Path $env:LOCALAPPDATA 'NovoElectric'
 $Work = Join-Path $Base 'local-build'
 $Target = 'x86_64-pc-windows-gnu'
@@ -77,6 +77,28 @@ if (-not (Test-Path (Join-Path $mingw 'bin\gcc.exe'))) {
     if (-not $asset) { throw 'Could not find a WinLibs zip in the latest release.' }
     $zip = Join-Path $Work $asset.name
     Invoke-WebRequest $asset.browser_download_url -OutFile $zip -UseBasicParsing
+    # WinLibs publishes a .sha256 file next to each zip; refuse a corrupt or
+    # tampered download. Without that file, say so rather than skip silently.
+    $sumAsset = $rel.assets | Where-Object { $_.name -eq "$($asset.name).sha256" } | Select-Object -First 1
+    if ($sumAsset) {
+        # Windows PowerShell 5.1 can hand back bytes for a binary content type.
+        $raw = (Invoke-WebRequest $sumAsset.browser_download_url -UseBasicParsing).Content
+        if ($raw -is [byte[]]) { $raw = [Text.Encoding]::ASCII.GetString($raw) }
+        $expected = (($raw.Trim() -split '\s+')[0]).ToLower()
+        if ($expected -notmatch '^[0-9a-f]{64}$') {
+            Write-Warning "Could not read a SHA-256 for $($asset.name); the download is unchecked."
+        }
+        else {
+            $actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
+            if ($actual -ne $expected) {
+                Remove-Item -Force $zip
+                throw "WinLibs download failed its SHA-256 check (expected $expected, got $actual)."
+            }
+        }
+    }
+    else {
+        Write-Warning "No SHA-256 file published for $($asset.name); the download is unchecked."
+    }
     $unpack = Join-Path $Work 'mingw-unpack'
     Remove-Item -Recurse -Force $unpack -ErrorAction SilentlyContinue
     Expand-Archive -Path $zip -DestinationPath $unpack
@@ -116,8 +138,8 @@ Write-Host 'Building (the first run takes a while)...'
 Push-Location $src
 try { Invoke-Checked 'cargo build' { cargo build --release -p novo-app --target $Target } }
 finally { Pop-Location }
-$built = Join-Path $env:CARGO_TARGET_DIR "$Target\release\novoelectric.exe"
-if (-not (Test-Path $built)) { throw 'The build finished without novoelectric.exe.' }
+$built = Join-Path $env:CARGO_TARGET_DIR "$Target\release\kopercad.exe"
+if (-not (Test-Path $built)) { throw 'The build finished without kopercad.exe.' }
 
 # 5. Put it where run-latest.ps1 starts it from, with a newer `built` time so
 # the stale release does not replace it.
@@ -125,16 +147,18 @@ $stamp = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
 $next = Join-Path $Experimental 'next'
 Remove-Item -Recurse -Force $next -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $next | Out-Null
+Copy-Item $built (Join-Path $next 'kopercad.exe')
+# A launcher installed before the rename still starts novoelectric.exe.
 Copy-Item $built (Join-Path $next 'novoelectric.exe')
-Set-Content -Path (Join-Path $next 'BUILD_INFO.txt') -Value "NovoElectric local build $stamp`nSource: $Ref at $commit`nBuilt on this PC with the GNU toolchain."
+Set-Content -Path (Join-Path $next 'BUILD_INFO.txt') -Value "KoperCAD local build $stamp`nSource: $Ref at $commit`nBuilt on this PC with the GNU toolchain."
 $current = Join-Path $Experimental 'current'
 Remove-Item -Recurse -Force $current -ErrorAction SilentlyContinue
-if (Test-Path $current) { throw 'NovoElectric is running; close it and run this again.' }
+if (Test-Path $current) { throw 'KoperCAD is running; close it and run this again.' }
 Move-Item $next $current
 $info = @{ built = $stamp; source = 'local'; ref = $Ref; commit = $commit } | ConvertTo-Json -Compress
 Set-Content -NoNewline -Path (Join-Path $Experimental 'build-info.json') -Value $info
 Write-Host "Done: $Ref at $($commit.Substring(0, 7))."
 
 if (-not $NoLaunch) {
-    Start-Process -FilePath (Join-Path $current 'novoelectric.exe') -WorkingDirectory $current
+    Start-Process -FilePath (Join-Path $current 'kopercad.exe') -WorkingDirectory $current
 }

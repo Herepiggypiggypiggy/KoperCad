@@ -1,4 +1,4 @@
-//! The NovoElectric theme on the Workbench window from docs/DESIGN.md §3,
+//! The KoperCAD theme on the Workbench window from docs/DESIGN.md §3,
 //! so theme changes can be checked by eye: top bar, outline, canvas with
 //! the HUD and the floating tool dock, the inspector overlay and the linked
 //! drawer.
@@ -12,7 +12,7 @@ use novo_theme::{brand, icons, tokens, widgets};
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("NovoElectric")
+            .with_title("KoperCAD")
             .with_inner_size([1440.0, 860.0])
             .with_icon(eframe::icon_data::from_png_bytes(brand::ICON_PNG_256).unwrap_or_default()),
         ..Default::default()

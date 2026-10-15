@@ -19,6 +19,8 @@ pub(crate) struct Reports {
     pending: ChangeSet,
     /// The sheet last handed to the canvas, by page, sheet and revision.
     shown: Option<((PageId, usize, u64), Option<SheetContent>)>,
+    /// Which revision each page shows, kept until the revisions change.
+    pub(super) page_revisions: Option<(Vec<novo_core::RevisionId>, novo_revisions::PageRevisions)>,
 }
 
 impl Default for Reports {
@@ -28,6 +30,7 @@ impl Default for Reports {
             since: None,
             pending: ChangeSet::default(),
             shown: None,
+            page_revisions: None,
         }
     }
 }
@@ -159,5 +162,6 @@ impl NovoApp {
         if let Some(view) = self.canvas.schematic() {
             view.set_sheet(content);
         }
+        self.update_title_revisions();
     }
 }

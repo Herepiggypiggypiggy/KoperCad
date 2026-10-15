@@ -1,0 +1,32 @@
+format = 1
+id = "nfpa/protection/fuse_switch_1p"
+name = "Fuse switch-disconnector, 1-pole"
+description = "1-pole switch-disconnector whose moving contact carries the fuse link."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "protection"
+function = "protection.fuse_switch"
+keywords = ["fuse switch", "fuse disconnector", "1p", "nfpa", "ansi"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 1.5] },
+  { kind = "arc", center = [0, 3], r = 1.5, start = 270, end = 450 },
+  { kind = "arc", center = [0, 6], r = 1.5, start = 90, end = 270 },
+  { kind = "line", from = [0, 7.5], to = [0, 10.5] },
+  { kind = "line", from = [-3, 10.5], to = [3, 10.5] },
+  { kind = "line", from = [-3, 13.5], to = [3, 13.5] },
+  { kind = "line", from = [0, 13.5], to = [0, 16] },
+]
+
+[behavior]
+kind = "fuse"
+switched = true
+poles = [["1", "2"]]

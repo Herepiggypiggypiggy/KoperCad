@@ -14,7 +14,7 @@ connections = [
 ]
 
 anchors = [
-  { role = "tag", at = [3, 2], align = "left" },
+  { role = "tag", at = [-3, 2], align = "right" },
 ]
 
 graphics = [

@@ -10,9 +10,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::geom::{Direction, Placement, Point, Rotation};
 use crate::id::{
-    AnyId, BlockDefinitionId, BlockInstanceId, CableId, DeviceId, DismissalId, JunctionId, PageId,
-    PartId, PotentialId, PotentialSystemId, RevisionId, StructureId, SymbolId, TerminalId, TextId,
-    WireId,
+    AnyId, BlockDefinitionId, BlockInstanceId, CabinetPlacementId, CableId, DeviceId, DismissalId,
+    JunctionId, PageId, PartId, PotentialId, PotentialSystemId, RailId, RevisionId, StructureId,
+    SymbolId, TerminalId, TextId, WireId,
 };
 use crate::tag::DeviceTag;
 
@@ -530,11 +530,68 @@ impl PinRef {
 }
 
 /// Something a wire can end on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Endpoint {
-    Pin { symbol: SymbolId, pin: u16 },
-    Junction { junction: JunctionId },
+    Pin {
+        symbol: SymbolId,
+        pin: u16,
+    },
+    Junction {
+        junction: JunctionId,
+    },
+    /// An open end: a free position on the wire's page, connected to
+    /// nothing (DESIGN §4 "Open ends"). The wire's other end still
+    /// connects; an open end joins no net and makes no connection, and
+    /// checks report each one as `wire.open`. Moving it is an ordinary
+    /// `update` of the wire; connecting it replaces it with a pin or
+    /// junction endpoint.
+    Free {
+        at: Point,
+    },
+}
+
+impl Eq for Endpoint {}
+
+impl PartialOrd for Endpoint {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+/// Pins first, then junctions, then open ends by position.
+impl Ord for Endpoint {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        use Endpoint::*;
+        let rank = |e: &Endpoint| match e {
+            Pin { .. } => 0,
+            Junction { .. } => 1,
+            Free { .. } => 2,
+        };
+        match (self, other) {
+            (Pin { symbol: a, pin: p }, Pin { symbol: b, pin: q }) => (a, p).cmp(&(b, q)),
+            (Junction { junction: a }, Junction { junction: b }) => a.cmp(b),
+            (Free { at: a }, Free { at: b }) => {
+                a.x.total_cmp(&b.x).then_with(|| a.y.total_cmp(&b.y))
+            }
+            _ => rank(self).cmp(&rank(other)),
+        }
+    }
+}
+
+impl std::hash::Hash for Endpoint {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            Endpoint::Pin { symbol, pin } => (symbol, pin).hash(state),
+            Endpoint::Junction { junction } => junction.hash(state),
+            // `0.0 == -0.0`, so hash them alike.
+            Endpoint::Free { at } => {
+                (at.x + 0.0).to_bits().hash(state);
+                (at.y + 0.0).to_bits().hash(state);
+            }
+        }
+    }
 }
 
 impl Endpoint {
@@ -546,11 +603,20 @@ impl Endpoint {
         Endpoint::Junction { junction }
     }
 
+    pub fn free(at: Point) -> Self {
+        Endpoint::Free { at }
+    }
+
     pub fn as_pin(self) -> Option<PinRef> {
         match self {
             Endpoint::Pin { symbol, pin } => Some(PinRef { symbol, pin }),
-            Endpoint::Junction { .. } => None,
+            Endpoint::Junction { .. } | Endpoint::Free { .. } => None,
         }
+    }
+
+    /// Whether this is an open end.
+    pub fn is_free(self) -> bool {
+        matches!(self, Endpoint::Free { .. })
     }
 }
 
@@ -866,6 +932,71 @@ pub struct Structure {
     /// side of a terminal strip faces it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub enclosure: bool,
+    /// The mounting plate of an enclosure, which devices are placed on
+    /// (cabinet layout). `None` until its size is set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plate: Option<MountingPlate>,
+    #[serde(default)]
+    pub properties: Properties,
+}
+
+/// The mounting plate of an enclosure, in millimetres with the origin at its
+/// top left, x to the right and y down.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct MountingPlate {
+    pub width: f64,
+    pub height: f64,
+    /// The border where nothing is placed.
+    #[serde(default)]
+    pub margin: f64,
+}
+
+/// What a [`Rail`] is.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RailKind {
+    #[default]
+    DinRail,
+    Duct,
+}
+
+/// A DIN rail or wiring duct on the mounting plate of an enclosure. It runs
+/// to the right from `(x, y)`, its start, for `length` millimetres.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Rail {
+    pub id: RailId,
+    /// The enclosure whose plate it is on.
+    pub structure: StructureId,
+    pub x: f64,
+    pub y: f64,
+    pub length: f64,
+    #[serde(default)]
+    pub kind: RailKind,
+    #[serde(default)]
+    pub properties: Properties,
+}
+
+/// Where a device sits on the mounting plate of an enclosure. A device has
+/// at most one. Deleting the device, the enclosure or the rail deletes
+/// the placement, except that deleting the rail leaves the device on the
+/// plate, off any rail.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CabinetPlacement {
+    pub id: CabinetPlacementId,
+    pub device: DeviceId,
+    pub structure: StructureId,
+    /// The top left of the footprint on the plate.
+    pub x: f64,
+    pub y: f64,
+    /// Turned by 90 degrees, so the footprint swaps width and height.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub rotated: bool,
+    /// The rail the device is on, and its offset along it; the offset is
+    /// only set with a rail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rail: Option<RailId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rail_offset: Option<f64>,
     #[serde(default)]
     pub properties: Properties,
 }
@@ -1053,6 +1184,29 @@ pub enum TerminalKind {
     Disconnect,
 }
 
+/// Who decides that a terminal is a PE terminal. A terminal becomes one by
+/// rule when it is connected to a wire of PE potential or to a ground or PE
+/// symbol; a hand toggle is an override that the rule never undoes (DESIGN
+/// "PE terminals"). The model only stores the choice: whoever applies the
+/// rule (novo-terminals) leaves a terminal alone unless this is `Auto`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PeOverride {
+    /// The rule decides.
+    #[default]
+    Auto,
+    /// Set by hand: a PE terminal whatever it is connected to.
+    ForcedPe,
+    /// Set by hand: not a PE terminal whatever it is connected to.
+    ForcedNotPe,
+}
+
+impl PeOverride {
+    pub fn is_auto(&self) -> bool {
+        *self == PeOverride::Auto
+    }
+}
+
 /// A terminal on a terminal strip device.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Terminal {
@@ -1081,6 +1235,10 @@ pub struct Terminal {
     /// terminal), declared explicitly rather than read from its name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub feed: Option<PotentialId>,
+    /// Whether a hand toggle fixed this as a PE terminal (or not), so the
+    /// automatic rule leaves `kind` alone; shown as an override (diamond).
+    #[serde(default, skip_serializing_if = "PeOverride::is_auto")]
+    pub pe_override: PeOverride,
     #[serde(default)]
     pub properties: Properties,
 }

@@ -8,17 +8,19 @@
 //! tool, then the selection.
 
 use novo_core::{
-    AnyId, ChangeSet, DeviceId, DeviceTag, Document, Endpoint, PageId, Placement, Point, Project,
-    Rotation, SymbolId, SymbolInstance, SymbolKey, SymbolRole, WireId,
+    AnyId, ChangeSet, DeviceId, DeviceTag, Direction, Document, Endpoint, PageId, Placement, Point,
+    Project, Rotation, SymbolId, SymbolInstance, SymbolKey, SymbolRole, TextAnchor, TextContent,
+    TextId, TextPlacement, WireId,
 };
 
 use crate::catalog::{Catalog, SymbolClass, classify, model_groups, model_pins};
 use crate::edit::{self, PlaceOptions, Transform};
-use crate::geometry::{EPS, Target, endpoint_direction, route_through, snap, target_at};
+use crate::geometry::{self, EPS, Target, endpoint_direction, route_through, snap, target_at};
 use crate::lines::{self, elbow, exact_bends, lock_axis};
 use crate::naming::{self, Numbering, parse_tag_input, tag_conflict};
 use crate::overlap::Refusal;
 use crate::potential::{self, FEED_SYMBOL, PotentialMenu, Suggestion};
+use crate::row::{self, RowDrag};
 
 /// Placing one symbol, over and over.
 #[derive(Debug, Clone, PartialEq)]
@@ -44,6 +46,16 @@ pub struct WireTool {
     /// Corners: R flipped the elbow of the leg in progress to run along the
     /// other axis first (DESIGN.md §4). Cleared by the next click.
     pub flip: bool,
+    /// The pin Q will end the wire on: set by Tab on the part under the
+    /// pointer, dropped when the pointer leaves that part.
+    pub aim: Option<(SymbolId, u16)>,
+    /// An existing wire this one replaces on commit (pulling or resuming
+    /// an open end, DESIGN.md §4): it keeps its number, colour and
+    /// potential, and nothing changes if the new one is refused.
+    pub replacing: Option<WireId>,
+    /// Pulling an open end: a release on nothing leaves the end open
+    /// where the pointer is, instead of cancelling.
+    pub pull: bool,
 }
 
 /// How the wire tool turns clicks into a route (DESIGN.md §4, "Wiring
@@ -59,6 +71,20 @@ pub enum WiringMode {
     Lines,
 }
 
+/// What happens to the wires between facing free pins after a drop
+/// (DESIGN.md §2). Joining pins that touch, and splitting a wire a pin lands
+/// in, happen in every mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ConnectMode {
+    /// Draw them with the drop, as one undo step.
+    #[default]
+    Draw,
+    /// Propose each one; Enter accepts, Delete declines.
+    Ask,
+    /// Draw and propose nothing.
+    Never,
+}
+
 /// Moving the selection: it follows the pointer until the next click.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MoveTool {
@@ -68,6 +94,28 @@ pub struct MoveTool {
     /// Quarter turns and mirroring applied on drop.
     pub turns: u8,
     pub mirrored: bool,
+    /// Shift: the wires on the moved pins stretch along instead of staying
+    /// behind as open ends.
+    pub carry: bool,
+    /// Shift+M chose to carry the wires: the choice stays after Shift is
+    /// released, so the per-frame default and Shift sync leaves it alone.
+    pub pinned: bool,
+}
+
+/// A label that is dragged on its own, leaving what it names where it is.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LabelSource {
+    /// A text record: its offset changes.
+    Record(TextId),
+    /// Text the canvas draws by itself (a symbol's tag, a wire's number):
+    /// the first drag gives it a record at the place it is drawn.
+    Drawn {
+        owner: AnyId,
+        content: TextContent,
+        /// Where it is drawn now, and which point of its box sits there.
+        at: Point,
+        anchor: TextAnchor,
+    },
 }
 
 /// The active tool.
@@ -78,6 +126,16 @@ pub enum Tool {
     Place(PlaceTool),
     Wire(WireTool),
     Move(MoveTool),
+    Cable(CableTool),
+}
+
+/// Drawing a cable: a line over wires (DESIGN.md, C in the keys table and
+/// the Cables drawer). Every wire the line
+/// touches joins the cable when the line is finished.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CableTool {
+    /// The points clicked so far, on the grid.
+    pub points: Vec<Point>,
 }
 
 impl Tool {
@@ -85,6 +143,7 @@ impl Tool {
     fn fresh(&self) -> Tool {
         match self {
             Tool::Wire(_) => Tool::Wire(WireTool::default()),
+            Tool::Cable(_) => Tool::Cable(CableTool::default()),
             Tool::Move(_) | Tool::Select => Tool::Select,
             Tool::Place(p) => Tool::Place(p.clone()),
         }
@@ -103,6 +162,8 @@ pub enum EditorKey {
     Wire,
     /// M: move the selection.
     Move,
+    /// Shift+M: move the selection with the wires on its pins.
+    MoveWithWires,
     /// Delete.
     Delete,
     /// Repeat the last tool when nothing is in progress (the first item of
@@ -116,6 +177,19 @@ pub enum EditorKey {
     /// Enter or a double click while a wire is in progress: finishes on the
     /// last point when it is on a pin or a wire.
     Finish,
+    /// A double click while a wire is in progress: the click before it was
+    /// the last corner; the wire ends there, on a pin or wire if one is
+    /// there and as an open end if not (DESIGN.md §4, "Open ends").
+    FinishOpen,
+    /// A double click with the Connect tool and no wire in progress: on
+    /// empty canvas it starts a wire there, open at that end.
+    StartFree,
+    /// Q while a wire is in progress: ends the wire on the part under the
+    /// pointer, on the pin Tab picked or else the nearest one.
+    EndOnPart,
+    /// Tab while a wire is in progress: the next connection point of the
+    /// part under the pointer.
+    NextPin,
 }
 
 /// What a click did.
@@ -151,6 +225,121 @@ pub struct Preview {
     /// Lines: the stretch of another wire the next line would lie over, to
     /// tint; `wire` is then kept up to the last legal point (DESIGN.md §4).
     pub blocked: Vec<(Point, Point)>,
+    /// Corners: the corner or T piece the next click places, with the arms
+    /// it would have (DESIGN.md §4 "Wiring modes"). R flips the elbow.
+    pub piece: Option<WirePiece>,
+}
+
+/// A corner (two arms) or T (three arms) piece of a wire in progress.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WirePiece {
+    pub at: Point,
+    pub arms: Vec<Direction>,
+}
+
+/// The direction of the axis-parallel stretch from `a` towards `b`.
+fn arm(a: Point, b: Point) -> Option<Direction> {
+    if a.approx_eq(b, EPS) {
+        None
+    } else if (a.x - b.x).abs() < EPS {
+        Some(if b.y > a.y {
+            Direction::Down
+        } else {
+            Direction::Up
+        })
+    } else if (a.y - b.y).abs() < EPS {
+        Some(if b.x > a.x {
+            Direction::Right
+        } else {
+            Direction::Left
+        })
+    } else {
+        None
+    }
+}
+
+/// The part under the pointer: the placed symbol on `page` whose pins,
+/// widened by a few millimetres, contain `p`; the smallest one wins so a
+/// small part inside a big frame is still reachable.
+fn part_at(project: &Project, page: PageId, p: Point) -> Option<SymbolId> {
+    const MARGIN: f64 = 6.0;
+    project
+        .page_contents(page)
+        .symbols
+        .into_iter()
+        .filter_map(|id| {
+            let s = project.symbol(id)?;
+            let points: Vec<Point> = (0..s.pins.len() as u16)
+                .filter_map(|i| s.pin_position(i))
+                .chain([s.placement.origin])
+                .collect();
+            let min_x = points.iter().map(|q| q.x).fold(f64::MAX, f64::min) - MARGIN;
+            let max_x = points.iter().map(|q| q.x).fold(f64::MIN, f64::max) + MARGIN;
+            let min_y = points.iter().map(|q| q.y).fold(f64::MAX, f64::min) - MARGIN;
+            let max_y = points.iter().map(|q| q.y).fold(f64::MIN, f64::max) + MARGIN;
+            ((min_x..=max_x).contains(&p.x) && (min_y..=max_y).contains(&p.y))
+                .then_some((id, (max_x - min_x) * (max_y - min_y)))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(id, _)| id)
+}
+
+/// Whether the segments `a`-`b` and `c`-`d` cross or come within `tolerance`.
+fn segments_touch(a: Point, b: Point, c: Point, d: Point, tolerance: f64) -> bool {
+    let cross =
+        |o: Point, p: Point, q: Point| (p.x - o.x) * (q.y - o.y) - (p.y - o.y) * (q.x - o.x);
+    let (d1, d2) = (cross(a, b, c), cross(a, b, d));
+    let (d3, d4) = (cross(c, d, a), cross(c, d, b));
+    if d1 * d2 < 0.0 && d3 * d4 < 0.0 {
+        return true;
+    }
+    let near = |p: Point, a: Point, b: Point| {
+        let (q, _) = geometry::closest_on_segment(p, a, b);
+        (q.x - p.x).hypot(q.y - p.y) <= tolerance
+    };
+    near(a, c, d) || near(b, c, d) || near(c, a, b) || near(d, a, b)
+}
+
+/// The pin nearest `p`.
+fn nearest_pin(pins: &[(u16, Point)], p: Point) -> (u16, Point) {
+    pins.iter()
+        .copied()
+        .min_by(|a, b| {
+            let d = |q: Point| (q.x - p.x).hypot(q.y - p.y);
+            d(a.1).total_cmp(&d(b.1))
+        })
+        .expect("callers pass at least one pin")
+}
+
+/// The piece at the last bend of `path` (start, bends, pointer), or the T
+/// piece at the pointer when it is on another wire: the branch points back
+/// the way the wire came, the other two arms run along the wire joined.
+fn pending_piece(
+    project: &Project,
+    page: PageId,
+    path: &[Point],
+    on: Option<Target>,
+) -> Option<WirePiece> {
+    let n = path.len();
+    if let Some(Target::Wire(w, at)) = on {
+        let branch = arm(at, *path.get(n.checked_sub(2)?)?)?;
+        let (_, seg) = geometry::wires_through(project, page, at)
+            .into_iter()
+            .find(|(id, _)| *id == w)?;
+        let pts = geometry::wire_points(project, w)?;
+        let (a, b) = (arm(at, pts[seg])?, arm(at, pts[seg + 1])?);
+        return Some(WirePiece {
+            at,
+            arms: vec![branch, a, b],
+        });
+    }
+    if n < 3 {
+        return None;
+    }
+    let (prev, at, next) = (path[n - 3], path[n - 2], path[n - 1]);
+    let arms = vec![arm(at, prev)?, arm(at, next)?];
+    // Two arms on one line are a straight stretch, not a corner.
+    (arms[0].vector() != -arms[1].vector()).then_some(WirePiece { at, arms })
 }
 
 /// The pin a target is, if it is one.
@@ -163,6 +352,48 @@ fn pin_of(target: Target) -> Option<Endpoint> {
 
 /// The reason shown when a line would run back over the wire being drawn.
 const SELF_OVERLAP_NOTICE: &str = "A line cannot run back over the wire";
+
+/// What dropping the single selected contact on `target` would link: the
+/// contact, the coil it joins and the coil's tag. `None` for any other drop.
+fn link_target(
+    project: &Project,
+    selection: &[AnyId],
+    target: AnyId,
+) -> Option<(SymbolId, SymbolId, DeviceTag)> {
+    let ([AnyId::Symbol(mine)], AnyId::Symbol(coil)) = (selection, target) else {
+        return None;
+    };
+    let (a, b) = (project.symbol(*mine)?, project.symbol(coil)?);
+    let (
+        SymbolRole::Device { main: false, .. } | SymbolRole::Unassigned,
+        SymbolRole::Device { device, main: true },
+    ) = (&a.role, &b.role)
+    else {
+        return None;
+    };
+    if a.id == b.id || a.device() == Some(*device) {
+        return None;
+    }
+    Some((*mine, coil, project.device(*device)?.tag.clone()))
+}
+
+/// What giving `device` the tag `tag` of another device would link: the
+/// symbols of `device` and the first symbol of the device that has the tag
+/// (its coil, when it has one). `None` when there is nothing to link.
+fn link_plan(
+    project: &Project,
+    device: DeviceId,
+    tag: &DeviceTag,
+) -> Option<(Vec<SymbolId>, SymbolId)> {
+    let other = *project.devices_by_tag(tag).iter().find(|&&d| d != device)?;
+    let mine: Vec<SymbolId> = project
+        .symbols_of_device(device)
+        .iter()
+        .map(|s| s.id)
+        .collect();
+    let partner = project.symbols_of_device(other).first().map(|s| s.id)?;
+    (!mine.is_empty()).then_some((mine, partner))
+}
 
 /// The reason shown when a line would lie over another wire.
 fn overlap_notice(_refusal: &Refusal) -> String {
@@ -199,10 +430,18 @@ pub struct Editor {
     /// The terminal strip in use, once the user placed or chose one.
     pub strip: Option<DeviceId>,
     wire_mode: WiringMode,
+    connect: ConnectMode,
     /// The page and pick radius of the last pointer move, for keys that act
     /// at the end of the wire in progress.
     hovered: Option<(PageId, f64)>,
+    /// The raw pointer position of the last hover, for the keys that act on
+    /// the part under it (Q, Tab while wiring).
+    hover_raw: Option<Point>,
+    /// The wires of a finished cable line, until the app takes them.
+    cable_request: Option<Vec<WireId>>,
     notice: Option<String>,
+    link_hint: Option<String>,
+    row: Option<RowDrag>,
     changes: ChangeSet,
     select: Option<Vec<AnyId>>,
 }
@@ -231,8 +470,13 @@ impl Editor {
             numbering: Numbering::default(),
             strip: None,
             wire_mode: WiringMode::default(),
+            connect: ConnectMode::default(),
             hovered: None,
+            hover_raw: None,
+            cable_request: None,
             notice: None,
+            link_hint: None,
+            row: None,
             changes: ChangeSet::default(),
             select: None,
         }
@@ -259,14 +503,22 @@ impl Editor {
                     .map_or(p.symbol.as_str(), |s| s.name.as_str())
             )),
             Tool::Wire(_) => Some("Wire".into()),
+            Tool::Cable(_) => Some("Cable".into()),
             _ => None,
         }
+    }
+
+    /// Whether a wire has been started and not finished: Q and Tab then
+    /// steer it (end on a part, cycle its pins).
+    pub fn is_wiring(&self) -> bool {
+        matches!(&self.tool, Tool::Wire(w) if w.start.is_some())
     }
 
     /// Whether a step is in progress (a wire started, a move in hand).
     pub fn in_progress(&self) -> bool {
         match &self.tool {
             Tool::Wire(w) => w.start.is_some(),
+            Tool::Cable(c) => !c.points.is_empty(),
             Tool::Move(_) => true,
             _ => false,
         }
@@ -341,6 +593,12 @@ impl Editor {
         self.cursor
     }
 
+    /// The pin, junction or wire under the pointer (or the pin Tab aimed at
+    /// while wiring), which the view highlights.
+    pub fn target(&self) -> Option<Target> {
+        self.target
+    }
+
     fn set_tool(&mut self, tool: Tool) {
         if !matches!(tool, Tool::Select) {
             self.last = Some(tool.fresh());
@@ -373,6 +631,36 @@ impl Editor {
         true
     }
 
+    /// What dropping a symbol does about facing free pins.
+    pub fn connect_mode(&self) -> ConnectMode {
+        self.connect
+    }
+
+    /// Chooses the facing-pin behavior (a per-user setting).
+    pub fn set_connect_mode(&mut self, mode: ConnectMode) {
+        self.connect = mode;
+        if mode != ConnectMode::Ask {
+            self.clear_proposals();
+        }
+    }
+
+    /// Draws the facing wires of `symbols` inside the transaction that
+    /// dropped them, when the mode is [`ConnectMode::Draw`]. A line that
+    /// cannot be drawn is left out, not an error.
+    fn draw_facing(&self, tx: &mut novo_core::Tx<'_>, symbols: &[SymbolId]) {
+        if !self.auto_connect || self.connect != ConnectMode::Draw {
+            return;
+        }
+        let placed: Vec<SymbolInstance> = symbols
+            .iter()
+            .filter_map(|&s| tx.project().symbol(s).cloned())
+            .collect();
+        let found = edit::facing_wires(tx.project(), &placed, &|s| self.outline(s));
+        for f in found {
+            let _ = edit::accept(tx, &f);
+        }
+    }
+
     /// How the wire tool turns clicks into a route.
     pub fn wire_mode(&self) -> WiringMode {
         self.wire_mode
@@ -403,8 +691,178 @@ impl Editor {
         self.set_tool(Tool::Wire(WireTool::default()));
     }
 
+    /// C: draw a cable. Click points for a line over the wires that belong
+    /// to it; click the last point again or press Enter to finish.
+    pub fn begin_cable(&mut self) {
+        self.set_tool(Tool::Cable(CableTool::default()));
+    }
+
+    /// The wires a finished cable line touched, once: the app makes the
+    /// cable out of them.
+    pub fn take_cable_request(&mut self) -> Option<Vec<WireId>> {
+        self.cable_request.take()
+    }
+
+    /// A press with a symbol on the pointer: a drag from here places a row
+    /// (DESIGN.md §4, "Placing a row"). `false` when there is nothing to
+    /// place in a row (no symbol, or a child symbol of a given device).
+    pub fn begin_row(&mut self) -> bool {
+        let (Tool::Place(p), Some(at)) = (&self.tool, self.cursor) else {
+            return false;
+        };
+        if p.parent.is_some() {
+            return false;
+        }
+        self.proposals.clear();
+        self.row = Some(RowDrag::new(at));
+        true
+    }
+
+    /// Whether a row is being dragged out.
+    pub fn row_active(&self) -> bool {
+        self.row.is_some() && matches!(self.tool, Tool::Place(_))
+    }
+
+    /// The pointer moved during a row drag.
+    pub fn row_follow(&mut self, pointer: Point, hysteresis: f64) {
+        if let Some(r) = &mut self.row {
+            r.follow(pointer, hysteresis);
+        }
+    }
+
+    /// `+` or `-` (or the wheel) during a row drag: one grid step wider or
+    /// narrower.
+    pub fn row_step(&mut self, delta: i32) {
+        if let Some(r) = &mut self.row {
+            r.extra_steps += delta;
+        }
+    }
+
+    /// Where the row's symbols go now and the position it stopped before.
+    fn row_plan(&self, doc: &Document, page: PageId) -> Option<(Vec<Point>, Option<Point>, f64)> {
+        let (Tool::Place(p), Some(r)) = (&self.tool, &self.row) else {
+            return None;
+        };
+        let symbol = self.catalog.get(&p.symbol)?;
+        let placement = Placement {
+            origin: r.press,
+            rotation: p.rotation,
+            mirrored: p.mirrored,
+        };
+        // A row of terminals matches the strip it joins.
+        let strip_pitch = match classify(symbol) {
+            SymbolClass::Terminal { .. } => edit::adjacent_strip(doc.project(), page, r.press)
+                .and_then(|strip| row::strip_pitch(doc.project(), page, strip, r, self.grid)),
+            _ => None,
+        };
+        let pitch = row::pitch(symbol, &placement, r, self.grid, strip_pitch);
+        let (at, stopped) = row::positions(
+            doc.project(),
+            &self.catalog,
+            page,
+            symbol,
+            placement,
+            r,
+            pitch,
+        );
+        Some((at, stopped, pitch))
+    }
+
+    /// A drag with a 1-pole symbol along its pole axis places one
+    /// multi-pole symbol (poles at the strip pitch), not several 1-poles.
+    fn pole_plan(&self) -> Option<row::PoleRow> {
+        let (Tool::Place(p), Some(r)) = (&self.tool, &self.row) else {
+            return None;
+        };
+        let placement = Placement {
+            origin: r.press,
+            rotation: p.rotation,
+            mirrored: p.mirrored,
+        };
+        row::pole_row(&p.symbol, &placement, r)
+    }
+
+    /// Release: places the whole row as one undo step (a drag that never
+    /// got past one pitch places the single symbol).
+    pub fn end_row(&mut self, doc: &mut Document, page: PageId) -> Clicked {
+        if let (Some(poles), Tool::Place(p)) = (self.pole_plan(), self.tool.clone()) {
+            self.row = None;
+            let multi = PlaceTool {
+                symbol: poles.symbol.to_owned(),
+                ..p
+            };
+            return self.commit_place(doc, page, &multi, poles.origin);
+        }
+        let Some((at, _, _)) = self.row_plan(doc, page) else {
+            self.row = None;
+            return Clicked::Unhandled;
+        };
+        let Tool::Place(p) = self.tool.clone() else {
+            self.row = None;
+            return Clicked::Unhandled;
+        };
+        let press = self.row.take().map_or(Point::ZERO, |r| r.press);
+        if at.len() <= 1 {
+            return self.commit_place(doc, page, &p, at.first().copied().unwrap_or(press));
+        }
+        let Some(symbol) = self.catalog.get(&p.symbol).cloned() else {
+            return Clicked::Refused;
+        };
+        let options = PlaceOptions {
+            parent: None,
+            auto_connect: self.auto_connect,
+            numbering: self.numbering,
+            ..PlaceOptions::default()
+        };
+        let label = format!("Place {} x{}", symbol.name, at.len());
+        let result = doc.transact(label, |tx| {
+            let mut options = options.clone();
+            let mut ids = Vec::new();
+            for &origin in &at {
+                let placement = Placement {
+                    origin,
+                    rotation: p.rotation,
+                    mirrored: p.mirrored,
+                };
+                let id = edit::place(tx, page, &symbol, placement, &options)?;
+                // The whole row is one strip, wherever its first terminal went.
+                if options.strip.is_none() {
+                    options.strip = edit::strip_of_symbol(tx.project(), id);
+                }
+                ids.push(id);
+            }
+            self.draw_facing(tx, &ids);
+            Ok(ids)
+        });
+        let ids = result.as_ref().ok().map(|(ids, _)| ids.clone());
+        if result.is_ok() {
+            self.catalog.used(&p.symbol);
+        }
+        let r = self.finish(result.map(|(_, c)| c), None);
+        if let Some(ids) = ids {
+            self.propose(doc, &ids);
+        }
+        r
+    }
+
     /// Picks up the selection to move it with the pointer.
     pub fn begin_move(&mut self, selection: &[AnyId]) -> bool {
+        self.begin_move_with(selection, false)
+    }
+
+    /// Whether the move in hand takes the wires along; the view sets it
+    /// from the default and the Shift key while the move runs.
+    pub fn set_move_carry(&mut self, carry: bool) {
+        if let Tool::Move(m) = &mut self.tool
+            && !m.pinned
+        {
+            m.carry = carry;
+        }
+    }
+
+    /// [`Self::begin_move`], with `carry` taking the wires along (Shift).
+    pub fn begin_move_with(&mut self, selection: &[AnyId], carry: bool) -> bool {
+        self.link_hint = None;
         let ids: Vec<AnyId> = selection
             .iter()
             .copied()
@@ -422,12 +880,18 @@ impl Editor {
             from,
             turns: 0,
             mirrored: false,
+            carry,
+            pinned: false,
         }));
         true
     }
 
     /// Escape, first rung: cancels the step in progress.
     pub fn cancel_step(&mut self) -> bool {
+        // Esc cancels a row drag and keeps the symbol on the pointer.
+        if self.row.take().is_some() {
+            return true;
+        }
         if !self.proposals.is_empty() {
             self.proposals.clear();
             return true;
@@ -435,6 +899,10 @@ impl Editor {
         match &mut self.tool {
             Tool::Wire(w) if w.start.is_some() => {
                 *w = WireTool::default();
+                true
+            }
+            Tool::Cable(c) if !c.points.is_empty() => {
+                c.points.clear();
                 true
             }
             Tool::Move(_) => {
@@ -473,6 +941,7 @@ impl Editor {
     /// pick radius in millimetres at the current zoom.
     pub fn hover(&mut self, doc: &Document, page: PageId, raw: Point, tolerance: f64) {
         self.hovered = Some((page, tolerance));
+        self.hover_raw = Some(raw);
         let project = doc.project();
         self.target = match &self.tool {
             Tool::Wire(_) => target_at(project, page, raw, tolerance),
@@ -482,6 +951,26 @@ impl Editor {
                 .filter(|t| matches!(t, Target::Endpoint(Endpoint::Pin { .. }, _))),
             _ => None,
         };
+        // A wire is joined on the grid, not wherever the pointer crosses it.
+        if let Some(Target::Wire(w, q)) = self.target {
+            let at = geometry::snap_along_wire(project, w, q, self.grid);
+            self.target = Some(Target::Wire(w, at));
+        }
+        // The pin Tab picked stays the target while the pointer is on its
+        // part; leaving the part forgets it.
+        if let Tool::Wire(w) = &mut self.tool
+            && let Some((symbol, pin)) = w.aim
+        {
+            match (
+                part_at(project, page, raw),
+                project.symbol(symbol).and_then(|s| s.pin_position(pin)),
+            ) {
+                (Some(under), Some(at)) if under == symbol => {
+                    self.target = Some(Target::Endpoint(Endpoint::Pin { symbol, pin }, at));
+                }
+                _ => w.aim = None,
+            }
+        }
         self.cursor = Some(match self.target {
             Some(t) => t.position(),
             None => snap(raw, self.grid),
@@ -503,7 +992,24 @@ impl Editor {
         // Clicking elsewhere leaves proposals unaccepted.
         self.proposals.clear();
         match self.tool.clone() {
-            Tool::Select => Clicked::Unhandled,
+            // A click on a pin starts a wire there, with no tool switch; the
+            // next click continues it.
+            Tool::Select => match self.target {
+                Some(start @ Target::Endpoint(Endpoint::Pin { .. }, _)) => {
+                    self.tool = Tool::Wire(WireTool {
+                        start: Some(start),
+                        corners: Vec::new(),
+                        drag: false,
+                        flip: false,
+                        aim: None,
+                        replacing: None,
+                        pull: false,
+                    });
+                    self.notice = None;
+                    Clicked::Step
+                }
+                _ => Clicked::Unhandled,
+            },
             Tool::Place(p) => self.commit_place(doc, page, &p, at),
             Tool::Wire(mut w) => {
                 let target = self.target;
@@ -517,6 +1023,15 @@ impl Editor {
                     (None, None) => {
                         self.notice = Some("Start a wire on a pin, junction or wire".into());
                         Clicked::Refused
+                    }
+                    (Some(start), None) if w.drag && w.pull => {
+                        // A pulled end released on nothing stays open there.
+                        let end = Target::Endpoint(Endpoint::Free { at }, at);
+                        if end.position().approx_eq(start.position(), EPS) {
+                            self.tool = Tool::Select;
+                            return Clicked::Step;
+                        }
+                        self.commit_wire(doc, page, w, start, end)
                     }
                     (Some(_), None) if w.drag => {
                         // A drag released on nothing connects nothing.
@@ -591,12 +1106,33 @@ impl Editor {
                     }
                 }
             }
+            Tool::Cable(mut c) => {
+                // Clicking the last point again finishes the line.
+                if c.points.last().is_some_and(|&last| last == at) {
+                    self.tool = Tool::Cable(c);
+                    return if self.finish_cable(doc, page, tolerance) {
+                        Clicked::Step
+                    } else {
+                        Clicked::Refused
+                    };
+                }
+                c.points.push(at);
+                self.tool = Tool::Cable(c);
+                self.notice = None;
+                Clicked::Step
+            }
             Tool::Move(m) => {
                 let delta = at - m.from;
                 let grid = self.grid;
+                let open_before = edit::open_end_count(doc.project());
                 let result = doc.transact("Move", |tx| {
                     if delta != Point::ZERO {
-                        edit::transform_interactive(tx, &m.ids, Transform::Move(delta))?;
+                        let how = Transform::Move(delta);
+                        if m.carry {
+                            edit::transform_interactive(tx, &m.ids, how)?;
+                        } else {
+                            edit::transform_detached(tx, &m.ids, how)?;
+                        }
                     }
                     let pivot = edit::pivot(tx.project(), &m.ids, grid);
                     if let Some(c) = pivot {
@@ -609,6 +1145,7 @@ impl Editor {
                     }
                     if self.auto_connect {
                         edit::settle(tx, &edit::symbols_in(&m.ids))?;
+                        self.draw_facing(tx, &edit::symbols_in(&m.ids));
                     }
                     Ok(())
                 });
@@ -616,6 +1153,14 @@ impl Editor {
                 let r = self.finish(result.map(|(_, c)| c), None);
                 if r == Clicked::Edited {
                     self.propose(doc, &edit::symbols_in(&m.ids));
+                    let left = edit::open_end_count(doc.project()).saturating_sub(open_before);
+                    if left > 0 {
+                        self.notice = Some(if left == 1 {
+                            "1 wire end left open".into()
+                        } else {
+                            format!("{left} wire ends left open")
+                        });
+                    }
                 }
                 self.select = Some(m.ids);
                 r
@@ -640,7 +1185,6 @@ impl Editor {
         };
         let options = PlaceOptions {
             parent: p.parent.clone(),
-            strip: self.strip,
             auto_connect: self.auto_connect,
             numbering: self.numbering,
             ..PlaceOptions::default()
@@ -672,7 +1216,9 @@ impl Editor {
             }
         }
         let result = doc.transact(format!("Place {}", symbol.name), |tx| {
-            edit::place(tx, page, &symbol, placement, &options)
+            let id = edit::place(tx, page, &symbol, placement, &options)?;
+            self.draw_facing(tx, &[id]);
+            Ok(id)
         });
         let placed = result.as_ref().ok().map(|(id, _)| AnyId::Symbol(*id));
         if let Ok((id, _)) = &result {
@@ -695,7 +1241,7 @@ impl Editor {
 
     /// Proposes the facing-pin wires of symbols just dropped.
     fn propose(&mut self, doc: &Document, symbols: &[SymbolId]) {
-        if !self.auto_connect {
+        if !self.auto_connect || self.connect != ConnectMode::Ask {
             return;
         }
         let project = doc.project();
@@ -703,7 +1249,7 @@ impl Editor {
             .iter()
             .filter_map(|&s| project.symbol(s).cloned())
             .collect();
-        self.proposals = edit::facing_wires(project, &placed, &|s| self.body(s));
+        self.proposals = edit::facing_wires(project, &placed, &|s| self.outline(s));
         self.proposal = 0;
         self.held = None;
     }
@@ -720,6 +1266,63 @@ impl Editor {
             .iter()
             .fold(corners[0], |m, c| Point::new(m.x.max(c.x), m.y.max(c.y)));
         Some((min, max))
+    }
+
+    /// The drawn lines of a placed symbol on its page, as segments: what a
+    /// proposed wire may not run through. Curves are flattened; text and the
+    /// empty space inside the bounding box do not count.
+    pub fn outline(&self, sym: &SymbolInstance) -> Option<Vec<(Point, Point)>> {
+        use novo_symbols::Graphic;
+        let def = self.catalog.get(&sym.symbol.0)?;
+        let at = |p: [f64; 2]| sym.placement.apply(Point::new(p[0], p[1]));
+        let mut out = Vec::new();
+        let mut chain = |pts: Vec<[f64; 2]>, closed: bool| {
+            for w in pts.windows(2) {
+                out.push((at(w[0]), at(w[1])));
+            }
+            if closed && pts.len() > 2 {
+                out.push((at(pts[pts.len() - 1]), at(pts[0])));
+            }
+        };
+        let curve = |c: [f64; 2], rx: f64, ry: f64, a0: f64, a1: f64| -> Vec<[f64; 2]> {
+            const STEPS: usize = 24;
+            (0..=STEPS)
+                .map(|i| {
+                    let a = (a0 + (a1 - a0) * i as f64 / STEPS as f64).to_radians();
+                    [c[0] + rx * a.cos(), c[1] + ry * a.sin()]
+                })
+                .collect()
+        };
+        for g in &def.graphics {
+            match g {
+                Graphic::Line { from, to, .. } => chain(vec![*from, *to], false),
+                Graphic::Polyline { points, closed, .. } => chain(points.clone(), *closed),
+                Graphic::Rect { at: a, size, .. } => chain(
+                    vec![
+                        *a,
+                        [a[0] + size[0], a[1]],
+                        [a[0] + size[0], a[1] + size[1]],
+                        [a[0], a[1] + size[1]],
+                    ],
+                    true,
+                ),
+                Graphic::Circle { center, r, .. } => {
+                    chain(curve(*center, *r, *r, 0.0, 360.0), false)
+                }
+                Graphic::Ellipse { center, rx, ry, .. } => {
+                    chain(curve(*center, *rx, *ry, 0.0, 360.0), false);
+                }
+                Graphic::Arc {
+                    center,
+                    r,
+                    start,
+                    end,
+                    ..
+                } => chain(curve(*center, *r, *r, *start, *end), false),
+                Graphic::Text { .. } => {}
+            }
+        }
+        Some(out)
     }
 
     /// The facing-pin wires the last drop proposes.
@@ -836,6 +1439,102 @@ impl Editor {
             corners: Vec::new(),
             drag: true,
             flip: false,
+            aim: None,
+            replacing: None,
+            pull: false,
+        });
+        self.notice = None;
+        true
+    }
+
+    /// The open end of a wire under `raw` (within `tolerance`), if any: the
+    /// wire, whether it is the wire's `from` end, and where the cap is.
+    pub fn open_end_at(
+        &self,
+        doc: &Document,
+        page: PageId,
+        raw: Point,
+        tolerance: f64,
+    ) -> Option<(WireId, bool, Point)> {
+        let project = doc.project();
+        project
+            .page_contents(page)
+            .wires
+            .into_iter()
+            .filter_map(|id| {
+                let w = project.wire(id)?;
+                let mut ends = Vec::new();
+                if let Endpoint::Free { at } = w.from {
+                    ends.push((id, true, at));
+                }
+                if let Endpoint::Free { at } = w.to {
+                    ends.push((id, false, at));
+                }
+                Some(ends)
+            })
+            .flatten()
+            .map(|e| (e.2.distance(raw), e))
+            .filter(|(d, _)| *d <= tolerance)
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, e)| e)
+    }
+
+    /// Whether `open_end_at` finds a cap under the hovered point.
+    pub fn open_end_hovered(&self, doc: &Document) -> bool {
+        let (Some((page, tolerance)), Some(at)) = (self.hovered, self.cursor) else {
+            return false;
+        };
+        self.open_end_at(doc, page, at, tolerance).is_some()
+    }
+
+    /// Takes hold of the open end under `raw`: with `pull` the end follows
+    /// the pointer (a drag, released on a pin or wire it connects, else it
+    /// stays open where it is dropped); without it the wire is resumed from
+    /// that end and goes on with clicks. The wire is replaced when the new
+    /// one is committed (DESIGN.md §4, "Open ends").
+    pub fn begin_open_end(
+        &mut self,
+        doc: &Document,
+        page: PageId,
+        raw: Point,
+        tolerance: f64,
+        pull: bool,
+    ) -> bool {
+        if !matches!(self.tool, Tool::Select | Tool::Wire(_)) {
+            return false;
+        }
+        if matches!(&self.tool, Tool::Wire(w) if w.start.is_some()) {
+            return false;
+        }
+        let Some((id, is_from, at)) = self.open_end_at(doc, page, raw, tolerance) else {
+            return false;
+        };
+        let project = doc.project();
+        let (Some(w), Some(route)) = (project.wire(id), crate::geometry::wire_points(project, id))
+        else {
+            return false;
+        };
+        let other = if is_from { w.to } else { w.from };
+        let Some(other_at) = project.endpoint_position(other) else {
+            return false;
+        };
+        // The route from the other end to the cap, without both ends.
+        let mut corners: Vec<Point> = route[1..route.len() - 1].to_vec();
+        if is_from {
+            corners.reverse();
+        }
+        if !pull {
+            corners.push(at);
+        }
+        self.proposals.clear();
+        self.tool = Tool::Wire(WireTool {
+            start: Some(Target::Endpoint(other, other_at)),
+            corners,
+            drag: pull,
+            flip: false,
+            aim: None,
+            replacing: Some(id),
+            pull,
         });
         self.notice = None;
         true
@@ -869,6 +1568,27 @@ impl Editor {
         } else {
             self.wire_mode
         };
+        let replacing = w.replacing;
+        // The wire being replaced goes first and its numbering and colour
+        // come back on the new one, all in this one undo step.
+        let old = replacing.and_then(|id| doc.project().wire(id).cloned());
+        // The cable core the old wire is on: removing the wire frees it.
+        let core = replacing.and_then(|id| doc.project().core_of_wire(id));
+        let swap = |tx: &mut novo_core::Tx<'_>, new: WireId| -> novo_core::Result<()> {
+            if let Some((cable, index)) = core {
+                tx.assign_core(cable, index, Some(new))?;
+            }
+            if let Some(old) = &old {
+                tx.update::<novo_core::Wire>(new, |n| {
+                    n.number = old.number.clone();
+                    n.color = old.color.clone();
+                    n.cross_section_mm2 = old.cross_section_mm2;
+                    n.potential = old.potential;
+                    n.properties = old.properties.clone();
+                })?;
+            }
+            Ok(())
+        };
         let result = match mode {
             WiringMode::Corners => {
                 if w.flip {
@@ -877,13 +1597,37 @@ impl Editor {
                         corners.push(e);
                     }
                 }
-                doc.transact("Draw wire", |tx| {
-                    edit::draw_wire(tx, page, start, &corners, end)
-                })
+                doc.transact(
+                    if old.is_some() {
+                        "Move wire end"
+                    } else {
+                        "Draw wire"
+                    },
+                    |tx| {
+                        if let Some(id) = replacing {
+                            tx.remove(AnyId::Wire(id))?;
+                        }
+                        let new = edit::draw_wire(tx, page, start, &corners, end)?;
+                        swap(tx, new)?;
+                        Ok(new)
+                    },
+                )
             }
-            WiringMode::Lines => doc.transact("Draw wire", |tx| {
-                lines::draw_wire_exact(tx, page, start, &corners, end)
-            }),
+            WiringMode::Lines => doc.transact(
+                if old.is_some() {
+                    "Move wire end"
+                } else {
+                    "Draw wire"
+                },
+                |tx| {
+                    if let Some(id) = replacing {
+                        tx.remove(AnyId::Wire(id))?;
+                    }
+                    let new = lines::draw_wire_exact(tx, page, start, &corners, end)?;
+                    swap(tx, new)?;
+                    Ok(new)
+                },
+            ),
         };
         // A wire that could not be stored leaves the one in progress as it
         // was (a drag, which has nothing to go back to, ends).
@@ -931,9 +1675,23 @@ impl Editor {
         edit::check_draw(project, page, start, &corners, end).map_err(|r| overlap_notice(&r))
     }
 
+    /// A double click with the Connect tool and no wire in progress starts
+    /// a wire open at the pointer, on empty canvas only.
+    fn start_free(&mut self) -> bool {
+        let (Tool::Wire(w), Some(at)) = (&mut self.tool, self.cursor) else {
+            return false;
+        };
+        if w.start.is_some() || self.target.is_some() {
+            return false;
+        }
+        w.start = Some(Target::Endpoint(Endpoint::Free { at }, at));
+        self.notice = None;
+        true
+    }
+
     /// Enter or a double click: finishes on the last point of the wire in
     /// progress when that point is on a pin or a wire.
-    fn finish_wire_here(&mut self, doc: &mut Document) -> bool {
+    fn finish_wire_here(&mut self, doc: &mut Document, open_ok: bool) -> bool {
         let Tool::Wire(w) = self.tool.clone() else {
             return false;
         };
@@ -941,12 +1699,21 @@ impl Editor {
             return false;
         };
         let Some(&last) = w.corners.last() else {
-            self.notice = Some("Click a pin or wire to finish".into());
+            // A double click on a pin that has just started a wire has
+            // nothing to finish yet, and nothing to complain about.
+            if !open_ok {
+                self.notice = Some("Click a pin or wire to finish".into());
+            }
             return true;
         };
-        let Some(end) = target_at(doc.project(), page, last, tolerance) else {
-            self.notice = Some("The last point is not on a pin or a wire".into());
-            return true;
+        let end = match target_at(doc.project(), page, last, tolerance) {
+            Some(end) => end,
+            // A double click on nothing leaves an open end.
+            None if open_ok => Target::Endpoint(Endpoint::Free { at: last }, last),
+            None => {
+                self.notice = Some("The last point is not on a pin or a wire".into());
+                return true;
+            }
         };
         let mut rest = w;
         rest.corners.pop();
@@ -955,6 +1722,147 @@ impl Editor {
             return true;
         }
         self.commit_wire(doc, page, rest, start, end);
+        true
+    }
+
+    /// Finishes the cable line: every wire on the page that is on no cable
+    /// yet and that the line touches goes into [`Editor::take_cable_request`].
+    fn finish_cable(&mut self, doc: &Document, page: PageId, tolerance: f64) -> bool {
+        let Tool::Cable(c) = &mut self.tool else {
+            return false;
+        };
+        let points = std::mem::take(&mut c.points);
+        if points.len() < 2 {
+            self.notice = Some("Click two or more points over the wires, then Enter".into());
+            return false;
+        }
+        let project = doc.project();
+        let wires: Vec<WireId> = project
+            .page_contents(page)
+            .wires
+            .into_iter()
+            .filter(|&w| project.cable_of_wire(w).is_none())
+            .filter(|&w| {
+                geometry::wire_points(project, w).is_some_and(|route| {
+                    points.windows(2).any(|line| {
+                        route
+                            .windows(2)
+                            .any(|seg| segments_touch(line[0], line[1], seg[0], seg[1], tolerance))
+                    })
+                })
+            })
+            .collect();
+        if wires.is_empty() {
+            self.notice = Some("The line touches no wire that is free for a cable".into());
+            return false;
+        }
+        self.notice = None;
+        self.cable_request = Some(wires);
+        true
+    }
+
+    /// The part under the pointer and its pins a wire in progress could
+    /// end on (not the pin it started from), in pin order.
+    fn aim_candidates(&self, doc: &Document) -> Option<(SymbolId, Vec<(u16, Point)>)> {
+        let (Tool::Wire(w), Some((page, _)), Some(raw)) =
+            (&self.tool, self.hovered, self.hover_raw)
+        else {
+            return None;
+        };
+        w.start?;
+        let project = doc.project();
+        let symbol = part_at(project, page, raw)?;
+        let s = project.symbol(symbol)?;
+        let pins: Vec<(u16, Point)> = (0..s.pins.len() as u16)
+            .filter(|&i| {
+                !matches!(w.start, Some(Target::Endpoint(Endpoint::Pin { symbol: a, pin }, _))
+                    if a == symbol && pin == i)
+            })
+            .filter_map(|i| s.pin_position(i).map(|p| (i, p)))
+            .collect();
+        (!pins.is_empty()).then_some((symbol, pins))
+    }
+
+    /// Tab while wiring: the next connection point of the part under the
+    /// pointer. The first press takes the pin nearest the pointer.
+    fn next_pin(&mut self, doc: &Document) -> bool {
+        let Some((symbol, pins)) = self.aim_candidates(doc) else {
+            if matches!(&self.tool, Tool::Wire(w) if w.start.is_some()) {
+                self.notice = Some("Move the pointer over a part to pick a pin".into());
+                return true;
+            }
+            return false;
+        };
+        let raw = self.hover_raw.unwrap_or_default();
+        let current = match &self.tool {
+            Tool::Wire(w) => w.aim.filter(|(s, _)| *s == symbol).map(|(_, pin)| pin),
+            _ => None,
+        };
+        let pick = match current.and_then(|pin| pins.iter().position(|(i, _)| *i == pin)) {
+            Some(at) => pins[(at + 1) % pins.len()],
+            None => nearest_pin(&pins, raw),
+        };
+        let name = doc
+            .project()
+            .symbol(symbol)
+            .and_then(|s| s.pins.get(usize::from(pick.0)))
+            .map(|p| p.name.clone())
+            .unwrap_or_default();
+        let place = pins.iter().position(|(i, _)| *i == pick.0).unwrap_or(0) + 1;
+        if let Tool::Wire(w) = &mut self.tool {
+            w.aim = Some((symbol, pick.0));
+        }
+        let target = Target::Endpoint(
+            Endpoint::Pin {
+                symbol,
+                pin: pick.0,
+            },
+            pick.1,
+        );
+        self.target = Some(target);
+        self.cursor = Some(pick.1);
+        self.notice = Some(format!(
+            "Pin {name} ({place} of {}): Tab for the next, Q to end here",
+            pins.len()
+        ));
+        true
+    }
+
+    /// Q while wiring: ends the wire on the part under the pointer, on the
+    /// pin Tab picked or else the nearest one.
+    fn end_on_part(&mut self, doc: &mut Document) -> bool {
+        let Some((symbol, pins)) = self.aim_candidates(doc) else {
+            if matches!(&self.tool, Tool::Wire(w) if w.start.is_some()) {
+                self.notice = Some("Move the pointer over a part to end the wire on it".into());
+                return true;
+            }
+            return false;
+        };
+        let (Tool::Wire(w), Some((page, _)), Some(raw)) =
+            (self.tool.clone(), self.hovered, self.hover_raw)
+        else {
+            return false;
+        };
+        let Some(start) = w.start else {
+            return false;
+        };
+        let pick = w
+            .aim
+            .filter(|(s, _)| *s == symbol)
+            .and_then(|(_, pin)| pins.iter().find(|(i, _)| *i == pin).copied())
+            .unwrap_or_else(|| nearest_pin(&pins, raw));
+        let end = Target::Endpoint(
+            Endpoint::Pin {
+                symbol,
+                pin: pick.0,
+            },
+            pick.1,
+        );
+        if start == end {
+            self.notice = Some("Pick a different end for the wire".into());
+            return true;
+        }
+        self.commit_wire(doc, page, w, start, end);
         true
     }
 
@@ -993,7 +1901,15 @@ impl Editor {
                 }
                 _ => false,
             },
-            EditorKey::Finish => self.finish_wire_here(doc),
+            EditorKey::Finish if matches!(self.tool, Tool::Cable(_)) => match self.hovered {
+                Some((page, tolerance)) => self.finish_cable(doc, page, tolerance),
+                None => false,
+            },
+            EditorKey::Finish => self.finish_wire_here(doc, false),
+            EditorKey::FinishOpen => self.finish_wire_here(doc, true),
+            EditorKey::StartFree => self.start_free(),
+            EditorKey::EndOnPart => self.end_on_part(doc),
+            EditorKey::NextPin => self.next_pin(doc),
             EditorKey::Rotate | EditorKey::Mirror => {
                 let rotate = key == EditorKey::Rotate;
                 let corners = self.wire_mode == WiringMode::Corners;
@@ -1033,10 +1949,23 @@ impl Editor {
                 }
             }
             EditorKey::Wire => {
+                // W on an open end's cap resumes that wire (DESIGN.md §4).
+                if let (Some((page, tolerance)), Some(at)) = (self.hovered, self.cursor)
+                    && self.begin_open_end(doc, page, at, tolerance, false)
+                {
+                    return true;
+                }
                 self.begin_wire();
                 true
             }
             EditorKey::Move => self.begin_move(selection),
+            EditorKey::MoveWithWires => {
+                let began = self.begin_move_with(selection, true);
+                if let Tool::Move(m) = &mut self.tool {
+                    m.pinned = true;
+                }
+                began
+            }
             EditorKey::Delete => {
                 if selection.is_empty() {
                     return false;
@@ -1105,6 +2034,121 @@ impl Editor {
         })
     }
 
+    /// How far a label dragged from `from` to `to` moves: both ends snap to
+    /// the grid, as a moved symbol does.
+    pub fn label_delta(&self, from: Point, to: Point) -> Point {
+        snap(to, self.grid) - snap(from, self.grid)
+    }
+
+    /// Moves one label by `delta`, one undo step. The thing it names stays.
+    pub fn move_label(
+        &mut self,
+        doc: &mut Document,
+        page: PageId,
+        source: &LabelSource,
+        delta: Point,
+    ) -> bool {
+        if delta == Point::ZERO {
+            return false;
+        }
+        self.run(doc, "Move label", |tx| {
+            match source {
+                LabelSource::Record(id) => {
+                    let mut placement = tx
+                        .project()
+                        .text(*id)
+                        .map(|t| t.placement)
+                        .ok_or(novo_core::ModelError::NotFound(AnyId::Text(*id)))?;
+                    placement.offset = placement.offset + delta;
+                    tx.move_text(*id, placement)
+                }
+                LabelSource::Drawn {
+                    owner,
+                    content,
+                    at,
+                    anchor,
+                } => {
+                    let id = tx.add_text(
+                        page,
+                        content.clone(),
+                        TextPlacement {
+                            anchor: *anchor,
+                            ..Default::default()
+                        },
+                        Some(*owner),
+                    )?;
+                    // The offset is from the host's own origin, whatever
+                    // the host is: read it back instead of knowing it.
+                    let origin = tx
+                        .project()
+                        .text_position(id)
+                        .ok_or(novo_core::ModelError::NotFound(AnyId::Text(id)))?;
+                    tx.move_text(
+                        id,
+                        TextPlacement {
+                            offset: *at + delta - origin,
+                            anchor: *anchor,
+                            ..Default::default()
+                        },
+                    )
+                }
+            }
+        })
+    }
+
+    /// Drops a dragged wire part `delta` further on, one undo step.
+    pub fn move_wire_part(
+        &mut self,
+        doc: &mut Document,
+        wire: WireId,
+        kind: edit::PartKind,
+        delta: Point,
+    ) -> bool {
+        if delta == Point::ZERO {
+            return false;
+        }
+        let square = self.wire_mode == WiringMode::Corners;
+        self.run(doc, "Move wire", |tx| {
+            edit::move_wire_part(tx, wire, kind, delta, square)
+        })
+    }
+
+    /// The route a wire would have with a part dragged by `delta`: what the
+    /// drop will store, in the current wiring mode.
+    pub fn moved_route(
+        &self,
+        doc: &Document,
+        wire: WireId,
+        kind: edit::PartKind,
+        delta: Point,
+    ) -> Option<Vec<Point>> {
+        let project = doc.project();
+        let w = project.wire(wire)?;
+        let a = project.endpoint_position(w.from)?;
+        let b = project.endpoint_position(w.to)?;
+        let square = self.wire_mode == WiringMode::Corners;
+        Some(edit::moved_route(a, &w.route, b, kind, delta, square))
+    }
+
+    /// How far a wire part dragged from `from` to `to` moves.
+    pub fn part_delta(
+        &self,
+        doc: &Document,
+        wire: WireId,
+        kind: edit::PartKind,
+        from: Point,
+        to: Point,
+    ) -> Point {
+        edit::part_delta(doc.project(), wire, kind, self.grid, from, to)
+    }
+
+    /// Removes one corner of a wire's route, one undo step.
+    pub fn remove_corner(&mut self, doc: &mut Document, wire: WireId, index: usize) -> bool {
+        self.run(doc, "Delete corner", |tx| {
+            edit::remove_corner(tx, wire, index)
+        })
+    }
+
     /// Moves the selection by a distance in one step (arrow keys, scripts).
     pub fn move_selection(
         &mut self,
@@ -1116,6 +2160,31 @@ impl Editor {
         self.run(doc, "Move", |tx| {
             edit::transform_interactive(tx, selection, Transform::Move(delta))?;
             // No preview here, so only pins dropped inside wires connect.
+            if settle {
+                edit::settle(tx, &edit::symbols_in(selection))?;
+            }
+            Ok(())
+        })
+    }
+
+    /// [`Self::move_selection`] for a person's arrow key: `carry` takes the
+    /// wires on the moved pins along, otherwise they stay behind as open
+    /// ends, as when dragging (DESIGN.md §4).
+    pub fn nudge_selection(
+        &mut self,
+        doc: &mut Document,
+        selection: &[AnyId],
+        delta: Point,
+        carry: bool,
+    ) -> bool {
+        let settle = self.auto_connect;
+        self.run(doc, "Move", |tx| {
+            let how = Transform::Move(delta);
+            if carry {
+                edit::transform_interactive(tx, selection, how)?;
+            } else {
+                edit::transform_detached(tx, selection, how)?;
+            }
             if settle {
                 edit::settle(tx, &edit::symbols_in(selection))?;
             }
@@ -1150,7 +2219,14 @@ impl Editor {
             return Ok(());
         }
         if let Some(reason) = tag_conflict(doc.project(), device, &tag) {
-            return Err(reason);
+            // A contact given its coil's tag joins the coil's device.
+            return match link_plan(doc.project(), device, &tag) {
+                Some((mine, partner)) => self
+                    .check_link(doc.project(), &mine, partner)
+                    .map_err(|why| format!("{reason}: {why}"))
+                    .and_then(|()| self.link_contacts(doc, &mine, partner, &tag)),
+                None => Err(reason),
+            };
         }
         let result = doc.transact(format!("Rename {old} to {tag}"), |tx| {
             edit::rename(tx, device, tag)
@@ -1162,6 +2238,93 @@ impl Editor {
             }
             Err(e) => Err(e.to_string()),
         }
+    }
+
+    /// Links each of `mine` to `partner`'s device as one undo step ("Linked
+    /// to -K1"), or says in plain words why it cannot, changing nothing.
+    pub fn link_contacts(
+        &mut self,
+        doc: &mut Document,
+        mine: &[SymbolId],
+        partner: SymbolId,
+        tag: &DeviceTag,
+    ) -> Result<(), String> {
+        self.check_link(doc.project(), mine, partner)?;
+        let result = doc.transact(format!("Link to {tag}"), |tx| {
+            for &s in mine {
+                let old = tx.project().symbol(s).and_then(SymbolInstance::device);
+                let command =
+                    novo_xref::link_command(tx.project(), self.catalog.library(), s, partner)
+                        .map_err(|e| novo_core::ModelError::Refused {
+                            what: "link".into(),
+                            reason: e.to_string(),
+                        })?;
+                tx.execute(command)?;
+                // The contact's own device is left empty (placing gave it a
+                // description, which keeps the link from removing it).
+                if let Some(old) = old
+                    && tx.project().referrers(old).next().is_none()
+                    && tx
+                        .project()
+                        .device(old)
+                        .is_some_and(|d| d.parts.is_empty() && d.properties.is_empty())
+                {
+                    tx.execute(novo_core::Command::Remove {
+                        id: AnyId::Device(old),
+                    })?;
+                }
+            }
+            Ok(())
+        });
+        match result {
+            Ok((_, changes)) => {
+                self.changes.merge(&changes);
+                self.notice = Some(format!("Linked to {tag}"));
+                Ok(())
+            }
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    /// A contact dragged onto a coil (DESIGN.md §4, "row place and link"):
+    /// links it to the coil's device instead of dropping it there. `true`
+    /// when the drop was a link (done or refused with a notice), `false`
+    /// when it is an ordinary drop. Esc has already cancelled nothing here:
+    /// the caller ends the move.
+    pub fn drop_link(&mut self, doc: &mut Document, selection: &[AnyId], target: AnyId) -> bool {
+        let Some((mine, coil, tag)) = link_target(doc.project(), selection, target) else {
+            return false;
+        };
+        if let Err(reason) = self.link_contacts(doc, &[mine], coil, &tag) {
+            self.notice = Some(reason);
+        }
+        if matches!(self.tool, Tool::Move(_)) {
+            self.tool = Tool::Select;
+        }
+        self.link_hint = None;
+        true
+    }
+
+    /// While a contact is carried over a coil, the hint that dropping links
+    /// it ("Link to -K1"); `None` clears it.
+    pub fn hint_link(&mut self, project: &Project, selection: &[AnyId], over: Option<AnyId>) {
+        self.link_hint = over
+            .and_then(|t| link_target(project, selection, t))
+            .map(|(_, _, tag)| format!("Link to {tag} · Esc cancels"));
+    }
+
+    /// Whether `mine` can be linked to `partner`, as the reason if not.
+    fn check_link(
+        &self,
+        project: &Project,
+        mine: &[SymbolId],
+        partner: SymbolId,
+    ) -> Result<(), String> {
+        for &s in mine {
+            novo_xref::link_command(project, self.catalog.library(), s, partner)
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(())
     }
 
     /// Checks what the user is typing as a new tag, for live feedback in
@@ -1181,7 +2344,12 @@ impl Editor {
         if tag != old
             && let Some(reason) = tag_conflict(doc.project(), device, &tag)
         {
-            return Err(reason);
+            return match link_plan(doc.project(), device, &tag) {
+                Some((mine, partner)) => {
+                    self.check_link(doc.project(), &mine, partner).map(|()| tag)
+                }
+                None => Err(reason),
+            };
         }
         Ok(tag)
     }
@@ -1196,6 +2364,43 @@ impl Editor {
             })
             .collect();
         potential::menu(doc.project(), &wires, self.supply_names)
+    }
+
+    /// Right-click a feed, Set potential: one undo step for all `feeds`.
+    pub fn set_feed_potential(
+        &mut self,
+        doc: &mut Document,
+        feeds: &[novo_core::SymbolId],
+        spec: &potential::PotentialSpec,
+    ) -> bool {
+        let label = format!("Set potential {}", spec.name);
+        self.run(doc, &label, |tx| {
+            potential::set_feed_potential(tx, feeds, spec).map(|_| ())
+        })
+    }
+
+    /// Right-click wires, Override potential: each wire takes `spec` for
+    /// itself, or with `None` goes back to what its net carries. One step.
+    pub fn override_wire_potential(
+        &mut self,
+        doc: &mut Document,
+        wires: &[WireId],
+        spec: Option<&potential::PotentialSpec>,
+    ) -> bool {
+        let label = match spec {
+            Some(s) => format!("Override potential {}", s.name),
+            None => "Remove potential override".to_string(),
+        };
+        self.run(doc, &label, |tx| {
+            let id = match spec {
+                Some(s) => Some(edit::find_or_add_potential(tx, &s.name, s.kind, s.voltage)?),
+                None => None,
+            };
+            for &w in wires {
+                tx.set_wire_potential(w, id)?;
+            }
+            Ok(())
+        })
     }
 
     /// Applies a potential suggestion to wires in page order, as one step.
@@ -1268,6 +2473,27 @@ impl Editor {
             // Quiet until something is in hand (DESIGN.md §3).
             Tool::Select if self.pin_hovered() => "Drag from the pin to connect".into(),
             Tool::Select => String::new(),
+            Tool::Place(_) if self.pole_plan().is_some() => {
+                let poles = self.pole_plan().map_or(0, |p| p.poles);
+                format!(
+                    "{poles}-pole · pitch {} mm · R/X turn · Esc cancels",
+                    row::POLE_PITCH
+                )
+            }
+            Tool::Place(_) if self.row.is_some() => {
+                match self.row_plan(doc, page) {
+                    Some((at, stopped, pitch)) => format!(
+                        "Row ×{} · pitch {pitch} mm{} · +/- spacing · R/X turn · Esc cancels",
+                        at.len(),
+                        if stopped.is_some() {
+                            " · stops before another device"
+                        } else {
+                            ""
+                        }
+                    ),
+                    None => String::new(),
+                }
+            }
             Tool::Place(p) => {
                 let name = self
                     .catalog
@@ -1311,7 +2537,32 @@ impl Editor {
                 "Corners: click a pin or wire to finish, empty space for a corner · R flips the bend · Backspace undo · Esc cancels · Shift+W lines"
                     .into()
             }
-            Tool::Move(_) => "Click to drop · R rotate · X mirror · Esc cancels the move".into(),
+            Tool::Cable(c) if c.points.is_empty() => {
+                "Cable: click along the wires that belong to it · Esc to stop".into()
+            }
+            Tool::Cable(_) => {
+                "Click the next point · Enter or click the last point again to finish · Esc cancels"
+                    .into()
+            }
+            Tool::Move(m) => self.link_hint.clone().unwrap_or_else(|| {
+                let wires = if m.carry {
+                    String::new()
+                } else {
+                    match edit::detaching_ends(doc.project(), &m.ids) {
+                        0 => String::new(),
+                        1 => " · 1 wire end stays behind open".into(),
+                        n => format!(" · {n} wire ends stay behind open"),
+                    }
+                };
+                let shift = if m.carry {
+                    "Shift: leave the wires"
+                } else {
+                    "Shift: take the wires along"
+                };
+                format!(
+                    "Click to drop · R rotate · X mirror · {shift} · Esc cancels the move{wires}"
+                )
+            }),
         };
         let text = if self.proposals.is_empty() {
             text
@@ -1348,24 +2599,41 @@ impl Editor {
         match &self.tool {
             Tool::Select => {}
             Tool::Place(p) => {
-                if let Some(symbol) = self.catalog.get(&p.symbol) {
+                let pole_plan = self.pole_plan();
+                let shown = pole_plan.as_ref().map_or(p.symbol.as_str(), |r| r.symbol);
+                if let Some(symbol) = self.catalog.get(shown) {
                     let (bridges, pass_through) = model_groups(symbol);
-                    preview.symbols.push(SymbolInstance {
-                        id: SymbolId::from(PREVIEW_ID),
-                        page,
-                        symbol: SymbolKey(symbol.id.clone()),
-                        placement: Placement {
-                            origin: cursor,
-                            rotation: p.rotation,
-                            mirrored: p.mirrored,
+                    let origins = match pole_plan.as_ref() {
+                        Some(r) => vec![r.origin],
+                        None => match self.row_plan(doc, page) {
+                            Some((at, _, _)) if !at.is_empty() => at,
+                            _ => vec![cursor],
                         },
-                        role: SymbolRole::Unassigned,
-                        pins: model_pins(symbol),
-                        bridges,
-                        pass_through,
-                        feeds: Vec::new(),
-                        properties: Default::default(),
-                    });
+                    };
+                    for origin in origins {
+                        preview.symbols.push(SymbolInstance {
+                            id: SymbolId::from(PREVIEW_ID),
+                            page,
+                            symbol: SymbolKey(symbol.id.clone()),
+                            placement: Placement {
+                                origin,
+                                rotation: p.rotation,
+                                mirrored: p.mirrored,
+                            },
+                            role: SymbolRole::Unassigned,
+                            pins: model_pins(symbol),
+                            bridges: bridges.clone(),
+                            pass_through: pass_through.clone(),
+                            feeds: Vec::new(),
+                            properties: Default::default(),
+                        });
+                    }
+                }
+            }
+            Tool::Cable(c) => {
+                if !c.points.is_empty() {
+                    preview.wire.extend(c.points.iter().copied());
+                    preview.wire.push(cursor);
                 }
             }
             Tool::Wire(w) => {
@@ -1394,6 +2662,12 @@ impl Editor {
                         let bends = route_through(a, from, &corners, cursor, to);
                         preview.wire.extend(bends);
                         preview.wire.push(cursor);
+                        // A drag from a pin is the quick connection: the router
+                        // picks the route, so there is no piece to place.
+                        if !w.drag {
+                            preview.piece =
+                                pending_piece(project, page, &preview.wire, self.target);
+                        }
                     }
                 }
             }
@@ -1405,8 +2679,11 @@ impl Editor {
         if !self.proposals.is_empty() {
             preview.proposals = self.proposals.iter().map(|f| (f.a, f.b)).collect();
             preview.current = Some(self.proposal.min(self.proposals.len() - 1));
-        } else if matches!(self.tool, Tool::Place(_) | Tool::Move(_)) && self.auto_connect {
-            preview.proposals = edit::facing_wires(project, &preview.symbols, &|s| self.body(s))
+        } else if matches!(self.tool, Tool::Place(_) | Tool::Move(_))
+            && self.auto_connect
+            && self.connect != ConnectMode::Never
+        {
+            preview.proposals = edit::facing_wires(project, &preview.symbols, &|s| self.outline(s))
                 .into_iter()
                 .map(|f| (f.a, f.b))
                 .collect();

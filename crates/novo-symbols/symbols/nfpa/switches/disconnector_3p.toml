@@ -1,0 +1,41 @@
+format = 1
+id = "nfpa/switches/disconnector_3p"
+name = "Disconnector, 3-pole"
+description = "3-pole disconnector (isolator) for isolating a circuit without load."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "switches"
+function = "switch.disconnector"
+keywords = ["disconnector", "isolator", "3p", "nfpa", "ansi"]
+aliases = ["iso3"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+  { id = "3", at = [8, 0], dir = "up" },
+  { id = "4", at = [8, 16], dir = "down" },
+  { id = "5", at = [16, 0], dir = "up" },
+  { id = "6", at = [16, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 5] },
+  { kind = "line", from = [0, 16], to = [0, 11] },
+  { kind = "line", from = [0, 11], to = [-4, 4] },
+  { kind = "line", from = [8, 0], to = [8, 5] },
+  { kind = "line", from = [8, 16], to = [8, 11] },
+  { kind = "line", from = [8, 11], to = [4, 4] },
+  { kind = "line", from = [16, 0], to = [16, 5] },
+  { kind = "line", from = [16, 16], to = [16, 11] },
+  { kind = "line", from = [16, 11], to = [12, 4] },
+  { kind = "line", from = [0, 8], to = [16, 8], stroke = "dashed" },
+]
+
+[behavior]
+kind = "contact"
+normally = "open"
+latching = true
+poles = [["1", "2"], ["3", "4"], ["5", "6"]]

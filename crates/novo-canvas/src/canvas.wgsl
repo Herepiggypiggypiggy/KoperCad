@@ -1,4 +1,4 @@
-// NovoElectric canvas shader.
+// KoperCAD canvas shader.
 //
 // World positions go through a pan/zoom transform. Strokes are extruded here
 // so a mesh stays valid at every zoom: world-unit widths scale with zoom,

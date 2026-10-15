@@ -3,7 +3,7 @@
 //! Issue revision dialog, the command line and scripts call this, so they
 //! all propose the same index and keep the same snapshot.
 
-use novo_core::{AnyId, Command, Document, ModelError, Project, RevisionId};
+use novo_core::{AnyId, ChangeSet, Command, Document, ModelError, Project, RevisionId};
 use novo_storage::{Session, StorageError};
 
 use crate::{IndexRule, diff};
@@ -32,6 +32,9 @@ pub struct Issued {
     /// changed since it: the command line says "no changes since B".
     /// Reissuing is allowed. Generated sheets are not compared here.
     pub unchanged_since: Option<String>,
+    /// What the issue changed in the model (the new revision and the
+    /// freezes), for views to refresh from.
+    pub changes: ChangeSet,
 }
 
 /// Issues the next revision: the index comes from `rule`, `date` is
@@ -67,6 +70,7 @@ pub fn issue_revision_as(
         description: description.into(),
     })?;
     session.record(&outcome.changes);
+    let changes = outcome.changes.clone();
     let revision = outcome
         .created
         .iter()
@@ -80,6 +84,7 @@ pub fn issue_revision_as(
         revision,
         index,
         unchanged_since,
+        changes,
     })
 }
 

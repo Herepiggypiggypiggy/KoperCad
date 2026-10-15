@@ -1,0 +1,33 @@
+format = 1
+id = "nfpa/passive/led"
+name = "Light-emitting diode"
+description = "Light-emitting diode (LED)."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "passive"
+function = "passive.diode.led"
+keywords = ["led", "light emitting diode", "diode", "nfpa", "ansi"]
+
+connections = [
+  { id = "A", at = [0, 0], dir = "up" },
+  { id = "K", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-4, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 6] },
+  { kind = "polyline", points = [[-2.5, 6], [2.5, 6], [0, 10]], closed = true },
+  { kind = "line", from = [-2.5, 10], to = [2.5, 10] },
+  { kind = "line", from = [0, 6], to = [0, 10] },
+  { kind = "line", from = [3, 7], to = [5.5, 5] },
+  { kind = "polyline", points = [[5.5, 5], [4.3, 5.2], [5, 6]], closed = true, fill = true },
+  { kind = "line", from = [3, 9], to = [5.5, 7] },
+  { kind = "polyline", points = [[5.5, 7], [4.3, 7.2], [5, 8]], closed = true, fill = true },
+  { kind = "line", from = [0, 10], to = [0, 16] },
+]
+
+[behavior]
+kind = "lamp"
+poles = [["A", "K"]]

@@ -20,7 +20,7 @@ use novo_editor::view::SchematicView;
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("NovoElectric schematic editor")
+            .with_title("KoperCAD schematic editor")
             .with_inner_size([1400.0, 900.0]),
         renderer: eframe::Renderer::Wgpu,
         ..Default::default()

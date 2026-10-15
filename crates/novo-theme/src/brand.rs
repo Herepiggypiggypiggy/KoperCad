@@ -8,7 +8,7 @@ use crate::tokens;
 use egui::{Color32, Painter, Pos2, Rect, Stroke, Vec2};
 
 /// Product name as shown to people.
-pub const NAME: &str = "NovoElectric";
+pub const NAME: &str = "KoperCAD";
 
 /// One-line description for the About box, installer and website.
 pub const TAGLINE: &str = "Electrical design, without the weight";

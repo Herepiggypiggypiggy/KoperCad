@@ -1,13 +1,13 @@
 [package]
 name = "novo-app"
-description = "NovoElectric desktop application"
+description = "KoperCAD desktop application"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 build = "build.rs"
 
 [[bin]]
-name = "novoelectric"
+name = "kopercad"
 path = "src/main.rs"
 
 [dependencies]
@@ -25,6 +25,9 @@ novo-pdf.workspace = true
 novo-reports.workspace = true
 novo-checks.workspace = true
 novo-terminals.workspace = true
+novo-plc.workspace = true
+novo-revisions.workspace = true
+novo-sim.workspace = true
 log = "0.4"
 env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
 rfd = "0.17"
@@ -40,8 +43,8 @@ lopdf.workspace = true
 winresource = "0.1"
 
 [package.metadata.winresource]
-ProductName = "NovoElectric"
-FileDescription = "NovoElectric electrical CAD"
+ProductName = "KoperCAD"
+FileDescription = "KoperCAD electrical CAD"
 
 [lints]
 workspace = true

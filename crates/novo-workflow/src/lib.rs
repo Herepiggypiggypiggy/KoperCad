@@ -10,15 +10,16 @@
 //!   the empty command field lists them by group (it is the menu).
 //! - [`language`]: Dutch words for every command; English and Dutch both
 //!   always match.
-//! - [`palette`]: the command field's search and grammar (Ctrl+K, I, Space) over commands, pages, devices and
+//! - [`palette`]: the command field's search and grammar (Ctrl+K, Q, Space) over commands, pages, devices and
 //!   symbols; an exact tag lists every location first (J6, J8).
-//! - [`insert`]: the I search: mnemonics (`no`, `nc`, `coil`), favourites
+//! - [`insert`]: the Q search: mnemonics (`no`, `nc`, `coil`), favourites
 //!   1 to 9, recents, child symbols (`K1 no`) and the IEC 81346-2 letter
 //!   code for the next free tag (J2).
 //! - [`orientation`]: R and X on a symbol or text.
 //! - [`locate`]: where a device occurs, as page and column (`/3.4`), on top
 //!   of novo-core's cross references.
 //! - [`renumber`]: renumber devices with a preview, as one undo step (J4).
+//! - [`userkeys`]: the user's keymap file, applied on top of the defaults.
 //! - [`history`]: back and forward through jumps (Alt+Left, Alt+Right).
 //! - [`duplicate`]: smart duplicate and paste with the next free tags (J4).
 //!
@@ -36,3 +37,4 @@ pub mod locate;
 pub mod orientation;
 pub mod palette;
 pub mod renumber;
+pub mod userkeys;

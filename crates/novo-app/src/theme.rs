@@ -65,6 +65,12 @@ fn model_style_from(p: &CanvasPalette) -> ModelStyle {
             color: color(p.wire),
             ..defaults.wire
         },
+        // Where wires meet and end (DESIGN.md §4): the junction dot is
+        // copper, a wire landing on a pin uses the wire's own colour.
+        joint_color: color(p.junction),
+        pin_joint_color: color(p.wire),
+        wire_end_color: color(p.wire_end),
+        unconnected_color: color(p.unconnected_flag),
         tag_color: color(p.text),
         sheet_fill: Some(color(p.sheet)),
         frame_color: color(p.sheet_frame),
@@ -84,6 +90,15 @@ mod tests {
         assert_eq!(style.background, Color(CANVAS_DARK.background));
         assert_eq!(model_style().symbol.color, Color(CANVAS_DARK.symbol));
         assert_eq!(model_style().sheet_fill, Some(Color(CANVAS_DARK.sheet)));
+    }
+
+    #[test]
+    fn wire_joints_and_open_ends_use_the_palette() {
+        let m = model_style();
+        assert_eq!(m.joint_color, Color(CANVAS_DARK.junction));
+        assert_eq!(m.pin_joint_color, Color(CANVAS_DARK.wire));
+        assert_eq!(m.wire_end_color, Color(CANVAS_DARK.wire_end));
+        assert_eq!(m.unconnected_color, Color(CANVAS_DARK.unconnected_flag));
     }
 
     /// Hue in degrees of an RGB colour.

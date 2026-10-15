@@ -11,12 +11,12 @@ pub enum StorageError {
     /// Another window or program has the file open.
     #[error("{} is already open in another window or program", .0.display())]
     Locked(PathBuf),
-    /// The file is not a NovoElectric project (or not SQLite at all).
-    #[error("{} is not a NovoElectric project file", .0.display())]
+    /// The file is not a KoperCAD project (or not SQLite at all).
+    #[error("{} is not a KoperCAD project file", .0.display())]
     NotAProject(PathBuf),
-    /// The file was written by a newer NovoElectric that changed the format.
+    /// The file was written by a newer KoperCAD that changed the format.
     #[error(
-        "{} was saved by a newer version of NovoElectric (file format {found}, this version reads up to {supported})",
+        "{} was saved by a newer version of KoperCAD (file format {found}, this version reads up to {supported})",
         path.display()
     )]
     NewerFormat {

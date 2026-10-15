@@ -166,6 +166,26 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["rules"],
     ),
+    verb(
+        cmd(
+            "app.preferences",
+            "Preferences",
+            "Project",
+            &["settings", "options", "auto connections", "autoconnect"],
+            Needs::Nothing,
+        ),
+        &["preferences", "prefs"],
+    ),
+    verb(
+        cmd(
+            "revision.issue",
+            "Issue revision",
+            "Project",
+            &["release", "checkpoint", "new revision", "freeze"],
+            Needs::Project,
+        ),
+        &["issue", "revision"],
+    ),
     cmd("file.quit", "Quit", "Project", &["exit"], Needs::Nothing),
     // Draw
     cmd(
@@ -205,6 +225,29 @@ pub const COMMANDS: &[CommandInfo] = &[
             &["wiring mode"],
         ),
         &["corners", "lines"],
+    ),
+    // C: draw a line; every wire it touches becomes a core of one cable.
+    cmd(
+        "tool.cable",
+        "Cable",
+        "Draw",
+        &["cable", "cores", "bundle"],
+        Needs::Page,
+    ),
+    // Only while a wire is being drawn (Keymap::resolve_while_wiring).
+    cmd(
+        "wire.end_on_part",
+        "End wire on part",
+        "Draw",
+        &["terminate", "end wire", "finish on part"],
+        Needs::Page,
+    ),
+    cmd(
+        "wire.next_pin",
+        "Next connection point",
+        "Draw",
+        &["cycle pin", "next pin", "next connection"],
+        Needs::Page,
     ),
     cmd("edit.rotate", "Rotate", "Draw", &["turn"], Needs::Selection),
     cmd("edit.mirror", "Mirror", "Draw", &["flip"], Needs::Selection),
@@ -331,7 +374,86 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["renumber io"],
     ),
+    // Bare `link` asks for the contact, then the coil (LINK_PICK_CONTACT,
+    // LINK_PICK_COIL), previews and runs on Enter; `link -K3 -K1` names the
+    // devices (see `palette::link_tags`). The app shell runs it through
+    // novo-xref, which also gives the refusal text.
+    verb(
+        cmd(
+            "xref.link",
+            "Link cross reference",
+            "Edit",
+            &["contact", "coil", "join contact"],
+            Needs::Page,
+        ),
+        &["link"],
+    ),
     cmd("edit.escape", "Cancel", "Edit", &["escape"], Needs::Nothing),
+    // Terminals
+    cmd(
+        "terminal.connect",
+        "Connect terminals",
+        "Edit",
+        &["jumper", "bridge", "cross connect"],
+        Needs::Selection,
+    ),
+    verb(
+        cmd(
+            "terminal.toggle_pe",
+            "Toggle PE terminal",
+            "Edit",
+            &[
+                "pe",
+                "protective earth",
+                "earth terminal",
+                "ground terminal",
+            ],
+            Needs::Selection,
+        ),
+        &["pe"],
+    ),
+    cmd(
+        "terminal.disconnect",
+        "Disconnect terminals",
+        "Edit",
+        &["jumper", "bridge", "unbridge"],
+        Needs::Selection,
+    ),
+    cmd(
+        "terminal.reset_pe",
+        "Reset PE override",
+        "Edit",
+        &["protective earth", "automatic pe"],
+        Needs::Selection,
+    ),
+    cmd(
+        "terminal.strip_up",
+        "Terminal strip number up",
+        "Edit",
+        &["rename strip", "x number", "next strip"],
+        Needs::Selection,
+    ),
+    cmd(
+        "terminal.strip_down",
+        "Terminal strip number down",
+        "Edit",
+        &["rename strip", "x number", "previous strip"],
+        Needs::Selection,
+    ),
+    cmd(
+        "terminal.strip_lowest",
+        "Terminal strip lowest free number",
+        "Edit",
+        &["rename strip", "x number", "free strip"],
+        Needs::Selection,
+    ),
+    cmd(
+        "interruption.renumber",
+        "Number interruption points automatically",
+        "Edit",
+        &["jump", "renumber", "continuation", "off page"],
+        Needs::Project,
+    ),
     // Navigate
     cmd(
         "nav.partner",
@@ -469,6 +591,23 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Show or hide marks",
         "View",
         &["problems", "proposals"],
+        Needs::Page,
+    ),
+    verb(
+        cmd(
+            "view.changes",
+            "Show changes since a revision",
+            "View",
+            &["compare", "what changed", "diff", "revision marks"],
+            Needs::Project,
+        ),
+        &["changes"],
+    ),
+    cmd(
+        "sim.live",
+        "Show live potentials",
+        "View",
+        &["simulate", "contacts", "close", "energized", "try"],
         Needs::Page,
     ),
     cmd(

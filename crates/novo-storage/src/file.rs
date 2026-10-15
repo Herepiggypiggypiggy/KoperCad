@@ -586,7 +586,7 @@ fn finish_save(tx: &Transaction<'_>) -> Result<()> {
     set_meta(
         tx,
         "writer",
-        concat!("NovoElectric ", env!("CARGO_PKG_VERSION")),
+        concat!("KoperCAD ", env!("CARGO_PKG_VERSION")),
     )?;
     Ok(())
 }
@@ -618,6 +618,8 @@ pub(crate) fn kind_name(kind: EntityKind) -> &'static str {
         EntityKind::BlockDefinition => "block_definition",
         EntityKind::BlockInstance => "block_instance",
         EntityKind::Revision => "revision",
+        EntityKind::Rail => "rail",
+        EntityKind::CabinetPlacement => "cabinet_placement",
     }
 }
 

@@ -1,7 +1,7 @@
-//! The `novoelectric` Python module: a thin shim over [`ScriptProject`].
+//! The `kopercad` Python module: a thin shim over [`ScriptProject`].
 //!
 //! Ids are plain ints, queries return dicts and lists (converted through
-//! JSON), and every error is a `novoelectric.NovoError`.
+//! JSON), and every error is a `kopercad.KoperError`.
 
 use std::path::PathBuf;
 
@@ -14,18 +14,18 @@ use serde_json::Value;
 use crate::{Role, ScriptError, ScriptProject};
 
 pyo3::create_exception!(
-    novoelectric,
-    NovoError,
+    kopercad,
+    KoperError,
     PyException,
-    "A NovoElectric call was refused; the project is unchanged."
+    "A KoperCAD call was refused; the project is unchanged."
 );
 
 fn err(e: ScriptError) -> PyErr {
-    NovoError::new_err(e.to_string())
+    KoperError::new_err(e.to_string())
 }
 
 fn closed() -> PyErr {
-    NovoError::new_err("the project is closed")
+    KoperError::new_err("the project is closed")
 }
 
 fn to_py<'py>(py: Python<'py>, value: &Value) -> PyResult<Bound<'py, PyAny>> {
@@ -33,13 +33,13 @@ fn to_py<'py>(py: Python<'py>, value: &Value) -> PyResult<Bound<'py, PyAny>> {
         .call_method1("loads", (value.to_string(),))
 }
 
-/// An open NovoElectric project. Every edit is one command and one undo
+/// An open KoperCAD project. Every edit is one command and one undo
 /// step, exactly as in the app.
 ///
 /// ``Project(name)`` starts a new unsaved project; ``Project.create(path)``
 /// and ``Project.open(path)`` work on a file, which stays locked against the
 /// app until ``close()`` (or the end of a ``with`` block).
-#[pyclass(name = "Project", module = "novoelectric", unsendable)]
+#[pyclass(name = "Project", module = "kopercad", unsendable)]
 struct PyProject {
     inner: Option<ScriptProject>,
 }
@@ -240,7 +240,7 @@ impl PyProject {
             (None, None, Some(p), None) => Role::Potential(PotentialId(p)),
             (None, None, None, Some(name)) => Role::Interruption(name),
             _ => {
-                return Err(NovoError::new_err(
+                return Err(KoperError::new_err(
                     "give at most one of device, terminal, potential and interruption",
                 ));
             }
@@ -369,13 +369,13 @@ impl PyProject {
         match &self.inner {
             Some(p) => match p.path() {
                 Some(path) => format!(
-                    "<novoelectric.Project {:?} at {:?}>",
+                    "<kopercad.Project {:?} at {:?}>",
                     p.project().info().name,
                     path.display().to_string()
                 ),
-                None => format!("<novoelectric.Project {:?}>", p.project().info().name),
+                None => format!("<kopercad.Project {:?}>", p.project().info().name),
             },
-            None => "<novoelectric.Project (closed)>".into(),
+            None => "<kopercad.Project (closed)>".into(),
         }
     }
 }
@@ -399,9 +399,11 @@ fn symbols(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
 }
 
 #[pymodule]
-fn novoelectric(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn kopercad(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyProject>()?;
-    m.add("NovoError", m.py().get_type::<NovoError>())?;
+    m.add("KoperError", m.py().get_type::<KoperError>())?;
+    // The name from before the rename, so old scripts keep catching errors.
+    m.add("NovoError", m.py().get_type::<KoperError>())?;
     m.add_function(wrap_pyfunction!(symbols, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())

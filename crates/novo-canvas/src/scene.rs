@@ -9,6 +9,7 @@
 use crate::geom::Aabb;
 use crate::shape::Primitive;
 use crate::snap::SnapKind;
+use crate::style::Color;
 use crate::text::Label;
 use glam::Vec2;
 use std::collections::HashMap;
@@ -120,6 +121,55 @@ pub struct Item {
     /// Non-selectable items (page frames, title blocks) are drawn and can be
     /// snapped to, but clicks go through them.
     pub selectable: bool,
+    /// Whether a click on the item's lines picks it. `false` leaves only a
+    /// box to select it (and a click on its text): a wire is picked by its
+    /// corners and segments instead, never as a whole by a single click.
+    pub click_select: bool,
+    /// Small markers that keep their size on screen at every zoom (wire
+    /// corners, pin dots), painted by the view over the drawing.
+    pub handles: Vec<Handle>,
+}
+
+/// A marker with a fixed size in screen points, centred on a world point.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Handle {
+    pub at: Vec2,
+    /// Half the side of the square (or the radius of the dot), in points.
+    pub half: f32,
+    pub color: Color,
+    pub round: bool,
+    /// Draw the round marker as an open ring instead of a disc.
+    pub ring: bool,
+}
+
+impl Handle {
+    pub fn square(at: Vec2, half: f32, color: Color) -> Self {
+        Self {
+            at,
+            half,
+            color,
+            round: false,
+            ring: false,
+        }
+    }
+
+    pub fn dot(at: Vec2, radius: f32, color: Color) -> Self {
+        Self {
+            at,
+            half: radius,
+            color,
+            round: true,
+            ring: false,
+        }
+    }
+
+    /// An open ring of `radius` points, drawn with a thin line.
+    pub fn ring(at: Vec2, radius: f32, color: Color) -> Self {
+        Self {
+            ring: true,
+            ..Self::dot(at, radius, color)
+        }
+    }
 }
 
 impl Item {
@@ -131,6 +181,8 @@ impl Item {
             snap_lines: Vec::new(),
             labels: Vec::new(),
             selectable: true,
+            click_select: true,
+            handles: Vec::new(),
         }
     }
 
@@ -151,6 +203,13 @@ impl Item {
 
     pub fn with_label(mut self, l: Label) -> Self {
         self.labels.push(l);
+        self
+    }
+
+    /// Only a box (or a click on its text) selects the item, not a click on
+    /// its lines.
+    pub fn box_only(mut self) -> Self {
+        self.click_select = false;
         self
     }
 
@@ -299,6 +358,18 @@ pub struct Scene {
     /// skip text entirely when even that would be too small to read.
     max_label_height: f32,
     revision: u64,
+    sheet: Option<Sheet>,
+}
+
+/// The sheet of paper a page scene is drawn on. The view paints the fill
+/// first, then the grid dots inside the sheet, then the scene on top, so a
+/// stroke or text always covers a dot.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Sheet {
+    pub rect: Aabb,
+    pub fill: Option<Color>,
+    /// The frame and title-block lines, which keep clear of grid dots.
+    pub lines: Vec<(Vec2, Vec2)>,
 }
 
 impl Default for Scene {
@@ -326,7 +397,17 @@ impl Scene {
             max_screen_half_width: 0.0,
             max_label_height: 0.0,
             revision: next_revision(),
+            sheet: None,
         }
+    }
+
+    /// The sheet the scene is drawn on, when it is a page.
+    pub fn sheet(&self) -> Option<&Sheet> {
+        self.sheet.as_ref()
+    }
+
+    pub fn set_sheet(&mut self, sheet: Option<Sheet>) {
+        self.sheet = sheet;
     }
 
     /// Changes whenever the geometry changes. Revisions are unique across all
@@ -512,10 +593,18 @@ impl Scene {
                 // Ink beats text: a label counts as `tolerance` further away
                 // than it is, so a tag running over a neighbour's body never
                 // steals the click from that body. Text still wins where no
-                // line is near.
-                let (ink, text) = slot.item.parts_distance(p, zoom);
+                // line is near, and a pointer inside the label box always
+                // takes the label, even where the symbol's own ink runs
+                // under it.
+                let (mut ink, text) = slot.item.parts_distance(p, zoom);
+                if !slot.item.click_select {
+                    ink = f32::INFINITY;
+                }
                 let (score, d, label) = match text {
-                    Some((t, i)) if t <= tolerance && (ink > tolerance || t + tolerance < ink) => {
+                    Some((t, i))
+                        if t <= tolerance
+                            && (ink > tolerance || t + tolerance < ink || t <= 1e-4) =>
+                    {
                         (t + tolerance, t, Some(i))
                     }
                     _ => (ink, ink, None),
@@ -863,6 +952,26 @@ mod label_pick_tests {
         assert_eq!((on_text.id, on_text.label), (ItemId(1), Some(0)));
         let on_line = scene.pick(Vec2::new(0.1, 8.0), 0.5, 2.0).unwrap();
         assert_eq!(on_line.label, None);
+    }
+
+    #[test]
+    fn a_label_wins_over_ink_under_it() {
+        let mut scene = Scene::new();
+        scene.insert(
+            ItemId(1),
+            Item::new(LayerId(0))
+                .with(Primitive::stroked(
+                    Shape::line(Vec2::new(0.0, 5.0), Vec2::new(20.0, 5.0)),
+                    Stroke::default(),
+                ))
+                .with_label(Label::new(Vec2::new(5.0, 5.0), "-K1", 2.5)),
+        );
+        // Inside the label box, right on the line.
+        let inside = scene.pick(Vec2::new(6.0, 5.0), 0.5, 2.0).unwrap();
+        assert_eq!(inside.label, Some(0));
+        // Past the box the line still wins.
+        let past = scene.pick(Vec2::new(18.0, 5.0), 0.5, 2.0).unwrap();
+        assert_eq!(past.label, None);
     }
 
     /// A junction drawn plain has no ink or text, but is still picked and

@@ -17,3 +17,12 @@
 
 ## 2026-10-15 08:05 UTC
 Wiring-mode dock mock-up (chip, dimmed state, refusal look, Compact hint) saved to design/wiring/wiring-dock.png, source design/code/wiring_dock.rs (not committed). Critique sent to workflow (#169) and wiring-modes thread (#168). Next: check merged DESIGN text.
+
+## 2026-10-15 08:35 UTC
+Wiring dock mock-up and KoperCAD lockup merged (#174, docs/design/wiring-dock.png, assets/branding/lockup.svg/.png). Decision: product KoperCAD, maker KoperVonk (no clash found on crates.io, GitHub or web; Dutch registers unreachable, so not legal clearance). brand::NAME and installer/launcher/docs strings are in the Release rename PR, not mine (#198 closed). Layout is parked: no proactive work until the lead says otherwise.
+
+## 2026-10-15 09:30 UTC
+Merged: #199 (canvas contrast, copper junction token, ring/flag tokens, canvas-feedback mock). Bug 7 (strip label over terminal number) is Canvas #214. Grid dots inside the page: spec sent to Canvas (dots above the sheet fill, minor 1 px, major 2 px, skipped near the frame and in text boxes, hidden under 6/12 px pitch); palette values grid_minor #2E2E33 and grid_major #404045 changed here in a small PR.
+
+## 2026-10-15 15:45 UTC
+Merged earlier: #216 (grid palette), #242 (label rule, workflow looks, connected terminals). Cabinet layout started on the lead's task: design doc docs/design/cabinet-layout.md and novo-layout engine (plate, footprints, collisions, clearance) merged as #284/#287; #289 adds rails and the overflow warning plus three doc fixes from design review. Next: ask WS-02 for placement storage and commands, then the place-all planner, then thin Cabinet canvas UI.

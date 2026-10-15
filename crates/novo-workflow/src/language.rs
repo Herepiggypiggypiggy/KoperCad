@@ -45,6 +45,17 @@ pub const DUTCH: &[Aliases] = &[
         &["pagina", "blad"],
     ),
     nl("project.rules", &["regels"], &["nummering", "instellingen"]),
+    nl(
+        "app.preferences",
+        &["voorkeuren"],
+        &["instellingen", "opties"],
+    ),
+    nl("terminal.toggle_pe", &["pe-klem"], &["aardklem", "aarde"]),
+    nl(
+        "revision.issue",
+        &["revisie"],
+        &["uitgeven", "versie", "vrijgeven"],
+    ),
     nl("file.quit", &[], &["afsluiten", "stoppen"]),
     // Draw
     nl(
@@ -58,6 +69,20 @@ pub const DUTCH: &[Aliases] = &[
         "wire.mode",
         &["bedradingsmodus"],
         &["modus", "hoeken", "lijnen", "tekenen"],
+    ),
+    nl("tool.cable", &["kabel"], &["kabel tekenen", "aders"]),
+    nl(
+        "wire.end_on_part",
+        &[],
+        &[
+            "draad op component laten eindigen",
+            "afsluiten op component",
+        ],
+    ),
+    nl(
+        "wire.next_pin",
+        &[],
+        &["volgend aansluitpunt", "volgende pin"],
     ),
     nl("edit.rotate", &[], &["draaien", "roteren"]),
     nl("edit.mirror", &[], &["spiegelen"]),
@@ -104,6 +129,11 @@ pub const DUTCH: &[Aliases] = &[
         &["hernummer io"],
         &["adressen hernummeren"],
     ),
+    nl(
+        "xref.link",
+        &["koppel", "koppelen"],
+        &["contact aan spoel koppelen", "kruisverwijzing koppelen"],
+    ),
     nl("edit.escape", &[], &["annuleren"]),
     // Navigate
     nl("nav.partner", &[], &["naar partner", "kruisverwijzing"]),
@@ -127,6 +157,29 @@ pub const DUTCH: &[Aliases] = &[
     nl("view.fit", &[], &["passend zoomen", "alles tonen"]),
     nl("view.schematic", &[], &["schema"]),
     nl("view.cabinet", &[], &["kast", "kastindeling"]),
+    nl(
+        "interruption.renumber",
+        &[],
+        &["onderbrekingspunten nummeren"],
+    ),
+    nl("terminal.reset_pe", &["herstel"], &["aarde", "klemmen"]),
+    nl("terminal.connect", &["verbind"], &["klemmen", "brug"]),
+    nl("terminal.disconnect", &["ontkoppel"], &["klemmen", "brug"]),
+    nl(
+        "terminal.strip_up",
+        &["hoger"],
+        &["klemmenstrook", "nummer"],
+    ),
+    nl(
+        "terminal.strip_down",
+        &["lager"],
+        &["klemmenstrook", "nummer"],
+    ),
+    nl(
+        "terminal.strip_lowest",
+        &["laagste"],
+        &["klemmenstrook", "nummer"],
+    ),
     nl("view.terminals_drawer", &[], &["klemmen", "klemmenstroken"]),
     nl("view.cables_drawer", &[], &["kabels", "aders"]),
     nl("view.devices_drawer", &[], &["apparaten", "onderdelen"]),
@@ -138,6 +191,12 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("view.full_screen", &[], &["volledig scherm"]),
     nl("view.cabinet_table", &[], &["kast als tabel", "tabel"]),
+    nl("view.changes", &["wijzigingen"], &["vergelijk", "verschil"]),
+    nl(
+        "sim.live",
+        &[],
+        &["live potentialen tonen", "contacten sluiten", "spanning"],
+    ),
     nl(
         "view.toggle_marks",
         &[],

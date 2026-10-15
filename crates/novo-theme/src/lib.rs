@@ -1,4 +1,4 @@
-//! NovoElectric look and feel.
+//! KoperCAD look and feel.
 //!
 //! One place for the app's dark theme, its design tokens, the proposed dark
 //! canvas palette and the brand assets. The app shell calls [`apply`] once at
@@ -14,5 +14,5 @@ mod style;
 pub mod tokens;
 pub mod widgets;
 
-pub use canvas::{CANVAS_DARK, CanvasPalette};
+pub use canvas::{CANVAS_DARK, CanvasPalette, POTENTIALS_DARK, PotentialPalette};
 pub use style::{apply, style, visuals};

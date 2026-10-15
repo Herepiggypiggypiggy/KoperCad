@@ -8,9 +8,9 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use novo_core::{
-    AnyId, Device, DeviceId, DeviceKind, DeviceTag, Endpoint, JunctionId, ModelError, PageId,
-    PinRef, Placement, Point, PotentialId, PotentialKind, Project, Result, Rotation, SymbolId,
-    SymbolInstance, SymbolRole, Terminal, TerminalId, TerminalKind, Tx, Wire, WireId,
+    AnyId, Device, DeviceId, DeviceKind, DeviceTag, Direction, Endpoint, JunctionId, ModelError,
+    PageId, PinRef, Placement, Point, PotentialId, PotentialKind, Project, Result, Rotation,
+    SymbolId, SymbolInstance, SymbolRole, Terminal, TerminalId, TerminalKind, Tx, Wire, WireId,
 };
 use novo_symbols::Symbol;
 
@@ -32,10 +32,12 @@ pub struct PlaceOptions {
     /// device yet creates it (scripts); the editor refuses that with a
     /// notice instead.
     pub parent: Option<DeviceTag>,
-    /// Terminal strip for terminal symbols; `None` uses the strip of the
-    /// last terminal on the page, else `-X1`.
+    /// Terminal strip for terminal symbols; `None` joins the strip the
+    /// terminal is drawn next to, else starts a strip with the next free
+    /// `-X` number (see [`adjacent_strip`]).
     pub strip: Option<DeviceId>,
-    /// Potential of a potential feed; `None` uses `L1`.
+    /// Potential of a potential feed; `None` gives the first of `L1`, `L2`,
+    /// `L3`, ... that no feed on the page carries yet (see [`next_feed_name`]).
     pub potential: Option<PotentialId>,
     /// Name of an interruption point; `None` gives the next free one.
     pub interruption: Option<String>,
@@ -129,7 +131,7 @@ pub fn place(
         SymbolClass::Terminal { kind } => {
             let strip = match options.strip.filter(|s| strip_exists(tx.project(), *s)) {
                 Some(s) => s,
-                None => default_strip(tx, page)?,
+                None => strip_for(tx, page, placement.origin)?,
             };
             let levels = bridges.len().max(1);
             let name = next_terminal_name(tx.project(), strip, kind);
@@ -147,7 +149,10 @@ pub fn place(
         SymbolClass::PotentialFeed => {
             let potential = match options.potential {
                 Some(p) if tx.project().potential(p).is_some() => p,
-                _ => find_or_add_potential(tx, "L1", PotentialKind::Line, None)?,
+                _ => {
+                    let name = next_feed_name(tx.project(), page);
+                    find_or_add_potential(tx, &name, PotentialKind::Line, None)?
+                }
             };
             SymbolRole::PotentialFeed { potential }
         }
@@ -178,42 +183,84 @@ pub fn place(
     Ok(id)
 }
 
+/// The name a new potential feed gets: the first of `L1`, `L2`, `L3`, ...
+/// that no feed on `page` carries yet, so a row of feeds reads L1, L2, L3.
+/// (Same rule as `novo_workflow::insert::next_feed_name`.)
+pub fn next_feed_name(project: &Project, page: PageId) -> String {
+    let taken: Vec<&str> = project
+        .symbols()
+        .filter(|s| s.page == page)
+        .filter_map(|s| match s.role {
+            SymbolRole::PotentialFeed { potential } => {
+                project.potential(potential).map(|p| p.name.as_str())
+            }
+            _ => None,
+        })
+        .collect();
+    (1u32..)
+        .map(|n| format!("L{n}"))
+        .find(|name| !taken.iter().any(|t| t.eq_ignore_ascii_case(name)))
+        .expect("an unbounded range has a free name")
+}
+
 fn strip_exists(project: &Project, strip: DeviceId) -> bool {
     project
         .device(strip)
         .is_some_and(|d| d.kind == DeviceKind::TerminalStrip)
 }
 
-/// The strip of the last terminal placed on the page, else `-X1` in the
-/// page's structure (created when missing).
-fn default_strip(tx: &mut Tx<'_>, page: PageId) -> Result<DeviceId> {
-    let project = tx.project();
-    let last = project
+/// Terminals this close (mm between symbol origins) and in line belong to
+/// one strip run, the same gap the canvas uses to name a strip once.
+pub const STRIP_ADJACENT: f64 = 20.0;
+
+/// How far off the line two terminals may sit and still be in line.
+const IN_LINE: f64 = 2.0;
+
+/// The strip of the terminal drawn next to `at` on the page: the nearest
+/// terminal symbol within [`STRIP_ADJACENT`] along a row or a column.
+/// `None` when the spot is not next to any strip.
+pub fn adjacent_strip(project: &Project, page: PageId, at: Point) -> Option<DeviceId> {
+    project
         .page_contents(page)
         .symbols
         .iter()
-        .rev()
         .filter_map(|&s| project.symbol(s))
-        .find_map(|s| match &s.role {
-            SymbolRole::Terminal { terminals } => terminals
-                .first()
-                .and_then(|t| project.terminal(*t))
-                .map(|t| t.strip),
+        .filter_map(|s| match &s.role {
+            SymbolRole::Terminal { terminals } => {
+                let strip = project.terminal(*terminals.first()?)?.strip;
+                let o = s.placement.origin;
+                let (dx, dy) = ((o.x - at.x).abs(), (o.y - at.y).abs());
+                let near = (dy <= IN_LINE && dx <= STRIP_ADJACENT)
+                    || (dx <= IN_LINE && dy <= STRIP_ADJACENT);
+                near.then_some((dx + dy, strip))
+            }
             _ => None,
-        });
-    if let Some(strip) = last {
+        })
+        .min_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)))
+        .map(|(_, strip)| strip)
+}
+
+/// The strip a placed terminal symbol belongs to.
+pub fn strip_of_symbol(project: &Project, symbol: SymbolId) -> Option<DeviceId> {
+    match &project.symbol(symbol)?.role {
+        SymbolRole::Terminal { terminals } => Some(project.terminal(*terminals.first()?)?.strip),
+        _ => None,
+    }
+}
+
+/// The strip a terminal placed at `at` joins: the one it is drawn next to
+/// (a terminal directly left of a strip joins it too, and the strip's name
+/// moves to it as the new leftmost). Anywhere else it starts a new strip
+/// with the next free `-X` number in the page's structure.
+fn strip_for(tx: &mut Tx<'_>, page: PageId, at: Point) -> Result<DeviceId> {
+    if let Some(strip) = adjacent_strip(tx.project(), page, at) {
         return Ok(strip);
     }
-    let mut tag = page_structure(project, page);
+    let structure = page_structure(tx.project(), page);
+    let mut tag = structure.clone();
     tag.product.push("X1".into());
-    if let Some(&d) = project.devices_by_tag(&tag).first() {
-        if strip_exists(project, d) {
-            return Ok(d);
-        }
-        let n = project.next_tag_number(&page_structure(project, page), "X");
-        tag = tag.with_number(n);
-    }
-    tx.add_terminal_strip(tag)
+    let n = tx.project().next_tag_number(&structure, "X");
+    tx.add_terminal_strip(tag.with_number(n))
 }
 
 /// Next terminal name on a strip: `PE` / `N` for those kinds (then `PE2`),
@@ -254,6 +301,77 @@ fn next_interruption_name(project: &Project) -> String {
         .map(|n| format!("IP{n}"))
         .find(|n| !used.contains(n.as_str()))
         .expect("some name is free")
+}
+
+/// Renames what a symbol's label names when it is not a device: its
+/// terminal (and the others of the symbol that share the name), the
+/// potential a feed carries (an existing one by that name, else a new one
+/// of the same kind), or an interruption point. Refused with the reason
+/// when the name is empty or already taken on the strip's level.
+pub fn rename_label(
+    tx: &mut Tx<'_>,
+    symbol: SymbolId,
+    name: &str,
+) -> std::result::Result<(), String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("A name cannot be empty".into());
+    }
+    let role = tx
+        .project()
+        .symbol(symbol)
+        .map(|s| s.role.clone())
+        .ok_or("The symbol no longer exists")?;
+    let fail = |e: novo_core::ModelError| e.to_string();
+    match role {
+        SymbolRole::Terminal { terminals } => {
+            let Some(first) = terminals.first().and_then(|t| tx.project().terminal(*t)) else {
+                return Err("The terminal no longer exists".into());
+            };
+            let old = first.name.clone();
+            if old == name {
+                return Ok(());
+            }
+            let mine: Vec<_> = terminals
+                .iter()
+                .filter(|t| tx.project().terminal(**t).is_some_and(|t| t.name == old))
+                .copied()
+                .collect();
+            for &t in &mine {
+                let this = tx.project().terminal(t).ok_or("The terminal is gone")?;
+                let taken = tx.project().terminals_of_strip(this.strip).iter().any(|o| {
+                    o.id != t && !mine.contains(&o.id) && o.level == this.level && o.name == name
+                });
+                if taken {
+                    return Err(format!("{name} is already used on this strip"));
+                }
+            }
+            for t in mine {
+                tx.update::<novo_core::Terminal>(t, |t| t.name = name.to_string())
+                    .map_err(fail)?;
+            }
+            Ok(())
+        }
+        SymbolRole::PotentialFeed { potential } => {
+            let (kind, voltage) = tx
+                .project()
+                .potential(potential)
+                .map(|p| (p.kind, p.voltage))
+                .ok_or("The potential no longer exists")?;
+            let id = find_or_add_potential(tx, name, kind, voltage).map_err(fail)?;
+            tx.set_role(symbol, SymbolRole::PotentialFeed { potential: id })
+                .map_err(fail)
+        }
+        SymbolRole::Interruption { .. } => tx
+            .set_role(
+                symbol,
+                SymbolRole::Interruption {
+                    name: name.to_string(),
+                },
+            )
+            .map_err(fail),
+        _ => Err("This label cannot be renamed here".into()),
+    }
 }
 
 /// A potential by name, created with `kind` and `voltage` when missing.
@@ -449,6 +567,9 @@ fn is_free(project: &Project, end: Endpoint) -> bool {
     project.wires_at(end).next().is_none()
 }
 
+/// The drawn lines of a symbol on its page.
+pub type Outline = Vec<(Point, Point)>;
+
 /// A straight wire that placing or moving would draw between a free pin of
 /// the symbol in hand and the free pin it faces.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -464,12 +585,13 @@ pub struct FacingWire {
 /// `ghosts` are symbol instances as they would be (a placement preview, or
 /// moved symbols at their new place, keeping their ids); other ghosts are
 /// ignored as partners. A pin that already has a wire, or that lands inside
-/// a wire, gets none, and a line that would cross a wire or another symbol's
-/// body (`body` gives a symbol's drawn extent on the page) is not proposed.
+/// a wire, gets none, and a line that would cross a wire or touch the drawn lines of another
+/// symbol (`outline` gives a symbol's drawn segments on the page; empty
+/// space inside its bounding box does not block) is not proposed.
 pub fn facing_wires(
     project: &Project,
     ghosts: &[SymbolInstance],
-    body: &dyn Fn(&SymbolInstance) -> Option<(Point, Point)>,
+    outline: &dyn Fn(&SymbolInstance) -> Option<Outline>,
 ) -> Vec<FacingWire> {
     let ignore: BTreeSet<SymbolId> = ghosts.iter().map(|g| g.id).collect();
     let mut out = Vec::new();
@@ -531,8 +653,8 @@ pub fn facing_wires(
                 Some(s) != partner
                     && project
                         .symbol(s)
-                        .and_then(body)
-                        .is_some_and(|(min, max)| segment_in_box(p, q, min, max))
+                        .and_then(outline)
+                        .is_some_and(|lines| lines.iter().any(|&(c, d)| segments_touch(p, q, c, d)))
             };
             if facing
                 && is_free(project, to)
@@ -595,15 +717,31 @@ pub fn decline(tx: &mut Tx<'_>, proposal: &FacingWire) -> Result<()> {
     Ok(())
 }
 
-/// Whether an axis-aligned segment passes through the inside of a box.
-fn segment_in_box(a: Point, b: Point, min: Point, max: Point) -> bool {
-    let inside = |t: f64, lo: f64, hi: f64| t > lo + EPS && t < hi - EPS;
-    let overlaps = |s: f64, e: f64, lo: f64, hi: f64| s.min(e) < hi - EPS && s.max(e) > lo + EPS;
-    if (a.x - b.x).abs() < EPS {
-        inside(a.x, min.x, max.x) && overlaps(a.y, b.y, min.y, max.y)
-    } else {
-        inside(a.y, min.y, max.y) && overlaps(a.x, b.x, min.x, max.x)
+/// Whether segment `ab` meets segment `cd`, touching included.
+fn segments_touch(a: Point, b: Point, c: Point, d: Point) -> bool {
+    let cross =
+        |o: Point, p: Point, q: Point| (p.x - o.x) * (q.y - o.y) - (p.y - o.y) * (q.x - o.x);
+    let on = |p: Point, q: Point, r: Point| {
+        r.x >= p.x.min(q.x) - EPS
+            && r.x <= p.x.max(q.x) + EPS
+            && r.y >= p.y.min(q.y) - EPS
+            && r.y <= p.y.max(q.y) + EPS
+    };
+    let (d1, d2, d3, d4) = (
+        cross(c, d, a),
+        cross(c, d, b),
+        cross(a, b, c),
+        cross(a, b, d),
+    );
+    if ((d1 > EPS && d2 < -EPS) || (d1 < -EPS && d2 > EPS))
+        && ((d3 > EPS && d4 < -EPS) || (d3 < -EPS && d4 > EPS))
+    {
+        return true;
     }
+    (d1.abs() <= EPS && on(c, d, a))
+        || (d2.abs() <= EPS && on(c, d, b))
+        || (d3.abs() <= EPS && on(a, b, c))
+        || (d4.abs() <= EPS && on(a, b, d))
 }
 
 /// Whether a straight line from `p` along `v` for `len` would cross or run
@@ -667,11 +805,85 @@ pub fn resolve_target(tx: &mut Tx<'_>, page: PageId, target: Target) -> Result<E
 }
 
 /// The model error a refused route fails with, for callers that cannot use
-/// [`Refusal`] as data (scripts, [`draw_wire`]).
-fn refused(r: Refusal) -> ModelError {
-    ModelError::InvalidValue {
-        id: r.other.into(),
-        field: "route overlaps this wire",
+/// [`Refusal`] as data (scripts, [`draw_wire`]). The reason names the other
+/// wire by its ends and says in plain words what is wrong.
+pub(crate) fn refused(r: Refusal) -> ModelError {
+    refusal_error(None, r)
+}
+
+/// As [`refused`], naming the wire the refusal is about when the project is
+/// at hand to label the other wire's ends.
+pub(crate) fn refusal_error(project: Option<&Project>, r: Refusal) -> ModelError {
+    let label = |e: Endpoint| match e {
+        Endpoint::Pin { symbol, pin } => project
+            .and_then(|p| {
+                let s = p.symbol(symbol)?;
+                let tag = s
+                    .device()
+                    .and_then(|d| p.device(d))
+                    .map(|d| d.tag.to_string());
+                Some(format!(
+                    "{} pin {}",
+                    tag.unwrap_or_else(|| "a symbol".into()),
+                    s.pins.get(usize::from(pin))?.name
+                ))
+            })
+            .unwrap_or_else(|| "a pin".into()),
+        Endpoint::Junction { .. } => "a junction".into(),
+        Endpoint::Free { .. } => "an open end".into(),
+    };
+    let which = project.and_then(|p| p.wire(r.other)).map_or_else(
+        || "another wire".to_string(),
+        |w| format!("the wire from {} to {}", label(w.from), label(w.to)),
+    );
+    let length = ((r.to.x - r.from.x).abs() + (r.to.y - r.from.y).abs()).round();
+    ModelError::Refused {
+        what: "This route".into(),
+        reason: format!(
+            "it would run along {which} for {length} mm; wires may cross or end on the side of another wire but not share its length. Move a corner or end the wire on its side."
+        ),
+    }
+}
+
+/// How a wire end on another wire's side should arrive: at right angles to
+/// that wire, from the side `toward` lies on. A pin or junction keeps its
+/// own exit direction. Without this a route to a point on a wire could
+/// arrive along the wire and be refused as sharing its length.
+fn approach_direction(
+    project: &Project,
+    page: PageId,
+    t: Target,
+    toward: Point,
+) -> Option<Direction> {
+    match t {
+        Target::Endpoint(e, _) => endpoint_direction(project, e),
+        Target::Wire(w, at) => {
+            if geometry::junction_at(project, page, at).is_some() {
+                return None;
+            }
+            let seg = wires_through(project, page, at)
+                .into_iter()
+                .find(|(x, _)| *x == w)
+                .or_else(|| wires_through(project, page, at).into_iter().next())?
+                .1;
+            let pts = wire_points(project, w)?;
+            let (a, b) = (*pts.get(seg)?, *pts.get(seg + 1)?);
+            if (a.y - b.y).abs() < EPS {
+                Some(if toward.y < at.y {
+                    Direction::Up
+                } else {
+                    Direction::Down
+                })
+            } else if (a.x - b.x).abs() < EPS {
+                Some(if toward.x < at.x {
+                    Direction::Left
+                } else {
+                    Direction::Right
+                })
+            } else {
+                None
+            }
+        }
     }
 }
 
@@ -705,16 +917,15 @@ pub fn check_draw(
         Target::Endpoint(e, _) => Some(e),
         Target::Wire(..) => None,
     };
-    let dir = |t: Target| endpoint(t).and_then(|e| endpoint_direction(project, e));
     let wires = |t: Target| endpoint(t).map_or_else(Vec::new, |e| pin_wires(project, e, &[]));
     plan_route(
         project,
         page,
         start.position(),
-        dir(start),
+        approach_direction(project, page, start, end.position()),
         corners,
         end.position(),
-        dir(end),
+        approach_direction(project, page, end, start.position()),
         &wires(start),
         &wires(end),
     )
@@ -731,29 +942,34 @@ pub fn draw_wire(
     corners: &[Point],
     end: Target,
 ) -> Result<WireId> {
+    let (start_dir, end_dir) = {
+        let project = tx.project();
+        (
+            approach_direction(project, page, start, end.position()),
+            approach_direction(project, page, end, start.position()),
+        )
+    };
     let from = resolve_target(tx, page, start)?;
     let to = resolve_target(tx, page, end)?;
     let project = tx.project();
     let a = project
         .endpoint_position(from)
-        .ok_or(ModelError::NotFound(endpoint_id(from)))?;
-    let b = project
-        .endpoint_position(to)
-        .ok_or(ModelError::NotFound(endpoint_id(to)))?;
+        .ok_or_else(|| missing(from))?;
+    let b = project.endpoint_position(to).ok_or_else(|| missing(to))?;
     // Wires that leave the same pin may run together for their first stretch;
     // that case becomes a derived junction later. Everything else is checked.
     let bends = plan_route(
         project,
         page,
         a,
-        endpoint_direction(project, from),
+        start_dir,
         corners,
         b,
-        endpoint_direction(project, to),
+        end_dir,
         &pin_wires(project, from, &[]),
         &pin_wires(project, to, &[]),
     )
-    .map_err(refused)?;
+    .map_err(|r| refusal_error(Some(project), r))?;
     let wire = tx.connect(from, to)?;
     if !bends.is_empty() {
         tx.update::<Wire>(wire, |w| w.route = bends)?;
@@ -761,10 +977,17 @@ pub fn draw_wire(
     Ok(wire)
 }
 
-fn endpoint_id(end: Endpoint) -> AnyId {
+/// The error for an endpoint that has no position: it names the missing
+/// symbol or junction.
+pub(crate) fn missing(end: Endpoint) -> ModelError {
     match end {
-        Endpoint::Pin { symbol, .. } => symbol.into(),
-        Endpoint::Junction { junction } => junction.into(),
+        Endpoint::Pin { symbol, .. } => ModelError::NotFound(symbol.into()),
+        Endpoint::Junction { junction } => ModelError::NotFound(junction.into()),
+        // An open end is its own position.
+        Endpoint::Free { .. } => ModelError::Refused {
+            what: "Wire".into(),
+            reason: "an open end has no position".into(),
+        },
     }
 }
 
@@ -855,7 +1078,7 @@ pub fn pivot(project: &Project, ids: &[AnyId], grid: f64) -> Option<Point> {
 /// re-routed. Nothing new connects here: callers finish with [`settle`]
 /// once every step of the gesture is done.
 pub fn transform(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform) -> Result<()> {
-    transform_with(tx, ids, how, false)
+    transform_with(tx, ids, how, false, false)
 }
 
 /// [`transform`] for a person's drag or key press: where no adjustment keeps
@@ -863,10 +1086,56 @@ pub fn transform(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform) -> Result<()> {
 /// nothing (the transaction rolls back). Scripts, AI edits, undo and redo
 /// use [`transform`], which accepts the overlap for `wire.overlap` to report.
 pub fn transform_interactive(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform) -> Result<()> {
-    transform_with(tx, ids, how, true)
+    transform_with(tx, ids, how, true, false)
 }
 
-fn transform_with(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform, refuse: bool) -> Result<()> {
+/// [`transform_interactive`] for dragging devices away: the wires on the
+/// moved pins stay where they are and end in the air there (open ends,
+/// DESIGN.md §2), instead of stretching along. Wires between two moved
+/// symbols and wires that are selected too move with them. Dropping the
+/// device on a wire or on facing pins reconnects it ([`settle`]).
+pub fn transform_detached(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform) -> Result<()> {
+    transform_with(tx, ids, how, true, true)
+}
+
+/// How many wire ends are open (in the air) on the whole project.
+pub fn open_end_count(project: &Project) -> usize {
+    project
+        .wires()
+        .flat_map(|w| w.ends())
+        .filter(|e| matches!(e, Endpoint::Free { .. }))
+        .count()
+}
+
+/// How many wire ends a detaching move of `ids` would leave in the air: the
+/// ends on moved symbols' pins whose wire is not carried along with both
+/// ends moving or selected.
+pub fn detaching_ends(project: &Project, ids: &[AnyId]) -> usize {
+    let symbols: BTreeSet<SymbolId> = symbols_in(ids).into_iter().collect();
+    project
+        .wires()
+        .filter(|w| !ids.contains(&AnyId::Wire(w.id)))
+        .map(|w| {
+            let on_moved = |e: Endpoint| {
+                matches!(e, Endpoint::Pin { symbol, .. } if symbols.contains(&symbol))
+            };
+            let [a, b] = w.ends();
+            if on_moved(a) && on_moved(b) {
+                0
+            } else {
+                usize::from(on_moved(a)) + usize::from(on_moved(b))
+            }
+        })
+        .sum()
+}
+
+fn transform_with(
+    tx: &mut Tx<'_>,
+    ids: &[AnyId],
+    how: Transform,
+    refuse: bool,
+    detach: bool,
+) -> Result<()> {
     let mut symbols: BTreeSet<SymbolId> = BTreeSet::new();
     let mut junctions: BTreeSet<JunctionId> = BTreeSet::new();
     for id in ids {
@@ -890,9 +1159,13 @@ fn transform_with(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform, refuse: bool) 
             _ => {}
         }
     }
+    if detach {
+        detach_pins(tx, ids, &symbols)?;
+    }
     let moved = |e: &Endpoint| match *e {
         Endpoint::Pin { symbol, .. } => symbols.contains(&symbol),
         Endpoint::Junction { junction } => junctions.contains(&junction),
+        Endpoint::Free { .. } => false,
     };
     // Wires touching anything that moves, and whether both ends move.
     let mut wires: BTreeMap<WireId, bool> = BTreeMap::new();
@@ -939,6 +1212,39 @@ fn transform_with(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform, refuse: bool) 
     Ok(())
 }
 
+/// Frees the ends of wires on the pins of `symbols` where they are, unless
+/// the wire moves with them (its other end moves too, or it is selected).
+fn detach_pins(tx: &mut Tx<'_>, ids: &[AnyId], symbols: &BTreeSet<SymbolId>) -> Result<()> {
+    let on_moved =
+        |e: &Endpoint| matches!(e, Endpoint::Pin { symbol, .. } if symbols.contains(symbol));
+    let mut todo: Vec<(WireId, Endpoint, Endpoint)> = Vec::new();
+    for w in tx.project().wires() {
+        let carried = ids.contains(&AnyId::Wire(w.id));
+        let [a, b] = w.ends();
+        let both_on = on_moved(&a) && on_moved(&b);
+        if carried || both_on || !(on_moved(&a) || on_moved(&b)) {
+            continue;
+        }
+        let free = |e: Endpoint| {
+            if on_moved(&e) {
+                tx.project()
+                    .endpoint_position(e)
+                    .map_or(e, |at| Endpoint::Free { at })
+            } else {
+                e
+            }
+        };
+        todo.push((w.id, free(a), free(b)));
+    }
+    for (wire, from, to) in todo {
+        tx.update::<Wire>(wire, |w| {
+            w.from = from;
+            w.to = to;
+        })?;
+    }
+    Ok(())
+}
+
 /// Fails if wire `wire` as it now lies shares a stretch with a wire that is
 /// not in `together` (the wires that moved rigidly with it).
 fn check_kept(project: &Project, wire: WireId, together: &[WireId]) -> Result<()> {
@@ -953,6 +1259,165 @@ fn check_kept(project: &Project, wire: WireId, together: &[WireId]) -> Result<()
         Some(r) => Err(refused(r)),
         None => Ok(()),
     }
+}
+
+/// Takes the bend at `index` out of a wire's route (a selected corner,
+/// Delete). The wire then runs straight between its neighbours; a result
+/// that would share a stretch with another wire is refused.
+pub fn remove_corner(tx: &mut Tx<'_>, wire: WireId, index: usize) -> Result<()> {
+    let Some(w) = tx.project().wire(wire) else {
+        return Ok(());
+    };
+    if index >= w.route.len() {
+        return Ok(());
+    }
+    tx.update::<Wire>(wire, |w| {
+        w.route.remove(index);
+    })?;
+    check_kept(tx.project(), wire, &[wire])
+}
+
+/// The part of a wire that is dragged (the canvas's `WirePartKind`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PartKind {
+    /// A bend: index into the route.
+    Corner(usize),
+    /// A straight run: 0 leaves the first end, the last reaches the second.
+    Segment(usize),
+}
+
+/// The route indices a dragged wire part moves: a corner moves itself; a
+/// run moves the corners at its ends (an end of the wire is not a corner).
+pub fn part_corners(kind: PartKind, route_len: usize) -> Vec<usize> {
+    match kind {
+        PartKind::Corner(i) => vec![i],
+        PartKind::Segment(k) => [k.checked_sub(1), Some(k)]
+            .into_iter()
+            .flatten()
+            .filter(|&i| i < route_len)
+            .collect(),
+    }
+}
+
+/// How far a wire part dragged from `from` to `to` moves, snapped to the
+/// grid. A corner is free. A run keeps its direction: an inner run slides
+/// across itself, a run that reaches an end of the wire along itself, so
+/// no slanted piece appears. A run with no corner to move stays put.
+pub fn part_delta(
+    project: &Project,
+    wire: WireId,
+    kind: PartKind,
+    grid: f64,
+    from: Point,
+    to: Point,
+) -> Point {
+    let delta = geometry::snap(to, grid) - geometry::snap(from, grid);
+    let PartKind::Segment(k) = kind else {
+        return delta;
+    };
+    let Some(pts) = wire_points(project, wire) else {
+        return Point::ZERO;
+    };
+    if k + 1 >= pts.len() || part_corners(kind, pts.len() - 2).is_empty() {
+        return Point::ZERO;
+    }
+    let (a, b) = (pts[k], pts[k + 1]);
+    let vertical = (a.x - b.x).abs() < 1e-6;
+    let horizontal = (a.y - b.y).abs() < 1e-6;
+    let end = k == 0 || k + 2 == pts.len();
+    match (vertical, horizontal, end) {
+        (true, _, false) | (_, true, true) => Point::new(delta.x, 0.0),
+        (_, true, false) | (true, _, true) => Point::new(0.0, delta.y),
+        _ => delta,
+    }
+}
+
+/// A wire's route from `a` to `b` with a dragged part moved by `delta`.
+/// Stretches that were horizontal or vertical stay so: where a moved corner
+/// would leave one slanted, an elbow is added next to the corner that did
+/// not move, so the stretch keeps its direction at the fixed end. Stretches
+/// that were slanted to begin with (a wire drawn in Lines mode) are left
+/// alone, unless `square` (Corners mode) asks for every stretch at a moved
+/// corner to end up horizontal or vertical.
+pub fn moved_route(
+    a: Point,
+    route: &[Point],
+    b: Point,
+    kind: PartKind,
+    delta: Point,
+    square: bool,
+) -> Vec<Point> {
+    const EPS: f64 = 1e-6;
+    let aligned = |u: Point, v: Point| (u.x - v.x).abs() < EPS || (u.y - v.y).abs() < EPS;
+    let mut old = vec![a];
+    old.extend_from_slice(route);
+    old.push(b);
+    let moved: Vec<usize> = part_corners(kind, route.len())
+        .into_iter()
+        .map(|i| i + 1)
+        .collect();
+    let new: Vec<Point> = old
+        .iter()
+        .enumerate()
+        .map(|(i, &p)| if moved.contains(&i) { p + delta } else { p })
+        .collect();
+    let mut out: Vec<Point> = Vec::new();
+    for i in 0..new.len() - 1 {
+        if i > 0 {
+            out.push(new[i]);
+        }
+        let (u, v) = (new[i], new[i + 1]);
+        if aligned(u, v) || !(square || aligned(old[i], old[i + 1])) {
+            continue;
+        }
+        let horizontal = (old[i].y - old[i + 1].y).abs() < EPS;
+        let elbow = match (moved.contains(&i), moved.contains(&(i + 1))) {
+            (false, _) if horizontal => Point::new(v.x, u.y),
+            (false, _) => Point::new(u.x, v.y),
+            (true, false) if horizontal => Point::new(u.x, v.y),
+            (true, false) => Point::new(v.x, u.y),
+            (true, true) => continue,
+        };
+        out.push(elbow);
+    }
+    // Drop bends that landed on their neighbour or on an end.
+    let mut route: Vec<Point> = Vec::new();
+    for p in out {
+        let prev = route.last().copied().unwrap_or(a);
+        if (p.x - prev.x).abs() > EPS || (p.y - prev.y).abs() > EPS {
+            route.push(p);
+        }
+    }
+    while route
+        .last()
+        .is_some_and(|p| (p.x - b.x).abs() < EPS && (p.y - b.y).abs() < EPS)
+    {
+        route.pop();
+    }
+    route
+}
+
+/// Moves a dragged wire part by `delta`; a result that would share a
+/// stretch with another wire is refused.
+pub fn move_wire_part(
+    tx: &mut Tx<'_>,
+    wire: WireId,
+    kind: PartKind,
+    delta: Point,
+    square: bool,
+) -> Result<()> {
+    let Some(w) = tx.project().wire(wire) else {
+        return Ok(());
+    };
+    let (Some(a), Some(b)) = (
+        tx.project().endpoint_position(w.from),
+        tx.project().endpoint_position(w.to),
+    ) else {
+        return Ok(());
+    };
+    let route = moved_route(a, &w.route, b, kind, delta, square);
+    tx.update::<Wire>(wire, |w| w.route = route)?;
+    check_kept(tx.project(), wire, &[wire])
 }
 
 /// The symbols among `ids`, for [`settle`].
@@ -1285,5 +1750,82 @@ pub fn device_of(project: &Project, id: AnyId) -> Option<DeviceId> {
         AnyId::Device(d) => project.device(d).map(|d: &Device| d.id),
         AnyId::Symbol(s) => project.symbol(s)?.device(),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_dragged_part_never_leaves_a_slanted_stretch_on_an_orthogonal_wire() {
+        let p = |x: f64, y: f64| Point::new(x, y);
+        let routes: Vec<(Point, Vec<Point>, Point)> = vec![
+            (p(0.0, 0.0), vec![p(0.0, 20.0)], p(40.0, 20.0)),
+            (
+                p(0.0, 0.0),
+                vec![p(0.0, 20.0), p(40.0, 20.0)],
+                p(40.0, 50.0),
+            ),
+            (
+                p(0.0, 0.0),
+                vec![p(0.0, 10.0), p(30.0, 10.0), p(30.0, 40.0), p(60.0, 40.0)],
+                p(60.0, 70.0),
+            ),
+            (p(0.0, 0.0), vec![p(25.0, 0.0)], p(25.0, 30.0)),
+            (p(0.0, 0.0), vec![], p(30.0, 0.0)),
+        ];
+        let aligned = |u: Point, v: Point| (u.x - v.x).abs() < 1e-6 || (u.y - v.y).abs() < 1e-6;
+        for (a, route, b) in routes {
+            let mut kinds: Vec<PartKind> = (0..route.len()).map(PartKind::Corner).collect();
+            kinds.extend((0..=route.len()).map(PartKind::Segment));
+            for kind in kinds {
+                for dx in [-15.0, -5.0, 0.0, 5.0, 20.0] {
+                    for dy in [-15.0, -5.0, 0.0, 5.0, 20.0] {
+                        let moved = moved_route(a, &route, b, kind, p(dx, dy), false);
+                        let mut pts = vec![a];
+                        pts.extend(moved.iter().copied());
+                        pts.push(b);
+                        assert!(
+                            pts.windows(2).all(|s| aligned(s[0], s[1])),
+                            "{kind:?} by ({dx}, {dy}) on {route:?} gave {pts:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    use super::*;
+
+    fn p(x: f64, y: f64) -> Point {
+        Point::new(x, y)
+    }
+
+    #[test]
+    fn a_line_blocks_only_where_a_drawn_segment_meets_it() {
+        let wire = (p(10.0, 0.0), p(10.0, 100.0));
+        // Crossing, touching and running along block.
+        assert!(segments_touch(wire.0, wire.1, p(0.0, 50.0), p(20.0, 50.0)));
+        assert!(segments_touch(wire.0, wire.1, p(10.0, 50.0), p(30.0, 50.0)));
+        assert!(segments_touch(wire.0, wire.1, p(10.0, 20.0), p(10.0, 60.0)));
+        // A line beside it, or short of it, or past its end does not (the
+        // empty corner of a bounding box).
+        assert!(!segments_touch(
+            wire.0,
+            wire.1,
+            p(12.0, 0.0),
+            p(12.0, 100.0)
+        ));
+        assert!(!segments_touch(
+            wire.0,
+            wire.1,
+            p(12.0, 50.0),
+            p(30.0, 50.0)
+        ));
+        assert!(!segments_touch(
+            wire.0,
+            wire.1,
+            p(0.0, 120.0),
+            p(20.0, 120.0)
+        ));
     }
 }

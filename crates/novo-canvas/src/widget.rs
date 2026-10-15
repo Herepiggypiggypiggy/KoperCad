@@ -287,6 +287,8 @@ pub struct CanvasView {
     hovered: Option<ItemId>,
     hovered_hit: Option<Hit>,
     band: Option<Vec2>,
+    /// What the box being dragged would select now (see `CanvasOutput`).
+    band_ids: Vec<ItemId>,
     right_drag: Option<RightDrag>,
     fit_pending: bool,
     /// What to bring into view; see [`Self::reveal`].
@@ -317,6 +319,12 @@ pub struct CanvasOutput {
     pub selection_changed: bool,
     /// World position of a primary click, after snapping.
     pub clicked: Option<Snapped>,
+    /// What a primary click hit, with the label when it landed on text, so
+    /// the editor can select just a component's text.
+    pub clicked_hit: Option<Hit>,
+    /// World position of a primary double click, after snapping: on empty
+    /// canvas it starts a wire.
+    pub double_clicked: Option<Snapped>,
     /// World position of a right click that did not turn into a pan (moved
     /// less than [`RIGHT_PAN_THRESHOLD`]), after snapping. Open context menus
     /// on this rather than `response.secondary_clicked()`, whose click
@@ -327,7 +335,30 @@ pub struct CanvasOutput {
     /// Marks (indices into `CanvasView::marks.list`) under the cursor's
     /// glyph; their text is shown as a hover note.
     pub hovered_marks: Vec<usize>,
+    /// While a selection box is dragged: how many items it would select if
+    /// released now, for an "N selected" hint.
+    pub band_count: Option<usize>,
 }
+
+/// `a` to `b` cut into dashes of length `dash` with `gap` between them.
+fn dashes(a: Vec2, b: Vec2, dash: f32, gap: f32) -> Vec<[Vec2; 2]> {
+    let len = a.distance(b);
+    if len <= 0.0 || dash <= 0.0 {
+        return Vec::new();
+    }
+    let dir = (b - a) / len;
+    let mut out = Vec::new();
+    let mut t = 0.0;
+    while t < len {
+        let e = (t + dash).min(len);
+        out.push([a + dir * t, a + dir * e]);
+        t = e + gap.max(f32::EPSILON);
+    }
+    out
+}
+
+/// Most items a selection box lights up while it is dragged.
+const BAND_HIGHLIGHT_MAX: usize = 2000;
 
 /// Frames a [`CanvasView::reveal`] waits for its target to appear in the
 /// scene before it is dropped.
@@ -373,6 +404,7 @@ impl CanvasView {
             hovered_hit: None,
             hovered: None,
             band: None,
+            band_ids: Vec::new(),
             right_drag: None,
             fit_pending: true,
             reveal_pending: None,
@@ -516,11 +548,17 @@ impl CanvasView {
 
         let mut selection_changed = false;
         let mut clicked = None;
+        let mut clicked_hit = None;
+        let mut double_clicked = None;
         let (shift, command) = ui.ctx().input(|i| (i.modifiers.shift, i.modifiers.command));
         let op = SelectOp::from_modifiers(shift, command);
 
+        if response.double_clicked_by(egui::PointerButton::Primary) {
+            double_clicked = cursor;
+        }
         if response.clicked_by(egui::PointerButton::Primary) {
             clicked = cursor;
+            clicked_hit = cursor_raw.and_then(|w| scene.pick(w, tol, self.viewport.zoom));
             if self.interaction.select
                 && let Some(w) = cursor_raw
             {
@@ -560,6 +598,15 @@ impl CanvasView {
         if !ui.ctx().input(|i| i.pointer.primary_down()) && !response.dragged() {
             self.band = None;
         }
+        // What the box would select now, for the live highlight.
+        self.band_ids = match (self.band, cursor_raw) {
+            (Some(start), Some(end)) => scene.box_select(
+                &Aabb::from_corners(start, end),
+                BoxMode::from_drag(start, end),
+                self.viewport.zoom,
+            ),
+            _ => Vec::new(),
+        };
         let mut escape = None;
         if self.interaction.escape_on_hover
             && response.hovered()
@@ -589,7 +636,7 @@ impl CanvasView {
                 rect.center(),
                 egui::Align2::CENTER_CENTER,
                 "The drawing cannot be shown: no graphics adapter was found.\n\
-                 NovoElectric needs Direct3D 12, Vulkan or Metal \
+                 KoperCAD needs Direct3D 12, Vulkan or Metal \
                  (on Linux, install the Mesa Vulkan drivers).",
                 egui::FontId::proportional(15.0),
                 ui.visuals().error_fg_color,
@@ -605,9 +652,12 @@ impl CanvasView {
             hit,
             selection_changed,
             clicked,
+            clicked_hit,
+            double_clicked,
             context_click: context_click.then_some(cursor).flatten(),
             escape,
             hovered_marks,
+            band_count: self.band.map(|_| self.band_ids.len()),
         }
     }
 
@@ -785,7 +835,7 @@ impl CanvasView {
 
         let mut under = Mesh::default();
         render::background(&mut under, &self.viewport, self.style.background);
-        self.grid_mesh(&mut under);
+        self.grid_mesh(&mut under, scene, pixels_per_point);
 
         let mut over = Mesh::default();
         if let Some(hit) = self.hovered_hit
@@ -808,17 +858,68 @@ impl CanvasView {
                 None => {}
             }
         }
+        // Handles keep their size on screen, so they are tessellated for
+        // this zoom every frame (only those of items in view).
+        for id in scene.query(&self.viewport.visible_world()) {
+            let Some(item) = scene.get(id) else { continue };
+            for h in &item.handles {
+                let r = self.viewport.screen_to_world_len(h.half);
+                if h.ring {
+                    let ring =
+                        Primitive::stroked(Shape::circle(h.at, r), Stroke::screen(1.2, h.color));
+                    self.tessellator.primitive(&mut over, &ring);
+                    continue;
+                }
+                let shape = if h.round {
+                    Shape::circle(h.at, r)
+                } else {
+                    Shape::rect(h.at - Vec2::splat(r), h.at + Vec2::splat(r))
+                };
+                self.tessellator
+                    .primitive(&mut over, &Primitive::filled(shape, h.color));
+            }
+        }
         if let (Some(start), Some(end)) = (self.band, cursor_raw) {
             let color = match BoxMode::from_drag(start, end) {
                 BoxMode::Window => self.style.band_window,
                 BoxMode::Crossing => self.style.band_crossing,
             };
-            let rect = Primitive {
+            // Items the box would select light up as they do under the
+            // hover, up to a cap that keeps the frame cheap.
+            if self.band_ids.len() <= BAND_HIGHLIGHT_MAX {
+                for id in &self.band_ids {
+                    if let Some(item) = scene.get(*id) {
+                        self.tessellator
+                            .item_highlighted(&mut over, item, &self.style.hover);
+                    }
+                }
+            }
+            let fill = Primitive {
                 shape: Shape::rect(start, end),
-                stroke: Some(Stroke::screen(1.0, color)),
+                stroke: None,
                 fill: Some(color.with_alpha(40)),
             };
-            self.tessellator.primitive(&mut over, &rect);
+            self.tessellator.primitive(&mut over, &fill);
+            let (lo, hi) = (start.min(end), start.max(end));
+            let corners = [lo, Vec2::new(hi.x, lo.y), hi, Vec2::new(lo.x, hi.y)];
+            let edge = Stroke::screen(1.0, color);
+            for i in 0..4 {
+                let (a, b) = (corners[i], corners[(i + 1) % 4]);
+                match BoxMode::from_drag(start, end) {
+                    // Enclosing box: a solid outline.
+                    BoxMode::Window => {
+                        tessellate::stroke_run(&mut over, &[a, b], &edge);
+                    }
+                    // Crossing box: dashed.
+                    BoxMode::Crossing => {
+                        let dash = self.viewport.screen_to_world_len(6.0);
+                        let gap = self.viewport.screen_to_world_len(4.0);
+                        for [p, q] in dashes(a, b, dash, gap) {
+                            tessellate::stroke_run(&mut over, &[p, q], &edge);
+                        }
+                    }
+                }
+            }
         }
         if self.interaction.snap_marker
             && let Some(c) = cursor
@@ -1046,11 +1147,63 @@ impl CanvasView {
             .filter(|f| fonts.families.contains_key(f))
     }
 
-    fn grid_mesh(&self, mesh: &mut Mesh) {
+    fn grid_mesh(&self, mesh: &mut Mesh, scene: &Scene, pixels_per_point: f32) {
+        // A page is painted here, under everything: the sheet fill, then the
+        // grid dots inside it, so strokes and text of the scene cover them.
+        let sheet = scene.sheet();
+        if let Some(sh) = sheet
+            && let Some(fill) = sh.fill
+        {
+            let r = sh.rect;
+            tessellate::fill_polygon(
+                mesh,
+                &[
+                    r.min,
+                    Vec2::new(r.max.x, r.min.y),
+                    r.max,
+                    Vec2::new(r.min.x, r.max.y),
+                ],
+                fill,
+                true,
+            );
+        }
         let Some(g) = self.grid.visible_lines(&self.viewport) else {
             return;
         };
         let vis = self.viewport.visible_world();
+        if let Some(sh) = sheet
+            && self.grid.style == GridStyle::Dots
+        {
+            let zoom = self.viewport.zoom;
+            let major_step = (self.grid.spacing * self.grid.major_every.max(1) as f32).max(g.step);
+            // Quieter when zoomed out (DESIGN section 4): dots need 8 px
+            // between them, so only the majors remain at first and then
+            // none.
+            let (minor, major) = (g.step * zoom >= 8.0, major_step * zoom >= 8.0);
+            let boxes: Vec<Aabb> = scene
+                .query(&vis)
+                .into_iter()
+                .filter_map(|id| scene.get(id))
+                .flat_map(|item| item.labels.iter().map(crate::text::Label::bounds))
+                .collect();
+            let ppp = pixels_per_point.max(f32::EPSILON);
+            for d in g.dots(&sh.rect, &sh.lines, &boxes, minor, major) {
+                // One device pixel for a minor dot, two for a major one.
+                let w = if d.major { 2.0 } else { 1.0 } / ppp;
+                let half = self.viewport.screen_to_world_len(w * 0.5);
+                let c = if d.major {
+                    self.style.grid_major
+                } else {
+                    self.style.grid_minor
+                };
+                tessellate::stroke_run(
+                    mesh,
+                    &[d.pos - Vec2::new(half, 0.0), d.pos + Vec2::new(half, 0.0)],
+                    &Stroke::screen(w, c),
+                );
+            }
+            return;
+        }
         match self.grid.style {
             GridStyle::Lines => {
                 for &(x, major) in &g.xs {
@@ -1141,6 +1294,17 @@ impl CanvasView {
 
 #[cfg(test)]
 mod tests {
+    use super::dashes;
+
+    #[test]
+    fn a_dashed_edge_has_gaps_and_ends_on_the_corner() {
+        let d = dashes(Vec2::ZERO, Vec2::new(20.0, 0.0), 6.0, 4.0);
+        assert_eq!(d.len(), 2);
+        assert_eq!(d[0], [Vec2::ZERO, Vec2::new(6.0, 0.0)]);
+        assert_eq!(d[1][0], Vec2::new(10.0, 0.0));
+        assert_eq!(d[1][1], Vec2::new(16.0, 0.0));
+        assert!(dashes(Vec2::ZERO, Vec2::ZERO, 6.0, 4.0).is_empty());
+    }
     use super::*;
     use crate::scene::Item;
     use crate::shape::Shape;

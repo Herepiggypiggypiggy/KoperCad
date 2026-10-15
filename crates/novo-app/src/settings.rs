@@ -1,5 +1,6 @@
 //! Preferences remembered between sessions.
 
+use novo_editor::tool::{ConnectMode, WiringMode};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -18,10 +19,56 @@ pub struct Settings {
     pub recent_projects: Vec<PathBuf>,
     /// Ids of recently run actions, newest first; the palette lists them first.
     pub recent_actions: Vec<String>,
+    /// How the wire tool takes clicks, `"corners"` or `"lines"`: the
+    /// person's preference, not the project's (docs/design/wiring-modes.md).
+    pub wiring_mode: String,
+    /// What a drop does about facing free pins, `"draw"`, `"ask"` or
+    /// `"never"` (docs/DESIGN.md §2): a per-user preference.
+    pub connect_mode: String,
+    /// The initials a revision is issued under (docs/DESIGN.md §7),
+    /// asked once and remembered.
+    pub initials: String,
+    /// Whether moving a symbol takes its wires along by default (Shift
+    /// does the other one): a per-user preference.
+    pub move_carries: bool,
 }
 
 impl Settings {
     pub const STORAGE_KEY: &str = "novo_settings";
+
+    /// The wiring mode; Corners unless the person chose Lines.
+    pub fn wiring_mode(&self) -> WiringMode {
+        match self.wiring_mode.as_str() {
+            "lines" => WiringMode::Lines,
+            _ => WiringMode::Corners,
+        }
+    }
+
+    pub fn set_wiring_mode(&mut self, mode: WiringMode) {
+        self.wiring_mode = match mode {
+            WiringMode::Corners => "corners",
+            WiringMode::Lines => "lines",
+        }
+        .to_owned();
+    }
+
+    /// The auto-connection mode; Draw unless the person chose otherwise.
+    pub fn connect_mode(&self) -> ConnectMode {
+        match self.connect_mode.as_str() {
+            "ask" => ConnectMode::Ask,
+            "never" => ConnectMode::Never,
+            _ => ConnectMode::Draw,
+        }
+    }
+
+    pub fn set_connect_mode(&mut self, mode: ConnectMode) {
+        self.connect_mode = match mode {
+            ConnectMode::Draw => "draw",
+            ConnectMode::Ask => "ask",
+            ConnectMode::Never => "never",
+        }
+        .to_owned();
+    }
 
     pub fn remember_recent(&mut self, path: &Path) {
         self.recent_projects.retain(|p| p != path);

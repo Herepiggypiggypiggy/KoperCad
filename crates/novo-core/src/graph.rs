@@ -22,7 +22,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use crate::entity::{Endpoint, SameName, SymbolRole};
+use crate::entity::{Endpoint, SameName, SymbolRole, Wire};
 use crate::id::{AnyId, DeviceId, PageId, PotentialId, SymbolId, WireId};
 use crate::project::Project;
 
@@ -224,8 +224,11 @@ impl Netlist {
         };
 
         let mut uf = UnionFind::new(endpoints.len());
+        // An open end belongs to no node: it joins nothing.
         for wire in project.wires() {
-            uf.union(index[&wire.from], index[&wire.to]);
+            if let (Some(&a), Some(&b)) = (index.get(&wire.from), index.get(&wire.to)) {
+                uf.union(a, b);
+            }
         }
         let mut by_terminal: HashMap<_, Vec<usize>> = HashMap::new();
         let mut by_interruption: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
@@ -304,9 +307,16 @@ impl Netlist {
             nets[id.0 as usize].endpoints.push(end);
             by_endpoint.insert(end, id);
         }
+        let net_of_wire = |wire: &Wire| {
+            by_endpoint
+                .get(&wire.from)
+                .or_else(|| by_endpoint.get(&wire.to))
+                .copied()
+        };
         for wire in project.wires() {
-            let net = by_endpoint[&wire.from];
-            nets[net.0 as usize].wires.push(wire.id);
+            if let Some(net) = net_of_wire(wire) {
+                nets[net.0 as usize].wires.push(wire.id);
+            }
         }
         // Pass-through edges: a potential crosses a switched pole from any
         // of its pins to the others, without joining the nets.
@@ -346,9 +356,10 @@ impl Netlist {
         }
         // Wires with a potential define it on their net.
         for wire in project.wires() {
-            if let Some(potential) = wire.potential {
-                let net = by_endpoint[&wire.from].0 as usize;
-                nets[net].define(potential, wire.id);
+            if let Some(potential) = wire.potential
+                && let Some(net) = net_of_wire(wire)
+            {
+                nets[net.0 as usize].define(potential, wire.id);
             }
         }
         // Under the rule, a terminal named like a supply potential
@@ -455,6 +466,13 @@ impl Netlist {
         self.by_endpoint.get(&end.into()).copied()
     }
 
+    /// The net a wire belongs to: that of its connected end (either end
+    /// when both connect, as they are one net). `None` for a wire open at
+    /// both ends.
+    pub fn net_of_wire(&self, wire: &Wire) -> Option<NetId> {
+        self.net_of(wire.from).or_else(|| self.net_of(wire.to))
+    }
+
     /// Whether two endpoints are electrically connected.
     pub fn connected(&self, a: impl Into<Endpoint>, b: impl Into<Endpoint>) -> bool {
         match (self.net_of(a), self.net_of(b)) {
@@ -504,6 +522,7 @@ impl Netlist {
             .filter_map(|&e| match e {
                 Endpoint::Pin { symbol, .. } => project.symbol(symbol).map(|s| s.page),
                 Endpoint::Junction { junction } => project.junction(junction).map(|j| j.page),
+                Endpoint::Free { .. } => None,
             })
             .collect();
         pages.sort();

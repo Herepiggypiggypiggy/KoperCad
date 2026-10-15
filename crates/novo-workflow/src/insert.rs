@@ -1,4 +1,4 @@
-//! Symbol search for placing (I opens the command field in place mode):
+//! Symbol search for placing (Q opens the command field in place mode):
 //! find a symbol in a few letters, with no insert centre to browse.
 //!
 //! - The library's aliases (`no`, `nc`, `coil`, `mcb3`, `mpcb`, `ol`, `m3`,
@@ -28,7 +28,7 @@ pub const DEFAULT_FAVOURITES: [&str; 9] = [
     "iec/protection/overload_relay",
     "iec/motors/motor_3ph",
     "iec/operators/pushbutton_no",
-    "iec/terminals/terminal",
+    "iec/terminals/terminal_end",
 ];
 
 /// A child placement read from a query: a symbol search plus the device
@@ -227,6 +227,17 @@ pub fn next_tag(
     Some(tag)
 }
 
+/// The name a newly placed potential feed gets: the first of `L1`, `L2`,
+/// `L3`, ... that no feed on the page (or in the project) already carries,
+/// so a row of feeds reads L1, L2, L3. `taken` are the names in use.
+pub fn next_feed_name<'a>(taken: impl IntoIterator<Item = &'a str>) -> String {
+    let taken: Vec<&str> = taken.into_iter().collect();
+    (1u32..)
+        .map(|n| format!("L{n}"))
+        .find(|name| !taken.iter().any(|t| t.eq_ignore_ascii_case(name)))
+        .expect("an unbounded range has a free name")
+}
+
 /// Whether a symbol is normally a function of another device (an auxiliary
 /// contact of a contactor) rather than a device of its own. Such symbols
 /// typed without a parent get a device of their own, and the checker flags
@@ -249,6 +260,15 @@ mod tests {
 
     fn library() -> Library {
         Library::builtin().unwrap()
+    }
+
+    #[test]
+    fn potential_feeds_count_up_from_l1() {
+        assert_eq!(next_feed_name([]), "L1");
+        assert_eq!(next_feed_name(["L1"]), "L2");
+        assert_eq!(next_feed_name(["L1", "L2", "N"]), "L3");
+        assert_eq!(next_feed_name(["l1", "L3"]), "L2");
+        assert_eq!(next_feed_name(["L1", "L2", "L3"]), "L4");
     }
 
     #[test]

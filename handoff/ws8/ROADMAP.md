@@ -8,7 +8,7 @@ feature list (Tadjiro: "its own program, not an EPLAN copy").
 ## Done (PR #29)
 - Keymap per interaction-model section 7, focus scopes (Canvas, PlaceFieldEmpty, TextField, Panel), conflict test, and a test that no typing key is bound outside the canvas
 - Command registry grouped Project/Draw/Edit/Navigate/View/Check/Export, with verbs, argument chips and disabled reasons
-- Command field engine (palette.rs): noun jumps (exact tag gives the device plus every /page.column location, via novo-core Project::search and cross_references), verb + noun runs, alias + device places a child (`no K1`), bare verb runs; an empty field is the grouped menu with Repeat last tool first; place mode (I) shows favourites; row `completion` makes every form pickable without typing
+- Command field engine (palette.rs): noun jumps (exact tag gives the device plus every /page.column location, via novo-core Project::search and cross_references), verb + noun runs, alias + device places a child (`no K1`), bare verb runs; an empty field is the grouped menu with Repeat last tool first; place mode (Q) shows favourites; row `completion` makes every form pickable without typing
 - Symbol search via novo-symbols Library::by_alias / favorites(); IEC 81346-2 letter codes; next_tag
 - Renumber (project/page/devices, preview, one undo step); smart duplicate/paste (next free tags, coil and contacts together, terminals continue the strip)
 - Jump history (Alt+Left/Right); R/X orientation table

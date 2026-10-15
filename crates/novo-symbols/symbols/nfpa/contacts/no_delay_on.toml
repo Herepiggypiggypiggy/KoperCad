@@ -1,0 +1,33 @@
+format = 1
+id = "nfpa/contacts/no_delay_on"
+name = "Make contact, delayed on closing"
+description = "Timer contact that closes after the on-delay of its timer relay."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "contacts"
+function = "contact.no.delay_on"
+keywords = ["timer", "delay", "no", "delay on", "nfpa", "ansi"]
+aliases = ["tno"]
+
+connections = [
+  { id = "17", at = [0, 0], dir = "up" },
+  { id = "18", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-9.5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 6] },
+  { kind = "line", from = [0, 16], to = [0, 10] },
+  { kind = "line", from = [-3, 6], to = [3, 6] },
+  { kind = "line", from = [-3, 10], to = [3, 10] },
+  { kind = "line", from = [-1, 8], to = [-8, 8] },
+  { kind = "arc", center = [-6, 8], r = 2, start = 90, end = 270 },
+]
+
+[behavior]
+kind = "contact"
+normally = "open"
+delay = "on"
+poles = [["17", "18"]]

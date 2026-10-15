@@ -1,0 +1,34 @@
+format = 1
+id = "nfpa/terminals/terminal_2level"
+name = "Double-level terminal"
+description = "Two-level terminal: two independent terminals stacked in one block."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "terminals"
+function = "terminal.multilevel"
+keywords = ["terminal", "double level", "two level", "2 tier", "nfpa", "ansi"]
+aliases = ["x2"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 8], dir = "down" },
+  { id = "3", at = [8, 0], dir = "up" },
+  { id = "4", at = [8, 8], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-3.5, 4], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 2.8] },
+  { kind = "circle", center = [0, 4], r = 1.2 },
+  { kind = "line", from = [0, 5.2], to = [0, 8] },
+  { kind = "line", from = [8, 0], to = [8, 2.8] },
+  { kind = "circle", center = [8, 4], r = 1.2 },
+  { kind = "line", from = [8, 5.2], to = [8, 8] },
+  { kind = "rect", at = [-2, 1.8], size = [12, 4.4], stroke = "dashed" },
+]
+
+[behavior]
+kind = "conductor"
+poles = [["1", "2"], ["3", "4"]]

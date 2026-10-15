@@ -13,7 +13,7 @@
 //! IEC 60617 artwork; until then [`PlaceholderArt`] draws a box with pin
 //! stubs so every symbol is visible and connectable.
 
-use crate::scene::{Item, ItemId, Layer, LayerId, Scene, SnapPoint};
+use crate::scene::{Handle, Hit, Item, ItemId, Layer, LayerId, Scene, Sheet, SnapPoint};
 use crate::shape::{Placement, Primitive, Shape};
 use crate::style::{Color, Stroke};
 use crate::text::{Anchor, Label};
@@ -66,6 +66,21 @@ pub fn anchor(a: TextAnchor) -> Anchor {
         TextAnchor::BottomLeft => Anchor::BottomLeft,
         TextAnchor::BottomCenter => Anchor::BottomCenter,
         TextAnchor::BottomRight => Anchor::BottomRight,
+    }
+}
+
+/// A canvas anchor as a model text anchor (the inverse of [`anchor`]).
+pub fn text_anchor(a: Anchor) -> TextAnchor {
+    match a {
+        Anchor::TopLeft => TextAnchor::TopLeft,
+        Anchor::TopCenter => TextAnchor::TopCenter,
+        Anchor::TopRight => TextAnchor::TopRight,
+        Anchor::CenterLeft => TextAnchor::MiddleLeft,
+        Anchor::Center => TextAnchor::MiddleCenter,
+        Anchor::CenterRight => TextAnchor::MiddleRight,
+        Anchor::BottomLeft => TextAnchor::BottomLeft,
+        Anchor::BottomCenter => TextAnchor::BottomCenter,
+        Anchor::BottomRight => TextAnchor::BottomRight,
     }
 }
 
@@ -171,6 +186,36 @@ pub struct ModelStyle {
     pub symbol: Stroke,
     pub wire: Stroke,
     pub junction_radius: f32,
+    /// Accent (copper) colour of junction dots: true junctions only, where
+    /// three or more conductors meet.
+    pub joint_color: Color,
+    /// Colour of the small dot where a wire lands on a pin (the wire
+    /// colour, not the junction accent).
+    pub pin_joint_color: Color,
+    /// Radius of that dot, in mm (world size for now, not zoom-stable).
+    pub pin_joint_radius: f32,
+    /// Open ring on a wire ended unconnected ([`wire_end_glyph`]).
+    pub wire_end_color: Color,
+    /// Flag pole and pennant beside that ring.
+    pub unconnected_color: Color,
+    /// Whether a click on a wire's line picks the whole wire. Turn it off
+    /// once the editor picks wires by corner and segment
+    /// ([`PageScene::wire_part_at`]); a box still selects whole wires.
+    pub wires_pick_whole: bool,
+    /// Half-size (screen points, the same at every zoom) of the square shown
+    /// on every wire corner; `0.0` draws none (print).
+    pub corner_half: f32,
+    /// Colour of a wire's corners.
+    pub corner_color: Color,
+    /// Colour of the wire part under the pointer or selected, and of the
+    /// corners that belong to it.
+    pub focus_color: Color,
+    /// Radius of the ring, in mm; the flag scales with it (world size for
+    /// now, not zoom-stable).
+    pub wire_end_radius: f32,
+    /// Radius of that ring on screen, in points: it keeps its size at every
+    /// zoom ([`Handle::ring`]).
+    pub wire_end_cap_px: f32,
     pub tag_height: f32,
     pub tag_color: Color,
     pub wire_number_height: f32,
@@ -191,6 +236,17 @@ impl Default for ModelStyle {
             symbol: Stroke::world(0.35, Color::rgb(20, 24, 32)),
             wire: Stroke::world(0.35, Color::rgb(30, 70, 200)),
             junction_radius: 0.7,
+            joint_color: Color::rgb(176, 104, 56),
+            pin_joint_color: Color::rgb(30, 70, 200),
+            pin_joint_radius: 0.6,
+            wire_end_color: Color::rgb(176, 104, 56),
+            unconnected_color: Color::rgb(190, 120, 20),
+            wires_pick_whole: true,
+            corner_half: 2.5,
+            corner_color: Color::rgb(30, 70, 200),
+            focus_color: Color::rgb(255, 150, 30),
+            wire_end_radius: 0.9,
+            wire_end_cap_px: 4.0,
             tag_height: 2.5,
             tag_color: Color::rgb(20, 24, 32),
             wire_number_height: 2.0,
@@ -290,7 +346,7 @@ fn quarter_dir(q: u8) -> Vec2 {
 
 /// The primitives of a junction glyph at `pos`.
 pub fn junction_glyph(glyph: JunctionGlyph, pos: Vec2, style: &ModelStyle) -> Vec<Primitive> {
-    let dot = Primitive::filled(Shape::circle(pos, style.junction_radius), style.wire.color);
+    let dot = Primitive::filled(Shape::circle(pos, style.junction_radius), style.joint_color);
     let stubs = |dirs: &[Vec2]| {
         dirs.iter()
             .map(|d| Primitive::stroked(Shape::line(pos, pos + *d * JUNCTION_STUB), style.wire))
@@ -317,6 +373,36 @@ pub fn junction_glyph(glyph: JunctionGlyph, pos: Vec2, style: &ModelStyle) -> Ve
     }
 }
 
+/// The mark on a wire ended unconnected (a double click in open space): an
+/// open ring on the end (a screen-size [`Handle::ring`], added by the caller)
+/// and a flag, so a loose end is never mistaken for a
+/// connection. `away` points from the wire out past its end; the flag leans
+/// to the side that keeps it clear of the wire.
+pub fn wire_end_glyph(end: Vec2, away: Vec2, style: &ModelStyle) -> Vec<Primitive> {
+    let r = style.wire_end_radius;
+    let out = if away.length_squared() > 0.0 {
+        away.normalize()
+    } else {
+        Vec2::X
+    };
+    let side = Vec2::new(-out.y, out.x);
+    let foot = end + out * r;
+    let top = foot + side * (r * 4.0);
+    let pennant = [
+        top,
+        top + out * (r * 2.8) + side * (r * 0.9),
+        top + side * (r * 1.8),
+    ];
+    let flag = Stroke::world(0.25, style.unconnected_color);
+    vec![
+        Primitive::stroked(Shape::line(foot, top), flag),
+        Primitive::filled(
+            Shape::polyline(pennant.to_vec(), true),
+            style.unconnected_color,
+        ),
+    ]
+}
+
 /// Layers a page scene uses.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ModelLayers {
@@ -340,6 +426,38 @@ pub struct SymbolNote {
     pub warning: bool,
     /// Where the note sits relative to its symbol.
     pub anchor: NoteAnchor,
+}
+
+/// The revision fields a title block prints (DESIGN §7), worked out by the
+/// caller from the issued revisions: the canvas only draws them.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct TitleRevisions {
+    /// The page's own revision, `(index, date)`: the latest in which the
+    /// page changed. `None` for a page added since the latest revision.
+    pub page: Option<(String, String)>,
+    /// The project's revision, the latest index; `None` before the first.
+    pub project: Option<String>,
+}
+
+impl TitleRevisions {
+    /// The text of the title block's revision row: "B  2026-09-01", with
+    /// "(set D)" when the project is further on than the page.
+    pub fn text(&self) -> String {
+        let page = self
+            .page
+            .as_ref()
+            .map(|(index, date)| format!("{index}  {date}"));
+        let set = self
+            .project
+            .as_ref()
+            .filter(|p| self.page.as_ref().is_none_or(|(index, _)| index != *p))
+            .map(|p| format!("(set {p})"));
+        [page, set]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join("  ")
+    }
 }
 
 /// One printed sheet of a generated page (a report): text boxes and rules
@@ -432,10 +550,93 @@ pub struct PageScene {
     notes: HashMap<SymbolId, SymbolNote>,
     /// What a generated page shows; see [`Self::set_sheet`].
     sheet: Option<SheetContent>,
+    /// The revision fields of the title block; see [`Self::set_revisions`].
+    revisions: Option<TitleRevisions>,
     /// The first terminal symbol of each run of one strip on this page,
     /// with the strip's tag it shows (see [`strip_heads`]).
     strip_heads: HashMap<SymbolId, String>,
+    /// The wire part under the pointer or selected, drawn emphasised.
+    focus: Option<WirePart>,
+    /// Wires drawn in another colour and width than the style's; see
+    /// [`Self::set_wire_looks`].
+    wire_looks: HashMap<WireId, WireLook>,
     pub style: ModelStyle,
+}
+
+/// A wire's own stroke, in place of [`ModelStyle::wire`]: the live view
+/// lights wires in the colour of what they carry.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WireLook {
+    pub color: Color,
+    /// Screen points, the same at every zoom.
+    pub width: f32,
+}
+
+/// What a double click acts on ([`PageScene::double_click_target`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DoubleClickTarget {
+    /// Text to edit: the object that owns it (a symbol, wire or text record).
+    Text(AnyId),
+    Component(SymbolId),
+    Wire(WireId),
+    Empty,
+}
+
+/// Which kind of text a label is, for rename and edit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LabelKind {
+    /// The tag of a device's symbol.
+    DeviceTag,
+    /// The name of a terminal on a strip (`1`, `PE`).
+    TerminalName,
+    /// The name of an interruption point.
+    InterruptionName,
+    WireNumber,
+    /// The name of a potential, on its feed or its wire.
+    Potential,
+    Literal,
+    Property,
+    /// Text the canvas adds itself (a symbol's art text, the strip name, a
+    /// cross-reference note): shown, not edited by double click.
+    Fixed,
+}
+
+/// The kind of the name a symbol of this role shows.
+fn role_label_kind(role: &SymbolRole) -> LabelKind {
+    match role {
+        SymbolRole::Terminal { .. } => LabelKind::TerminalName,
+        SymbolRole::Interruption { .. } => LabelKind::InterruptionName,
+        SymbolRole::PotentialFeed { .. } => LabelKind::Potential,
+        SymbolRole::Device { .. } | SymbolRole::Unassigned => LabelKind::DeviceTag,
+    }
+}
+
+/// The label under a pick ([`PageScene::label_hit`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LabelHit {
+    /// The object the text belongs to: the host of a text record, the symbol
+    /// of its tag, the wire of its number.
+    pub owner: AnyId,
+    /// The text record, when the text is one.
+    pub text: Option<TextId>,
+    pub kind: LabelKind,
+}
+
+/// A part of a wire that can be picked on its own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WirePart {
+    pub wire: WireId,
+    pub kind: WirePartKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WirePartKind {
+    /// A bend point: index into the wire's `route`.
+    Corner(usize),
+    /// A straight run between two points: 0 is the one leaving the first
+    /// end; the last is the one reaching the second end. Its corners are
+    /// the route points at `i - 1` and `i` (an end is not a corner).
+    Segment(usize),
 }
 
 /// Item id of a model object.
@@ -463,7 +664,10 @@ impl PageScene {
             text_hosts: HashMap::new(),
             notes: HashMap::new(),
             sheet: None,
+            revisions: None,
             strip_heads: HashMap::new(),
+            focus: None,
+            wire_looks: HashMap::new(),
             style: ModelStyle::default(),
         };
         s.rebuild(project, art);
@@ -496,6 +700,157 @@ impl PageScene {
     /// The model object behind a canvas item.
     pub fn model_id(&self, item: ItemId) -> Option<AnyId> {
         self.ids.get(&item).copied()
+    }
+
+    /// The wire part at `p` within `tolerance` (mm): a corner when one is
+    /// near, else the nearest straight run. Wires are never picked whole by
+    /// a click; a double click selects the whole wire.
+    pub fn wire_part_at(&self, project: &Project, p: Vec2, tolerance: f32) -> Option<WirePart> {
+        let mut best: Option<(f32, WirePart)> = None;
+        let mut offer = |d: f32, part: WirePart, pref: f32| {
+            let score = d - pref;
+            if d <= tolerance && best.is_none_or(|(b, _)| score < b) {
+                best = Some((score, part));
+            }
+        };
+        for wire in project.page_contents(self.page).wires {
+            // Most wires are nowhere near: skip them on their drawn bounds.
+            if let Some(b) = self.scene.item_bounds(item_id(wire))
+                && (p.x < b.min.x - tolerance
+                    || p.x > b.max.x + tolerance
+                    || p.y < b.min.y - tolerance
+                    || p.y > b.max.y + tolerance)
+            {
+                continue;
+            }
+            let Some(pts) = self.wire_points(project, wire) else {
+                continue;
+            };
+            // A corner within reach beats a run through the same spot.
+            for (i, c) in pts[1..pts.len().saturating_sub(1)].iter().enumerate() {
+                let part = WirePart {
+                    wire,
+                    kind: WirePartKind::Corner(i),
+                };
+                offer(c.distance(p), part, tolerance);
+            }
+            for (k, w) in pts.windows(2).enumerate() {
+                let part = WirePart {
+                    wire,
+                    kind: WirePartKind::Segment(k),
+                };
+                offer(crate::geom::dist_point_segment(p, w[0], w[1]), part, 0.0);
+            }
+        }
+        best.map(|(_, part)| part)
+    }
+
+    /// Draws the given wires in their own look, in the wire layer under
+    /// symbols and text; every other wire goes back to the style's. Only the
+    /// wires whose look changed are redrawn.
+    pub fn set_wire_looks(&mut self, project: &Project, looks: HashMap<WireId, WireLook>) {
+        if looks == self.wire_looks {
+            return;
+        }
+        let old = std::mem::replace(&mut self.wire_looks, looks);
+        let changed: Vec<WireId> = old
+            .keys()
+            .chain(self.wire_looks.keys())
+            .copied()
+            .filter(|w| old.get(w) != self.wire_looks.get(w))
+            .collect();
+        for wire in changed {
+            self.sync_wire(project, wire);
+        }
+    }
+
+    /// Emphasises one wire part (or none): the pointer's, or the selected
+    /// one. Only the wires involved are redrawn.
+    pub fn set_wire_focus(&mut self, project: &Project, focus: Option<WirePart>) {
+        if self.focus == focus {
+            return;
+        }
+        let old = std::mem::replace(&mut self.focus, focus);
+        for wire in [old, focus].into_iter().flatten().map(|p| p.wire) {
+            self.sync_wire(project, wire);
+        }
+    }
+
+    /// What a double click at a pick should act on: the text when text was
+    /// hit (a tag, a wire number or a free text), else the component or
+    /// wire, else nothing. Wires are told from components so a double click
+    /// on a wire can end it there while one on text edits it.
+    pub fn double_click_target(&self, hit: Option<&Hit>) -> DoubleClickTarget {
+        let Some(hit) = hit else {
+            return DoubleClickTarget::Empty;
+        };
+        let Some(id) = self.model_id(hit.id) else {
+            return DoubleClickTarget::Empty;
+        };
+        match id {
+            AnyId::Text(_) => DoubleClickTarget::Text(id),
+            _ if hit.label.is_some() => DoubleClickTarget::Text(id),
+            AnyId::Symbol(s) => DoubleClickTarget::Component(s),
+            AnyId::Wire(w) => DoubleClickTarget::Wire(w),
+            _ => DoubleClickTarget::Empty,
+        }
+    }
+
+    /// The label a pick hit, with what it belongs to and what kind of text
+    /// it is, so a double click can rename a tag, a wire number or a free
+    /// text. `None` when the pick did not hit text.
+    pub fn label_hit(&self, project: &Project, hit: &Hit) -> Option<LabelHit> {
+        let index = hit.label?;
+        let id = self.model_id(hit.id)?;
+        match id {
+            AnyId::Text(t) => {
+                let text = project.text(t)?;
+                let kind = match text.content {
+                    TextContent::DeviceTag => text
+                        .attached_to
+                        .and_then(|h| match h {
+                            AnyId::Symbol(s) => project.symbol(s),
+                            _ => None,
+                        })
+                        .map_or(LabelKind::DeviceTag, |s| role_label_kind(&s.role)),
+                    TextContent::WireNumber => LabelKind::WireNumber,
+                    TextContent::Potential => LabelKind::Potential,
+                    TextContent::Literal { .. } => LabelKind::Literal,
+                    TextContent::Property { .. } => LabelKind::Property,
+                };
+                Some(LabelHit {
+                    owner: text.attached_to.unwrap_or(id),
+                    text: Some(t),
+                    kind,
+                })
+            }
+            // A symbol's own tag is its first label when no text record
+            // draws it; everything after is the canvas's own text.
+            AnyId::Symbol(s) => {
+                let sym = project.symbol(s)?;
+                let has_record = project.texts_of(s).into_iter().any(|t| {
+                    project
+                        .text(t)
+                        .is_some_and(|t| t.content == TextContent::DeviceTag)
+                });
+                let tag = index == 0 && !has_record && symbol_text(project, sym).is_some();
+                Some(LabelHit {
+                    owner: id,
+                    text: None,
+                    kind: if tag {
+                        role_label_kind(&sym.role)
+                    } else {
+                        LabelKind::Fixed
+                    },
+                })
+            }
+            AnyId::Wire(_) => Some(LabelHit {
+                owner: id,
+                text: None,
+                kind: LabelKind::WireNumber,
+            }),
+            _ => None,
+        }
     }
 
     /// Replaces the notes drawn next to symbols (cross references). Only
@@ -553,6 +908,18 @@ impl PageScene {
         true
     }
 
+    /// Sets the revision fields of the title block (DESIGN §7): the page's
+    /// own revision and the project's. `None` goes back to the project
+    /// properties. Kept across rebuilds. Returns whether anything changed.
+    pub fn set_revisions(&mut self, project: &Project, revisions: Option<TitleRevisions>) -> bool {
+        if revisions == self.revisions {
+            return false;
+        }
+        self.revisions = revisions;
+        self.frame(project);
+        true
+    }
+
     /// The sheet shown, if any.
     pub fn sheet(&self) -> Option<&SheetContent> {
         self.sheet.as_ref()
@@ -572,6 +939,7 @@ impl PageScene {
         for id in contents.symbols {
             self.sync_symbol(project, id, art);
         }
+        self.sync_bars(project);
         for id in contents.junctions {
             self.sync_junction(project, id);
         }
@@ -682,6 +1050,7 @@ impl PageScene {
             _ => false,
         });
         if terminals_touched {
+            self.sync_bars(project);
             let heads = strip_heads(project, self.page);
             for (s, tag) in self.strip_heads.iter().chain(&heads) {
                 if self.strip_heads.get(s) != Some(tag) || heads.get(s) != Some(tag) {
@@ -751,8 +1120,9 @@ impl PageScene {
         let color = self.style.frame_color;
         let ink = Stroke::world(0.5, color);
         let thin = Stroke::world(0.25, color);
-        let mut sheet = Primitive::stroked(Shape::rect(Vec2::ZERO, size), thin);
-        sheet.fill = self.style.sheet_fill;
+        // The sheet's fill is painted by the view under the grid dots, not
+        // by this item, so the dots show inside the page.
+        let sheet = Primitive::stroked(Shape::rect(Vec2::ZERO, size), thin);
         let inner_min = Vec2::splat(FRAME_MARGIN);
         let inner_max = size - Vec2::splat(FRAME_MARGIN);
         let mut item = Item::new(self.layers.frame)
@@ -812,6 +1182,15 @@ impl PageScene {
             }
         }
         self.title_block(project, page, inner_max, &mut item);
+        let mut lines = Vec::new();
+        for p in &item.primitives {
+            frame_segments(&p.shape, &mut lines);
+        }
+        self.scene.set_sheet(Some(Sheet {
+            rect: crate::Aabb::from_corners(Vec2::ZERO, size),
+            fill: self.style.sheet_fill,
+            lines,
+        }));
         self.scene.insert(item_id(self.page), item);
     }
 
@@ -819,9 +1198,9 @@ impl PageScene {
     /// (docs/DESIGN.md §3): project, page name and title, "n of m", the
     /// page's `=function +location`, revision and drawn / checked by.
     ///
-    /// Until novo-core has revisions these come from properties: the page's
-    /// `structure`, and the project's `revision`, `revision_date`,
-    /// `drawn_by` and `checked_by`.
+    /// The revision row comes from [`Self::set_revisions`]; without it (and
+    /// for drawn by / checked by) it is read from the project's `revision`,
+    /// `revision_date`, `drawn_by` and `checked_by` properties.
     fn title_block(
         &self,
         project: &Project,
@@ -874,11 +1253,14 @@ impl PageScene {
         } else {
             page.structure.to_string()
         };
-        let revision = [text(info, "revision"), text(info, "revision_date")]
-            .into_iter()
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join("  ");
+        let revision = match &self.revisions {
+            Some(revisions) => revisions.text(),
+            None => [text(info, "revision"), text(info, "revision_date")]
+                .into_iter()
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join("  "),
+        };
         let people = match (text(info, "drawn_by"), text(info, "checked_by")) {
             (d, c) if d.is_empty() && c.is_empty() => String::new(),
             (d, c) => format!("{d} / {c}"),
@@ -912,6 +1294,21 @@ impl PageScene {
                 );
             }
         }
+    }
+
+    /// Redraws the bridge bars of the page's jumper groups.
+    fn sync_bars(&mut self, project: &Project) {
+        let bars = bridge_bars(project, self.page);
+        if bars.is_empty() {
+            self.scene.remove(BARS_ITEM);
+            return;
+        }
+        let stroke = Stroke::world(0.5, self.style.symbol.color);
+        let mut item = Item::new(self.layers.symbols).unselectable();
+        for (a, b) in bars {
+            item = item.with(Primitive::stroked(Shape::line(a, b), stroke));
+        }
+        self.scene.insert(BARS_ITEM, item);
     }
 
     fn sync_symbol(&mut self, project: &Project, id: SymbolId, art: &dyn SymbolArt) {
@@ -981,25 +1378,30 @@ impl PageScene {
             item.labels.insert(0, label);
         }
         if let Some(strip) = self.strip_heads.get(&id) {
-            // Left of the run's first terminal; the terminals' own names
-            // are on their right.
+            // Left of the run's first terminal and of every label already
+            // on its row (the terminal's own name, a pin number), so the
+            // two never overlap at any zoom: label boxes are in mm.
             let b = item
                 .primitives
                 .iter()
                 .fold(crate::Aabb::EMPTY, |b, p| b.union(&p.shape.bounds()));
-            let at = if b.is_empty() {
-                vec(sym.placement.origin)
+            let (mut x, y) = if b.is_empty() {
+                let o = vec(sym.placement.origin);
+                (o.x, o.y)
             } else {
-                Vec2::new(b.min.x, b.center().y)
+                (b.min.x, b.center().y)
             };
+            let h = self.style.tag_height;
+            for l in &item.labels {
+                let lb = l.bounds();
+                if lb.min.y < y + h * 0.5 && lb.max.y > y - h * 0.5 {
+                    x = x.min(lb.min.x);
+                }
+            }
             item.labels.push(
-                Label::new(
-                    at - Vec2::new(1.5, 0.0),
-                    strip.clone(),
-                    self.style.tag_height,
-                )
-                .anchored(Anchor::CenterRight)
-                .colored(self.style.tag_color),
+                Label::new(Vec2::new(x - 2.0, y), strip.clone(), h)
+                    .anchored(Anchor::CenterRight)
+                    .colored(self.style.tag_color),
             );
         }
         if let Some(note) = self.notes.get(&id) {
@@ -1129,13 +1531,76 @@ impl PageScene {
             self.remove(id.into());
             return;
         };
+        let stroke = self
+            .wire_looks
+            .get(&id)
+            .map_or(self.style.wire, |l| Stroke::screen(l.width, l.color));
         let mut item = Item::new(self.layers.wires)
             .with(Primitive::stroked(
                 Shape::polyline(pts.clone(), false),
-                self.style.wire,
+                stroke,
             ))
             .with_snap(SnapPoint::connection(pts[0]))
             .with_snap(SnapPoint::connection(pts[pts.len() - 1]));
+        // A dot where the wire lands on a pin marks the connection.
+        for (e, p) in w.ends().into_iter().zip([pts[0], pts[pts.len() - 1]]) {
+            if matches!(e, Endpoint::Pin { .. }) {
+                item = item.with(Primitive::filled(
+                    Shape::circle(p, self.style.pin_joint_radius),
+                    self.style.pin_joint_color,
+                ));
+            }
+        }
+        item.click_select = self.style.wires_pick_whole;
+        // Every corner shows as a small square, so it can be told from the
+        // straight runs and picked on its own.
+        if self.style.corner_half > 0.0 {
+            for c in &pts[1..pts.len() - 1] {
+                item.handles.push(Handle::square(
+                    *c,
+                    self.style.corner_half,
+                    self.style.corner_color,
+                ));
+            }
+        }
+        // The part under the pointer or selected: that run drawn heavier,
+        // with its corners filled in the focus colour.
+        if let Some(part) = self.focus.filter(|p| p.wire == id) {
+            let focus = self.style.focus_color;
+            let big = self.style.corner_half * 1.8;
+            let mut corners = Vec::new();
+            match part.kind {
+                WirePartKind::Segment(k) if k + 1 < pts.len() => {
+                    item.primitives.push(Primitive::stroked(
+                        Shape::line(pts[k], pts[k + 1]),
+                        Stroke::world(self.style.wire.width * 2.5, focus),
+                    ));
+                    corners.extend(
+                        [k, k + 1]
+                            .into_iter()
+                            .filter(|&i| i > 0 && i + 1 < pts.len()),
+                    );
+                }
+                WirePartKind::Corner(c) if c + 2 < pts.len() => corners.push(c + 1),
+                _ => {}
+            }
+            for i in corners {
+                item.handles.push(Handle::square(pts[i], big, focus));
+            }
+        }
+        // An open end (a wire ended unconnected) shows a ring and a flag.
+        let n = pts.len();
+        for (e, end, inner) in [(w.from, pts[0], pts[1]), (w.to, pts[n - 1], pts[n - 2])] {
+            if matches!(e, Endpoint::Free { .. }) {
+                item.primitives
+                    .extend(wire_end_glyph(end, end - inner, &self.style));
+                item.handles.push(Handle::ring(
+                    end,
+                    self.style.wire_end_cap_px,
+                    self.style.wire_end_color,
+                ));
+            }
+        }
         if let Some(n) = w.number.as_deref().filter(|n| !n.is_empty()) {
             // Along the longest segment, just above (or left of) the wire.
             let (s0, s1) = pts
@@ -1162,8 +1627,26 @@ impl PageScene {
 fn junctions_of(w: &novo_core::Wire) -> [Option<JunctionId>; 2] {
     w.ends().map(|e| match e {
         Endpoint::Junction { junction } => Some(junction),
-        Endpoint::Pin { .. } => None,
+        Endpoint::Pin { .. } | Endpoint::Free { .. } => None,
     })
+}
+
+/// The straight segments of a frame shape, for keeping grid dots clear.
+fn frame_segments(shape: &Shape, out: &mut Vec<(Vec2, Vec2)>) {
+    match shape {
+        Shape::Line { a, b } => out.push((*a, *b)),
+        Shape::Rect { min, max } => {
+            let c = [*min, Vec2::new(max.x, min.y), *max, Vec2::new(min.x, max.y)];
+            out.extend((0..4).map(|i| (c[i], c[(i + 1) % 4])));
+        }
+        Shape::Polyline { points, closed } => {
+            out.extend(points.windows(2).map(|w| (w[0], w[1])));
+            if let (true, Some(f), Some(l)) = (*closed, points.first(), points.last()) {
+                out.push((*l, *f));
+            }
+        }
+        _ => {}
+    }
 }
 
 /// The text shown next to a symbol: its device tag, terminal designation,
@@ -1196,6 +1679,68 @@ pub fn symbol_text(project: &Project, sym: &SymbolInstance) -> Option<String> {
 /// Terminals of one strip further apart than this (mm, between symbol
 /// origins) start a new run, which names its strip again.
 const STRIP_RUN_GAP: f64 = 20.0;
+
+/// Item id of the bridge bars of a page's jumper groups (no model object
+/// has this id).
+const BARS_ITEM: ItemId = ItemId(u64::MAX - 1);
+
+/// Height of a connected terminal's bridge bar in its symbol, in mm
+/// (`terminal_bridged.toml`: the dot sits on the upper lead at this height).
+const BRIDGE_BAR_Y: f64 = 1.4;
+
+/// The symbol that carries the bridge dot.
+const BRIDGED_SYMBOL: &str = "iec/terminals/terminal_bridged";
+
+/// The one-ended variant: the same dot on its single lead.
+const END_BRIDGED_SYMBOL: &str = "iec/terminals/terminal_end_bridged";
+
+/// One heavy bar per run of connected terminals on a page, from the first
+/// lead to the last, never past them: the connected terminals of a jumper
+/// group on one strip that are chained by neighbours at most
+/// [`STRIP_RUN_GAP`] apart. A lone terminal gets none.
+fn bridge_bars(project: &Project, page: PageId) -> Vec<(Vec2, Vec2)> {
+    let mut groups: HashMap<(novo_core::DeviceId, u32), Vec<Point>> = HashMap::new();
+    for id in project.page_contents(page).symbols {
+        let Some(sym) = project.symbol(id) else {
+            continue;
+        };
+        let SymbolRole::Terminal { terminals } = &sym.role else {
+            continue;
+        };
+        if sym.symbol.0 != BRIDGED_SYMBOL && sym.symbol.0 != END_BRIDGED_SYMBOL {
+            continue;
+        }
+        let [t] = terminals.as_slice() else {
+            continue;
+        };
+        if let Some((strip, group)) = project
+            .terminal(*t)
+            .and_then(|t| t.jumper.map(|j| (t.strip, j)))
+        {
+            groups
+                .entry((strip, group))
+                .or_default()
+                .push(sym.placement.apply(Point::new(0.0, BRIDGE_BAR_Y)));
+        }
+    }
+    let mut bars = Vec::new();
+    for (_, mut leads) in groups {
+        leads.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+        let mut start = 0;
+        for i in 1..=leads.len() {
+            let broken = i == leads.len()
+                || (leads[i].x - leads[i - 1].x).hypot(leads[i].y - leads[i - 1].y) > STRIP_RUN_GAP;
+            if broken {
+                if i - start >= 2 {
+                    bars.push((vec(leads[start]), vec(leads[i - 1])));
+                }
+                start = i;
+            }
+        }
+    }
+    bars.sort_by(|a, b| a.0.x.total_cmp(&b.0.x).then(a.0.y.total_cmp(&b.0.y)));
+    bars
+}
 
 /// The symbols that name their strip on `page`: the first terminal (left
 /// most, then top most) of each run of adjacent terminals of one strip, as
@@ -1244,12 +1789,27 @@ fn strip_heads(project: &Project, page: PageId) -> HashMap<SymbolId, String> {
             }
             i
         }
+        // Neighbours come from a grid of STRIP_RUN_GAP cells, so a long
+        // column of terminals costs a few comparisons each, not all pairs.
+        let cell = |p: Point| {
+            (
+                (p.x / STRIP_RUN_GAP).floor() as i64,
+                (p.y / STRIP_RUN_GAP).floor() as i64,
+            )
+        };
+        let mut grid: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+        for (i, (p, _)) in syms.iter().enumerate() {
+            grid.entry(cell(*p)).or_default().push(i);
+        }
         for i in 0..syms.len() {
-            for j in i + 1..syms.len() {
-                if near(syms[i].0, syms[j].0) {
-                    let (a, b) = (root(&mut run, i), root(&mut run, j));
-                    // The earlier terminal stays the root, so it heads the run.
-                    run[a.max(b)] = a.min(b);
+            let (cx, cy) = cell(syms[i].0);
+            for (dx, dy) in (-1..=1).flat_map(|dx| (-1..=1).map(move |dy| (dx, dy))) {
+                for &j in grid.get(&(cx + dx, cy + dy)).into_iter().flatten() {
+                    if j > i && near(syms[i].0, syms[j].0) {
+                        let (a, b) = (root(&mut run, i), root(&mut run, j));
+                        // The earlier terminal stays the root, so it heads the run.
+                        run[a.max(b)] = a.min(b);
+                    }
                 }
             }
         }
@@ -1602,6 +2162,132 @@ mod tests {
     }
 
     #[test]
+    fn a_run_of_connected_terminals_gets_one_bar_first_lead_to_last() {
+        let mut doc = Document::default();
+        let ((page, last), _) = doc
+            .transact("strip", |tx| {
+                let page = tx.add_page("1")?;
+                let x1 = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+                // Three connected in a row, one far away in the same group,
+                // one connected alone in another group.
+                let at = [(100.0, 50.0, 1), (108.0, 50.0, 1), (116.0, 50.0, 1)]
+                    .into_iter()
+                    .chain([(200.0, 50.0, 1), (100.0, 150.0, 2)]);
+                let mut last = None;
+                for (i, (x, y, group)) in at.enumerate() {
+                    let t = tx.add_terminal(x1, (i + 1).to_string())?;
+                    tx.update::<novo_core::Terminal>(t, |t| t.jumper = Some(group))?;
+                    let sym = tx.place_symbol(
+                        page,
+                        BRIDGED_SYMBOL,
+                        MPlacement::at(Point::new(x, y)),
+                        vec![Pin::new("1", 0.0, 0.0), Pin::new("2", 0.0, 8.0)],
+                        SymbolRole::Terminal { terminals: vec![t] },
+                    )?;
+                    if i == 2 {
+                        last = Some((t, sym));
+                    }
+                }
+                Ok((page, last.unwrap()))
+            })
+            .unwrap();
+        let bars = bridge_bars(doc.project(), page);
+        assert_eq!(
+            bars,
+            vec![(Vec2::new(100.0, 51.4), Vec2::new(116.0, 51.4))],
+            "one bar across the run; lone terminals draw none"
+        );
+        // A one-ended terminal joins the run like any other.
+        let (_, _) = doc
+            .transact("end", |tx| {
+                let id = tx
+                    .project()
+                    .symbols()
+                    .find(|s| s.placement.origin == Point::new(100.0, 50.0))
+                    .map(|s| s.id)
+                    .unwrap();
+                tx.update::<novo_core::SymbolInstance>(id, |s| {
+                    s.symbol = key(END_BRIDGED_SYMBOL);
+                })
+            })
+            .unwrap();
+        assert_eq!(bridge_bars(doc.project(), page).len(), 1);
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        assert!(ps.scene().contains(BARS_ITEM));
+        // Taking the far terminal's neighbour into the run extends the bar.
+        let (_, changes) = doc
+            .transact("move", |tx| {
+                tx.move_symbol(last.1, MPlacement::at(Point::new(124.0, 50.0)))
+            })
+            .unwrap();
+        assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
+        assert_eq!(
+            bridge_bars(doc.project(), page)[0].1,
+            Vec2::new(124.0, 51.4)
+        );
+        // Unjumpering them removes the bars.
+        let (_, changes) = doc
+            .transact("free", |tx| {
+                let ids: Vec<_> = tx.project().terminals().map(|t| t.id).collect();
+                for t in ids {
+                    tx.update::<novo_core::Terminal>(t, |t| t.jumper = None)?;
+                }
+                Ok(())
+            })
+            .unwrap();
+        ps.apply(doc.project(), &changes, &PlaceholderArt);
+        assert!(!ps.scene().contains(BARS_ITEM));
+    }
+
+    #[test]
+    fn strip_label_clears_the_terminal_name_on_the_left() {
+        // A library terminal that puts its own name left of the pins.
+        struct LeftName;
+        impl SymbolArt for LeftName {
+            fn artwork(&self, _: &SymbolInstance) -> Option<Vec<Primitive>> {
+                None
+            }
+            fn tag_anchor(&self, _: &SymbolInstance) -> Option<(Vec2, Anchor)> {
+                Some((Vec2::new(-5.0, 0.0), Anchor::CenterRight))
+            }
+        }
+        for rotation in [novo_core::Rotation::R0, novo_core::Rotation::R90] {
+            let mut doc = Document::default();
+            let ((page, sym), _) = doc
+                .transact("strip", |tx| {
+                    let page = tx.add_page("1")?;
+                    let x1 = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+                    let t = tx.add_terminal(x1, "1")?;
+                    let sym = tx.place_symbol(
+                        page,
+                        "iec/terminal",
+                        MPlacement {
+                            origin: Point::new(100.0, 50.0),
+                            rotation,
+                            mirrored: false,
+                        },
+                        vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                        SymbolRole::Terminal { terminals: vec![t] },
+                    )?;
+                    Ok((page, sym))
+                })
+                .unwrap();
+            let ps = PageScene::new(doc.project(), page, &LeftName);
+            let item = ps.scene().get(item_id(sym)).unwrap();
+            let name = item.labels.iter().find(|l| l.text == "1").unwrap();
+            let strip = item.labels.iter().find(|l| l.text == "-X1").unwrap();
+            let (a, b) = (name.bounds(), strip.bounds());
+            assert!(
+                a.min.x >= b.max.x
+                    || b.min.x >= a.max.x
+                    || a.min.y >= b.max.y
+                    || b.min.y >= a.max.y,
+                "{rotation:?}: strip label {b:?} overlaps the terminal name {a:?}"
+            );
+        }
+    }
+
+    #[test]
     fn each_run_of_terminals_names_its_strip_once() {
         let mut doc = Document::default();
         let ((page, syms), _) = doc
@@ -1849,6 +2535,33 @@ mod tests {
         assert_eq!(corner.len(), 2);
         assert!(corner.iter().any(|e| e.distance(Vec2::X) < 1e-6));
         assert!(corner.iter().any(|e| e.distance(Vec2::Y) < 1e-6));
+    }
+
+    #[test]
+    fn wire_end_glyph_flag_clears_the_wire() {
+        let style = ModelStyle::default();
+        let prims = wire_end_glyph(Vec2::ZERO, Vec2::X, &style);
+        assert_eq!(prims.len(), 2, "pole and pennant");
+        // The flag stands to the side of the line the wire ran along (the
+        // x axis) and starts past the ring, never on the wire.
+        let flag = prims[0].shape.bounds();
+        assert!(flag.min.x >= style.wire_end_radius - 1e-4);
+        assert!(
+            flag.max.y.abs() > style.wire_end_radius || flag.min.y.abs() > style.wire_end_radius
+        );
+        // A zero direction still draws something sensible.
+        assert_eq!(wire_end_glyph(Vec2::ZERO, Vec2::ZERO, &style).len(), 2);
+    }
+
+    #[test]
+    fn junction_dots_use_the_accent() {
+        let style = ModelStyle::default();
+        assert_ne!(style.joint_color, style.wire.color);
+        let dot = &junction_glyph(JunctionGlyph::Dot, Vec2::ZERO, &style)[0];
+        assert_eq!(dot.fill, Some(style.joint_color));
+        // A wire landing on a pin is the wire colour, not the copper.
+        assert_eq!(style.pin_joint_color, style.wire.color);
+        assert_ne!(style.pin_joint_color, style.joint_color);
     }
 
     #[test]
@@ -2154,6 +2867,399 @@ mod tests {
         // Text is pickable on its own.
         let hit = ps.scene().pick(Vec2::new(100.0, 101.0), 0.5, 2.0).unwrap();
         assert_eq!(hit.label, Some(1));
+    }
+
+    #[test]
+    fn an_open_wire_end_shows_a_ring_and_a_flag() {
+        let mut doc = Document::default();
+        let ((page, closed, open), _) = doc
+            .transact("wires", |tx| {
+                let page = tx.add_page("1")?;
+                let x1 = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+                let mut pins = Vec::new();
+                for x in [100.0, 140.0] {
+                    let t = tx.add_terminal(x1, "1")?;
+                    pins.push(tx.place_symbol(
+                        page,
+                        "iec/terminal",
+                        MPlacement::at(Point::new(x, 50.0)),
+                        vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                        SymbolRole::Terminal { terminals: vec![t] },
+                    )?);
+                }
+                let closed = tx.connect(Endpoint::pin(pins[0], 1), Endpoint::pin(pins[1], 0))?;
+                let open = tx.connect(
+                    Endpoint::pin(pins[0], 0),
+                    Endpoint::Free {
+                        at: Point::new(100.0, 20.0),
+                    },
+                )?;
+                Ok((page, closed, open))
+            })
+            .unwrap();
+        let ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let count = |w| ps.scene().get(item_id(w)).unwrap().primitives.len();
+        // The open wire has the closed wire's line and dot plus pole and
+        // pennant; the ring is a screen-size handle on the open end.
+        assert_eq!(count(open), 1 + 1 + 2);
+        assert_eq!(count(closed), 1 + 2);
+        let rings: Vec<_> = ps
+            .scene()
+            .get(item_id(open))
+            .unwrap()
+            .handles
+            .iter()
+            .filter(|h| h.ring)
+            .copied()
+            .collect();
+        assert_eq!(rings.len(), 1);
+        assert!((rings[0].at - Vec2::new(100.0, 20.0)).length() < 1e-3);
+        assert_eq!(rings[0].half, ps.style.wire_end_cap_px);
+        assert!(
+            ps.scene()
+                .get(item_id(closed))
+                .unwrap()
+                .handles
+                .iter()
+                .all(|h| !h.ring)
+        );
+    }
+
+    #[test]
+    fn double_click_tells_text_component_and_wire_apart() {
+        let mut doc = Document::default();
+        let ((page, sym, wire), _) = doc
+            .transact("dc", |tx| {
+                let page = tx.add_page("1")?;
+                let x1 = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+                let t = tx.add_terminal(x1, "1")?;
+                let sym = tx.place_symbol(
+                    page,
+                    "iec/terminal",
+                    MPlacement::at(Point::new(100.0, 50.0)),
+                    vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                    SymbolRole::Terminal { terminals: vec![t] },
+                )?;
+                let wire = tx.connect(
+                    Endpoint::pin(sym, 0),
+                    Endpoint::Free {
+                        at: Point::new(100.0, 20.0),
+                    },
+                )?;
+                Ok((page, sym, wire))
+            })
+            .unwrap();
+        let ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let hit = |id: ItemId, label| Hit {
+            id,
+            distance: 0.0,
+            label,
+        };
+        let t = |h| ps.double_click_target(Some(&h));
+        assert_eq!(
+            t(hit(item_id(sym), None)),
+            DoubleClickTarget::Component(sym)
+        );
+        assert_eq!(t(hit(item_id(wire), None)), DoubleClickTarget::Wire(wire));
+        assert_eq!(
+            t(hit(item_id(sym), Some(0))),
+            DoubleClickTarget::Text(AnyId::Symbol(sym))
+        );
+        assert_eq!(ps.double_click_target(None), DoubleClickTarget::Empty);
+    }
+
+    #[test]
+    fn label_hits_name_the_owner_and_the_kind_of_text() {
+        let mut doc = Document::default();
+        let ((page, sym, wire, free), _) = doc
+            .transact("labels", |tx| {
+                let page = tx.add_page("1")?;
+                let x1 = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+                let t = tx.add_terminal(x1, "1")?;
+                let sym = tx.place_symbol(
+                    page,
+                    "iec/terminal",
+                    MPlacement::at(Point::new(100.0, 50.0)),
+                    vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                    SymbolRole::Terminal { terminals: vec![t] },
+                )?;
+                let wire = tx.connect(
+                    Endpoint::pin(sym, 0),
+                    Endpoint::Free {
+                        at: Point::new(100.0, 20.0),
+                    },
+                )?;
+                let free = tx.add_text(
+                    page,
+                    TextContent::Literal {
+                        text: "Note".into(),
+                    },
+                    novo_core::TextPlacement {
+                        offset: Point::new(60.0, 60.0),
+                        ..Default::default()
+                    },
+                    None,
+                )?;
+                Ok((page, sym, wire, free))
+            })
+            .unwrap();
+        let ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let label = |id: ItemId, label| {
+            ps.label_hit(
+                doc.project(),
+                &Hit {
+                    id,
+                    distance: 0.0,
+                    label,
+                },
+            )
+        };
+        // The terminal's own name is its tag, the first label.
+        let tag = label(item_id(sym), Some(0)).unwrap();
+        assert_eq!(
+            (tag.owner, tag.kind),
+            (AnyId::Symbol(sym), LabelKind::TerminalName)
+        );
+        // Any later label of a symbol is the canvas's own text.
+        assert_eq!(label(item_id(sym), Some(1)).unwrap().kind, LabelKind::Fixed);
+        assert_eq!(
+            label(item_id(wire), Some(0)).unwrap().kind,
+            LabelKind::WireNumber
+        );
+        let lit = label(item_id(free), Some(0)).unwrap();
+        assert_eq!((lit.kind, lit.text), (LabelKind::Literal, Some(free)));
+        // A hit on a line, not on text, is no label hit.
+        assert_eq!(label(item_id(sym), None), None);
+    }
+
+    /// A wire from a terminal's pin up and over to an open end, with two
+    /// corners at (100, 30) and (140, 30).
+    fn bent_wire() -> (Document, PageId, WireId) {
+        let mut doc = Document::default();
+        let ((page, wire), _) = doc
+            .transact("bent", |tx| {
+                let page = tx.add_page("1")?;
+                let x1 = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+                let t = tx.add_terminal(x1, "1")?;
+                let sym = tx.place_symbol(
+                    page,
+                    "iec/terminal",
+                    MPlacement::at(Point::new(100.0, 50.0)),
+                    vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                    SymbolRole::Terminal { terminals: vec![t] },
+                )?;
+                let wire = tx.connect(
+                    Endpoint::pin(sym, 0),
+                    Endpoint::Free {
+                        at: Point::new(140.0, 47.5),
+                    },
+                )?;
+                tx.update::<novo_core::Wire>(wire, |w| {
+                    w.route = vec![Point::new(100.0, 30.0), Point::new(140.0, 30.0)];
+                })?;
+                Ok((page, wire))
+            })
+            .unwrap();
+        (doc, page, wire)
+    }
+
+    #[test]
+    fn a_wire_look_replaces_the_stroke_and_clears() {
+        let (doc, page, wire) = bent_wire();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let stroke_of = |ps: &PageScene| {
+            let item = ps.scene().get(item_id(wire)).unwrap();
+            item.primitives[0].stroke.unwrap()
+        };
+        assert_eq!(stroke_of(&ps), ps.style.wire);
+        let look = WireLook {
+            color: Color::rgb(10, 200, 30),
+            width: 4.5,
+        };
+        ps.set_wire_looks(doc.project(), HashMap::from([(wire, look)]));
+        assert_eq!(stroke_of(&ps), Stroke::screen(4.5, look.color));
+        ps.set_wire_looks(doc.project(), HashMap::new());
+        assert_eq!(stroke_of(&ps), ps.style.wire);
+    }
+
+    #[test]
+    fn a_click_on_a_wire_never_picks_it_whole() {
+        let (doc, page, wire) = bent_wire();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        // By default a click picks the wire whole (until the editor picks
+        // its parts)...
+        assert!(ps.scene().pick(Vec2::new(120.0, 30.0), 2.0, 4.0).is_some());
+        let style = ModelStyle {
+            wires_pick_whole: false,
+            ..ps.style
+        };
+        ps.set_style(style, doc.project(), &PlaceholderArt);
+        // On the straight run, and right on a corner: no pick by click.
+        assert!(ps.scene().pick(Vec2::new(120.0, 30.0), 2.0, 4.0).is_none());
+        assert!(ps.scene().pick(Vec2::new(100.0, 30.0), 2.0, 4.0).is_none());
+        // A box still selects it.
+        let rect = crate::Aabb::from_corners(Vec2::new(90.0, 20.0), Vec2::new(150.0, 55.0));
+        let ids = ps
+            .scene()
+            .box_select(&rect, crate::scene::BoxMode::Crossing, 4.0);
+        assert!(ids.contains(&item_id(wire)));
+    }
+
+    #[test]
+    fn wire_parts_are_corners_and_segments() {
+        let (doc, page, wire) = bent_wire();
+        let ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let part = |x, y| ps.wire_part_at(doc.project(), Vec2::new(x, y), 1.5);
+        let kind = |x, y| part(x, y).map(|p| (p.wire, p.kind));
+        // A corner wins where it is within reach, even on a run.
+        assert_eq!(kind(100.0, 30.5), Some((wire, WirePartKind::Corner(0))));
+        assert_eq!(kind(140.0, 29.6), Some((wire, WirePartKind::Corner(1))));
+        // Mid run: the segment (0 up, 1 across, 2 down).
+        assert_eq!(kind(100.0, 40.0), Some((wire, WirePartKind::Segment(0))));
+        assert_eq!(kind(120.0, 30.2), Some((wire, WirePartKind::Segment(1))));
+        assert_eq!(kind(140.0, 40.0), Some((wire, WirePartKind::Segment(2))));
+        assert_eq!(kind(120.0, 20.0), None);
+    }
+
+    #[test]
+    fn corners_are_drawn_and_a_focused_run_lights_its_corners() {
+        let (doc, page, wire) = bent_wire();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let handles = |ps: &PageScene| {
+            let mut h = ps.scene().get(item_id(wire)).unwrap().handles.clone();
+            h.retain(|h| !h.ring);
+            h
+        };
+        let prims = |ps: &PageScene| ps.scene().get(item_id(wire)).unwrap().primitives.len();
+        // Corners are screen-size handles; the line, the pin dot and the
+        // open end's pole and pennant stay primitives (its ring is a handle).
+        let plain = prims(&ps);
+        assert_eq!(plain, 1 + 1 + 2);
+        let base = handles(&ps);
+        assert_eq!(base.len(), 2);
+        assert!(base.iter().all(|h| h.half == ps.style.corner_half));
+        let focus = ps.style.focus_color;
+        let lit = |ps: &PageScene| {
+            let item = ps.scene().get(item_id(wire)).unwrap();
+            item.handles.iter().filter(|h| h.color == focus).count()
+                + item
+                    .primitives
+                    .iter()
+                    .filter(|p| p.stroke.is_some_and(|s| s.color == focus))
+                    .count()
+        };
+        assert_eq!(lit(&ps), 0);
+        // The across run: the run itself and both of its corners.
+        let seg = WirePart {
+            wire,
+            kind: WirePartKind::Segment(1),
+        };
+        ps.set_wire_focus(doc.project(), Some(seg));
+        assert_eq!(lit(&ps), 3);
+        // A corner lights just itself, drawn larger than the plain ones.
+        let corner = WirePart {
+            wire,
+            kind: WirePartKind::Corner(0),
+        };
+        ps.set_wire_focus(doc.project(), Some(corner));
+        assert_eq!(lit(&ps), 1);
+        assert!(handles(&ps).iter().any(|h| h.half > ps.style.corner_half));
+        ps.set_wire_focus(doc.project(), None);
+        assert_eq!(prims(&ps), plain);
+        assert_eq!(handles(&ps), base);
+    }
+
+    #[test]
+    fn label_kinds_follow_the_symbol_role() {
+        let mut doc = Document::default();
+        let ((page, feed, int), _) = doc
+            .transact("roles", |tx| {
+                let page = tx.add_page("1")?;
+                let l1 = tx.add_potential("L1", novo_core::PotentialKind::Line)?;
+                let feed = tx.place_symbol(
+                    page,
+                    "iec/potential",
+                    MPlacement::at(Point::new(50.0, 50.0)),
+                    vec![Pin::new("1", 0.0, 2.5)],
+                    SymbolRole::PotentialFeed { potential: l1 },
+                )?;
+                let int = tx.place_symbol(
+                    page,
+                    "iec/interruption",
+                    MPlacement::at(Point::new(80.0, 50.0)),
+                    vec![Pin::new("1", 0.0, 2.5)],
+                    SymbolRole::Interruption { name: "A1".into() },
+                )?;
+                Ok((page, feed, int))
+            })
+            .unwrap();
+        let ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let kind = |s: SymbolId| {
+            ps.label_hit(
+                doc.project(),
+                &Hit {
+                    id: item_id(s),
+                    distance: 0.0,
+                    label: Some(0),
+                },
+            )
+            .map(|l| l.kind)
+        };
+        assert_eq!(kind(feed), Some(LabelKind::Potential));
+        assert_eq!(kind(int), Some(LabelKind::InterruptionName));
+    }
+
+    #[test]
+    fn page_scene_hands_the_sheet_to_the_view() {
+        let mut doc = Document::default();
+        let (page, _) = doc.transact("page", |tx| tx.add_page("1")).unwrap();
+        let style = ModelStyle {
+            sheet_fill: Some(Color::rgb(19, 19, 21)),
+            ..ModelStyle::default()
+        };
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        ps.set_style(style, doc.project(), &PlaceholderArt);
+        let sheet = ps.scene().sheet().expect("a page has a sheet");
+        assert_eq!(sheet.fill, Some(Color::rgb(19, 19, 21)));
+        assert!(!sheet.lines.is_empty(), "frame lines keep dots clear");
+        // The frame item no longer fills: the view paints the sheet under
+        // the grid dots.
+        let frame = ps.scene().get(item_id(page)).unwrap();
+        assert!(frame.primitives.iter().all(|p| p.fill.is_none()));
+    }
+
+    #[test]
+    fn the_title_block_prints_the_page_and_the_set_revision() {
+        let (doc, page, ..) = doc();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let texts = |ps: &PageScene| -> Vec<String> {
+            ps.scene()
+                .get(item_id(page))
+                .unwrap()
+                .labels
+                .iter()
+                .map(|l| l.text.clone())
+                .collect()
+        };
+        let revisions = |page: Option<(&str, &str)>, project: &str| TitleRevisions {
+            page: page.map(|(i, d)| (i.to_owned(), d.to_owned())),
+            project: Some(project.to_owned()),
+        };
+        // An untouched page keeps its own index while the set moves on.
+        let old = revisions(Some(("A", "2026-09-01")), "D");
+        assert_eq!(old.text(), "A  2026-09-01  (set D)");
+        assert!(ps.set_revisions(doc.project(), Some(old)));
+        assert!(texts(&ps).contains(&"A  2026-09-01  (set D)".to_owned()));
+        // A page changed in the latest revision shows just that.
+        let current = revisions(Some(("D", "2026-10-15")), "D");
+        assert_eq!(current.text(), "D  2026-10-15");
+        // A page added since the latest revision has none yet.
+        assert_eq!(revisions(None, "D").text(), "(set D)");
+        assert!(ps.set_revisions(doc.project(), Some(current)));
+        assert!(!ps.set_revisions(
+            doc.project(),
+            Some(revisions(Some(("D", "2026-10-15")), "D"))
+        ));
     }
 
     #[test]

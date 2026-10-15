@@ -6,8 +6,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::entity::{
-    BlockDefinition, BlockInstance, Cable, Device, Dismissal, Junction, Page, Part, Potential,
-    PotentialSystem, ProjectInfo, Revision, Structure, SymbolInstance, Terminal, Text, Wire,
+    BlockDefinition, BlockInstance, CabinetPlacement, Cable, Device, Dismissal, Junction, Page,
+    Part, Potential, PotentialSystem, ProjectInfo, Rail, Revision, Structure, SymbolInstance,
+    Terminal, Text, Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::project::Project;
@@ -59,6 +60,10 @@ struct ProjectJson {
     block_instances: Vec<BlockInstance>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     revisions: Vec<Revision>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    rails: Vec<Rail>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    cabinet_placements: Vec<CabinetPlacement>,
 }
 
 impl Project {
@@ -85,6 +90,8 @@ impl Project {
             block_definitions: self.block_definitions.values().cloned().collect(),
             block_instances: self.block_instances.values().cloned().collect(),
             revisions: self.revisions.values().cloned().collect(),
+            rails: self.rails.values().cloned().collect(),
+            cabinet_placements: self.cabinet_placements.values().cloned().collect(),
         };
         serde_json::to_string_pretty(&file).expect("project serializes to JSON")
     }
@@ -122,7 +129,13 @@ impl Project {
                     .map(Record::BlockDefinition),
             )
             .chain(file.block_instances.into_iter().map(Record::BlockInstance))
-            .chain(file.revisions.into_iter().map(Record::Revision));
+            .chain(file.revisions.into_iter().map(Record::Revision))
+            .chain(file.rails.into_iter().map(Record::Rail))
+            .chain(
+                file.cabinet_placements
+                    .into_iter()
+                    .map(Record::CabinetPlacement),
+            );
         Project::from_records(file.info, file.next_id, records)
     }
 }

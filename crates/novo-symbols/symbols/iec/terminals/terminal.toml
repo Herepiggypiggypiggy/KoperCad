@@ -1,13 +1,12 @@
 format = 1
 id = "iec/terminals/terminal"
-name = "Terminal"
+name = "Terminal, feed-through"
 description = "Terminal of a terminal strip; both sides are the same conductor."
 standard = "IEC 60617"
 category = "terminals"
 function = "terminal"
 keywords = ["terminal", "x", "clamp", "feed-through"]
-aliases = ["x", "term"]
-favorite = true
+aliases = ["term"]
 
 connections = [
   { id = "1", at = [0, 0], dir = "up" },

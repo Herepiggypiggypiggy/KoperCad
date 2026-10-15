@@ -406,6 +406,33 @@ pub(crate) fn zero_length_wires(cx: &Context<'_>, out: &mut Vec<Problem>) {
     }
 }
 
+/// Wires with an open end ([`Endpoint::Free`]): drawn on purpose while
+/// sketching, but a finished page has none. One problem per open end.
+pub(crate) fn open_wires(cx: &Context<'_>, out: &mut Vec<Problem>) {
+    for wire in cx.project.wires() {
+        for (end, other) in [(wire.from, wire.to), (wire.to, wire.from)] {
+            let Endpoint::Free { at } = end else {
+                continue;
+            };
+            let message = if other.is_free() {
+                format!("The wire has an open end at {:.1}, {:.1} mm", at.x, at.y)
+            } else {
+                format!(
+                    "The wire from {} has an open end at {:.1}, {:.1} mm",
+                    cx.endpoint_label(other),
+                    at.x,
+                    at.y
+                )
+            };
+            out.push(Problem::new(
+                ProblemKind::OpenWire,
+                vec![wire.id.into()],
+                message,
+            ));
+        }
+    }
+}
+
 /// Devices and cables without a part. Info only: parts are assigned late
 /// (WS-07 proposes them), and DESIGN.md §6 step 7 lists them in Issues.
 /// A terminal strip is judged by its terminals: their article is their own

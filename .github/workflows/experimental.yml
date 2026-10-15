@@ -91,7 +91,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git config user.name "NovoElectric experimental build"
+          git config user.name "KoperCAD experimental build"
           git config user.email "noreply@github.com"
           state="$(cygpath -u "$RUNNER_TEMP")/experimental"
           mkdir -p "$state"
@@ -191,10 +191,13 @@ jobs:
         run: |
           stamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           mkdir -p dist out
-          cp target/release/novoelectric.exe dist/
+          cp target/release/kopercad.exe dist/
+          # Launchers installed before the rename start novoelectric.exe after
+          # unpacking this zip; keep a copy until they have been refreshed.
+          cp target/release/kopercad.exe dist/novoelectric.exe
           if [ -f target/release/examples/demo.exe ]; then cp target/release/examples/demo.exe dist/canvas-demo.exe; fi
           {
-            echo "NovoElectric experimental build $stamp"
+            echo "KoperCAD experimental build $stamp"
             echo
             echo "Included:"
             cat "$state/merged.txt"

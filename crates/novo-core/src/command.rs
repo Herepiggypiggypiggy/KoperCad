@@ -9,15 +9,16 @@
 use serde::{Deserialize, Serialize};
 
 use crate::entity::{
-    BlockOverride, BlockParameter, CableCore, DeviceKind, Endpoint, PageFormat, PageKind, Pin,
-    PotentialKind, PotentialSet, PotentialSpec, ProjectInfo, SymbolKey, SymbolRole, TextContent,
-    TextPlacement, Value,
+    BlockOverride, BlockParameter, CableCore, DeviceKind, Endpoint, MountingPlate, PageFormat,
+    PageKind, PeOverride, Pin, PotentialKind, PotentialSet, PotentialSpec, ProjectInfo, RailKind,
+    SymbolKey, SymbolRole, TextContent, TextPlacement, Value,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::{Placement, Point};
 use crate::id::{
-    AnyId, BlockDefinitionId, BlockInstanceId, CableId, DeviceId, PageId, PartId, PotentialId,
-    PotentialSystemId, SymbolId, TerminalId, TextId, WireId,
+    AnyId, BlockDefinitionId, BlockInstanceId, CabinetPlacementId, CableId, DeviceId, PageId,
+    PartId, PotentialId, PotentialSystemId, RailId, StructureId, SymbolId, TerminalId, TextId,
+    WireId,
 };
 use crate::record::Record;
 use crate::tag::DeviceTag;
@@ -34,6 +35,18 @@ pub enum Command {
     DeletePage {
         page: PageId,
     },
+    /// Renames a page (its name is what references print).
+    RenamePage {
+        page: PageId,
+        name: String,
+    },
+    /// Renames a group (`=10D41`) or panel (`+K1B1G1`) everywhere its name
+    /// is copied; see [`Tx::rename_level`].
+    RenameLevel {
+        aspect: crate::tag::Aspect,
+        from: Vec<String>,
+        to: Vec<String>,
+    },
     AddPage {
         name: String,
         #[serde(default)]
@@ -42,6 +55,14 @@ pub enum Command {
         kind: PageKind,
         #[serde(default)]
         format: PageFormat,
+        /// Page group (`=10D41`) and panel (`+K1B1G1`); see [`Page::structure`].
+        #[serde(default)]
+        structure: DeviceTag,
+    },
+    /// Moves a page into another page group and/or panel.
+    SetPageStructure {
+        page: PageId,
+        structure: DeviceTag,
     },
     AddDevice {
         tag: DeviceTag,
@@ -135,6 +156,11 @@ pub enum Command {
         to: Endpoint,
         #[serde(default)]
         route: Vec<Point>,
+        /// The page, only needed when both ends are open
+        /// ([`Endpoint::Free`]); otherwise it is that of the pin or
+        /// junction.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        page: Option<PageId>,
     },
     SplitWire {
         wire: WireId,
@@ -184,6 +210,12 @@ pub enum Command {
     SetTerminalFeed {
         terminal: TerminalId,
         potential: Option<PotentialId>,
+    },
+    /// Sets whether the terminals are PE terminals by rule or by hand
+    /// ("Toggle PE terminal"); see [`PeOverride`].
+    SetTerminalPe {
+        terminals: Vec<TerminalId>,
+        mode: PeOverride,
     },
     AddPotential {
         name: String,
@@ -237,6 +269,40 @@ pub enum Command {
     },
     /// Records a declined proposal; see [`Tx::dismiss`]. Remove the
     /// dismissal to bring the proposal back.
+    /// Sets the mounting plate of an enclosure; `None` removes it.
+    SetPlateSize {
+        structure: StructureId,
+        plate: Option<MountingPlate>,
+    },
+    /// Adds a rail or duct to the plate of an enclosure.
+    AddRail {
+        structure: StructureId,
+        x: f64,
+        y: f64,
+        length: f64,
+        #[serde(default)]
+        kind: RailKind,
+    },
+    /// Places a device on the plate, or moves it if it is already placed.
+    /// Several together go in a [`Command::Batch`].
+    PlaceDevice {
+        device: DeviceId,
+        structure: StructureId,
+        x: f64,
+        y: f64,
+        #[serde(default)]
+        rotated: bool,
+        /// The rail and the offset along it.
+        #[serde(default)]
+        rail: Option<(RailId, f64)>,
+    },
+    RotatePlacement {
+        placement: CabinetPlacementId,
+        rotated: bool,
+    },
+    RemovePlacement {
+        placement: CabinetPlacementId,
+    },
     Dismiss {
         proposal: String,
         subjects: Vec<AnyId>,
@@ -299,7 +365,13 @@ impl Command {
         match self {
             Command::SetProjectInfo { .. } => "Edit project info".into(),
             Command::DeletePage { .. } => "Delete page".into(),
+            Command::RenamePage { .. } => "Rename page".into(),
+            Command::RenameLevel { aspect, .. } => match aspect {
+                crate::tag::Aspect::Function => "Rename group".into(),
+                _ => "Rename panel".into(),
+            },
             Command::AddPage { .. } => "Add page".into(),
+            Command::SetPageStructure { .. } => "Move page to group or panel".into(),
             Command::AddDevice { .. } => "Add device".into(),
             Command::SetTag { .. } => "Rename device".into(),
             Command::PlaceSymbol { .. } => "Place symbol".into(),
@@ -320,6 +392,7 @@ impl Command {
             Command::FeedSystem { .. }
             | Command::SetPinFeed { .. }
             | Command::SetTerminalFeed { .. } => "Feed potential".into(),
+            Command::SetTerminalPe { .. } => "Toggle PE terminal".into(),
             Command::AddTerminal { .. } => "Add terminal".into(),
             Command::AddCable { .. } => "Add cable".into(),
             Command::AssignCore { .. } => "Assign cable core".into(),
@@ -334,6 +407,11 @@ impl Command {
             Command::IssueRevision { index, .. } => format!("Issue revision {index}"),
             Command::FreezePage { .. } => "Freeze page".into(),
             Command::UnfreezePage { .. } => "Unfreeze page".into(),
+            Command::SetPlateSize { .. } => "Set plate size".into(),
+            Command::AddRail { .. } => "Add rail".into(),
+            Command::PlaceDevice { .. } => "Place device".into(),
+            Command::RotatePlacement { .. } => "Rotate device".into(),
+            Command::RemovePlacement { .. } => "Remove from plate".into(),
             Command::Dismiss { .. } => "Dismiss proposal".into(),
             Command::AssignPart { .. } => "Assign part".into(),
             Command::SetProperty { .. } => "Set property".into(),
@@ -354,6 +432,21 @@ impl Tx<'_> {
                 self.set_info(|i| *i = info)?;
                 return Ok(Vec::new());
             }
+            Command::RenamePage { page, name } => {
+                let name = name.trim().to_owned();
+                if name.is_empty() {
+                    return Err(ModelError::InvalidValue {
+                        id: page.into(),
+                        field: "name",
+                    });
+                }
+                self.update::<crate::Page>(page, |p| p.name = name)?;
+                return Ok(Vec::new());
+            }
+            Command::RenameLevel { aspect, from, to } => {
+                self.rename_level(aspect, &from, &to)?;
+                return Ok(Vec::new());
+            }
             Command::DeletePage { page } => {
                 self.delete_page(page)?;
                 return Ok(Vec::new());
@@ -363,14 +456,20 @@ impl Tx<'_> {
                 title,
                 kind,
                 format,
+                structure,
             } => {
                 let page = self.add_page(name)?;
                 self.update::<crate::Page>(page, |p| {
                     p.title = title;
                     p.kind = kind;
                     p.format = format;
+                    p.structure = structure;
                 })?;
                 page.into()
+            }
+            Command::SetPageStructure { page, structure } => {
+                self.update::<crate::Page>(page, |p| p.structure = structure)?;
+                return Ok(Vec::new());
             }
             Command::AddDevice {
                 tag,
@@ -433,8 +532,16 @@ impl Tx<'_> {
                 self.set_text(text, content, height_mm)?;
                 return Ok(Vec::new());
             }
-            Command::Connect { from, to, route } => {
-                let wire = self.connect(from, to)?;
+            Command::Connect {
+                from,
+                to,
+                route,
+                page,
+            } => {
+                let wire = match page {
+                    Some(page) => self.connect_on(page, from, to)?,
+                    None => self.connect(from, to)?,
+                };
                 if !route.is_empty() {
                     self.update::<crate::Wire>(wire, |w| w.route = route)?;
                 }
@@ -502,6 +609,10 @@ impl Tx<'_> {
                 }
                 id.into()
             }
+            Command::SetTerminalPe { terminals, mode } => {
+                self.set_terminal_pe(&terminals, mode)?;
+                return Ok(Vec::new());
+            }
             Command::AddTerminal { strip, name } => self.add_terminal(strip, name)?.into(),
             Command::AddCable { tag, cores } => self.add_cable(tag, cores)?.into(),
             Command::AssignCore { cable, core, wire } => {
@@ -566,6 +677,40 @@ impl Tx<'_> {
                 description,
                 enclosure,
             } => self.add_structure(tag, description, enclosure)?.into(),
+            Command::SetPlateSize { structure, plate } => {
+                self.set_plate(structure, plate)?;
+                return Ok(Vec::new());
+            }
+            Command::AddRail {
+                structure,
+                x,
+                y,
+                length,
+                kind,
+            } => self.add_rail(structure, x, y, length, kind)?.into(),
+            Command::PlaceDevice {
+                device,
+                structure,
+                x,
+                y,
+                rotated,
+                rail,
+            } => {
+                let (placement, new) =
+                    self.place_device(device, structure, Point::new(x, y), rotated, rail)?;
+                if !new {
+                    return Ok(Vec::new());
+                }
+                placement.into()
+            }
+            Command::RotatePlacement { placement, rotated } => {
+                self.update::<crate::CabinetPlacement>(placement, |p| p.rotated = rotated)?;
+                return Ok(Vec::new());
+            }
+            Command::RemovePlacement { placement } => {
+                self.remove(placement)?;
+                return Ok(Vec::new());
+            }
             Command::Dismiss { proposal, subjects } => self.dismiss(proposal, subjects)?.into(),
             Command::AddPart {
                 manufacturer,

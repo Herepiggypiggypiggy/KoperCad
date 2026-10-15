@@ -94,5 +94,23 @@ claude/data-model-amzaxu origin/main`, then new PR for new work.
   `carried` (BFS through pass-through poles, nearest feed only, never into
   defining nets), `reachable`; conflicts only from `defined`. Changeovers need
   the two-group pass-through form.
+- Open wire ends: `Endpoint::Free { at }` (JSON `{"type":"free","at":{x,y}}`), a
+  position on the wire's page that joins no net. `Endpoint` is no longer
+  `Copy`-derived `Eq/Hash/Ord` by derive (manual, on `total_cmp`/bits). Use
+  `Netlist::net_of_wire(&wire)` instead of `net_of(wire.from)`; a wire open at both
+  ends has no net. `Command::Connect.page` / `Tx::connect_on` are needed only
+  when both ends are open. Connecting an end = `update::<Wire>` replacing it.
+- PE terminals: `Terminal.pe_override` (`Auto`, `ForcedPe`, `ForcedNotPe`; file field only
+  when not Auto) and `Command::SetTerminalPe { terminals, mode }` (one undo step). The
+  model stores the choice only; novo-terminals applies the PE rule to `Auto` terminals and
+  changes `kind` and the symbol with a forced toggle.
+- Cabinet layout: `Structure.plate: Option<MountingPlate { width, height, margin }>` (enclosures
+  only; file field only when set), entities `Rail` (`structure`, `x`, `y`, `length`, `kind`
+  DinRail | Duct) and `CabinetPlacement` (`device`, `structure`, `x`, `y`, `rotated`, `rail`,
+  `rail_offset`; at most one per device). Commands `SetPlateSize`, `AddRail`, `PlaceDevice`
+  (places or moves; creates nothing when it moves), `RotatePlacement`, `RemovePlacement`;
+  `place all` = one `Command::Batch` of `PlaceDevice`. Deleting a device or enclosure deletes
+  its placements; deleting a rail leaves the devices on the plate, off the rail. A plate with
+  rails or devices on it cannot be removed. Clearances live in `novo-layout`, not the model.
 - PRs get squash-merged: rebase follow-ups with `git rebase --onto origin/main <old-head>`.
 - Commit trailers: Co-Authored-By Claude line + Claude-Session link (see git log).

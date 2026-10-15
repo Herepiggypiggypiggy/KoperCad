@@ -21,7 +21,8 @@ pub struct CanvasPalette {
     pub grid_major: [u8; 4],
     /// Symbol outlines.
     pub symbol: [u8; 4],
-    /// Wires and connections, tinted blue so they read apart from symbols.
+    /// Wires and connections: a mid, saturated blue, clearly darker than the
+    /// near-white symbols so a wire never merges into a terminal outline.
     pub wire: [u8; 4],
     /// Device tags, terminal numbers and page text.
     pub text: [u8; 4],
@@ -55,7 +56,45 @@ pub struct CanvasPalette {
     /// screen, so it stays a quiet grey rather than copper, which belongs
     /// to the selection.
     pub snap_marker: [u8; 4],
+    /// Filled dot at a true junction (three or more conductors, DESIGN §2),
+    /// the same copper dot as the logo. Darker than the selection, which
+    /// also gets a halo and a thicker line, so a selected net is told apart.
+    pub junction: [u8; 4],
+    /// Open ring on a wire end that was terminated unconnected. The case
+    /// and its Warning are defined in DESIGN §4.
+    pub wire_end: [u8; 4],
+    /// The small flag beside an unconnected wire end.
+    pub unconnected_flag: [u8; 4],
 }
+
+/// Colours for the live potentials view (Shift+L): a wire is lit in the
+/// colour of the potential it carries. Screen only, like the canvas palette.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PotentialPalette {
+    pub protective_earth: [u8; 4],
+    pub pen: [u8; 4],
+    pub neutral: [u8; 4],
+    pub dc_positive: [u8; 4],
+    pub dc_negative: [u8; 4],
+    /// Line conductors and signals, by the last digit of their name, so
+    /// L1, L2 and L3 stay apart.
+    pub line: [[u8; 4]; 4],
+}
+
+/// The dark potential palette.
+pub const POTENTIALS_DARK: PotentialPalette = PotentialPalette {
+    protective_earth: [0x7F, 0xD0, 0x8A, 0xFF],
+    pen: [0xB8, 0xD0, 0x6A, 0xFF],
+    neutral: [0x5C, 0x8D, 0xE0, 0xFF],
+    dc_positive: [0xE0, 0x76, 0x6C, 0xFF],
+    dc_negative: [0x6C, 0x7C, 0xE0, 0xFF],
+    line: [
+        [0xE0, 0xA2, 0x4A, 0xFF],
+        [0xC0, 0x70, 0xD0, 0xFF],
+        [0x4F, 0xC1, 0xD0, 0xFF],
+        [0xD0, 0xD0, 0x5C, 0xFF],
+    ],
+};
 
 /// Converts a palette colour for drawing with egui.
 pub fn to_color32([r, g, b, a]: [u8; 4]) -> egui::Color32 {
@@ -67,10 +106,10 @@ pub const CANVAS_DARK: CanvasPalette = CanvasPalette {
     background: [0x0E, 0x0E, 0x10, 0xFF],
     sheet: [0x13, 0x13, 0x15, 0xFF],
     sheet_frame: [0x46, 0x45, 0x48, 0xFF],
-    grid_minor: [0x20, 0x20, 0x23, 0xFF],
-    grid_major: [0x2C, 0x2C, 0x30, 0xFF],
-    symbol: [0xD9, 0xD7, 0xD2, 0xFF],
-    wire: [0x9F, 0xB4, 0xD0, 0xFF],
+    grid_minor: [0x2E, 0x2E, 0x33, 0xFF],
+    grid_major: [0x40, 0x40, 0x45, 0xFF],
+    symbol: [0xEC, 0xEA, 0xE5, 0xFF],
+    wire: [0x6F, 0x9B, 0xDB, 0xFF],
     text: [0xC4, 0xC2, 0xBD, 0xFF],
     cross_reference: [0x8F, 0xA8, 0xC8, 0xFF],
     connection_point: [0x7F, 0xB0, 0x86, 0xFF],
@@ -86,6 +125,9 @@ pub const CANVAS_DARK: CanvasPalette = CanvasPalette {
     removed: [0xE0, 0x76, 0x6C, 0x80],
     mark_text: [0xC4, 0xC2, 0xBD, 0xFF],
     snap_marker: [0x85, 0x83, 0x80, 0xFF],
+    junction: [0xC8, 0x8A, 0x5E, 0xFF],
+    wire_end: [0xC8, 0x8A, 0x5E, 0xFF],
+    unconnected_flag: [0xD6, 0xA5, 0x5C, 0xFF],
 };
 
 #[cfg(test)]
@@ -117,10 +159,37 @@ mod tests {
             p.selection,
             p.error,
             p.warning,
+            p.junction,
+            p.wire_end,
+            p.unconnected_flag,
         ] {
             let ratio = crate::tokens::tests::contrast(to_color32(c), sheet);
             assert!(ratio >= 4.5, "{c:?}: {ratio}");
         }
+    }
+
+    #[test]
+    fn grid_dots_show_on_the_sheet_without_competing_with_the_drawing() {
+        let p = CANVAS_DARK;
+        let sheet = to_color32(p.sheet);
+        let minor = crate::tokens::tests::contrast(to_color32(p.grid_minor), sheet);
+        let major = crate::tokens::tests::contrast(to_color32(p.grid_major), sheet);
+        assert!(minor >= 1.3, "minor grid dots: {minor}");
+        assert!(major >= minor + 0.3, "major grid dots: {major}");
+        let frame = crate::tokens::tests::contrast(to_color32(p.sheet_frame), sheet);
+        assert!(major < frame, "grid stays quieter than the page frame");
+    }
+
+    #[test]
+    fn wires_are_told_apart_from_symbols_and_junctions_are_not_the_selection() {
+        let p = CANVAS_DARK;
+        let ratio = crate::tokens::tests::contrast(to_color32(p.symbol), to_color32(p.wire));
+        assert!(ratio >= 2.0, "symbol against wire: {ratio}");
+        let rgb = |c: [u8; 4]| [c[0], c[1], c[2]];
+        for c in [p.junction, p.wire_end] {
+            assert_ne!(rgb(c), rgb(p.selection));
+        }
+        assert_eq!(rgb(p.unconnected_flag), rgb(p.warning));
     }
 
     #[test]
@@ -150,5 +219,41 @@ mod tests {
         }
         let ratio = crate::tokens::tests::contrast(to_color32(p.mark_text), to_color32(p.sheet));
         assert!(ratio >= 4.5);
+    }
+
+    #[test]
+    fn potential_colours_are_readable_on_the_sheet_and_tell_the_conductors_apart() {
+        let p = POTENTIALS_DARK;
+        let sheet = to_color32(CANVAS_DARK.sheet);
+        let all: Vec<[u8; 4]> = [
+            p.protective_earth,
+            p.pen,
+            p.neutral,
+            p.dc_positive,
+            p.dc_negative,
+        ]
+        .into_iter()
+        .chain(p.line)
+        .collect();
+        for c in &all {
+            let ratio = crate::tokens::tests::contrast(to_color32(*c), sheet);
+            assert!(ratio >= 4.5, "{c:?}: {ratio}");
+        }
+        for (i, a) in all.iter().enumerate() {
+            for b in &all[i + 1..] {
+                assert_ne!(a, b);
+            }
+        }
+        // The three line conductors differ clearly in hue, not just a shade.
+        let spread = |a: [u8; 4], b: [u8; 4]| {
+            (0..3)
+                .map(|i| (i32::from(a[i]) - i32::from(b[i])).unsigned_abs())
+                .sum::<u32>()
+        };
+        for (i, a) in p.line[..3].iter().enumerate() {
+            for b in &p.line[i + 1..3] {
+                assert!(spread(*a, *b) >= 120, "{a:?} {b:?}");
+            }
+        }
     }
 }

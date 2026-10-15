@@ -1,0 +1,11 @@
+[package]
+name = "novo-layout"
+description = "Cabinet layout: mounting plate, footprints, collision and clearance queries (WS-15)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

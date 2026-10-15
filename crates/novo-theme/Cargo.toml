@@ -1,6 +1,6 @@
 [package]
 name = "novo-theme"
-description = "NovoElectric look: dark theme, design tokens, canvas palette and branding"
+description = "KoperCAD look: dark theme, design tokens, canvas palette and branding"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

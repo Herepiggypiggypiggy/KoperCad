@@ -1,4 +1,4 @@
-//! Scripting API (owned by WS-28): what the `novoelectric` Python module
+//! Scripting API (owned by WS-28): what the `kopercad` Python module
 //! exposes, as plain Rust.
 //!
 //! A [`ScriptProject`] is an open project with undo, optionally backed by a
@@ -72,7 +72,7 @@ pub enum ScriptError {
     #[error("unknown {what} `{value}`")]
     UnknownValue { what: &'static str, value: String },
     #[error(
-        "{} has unsaved work from an app session that did not close cleanly; open it in NovoElectric to recover or discard that work first",
+        "{} has unsaved work from an app session that did not close cleanly; open it in KoperCAD to recover or discard that work first",
         .0.display()
     )]
     RecoveryPending(PathBuf),
@@ -274,6 +274,7 @@ impl ScriptProject {
                 title: title.into(),
                 kind: PageKind::default(),
                 format: PageFormat::default(),
+                structure: Default::default(),
             },
             |id| match id {
                 AnyId::Page(id) => Some(id),
@@ -483,6 +484,7 @@ impl ScriptProject {
                 from,
                 to,
                 route: Vec::new(),
+                page: None,
             },
             |id| match id {
                 AnyId::Wire(id) => Some(id),
@@ -671,7 +673,7 @@ fn kind_from_name(name: &str) -> PotentialKind {
 
 // ----- JSON views shared with the command-line tool -------------------------
 
-/// Counts and names of a project, for `novo info` and `Project.info()`.
+/// Counts and names of a project, for `kopercad-cli info` and `Project.info()`.
 pub fn info_json(p: &Project, path: Option<&Path>) -> Value {
     json!({
         "name": p.info().name,
@@ -740,6 +742,7 @@ pub fn endpoint_name(p: &Project, end: Endpoint) -> String {
     let (symbol, pin) = match end {
         Endpoint::Pin { symbol, pin } => (symbol, pin),
         Endpoint::Junction { junction } => return junction.to_string(),
+        Endpoint::Free { at } => return format!("open end ({:.1}, {:.1})", at.x, at.y),
     };
     let Some(instance) = p.symbol(symbol) else {
         return format!("{symbol} pin {pin}");
@@ -779,7 +782,7 @@ pub fn wires_json(p: &Project) -> Value {
             .into_iter()
             .map(|w| {
                 let potentials = netlist
-                    .net_of(w.from)
+                    .net_of_wire(w)
                     .map(|net| potential_names(p, &netlist.net(net).potentials))
                     .unwrap_or_default();
                 json!({

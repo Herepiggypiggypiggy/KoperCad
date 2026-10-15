@@ -257,6 +257,7 @@ impl<'a, S: Store> Flow<'a, S> {
             from,
             to,
             route: vec![],
+            page: None,
         });
         created(&outcome, |id| match id {
             AnyId::Wire(w) => Some(w),
@@ -422,6 +423,7 @@ fn scenario_on_main() {
             title: "Motor starter".into(),
             kind: PageKind::default(),
             format: PageFormat::default(),
+            structure: Default::default(),
         }),
         |id| match id {
             AnyId::Page(p) => Some(p),
@@ -637,6 +639,7 @@ fn gap_insert_search_ignores_case() {
             title: String::new(),
             kind: PageKind::default(),
             format: PageFormat::default(),
+            structure: Default::default(),
         }),
         |id| match id {
             AnyId::Page(p) => Some(p),
@@ -674,6 +677,7 @@ fn gap_assign_potentials_to_selected_wires() {
             title: String::new(),
             kind: PageKind::default(),
             format: PageFormat::default(),
+            structure: Default::default(),
         }),
         |id| match id {
             AnyId::Page(p) => Some(p),
@@ -774,6 +778,7 @@ fn new_flow<'a>(library: &'a Library, dir: &std::path::Path) -> (Flow<'a, FileSt
             title: String::new(),
             kind: PageKind::default(),
             format: PageFormat::default(),
+            structure: Default::default(),
         }),
         |id| match id {
             AnyId::Page(p) => Some(p),

@@ -88,7 +88,7 @@ impl Action {
             Action::FocusMode => "Focus mode",
             Action::FullScreen => "Full screen",
             Action::CommandPalette => "Command palette…",
-            Action::About => "About NovoElectric",
+            Action::About => "About KoperCAD",
         }
     }
 
@@ -171,6 +171,11 @@ impl Action {
 /// may take one of these until its feature claims it.
 pub const RESERVED_SHORTCUTS: &[(Modifiers, Key, &str)] = &[
     (Modifiers::NONE, Key::I, "canvas tool: insert symbol"),
+    (
+        Modifiers::NONE,
+        Key::Q,
+        "canvas tool: place (hold for the wheel)",
+    ),
     (Modifiers::NONE, Key::W, "canvas tool: wire"),
     (Modifiers::NONE, Key::T, "canvas tool: terminal"),
     (Modifiers::NONE, Key::C, "canvas tool: cable"),

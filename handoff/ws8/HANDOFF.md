@@ -4,12 +4,12 @@
 - #29 and #90 merged. Open: the review follow-up PR from `claude/project-thread-9lkslj` (renumber families, page words).
 - #29 merged (5a73f86). Follow-up PR from branch `claude/project-thread-9lkslj`, restarted from main 7bb466d: MPCB coded Q (DESIGN §6, tester O1), `?` overlay and Shift+O (held) keys, Ctrl+Y shown first for redo, Escape yields to text fields, Dutch command words (language.rs), Keep-mode paste keeps terminal names, renumber keeps sub-device numbers shared, split_verb byte-offset fix.
 - novo-app maps keys (WS-01, crates/novo-app/src/keys.rs): it still needs to map `?` to `Key::Char('?')` and to treat Shift+O as held. Engine side is done.
-- Open: the per-class letter-code rule sentence (DESIGN §6) and contactor as Q (DESIGN says Q; the Gate 1 fixture and #62 use -K1). Ask the Workflow thread before changing contactors.
+- Open: the "Contactors are coded [K | Q]" and "Circuit breakers are coded [...]" rule sentences are not wired to project rules yet; `novo_symbols::letter_code_with(LetterRules)` is the hook. Do not offer the Q setting in the UI until the Gate 1 fixture and #62 (-K1 contactors) are moved to coil.contactor. Also open for others: ignore key repeat for Shift+W (WS-01), dock chip and EditorKey::Backspace (WS-01, WS-06), mapping plc.* command ids to novo-plc functions (app shell).
 
 ## Crate layout (crates/novo-workflow/src)
 keymap.rs (keys and scopes), commands.rs (COMMANDS, GROUPS, verbs, arguments, availability),
 palette.rs (command field engine: Palette::search_in(Mode, query, Sources) -> Vec<Row>; Row has target, group, completion, shortcut, disabled),
-insert.rs (symbol search over Library aliases, favourites slots, child_queries, letter_code, next_tag),
+insert.rs (symbol search over Library aliases, favourites slots, child_queries, next_tag; letter codes come from novo_symbols::letter_code),
 locate.rs (over novo-core cross_references), renumber.rs, duplicate.rs, history.rs, orientation.rs (R/X only), fuzzy.rs.
 Tests: unit tests per module, plus tests/journeys.rs against the novo-tests Gate 1 motor starter.
 
@@ -29,8 +29,10 @@ Check that the PR is still open before pushing. After every push, message the re
 
 ## Decisions already made (do not re-open)
 - No manual corners or T-pieces, and no J key. Tab = next proposal, Enter = accept, R/X orient.
-- One command field: Ctrl+K at the top, I (place mode) and a tapped Space at the pointer. No menu bar. The empty field is the grouped menu.
+- One command field: Ctrl+K at the top, Q (place mode, I is an alias) and a tapped Space at the pointer. No menu bar. The empty field is the grouped menu.
 - Favourites 1-9 act only while the place field is empty.
+- Left-hand keys: Q place, W wire, R rotate, C cable, X mirror, M move; E, T, P, J stay free. While a wire is in progress the app asks `Keymap::resolve_while_wiring`: Q ends the wire on the part under the pointer (`wire.end_on_part`), Tab cycles that part's pins (`wire.next_pin`). `link` is the verb for `xref.link`; `palette::link_tags` splits `link -K3 -K1`.
+- New potential feeds are named by `edit::next_feed_name` (L1, L2, L3 per page); `insert::next_feed_name` is the same rule for scripts.
 - Search builds on novo-core Project::search; aliases come from novo-symbols by_alias. Don't duplicate either.
 - The canvas owns Escape (escape_with) and Space tap-vs-hold; the editor owns preview before Enter.
 - Theme commands are not in the list (the app is dark only).

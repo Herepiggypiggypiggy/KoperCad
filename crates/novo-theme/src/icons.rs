@@ -1,7 +1,7 @@
 //! Interface icons (Phosphor, MIT licence), drawn as font glyphs.
 //!
 //! Use the constants as text: `ui.label(format!("{} Save", icons::action::SAVE))`.
-//! The full set is re-exported; the names below are the ones NovoElectric
+//! The full set is re-exported; the names below are the ones KoperCAD
 //! uses, so every screen picks the same icon for the same action.
 
 pub use egui_phosphor::regular::*;

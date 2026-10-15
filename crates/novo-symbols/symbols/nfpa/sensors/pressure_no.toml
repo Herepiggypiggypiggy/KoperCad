@@ -1,0 +1,31 @@
+format = 1
+id = "nfpa/sensors/pressure_no"
+name = "Pressure switch, make contact"
+description = "Pressure switch with a normally open contact."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "sensors"
+function = "contact.no.pressure"
+keywords = ["pressure", "sensor", "no", "nfpa", "ansi"]
+
+connections = [
+  { id = "13", at = [0, 0], dir = "up" },
+  { id = "14", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-12, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 6] },
+  { kind = "line", from = [0, 16], to = [0, 10] },
+  { kind = "line", from = [-3, 6], to = [3, 6] },
+  { kind = "line", from = [-3, 10], to = [3, 10] },
+  { kind = "line", from = [-1, 8], to = [-7, 8] },
+  { kind = "text", at = [-9, 8], text = "P", size = 3 },
+]
+
+[behavior]
+kind = "contact"
+normally = "open"
+poles = [["13", "14"]]

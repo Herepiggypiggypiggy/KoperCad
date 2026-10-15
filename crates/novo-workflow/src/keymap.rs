@@ -285,7 +285,7 @@ pub struct Binding {
 /// Ctrl+Shift+Z both redo); a chord runs at most one command per focus.
 #[derive(Debug, Clone)]
 pub struct Keymap {
-    bindings: Vec<Binding>,
+    pub(crate) bindings: Vec<Binding>,
 }
 
 impl Default for Keymap {
@@ -338,8 +338,14 @@ impl Keymap {
         bind(Chord::plain(Escape), OutsideText, "edit.escape");
 
         // Draw.
+        // Q sits at the left edge of the left hand (DESIGN: held Q opens the
+        // place wheel); I stays as the older alias. The first chord is the
+        // one the `?` table shows. E stays free.
+        bind(Chord::plain(l('q')), Canvas, "tool.place");
         bind(Chord::plain(l('i')), Canvas, "tool.place");
         bind(Chord::plain(l('w')), Canvas, "tool.connect");
+        // C draws a cable over the wires it touches (DESIGN section 4).
+        bind(Chord::plain(l('c')), Canvas, "tool.cable");
         // Corners / Lines (DESIGN §4): works mid-wire. The app shell ignores
         // key repeat for this chord, so a held key does not flip back and forth.
         bind(Chord::shift(l('w')), Canvas, "wire.mode");
@@ -353,10 +359,18 @@ impl Keymap {
             );
         }
 
+        // Terminals (DESIGN §4, strip naming): with only terminals selected,
+        // Up and Down move them to the next or previous strip number, Ctrl+Up
+        // to the lowest free one.
+        bind(Chord::plain(ArrowUp), Canvas, "terminal.strip_up");
+        bind(Chord::plain(ArrowDown), Canvas, "terminal.strip_down");
+        bind(Chord::ctrl(ArrowUp), Canvas, "terminal.strip_lowest");
+
         // Proposals and problems.
         bind(Chord::plain(Enter), Canvas, "proposal.accept");
         bind(Chord::plain(Tab), Canvas, "proposal.next");
         bind(Chord::shift(l('p')), Canvas, "view.toggle_marks");
+        bind(Chord::shift(l('l')), Canvas, "sim.live");
         // Held: the app shows override marks while Shift+O is down.
         bind(Chord::shift(l('o')), Canvas, "view.override_marks");
         bind(Chord::plain(F(8)), Anywhere, "check.next_problem");
@@ -399,6 +413,23 @@ impl Keymap {
             .iter()
             .find(|b| b.chord == chord && focus.allows(b.scope))
             .map(|b| b.command)
+    }
+
+    /// Like [`Keymap::resolve`], but while a wire is being drawn: Q ends the
+    /// wire on the part under the pointer and Tab cycles which connection
+    /// point of a multi-pin part it will take. Every other chord resolves as
+    /// usual, so R, Esc and the undo keys keep working mid-wire.
+    pub fn resolve_while_wiring(&self, chord: Chord, focus: Focus) -> Option<&'static str> {
+        let bare = !chord.ctrl && !chord.shift && !chord.alt;
+        if focus == Focus::Canvas && bare {
+            if chord.key == Key::letter('q') {
+                return Some("wire.end_on_part");
+            }
+            if chord.key == Key::Tab {
+                return Some("wire.next_pin");
+            }
+        }
+        self.resolve(chord, focus)
     }
 
     /// The chords for a command, in the order they were bound. The first
@@ -456,7 +487,7 @@ pub const FAVOURITE_COMMANDS: [&str; 9] = [
     "insert.favourite_9",
 ];
 
-fn scopes_overlap(a: Scope, b: Scope) -> bool {
+pub(crate) fn scopes_overlap(a: Scope, b: Scope) -> bool {
     Focus::ALL.iter().any(|f| f.allows(a) && f.allows(b))
 }
 
@@ -535,9 +566,60 @@ mod tests {
     }
 
     #[test]
+    fn place_is_on_q_for_the_left_hand_and_i_still_works() {
+        let map = Keymap::workflow();
+        let place = |c| map.resolve(Chord::plain(Key::letter(c)), Focus::Canvas);
+        assert_eq!(place('q'), Some("tool.place"));
+        assert_eq!(place('i'), Some("tool.place"));
+        // E stays free.
+        assert_eq!(place('e'), None);
+        // The `?` table shows Q first, and Q types into a field.
+        assert_eq!(map.shortcut_text("tool.place").as_deref(), Some("Q"));
+        assert_eq!(
+            map.resolve(Chord::plain(Key::letter('q')), Focus::TextField),
+            None
+        );
+        // Q place, W wire, R rotate: the drawing keys sit under the left hand.
+        assert_eq!(place('w'), Some("tool.connect"));
+        assert_eq!(place('r'), Some("edit.rotate"));
+        assert!(map.conflicts().is_empty());
+    }
+
+    #[test]
+    fn c_draws_cables_and_q_tab_steer_a_wire_in_progress() {
+        let map = Keymap::workflow();
+        let plain = |k| Chord::plain(k);
+        assert_eq!(
+            map.resolve(plain(Key::letter('c')), Focus::Canvas),
+            Some("tool.cable")
+        );
+        assert_eq!(map.shortcut_text("tool.cable").as_deref(), Some("C"));
+        assert_eq!(map.resolve(plain(Key::letter('c')), Focus::TextField), None);
+        // Mid-wire, Q ends on the part and Tab cycles its pins; Q still
+        // places and Tab still takes the next proposal otherwise.
+        let q = plain(Key::letter('q'));
+        assert_eq!(map.resolve(q, Focus::Canvas), Some("tool.place"));
+        assert_eq!(
+            map.resolve_while_wiring(q, Focus::Canvas),
+            Some("wire.end_on_part")
+        );
+        assert_eq!(
+            map.resolve_while_wiring(plain(Key::Tab), Focus::Canvas),
+            Some("wire.next_pin")
+        );
+        // Typing in a field is untouched, and R keeps rotating mid-wire.
+        assert_eq!(map.resolve_while_wiring(q, Focus::TextField), None);
+        assert_eq!(
+            map.resolve_while_wiring(plain(Key::letter('r')), Focus::Canvas),
+            Some("edit.rotate")
+        );
+        assert!(map.conflicts().is_empty());
+    }
+
+    #[test]
     fn no_keys_for_things_the_user_does_not_place() {
         let map = Keymap::workflow();
-        for letter in ['t', 'c', 'p', 'j'] {
+        for letter in ['t', 'p', 'j'] {
             assert_eq!(
                 map.resolve(Chord::plain(Key::letter(letter)), Focus::Canvas),
                 None

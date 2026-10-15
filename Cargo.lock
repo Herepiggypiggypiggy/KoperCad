@@ -1848,7 +1848,10 @@ dependencies = [
  "novo-core",
  "novo-editor",
  "novo-pdf",
+ "novo-plc",
  "novo-reports",
+ "novo-revisions",
+ "novo-sim",
  "novo-storage",
  "novo-symbols",
  "novo-terminals",
@@ -1934,7 +1937,22 @@ dependencies = [
  "novo-canvas",
  "novo-core",
  "novo-symbols",
+ "novo-terminals",
+ "novo-xref",
 ]
+
+[[package]]
+name = "novo-interop"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-parts",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "novo-layout"
+version = "0.1.0"
 
 [[package]]
 name = "novo-parts"
@@ -1969,6 +1987,7 @@ name = "novo-plc"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+ "novo-editor",
  "novo-symbols",
  "thiserror 2.0.21",
 ]
@@ -2018,8 +2037,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-routing"
+version = "0.1.0"
+
+[[package]]
 name = "novo-sim"
 version = "0.1.0"
+dependencies = [
+ "novo-core",
+]
 
 [[package]]
 name = "novo-storage"

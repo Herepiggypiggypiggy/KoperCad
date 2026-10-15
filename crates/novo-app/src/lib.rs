@@ -1,4 +1,4 @@
-//! NovoElectric application shell (owned by WS-01).
+//! KoperCAD application shell (owned by WS-01).
 //!
 //! Owns the native window, menus, panels, keyboard shortcuts and the command
 //! palette, and wires the other crates together through two hooks:
@@ -20,6 +20,7 @@ mod canvas;
 mod command_field;
 mod editor_canvas;
 mod keys;
+mod migrate;
 mod model_canvas;
 mod settings;
 mod theme;
@@ -36,10 +37,22 @@ pub use model_canvas::ModelCanvas;
 
 use eframe::egui;
 
-/// Name used for the window title and the settings directory.
-pub const APP_NAME: &str = "NovoElectric";
+/// Name shown in the window title, menus and dialogs.
+pub const APP_NAME: &str = "KoperCAD";
 
-/// File extension of a NovoElectric project file, without the dot.
+/// The maker, shown as "by KoperVonk" in the About box.
+pub const APP_MAKER: &str = "KoperVonk";
+
+/// Name of the per-user folders the app keeps data in: settings and the parts
+/// catalog under `%APPDATA%`, new projects under `Documents`.
+pub const DATA_DIR_NAME: &str = "KoperCAD";
+
+/// The folder name from before the rename. Old data is moved from it (see the
+/// `migrate` module); `%LOCALAPPDATA%\NovoElectric` also keeps this name, see
+/// [`data_dir`].
+pub const LEGACY_DATA_DIR_NAME: &str = "NovoElectric";
+
+/// File extension of a KoperCAD project file, without the dot.
 pub const PROJECT_EXTENSION: &str = novo_storage::PROJECT_EXTENSION;
 
 fn window_icon() -> egui::IconData {
@@ -59,15 +72,17 @@ pub fn run() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title(APP_NAME)
-            .with_app_id("novoelectric")
+            .with_app_id("kopercad")
             .with_inner_size([1280.0, 800.0])
             .with_min_inner_size([640.0, 400.0])
             .with_icon(window_icon()),
         renderer: eframe::Renderer::Wgpu,
         ..Default::default()
     };
+    // The first argument names eframe's settings folder; move the old one first.
+    migrate::migrate_roaming_data();
     eframe::run_native(
-        APP_NAME,
+        DATA_DIR_NAME,
         options,
         Box::new(move |cc| {
             let canvas: Box<dyn CanvasView> = match cc.wgpu_render_state.as_ref() {
@@ -91,8 +106,9 @@ pub fn run() -> eframe::Result {
 }
 
 /// The per-user folder for data the app keeps for itself, such as unsaved
-/// new projects: `%LOCALAPPDATA%\NovoElectric` on Windows. Never a
-/// system-wide location, so no admin rights are needed.
+/// new projects: `%LOCALAPPDATA%\NovoElectric` on Windows. It keeps the old name because
+/// `scripts\run-latest.ps1` and `scripts\build-local.ps1` keep the experimental builds
+/// there. Never a system-wide location, so no admin rights are needed.
 fn data_dir() -> Option<std::path::PathBuf> {
     use std::path::PathBuf;
     let env = |name| {
@@ -107,7 +123,7 @@ fn data_dir() -> Option<std::path::PathBuf> {
     } else {
         env("XDG_DATA_HOME").or_else(|| env("HOME").map(|h| h.join(".local/share")))?
     };
-    Some(base.join(APP_NAME))
+    Some(base.join(LEGACY_DATA_DIR_NAME))
 }
 
 #[cfg(test)]

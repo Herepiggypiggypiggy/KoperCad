@@ -1,16 +1,19 @@
 //! Writes an HTML page showing every built-in symbol, for visual review.
 //!
-//! `cargo run -p novo-symbols --example gallery -- gallery.html`
+//! `cargo run -p novo-symbols --example gallery -- gallery.html [iec|nfpa]`
 
 use std::fmt::Write as _;
 
-use novo_symbols::{Library, SvgOptions, to_svg};
+use novo_symbols::{Library, Pack, SvgOptions, to_svg};
 
 fn main() {
     let out = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "symbol-gallery.html".into());
-    let lib = Library::builtin().expect("built-in library loads");
+    let pack = std::env::args().nth(2).map_or(Pack::Iec, |id| {
+        Pack::from_id(&id).expect("pack is iec or nfpa")
+    });
+    let lib = Library::builtin_pack(pack).expect("built-in library loads");
     let options = SvgOptions::default();
 
     let mut html = String::from(

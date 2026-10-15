@@ -26,6 +26,7 @@
 //! | [`TerminalUse`](ProblemKind::TerminalUse) | warning, error for a wrong potential or a one-sided fuse terminal | A terminal used against its kind (novo-terminals' checks) |
 //! | [`Plc`](ProblemKind::Plc) | warning, error where the I/O list would be wrong | A PLC card or channel that cannot be addressed or wired as drawn (novo-plc's checks) |
 //! | [`WireOverlap`](ProblemKind::WireOverlap) | warning | Two wires on a page sharing a stretch of line |
+//! | [`OpenWire`](ProblemKind::OpenWire) | warning | A wire with an open end that is connected to nothing |
 //! | [`MissingPart`](ProblemKind::MissingPart) | info | A device or cable without a part |
 //!
 //! Not checked here:
@@ -127,11 +128,14 @@ pub enum ProblemKind {
     /// come from imports, scripts and undo or redo. Wires leaving one pin
     /// together may share the stretch from that pin.
     WireOverlap,
+    /// A wire with an open end (`wire.open`, DESIGN.md §4): an end connected
+    /// to nothing. Open ends are allowed while sketching; they join no net.
+    OpenWire,
 }
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 16] = [
+    pub const ALL: [ProblemKind; 17] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -148,6 +152,7 @@ impl ProblemKind {
         ProblemKind::UndersizedWire,
         ProblemKind::MissingPart,
         ProblemKind::WireOverlap,
+        ProblemKind::OpenWire,
     ];
 
     pub fn severity(self) -> Severity {
@@ -166,6 +171,7 @@ impl ProblemKind {
             | ProblemKind::CableCore
             | ProblemKind::TerminalUse
             | ProblemKind::WireOverlap
+            | ProblemKind::OpenWire
             | ProblemKind::Plc => Severity::Warning,
             ProblemKind::MissingPart => Severity::Info,
         }
@@ -190,6 +196,7 @@ impl ProblemKind {
             ProblemKind::TerminalUse => "Terminal use",
             ProblemKind::Plc => "PLC",
             ProblemKind::WireOverlap => "Wires overlap",
+            ProblemKind::OpenWire => "Open wire end",
         }
     }
 }
@@ -297,6 +304,7 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     checks::terminal_use(&cx, netlist, &mut problems);
     checks::plc(&cx, &mut problems);
     checks::wire_overlaps(&cx, &mut problems);
+    checks::open_wires(&cx, &mut problems);
     cx.sort(&mut problems);
     problems
 }
@@ -485,6 +493,7 @@ impl<'a> Context<'a> {
                 format!("{}:{name}", self.symbol_label(s))
             }
             Endpoint::Junction { .. } => "a junction".to_owned(),
+            Endpoint::Free { .. } => "an open end".to_owned(),
         }
     }
 }

@@ -240,7 +240,7 @@ pub enum CatalogError {
         path: PathBuf,
         source: serde_json::Error,
     },
-    #[error("the parts catalog {path} was written by a newer NovoElectric (format {found})")]
+    #[error("the parts catalog {path} was written by a newer KoperCAD (format {found})")]
     TooNew { path: PathBuf, found: u32 },
 }
 
@@ -510,14 +510,24 @@ impl FromIterator<CatalogPart> for Catalog {
     }
 }
 
-/// Where the user's own parts catalog lives: `%APPDATA%\NovoElectric\parts.json`
-/// on Windows, `$XDG_DATA_HOME/novoelectric/parts.json` (or
+/// Where the user's own parts catalog lives: `%APPDATA%\KoperCAD\parts.json`
+/// on Windows (the app moves it there from the old `NovoElectric` folder at
+/// start; until then the old file is used), `$XDG_DATA_HOME/novoelectric/parts.json` (or
 /// `~/.local/share/...`) elsewhere. Always inside the user's profile, so it
 /// is writable without admin rights. `None` if no profile folder is known.
 pub fn user_catalog_path() -> Option<PathBuf> {
     let var = |name: &str| std::env::var_os(name).filter(|v| !v.is_empty());
     if cfg!(windows) {
-        var("APPDATA").map(|dir| PathBuf::from(dir).join("NovoElectric").join("parts.json"))
+        var("APPDATA").map(|dir| {
+            let dir = PathBuf::from(dir);
+            let new = dir.join("KoperCAD").join("parts.json");
+            let old = dir.join("NovoElectric").join("parts.json");
+            if !new.exists() && old.exists() {
+                old
+            } else {
+                new
+            }
+        })
     } else {
         var("XDG_DATA_HOME")
             .map(PathBuf::from)

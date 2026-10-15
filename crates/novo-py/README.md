@@ -1,6 +1,6 @@
-# novoelectric (Python API)
+# kopercad (Python API)
 
-Open, edit and save NovoElectric project files from Python, headless. Every
+Open, edit and save KoperCAD project files from Python, headless. Every
 call is one command and one undo step, the same commands the app runs.
 
 ## Build and install (no admin rights)
@@ -33,7 +33,7 @@ behind the `python` feature, which maturin turns on.
 ## Example
 
 ```python
-import novoelectric as ne
+import kopercad as ne
 
 with ne.Project.create("dol.novo", name="DOL starter", overwrite=True) as p:
     page = p.add_page("1", "Main circuit")
@@ -50,7 +50,7 @@ with ne.Project.create("dol.novo", name="DOL starter", overwrite=True) as p:
 
 - Queries: `info()`, `pages()`, `devices()`, `symbols()`, `wires()`,
   `potentials()`, `terminals()`, `nets()`, `device(tag)`, `to_json()`;
-  `novoelectric.symbols()` lists the symbol library.
+  `kopercad.symbols()` lists the symbol library.
 - Parts and reports: `add_part(manufacturer, order_number, ...)`,
   `assign_part(device, part)`, `report("bom")` (also `toc`, `devices`,
   `wires`) as data, `export_bom("bom.xlsx")` and
@@ -58,7 +58,7 @@ with ne.Project.create("dol.novo", name="DOL starter", overwrite=True) as p:
   export is never written over a project file.
 - Any model command in its JSON form: `p.execute({"command": "add_page",
   "name": "3"})`; a `{"command": "batch", ...}` is one undo step.
-- Errors raise `novoelectric.NovoError`; a refused call changes nothing.
+- Errors raise `kopercad.KoperError` (also available as `NovoError`); a refused call changes nothing.
 - `create` and `save_as` refuse an existing file unless `overwrite=True`.
 - A file stays locked against the app while it is open in a script. A file
   with unrecovered work from a crashed app session is refused by `open`,
