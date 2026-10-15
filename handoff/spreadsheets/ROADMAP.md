@@ -13,7 +13,7 @@ no Excel install, no admin. Design: `docs/design/spreadsheets.md`.
 2. App dialog: File menu export, import with preview table and conflict choice.
 3. Cable cores sheet (core name, cross-section, shield; key = cable Id + core index).
 4. New rows (add devices/terminals) with an explicit "add new rows" switch.
-5. Rejected rows written as a workbook to fix and re-import.
+5. (done, PR 2) Rejected rows written as a workbook to fix and re-import.
 6. Python: `project.export_sheets()` / `import_sheets()` in novo-py.
 
 ## Open questions

@@ -5,12 +5,19 @@
 //! project model, so they are tested headless. The renderer (`gpu` feature) and the egui widget come in the next pull
 //! requests.
 
+#[cfg(feature = "model")]
+pub mod build;
 pub mod camera;
+pub mod cube;
 pub mod cull;
 pub mod demo;
+pub mod feel;
+pub mod governor;
+pub mod labels;
 pub mod look;
 pub mod math;
 pub mod mesh;
+pub mod palette;
 pub mod pick;
 pub mod scene;
 pub mod view_state;
