@@ -1478,3 +1478,88 @@ fn dragging_a_selection_box_reports_how_many_it_would_take() {
     d.frame();
     assert_eq!(band(&mut d), None, "gone when released");
 }
+
+#[test]
+fn link_joins_a_contact_to_a_coil_by_tags_or_by_selection() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let inspector = || ctx.memory(|m| m.area_rect(egui::Id::new("inspector")));
+    let k = d.place("km3", 80.0, 96.0);
+    d.editor_leave();
+    d.app.canvas.schematic().unwrap().canvas.selection.clear();
+    d.frame();
+    d.frame();
+    let layer = egui::LayerId::new(egui::Order::Middle, egui::Id::new("inspector"));
+    let shown = |ctx: &egui::Context| ctx.memory(|m| m.areas().visible_last_frame(&layer));
+    assert!(!shown(&ctx), "nothing selected, no inspector");
+
+    d.select(k);
+    d.frame();
+    assert!(shown(&ctx), "{:?}", inspector());
+    let device = novo_editor::edit::device_of(d.doc().project(), AnyId::Symbol(k)).unwrap();
+    let before = d
+        .doc()
+        .project()
+        .device(device)
+        .unwrap()
+        .description
+        .clone();
+
+    // Type into the description and press Enter.
+    ctx.memory_mut(|m| m.request_focus(egui::Id::new("inspector_description")));
+    d.frame();
+    d.frame_with(vec![
+        egui::Event::Key {
+            key: egui::Key::A,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::COMMAND,
+        },
+        egui::Event::Text("Pump contactor".into()),
+    ]);
+    d.key(egui::Key::Enter, egui::Modifiers::NONE);
+    d.frame();
+    let now = d
+        .doc()
+        .project()
+        .device(device)
+        .unwrap()
+        .description
+        .clone();
+    assert_eq!(now, "Pump contactor");
+
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(
+        d.doc().project().device(device).unwrap().description,
+        before
+    );
+    let coil = d.place("coil", 200.0, 144.0);
+    let contact = d.place("no", 320.0, 144.0);
+    let (coil_tag, contact_tag) = (d.tag_of(coil), d.tag_of(contact));
+    assert_ne!(coil_tag, contact_tag);
+    let last = |d: &Drive| d.app.messages().last().map(|m| m.text.clone()).unwrap();
+
+    // A bare link with nothing selected asks for the two.
+    d.app.run_command(&ctx, "xref.link", None);
+    assert!(last(&d).contains("Pick the contact"), "{}", last(&d));
+    // The tags name them: the contact joins the coil's device.
+    let depth = d.doc().undo_depth();
+    d.app.run_command(
+        &ctx,
+        "xref.link",
+        Some(&format!("{contact_tag} {coil_tag}")),
+    );
+    assert_eq!(last(&d), "Linked");
+    assert_eq!(d.tag_of(contact), coil_tag);
+    assert_eq!(d.doc().undo_depth(), depth + 1);
+    // Again: a refusal reads in plain words and changes nothing.
+    d.app
+        .run_command(&ctx, "xref.link", Some(&format!("{coil_tag} {coil_tag}")));
+    assert!(!last(&d).is_empty() && last(&d) != "Linked", "{}", last(&d));
+    assert_eq!(d.doc().undo_depth(), depth + 1);
+}
