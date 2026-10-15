@@ -2538,3 +2538,22 @@ fn the_project_standard_defaults_to_iec_and_shows_in_the_title() {
     assert_eq!(d.app.standard(), Pack::Iec);
     assert!(!d.app.window_title.contains("NFPA"));
 }
+
+#[test]
+fn export_tables_writes_a_workbook_and_never_replaces_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    assert!(super::workbench::app_runs("export.sheet"));
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let file = dir.path().join("Plant.novo");
+    assert!(d.app.save_to(&file));
+    d.app.run_command(&ctx, "export.sheet", None);
+    let first = dir.path().join("Plant tables.xlsx");
+    let bytes = std::fs::read(&first).expect("workbook written beside the project");
+    assert!(bytes.starts_with(b"PK"), "an xlsx file is a zip");
+    d.app.run_command(&ctx, "export.sheet", None);
+    assert!(dir.path().join("Plant tables 2.xlsx").exists());
+    assert_eq!(std::fs::read(&first).unwrap(), bytes, "the first stays");
+}

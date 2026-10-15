@@ -679,6 +679,23 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.sheet",
+            "Export tables to Excel",
+            "Export",
+            &[
+                "spreadsheet",
+                "xlsx",
+                "devices",
+                "terminals",
+                "wires",
+                "cables",
+            ],
+            Needs::Project,
+        ),
+        &["export excel", "export spreadsheet", "excel"],
+    ),
+    verb(
+        cmd(
             "export.bom",
             "Export bill of materials",
             "Export",

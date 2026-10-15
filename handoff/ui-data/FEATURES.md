@@ -12,7 +12,7 @@ State as of 2026-10-15 19:00 UTC. "Engine" means code exists and tests pass but 
 | Parts browser | novo-parts | PR #429 (draft): Project menu > Libraries > Parts | menu entry appears with the command; Import is still "Open page" | Parts browser |
 | Part Import (one click) | novo-parts | not yet | Import flow PR 2 of the Parts browser thread | Parts browser |
 | Macro library | novo-parts macros (#405) | none | browser window + Place flow; design #396 | this thread |
-| Spreadsheet export | novo-interop sheets (#414) | none | Export > Spreadsheet… dialog (what to include, file) | this thread |
+| Spreadsheet export | novo-interop sheets (#414) | Export > Export tables to Excel, palette `export excel` (writes `<project> tables.xlsx` beside the project, never replaces one) | none until import preview exists | this thread |
 | Spreadsheet import | novo-interop sheets (#414) | none | Import > Spreadsheet… with preview of the plan (changes, conflicts), apply as one undo step | import dialog thread |
 | DXF export | novo-interop dxf | PR #385 (draft) | menu entry arrives with `export.dxf` | DXF/EPLAN interop |
 | DXF as page background | novo-interop dxf | PR #385 (draft) | controls in the page properties | DXF/EPLAN interop |

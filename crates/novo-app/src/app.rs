@@ -23,6 +23,7 @@ mod preferences;
 mod project_settings;
 mod reports;
 mod revisions;
+mod sheets;
 mod terminals;
 mod title_revisions;
 mod userkeymap;
