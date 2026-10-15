@@ -9,3 +9,4 @@
 2026-10-15 15:00 UTC #272 READY from both reviewers; merged main after #273.
 2026-10-15 15:00 UTC New… potential and wire override rows built (PR 'Potential New… and wire override'). Next: coil-to-contact coupling in the live view.
 2026-10-15 15:30 UTC Coil to contact coupling built (novo-sim settle + live view coil badges). PR open.
+2026-10-15 15:25 UTC Changeover contacts follow their coil (PR 'Live potentials: changeover contacts'). Next: timers.

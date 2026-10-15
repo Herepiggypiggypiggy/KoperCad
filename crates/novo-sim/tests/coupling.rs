@@ -130,3 +130,62 @@ fn a_forced_coil_drives_its_contacts_without_supply() {
     assert!(s.driven.contains(&c.seal) && s.driven.contains(&c.nc));
     assert!(!s.driven.contains(&c.start), "a push button has no coil");
 }
+
+#[test]
+fn a_changeover_contact_switches_between_its_two_sides() {
+    let mut doc = Document::default();
+    let ((coil, a, b), _) = doc
+        .transact("Draw", |tx| {
+            let page = tx.add_page("1")?;
+            let l1 = tx.add_potential("L1", PotentialKind::Line)?;
+            let k1 = tx.add_device(DeviceTag::product("K1"), "")?;
+            let dev = |main| SymbolRole::Device { device: k1, main };
+            let feed = put(
+                tx,
+                page,
+                "t/feed",
+                0.0,
+                SymbolRole::PotentialFeed { potential: l1 },
+            );
+            let coil = put(tx, page, "t/coil", 10.0, dev(true));
+            let co = tx
+                .place_symbol(
+                    page,
+                    "t/contact/changeover",
+                    Placement::at(Point::new(0.0, 20.0)),
+                    vec![
+                        Pin::new("11", 0.0, 0.0),
+                        Pin::new("12", 4.0, 8.0),
+                        Pin::new("14", -4.0, 8.0),
+                    ],
+                    dev(false),
+                )
+                .unwrap();
+            // Break side first, make side second, as the library lists them.
+            tx.update::<novo_core::SymbolInstance>(co, |s| {
+                s.pass_through = vec![vec![0, 1], vec![0, 2]]
+            })?;
+            let lamp_a = put(tx, page, "t/lamp", 30.0, SymbolRole::Unassigned);
+            let lamp_b = put(tx, page, "t/lamp", 40.0, SymbolRole::Unassigned);
+            tx.connect(Endpoint::pin(feed, 1), Endpoint::pin(co, 0))?;
+            tx.connect(Endpoint::pin(co, 1), Endpoint::pin(lamp_a, 0))?;
+            tx.connect(Endpoint::pin(co, 2), Endpoint::pin(lamp_b, 0))?;
+            Ok((coil, Endpoint::pin(lamp_a, 0), Endpoint::pin(lamp_b, 0)))
+        })
+        .unwrap();
+    let project = doc.project();
+    let netlist = project.netlist();
+    let none = BTreeSet::new();
+    let rest = settle(project, &netlist, &PoleState::all_open(), &none, &none);
+    assert!(rest.solution.of(&netlist, a).potential().is_some());
+    assert_eq!(rest.solution.of(&netlist, b), &Live::Dead);
+    let on = settle(
+        project,
+        &netlist,
+        &PoleState::all_open(),
+        &BTreeSet::from([coil]),
+        &none,
+    );
+    assert_eq!(on.solution.of(&netlist, a), &Live::Dead);
+    assert!(on.solution.of(&netlist, b).potential().is_some());
+}
