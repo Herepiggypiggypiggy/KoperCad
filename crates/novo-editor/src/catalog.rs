@@ -57,57 +57,20 @@ pub fn classify(symbol: &Symbol) -> SymbolClass {
     if f.starts_with("connectivity") || f.starts_with("earth") {
         return SymbolClass::Plain;
     }
-    if let Some(rest) = f.strip_prefix("contact.") {
-        // Operated by hand or by a process value: a device of its own.
-        if ["push", "key", "turn", "estop"].iter().any(|p| has(p)) {
-            return SymbolClass::Main { letter: "S" };
-        }
-        if ["position", "proximity", "pressure", "float", "temperature"]
-            .iter()
-            .any(|p| has(p))
-        {
-            return SymbolClass::Main { letter: "B" };
-        }
-        if has("thermal") {
-            return SymbolClass::Child { letter: "F" };
-        }
-        let _ = rest;
-        return SymbolClass::Child { letter: "K" };
+    let Some(letter) = letter_code(f) else {
+        return SymbolClass::Plain;
+    };
+    if f.starts_with("contact.") && !matches!(letter, "S" | "B") {
+        // Not operated by hand or by a process value: part of a device.
+        return SymbolClass::Child { letter };
     }
-    SymbolClass::Main {
-        letter: letter_code(f),
-    }
+    SymbolClass::Main { letter }
 }
 
-/// IEC 81346-2 letter code for a function type: the class of object a
-/// device of that function is (`K` processing signals, `M` providing
-/// mechanical energy, `F` protecting, `Q` switching energy, ...).
-pub fn letter_code(function: &str) -> &'static str {
-    let first = function.split('.').next().unwrap_or("");
-    match function {
-        "coil.valve" => return "M",
-        "protection.mpcb" | "protection.mcp" => return "Q",
-        "passive.capacitor" | "passive.capacitor.polarized" | "passive.capacitor.variable" => {
-            return "C";
-        }
-        "source.generator" => return "G",
-        _ => {}
-    }
-    match first {
-        "coil" | "plc" => "K",
-        "contact" => "K",
-        "motor" => "M",
-        "protection" => "F",
-        "switch" => "Q",
-        "signal" | "meter" => "P",
-        "terminal" | "connector" => "X",
-        "transformer" | "converter" => "T",
-        "sensor" => "B",
-        "source" => "G",
-        "load" => "E",
-        "passive" => "R",
-        _ => "A",
-    }
+/// IEC 81346-2 letter code for a function type, from the shared table in
+/// novo-symbols. `None` for symbols that are not devices of their own.
+pub fn letter_code(function: &str) -> Option<&'static str> {
+    novo_symbols::letter_code(function)
 }
 
 /// Short names that rank first in the insert search (DESIGN.md §4), on

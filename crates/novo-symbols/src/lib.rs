@@ -10,11 +10,13 @@
 //! assert_eq!(contact.connections.len(), 2);
 //! ```
 
+mod letter;
 mod library;
 mod svg;
 mod symbol;
 mod validate;
 
+pub use letter::{BreakerCode, ContactorCode, LetterRules, letter_code, letter_code_with};
 pub use library::{Library, LoadError};
 pub use svg::{SvgOptions, to_svg};
 pub use symbol::{
