@@ -28,8 +28,11 @@ Mockups (SVG, drawn with the real colour ramp and tokens, data synthetic):
    `warning`, `error`) are verdicts. A badge uses status colours with a dot and words, never colour alone.
    Copper stays "selected / active", so the ramp avoids a flat copper hue (it passes through coral and amber
    but never settles on `accent`).
-6. **One result, many faces.** The 2D Cabinet view and the 3D view read the same result structure
-   (section 8), so a number is the same everywhere.
+6. **One result, many faces.** The solver is a real 3D conjugate heat transfer and airflow simulation, so
+   the result is a volume. The 3D face shows it whole; the 2D plate view is a slice of the same volume.
+   Both read the same structure (section 8), so a number is the same everywhere.
+7. **Beautiful and readable before technical.** No debug plots: restrained colour, soft translucency, fine
+   lines, labels only where they help. A first-time user should understand the picture without a legend.
 
 ## 2. Where the user finds it
 
@@ -149,20 +152,68 @@ struct Grid3 { origin_mm: [f64; 3], cell_mm: [f64; 3], dims: [usize; 3] } // x r
 struct ScalarField { grid: Grid3, values: Vec<f32> }   // x fastest, then y, then z; NaN = solid
 struct VectorField { grid: Grid3, u: Vec<f32>, v: Vec<f32>, w: Vec<f32> }
 struct DeviceThermal { id: u64, loss_w: f64, surface_c: f64, hot_spot_c: f64, limit_c: Option<f64>, inlet_air_c: f64 }
+struct SurfaceField { id: u64 /* device or wall */, tris: Vec<[[f32; 3]; 3]>, temperature_c: Vec<f32>, flux_w_m2: Vec<f32> }  // per triangle, from the conjugate solid/fluid interface
 struct ThermalFrame { time_s: f64, temperature: ScalarField, velocity: Option<VectorField>,
-                      heat_flux: Option<VectorField>, devices: Vec<DeviceThermal> }
+                      heat_flux: Option<VectorField>, surfaces: Vec<SurfaceField>, devices: Vec<DeviceThermal> }
 struct ThermalResult { ambient_c: f64, frames: Vec<ThermalFrame>, steady: bool, converged: bool,
                        residual: f64, notes: Vec<String> }   // steady: one frame
+struct SolveProgress { level: u32, levels: u32, cells: u64, iteration: u64, residuals: Vec<f64> /* history, normalised */,
+                       target_residual: f64, elapsed_s: f64, eta_s: Option<f64>, preview: Option<ThermalResult> }
 ```
+
+`SolveProgress` is what a running solve publishes after each refinement level (and every few iterations):
+`preview` is the current field, on the grid of that level. The pictures accept any `ThermalResult`
+whatever its resolution, so a coarse preview and the final field are drawn by the same code.
 
 The plate view draws the slice at the device front plane (`z` where most device fronts sit, with a
 `Depth` control in the layer menu to look at the wall or the door side). Everything in sections 3 to 7 is
 computed from this and nothing else, so a result loaded from a file looks identical to a fresh one.
 
-## 9. The 3D face
+## 9. Progress and progressive refinement
 
-Same result, same ramp, same legend (see `3d-view.md` and `3d-look.md`; renderer #481). Plan, built after
-the 2D face is merged:
+A real solve takes seconds to minutes, so the view is alive while it runs:
+
+1. **Instant coarse preview.** The first level (a few thousand cells) arrives within a second; the map,
+   contours and badges draw at once, marked `Preview, level 1 of 4`, with the map slightly dimmed and no
+   callout numbers (they would be wrong digits). The picture is already the right shape.
+2. **Refinement replaces it.** Each finer level cross-fades into the previous one over 250 ms (instant with
+   reduced motion). Cell edges never show because the map is always interpolated (section 3). Callouts and
+   badges turn solid and show digits when the level is final or the change per level is under 0.5 K.
+3. **Progress indicator.** A slim bar in the header: level, cells, and a small residual sparkline on a log
+   axis with the target as a dashed line, `converged` when below it. Elapsed time and ETA in text. `Esc`
+   or the bar's cancel button stops the run and keeps the latest preview, labelled `Not converged`.
+4. **No jumping.** Colour range changes during a run ease (the legend range only grows while running, then
+   settles on the final value) so the picture does not flicker as the hot spot sharpens.
+5. A run never blocks the UI; the model can be edited, which marks the preview `Out of date`.
+
+## 10. The 3D face
+
+The main face for results. Same ramp, same legend (see `3d-view.md` and `3d-look.md`; renderer #481).
+Built after the 2D face is merged, in this order:
+
+1. **Device and wall surfaces** take the ramp colour of their solid-fluid interface temperature
+   (`SurfaceField`), smooth across each body, edges unchanged. Surface heat flux is a second mode of the
+   same colouring (`W/m²`, own legend) so the user sees where heat leaves a drive or the door.
+2. **Slice planes**: up to three planes (plate-parallel, vertical, horizontal), each draggable along its
+   normal with the mouse (a thin copper handle on the plane edge, `[` and `]` nudge 10 mm). Each plane shows
+   temperature as a ramp texture with contour lines, or speed as a second plane mode (a calm grey-blue ramp,
+   so temperature and speed are never confused), plus velocity direction ticks. While dragging, planes
+   re-slice live from the volume (CPU resample, under 2 ms for 200 000 cells).
+3. **Isosurfaces**: a translucent shell at a chosen temperature (default: the lowest device limit, or
+   ambient plus the allowed rise), 35% opacity, soft rim, depth-sorted; a second optional shell at a lower
+   level makes a "heat bloom" around the hot parts. A small slider on the legend moves the level.
+4. **Streamlines and tracers**: static streamlines drawn as thin tubes (seeded from inlets and above hot
+   devices, Jobard-Lefer in 3D, colour steel blue, width by speed), and an opt-in `Animate flow` that moves
+   short fading tracer particles (500 to 3000) along the 3D field. Off by default, stops when hidden,
+   30 fps cap, still when reduced motion is on. Tracers can be coloured by temperature (a second toggle)
+   to show the air heating up on its way.
+5. **Cut-away and focus**: Heat view hides the door and ghosts the shell; a device click isolates its
+   streamlines and shows its badge and the thermal inspector section.
+6. Badges and callouts are 2D overlays anchored to device screen positions, as on the plate.
+
+The renderer gets a small `HeatPlan` (layers, ramp, range, planes, iso levels); geometry for planes, shells
+and tubes is built by `novo-heatview` (marching cubes, slice resampling, 3D streamlines), not recomputed per
+face. The 2D plate view is the same pipeline with one slice plane locked to the plate side.
 
 1. Device surfaces take the ramp colour of `surface_c` (replacing the material colour while Heat is on, edges
    unchanged).
@@ -174,31 +225,32 @@ the 2D face is merged:
 5. Badges and callouts as 2D overlays anchored to device screen positions.
 
 The renderer gets a small `HeatPlan` (layers, ramp, range, plane positions); the pictures are built from
-the same `novo-heatview` data (section 10), not recomputed per face.
+the same `novo-heatview` data (section 11), not recomputed per face.
 
-## 10. Where the code goes
+## 11. Where the code goes
 
 - `novo_theme::heat`: the ramp, its lookup table, the diverging ramp and the status mapping (tokens).
 - `novo-heatview` (new crate, a pure engine with no UI dependency; to be registered by the coordinator):
-  field sampling, ramp lookup, contour lines, hot-spot detection, streamlines, particle advection, flux
-  lattice, compare (difference field, device table), range selection, a synthetic generator for tests and
-  the pre-engine demo. Fully unit tested.
+  field sampling, ramp lookup, slice resampling, contour lines, marching-cubes isosurfaces, hot-spot
+  detection, 2D and 3D streamlines, particle advection, flux lattice, progressive result blending, compare
+  (difference field, device table), range selection, a synthetic generator (3D, with refinement levels)
+  for tests and the pre-engine demo. Fully unit tested.
 - `novo-app` Cabinet view: the egui drawing of those primitives, layer chips, legend, badges, time bar,
   palette commands. Thin, as the rules ask.
 
-## 11. Build order
+## 12. Build order
 
 1. This page and the mockups. Result contract agreed with the physics thread.
 2. `novo_theme::heat` (ramp, LUT, tests for monotone lightness and contrast).
-3. `novo-heatview` engine from a synthetic field.
-4. Cabinet Heat view: map, contours, legend, badges, callouts, palette entries.
+3. `novo-heatview` engine from a synthetic 3D field with refinement levels.
+4. Cabinet Heat view (plate slice): map, contours, legend, badges, callouts, progress bar, palette entries.
 5. Airflow, flux, animation toggle.
-6. Time slider and compare.
-7. 3D face (after #481).
+6. 3D face on #481: surfaces, slice planes, isosurfaces, streamlines and tracers.
+7. Time slider and compare.
 
 Each step is its own pull request and names, in its description, where the user finds the feature.
 
-## 12. Open points
+## 13. Open points
 
 - Solver resolution decides the texture size: 150 by 100 cells is smooth with bicubic; below 60 by 40 we
   upsample first.
