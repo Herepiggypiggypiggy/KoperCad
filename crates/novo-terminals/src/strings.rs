@@ -258,6 +258,11 @@ pub fn rename_problem(new: &str, problem: crate::RenameProblem, taken_by: &str) 
     }
 }
 
+/// `page.column` as printed in lists (`3.4`, or `=A2/3.4` with a structure).
+pub fn place(location: &novo_core::Location) -> String {
+    location.qualified(&novo_core::DeviceTag::default())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -277,9 +282,4 @@ mod tests {
             "-X1:PE is named like a PE terminal but is an N terminal."
         );
     }
-}
-
-/// `page.column` as printed in lists (`3.4`, or `=A2/3.4` with a structure).
-pub fn place(location: &novo_core::Location) -> String {
-    location.qualified(&novo_core::DeviceTag::default())
 }
