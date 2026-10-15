@@ -110,6 +110,8 @@ becomes a fixture and a test.
    background (needs the WS-02 underlay decision), CLI/Python entry points.
 4. Excel round trip for the parts list and the I/O list (WS-24, after
    WS-17's PLC tag table export).
+5. Spreadsheet round trip for devices, terminals, wires and cables:
+   `docs/design/spreadsheets.md`, module `novo_interop::sheets`.
 
 ## 7. Out of scope here
 
