@@ -80,8 +80,6 @@ const TOP_BAR: f32 = 42.0;
 const OUTLINE_WIDTH: f32 = 248.0;
 /// Windows at least this wide pin the outline unless the user chose.
 const PIN_OUTLINE_FROM: f32 = 1700.0;
-/// Pages listed under "Recent" in the outline.
-const MAX_RECENT_PAGES: usize = 5;
 
 /// An action that replaces or closes the open project. Nothing asks first:
 /// the backend keeps the work (docs/DESIGN.md: no save prompts).
@@ -127,8 +125,6 @@ pub struct NovoApp {
     page_filter: String,
     /// Whether the outline files pages by page group or by panel.
     page_view: PageView,
-    /// Pages visited this session, newest first.
-    recent_pages: Vec<PageId>,
     /// Window width last frame, which decides whether the outline pins.
     window_width: f32,
 }
@@ -180,7 +176,6 @@ impl NovoApp {
             breadcrumb_link: None,
             page_filter: String::new(),
             page_view: PageView::Function,
-            recent_pages: Vec::new(),
             window_width: 0.0,
         }
     }
@@ -255,8 +250,6 @@ impl NovoApp {
                     .collect()
             })
             .unwrap_or_default();
-        self.recent_pages
-            .retain(|r| pages.iter().any(|(id, _)| id == r));
         if !pages.iter().any(|(id, _)| Some(*id) == self.current_page) {
             self.current_page = pages
                 .iter()
@@ -755,15 +748,12 @@ impl NovoApp {
             .unwrap_or(self.window_width >= PIN_OUTLINE_FROM)
     }
 
-    /// Shows `page` on the canvas and puts it first under "Recent".
+    /// Shows `page` on the canvas.
     fn show_page(&mut self, page: PageId) {
         if self.current_page != Some(page) {
             self.wb.sheet = 0;
         }
         self.current_page = Some(page);
-        self.recent_pages.retain(|&p| p != page);
-        self.recent_pages.insert(0, page);
-        self.recent_pages.truncate(MAX_RECENT_PAGES);
     }
 
     /// Shows sheet `sheet` of a generated page (0 for any other page).
@@ -985,22 +975,6 @@ impl NovoApp {
         egui::ScrollArea::vertical()
             .auto_shrink(false)
             .show(ui, |ui| {
-                if filter.is_empty() {
-                    let recent: Vec<_> = self
-                        .recent_pages
-                        .iter()
-                        .filter_map(|id| pages.iter().find(|r| r.page == *id))
-                        .collect();
-                    if !recent.is_empty() {
-                        section_label(ui, "Recent");
-                        for row in recent {
-                            if self.page_row(ui, row) {
-                                chosen = Some((row.page, row.sheet));
-                            }
-                        }
-                        ui.add_space(6.0);
-                    }
-                }
                 section_label(ui, "All pages");
                 let mut any = false;
                 let mut shown = DeviceTag::default();
@@ -2088,20 +2062,6 @@ mod tests {
         let app = app_with(MemoryBackend::default());
         assert!(!app.is_enabled(Action::ShowCabinet));
         assert!(app.is_enabled(Action::ShowSchematic));
-    }
-
-    #[test]
-    fn visited_pages_lead_the_recent_list_and_vanish_with_their_page() {
-        let ctx = themed_ctx();
-        let mut app = app_with(DirtyBackend::default());
-        app.run(&ctx, Action::NewProject);
-        let (one, two) = (app.pages()[0].0, app.pages()[1].0);
-        app.show_page(one);
-        app.show_page(two);
-        app.show_page(one);
-        assert_eq!(app.recent_pages, vec![one, two]);
-        app.run(&ctx, Action::Undo);
-        assert_eq!(app.recent_pages, vec![one]);
     }
 
     #[test]

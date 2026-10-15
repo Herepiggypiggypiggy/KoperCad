@@ -72,7 +72,6 @@ back. Scripts (WS-28) and the AI assistant (WS-23) use the same commands.
 | Pages Issues  |                                      hud  +------------+ |
 |       Changes |                                           | Inspector  | |
 | [filter =/+ ] |               canvas                      | (overlay,  | |
-| RECENT        |                                           |  pinnable) | |
 | ALL PAGES     |          [ tools | hint | proposals ]     +------------+ |
 +---------------+----------------------------------------------------------+
 | Terminals | Cables | Devices   (drawer, linked to the selection)      |
@@ -108,7 +107,7 @@ What the screen must do:
 
 **Outline (left, 248 px).** Pinned above 1700 px wide, a flyout below;
 pinned from its pin button or the "Pin outline" command. Three modes:
-- **Pages:** Recent, then All pages. The filter takes text and structure
+- **Pages:** All pages, grouped by function or location (no Recent list). The filter takes text and structure
   (`=A1`, `+CAB1`, `motor`): the 81346 tree filters pages rather than
   owning them, because one page can hold several functions.
 - **Issues:** problems and proposals in one sortable list with filter
@@ -1163,7 +1162,7 @@ Changes mode, WS-09 the PDF.
 | File/Edit/View menu bar | Windows applications | A second, worse index of commands |
 | Permanent command line and jargon commands | AutoCAD | Splits attention; our surface opens where you look and every form is pickable |
 | Status bar | Most CAD | Hint in the dock, coordinates in the HUD, checks in the pill |
-| Page tab strip | Most CAD | Fails at 500 pages; Recent does its job |
+| Page tab strip | Most CAD | Fails at 500 pages; the outline's filter and groups do its job |
 | Infinite canvas | Figma, Miro | IEC documentation is printed and referenced by page and column |
 | Floating panels everywhere | Figma-style tools | Weak spatial memory; only the dock and inspector float |
 | New-project wizards | Most CAD | A name and Enter; the rest is defaults and rules |
