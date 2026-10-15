@@ -416,9 +416,11 @@ teaches. Because companies differ here, each class has a rule sentence
 contactor rule recodes contactor coils and main contacts only; control
 relays and their auxiliary contacts stay K, as 81346-2 codes them.
 
-Letters follow the 2019 edition, which has no L or V class: inductors,
-filters, diodes and rectifiers are R (restricting a flow), transistors
-are K and thyristors and triacs Q (switching signals or energy). A PLC
+Letters follow the 2019 edition, which codes by purpose rather than by
+component type: inductors, filters, diodes and rectifiers are R
+(restricting a flow), transistors are K and thyristors and triacs Q
+(switching signals or energy), and the older V for semiconductors and L
+for inductors (DIN 40719, IEC 60750) are not used. A PLC
 and its I/O modules are K (processing signals), not A: A is for objects
 with several purposes, and K is also what the 2019 edition lists for a
 PLC. Panel builders used to the older V, L and A will see these change.
