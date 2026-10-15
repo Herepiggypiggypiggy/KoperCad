@@ -232,6 +232,23 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["compare"],
     ),
     cmd("file.quit", "Quit", "Project", &["exit"], Needs::Nothing),
+    verb(
+        cmd(
+            "file.import_dxf_background",
+            "Import DXF as background",
+            "Project",
+            &["underlay", "drawing", "dwg", "reference"],
+            Needs::Page,
+        ),
+        &["import dxf"],
+    ),
+    cmd(
+        "file.remove_background",
+        "Remove the DXF background",
+        "Project",
+        &["underlay", "dxf", "reference drawing"],
+        Needs::Page,
+    ),
     // Draw
     cmd(
         "tool.repeat",
@@ -699,6 +716,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["keys", "help", "overlay"],
         Needs::Nothing,
     ),
+    cmd(
+        "view.background",
+        "Show or hide the DXF background",
+        "View",
+        &["underlay", "dxf", "reference drawing"],
+        Needs::Page,
+    ),
     // Check
     verb(
         cmd(
@@ -725,6 +749,23 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     // Export
+    verb(
+        cmd(
+            "export.dxf_page",
+            "Export this page as DXF",
+            "Export",
+            &["cad", "autocad"],
+            Needs::Page,
+        ),
+        &["export dxf"],
+    ),
+    cmd(
+        "export.dxf_all",
+        "Export all pages as DXF",
+        "Export",
+        &["cad", "autocad"],
+        Needs::Project,
+    ),
     verb(
         cmd(
             "export.pdf",
