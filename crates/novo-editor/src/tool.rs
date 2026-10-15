@@ -165,6 +165,24 @@ fn pin_of(target: Target) -> Option<Endpoint> {
 const SELF_OVERLAP_NOTICE: &str = "A line cannot run back over the wire";
 
 /// The reason shown when a line would lie over another wire.
+/// What giving `device` the tag `tag` of another device would link: the
+/// symbols of `device` and the first symbol of the device that has the tag
+/// (its coil, when it has one). `None` when there is nothing to link.
+fn link_plan(
+    project: &Project,
+    device: DeviceId,
+    tag: &DeviceTag,
+) -> Option<(Vec<SymbolId>, SymbolId)> {
+    let other = *project.devices_by_tag(tag).iter().find(|&&d| d != device)?;
+    let mine: Vec<SymbolId> = project
+        .symbols_of_device(device)
+        .iter()
+        .map(|s| s.id)
+        .collect();
+    let partner = project.symbols_of_device(other).first().map(|s| s.id)?;
+    (!mine.is_empty()).then_some((mine, partner))
+}
+
 fn overlap_notice(_refusal: &Refusal) -> String {
     "Overlaps another wire".into()
 }
@@ -1150,7 +1168,14 @@ impl Editor {
             return Ok(());
         }
         if let Some(reason) = tag_conflict(doc.project(), device, &tag) {
-            return Err(reason);
+            // A contact given its coil's tag joins the coil's device.
+            return match link_plan(doc.project(), device, &tag) {
+                Some((mine, partner)) => self
+                    .check_link(doc.project(), &mine, partner)
+                    .map_err(|why| format!("{reason}: {why}"))
+                    .and_then(|()| self.link_contacts(doc, &mine, partner, &tag)),
+                None => Err(reason),
+            };
         }
         let result = doc.transact(format!("Rename {old} to {tag}"), |tx| {
             edit::rename(tx, device, tag)
@@ -1162,6 +1187,66 @@ impl Editor {
             }
             Err(e) => Err(e.to_string()),
         }
+    }
+
+    /// Links each of `mine` to `partner`'s device as one undo step ("Linked
+    /// to -K1"), or says in plain words why it cannot, changing nothing.
+    pub fn link_contacts(
+        &mut self,
+        doc: &mut Document,
+        mine: &[SymbolId],
+        partner: SymbolId,
+        tag: &DeviceTag,
+    ) -> Result<(), String> {
+        self.check_link(doc.project(), mine, partner)?;
+        let result = doc.transact(format!("Link to {tag}"), |tx| {
+            for &s in mine {
+                let old = tx.project().symbol(s).and_then(SymbolInstance::device);
+                let command =
+                    novo_xref::link_command(tx.project(), self.catalog.library(), s, partner)
+                        .map_err(|e| novo_core::ModelError::Refused {
+                            what: "link".into(),
+                            reason: e.to_string(),
+                        })?;
+                tx.execute(command)?;
+                // The contact's own device is left empty (placing gave it a
+                // description, which keeps the link from removing it).
+                if let Some(old) = old
+                    && tx.project().referrers(old).next().is_none()
+                    && tx
+                        .project()
+                        .device(old)
+                        .is_some_and(|d| d.parts.is_empty() && d.properties.is_empty())
+                {
+                    tx.execute(novo_core::Command::Remove {
+                        id: AnyId::Device(old),
+                    })?;
+                }
+            }
+            Ok(())
+        });
+        match result {
+            Ok((_, changes)) => {
+                self.changes.merge(&changes);
+                self.notice = Some(format!("Linked to {tag}"));
+                Ok(())
+            }
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    /// Whether `mine` can be linked to `partner`, as the reason if not.
+    fn check_link(
+        &self,
+        project: &Project,
+        mine: &[SymbolId],
+        partner: SymbolId,
+    ) -> Result<(), String> {
+        for &s in mine {
+            novo_xref::link_command(project, self.catalog.library(), s, partner)
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(())
     }
 
     /// Checks what the user is typing as a new tag, for live feedback in
@@ -1181,7 +1266,12 @@ impl Editor {
         if tag != old
             && let Some(reason) = tag_conflict(doc.project(), device, &tag)
         {
-            return Err(reason);
+            return match link_plan(doc.project(), device, &tag) {
+                Some((mine, partner)) => {
+                    self.check_link(doc.project(), &mine, partner).map(|()| tag)
+                }
+                None => Err(reason),
+            };
         }
         Ok(tag)
     }
