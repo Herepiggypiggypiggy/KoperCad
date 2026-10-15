@@ -63,3 +63,8 @@
 2026-10-15 07:55 UTC #169 folded in: reviewer items 1-9, Layout chip/refusal feedback, main reviewer (a)(b)(c); wiring thread agreed to close #168
 2026-10-15 08:00 UTC #169: dropped wire merging (reviewer: nudge/refuse any wire), nudge preview note; wiring thread cut #168 to engine plan
 2026-10-15 08:10 UTC #169: interactive moves are refused like corners (Tadjiro's words), scripts/AI/undo/open accept+report; decision row moved to §8
+2026-10-15 08:15 UTC #169 READY at 387f0b3 (design); my re-wrap d325e29 followed, asked reviewer to reconfirm on d325e29. Lead asked #168 as base; asked lead to confirm #169 stays DESIGN PR. No more pushes to #169.
+2026-10-15 08:20 UTC Lead confirmed #169 DESIGN PR + #168 engine plan; both need main reviewer READY on current head. Sent heads (#169 d325e29, #168 9754caf) to main reviewer. Feature threads told after both merge.
+2026-10-15 08:25 UTC Layout's dock mock is PR #174 (docs/design/wiring-dock.png, a1f6e0a). #169 is READY so no push; link it from DESIGN in a follow-up after #169 and #174 merge, and give it to WS-01.
+2026-10-15 08:30 UTC #169 READY from main reviewer on d325e29 too. Follow-up DESIGN PR after merge: end-segment stretch adds a bend if pin leaves axis; R does nothing in Lines; link Layout's mock (#174). Then tell WS-06/03/01/08/02 to build.
+2026-10-15 08:35 UTC #169 merged. Follow-up DESIGN PR: end-segment bend and R in Lines.
