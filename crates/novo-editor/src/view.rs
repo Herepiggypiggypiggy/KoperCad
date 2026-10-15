@@ -172,6 +172,9 @@ pub struct SchematicView {
     revisions: Option<TitleRevisions>,
     /// `revisions` changed since it was last handed to the scene.
     revisions_dirty: bool,
+    /// The background drawing of the shown page and the key it was made for.
+    underlay: Option<(u64, novo_canvas::model::Underlay)>,
+    underlay_dirty: bool,
     /// What "Show where it goes" lit up, with the selection it was shown
     /// for; any change of selection puts it out.
     where_shown: Option<(Vec<ItemId>, Vec<ItemId>)>,
@@ -284,6 +287,8 @@ impl SchematicView {
             sheet_dirty: false,
             revisions: None,
             revisions_dirty: false,
+            underlay: None,
+            underlay_dirty: false,
             where_shown: None,
         }
     }
@@ -333,6 +338,22 @@ impl SchematicView {
             self.revisions = revisions;
             self.revisions_dirty = true;
         }
+    }
+
+    /// The background drawing (an imported DXF) under the shown page.
+    /// `key` identifies what `make` would build (`None`: no background); the
+    /// drawing is only built when the key changes, so this is cheap to call
+    /// every frame.
+    pub fn set_underlay(
+        &mut self,
+        key: Option<u64>,
+        make: impl FnOnce() -> Option<novo_canvas::model::Underlay>,
+    ) {
+        if key == self.underlay.as_ref().map(|(k, _)| *k) {
+            return;
+        }
+        self.underlay = key.zip(make());
+        self.underlay_dirty = true;
     }
 
     /// The sheet the page scene draws inside the frame, if any.
@@ -540,6 +561,13 @@ impl SchematicView {
             self.notes_dirty = true;
             self.sheet_dirty = true;
             self.revisions_dirty = true;
+            self.underlay_dirty = true;
+        }
+        if self.underlay_dirty
+            && let Some(scene) = &mut self.scene
+        {
+            scene.set_underlay(self.underlay.as_ref().map(|(_, u)| u.clone()));
+            self.underlay_dirty = false;
         }
         if self.revisions_dirty
             && let Some(scene) = &mut self.scene

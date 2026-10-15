@@ -234,6 +234,27 @@ pub const DUTCH: &[Aliases] = &[
     nl("check.problems", &["problemen", "fouten"], &["controles"]),
     nl("check.next_problem", &[], &["volgend probleem"]),
     nl("check.previous_problem", &[], &["vorig probleem"]),
+    nl(
+        "file.import_dxf_background",
+        &["importeer dxf"],
+        &["achtergrond", "onderlegger", "tekening"],
+    ),
+    nl(
+        "view.background",
+        &[],
+        &["achtergrond tonen", "achtergrond verbergen", "dxf"],
+    ),
+    nl(
+        "file.remove_background",
+        &[],
+        &["achtergrond verwijderen", "dxf"],
+    ),
+    nl(
+        "export.dxf_page",
+        &["exporteer dxf"],
+        &["cad", "autocad", "pagina"],
+    ),
+    nl("export.dxf_all", &[], &["alle paginas", "cad", "autocad"]),
     // Export
     nl(
         "export.pdf",

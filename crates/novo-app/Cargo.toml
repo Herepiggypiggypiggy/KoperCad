@@ -25,6 +25,7 @@ novo-workflow.workspace = true
 novo-xref.workspace = true
 novo-parts.workspace = true
 novo-pdf.workspace = true
+novo-interop.workspace = true
 novo-reports.workspace = true
 novo-checks.workspace = true
 novo-terminals.workspace = true
