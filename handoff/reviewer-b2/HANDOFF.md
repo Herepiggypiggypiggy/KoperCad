@@ -22,3 +22,8 @@ Next: re-review #327 and #323 when the lead sends new heads; review newly opened
 - Open: #327, #323 (waiting on authors). Re-review #461, #469, #472, #478, #463, #475 when new heads come.
 - Lessons: check `git merge-tree --write-tree origin/main refs/review/prN` BEFORE saying READY (I retracted #478 once). Never `pkill -f` with a pattern that appears in my own command line (killed my shell twice). Do not run two chains on the same target dir.
 - Scripts: scratchpad run2.sh (workspace checks, own target per PR), run3.sh (novo-app only, shared target), run5.sh (novo-view3d only).
+
+## Update 2026-10-15 20:00Z (stopped at the session limit)
+- Also READY: #430 3ff277c, #478 24ef928, #461 4ce992b, #472 f573b85, #502 e9f1746, #511 b0fe799, #463 afb185d, #518 5564b32, #529 d50709a.
+- Not yet reviewed on current heads: #514 db12e60, #472 2c2274a, #469 5fb21e9, #463 c2edddd, #475 f022249, #532 08f4461, #535 b7e5fff, #496, #531, #433 (needs rebase), #406/#409 (need rebase; helper found no code bugs), #508, #487, #490, #493, #499, #449, #489, #379 (three helper agents may have posted; check GitHub reviews).
+- Main was red on novo-interop clippy (Parsed enum); #529 fixes it.
