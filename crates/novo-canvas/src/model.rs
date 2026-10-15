@@ -1780,16 +1780,27 @@ fn strip_heads(project: &Project, page: PageId) -> HashMap<SymbolId, String> {
             }
             i
         }
+        // Neighbours come from a grid of STRIP_RUN_GAP cells, so a long
+        // column of terminals costs a few comparisons each, not all pairs.
+        let cell = |p: Point| {
+            (
+                (p.x / STRIP_RUN_GAP).floor() as i64,
+                (p.y / STRIP_RUN_GAP).floor() as i64,
+            )
+        };
+        let mut grid: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+        for (i, (p, _)) in syms.iter().enumerate() {
+            grid.entry(cell(*p)).or_default().push(i);
+        }
         for i in 0..syms.len() {
-            for j in i + 1..syms.len() {
-                // Sorted by x: nothing further right can be near either.
-                if syms[j].0.x - syms[i].0.x > STRIP_RUN_GAP {
-                    break;
-                }
-                if near(syms[i].0, syms[j].0) {
-                    let (a, b) = (root(&mut run, i), root(&mut run, j));
-                    // The earlier terminal stays the root, so it heads the run.
-                    run[a.max(b)] = a.min(b);
+            let (cx, cy) = cell(syms[i].0);
+            for (dx, dy) in (-1..=1).flat_map(|dx| (-1..=1).map(move |dy| (dx, dy))) {
+                for &j in grid.get(&(cx + dx, cy + dy)).into_iter().flatten() {
+                    if j > i && near(syms[i].0, syms[j].0) {
+                        let (a, b) = (root(&mut run, i), root(&mut run, j));
+                        // The earlier terminal stays the root, so it heads the run.
+                        run[a.max(b)] = a.min(b);
+                    }
                 }
             }
         }
