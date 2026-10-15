@@ -405,6 +405,29 @@ pub fn dismiss_suggestion(tx: &mut Tx<'_>, wire: WireId) -> Result<()> {
     tx.dismiss(DISMISS_KEY, vec![wire.into()]).map(|_| ())
 }
 
+/// Moves declines kept by older files as the wire property
+/// [`DISMISS_KEY`]` = false` onto `Dismissal` records and removes the
+/// property. Returns whether anything changed; one undo step. Until it runs,
+/// the property is still read as a decline.
+pub fn migrate_legacy_dismissals(tx: &mut Tx<'_>) -> Result<bool> {
+    let wires: Vec<(WireId, bool)> = tx
+        .project()
+        .wires()
+        .filter_map(|w| {
+            w.properties
+                .get(DISMISS_KEY)
+                .map(|v| (w.id, matches!(v, Value::Bool(false))))
+        })
+        .collect();
+    for &(wire, declined) in &wires {
+        if declined {
+            tx.dismiss(DISMISS_KEY, vec![wire.into()])?;
+        }
+        tx.set_property(wire, DISMISS_KEY, None)?;
+    }
+    Ok(!wires.is_empty())
+}
+
 /// Forgets a declined suggestion on a wire.
 pub fn restore_suggestion(tx: &mut Tx<'_>, wire: WireId) -> Result<()> {
     if let Some(record) = tx.project().dismissal(DISMISS_KEY, &[wire.into()]) {

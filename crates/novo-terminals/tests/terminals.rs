@@ -1176,6 +1176,22 @@ fn the_side_with_a_strip_is_the_cabinet_and_dismissals_stick() {
     doc.transact("Restore", |tx| restore_suggestion(tx, wires[0]))
         .unwrap();
     assert_eq!(suggest_terminals(doc.project()).len(), 2);
+    // Migrating moves it onto a Dismissal record and drops the property.
+    doc.transact("Old decline", |tx| {
+        tx.set_property(wires[0], DISMISS_KEY, Some(Value::Bool(false)))
+    })
+    .unwrap();
+    let (changed, _) = doc.transact("Migrate", migrate_legacy_dismissals).unwrap();
+    assert!(changed);
+    let w = doc.project().wire(wires[0]).unwrap();
+    assert!(!w.properties.contains_key(DISMISS_KEY));
+    assert!(
+        doc.project()
+            .is_dismissed(DISMISS_KEY, &[novo_core::AnyId::from(wires[0])])
+    );
+    assert_eq!(suggest_terminals(doc.project()).len(), 1);
+    let (changed, _) = doc.transact("Migrate", migrate_legacy_dismissals).unwrap();
+    assert!(!changed);
 }
 
 #[test]
