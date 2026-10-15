@@ -3,6 +3,17 @@
 For a fresh cloud session that takes over as **integration lead**: the role that coordinates the threads and merges PRs.
 Last updated 2026-10-14 17:17 UTC (final from the first lead session) by the integration lead (session_011PfTJ1QaP1JQJPwXcFnxBE).
 
+## 0f. State at 2026-10-15 19:20 UTC (integration lead A)
+
+- Two merge leads now. Lead A (this thread) merges even PR numbers, lead B (cse_011NKUp2tgBn8uVWK6WHsc7k) odd ones and retargets stacked PRs. Reviewers: main A/B/C by number mod 3, design reviewers 0114/01WP/C by number mod 3 (routing in coordination/threads.md).
+- Tadjiro decided "Menu and status bar": #438 (workspaces, menus, status bar) merged. Reports workspace is Ctrl+4, the Reports hub (#452) is its content (no Ctrl+6).
+- Build 5 = main f7a76cd (run 598). No further build until he asks.
+- Main was red for ~10 min after #447 + #458 (switch.rs test assumed an IEC symbol without an NFPA twin); fixed by #476. Lesson: when two PRs touch the same assumption, merge the second only after CI on current main. Clean run of main 4e16929: 1449 passed, 0 failed.
+- Merged since 0e: #403, #415, #447, #456, #458, #396, #462, #446, #388, #468, #474, #476, #422, #428, #438, #448, #450, #460, #480, #436, #466. Registered crates: novo-view3d, novo-commissioning, novo-learn.
+- Open (even, mine): #440, #452, #464, #470, #477, #406, #430, #412, #442, #416, #455, #482, #484.
+- Follow-up owed: #448 design edits (49673e4) as a new PR from main; #491 handoff docs.
+- Disk: cloud test runs need CARGO_PROFILE_DEV_DEBUG=0 and a single target dir; the container fills up otherwise.
+
 ## 0e. State at 2026-10-15 16:40 UTC (integration lead)
 - **Main** has about 1022 tests passing (lead's combined local run); product KoperCAD. **No build is planned** until Tadjiro asks; Release is idle and must not dispatch one. Windows hands-on checklist: `docs/WINDOWS-CHECK.md`.
 - **Merged since 10:40 UTC (UI and engine):** wheel and table, wire corners and parts, Corners/Lines modes with plain drag moving only the component (Shift+M carries wires, Moving preference), terminals (strips, multi-pole drag, connect/disconnect, bridge bar per run), potentials and PE menus, live potentials (Shift+L, hover, timers with seconds left, theme tokens), Show where it goes (lights the potential), coil/contact coupling, Auto connections preference, pages navigator with groups/panels, contents list with panels, inline page rename (additive `Command::RenamePage`, accepted by the lead), feed numbering L1/L2/L3, Tab/Q while wiring, revisions (Issue window, title block fields, Changes mode), cabinet layout design and `novo-layout` geometry engine, data-folder migration to KoperCAD names, `kopercad.exe` with compat copy, Python module `kopercad` with `novoelectric` shim.

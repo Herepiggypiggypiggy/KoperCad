@@ -51,7 +51,7 @@ pub(crate) fn today() -> String {
 }
 
 /// The civil date of a day count since 1970-01-01.
-fn iso_date(days: i64) -> String {
+pub(super) fn iso_date(days: i64) -> String {
     let z = days + 719_468;
     let era = z.div_euclid(146_097);
     let doe = z.rem_euclid(146_097);

@@ -36,6 +36,12 @@ pub const DUTCH: &[Aliases] = &[
     nl("file.new", &[], &["nieuw project", "nieuw"]),
     nl("file.open", &[], &["project openen", "openen"]),
     nl("file.example", &[], &["voorbeeld openen", "voorbeeld"]),
+    nl("file.practice", &[], &["snelle toetsen", "oefenen"]),
+    nl(
+        "help.walkthrough",
+        &[],
+        &["rondleiding", "snelle toetsen uitleg"],
+    ),
     nl("file.save", &[], &["opslaan", "bewaren"]),
     nl("file.save_as", &[], &["opslaan als"]),
     nl("file.close", &[], &["project sluiten", "sluiten"]),
@@ -215,6 +221,11 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("view.changes", &["wijzigingen"], &["vergelijk", "verschil"]),
     nl(
+        "view.commissioning",
+        &["inbedrijfstelling"],
+        &["uitvoeren", "afvinken", "restpunten"],
+    ),
+    nl(
         "sim.live",
         &[],
         &["live potentialen tonen", "contacten sluiten", "spanning"],
@@ -234,6 +245,27 @@ pub const DUTCH: &[Aliases] = &[
     nl("check.problems", &["problemen", "fouten"], &["controles"]),
     nl("check.next_problem", &[], &["volgend probleem"]),
     nl("check.previous_problem", &[], &["vorig probleem"]),
+    nl(
+        "file.import_dxf_background",
+        &["importeer dxf"],
+        &["achtergrond", "onderlegger", "tekening"],
+    ),
+    nl(
+        "view.background",
+        &[],
+        &["achtergrond tonen", "achtergrond verbergen", "dxf"],
+    ),
+    nl(
+        "file.remove_background",
+        &[],
+        &["achtergrond verwijderen", "dxf"],
+    ),
+    nl(
+        "export.dxf_page",
+        &["exporteer dxf"],
+        &["cad", "autocad", "pagina"],
+    ),
+    nl("export.dxf_all", &[], &["alle paginas", "cad", "autocad"]),
     // Export
     nl(
         "export.pdf",
