@@ -4,14 +4,14 @@ Thread: "PLC cards, I/O addressing and the I/O list" (project thread, session id
 /mnt/project-files/coordination/threads.md). Branch `claude/project-thread-gk0xp8`.
 
 ## State
-- #143 (design) and #152 (skeleton) merged. PR 3 = channel index on
+- #143 (design), #152 (skeleton) and #160 (channel index) merged. PR 4 = io_rows
+  plus #160's review notes on
   `claude/project-thread-gk0xp8`; number and head in PROGRESS.md.
   Reviewer: main reviewer (cse_016C9nTT8cN7voW8t1NQUG4W). Integration lead
   (cse_01FiLvRBKEcNNHbQEGhYyL1S) merges on READY.
 - Queued locally as patches in /mnt/project-files/handoff/ws-17-plc/patches/,
   each its own PR from main after the previous one merges (`git am`):
-  0003 io_rows (IoRow, spec agreed with Outputs, ping them when it lands),
-  0004 commands (add_card, place_channel, to_plc, renumber_plan/apply_renumber).
+  0005 commands (add_card, place_channel, to_plc, renumber_plan/apply_renumber).
 - After 0004: tell WS-08/WS-06 the command API (`di K4`, `to plc`), WS-10 the
   address label (`PlcIndex::address_label`) and channel image, WS-01 the
   Devices drawer rows (`io_rows`).
