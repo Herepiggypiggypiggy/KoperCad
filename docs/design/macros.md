@@ -17,13 +17,15 @@ device and can be exported to and imported from a single file, so a team can sha
    macros holds: parameter edits and library updates behave as for any block. The user word is
    "macro"; the model word stays "block".
 2. **The library is a folder of files**, one macro per file, in the user's profile and never anywhere
-   needing admin rights: `%APPDATA%\KoperCAD\Macros\` on Windows, `$XDG_DATA_HOME/novoelectric/macros/`
-   elsewhere (same convention as `parts.json` and `keymap.txt`). An optional company folder the user
+   needing admin rights: `%APPDATA%\KoperCAD\Macros\` on Windows and `<platform data dir>/KoperCAD/Macros/` elsewhere,
+   built from `DATA_DIR_NAME` like `keymap.txt` and the user parts catalog (the roaming data folder was
+   renamed to KoperCAD and is migrated at start, `migrate.rs`). DESIGN section 7 named the old
+   `%APPDATA%\NovoElectric\Blocks`; this PR updates that line, so there is one data folder. An optional company folder the user
    points at is read the same way.
 3. **One file format for library and sharing.** `<name>.kcmacro` is UTF-8 JSON (diffable, no
    binary). Export of several macros is the same file with a list; import accepts either.
 4. **Macros are copies, like any library source.** Placing one into a project copies the definition into
-   the project (so a `.novo` file stays complete) and records `BlockSource` (library, name, version);
+   the project (so a `.novo` file stays complete) and records `BlockSource` (`library` = the folder-relative path, which names the macro; `version` = the macro's `revision`);
    a newer library version is offered as an update, never applied silently.
 
 ## File format (version 1)
@@ -31,13 +33,13 @@ device and can be exported to and imported from a single file, so a team can sha
 Agreed with the Macro library thread, which owns the library and file code:
 
 ```
-{ "format": "kopercad-macro", "version": 1,
+{ "format": "kopercad-macro", "version": 1, "revision": 1,
   "name": "dol-starter", "description": "...", "author": "...", "tags": ["motor"],
   "definition": <novo_core::BlockDefinition as serialised, parameters and members included> }
 ```
 
 No new core types. When a macro is copied into a project the library fills `definition.source`
-(`BlockSource`: library = folder-relative path, version = file version). Later, optional additive
+(`BlockSource`: `library` = folder-relative path, `version` = `revision`). Later, optional additive
 fields carry the extras of step 5 (`parts`: manufacturer and order number per template device;
 `cabinet`: offsets per template device). Readers ignore unknown fields and keep them on re-export; a
 newer `version` is refused with the file untouched; a file that fails validation is rejected whole.
@@ -61,8 +63,8 @@ newer `version` is refused with the file untouched; a file that fails validation
   reported in the preview, never silently renumbered.
 - **Potentials, feeds, interruptions, terminals.** As for blocks: the first three cannot be part of a
   macro (they join nets across the project). Terminals are allowed in a macro as devices in a strip
-  (the same-name join rule then applies in the target project); this needs a core check and is step 3,
-  not step 1.
+  (the same-name join rule then applies in the target project); this needs a core check and is the last step
+  (step 6).
 - **Parts.** A part id is project-scoped, so a macro stores manufacturer and order number. On
   placement each is looked up in the project's catalog (then the user catalog); a hit is assigned, a
   miss leaves the device unassigned and the preview names it, after which the normal part proposals
@@ -92,7 +94,7 @@ destroyed). Search filters by name and description; recently used macros sort fi
 
 `save macro` needs a selection that `define_block` accepts, and asks only for a name (prefilled from
 the main device, "dol-starter"). It lists what it left out and why (wires to objects outside the
-selection, terminals before step 3). Saving over a name asks first and bumps `revision`.
+selection, terminals until step 6). Saving over a name asks first and bumps `revision`.
 
 ## Where the code goes
 
