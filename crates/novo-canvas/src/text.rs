@@ -64,6 +64,10 @@ pub struct Label {
 /// text box.
 pub const ADVANCE: f32 = 0.6;
 
+/// How far the second pass of a bold label is shifted along its baseline,
+/// relative to the font size; the text box grows by as much.
+pub const BOLD_SHIFT: f32 = 0.04;
+
 impl Label {
     pub fn new(pos: impl Into<Vec2>, text: impl Into<String>, height: f32) -> Self {
         Self {
@@ -115,7 +119,12 @@ impl Label {
             .max()
             .unwrap_or(0);
         Vec2::new(
-            cols as f32 * self.height * ADVANCE,
+            cols as f32 * self.height * ADVANCE
+                + if self.bold {
+                    BOLD_SHIFT * self.height
+                } else {
+                    0.0
+                },
             lines as f32 * self.height,
         )
     }

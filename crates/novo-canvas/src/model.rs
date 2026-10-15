@@ -800,7 +800,14 @@ impl PageScene {
                     f if f > 0.75 => Anchor::CenterRight,
                     _ => Anchor::Center,
                 };
-                let text = fit_text(&t.text, t.size.x, t.height);
+                // A bold cell's second pass widens it: keep that inside too.
+                let width = t.size.x
+                    - if t.bold {
+                        crate::text::BOLD_SHIFT * t.height
+                    } else {
+                        0.0
+                    };
+                let text = fit_text(&t.text, width, t.height);
                 if !text.is_empty() {
                     item.labels.push(
                         Label::new(pos, text, t.height)
@@ -2247,8 +2254,8 @@ mod tests {
             text: text.into(),
             height: 2.5,
             align,
-            // The first column stands in for a header cell.
-            bold: x == 15.0,
+            // Header cells; the long one must still fit when bold.
+            bold: x != 45.0,
         };
         let sheet = SheetContent {
             name: "20b".into(),

@@ -1016,9 +1016,9 @@ impl CanvasView {
             let rot = egui::emath::Rot2::from_angle(l.rotation);
             let at = anchor - rot * offset;
             if l.bold {
-                // No bold face is loaded: a second pass a few percent of the
-                // size along the baseline thickens the strokes.
-                let shift = rot * egui::vec2((size * 0.06).max(0.5), 0.0);
+                // No bold face is loaded: a second pass shifted along the
+                // baseline thickens the strokes.
+                let shift = rot * egui::vec2((size * crate::text::BOLD_SHIFT).max(0.5), 0.0);
                 painter.add(
                     egui::epaint::TextShape::new(at + shift, galley.clone(), color)
                         .with_angle(l.rotation),
