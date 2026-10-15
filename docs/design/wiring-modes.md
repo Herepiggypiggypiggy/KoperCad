@@ -25,9 +25,12 @@ they differ, DESIGN wins.
     (`Clicked::Refused`).
   - Same conductor: merge (survivor keeps number and text; two different
     explicit numbers refuse). Same pin and direction: derived junction.
-  - Move with no room: accepted, reported by `wire.overlap`.
+  - Move with no room: `settle_wire` takes one flag. Interactive (drag or
+    keyboard nudge): refuse or accept as DESIGN decides (design reviewer
+    proposes refuse). Non-interactive (scripts, AI edits, undo/redo, file
+    open): accept and let `wire.overlap` report.
 - `edit::draw_wire_exact` takes explicit points and does not route (Lines).
-- `novo-checks`: `wire.overlap`, error level, for projects that already
+- `novo-checks`: `wire.overlap`, warning (as in DESIGN), for projects that already
   contain overlaps (raw `Command::AddWire`/`SetRoute`, imports). Core never
   rejects.
 - Headless hooks for the tester: readable `wiring_mode` on the app and editor,
@@ -49,9 +52,9 @@ they differ, DESIGN wins.
 ## Tests (run in both modes unless marked)
 
 1. Aligned pins: identical route in both modes.
-2. EPLAN journey (Corners): click pin, two corners, click pin; legs routed,
+2. EPLAN journey (Corners mode): click pin, two corners, click pin; legs routed,
    all orthogonal. Backspace removes the last corner.
-3. AutoCAD journey (Lines): click pin, three clicks, click pin; exactly the
+3. AutoCAD journey (Lines mode): click pin, three clicks, click pin; exactly the
    axis-locked segments, no router; Backspace removes the last segment.
 4. A pin-to-pin drag gives the same wire in both modes.
 5. Corners: an overlapping leg is nudged and the preview shows the nudge
