@@ -222,20 +222,15 @@ pub(super) fn coil_badges(
 /// How a potential is drawn: its kind first, then its name for the line
 /// conductors, so L1, L2 and L3 stay apart.
 pub(super) fn potential_color(potential: &Potential) -> egui::Color32 {
-    let rgb = |r, g, b| egui::Color32::from_rgb(r, g, b);
+    let palette = novo_theme::POTENTIALS_DARK;
+    let color = |c| novo_theme::canvas::to_color32(c);
     match potential.kind {
-        PotentialKind::ProtectiveEarth => rgb(0x7F, 0xD0, 0x8A),
-        PotentialKind::Pen => rgb(0xB8, 0xD0, 0x6A),
-        PotentialKind::Neutral => rgb(0x5C, 0x8D, 0xE0),
-        PotentialKind::DcPositive => rgb(0xE0, 0x76, 0x6C),
-        PotentialKind::DcNegative => rgb(0x6C, 0x7C, 0xE0),
+        PotentialKind::ProtectiveEarth => color(palette.protective_earth),
+        PotentialKind::Pen => color(palette.pen),
+        PotentialKind::Neutral => color(palette.neutral),
+        PotentialKind::DcPositive => color(palette.dc_positive),
+        PotentialKind::DcNegative => color(palette.dc_negative),
         PotentialKind::Line | PotentialKind::Signal => {
-            const WHEEL: [(u8, u8, u8); 4] = [
-                (0xE0, 0xA2, 0x4A),
-                (0xC0, 0x70, 0xD0),
-                (0x4F, 0xC1, 0xD0),
-                (0xD0, 0xD0, 0x5C),
-            ];
             let slot = potential
                 .name
                 .chars()
@@ -245,9 +240,8 @@ pub(super) fn potential_color(potential: &Potential) -> egui::Color32 {
                     || potential.name.bytes().map(usize::from).sum::<usize>(),
                     |d| d.saturating_sub(1) as usize,
                 )
-                % WHEEL.len();
-            let (r, g, b) = WHEEL[slot];
-            rgb(r, g, b)
+                % palette.line.len();
+            color(palette.line[slot])
         }
     }
 }

@@ -46,6 +46,9 @@ pub struct WireTool {
     /// Corners: R flipped the elbow of the leg in progress to run along the
     /// other axis first (DESIGN.md §4). Cleared by the next click.
     pub flip: bool,
+    /// The pin Q will end the wire on: set by Tab on the part under the
+    /// pointer, dropped when the pointer leaves that part.
+    pub aim: Option<(SymbolId, u16)>,
 }
 
 /// How the wire tool turns clicks into a route (DESIGN.md §4, "Wiring
@@ -163,6 +166,12 @@ pub enum EditorKey {
     /// A double click with the Connect tool and no wire in progress: on
     /// empty canvas it starts a wire there, open at that end.
     StartFree,
+    /// Q while a wire is in progress: ends the wire on the part under the
+    /// pointer, on the pin Tab picked or else the nearest one.
+    EndOnPart,
+    /// Tab while a wire is in progress: the next connection point of the
+    /// part under the pointer.
+    NextPin,
 }
 
 /// What a click did.
@@ -229,6 +238,43 @@ fn arm(a: Point, b: Point) -> Option<Direction> {
     } else {
         None
     }
+}
+
+/// The part under the pointer: the placed symbol on `page` whose pins,
+/// widened by a few millimetres, contain `p`; the smallest one wins so a
+/// small part inside a big frame is still reachable.
+fn part_at(project: &Project, page: PageId, p: Point) -> Option<SymbolId> {
+    const MARGIN: f64 = 6.0;
+    project
+        .page_contents(page)
+        .symbols
+        .into_iter()
+        .filter_map(|id| {
+            let s = project.symbol(id)?;
+            let points: Vec<Point> = (0..s.pins.len() as u16)
+                .filter_map(|i| s.pin_position(i))
+                .chain([s.placement.origin])
+                .collect();
+            let min_x = points.iter().map(|q| q.x).fold(f64::MAX, f64::min) - MARGIN;
+            let max_x = points.iter().map(|q| q.x).fold(f64::MIN, f64::max) + MARGIN;
+            let min_y = points.iter().map(|q| q.y).fold(f64::MAX, f64::min) - MARGIN;
+            let max_y = points.iter().map(|q| q.y).fold(f64::MIN, f64::max) + MARGIN;
+            ((min_x..=max_x).contains(&p.x) && (min_y..=max_y).contains(&p.y))
+                .then_some((id, (max_x - min_x) * (max_y - min_y)))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(id, _)| id)
+}
+
+/// The pin nearest `p`.
+fn nearest_pin(pins: &[(u16, Point)], p: Point) -> (u16, Point) {
+    pins.iter()
+        .copied()
+        .min_by(|a, b| {
+            let d = |q: Point| (q.x - p.x).hypot(q.y - p.y);
+            d(a.1).total_cmp(&d(b.1))
+        })
+        .expect("callers pass at least one pin")
 }
 
 /// The piece at the last bend of `path` (start, bends, pointer), or the T
@@ -354,6 +400,9 @@ pub struct Editor {
     /// The page and pick radius of the last pointer move, for keys that act
     /// at the end of the wire in progress.
     hovered: Option<(PageId, f64)>,
+    /// The raw pointer position of the last hover, for the keys that act on
+    /// the part under it (Q, Tab while wiring).
+    hover_raw: Option<Point>,
     notice: Option<String>,
     link_hint: Option<String>,
     row: Option<RowDrag>,
@@ -387,6 +436,7 @@ impl Editor {
             wire_mode: WiringMode::default(),
             connect: ConnectMode::default(),
             hovered: None,
+            hover_raw: None,
             notice: None,
             link_hint: None,
             row: None,
@@ -418,6 +468,12 @@ impl Editor {
             Tool::Wire(_) => Some("Wire".into()),
             _ => None,
         }
+    }
+
+    /// Whether a wire has been started and not finished: Q and Tab then
+    /// steer it (end on a part, cycle its pins).
+    pub fn is_wiring(&self) -> bool {
+        matches!(&self.tool, Tool::Wire(w) if w.start.is_some())
     }
 
     /// Whether a step is in progress (a wire started, a move in hand).
@@ -496,6 +552,12 @@ impl Editor {
     /// The pointer position after snapping, in page millimetres.
     pub fn cursor(&self) -> Option<Point> {
         self.cursor
+    }
+
+    /// The pin, junction or wire under the pointer (or the pin Tab aimed at
+    /// while wiring), which the view highlights.
+    pub fn target(&self) -> Option<Target> {
+        self.target
     }
 
     fn set_tool(&mut self, tool: Tool) {
@@ -824,6 +886,7 @@ impl Editor {
     /// pick radius in millimetres at the current zoom.
     pub fn hover(&mut self, doc: &Document, page: PageId, raw: Point, tolerance: f64) {
         self.hovered = Some((page, tolerance));
+        self.hover_raw = Some(raw);
         let project = doc.project();
         self.target = match &self.tool {
             Tool::Wire(_) => target_at(project, page, raw, tolerance),
@@ -837,6 +900,21 @@ impl Editor {
         if let Some(Target::Wire(w, q)) = self.target {
             let at = geometry::snap_along_wire(project, w, q, self.grid);
             self.target = Some(Target::Wire(w, at));
+        }
+        // The pin Tab picked stays the target while the pointer is on its
+        // part; leaving the part forgets it.
+        if let Tool::Wire(w) = &mut self.tool
+            && let Some((symbol, pin)) = w.aim
+        {
+            match (
+                part_at(project, page, raw),
+                project.symbol(symbol).and_then(|s| s.pin_position(pin)),
+            ) {
+                (Some(under), Some(at)) if under == symbol => {
+                    self.target = Some(Target::Endpoint(Endpoint::Pin { symbol, pin }, at));
+                }
+                _ => w.aim = None,
+            }
         }
         self.cursor = Some(match self.target {
             Some(t) => t.position(),
@@ -868,6 +946,7 @@ impl Editor {
                         corners: Vec::new(),
                         drag: false,
                         flip: false,
+                        aim: None,
                     });
                     self.notice = None;
                     Clicked::Step
@@ -1270,6 +1349,7 @@ impl Editor {
             corners: Vec::new(),
             drag: true,
             flip: false,
+            aim: None,
         });
         self.notice = None;
         true
@@ -1415,6 +1495,111 @@ impl Editor {
         true
     }
 
+    /// The part under the pointer and its pins a wire in progress could
+    /// end on (not the pin it started from), in pin order.
+    fn aim_candidates(&self, doc: &Document) -> Option<(SymbolId, Vec<(u16, Point)>)> {
+        let (Tool::Wire(w), Some((page, _)), Some(raw)) =
+            (&self.tool, self.hovered, self.hover_raw)
+        else {
+            return None;
+        };
+        w.start?;
+        let project = doc.project();
+        let symbol = part_at(project, page, raw)?;
+        let s = project.symbol(symbol)?;
+        let pins: Vec<(u16, Point)> = (0..s.pins.len() as u16)
+            .filter(|&i| {
+                !matches!(w.start, Some(Target::Endpoint(Endpoint::Pin { symbol: a, pin }, _))
+                    if a == symbol && pin == i)
+            })
+            .filter_map(|i| s.pin_position(i).map(|p| (i, p)))
+            .collect();
+        (!pins.is_empty()).then_some((symbol, pins))
+    }
+
+    /// Tab while wiring: the next connection point of the part under the
+    /// pointer. The first press takes the pin nearest the pointer.
+    fn next_pin(&mut self, doc: &Document) -> bool {
+        let Some((symbol, pins)) = self.aim_candidates(doc) else {
+            if matches!(&self.tool, Tool::Wire(w) if w.start.is_some()) {
+                self.notice = Some("Move the pointer over a part to pick a pin".into());
+                return true;
+            }
+            return false;
+        };
+        let raw = self.hover_raw.unwrap_or_default();
+        let current = match &self.tool {
+            Tool::Wire(w) => w.aim.filter(|(s, _)| *s == symbol).map(|(_, pin)| pin),
+            _ => None,
+        };
+        let pick = match current.and_then(|pin| pins.iter().position(|(i, _)| *i == pin)) {
+            Some(at) => pins[(at + 1) % pins.len()],
+            None => nearest_pin(&pins, raw),
+        };
+        let name = doc
+            .project()
+            .symbol(symbol)
+            .and_then(|s| s.pins.get(usize::from(pick.0)))
+            .map(|p| p.name.clone())
+            .unwrap_or_default();
+        let place = pins.iter().position(|(i, _)| *i == pick.0).unwrap_or(0) + 1;
+        if let Tool::Wire(w) = &mut self.tool {
+            w.aim = Some((symbol, pick.0));
+        }
+        let target = Target::Endpoint(
+            Endpoint::Pin {
+                symbol,
+                pin: pick.0,
+            },
+            pick.1,
+        );
+        self.target = Some(target);
+        self.cursor = Some(pick.1);
+        self.notice = Some(format!(
+            "Pin {name} ({place} of {}): Tab for the next, Q to end here",
+            pins.len()
+        ));
+        true
+    }
+
+    /// Q while wiring: ends the wire on the part under the pointer, on the
+    /// pin Tab picked or else the nearest one.
+    fn end_on_part(&mut self, doc: &mut Document) -> bool {
+        let Some((symbol, pins)) = self.aim_candidates(doc) else {
+            if matches!(&self.tool, Tool::Wire(w) if w.start.is_some()) {
+                self.notice = Some("Move the pointer over a part to end the wire on it".into());
+                return true;
+            }
+            return false;
+        };
+        let (Tool::Wire(w), Some((page, _)), Some(raw)) =
+            (self.tool.clone(), self.hovered, self.hover_raw)
+        else {
+            return false;
+        };
+        let Some(start) = w.start else {
+            return false;
+        };
+        let pick = w
+            .aim
+            .filter(|(s, _)| *s == symbol)
+            .and_then(|(_, pin)| pins.iter().find(|(i, _)| *i == pin).copied())
+            .unwrap_or_else(|| nearest_pin(&pins, raw));
+        let end = Target::Endpoint(
+            Endpoint::Pin {
+                symbol,
+                pin: pick.0,
+            },
+            pick.1,
+        );
+        if start == end {
+            self.notice = Some("Pick a different end for the wire".into());
+            return true;
+        }
+        self.commit_wire(doc, page, w, start, end);
+        true
+    }
+
     fn finish(&mut self, result: novo_core::Result<ChangeSet>, select: Option<AnyId>) -> Clicked {
         match result {
             Ok(changes) => {
@@ -1453,6 +1638,8 @@ impl Editor {
             EditorKey::Finish => self.finish_wire_here(doc, false),
             EditorKey::FinishOpen => self.finish_wire_here(doc, true),
             EditorKey::StartFree => self.start_free(),
+            EditorKey::EndOnPart => self.end_on_part(doc),
+            EditorKey::NextPin => self.next_pin(doc),
             EditorKey::Rotate | EditorKey::Mirror => {
                 let rotate = key == EditorKey::Rotate;
                 let corners = self.wire_mode == WiringMode::Corners;

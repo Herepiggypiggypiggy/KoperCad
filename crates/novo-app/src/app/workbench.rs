@@ -172,6 +172,8 @@ const APP_COMMANDS: &[&str] = &[
     "tool.place",
     "tool.repeat",
     "tool.connect",
+    "wire.end_on_part",
+    "wire.next_pin",
     "view.command_field_here",
     "edit.rotate",
     "edit.mirror",
@@ -375,7 +377,12 @@ impl NovoApp {
     /// The commands this frame's key presses run, taken out of the input.
     pub(super) fn key_commands(&self, ctx: &egui::Context) -> Vec<&'static str> {
         let focus = self.key_focus(ctx);
-        keys::take_commands(ctx, &self.wb.keymap, focus, |c| self.claims_key(c))
+        // A wire being drawn gives Q and Tab their own meaning.
+        let wiring = self
+            .canvas
+            .schematic_ref()
+            .is_some_and(|v| v.editor.is_wiring());
+        keys::take_commands(ctx, &self.wb.keymap, focus, wiring, |c| self.claims_key(c))
     }
 
     /// Runs a command from a key press. Space only arms the command field:
@@ -423,6 +430,17 @@ impl NovoApp {
                 }
             }
             "tool.repeat" => self.editor_key(EditorKey::Repeat),
+            "wire.end_on_part" => self.editor_key(EditorKey::EndOnPart),
+            "wire.next_pin" => {
+                // Tab must not leave the drawing: egui's own focus move to
+                // the next widget is undone, as for the next proposal.
+                ctx.memory_mut(|m| {
+                    if let Some(id) = m.focused() {
+                        m.surrender_focus(id);
+                    }
+                });
+                self.editor_key(EditorKey::NextPin)
+            }
             "edit.rotate" => self.editor_key(EditorKey::Rotate),
             "edit.mirror" => self.editor_key(EditorKey::Mirror),
             "edit.delete" if self.declines_proposal() => self.dismiss_proposal(),
