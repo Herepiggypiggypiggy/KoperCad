@@ -12,6 +12,10 @@
   `ImportPlan`, `apply`).
 - Hidden sheets `~Devices` etc. hold the baseline; `~Meta` holds format, project, revision.
 
+## How to reach it (UI)
+- File > Export spreadsheet (.xlsx) and File > Export spreadsheet (CSV files); palette `export.sheets` / `export.sheets_csv` ("export excel", "excel", "export csv").
+- Code: crates/novo-app/src/app/sheets.rs (thin; writes next to the project, only replaces files it wrote). Import dialog + CLI: dialog/CLI thread (session_0152EZHJQEhZVhJcXFt5h8az).
+
 ## Resume
 ```
 cargo test -p novo-interop --test sheets

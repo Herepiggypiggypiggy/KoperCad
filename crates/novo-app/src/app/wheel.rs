@@ -9,7 +9,6 @@
 use std::f32::consts::TAU;
 
 use eframe::egui::{self, Key, Modifiers, Pos2, Vec2};
-use novo_symbols::Pack;
 use novo_workflow::palette::Mode;
 
 use super::NovoApp;
@@ -211,6 +210,7 @@ impl NovoApp {
         if self.canvas.schematic_ref().is_none() || !self.is_open() {
             return;
         }
+        self.tour_tick("place");
         let screen = ctx.content_rect();
         let at = ctx.pointer_latest_pos().unwrap_or(screen.center());
         let room = screen.shrink(REACH + 8.0);
@@ -236,7 +236,9 @@ impl NovoApp {
         let Some(view) = self.canvas.schematic_ref() else {
             return Vec::new();
         };
+        // The items name IEC keys; the catalog's pack says which twin is drawn.
         let used = |key: &str| {
+            let key = view.editor.catalog.in_pack(key);
             self.backend.document().map_or(0, |d| {
                 d.project().symbols().filter(|s| s.symbol.0 == key).count()
             })
@@ -245,7 +247,12 @@ impl NovoApp {
             .1
             .iter()
             .copied()
-            .filter(|(key, _)| view.editor.catalog.get(key).is_some())
+            .filter(|(key, _)| {
+                view.editor
+                    .catalog
+                    .get(&view.editor.catalog.in_pack(key))
+                    .is_some()
+            })
             .collect();
         items.sort_by_key(|(key, _)| std::cmp::Reverse(used(key)));
         items
@@ -343,6 +350,7 @@ impl NovoApp {
             }
         }
         self.draw_wheel(ctx, centre, shown, &items, at);
+        self.hidden_note(ctx, centre, shown, &items);
 
         if close {
             self.wb.wheel = None;
@@ -353,16 +361,46 @@ impl NovoApp {
             && let Some(&(key, _)) = items.get(j)
         {
             self.wb.wheel = None;
-            let pack = self.standard();
             if let Some(view) = self.canvas.schematic() {
-                // The project's drawing standard picks the pack when the
-                // library has the same device there; else the IEC one.
-                let id = Pack::counterpart(key, pack)
-                    .filter(|id| view.editor.catalog.get(id).is_some())
-                    .unwrap_or_else(|| key.to_owned());
+                // The catalog's pack (the project's drawing standard) says
+                // which twin of the item is placed.
+                let id = view.editor.catalog.in_pack(key);
                 view.editor.begin_place(&id, None);
             }
         }
+    }
+
+    /// One weak line under the wheel when the project's standard has no
+    /// drawing for some items of the sector shown; hovering lists them.
+    fn hidden_note(&self, ctx: &egui::Context, centre: Pos2, shown: Option<usize>, items: &[Item]) {
+        let (Some(sector), Some(view)) = (shown, self.canvas.schematic_ref()) else {
+            return;
+        };
+        let hidden: Vec<&str> = CATEGORIES[sector]
+            .1
+            .iter()
+            .filter(|(key, _)| !items.iter().any(|(k, _)| k == key))
+            .map(|(_, label)| *label)
+            .collect();
+        if hidden.is_empty() {
+            return;
+        }
+        let pack = view
+            .editor
+            .catalog
+            .library()
+            .pack()
+            .map_or("this".to_owned(), |p| p.id().to_uppercase());
+        egui::Area::new(egui::Id::new("place_wheel_hidden"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(centre + Vec2::new(-90.0, REACH + 8.0))
+            .show(ctx, |ui| {
+                ui.set_width(180.0);
+                ui.vertical_centered(|ui| {
+                    ui.weak(format!("{} symbols have no {pack} version", hidden.len()))
+                        .on_hover_text(hidden.join(", "));
+                });
+            });
     }
 
     fn draw_wheel(

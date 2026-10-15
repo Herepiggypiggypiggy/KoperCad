@@ -31,6 +31,7 @@ mod import;
 mod library;
 mod macros;
 mod panel;
+mod schema;
 mod search;
 mod sheet;
 mod step;
@@ -54,8 +55,8 @@ pub use csv::{
 };
 pub use import::{
     Arrival, DownloadsWatcher, FallbackReason, FetchError, Fetcher, ImportJob, ImportOutcome,
-    ImportState, MakerSource, RemoteFile, ScriptedAnswer, ScriptedFetcher, SourceTable,
-    default_downloads_dir,
+    ImportState, MTIME_SLACK, MakerSource, RemoteFile, ScriptedAnswer, ScriptedFetcher,
+    SourceTable, default_downloads_dir,
 };
 pub use library::{
     FileKind, ImportFlow, LIBRARY_FORMAT_VERSION, LibraryError, LocalLibrary, NewSource,
@@ -67,6 +68,11 @@ pub use macros::{
     PackEntry, STARTER_FOLDER, starter_macros, user_macros_dir,
 };
 pub use panel::{Clearances, Mounting, PanelData, is_panel_number_key, migrate_properties};
+pub use schema::eng;
+pub use schema::{
+    Asset, AssetKind, Classification, ConnectionKind, DataSource, LetThroughPoint, Lifecycle,
+    PartRef, PartTerminal, Price, Provenance, Side,
+};
 pub use search::{Matcher, normalize_code};
 pub use sheet::{
     EditError, Group, INTERNAL_KEY_PREFIXES, PropertySheet, Row, RowKey, RowValue, display_value,

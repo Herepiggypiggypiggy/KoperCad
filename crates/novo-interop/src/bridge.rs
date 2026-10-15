@@ -174,3 +174,52 @@ pub fn page_drawing(
     scene.set_style(style, project, art);
     Some(scene_to_drawing(scene.scene(), height))
 }
+
+/// The DXF text of one project page (see [`page_drawing`]).
+pub fn page_dxf(
+    project: &Project,
+    page: PageId,
+    art: &dyn SymbolArt,
+    style: ModelStyle,
+) -> Option<String> {
+    page_drawing(project, page, art, style).map(|d| crate::dxf::write_dxf(&d))
+}
+
+/// A file name (no folder) for page `page_name` of the project called
+/// `stem`: `Plant - 3.dxf`. Characters Windows does not allow in file names
+/// become `_`, so any page name is safe.
+pub fn page_file_name(stem: &str, page_name: &str) -> String {
+    let clean = |s: &str| -> String {
+        s.chars()
+            .map(|c| {
+                if c.is_control() || "<>:\"/\\|?*".contains(c) {
+                    '_'
+                } else {
+                    c
+                }
+            })
+            .collect::<String>()
+            .trim()
+            .trim_end_matches('.')
+            .to_string()
+    };
+    let (stem, page) = (clean(stem), clean(page_name));
+    match (stem.is_empty(), page.is_empty()) {
+        (_, true) if stem.is_empty() => "page.dxf".into(),
+        (_, true) => format!("{stem}.dxf"),
+        (true, false) => format!("{page}.dxf"),
+        (false, false) => format!("{stem} - {page}.dxf"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::page_file_name;
+
+    #[test]
+    fn page_names_are_safe_file_names() {
+        assert_eq!(page_file_name("Plant", "3"), "Plant - 3.dxf");
+        assert_eq!(page_file_name("Plant", "A/B:1?"), "Plant - A_B_1_.dxf");
+        assert_eq!(page_file_name("", ""), "page.dxf");
+    }
+}

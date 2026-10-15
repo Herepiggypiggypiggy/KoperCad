@@ -137,6 +137,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["sample", "motor starter", "demo"],
         Needs::Nothing,
     ),
+    cmd(
+        "file.practice",
+        "Try the fast keys",
+        "Project",
+        &["practice", "tutorial", "learn"],
+        Needs::Nothing,
+    ),
     cmd("file.save", "Save", "Project", &[], Needs::Project),
     cmd(
         "file.save_as",
@@ -221,7 +228,41 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["issue", "revision"],
     ),
+    verb(
+        cmd(
+            "revision.compare",
+            "Compare revisions",
+            "Project",
+            &["diff", "what changed", "between revisions", "revision list"],
+            Needs::Project,
+        ),
+        &["compare"],
+    ),
     cmd("file.quit", "Quit", "Project", &["exit"], Needs::Nothing),
+    cmd(
+        "help.about",
+        "About",
+        "Project",
+        &["version", "credits", "kopervonk"],
+        Needs::Nothing,
+    ),
+    verb(
+        cmd(
+            "file.import_dxf_background",
+            "Import DXF as background",
+            "Project",
+            &["underlay", "drawing", "dwg", "reference"],
+            Needs::Page,
+        ),
+        &["import dxf"],
+    ),
+    cmd(
+        "file.remove_background",
+        "Remove the DXF background",
+        "Project",
+        &["underlay", "dxf", "reference drawing"],
+        Needs::Page,
+    ),
     // Draw
     cmd(
         "tool.repeat",
@@ -364,6 +405,26 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Edit",
         &["copy", "clone"],
         Needs::Selection,
+    ),
+    verb(
+        cmd(
+            "macro.save",
+            "Save selection as macro",
+            "Edit",
+            &["macro", "block", "reuse", "template", "library"],
+            Needs::Selection,
+        ),
+        &["save macro"],
+    ),
+    verb(
+        cmd(
+            "macro.place",
+            "Place macro",
+            "Edit",
+            &["macro", "block", "insert", "starter", "library"],
+            Needs::Page,
+        ),
+        &["place macro", "macro"],
     ),
     cmd(
         "edit.select_all",
@@ -615,10 +676,45 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "cabinet.size-enclosure",
+        "Size the enclosure",
+        "View",
+        &["enclosure", "cabinet", "heat", "cooling", "plate"],
+        Needs::Project,
+    ),
+    cmd(
+        "cabinet.enclosures",
+        "Enclosures",
+        "View",
+        &["enclosure", "list", "sizes", "catalog"],
+        Needs::Project,
+    ),
+    cmd(
         "view.cabinet_table",
         "Cabinet as table",
         "View",
         &["table"],
+        Needs::Project,
+    ),
+    cmd(
+        "heat.toggle",
+        "Show or hide heat",
+        "View",
+        &["heat", "temperature", "thermal", "map", "cabinet"],
+        Needs::Project,
+    ),
+    cmd(
+        "heat.airflow",
+        "Show or hide airflow",
+        "View",
+        &["heat", "air", "flow", "streamlines", "cabinet"],
+        Needs::Project,
+    ),
+    cmd(
+        "heat.contours",
+        "Show or hide heat contours",
+        "View",
+        &["heat", "contour", "lines", "isotherms", "cabinet"],
         Needs::Project,
     ),
     cmd(
@@ -638,6 +734,22 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["changes"],
     ),
+    verb(
+        cmd(
+            "view.commissioning",
+            "Commissioning",
+            "View",
+            &[
+                "commission",
+                "punch list",
+                "check off",
+                "continuity",
+                "torque",
+            ],
+            Needs::Project,
+        ),
+        &["commissioning"],
+    ),
     cmd(
         "sim.live",
         "Show live potentials",
@@ -653,11 +765,25 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd(
+        "help.walkthrough",
+        "Fast keys walk-through",
+        "View",
+        &["tour", "tutorial", "walkthrough", "help"],
+        Needs::Nothing,
+    ),
+    cmd(
         "view.shortcuts",
         "Keyboard shortcuts",
         "View",
         &["keys", "help", "overlay"],
         Needs::Nothing,
+    ),
+    cmd(
+        "view.background",
+        "Show or hide the DXF background",
+        "View",
+        &["underlay", "dxf", "reference drawing"],
+        Needs::Page,
     ),
     // Check
     verb(
@@ -687,6 +813,23 @@ pub const COMMANDS: &[CommandInfo] = &[
     // Export
     verb(
         cmd(
+            "export.dxf_page",
+            "Export this page as DXF",
+            "Export",
+            &["cad", "autocad"],
+            Needs::Page,
+        ),
+        &["export dxf"],
+    ),
+    cmd(
+        "export.dxf_all",
+        "Export all pages as DXF",
+        "Export",
+        &["cad", "autocad"],
+        Needs::Project,
+    ),
+    verb(
+        cmd(
             "export.pdf",
             "Export PDF",
             "Export",
@@ -704,6 +847,103 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export bom", "bom"],
+    ),
+    verb(
+        cmd(
+            "export.sheets",
+            "Export for bulk edit (.xlsx)",
+            "Export",
+            &["excel", "xlsx", "spreadsheet", "round trip"],
+            Needs::Project,
+        ),
+        &["export bulk edit", "export for editing"],
+    ),
+    verb(
+        cmd(
+            "export.assembly",
+            "Export assembly checklist (PDF)",
+            "Export",
+            &["workshop", "build sheet", "mounting", "drill", "cabinet"],
+            Needs::Project,
+        ),
+        &["export assembly", "assembly checklist"],
+    ),
+    verb(
+        cmd(
+            "export.sheets_csv",
+            "Export for bulk edit (CSV files)",
+            "Export",
+            &["csv"],
+            Needs::Project,
+        ),
+        &["export csv", "csv"],
+    ),
+    verb(
+        cmd(
+            "plc.import_tags",
+            "Import PLC tags",
+            "Export",
+            &[
+                "plc",
+                "tia",
+                "codesys",
+                "studio 5000",
+                "comments",
+                "read back",
+            ],
+            Needs::Project,
+        ),
+        &["import plc", "import tags"],
+    ),
+    verb(
+        cmd(
+            "export.plc_csv",
+            "Export PLC I/O list (CSV)",
+            "Export",
+            &["plc", "i/o", "tags", "excel"],
+            Needs::Project,
+        ),
+        &["export plc", "export io"],
+    ),
+    verb(
+        cmd(
+            "export.plc_plcopen",
+            "Export PLC tags (PLCopen XML)",
+            "Export",
+            &["plc", "codesys", "plcopen", "tags", "symbols"],
+            Needs::Project,
+        ),
+        &["export plcopen", "export codesys"],
+    ),
+    verb(
+        cmd(
+            "export.plc_tia",
+            "Export PLC tags for TIA Portal",
+            "Export",
+            &["plc", "siemens", "tia", "tag table", "s7"],
+            Needs::Project,
+        ),
+        &["export tia", "export siemens"],
+    ),
+    verb(
+        cmd(
+            "export.plc_studio5000",
+            "Export PLC tags for Studio 5000",
+            "Export",
+            &["plc", "rockwell", "allen-bradley", "logix", "tags"],
+            Needs::Project,
+        ),
+        &["export studio 5000", "export rockwell"],
+    ),
+    verb(
+        cmd(
+            "export.plc_address_plan",
+            "Export PLC address plan",
+            "Export",
+            &["plc", "hardware", "slots", "addresses"],
+            Needs::Project,
+        ),
+        &["export address plan"],
     ),
 ];
 

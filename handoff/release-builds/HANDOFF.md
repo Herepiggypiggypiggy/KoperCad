@@ -4,11 +4,14 @@ Thread: "Release and builds" (session cse_01UuGC6jT84yVrbcwGaSJ5Df). Owns .githu
 packaging/windows/novoelectric.iss, scripts/run-latest.ps1, scripts/install-desktop-shortcut.ps1,
 scripts/setup-new-pc.ps1, scripts/build-local.ps1, scripts/cross-build-windows.sh, docs/LOCAL-BUILDS.md.
 
-## Current state (2026-10-15 15:50 UTC)
+## Current state (2026-10-15 19:50 UTC)
 - Repo is public and renamed `Herepiggypiggypiggy/kopercad` (old slug redirects). Product KoperCAD,
   maker KoperVonk. Free Actions minutes.
 - Standing order from the lead: do NOT dispatch an experimental build unless Tadjiro asks. Last
-  builds: 1 to 4 (build 4 = main f6be257). Windows CI on main builds and passes.
+  build: 5 (run 600, main df249b4, 2026-10-15 19:27Z), asked for by Tadjiro, delivered on the
+  `latest-build` branch (below). Release hold from the lead: no build with the STEP import button
+  (#508) until #506 is merged; #511 makes the experimental build skip drafts and PRs labelled
+  `no-experimental` (check whether it merged).
 - Rename leftovers done: user-visible names (#201, #236), README line and WinLibs checksum check
   (#285), settings and parts catalog moved to %APPDATA%\KoperCAD with a migration, Documents folder
   rule (#302), program renamed to kopercad.exe (#304).
@@ -37,7 +40,8 @@ scripts/setup-new-pc.ps1, scripts/build-local.ps1, scripts/cross-build-windows.s
 - One designated branch per thread: wait for a PR to merge before reusing the branch.
 
 ## Next
-1. Wait for Tadjiro to ask for a build (via coordinator or lead); then dispatch experimental.yml.
+1. Wait for Tadjiro to ask for a build (via coordinator or lead); then dispatch experimental.yml once.
+   A run dispatched seconds before a workflow PR merges uses the old workflow (happened with run 599).
 2. Hands-on checks on his PC (shortcut, build-local, installer upgrade).
 3. Drop the novoelectric.exe copy later; consider pinning a WinLibs release and hash.
 
@@ -50,4 +54,4 @@ Skipped with a log line if the exe is over 95 MB. Clone once, then run `run.cmd`
 
     git clone --branch latest-build --single-branch --depth 1 https://github.com/Herepiggypiggypiggy/KoperCad.git KoperCAD-latest
 
-Delete the branch to remove the build. The release zip is still published. Not yet run on GitHub.
+Delete the branch to remove the build. The release zip is still published. Verified: run 600 created the branch with the four files. Not yet started on his laptop.

@@ -165,16 +165,16 @@ impl EnclosureCatalog {
                 ','
             };
             let cells: Vec<&str> = raw.split(separator).map(str::trim).collect();
+            // Header row.
+            if line == 1 && cells[0].eq_ignore_ascii_case("name") {
+                continue;
+            }
             if cells.len() < 6 {
                 errors.push(CatalogError {
                     line,
                     message: "needs at least name, width, height, depth, plate width, plate height"
                         .into(),
                 });
-                continue;
-            }
-            // Header row.
-            if line == 1 && cells[0].eq_ignore_ascii_case("name") {
                 continue;
             }
             let mut numbers = [0.0; 6];

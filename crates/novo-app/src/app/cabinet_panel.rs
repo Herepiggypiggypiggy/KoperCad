@@ -24,6 +24,8 @@ const NUMBERS: [(&str, &str, &str); 5] = [
 #[derive(Default)]
 pub(super) struct PanelFields {
     text: [String; 5],
+    /// The device the buffers belong to; they are cleared when it changes.
+    device: Option<u64>,
 }
 
 /// One edit asked for: the device, the property key and the typed text.
@@ -56,6 +58,12 @@ pub(super) fn show(
     id: u64,
 ) -> Option<PanelEdit> {
     let device = project.get::<Device>(DeviceId::from(id))?;
+    if fields.device != Some(id) {
+        *fields = PanelFields {
+            device: Some(id),
+            ..Default::default()
+        };
+    }
     let data = panel_data(project, device);
     let current = [
         shown(data.power_loss_w),
