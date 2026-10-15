@@ -140,6 +140,13 @@ fn sheet(
     let lane_space = (lanes.len() as f64 * LANE_MM)
         .min(middle - BLOCK_MM)
         .max(0.0);
+    // Bars are LANE_MM apart, squeezed together when there are too many
+    // groups for the room beside the blocks.
+    let lane_pitch = if lanes.is_empty() {
+        LANE_MM
+    } else {
+        lane_space / lanes.len() as f64
+    };
     let block_x = x0 + dest_w + wire_w + (middle - BLOCK_MM + lane_space) / 2.0;
     let mid_start = x0 + dest_w + wire_w;
     let out_x = mid_start + middle;
@@ -200,7 +207,7 @@ fn sheet(
 
     let lane_x = |group: u32| {
         let lane = lanes.iter().position(|&g| g == group).unwrap_or(0);
-        block_x - LANE_MM * (lane as f64 + 1.0)
+        block_x - lane_pitch * (lane as f64 + 1.0)
     };
     for (i, row) in rows.iter().enumerate() {
         let y = first + i as f64 * ROW_MM;
@@ -268,4 +275,46 @@ fn sheet(
         }
     }
     layout
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row(name: &str, jumper: u32) -> ScreenRow {
+        ScreenRow {
+            internal: Vec::new(),
+            terminal: name.into(),
+            kind: String::new(),
+            external: Vec::new(),
+            cables: Vec::new(),
+            jumper: Some(jumper),
+            bridged_with: Vec::new(),
+            wires_internal: Vec::new(),
+            wires_external: Vec::new(),
+            pages: Vec::new(),
+            build: String::new(),
+            spare: false,
+        }
+    }
+
+    #[test]
+    fn many_jumper_groups_stay_beside_the_blocks() {
+        let rows: Vec<ScreenRow> = (0..30).map(|i| row(&i.to_string(), i)).collect();
+        let screen = Screen {
+            strip: DeviceId(1),
+            tag: "-X1".into(),
+            rows: rows.clone(),
+        };
+        let mut format = novo_core::PageFormat::default();
+        format.size = novo_core::PaperSize::A4;
+        let setup = PageSetup::for_format(format);
+        let layout = sheet(&screen, &rows[..20], (0, 1), &setup);
+        let (x0, _, w, _) = setup.table_area();
+        // The wire-in column ends where the lanes may start.
+        let lanes_start = x0 + w * 0.22 + w * 0.07;
+        for line in layout.lines.iter().filter(|l| l.from.0 == l.to.0) {
+            assert!(line.from.0 >= lanes_start - 1e-9, "{line:?}");
+        }
+    }
 }
