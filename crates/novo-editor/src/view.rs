@@ -519,6 +519,17 @@ impl SchematicView {
             }
         }
         let selection = self.selection();
+        // Wiring (DESIGN.md §4): Shift+W switches mode, Backspace takes back
+        // the last corner or line, Enter finishes on the last point.
+        if consume_shift_key(ctx, Key::W) {
+            self.editor.key(document, EditorKey::WireMode, &selection);
+        }
+        if pressed(Key::Backspace) {
+            self.editor.key(document, EditorKey::Back, &selection);
+        }
+        if self.editor.proposals().is_empty() && pressed(Key::Enter) {
+            self.editor.key(document, EditorKey::Finish, &selection);
+        }
         for (key, step) in [(Key::PageUp, -1), (Key::PageDown, 1)] {
             if pressed(key)
                 && let Some(p) = crate::pages::neighbour(document.project(), page, step)
@@ -884,6 +895,28 @@ fn consume_plain_key(input: &mut egui::InputState, key: Key) -> bool {
             if *k == key && modifiers.is_none())
     });
     found.map(|i| input.events.remove(i)).is_some()
+}
+
+/// Shift plus `key`, once per press: a held key repeats and is swallowed, so
+/// Shift+W never flips the wiring mode back and forth.
+fn consume_shift_key(ctx: &egui::Context, key: Key) -> bool {
+    ctx.input_mut(|input| {
+        let mut pressed = false;
+        input.events.retain(|e| match e {
+            egui::Event::Key {
+                key: k,
+                pressed: true,
+                repeat,
+                modifiers,
+                ..
+            } if *k == key && modifiers.shift && !modifiers.ctrl && !modifiers.alt => {
+                pressed |= !repeat;
+                false
+            }
+            _ => true,
+        });
+        pressed
+    })
 }
 
 /// A symbol name cut to a short favourite label.
