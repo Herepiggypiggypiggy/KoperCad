@@ -16,6 +16,7 @@ use novo_layout::model::{
 use novo_layout::plan::Plan;
 use novo_layout::state::CabinetLayout;
 
+use super::cabinet_inspector;
 use super::{Level, NovoApp};
 use crate::theme;
 
@@ -82,6 +83,8 @@ pub(super) enum Ask {
     Panel(DeviceTag),
     CreateCabinet(DeviceTag),
     SetPlate(StructureId),
+    /// Set the plate to new dimensions from the inspector.
+    SetPlateSize(StructureId, MountingPlate),
     PlaceAll,
     Accept,
     Cancel,
@@ -427,6 +430,26 @@ impl NovoApp {
                         }
                     });
 
+                let selected: Vec<u64> = self
+                    .cabinet
+                    .view
+                    .selection
+                    .ids()
+                    .iter()
+                    .filter_map(|i| novo_canvas::cabinet::box_of(*i))
+                    .collect();
+                if let (Some(stored), Some(s)) = (&layout, structure) {
+                    let facts = cabinet_inspector::gather(project, s, stored, &shown, &selected);
+                    egui::Panel::right("cabinet_inspector")
+                        .exact_size(240.0)
+                        .resizable(false)
+                        .show(ui, |ui| {
+                            if let Some(a) = cabinet_inspector::show(ui, &facts) {
+                                ask = Some(a);
+                            }
+                        });
+                }
+
                 let view = cabinet_view(&shown, &tag_of);
                 self.cabinet.scene.set(&view);
                 if self.cabinet.fitted != location {
@@ -622,6 +645,9 @@ impl NovoApp {
                 self.cabinet_edit("Remove from plate", move |tx| {
                     devices.iter().try_for_each(|d| unplace_device(tx, *d))
                 });
+            }
+            Ask::SetPlateSize(s, plate) => {
+                self.cabinet_edit("Set plate size", move |tx| set_plate(tx, s, plate));
             }
             Ask::SetPlate(s) => {
                 self.cabinet_edit("Set plate", move |tx| set_plate(tx, s, DEFAULT_PLATE));

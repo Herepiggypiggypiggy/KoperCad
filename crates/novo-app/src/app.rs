@@ -4,6 +4,7 @@
 //! bar and no status bar.
 
 mod cabinet;
+mod cabinet_inspector;
 mod changes;
 mod checks;
 mod dock;
