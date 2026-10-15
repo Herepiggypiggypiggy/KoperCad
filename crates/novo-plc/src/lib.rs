@@ -39,6 +39,7 @@ pub mod commands;
 pub mod index;
 pub mod io;
 pub mod layout;
+pub mod link;
 
 pub use address::{Address, AddressStyle};
 pub use card::{Card, LayoutSource, address_style, allocate, cards, next_start};
