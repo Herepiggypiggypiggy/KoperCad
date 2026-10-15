@@ -1,0 +1,18 @@
+[package]
+name = "novo-commissioning"
+description = "Commissioning: checks per wire, terminal and device, progress, punch list"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+novo-core.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+novo-tests = { path = "../novo-tests" }
+serde_json.workspace = true
+
+[lints]
+workspace = true
