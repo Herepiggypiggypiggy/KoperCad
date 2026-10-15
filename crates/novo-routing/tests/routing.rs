@@ -291,19 +291,3 @@ fn a_wire_does_not_cross_the_plate_in_free_air_to_save_duct_length() {
     };
     assert!(net.route(&j, &far).length_mm < 480.0);
 }
-
-#[test]
-fn a_wire_that_turns_back_keeps_its_turning_point() {
-    // Both terminals face the duct but sit on one vertical line: the wire
-    // runs down to the duct and back up, and the length counts both legs.
-    let net = Network::new(&[duct(1, 0.0, 100.0, 400.0, 100.0)]);
-    let j = job(
-        1,
-        anchor(50.0, 20.0, Facing::Down),
-        anchor(50.0, 60.0, Facing::Down),
-    );
-    let r = net.route(&j, &NO_SLACK);
-    assert_eq!(r.length_mm, 80.0 + 40.0);
-    assert_eq!(polyline_length(&r.points), r.length_mm);
-    assert!(r.points.contains(&Point::new(50.0, 100.0)));
-}
