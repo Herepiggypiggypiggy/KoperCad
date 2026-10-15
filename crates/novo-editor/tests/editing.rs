@@ -2779,3 +2779,53 @@ fn tab_cycles_the_pins_of_a_part_and_q_ends_the_wire_there() {
     assert!(!editor.key(&mut doc, EditorKey::EndOnPart, &[]));
     assert!(!editor.key(&mut doc, EditorKey::NextPin, &[]));
 }
+
+#[test]
+fn a_cable_line_collects_the_wires_it_touches() {
+    let (mut doc, page, mut editor) = setup();
+    editor.begin_place("iec/protection/mcb_3p", None);
+    editor.click(&mut doc, page, p(40.0, 100.0), TOL);
+    editor.click(&mut doc, page, p(160.0, 100.0), TOL);
+    editor.leave_tool();
+    let a = symbol_at(&doc, page, p(40.0, 100.0));
+    let b = symbol_at(&doc, page, p(160.0, 100.0));
+    editor.begin_wire();
+    for (from, to) in [("2", "1"), ("4", "3"), ("6", "5")] {
+        click_pin(&mut editor, &mut doc, page, a, from);
+        click_pin(&mut editor, &mut doc, page, b, to);
+    }
+    editor.leave_tool();
+    let wires: Vec<_> = doc.project().wires().map(|w| w.id).collect();
+    assert_eq!(wires.len(), 3);
+
+    // C, a line down through all of them, Enter.
+    editor.begin_cable();
+    let (x, top, bottom) = (100.0, 60.0, 160.0);
+    assert_eq!(editor.click(&mut doc, page, p(x, top), TOL), Clicked::Step);
+    assert_eq!(
+        editor.click(&mut doc, page, p(x, bottom), TOL),
+        Clicked::Step
+    );
+    assert!(editor.in_progress());
+    assert!(editor.key(&mut doc, EditorKey::Finish, &[]));
+    let mut got = editor.take_cable_request().expect("the line touched wires");
+    got.sort();
+    let mut want = wires.clone();
+    want.sort();
+    assert_eq!(got, want);
+    assert!(editor.take_cable_request().is_none(), "taken once");
+    assert!(!editor.in_progress(), "the next line starts clean");
+
+    // A short line over one run takes only that wire.
+    editor.click(&mut doc, page, p(96.0, 108.0), TOL);
+    editor.click(&mut doc, page, p(104.0, 108.0), TOL);
+    assert!(editor.key(&mut doc, EditorKey::Finish, &[]));
+    assert_eq!(editor.take_cable_request(), Some(vec![wires[0]]));
+
+    // A line over nothing makes no request and says so.
+    editor.click(&mut doc, page, p(300.0, 20.0), TOL);
+    editor.click(&mut doc, page, p(300.0, 40.0), TOL);
+    assert!(!editor.key(&mut doc, EditorKey::Finish, &[]));
+    assert!(editor.take_cable_request().is_none());
+    assert!(editor.notice().is_some());
+}

@@ -175,6 +175,7 @@ const APP_COMMANDS: &[&str] = &[
     "tool.place",
     "tool.repeat",
     "tool.connect",
+    "tool.cable",
     "wire.end_on_part",
     "wire.next_pin",
     "view.command_field_here",
@@ -434,6 +435,11 @@ impl NovoApp {
                 }
             }
             "tool.repeat" => self.editor_key(EditorKey::Repeat),
+            "tool.cable" => {
+                if let Some(view) = self.canvas.schematic() {
+                    view.editor.begin_cable();
+                }
+            }
             "wire.end_on_part" => self.editor_key(EditorKey::EndOnPart),
             "wire.next_pin" => {
                 // Tab must not leave the drawing: egui's own focus move to
