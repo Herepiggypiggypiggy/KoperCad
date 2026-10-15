@@ -12,3 +12,4 @@
 2026-10-15 15:30 UTC #271 3fdf358 READY (live potentials overlay; follow-ups: repaint, tokens, paint order). #269 waits for #267 new head. Evens (#260,#268,#270,#272) are the original reviewer's.
 2026-10-15 15:40 UTC #269 0ddb866 CHANGES (the #267 fixes missing, conflicts with main). #263 re-READY on aa8e481 (merge of main only).
 2026-10-15 15:55 UTC #267 31e97f0 READY (all three fixes). #269 64397c9 CHANGES: corner drag makes diagonal stretches (DESIGN §4/§6); needs orthogonal constraint + test.
+2026-10-15 16:10 UTC #269 78d6367 READY (orthogonal drag fixed). #267 re-READY on b255817 (merge of main only). #271 3fdf358 READY earlier (merged).
