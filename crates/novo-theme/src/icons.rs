@@ -52,12 +52,15 @@ pub mod tool {
     pub const TEXT: &str = p::TEXT_T;
 }
 
-/// The two canvases.
+/// The canvases and workspaces.
 pub mod canvas {
     use egui_phosphor::regular as p;
 
     pub const SCHEMATIC: &str = p::LINE_SEGMENTS;
     pub const CABINET: &str = p::SQUARES_FOUR;
+    pub const REPORTS: &str = p::FILE_TEXT;
+    pub const COMMISSIONING: &str = p::CLIPBOARD_TEXT;
+    pub const VIEW_3D: &str = p::CUBE;
 }
 
 /// The outline and its modes, the inspector and the drawer tabs.

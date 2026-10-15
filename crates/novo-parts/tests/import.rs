@@ -519,3 +519,28 @@ fn a_failed_job_still_lists_what_it_stored() {
     assert!(job.stored_so_far().dimensions.is_some());
     assert_eq!(lib.records().unwrap().len(), 1);
 }
+
+#[test]
+fn a_file_saved_right_at_the_click_is_not_missed_to_rounded_file_times() {
+    let downloads = tempfile::tempdir().unwrap();
+    let click = SystemTime::now();
+    let path = downloads.path().join("9000-0001.stp");
+    fs::write(&path, STEP).unwrap();
+    // The file system stamped it a little before the click's clock reading.
+    let f = fs::File::options().write(true).open(&path).unwrap();
+    f.set_modified(click - Duration::from_millis(900)).unwrap();
+    let mut w = DownloadsWatcher::new(downloads.path(), click, "9000-0001");
+    w.poll();
+    assert_eq!(w.poll().len(), 1);
+
+    // A file well before the click is still ignored.
+    let old = downloads.path().join("9000-0001-old.stp");
+    fs::write(&old, STEP).unwrap();
+    let f = fs::File::options().write(true).open(&old).unwrap();
+    f.set_modified(click - Duration::from_secs(30)).unwrap();
+    let mut w = DownloadsWatcher::new(downloads.path(), click, "9000-0001");
+    w.poll();
+    let got = w.poll();
+    assert_eq!(got.len(), 1);
+    assert!(got[0].path.ends_with("9000-0001.stp"));
+}
