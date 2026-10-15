@@ -307,6 +307,60 @@ impl Tx<'_> {
         self.update::<BlockInstance>(instance, |b| b.detached = Some(reason))
     }
 
+    /// Called when a wire is drawn: a new connection between two members
+    /// of the same placed block is a structural edit and detaches it. A
+    /// wire from a member out to the rest of the circuit is how a block is
+    /// used and keeps the link.
+    pub(crate) fn detach_on_connect(&mut self, from: Endpoint, to: Endpoint) -> Result<()> {
+        let (a, b) = (endpoint_owner(from), endpoint_owner(to));
+        let blocks: Vec<BlockInstanceId> = self
+            .project()
+            .block_instances()
+            .filter(|b| b.detached.is_none())
+            .filter(|bl| {
+                let has = |id| bl.members.iter().any(|m| m.actual == id);
+                has(a) && has(b)
+            })
+            .map(|b| b.id)
+            .collect();
+        if blocks.is_empty() {
+            return Ok(());
+        }
+        let reason = format!(
+            "connection {} to {} added",
+            self.endpoint_name(from),
+            self.endpoint_name(to)
+        );
+        for block in blocks {
+            self.detach_block(block, reason.clone())?;
+        }
+        Ok(())
+    }
+
+    /// How a wire end reads to the user: `-K1:13` for a pin of a tagged
+    /// device, the id otherwise.
+    fn endpoint_name(&self, end: Endpoint) -> String {
+        let Endpoint::Pin { symbol, pin } = end else {
+            return endpoint_owner(end).to_string();
+        };
+        let Some(s) = self.project().symbol(symbol) else {
+            return symbol.to_string();
+        };
+        let owner = match &s.role {
+            SymbolRole::Device { device, .. } => self
+                .project()
+                .device(*device)
+                .map(|d| d.tag.to_string())
+                .filter(|t| !t.is_empty()),
+            _ => None,
+        }
+        .unwrap_or_else(|| symbol.to_string());
+        match s.pins.get(usize::from(pin)) {
+            Some(p) if !p.name.is_empty() => format!("{owner}:{}", p.name),
+            _ => format!("{owner}:{pin}"),
+        }
+    }
+
     /// Called before an object is deleted: drops it from the block it
     /// belongs to and detaches that block (a structural edit).
     pub(crate) fn forget_block_member(&mut self, id: AnyId) -> Result<()> {

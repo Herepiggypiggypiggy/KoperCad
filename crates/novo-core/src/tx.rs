@@ -544,7 +544,9 @@ impl<'p> Tx<'p> {
     ) -> Result<WireId> {
         let (from, to) = (from.into(), to.into());
         let page = self.endpoint_page(from)?;
-        self.insert(|id| Wire::new(id, page, from, to))
+        let wire = self.insert(|id| Wire::new(id, page, from, to))?;
+        self.detach_on_connect(from, to)?;
+        Ok(wire)
     }
 
     fn endpoint_page(&self, end: Endpoint) -> Result<PageId> {

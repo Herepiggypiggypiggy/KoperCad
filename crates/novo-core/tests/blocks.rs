@@ -352,6 +352,71 @@ fn deleting_a_member_detaches_the_block() {
 }
 
 #[test]
+fn a_connection_inside_the_block_detaches_it() {
+    let mut doc = Document::default();
+    let d = drawing(&mut doc);
+    let (block, _) = doc
+        .transact("Place", |tx| {
+            let def = tx.define_block(
+                "dol",
+                &[d.q1.into(), d.m1.into()],
+                Point::default(),
+                power(4.0),
+            )?;
+            tx.place_block(def, d.p2, Point::default(), Vec::new())
+        })
+        .unwrap();
+    let project = doc.project();
+    let symbol_of = |letter: &str| {
+        let device = device_of(project, project.block_instance(block).unwrap(), letter);
+        project.symbols_of_device(device.id)[0].id
+    };
+    let (q, m) = (symbol_of("Q"), symbol_of("M"));
+    // A wire out to the rest of the circuit is how a block is used.
+    doc.transact("Wire out", |tx| {
+        let lamp = tx.place_symbol(
+            d.p2,
+            "x",
+            Placement::at(Point::new(60.0, 0.0)),
+            two_pins(),
+            SymbolRole::Unassigned,
+        )?;
+        tx.connect(Endpoint::pin(m, 1), Endpoint::pin(lamp, 0))
+            .map(|_| ())
+    })
+    .unwrap();
+    assert!(
+        doc.project()
+            .block_instance(block)
+            .unwrap()
+            .detached
+            .is_none()
+    );
+    // A new connection between two members changes the circuit.
+    doc.transact("Wire in", |tx| {
+        tx.connect(Endpoint::pin(q, 0), Endpoint::pin(m, 1))
+            .map(|_| ())
+    })
+    .unwrap();
+    assert_eq!(
+        doc.project()
+            .block_instance(block)
+            .unwrap()
+            .detached
+            .as_deref(),
+        Some("connection =A1-Q2:1 to =A1-M2:2 added")
+    );
+    doc.undo().unwrap();
+    assert!(
+        doc.project()
+            .block_instance(block)
+            .unwrap()
+            .detached
+            .is_none()
+    );
+}
+
+#[test]
 fn what_a_block_cannot_hold() {
     let mut doc = Document::default();
     let d = drawing(&mut doc);
