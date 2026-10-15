@@ -224,3 +224,25 @@ fn capture_refuses_terminals_and_an_empty_page_has_the_origin() {
         Point::new(0.0, 0.0)
     );
 }
+
+#[test]
+fn free_origin_clears_the_pins_of_a_wide_symbol() {
+    let mut doc = Document::default();
+    let (page, _) = doc
+        .transact("Draw", |tx| {
+            let page = tx.add_page("1")?;
+            tx.place_symbol(
+                page,
+                "x",
+                Placement::at(Point::new(10.0, 4.0)),
+                vec![Pin::new("1", 0.0, 0.0), Pin::new("2", 50.0, 0.0)],
+                SymbolRole::Unassigned,
+            )?;
+            Ok(page)
+        })
+        .unwrap();
+    assert_eq!(
+        free_origin(doc.project(), page, 20.0),
+        Point::new(80.0, 4.0)
+    );
+}

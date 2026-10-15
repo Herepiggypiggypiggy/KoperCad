@@ -26,6 +26,8 @@ pub(crate) struct SaveDraft {
     pub name: String,
     pub description: String,
     pub error: Option<String>,
+    /// The name is taken: the window offers to replace that macro.
+    pub exists: bool,
     focused: bool,
 }
 
@@ -154,6 +156,7 @@ impl NovoApp {
             name: hint,
             description: String::new(),
             error: None,
+            exists: false,
             focused: false,
         });
     }
@@ -183,6 +186,7 @@ impl NovoApp {
             return;
         };
         let mut save = false;
+        let mut replace = false;
         let modal = egui::Modal::new(egui::Id::new("macro_save")).show(ctx, |ui| {
             ui.set_width(380.0);
             ui.heading("Save as macro");
@@ -216,13 +220,18 @@ impl NovoApp {
                 {
                     save = true;
                 }
+                if draft.exists && ui.button("Replace it").clicked() {
+                    replace = true;
+                }
                 ui.weak("Enter saves · Esc cancels");
             });
         });
         if modal.should_close() {
             return;
         }
-        if save {
+        if replace {
+            self.submit_macro_replace(draft);
+        } else if save {
             self.submit_macro_save(draft);
         } else {
             self.wb.macro_save = Some(draft);
@@ -231,35 +240,69 @@ impl NovoApp {
 
     /// Captures the selection and writes it to the library. On a refusal
     /// the window stays, saying why.
-    pub(crate) fn submit_macro_save(&mut self, mut draft: SaveDraft) {
+    pub(crate) fn submit_macro_save(&mut self, draft: SaveDraft) {
+        self.write_macro(draft, false);
+    }
+
+    /// Writes the selection over the macro of the same name; its revision
+    /// goes up by one.
+    pub(crate) fn submit_macro_replace(&mut self, draft: SaveDraft) {
+        self.write_macro(draft, true);
+    }
+
+    fn write_macro(&mut self, mut draft: SaveDraft, replace: bool) {
         let name = draft.name.trim().to_owned();
-        let result = self.save_selection_as_macro(&name, draft.description.trim());
+        let result = self.save_selection_as_macro(&name, draft.description.trim(), replace);
         match result {
             Ok(path) => self.message(Level::Info, format!("Saved macro {path}")),
-            Err(reason) => {
+            Err((reason, exists)) => {
                 draft.error = Some(reason);
+                draft.exists = exists;
                 self.wb.macro_save = Some(draft);
             }
         }
     }
 
-    fn save_selection_as_macro(&mut self, name: &str, description: &str) -> Result<String, String> {
+    /// Saves, or with `replace` writes over the macro of that name. The
+    /// error says whether the name was taken.
+    fn save_selection_as_macro(
+        &mut self,
+        name: &str,
+        description: &str,
+        replace: bool,
+    ) -> Result<String, (String, bool)> {
+        let plain = |e: String| (e, false);
         let selection = self.selection();
         let project = self
             .backend
             .document()
             .map(|d| d.project())
-            .ok_or("No project is open")?;
+            .ok_or_else(|| plain("No project is open".into()))?;
         let definition = macro_place::capture(project, name, description, &selection)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| plain(e.to_string()))?;
         let library = self
             .wb
             .macro_place
             .library
             .as_ref()
-            .ok_or("There is no macro folder on this computer")?;
+            .ok_or_else(|| plain("There is no macro folder on this computer".into()))?;
         let file = MacroFile::new(definition).with_author(self.settings.initials.clone());
-        library.save("", &file).map_err(|e| e.to_string())
+        if replace {
+            let path = format!("{}.{}", file.name, novo_parts::MACRO_EXTENSION);
+            library
+                .replace(&path, &file)
+                .map_err(|e| plain(e.to_string()))?;
+            return Ok(path);
+        }
+        library.save("", &file).map_err(|e| {
+            let exists = matches!(e, novo_parts::MacroError::Exists(_));
+            let text = if exists {
+                format!("A macro called {name} already exists")
+            } else {
+                e.to_string()
+            };
+            (text, exists)
+        })
     }
 
     /// `macro.place`: opens the window that picks a macro and previews it.
@@ -280,6 +323,10 @@ impl NovoApp {
 
     pub(super) fn macro_place_window(&mut self, ctx: &egui::Context) {
         if !self.wb.macro_place.open {
+            return;
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.wb.macro_place.open = false;
             return;
         }
         let page = self.current_page;

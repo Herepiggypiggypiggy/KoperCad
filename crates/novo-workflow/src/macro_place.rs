@@ -230,13 +230,17 @@ pub fn selection_origin(project: &Project, items: &[AnyId]) -> Point {
     corner(points)
 }
 
-/// Where a macro goes by default: right of what is on `page`, top aligned,
-/// one `gap` away. An empty page gets the origin.
+/// Where a macro goes by default: right of what is on `page` (including the
+/// reach of each symbol's pins), top aligned, one `gap` away. An empty page gets the origin.
 pub fn free_origin(project: &Project, page: PageId, gap: f64) -> Point {
     let symbols = project.symbols().filter(|s| s.page == page);
     let mut right = f64::NEG_INFINITY;
     let mut points = Vec::new();
     for s in symbols {
+        // Pins reach past the origin of a wide symbol.
+        for pin in &s.pins {
+            right = right.max(s.placement.apply(pin.offset).x);
+        }
         right = right.max(s.placement.origin.x);
         points.push(s.placement.origin);
     }

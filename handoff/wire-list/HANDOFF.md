@@ -1,17 +1,21 @@
 # Wire list with cut lengths: handoff
 
 ## State
-- Branch `claude/project-thread-qpde09` (local name `wire-list-lengths`), stacked on the routing branch `claude/project-thread-euksez` (#381, `route_connections`). Draft PR; rebase onto main once #381 merges.
-- Changes: `novo-reports/src/lengths.rs`, `wires.rs`, `cutlist.rs`, `report.rs` (`proposed_by_default`), `defaults.rs`, tests in `tests/reports.rs`, `tests/live.rs`, `novo-cli/tests/cli.rs`.
+- #417 merged (wire list Cut length mm / Length basis, `cutlist` report, docs/design/cut-list.md).
+- Follow-up PR on `claude/project-thread-qpde09`: `kopercad-cli export cutlist`.
+- Next (asked by the coordinator): labels export (wire, terminal, device, cable labels; CSV layouts, PDF sheet with user-set sizes, app preview, CLI).
+
+## How the user opens it
+- Wire list with cut lengths: generated "Wire list" page (default page), `kopercad-cli export wires`, Excel via `export reports`.
+- Cut list: `kopercad-cli export cutlist` and Excel via `export reports`. App: not a default page; an "add Cut list page" command is to be agreed with "UI integration: reports and checks" (session_01TaTTPuTqhk8bHd277oJRFR), message sent, no answer yet.
 
 ## Resume
 ```
 cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings
-cargo test -p novo-reports -p novo-cli -p novo-pdf -p novo-tests
+cargo test -p novo-reports -p novo-cli
 ```
 Disk is small: `CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0`, `rm -rf target` when full.
 
 ## Decisions
-- Cut list is a standard report but not a default page (`proposed_by_default` false).
-- Estimate and end allowances are constants documented in docs/design/cut-list.md.
+- Cut list is a standard report but not a default page (`Report::proposed_by_default` false).
 - Routing code is not touched; only `route_connections` is called.

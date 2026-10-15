@@ -132,6 +132,16 @@ pub trait ProjectBackend {
         None
     }
 
+    /// The commissioning document kept in the project file (checks and
+    /// punch list), as JSON. Not part of the model: not undone, not saved
+    /// with the drawing.
+    fn commissioning_json(&self) -> Option<String> {
+        None
+    }
+
+    /// Keeps the commissioning document at once.
+    fn set_commissioning_json(&mut self, _json: &str) {}
+
     /// Issues a revision: the model command and the snapshot kept in the
     /// project file, as one undo step (DESIGN §7). The caller passes
     /// [`novo_revisions::Issued::changes`] on to the views.
@@ -420,6 +430,22 @@ impl ProjectBackend for StorageBackend {
         self.session.as_ref()?.snapshot(revision).ok().flatten()
     }
 
+    fn commissioning_json(&self) -> Option<String> {
+        self.session
+            .as_ref()?
+            .sidecar(COMMISSIONING_KEY)
+            .ok()
+            .flatten()
+    }
+
+    fn set_commissioning_json(&mut self, json: &str) {
+        if let Some(session) = self.session.as_mut()
+            && let Err(e) = session.put_sidecar(COMMISSIONING_KEY, json)
+        {
+            log::warn!("could not keep the commissioning data: {e}");
+        }
+    }
+
     fn issue_revision(
         &mut self,
         index: Option<String>,
@@ -630,13 +656,25 @@ impl Drop for StorageBackend {
     }
 }
 
+/// The sidecar document the commissioning data is kept under.
+const COMMISSIONING_KEY: &str = "commissioning";
+
 /// Keeps projects in memory and cannot read or write files.
 #[derive(Default)]
 pub struct MemoryBackend {
     document: Option<Document>,
+    commissioning: Option<String>,
 }
 
 impl ProjectBackend for MemoryBackend {
+    fn commissioning_json(&self) -> Option<String> {
+        self.commissioning.clone()
+    }
+
+    fn set_commissioning_json(&mut self, json: &str) {
+        self.commissioning = Some(json.to_owned());
+    }
+
     fn new_project(&mut self, name: &str) -> Result<(), BackendError> {
         self.document = Some(new_document(name)?);
         Ok(())

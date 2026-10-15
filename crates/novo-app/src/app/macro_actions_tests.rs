@@ -41,8 +41,17 @@ fn a_saved_selection_is_previewed_and_placed_with_the_next_free_tag() {
     d.app.run_command(&ctx, "macro.save", Some("Breaker"));
     let again = d.app.wb.macro_save.take().unwrap();
     d.app.submit_macro_save(again);
-    assert!(d.app.wb.macro_save.as_ref().unwrap().error.is_some());
-    d.app.wb.macro_save = None;
+    let refused = d.app.wb.macro_save.take().unwrap();
+    assert!(refused.error.is_some() && refused.exists);
+
+    // Replace writes over it and bumps the revision.
+    d.app.submit_macro_replace(refused);
+    assert!(
+        d.app.wb.macro_save.is_none(),
+        "replaced without a complaint"
+    );
+    let library = MacroLibrary::new(dir.path().join("Macros"), "user");
+    assert_eq!(library.load("Breaker.kcmacro").unwrap().revision, 2);
 
     // Place: the preview names the tag it would take.
     let devices = d.doc().project().devices().count();
