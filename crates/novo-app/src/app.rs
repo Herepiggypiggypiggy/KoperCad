@@ -130,6 +130,8 @@ pub struct NovoApp {
     page_filter: String,
     /// Whether the outline files pages by page group or by panel.
     page_view: PageView,
+    /// The page being renamed in the outline, with the text so far.
+    renaming_page: Option<(PageId, String)>,
     /// Window width last frame, which decides whether the outline pins.
     window_width: f32,
 }
@@ -181,6 +183,7 @@ impl NovoApp {
             breadcrumb_link: None,
             page_filter: String::new(),
             page_view: PageView::Function,
+            renaming_page: None,
             window_width: 0.0,
         }
     }
@@ -1167,7 +1170,43 @@ impl NovoApp {
         }
     }
 
+    /// A page row being renamed: Enter or clicking away keeps the name, Esc
+    /// drops it.
+    fn rename_row(&mut self, ui: &mut egui::Ui, page: PageId) {
+        let Some((_, text)) = self.renaming_page.as_mut() else {
+            return;
+        };
+        let edit = ui.add(egui::TextEdit::singleline(text).desired_width(f32::INFINITY));
+        if !edit.has_focus() && !edit.lost_focus() {
+            edit.request_focus();
+        }
+        let escape = ui.input(|i| i.key_pressed(egui::Key::Escape));
+        if escape {
+            self.renaming_page = None;
+        } else if edit.lost_focus() {
+            let name = text.clone();
+            self.renaming_page = None;
+            let unchanged = self
+                .backend
+                .document()
+                .and_then(|d| d.project().page(page).map(|p| p.name == name.trim()))
+                .unwrap_or(true);
+            if !unchanged && let Some(Err(e)) = self.execute(Command::RenamePage { page, name }) {
+                self.message(Level::Error, format!("Could not rename the page: {e}"));
+            }
+        }
+    }
+
     fn page_row(&mut self, ui: &mut egui::Ui, row: &PageRow) -> bool {
+        if row.sheet == 0
+            && self
+                .renaming_page
+                .as_ref()
+                .is_some_and(|(p, _)| *p == row.page)
+        {
+            self.rename_row(ui, row.page);
+            return false;
+        }
         let selected = self.current_page == Some(row.page) && self.wb.sheet == row.sheet;
         let label = row.label.as_str();
         let response = ui
@@ -1180,6 +1219,19 @@ impl NovoApp {
             })
             .inner;
         response.dnd_set_drag_payload(row.page);
+        let drawn = self.backend.document().is_some_and(|d| {
+            d.project()
+                .page(row.page)
+                .is_some_and(|p| !matches!(p.kind, PageKind::Generated { .. }))
+        });
+        if drawn && response.double_clicked() {
+            let name = self
+                .backend
+                .document()
+                .and_then(|d| d.project().page(row.page).map(|p| p.name.clone()))
+                .unwrap_or_default();
+            self.renaming_page = Some((row.page, name));
+        }
         let structure = self
             .backend
             .document()
