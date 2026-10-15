@@ -16,6 +16,7 @@
 
 mod coupling;
 mod devices;
+mod loads;
 
 pub use coupling::{
     Clock, DEFAULT_DELAY, Settled, delay_seconds, is_coil, is_timer_contact, settle, settle_timed,
@@ -23,6 +24,8 @@ pub use coupling::{
 pub use devices::{
     DeviceStates, Direction, MotorRun, device_states, is_lamp, is_motor, lamp_color,
 };
+
+pub use loads::{is_load, loads_on};
 
 use std::collections::{HashSet, VecDeque};
 
