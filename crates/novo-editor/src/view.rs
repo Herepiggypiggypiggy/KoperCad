@@ -531,7 +531,11 @@ impl SchematicView {
                 .editor
                 .part_delta(document, drag.part.wire, kind, drag.from, drag.to);
             let mut pts = vec![a];
-            pts.extend(crate::edit::moved_route(a, &w.route, b, kind, delta));
+            pts.extend(
+                self.editor
+                    .moved_route(document, drag.part.wire, kind, delta)
+                    .unwrap_or_default(),
+            );
             pts.push(b);
             items.push(Item::new(layer).unselectable().with(Primitive::stroked(
                 Shape::polyline(pts.iter().map(|p| model::vec(*p)), false),

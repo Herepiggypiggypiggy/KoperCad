@@ -1621,9 +1621,27 @@ impl Editor {
         if delta == Point::ZERO {
             return false;
         }
+        let square = self.wire_mode == WiringMode::Corners;
         self.run(doc, "Move wire", |tx| {
-            edit::move_wire_part(tx, wire, kind, delta)
+            edit::move_wire_part(tx, wire, kind, delta, square)
         })
+    }
+
+    /// The route a wire would have with a part dragged by `delta`: what the
+    /// drop will store, in the current wiring mode.
+    pub fn moved_route(
+        &self,
+        doc: &Document,
+        wire: WireId,
+        kind: edit::PartKind,
+        delta: Point,
+    ) -> Option<Vec<Point>> {
+        let project = doc.project();
+        let w = project.wire(wire)?;
+        let a = project.endpoint_position(w.from)?;
+        let b = project.endpoint_position(w.to)?;
+        let square = self.wire_mode == WiringMode::Corners;
+        Some(edit::moved_route(a, &w.route, b, kind, delta, square))
     }
 
     /// How far a wire part dragged from `from` to `to` moves.
