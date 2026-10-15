@@ -237,6 +237,7 @@ pub struct PlcIndex {
 impl PlcIndex {
     pub fn build(project: &Project, functions: &dyn Functions) -> PlcIndex {
         let cards = cards(project);
+        let style = address_style(project);
         let mut channels = Vec::new();
         for card in &cards {
             for symbol in project.symbols_of_device(card.device) {
@@ -260,7 +261,7 @@ impl PlcIndex {
                     kind,
                     stored,
                     number,
-                    address: number.and_then(|n| card.address(kind, n)),
+                    address: number.and_then(|n| card.address_in(kind, n, style)),
                 });
             }
         }
@@ -271,7 +272,7 @@ impl PlcIndex {
             .map(|(i, c)| (c.symbol, i))
             .collect();
         let mut index = PlcIndex {
-            style: address_style(project),
+            style,
             cards,
             channels,
             by_symbol,
@@ -358,7 +359,10 @@ impl PlcIndex {
                 (Ok(_), _) => {}
             }
             for space in Space::ALL {
-                if card.bytes(space) > 0 && card.start[space as usize].is_none() {
+                if self.style != AddressStyle::Rockwell
+                    && card.bytes(space) > 0
+                    && card.start[space as usize].is_none()
+                {
                     issues.push(Issue::NoStart {
                         card: card.device,
                         space,

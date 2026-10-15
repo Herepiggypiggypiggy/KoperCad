@@ -20,3 +20,5 @@
 2026-10-15 04:20 UTC PR #160 opened (channel index), head 95430f7, sent to main reviewer. Patches 0003-0004 rebased onto it (branch ws17-next).
 2026-10-15 04:25 UTC #160 READY (main reviewer) on 95430f7. Non-blocking notes (Rockwell SharedSlot error, skip NoSuchChannel on bad layout, READS Page) go into the io_rows PR.
 2026-10-15 04:30 UTC #160 merged. PR 4 (io_rows + #160 review notes) opened from main.
+2026-10-15 04:35 UTC #162 READY on 1df1812. Notes (io_rows_with, Rockwell addresses without starts) go into the commands PR.
+2026-10-15 04:40 UTC #162 merged. PR 5 (commands + #162 notes) opened from main. Told Outputs io_rows is on main.

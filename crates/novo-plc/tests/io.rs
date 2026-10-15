@@ -133,3 +133,34 @@ fn stations_group_rows_and_missing_starts_sort_last() {
         ]
     );
 }
+
+#[test]
+fn rockwell_rows_need_no_start_and_follow_the_slots() {
+    use novo_plc::card::ADDRESS_STYLE;
+    let mut doc = Document::default();
+    doc.transact("Cards", |tx| {
+        for (tag, slot) in [("-K1", 1), ("-K2", 2)] {
+            let c = tx.add_device_of_kind(DeviceTag::parse(tag)?, "", DeviceKind::Plc)?;
+            tx.set_property(c, CHANNELS, Some(Value::from("DI2")))?;
+            tx.set_property(c, SLOT, Some(Value::Int(slot)))?;
+        }
+        tx.set_info(|i| {
+            i.properties
+                .insert(ADDRESS_STYLE.into(), Value::from("rockwell"));
+        })
+    })
+    .unwrap();
+    let project = doc.project();
+    let rows = PlcIndex::build(project, &FromKey)
+        .io_rows_with(project, &novo_core::Netlist::build(project));
+    let addresses: Vec<_> = rows.iter().map(|r| r.address.clone().unwrap()).collect();
+    assert_eq!(
+        addresses,
+        [
+            "Local:1:I.Data.0",
+            "Local:1:I.Data.1",
+            "Local:2:I.Data.0",
+            "Local:2:I.Data.1"
+        ]
+    );
+}
