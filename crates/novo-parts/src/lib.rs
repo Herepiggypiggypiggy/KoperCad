@@ -44,7 +44,7 @@ pub use csv::{
 pub use macros::{
     Imported, MACRO_EXTENSION, MACRO_FORMAT, MACRO_FORMAT_VERSION, MACRO_PACK_EXTENSION,
     MACRO_PACK_FORMAT, MacroEntry, MacroError, MacroFile, MacroLibrary, MacroPack, OnConflict,
-    PackEntry, user_macros_dir,
+    PackEntry, STARTER_FOLDER, starter_macros, user_macros_dir,
 };
 pub use search::{Matcher, normalize_code};
 pub use sheet::{

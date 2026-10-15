@@ -29,6 +29,9 @@ use thiserror::Error;
 
 use crate::search::Matcher;
 
+mod starter;
+pub use starter::{STARTER_FOLDER, starter_macros};
+
 /// The `format` value of a macro file.
 pub const MACRO_FORMAT: &str = "kopercad-macro";
 /// The `format` value of a pack file.
