@@ -665,6 +665,15 @@ impl PageScene {
             }
         };
         for wire in project.page_contents(self.page).wires {
+            // Most wires are nowhere near: skip them on their drawn bounds.
+            if let Some(b) = self.scene.item_bounds(item_id(wire))
+                && (p.x < b.min.x - tolerance
+                    || p.x > b.max.x + tolerance
+                    || p.y < b.min.y - tolerance
+                    || p.y > b.max.y + tolerance)
+            {
+                continue;
+            }
             let Some(pts) = self.wire_points(project, wire) else {
                 continue;
             };

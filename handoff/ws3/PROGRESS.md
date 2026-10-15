@@ -58,3 +58,4 @@
 - 2026-10-15: text-only drag. Press and drag on a label moves only the text: Editor::move_label (LabelSource Record or Drawn; a drawn tag gets a text record at the place it is drawn), view ghost while dragging, Esc puts it back.
 - 2026-10-15: wire part drag keeps stretches horizontal or vertical: edit::moved_route adds an elbow next to the fixed neighbour (DESIGN 4, 6); the part selection clears after a drag because bends may be added.
 - 2026-10-15: a dragged wire part squares every stretch at a moved corner in Corners mode (edit::moved_route square flag, Editor::moved_route for the ghost); Lines mode leaves slanted stretches alone.
+- 2026-10-15: perf: wire_part_at skips wires by their drawn bounds before building points (3,000 wires: 0.87 -> 0.12 ms per call, measured with tests/model_perf.rs from #315).
