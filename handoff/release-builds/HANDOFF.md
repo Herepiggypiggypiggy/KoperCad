@@ -1,36 +1,42 @@
 # Release and builds: handoff
 
 Thread: "Release and builds" (session cse_01UuGC6jT84yVrbcwGaSJ5Df). Owns .github/workflows/*,
-packaging/windows/novoelectric.iss, scripts/run-latest.ps1, scripts/install-desktop-shortcut.ps1.
+packaging/windows/novoelectric.iss, scripts/run-latest.ps1, scripts/install-desktop-shortcut.ps1,
+scripts/setup-new-pc.ps1, scripts/build-local.ps1, scripts/cross-build-windows.sh, docs/LOCAL-BUILDS.md.
 
-## Current state (2026-10-14 17:05 UTC)
-- Branch claude/project-thread-4loohk, PR #41, head 618b36f. Sent to main reviewer
-  (cse_016C9nTT8cN7voW8t1NQUG4W). Integration lead merges on READY without waiting for CI
-  (workflow-only exception). #40 was closed in favour of #41.
-- #41 does: experimental build drops only PRs that break `cargo check -p novo-app` (fallback
-  path), main-only as last resort; no LTO, 16 codegen units for the experimental build;
-  CI/installer cancel superseded PR runs; paths-ignore **/*.md and docs/** on CI and
-  experimental; installer workflow only on packaging/icon/workflow changes, tags, dispatch;
-  scripts/setup-new-pc.ps1 (one-paste setup on a new PC; copy also at launcher/setup-novoelectric-shortcut.ps1).
+## Current state (2026-10-15 15:50 UTC)
+- Repo is public and renamed `Herepiggypiggypiggy/kopercad` (old slug redirects). Product KoperCAD,
+  maker KoperVonk. Free Actions minutes.
+- Standing order from the lead: do NOT dispatch an experimental build unless Tadjiro asks. Last
+  builds: 1 to 4 (build 4 = main f6be257). Windows CI on main builds and passes.
+- Rename leftovers done: user-visible names (#201, #236), README line and WinLibs checksum check
+  (#285), settings and parts catalog moved to %APPDATA%\KoperCAD with a migration, Documents folder
+  rule (#302), program renamed to kopercad.exe (#304).
+- Deliberately NOT renamed: `%LOCALAPPDATA%\NovoElectric` (launcher builds live there; the app's
+  autosaves too), the release asset `novoelectric-experimental-windows.zip`, the `novo-*` crates, the
+  `novoelectric` Python module (WS-28's call).
+- Compatibility copy: the experimental zip and build-local also carry `novoelectric.exe`, because
+  Tadjiro's installed run-latest.ps1 starts that name. Remove it once he has re-run
+  install-desktop-shortcut.ps1 (new run-latest accepts either name).
+- Stray remote branch `claude/local-builds` stays (delete was denied; content is on main).
 
 ## Tadjiro's PC
-- Shortcut %USERPROFILE%\Desktop\NovoElectric (latest).lnk -> run-latest.ps1 copy in
-  %LOCALAPPDATA%\NovoElectric\experimental. gh installed per user and signed in.
-- The owner's Remote Control session (id on the project mount) takes only Tadjiro's own typed messages.
-- 60 fps GPU check pending: Tadjiro types "run the GPU speed check on my PC" in the
-  coordination thread; RC runs `canvas-demo.exe --stress 10000 --seconds 10`; tester fills Gate 0.
+- Shortcuts "KoperCAD (latest)" and "KoperCAD (build here)" on the Desktop -> copies of
+  run-latest.ps1 / build-local.ps1 in %LOCALAPPDATA%\NovoElectric\experimental. Those copies are only
+  refreshed by running scripts\install-desktop-shortcut.ps1.
 - Never touch the owner's existing EPLAN project folder (path on the project mount only).
+- Not verified on his PC: build-local.ps1 end to end, the installer upgrade over an old install, the
+  new run-latest.
 
 ## Rules and traps
 - No admin rights ever: per-user, HKCU, %LOCALAPPDATA%, PrivilegesRequired=lowest.
-- Private repo, free plan: no branch protection, limited runners, Windows minutes count 2x.
-  Keep CI load low. Experimental concurrency group keeps only the newest pending run.
-- Publish job runs on ubuntu with the write token and runs no PR code; keep it that way.
-- gh GraphQL is blocked (403) here; use REST (`gh api`) or the GitHub MCP tools.
-
-- GPU check PASSED (P1000: 10k 1135 fps avg; 100k 113 avg, 38.5 1% low). Tester and canvas thread told.
+- Main CI runs are not cancelled (only PR runs are); experimental concurrency group keeps the newest
+  pending run. The publish job runs on ubuntu with the write token and runs no PR code.
+- gh GraphQL is blocked (403) here; use REST or the GitHub MCP tools. Force-push is blocked by a repo
+  rule; add a commit instead. The sandbox gets 403 from github.com release downloads.
+- One designated branch per thread: wait for a PR to merge before reusing the branch.
 
 ## Next
-1. Drive #41 to merge; then confirm the next experimental run publishes and BUILD_INFO lists PRs.
-2. Drop canvas-demo from the experimental build (GPU check done) unless canvas thread wants it for the 100k stutter.
-3. Launcher: show which build is running (BUILD_INFO) without a console window.
+1. Wait for Tadjiro to ask for a build (via coordinator or lead); then dispatch experimental.yml.
+2. Hands-on checks on his PC (shortcut, build-local, installer upgrade).
+3. Drop the novoelectric.exe copy later; consider pinning a WinLibs release and hash.
