@@ -46,3 +46,4 @@
 18:47 UTC #406 026c901 CHANGES (design): top-band mark, per-frame recompute, cabinet.heat command + DESIGN line
 18:48 UTC #429 a3a4a69 READY (Parts window + import). Routing from #440: I take PR number mod 3 = 1
 18:56 UTC #463 959a47b CHANGES (design, draft): no build on main (cabinet_open), F10/Alt, width check 1500/1366, one-row mark
+18:58 UTC #464 ab1d519 CHANGES (design): own test fails on main (#458 twin), wheel hidden-items hint, favourites
