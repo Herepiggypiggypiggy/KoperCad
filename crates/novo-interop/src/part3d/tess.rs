@@ -306,7 +306,9 @@ fn polygon(s: &Surface, mut loops: Vec<UvLoop>, tol: f64) -> Option<Soup> {
         return None;
     }
     let mut tris: Vec<[u32; 3]> = idx
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .map(|c| {
             let (a, b, c) = (c[0], c[1], c[2]);
             let cr = (uvs[b][0] - uvs[a][0]) * (uvs[c][1] - uvs[a][1])

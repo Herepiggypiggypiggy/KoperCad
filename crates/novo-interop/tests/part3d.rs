@@ -46,7 +46,7 @@ fn cylinder_step(r: f64, h: f64) -> String {
 fn volume(g: &PartGeometry) -> f64 {
     let m = g.detail();
     let mut v = 0.0;
-    for t in m.indices.chunks_exact(3) {
+    for t in m.indices.as_chunks::<3>().0.iter() {
         let p = |i: usize| m.positions[t[i] as usize].map(f64::from);
         let (a, b, c) = (p(0), p(1), p(2));
         v += (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0])

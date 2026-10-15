@@ -536,7 +536,7 @@ pub fn mesh_edges(positions: &[[f32; 3]], indices: &[u32], crease_deg: f64) -> V
     type EdgeUses = Vec<(usize, [u32; 2])>;
     let mut by_edge: HashMap<(u32, u32), EdgeUses> = HashMap::new();
     let mut normals: Vec<V3> = Vec::with_capacity(indices.len() / 3);
-    for (ti, t) in indices.chunks_exact(3).enumerate() {
+    for (ti, t) in indices.as_chunks::<3>().0.iter().enumerate() {
         let p = |i: usize| positions[t[i] as usize].map(f64::from);
         normals.push(unit_or(cross(sub(p(1), p(0)), sub(p(2), p(0))), [0.0; 3]));
         for k in 0..3 {
@@ -576,7 +576,7 @@ mod tests {
         assert_eq!(g.size_mm(), [10.0, 20.0, 30.0]);
         assert_eq!(m.edges.len(), 12, "a box has twelve feature edges");
         let mut vol = 0.0f64;
-        for t in m.indices.chunks_exact(3) {
+        for t in m.indices.as_chunks::<3>().0.iter() {
             let p = |i: usize| m.positions[t[i] as usize].map(f64::from);
             let (a, b, c) = (p(0), p(1), p(2));
             // Signed volume of the tetrahedron to the origin.
@@ -621,7 +621,9 @@ mod tests {
         let pos: Vec<V3> = m.positions.iter().map(|p| p.map(f64::from)).collect();
         let tris: Vec<[u32; 3]> = m
             .indices
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|c| [c[0], c[1], c[2]])
             .collect();
         let (pos, tris) = weld(&pos, &tris, 1e-6);

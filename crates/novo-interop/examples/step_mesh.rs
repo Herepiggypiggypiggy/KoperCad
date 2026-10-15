@@ -39,7 +39,9 @@ fn main() {
     let m = g.detail();
     let tris: Vec<[u32; 3]> = m
         .indices
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .map(|c| [c[0], c[1], c[2]])
         .collect();
     let pos: Vec<[f64; 3]> = m.positions.iter().map(|p| p.map(f64::from)).collect();
@@ -62,7 +64,7 @@ fn main() {
         for p in &m.positions {
             o.push_str(&format!("v {} {} {}\n", p[0], p[1], p[2]));
         }
-        for t in m.indices.chunks_exact(3) {
+        for t in m.indices.as_chunks::<3>().0.iter() {
             o.push_str(&format!("f {} {} {}\n", t[0] + 1, t[1] + 1, t[2] + 1));
         }
         std::fs::write(format!("{path}.obj"), o).expect("write obj");
