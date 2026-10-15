@@ -13,101 +13,49 @@ is a handful of numbers and one picture, with the assumptions visible. It is a
 **planning value**: the enclosure or cooling-unit maker's own sizing tool or
 datasheet is the authority, and the UI says so next to every result.
 
-## 2. Standard followed, and what is not claimed
+## 2. Split of work and standard followed
 
-- **Effective cooling surface** follows the surface-factor method of
-  IEC 60890 (Annex on effective area): each outer face of the enclosure counts
-  with a factor `b` that depends on how freely air reaches it.
-- **Heat balance** is the steady-state balance used in maker handbooks
-  (Rittal climate-control handbook, listed in the gap analysis): heat leaves
-  through the walls in proportion to the effective area and the temperature
-  difference.
-- **Not claimed:** the full IEC 60890 type-test extrapolation (temperature
-  rise at 0.5 and 1.0 of the enclosure height from the `k` and `x` curves).
-  The curve tables were not available to the implementing thread, so they are
-  not reproduced from memory. The result is a **mean interior temperature**
-  estimate; the top of a cabinet is warmer than that value, which is why the
-  hot-spot map and the "top third" share are shown next to it.
-
-If a later thread adds the IEC 60890 curves, they replace section 4.2's
-`delta_t` and nothing else changes.
+- **Enclosure heat balance** lives in `novo_layout::sizing` (Enclosure sizing
+  helper thread, PR #402): `effective_surface` (IEC 60890 surface factors per
+  face), `total_loss`, `thermal` (dissipation, rise, inside temperature,
+  cooling needed, fan airflow) and the material constants. This document does
+  not duplicate those formulas; section 4.1 only records what to verify.
+- **This thread adds** per-device heat on the plate: sources, the loss-density
+  map, legend, hot-device ranking and the share of heat high on the plate
+  (`novo_layout::thermal`), and the Cabinet canvas overlay.
+- **Not claimed:** the full IEC 60890 type-test extrapolation (temperature rise
+  at 0.5 and 1.0 of the enclosure height from the `k` and `x` curves). The
+  tables were not available, so they are not reproduced from memory. The
+  balance gives a **mean interior temperature**; the top of a cabinet is
+  warmer, which is why the map and the top-third share sit next to it.
 
 ## 3. Inputs
 
 | Input | Where it lives | Default |
 | --- | --- | --- |
-| Loss `power_loss_w` per part (W) | part property (from the Part power loss thread) | missing = **unknown**, never 0 |
-| `load_factor` per part, 0 to 1 | part property | 1 (full loss) |
-| Interior size `width_mm`, `height_mm`, `depth_mm` | enclosure `Structure.properties` | outer size guessed from the plate (+100 mm each way, 250 mm deep), flagged **guessed** |
-| `installation` | enclosure property | `free_standing` |
-| `top_covered` | enclosure property | false |
-| `material` | enclosure property | `sheet_steel` |
-| `ambient_c`, `max_internal_c` | enclosure property | 35 and 40 degrees C |
-| `altitude_m` | enclosure property | 0 |
+| `power_loss_w` per part (W) | part property (Part power loss thread) | missing = **unknown**, never 0 |
+| `load_factor` per part, 0 to 1 | part property | 1 |
+| Enclosure size, installation, material, temperatures | enclosure data, see `sizing` | from the sizing helper |
 
-Effective loss of a device is `power_loss_w * load_factor`. The load factor is
-the designer's statement of how much of the rated loss is present on average
-(a motor starter idles most of the day); the engine does not scale by I squared
-on its own, because that needs the load current, which is not known here.
-Enclosure dimensions are exterior dimensions (width W, height H, depth D) as
-the maker lists them.
+Effective loss of a device is `power_loss_w * load_factor`, the same rule as
+`sizing::total_loss`. The load factor is the designer's statement of how much
+of the rated loss is present on average; the engine does not scale by I squared
+because the load current is not known here. A device with no loss data is
+listed as unknown and left out of the map; results that depend on the total are
+shown as "at least" values.
 
 ## 4. Formulas
 
-All lengths in metres inside the formulas, areas in m2, temperatures in
-degrees C, power in W.
+### 4.1 Enclosure balance (in `sizing`, summarised here to verify)
 
-### 4.1 Effective surface `Ae`
-
-`Ae = sum(A_face * b_face)`, with:
-
-| Face | Area | `b`, free | `b`, covered (against a wall, neighbour or ceiling) |
-| --- | --- | --- | --- |
-| Top | `W * D` | 1.4 | 0.7 |
-| Front | `W * H` | 0.9 | n/a (the door is always free) |
-| Rear | `W * H` | 0.9 | 0.5 |
-| Left, right | `D * H` | 0.9 | 0.5 |
-| Bottom (floor) | `W * D` | 0 | 0 |
-
-Installations are presets of which faces are covered:
-
-| `installation` | Covered faces |
-| --- | --- |
-| `free_standing` | none |
-| `wall` | rear |
-| `row_end` | one side |
-| `row_end_wall` | rear, one side |
-| `row_middle` | both sides |
-| `row_middle_wall` | rear, both sides |
-
-`top_covered` additionally covers the top (cabinet under a ceiling or a
-canopy). Check: a free-standing cabinet gives `1.8*H*(W+D) + 1.4*W*D` and a
-wall-mounted one `1.4*W*(H+D) + 1.8*D*H`, the well-known closed forms.
-
-### 4.2 Heat balance
-
-- Total loss `Pv = sum(power_loss_w * load_factor)` over devices in the
-  enclosure.
-- Wall heat transfer coefficient `k` by material, in W/m2K (planning values,
-  surface emission included): painted sheet steel 5.5, stainless steel 4.5,
-  aluminium 12, plastic 3.5.
-- Heat the walls shed at the permitted interior temperature:
-  `P_wall = k * Ae * (T_max - T_ambient)`. Negative when the interior must be
-  colder than the room (then everything has to be cooled).
-- Interior temperature rise without cooling (mean): `dT = Pv / (k * Ae)`;
-  interior temperature `T_ambient + dT`.
-- **Required cooling power** `Pk = max(0, Pv - P_wall)`.
-- **Filter-fan airflow**, only when `T_max > T_ambient`:
-  `V = 3600 * Pk / (rho * cp * (T_max - T_ambient))` in m3/h, with
-  `cp = 1005 J/kgK` and air density `rho = 1.146 kg/m3 * exp(-altitude/8434)`
-  (density at 35 degrees C, sea level, thinning with height). This gives the
-  usual `3.1 m3K/Wh` factor at sea level. A fan can never cool below ambient;
-  when `T_max <= T_ambient` no airflow is given and the verdict says a cooling
-  unit is needed.
-- Verdict: `Ok` (`Pk = 0`), `NeedsCooling`, or `Incomplete` when any device in
-  the enclosure has no loss data or the size is guessed. An incomplete result
-  shows the partial numbers marked "at least" and lists the devices without
-  data. It is never presented as a final answer.
+`Ae = sum(area * b)` with `b`: top 1.4 (0.7 covered), front, rear and sides 0.9
+(0.5 covered), bottom factor per `sizing` (0.5 there; some handbook closed
+forms, such as `1.8*H*(W+D) + 1.4*W*D`, leave the floor out, a difference of
+`0.5*W*D`). Wall loss `k * Ae * (T_max - T_ambient)`, rise `Pv / (k * Ae)`,
+cooling `max(0, Pv - wall loss)`, fan flow about `3.1 * cooling / dT` m3/h at
+sea level (`3600 / (rho * cp)` with `rho = 1.146 kg/m3`). The bottom-face
+factor and `k` are planning values to check against IEC 60890 and a maker
+handbook before the UI shows numbers.
 
 ### 4.3 Hot-spot map
 
@@ -133,22 +81,18 @@ reports how much of the placed loss sits in the upper third of the plate
 ## 5. Where it shows
 
 - Cabinet canvas: a "Heat" overlay toggle draws the map under the devices,
-  with a legend of the bands and the numbers of section 4 in a small strip.
-  Colour is never the only carrier: the legend names each band and devices
-  above the top band get a mark.
+  with a legend of the bands and the balance numbers from `sizing` in a small
+  strip. Colour is never the only carrier: the legend names each band and
+  devices above the top band get a mark.
 - Issues: one Problem in `novo-checks` ("needs about N W of cooling, or a fan
-  of about V m3/h"), later, after the engine merges.
+  of about V m3/h"), owned with the sizing helper.
 - Always next to a result: "Planning value. Check with the enclosure maker."
 
 ## 6. Plan
 
-1. This document and `novo-layout::thermal` with the model bridge (this PR).
-2. Heat overlay and legend on the Cabinet canvas (`novo-canvas` colour bands
-   scene, then the app toggle).
-3. Enclosure inputs in the inspector; the Problem in `novo-checks`.
-4. IEC 60890 curves, if the tables become available.
-
-Dependencies: the `power_loss_w` and `load_factor` part keys come from the Part
-power loss and clearances thread; until they land the keys are read by name from
-part properties, so a hand-typed property already works. The enclosure inputs are
-plain properties on the enclosure `Structure`, so no `novo-core` change is needed.
+1. This document and `novo_layout::thermal` (sources, map, legend, ranking,
+   model bridge for losses) (PR #406).
+2. Heat overlay scene and legend in `novo-canvas`, then the app toggle.
+3. Join with `sizing::thermal` for the result strip once #402 merges.
+4. Fan or cooler position and a vertical gradient inside, if the planning
+   value needs more than the mean.

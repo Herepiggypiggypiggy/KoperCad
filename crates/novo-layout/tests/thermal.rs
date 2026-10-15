@@ -1,94 +1,11 @@
 use novo_core::{DeviceTag, MountingPlate, Project, StructureId, Value};
 use novo_layout::thermal::{
-    self, DEFAULT_BAND_LIMITS, Enclosure, HeatSource, Installation, Verdict, balance, band_of,
-    heat_map, hot_devices, legend, top_third_share,
+    self, DEFAULT_BAND_LIMITS, HeatSource, band_of, heat_map, hot_devices, legend, top_third_share,
 };
 use novo_layout::{Plate, Rect};
 
 fn close(a: f64, b: f64) {
     assert!((a - b).abs() < 1e-6, "{a} != {b}");
-}
-
-#[test]
-fn free_standing_area_matches_the_closed_form() {
-    let e = Enclosure::new(800.0, 2000.0, 600.0);
-    let (w, h, d) = (0.8, 2.0, 0.6);
-    close(e.effective_area(), 1.8 * h * (w + d) + 1.4 * w * d);
-}
-
-#[test]
-fn wall_mounted_area_matches_the_closed_form() {
-    let mut e = Enclosure::new(600.0, 800.0, 250.0);
-    e.installation = Installation::Wall;
-    let (w, h, d) = (0.6, 0.8, 0.25);
-    close(e.effective_area(), 1.4 * w * (h + d) + 1.8 * d * h);
-}
-
-#[test]
-fn covered_sides_and_top_reduce_the_area() {
-    let free = Enclosure::new(600.0, 800.0, 250.0).effective_area();
-    let mut e = Enclosure::new(600.0, 800.0, 250.0);
-    e.installation = Installation::RowMiddle;
-    let middle = e.effective_area();
-    close(free - middle, 2.0 * 0.4 * 0.25 * 0.8);
-    e.top_covered = true;
-    close(middle - e.effective_area(), 0.7 * 0.6 * 0.25);
-}
-
-#[test]
-fn balance_hand_calculation() {
-    // 600 x 800 x 250 wall mounted: Ae = 1.4*0.6*1.05 + 1.8*0.25*0.8 = 1.242 m2.
-    let mut e = Enclosure::new(600.0, 800.0, 250.0);
-    e.installation = Installation::Wall;
-    let t = balance(&e, 200.0, 3, 0);
-    close(t.effective_area_m2, 1.242);
-    close(t.wall_dissipation_w, 5.5 * 1.242 * 5.0);
-    close(t.rise_k, 200.0 / (5.5 * 1.242));
-    close(t.cooling_w, 200.0 - 5.5 * 1.242 * 5.0);
-    // Sea level: about 3.1 m3K/Wh.
-    let v = t.airflow_m3h.unwrap();
-    close(v, 3600.0 * t.cooling_w / (1.146 * 1005.0 * 5.0));
-    assert!((v / t.cooling_w * 5.0 - 3.126).abs() < 0.01);
-    assert_eq!(t.verdict, Verdict::NeedsCooling);
-}
-
-#[test]
-fn small_loss_needs_no_cooling() {
-    let e = Enclosure::new(600.0, 800.0, 250.0);
-    let t = balance(&e, 20.0, 2, 0);
-    assert_eq!(t.cooling_w, 0.0);
-    assert_eq!(t.airflow_m3h, None);
-    assert_eq!(t.verdict, Verdict::Ok);
-}
-
-#[test]
-fn no_fan_when_the_limit_is_not_above_ambient() {
-    let mut e = Enclosure::new(600.0, 800.0, 250.0);
-    e.max_internal_c = 35.0;
-    let t = balance(&e, 100.0, 1, 0);
-    close(t.cooling_w, 100.0);
-    assert_eq!(t.airflow_m3h, None);
-}
-
-#[test]
-fn altitude_needs_more_air() {
-    let mut e = Enclosure::new(600.0, 800.0, 250.0);
-    let sea = balance(&e, 300.0, 1, 0).airflow_m3h.unwrap();
-    e.altitude_m = 2000.0;
-    assert!(balance(&e, 300.0, 1, 0).airflow_m3h.unwrap() > sea);
-}
-
-#[test]
-fn missing_data_or_a_guessed_size_is_incomplete() {
-    let e = Enclosure::new(600.0, 800.0, 250.0);
-    assert_eq!(balance(&e, 300.0, 2, 1).verdict, Verdict::Incomplete);
-    let g = Enclosure::around_plate(&Plate {
-        width: 500.0,
-        height: 700.0,
-        margin: 0.0,
-    });
-    assert!(g.guessed);
-    assert_eq!(balance(&g, 300.0, 2, 0).verdict, Verdict::Incomplete);
 }
 
 fn plate() -> Plate {
@@ -209,46 +126,4 @@ fn losses_read_parts_with_load_factor_and_flag_the_unknown() {
     let known: Vec<f64> = l.iter().filter_map(|x| x.1).collect();
     assert_eq!(known.len(), 2);
     close(known.iter().sum::<f64>(), 60.0 + 2.0);
-}
-
-#[test]
-fn estimate_is_incomplete_with_a_guessed_enclosure_and_missing_data() {
-    let (p, cab) = project();
-    let e = thermal::model::enclosure(&p, cab).unwrap();
-    assert!(e.guessed);
-    close(e.width_mm, 600.0);
-    let t = thermal::model::estimate(&p, cab).unwrap();
-    assert_eq!((t.known, t.missing), (2, 2));
-    assert_eq!(t.verdict, Verdict::Incomplete);
-    close(t.loss_w, 62.0);
-}
-
-#[test]
-fn enclosure_properties_override_the_guess() {
-    let (mut p, cab) = project();
-    p.transact("props", |tx| {
-        let id = novo_core::AnyId::Structure(cab);
-        for (k, v) in [
-            ("width_mm", Value::Float(600.0)),
-            ("height_mm", Value::Int(800)),
-            ("depth_mm", Value::Int(250)),
-            ("installation", Value::Text("wall".into())),
-            ("material", Value::Text("aluminium".into())),
-            ("top_covered", Value::Bool(true)),
-            ("ambient_c", Value::Int(30)),
-            ("max_internal_c", Value::Int(45)),
-            ("altitude_m", Value::Int(500)),
-        ] {
-            tx.set_property(id, k, Some(v))?;
-        }
-        Ok(())
-    })
-    .unwrap();
-    let e = thermal::model::enclosure(&p, cab).unwrap();
-    assert!(!e.guessed);
-    assert_eq!(e.installation, Installation::Wall);
-    assert_eq!(e.material, thermal::Material::Aluminium);
-    assert!(e.top_covered);
-    close(e.max_internal_c, 45.0);
-    close(e.altitude_m, 500.0);
 }
