@@ -12,12 +12,13 @@ use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
 use novo_checks::{Problem, ProblemKind, Severity, Summary};
-use novo_core::{AnyId, PageId, Project};
+use novo_core::{PageId, Project};
 use novo_editor::art::LibraryArt;
 use novo_pdf::{NoteAnchor, PageSet, PdfOptions, SymbolNote};
 use novo_py::ReportFormat;
+use novo_py::{comparison_json, group_name, kind_name, page_label, revisions_json};
 use novo_reports::CsvOptions;
-use novo_revisions::{Comparison, FieldChange, Group, Side, group_of};
+use novo_revisions::{Comparison, FieldChange, Side, group_of};
 use novo_storage::ProjectFile;
 use serde_json::{Value, json};
 
@@ -293,19 +294,7 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
                 .map(|r| (r, kept.contains(&r.id)))
                 .collect();
             if json {
-                let list: Vec<Value> = rows
-                    .iter()
-                    .map(|(r, kept)| {
-                        json!({
-                            "index": r.index,
-                            "date": r.date,
-                            "author": r.author,
-                            "description": r.description,
-                            "snapshot": kept,
-                        })
-                    })
-                    .collect();
-                print(out, &format!("{:#}", Value::Array(list)))?;
+                print(out, &format!("{:#}", revisions_json(&project, &kept)))?;
             } else if rows.is_empty() {
                 print(out, "No revisions issued yet")?;
             } else {
@@ -389,37 +378,6 @@ fn read_failure(path: &Path, e: &novo_storage::StorageError) -> Failure {
     Failure::new(exit::READ, format!("cannot read {}: {e}", path.display()))
 }
 
-fn group_name(group: Group) -> &'static str {
-    match group {
-        Group::Page => "page",
-        Group::Device => "device",
-        Group::Terminal => "terminal",
-        Group::Cable => "cable",
-        Group::Wire => "wire",
-        Group::Text => "text",
-        Group::Drawing => "drawing",
-        Group::Part => "part",
-        Group::Project => "project",
-    }
-}
-
-fn kind_name(kind: &novo_revisions::ChangeKind) -> &'static str {
-    match kind {
-        novo_revisions::ChangeKind::Added => "added",
-        novo_revisions::ChangeKind::Removed => "removed",
-        novo_revisions::ChangeKind::Changed { .. } => "changed",
-    }
-}
-
-fn row_page(project: &Project, id: Option<PageId>) -> Option<String> {
-    let id = id?;
-    Some(
-        project
-            .page(id)
-            .map_or_else(|| format!("{id}"), |p| p.name.clone()),
-    )
-}
-
 /// One field as `name: old -> new`, with the plain-words note after it.
 fn field_text(f: &FieldChange) -> String {
     let show = |v: &Option<String>| v.clone().unwrap_or_else(|| "(none)".into());
@@ -445,7 +403,7 @@ fn comparison_text(project: &Project, from: &str, to: &str, c: &Comparison) -> V
             lines.push(format!("{}:", group_name(g)));
             group = Some(g);
         }
-        let page = row_page(project, r.page).map_or_else(String::new, |p| format!(" (page {p})"));
+        let page = page_label(project, r.page).map_or_else(String::new, |p| format!(" (page {p})"));
         lines.push(format!("  {} {}{page}", kind_name(&r.kind), r.label));
         for f in &r.fields {
             lines.push(format!("    {}", field_text(f)));
@@ -458,43 +416,6 @@ fn comparison_text(project: &Project, from: &str, to: &str, c: &Comparison) -> V
         lines.push(format!("sheet {} ({}): {:?}", s.name, s.report, s.kind));
     }
     lines
-}
-
-fn field_json(f: &FieldChange) -> Value {
-    json!({ "name": f.name, "old": f.old, "new": f.new, "note": f.note })
-}
-
-fn comparison_json(project: &Project, from: &str, to: &str, c: &Comparison) -> Value {
-    let rows: Vec<Value> = c
-        .rows
-        .iter()
-        .map(|r| {
-            json!({
-                "group": group_name(group_of(r.id)),
-                "kind": kind_name(&r.kind),
-                "label": r.label,
-                "page": row_page(project, r.page),
-                "id": id_text(r.id),
-                "fields": r.fields.iter().map(field_json).collect::<Vec<_>>(),
-            })
-        })
-        .collect();
-    json!({
-        "from": from,
-        "to": to,
-        "rows": rows,
-        "info": c.info.iter().map(field_json).collect::<Vec<_>>(),
-        "sheets": c.sheets.iter().map(|s| json!({
-            "page": row_page(project, Some(s.page)),
-            "name": s.name,
-            "report": s.report,
-            "kind": format!("{:?}", s.kind).to_lowercase(),
-        })).collect::<Vec<_>>(),
-    })
-}
-
-fn id_text(id: AnyId) -> String {
-    id.to_string()
 }
 
 fn print(out: &mut dyn Write, text: &str) -> Result<(), Failure> {

@@ -137,6 +137,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["sample", "motor starter", "demo"],
         Needs::Nothing,
     ),
+    cmd(
+        "file.practice",
+        "Try the fast keys",
+        "Project",
+        &["practice", "tutorial", "learn"],
+        Needs::Nothing,
+    ),
     cmd("file.save", "Save", "Project", &[], Needs::Project),
     cmd(
         "file.save_as",
@@ -679,6 +686,22 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["changes"],
     ),
+    verb(
+        cmd(
+            "view.commissioning",
+            "Commissioning",
+            "View",
+            &[
+                "commission",
+                "punch list",
+                "check off",
+                "continuity",
+                "torque",
+            ],
+            Needs::Project,
+        ),
+        &["commissioning"],
+    ),
     cmd(
         "sim.live",
         "Show live potentials",
@@ -692,6 +715,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         "View",
         &["overrides", "manual"],
         Needs::Page,
+    ),
+    cmd(
+        "help.walkthrough",
+        "Fast keys walk-through",
+        "View",
+        &["tour", "tutorial", "walkthrough", "help"],
+        Needs::Nothing,
     ),
     cmd(
         "view.shortcuts",
