@@ -17,6 +17,7 @@ mod drawers;
 mod duplicate;
 mod dxf;
 mod example;
+mod heat;
 mod inspector;
 mod link;
 mod live;
@@ -30,6 +31,7 @@ mod parts;
 mod parts_import;
 mod pdf;
 mod plc;
+mod plc_link;
 mod potentials;
 mod preferences;
 mod project_settings;
@@ -73,6 +75,7 @@ use crate::actions::Action;
 const ASSEMBLY_HINT: &str = "The workshop sheet of every cabinet: prepare, drill, mount, wire, label and check, with a box to tick at each line. Needs a cabinet with a mounting plate.";
 const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel. Export only: bringing the edited file back comes with the import dialog. The generated reports are under Export all reports to Excel.";
 use novo_core::{Aspect, Command, DeviceTag, ModelError, Outcome, PageId, PageKind};
+use novo_plc::link::LinkFormat;
 use pages::{FormKind, PageForm, PageView};
 
 use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows};
@@ -365,8 +368,8 @@ impl NovoApp {
             Action::ShowCabinet => self
                 .workspace_unavailable(workspace::Workspace::Cabinet)
                 .is_none(),
-            Action::Undo => doc.is_some_and(|d| d.can_undo()),
-            Action::Redo => doc.is_some_and(|d| d.can_redo()),
+            Action::Undo => !self.commissioning_locks_edits() && doc.is_some_and(|d| d.can_undo()),
+            Action::Redo => !self.commissioning_locks_edits() && doc.is_some_and(|d| d.can_redo()),
             _ => true,
         }
     }
@@ -738,7 +741,11 @@ impl NovoApp {
                     self.cabinet.keys.push((*id).to_owned());
                 }
             }
-            commands.retain(|id| Action::from_id(id).is_some() || *id == "view.cabinet_table");
+            commands.retain(|id| {
+                Action::from_id(id).is_some()
+                    || *id == "view.cabinet_table"
+                    || id.starts_with("heat.")
+            });
         }
 
         self.window_width = ctx.content_rect().width();
@@ -802,6 +809,7 @@ impl NovoApp {
         self.recovery_dialog(&ctx);
         self.about_dialog(&ctx);
         self.renumber_dialog(&ctx);
+        self.plc_import_dialog(&ctx);
         self.preferences_dialog(&ctx);
         self.parts_window(&ctx);
         self.project_settings_dialog(&ctx);
@@ -828,7 +836,15 @@ impl NovoApp {
     /// other views, and a page it asked for is opened.
     fn after_canvas(&mut self) {
         let changes = self.canvas.take_changes();
-        if !changes.is_empty() {
+        if !changes.is_empty() && self.commissioning_locks_edits() {
+            // Commissioning mode checks the drawing against the machine; a
+            // stray touch must not move a wire. One undo takes it back.
+            self.undo_redo(false);
+            self.message(
+                Level::Info,
+                "Commissioning is read-only. Close it (Ctrl+K, Commissioning) to edit.",
+            );
+        } else if !changes.is_empty() {
             self.reports_heard(&changes);
             self.mark_earthed_terminals(&changes);
             self.fix_current_page();
@@ -1065,6 +1081,30 @@ impl NovoApp {
                     ui.close();
                 }
             });
+        });
+        ui.add_enabled_ui(self.is_open(), |ui| {
+            ui.menu_button("Export PLC", |ui| {
+                for (id, format) in [
+                    ("export.plc_csv", LinkFormat::Csv),
+                    ("export.plc_plcopen", LinkFormat::PlcOpen),
+                    ("export.plc_tia", LinkFormat::Tia),
+                    ("export.plc_studio5000", LinkFormat::Studio5000),
+                    ("export.plc_address_plan", LinkFormat::Hardware),
+                ] {
+                    if ui.button(format.label()).clicked() {
+                        self.wb.queued.push(id);
+                        ui.close();
+                    }
+                }
+            });
+            if ui
+                .button("Import PLC tags...")
+                .on_hover_text("Read the programmer's tag file back: comments and tag names update, addresses never change")
+                .clicked()
+            {
+                self.wb.queued.push("plc.import_tags");
+                ui.close();
+            }
         });
         ui.separator();
         for a in [Action::About, Action::Quit] {
