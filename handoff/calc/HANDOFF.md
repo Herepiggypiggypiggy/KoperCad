@@ -18,6 +18,12 @@ git checkout claude/project-thread-bib2al
 cargo test -p novo-checks calc
 ```
 
+## Adapter PR
+Branch `claude/project-thread-bib2al-adapter` (stacked on #412): kinds in
+lib.rs, `calc_checks.rs`, tests/calc_checks.rs. The Gate 1 test in
+tests/motor_starter.rs skips the six calc kinds (they need numbers).
+Panel PR #413 also adds VoltageDrop/ShortCircuit: expect a small enum merge.
+
 ## Decisions
 - Pure functions on numbers so the same code serves checks, property sheet
   and Python. `Finding { rule, severity, message }`; `Rule` is the stable
