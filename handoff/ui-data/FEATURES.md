@@ -7,13 +7,13 @@ State as of 2026-10-15 19:00 UTC. "Engine" means code exists and tests pass but 
 | Feature | Engine | Where the user finds it today | Gap and next step | Owner thread |
 | --- | --- | --- | --- | --- |
 | Export PDF | novo-pdf | Project menu > Export > Export PDF, palette `pdf` | none | app |
-| Bill of materials export | novo-reports | none (command listed, app does not run it) | Export > BOM through the spreadsheet dialog | this thread |
+| Bill of materials export | novo-reports | none (command listed, app does not run it) | unowned: ask Reports | Reports |
 | Generated pages (reports) | novo-reports | Outline > page list, New > Pages | fine | pages |
 | Parts browser | novo-parts | PR #429 (draft): Project menu > Libraries > Parts | menu entry appears with the command; Import is still "Open page" | Parts browser |
 | Part Import (one click) | novo-parts | not yet | Import flow PR 2 of the Parts browser thread | Parts browser |
-| Macro library | novo-parts macros (#405) | none | browser window + Place flow; design #396 | this thread |
-| Spreadsheet export | novo-interop sheets (#414) | Export > Export tables to Excel, palette `export excel` (writes `<project> tables.xlsx` beside the project, never replaces one) | none until import preview exists | this thread |
-| Spreadsheet import | novo-interop sheets (#414) | none | Import > Spreadsheet… with preview of the plan (changes, conflicts), apply as one undo step | import dialog thread |
+| Macro library | novo-parts macros (#405) | none | `macro.browser` window (Macro library thread builds `app/macro_browser.rs`), `macro.save`, `macro.place`, `macro.import`, `macro.export` (Macros thread, design #396) | Macro library, Macros |
+| Spreadsheet export | novo-interop sheets (#414) | PR #430 (round-trip thread): File > Export spreadsheet (.xlsx) and (CSV files), ids `export.sheets`, `export.sheets_csv` | none | Spreadsheet round-trip |
+| Spreadsheet import | novo-interop sheets (#414) | PR #433: `import.spreadsheet`, file picker then preview modal | none | Import dialog thread |
 | DXF export | novo-interop dxf | PR #385 (draft) | menu entry arrives with `export.dxf` | DXF/EPLAN interop |
 | DXF as page background | novo-interop dxf | PR #385 (draft) | controls in the page properties | DXF/EPLAN interop |
 | EPLAN parts import | novo-interop eplan | none | Import > EPLAN parts… sharing the dialog frame | this thread |
@@ -34,3 +34,7 @@ Import and export dialogs share one frame: title, one-line "what happens", optio
 4. Macro browser and Place flow.
 5. Compare revisions window.
 6. EPLAN parts import, DXF page background.
+
+## Menu ownership
+
+The menu skeleton (File, Edit, Draw, View, Check, Reports, Tools, Help, generated from the command registry) belongs to the Workspaces thread (#438). #440's prefix sections are a stopgap in one isolated file (`file_menu.rs`) that `menu_bar.rs` replaces. Threads register their own command rows in `novo-workflow` next to their handler. Property-sheet panel for part data (power loss, mounting, clearances; `novo_parts::PropertySheet`) is open and sits with this thread after the Parts window.
