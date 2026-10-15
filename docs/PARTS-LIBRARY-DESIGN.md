@@ -62,6 +62,42 @@ until someone reads the actual licence text, or asks the maker.**
 - An EDZ file is a zip with XML part data plus macro files. We have not
   opened one; the exact layout must be checked on a real file before writing a parser.
 
+## 2a. The makers' terms of use (read 2026-10-15)
+
+Method: each maker's general website terms were fetched and summarised by a
+small model, quotes below are from that summary, not from a lawyer's read.
+Product-download pages can carry their own terms that these pages do not
+show (Schneider says so explicitly). **None of the four texts grants a right
+to redistribute downloaded data, and none forbids a user importing it for
+their own project by name. That is silence, not permission.**
+
+| Maker | What the text says | What it means for us |
+| --- | --- | --- |
+| WAGO (website terms of use) | Section 1.2: certain "non-binding information and software" is available for download; no express usage rights are granted. 2.1(iii) bars infringing IP; 2.3 excludes liability for free content; 3.2 requires export-control compliance when passing content to third parties. Does not address copying, redistribution or CAD files. | Personal import looks fine. Redistribution is not granted, so do not ship. Ask. |
+| Phoenix Contact (the page found is the cxE manual's legal notice, not the website terms) | Manual is copyright protected; reproduction and public distribution need written consent. Nothing about CAD or data downloads. | **The real website and e-shop terms were not found.** Open. |
+| Siemens (siemens.com terms of use) | Only the table of contents came back: A.4 "Right of use to Information, Software and Documentation", A.5 "Intellectual Property". Clause text and the Industry Online Support / CAx terms were not read. | Open. Read A.4 and A.5 in a browser. |
+| Schneider Electric (se.com terms of use) | Section 2: no reproduction "other than for your own personal, non-commercial use"; access is "a non-exclusive license to consult it on an as is basis"; "all other rights are reserved". Section 8: materials are presented "solely for the purpose of promoting Schneider Electric products". Certain pages may have specific terms. | Strictest. Redistribution is out. Even use inside a commercial project is arguable; ask. Do not scrape. |
+
+Consequences for the design, unchanged: no maker file in the installer, no
+bulk copy, import from a file the user obtained themselves, `provenance`
+on every part, local storage only. Add: no scraping or automated download from
+any maker site (Schneider's text does not address it, so assume not allowed).
+
+### Draft questions for the owner to send (not sent by us)
+
+To each of WAGO, Phoenix Contact, Siemens, Schneider Electric (adjust the maker name):
+
+> We are developing KoperCAD, a desktop electrical CAD program for Windows. We would like our
+> users to be able to use your product data in their own projects. Please tell us in writing:
+> 1. May a user download your CAE/CAD data (ETIM/ECLASS or BMEcat data, STEP, DXF, EPLAN/EDZ) from your site and import it into KoperCAD for their own projects?
+> 2. May KoperCAD ship a small list of your article numbers with basic technical values
+>    (rated current, width, ETIM class) typed from your public datasheets?
+> 3. Do you have a documented API or a bulk data feed we may use, and on what terms?
+> 4. May KoperCAD ship your STEP or 2D symbol files for a small set of articles, with attribution?
+> 5. Who is the right contact for CAE data partnerships?
+
+Siemens and Phoenix: also ask which terms govern the CAx download manager / Eplan data export.
+
 ## 3. What we may ship versus fetch per user
 
 | Item | Ship in the installer | Fetch per user |
@@ -176,14 +212,14 @@ types them (the existing starter set already carries that warning).
 | Schneider | LC1D contactors, GV2 motor breakers, iC60 MCBs | Same roles as Siemens |
 | Schneider | ATV320 / ATV340 drives, M241/M262 CPU | Motor drive and PLC cases |
 
-Target: roughly 15 to 25 rows per maker. We type facts from the datasheet.
+Target: roughly 15 to 25 rows per maker, typed from the maker's datasheet by someone with the datasheet open. Not yet written: order numbers and dimensions must not come from memory.
 We do not paste maker descriptions.
 
 ## 8. Phased plan
 
 | Phase | Deliverable | Needs |
 | --- | --- | --- |
-| P0 | Read the four makers' terms (and ECLASS licence). Ask each maker in writing whether a user-side import and a small authored subset are acceptable. Record answers in this doc. | A person; nothing to build |
+| P0 | Terms read for WAGO, Phoenix (manual only), Siemens (headings only), Schneider (section 2a). Still to read: Phoenix website terms, Siemens A.4/A.5, ECLASS licence, product-page terms. The owner sends the draft questions in section 2a; record answers here. | A person; nothing to build |
 | P1 | Schema v2 in `novo-parts` (read v1, write v2), `provenance`, `terminals`, `class` fields. Authored sets for the 4 makers (section 7). Attribution screen for ETIM. | WS-07 |
 | P2 | BMEcat importer and STEP bounding-box reader, with preview. User points at a file or folder. | One real BMEcat and a few STEP files per maker |
 | P3 | Asset store, outline-from-STEP for cabinet layout, symbol choice by `function`. | WS-15, WS-05 |
@@ -191,6 +227,6 @@ We do not paste maker descriptions.
 
 ## 9. Open questions for the owner
 
-1. May we spend time on P0 (contacting makers) or should the legal read be done by someone else?
+1. Will you send the section 2a questions to the makers (we do not contact them)?
 2. Is reading an EDZ file the user already owns acceptable to him, given EPLAN's terms? Default: skip until P4.
 3. Which Siemens and Schneider PLC and drive families does he actually use? That fixes the section 7 list.
