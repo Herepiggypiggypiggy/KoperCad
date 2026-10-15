@@ -18,8 +18,9 @@ window from `docs/DESIGN.md` §3, drawn with these tokens and widgets.
    spacing, not colour.
 2. **One accent, copper, used rarely.** Copper (the conductor) marks focus,
    the active tool, the selection on the canvas, the primary button and the
-   logo. Nothing else is copper, so it always means "here". Copper is never
-   a mark: proposals, problems, overrides and changes use other colours, so
+   logo, plus the conductor joints and open wire ends on the canvas (the
+   same copper dot as the logo). Nothing else is copper, so it always means
+   "here". Copper is never a mark: proposals, problems, overrides and changes use other colours, so
    the selection is always unambiguous (DESIGN §5).
 3. **Status colours mean status.** Muted green, amber and red only for OK,
    warning and error, always with an icon or text, never colour alone.
@@ -112,6 +113,20 @@ references, muted green open connection points. Printing and PDF stay black on w
 The DESIGN.md §5 marks are in the palette too: proposals in the hover hue
 at 55% (dashed, where hover is solid), a grey override diamond, and change
 marks in the status colours at 50%. A test keeps every mark off copper.
+
+Links and wire ends (`docs/design/canvas-feedback.png`): wires are a mid
+saturated blue `#6F9BDB` and symbols near white `#ECEAE5`, at least 2:1
+apart, so a wire never merges into a terminal outline. A filled copper
+joint dot (`junction`, radius 3 px at 100% zoom, 3.5 px on a tee) marks
+every place a wire meets a pin or another wire. A wire ended by double
+click gets an open copper ring (`wire_end`, radius 4 px, 1.6 px line) and
+a small amber flag (`unconnected_flag`, 16 px pole, 10 px pennant) with
+the tooltip "Unconnected". Hollow means open, filled means joined. The
+selection stays the brighter copper with a halo, so a selected net is still
+told apart from its joints. The radial place picker (four wedges,
+inner radius 38, outer 110, hovered wedge copper outline) and the
+right-click menu (26 px rows, 236 px wide, shortcut right-aligned) are in
+the same mock-up; behaviour is Workflow's spec.
 
 The app maps it onto `novo_canvas::widget::CanvasStyle` (background, grid,
 selection, hover, rubber band, snap marker) and `novo_canvas::model::ModelStyle`
