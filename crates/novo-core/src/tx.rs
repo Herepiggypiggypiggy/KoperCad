@@ -16,7 +16,7 @@ use crate::id::{
 };
 use crate::project::Project;
 use crate::record::{Entity, Op, Record};
-use crate::tag::DeviceTag;
+use crate::tag::{Aspect, DeviceTag};
 
 /// An open edit on a project, handed out by [`Project::transact`] and
 /// [`Document::transact`](crate::Document::transact).
@@ -984,6 +984,126 @@ impl<'p> Tx<'p> {
                 d.parts.push(part);
             }
         })
+    }
+
+    /// Renames a group (function aspect) or panel (location aspect): every
+    /// page, device, cable and structure node whose levels for `aspect`
+    /// start with `from` gets `to` in their place, so children follow
+    /// (`+CAB1` also renames `+CAB1+DOOR`) and enclosure lookups give the
+    /// same answer before and after. Frozen pages keep what was printed.
+    ///
+    /// Renaming onto an existing name merges the two, unless that would give
+    /// two devices, two cables or two structure nodes the same full tag.
+    pub fn rename_level(&mut self, aspect: Aspect, from: &[String], to: &[String]) -> Result<()> {
+        let refuse = |reason: &str| ModelError::Refused {
+            what: "Rename".into(),
+            reason: reason.into(),
+        };
+        if aspect == Aspect::Product {
+            return Err(refuse("only groups and panels can be renamed here"));
+        }
+        if from.is_empty() || to.is_empty() {
+            return Err(refuse("the name is empty"));
+        }
+        if from == to {
+            return Ok(());
+        }
+        if to.len() > from.len() && to.starts_with(from) {
+            return Err(refuse("a name cannot be renamed into its own sub-level"));
+        }
+        let mut probe = DeviceTag::default();
+        *probe.levels_mut(aspect) = to.to_vec();
+        probe.validate()?;
+
+        let rewrite = |tag: &DeviceTag| -> Option<DeviceTag> {
+            let levels = tag.levels(aspect);
+            if !levels.starts_with(from) {
+                return None;
+            }
+            let mut new = tag.clone();
+            *new.levels_mut(aspect) = to.iter().chain(&levels[from.len()..]).cloned().collect();
+            Some(new)
+        };
+        // A rewritten tag may not land on a tag that stays, or on the
+        // rewrite of a different tag.
+        fn clash(all: &[DeviceTag], changes: &[(usize, DeviceTag)], noun: &str) -> Result<()> {
+            let moved: BTreeSet<usize> = changes.iter().map(|(i, _)| *i).collect();
+            for (n, (i, new)) in changes.iter().enumerate() {
+                let stays = all
+                    .iter()
+                    .enumerate()
+                    .any(|(j, t)| !moved.contains(&j) && t == new);
+                let twin = changes[..n]
+                    .iter()
+                    .any(|(j, other)| other == new && all[*j] != all[*i]);
+                if stays || twin {
+                    return Err(ModelError::Refused {
+                        what: "Rename".into(),
+                        reason: format!("two {noun} would both be called {new}"),
+                    });
+                }
+            }
+            Ok(())
+        }
+
+        let devices: Vec<(DeviceId, DeviceTag)> = self
+            .project
+            .devices()
+            .map(|d| (d.id, d.tag.clone()))
+            .collect();
+        let device_tags: Vec<DeviceTag> = devices.iter().map(|(_, t)| t.clone()).collect();
+        let device_changes: Vec<(usize, DeviceTag)> = device_tags
+            .iter()
+            .enumerate()
+            .filter_map(|(i, t)| rewrite(t).map(|n| (i, n)))
+            .collect();
+        clash(&device_tags, &device_changes, "devices")?;
+
+        let cables: Vec<(CableId, DeviceTag)> = self
+            .project
+            .cables()
+            .map(|c| (c.id, c.tag.clone()))
+            .collect();
+        let cable_tags: Vec<DeviceTag> = cables.iter().map(|(_, t)| t.clone()).collect();
+        let cable_changes: Vec<(usize, DeviceTag)> = cable_tags
+            .iter()
+            .enumerate()
+            .filter_map(|(i, t)| rewrite(t).map(|n| (i, n)))
+            .collect();
+        clash(&cable_tags, &cable_changes, "cables")?;
+
+        let structures: Vec<(StructureId, DeviceTag)> = self
+            .project
+            .structures()
+            .map(|s| (s.id, s.tag.clone()))
+            .collect();
+        let structure_tags: Vec<DeviceTag> = structures.iter().map(|(_, t)| t.clone()).collect();
+        let structure_changes: Vec<(usize, DeviceTag)> = structure_tags
+            .iter()
+            .enumerate()
+            .filter_map(|(i, t)| rewrite(t).map(|n| (i, n)))
+            .collect();
+        clash(&structure_tags, &structure_changes, "structure nodes")?;
+
+        let pages: Vec<(PageId, DeviceTag)> = self
+            .project
+            .pages()
+            .filter_map(|p| rewrite(&p.structure).map(|n| (p.id, n)))
+            .collect();
+
+        for (i, new) in device_changes {
+            self.update::<Device>(devices[i].0, |d| d.tag = new)?;
+        }
+        for (i, new) in cable_changes {
+            self.update::<Cable>(cables[i].0, |c| c.tag = new)?;
+        }
+        for (i, new) in structure_changes {
+            self.update::<Structure>(structures[i].0, |s| s.tag = new)?;
+        }
+        for (id, new) in pages {
+            self.update::<Page>(id, |p| p.structure = new)?;
+        }
+        Ok(())
     }
 
     /// Renames a device.
