@@ -9,3 +9,5 @@ Decisions
 - Interruption names: whole numbers, lowest unused; an unnamed partner takes the other's name on link.
 
 Next: point 22 follow-ups, see ROADMAP design note. Resume: `cargo test -p novo-terminals -p novo-editor -p novo-xref -p novo-sim`.
+
+Live potentials view (UI for #255): `crates/novo-app/src/app/live.rs`. Shift+L (`sim.live`, View) toggles it. A badge sits on every `pass_through` group of the page (open = ring, closed = green); click flips the pole, Shift+click flips every pole of the symbol. Wires are painted over the canvas from `novo_sim::solve`: potential colour (`potential_color`: kind first, L1/L2/L3 by digit), dimmed when dead, red when shorted. A card top left shows the legend, poles closed and All open. State lives in `Workbench.live`, never in the project. Not done: coil to contact coupling (clicking a coil), per-potential colours from the canvas engine instead of an app overlay, showing the live potential in wire labels, time stepping. Right-click menus, interruption points and the wheel belong to other threads.
