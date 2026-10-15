@@ -23,12 +23,16 @@ use novo_core::{
 /// What happens to the wire numbers stored in a macro.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum WireNumbers {
-    /// Placed wires carry no number.
+    /// The macro's numbers are dropped and the placed wires are numbered by
+    /// the project's numbering scheme (`novo-numbering`), continuing the
+    /// project's series without touching any existing number.
     #[default]
-    Clear,
+    Auto,
     /// Placed wires keep the macro's numbers, except where the project
-    /// already uses the number.
+    /// already uses the number; those are numbered by the scheme.
     Keep,
+    /// Placed wires carry no number.
+    Clear,
 }
 
 /// How to place.
@@ -48,6 +52,8 @@ pub struct Report {
     pub kept_wire_numbers: Vec<String>,
     /// Number of wires whose macro number was dropped.
     pub cleared_wires: usize,
+    /// Numbers the scheme gave to placed wires, in reading order.
+    pub numbered_wires: Vec<String>,
     /// Macro wire numbers dropped because another wire already has them.
     pub clashes: Vec<String>,
     /// The project already had this definition, so it was not copied again.
@@ -152,6 +158,28 @@ fn placed_tags(project: &Project, instance: BlockInstanceId) -> Vec<DeviceTag> {
     tags
 }
 
+/// Numbers the placed wires that have no number, with the project's scheme.
+fn number_placed(tx: &mut Tx<'_>, placed: &BTreeSet<WireId>, report: &mut Report) -> Result<()> {
+    let scheme = novo_numbering::Scheme::load(tx.project());
+    let plan = novo_numbering::plan(
+        tx.project(),
+        &scheme,
+        novo_numbering::Mode::Fill,
+        &novo_numbering::Scope::Wires(placed.iter().copied().collect()),
+    );
+    plan.apply(tx)?;
+    let mut numbers: Vec<String> = Vec::new();
+    for g in plan.changed_groups() {
+        if let Some(n) = &g.new
+            && !numbers.contains(n)
+        {
+            numbers.push(n.clone());
+        }
+    }
+    report.numbered_wires = numbers;
+    Ok(())
+}
+
 fn settle_wire_numbers(
     tx: &mut Tx<'_>,
     instance: BlockInstanceId,
@@ -182,5 +210,8 @@ fn settle_wire_numbers(
     }
     report.kept_wire_numbers.sort();
     report.clashes.sort();
+    if mode != WireNumbers::Clear {
+        number_placed(tx, &own, report)?;
+    }
     Ok(())
 }

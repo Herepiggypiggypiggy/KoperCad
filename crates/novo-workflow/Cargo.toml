@@ -7,6 +7,8 @@ license.workspace = true
 
 [dependencies]
 novo-core.workspace = true
+# Not in the workspace table yet (new crate, registered by the coordinator).
+novo-numbering = { path = "../novo-numbering" }
 novo-symbols.workspace = true
 
 [lints]
