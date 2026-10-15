@@ -187,12 +187,22 @@ pub(super) fn problem_lines(
 
 /// The table face (Ctrl+T): every device of the panel with where it is and
 /// what is wrong.
-fn cabinet_table(
+pub(super) fn cabinet_table(
     ui: &mut egui::Ui,
     layout: &CabinetLayout,
     cands: &[novo_layout::plan::Candidate],
     tag_of: &impl Fn(u64) -> String,
-) {
+    selected: &[u64],
+) -> Option<u64> {
+    let mut clicked = None;
+    let mut rows: Vec<_> = cands.iter().collect();
+    rows.sort_by_key(|c| tag_of(c.id));
+    // Numbers read best flush right.
+    let num = |ui: &mut egui::Ui, text: String| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.label(text);
+        });
+    };
     egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
         egui::Grid::new("cabinet_table")
             .striped(true)
@@ -211,34 +221,54 @@ fn cabinet_table(
                     ui.strong(head);
                 }
                 ui.end_row();
-                for c in cands {
-                    ui.label(tag_of(c.id));
+                for c in rows {
+                    if ui
+                        .selectable_label(selected.contains(&c.id), tag_of(c.id))
+                        .clicked()
+                    {
+                        clicked = Some(c.id);
+                    }
                     let size = format!("{} x {}", c.size.width, c.size.height);
                     match layout.placements.iter().find(|p| p.id == c.id) {
                         Some(p) => {
-                            ui.label(size);
-                            ui.label(format!("{}", p.x));
-                            ui.label(format!("{}", p.y));
+                            num(ui, size);
+                            num(ui, format!("{}", p.x));
+                            num(ui, format!("{}", p.y));
                             ui.label(if p.rotated { "yes" } else { "" });
                             ui.label(p.rail.map(|r| format!("#{r}")).unwrap_or_default());
                             ui.label(problem_lines(layout, c.id, tag_of).join("; "));
                         }
                         None => {
-                            ui.label(size);
+                            num(ui, size);
                             ui.weak("");
                             ui.weak("");
                             ui.weak("");
                             ui.weak("");
-                            ui.weak("Unplaced");
+                            ui.colored_label(
+                                ui.visuals().warn_fg_color,
+                                "Unplaced (use Place all, or drag it in)",
+                            );
                         }
                     }
                     ui.end_row();
                 }
             });
     });
+    clicked
 }
 
 impl NovoApp {
+    /// The devices selected on the plate.
+    fn cabinet_selected(&self) -> Vec<u64> {
+        self.cabinet
+            .view
+            .selection
+            .ids()
+            .iter()
+            .filter_map(|i| novo_canvas::cabinet::box_of(*i))
+            .collect()
+    }
+
     /// The Cabinet canvas, in place of the schematic canvas.
     pub(super) fn cabinet_show(&mut self, ui: &mut egui::Ui) {
         let Some(doc) = self.backend.document() else {
@@ -387,7 +417,15 @@ impl NovoApp {
                 self.cabinet.keys.clear();
                 self.cabinet.drag = None;
                 self.cabinet.ghost = None;
-                cabinet_table(ui, &shown, &cands, &tag_of);
+                let selected = self.cabinet_selected();
+                if let Some(id) = cabinet_table(ui, &shown, &cands, &tag_of, &selected) {
+                    // A row is its device: select it and show it on the plate.
+                    self.cabinet.view.selection.apply(
+                        [novo_canvas::cabinet::box_item(id)],
+                        novo_canvas::SelectOp::Replace,
+                    );
+                    self.cabinet.table = false;
+                }
             }
             Some(shown) => {
                 let unplaced_list: Vec<(u64, String, String)> = layout
@@ -523,14 +561,7 @@ impl NovoApp {
                         ask = Some(Ask::Drop(d.id, d.at.0, d.at.1));
                     }
                     // Rotate and delete act on the selected devices.
-                    let selected: Vec<u64> = self
-                        .cabinet
-                        .view
-                        .selection
-                        .ids()
-                        .iter()
-                        .filter_map(|i| novo_canvas::cabinet::box_of(*i))
-                        .collect();
+                    let selected = self.cabinet_selected();
                     for key in std::mem::take(&mut self.cabinet.keys) {
                         match key.as_str() {
                             "edit.rotate" if !selected.is_empty() => {
