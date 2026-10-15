@@ -18,3 +18,8 @@ One `edit::settle_wire(tx,page,wire)` called from draw_wire, accept (facing prop
 
 ## Clarifications from DESIGN follow-up #177
 Moving a symbol stretches a hand-drawn wire by moving only its end segment; if the pin leaves that segment's axis, add a bend (never diagonal). R flips a Corners elbow only; in Lines R does nothing. Corners elbow runs along the axis of greater pointer movement. Pin drag over 4 px is always auto-routed. I own geometry.rs, edit.rs, tool.rs during engine PRs (WS-06 agreed). Reviewer asks: tests for settle_wire from tidy_junctions and accept; multi-selection interactive move refused atomically; diagonal pin move on hand-drawn wire.
+
+## Known limits after engine PR 1 (#181)
+- With clicked corners the whole gesture is refused when a leg would overlap (router legs between corners are not nudged); L routes are not nudged. Arriving along a wire's run is now an overlap (T-junction test changed).
+- Refusal reaches callers as ModelError::InvalidValue; a typed DrawError entry is due before the UI uses it.
+- SegmentIndex is rebuilt per call; 10k benchmark and a persistent index come before the move/ghost step. Test 6 (through another net's pin/junction) still to do.

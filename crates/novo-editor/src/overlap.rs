@@ -179,8 +179,38 @@ impl std::fmt::Display for Refusal {
     }
 }
 
+/// Wires that leave the same pin may run together for their first stretch.
+/// Keeps only the overlaps that are not that stretch: the stretches that
+/// chain from `a` along `start_wires` (and from `b` along `end_wires`) are
+/// dropped, anything after the wires part is blocking.
+fn blocking(
+    mut found: Vec<Overlap>,
+    a: Point,
+    start_wires: &[WireId],
+    b: Point,
+    end_wires: &[WireId],
+) -> Vec<Overlap> {
+    for (pin, wires) in [(a, start_wires), (b, end_wires)] {
+        let mut at = pin;
+        while let Some(i) = found.iter().position(|o| {
+            wires.contains(&o.wire) && (o.from.approx_eq(at, EPS) || o.to.approx_eq(at, EPS))
+        }) {
+            let o = found.remove(i);
+            at = if o.from.approx_eq(at, EPS) {
+                o.to
+            } else {
+                o.from
+            };
+        }
+    }
+    found
+}
+
 /// The bends for a wire from `a` to `b` through the user's `corners` that
-/// share no stretch with the wires on `page`, ignoring `exempt`.
+/// share no stretch with the wires on `page`. `start_wires` and `end_wires`
+/// are the wires already at the pins `a` and `b` (empty for a junction or a
+/// point on a wire); the stretch a new wire shares with them contiguously
+/// from the pin is allowed, because it becomes a derived junction later.
 ///
 /// The default route is kept when it is clear. Otherwise, with no user
 /// corners, the router tries moving a Z route's cross-over up to
@@ -195,14 +225,15 @@ pub fn plan_route(
     corners: &[Point],
     b: Point,
     to: Option<Direction>,
-    exempt: &[WireId],
+    start_wires: &[WireId],
+    end_wires: &[WireId],
 ) -> Result<Vec<Point>, Refusal> {
     let index = SegmentIndex::new(project, page);
     let check = |bends: &[Point]| -> Vec<Overlap> {
         let mut pts = vec![a];
         pts.extend_from_slice(bends);
         pts.push(b);
-        index.overlaps(&pts, exempt)
+        blocking(index.overlaps(&pts, &[]), a, start_wires, b, end_wires)
     };
     let default = route_through(a, from, corners, b, to);
     let first = check(&default);

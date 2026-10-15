@@ -1330,3 +1330,41 @@ fn crossing_wires_are_not_an_overlap() {
     assert_eq!(doc.project().wires().count(), 2);
     assert!(page_has_no_overlaps(&doc, page));
 }
+
+#[test]
+fn wires_from_one_pin_may_share_only_the_stretch_before_they_part() {
+    let (mut doc, page, [a, _b, c, d]) = two_rows();
+    let mid = (pin_pos(&doc, a, "14").y + pin_pos(&doc, c, "13").y) / 2.0;
+    // A leaves a.14, goes down, left, down to the middle line and across it.
+    doc.transact("A", |tx| {
+        edit::draw_wire(
+            tx,
+            page,
+            target(tx.project(), a, "14"),
+            &[p(40.0, 70.0), p(30.0, 70.0), p(30.0, mid), p(100.0, mid)],
+            target(tx.project(), d, "13"),
+        )
+    })
+    .unwrap();
+    // B starts at the same pin and its default Z route would run along A's
+    // horizontal at `mid` after the two have parted: it must be moved clear.
+    doc.transact("B", |tx| {
+        edit::draw_wire(
+            tx,
+            page,
+            target(tx.project(), a, "14"),
+            &[],
+            target(tx.project(), c, "13"),
+        )
+    })
+    .unwrap();
+    let overlaps = novo_editor::overlap::page_overlaps(doc.project(), page);
+    let pin = pin_pos(&doc, a, "14");
+    // Only the stretch that starts at the shared pin may be shared.
+    assert!(
+        overlaps
+            .iter()
+            .all(|(_, o)| o.from.approx_eq(pin, 1e-6) || o.to.approx_eq(pin, 1e-6)),
+        "{overlaps:?}"
+    );
+}

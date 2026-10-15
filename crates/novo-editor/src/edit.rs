@@ -673,12 +673,13 @@ pub fn draw_wire(
         .ok_or(ModelError::NotFound(endpoint_id(to)))?;
     // Wires that leave the same pin may run together for their first stretch;
     // that case becomes a derived junction later. Everything else is checked.
-    let mut exempt: Vec<WireId> = Vec::new();
-    for end in [from, to] {
+    let at_pin = |end: Endpoint| -> Vec<WireId> {
         if matches!(end, Endpoint::Pin { .. }) {
-            exempt.extend(project.wires_at(end));
+            project.wires_at(end).collect()
+        } else {
+            Vec::new()
         }
-    }
+    };
     let bends = plan_route(
         project,
         page,
@@ -687,7 +688,8 @@ pub fn draw_wire(
         corners,
         b,
         endpoint_direction(project, to),
-        &exempt,
+        &at_pin(from),
+        &at_pin(to),
     )
     .map_err(|r| ModelError::InvalidValue {
         id: r.other.into(),
