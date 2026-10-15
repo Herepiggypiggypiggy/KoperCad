@@ -202,6 +202,41 @@ fn the_table_face_toggles_and_problems_are_in_words() {
 }
 
 #[test]
+fn a_device_too_deep_for_the_door_gets_its_own_mark_and_sentence() {
+    use novo_canvas::cabinet::BoxState;
+    use novo_layout::enclosure::Enclosure;
+    use novo_layout::state::CabinetLayout;
+    use novo_layout::{Plate, Size};
+    let mut l = CabinetLayout::new(Plate {
+        width: 300.0,
+        height: 300.0,
+        margin: 10.0,
+    });
+    let size = Size::from_part(Some(45.0), Some(90.0));
+    l.drop_device(1, size, 20.0, 20.0);
+    l.drop_device(2, size, 120.0, 20.0);
+    l.enclosure = Some(Enclosure {
+        width: 400.0,
+        height: 400.0,
+        depth: 200.0,
+        plate_setback: 20.0,
+        door: None,
+        front_clearance: None,
+        hinge_side_clearance: None,
+    });
+    l.depths.insert(1, 220.0);
+    l.depths.insert(2, 80.0);
+    let name = |id: u64| format!("-K{id}");
+    let view = super::cabinet::cabinet_view(&l, &name);
+    let state = |id| view.boxes.iter().find(|b| b.id == id).unwrap().state;
+    assert_eq!(state(1), BoxState::TooDeep);
+    assert_eq!(state(2), BoxState::Ok);
+    let lines = super::cabinet::problem_lines(&l, 1, &name);
+    assert!(lines.iter().any(|t| t.contains("40 mm too deep")));
+    assert!(super::cabinet::problem_lines(&l, 2, &name).is_empty());
+}
+
+#[test]
 fn keys_pressed_in_the_table_do_not_wait_for_the_plate() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));

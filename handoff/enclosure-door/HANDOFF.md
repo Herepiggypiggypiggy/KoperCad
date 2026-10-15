@@ -8,9 +8,10 @@ Updated 2026-10-15.
   Plate chip: the inspector's plate card has the collapsible section "Inside
   and door" (form, Apply as one undo step, problem list, top view with the door
   arc). Door problems count in the header strip.
+- A device too deep for the door gets `BoxState::TooDeep` (error colour and a
+  down-pointing triangle mark) and a sentence in the hover, table and inspector.
 - Still missing in the UI: checks as `novo-checks` Problems (they show only in
-  this panel and the header count), front-view boxes coloured for depth,
-  door-mounted devices. Coordinate with "UI integration: cabinet, 3D,
+  the card, the marks and the header count), door-mounted devices. Coordinate with "UI integration: cabinet, 3D,
   enclosure".
 - Engine: `crates/novo-layout/src/enclosure.rs` (types, `check`, swing, arc).
   Storage: `novo_layout::model::{enclosure_of, set_enclosure, device_depth}`

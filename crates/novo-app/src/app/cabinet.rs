@@ -108,6 +108,10 @@ pub(super) enum Ask {
 /// The Cabinet drawing of a layout, with the layout's problems as box states.
 pub(super) fn cabinet_view(layout: &CabinetLayout, tag_of: &impl Fn(u64) -> String) -> CabinetView {
     let report = layout.report();
+    let deep: Vec<u64> = layout
+        .door_report()
+        .map(|d| d.too_deep.iter().map(|&(id, _)| id).collect())
+        .unwrap_or_default();
     let state = |id: u64| {
         if report.collisions.iter().any(|&(a, b)| a == id || b == id)
             || report.outside.contains(&id)
@@ -117,6 +121,8 @@ pub(super) fn cabinet_view(layout: &CabinetLayout, tag_of: &impl Fn(u64) -> Stri
             } else {
                 BoxState::Collision
             }
+        } else if deep.contains(&id) {
+            BoxState::TooDeep
         } else if report.too_close.iter().any(|&(a, b, _)| a == id || b == id) {
             BoxState::TooClose
         } else {
@@ -183,6 +189,13 @@ pub(super) fn problem_lines(
                 "Only {gap:.0} mm from {}",
                 tag_of(if a == id { b } else { a })
             ));
+        }
+    }
+    if let Some(door) = layout.door_report() {
+        for &(d, over) in &door.too_deep {
+            if d == id {
+                lines.push(format!("{over:.0} mm too deep: the door cannot close"));
+            }
         }
     }
     if let Some(p) = layout.placements.iter().find(|p| p.id == id) {
