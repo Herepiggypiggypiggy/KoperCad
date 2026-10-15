@@ -34,3 +34,4 @@
 21:45 UTC #339 ffbfd27 READY (clippy fix confirmed)
 22:00 UTC #348 9c45d1e READY (rename group/panel in outline); #350 d622e2a READY (palette ranking)
 22:15 UTC #363 372828c READY (page reorder in outline)
+22:25 UTC #365 69bd421 READY (docs: wheel sentence + hands-on checklist)
