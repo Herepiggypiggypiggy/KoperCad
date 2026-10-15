@@ -757,6 +757,14 @@ impl Editor {
         true
     }
 
+    /// Shift held while a move is in the air: the wires follow at the drop,
+    /// whichever way the move was picked up.
+    pub fn set_move_carry(&mut self, carry: bool) {
+        if let Tool::Move(m) = &mut self.tool {
+            m.carry = carry;
+        }
+    }
+
     /// Escape, first rung: cancels the step in progress.
     pub fn cancel_step(&mut self) -> bool {
         // Esc cancels a row drag and keeps the symbol on the pointer.
@@ -948,6 +956,7 @@ impl Editor {
             Tool::Move(m) => {
                 let delta = at - m.from;
                 let grid = self.grid;
+                let open_before = edit::open_end_count(doc.project());
                 let result = doc.transact("Move", |tx| {
                     if delta != Point::ZERO {
                         let how = Transform::Move(delta);
@@ -976,6 +985,14 @@ impl Editor {
                 let r = self.finish(result.map(|(_, c)| c), None);
                 if r == Clicked::Edited {
                     self.propose(doc, &edit::symbols_in(&m.ids));
+                    let left = edit::open_end_count(doc.project()).saturating_sub(open_before);
+                    if left > 0 {
+                        self.notice = Some(if left == 1 {
+                            "1 wire end left open".into()
+                        } else {
+                            format!("{left} wire ends left open")
+                        });
+                    }
                 }
                 self.select = Some(m.ids);
                 r
@@ -2008,8 +2025,19 @@ impl Editor {
                 "Corners: click a pin or wire to finish, empty space for a corner · R flips the bend · Backspace undo · Esc cancels · Shift+W lines"
                     .into()
             }
-            Tool::Move(_) => self.link_hint.clone().unwrap_or_else(|| {
-                "Click to drop · R rotate · X mirror · Esc cancels the move".into()
+            Tool::Move(m) => self.link_hint.clone().unwrap_or_else(|| {
+                let wires = if m.carry {
+                    String::new()
+                } else {
+                    match edit::detaching_ends(doc.project(), &m.ids) {
+                        0 => String::new(),
+                        1 => " · 1 wire end stays behind open, Shift at the drop takes it along".into(),
+                        n => format!(
+                            " · {n} wire ends stay behind open, Shift at the drop takes them along"
+                        ),
+                    }
+                };
+                format!("Click to drop · R rotate · X mirror · Esc cancels the move{wires}")
             }),
         };
         let text = if self.proposals.is_empty() {

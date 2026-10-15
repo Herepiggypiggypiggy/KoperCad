@@ -764,6 +764,11 @@ impl SchematicView {
                 self.editor.move_label(document, page, &source, delta);
             }
         }
+        if matches!(self.editor.tool(), crate::tool::Tool::Move(_)) {
+            // Shift at the drop takes the wires along, however it began.
+            let carry = ui.input(|i| i.modifiers.shift);
+            self.editor.set_move_carry(carry);
+        }
         if self.drag_move
             && let Some(w) = out.cursor_raw
         {

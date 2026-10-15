@@ -1074,6 +1074,37 @@ pub fn transform_detached(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform) -> Res
     transform_with(tx, ids, how, true, true)
 }
 
+/// How many wire ends are open (in the air) on the whole project.
+pub fn open_end_count(project: &Project) -> usize {
+    project
+        .wires()
+        .flat_map(|w| w.ends())
+        .filter(|e| matches!(e, Endpoint::Free { .. }))
+        .count()
+}
+
+/// How many wire ends a detaching move of `ids` would leave in the air: the
+/// ends on moved symbols' pins whose wire is not carried along with both
+/// ends moving or selected.
+pub fn detaching_ends(project: &Project, ids: &[AnyId]) -> usize {
+    let symbols: BTreeSet<SymbolId> = symbols_in(ids).into_iter().collect();
+    project
+        .wires()
+        .filter(|w| !ids.contains(&AnyId::Wire(w.id)))
+        .map(|w| {
+            let on_moved = |e: Endpoint| {
+                matches!(e, Endpoint::Pin { symbol, .. } if symbols.contains(&symbol))
+            };
+            let [a, b] = w.ends();
+            if on_moved(a) && on_moved(b) {
+                0
+            } else {
+                usize::from(on_moved(a)) + usize::from(on_moved(b))
+            }
+        })
+        .sum()
+}
+
 fn transform_with(
     tx: &mut Tx<'_>,
     ids: &[AnyId],

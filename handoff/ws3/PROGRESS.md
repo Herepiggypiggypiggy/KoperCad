@@ -57,3 +57,4 @@
 - 2026-10-15: drag a selected wire part: a corner moves alone, a run moves its two corners (inner run slides across itself, end run along itself), grid-snapped, ghost while dragging, Esc cancels (edit::move_wire_part, Editor::part_delta).
 - 2026-10-15: text-only drag. Press and drag on a label moves only the text: Editor::move_label (LabelSource Record or Drawn; a drawn tag gets a text record at the place it is drawn), view ghost while dragging, Esc puts it back.
 - 2026-10-15: wire part drag keeps stretches horizontal or vertical: edit::moved_route adds an elbow next to the fixed neighbour (DESIGN 4, 6); the part selection clears after a drag because bends may be added.
+- 2026-10-15: move follow-ups to #259: Shift at the drop takes the wires along (Editor::set_move_carry), the status line says how many wire ends stay behind open and, after the drop, how many were left open; tests for both ends moved.

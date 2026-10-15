@@ -2037,6 +2037,80 @@ fn dragging_a_label_moves_only_the_text_in_one_undo_step() {
     assert!(doc.project().texts_of(a).is_empty());
 }
 
+/// Two contacts joined by a wire, nothing selected.
+fn wired_pair() -> (Document, PageId, Editor, [novo_core::SymbolId; 2]) {
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/contacts/no", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.click(&mut doc, page, p(80.0, 100.0), TOL);
+    let a = symbol_at(&doc, page, p(40.0, 40.0));
+    let b = symbol_at(&doc, page, p(80.0, 100.0));
+    editor.begin_wire();
+    click_pin(&mut editor, &mut doc, page, a, "14");
+    click_pin(&mut editor, &mut doc, page, b, "13");
+    editor.leave_tool();
+    (doc, page, editor, [a, b])
+}
+
+#[test]
+fn moving_both_ends_of_a_wire_together_keeps_it_connected_and_leaves_nothing_open() {
+    let (mut doc, page, mut editor, [a, b]) = wired_pair();
+    editor.hover(&doc, page, p(40.0, 40.0), TOL);
+    let both = [AnyId::Symbol(a), AnyId::Symbol(b)];
+    assert!(editor.begin_move(&both));
+    // Nothing stays behind, so the status says nothing about open ends.
+    assert!(!editor.status(&doc, page).contains("open"));
+    editor.hover(&doc, page, p(60.0, 60.0), TOL);
+    assert_eq!(
+        editor.click(&mut doc, page, p(60.0, 60.0), TOL),
+        Clicked::Edited
+    );
+    assert_eq!(novo_editor::edit::open_end_count(doc.project()), 0);
+    assert!(!editor.status(&doc, page).contains("left open"));
+    let w = doc.project().wires().next().unwrap();
+    assert!(matches!(w.from, Endpoint::Pin { .. }) && matches!(w.to, Endpoint::Pin { .. }));
+    let pts = novo_editor::geometry::wire_points(doc.project(), w.id).unwrap();
+    assert_eq!(pts[0], pin_pos(&doc, a, "14"));
+    assert_eq!(*pts.last().unwrap(), pin_pos(&doc, b, "13"));
+}
+
+#[test]
+fn a_plain_move_says_how_many_ends_stay_behind_and_how_many_were_left_open() {
+    let (mut doc, page, mut editor, [_, b]) = wired_pair();
+    editor.hover(&doc, page, p(80.0, 100.0), TOL);
+    assert!(editor.begin_move(&[AnyId::Symbol(b)]));
+    let status = editor.status(&doc, page);
+    assert!(
+        status.contains("1 wire end stays behind open") && status.contains("Shift"),
+        "{status}"
+    );
+    editor.hover(&doc, page, p(120.0, 120.0), TOL);
+    assert_eq!(
+        editor.click(&mut doc, page, p(120.0, 120.0), TOL),
+        Clicked::Edited
+    );
+    assert_eq!(novo_editor::edit::open_end_count(doc.project()), 1);
+    assert!(
+        editor.status(&doc, page).contains("1 wire end left open"),
+        "{}",
+        editor.status(&doc, page)
+    );
+}
+
+#[test]
+fn shift_at_the_drop_takes_the_wires_along_and_leaves_nothing_open() {
+    let (mut doc, page, mut editor, [_, b]) = wired_pair();
+    editor.hover(&doc, page, p(80.0, 100.0), TOL);
+    assert!(editor.begin_move(&[AnyId::Symbol(b)]));
+    editor.set_move_carry(true);
+    assert!(!editor.status(&doc, page).contains("stays behind"));
+    editor.hover(&doc, page, p(120.0, 120.0), TOL);
+    editor.click(&mut doc, page, p(120.0, 120.0), TOL);
+    assert_eq!(novo_editor::edit::open_end_count(doc.project()), 0);
+    assert!(!editor.status(&doc, page).contains("left open"));
+}
+
 #[test]
 fn a_double_click_on_empty_canvas_starts_a_wire_open_at_that_end() {
     for lines in [false, true] {
