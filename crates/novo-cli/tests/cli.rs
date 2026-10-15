@@ -355,6 +355,7 @@ fn export_reports_as_excel_and_csv() {
             "Bill of materials",
             "Device list",
             "Wire list",
+            "Cut list",
             "Terminal diagram",
             "Cable diagram",
             "IO list"
