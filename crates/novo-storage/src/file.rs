@@ -77,6 +77,13 @@ impl ProjectFile {
     /// media; a file from an older version is upgraded in memory only. A file
     /// open in the app gives [`StorageError::Locked`].
     pub fn read(path: impl AsRef<Path>) -> Result<Project> {
+        Self::read_only(path)?.load()
+    }
+
+    /// Like [`ProjectFile::read`] but keeps the file, so the snapshots of
+    /// issued revisions can be read too ([`ProjectFile::snapshot`]), for
+    /// comparing revisions from the command line. Never writes.
+    pub fn read_only(path: impl AsRef<Path>) -> Result<ProjectFile> {
         let path = path.as_ref();
         ensure_exists(path)?;
         let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
@@ -101,7 +108,7 @@ impl ProjectFile {
             path: path.to_owned(),
         };
         file.check_role(Role::Project)?;
-        file.load()
+        Ok(file)
     }
 
     pub fn path(&self) -> &Path {
