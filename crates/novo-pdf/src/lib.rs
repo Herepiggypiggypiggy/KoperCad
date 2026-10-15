@@ -3,7 +3,7 @@
 //!
 //! A generated page (a [`PageKind::Generated`] record: bill of materials,
 //! terminal diagram, ...) prints as one PDF page per sheet of its report,
-//! each named like the sheet (`20`, or `20.1`, `20.2`, ...; see
+//! each named like the sheet (`20`, or `20a`, `20b`, ...; see
 //! [`novo_reports::sheet_names`]) in the page labels and bookmarks, with
 //! the report's table drawn inside the page frame.
 //!
@@ -426,7 +426,7 @@ fn draw_layout(writer: &mut draw::PageWriter, layout: &PageLayout, ink: Color) {
     }
 }
 
-/// `20.2  Terminal diagram · =A1+CAB-X1`: the sheet name, the page title,
+/// `20b  Terminal diagram · =A1+CAB-X1`: the sheet name, the page title,
 /// then what the sheet shows, so a reflowed sheet is found by name
 /// (docs/DESIGN.md, generated pages under pinned flow).
 fn sheet_bookmark(sheet: &Sheet) -> String {
