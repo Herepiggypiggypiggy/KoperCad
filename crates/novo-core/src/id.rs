@@ -116,4 +116,8 @@ define_ids! {
     BlockInstanceId => BlockInstance, "BlockInstance";
     /// An issued revision of the drawing set.
     RevisionId => Revision, "Revision";
+    /// A DIN rail or wiring duct on the mounting plate of an enclosure.
+    RailId => Rail, "Rail";
+    /// A device placed on the mounting plate of an enclosure.
+    CabinetPlacementId => CabinetPlacement, "CabinetPlacement";
 }

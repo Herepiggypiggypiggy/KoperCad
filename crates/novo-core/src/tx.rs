@@ -3,16 +3,18 @@
 use std::collections::BTreeSet;
 
 use crate::entity::{
-    Cable, CableCore, Device, DeviceKind, Dismissal, Endpoint, Junction, Page, PageFreeze,
-    PageKind, Part, PeOverride, Pin, PinFeed, Potential, PotentialKind, PotentialSet,
-    PotentialSpec, PotentialSystem, ProjectInfo, Revision, Structure, SymbolInstance, SymbolKey,
-    SymbolRole, Terminal, Text, TextContent, TextPlacement, Value, Wire,
+    CabinetPlacement, Cable, CableCore, Device, DeviceKind, Dismissal, Endpoint, Junction,
+    MountingPlate, Page, PageFreeze, PageKind, Part, PeOverride, Pin, PinFeed, Potential,
+    PotentialKind, PotentialSet, PotentialSpec, PotentialSystem, ProjectInfo, Rail, RailKind,
+    Revision, Structure, SymbolInstance, SymbolKey, SymbolRole, Terminal, Text, TextContent,
+    TextPlacement, Value, Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::{Placement, Point};
 use crate::id::{
-    AnyId, CableId, DeviceId, DismissalId, JunctionId, PageId, PartId, PotentialId,
-    PotentialSystemId, RevisionId, StructureId, SymbolId, TerminalId, TextId, WireId,
+    AnyId, CabinetPlacementId, CableId, DeviceId, DismissalId, JunctionId, PageId, PartId,
+    PotentialId, PotentialSystemId, RailId, RevisionId, StructureId, SymbolId, TerminalId, TextId,
+    WireId,
 };
 use crate::project::Project;
 use crate::record::{Entity, Op, Record};
@@ -198,6 +200,13 @@ impl<'p> Tx<'p> {
                 {
                     self.update::<SymbolInstance>(symbol, |s| {
                         s.feeds.retain(|f| f.potential != potential)
+                    })?;
+                }
+                // The device stays where it is on the plate, off the rail.
+                (AnyId::CabinetPlacement(placement), AnyId::Rail(_)) => {
+                    self.update::<CabinetPlacement>(placement, |p| {
+                        p.rail = None;
+                        p.rail_offset = None;
                     })?;
                 }
                 (AnyId::Cable(cable), AnyId::Wire(wire)) => {
@@ -904,8 +913,95 @@ impl<'p> Tx<'p> {
             tag,
             description,
             enclosure,
+            plate: None,
             properties: Default::default(),
         })
+    }
+
+    /// Sets the mounting plate of an enclosure, or removes it with `None`
+    /// (refused while rails or placed devices are on it).
+    pub fn set_plate(
+        &mut self,
+        structure: StructureId,
+        plate: Option<MountingPlate>,
+    ) -> Result<()> {
+        if plate.is_none()
+            && self
+                .project
+                .referrers(structure)
+                .any(|r| matches!(r, AnyId::Rail(_) | AnyId::CabinetPlacement(_)))
+        {
+            return Err(ModelError::Refused {
+                what: "Remove mounting plate".into(),
+                reason: "rails or devices are still placed on it".into(),
+            });
+        }
+        self.update::<Structure>(structure, |s| s.plate = plate)
+    }
+
+    /// Adds a rail or duct to the plate of an enclosure.
+    pub fn add_rail(
+        &mut self,
+        structure: StructureId,
+        x: f64,
+        y: f64,
+        length: f64,
+        kind: RailKind,
+    ) -> Result<RailId> {
+        self.insert(|id| Rail {
+            id,
+            structure,
+            x,
+            y,
+            length,
+            kind,
+            properties: Default::default(),
+        })
+    }
+
+    /// Places a device on the plate of an enclosure, or moves it when it
+    /// already has a placement. Returns the placement and whether it is new.
+    pub fn place_device(
+        &mut self,
+        device: DeviceId,
+        structure: StructureId,
+        at: Point,
+        rotated: bool,
+        rail: Option<(RailId, f64)>,
+    ) -> Result<(CabinetPlacementId, bool)> {
+        let existing = self
+            .project
+            .cabinet_placements
+            .values()
+            .find(|p| p.device == device)
+            .map(|p| p.id);
+        let (rail, rail_offset) = match rail {
+            Some((rail, offset)) => (Some(rail), Some(offset)),
+            None => (None, None),
+        };
+        if let Some(id) = existing {
+            self.update::<CabinetPlacement>(id, |p| {
+                p.structure = structure;
+                p.x = at.x;
+                p.y = at.y;
+                p.rotated = rotated;
+                p.rail = rail;
+                p.rail_offset = rail_offset;
+            })?;
+            return Ok((id, false));
+        }
+        let id = self.insert(|id| CabinetPlacement {
+            id,
+            device,
+            structure,
+            x: at.x,
+            y: at.y,
+            rotated,
+            rail,
+            rail_offset,
+            properties: Default::default(),
+        })?;
+        Ok((id, true))
     }
 
     /// Records that the user declined a proposal about `subjects`, or
