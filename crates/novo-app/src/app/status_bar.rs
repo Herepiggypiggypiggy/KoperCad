@@ -93,6 +93,11 @@ impl NovoApp {
                                     run = Some("file.save");
                                 }
                             }
+                            let label = if unsaved {
+                                label.on_hover_cursor(egui::CursorIcon::PointingHand)
+                            } else {
+                                label
+                            };
                             if !tip.is_empty() {
                                 label.on_hover_text(tip);
                             }
