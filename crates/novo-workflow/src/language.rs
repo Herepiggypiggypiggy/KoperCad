@@ -280,6 +280,15 @@ pub const DUTCH: &[Aliases] = &[
         &["kasten", "kastenlijst", "behuizingen"],
     ),
     nl(
+        "view.protection",
+        &["beveiliging"],
+        &[
+            "selectiviteit",
+            "uitschakelkarakteristiek",
+            "kortsluitvastheid",
+        ],
+    ),
+    nl(
         "simulate.motor-start",
         &[],
         &[
@@ -361,6 +370,11 @@ pub const DUTCH: &[Aliases] = &[
         "import.spreadsheet",
         &["importeer spreadsheet", "importeer excel"],
         &["spreadsheet", "excel", "csv"],
+    ),
+    nl(
+        "export.change_report",
+        &["wijzigingenrapport exporteren", "wijzigingsrapport"],
+        &["wijzigingen pdf", "revisierapport"],
     ),
     nl(
         "export.commissioning",

@@ -796,6 +796,21 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.protection",
+        "Protection: curves, selectivity, rating",
+        "View",
+        &[
+            "protection",
+            "trip",
+            "curve",
+            "selectivity",
+            "sccr",
+            "breaker",
+            "fuse",
+        ],
+        Needs::Project,
+    ),
+    cmd(
         "simulate.motor-start",
         "Simulate motor start",
         "View",
@@ -1019,6 +1034,13 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export pdf", "pdf"],
+    ),
+    cmd(
+        "export.change_report",
+        "Export change report",
+        "Export",
+        &["what changed", "revision report", "diff pdf"],
+        Needs::Project,
     ),
     verb(
         cmd(

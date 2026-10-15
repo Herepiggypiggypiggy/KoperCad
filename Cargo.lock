@@ -1930,6 +1930,7 @@ dependencies = [
  "novo-symbols",
  "novo-terminals",
  "novo-tests",
+ "serde",
  "serde_json",
 ]
 
@@ -2125,6 +2126,7 @@ name = "novo-revisions"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+ "novo-pdf",
  "novo-reports",
  "novo-storage",
  "novo-tests",
