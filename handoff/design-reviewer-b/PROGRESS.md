@@ -58,3 +58,4 @@
 19:31 UTC #430 ccbef31 CHANGES (design): app.rs merge conflict, export labels vs #475, where-to-find; File buttons ok until #440 if second PR drops them
 19:35 UTC #448 2338d9d CHANGES (design): pointer pulse vs no-loop rule, accent on wash contrast, card vs status bar
 19:45 UTC #409 a9acd31 CHANGES (design): raw 10 px fonts, top-view bars colour-only
+19:55 UTC #406 da254d8 CHANGES (merge conflict only; design items all fixed)
