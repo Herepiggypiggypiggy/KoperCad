@@ -3,6 +3,7 @@
 //! toasts for messages, the dialogs and action dispatch. There is no menu
 //! bar and no status bar.
 
+mod background_panel;
 mod cabinet;
 mod cabinet_inspector;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
@@ -767,6 +768,7 @@ impl NovoApp {
         self.about_dialog(&ctx);
         self.renumber_dialog(&ctx);
         self.preferences_dialog(&ctx);
+        self.background_panel(&ctx);
         self.parts_window(&ctx);
         self.project_settings_dialog(&ctx);
         self.issue_revision_dialog(&ctx);
@@ -981,6 +983,13 @@ impl NovoApp {
                 };
                 if ui.add_enabled(has, egui::Button::new(label)).clicked() {
                     self.wb.queued.push("view.background");
+                    ui.close();
+                }
+                if ui
+                    .add_enabled(has, egui::Button::new("Move and scale..."))
+                    .clicked()
+                {
+                    self.wb.queued.push("view.background_place");
                     ui.close();
                 }
                 if ui.add_enabled(has, egui::Button::new("Remove")).clicked() {

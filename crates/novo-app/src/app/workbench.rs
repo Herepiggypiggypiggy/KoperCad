@@ -111,6 +111,9 @@ pub(crate) struct Workbench {
     pub(super) changes: Option<super::changes::ChangesMode>,
     /// The background drawing last handed to the canvas: page, project
     /// revision and the key it has.
+    /// The DXF background panel, while open; inside, the values being
+    /// edited before they are committed.
+    pub(super) background_panel: Option<Option<super::background_panel::Placement>>,
     pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
 }
 
@@ -164,6 +167,7 @@ impl Default for Workbench {
             last_export: None,
             live: Default::default(),
             changes: None,
+            background_panel: None,
             underlay_seen: None,
         }
     }
@@ -220,6 +224,7 @@ const APP_COMMANDS: &[&str] = &[
     "export.pdf",
     "file.import_dxf_background",
     "view.background",
+    "view.background_place",
     "file.remove_background",
     "export.dxf_page",
     "export.dxf_all",
@@ -552,6 +557,7 @@ impl NovoApp {
             }
             "file.import_dxf_background" => self.import_dxf_background(),
             "view.background" => self.toggle_background(),
+            "view.background_place" => self.open_background_panel(),
             "file.remove_background" => self.remove_background(),
             "export.dxf_page" => {
                 self.export_dxf(super::dxf::DxfScope::CurrentPage);
