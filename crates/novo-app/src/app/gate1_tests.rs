@@ -18,13 +18,13 @@ use crate::settings::Settings;
 /// Pick tolerance for clicks, in millimetres.
 const TOL: f64 = 1.0;
 
-struct Drive {
-    ctx: egui::Context,
-    app: NovoApp,
+pub(super) struct Drive {
+    pub(super) ctx: egui::Context,
+    pub(super) app: NovoApp,
 }
 
 impl Drive {
-    fn new(untitled: &Path) -> Drive {
+    pub(super) fn new(untitled: &Path) -> Drive {
         let ctx = egui::Context::default();
         novo_theme::apply(&ctx);
         let app = NovoApp::with_settings(
@@ -51,7 +51,7 @@ impl Drive {
         output.textures_delta.clear();
     }
 
-    fn frame(&mut self) {
+    pub(super) fn frame(&mut self) {
         self.frame_with(Vec::new());
     }
 
@@ -65,7 +65,7 @@ impl Drive {
         }]);
     }
 
-    fn doc(&self) -> &Document {
+    pub(super) fn doc(&self) -> &Document {
         self.app.document().expect("a project is open")
     }
 
@@ -75,7 +75,7 @@ impl Drive {
 
     /// I, the query, Enter, then a click on the page: one placement as the
     /// user does it. Returns the new symbol.
-    fn place(&mut self, query: &str, x: f64, y: f64) -> SymbolId {
+    pub(super) fn place(&mut self, query: &str, x: f64, y: f64) -> SymbolId {
         let before: Vec<SymbolId> = self.doc().project().symbols().map(|s| s.id).collect();
         assert!(
             self.app.type_command(&self.ctx.clone(), Mode::Place, query),
@@ -2408,4 +2408,55 @@ fn c_draws_a_line_and_the_wires_it_touches_become_one_cable() {
     // One undo step takes the cable away again.
     d.app.backend.document_mut().unwrap().undo().unwrap();
     assert_eq!(d.doc().project().cables().count(), 0);
+}
+
+#[test]
+fn reconnecting_a_wire_to_earth_marks_the_terminal_too() {
+    use novo_core::{AnyId, ChangeSet, Endpoint, Pin, Point, SymbolRole, TerminalKind};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let page = d.page();
+    let ((term, wire), _) = d
+        .app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("setup", |tx| {
+            let x1 = tx.add_terminal_strip(novo_core::DeviceTag::parse("-X1")?)?;
+            let t = tx.add_terminal(x1, "1")?;
+            let term = tx.place_symbol(
+                page,
+                "iec/terminals/end_bracket",
+                novo_core::Placement::at(Point::new(100.0, 100.0)),
+                vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                SymbolRole::Terminal { terminals: vec![t] },
+            )?;
+            let earth = tx.place_symbol(
+                page,
+                "iec/earth/earth",
+                novo_core::Placement::at(Point::new(100.0, 140.0)),
+                vec![Pin::new("1", 0.0, -2.5)],
+                SymbolRole::Unassigned,
+            )?;
+            let wire = tx.connect(Endpoint::pin(term, 1), Endpoint::pin(earth, 0))?;
+            Ok((term, wire))
+        })
+        .unwrap();
+    d.frame();
+    let kind = |d: &Drive| {
+        let p = d.doc().project();
+        let SymbolRole::Terminal { terminals } = &p.symbol(term).unwrap().role else {
+            panic!()
+        };
+        p.terminal(terminals[0]).unwrap().kind
+    };
+    assert_eq!(kind(&d), TerminalKind::Feedthrough);
+    // The wire was changed, not added (an end moved onto the earth pin).
+    let mut changes = ChangeSet::default();
+    changes.modified.insert(AnyId::Wire(wire));
+    d.app.mark_earthed_terminals(&changes);
+    assert_eq!(kind(&d), TerminalKind::ProtectiveEarth);
 }
