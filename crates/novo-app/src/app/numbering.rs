@@ -265,7 +265,7 @@ impl NovoApp {
         if apply || save_only {
             self.apply_numbering(&mut win, apply);
         }
-        if open {
+        if open && !ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.wb.numbering = Some(win);
         }
     }

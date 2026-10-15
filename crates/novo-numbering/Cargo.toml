@@ -9,8 +9,8 @@ license.workspace = true
 novo-core.workspace = true
 
 [dev-dependencies]
-novo-reports = { path = "../novo-reports" }
-novo-cables = { path = "../novo-cables" }
+novo-reports.workspace = true
+novo-cables.workspace = true
 
 [lints]
 workspace = true
