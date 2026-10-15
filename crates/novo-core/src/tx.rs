@@ -47,6 +47,19 @@ impl<'p> Tx<'p> {
         }
     }
 
+    /// The wires this edit added so far.
+    pub(crate) fn added_wires(&self) -> Vec<WireId> {
+        self.ops
+            .iter()
+            .filter_map(|op| match op {
+                Op::Insert {
+                    record: Record::Wire(w),
+                } => Some(w.id),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// The project as edited so far.
     pub fn project(&self) -> &Project {
         self.project

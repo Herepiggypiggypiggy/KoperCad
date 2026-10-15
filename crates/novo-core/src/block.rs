@@ -337,6 +337,94 @@ impl Tx<'_> {
         Ok(())
     }
 
+    /// Called at the end of every edit: a device outside any block whose
+    /// wires (two or more) all land on members of one placed block was
+    /// added inside it, a structural edit that detaches it. A device with
+    /// only its first wire in stays linked until it is clearly inside.
+    pub(crate) fn detach_enclosed_devices(&mut self) -> Result<()> {
+        let added = self.added_wires();
+        if added.is_empty() || self.project().block_instances().next().is_none() {
+            return Ok(());
+        }
+        let member_of = |project: &crate::Project, id: AnyId| {
+            project
+                .block_instances()
+                .find(|b| b.members.iter().any(|m| m.actual == id))
+                .map(|b| b.id)
+        };
+        let device_of = |project: &crate::Project, id: AnyId| match id {
+            AnyId::Symbol(s) => match project.symbol(s).map(|s| &s.role) {
+                Some(SymbolRole::Device { device, .. }) => Some(*device),
+                _ => None,
+            },
+            _ => None,
+        };
+        let mut candidates = BTreeSet::new();
+        for wire in added {
+            let Some(w) = self.project().wire(wire) else {
+                continue;
+            };
+            for end in w.ends() {
+                let owner = endpoint_owner(end);
+                if let Some(device) = device_of(self.project(), owner)
+                    && member_of(self.project(), device.into()).is_none()
+                {
+                    candidates.insert(device);
+                }
+            }
+        }
+        let mut detach = Vec::new();
+        for device in candidates {
+            let project = self.project();
+            let symbols: BTreeSet<AnyId> = project
+                .symbols_of_device(device)
+                .iter()
+                .map(|s| AnyId::Symbol(s.id))
+                .collect();
+            let mut blocks = BTreeSet::new();
+            let mut count = 0;
+            let mut outside = false;
+            for &symbol in &symbols {
+                for referrer in project.referrers(symbol) {
+                    let AnyId::Wire(w) = referrer else { continue };
+                    let Some(w) = project.wire(w) else { continue };
+                    for end in w.ends() {
+                        let owner = endpoint_owner(end);
+                        if symbols.contains(&owner) {
+                            continue;
+                        }
+                        count += 1;
+                        match member_of(project, owner) {
+                            Some(b) => {
+                                blocks.insert(b);
+                            }
+                            None => outside = true,
+                        }
+                    }
+                }
+            }
+            if outside || count < 2 || blocks.len() != 1 {
+                continue;
+            }
+            let block = blocks.into_iter().next().expect("one block");
+            if project
+                .block_instance(block)
+                .is_some_and(|b| b.detached.is_none())
+            {
+                let tag = project
+                    .device(device)
+                    .map(|d| d.tag.to_string())
+                    .filter(|t| !t.is_empty())
+                    .unwrap_or_else(|| device.to_string());
+                detach.push((block, format!("device {tag} added inside the block")));
+            }
+        }
+        for (block, reason) in detach {
+            self.detach_block(block, reason)?;
+        }
+        Ok(())
+    }
+
     /// How a wire end reads to the user: `-K1:13` for a pin of a tagged
     /// device, the id otherwise.
     fn endpoint_name(&self, end: Endpoint) -> String {

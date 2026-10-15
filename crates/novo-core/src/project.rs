@@ -193,7 +193,10 @@ impl Project {
         edit: impl FnOnce(&mut Tx<'_>) -> Result<R>,
     ) -> Result<(R, Transaction)> {
         let mut tx = Tx::new(self);
-        let result = edit(&mut tx);
+        let result = edit(&mut tx).and_then(|value| {
+            tx.detach_enclosed_devices()?;
+            Ok(value)
+        });
         let ops = tx.finish(result.is_ok());
         let value = result?;
         if !ops.is_empty() {

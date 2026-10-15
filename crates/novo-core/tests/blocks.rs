@@ -414,6 +414,44 @@ fn a_connection_inside_the_block_detaches_it() {
             .detached
             .is_none()
     );
+
+    // A new device with its first wire in a member stays linked ...
+    let detached = |doc: &Document| {
+        doc.project()
+            .block_instance(block)
+            .unwrap()
+            .detached
+            .clone()
+    };
+    let k9 = doc
+        .transact("Relay", |tx| {
+            let k = tx.add_device(tag("=A1-K9"), "Relay")?;
+            let s = tx.place_symbol(
+                d.p2,
+                "x",
+                Placement::at(Point::new(20.0, 40.0)),
+                two_pins(),
+                SymbolRole::Device {
+                    device: k,
+                    main: true,
+                },
+            )?;
+            tx.connect(Endpoint::pin(s, 0), Endpoint::pin(q, 0))?;
+            Ok(s)
+        })
+        .unwrap()
+        .0;
+    assert_eq!(detached(&doc), None);
+    // ... and is inside once its wires all land on members.
+    doc.transact("Wire in", |tx| {
+        tx.connect(Endpoint::pin(k9, 1), Endpoint::pin(m, 0))
+            .map(|_| ())
+    })
+    .unwrap();
+    assert_eq!(
+        detached(&doc).as_deref(),
+        Some("device =A1-K9 added inside the block")
+    );
 }
 
 #[test]
