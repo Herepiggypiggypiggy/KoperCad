@@ -77,6 +77,28 @@ if (-not (Test-Path (Join-Path $mingw 'bin\gcc.exe'))) {
     if (-not $asset) { throw 'Could not find a WinLibs zip in the latest release.' }
     $zip = Join-Path $Work $asset.name
     Invoke-WebRequest $asset.browser_download_url -OutFile $zip -UseBasicParsing
+    # WinLibs publishes a .sha256 file next to each zip; refuse a corrupt or
+    # tampered download. Without that file, say so rather than skip silently.
+    $sumAsset = $rel.assets | Where-Object { $_.name -eq "$($asset.name).sha256" } | Select-Object -First 1
+    if ($sumAsset) {
+        # Windows PowerShell 5.1 can hand back bytes for a binary content type.
+        $raw = (Invoke-WebRequest $sumAsset.browser_download_url -UseBasicParsing).Content
+        if ($raw -is [byte[]]) { $raw = [Text.Encoding]::ASCII.GetString($raw) }
+        $expected = (($raw.Trim() -split '\s+')[0]).ToLower()
+        if ($expected -notmatch '^[0-9a-f]{64}$') {
+            Write-Warning "Could not read a SHA-256 for $($asset.name); the download is unchecked."
+        }
+        else {
+            $actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
+            if ($actual -ne $expected) {
+                Remove-Item -Force $zip
+                throw "WinLibs download failed its SHA-256 check (expected $expected, got $actual)."
+            }
+        }
+    }
+    else {
+        Write-Warning "No SHA-256 file published for $($asset.name); the download is unchecked."
+    }
     $unpack = Join-Path $Work 'mingw-unpack'
     Remove-Item -Recurse -Force $unpack -ErrorAction SilentlyContinue
     Expand-Archive -Path $zip -DestinationPath $unpack
