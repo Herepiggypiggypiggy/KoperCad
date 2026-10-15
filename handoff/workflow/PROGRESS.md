@@ -44,3 +44,7 @@
 2026-10-14 22:09 UTC Outputs had proposed 20-1; told them letters (20a) per #108 ('-' is the tag prefix, '/' the structure separator)
 2026-10-14 22:10 UTC #108 READY (e90b056). Accepted reviewer's optional note: skip i, l, o in sheet letters; follow-up docs PR after #108 merges; outputs told
 2026-10-14 22:10 UTC #108 merged; opening follow-up for skip i/l/o
+2026-10-14 22:12 UTC #110 READY (24666e6); lead merges
+2026-10-14 22:15 UTC #110 merged. No open PR of mine.
+2026-10-14 22:17 UTC WS-02 blocks model checked vs DESIGN §7: matches; flagged that adding a device/connection inside a block must detach too (suggested 'inside' rule)
+2026-10-14 22:24 UTC Found novo-editor names inserted pages 1.1 (clashes with page.column); DESIGN PR: page names never contain a dot, inserted pages take letters (3a)
