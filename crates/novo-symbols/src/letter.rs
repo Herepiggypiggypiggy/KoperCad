@@ -92,8 +92,11 @@ pub fn letter_code_with(function: &str, rules: LetterRules) -> Option<&'static s
         "plc" => "A",
         "passive" => match parts.get(1).copied() {
             Some("capacitor") => "C",
-            Some("inductor" | "filter") => "L",
-            Some("diode" | "rectifier" | "transistor" | "thyristor" | "triac") => "V",
+            // A transistor switches signals, a thyristor or triac switches
+            // energy; diodes, rectifiers, inductors and filters restrict
+            // or stabilize a flow (R).
+            Some("transistor") => "K",
+            Some("thyristor" | "triac") => "Q",
             _ => "R",
         },
         _ => "A",
@@ -174,25 +177,25 @@ mod tests {
             ("passive.capacitor", Some("C")),
             ("passive.capacitor.polarized", Some("C")),
             ("passive.capacitor.variable", Some("C")),
-            ("passive.diode", Some("V")),
-            ("passive.diode.led", Some("V")),
-            ("passive.diode.photo", Some("V")),
-            ("passive.diode.zener", Some("V")),
-            ("passive.filter", Some("L")),
-            ("passive.inductor", Some("L")),
-            ("passive.inductor.reactor", Some("L")),
+            ("passive.diode", Some("R")),
+            ("passive.diode.led", Some("R")),
+            ("passive.diode.photo", Some("R")),
+            ("passive.diode.zener", Some("R")),
+            ("passive.filter", Some("R")),
+            ("passive.inductor", Some("R")),
+            ("passive.inductor.reactor", Some("R")),
             ("passive.potentiometer", Some("R")),
-            ("passive.rectifier", Some("V")),
+            ("passive.rectifier", Some("R")),
             ("passive.resistor", Some("R")),
             ("passive.resistor.ldr", Some("R")),
             ("passive.resistor.ntc", Some("R")),
             ("passive.resistor.ptc", Some("R")),
             ("passive.resistor.variable", Some("R")),
             ("passive.resistor.varistor", Some("R")),
-            ("passive.thyristor", Some("V")),
-            ("passive.transistor.npn", Some("V")),
-            ("passive.transistor.pnp", Some("V")),
-            ("passive.triac", Some("V")),
+            ("passive.thyristor", Some("Q")),
+            ("passive.transistor.npn", Some("K")),
+            ("passive.transistor.pnp", Some("K")),
+            ("passive.triac", Some("Q")),
             ("plc.input.analog", Some("A")),
             ("plc.input.digital", Some("A")),
             ("plc.output.analog", Some("A")),
@@ -245,6 +248,23 @@ mod tests {
                 symbol.id
             );
         }
+    }
+
+    /// One library symbol per IEC 81346-2 class, by symbol id.
+    #[test]
+    fn one_symbol_per_class() {
+        let library = Library::builtin().unwrap();
+        let code = |id: &str| letter_code(&library.get(id).unwrap().function);
+        assert_eq!(code("iec/signalling/lamp"), Some("P"));
+        assert_eq!(code("iec/motors/motor_3ph"), Some("M"));
+        assert_eq!(code("iec/protection/motor_protection_breaker"), Some("Q"));
+        assert_eq!(code("iec/protection/mcb_1p"), Some("F"));
+        assert_eq!(code("iec/coils/relay"), Some("K"));
+        assert_eq!(code("iec/operators/pushbutton_no"), Some("S"));
+        assert_eq!(code("iec/terminals/terminal"), Some("X"));
+        let first = |f: &str| library.iter().find(|s| s.function == f).unwrap().id.clone();
+        assert_eq!(code(&first("passive.inductor")), Some("R"));
+        assert_eq!(code(&first("contact.no.position")), Some("B"));
     }
 
     #[test]
