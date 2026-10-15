@@ -18,6 +18,7 @@ mod pdf;
 mod plc;
 mod potentials;
 mod preferences;
+mod project_settings;
 mod reports;
 mod revisions;
 mod terminals;
@@ -661,11 +662,22 @@ impl NovoApp {
         self.space_pan(&ctx);
         self.space_released(&ctx);
         self.track_pointer(&ctx);
-        let commands = if self.modal_open() {
+        let mut commands = if self.modal_open() {
             Vec::new()
         } else {
             self.key_commands(&ctx)
         };
+        if self.cabinet_open {
+            // The schematic's keys must not edit the hidden page: rotate
+            // and delete go to the Cabinet, the rest keep only the view,
+            // file and undo actions.
+            for id in &commands {
+                if matches!(*id, "edit.rotate" | "edit.delete") {
+                    self.cabinet.keys.push((*id).to_owned());
+                }
+            }
+            commands.retain(|id| Action::from_id(id).is_some());
+        }
 
         self.window_width = ctx.content_rect().width();
         let pinned = self.outline_pinned() && !self.focus_mode;
@@ -725,6 +737,7 @@ impl NovoApp {
         self.about_dialog(&ctx);
         self.renumber_dialog(&ctx);
         self.preferences_dialog(&ctx);
+        self.project_settings_dialog(&ctx);
         self.issue_revision_dialog(&ctx);
         self.page_form_dialog(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {
@@ -799,7 +812,7 @@ impl NovoApp {
 
     fn update_title(&mut self, ctx: &egui::Context) {
         let title = match self.project_name() {
-            Some(name) => format!("{name} - {APP_NAME}"),
+            Some(name) => format!("{name}{} - {APP_NAME}", self.standard_suffix()),
             None => APP_NAME.to_owned(),
         };
         if title != self.window_title {
@@ -825,6 +838,8 @@ impl NovoApp {
             self.wb.sheet = 0;
         }
         self.current_page = Some(page);
+        // A page is a schematic page: picking one leaves the Cabinet.
+        self.cabinet_open = false;
     }
 
     /// Shows sheet `sheet` of a generated page (0 for any other page).

@@ -2050,6 +2050,7 @@ name = "novo-routing"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+ "novo-layout",
 ]
 
 [[package]]
@@ -2057,6 +2058,7 @@ name = "novo-sim"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+ "novo-symbols",
 ]
 
 [[package]]

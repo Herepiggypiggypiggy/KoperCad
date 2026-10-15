@@ -80,3 +80,31 @@ fn the_same_documents_give_the_same_bytes() {
         write_dxf(&plate_dxf(&docs[0]))
     );
 }
+
+#[test]
+fn dxf_coordinates_are_x_and_minus_y_of_the_table() {
+    let docs = docs();
+    let (x, y) = {
+        let h = docs[0]
+            .drawing
+            .marks
+            .shapes
+            .iter()
+            .find_map(|(l, s)| match s {
+                novo_layout::plate_drawing::Shape::Circle { centre, radius }
+                    if *l == novo_layout::plate_drawing::Layer::Holes && *radius < 2.5 =>
+                {
+                    Some(*centre)
+                }
+                _ => None,
+            });
+        h.expect("a 4.2 mm hole")
+    };
+    let back = read_dxf(write_dxf(&plate_dxf(&docs[0])).as_bytes())
+        .unwrap()
+        .drawing;
+    assert!(back.entities.iter().any(|e| matches!(
+        e.kind,
+        EntityKind::Circle { center, .. } if (center.x - x).abs() < 1e-6 && (center.y + y).abs() < 1e-6
+    )));
+}

@@ -9,23 +9,21 @@ use novo_core::{Endpoint, Netlist, PotentialId, PotentialKind, Project, SymbolId
 
 use crate::Solution;
 
-fn name_of(symbol: &SymbolInstance) -> &str {
-    symbol.symbol.0.rsplit('/').next().unwrap_or("")
+/// The symbol's key below its pack (`plc/digital_input`), so the symbol of
+/// any pack is recognised.
+fn path_of(symbol: &SymbolInstance) -> &str {
+    novo_symbols::Pack::path_of(&symbol.symbol.0)
 }
 
-/// A digital input channel symbol (`iec/plc/digital_input`).
+/// A digital input channel symbol (`plc/digital_input` in any pack).
 pub fn is_plc_input(symbol: &SymbolInstance) -> bool {
-    symbol.device().is_some() && symbol.symbol.0.starts_with("iec/plc/") && {
-        name_of(symbol) == "digital_input"
-    }
+    symbol.device().is_some() && path_of(symbol) == "plc/digital_input"
 }
 
-/// A digital output channel symbol (`iec/plc/digital_output`). A relay
-/// output is a make contact and is switched like any other pole.
+/// A digital output channel symbol (`plc/digital_output` in any pack). A
+/// relay output is a make contact and is switched like any other pole.
 pub fn is_plc_output(symbol: &SymbolInstance) -> bool {
-    symbol.device().is_some() && symbol.symbol.0.starts_with("iec/plc/") && {
-        name_of(symbol) == "digital_output"
-    }
+    symbol.device().is_some() && path_of(symbol) == "plc/digital_output"
 }
 
 /// The potential an output puts on its pin: the first DC positive potential

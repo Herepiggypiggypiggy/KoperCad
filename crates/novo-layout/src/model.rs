@@ -67,6 +67,7 @@ pub fn load(project: &Project, id: StructureId) -> Option<CabinetLayout> {
             x: r.x,
             y: r.y,
             length: r.length,
+            vertical: r.vertical,
         })
         .collect();
     layout.placements = project
@@ -193,4 +194,52 @@ pub fn plate_documents(
         .collect();
     let title = structure(project, id)?.tag.to_string();
     Some(documents(&title, &layout, &features))
+}
+
+/// Places a device on the plate at `(x, y)`, or moves it there; it leaves
+/// any rail it was on.
+pub fn place_device(
+    tx: &mut Tx<'_>,
+    id: StructureId,
+    device: u64,
+    x: f64,
+    y: f64,
+    rotated: bool,
+) -> Result<()> {
+    tx.execute(Command::PlaceDevice {
+        device: DeviceId::from(device),
+        structure: id,
+        x,
+        y,
+        rotated,
+        rail: None,
+    })
+    .map(|_| ())
+}
+
+fn placement_of(tx: &Tx<'_>, device: u64) -> Option<(novo_core::CabinetPlacementId, bool)> {
+    let device = DeviceId::from(device);
+    tx.project()
+        .all::<CabinetPlacement>()
+        .find(|p| p.device == device)
+        .map(|p| (p.id, p.rotated))
+}
+
+/// Turns a placed device by 90 degrees. A device that is not placed is left alone.
+pub fn rotate_device(tx: &mut Tx<'_>, device: u64) -> Result<()> {
+    if let Some((placement, rotated)) = placement_of(tx, device) {
+        tx.execute(Command::RotatePlacement {
+            placement,
+            rotated: !rotated,
+        })?;
+    }
+    Ok(())
+}
+
+/// Takes a device off the plate. A device that is not placed is left alone.
+pub fn unplace_device(tx: &mut Tx<'_>, device: u64) -> Result<()> {
+    if let Some((placement, _)) = placement_of(tx, device) {
+        tx.execute(Command::RemovePlacement { placement })?;
+    }
+    Ok(())
 }

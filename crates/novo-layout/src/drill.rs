@@ -261,20 +261,23 @@ impl DrillTable {
 }
 
 /// Screw holes of one rail: both ends and at most
-/// [`RAIL_HOLE_PITCH_MM`] apart, on its centre line.
+/// [`RAIL_HOLE_PITCH_MM`] apart, on its centre line. A rail shorter than
+/// twice the inset gets one hole at its middle.
 pub fn rail_holes(rail: &Rail) -> Vec<(f64, f64)> {
+    let along = |d: f64| {
+        if rail.vertical {
+            (rail.x, rail.y + d)
+        } else {
+            (rail.x + d, rail.y)
+        }
+    };
     let span = rail.length - 2.0 * RAIL_HOLE_INSET_MM;
     if span <= 0.0 {
-        return vec![(rail.x + rail.length / 2.0, rail.y)];
+        return vec![along(rail.length / 2.0)];
     }
     let segments = (span / RAIL_HOLE_PITCH_MM).ceil().max(1.0) as usize;
     (0..=segments)
-        .map(|i| {
-            (
-                rail.x + RAIL_HOLE_INSET_MM + span * i as f64 / segments as f64,
-                rail.y,
-            )
-        })
+        .map(|i| along(RAIL_HOLE_INSET_MM + span * i as f64 / segments as f64))
         .collect()
 }
 

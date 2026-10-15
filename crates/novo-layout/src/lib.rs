@@ -187,6 +187,8 @@ pub struct Rail {
     pub x: f64,
     pub y: f64,
     pub length: f64,
+    /// Runs down from `(x, y)` instead of to the right.
+    pub vertical: bool,
 }
 
 /// Length used on a rail: the footprint widths of its devices plus the
@@ -308,6 +310,7 @@ mod tests {
     #[test]
     fn rail_overflow_counts_gaps() {
         let rail = Rail {
+            vertical: false,
             id: 7,
             x: 0.0,
             y: 0.0,

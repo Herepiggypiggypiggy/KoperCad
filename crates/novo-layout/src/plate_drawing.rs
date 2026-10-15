@@ -417,8 +417,13 @@ pub fn plate_drawing(
             );
         }
         for r in &layout.rails {
-            for dy in [-17.5, 17.5] {
-                m.line(Layer::Rails, (r.x, r.y + dy), (r.x + r.length, r.y + dy));
+            for d in [-17.5, 17.5] {
+                let (a, b) = if r.vertical {
+                    ((r.x + d, r.y), (r.x + d, r.y + r.length))
+                } else {
+                    ((r.x, r.y + d), (r.x + r.length, r.y + d))
+                };
+                m.line(Layer::Rails, a, b);
             }
         }
         let label = |p: &Placement| {

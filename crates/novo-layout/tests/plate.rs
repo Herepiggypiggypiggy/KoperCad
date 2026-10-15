@@ -18,6 +18,7 @@ fn layout() -> CabinetLayout {
         x: 10.0,
         y: 100.0,
         length: 580.0,
+        vertical: false,
     });
     l.placements.push(Placement {
         id: 7,
@@ -58,6 +59,7 @@ fn rail_holes_sit_at_both_ends_and_at_most_200_apart() {
         x: 10.0,
         y: 100.0,
         length: 580.0,
+        vertical: false,
     };
     let h = rail_holes(&r);
     assert_eq!(h.first().unwrap().0, 20.0);
@@ -201,4 +203,39 @@ fn no_plate_no_documents() {
         })
         .unwrap();
     assert!(plate_documents(&p, s).is_none());
+}
+
+#[test]
+fn vertical_rails_get_holes_down_their_length_and_are_drawn_vertical() {
+    let r = Rail {
+        id: 1,
+        x: 100.0,
+        y: 50.0,
+        length: 500.0,
+        vertical: true,
+    };
+    let h = rail_holes(&r);
+    assert_eq!(h.first(), Some(&(100.0, 60.0)));
+    assert_eq!(h.last(), Some(&(100.0, 540.0)));
+    assert!(h.iter().all(|p| p.0 == 100.0));
+
+    let mut l = layout();
+    l.rails = vec![r];
+    let t = drill_table(&l, &[]);
+    assert!(t.holes.iter().all(|h| h.x == 100.0));
+    let d = plate_drawing(&l, &[], &t, Surface::Plate, 5.0);
+    let rail_lines: Vec<_> = d
+        .marks
+        .shapes
+        .iter()
+        .filter(|(layer, _)| *layer == novo_layout::plate_drawing::Layer::Rails)
+        .collect();
+    assert_eq!(rail_lines.len(), 2);
+    for (_, s) in rail_lines {
+        let novo_layout::plate_drawing::Shape::Line { a, b } = s else {
+            panic!()
+        };
+        assert_eq!(a.0, b.0);
+        assert_eq!(b.1 - a.1, 500.0);
+    }
 }

@@ -275,7 +275,15 @@ impl LiveReports {
     /// The current output of a report, regenerated if anything it reads
     /// changed. `None` for an unknown id.
     pub fn get(&mut self, project: &Project, id: &str) -> Option<&ReportOutput> {
-        let i = self.entries.iter().position(|e| e.report.id() == id)?;
+        let i = match self.entries.iter().position(|e| e.report.id() == id) {
+            Some(i) => i,
+            None => {
+                // The contents list of a panel is not registered up front:
+                // a generated page naming the panel brings it in.
+                self.register(Box::new(crate::PanelContents::of_generator(id)?));
+                self.entries.len() - 1
+            }
+        };
         self.refresh(i, project);
         Some(self.output_at(i))
     }

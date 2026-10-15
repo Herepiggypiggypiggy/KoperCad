@@ -33,7 +33,7 @@ Text that cannot be read is listed in `DrillTable::problems` with the device tag
 it is never silently dropped.
 
 DIN rails get their own M5 clearance holes (5.5 mm): 10 mm in from each end and
-at most 200 mm apart. Ducts get none yet.
+at most 200 mm apart, along the rail (vertical rails run down). A rail shorter than 20 mm gets one hole at its middle. Ducts get none yet.
 
 ## The drawing
 
