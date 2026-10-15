@@ -187,7 +187,11 @@ fn show(
                 if let Some(rail) = &d.rail {
                     widgets::field(ui, "Mounted on", rail);
                 }
-                if let Some(edit) = super::cabinet_panel::show(ui, fields, project, d.id) {
+                // One device only: the text buffers are shared, and bulk edits
+                // belong to the property sheet.
+                if devices.len() == 1
+                    && let Some(edit) = super::cabinet_panel::show(ui, fields, project, d.id)
+                {
                     ask = Some(Ask::SetPanelValue(edit));
                 }
                 if !d.problems.is_empty() {
