@@ -223,7 +223,7 @@ lives only in a menu, and nothing opens a modal dialog in the drawing loop.
    connect; drag a symbol, a junction dot or a text to move it (a drag that
    starts on a text moves only that text); drop a contact on a coil to give
    it its device; drag a device onto a location in the outline.
-2. **The command surface.** Ctrl+K opens it at the top; I and a tapped
+2. **The command surface.** Ctrl+K opens it at the top; Q and a tapped
    Space open it at the pointer, acting on what is under it. Empty, it
    lists every command grouped (Project, Draw, Edit, Navigate, View, Check,
    Export) with shortcuts and disabled reasons: this is the menu, and there
@@ -251,6 +251,33 @@ starts there connects and a drag anywhere else on the symbol moves it.
 the text and edits it. Alt+click selects the deepest item under the
 pointer. Clicking empty canvas clears the selection.
 
+**Double click and drag.** A double click means one thing per place, and
+the tool decides whether it is a wire gesture or an edit gesture, so it
+never changes meaning in the middle of work.
+
+| Double click on | Select tool (default) | Connect tool (W) |
+| --- | --- | --- |
+| Text (tag, wire number, label) | Rename in place, as F2 | Nothing |
+| A device | Properties open, cursor in the tag | Nothing |
+| A wire | Edit its number in place | Ends or starts a wire |
+| A pin | Select the device | Starts a connection |
+| Empty canvas | Nothing | Starts a free wire, or ends the one in progress |
+| A page tab | Rename the page | Rename the page |
+
+A double click in the Place mode places like a click and has no further
+meaning. The first click of a double click does what a click does, so a
+double click on text selects it first and a double click on a device
+selects it first; nothing is lost if the second click is slow.
+
+**Moving needs no key.** Press on a device and drag more than 4 px and it
+moves, selected or not: the press selects it (as a click would) and the
+drag moves the whole selection if the device was already part of it. Pins
+still win within their grab zone, so a drag from a pin connects (§4, pin
+or body). The move snaps to the grid, shows the wires stretching, follows
+the no-overlap rules, and Esc during the drag puts everything back. M
+keeps working as the keyboard move: it picks the selection up at the
+pointer and a click puts it down. Undo takes back one whole move.
+
 **Escape ladder.** Cancel the step in progress, then leave the tool, then
 clear the selection.
 
@@ -265,10 +292,11 @@ clear the selection.
 | Ctrl+3 / Ctrl+4 / Ctrl+5 | Terminals / Cables / Devices drawer |
 | Ctrl+T | Table face of the Cabinet canvas |
 | Ctrl+Shift+F / F11 | Focus mode / full screen |
-| I | Place (command surface in place mode at the pointer) |
+| Q | Place (command surface in place mode at the pointer); held, the place wheel |
 | 1 to 9 | Favourite symbols, only while the place query is empty |
 | W | Connect, for chains (one connection is a drag from a pin); Shift+W switches Corners / Lines, also in the middle of a wire |
 | R / X | Rotate / mirror while placing or on the selection |
+| M | Move the selection with the pointer (a drag does the same, no key needed) |
 | F2 | Edit the selected tag or text |
 | Enter | Accept the highlighted proposal |
 | Tab | Next proposal |
@@ -463,8 +491,8 @@ On a selection of several objects the rows act on all of them, and the
 top row is the action common to all.
 
 **Place wheel.** "Place component" opens a radial picker at the pointer,
-the fast way for a mouse hand to put down the common parts. Holding I
-(over 250 ms) opens the same wheel; a tap of I stays the command surface
+the fast way for a mouse hand to put down the common parts. Holding Q
+(over 250 ms) opens the same wheel; a tap of Q stays the command surface
 in place mode. The wheel has two rings and no hidden level.
 
 - Inner ring, five sectors: **Terminal**, **Switch** (switches, buttons,
@@ -512,8 +540,9 @@ click adds no extra corner and no zero-length segment.
 - Pressing on the end cap and dragging pulls the end; releasing on a pin
   or a wire connects it and the flag disappears. W on the end cap resumes
   the wire. Backspace in a resumed wire takes back its last corner.
-- Double click on a finished wire does not end anything; it selects the
-  wire and opens its number for editing, as for any text.
+- In the Select tool a double click on a finished wire selects it and opens
+  its number for editing; in the Connect tool see the table under Double
+  click and drag.
 - The model needs a wire with a free end: WS-02 describes the flag
   (an endpoint that is a position, not a pin) in its pull request.
 
@@ -554,7 +583,7 @@ Acceptance:
     on the first menu.
 13. Place component, then Relays, then coil: a coil follows the pointer
     with an auto tag; click places it; R and X work; Esc cancels. The same
-    through I held, keys 3 then 1, and a flick.
+    through Q held, keys 3 then 1, and a flick.
 14. Double click on empty canvas mid-wire: the wire ends there with the
     end cap and the Unconnected flag, one new corner at most, and a
     `wire.open` warning in Issues. Dragging the cap onto a pin connects it
@@ -567,6 +596,16 @@ Acceptance:
     in the mode's way. A double click on a pin starts connected. A single
     click on empty canvas starts nothing. Dragging either cap onto a pin
     connects it.
+17. Select tool: double click on a tag renames it in place; on a device
+    opens its properties with the cursor in the tag; on a wire edits its
+    number; on a page tab renames the page. The same gestures in the Connect
+    tool do the wire meanings in the table and nothing else.
+18. Click a device, then drag it: it moves without M, with wires stretching
+    live and a refused position shown as in check 9; Esc mid-drag restores
+    it; undo takes back one move. Dragging an unselected device selects and
+    moves it in one gesture. M still picks up and drops.
+19. A slow second click of a double click never loses the selection or
+    starts a drag.
 
 Keys match the logical character, not the physical position, so `?`,
 Ctrl+Z and Ctrl+Y work on Dutch, German (QWERTZ) and US layouts alike.
@@ -591,7 +630,7 @@ between fields as usual.
   area when zoomed out. Shift+P hides them; counters remain.
 - Copper is never a mark (a proposal, problem, override or change), so
   selection is always unambiguous. Copper also draws junction dots
-  (filled, of a fixed size: 3 px radius, 3.5 px for a T), which are
+  (filled, one fixed size, 3.5 px radius), which are
   not marks; selection never relies on colour alone, because it is
   thicker and haloed, and a junction dot never changes size.
 - Proposal, problem and override differ in colour, line style and
@@ -643,7 +682,7 @@ connected circuit and finds a command without a menu bar:
 | --- | --- | --- | --- |
 | 1. Launch | The canvas area shows New project, Open, Open example and Recent. Click New project, type a name, Enter. | 2 | name |
 | 2. Structure | The board's hint reads "Add a page under a function". Click Add page. | 1 | |
-| 3. First symbol | The empty page reads "Press I or Space to place a symbol · ? for keys". I, type `contactor`, Enter, click. | 3 | `contactor` |
+| 3. First symbol | The empty page reads "Press Q or Space to place a symbol · ? for keys". Q, type `contactor`, Enter, click. | 3 | `contactor` |
 | 4. Second symbol | The dock hint reads "Click to place another · Esc stop"; click once more (tools are sticky). | 1 | |
 | 5. Connect | Hovering a pin shows the connect ring and the dock hint "Drag from a pin to connect"; drag. | 1 | |
 | 6. Keys | ? shows the shortcut overlay; ? or Esc closes it. | 2 | |
@@ -665,7 +704,7 @@ connections by drag, one proposal accept). With a block: 11.
 | Task | Actions |
 | --- | --- |
 | Place a further device of the same kind | 1 click (tools are sticky) |
-| Place a contact of `-K1` | 3 (I, `no K1`, Enter, click) |
+| Place a contact of `-K1` | 3 (Q, `no K1`, Enter, click) |
 | Connect two pins | 1 drag |
 | T-junction onto a connection | 1 drag onto the line |
 | Rename a device | 2 (F2, Enter) plus the tag; renaming a coil renames its contacts |
