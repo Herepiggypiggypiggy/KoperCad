@@ -3,11 +3,14 @@
 
 use std::collections::BTreeSet;
 
+use eframe::egui;
 use novo_core::{DeviceTag, Endpoint, Placement, Point};
 use novo_editor::catalog::model_pins;
 use novo_editor::naming::next_device_tag;
-use novo_plc::commands::{NewCardLayout, add_card, apply_renumber, renumber_plan, to_plc};
-use novo_plc::{CardLayout, ChannelType, PlcIndex, cards};
+use novo_plc::commands::{
+    NewCardLayout, RenumberPlan, add_card, apply_renumber, renumber_plan, to_plc,
+};
+use novo_plc::{CardLayout, ChannelType, PlcIndex, Space, cards};
 
 use super::{Level, NovoApp};
 
@@ -145,42 +148,106 @@ impl NovoApp {
         }
     }
 
-    /// `renumber io`: packs every station's cards back to back in slot
-    /// order, so addresses have no gaps.
+    /// `renumber io`: plans every station's cards packed back to back in
+    /// slot order and opens the preview; Enter applies it, Esc cancels
+    /// (docs/design/plc.md §3).
     pub(super) fn plc_renumber_io(&mut self) {
-        let Some(doc) = self.backend.document_mut() else {
+        let Some(doc) = self.backend.document() else {
             return;
         };
-        let stations: BTreeSet<String> = cards(doc.project())
-            .into_iter()
-            .map(|c| c.station)
-            .collect();
+        let project = doc.project();
+        let stations: BTreeSet<String> = cards(project).into_iter().map(|c| c.station).collect();
         if stations.is_empty() {
             self.message(Level::Info, "The project has no PLC cards");
             return;
         }
-        let result = doc.transact("Renumber I/O", |tx| {
-            let mut moved = 0;
-            let mut skipped = 0;
-            for station in &stations {
-                let plan = renumber_plan(tx.project(), station);
-                moved += plan.moves.len();
-                skipped += plan.skipped.len();
-                apply_renumber(tx, &plan)?;
+        let plans: Vec<RenumberPlan> = stations
+            .iter()
+            .map(|station| renumber_plan(project, station))
+            .filter(|plan| !plan.is_empty())
+            .collect();
+        if plans.is_empty() {
+            self.message(Level::Info, "I/O addresses are already in order");
+            return;
+        }
+        self.wb.renumber = Some(plans);
+    }
+
+    /// The renumber preview: every address that moves, and the cards left
+    /// alone. Enter applies, Esc or Cancel leaves the project untouched.
+    pub(super) fn renumber_dialog(&mut self, ctx: &egui::Context) {
+        let Some(plans) = &self.wb.renumber else {
+            return;
+        };
+        let Some(doc) = self.backend.document() else {
+            self.wb.renumber = None;
+            return;
+        };
+        let project = doc.project();
+        let tag_of = |id| {
+            project
+                .device(id)
+                .map(|d| d.tag.to_string())
+                .unwrap_or_default()
+        };
+        let address = |space: Space, start: Option<u32>| match start {
+            Some(n) => format!("%{}{n}", space.letter()),
+            None => "none".to_owned(),
+        };
+        let modal = egui::Modal::new(egui::Id::new("renumber_io")).show(ctx, |ui| {
+            ui.set_width(360.0);
+            ui.heading("Renumber I/O");
+            ui.add_space(4.0);
+            for plan in plans {
+                for m in &plan.moves {
+                    ui.label(format!(
+                        "{}  {} → {}",
+                        tag_of(m.card),
+                        address(m.space, m.from),
+                        address(m.space, Some(m.to))
+                    ));
+                }
+                for &card in &plan.skipped {
+                    ui.label(format!(
+                        "{}  left alone: its layout is not valid",
+                        tag_of(card)
+                    ));
+                }
             }
-            Ok((moved, skipped))
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                let apply = ui.button("Renumber (Enter)").clicked();
+                let cancel = ui.button("Cancel (Esc)").clicked();
+                (apply, cancel)
+            })
+            .inner
+        });
+        let (apply, cancel) = modal.inner;
+        let enter = ctx.input(|i| i.key_pressed(egui::Key::Enter));
+        if apply || enter {
+            if let Some(plans) = self.wb.renumber.take() {
+                self.apply_renumber_plans(&plans);
+            }
+        } else if cancel || modal.should_close() {
+            self.wb.renumber = None;
+        }
+    }
+
+    fn apply_renumber_plans(&mut self, plans: &[RenumberPlan]) {
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let result = doc.transact("Renumber I/O", |tx| {
+            plans.iter().try_for_each(|plan| apply_renumber(tx, plan))
         });
         match result {
-            Ok(((moved, skipped), changes)) => {
+            Ok(((), changes)) => {
                 self.changed_outside_canvas(&changes);
-                let text = match (moved, skipped) {
-                    (0, 0) => "I/O addresses are already in order".to_owned(),
-                    (m, 0) => format!("Renumbered I/O: {m} start address(es) moved"),
-                    (m, s) => format!(
-                        "Renumbered I/O: {m} start address(es) moved; {s} card(s) with a wrong layout were left alone"
-                    ),
-                };
-                self.message(Level::Info, text);
+                let moved: usize = plans.iter().map(|p| p.moves.len()).sum();
+                self.message(
+                    Level::Info,
+                    format!("Renumbered I/O: {moved} start address(es) moved"),
+                );
             }
             Err(e) => self.message(Level::Error, format!("Could not renumber I/O: {e}")),
         }

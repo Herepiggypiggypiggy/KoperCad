@@ -44,6 +44,8 @@ pub(crate) struct Workbench {
     pub(super) xref: LiveXref,
     /// The generated pages' reports, live.
     pub(super) reports: super::reports::Reports,
+    /// The `renumber io` preview waiting for Enter or Esc, per station.
+    pub(super) renumber: Option<Vec<novo_plc::commands::RenumberPlan>>,
     /// Which sheet of a generated page the canvas shows (0 for the first).
     pub(super) sheet: usize,
     pub(super) nav: Navigator,
@@ -97,6 +99,7 @@ impl Default for Workbench {
             keymap: Keymap::workflow(),
             xref: LiveXref::default(),
             reports: Default::default(),
+            renumber: None,
             sheet: 0,
             nav: Navigator::default(),
             pending: None,

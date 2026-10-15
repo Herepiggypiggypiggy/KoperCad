@@ -1018,7 +1018,32 @@ fn plc_commands_add_a_card_send_a_signal_and_renumber() {
     assert_eq!(d.doc().project().wires().count(), wires + 1);
     assert_eq!(d.doc().undo_depth(), depth + 1);
 
-    // Renumber on an ordered project changes nothing worth a step.
+    // Renumber on an ordered project opens no preview and adds no step.
+    let depth = d.doc().undo_depth();
     d.app.run_command(&ctx, "plc.renumber_io", None);
-    assert!(last(&d).contains("Renumbered") || last(&d).contains("already"));
+    assert!(last(&d).contains("already in order"), "{}", last(&d));
+    assert!(d.app.wb.renumber.is_none());
+    assert_eq!(d.doc().undo_depth(), depth);
+
+    // A gap opens the preview; Esc leaves the project alone, Enter applies.
+    let card = novo_plc::cards(d.doc().project())[0].device;
+    let doc = d.app.backend.document_mut().unwrap();
+    let (_, changes) = doc
+        .transact("Gap", |tx| {
+            tx.set_property(card, "plc.start.i", Some(novo_core::Value::Int(8)))
+        })
+        .unwrap();
+    d.app.changed_outside_canvas(&changes);
+    let depth = d.doc().undo_depth();
+    d.app.run_command(&ctx, "plc.renumber_io", None);
+    assert!(d.app.wb.renumber.is_some(), "the preview is waiting");
+    d.frame();
+    d.key(egui::Key::Escape, egui::Modifiers::NONE);
+    assert!(d.app.wb.renumber.is_none());
+    assert_eq!(d.doc().undo_depth(), depth, "Esc changed nothing");
+    d.app.run_command(&ctx, "plc.renumber_io", None);
+    d.frame();
+    d.key(egui::Key::Enter, egui::Modifiers::NONE);
+    assert!(last(&d).starts_with("Renumbered"), "{}", last(&d));
+    assert_eq!(d.doc().undo_depth(), depth + 1);
 }

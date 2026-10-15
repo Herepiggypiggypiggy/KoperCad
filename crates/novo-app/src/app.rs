@@ -681,6 +681,7 @@ impl NovoApp {
         self.command_field(&ctx, canvas_rect);
         self.recovery_dialog(&ctx);
         self.about_dialog(&ctx);
+        self.renumber_dialog(&ctx);
 
         for action in picked {
             self.run(&ctx, action);
@@ -704,7 +705,7 @@ impl NovoApp {
     }
 
     fn modal_open(&self) -> bool {
-        self.show_about || self.backend.recovery_offer().is_some()
+        self.show_about || self.wb.renumber.is_some() || self.backend.recovery_offer().is_some()
     }
 
     fn update_title(&mut self, ctx: &egui::Context) {
