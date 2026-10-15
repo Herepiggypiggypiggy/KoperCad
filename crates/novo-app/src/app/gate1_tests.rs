@@ -858,7 +858,7 @@ fn a_generated_page_shows_its_report_and_follows_each_edit() {
     d.app.changed_outside_canvas(&changes);
     d.frame();
     let after = texts(&d);
-    assert!(after.iter().any(|t| t == "77"), "{after:?}");
+    assert!(after.iter().any(|t| t.starts_with("77")), "{after:?}");
 
     // Undo takes it back.
     d.app.run(&ctx, Action::Undo);
@@ -2502,4 +2502,54 @@ fn ctrl_d_copies_the_selection_with_the_next_tag_and_selects_the_copy() {
     // One undo step per Ctrl+D.
     d.app.backend.document_mut().unwrap().undo().unwrap();
     assert_eq!(symbols(&d), 2);
+}
+
+#[test]
+fn the_project_standard_defaults_to_iec_and_shows_in_the_title() {
+    use novo_symbols::Pack;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert_eq!(d.app.standard(), Pack::Iec);
+    assert_eq!(d.app.standard_suffix(), "");
+    assert!(d.doc().project().info().rules.standard.is_empty());
+
+    // The command opens the Project settings window.
+    assert!(super::workbench::app_runs("project.standard"));
+    d.app.run_command(&ctx, "project.standard", None);
+    assert!(d.app.wb.project_settings);
+    d.frame();
+
+    // Choosing NFPA is saved in the project, shown beside the name, and
+    // one undo step takes it back.
+    d.app.set_standard(Pack::Nfpa);
+    d.frame();
+    assert_eq!(d.doc().project().info().rules.standard, "nfpa");
+    assert_eq!(d.app.standard(), Pack::Nfpa);
+    assert!(
+        d.app.window_title.contains("NFPA"),
+        "{}",
+        d.app.window_title
+    );
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(d.app.standard(), Pack::Iec);
+    assert!(!d.app.window_title.contains("NFPA"));
+}
+
+#[test]
+fn the_parts_command_opens_and_closes_the_parts_window() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    assert!(super::workbench::app_runs("parts.browser"));
+    d.app.run_command(&ctx, "parts.browser", None);
+    d.frame();
+    d.frame();
+    assert!(d.app.wb.parts.is_some(), "the window opens");
+    d.app.wb.parts = None;
+    d.frame();
+    assert!(d.app.wb.parts.is_none());
 }

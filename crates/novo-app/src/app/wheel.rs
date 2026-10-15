@@ -9,6 +9,7 @@
 use std::f32::consts::TAU;
 
 use eframe::egui::{self, Key, Modifiers, Pos2, Vec2};
+use novo_symbols::Pack;
 use novo_workflow::palette::Mode;
 
 use super::NovoApp;
@@ -352,8 +353,14 @@ impl NovoApp {
             && let Some(&(key, _)) = items.get(j)
         {
             self.wb.wheel = None;
+            let pack = self.standard();
             if let Some(view) = self.canvas.schematic() {
-                view.editor.begin_place(key, None);
+                // The project's drawing standard picks the pack when the
+                // library has the same device there; else the IEC one.
+                let id = Pack::counterpart(key, pack)
+                    .filter(|id| view.editor.catalog.get(id).is_some())
+                    .unwrap_or_else(|| key.to_owned());
+                view.editor.begin_place(&id, None);
             }
         }
     }

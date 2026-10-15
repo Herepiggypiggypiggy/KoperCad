@@ -220,6 +220,18 @@ impl Session {
         self.file.path()
     }
 
+    /// Moves recovery files to `dir` (`None`: beside the project) from now
+    /// on, for a session that moved from a temporary file to a user's file
+    /// by [`Session::save_as`]. Any open recovery file is removed first;
+    /// the next autosave writes a fresh one. A folder that cannot be
+    /// created means beside the project.
+    pub fn set_recovery_dir(&mut self, dir: Option<&Path>) {
+        self.drop_autosave_quietly();
+        self.recovery_dir = dir
+            .filter(|dir| std::fs::create_dir_all(dir).is_ok())
+            .map(Path::to_owned);
+    }
+
     /// Where this session's recovery file is (or will be) written.
     pub fn recovery_path(&self) -> PathBuf {
         match &self.recovery_dir {
@@ -255,6 +267,17 @@ impl Session {
         self.file.snapshot(revision)
     }
 
+    /// Keeps a document beside the model in the project file, at once (see
+    /// [`ProjectFile::put_sidecar`]).
+    pub fn put_sidecar(&mut self, key: &str, data: &str) -> Result<()> {
+        self.file.put_sidecar(key, data)
+    }
+
+    /// The document kept under `key`, if any.
+    pub fn sidecar(&self, key: &str) -> Result<Option<String>> {
+        self.file.sidecar(key)
+    }
+
     /// Whether anything changed since the last save.
     pub fn has_unsaved_changes(&self) -> bool {
         self.unsaved != Pending::Nothing
@@ -279,6 +302,7 @@ impl Session {
         let mut file = ProjectFile::create(path, project)?;
         // Snapshots of issued revisions travel with the project.
         self.file.copy_snapshots_to(&mut file)?;
+        self.file.copy_sidecars_to(&mut file)?;
         self.drop_autosave_quietly();
         let old = std::mem::replace(&mut self.file, file);
         let _ = old.close();

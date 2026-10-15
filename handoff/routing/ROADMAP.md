@@ -13,10 +13,12 @@ Scope: crate `novo-routing`, pure engine that routes wires through ducts on the 
 - Fill PR merged (#358). Follow-up PR: unsized ducts (UnsizedDuct problem, no penalty), duplicate duct ids ignored. 24 tests.
 - WS-02 stores ducts as `Rail { kind: Duct, x, y, length, vertical, width, height }` (0 = unknown size); the adapter to `Duct` is mine or the app's.
 - Model bridge PR: `novo_routing::model::{ducts, network}` reading WS-02 duct rails (#362). 26 tests.
+- Bridge merged (#371). Connection PR: `route_connections` (pin -> plate anchor, per-enclosure plan, unrouted list). 28 tests.
+- #381 merged. Follow-up PR: library pin direction for anchors, duplicate connection ids unrouted. 30 tests.
 
 ## Next
-1. Jobs from the model: needs terminal positions on a device footprint (parts, WS-07) and the wire list (WS-13). Ask both.
-2. Wire list lengths (novo-reports), checks (novo-checks).
+1. (Wire list thread owns the WireList cut-length column and cutting list; they call `route_connections`.)
+2. novo-checks: routing problems (free air, overfull and unsized duct, guessed wire) as issues.
 3. Thin Cabinet canvas drawing.
 
 ## Open questions

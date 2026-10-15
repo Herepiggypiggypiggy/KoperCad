@@ -18,6 +18,8 @@ use novo_theme::tokens;
 
 /// Rate at which glow and pull-in ease, per second.
 const EASE: f32 = 14.0;
+/// Width of the lines the canvas draws symbols with, in millimetres.
+const SYMBOL_STROKE_MM: f32 = 0.35;
 /// Turns per second of a running motor at speed 0.
 const TURNS: f32 = 1.2;
 
@@ -341,20 +343,19 @@ impl Anim {
                     to_screen(egui::vec2(at.x as f32, at.y as f32))
                 };
                 let pivot = place(blade.pivot);
+                // The blade has the width of the artwork's own lines.
+                let width = (SYMBOL_STROKE_MM * f.zoom).max(1.0);
                 // Wipe the drawn blade, then draw it where it is now.
                 painter.line_segment(
                     [pivot, place(blade.rest)],
-                    egui::Stroke::new(3.0 * f.zoom.clamp(1.0, 2.0), sheet),
+                    egui::Stroke::new((width * 1.5).max(width + 2.0), sheet),
                 );
                 let mix = |a: f64, b: f64| a + (b - a) * f64::from(k);
                 let tip = place([
                     mix(blade.rest[0], blade.operated[0]),
                     mix(blade.rest[1], blade.operated[1]),
                 ]);
-                painter.line_segment(
-                    [pivot, tip],
-                    egui::Stroke::new(1.5 * f.zoom.clamp(1.0, 2.0), ink),
-                );
+                painter.line_segment([pivot, tip], egui::Stroke::new(width, ink));
             }
         }
         moving

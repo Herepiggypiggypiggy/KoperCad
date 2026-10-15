@@ -1689,10 +1689,25 @@ const BARS_ITEM: ItemId = ItemId(u64::MAX - 1);
 const BRIDGE_BAR_Y: f64 = 1.4;
 
 /// The symbol that carries the bridge dot.
+#[cfg(test)]
 const BRIDGED_SYMBOL: &str = "iec/terminals/terminal_bridged";
 
 /// The one-ended variant: the same dot on its single lead.
+#[cfg(test)]
 const END_BRIDGED_SYMBOL: &str = "iec/terminals/terminal_end_bridged";
+
+#[cfg(test)]
+#[path = "nfpa_keys_test.rs"]
+mod nfpa_keys_test;
+
+/// Whether a symbol key is one of the two terminals that carry the bridge
+/// dot, in any pack.
+fn is_bridged(key: &str) -> bool {
+    matches!(
+        novo_symbols::Pack::path_of(key),
+        "terminals/terminal_bridged" | "terminals/terminal_end_bridged"
+    )
+}
 
 /// One heavy bar per run of connected terminals on a page, from the first
 /// lead to the last, never past them: the connected terminals of a jumper
@@ -1707,7 +1722,7 @@ fn bridge_bars(project: &Project, page: PageId) -> Vec<(Vec2, Vec2)> {
         let SymbolRole::Terminal { terminals } = &sym.role else {
             continue;
         };
-        if sym.symbol.0 != BRIDGED_SYMBOL && sym.symbol.0 != END_BRIDGED_SYMBOL {
+        if !is_bridged(&sym.symbol.0) {
             continue;
         }
         let [t] = terminals.as_slice() else {

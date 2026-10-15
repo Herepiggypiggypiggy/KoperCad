@@ -8,11 +8,15 @@ use novo_canvas::cabinet::{
     BoxState, BoxView, CabinetScene, CabinetView, PlateView, RailView, view_bounds,
 };
 use novo_canvas::widget::CanvasView;
+use novo_canvas::{Vec2, vec2};
 use novo_core::{Command, Device, DeviceId, DeviceTag, MountingPlate, StructureId};
-use novo_layout::model::{apply_plan, candidates, load, set_plate};
+use novo_layout::model::{
+    apply_plan, candidates, load, place_device, rotate_device, set_plate, unplace_device,
+};
 use novo_layout::plan::Plan;
 use novo_layout::state::CabinetLayout;
 
+use super::cabinet_inspector;
 use super::{Level, NovoApp};
 use crate::theme;
 
@@ -32,6 +36,28 @@ pub(super) struct CabinetState {
     pub(super) preview: Option<Plan>,
     /// The panel the drawing was last fitted to.
     fitted: Option<DeviceTag>,
+    /// A placed device being dragged, with where it would land.
+    drag: Option<Drag>,
+    /// An unplaced device being dragged over the plate, with the snapped
+    /// top left it would land on: drawn as the landing box.
+    pub(super) ghost: Option<(u64, f64, f64)>,
+    /// Keys the shell left for the Cabinet this frame (`edit.rotate`,
+    /// `edit.delete`).
+    pub(super) keys: Vec<String>,
+    /// The table face (Ctrl+T) is shown instead of the plate.
+    pub(super) table: bool,
+    /// The plate card of the inspector is shown with nothing selected.
+    pub(super) plate_card: bool,
+}
+
+/// A placed device being dragged across the plate.
+#[derive(Clone, Copy)]
+struct Drag {
+    id: u64,
+    /// The cursor's offset from the footprint's top left, in mm.
+    grab: Vec2,
+    /// The snapped top left it would land on.
+    at: (f64, f64),
 }
 
 impl CabinetState {
@@ -46,6 +72,11 @@ impl CabinetState {
             location: None,
             preview: None,
             fitted: None,
+            drag: None,
+            ghost: None,
+            keys: Vec::new(),
+            table: false,
+            plate_card: false,
         }
     }
 }
@@ -55,13 +86,21 @@ pub(super) enum Ask {
     Panel(DeviceTag),
     CreateCabinet(DeviceTag),
     SetPlate(StructureId),
+    /// Set the plate to new dimensions from the inspector.
+    SetPlateSize(StructureId, MountingPlate),
     PlaceAll,
     Accept,
     Cancel,
+    ToggleTable,
+    TogglePlateCard,
+    /// Place or move a device with its top left at `(x, y)` mm.
+    Drop(u64, f64, f64),
+    Rotate(Vec<u64>),
+    Remove(Vec<u64>),
 }
 
 /// The Cabinet drawing of a layout, with the layout's problems as box states.
-pub(super) fn cabinet_view(layout: &CabinetLayout, tag_of: impl Fn(u64) -> String) -> CabinetView {
+pub(super) fn cabinet_view(layout: &CabinetLayout, tag_of: &impl Fn(u64) -> String) -> CabinetView {
     let report = layout.report();
     let state = |id: u64| {
         if report.collisions.iter().any(|&(a, b)| a == id || b == id)
@@ -115,6 +154,97 @@ pub(super) fn cabinet_view(layout: &CabinetLayout, tag_of: impl Fn(u64) -> Strin
     }
 }
 
+/// What is wrong with a placed device, in words: the hover text of its mark
+/// and the table's Problems column.
+pub(super) fn problem_lines(
+    layout: &CabinetLayout,
+    id: u64,
+    tag_of: &impl Fn(u64) -> String,
+) -> Vec<String> {
+    let report = layout.report();
+    let mut lines = Vec::new();
+    for &(a, b) in &report.collisions {
+        if a == id || b == id {
+            lines.push(format!("Overlaps {}", tag_of(if a == id { b } else { a })));
+        }
+    }
+    if report.outside.contains(&id) {
+        lines.push("Reaches past the usable plate".to_owned());
+    }
+    for &(a, b, gap) in &report.too_close {
+        if a == id || b == id {
+            lines.push(format!(
+                "Only {gap:.0} mm from {}",
+                tag_of(if a == id { b } else { a })
+            ));
+        }
+    }
+    if let Some(p) = layout.placements.iter().find(|p| p.id == id) {
+        for &(rail, over) in &report.rail_overflows {
+            if p.rail == Some(rail) {
+                lines.push(format!("Its rail is {over:.0} mm too short"));
+            }
+        }
+        if p.size.guessed {
+            lines.push("Size is a guess: the part has none".to_owned());
+        }
+    }
+    lines
+}
+
+/// The table face (Ctrl+T): every device of the panel with where it is and
+/// what is wrong.
+fn cabinet_table(
+    ui: &mut egui::Ui,
+    layout: &CabinetLayout,
+    cands: &[novo_layout::plan::Candidate],
+    tag_of: &impl Fn(u64) -> String,
+) {
+    egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
+        egui::Grid::new("cabinet_table")
+            .striped(true)
+            .num_columns(7)
+            .spacing([18.0, 4.0])
+            .show(ui, |ui| {
+                for head in [
+                    "Device",
+                    "Size (mm)",
+                    "X",
+                    "Y",
+                    "Turned",
+                    "Rail",
+                    "Problems",
+                ] {
+                    ui.strong(head);
+                }
+                ui.end_row();
+                for c in cands {
+                    ui.label(tag_of(c.id));
+                    let size = format!("{} x {}", c.size.width, c.size.height);
+                    match layout.placements.iter().find(|p| p.id == c.id) {
+                        Some(p) => {
+                            ui.label(size);
+                            ui.label(format!("{}", p.x));
+                            ui.label(format!("{}", p.y));
+                            ui.label(if p.rotated { "yes" } else { "" });
+                            ui.label(p.rail.map(|r| format!("#{r}")).unwrap_or_default());
+                            ui.label(problem_lines(layout, c.id, tag_of).join("; "));
+                        }
+                        None => {
+                            ui.label(size);
+                            ui.weak("");
+                            ui.weak("");
+                            ui.weak("");
+                            ui.weak("");
+                            ui.weak("Unplaced");
+                        }
+                    }
+                    ui.end_row();
+                }
+            });
+    });
+}
+
 impl NovoApp {
     /// The Cabinet canvas, in place of the schematic canvas.
     pub(super) fn cabinet_show(&mut self, ui: &mut egui::Ui) {
@@ -152,6 +282,9 @@ impl NovoApp {
         let cands = structure
             .map(|s| candidates(project, s))
             .unwrap_or_default();
+        let sizing_devices = structure
+            .map(|s| novo_layout::sizing_model::sizing_devices(project, s))
+            .unwrap_or_default();
         let tag_of = |id: u64| {
             project
                 .get::<Device>(DeviceId::from(id))
@@ -167,6 +300,18 @@ impl NovoApp {
                 preview
             }
             None => l.clone(),
+        });
+        let shown = shown.map(|mut s| {
+            if let (Some(d), None) = (self.cabinet.drag, &self.cabinet.preview) {
+                s.move_to(d.id, d.at.0, d.at.1);
+            }
+            if let (Some((id, x, y)), None) = (self.cabinet.ghost, &self.cabinet.preview)
+                && let Some(c) = cands.iter().find(|c| c.id == id)
+                && !s.placements.iter().any(|p| p.id == id)
+            {
+                s.drop_device(id, c.size, x, y);
+            }
+            s
         });
         let (placed, unplaced, problems) = match (&layout, &shown) {
             (Some(l), Some(s)) => {
@@ -230,6 +375,24 @@ impl NovoApp {
                         ask = Some(Ask::PlaceAll);
                     }
                 }
+                if !self.cabinet.table
+                    && ui
+                        .selectable_label(self.cabinet.plate_card, "Plate")
+                        .on_hover_text("Size and fill of the mounting plate")
+                        .clicked()
+                {
+                    ask = Some(Ask::TogglePlateCard);
+                }
+                if ui
+                    .selectable_label(self.cabinet.table, "Table")
+                    .on_hover_text("Devices as a table (Ctrl+T)")
+                    .clicked()
+                {
+                    ask = Some(Ask::ToggleTable);
+                }
+                if ui.button("Size enclosure").clicked() {
+                    self.sizing.panel_open = !self.sizing.panel_open;
+                }
                 ui.weak(format!(
                     "{placed} placed, {unplaced} unplaced, {problems} {}",
                     if problems == 1 { "problem" } else { "problems" }
@@ -239,24 +402,205 @@ impl NovoApp {
         ui.separator();
 
         match shown {
+            Some(shown) if self.cabinet.table => {
+                // Keys, drags and the landing box belong to the plate: none
+                // may wait there while the table is shown.
+                self.cabinet.keys.clear();
+                self.cabinet.drag = None;
+                self.cabinet.ghost = None;
+                cabinet_table(ui, &shown, &cands, &tag_of);
+            }
             Some(shown) => {
-                let view = cabinet_view(&shown, tag_of);
+                let unplaced_list: Vec<(u64, String, String)> = layout
+                    .as_ref()
+                    .map(|l| {
+                        l.unplaced(&cands)
+                            .into_iter()
+                            .map(|c| {
+                                let size = format!("{} x {} mm", c.size.width, c.size.height);
+                                let size = if c.size.guessed {
+                                    format!("{size} (guessed)")
+                                } else {
+                                    size
+                                };
+                                (c.id, tag_of(c.id), size)
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                egui::Panel::left("cabinet_unplaced")
+                    .exact_size(200.0)
+                    .resizable(false)
+                    .show(ui, |ui| {
+                        ui.add_space(6.0);
+                        ui.strong("Unplaced");
+                        ui.weak("Drag onto the plate");
+                        ui.add_space(4.0);
+                        for (id, tag, size) in &unplaced_list {
+                            ui.dnd_drag_source(egui::Id::new(("cabinet_device", *id)), *id, |ui| {
+                                ui.label(tag.as_str());
+                                ui.weak(size.as_str());
+                            });
+                            ui.add_space(2.0);
+                        }
+                        if unplaced_list.is_empty() {
+                            ui.weak("Every device is placed");
+                        }
+                    });
+
+                let selected: Vec<u64> = self
+                    .cabinet
+                    .view
+                    .selection
+                    .ids()
+                    .iter()
+                    .filter_map(|i| novo_canvas::cabinet::box_of(*i))
+                    .collect();
+                // The inspector: with a selection, or the plate card when it
+                // is switched on; otherwise the plate gets the whole window.
+                let inspector = match (&layout, structure) {
+                    (Some(stored), Some(s)) if !selected.is_empty() || self.cabinet.plate_card => {
+                        let facts = cabinet_inspector::gather(
+                            project, s, stored, &shown, &selected, &tag_of,
+                        );
+                        // On the side away from the selection.
+                        let centre = shown
+                            .placements
+                            .iter()
+                            .filter(|p| selected.contains(&p.id))
+                            .map(|p| p.footprint().x + p.footprint().w / 2.0)
+                            .sum::<f64>()
+                            / selected.len().max(1) as f64;
+                        Some((facts, centre > shown.plate.width / 2.0))
+                    }
+                    _ => None,
+                };
+
+                let view = cabinet_view(&shown, &tag_of);
                 self.cabinet.scene.set(&view);
                 if self.cabinet.fitted != location {
                     self.cabinet.view.viewport.fit(&view_bounds(&view), 24.0);
                     self.cabinet.fitted = location.clone();
                 }
-                self.cabinet.view.show(ui, self.cabinet.scene.scene());
+                let out = self.cabinet.view.show(ui, self.cabinet.scene.scene());
+                if let Some((facts, left)) = &inspector
+                    && let Some(a) =
+                        cabinet_inspector::overlay(ui.ctx(), out.response.rect, *left, facts)
+                {
+                    ask = Some(a);
+                }
+                if let Some(id) = out.hovered.and_then(novo_canvas::cabinet::box_of) {
+                    let lines = problem_lines(&shown, id, &tag_of);
+                    out.response.clone().on_hover_ui_at_pointer(|ui| {
+                        ui.strong(tag_of(id));
+                        if lines.is_empty() {
+                            ui.weak("No problems");
+                        }
+                        for line in &lines {
+                            ui.label(line);
+                        }
+                    });
+                }
+                // Enter and Escape belong to the palette or a text field when
+                // one is open.
+                let typing = self.wb.field.is_open()
+                    || self.wb.occurrences.is_some()
+                    || self.modal_open()
+                    || ui.ctx().egui_wants_keyboard_input();
                 let (enter, escape) = ui.input(|i| {
                     (
-                        i.key_pressed(egui::Key::Enter),
-                        i.key_pressed(egui::Key::Escape),
+                        !typing && i.key_pressed(egui::Key::Enter),
+                        !typing && i.key_pressed(egui::Key::Escape),
                     )
                 });
                 if has_plan && enter {
                     ask = Some(Ask::Accept);
                 } else if has_plan && escape {
                     ask = Some(Ask::Cancel);
+                } else if let (Some(layout), false) = (&layout, has_plan) {
+                    // Dropping a device from the list.
+                    if let (Some(id), Some(at)) =
+                        (out.response.dnd_release_payload::<u64>(), out.cursor_raw)
+                        && let Some(c) = cands.iter().find(|c| c.id == *id)
+                    {
+                        let (x, y) = layout.snapped(
+                            f64::from(at.x) - c.size.width / 2.0,
+                            f64::from(at.y) - c.size.height / 2.0,
+                        );
+                        ask = Some(Ask::Drop(*id, x, y));
+                    }
+                    // The landing box of a device dragged in from the list.
+                    self.cabinet.ghost = None;
+                    if let (Some(id), Some(at)) =
+                        (out.response.dnd_hover_payload::<u64>(), out.cursor_raw)
+                        && let Some(c) = cands.iter().find(|c| c.id == *id)
+                    {
+                        let (x, y) = layout.snapped(
+                            f64::from(at.x) - c.size.width / 2.0,
+                            f64::from(at.y) - c.size.height / 2.0,
+                        );
+                        self.cabinet.ghost = Some((*id, x, y));
+                    }
+                    // Dragging a placed device: egui starts a drag a few
+                    // points after the press, so the box is the one under
+                    // the press, not under the pointer now.
+                    let press = ui.input(|i| i.pointer.press_origin());
+                    if out.response.drag_started_by(egui::PointerButton::Primary)
+                        && let Some(press) = press
+                    {
+                        let rect = out.response.rect;
+                        let world = self
+                            .cabinet
+                            .view
+                            .viewport
+                            .screen_to_world(vec2(press.x - rect.min.x, press.y - rect.min.y));
+                        let (wx, wy) = (f64::from(world.x), f64::from(world.y));
+                        if let Some(p) = layout.placements.iter().rev().find(|p| {
+                            let f = p.footprint();
+                            wx >= f.x && wx <= f.right() && wy >= f.y && wy <= f.bottom()
+                        }) {
+                            let f = p.footprint();
+                            self.cabinet.drag = Some(Drag {
+                                id: p.id,
+                                grab: vec2(world.x - f.x as f32, world.y - f.y as f32),
+                                at: (f.x, f.y),
+                            });
+                        }
+                    }
+                    if let (Some(d), Some(at)) = (self.cabinet.drag.as_mut(), out.cursor_raw) {
+                        let (x, y) =
+                            layout.snapped(f64::from(at.x - d.grab.x), f64::from(at.y - d.grab.y));
+                        d.at = (x, y);
+                    }
+                    if out.response.drag_stopped()
+                        && let Some(d) = self.cabinet.drag.take()
+                    {
+                        ask = Some(Ask::Drop(d.id, d.at.0, d.at.1));
+                    }
+                    // Rotate and delete act on the selected devices.
+                    let selected: Vec<u64> = self
+                        .cabinet
+                        .view
+                        .selection
+                        .ids()
+                        .iter()
+                        .filter_map(|i| novo_canvas::cabinet::box_of(*i))
+                        .collect();
+                    for key in std::mem::take(&mut self.cabinet.keys) {
+                        match key.as_str() {
+                            "edit.rotate" if !selected.is_empty() => {
+                                ask = Some(Ask::Rotate(selected.clone()));
+                            }
+                            "edit.delete" if !selected.is_empty() => {
+                                ask = Some(Ask::Remove(selected.clone()));
+                            }
+                            _ => {}
+                        }
+                    }
+                } else {
+                    self.cabinet.drag = None;
+                    self.cabinet.ghost = None;
+                    self.cabinet.keys.clear();
                 }
             }
             None => {
@@ -270,6 +614,9 @@ impl NovoApp {
                 });
             }
         }
+
+        super::sizing::show_window(ui.ctx(), &mut self.sizing, &sizing_devices);
+        super::sizing::show_editor(ui.ctx(), &mut self.sizing);
 
         if let Some(ask) = ask {
             self.cabinet_ask(ask, structure, layout, &cands);
@@ -289,6 +636,8 @@ impl NovoApp {
                 self.cabinet.preview = None;
             }
             Ask::Cancel => self.cabinet.preview = None,
+            Ask::ToggleTable => self.cabinet.table ^= true,
+            Ask::TogglePlateCard => self.cabinet.plate_card ^= true,
             Ask::PlaceAll => {
                 if let Some(layout) = layout {
                     let plan = layout.preview(cands);
@@ -310,6 +659,31 @@ impl NovoApp {
                     return;
                 };
                 self.cabinet_edit("Place all", move |tx| apply_plan(tx, structure, &plan));
+            }
+            Ask::Drop(device, x, y) => {
+                let Some(structure) = structure else {
+                    return;
+                };
+                let rotated = layout
+                    .as_ref()
+                    .and_then(|l| l.placements.iter().find(|p| p.id == device))
+                    .is_some_and(|p| p.rotated);
+                self.cabinet_edit("Place device", move |tx| {
+                    place_device(tx, structure, device, x, y, rotated)
+                });
+            }
+            Ask::Rotate(devices) => {
+                self.cabinet_edit("Rotate device", move |tx| {
+                    devices.iter().try_for_each(|d| rotate_device(tx, *d))
+                });
+            }
+            Ask::Remove(devices) => {
+                self.cabinet_edit("Remove from plate", move |tx| {
+                    devices.iter().try_for_each(|d| unplace_device(tx, *d))
+                });
+            }
+            Ask::SetPlateSize(s, plate) => {
+                self.cabinet_edit("Set plate size", move |tx| set_plate(tx, s, plate));
             }
             Ask::SetPlate(s) => {
                 self.cabinet_edit("Set plate", move |tx| set_plate(tx, s, DEFAULT_PLATE));
