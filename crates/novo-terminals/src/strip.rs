@@ -298,7 +298,41 @@ pub fn set_jumper(
     for &id in terminals {
         tx.update::<Terminal>(id, |t| t.jumper = jumper)?;
     }
+    // Connected terminals are drawn with their own symbol (see
+    // `style::style_of`): redraw the drawings that follow the strip's style.
+    for &id in terminals {
+        if let Some(style) = style_of(tx.project(), id) {
+            let symbols: Vec<_> = tx
+                .project()
+                .symbols_of_terminal(id)
+                .into_iter()
+                .filter(|s| crate::style::draws_only_inherited(tx.project(), s))
+                .map(|s| s.id)
+                .collect();
+            for symbol in symbols {
+                redraw(tx, symbol, &style.symbol)?;
+            }
+        }
+    }
     Ok(jumper)
+}
+
+/// Connects terminals of one strip, the Connect terminals command: they
+/// share a new jumper group (`free_jumper`) and are drawn as connected
+/// terminals. Returns the group. Fewer than two terminals are refused.
+pub fn connect_terminals(tx: &mut Tx<'_>, terminals: &[TerminalId]) -> Result<u32> {
+    let mut ids = terminals.to_vec();
+    ids.sort();
+    ids.dedup();
+    let Some(first) = ids.first().and_then(|&t| tx.project().terminal(t)) else {
+        return Err(ModelError::Format(strings::not_on_one_strip()));
+    };
+    if ids.len() < 2 {
+        return Err(ModelError::Format(strings::connect_needs_two()));
+    }
+    let group = free_jumper(tx.project(), first.strip);
+    set_jumper(tx, &ids, Some(group))?;
+    Ok(group)
 }
 
 /// Changes the kind of a terminal and redraws it with its strip's symbol for

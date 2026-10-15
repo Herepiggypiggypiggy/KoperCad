@@ -1769,3 +1769,120 @@ fn parallel_wires_restore_from_either_and_doors_count_for_their_cabinet() {
         .unwrap();
     assert_eq!(suggest_terminals(doc.project()).len(), 1);
 }
+
+#[test]
+fn up_moves_terminals_to_the_next_strip_and_ctrl_up_to_the_lowest_free() {
+    let mut doc = Document::default();
+    let (ids, _) = doc
+        .transact("Strips", |tx| {
+            let x1 = strip_by_tag(tx, "-X1")?;
+            let x3 = strip_by_tag(tx, "-X3")?;
+            let a = tx.add_terminal(x1, "1")?;
+            let b = tx.add_terminal(x1, "2")?;
+            let c = tx.add_terminal(x1, "3")?;
+            // -X3 already uses the name 1.
+            tx.add_terminal(x3, "1")?;
+            Ok((a, b, c))
+        })
+        .unwrap();
+    let (a, b, c) = ids;
+    let name_of = |doc: &Document, t| doc.project().terminal(t).unwrap().name.clone();
+    let strip_of = |doc: &Document, t| {
+        let s = doc.project().terminal(t).unwrap().strip;
+        doc.project().device(s).unwrap().tag.to_string()
+    };
+    // Up: -X1 to -X2, which does not exist yet and is created.
+    doc.transact("Up", |tx| move_to_strip(tx, &[a, b], MoveTo::NextNumber))
+        .unwrap();
+    assert_eq!(strip_of(&doc, a), "-X2");
+    assert_eq!(strip_of(&doc, b), "-X2");
+    assert_eq!(strip_of(&doc, c), "-X1");
+    // Up again: -X3 already has a terminal 1, so the arrivals take the next free numbers 2 and 3.
+    doc.transact("Up", |tx| move_to_strip(tx, &[a, b], MoveTo::NextNumber))
+        .unwrap();
+    assert_eq!(strip_of(&doc, a), "-X3");
+    assert_eq!(name_of(&doc, a), "2");
+    assert_eq!(name_of(&doc, b), "3");
+    // -X2 had nothing left and is gone, so the lowest free number is 2.
+    assert!(doc.project().devices().all(|d| d.tag.to_string() != "-X2"));
+    doc.transact("Ctrl+Up", |tx| move_to_strip(tx, &[c], MoveTo::LowestFree))
+        .unwrap();
+    // -X1 is used (by c itself), so the lowest free number is 2.
+    assert_eq!(strip_of(&doc, c), "-X2");
+    // One undo undoes one move.
+    doc.undo().unwrap();
+    doc.transact("Ctrl+Up", |tx| move_to_strip(tx, &[a], MoveTo::LowestFree))
+        .unwrap();
+    assert_eq!(strip_of(&doc, a), "-X2");
+    // Terminals of two strips are refused.
+    assert!(
+        doc.transact("Mixed", |tx| move_to_strip(tx, &[a, c], MoveTo::NextNumber))
+            .is_err()
+    );
+}
+
+#[test]
+fn connecting_terminals_jumpers_them_and_changes_their_symbol() {
+    use novo_core::SymbolKey;
+    let mut doc = Document::default();
+    let (ts, _) = doc
+        .transact("Strip", |tx| {
+            let page = tx.add_page("1")?;
+            let strip = strip_by_tag(tx, "-X1")?;
+            let mut out = Vec::new();
+            for i in 0..3u32 {
+                let t = tx.add_terminal(strip, (i + 1).to_string())?;
+                let end = SymbolKey("iec/terminals/terminal_end".into());
+                let pins = if i == 2 {
+                    symbol_pins(&SymbolKey("iec/terminals/terminal".into()))?
+                } else {
+                    vec![Pin::new("1", 0.0, 0.0)]
+                };
+                let symbol = if i == 2 {
+                    SymbolKey("iec/terminals/terminal".into())
+                } else {
+                    end
+                };
+                let s = tx.place_symbol(
+                    page,
+                    symbol,
+                    Placement::at(Point::new(40.0 + 8.0 * f64::from(i), 40.0)),
+                    pins,
+                    SymbolRole::Terminal { terminals: vec![t] },
+                )?;
+                out.push((t, s));
+            }
+            Ok(out)
+        })
+        .unwrap();
+    let key = |doc: &Document, s| doc.project().symbol(s).unwrap().symbol.0.clone();
+    assert!(
+        doc.transact("Connect", |tx| connect_terminals(tx, &[ts[0].0]))
+            .is_err()
+    );
+    let (group, _) = doc
+        .transact("Connect", |tx| {
+            connect_terminals(tx, &[ts[0].0, ts[1].0, ts[2].0])
+        })
+        .unwrap();
+    for (t, _) in &ts {
+        assert_eq!(doc.project().terminal(*t).unwrap().jumper, Some(group));
+    }
+    // One-ended and two-ended drawings each get their connected variant.
+    assert_eq!(key(&doc, ts[0].1), "iec/terminals/terminal_end_bridged");
+    assert_eq!(key(&doc, ts[2].1), "iec/terminals/terminal_bridged");
+    assert_eq!(doc.project().symbol(ts[0].1).unwrap().pins.len(), 1);
+    // Disconnecting restores the plain symbols, in one undo step each.
+    doc.transact("Disconnect", |tx| {
+        set_jumper(tx, &[ts[0].0, ts[1].0, ts[2].0], None)
+    })
+    .unwrap();
+    assert_eq!(key(&doc, ts[0].1), "iec/terminals/terminal_end");
+    assert_eq!(key(&doc, ts[2].1), "iec/terminals/terminal");
+    // A kind change keeps a one-ended drawing one-ended.
+    doc.transact("PE", |tx| {
+        set_kind(tx, ts[1].0, TerminalKind::ProtectiveEarth)
+    })
+    .unwrap();
+    assert_eq!(key(&doc, ts[1].1), "iec/terminals/terminal_pe_end");
+}

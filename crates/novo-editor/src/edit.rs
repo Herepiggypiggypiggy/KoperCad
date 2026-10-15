@@ -32,8 +32,9 @@ pub struct PlaceOptions {
     /// device yet creates it (scripts); the editor refuses that with a
     /// notice instead.
     pub parent: Option<DeviceTag>,
-    /// Terminal strip for terminal symbols; `None` uses the strip of the
-    /// last terminal on the page, else `-X1`.
+    /// Terminal strip for terminal symbols; `None` joins the strip the
+    /// terminal is drawn next to, else starts a strip with the next free
+    /// `-X` number (see [`adjacent_strip`]).
     pub strip: Option<DeviceId>,
     /// Potential of a potential feed; `None` uses `L1`.
     pub potential: Option<PotentialId>,
@@ -129,7 +130,7 @@ pub fn place(
         SymbolClass::Terminal { kind } => {
             let strip = match options.strip.filter(|s| strip_exists(tx.project(), *s)) {
                 Some(s) => s,
-                None => default_strip(tx, page)?,
+                None => strip_for(tx, page, placement.origin)?,
             };
             let levels = bridges.len().max(1);
             let name = next_terminal_name(tx.project(), strip, kind);
@@ -184,36 +185,58 @@ fn strip_exists(project: &Project, strip: DeviceId) -> bool {
         .is_some_and(|d| d.kind == DeviceKind::TerminalStrip)
 }
 
-/// The strip of the last terminal placed on the page, else `-X1` in the
-/// page's structure (created when missing).
-fn default_strip(tx: &mut Tx<'_>, page: PageId) -> Result<DeviceId> {
-    let project = tx.project();
-    let last = project
+/// Terminals this close (mm between symbol origins) and in line belong to
+/// one strip run, the same gap the canvas uses to name a strip once.
+pub const STRIP_ADJACENT: f64 = 20.0;
+
+/// How far off the line two terminals may sit and still be in line.
+const IN_LINE: f64 = 2.0;
+
+/// The strip of the terminal drawn next to `at` on the page: the nearest
+/// terminal symbol within [`STRIP_ADJACENT`] along a row or a column.
+/// `None` when the spot is not next to any strip.
+pub fn adjacent_strip(project: &Project, page: PageId, at: Point) -> Option<DeviceId> {
+    project
         .page_contents(page)
         .symbols
         .iter()
-        .rev()
         .filter_map(|&s| project.symbol(s))
-        .find_map(|s| match &s.role {
-            SymbolRole::Terminal { terminals } => terminals
-                .first()
-                .and_then(|t| project.terminal(*t))
-                .map(|t| t.strip),
+        .filter_map(|s| match &s.role {
+            SymbolRole::Terminal { terminals } => {
+                let strip = project.terminal(*terminals.first()?)?.strip;
+                let o = s.placement.origin;
+                let (dx, dy) = ((o.x - at.x).abs(), (o.y - at.y).abs());
+                let near = (dy <= IN_LINE && dx <= STRIP_ADJACENT)
+                    || (dx <= IN_LINE && dy <= STRIP_ADJACENT);
+                near.then_some((dx + dy, strip))
+            }
             _ => None,
-        });
-    if let Some(strip) = last {
+        })
+        .min_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)))
+        .map(|(_, strip)| strip)
+}
+
+/// The strip a placed terminal symbol belongs to.
+pub fn strip_of_symbol(project: &Project, symbol: SymbolId) -> Option<DeviceId> {
+    match &project.symbol(symbol)?.role {
+        SymbolRole::Terminal { terminals } => Some(project.terminal(*terminals.first()?)?.strip),
+        _ => None,
+    }
+}
+
+/// The strip a terminal placed at `at` joins: the one it is drawn next to
+/// (a terminal directly left of a strip joins it too, and the strip's name
+/// moves to it as the new leftmost). Anywhere else it starts a new strip
+/// with the next free `-X` number in the page's structure.
+fn strip_for(tx: &mut Tx<'_>, page: PageId, at: Point) -> Result<DeviceId> {
+    if let Some(strip) = adjacent_strip(tx.project(), page, at) {
         return Ok(strip);
     }
-    let mut tag = page_structure(project, page);
+    let structure = page_structure(tx.project(), page);
+    let mut tag = structure.clone();
     tag.product.push("X1".into());
-    if let Some(&d) = project.devices_by_tag(&tag).first() {
-        if strip_exists(project, d) {
-            return Ok(d);
-        }
-        let n = project.next_tag_number(&page_structure(project, page), "X");
-        tag = tag.with_number(n);
-    }
-    tx.add_terminal_strip(tag)
+    let n = tx.project().next_tag_number(&structure, "X");
+    tx.add_terminal_strip(tag.with_number(n))
 }
 
 /// Next terminal name on a strip: `PE` / `N` for those kinds (then `PE2`),

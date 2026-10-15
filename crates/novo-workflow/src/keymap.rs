@@ -357,6 +357,11 @@ impl Keymap {
             );
         }
 
+        // Terminals: the selected terminals move to the next strip number,
+        // or with Ctrl to the lowest free one.
+        bind(Chord::plain(ArrowUp), Canvas, "terminal.strip_up");
+        bind(Chord::ctrl(ArrowUp), Canvas, "terminal.strip_lowest");
+
         // Proposals and problems.
         bind(Chord::plain(Enter), Canvas, "proposal.accept");
         bind(Chord::plain(Tab), Canvas, "proposal.next");

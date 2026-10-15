@@ -393,6 +393,35 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["changes"],
     ),
+    // Terminals
+    cmd(
+        "terminal.connect",
+        "Connect terminals",
+        "Terminals",
+        &["jumper", "bridge", "cross connect"],
+        Needs::Selection,
+    ),
+    cmd(
+        "terminal.disconnect",
+        "Disconnect terminals",
+        "Terminals",
+        &["jumper", "bridge", "unbridge"],
+        Needs::Selection,
+    ),
+    cmd(
+        "terminal.strip_up",
+        "Terminal strip number up",
+        "Terminals",
+        &["rename strip", "x number", "next strip"],
+        Needs::Selection,
+    ),
+    cmd(
+        "terminal.strip_lowest",
+        "Terminal strip lowest free number",
+        "Terminals",
+        &["rename strip", "x number", "free strip"],
+        Needs::Selection,
+    ),
     // View
     cmd(
         "view.command_palette",

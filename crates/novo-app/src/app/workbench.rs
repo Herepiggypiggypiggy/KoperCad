@@ -433,6 +433,10 @@ impl NovoApp {
                 self.next_proposal();
             }
             "proposal.accept_all" => self.accept_all_proposals(),
+            "terminal.connect"
+            | "terminal.disconnect"
+            | "terminal.strip_up"
+            | "terminal.strip_lowest" => self.terminal_command(id),
             "view.terminals_drawer" => self.toggle_drawer(Drawer::Terminals),
             "view.cables_drawer" => self.toggle_drawer(Drawer::Cables),
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
