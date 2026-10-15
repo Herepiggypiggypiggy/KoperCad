@@ -24,3 +24,4 @@
 2026-10-14 22:20 UTC #99 merged; main c3c51a0 merged into #87, F4 tests un-ignored, textures_delta comment added. 659/0/2. F4 closed.
 2026-10-15 04:15 UTC Round 11 (F5 closed by #126) and Round 12 (Gate 2 assessment, gate2_live_pages.rs: engine live; gaps G2-1..G2-4) on main f3534dc: 722/0/3.
 2026-10-15 03:50 UTC #146 merged. Follow-up PR: reviewer nits (BOM columns by key, -W1 table by tag).
+2026-10-15 03:55 UTC #151 merged. Round 13 on main 3cd3772: G2-4 closed by #138 (Cables/Devices drawers); 738/0/3. G2-1..G2-3 open.

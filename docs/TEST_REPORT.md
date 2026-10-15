@@ -24,6 +24,18 @@ How a PR is tested: its branch is merged onto the current `main` (a
 main `11363c1` passes fmt, clippy and all 232 workspace tests on Linux.
 **Every Gate 0 criterion is met.**
 
+## Round 13 (2026-10-15, main `3cd3772`): G2-4 closed
+
+#138 (WS-01) added the Cables and Devices drawers (`view.cables_drawer`,
+`view.devices_drawer` in `crates/novo-app/src/app/workbench.rs`), so **G2-4
+is closed**. G2-1, G2-2 and G2-3 are still open; their tests stay ignored.
+#151 made `gate2_live_pages.rs` find BOM columns by key and `-W1`'s table by
+tag.
+
+main `3cd3772`: fmt and clippy clean; **738 passed, 0 failed, 3 ignored**
+(G2-1, G2-2 and the `widget.rs` doc example). Linux only; GitHub Actions is
+still down.
+
 ## Round 12 (2026-10-15, main `f3534dc`): Gate 2, "terminal, cable and report pages generate live"
 
 New test file `crates/novo-tests/tests/gate2_live_pages.rs`. It starts from
