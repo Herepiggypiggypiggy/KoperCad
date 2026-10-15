@@ -166,6 +166,16 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["rules"],
     ),
+    verb(
+        cmd(
+            "app.preferences",
+            "Preferences",
+            "Project",
+            &["settings", "options", "auto connections", "autoconnect"],
+            Needs::Nothing,
+        ),
+        &["preferences", "prefs"],
+    ),
     cmd("file.quit", "Quit", "Project", &["exit"], Needs::Nothing),
     // Draw
     cmd(
