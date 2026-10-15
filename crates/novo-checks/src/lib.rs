@@ -24,6 +24,7 @@
 //! | [`UndersizedWire`](ProblemKind::UndersizedWire) | warning | A wire on an overcurrent protective device that carries less than the device's rated current |
 //! | [`CableCore`](ProblemKind::CableCore) | warning, error for green-yellow misuse | A cable core used against its marking or the cable's limits (novo-cables' checks) |
 //! | [`TerminalUse`](ProblemKind::TerminalUse) | warning, error for a wrong potential or a one-sided fuse terminal | A terminal used against its kind (novo-terminals' checks) |
+//! | [`Plc`](ProblemKind::Plc) | warning, error where the I/O list would be wrong | A PLC card or channel that cannot be addressed or wired as drawn (novo-plc's checks) |
 //! | [`MissingPart`](ProblemKind::MissingPart) | info | A device or cable without a part |
 //!
 //! Not checked here:
@@ -114,11 +115,17 @@ pub enum ProblemKind {
     /// terminal wired on one side (error), or, under the refuse rule, a
     /// terminal drawn twice (error).
     TerminalUse,
+    /// A PLC card or channel that cannot be addressed or wired as drawn
+    /// (novo-plc, plc.md §7): overlapping addresses, a channel drawn twice
+    /// or that the card does not have, a channel without a number or of
+    /// the wrong type, a card without a layout or start address, or two
+    /// cards in one slot. Errors where the I/O list would be wrong.
+    Plc,
 }
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 14] = [
+    pub const ALL: [ProblemKind; 15] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -130,6 +137,7 @@ impl ProblemKind {
         ProblemKind::ZeroLengthWire,
         ProblemKind::CableCore,
         ProblemKind::TerminalUse,
+        ProblemKind::Plc,
         ProblemKind::WrongTerminalBlock,
         ProblemKind::UndersizedWire,
         ProblemKind::MissingPart,
@@ -149,7 +157,8 @@ impl ProblemKind {
             | ProblemKind::UndersizedWire
             | ProblemKind::WrongTerminalBlock
             | ProblemKind::CableCore
-            | ProblemKind::TerminalUse => Severity::Warning,
+            | ProblemKind::TerminalUse
+            | ProblemKind::Plc => Severity::Warning,
             ProblemKind::MissingPart => Severity::Info,
         }
     }
@@ -171,6 +180,7 @@ impl ProblemKind {
             ProblemKind::WrongTerminalBlock => "Wrong terminal block",
             ProblemKind::CableCore => "Cable core",
             ProblemKind::TerminalUse => "Terminal use",
+            ProblemKind::Plc => "PLC",
         }
     }
 }
@@ -276,6 +286,7 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     checks::wrong_terminal_blocks(&cx, &mut problems);
     checks::cable_cores(&cx, netlist, &mut problems);
     checks::terminal_use(&cx, netlist, &mut problems);
+    checks::plc(&cx, &mut problems);
     cx.sort(&mut problems);
     problems
 }

@@ -9,6 +9,7 @@ license.workspace = true
 novo-cables.workspace = true
 novo-core.workspace = true
 novo-parts.workspace = true
+novo-plc.workspace = true
 novo-terminals.workspace = true
 
 [dev-dependencies]
