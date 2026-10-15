@@ -2131,6 +2131,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-view3d"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "glam",
+]
+
+[[package]]
 name = "novo-workflow"
 version = "0.1.0"
 dependencies = [
