@@ -1,0 +1,24 @@
+# Lesson tracks, in the order the Learn window lists them.
+# Owned by the Learning modules thread; a lesson picks its track with
+# `track = "<id>"` and its place inside it with `order` (leave gaps of 10).
+# Format: docs/design/learning-modules.md
+
+[[track]]
+id = "basics"
+title = "Schematic basics and motor control"
+summary = "Place, wire and number a first circuit, then build a motor starter."
+
+[[track]]
+id = "terminals"
+title = "Terminals, PLC and documentation"
+summary = "Terminal strips, cables, PLC cards and the pages and reports generated from the drawing."
+
+[[track]]
+id = "cabinet"
+title = "Cabinet layout and panel building"
+summary = "Lay out the enclosure, size it, route wires and see the panel in 3D."
+
+[[track]]
+id = "productivity"
+title = "Productivity, checks and data"
+summary = "Macros, spreadsheets, design checks, revisions and import and export."

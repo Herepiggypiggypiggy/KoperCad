@@ -29,6 +29,11 @@ pub(crate) struct ChangesMode {
 }
 
 impl ChangesMode {
+    /// The index of the revision Changes mode compares with.
+    pub(super) fn base_index(&self) -> &str {
+        &self.index
+    }
+
     fn changes(&mut self, project: &Project) -> &ChangeSet {
         if self
             .changes
@@ -273,6 +278,7 @@ impl NovoApp {
         let elsewhere = set.project.len() + usize::from(!set.info.is_empty());
         let mut pick = None;
         let mut leave = false;
+        let mut compare = false;
         // Below the live potentials card when both are on.
         let live = self.wb.live.on;
         egui::Area::new(egui::Id::new("changes_card"))
@@ -288,6 +294,13 @@ impl NovoApp {
                         }
                     });
                     pick = base_picker(ui, &revisions, mode.base);
+                    if ui
+                        .small_button("Compare…")
+                        .on_hover_text("List what changed, field by field")
+                        .clicked()
+                    {
+                        compare = true;
+                    }
                     if nothing_here {
                         ui.weak("Nothing changed on this page");
                     } else {
@@ -315,6 +328,9 @@ impl NovoApp {
         }
         if leave {
             self.wb.changes = None;
+        }
+        if compare {
+            self.open_compare_from_changes();
         }
     }
 

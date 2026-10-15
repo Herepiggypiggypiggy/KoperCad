@@ -54,7 +54,7 @@ fn the_change_list_names_each_change_in_page_order() {
         [
             (Some(p1), "Device -K1", device.clone()),
             (Some(p2), "Device -K1", device),
-            (Some(p2), "Wire", ChangeKind::Removed),
+            (Some(p2), "Wire -K1:2 to lamp:1", ChangeKind::Removed),
             (None, "Part Siemens 3RT2015", ChangeKind::Added),
         ]
     );

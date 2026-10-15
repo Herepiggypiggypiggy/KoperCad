@@ -10,6 +10,7 @@ novo-core = { workspace = true }
 # Only the model adapter: the PDF is drawn from the same page scene as the
 # canvas, without the egui widget.
 novo-canvas = { path = "../novo-canvas", default-features = false, features = ["model"] }
+novo-layout = { workspace = true }
 novo-reports = { workspace = true }
 pdf-writer = { workspace = true }
 subsetter = { workspace = true }
