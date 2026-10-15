@@ -83,21 +83,12 @@ struct ContextMenu {
     device: Option<DeviceId>,
     /// Drawn terminals in the selection (terminal actions show for these).
     terminals: usize,
-    /// How the selected terminals stand as protective earth.
-    pe: PeMenu,
     /// Interruption points in the selection.
     interruptions: usize,
     /// The first of them, for Rename.
     interruption: Option<novo_core::SymbolId>,
     page: PageId,
     opened: bool,
-}
-
-/// The PE rows of the context menu for the selected terminals.
-#[derive(Default, Clone, Copy)]
-struct PeMenu {
-    /// Some selected terminal carries a PE choice made by hand.
-    overridden: bool,
 }
 
 /// One page of the schematic on screen, with the editor's tools.
@@ -763,22 +754,6 @@ impl SchematicView {
                     _ => false,
                 })
                 .count();
-            let drawn_terminals: Vec<_> = selection
-                .iter()
-                .filter_map(|&id| match id {
-                    AnyId::Symbol(s) => document.project().symbol(s),
-                    _ => None,
-                })
-                .filter_map(|s| match &s.role {
-                    SymbolRole::Terminal { terminals } => Some(terminals),
-                    _ => None,
-                })
-                .flatten()
-                .filter_map(|&t| document.project().terminal(t))
-                .collect();
-            let pe = PeMenu {
-                overridden: drawn_terminals.iter().any(|t| !t.pe_override.is_auto()),
-            };
             let interruptions = selection
                 .iter()
                 .filter(|&&id| match id {
@@ -807,7 +782,6 @@ impl SchematicView {
                 potentials,
                 device,
                 terminals,
-                pe,
                 interruptions,
                 interruption,
                 page,
@@ -1217,10 +1191,6 @@ impl SchematicView {
                         ui.separator();
                     }
                     if menu.terminals > 0 {
-                        // A choice by hand sticks until it is reset.
-                        if menu.pe.overridden && ui.button("PE: back to automatic").clicked() {
-                            chosen = Some(MenuChoice::Command("terminal.pe_auto"));
-                        }
                         if menu.terminals > 1 {
                             if ui.button("Connect terminals").clicked() {
                                 chosen = Some(MenuChoice::Command("terminal.connect"));

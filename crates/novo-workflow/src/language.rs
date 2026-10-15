@@ -152,7 +152,6 @@ pub const DUTCH: &[Aliases] = &[
     nl("view.fit", &[], &["passend zoomen", "alles tonen"]),
     nl("view.schematic", &[], &["schema"]),
     nl("view.cabinet", &[], &["kast", "kastindeling"]),
-    nl("terminal.pe_auto", &[], &["aardklem automatisch"]),
     nl(
         "interruption.renumber",
         &[],

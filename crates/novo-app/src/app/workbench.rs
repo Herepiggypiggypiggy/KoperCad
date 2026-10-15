@@ -197,7 +197,6 @@ const APP_COMMANDS: &[&str] = &[
     "app.preferences",
     "terminal.toggle_pe",
     "wire.mode",
-    "terminal.pe_auto",
     "interruption.renumber",
 ];
 
@@ -449,7 +448,6 @@ impl NovoApp {
             | "terminal.strip_up"
             | "terminal.strip_down"
             | "terminal.strip_lowest" => self.terminal_command(id),
-            "terminal.pe_auto" => self.pe_back_to_automatic(),
             "interruption.renumber" => self.renumber_interruptions(),
             "view.terminals_drawer" => self.toggle_drawer(Drawer::Terminals),
             "view.cables_drawer" => self.toggle_drawer(Drawer::Cables),

@@ -431,13 +431,6 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Selection,
     ),
     cmd(
-        "terminal.pe_auto",
-        "PE terminal: back to automatic",
-        "Edit",
-        &["protective earth", "reset pe", "earth terminal"],
-        Needs::Selection,
-    ),
-    cmd(
         "interruption.renumber",
         "Number interruption points automatically",
         "Edit",

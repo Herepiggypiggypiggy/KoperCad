@@ -2058,7 +2058,7 @@ fn number_automatically_renumbers_interruption_points_in_one_undo_step() {
 }
 
 #[test]
-fn toggle_pe_is_an_override_with_a_diamond_and_back_to_automatic_hands_it_back() {
+fn a_pe_terminal_set_by_hand_carries_the_override_diamond() {
     use novo_canvas::MarkKind;
     use novo_core::{PeOverride, SymbolRole, TerminalKind};
     let dir = tempfile::tempdir().unwrap();
@@ -2084,20 +2084,5 @@ fn toggle_pe_is_an_override_with_a_diamond_and_back_to_automatic_hands_it_back()
     assert!(
         marks.iter().any(|m| m.kind == MarkKind::Override),
         "a by-hand PE terminal carries the override diamond"
-    );
-    d.app.run_command(&ctx, "terminal.pe_auto", None);
-    d.frame();
-    let t = terminal(&d);
-    assert_eq!(t.pe_override, PeOverride::Auto);
-    assert!(
-        d.app
-            .canvas
-            .schematic_ref()
-            .unwrap()
-            .canvas
-            .marks
-            .list
-            .iter()
-            .all(|m| m.kind != MarkKind::Override)
     );
 }

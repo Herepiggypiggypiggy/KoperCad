@@ -4,7 +4,7 @@
 
 use novo_canvas::model::item_id;
 use novo_canvas::{Mark, MarkKind};
-use novo_core::{AnyId, PageId, SymbolId, SymbolRole, TerminalId};
+use novo_core::{AnyId, PageId, SymbolId, SymbolRole};
 
 use super::{Level, NovoApp};
 
@@ -47,27 +47,6 @@ impl NovoApp {
                 self.message(Level::Info, format!("Numbered {n} interruption {what}"));
             }
             Err(e) => self.message(Level::Error, format!("Number interruption points: {e}")),
-        }
-    }
-
-    /// "PE: back to automatic": hands the selected terminals back to the
-    /// rule and runs it.
-    pub(super) fn pe_back_to_automatic(&mut self) {
-        let terminals: Vec<TerminalId> = self.selected_terminals();
-        if terminals.is_empty() {
-            self.message(Level::Info, "Select one or more terminals first");
-            return;
-        }
-        let Some(doc) = self.backend.document_mut() else {
-            return;
-        };
-        let result = doc.transact("PE terminal: back to automatic", |tx| {
-            novo_terminals::reset_pe_override(tx, &terminals)?;
-            novo_terminals::mark_earthed(tx).map(|_| ())
-        });
-        match result {
-            Ok(((), changes)) => self.changed_outside_canvas(&changes),
-            Err(e) => self.message(Level::Error, format!("PE terminal: back to automatic: {e}")),
         }
     }
 
