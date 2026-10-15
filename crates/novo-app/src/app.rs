@@ -16,6 +16,7 @@ mod live;
 mod live_anim;
 mod pages;
 mod parts;
+mod parts_import;
 mod pdf;
 mod plc;
 mod potentials;

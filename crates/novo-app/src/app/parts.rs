@@ -7,13 +7,18 @@
 //! [`browser_rows`], the library and its source records from
 //! [`LocalLibrary`]. Design: `docs/PARTS-LIBRARY-DESIGN.md` (section 3a).
 
+use std::path::{Path, PathBuf};
+
 use eframe::egui;
 use novo_core::Value;
 use novo_parts::{
-    Catalog, CatalogPart, LocalLibrary, PartKey, RowAction, SourceRecord, SourceTable,
-    browser_rows, display_value, is_internal_key, property_label,
+    Catalog, CatalogPart, ImportFlow, LocalLibrary, PartKey, RowAction, SourceRecord, SourceTable,
+    browser_rows, default_downloads_dir, display_value, is_internal_key, property_label,
+    user_catalog_path,
 };
 
+use super::parts_import::{Import, Phase, import_path};
+use super::revisions::today;
 use super::{Level, NovoApp};
 
 /// State of the open Parts window.
@@ -25,6 +30,12 @@ pub(crate) struct PartsWindow {
     catalog: Catalog,
     library: Option<LocalLibrary>,
     sources: SourceTable,
+    /// The import in progress or just finished, shown in the status strip.
+    import: Option<Import>,
+    /// The folder the Downloads watch looks in.
+    downloads: Option<PathBuf>,
+    /// The user's catalog file, where read data is saved.
+    catalog_path: Option<PathBuf>,
 }
 
 impl PartsWindow {
@@ -40,6 +51,67 @@ impl PartsWindow {
             catalog,
             library,
             sources,
+            import: None,
+            downloads: default_downloads_dir(),
+            catalog_path: user_catalog_path(),
+        }
+    }
+
+    /// The part a dropped or picked file belongs to: the one being
+    /// imported, else the selected one.
+    fn target(&self) -> Option<CatalogPart> {
+        let key = self
+            .import
+            .as_ref()
+            .map(|i| i.key.clone())
+            .or_else(|| self.selected.clone())?;
+        self.catalog.get(&key).cloned()
+    }
+
+    fn start_import(&mut self, key: &PartKey) {
+        let (Some(part), Some(library)) = (self.catalog.get(key), self.library.as_ref()) else {
+            return;
+        };
+        self.import = Some(Import::start(
+            part,
+            library,
+            &self.sources,
+            self.downloads.as_deref(),
+            &today(),
+        ));
+    }
+
+    /// Imports a file for the target part and records the result.
+    fn import_file(&mut self, path: &Path, flow: ImportFlow) {
+        let Some(part) = self.target() else {
+            return;
+        };
+        if self.import.as_ref().is_none_or(|i| i.key != part.key()) {
+            self.start_import(&part.key());
+        }
+        let Some(library) = self.library.as_ref() else {
+            return;
+        };
+        let result = import_path(
+            &part,
+            path,
+            flow,
+            library,
+            &self.sources,
+            self.catalog_path.as_deref(),
+            &today(),
+        );
+        let phase = match result {
+            Ok((summary, changed)) => {
+                for p in changed {
+                    self.catalog.upsert(p);
+                }
+                Phase::Done(summary)
+            }
+            Err(e) => Phase::Failed(e),
+        };
+        if let Some(i) = self.import.as_mut() {
+            i.phase = phase;
         }
     }
 
@@ -187,7 +259,11 @@ pub(crate) fn detail_sections(part: &CatalogPart) -> Vec<DetailSection> {
 /// reads.
 enum PartsAction {
     Select(PartKey),
+    Import(PartKey),
     OpenPage(String),
+    ChooseFile,
+    ChooseFolder,
+    StopImport,
     Remove(PartKey),
     Close,
 }
@@ -218,16 +294,68 @@ impl NovoApp {
         };
         let mut open = true;
         let mut actions = Vec::new();
+        let dragging = ctx.input(|i| !i.raw.hovered_files.is_empty());
         egui::Window::new("Parts")
             .open(&mut open)
             .default_size([820.0, 520.0])
-            .show(ctx, |ui| parts_ui(ui, win, &mut actions));
+            .show(ctx, |ui| parts_ui(ui, win, dragging, &mut actions));
+        // A file dropped on the window, or one the watch found.
+        let dropped: Vec<PathBuf> = ctx.input(|i| {
+            i.raw
+                .dropped_files
+                .iter()
+                .map(|f| f.path().to_path_buf())
+                .filter(|p| !p.as_os_str().is_empty())
+                .collect()
+        });
+        if let Some(path) = dropped.first() {
+            win.import_file(path, ImportFlow::Manual);
+        }
+        let now = ctx.input(|i| i.time);
+        if let Some(path) = win.import.as_mut().and_then(|i| i.poll(now)) {
+            win.import_file(&path, ImportFlow::Downloads);
+        }
+        if win
+            .import
+            .as_ref()
+            .is_some_and(|i| i.phase == Phase::Waiting)
+        {
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64(
+                super::parts_import::POLL_SECONDS,
+            ));
+        }
         let mut close = !open;
         let mut error = None;
         for action in actions {
             match action {
                 PartsAction::Select(key) => win.selected = Some(key),
+                PartsAction::Import(key) => {
+                    win.start_import(&key);
+                    if let Some(url) = win.import.as_ref().and_then(|i| i.page_url.clone()) {
+                        ctx.open_url(egui::OpenUrl::new_tab(url));
+                    }
+                }
                 PartsAction::OpenPage(url) => ctx.open_url(egui::OpenUrl::new_tab(url)),
+                PartsAction::ChooseFile => {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .set_title("Choose the downloaded file")
+                        .pick_file()
+                    {
+                        win.import_file(&path, ImportFlow::Manual);
+                    }
+                }
+                PartsAction::ChooseFolder => {
+                    if let Some(dir) = rfd::FileDialog::new()
+                        .set_title("Folder to watch for downloads")
+                        .pick_folder()
+                    {
+                        win.downloads = Some(dir);
+                        if let Some(key) = win.import.as_ref().map(|i| i.key.clone()) {
+                            win.start_import(&key);
+                        }
+                    }
+                }
+                PartsAction::StopImport => win.import = None,
                 PartsAction::Remove(key) => {
                     if let Some(Err(e)) = win.library.as_ref().map(|l| l.remove(&key)) {
                         error = Some(format!("Parts library: {e}"));
@@ -245,7 +373,12 @@ impl NovoApp {
     }
 }
 
-fn parts_ui(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<PartsAction>) {
+fn parts_ui(
+    ui: &mut egui::Ui,
+    win: &mut PartsWindow,
+    dragging: bool,
+    actions: &mut Vec<PartsAction>,
+) {
     ui.horizontal(|ui| {
         ui.add(
             egui::TextEdit::singleline(&mut win.query)
@@ -269,6 +402,11 @@ fn parts_ui(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<PartsAct
     });
     ui.separator();
     let rows = win.rows();
+    if win.import.is_some() || dragging {
+        egui::Panel::bottom("parts_status")
+            .resizable(false)
+            .show(ui, |ui| status_ui(ui, win, dragging, actions));
+    }
     egui::Panel::right("parts_detail")
         .exact_size(300.0)
         .resizable(false)
@@ -303,16 +441,10 @@ fn parts_ui(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<PartsAct
                                     "In library",
                                 );
                             }
-                            RowAction::Import => {
-                                ui.add_enabled(false, egui::Button::new("Import"));
-                            }
-                            RowAction::OpenPage(Some(url)) => {
+                            RowAction::Import | RowAction::OpenPage(_) => {
                                 if ui.small_button("Import").clicked() {
-                                    actions.push(PartsAction::OpenPage(url.clone()));
+                                    actions.push(PartsAction::Import(key.clone()));
                                 }
-                            }
-                            RowAction::OpenPage(None) => {
-                                ui.weak("No page");
                             }
                         }
                     });
@@ -320,6 +452,85 @@ fn parts_ui(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<PartsAct
             }
         });
     });
+}
+
+/// The strip under the list: what the import is waiting for, or its result.
+fn status_ui(ui: &mut egui::Ui, win: &PartsWindow, dragging: bool, actions: &mut Vec<PartsAction>) {
+    if dragging {
+        let who = win.target().map_or_else(
+            || "Select a part first, then drop its file here.".to_owned(),
+            |p| format!("Drop the file to import it for {p}."),
+        );
+        ui.strong(who);
+        return;
+    }
+    let Some(import) = win.import.as_ref() else {
+        return;
+    };
+    match &import.phase {
+        Phase::Waiting => {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.strong(format!("Importing {}", import.label));
+            });
+            match (&win.downloads, import.watching()) {
+                (Some(dir), true) => ui.label(format!(
+                    "Save the file from the maker's page. It is picked up from {} by itself; \
+you can also drop it on this window.",
+                    dir.display()
+                )),
+                _ => ui.label("Drop the downloaded file on this window, or choose it."),
+            };
+            if import.page_url.is_some() && !import.page_verified {
+                ui.weak(
+                    "This page address is not confirmed. If it does not show the part, find it \
+on the maker's site and drop the file here.",
+                );
+            }
+            ui.horizontal(|ui| {
+                if let Some(url) = &import.page_url
+                    && ui.small_button("Open page again").clicked()
+                {
+                    actions.push(PartsAction::OpenPage(url.clone()));
+                }
+                if ui.small_button("Choose file\u{2026}").clicked() {
+                    actions.push(PartsAction::ChooseFile);
+                }
+                if ui.small_button("Watch another folder\u{2026}").clicked() {
+                    actions.push(PartsAction::ChooseFolder);
+                }
+                if ui.small_button("Stop").clicked() {
+                    actions.push(PartsAction::StopImport);
+                }
+            });
+        }
+        Phase::Done(summary) => {
+            ui.colored_label(
+                egui::Color32::from_rgb(90, 190, 120),
+                format!("Imported {} ({})", import.label, summary.file),
+            );
+            for line in &summary.lines {
+                ui.label(line);
+            }
+            if ui.small_button("Done").clicked() {
+                actions.push(PartsAction::StopImport);
+            }
+        }
+        Phase::Failed(e) => {
+            ui.colored_label(
+                ui.visuals().error_fg_color,
+                format!("Could not import {}: {e}", import.label),
+            );
+            ui.horizontal(|ui| {
+                if ui.small_button("Try again").clicked() {
+                    actions.push(PartsAction::Import(import.key.clone()));
+                }
+                if ui.small_button("Dismiss").clicked() {
+                    actions.push(PartsAction::StopImport);
+                }
+            });
+        }
+    }
 }
 
 fn detail_ui(ui: &mut egui::Ui, win: &PartsWindow, actions: &mut Vec<PartsAction>) {
@@ -474,5 +685,33 @@ mod tests {
         let row = rows.iter().find(|(k, _)| *k == first.key()).unwrap();
         assert_eq!(row.1, RowAction::InLibrary);
         assert!(rows.iter().any(|(_, a)| *a != RowAction::InLibrary));
+    }
+
+    #[test]
+    fn a_dropped_file_imports_for_the_selected_part_and_the_row_turns_green() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut win = PartsWindow::new(
+            Catalog::starter(),
+            Some(LocalLibrary::at(dir.path().join("lib"))),
+            SourceTable::builtin(),
+        );
+        win.downloads = None;
+        win.catalog_path = Some(dir.path().join("parts.json"));
+        let key = win.catalog.parts()[0].key();
+        let file = dir.path().join("part.stp");
+        std::fs::write(
+            &file,
+            "ISO-10303-21;\nDATA;\n#1=CARTESIAN_POINT('',(0.,0.,0.));\n#2=CARTESIAN_POINT('',(10.,20.,30.));\nENDSEC;\nEND-ISO-10303-21;\n",
+        )
+        .unwrap();
+        win.import_file(&file, ImportFlow::Manual);
+        assert!(win.import.is_none(), "nothing selected: nothing happens");
+        win.selected = Some(key.clone());
+        win.import_file(&file, ImportFlow::Manual);
+        let imp = win.import.as_ref().unwrap();
+        assert!(matches!(imp.phase, Phase::Done(_)), "{:?}", imp.phase);
+        let row = win.rows().into_iter().find(|(k, _)| *k == key).unwrap();
+        assert_eq!(row.1, RowAction::InLibrary);
+        assert_eq!(win.records(&key)[0].flow, ImportFlow::Manual);
     }
 }
