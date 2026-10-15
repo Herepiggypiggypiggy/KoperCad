@@ -62,6 +62,8 @@ pub(crate) struct Workbench {
     pub(super) project_settings: bool,
     /// The Issue revision window, while it is open.
     pub(super) issue: Option<super::revisions::IssueDraft>,
+    /// The Compare revisions window, while it is open.
+    pub(super) compare: Option<super::compare::CompareWindow>,
     /// The new pages, group and panel form, while open.
     pub(super) page_form: Option<super::pages::PageForm>,
     /// Which sheet of a generated page the canvas shows (0 for the first).
@@ -136,6 +138,7 @@ impl Default for Workbench {
             parts: None,
             project_settings: false,
             issue: None,
+            compare: None,
             page_form: None,
             sheet: 0,
             nav: Navigator::default(),
@@ -219,6 +222,7 @@ const APP_COMMANDS: &[&str] = &[
     "parts.browser",
     "project.standard",
     "revision.issue",
+    "revision.compare",
     "terminal.toggle_pe",
     "terminal.reset_pe",
     "wire.mode",
@@ -537,6 +541,7 @@ impl NovoApp {
             "parts.browser" => self.open_parts_browser(),
             "project.standard" => self.wb.project_settings = true,
             "revision.issue" => self.open_issue_revision(argument),
+            "revision.compare" => self.open_compare(argument),
             other => {
                 let label = novo_workflow::commands::get(other).map_or(other, |c| c.label);
                 self.message(Level::Info, format!("{label} is not in the app yet"));
