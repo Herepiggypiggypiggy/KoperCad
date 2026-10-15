@@ -263,6 +263,8 @@ pub struct CanvasView {
     /// Screen points per world unit that [`Self::reveal`] zooms in to at
     /// least: 4 shows 2.5 mm text at 10 points.
     pub reveal_zoom: f32,
+    /// Screen points a revealed target keeps from the canvas edges.
+    pub reveal_margin: f32,
     /// At most this many labels are drawn per frame, the largest first;
     /// text costs CPU time per glyph, and a page dense enough to exceed it
     /// is too small to read anyway.
@@ -283,8 +285,8 @@ pub struct CanvasView {
     band: Option<Vec2>,
     right_drag: Option<RightDrag>,
     fit_pending: bool,
-    /// Items to bring into view on the next frame; see [`Self::reveal`].
-    reveal_pending: Vec<ItemId>,
+    /// What to bring into view; see [`Self::reveal`].
+    reveal_pending: Option<PendingReveal>,
     stats: FrameStats,
 }
 
@@ -323,6 +325,18 @@ pub struct CanvasOutput {
     pub hovered_marks: Vec<usize>,
 }
 
+/// Frames a [`CanvasView::reveal`] waits for its target to appear in the
+/// scene before it is dropped.
+pub const REVEAL_WAIT_FRAMES: u8 = 30;
+
+/// A reveal waiting for a frame whose scene holds its target.
+struct PendingReveal {
+    ids: Vec<ItemId>,
+    area: Aabb,
+    /// Frames left before it is dropped.
+    frames: u8,
+}
+
 impl Default for CanvasView {
     fn default() -> Self {
         Self::new()
@@ -357,8 +371,9 @@ impl CanvasView {
             band: None,
             right_drag: None,
             fit_pending: true,
-            reveal_pending: Vec::new(),
+            reveal_pending: None,
             reveal_zoom: 4.0,
+            reveal_margin: 48.0,
             stats: FrameStats::default(),
         }
     }
@@ -396,12 +411,28 @@ impl CanvasView {
         self.fit_pending = true;
     }
 
-    /// Brings `ids` into view on the next frame, for a jump: the view stays
-    /// put when they are already in it, else centres on them, zooming in to
-    /// [`Self::reveal_zoom`] or out until they fit (see
-    /// [`Viewport::reveal`]). Ids the scene does not hold are ignored.
+    /// Brings `ids` into view for a jump, on the first frame whose scene
+    /// holds any of them (a jump to another page waits for its scene,
+    /// up to [`REVEAL_WAIT_FRAMES`]): the view stays put when they are
+    /// already [`Self::reveal_margin`] inside it, else centres on them,
+    /// zooming in to [`Self::reveal_zoom`] or out until they fit (see
+    /// [`Viewport::reveal`]).
     pub fn reveal(&mut self, ids: impl IntoIterator<Item = ItemId>) {
-        self.reveal_pending = ids.into_iter().collect();
+        self.reveal_pending = Some(PendingReveal {
+            ids: ids.into_iter().collect(),
+            area: Aabb::EMPTY,
+            frames: REVEAL_WAIT_FRAMES,
+        });
+    }
+
+    /// Like [`Self::reveal`], for a world rectangle rather than items (a
+    /// proposal, a problem's location).
+    pub fn reveal_area(&mut self, area: Aabb) {
+        self.reveal_pending = Some(PendingReveal {
+            ids: Vec::new(),
+            area,
+            frames: REVEAL_WAIT_FRAMES,
+        });
     }
 
     pub fn hovered(&self) -> Option<ItemId> {
@@ -446,13 +477,21 @@ impl CanvasView {
             self.viewport.fit(&scene.bounds(), 24.0);
             self.fit_pending = false;
         }
-        if !self.reveal_pending.is_empty() && rect.width() > 1.0 {
-            let bounds = self
-                .reveal_pending
-                .drain(..)
-                .filter_map(|id| scene.item_bounds(id))
-                .fold(Aabb::EMPTY, |b, i| b.union(&i));
-            self.viewport.reveal(&bounds, 48.0, self.reveal_zoom);
+        if rect.width() > 1.0
+            && let Some(mut pending) = self.reveal_pending.take()
+        {
+            let bounds = pending
+                .ids
+                .iter()
+                .filter_map(|id| scene.item_bounds(*id))
+                .fold(pending.area, |b, i| b.union(&i));
+            if !bounds.is_empty() {
+                self.viewport
+                    .reveal(&bounds, self.reveal_margin, self.reveal_zoom);
+            } else if pending.frames > 1 {
+                pending.frames -= 1;
+                self.reveal_pending = Some(pending);
+            }
         }
         let to_local = |p: egui::Pos2| Vec2::new(p.x - rect.min.x, p.y - rect.min.y);
         let hover_local = response.hover_pos().map(to_local);
@@ -1321,16 +1360,41 @@ mod tests {
         assert_eq!(view.selection.len(), 1);
     }
 
-    /// A reveal waits for the next frame, where the scene is at hand, and
-    /// is used up by it; ids the scene lacks leave the view alone.
+    /// A reveal waits for a frame whose scene holds its target (a jump to
+    /// another page waits for that page's scene), is used up by it, and
+    /// is dropped when the target never comes.
     #[test]
     fn reveal_centres_an_item_out_of_view_on_the_next_frame() {
         let (ctx, mut view, scene) = setup();
         view.viewport.center = Vec2::new(5000.0, 5000.0);
         view.viewport.zoom = 4.0;
         view.reveal([ItemId(99)]);
+        for _ in 0..REVEAL_WAIT_FRAMES {
+            frame(&ctx, &mut view, &scene, vec![]);
+        }
+        assert_eq!(view.viewport.center, Vec2::new(5000.0, 5000.0));
+        assert!(view.reveal_pending.is_none());
+        // The target arrives a frame late: the reveal waits for it.
+        view.reveal([ItemId(2)]);
         frame(&ctx, &mut view, &scene, vec![]);
         assert_eq!(view.viewport.center, Vec2::new(5000.0, 5000.0));
+        let mut later = self::scene();
+        later.insert(
+            ItemId(2),
+            Item::new(crate::LayerId(0)).with(Primitive::stroked(
+                Shape::line(Vec2::new(300.0, 0.0), Vec2::new(320.0, 0.0)),
+                Stroke::default(),
+            )),
+        );
+        frame(&ctx, &mut view, &later, vec![]);
+        let at = view.viewport.world_to_screen(Vec2::new(310.0, 0.0));
+        assert!((at - Vec2::new(400.0, 300.0)).length() < 1.0, "{at}");
+        // An area is revealed like an item.
+        view.reveal_area(Aabb::new(Vec2::new(-505.0, -5.0), Vec2::new(-495.0, 5.0)));
+        frame(&ctx, &mut view, &scene, vec![]);
+        let at = view.viewport.world_to_screen(Vec2::new(-500.0, 0.0));
+        assert!((at - Vec2::new(400.0, 300.0)).length() < 1.0, "{at}");
+        view.viewport.center = Vec2::new(5000.0, 5000.0);
         view.reveal([ItemId(1)]);
         frame(&ctx, &mut view, &scene, vec![]);
         let at = view.viewport.world_to_screen(Vec2::new(50.0, 0.0));
