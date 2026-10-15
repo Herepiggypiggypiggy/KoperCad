@@ -42,6 +42,15 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["rondleiding", "snelle toetsen uitleg"],
     ),
+    nl(
+        "help.learn",
+        &["leren", "les"],
+        &["leren", "training", "cursus", "uitleg"],
+    ),
+    nl("learn.next", &[], &["les volgende stap", "les verder"]),
+    nl("learn.back", &[], &["les vorige stap", "les terug"]),
+    nl("learn.restart", &[], &["les opnieuw", "les herstarten"]),
+    nl("learn.close", &[], &["les sluiten"]),
     nl("file.save", &[], &["opslaan", "bewaren"]),
     nl("file.save_as", &[], &["opslaan als"]),
     nl("file.close", &[], &["project sluiten", "sluiten"]),
@@ -63,6 +72,21 @@ pub const DUTCH: &[Aliases] = &[
         &["artikelen", "onderdeel"],
     ),
     nl("project.standard", &["tekennorm"], &["norm", "standaard"]),
+    nl(
+        "project.options",
+        &["projectopties", "varianten"],
+        &["opties van het project", "uitvoeringen", "machineopties"],
+    ),
+    nl(
+        "project.variant",
+        &["variant"],
+        &["uitvoering", "configuratie"],
+    ),
+    nl(
+        "project.generate",
+        &["genereer"],
+        &["genereren", "specificatielijst", "uit excel"],
+    ),
     nl("terminal.toggle_pe", &["pe-klem"], &["aardklem", "aarde"]),
     nl(
         "revision.issue",
@@ -311,6 +335,11 @@ pub const DUTCH: &[Aliases] = &[
         &["achtergrond tonen", "achtergrond verbergen", "dxf"],
     ),
     nl(
+        "view.background_place",
+        &[],
+        &["achtergrond verplaatsen", "achtergrond schalen", "dxf"],
+    ),
+    nl(
         "file.remove_background",
         &[],
         &["achtergrond verwijderen", "dxf"],
@@ -326,6 +355,11 @@ pub const DUTCH: &[Aliases] = &[
         "export.pdf",
         &["exporteer pdf", "pdf exporteren"],
         &["afdrukken"],
+    ),
+    nl(
+        "export.commissioning",
+        &["exporteer inbedrijfstelling", "inbedrijfstellingsrapport"],
+        &["restpuntenlijst", "oplevering"],
     ),
     nl(
         "export.plate",
@@ -352,6 +386,16 @@ pub const DUTCH: &[Aliases] = &[
         &["werkplaats", "boren"],
     ),
     nl("export.sheets_csv", &["exporteer csv"], &["csv"]),
+    nl(
+        "export.variant_pdf",
+        &["exporteer variant"],
+        &["pdf van een variant", "uitvoering exporteren"],
+    ),
+    nl(
+        "export.spec",
+        &["exporteer specificatie"],
+        &["specificatielijst exporteren"],
+    ),
     nl(
         "plc.import_tags",
         &["importeer plc", "importeer tags"],
