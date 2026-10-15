@@ -34,10 +34,7 @@ fn edits_regenerate_only_affected_reports() {
     stale.sort_unstable();
     // The diagrams read wires too, and the contents list follows the
     // sheets of every report.
-    assert_eq!(
-        stale,
-        ["cables", "io", "plugs", "terminals", "toc", "wires"]
-    );
+    assert_eq!(stale, ["cables", "io", "terminals", "toc", "wires"]);
     for id in ["bom", "devices"] {
         assert!(reports.is_current(doc.project(), id), "{id}");
         // Rolled forward, so the output itself says it is current.
@@ -61,15 +58,7 @@ fn edits_regenerate_only_affected_reports() {
     stale.sort_unstable();
     assert_eq!(
         stale,
-        [
-            "cables",
-            "devices",
-            "io",
-            "plugs",
-            "terminals",
-            "toc",
-            "wires"
-        ]
+        ["cables", "devices", "io", "terminals", "toc", "wires"]
     );
     assert!(reports.is_current(doc.project(), "bom"));
 
@@ -157,7 +146,7 @@ fn reports_regenerate_within_a_second_on_10k_objects() {
     let slack = if cfg!(debug_assertions) { 3 } else { 1 };
     let start = Instant::now();
     let stale = reports.notify(doc.project(), &changes).len();
-    assert_eq!(stale, 8);
+    assert_eq!(stale, 7);
     let mut pages = 0;
     for output in reports.all(doc.project()) {
         let paged = paginate(output, &setup);
