@@ -1,13 +1,18 @@
-//! Table of contents: every page in reading order.
+//! Table of contents: every page in reading order, each sheet of a
+//! generated page on its own row.
 
 use novo_core::{EntityKind, PageKind, Project};
 
 use crate::report::{Dependencies, Report};
+use crate::sheets::sheets_for;
 use crate::table::{Cell, Column, ReportOutput, Section};
 
 /// The table of contents: pages in [`Project::pages_in_order`] order with
-/// their titles, structure and kind. Generated pages are listed like any
-/// other page, under the report that owns them.
+/// their titles, structure and kind. A generated page lists each of its
+/// sheets (`20a`, `20b`, ...) with what the sheet shows (`Terminals ·
+/// =A1+CAB-X1`), as the PDF bookmarks do (DESIGN.md §8). A generated page
+/// of a report this crate does not know, and the contents page itself, are
+/// listed as one page.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct TableOfContents;
 
@@ -25,7 +30,16 @@ impl Report for TableOfContents {
     }
 
     fn dependencies(&self) -> Dependencies {
-        Dependencies::on(&[EntityKind::Page])
+        // Its pages, and the sheets that follow every other report's length.
+        let mut deps = Dependencies::on(&[EntityKind::Page]);
+        for report in crate::standard_reports() {
+            if report.id() != Self::ID {
+                let other = report.dependencies();
+                deps.kinds.extend(other.kinds);
+                deps.info |= other.info;
+            }
+        }
+        deps
     }
 
     fn generate(&self, project: &Project) -> ReportOutput {
@@ -39,7 +53,53 @@ impl Report for TableOfContents {
                 Column::new("kind", "Kind", 25.0),
             ],
         );
+        // Built on demand, one output per report however many pages use it.
+        let mut reports: Vec<Box<dyn Report>> = Vec::new();
+        let mut outputs: Vec<ReportOutput> = Vec::new();
         for page in project.pages_in_order() {
+            if let PageKind::Generated { generator } = &page.kind
+                && generator != Self::ID
+            {
+                if reports.is_empty() {
+                    reports = crate::standard_reports();
+                }
+                let output = match outputs.iter().position(|o| o.report == *generator) {
+                    Some(i) => Some(&outputs[i]),
+                    None => match reports.iter().find(|r| r.id() == generator) {
+                        Some(r) => {
+                            outputs.push(r.generate(project));
+                            outputs.last()
+                        }
+                        None => None,
+                    },
+                };
+                if let Some(output) = output {
+                    let sheets = sheets_for(project, page, generator, output);
+                    let kind = format!("Generated: {generator}");
+                    for sheet in &sheets {
+                        let shows = output
+                            .sections
+                            .get(sheet.sheet.section)
+                            .map_or("", |s| s.title.as_str());
+                        let title: Vec<&str> = [page.title.as_str(), shows]
+                            .into_iter()
+                            .filter(|s| !s.is_empty())
+                            .collect();
+                        section.push(
+                            vec![
+                                Cell::text(sheet.name.clone()),
+                                Cell::text(title.join(" · ")),
+                                Cell::text(page.structure.to_string()),
+                                Cell::text(kind.clone()),
+                            ],
+                            vec![page.id.into()],
+                        );
+                    }
+                    if !sheets.is_empty() {
+                        continue;
+                    }
+                }
+            }
             let kind = match &page.kind {
                 PageKind::Schematic => "Schematic".to_owned(),
                 PageKind::Overview => "Overview".to_owned(),
