@@ -220,6 +220,49 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "project.options",
+            "Project options and variants",
+            "Project",
+            &[
+                "options",
+                "variants",
+                "configuration",
+                "conveyor",
+                "with without",
+                "machine options",
+            ],
+            Needs::Project,
+        ),
+        &["options", "variants"],
+    ),
+    verb(
+        cmd(
+            "project.variant",
+            "Switch variant",
+            "Project",
+            &["variant", "configuration", "machine"],
+            Needs::Project,
+        ),
+        &["variant"],
+    ),
+    verb(
+        cmd(
+            "project.generate",
+            "Generate pages from a spec sheet",
+            "Project",
+            &[
+                "spec sheet",
+                "generate project",
+                "from excel",
+                "from csv",
+                "macros",
+            ],
+            Needs::Project,
+        ),
+        &["generate"],
+    ),
+    verb(
+        cmd(
             "revision.issue",
             "Issue revision",
             "Project",
@@ -835,6 +878,23 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd(
+        "sim.faults",
+        "Fault scenarios",
+        "View",
+        &[
+            "short circuit",
+            "fault",
+            "trip",
+            "breaker",
+            "selectivity",
+            "protection",
+            "waveform",
+            "timing",
+            "overload",
+        ],
+        Needs::Project,
+    ),
+    cmd(
         "view.override_marks",
         "Show override marks",
         "View",
@@ -846,6 +906,44 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Fast keys walk-through",
         "View",
         &["tour", "tutorial", "walkthrough", "help"],
+        Needs::Nothing,
+    ),
+    verb(
+        cmd(
+            "help.learn",
+            "Learn…",
+            "View",
+            &["lesson", "tutorial", "training", "learn", "teach", "course"],
+            Needs::Nothing,
+        ),
+        &["learn", "lesson"],
+    ),
+    cmd(
+        "learn.next",
+        "Lesson: next step",
+        "View",
+        &["lesson", "tutorial", "training", "learn", "teach"],
+        Needs::Nothing,
+    ),
+    cmd(
+        "learn.back",
+        "Lesson: previous step",
+        "View",
+        &["lesson", "tutorial", "training", "learn", "teach"],
+        Needs::Nothing,
+    ),
+    cmd(
+        "learn.restart",
+        "Lesson: start over",
+        "View",
+        &["lesson", "tutorial", "training", "learn", "teach"],
+        Needs::Nothing,
+    ),
+    cmd(
+        "learn.close",
+        "Lesson: close",
+        "View",
+        &["lesson", "tutorial", "training", "learn", "teach"],
         Needs::Nothing,
     ),
     cmd(
@@ -860,6 +958,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Show or hide the DXF background",
         "View",
         &["underlay", "dxf", "reference drawing"],
+        Needs::Page,
+    ),
+    cmd(
+        "view.background_place",
+        "Move and scale the DXF background",
+        "View",
+        &["underlay", "dxf", "reference drawing", "offset", "position"],
         Needs::Page,
     ),
     // Check
@@ -917,6 +1022,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.commissioning",
+            "Export commissioning report",
+            "Export",
+            &["punch list", "sign-off", "handover", "inbedrijfstelling"],
+            Needs::Project,
+        ),
+        &["export commissioning", "commissioning report"],
+    ),
+    verb(
+        cmd(
             "export.plate",
             "Export plate drawing",
             "Export",
@@ -954,6 +1069,26 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export assembly", "assembly checklist"],
+    ),
+    verb(
+        cmd(
+            "export.variant_pdf",
+            "Export PDF of a variant",
+            "Export",
+            &["variant", "configuration", "pdf", "with conveyor"],
+            Needs::Project,
+        ),
+        &["export variant"],
+    ),
+    verb(
+        cmd(
+            "export.spec",
+            "Export the spec sheet (.xlsx)",
+            "Export",
+            &["spec sheet", "generated pages", "round trip", "excel"],
+            Needs::Project,
+        ),
+        &["export spec"],
     ),
     verb(
         cmd(

@@ -40,6 +40,7 @@ mod grid;
 mod open;
 mod plan;
 mod rejects;
+mod spec;
 
 pub use create::NewDevice;
 pub use decode::decode_csv;
@@ -52,3 +53,4 @@ pub use plan::{
     ApplyError, Change, ImportPlan, Rejected, Resolution, plan_import, plan_import_with,
 };
 pub use rejects::{WHY_HEADER, rejected_workbook};
+pub use spec::{SPEC_SHEET, read_grid, write_grid};

@@ -464,6 +464,20 @@ fn gate1_motor_starter_through_the_window() {
     d.frame();
     assert_eq!(underlay_items(&d), Some(0), "hidden");
     d.app.toggle_background();
+    // Move and scale: one undo step for the whole edit.
+    {
+        use super::background_panel::Placement;
+        let from = Placement::of(d.app.page_properties().unwrap());
+        let to = Placement {
+            dx: 40.0,
+            dy: 25.0,
+            percent: 50.0,
+        };
+        d.app.apply_placement(from, to);
+        assert_eq!(Placement::of(d.app.page_properties().unwrap()), to);
+        d.app.run(&d.ctx.clone(), Action::Undo);
+        assert_eq!(Placement::of(d.app.page_properties().unwrap()), from);
+    }
     d.app.remove_background();
     d.frame();
     assert_eq!(underlay_items(&d), Some(0));
@@ -1966,6 +1980,7 @@ fn the_title_block_prints_the_set_revision_after_an_issue() {
             date: "2026-10-15".into(),
             author: "TV".into(),
             description: String::new(),
+            note: String::new(),
         })
         .unwrap();
     d.app.changed_outside_canvas(&outcome.changes);

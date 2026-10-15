@@ -8,6 +8,8 @@ license.workspace = true
 [dependencies]
 novo-core.workspace = true
 novo-symbols.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

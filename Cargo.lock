@@ -1870,6 +1870,7 @@ dependencies = [
  "novo-heatview",
  "novo-interop",
  "novo-layout",
+ "novo-learn",
  "novo-numbering",
  "novo-parts",
  "novo-pdf",
@@ -1938,6 +1939,7 @@ dependencies = [
  "calamine",
  "clap",
  "novo-checks",
+ "novo-commissioning",
  "novo-core",
  "novo-editor",
  "novo-interop",
@@ -2145,6 +2147,8 @@ version = "0.1.0"
 dependencies = [
  "novo-core",
  "novo-symbols",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2229,6 +2233,7 @@ dependencies = [
  "naga",
  "novo-core",
  "novo-layout",
+ "novo-theme",
  "pollster 1.0.1",
  "wgpu",
 ]
@@ -2241,7 +2246,9 @@ dependencies = [
  "novo-numbering",
  "novo-symbols",
  "novo-tests",
+ "serde",
  "serde_json",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

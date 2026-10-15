@@ -28,9 +28,11 @@ pub fn orbit_delta(dx_px: f32, dy_px: f32) -> (f32, f32) {
 }
 
 /// What the orbit turns about: the selection centre if there is one, else the
-/// scene point under the pointer at drag start, else the old target.
-pub fn orbit_pivot(selection_center: Option<Vec3>, hit: Option<Vec3>, target: Vec3) -> Vec3 {
-    selection_center.or(hit).unwrap_or(target)
+/// scene point under the pointer at drag start, else `fallback`. The spec
+/// (3d-look.md section 6) wants the plate centre as the fallback, so the
+/// caller passes that; the camera's old target is also acceptable.
+pub fn orbit_pivot(selection_center: Option<Vec3>, hit: Option<Vec3>, fallback: Vec3) -> Vec3 {
+    selection_center.or(hit).unwrap_or(fallback)
 }
 
 /// Move the orbit pivot without moving the picture: the camera keeps its
@@ -153,7 +155,8 @@ pub fn leave_auto_ortho(camera: &mut Camera) {
     camera.projection = Projection::Perspective;
 }
 
-/// A named camera stored with the project, with the cutaway flag.
+/// A named camera with the cutaway flag. Saved per user, not in the project
+/// file (3d-view.md section 3); project storage is a later WS-02 request.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SavedView {
     pub name: String,
@@ -176,7 +179,7 @@ mod tests {
     #[test]
     fn a_wheel_notch_is_twelve_percent() {
         assert!((zoom_factor(1.0) - 0.88).abs() < 1e-6);
-        assert!((zoom_factor(-1.0) - 1.0 / 0.88).abs() < 0.2);
+        assert!((zoom_factor(-1.0) - 1.0 / 0.88).abs() < 1e-6);
     }
 
     #[test]
