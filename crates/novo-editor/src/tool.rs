@@ -138,6 +138,8 @@ pub enum EditorKey {
     Wire,
     /// M: move the selection.
     Move,
+    /// Shift+M: move the selection with the wires on its pins.
+    MoveWithWires,
     /// Delete.
     Delete,
     /// Repeat the last tool when nothing is in progress (the first item of
@@ -1480,6 +1482,7 @@ impl Editor {
                 true
             }
             EditorKey::Move => self.begin_move(selection),
+            EditorKey::MoveWithWires => self.begin_move_with(selection, true),
             EditorKey::Delete => {
                 if selection.is_empty() {
                     return false;

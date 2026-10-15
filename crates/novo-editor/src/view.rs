@@ -1204,6 +1204,12 @@ impl SchematicView {
                 });
             }
         }
+        if out.cursor_raw.is_some()
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, Key::M))
+        {
+            self.editor
+                .key(document, EditorKey::MoveWithWires, &selection);
+        }
         for (key, action) in [
             (Key::W, EditorKey::Wire),
             (Key::M, EditorKey::Move),

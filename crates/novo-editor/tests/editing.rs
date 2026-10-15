@@ -512,7 +512,7 @@ fn move_and_rotate_keep_wires_connected_and_orthogonal() {
     // Shift+M picks the contact up with its wires, the pointer carries it,
     // a click drops it.
     editor.hover(&doc, page, p(80.0, 100.0), TOL);
-    assert!(editor.begin_move_with(&[AnyId::Symbol(b)], true));
+    assert!(editor.key(&mut doc, EditorKey::MoveWithWires, &[AnyId::Symbol(b)]));
     editor.hover(&doc, page, p(120.0, 120.0), TOL);
     let preview = editor.preview(&doc, page);
     assert_eq!(preview.symbols[0].placement.origin, p(120.0, 120.0));
