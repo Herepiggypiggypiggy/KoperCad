@@ -29,6 +29,7 @@ fn sources(enabled: bool) -> SourceTable {
         fetch_enabled: enabled,
         page_url: Some("https://example.invalid/p/{order}".into()),
         terms_url: Some("https://example.invalid/cloud-terms".into()),
+        page_verified: true,
     }])
 }
 
@@ -392,4 +393,30 @@ fn a_downloaded_dxf_or_zip_of_one_is_stored_and_handed_out() {
         assert_eq!(out.dxf_members[0].1, dxf);
     }
     assert_eq!(lib.records().unwrap().len(), 2);
+}
+
+#[test]
+fn the_built_in_sources_never_fetch_and_label_unconfirmed_pages() {
+    let t = SourceTable::builtin();
+    for maker in ["Schneider Electric", "WAGO", "Phoenix Contact", "Siemens"] {
+        assert!(!t.get(maker).unwrap().fetch_enabled, "{maker}");
+    }
+    let se = t.get("schneider electric").unwrap();
+    assert!(!se.page_verified);
+    assert_eq!(
+        se.page_for("LC1D09BD").as_deref(),
+        Some("https://www.se.com/ww/en/product/LC1D09BD/")
+    );
+    let wago = t.get("WAGO").unwrap();
+    assert!(wago.page_verified);
+    assert_eq!(
+        wago.page_for("2002-1201").as_deref(),
+        Some("https://wago.partcommunity.com/3d-cad-models/?catalog=wago&part=2002-1201")
+    );
+    assert!(
+        t.get("Siemens")
+            .unwrap()
+            .page_for("3RT2016-1BB41")
+            .is_none()
+    );
 }

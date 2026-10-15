@@ -339,10 +339,24 @@ commercial use.** Every row is hand-off (flow B); `fetch_enabled` stays false.
 maker route found with a free, per-product CAD download and a named format
 list, and no login mentioned. Import opens the product page and the Downloads
 watch imports the DXF, DWG or STEP the user saves. Notes:
-- The product page address pattern for `{order}` is not verified and the
-  source table ships empty; whoever verifies it adds it as data. The first
-  Schneider test is a person doing it once and reporting the page address and
-  the file name the browser saves.
+- **Page address (best found, unverified).** Search results for LC1D09BD show
+  the pattern `https://www.se.com/<country>/<language>/product/<reference>/<slug>/`
+  (for example `/us/en/`, `/ie/en/`, `/fr/fr/`), where the slug is a localised
+  description. The built-in source table uses
+  `https://www.se.com/ww/en/product/{order}/`. Whether the `ww` site exists
+  and whether the address works without the slug is **unverified: confirm with
+  one real download**. The page is marked `page_verified: false`, and
+  the app says so. I could not read a product page myself: se.com's robots.txt
+  disallows my fetch tool, which is another reason to leave fetching off.
+- **File naming:** not found in the CAD page text or anywhere else. The
+  Downloads watch matches by the order number in the file name; if
+  Schneider's names do not contain it, the user drops the file instead.
+- **Built-in table** (`SourceTable::builtin()`): Schneider as above (unverified);
+  WAGO `wago.partcommunity.com/3d-cad-models/?catalog=wago&part={order}`
+  (confirmed by the owner's capture for 2002-1201); Phoenix Contact
+  `dataportal.eplan.com/part-details/PXC.{order}` (confirmed for 3044076, the
+  download there needs an Eplan ID); Siemens no address yet. All four have
+  `fetch_enabled: false`.
 - DWG is stored but not read: the importer reads STEP size and hands out DXF,
   and there is no DWG reader.
 - Because the se.com website terms limit copying to personal, non-commercial

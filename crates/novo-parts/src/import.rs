@@ -75,6 +75,10 @@ pub struct MakerSource {
     /// file names none itself. Filled from data; never guessed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terms_url: Option<String>,
+    /// Whether `page_url` has been confirmed with a real download. Until
+    /// it has, the app says the page may not open the right part.
+    #[serde(default)]
+    pub page_verified: bool,
 }
 
 impl MakerSource {
@@ -98,6 +102,46 @@ impl SourceTable {
 
     pub fn from_json(text: &str) -> Result<Self, serde_json::Error> {
         Ok(SourceTable::new(serde_json::from_str(text)?))
+    }
+
+    /// The makers KoperCAD knows pages for. Every entry has fetching off:
+    /// only the user's own download from the maker's page is supported.
+    /// `page_verified` marks the pages confirmed by a real download.
+    pub fn builtin() -> Self {
+        let m = |name: &str, page: Option<&str>, terms: Option<&str>, verified: bool| MakerSource {
+            manufacturer: name.into(),
+            fetch_enabled: false,
+            page_url: page.map(str::to_owned),
+            terms_url: terms.map(str::to_owned),
+            page_verified: verified,
+        };
+        SourceTable::new(vec![
+            // Pattern seen in search results (`/<country>/<language>/product/<ref>/<slug>/`);
+            // the slug and the `ww` site are not confirmed. Confirm with one real download.
+            m(
+                "Schneider Electric",
+                Some("https://www.se.com/ww/en/product/{order}/"),
+                Some("https://www.se.com/my/en/about-us/legal/terms-of-use/"),
+                false,
+            ),
+            // Owner's capture of 2002-1201: the CAD button leads here (login required).
+            m(
+                "WAGO",
+                Some("https://wago.partcommunity.com/3d-cad-models/?catalog=wago&part={order}"),
+                Some("https://www.cadenas.de/terms-of-use-3d-cad-models"),
+                true,
+            ),
+            // Owner's capture of 3044076: Phoenix's own pages were down; the
+            // Eplan Data Portal part page opens, its download needs an Eplan ID.
+            m(
+                "Phoenix Contact",
+                Some("https://dataportal.eplan.com/part-details/PXC.{order}"),
+                None,
+                true,
+            ),
+            // No Siemens page address found yet.
+            m("Siemens", None, None, false),
+        ])
     }
 
     pub fn get(&self, manufacturer: &str) -> Option<&MakerSource> {
