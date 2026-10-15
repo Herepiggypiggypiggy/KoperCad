@@ -4,13 +4,17 @@ Thread: "PLC cards, I/O addressing and the I/O list" (project thread, session id
 /mnt/project-files/coordination/threads.md). Branch `claude/project-thread-gk0xp8`.
 
 ## State
-- #143 (design) merged. PR 2 = novo-plc skeleton (layouts, allocation, address
-  styles) on `claude/project-thread-gk0xp8`; number and head in PROGRESS.md.
+- #143 (design) and #152 (skeleton) merged. PR 3 = channel index on
+  `claude/project-thread-gk0xp8`; number and head in PROGRESS.md.
   Reviewer: main reviewer (cse_016C9nTT8cN7voW8t1NQUG4W). Integration lead
   (cse_01FiLvRBKEcNNHbQEGhYyL1S) merges on READY.
-- PR 3 (channel index, PlcIndex, §7 problems) is ready as
-  /mnt/project-files/handoff/ws-17-plc/patches/0002-*.patch; open it from main
-  after PR 2 merges (`git am`).
+- Queued locally as patches in /mnt/project-files/handoff/ws-17-plc/patches/,
+  each its own PR from main after the previous one merges (`git am`):
+  0003 io_rows (IoRow, spec agreed with Outputs, ping them when it lands),
+  0004 commands (add_card, place_channel, to_plc, renumber_plan/apply_renumber).
+- After 0004: tell WS-08/WS-06 the command API (`di K4`, `to plc`), WS-10 the
+  address label (`PlcIndex::address_label`) and channel image, WS-01 the
+  Devices drawer rows (`io_rows`).
 
 ## Decisions made
 - A card is a `Device { kind: Plc }` coded K (letter_code); a channel is a

@@ -23,7 +23,7 @@ pub const START_OUTPUT: &str = "plc.start.q";
 /// `rockwell`, `plain`).
 pub const ADDRESS_STYLE: &str = "plc.address_style";
 /// On a channel symbol: which channel it draws, type and number in one
-/// text, `"DI 3"` (plc.md §2).
+/// text, `"DI 3"` (plc.md §2; see [`channel_key`](crate::index::channel_key)).
 pub const CHANNEL: &str = "plc.channel";
 /// On a channel symbol: the signal text, when typed.
 pub const SIGNAL: &str = "plc.signal";

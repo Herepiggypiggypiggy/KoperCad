@@ -29,3 +29,12 @@ Crate: `novo-plc` (registered on main, not created yet). Design:
 
 ## Open questions
 See plc.md §11 (Rockwell allocation, safety channels, distributed I/O).
+
+## io_rows() spec agreed with Outputs (2026-10-15 03:51 UTC)
+Rows in address order grouped by station; each row: station key + title
+(section key/title), address, type, card tag, channel, pin, signal (text or
+potential), connected-to tags + their AnyIds, drawn-at page.column + symbol
+AnyId (None for spare), spare flag. `novo_plc::READS` lists record kinds read
+(plus project info). Checks: Issue::is_error(), Issue::message(project) with no
+trailing period, Issue::at() AnyIds (done in PR 3). Ping Outputs
+(session_01GNLWH7SKcFppZwCxZoC1rw) when io_rows lands.
