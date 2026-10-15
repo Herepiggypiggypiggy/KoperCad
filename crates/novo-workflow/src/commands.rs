@@ -852,6 +852,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["underlay", "dxf", "reference drawing"],
         Needs::Page,
     ),
+    cmd(
+        "view.background_place",
+        "Move and scale the DXF background",
+        "View",
+        &["underlay", "dxf", "reference drawing", "offset", "position"],
+        Needs::Page,
+    ),
     // Check
     verb(
         cmd(
@@ -904,6 +911,16 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export pdf", "pdf"],
+    ),
+    verb(
+        cmd(
+            "export.plate",
+            "Export plate drawing",
+            "Export",
+            &["mounting plate", "drill table", "drilling"],
+            Needs::Project,
+        ),
+        &["export plate"],
     ),
     verb(
         cmd(

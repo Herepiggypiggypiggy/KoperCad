@@ -1,0 +1,112 @@
+{
+  "notes": [],
+  "parts": [
+    {
+      "class": {
+        "etim": "EC000066"
+      },
+      "data": {
+        "ac3_current_a": 9.0,
+        "coil_voltage_v": 24.0,
+        "control_supply_voltage_1_at_dc_rated_value": "24 V",
+        "depth": "73 mm",
+        "height": "57.5 mm",
+        "number_of_poles": 3,
+        "operating_current_at_ac_3_at_400_v_rated_value": "9 A",
+        "operating_power_at_ac_3_at_400_v_rated_value": "4 kW",
+        "poles": 3,
+        "power_loss_w_for_rated_value_of_the_current_at_ac_3_per_conductor": "1.3 W",
+        "product_lifecycle": "PM300:Active Product",
+        "rated_power_kw": 4.0,
+        "width": "45 mm"
+      },
+      "description": "Contactor, AC-3 9 A, 4 kW at 400 V, coil 24 V DC, 3 poles",
+      "dimensions": {
+        "depth_mm": 73.0,
+        "height_mm": 57.5,
+        "width_mm": 45.0
+      },
+      "function": "contactor",
+      "letter_codes": [
+        "K",
+        "Q"
+      ],
+      "lifecycle": "active",
+      "manufacturer": "Siemens",
+      "order_number": "3RT2016-1BB41",
+      "provenance": {
+        "file": "sample.xml",
+        "imported": "2026-10-15",
+        "licence_note": "user-supplied from Siemens; not redistributable",
+        "source": "import:bmecat"
+      },
+      "sources": {
+        "ac3_current_a": "maker_datasheet",
+        "coil_voltage_v": "maker_datasheet",
+        "poles": "maker_datasheet",
+        "rated_power_kw": "maker_datasheet"
+      },
+      "type_number": "3RT2016-1BB41"
+    },
+    {
+      "data": {
+        "adjustable_current_response_value_current_of_the_current_dependent_overload_release": "2.8 ... 4 A",
+        "breaking_capacity_ics_at_400_v": "50 kA",
+        "breaking_capacity_ics_ka": 50.0,
+        "number_of_poles": 3,
+        "poles": 3,
+        "setting_max_a": 4.0,
+        "setting_min_a": 2.8,
+        "trip_class": "CLASS 10"
+      },
+      "description": "Motor protection circuit breaker, S00, 2.8 to 4 A",
+      "function": "motor_protection_breaker",
+      "letter_codes": [
+        "Q",
+        "F"
+      ],
+      "manufacturer": "Siemens",
+      "order_number": "3RV2011-1EA10",
+      "provenance": {
+        "file": "sample.xml",
+        "imported": "2026-10-15",
+        "licence_note": "user-supplied from Siemens; not redistributable",
+        "source": "import:bmecat"
+      },
+      "sources": {
+        "breaking_capacity_ics_ka": "maker_datasheet",
+        "poles": "maker_datasheet",
+        "setting_max_a": "maker_datasheet",
+        "setting_min_a": "maker_datasheet",
+        "trip_class": "maker_datasheet"
+      },
+      "type_number": "3RV2011-1EA10"
+    }
+  ],
+  "report": {
+    "mapped": [
+      "3RT2016-1BB41: control_supply_voltage_1_at_dc_rated_value -> coil_voltage_v = 24",
+      "3RT2016-1BB41: depth -> size depth = 73 mm",
+      "3RT2016-1BB41: height -> size height = 57.5 mm",
+      "3RT2016-1BB41: number_of_poles -> poles = 3",
+      "3RT2016-1BB41: operating_current_at_ac_3_at_400_v_rated_value -> ac3_current_a = 9",
+      "3RT2016-1BB41: operating_power_at_ac_3_at_400_v_rated_value -> rated_power_kw = 4",
+      "3RT2016-1BB41: product_lifecycle -> lifecycle Active",
+      "3RT2016-1BB41: width -> size width = 45 mm",
+      "3RV2011-1EA10: adjustable_current_response_value_current_of_the_current_dependent_overload_release -> setting_min_a and setting_max_a",
+      "3RV2011-1EA10: breaking_capacity_ics_at_400_v -> breaking_capacity_ics_ka = 50",
+      "3RV2011-1EA10: number_of_poles -> poles = 3",
+      "3RV2011-1EA10: trip_class -> trip_class = CLASS 10"
+    ],
+    "parts": 2,
+    "skipped": [
+      "3RT2016-1BB41: power_loss_w_for_rated_value_of_the_current_at_ac_3_per_conductor (power loss given per pole or conductor, not for the whole part)"
+    ],
+    "summary": [
+      "Read 12 value(s) into structured part data for 2 part(s), marked as from the maker's data.",
+      "Left as written: 1 power loss given per pole or conductor, not for the whole part."
+    ],
+    "unmapped": {},
+    "warnings": []
+  }
+}
