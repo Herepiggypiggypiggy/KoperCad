@@ -63,6 +63,7 @@ coordinator in its own small PR first.
 | `novo-learn` | Learning | Learning modules engine: lessons, steps, checks, progress (design `docs/design/learning-modules.md`) |
 | `novo-heatview` | Thermal visuals | Heat field engine: contours, hot spots, streamlines, compare, synthetic field (pure, no UI deps) |
 | `novo-thermal` | Thermal simulation | Physical heat and airflow simulation engine (pure, depends on novo-layout) |
+| `novo-numbering` | Wire numbering | Wire and potential numbering: schemes, stable fill, renumber, locks, conflicts (design `docs/design/wire-numbering.md`) |
 | `novo-tests` | Tester | Cross-crate tests and the Gate 1 fixture |
 | `novo-app` | WS-01 | Application shell, wiring crates together |
 

@@ -174,6 +174,7 @@ impl LiveView {
 /// One wire of the page and what it carries.
 pub(super) struct LitWire {
     pub id: WireId,
+    pub net: Option<NetId>,
     pub points: Vec<egui::Vec2>,
     pub live: Live,
 }
@@ -194,11 +195,11 @@ pub(super) fn lit_wires(
             let mut points = vec![egui::vec2(a.x as f32, a.y as f32)];
             points.extend(w.route.iter().map(|p| egui::vec2(p.x as f32, p.y as f32)));
             points.push(egui::vec2(b.x as f32, b.y as f32));
-            let live = netlist
-                .net_of_wire(w)
-                .map_or(Live::Dead, |n| solution.net(n).clone());
+            let net = netlist.net_of_wire(w);
+            let live = net.map_or(Live::Dead, |n| solution.net(n).clone());
             Some(LitWire {
                 id: w.id,
+                net,
                 points,
                 live,
             })
@@ -469,6 +470,11 @@ impl NovoApp {
             .collect();
         let states = novo_sim::device_states(project, &solved.netlist, &solved.settled);
         let poles = solved.settled.poles.clone();
+        let analysis = self
+            .wb
+            .sim
+            .analysis(project, &solved.netlist, &solved.settled.poles)
+            .clone();
         let glows = load_glows(project, page, &solved.netlist, &solved.settled.solution);
         let timers = novo_sim::timer_progress(project, &live.clock);
         let names: BTreeMap<SymbolId, String> = badges
@@ -549,6 +555,15 @@ impl NovoApp {
                             .collect::<Vec<_>>()
                             .join(" meets ")
                     ),
+                };
+                let text = match wire.net {
+                    Some(net) if !matches!(wire.live, Live::Shorted(_)) => {
+                        format!(
+                            "{text} · {}",
+                            super::simulate::reading_text(analysis.net(net))
+                        )
+                    }
+                    _ => text,
                 };
                 egui::Area::new(egui::Id::new("live_wire_tip"))
                     .order(egui::Order::Tooltip)
@@ -703,6 +718,7 @@ impl NovoApp {
         let closed = badges.iter().filter(|b| b.closed).count();
         let mut open_all = false;
         let mut leave = false;
+        let mut open_motor: Option<SymbolId> = None;
         egui::Area::new(egui::Id::new("live_card"))
             .order(egui::Order::Middle)
             .fixed_pos(canvas.left_top() + egui::vec2(12.0, 10.0))
@@ -758,6 +774,9 @@ impl NovoApp {
                     if let Some(left) = timing {
                         ui.weak(format!("A timer is running, {left:.1} s left"));
                     }
+                    open_motor = super::simulate::values_block(ui, project, &analysis, &|s| {
+                        symbol_name(project, s)
+                    });
                     if legend.carried.is_empty() && legend.shorted == 0 {
                         ui.weak("Nothing is energized");
                     }
@@ -767,6 +786,9 @@ impl NovoApp {
         // Draws again only when something changed; egui repaints on input.
         if leave || open_all || clicked.is_some() || timing.is_some() || animating {
             ctx.request_repaint();
+        }
+        if let Some(motor) = open_motor {
+            self.open_motor_start_for(motor);
         }
         if leave {
             self.wb.live.on = false;

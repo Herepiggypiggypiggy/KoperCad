@@ -19,7 +19,7 @@ use super::grid::Cell;
 pub(crate) struct PartRef {
     pub order_number: String,
     pub manufacturer: String,
-    pub catalog: Option<CatalogPart>,
+    pub catalog: Option<Box<CatalogPart>>,
 }
 
 impl PartRef {
@@ -32,7 +32,7 @@ impl PartRef {
         PartRef {
             order_number: order_number.to_owned(),
             manufacturer: manufacturer.to_owned(),
-            catalog: found.cloned(),
+            catalog: found.cloned().map(Box::new),
         }
     }
 }

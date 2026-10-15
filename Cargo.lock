@@ -1867,9 +1867,11 @@ dependencies = [
  "novo-commissioning",
  "novo-core",
  "novo-editor",
+ "novo-heatview",
  "novo-interop",
  "novo-layout",
  "novo-learn",
+ "novo-numbering",
  "novo-parts",
  "novo-pdf",
  "novo-plc",
@@ -1940,7 +1942,9 @@ dependencies = [
  "novo-core",
  "novo-editor",
  "novo-interop",
+ "novo-layout",
  "novo-pdf",
+ "novo-plc",
  "novo-py",
  "novo-reports",
  "novo-revisions",
@@ -1985,6 +1989,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-heatview"
+version = "0.1.0"
+
+[[package]]
 name = "novo-interop"
 version = "0.1.0"
 dependencies = [
@@ -2018,6 +2026,15 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "toml",
+]
+
+[[package]]
+name = "novo-numbering"
+version = "0.1.0"
+dependencies = [
+ "novo-cables",
+ "novo-core",
+ "novo-reports",
 ]
 
 [[package]]
@@ -2058,9 +2075,12 @@ dependencies = [
 name = "novo-plc"
 version = "0.1.0"
 dependencies = [
+ "calamine",
  "novo-core",
  "novo-editor",
  "novo-symbols",
+ "quick-xml",
+ "rust_xlsxwriter",
  "thiserror 2.0.21",
 ]
 
@@ -2210,8 +2230,10 @@ name = "novo-workflow"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+ "novo-numbering",
  "novo-symbols",
  "novo-tests",
+ "serde_json",
 ]
 
 [[package]]
