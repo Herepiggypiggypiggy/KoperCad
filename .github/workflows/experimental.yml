@@ -2,7 +2,8 @@
 # merged in PR order. Published to the `experimental` pre-release, which the
 # desktop launcher (scripts/run-latest.ps1) downloads. It is deliberately
 # unverified: PRs that conflict are skipped, and if the combined build fails
-# the PRs that break it are dropped one by one.
+# the PRs that break it are dropped one by one. Draft PRs and PRs labelled
+# `no-experimental` are left out.
 #
 # PR code (build scripts, proc macros) runs only in the read-only `build`
 # job; the write token exists only in `publish`, which runs no PR code.
@@ -57,7 +58,7 @@ jobs:
           inputs=$( {
             echo "main"; tree "$(gh api "repos/$REPO/commits/main" --jq .sha)"
             gh api "repos/$REPO/pulls?state=open&per_page=100" \
-              --jq '.[] | select(.head.repo.full_name == "'"$REPO"'") | "\(.number) \(.head.sha)"' | sort -n |
+              --jq '.[] | select(.head.repo.full_name == "'"$REPO"'" and (.draft | not) and ((.labels | map(.name) | index("no-experimental")) | not)) | "\(.number) \(.head.sha)"' | sort -n |
             while read -r n sha; do echo "pr $n"; tree "$sha"; done
           } | sha256sum | cut -c1-16)
           last=$(gh release download experimental --repo "$REPO" --pattern build-info.json --output - 2>/dev/null | jq -r '.inputs // ""' || true)
@@ -98,7 +99,7 @@ jobs:
           export state
           echo "state=$state" >> "$GITHUB_ENV"
           gh api "repos/${{ github.repository }}/pulls?state=open&per_page=100" \
-            --jq '.[] | select(.head.repo.full_name == "${{ github.repository }}") | "\(.number)\t\(.title)"' \
+            --jq '.[] | select(.head.repo.full_name == "${{ github.repository }}" and (.draft | not) and ((.labels | map(.name) | index("no-experimental")) | not)) | "\(.number)\t\(.title)"' \
             | sort -n > "$state/prs.tsv"
           # Merges every open PR onto HEAD in PR order. With "check", a PR
           # whose merge stops novo-app from compiling is dropped again, so

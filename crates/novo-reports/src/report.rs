@@ -31,6 +31,12 @@ impl Dependencies {
         self
     }
 
+    /// The same dependencies plus more record kinds.
+    pub fn with_kinds(mut self, kinds: &[EntityKind]) -> Self {
+        self.kinds.extend(kinds.iter().copied());
+        self
+    }
+
     /// Everything: for reports that cannot say what they read.
     pub fn everything() -> Self {
         use EntityKind::*;
