@@ -127,3 +127,34 @@ fn losses_read_parts_with_load_factor_and_flag_the_unknown() {
     assert_eq!(known.len(), 2);
     close(known.iter().sum::<f64>(), 60.0 + 2.0);
 }
+
+#[test]
+fn a_device_property_overrides_the_part_and_bad_values_count_as_missing() {
+    let (mut p, cab) = project();
+    let ids: Vec<u64> = thermal::model::losses(&p, cab)
+        .iter()
+        .map(|l| l.0)
+        .collect();
+    p.transact("override", |tx| {
+        // K1 (2 W part): device says 10 W. K2 (no loss): a negative value is missing.
+        let k1 = novo_core::AnyId::Device(novo_core::DeviceId::from(ids[1]));
+        tx.set_property(k1, "power_loss_w", Some(Value::Float(10.0)))?;
+        let k2 = novo_core::AnyId::Device(novo_core::DeviceId::from(ids[2]));
+        tx.set_property(k2, "power_loss_w", Some(Value::Float(-4.0)))?;
+        Ok(())
+    })
+    .unwrap();
+    let l = thermal::model::losses(&p, cab);
+    assert_eq!(l[1].1, Some(10.0));
+    assert_eq!(l[2].1, None);
+}
+
+#[test]
+fn bands_for_the_overlay() {
+    let s = [source(1, 100.0, 50.0, 50.0, 100.0, 10.0)];
+    let m = heat_map(&plate(), &s, 10.0, 0.0);
+    let b = m.bands(&DEFAULT_BAND_LIMITS);
+    assert_eq!(b.len(), m.cols * m.rows);
+    assert_eq!(b[11 + 6 * m.cols], 4);
+    assert_eq!(b[0], 0);
+}

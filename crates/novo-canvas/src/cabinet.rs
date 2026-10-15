@@ -61,12 +61,25 @@ pub struct BoxView {
     pub state: BoxState,
 }
 
+/// The heat overlay: a grid of cells over the plate, each with a band from
+/// 0 (cool, not drawn) to 4 (very hot). Row by row from the top left, cells
+/// `cell` mm square. The legend names the bands; the app draws it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct HeatView {
+    pub cell: f32,
+    pub cols: usize,
+    pub rows: usize,
+    pub bands: Vec<u8>,
+}
+
 /// Everything the Cabinet canvas draws.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct CabinetView {
     pub plate: Option<PlateView>,
     pub rails: Vec<RailView>,
     pub boxes: Vec<BoxView>,
+    /// The heat overlay, when switched on.
+    pub heat: Option<HeatView>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -78,6 +91,8 @@ pub struct CabinetStyle {
     pub clearance: Color,
     pub error: Color,
     pub warning: Color,
+    /// Fill of heat bands 1 to 4 (band 0 is not drawn), cool to hot.
+    pub heat: [Color; 4],
     pub tag_height: f32,
 }
 
@@ -91,6 +106,12 @@ impl Default for CabinetStyle {
             clearance: Color::rgb(120, 130, 150),
             error: Color::rgb(215, 60, 60),
             warning: Color::rgb(190, 120, 20),
+            heat: [
+                Color::rgba(230, 200, 60, 50),
+                Color::rgba(240, 150, 40, 80),
+                Color::rgba(230, 90, 40, 110),
+                Color::rgba(200, 30, 50, 140),
+            ],
             tag_height: 3.5,
         }
     }
@@ -100,6 +121,7 @@ impl Default for CabinetStyle {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CabinetLayers {
     pub plate: LayerId,
+    pub heat: LayerId,
     pub clearance: LayerId,
     pub rails: LayerId,
     pub devices: LayerId,
@@ -116,6 +138,11 @@ pub fn rail_item(id: u64) -> ItemId {
 /// Item id of a device box.
 pub fn box_item(id: u64) -> ItemId {
     ItemId((3 << 40) | id)
+}
+
+/// Item id of a run of heat cells: the row and the first column.
+pub fn heat_item(row: usize, col: usize) -> ItemId {
+    ItemId((5 << 40) | ((row as u64) << 20) | col as u64)
 }
 
 /// Item id of a device's clearance outline.
@@ -139,6 +166,7 @@ impl CabinetScene {
         let mut scene = Scene::new();
         let layers = CabinetLayers {
             plate: scene.add_layer(Layer::new("Plate", -10)),
+            heat: scene.add_layer(Layer::new("Heat", -5)),
             clearance: scene.add_layer(Layer::new("Clearance", 0)),
             rails: scene.add_layer(Layer::new("Rails", 5)),
             devices: scene.add_layer(Layer::new("Devices", 10)),
@@ -202,6 +230,9 @@ impl CabinetScene {
             }
             out.push((PLATE_ITEM, item));
         }
+        if let Some(h) = &view.heat {
+            out.extend(self.heat_items(h));
+        }
         for r in &view.rails {
             let a = Vec2::new(r.x, r.y);
             let b = Vec2::new(r.x + r.length, r.y);
@@ -221,6 +252,36 @@ impl CabinetScene {
             out.push((box_item(b.id), self.device(b)));
             if b.clearance > 0.0 {
                 out.push((clearance_item(b.id), self.clearance(b)));
+            }
+        }
+        out
+    }
+
+    /// One item per run of equal-band cells along a row, so a plate does
+    /// not turn into thousands of rectangles. Band 0 is not drawn.
+    fn heat_items(&self, h: &HeatView) -> Vec<(ItemId, Item)> {
+        let mut out = Vec::new();
+        if h.cols == 0 || h.cell <= 0.0 {
+            return out;
+        }
+        for row in 0..h.rows {
+            let mut col = 0;
+            while col < h.cols {
+                let band = h.bands.get(row * h.cols + col).copied().unwrap_or(0);
+                let mut end = col + 1;
+                while end < h.cols && h.bands.get(row * h.cols + end).copied() == Some(band) {
+                    end += 1;
+                }
+                if band > 0 {
+                    let color = self.style.heat[(band as usize - 1).min(3)];
+                    let min = Vec2::new(col as f32 * h.cell, row as f32 * h.cell);
+                    let max = Vec2::new(end as f32 * h.cell, (row + 1) as f32 * h.cell);
+                    let item = Item::new(self.layers.heat)
+                        .with(Primitive::filled(Shape::rect(min, max), color))
+                        .unselectable();
+                    out.push((heat_item(row, col), item));
+                }
+                col = end;
             }
         }
         out
@@ -392,7 +453,33 @@ mod tests {
                 device(1, 60.0, BoxState::Ok),
                 device(2, 120.0, BoxState::Ok),
             ],
+            heat: None,
         }
+    }
+
+    #[test]
+    fn heat_overlay_merges_runs_skips_cool_cells_and_goes_away() {
+        let mut c = CabinetScene::new(CabinetStyle::default());
+        let mut v = view();
+        let base = {
+            c.set(&v);
+            c.scene().iter().count()
+        };
+        // Two rows of five cells: row 0 is 0 2 2 2 4, row 1 is all 0.
+        v.heat = Some(HeatView {
+            cell: 10.0,
+            cols: 5,
+            rows: 2,
+            bands: vec![0, 2, 2, 2, 4, 0, 0, 0, 0, 0],
+        });
+        c.set(&v);
+        assert_eq!(c.scene().iter().count(), base + 2);
+        assert!(c.scene().get(heat_item(0, 1)).is_some());
+        assert!(c.scene().get(heat_item(0, 4)).is_some());
+        assert!(c.scene().get(heat_item(0, 2)).is_none());
+        v.heat = None;
+        c.set(&v);
+        assert_eq!(c.scene().iter().count(), base);
     }
 
     #[test]

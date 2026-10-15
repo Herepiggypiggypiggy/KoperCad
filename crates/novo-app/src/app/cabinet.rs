@@ -140,6 +140,7 @@ pub(super) fn cabinet_view(layout: &CabinetLayout, tag_of: &impl Fn(u64) -> Stri
                 }
             })
             .collect(),
+        heat: None,
     }
 }
 

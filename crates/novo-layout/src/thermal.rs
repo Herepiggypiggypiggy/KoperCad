@@ -69,6 +69,14 @@ impl HeatMap {
         self.density.iter().copied().fold(0.0, f64::max)
     }
 
+    /// The band of every cell (0 cool to 4 very hot) for the canvas overlay.
+    pub fn bands(&self, limits: &[f64; 4]) -> Vec<u8> {
+        self.density
+            .iter()
+            .map(|d| band_of(*d, limits) as u8)
+            .collect()
+    }
+
     /// Total heat in the map, W (conserved by the blur).
     pub fn total_w(&self) -> f64 {
         let dm2 = (self.cell_mm / 100.0).powi(2);
@@ -214,16 +222,26 @@ pub mod model {
         }
     }
 
-    /// The effective loss of a device in W: the first of its parts with a
-    /// `power_loss_w`, times that part's `load_factor` (default 1, clamped to
-    /// 0..=1). `None` when no part gives a loss; never 0 by omission.
-    pub fn device_loss(project: &Project, device: &Device) -> Option<f64> {
-        device.parts.iter().find_map(|part| {
-            let part = project.get::<Part>(*part)?;
-            let loss = number(part.properties.get(POWER_LOSS_KEY))?;
-            let factor = number(part.properties.get(LOAD_FACTOR_KEY)).unwrap_or(1.0);
-            Some(loss.max(0.0) * factor.clamp(0.0, 1.0))
+    /// A property of the device, else of the first of its parts that has it
+    /// (the device overrides the part, as in the Parts library). Negative or
+    /// non-numeric values count as missing.
+    fn property(project: &Project, device: &Device, key: &str) -> Option<f64> {
+        let valid = |v: Option<f64>| v.filter(|v| *v >= 0.0);
+        valid(number(device.properties.get(key))).or_else(|| {
+            device
+                .parts
+                .iter()
+                .find_map(|part| valid(number(project.get::<Part>(*part)?.properties.get(key))))
         })
+    }
+
+    /// The effective loss of a device in W: `power_loss_w` times
+    /// `load_factor` (default 1, clamped to 0..=1). `None` when no loss is
+    /// given; never 0 by omission.
+    pub fn device_loss(project: &Project, device: &Device) -> Option<f64> {
+        let loss = property(project, device, POWER_LOSS_KEY)?;
+        let factor = property(project, device, LOAD_FACTOR_KEY).unwrap_or(1.0);
+        Some(loss * factor.clamp(0.0, 1.0))
     }
 
     /// Every device at the enclosure's location with its effective loss, in
