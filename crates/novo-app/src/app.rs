@@ -24,6 +24,8 @@ mod workbench;
 mod xref;
 
 #[cfg(test)]
+mod changes_tests;
+#[cfg(test)]
 mod gate1_tests;
 
 use std::path::{Path, PathBuf};
@@ -44,11 +46,12 @@ pub(crate) use revisions::index_rule;
 use workbench::Workbench;
 pub(crate) use workbench::app_runs;
 
-/// What the outline lists (docs/DESIGN.md §3). Changes comes later.
+/// What the outline lists (docs/DESIGN.md §3).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum OutlineMode {
     Pages,
     Issues,
+    Changes,
 }
 
 impl OutlineMode {
@@ -56,6 +59,7 @@ impl OutlineMode {
         match self {
             OutlineMode::Pages => "Pages",
             OutlineMode::Issues => "Issues",
+            OutlineMode::Changes => "Changes",
         }
     }
 }
@@ -937,7 +941,11 @@ impl NovoApp {
     fn outline(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
         ui.set_min_width(ui.available_width());
         ui.horizontal(|ui| {
-            for mode in [OutlineMode::Pages, OutlineMode::Issues] {
+            for mode in [
+                OutlineMode::Pages,
+                OutlineMode::Issues,
+                OutlineMode::Changes,
+            ] {
                 if ui
                     .selectable_label(self.outline_mode == mode, mode.label())
                     .clicked()
@@ -945,8 +953,6 @@ impl NovoApp {
                     self.outline_mode = mode;
                 }
             }
-            ui.add_enabled(false, egui::Button::selectable(false, "Changes"))
-                .on_disabled_hover_text("Comes later");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let pinned = self.outline_pinned();
                 let pin = egui::Button::selectable(pinned, "Pin");
@@ -965,6 +971,12 @@ impl NovoApp {
         });
         if self.outline_mode == OutlineMode::Issues {
             if self.issues_list(ui) {
+                self.outline_open = false;
+            }
+            return;
+        }
+        if self.outline_mode == OutlineMode::Changes {
+            if self.changes_outline(ui) {
                 self.outline_open = false;
             }
             return;
@@ -1218,7 +1230,14 @@ impl NovoApp {
             return false;
         }
         let selected = self.current_page == Some(row.page) && self.wb.sheet == row.sheet;
-        let label = row.label.as_str();
+        // While Changes mode is on, a page with changes since the revision
+        // is marked in the list (docs/DESIGN.md §5).
+        let label = if self.page_has_changes(row.page) {
+            format!("● {}", row.label)
+        } else {
+            row.label.clone()
+        };
+        let label = label.as_str();
         let response = ui
             .with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
                 ui.add(
