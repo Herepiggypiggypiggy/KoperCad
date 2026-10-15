@@ -59,6 +59,7 @@ pub const DUTCH: &[Aliases] = &[
         &["uitgeven", "versie", "vrijgeven"],
     ),
     nl("file.quit", &[], &["afsluiten", "stoppen"]),
+    nl("help.about", &[], &["over", "versie"]),
     // Draw
     nl(
         "tool.repeat",

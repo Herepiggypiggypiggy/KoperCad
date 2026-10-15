@@ -264,6 +264,20 @@ mod tests {
     }
 
     #[test]
+    fn every_action_is_a_command_in_the_registry() {
+        // One list of commands (docs/design/workspaces.md §5.1): the menus
+        // and the command field read novo-workflow's registry, so an
+        // action missing there would have no menu row and no palette row.
+        for &a in Action::ALL {
+            assert!(
+                novo_workflow::commands::is_known(a.id()),
+                "{a:?} ({}) is not in the command registry",
+                a.id()
+            );
+        }
+    }
+
+    #[test]
     fn redo_also_answers_to_ctrl_y() {
         let keys: Vec<_> = Action::Redo
             .shortcuts()

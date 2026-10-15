@@ -204,6 +204,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["issue", "revision"],
     ),
     cmd("file.quit", "Quit", "Project", &["exit"], Needs::Nothing),
+    cmd(
+        "help.about",
+        "About",
+        "Project",
+        &["version", "credits", "kopervonk"],
+        Needs::Nothing,
+    ),
     // Draw
     cmd(
         "tool.repeat",
