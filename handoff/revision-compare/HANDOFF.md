@@ -24,6 +24,13 @@ reviewer with the head SHA after each push.
 ## App PR (claude/revision-compare-app)
 Compare window (`crates/novo-app/src/app/compare.rs`), command
 `revision.compare` ("Compare revisions", verb `compare`), and a "Compare…"
-button on the Changes card. Next: read-only revision view on the canvas,
-note field in the Issue window, `kind_name` match for sheet kinds in
+button on the Changes card.
+
+Revision view (PR claude/revision-view): "Show drawing" in the Compare
+window draws one side (From or To, any page) read only with
+`PageScene` + `CanvasView`, changes outlined with canvas marks (added on To,
+removed on From, changed on both). How to reach it: command palette
+"Compare revisions" (or Changes card "Compare…") → tick "Show drawing".
+
+Next: note field in the Issue window, `kind_name` match for sheet kinds in
 novo-py `comparison_json` (reviewer nit on #450).
