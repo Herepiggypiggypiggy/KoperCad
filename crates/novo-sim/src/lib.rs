@@ -14,6 +14,10 @@
 //! A pole is one group of `SymbolInstance::pass_through`: with the group
 //! closed every pin of it conducts to every other.
 
+mod coupling;
+
+pub use coupling::{Settled, is_coil, settle};
+
 use std::collections::{HashSet, VecDeque};
 
 use novo_core::{Endpoint, NetId, Netlist, PotentialId, Project, SymbolId};
