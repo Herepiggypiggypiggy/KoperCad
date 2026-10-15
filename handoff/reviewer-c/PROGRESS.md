@@ -14,3 +14,4 @@
 2026-10-14 20:05 UTC #62 c7af047: READY. #63 57b92bf: READY. #64 780cf34: CHANGES NEEDED, reproduced (horizontal wires numbered 2/1/3); it had already merged at 19:57.
 2026-10-14 20:15 UTC #65 3354d4e: READY (drove the real novo binary; pytest 6 passed). #68 02d6e29: READY.
 2026-10-14 20:30 UTC #71 166a8bf (fix for the #64 regression, axis-based sort): READY. fmt, clippy and 71 test binaries green on main cdf2402. Wrote this handoff; my role rules forbid pushing, so the files went to the coordinator to commit.
+2026-10-15 18:50 UTC Second session as main reviewer C (thread "Main reviewer C"). Takes open PRs whose number mod 3 = 2 (A/B keep the others; confirmed with the integration lead). Verdicts: #389 READY fe119a3 (merged already), #407 READY 6a8c30c, #356 READY c6fc17c (non-blocking: ZIP total cap, Windows reserved names, Downloads watcher by type, orphan file on TooNew), #395 READY 8972e56. Waiting on drafts #386, #404, #401.
