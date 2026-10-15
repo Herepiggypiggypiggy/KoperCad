@@ -139,11 +139,12 @@ impl Action {
             Action::ZoomToFit => (Modifiers::NONE, Key::Home),
             Action::ShowSchematic => (cmd, Key::Num1),
             Action::ShowCabinet => (cmd, Key::Num2),
-            Action::ShowReports => (cmd, Key::Num6),
             Action::FocusMode => (cmd_shift, Key::F),
             Action::FullScreen => (Modifiers::NONE, Key::F11),
             Action::CommandPalette => (cmd, Key::K),
-            Action::PinOutline | Action::About | Action::OpenExample => return None,
+            Action::PinOutline | Action::About | Action::OpenExample | Action::ShowReports => {
+                return None;
+            }
         };
         Some(KeyboardShortcut::new(modifiers, key))
     }

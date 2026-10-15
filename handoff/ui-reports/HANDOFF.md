@@ -2,7 +2,7 @@
 
 Branch `claude/project-thread-8ngiwg` (repo kopercad). Code: `crates/novo-app/src/app/reports_hub.rs`
 (`Hub`, `hub_show`, `export_reports_to`, `export_menu`), tests `reports_hub_tests.rs`; hooks in
-`app.rs` (`hub.open` beside `cabinet_open`, top-bar segment), `actions.rs` (`ShowReports`, Ctrl+6),
+`app.rs` (`hub.open` beside `cabinet_open`, top-bar segment), `actions.rs` (`ShowReports`, no key: Ctrl+4 comes with the Workspaces key step),
 `workbench.rs` (`export.reports`, `export.bom`), novo-workflow (`view.reports`, `export.reports`, Dutch words),
 `settings.rs` (`csv_semicolon`).
 

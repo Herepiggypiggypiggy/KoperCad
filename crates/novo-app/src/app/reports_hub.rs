@@ -1,4 +1,4 @@
-//! The Reports hub (Ctrl+6): every report as a live table beside the
+//! The Reports hub: every report as a live table beside the
 //! drawing, with its exports in one place. It is the third view next to
 //! Schematic and Cabinet, so a wire list, a cut list or a cable schedule is
 //! one key away and never a page to hunt for in the outline.
@@ -18,7 +18,9 @@ use novo_theme::tokens;
 use novo_xref::Place;
 
 use super::{Level, NovoApp};
-use crate::actions::Action;
+
+/// Narrowest a table column is drawn, in points.
+const MIN_COLUMN: f32 = 84.0;
 
 /// A file format a report can be written in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -78,6 +80,13 @@ impl NovoApp {
     /// The hub, filling the window beside the top bar.
     pub(super) fn hub_show(&mut self, ui: &mut egui::Ui) {
         let semicolon = self.settings.csv_semicolon;
+        // Esc goes back to the drawing, unless a text field has the keys.
+        if ui.input(|i| i.key_pressed(egui::Key::Escape))
+            && ui.ctx().memory(|m| m.focused().is_none())
+        {
+            self.hub.open = false;
+            return;
+        }
         let mut asks: Vec<HubAsk> = Vec::new();
         {
             let Some(doc) = self.backend.document() else {
@@ -102,7 +111,7 @@ impl NovoApp {
                 .unwrap_or(0);
             let shown = outputs.get(current).copied();
             egui::Frame::new()
-                .fill(tokens::BG_1)
+                .fill(tokens::BG_0)
                 .inner_margin(egui::Margin::same(16))
                 .show(ui, |ui| {
                     ui.set_min_size(ui.available_size());
@@ -203,28 +212,6 @@ impl NovoApp {
                 self.message(Level::Info, format!("Added page {} ({title})", spec.name));
             }
             Err(e) => self.message(Level::Error, format!("Could not add the page: {e}")),
-        }
-    }
-
-    /// The Export submenu of the project menu.
-    pub(super) fn export_menu(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
-        if ui.button("PDF of every page").clicked() {
-            self.export_pdf();
-            ui.close();
-        }
-        if ui.button("All reports to Excel…").clicked() {
-            self.export_reports_dialog(None, Format::Xlsx);
-            ui.close();
-        }
-        ui.separator();
-        let shortcut = Action::ShowReports
-            .shortcut()
-            .map(|s| ui.ctx().format_shortcut(&s))
-            .unwrap_or_default();
-        let hub = egui::Button::new("Reports…").shortcut_text(shortcut);
-        if ui.add(hub).clicked() {
-            picked.push(Action::ShowReports);
-            ui.close();
         }
     }
 
@@ -364,37 +351,51 @@ fn report_list(ui: &mut egui::Ui, list: &[ListRow], current: usize, asks: &mut V
         .auto_shrink([false, false])
         .show(ui, |ui| {
             for (i, row) in list.iter().enumerate() {
+                let selected = i == current;
+                let (rect, response) = ui.allocate_exact_size(
+                    egui::vec2(ui.available_width(), tokens::CONTROL_HEIGHT + 4.0),
+                    egui::Sense::click(),
+                );
+                if selected {
+                    ui.painter()
+                        .rect_filled(rect, 3.0, tokens::ACCENT_SELECTION);
+                } else if response.hovered() {
+                    ui.painter().rect_filled(rect, 3.0, tokens::BG_2);
+                }
                 let count = if row.rows == 0 {
                     "empty".to_owned()
                 } else {
                     row.rows.to_string()
                 };
-                let selected = i == current;
-                let text = egui::RichText::new(&row.title).color(if selected {
-                    tokens::TEXT
-                } else {
-                    tokens::TEXT_MUTED
-                });
-                let response = ui
-                    .add_sized(
-                        [ui.available_width(), tokens::CONTROL_HEIGHT + 4.0],
-                        egui::Button::selectable(selected, text),
-                    )
-                    .on_hover_text(if row.page.is_some() {
-                        format!(
-                            "{} · {count} rows · also a page in the drawing set",
-                            row.title
-                        )
-                    } else {
-                        format!("{} · {count} rows", row.title)
-                    });
-                // The count sits on the right edge of the row.
-                ui.painter().text(
-                    response.rect.right_center() - egui::vec2(8.0, 0.0),
-                    egui::Align2::RIGHT_CENTER,
-                    &count,
+                let count_galley = ui.painter().layout_no_wrap(
+                    count,
                     egui::FontId::proportional(tokens::FONT_SMALL),
                     tokens::TEXT_FAINT,
+                );
+                let count_width = count_galley.size().x;
+                ui.painter().galley(
+                    egui::pos2(
+                        rect.right() - 8.0 - count_width,
+                        rect.center().y - count_galley.size().y / 2.0,
+                    ),
+                    count_galley,
+                    tokens::TEXT_FAINT,
+                );
+                // The title is cut before the count, never over it.
+                let title_area = egui::Rect::from_min_max(
+                    rect.left_top(),
+                    egui::pos2(rect.right() - count_width - 16.0, rect.bottom()),
+                );
+                ui.painter().with_clip_rect(title_area).text(
+                    rect.left_center() + egui::vec2(8.0, 0.0),
+                    egui::Align2::LEFT_CENTER,
+                    &row.title,
+                    egui::FontId::proportional(tokens::FONT_BODY),
+                    if selected {
+                        tokens::TEXT
+                    } else {
+                        tokens::TEXT_MUTED
+                    },
                 );
                 if response.clicked() {
                     asks.push(HubAsk::Select(row.id.clone()));
@@ -427,30 +428,28 @@ fn preview(
             }
         ));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.menu_button("CSV", |ui| {
-                if ui.button("This report…").clicked() {
+            ui.menu_button("Export", |ui| {
+                if ui.button("This report as Excel…").clicked() {
+                    asks.push(HubAsk::Export(Some(output.report.clone()), Format::Xlsx));
+                    ui.close();
+                }
+                if ui.button("This report as CSV…").clicked() {
                     asks.push(HubAsk::Export(Some(output.report.clone()), Format::Csv));
+                    ui.close();
+                }
+                if ui.button("All reports as one Excel workbook…").clicked() {
+                    asks.push(HubAsk::Export(None, Format::Xlsx));
                     ui.close();
                 }
                 ui.separator();
                 let mut on = semicolon;
                 if ui
-                    .checkbox(&mut on, "Semicolons (Excel in Dutch or German)")
+                    .checkbox(&mut on, "CSV with semicolons (Excel in Dutch or German)")
                     .changed()
                 {
                     asks.push(HubAsk::Semicolon(on));
                 }
             });
-            if ui
-                .button("Excel, all reports")
-                .on_hover_text("One workbook, one sheet per report")
-                .clicked()
-            {
-                asks.push(HubAsk::Export(None, Format::Xlsx));
-            }
-            if novo_theme::widgets::primary_button(ui, "Excel").clicked() {
-                asks.push(HubAsk::Export(Some(output.report.clone()), Format::Xlsx));
-            }
             match page {
                 Some(page) => {
                     if ui
@@ -498,7 +497,9 @@ fn preview(
     ui.add_space(6.0);
 
     let Some(table) = output.sections.get(section) else {
-        ui.weak("Nothing to list yet. It fills in as the drawing grows.");
+        ui.weak(
+            "Nothing to list yet. It fills in as the drawing grows. Esc returns to the drawing.",
+        );
         return;
     };
     if table.rows.is_empty() {
@@ -529,18 +530,38 @@ fn table_view(
     rows: &[usize],
     asks: &mut Vec<HubAsk>,
 ) {
-    let width = ui.available_width();
+    // Columns keep a readable width; a wide table scrolls sideways.
+    let available = ui.available_width();
+    let width = available.max(table.columns.len() as f32 * MIN_COLUMN);
+    if width > available {
+        egui::ScrollArea::horizontal()
+            .id_salt("hub_wide")
+            .show(ui, |ui| table_body(ui, project, table, rows, width, asks));
+    } else {
+        table_body(ui, project, table, rows, width, asks);
+    }
+}
+
+fn table_body(
+    ui: &mut egui::Ui,
+    project: &Project,
+    table: &Section,
+    rows: &[usize],
+    width: f32,
+    asks: &mut Vec<HubAsk>,
+) {
     let total: f64 = table.columns.iter().map(|c| c.width).sum::<f64>().max(1.0);
     let widths: Vec<f32> = table
         .columns
         .iter()
-        .map(|c| ((c.width / total) as f32 * width).max(48.0))
+        .map(|c| ((c.width / total) as f32 * width).max(MIN_COLUMN))
         .collect();
     let height = tokens::CONTROL_HEIGHT + 2.0;
     let font = egui::FontId::proportional(tokens::FONT_BODY);
 
     // The header stays while the rows scroll.
     let (header, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
+    ui.painter().rect_filled(header, 0.0, tokens::BG_1);
     draw_cells(
         ui,
         header,
@@ -572,7 +593,7 @@ fn table_view(
                     ui.painter().rect_filled(rect, 2.0, tokens::BG_3);
                     ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                 } else if shown % 2 == 1 {
-                    ui.painter().rect_filled(rect, 0.0, tokens::BG_2);
+                    ui.painter().rect_filled(rect, 0.0, tokens::BG_1);
                 }
                 let texts: Vec<String> = row.cells.iter().map(Cell::to_string).collect();
                 draw_cells(
@@ -587,7 +608,7 @@ fn table_view(
                     tokens::TEXT,
                 );
                 if let Some(id) = target
-                    && response.on_hover_text("Go to it in the drawing").clicked()
+                    && response.clicked()
                 {
                     asks.push(HubAsk::Go(id));
                 }

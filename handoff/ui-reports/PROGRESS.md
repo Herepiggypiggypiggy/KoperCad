@@ -4,7 +4,7 @@
 
 | Feature | Engine | Where in the app | Status |
 | --- | --- | --- | --- |
-| Table of contents, BOM, device list, wire list, terminal diagram, cable diagram, I/O list | novo-reports, main | Generated pages (outline); Reports hub (Ctrl+6) with live table, filter, Excel, CSV | hub: PR 1 (draft) |
+| Table of contents, BOM, device list, wire list, terminal diagram, cable diagram, I/O list | novo-reports, main | Generated pages (outline); Reports hub (top bar, palette) with live table, filter, Excel, CSV | hub: PR 1 (draft) |
 | Reports as one Excel workbook | novo-reports `xlsx_bytes`, main | Project menu > Export > All reports to Excel; hub button; command `export reports` | PR 1 |
 | BOM export | main | command `export bom` (was "not in the app yet"); hub | PR 1 |
 | PDF of every page | novo-pdf, main | Project menu > Export; command `export pdf` | existed, moved under Export |

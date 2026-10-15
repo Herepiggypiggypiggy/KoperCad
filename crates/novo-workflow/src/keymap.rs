@@ -391,7 +391,6 @@ impl Keymap {
         bind(Chord::ctrl(Digit(3)), Anywhere, "view.terminals_drawer");
         bind(Chord::ctrl(Digit(4)), Anywhere, "view.cables_drawer");
         bind(Chord::ctrl(Digit(5)), Anywhere, "view.devices_drawer");
-        bind(Chord::ctrl(Digit(6)), Anywhere, "view.reports");
         bind(Chord::ctrl_shift(l('f')), Anywhere, "view.focus");
         bind(Chord::plain(F(11)), Anywhere, "view.full_screen");
         bind(Chord::ctrl(l('t')), Anywhere, "view.cabinet_table");

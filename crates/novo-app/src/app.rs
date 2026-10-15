@@ -142,7 +142,7 @@ pub struct NovoApp {
     /// The Cabinet canvas is shown instead of the schematic (Ctrl+2).
     cabinet_open: bool,
     cabinet: cabinet::CabinetState,
-    /// The Reports hub (Ctrl+6): every report as a live table, with exports.
+    /// The Reports hub: every report as a live table, with exports.
     hub: reports_hub::Hub,
     /// The outline flyout is showing over the canvas.
     outline_open: bool,
@@ -960,9 +960,11 @@ impl NovoApp {
             self.action_button(ui, a, picked);
         }
         ui.separator();
-        ui.add_enabled_ui(self.is_open(), |ui| {
-            ui.menu_button("Export", |ui| self.export_menu(ui, picked));
-        });
+        let export = egui::Button::new("Export PDF");
+        if ui.add_enabled(self.is_open(), export).clicked() {
+            self.export_pdf();
+            ui.close();
+        }
         ui.separator();
         for a in [Action::About, Action::Quit] {
             self.action_button(ui, a, picked);

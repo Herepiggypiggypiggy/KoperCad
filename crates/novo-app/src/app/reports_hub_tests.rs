@@ -1,4 +1,4 @@
-//! The Reports hub: Ctrl+6, the live tables and the Excel and CSV exports.
+//! The Reports hub: the live tables and the Excel and CSV exports.
 
 use novo_core::AnyId;
 
@@ -36,7 +36,7 @@ fn the_hub_is_a_third_view_next_to_schematic_and_cabinet() {
 }
 
 #[test]
-fn ctrl_6_opens_the_hub_and_the_palette_knows_it() {
+fn the_palette_opens_the_hub_and_knows_the_export_commands() {
     let (_dir, mut d) = example();
     let ctx = d.ctx.clone();
     d.app.run_command(&ctx, "view.reports", None);

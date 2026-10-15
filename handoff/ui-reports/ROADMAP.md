@@ -8,7 +8,7 @@ novo-pdf, novo-revisions, commissioning). Coordinates with Workspaces, menus and
 navigation (cse_01WAQSEGkMbyreCPG18tsSPc) on view switcher and menus, and with Design
 checks panel (cse_0191A95sdns9gs3sLWgmXiis, PR #413) on the Issues list.
 
-1. Reports hub (Ctrl+6): third view next to Schematic and Cabinet; every registered
+1. Reports hub: third view next to Schematic and Cabinet; every registered
    report as a live table, filter, section tabs, row click goes to the drawing, Excel
    (this report, or all as one workbook), CSV (comma or semicolon), Show page. PR 1.
 2. Export submenu in the project menu, `export.reports` and `export.bom` commands. PR 1.
