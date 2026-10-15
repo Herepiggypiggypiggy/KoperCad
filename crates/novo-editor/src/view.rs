@@ -1432,6 +1432,23 @@ mod tests {
     }
 
     #[test]
+    fn a_press_just_off_a_pin_starts_a_wire_and_does_not_box_select() {
+        let mut h = Harness::new();
+        h.view.editor.auto_connect = false;
+        h.view.editor.begin_place("iec/coils/relay", None);
+        h.click(60.0, 60.0, egui::PointerButton::Primary);
+        h.click(140.0, 120.0, egui::PointerButton::Primary);
+        h.view.editor.leave_tool();
+        let a = pin_at(&h.doc, Point::new(60.0, 60.0), "A2");
+        let b = pin_at(&h.doc, Point::new(140.0, 120.0), "A1");
+        // Within the pin target but outside the old, smaller one.
+        let off = f64::from(PIN_RADIUS - 1.0) / f64::from(h.view.canvas.viewport.zoom);
+        h.drag((a.x - off, a.y), (b.x, b.y));
+        assert_eq!(h.doc.project().wires().count(), 1);
+        assert!(h.view.canvas.selection.is_empty());
+    }
+
+    #[test]
     fn the_click_that_closes_a_menu_does_not_place() {
         let mut h = Harness::new();
         h.view.editor.begin_place("iec/coils/relay", None);
