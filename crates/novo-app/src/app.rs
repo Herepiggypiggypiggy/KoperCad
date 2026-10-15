@@ -4,6 +4,8 @@
 //! bar and no status bar.
 
 mod cabinet;
+#[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
+mod cabinet_routes;
 mod changes;
 mod checks;
 mod dock;

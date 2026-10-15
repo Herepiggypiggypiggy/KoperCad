@@ -1852,6 +1852,7 @@ dependencies = [
  "novo-plc",
  "novo-reports",
  "novo-revisions",
+ "novo-routing",
  "novo-sim",
  "novo-storage",
  "novo-symbols",

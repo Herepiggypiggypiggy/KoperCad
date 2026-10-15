@@ -47,6 +47,29 @@ pub struct Connection {
     pub diameter_mm: Option<f64>,
 }
 
+/// The connections of a project's wires: every wire with a pin at both ends
+/// (a wire ending on a junction or open is not a connection yet), the id
+/// being the raw wire id. The diameter is the conductor plus insulation of
+/// the wire's cross-section (1.5 mm2 comes out at 3 mm), `None` when the
+/// wire has no size. The Cabinet, the checks and the wire list route the
+/// same connections by using this.
+pub fn wire_connections(project: &Project) -> Vec<Connection> {
+    project
+        .wires()
+        .filter_map(|w| {
+            Some(Connection {
+                id: w.id.raw(),
+                from: w.from.as_pin()?,
+                to: w.to.as_pin()?,
+                diameter_mm: w
+                    .cross_section_mm2
+                    .filter(|s| *s > 0.0)
+                    .map(|s| 2.0 * (s / std::f64::consts::PI).sqrt() + 1.6),
+            })
+        })
+        .collect()
+}
+
 /// The device a pin physically sits on: the device of a device symbol, or
 /// the strip of a terminal symbol.
 fn device_of_pin(project: &Project, pin: PinRef) -> Option<DeviceId> {
