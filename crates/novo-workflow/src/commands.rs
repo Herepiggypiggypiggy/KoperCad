@@ -593,6 +593,16 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["problems", "proposals"],
         Needs::Page,
     ),
+    verb(
+        cmd(
+            "view.changes",
+            "Show changes since a revision",
+            "View",
+            &["compare", "what changed", "diff", "revision marks"],
+            Needs::Project,
+        ),
+        &["changes"],
+    ),
     cmd(
         "sim.live",
         "Show live potentials",

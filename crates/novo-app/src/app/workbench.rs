@@ -101,6 +101,8 @@ pub(crate) struct Workbench {
     pub(super) last_export: Option<PathBuf>,
     /// The live potentials view (Shift+L).
     pub(super) live: super::live::LiveView,
+    /// Changes mode, while it is on.
+    pub(super) changes: Option<super::changes::ChangesMode>,
 }
 
 impl Workbench {
@@ -149,6 +151,7 @@ impl Default for Workbench {
             problem_at: None,
             last_export: None,
             live: Default::default(),
+            changes: None,
         }
     }
 }
@@ -195,6 +198,7 @@ const APP_COMMANDS: &[&str] = &[
     "view.devices_drawer",
     "view.toggle_marks",
     "sim.live",
+    "view.changes",
     "check.problems",
     "check.next_problem",
     "check.previous_problem",
@@ -482,6 +486,7 @@ impl NovoApp {
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
             "view.toggle_marks" => self.wb.marks ^= true,
             "sim.live" => self.toggle_live(),
+            "view.changes" => self.toggle_changes(argument),
             "check.problems" => self.show_issues(false),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),
@@ -698,6 +703,7 @@ impl NovoApp {
         let mut list = super::terminals::proposal_marks(&self.page_proposals(), self.wb.proposal);
         list.extend(self.problem_marks(page));
         list.extend(self.pe_override_marks(page));
+        list.extend(self.changes_marks(page));
         let hidden = !self.wb.marks;
         // Cross references are printed drawing content: they go into the
         // page scene, like the tags, so the PDF shows them the same way.
