@@ -8,7 +8,7 @@ Run after installing the wheel (see crates/novo-py/README.md):
 
 import pytest
 
-import novoelectric as ne
+import kopercad as ne
 
 
 def build_dol(p):
@@ -96,7 +96,7 @@ def test_dol_motor_circuit_round_trip(tmp_path):
     before = p.nets()
 
     # The file is locked while open: a second opener is refused.
-    with pytest.raises(ne.NovoError, match="already open"):
+    with pytest.raises(ne.KoperError, match="already open"):
         ne.Project.open(path)
     p.close()
 
@@ -138,11 +138,11 @@ def test_commands_as_json_and_undo():
     k = p.execute('{"command": "add_device", "tag": "-K5"}')[0]["id"]
     assert p.device("-K5") == k
     assert p.undo() and p.device("-K5") is None
-    with pytest.raises(ne.NovoError):
+    with pytest.raises(ne.KoperError):
         p.execute({"command": "no_such_command"})
-    with pytest.raises(ne.NovoError, match="no symbol"):
+    with pytest.raises(ne.KoperError, match="no symbol"):
         p.place(created[0]["id"], "not-a-symbol", 0, 0)
-    with pytest.raises(ne.NovoError, match="has no file"):
+    with pytest.raises(ne.KoperError, match="has no file"):
         p.save()
 
 
@@ -161,10 +161,10 @@ def test_create_refuses_a_file_with_crash_recovery(tmp_path):
     path = tmp_path / "crashed.novo"
     recovery = tmp_path / "crashed.novo.autosave"
     recovery.write_bytes(b"work the app has not offered back yet")
-    with pytest.raises(ne.NovoError, match="did not close cleanly"):
+    with pytest.raises(ne.KoperError, match="did not close cleanly"):
         ne.Project.create(path, overwrite=True)
     p = ne.Project("Fresh")
-    with pytest.raises(ne.NovoError, match="did not close cleanly"):
+    with pytest.raises(ne.KoperError, match="did not close cleanly"):
         p.save_as(path, overwrite=True)
     assert recovery.read_bytes() == b"work the app has not offered back yet"
     assert not path.exists()
@@ -173,9 +173,9 @@ def test_create_refuses_a_file_with_crash_recovery(tmp_path):
 def test_existing_project_needs_overwrite(tmp_path):
     path = tmp_path / "plant.novo"
     ne.Project.create(path, name="Real plant").close()
-    with pytest.raises(ne.NovoError, match="already exists"):
+    with pytest.raises(ne.KoperError, match="already exists"):
         ne.Project.create(path, name="Typo")
-    with pytest.raises(ne.NovoError, match="already exists"):
+    with pytest.raises(ne.KoperError, match="already exists"):
         ne.Project("Other").save_as(path)
     with ne.Project.open(path) as p:
         assert p.info()["name"] == "Real plant"
@@ -228,6 +228,6 @@ def test_dol_bom_to_excel(tmp_path):
     assert "=A1+CAB-K1" in strings
 
     p.export_reports(tmp_path / "all.xlsx")
-    with pytest.raises(ne.NovoError, match="project file"):
+    with pytest.raises(ne.KoperError, match="project file"):
         p.export_bom(tmp_path / "dol.novo")
     p.close()

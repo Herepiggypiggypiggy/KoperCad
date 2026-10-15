@@ -1,4 +1,4 @@
-//! Scripting API (owned by WS-28): what the `novoelectric` Python module
+//! Scripting API (owned by WS-28): what the `kopercad` Python module
 //! exposes, as plain Rust.
 //!
 //! A [`ScriptProject`] is an open project with undo, optionally backed by a
@@ -673,7 +673,7 @@ fn kind_from_name(name: &str) -> PotentialKind {
 
 // ----- JSON views shared with the command-line tool -------------------------
 
-/// Counts and names of a project, for `novo info` and `Project.info()`.
+/// Counts and names of a project, for `kopercad-cli info` and `Project.info()`.
 pub fn info_json(p: &Project, path: Option<&Path>) -> Value {
     json!({
         "name": p.info().name,

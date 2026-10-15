@@ -1,4 +1,4 @@
-//! Report and file exports shared by the Python API and the `novo` tool:
+//! Report and file exports shared by the Python API and the `kopercad-cli` tool:
 //! reports (BOM, device list, wire list, contents) as Excel or CSV, and the
 //! one way exports reach the disk.
 

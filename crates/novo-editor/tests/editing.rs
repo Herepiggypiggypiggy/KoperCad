@@ -512,7 +512,7 @@ fn move_and_rotate_keep_wires_connected_and_orthogonal() {
     // Shift+M picks the contact up with its wires, the pointer carries it,
     // a click drops it.
     editor.hover(&doc, page, p(80.0, 100.0), TOL);
-    assert!(editor.begin_move_with(&[AnyId::Symbol(b)], true));
+    assert!(editor.key(&mut doc, EditorKey::MoveWithWires, &[AnyId::Symbol(b)]));
     editor.hover(&doc, page, p(120.0, 120.0), TOL);
     let preview = editor.preview(&doc, page);
     assert_eq!(preview.symbols[0].placement.origin, p(120.0, 120.0));
@@ -2037,6 +2037,110 @@ fn dragging_a_label_moves_only_the_text_in_one_undo_step() {
     assert!(doc.project().texts_of(a).is_empty());
 }
 
+/// Two contacts joined by a wire, nothing selected.
+fn wired_pair() -> (Document, PageId, Editor, [novo_core::SymbolId; 2]) {
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/contacts/no", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.click(&mut doc, page, p(80.0, 100.0), TOL);
+    let a = symbol_at(&doc, page, p(40.0, 40.0));
+    let b = symbol_at(&doc, page, p(80.0, 100.0));
+    editor.begin_wire();
+    click_pin(&mut editor, &mut doc, page, a, "14");
+    click_pin(&mut editor, &mut doc, page, b, "13");
+    editor.leave_tool();
+    (doc, page, editor, [a, b])
+}
+
+#[test]
+fn moving_both_ends_of_a_wire_together_keeps_it_connected_and_leaves_nothing_open() {
+    let (mut doc, page, mut editor, [a, b]) = wired_pair();
+    editor.hover(&doc, page, p(40.0, 40.0), TOL);
+    let both = [AnyId::Symbol(a), AnyId::Symbol(b)];
+    assert!(editor.begin_move(&both));
+    // Nothing stays behind, so the status says nothing about open ends.
+    assert!(!editor.status(&doc, page).contains("open"));
+    editor.hover(&doc, page, p(60.0, 60.0), TOL);
+    assert_eq!(
+        editor.click(&mut doc, page, p(60.0, 60.0), TOL),
+        Clicked::Edited
+    );
+    assert_eq!(novo_editor::edit::open_end_count(doc.project()), 0);
+    assert!(!editor.status(&doc, page).contains("left open"));
+    let w = doc.project().wires().next().unwrap();
+    assert!(matches!(w.from, Endpoint::Pin { .. }) && matches!(w.to, Endpoint::Pin { .. }));
+    let pts = novo_editor::geometry::wire_points(doc.project(), w.id).unwrap();
+    assert_eq!(pts[0], pin_pos(&doc, a, "14"));
+    assert_eq!(*pts.last().unwrap(), pin_pos(&doc, b, "13"));
+}
+
+#[test]
+fn a_plain_move_says_how_many_ends_stay_behind_and_how_many_were_left_open() {
+    let (mut doc, page, mut editor, [_, b]) = wired_pair();
+    editor.hover(&doc, page, p(80.0, 100.0), TOL);
+    assert!(editor.begin_move(&[AnyId::Symbol(b)]));
+    let status = editor.status(&doc, page);
+    assert!(
+        status.contains("1 wire end stays behind open") && status.contains("Shift"),
+        "{status}"
+    );
+    editor.hover(&doc, page, p(120.0, 120.0), TOL);
+    assert_eq!(
+        editor.click(&mut doc, page, p(120.0, 120.0), TOL),
+        Clicked::Edited
+    );
+    assert_eq!(novo_editor::edit::open_end_count(doc.project()), 1);
+    assert!(
+        editor.status(&doc, page).contains("1 wire end left open"),
+        "{}",
+        editor.status(&doc, page)
+    );
+}
+
+#[test]
+fn shift_at_the_drop_takes_the_wires_along_and_leaves_nothing_open() {
+    let (mut doc, page, mut editor, [_, b]) = wired_pair();
+    editor.hover(&doc, page, p(80.0, 100.0), TOL);
+    assert!(editor.begin_move(&[AnyId::Symbol(b)]));
+    editor.set_move_carry(true);
+    assert!(!editor.status(&doc, page).contains("stays behind"));
+    editor.hover(&doc, page, p(120.0, 120.0), TOL);
+    editor.click(&mut doc, page, p(120.0, 120.0), TOL);
+    assert_eq!(novo_editor::edit::open_end_count(doc.project()), 0);
+    assert!(!editor.status(&doc, page).contains("left open"));
+}
+
+#[test]
+fn dragging_a_corner_of_a_slanted_wire_squares_it_in_corners_mode_only() {
+    use novo_editor::edit::PartKind;
+    for lines in [false, true] {
+        let (mut doc, _page, mut editor, [a, b, _]) = three_contacts();
+        if lines {
+            editor.toggle_wire_mode();
+        }
+        let from = doc.project().symbol(a).unwrap().pin_position(0).unwrap();
+        let to = doc.project().symbol(b).unwrap().pin_position(0).unwrap();
+        let (wire, _) = doc
+            .transact("Wire", |tx| {
+                let wire = tx.connect(Endpoint::pin(a, 0), Endpoint::pin(b, 0))?;
+                tx.update::<novo_core::Wire>(wire, |w| w.route = vec![p(from.x + 7.0, 13.0)])?;
+                Ok(wire)
+            })
+            .unwrap();
+        let delta = p(5.0, -5.0);
+        assert!(editor.move_wire_part(&mut doc, wire, PartKind::Corner(0), delta));
+        let w = doc.project().wire(wire).unwrap();
+        let mut pts = vec![from];
+        pts.extend(w.route.iter().copied());
+        pts.push(to);
+        let square = pts
+            .windows(2)
+            .all(|s| (s[0].x - s[1].x).abs() < 1e-6 || (s[0].y - s[1].y).abs() < 1e-6);
+        assert_eq!(square, !lines, "{pts:?}");
+    }
+}
+
 #[test]
 fn a_double_click_on_empty_canvas_starts_a_wire_open_at_that_end() {
     for lines in [false, true] {
@@ -2544,4 +2648,134 @@ fn a_pin_drag_shows_no_corner_piece() {
     editor.hover(&doc, page, p(from.x + 40.0, from.y - 20.0), TOL);
     assert!(editor.preview(&doc, page).wire.len() >= 3);
     assert!(editor.preview(&doc, page).piece.is_none());
+}
+
+/// A drop in Draw mode with a lamp between a fuse and the contactor, the
+/// lamp's centre at `x`: how many of the three wires are drawn.
+fn wires_past_a_lamp_at(x: f64) -> usize {
+    let (mut doc, page, mut editor) = setup();
+    editor.set_connect_mode(novo_editor::tool::ConnectMode::Draw);
+    editor.begin_place("iec/protection/fuse_3p", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.begin_place("iec/signalling/lamp", None);
+    editor.click(&mut doc, page, p(x, 88.0), TOL);
+    let before = doc.project().wires().count();
+    editor.begin_place("iec/contactors/main_3p", None);
+    editor.click(&mut doc, page, p(40.0, 140.0), TOL);
+    doc.project().wires().count() - before
+}
+
+#[test]
+fn a_wire_through_the_drawn_lines_of_another_device_is_not_made() {
+    // A lamp between the poles at x = 40 and 48 has its drawn lines across
+    // those two columns: only the third pole is wired.
+    assert_eq!(wires_past_a_lamp_at(44.0), 1);
+}
+
+#[test]
+fn a_wire_past_only_the_bounding_box_of_a_device_is_made() {
+    // Far from the column the lamp is out of the way entirely: all three.
+    assert_eq!(wires_past_a_lamp_at(400.0), 3);
+}
+
+#[test]
+fn new_potential_feeds_count_up_from_l1_on_the_page() {
+    let (mut doc, page, _) = setup();
+    let lib = novo_symbols::Library::builtin().unwrap();
+    let sym = lib.get(potential::FEED_SYMBOL).unwrap().clone();
+    let mut names = Vec::new();
+    for i in 0..4 {
+        let (id, _) = doc
+            .transact("feed", |tx| {
+                edit::place(
+                    tx,
+                    page,
+                    &sym,
+                    novo_core::Placement::at(p(40.0 * i as f64, 0.0)),
+                    &PlaceOptions::new(),
+                )
+            })
+            .unwrap();
+        let SymbolRole::PotentialFeed { potential } = doc.project().symbol(id).unwrap().role else {
+            panic!("a feed")
+        };
+        names.push(doc.project().potential(potential).unwrap().name.clone());
+    }
+    assert_eq!(names, ["L1", "L2", "L3", "L4"]);
+    // An explicit potential is kept as given.
+    let l2 = doc
+        .project()
+        .potentials()
+        .find(|p| p.name == "L2")
+        .unwrap()
+        .id;
+    let (id, _) = doc
+        .transact("feed", |tx| {
+            let options = PlaceOptions {
+                potential: Some(l2),
+                ..PlaceOptions::new()
+            };
+            edit::place(
+                tx,
+                page,
+                &sym,
+                novo_core::Placement::at(p(400.0, 0.0)),
+                &options,
+            )
+        })
+        .unwrap();
+    assert!(matches!(
+        doc.project().symbol(id).unwrap().role,
+        SymbolRole::PotentialFeed { potential } if potential == l2
+    ));
+}
+
+#[test]
+fn tab_cycles_the_pins_of_a_part_and_q_ends_the_wire_there() {
+    let (mut doc, page, mut editor) = setup();
+    editor.begin_place("iec/protection/mcb_3p", None);
+    editor.click(&mut doc, page, p(40.0, 100.0), TOL);
+    editor.click(&mut doc, page, p(120.0, 100.0), TOL);
+    editor.leave_tool();
+    let a = symbol_at(&doc, page, p(40.0, 100.0));
+    let b = symbol_at(&doc, page, p(120.0, 100.0));
+    let pins_b = doc.project().symbol(b).unwrap().pins.len();
+    assert!(pins_b >= 4, "a three pole breaker has several pins");
+
+    // Start a wire on a pin of A, then move over the middle of B.
+    editor.begin_wire();
+    assert_eq!(
+        click_pin(&mut editor, &mut doc, page, a, "1"),
+        Clicked::Step
+    );
+    let body = doc.project().symbol(b).unwrap().placement.origin;
+    editor.hover(&doc, page, p(body.x + 4.0, body.y + 4.0), TOL);
+
+    // Tab picks a pin, and each further Tab moves to a different one.
+    let mut seen = Vec::new();
+    for _ in 0..pins_b {
+        assert!(editor.key(&mut doc, EditorKey::NextPin, &[]));
+        let Some(novo_editor::geometry::Target::Endpoint(Endpoint::Pin { symbol, pin }, _)) =
+            editor.target()
+        else {
+            panic!("Tab aims at a pin");
+        };
+        assert_eq!(symbol, b);
+        seen.push(pin);
+    }
+    let mut unique = seen.clone();
+    unique.sort_unstable();
+    unique.dedup();
+    assert_eq!(unique.len(), pins_b, "a full round visits every pin once");
+
+    // Q ends the wire on the pin Tab last picked: one wire, one undo step.
+    let aimed = *seen.last().unwrap();
+    let depth = doc.undo_depth();
+    assert!(editor.key(&mut doc, EditorKey::EndOnPart, &[]));
+    assert_eq!(doc.undo_depth(), depth + 1);
+    assert!(connected(&doc, pin(&doc, a, "1"), Endpoint::pin(b, aimed)));
+
+    // With nothing in progress the keys do nothing.
+    assert!(!editor.key(&mut doc, EditorKey::EndOnPart, &[]));
+    assert!(!editor.key(&mut doc, EditorKey::NextPin, &[]));
 }

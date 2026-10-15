@@ -1850,6 +1850,7 @@ dependencies = [
  "novo-pdf",
  "novo-plc",
  "novo-reports",
+ "novo-revisions",
  "novo-sim",
  "novo-storage",
  "novo-symbols",
@@ -1939,6 +1940,10 @@ dependencies = [
  "novo-terminals",
  "novo-xref",
 ]
+
+[[package]]
+name = "novo-layout"
+version = "0.1.0"
 
 [[package]]
 name = "novo-parts"

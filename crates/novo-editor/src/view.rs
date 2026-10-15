@@ -13,7 +13,7 @@
 use egui::{Key, Modifiers};
 use novo_canvas::model::{
     self, LabelKind, ModelStyle, PageScene, PlaceholderArt, SheetContent, SymbolArt, SymbolNote,
-    WirePart, WirePartKind, item_id,
+    TitleRevisions, WireLook, WirePart, WirePartKind, item_id,
 };
 use novo_canvas::widget::{CanvasView, EscapeTarget};
 use novo_canvas::{Anchor, Color, Item, ItemId, Label, Primitive, SelectOp, Shape, Stroke, Vec2};
@@ -21,6 +21,7 @@ use novo_core::{
     AnyId, ChangeSet, Command, DeviceId, Document, PageId, Point, SymbolId, SymbolRole,
     TextContent, WireId,
 };
+use std::collections::HashMap;
 
 use crate::art::LibraryArt;
 use crate::catalog::Match;
@@ -140,6 +141,9 @@ pub struct SchematicView {
     commands: Vec<&'static str>,
     /// Items a release would select while a selection box is dragged.
     band_count: Option<usize>,
+    /// The Preferences default for moving a symbol: its wires go along
+    /// (Shift then leaves them) or stay (Shift then takes them).
+    pub move_carries: bool,
     /// The press that closed a popup, until its release.
     swallow: bool,
     /// The move in progress was picked up by dragging a selected object (no
@@ -164,6 +168,13 @@ pub struct SchematicView {
     sheet: Option<SheetContent>,
     /// `sheet` changed since it was last handed to the scene.
     sheet_dirty: bool,
+    /// The title block's revision fields, set by the shell.
+    revisions: Option<TitleRevisions>,
+    /// `revisions` changed since it was last handed to the scene.
+    revisions_dirty: bool,
+    /// What "Show where it goes" lit up, with the selection it was shown
+    /// for; any change of selection puts it out.
+    where_shown: Option<(Vec<ItemId>, Vec<ItemId>)>,
 }
 
 impl Default for SchematicView {
@@ -259,6 +270,7 @@ impl SchematicView {
             goto: None,
             commands: Vec::new(),
             band_count: None,
+            move_carries: false,
             swallow: false,
             drag_move: false,
             wire_part: None,
@@ -270,6 +282,9 @@ impl SchematicView {
             notes_dirty: false,
             sheet: None,
             sheet_dirty: false,
+            revisions: None,
+            revisions_dirty: false,
+            where_shown: None,
         }
     }
 
@@ -290,6 +305,15 @@ impl SchematicView {
         if sheet != self.sheet {
             self.sheet = sheet;
             self.sheet_dirty = true;
+        }
+    }
+
+    /// The revision fields of the title block (DESIGN §7). Cheap to call
+    /// every frame; kept until changed, across page rebuilds.
+    pub fn set_revisions(&mut self, revisions: Option<TitleRevisions>) {
+        if revisions != self.revisions {
+            self.revisions = revisions;
+            self.revisions_dirty = true;
         }
     }
 
@@ -386,6 +410,18 @@ impl SchematicView {
         self.scene.as_ref()
     }
 
+    /// Draws these wires in their own colour and width, in the wire layer
+    /// under the symbols (the live view); an empty map restores them all.
+    pub fn set_wire_looks(
+        &mut self,
+        project: &novo_core::Project,
+        looks: HashMap<WireId, WireLook>,
+    ) {
+        if let Some(scene) = self.scene.as_mut() {
+            scene.set_wire_looks(project, looks);
+        }
+    }
+
     pub fn zoom_to_fit(&mut self) {
         self.canvas.zoom_to_fit();
     }
@@ -404,6 +440,18 @@ impl SchematicView {
             .screen_to_world_len(self.canvas.pick_tolerance);
         let hit = scene.scene().pick(w, tol, self.canvas.viewport.zoom)?;
         scene.model_id(hit.id)
+    }
+
+    /// What "Show where it goes" lights up now; empty once the selection
+    /// has changed since.
+    pub fn where_lit(&mut self) -> Vec<ItemId> {
+        match &self.where_shown {
+            Some((lit, at)) if at.as_slice() == self.canvas.selection.ids() => lit.clone(),
+            _ => {
+                self.where_shown = None;
+                Vec::new()
+            }
+        }
     }
 
     /// The selection as model ids.
@@ -456,6 +504,13 @@ impl SchematicView {
             self.revision = Some(project.revision());
             self.notes_dirty = true;
             self.sheet_dirty = true;
+            self.revisions_dirty = true;
+        }
+        if self.revisions_dirty
+            && let Some(scene) = &mut self.scene
+        {
+            scene.set_revisions(project, self.revisions.clone());
+            self.revisions_dirty = false;
         }
         if self.sheet_dirty
             && let Some(scene) = &mut self.scene
@@ -531,7 +586,11 @@ impl SchematicView {
                 .editor
                 .part_delta(document, drag.part.wire, kind, drag.from, drag.to);
             let mut pts = vec![a];
-            pts.extend(crate::edit::moved_route(a, &w.route, b, kind, delta));
+            pts.extend(
+                self.editor
+                    .moved_route(document, drag.part.wire, kind, delta)
+                    .unwrap_or_default(),
+            );
             pts.push(b);
             items.push(Item::new(layer).unselectable().with(Primitive::stroked(
                 Shape::polyline(pts.iter().map(|p| model::vec(*p)), false),
@@ -737,10 +796,14 @@ impl SchematicView {
                     // A press on text moves the text and nothing else.
                     self.label_drag = label_drag;
                 } else if matches!(scene.model_id(hit.id), Some(AnyId::Symbol(_))) {
-                    let carry = ui.input(|i| i.modifiers.shift);
+                    let carry = ui.input(|i| i.modifiers.shift) != self.move_carries;
                     self.drag_move = self.editor.begin_move_with(&selection, carry);
                 }
             }
+        }
+        if matches!(self.editor.tool(), crate::tool::Tool::Move(_)) {
+            let carry = ui.input(|i| i.modifiers.shift) != self.move_carries;
+            self.editor.set_move_carry(carry);
         }
         if let Some(w) = out.cursor_raw {
             self.editor.hover(document, page, point(w), tolerance);
@@ -1204,6 +1267,12 @@ impl SchematicView {
                 });
             }
         }
+        if out.cursor_raw.is_some()
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, Key::M))
+        {
+            self.editor
+                .key(document, EditorKey::MoveWithWires, &selection);
+        }
         for (key, action) in [
             (Key::W, EditorKey::Wire),
             (Key::M, EditorKey::Move),
@@ -1558,7 +1627,7 @@ impl SchematicView {
                         }
                         if ui
                             .button("Show where it goes")
-                            .on_hover_text("Selects what carries it on this page")
+                            .on_hover_text("Lights up what carries it on this page")
                             .clicked()
                         {
                             chosen = Some(MenuChoice::ShowWhere);
@@ -1566,11 +1635,11 @@ impl SchematicView {
                         ui.separator();
                     }
                     if let Some(w) = &menu.wire_override {
-                        ui.menu_button("Override potential  ▸", |ui| {
+                        ui.add_enabled(false, egui::Button::new("Override potential"));
+                        ui.horizontal_wrapped(|ui| {
                             for (i, chip) in w.chips.iter().enumerate() {
                                 if ui.button(&chip.name).clicked() {
                                     chosen = Some(MenuChoice::WireOverride(i));
-                                    ui.close();
                                 }
                             }
                         });
@@ -1687,7 +1756,10 @@ impl SchematicView {
                     .flat_map(|f| f.feeds.iter())
                     .flat_map(|&feed| potential_menu::where_it_goes(document.project(), page, feed))
                     .collect::<Vec<_>>();
-                self.select(&found);
+                // Lit, not selected: a Delete right after must not remove
+                // every wire on the potential.
+                let lit = found.iter().map(|&id| item_id(id)).collect();
+                self.where_shown = Some((lit, self.canvas.selection.ids().to_vec()));
             }
             Some(MenuChoice::WireOverride(i)) => {
                 if let Some(w) = &wire_override {
@@ -2160,6 +2232,20 @@ mod tests {
         h.click(x, 120.0, egui::PointerButton::Primary);
         assert_eq!(h.view.editor.proposals().len(), 3);
         assert_eq!(h.doc.project().wires().count(), 0);
+    }
+
+    #[test]
+    fn the_lit_potential_goes_out_when_the_selection_changes() {
+        let mut h = Harness::new();
+        let lit = vec![ItemId(7)];
+        h.view.where_shown = Some((lit.clone(), Vec::new()));
+        assert_eq!(h.view.where_lit(), lit);
+        h.view
+            .canvas
+            .selection
+            .apply([ItemId(3)], SelectOp::Replace);
+        assert!(h.view.where_lit().is_empty());
+        assert!(h.view.where_shown.is_none());
     }
 
     #[test]

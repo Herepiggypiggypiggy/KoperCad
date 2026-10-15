@@ -36,7 +36,8 @@ pub struct PlaceOptions {
     /// terminal is drawn next to, else starts a strip with the next free
     /// `-X` number (see [`adjacent_strip`]).
     pub strip: Option<DeviceId>,
-    /// Potential of a potential feed; `None` uses `L1`.
+    /// Potential of a potential feed; `None` gives the first of `L1`, `L2`,
+    /// `L3`, ... that no feed on the page carries yet (see [`next_feed_name`]).
     pub potential: Option<PotentialId>,
     /// Name of an interruption point; `None` gives the next free one.
     pub interruption: Option<String>,
@@ -148,7 +149,10 @@ pub fn place(
         SymbolClass::PotentialFeed => {
             let potential = match options.potential {
                 Some(p) if tx.project().potential(p).is_some() => p,
-                _ => find_or_add_potential(tx, "L1", PotentialKind::Line, None)?,
+                _ => {
+                    let name = next_feed_name(tx.project(), page);
+                    find_or_add_potential(tx, &name, PotentialKind::Line, None)?
+                }
             };
             SymbolRole::PotentialFeed { potential }
         }
@@ -177,6 +181,26 @@ pub fn place(
         auto_connect(tx, id)?;
     }
     Ok(id)
+}
+
+/// The name a new potential feed gets: the first of `L1`, `L2`, `L3`, ...
+/// that no feed on `page` carries yet, so a row of feeds reads L1, L2, L3.
+/// (Same rule as `novo_workflow::insert::next_feed_name`.)
+pub fn next_feed_name(project: &Project, page: PageId) -> String {
+    let taken: Vec<&str> = project
+        .symbols()
+        .filter(|s| s.page == page)
+        .filter_map(|s| match s.role {
+            SymbolRole::PotentialFeed { potential } => {
+                project.potential(potential).map(|p| p.name.as_str())
+            }
+            _ => None,
+        })
+        .collect();
+    (1u32..)
+        .map(|n| format!("L{n}"))
+        .find(|name| !taken.iter().any(|t| t.eq_ignore_ascii_case(name)))
+        .expect("an unbounded range has a free name")
 }
 
 fn strip_exists(project: &Project, strip: DeviceId) -> bool {
@@ -1074,6 +1098,37 @@ pub fn transform_detached(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform) -> Res
     transform_with(tx, ids, how, true, true)
 }
 
+/// How many wire ends are open (in the air) on the whole project.
+pub fn open_end_count(project: &Project) -> usize {
+    project
+        .wires()
+        .flat_map(|w| w.ends())
+        .filter(|e| matches!(e, Endpoint::Free { .. }))
+        .count()
+}
+
+/// How many wire ends a detaching move of `ids` would leave in the air: the
+/// ends on moved symbols' pins whose wire is not carried along with both
+/// ends moving or selected.
+pub fn detaching_ends(project: &Project, ids: &[AnyId]) -> usize {
+    let symbols: BTreeSet<SymbolId> = symbols_in(ids).into_iter().collect();
+    project
+        .wires()
+        .filter(|w| !ids.contains(&AnyId::Wire(w.id)))
+        .map(|w| {
+            let on_moved = |e: Endpoint| {
+                matches!(e, Endpoint::Pin { symbol, .. } if symbols.contains(&symbol))
+            };
+            let [a, b] = w.ends();
+            if on_moved(a) && on_moved(b) {
+                0
+            } else {
+                usize::from(on_moved(a)) + usize::from(on_moved(b))
+            }
+        })
+        .sum()
+}
+
 fn transform_with(
     tx: &mut Tx<'_>,
     ids: &[AnyId],
@@ -1281,13 +1336,16 @@ pub fn part_delta(
 /// Stretches that were horizontal or vertical stay so: where a moved corner
 /// would leave one slanted, an elbow is added next to the corner that did
 /// not move, so the stretch keeps its direction at the fixed end. Stretches
-/// that were slanted to begin with (Lines mode) are left alone.
+/// that were slanted to begin with (a wire drawn in Lines mode) are left
+/// alone, unless `square` (Corners mode) asks for every stretch at a moved
+/// corner to end up horizontal or vertical.
 pub fn moved_route(
     a: Point,
     route: &[Point],
     b: Point,
     kind: PartKind,
     delta: Point,
+    square: bool,
 ) -> Vec<Point> {
     const EPS: f64 = 1e-6;
     let aligned = |u: Point, v: Point| (u.x - v.x).abs() < EPS || (u.y - v.y).abs() < EPS;
@@ -1309,7 +1367,7 @@ pub fn moved_route(
             out.push(new[i]);
         }
         let (u, v) = (new[i], new[i + 1]);
-        if aligned(u, v) || !aligned(old[i], old[i + 1]) {
+        if aligned(u, v) || !(square || aligned(old[i], old[i + 1])) {
             continue;
         }
         let horizontal = (old[i].y - old[i + 1].y).abs() < EPS;
@@ -1341,7 +1399,13 @@ pub fn moved_route(
 
 /// Moves a dragged wire part by `delta`; a result that would share a
 /// stretch with another wire is refused.
-pub fn move_wire_part(tx: &mut Tx<'_>, wire: WireId, kind: PartKind, delta: Point) -> Result<()> {
+pub fn move_wire_part(
+    tx: &mut Tx<'_>,
+    wire: WireId,
+    kind: PartKind,
+    delta: Point,
+    square: bool,
+) -> Result<()> {
     let Some(w) = tx.project().wire(wire) else {
         return Ok(());
     };
@@ -1351,7 +1415,7 @@ pub fn move_wire_part(tx: &mut Tx<'_>, wire: WireId, kind: PartKind, delta: Poin
     ) else {
         return Ok(());
     };
-    let route = moved_route(a, &w.route, b, kind, delta);
+    let route = moved_route(a, &w.route, b, kind, delta, square);
     tx.update::<Wire>(wire, |w| w.route = route)?;
     check_kept(tx.project(), wire, &[wire])
 }
@@ -1691,6 +1755,45 @@ pub fn device_of(project: &Project, id: AnyId) -> Option<DeviceId> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_dragged_part_never_leaves_a_slanted_stretch_on_an_orthogonal_wire() {
+        let p = |x: f64, y: f64| Point::new(x, y);
+        let routes: Vec<(Point, Vec<Point>, Point)> = vec![
+            (p(0.0, 0.0), vec![p(0.0, 20.0)], p(40.0, 20.0)),
+            (
+                p(0.0, 0.0),
+                vec![p(0.0, 20.0), p(40.0, 20.0)],
+                p(40.0, 50.0),
+            ),
+            (
+                p(0.0, 0.0),
+                vec![p(0.0, 10.0), p(30.0, 10.0), p(30.0, 40.0), p(60.0, 40.0)],
+                p(60.0, 70.0),
+            ),
+            (p(0.0, 0.0), vec![p(25.0, 0.0)], p(25.0, 30.0)),
+            (p(0.0, 0.0), vec![], p(30.0, 0.0)),
+        ];
+        let aligned = |u: Point, v: Point| (u.x - v.x).abs() < 1e-6 || (u.y - v.y).abs() < 1e-6;
+        for (a, route, b) in routes {
+            let mut kinds: Vec<PartKind> = (0..route.len()).map(PartKind::Corner).collect();
+            kinds.extend((0..=route.len()).map(PartKind::Segment));
+            for kind in kinds {
+                for dx in [-15.0, -5.0, 0.0, 5.0, 20.0] {
+                    for dy in [-15.0, -5.0, 0.0, 5.0, 20.0] {
+                        let moved = moved_route(a, &route, b, kind, p(dx, dy), false);
+                        let mut pts = vec![a];
+                        pts.extend(moved.iter().copied());
+                        pts.push(b);
+                        assert!(
+                            pts.windows(2).all(|s| aligned(s[0], s[1])),
+                            "{kind:?} by ({dx}, {dy}) on {route:?} gave {pts:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     use super::*;
 
     fn p(x: f64, y: f64) -> Point {

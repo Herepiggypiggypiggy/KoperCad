@@ -138,8 +138,8 @@ Write-Host 'Building (the first run takes a while)...'
 Push-Location $src
 try { Invoke-Checked 'cargo build' { cargo build --release -p novo-app --target $Target } }
 finally { Pop-Location }
-$built = Join-Path $env:CARGO_TARGET_DIR "$Target\release\novoelectric.exe"
-if (-not (Test-Path $built)) { throw 'The build finished without novoelectric.exe.' }
+$built = Join-Path $env:CARGO_TARGET_DIR "$Target\release\kopercad.exe"
+if (-not (Test-Path $built)) { throw 'The build finished without kopercad.exe.' }
 
 # 5. Put it where run-latest.ps1 starts it from, with a newer `built` time so
 # the stale release does not replace it.
@@ -147,6 +147,8 @@ $stamp = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
 $next = Join-Path $Experimental 'next'
 Remove-Item -Recurse -Force $next -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $next | Out-Null
+Copy-Item $built (Join-Path $next 'kopercad.exe')
+# A launcher installed before the rename still starts novoelectric.exe.
 Copy-Item $built (Join-Path $next 'novoelectric.exe')
 Set-Content -Path (Join-Path $next 'BUILD_INFO.txt') -Value "KoperCAD local build $stamp`nSource: $Ref at $commit`nBuilt on this PC with the GNU toolchain."
 $current = Join-Path $Experimental 'current'
@@ -158,5 +160,5 @@ Set-Content -NoNewline -Path (Join-Path $Experimental 'build-info.json') -Value 
 Write-Host "Done: $Ref at $($commit.Substring(0, 7))."
 
 if (-not $NoLaunch) {
-    Start-Process -FilePath (Join-Path $current 'novoelectric.exe') -WorkingDirectory $current
+    Start-Process -FilePath (Join-Path $current 'kopercad.exe') -WorkingDirectory $current
 }

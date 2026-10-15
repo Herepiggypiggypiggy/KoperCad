@@ -176,6 +176,16 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["preferences", "prefs"],
     ),
+    verb(
+        cmd(
+            "revision.issue",
+            "Issue revision",
+            "Project",
+            &["release", "checkpoint", "new revision", "freeze"],
+            Needs::Project,
+        ),
+        &["issue", "revision"],
+    ),
     cmd("file.quit", "Quit", "Project", &["exit"], Needs::Nothing),
     // Draw
     cmd(

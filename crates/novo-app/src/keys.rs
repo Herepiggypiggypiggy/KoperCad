@@ -2,7 +2,8 @@
 //!
 //! Each frame the shell turns egui key events into [`Chord`]s, decides what
 //! has keyboard focus ([`Focus`]) and asks [`Keymap::resolve`] which command
-//! a press runs. Presses the shell acts on are taken out of the input; the
+//! a press runs (while a wire is being drawn, [`Keymap::resolve_while_wiring`],
+//! so Q ends the wire on a part and Tab cycles its pins). Presses the shell acts on are taken out of the input; the
 //! rest (the editor's W, R, X, F2, Delete, Escape, Page Up/Down) stay for the
 //! schematic editor, which reads them itself.
 
@@ -65,6 +66,7 @@ pub fn take_commands(
     ctx: &egui::Context,
     keymap: &Keymap,
     focus: Focus,
+    wiring: bool,
     mut wants: impl FnMut(&'static str) -> bool,
 ) -> Vec<&'static str> {
     let mut fired = Vec::new();
@@ -84,7 +86,12 @@ pub fn take_commands(
             let Some(chord) = chord_of(*key, *modifiers) else {
                 return true;
             };
-            match keymap.resolve(chord, focus) {
+            let resolved = if wiring {
+                keymap.resolve_while_wiring(chord, focus)
+            } else {
+                keymap.resolve(chord, focus)
+            };
+            match resolved {
                 Some(command) if wants(command) => {
                     // A held Shift+W would flip the mode on every repeat, and
                     // a held place key would re-arm its hold and, on the

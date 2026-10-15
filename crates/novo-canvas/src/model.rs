@@ -427,6 +427,38 @@ pub struct SymbolNote {
     pub anchor: NoteAnchor,
 }
 
+/// The revision fields a title block prints (DESIGN §7), worked out by the
+/// caller from the issued revisions: the canvas only draws them.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct TitleRevisions {
+    /// The page's own revision, `(index, date)`: the latest in which the
+    /// page changed. `None` for a page added since the latest revision.
+    pub page: Option<(String, String)>,
+    /// The project's revision, the latest index; `None` before the first.
+    pub project: Option<String>,
+}
+
+impl TitleRevisions {
+    /// The text of the title block's revision row: "B  2026-09-01", with
+    /// "(set D)" when the project is further on than the page.
+    pub fn text(&self) -> String {
+        let page = self
+            .page
+            .as_ref()
+            .map(|(index, date)| format!("{index}  {date}"));
+        let set = self
+            .project
+            .as_ref()
+            .filter(|p| self.page.as_ref().is_none_or(|(index, _)| index != *p))
+            .map(|p| format!("(set {p})"));
+        [page, set]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join("  ")
+    }
+}
+
 /// One printed sheet of a generated page (a report): text boxes and rules
 /// laid out by its generator (novo-reports' `layout_sheet`), in page
 /// millimetres with the origin at the sheet's top left. The canvas stays
@@ -517,12 +549,26 @@ pub struct PageScene {
     notes: HashMap<SymbolId, SymbolNote>,
     /// What a generated page shows; see [`Self::set_sheet`].
     sheet: Option<SheetContent>,
+    /// The revision fields of the title block; see [`Self::set_revisions`].
+    revisions: Option<TitleRevisions>,
     /// The first terminal symbol of each run of one strip on this page,
     /// with the strip's tag it shows (see [`strip_heads`]).
     strip_heads: HashMap<SymbolId, String>,
     /// The wire part under the pointer or selected, drawn emphasised.
     focus: Option<WirePart>,
+    /// Wires drawn in another colour and width than the style's; see
+    /// [`Self::set_wire_looks`].
+    wire_looks: HashMap<WireId, WireLook>,
     pub style: ModelStyle,
+}
+
+/// A wire's own stroke, in place of [`ModelStyle::wire`]: the live view
+/// lights wires in the colour of what they carry.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WireLook {
+    pub color: Color,
+    /// Screen points, the same at every zoom.
+    pub width: f32,
 }
 
 /// What a double click acts on ([`PageScene::double_click_target`]).
@@ -617,8 +663,10 @@ impl PageScene {
             text_hosts: HashMap::new(),
             notes: HashMap::new(),
             sheet: None,
+            revisions: None,
             strip_heads: HashMap::new(),
             focus: None,
+            wire_looks: HashMap::new(),
             style: ModelStyle::default(),
         };
         s.rebuild(project, art);
@@ -665,6 +713,15 @@ impl PageScene {
             }
         };
         for wire in project.page_contents(self.page).wires {
+            // Most wires are nowhere near: skip them on their drawn bounds.
+            if let Some(b) = self.scene.item_bounds(item_id(wire))
+                && (p.x < b.min.x - tolerance
+                    || p.x > b.max.x + tolerance
+                    || p.y < b.min.y - tolerance
+                    || p.y > b.max.y + tolerance)
+            {
+                continue;
+            }
             let Some(pts) = self.wire_points(project, wire) else {
                 continue;
             };
@@ -685,6 +742,25 @@ impl PageScene {
             }
         }
         best.map(|(_, part)| part)
+    }
+
+    /// Draws the given wires in their own look, in the wire layer under
+    /// symbols and text; every other wire goes back to the style's. Only the
+    /// wires whose look changed are redrawn.
+    pub fn set_wire_looks(&mut self, project: &Project, looks: HashMap<WireId, WireLook>) {
+        if looks == self.wire_looks {
+            return;
+        }
+        let old = std::mem::replace(&mut self.wire_looks, looks);
+        let changed: Vec<WireId> = old
+            .keys()
+            .chain(self.wire_looks.keys())
+            .copied()
+            .filter(|w| old.get(w) != self.wire_looks.get(w))
+            .collect();
+        for wire in changed {
+            self.sync_wire(project, wire);
+        }
     }
 
     /// Emphasises one wire part (or none): the pointer's, or the selected
@@ -831,6 +907,18 @@ impl PageScene {
         true
     }
 
+    /// Sets the revision fields of the title block (DESIGN §7): the page's
+    /// own revision and the project's. `None` goes back to the project
+    /// properties. Kept across rebuilds. Returns whether anything changed.
+    pub fn set_revisions(&mut self, project: &Project, revisions: Option<TitleRevisions>) -> bool {
+        if revisions == self.revisions {
+            return false;
+        }
+        self.revisions = revisions;
+        self.frame(project);
+        true
+    }
+
     /// The sheet shown, if any.
     pub fn sheet(&self) -> Option<&SheetContent> {
         self.sheet.as_ref()
@@ -850,6 +938,7 @@ impl PageScene {
         for id in contents.symbols {
             self.sync_symbol(project, id, art);
         }
+        self.sync_bars(project);
         for id in contents.junctions {
             self.sync_junction(project, id);
         }
@@ -960,6 +1049,7 @@ impl PageScene {
             _ => false,
         });
         if terminals_touched {
+            self.sync_bars(project);
             let heads = strip_heads(project, self.page);
             for (s, tag) in self.strip_heads.iter().chain(&heads) {
                 if self.strip_heads.get(s) != Some(tag) || heads.get(s) != Some(tag) {
@@ -1107,9 +1197,9 @@ impl PageScene {
     /// (docs/DESIGN.md §3): project, page name and title, "n of m", the
     /// page's `=function +location`, revision and drawn / checked by.
     ///
-    /// Until novo-core has revisions these come from properties: the page's
-    /// `structure`, and the project's `revision`, `revision_date`,
-    /// `drawn_by` and `checked_by`.
+    /// The revision row comes from [`Self::set_revisions`]; without it (and
+    /// for drawn by / checked by) it is read from the project's `revision`,
+    /// `revision_date`, `drawn_by` and `checked_by` properties.
     fn title_block(
         &self,
         project: &Project,
@@ -1162,11 +1252,14 @@ impl PageScene {
         } else {
             page.structure.to_string()
         };
-        let revision = [text(info, "revision"), text(info, "revision_date")]
-            .into_iter()
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join("  ");
+        let revision = match &self.revisions {
+            Some(revisions) => revisions.text(),
+            None => [text(info, "revision"), text(info, "revision_date")]
+                .into_iter()
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join("  "),
+        };
         let people = match (text(info, "drawn_by"), text(info, "checked_by")) {
             (d, c) if d.is_empty() && c.is_empty() => String::new(),
             (d, c) => format!("{d} / {c}"),
@@ -1200,6 +1293,21 @@ impl PageScene {
                 );
             }
         }
+    }
+
+    /// Redraws the bridge bars of the page's jumper groups.
+    fn sync_bars(&mut self, project: &Project) {
+        let bars = bridge_bars(project, self.page);
+        if bars.is_empty() {
+            self.scene.remove(BARS_ITEM);
+            return;
+        }
+        let stroke = Stroke::world(0.5, self.style.symbol.color);
+        let mut item = Item::new(self.layers.symbols).unselectable();
+        for (a, b) in bars {
+            item = item.with(Primitive::stroked(Shape::line(a, b), stroke));
+        }
+        self.scene.insert(BARS_ITEM, item);
     }
 
     fn sync_symbol(&mut self, project: &Project, id: SymbolId, art: &dyn SymbolArt) {
@@ -1422,10 +1530,14 @@ impl PageScene {
             self.remove(id.into());
             return;
         };
+        let stroke = self
+            .wire_looks
+            .get(&id)
+            .map_or(self.style.wire, |l| Stroke::screen(l.width, l.color));
         let mut item = Item::new(self.layers.wires)
             .with(Primitive::stroked(
                 Shape::polyline(pts.clone(), false),
-                self.style.wire,
+                stroke,
             ))
             .with_snap(SnapPoint::connection(pts[0]))
             .with_snap(SnapPoint::connection(pts[pts.len() - 1]));
@@ -1562,6 +1674,65 @@ pub fn symbol_text(project: &Project, sym: &SymbolInstance) -> Option<String> {
 /// origins) start a new run, which names its strip again.
 const STRIP_RUN_GAP: f64 = 20.0;
 
+/// Item id of the bridge bars of a page's jumper groups (no model object
+/// has this id).
+const BARS_ITEM: ItemId = ItemId(u64::MAX - 1);
+
+/// Height of a connected terminal's bridge bar in its symbol, in mm
+/// (`terminal_bridged.toml`: the dot sits on the upper lead at this height).
+const BRIDGE_BAR_Y: f64 = 1.4;
+
+/// The symbol that carries the bridge dot.
+const BRIDGED_SYMBOL: &str = "iec/terminals/terminal_bridged";
+
+/// One heavy bar per run of connected terminals on a page, from the first
+/// lead to the last, never past them: the connected terminals of a jumper
+/// group on one strip that are chained by neighbours at most
+/// [`STRIP_RUN_GAP`] apart. A lone terminal gets none.
+fn bridge_bars(project: &Project, page: PageId) -> Vec<(Vec2, Vec2)> {
+    let mut groups: HashMap<(novo_core::DeviceId, u32), Vec<Point>> = HashMap::new();
+    for id in project.page_contents(page).symbols {
+        let Some(sym) = project.symbol(id) else {
+            continue;
+        };
+        let SymbolRole::Terminal { terminals } = &sym.role else {
+            continue;
+        };
+        if sym.symbol.0 != BRIDGED_SYMBOL {
+            continue;
+        }
+        let [t] = terminals.as_slice() else {
+            continue;
+        };
+        if let Some((strip, group)) = project
+            .terminal(*t)
+            .and_then(|t| t.jumper.map(|j| (t.strip, j)))
+        {
+            groups
+                .entry((strip, group))
+                .or_default()
+                .push(sym.placement.apply(Point::new(0.0, BRIDGE_BAR_Y)));
+        }
+    }
+    let mut bars = Vec::new();
+    for (_, mut leads) in groups {
+        leads.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+        let mut start = 0;
+        for i in 1..=leads.len() {
+            let broken = i == leads.len()
+                || (leads[i].x - leads[i - 1].x).hypot(leads[i].y - leads[i - 1].y) > STRIP_RUN_GAP;
+            if broken {
+                if i - start >= 2 {
+                    bars.push((vec(leads[start]), vec(leads[i - 1])));
+                }
+                start = i;
+            }
+        }
+    }
+    bars.sort_by(|a, b| a.0.x.total_cmp(&b.0.x).then(a.0.y.total_cmp(&b.0.y)));
+    bars
+}
+
 /// The symbols that name their strip on `page`: the first terminal (left
 /// most, then top most) of each run of adjacent terminals of one strip, as
 /// IEC 61082 drawings name `-X1` once beside a group of its terminals.
@@ -1611,6 +1782,10 @@ fn strip_heads(project: &Project, page: PageId) -> HashMap<SymbolId, String> {
         }
         for i in 0..syms.len() {
             for j in i + 1..syms.len() {
+                // Sorted by x: nothing further right can be near either.
+                if syms[j].0.x - syms[i].0.x > STRIP_RUN_GAP {
+                    break;
+                }
                 if near(syms[i].0, syms[j].0) {
                     let (a, b) = (root(&mut run, i), root(&mut run, j));
                     // The earlier terminal stays the root, so it heads the run.
@@ -1964,6 +2139,69 @@ mod tests {
                 .collect();
             assert_eq!(named, expect, "{at:?}");
         }
+    }
+
+    #[test]
+    fn a_run_of_connected_terminals_gets_one_bar_first_lead_to_last() {
+        let mut doc = Document::default();
+        let ((page, last), _) = doc
+            .transact("strip", |tx| {
+                let page = tx.add_page("1")?;
+                let x1 = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+                // Three connected in a row, one far away in the same group,
+                // one connected alone in another group.
+                let at = [(100.0, 50.0, 1), (108.0, 50.0, 1), (116.0, 50.0, 1)]
+                    .into_iter()
+                    .chain([(200.0, 50.0, 1), (100.0, 150.0, 2)]);
+                let mut last = None;
+                for (i, (x, y, group)) in at.enumerate() {
+                    let t = tx.add_terminal(x1, (i + 1).to_string())?;
+                    tx.update::<novo_core::Terminal>(t, |t| t.jumper = Some(group))?;
+                    let sym = tx.place_symbol(
+                        page,
+                        BRIDGED_SYMBOL,
+                        MPlacement::at(Point::new(x, y)),
+                        vec![Pin::new("1", 0.0, 0.0), Pin::new("2", 0.0, 8.0)],
+                        SymbolRole::Terminal { terminals: vec![t] },
+                    )?;
+                    if i == 2 {
+                        last = Some((t, sym));
+                    }
+                }
+                Ok((page, last.unwrap()))
+            })
+            .unwrap();
+        let bars = bridge_bars(doc.project(), page);
+        assert_eq!(
+            bars,
+            vec![(Vec2::new(100.0, 51.4), Vec2::new(116.0, 51.4))],
+            "one bar across the run; lone terminals draw none"
+        );
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        assert!(ps.scene().contains(BARS_ITEM));
+        // Taking the far terminal's neighbour into the run extends the bar.
+        let (_, changes) = doc
+            .transact("move", |tx| {
+                tx.move_symbol(last.1, MPlacement::at(Point::new(124.0, 50.0)))
+            })
+            .unwrap();
+        assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
+        assert_eq!(
+            bridge_bars(doc.project(), page)[0].1,
+            Vec2::new(124.0, 51.4)
+        );
+        // Unjumpering them removes the bars.
+        let (_, changes) = doc
+            .transact("free", |tx| {
+                let ids: Vec<_> = tx.project().terminals().map(|t| t.id).collect();
+                for t in ids {
+                    tx.update::<novo_core::Terminal>(t, |t| t.jumper = None)?;
+                }
+                Ok(())
+            })
+            .unwrap();
+        ps.apply(doc.project(), &changes, &PlaceholderArt);
+        assert!(!ps.scene().contains(BARS_ITEM));
     }
 
     #[test]
@@ -2775,6 +3013,25 @@ mod tests {
     }
 
     #[test]
+    fn a_wire_look_replaces_the_stroke_and_clears() {
+        let (doc, page, wire) = bent_wire();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let stroke_of = |ps: &PageScene| {
+            let item = ps.scene().get(item_id(wire)).unwrap();
+            item.primitives[0].stroke.unwrap()
+        };
+        assert_eq!(stroke_of(&ps), ps.style.wire);
+        let look = WireLook {
+            color: Color::rgb(10, 200, 30),
+            width: 4.5,
+        };
+        ps.set_wire_looks(doc.project(), HashMap::from([(wire, look)]));
+        assert_eq!(stroke_of(&ps), Stroke::screen(4.5, look.color));
+        ps.set_wire_looks(doc.project(), HashMap::new());
+        assert_eq!(stroke_of(&ps), ps.style.wire);
+    }
+
+    #[test]
     fn a_click_on_a_wire_never_picks_it_whole() {
         let (doc, page, wire) = bent_wire();
         let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
@@ -2914,6 +3171,40 @@ mod tests {
         // the grid dots.
         let frame = ps.scene().get(item_id(page)).unwrap();
         assert!(frame.primitives.iter().all(|p| p.fill.is_none()));
+    }
+
+    #[test]
+    fn the_title_block_prints_the_page_and_the_set_revision() {
+        let (doc, page, ..) = doc();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let texts = |ps: &PageScene| -> Vec<String> {
+            ps.scene()
+                .get(item_id(page))
+                .unwrap()
+                .labels
+                .iter()
+                .map(|l| l.text.clone())
+                .collect()
+        };
+        let revisions = |page: Option<(&str, &str)>, project: &str| TitleRevisions {
+            page: page.map(|(i, d)| (i.to_owned(), d.to_owned())),
+            project: Some(project.to_owned()),
+        };
+        // An untouched page keeps its own index while the set moves on.
+        let old = revisions(Some(("A", "2026-09-01")), "D");
+        assert_eq!(old.text(), "A  2026-09-01  (set D)");
+        assert!(ps.set_revisions(doc.project(), Some(old)));
+        assert!(texts(&ps).contains(&"A  2026-09-01  (set D)".to_owned()));
+        // A page changed in the latest revision shows just that.
+        let current = revisions(Some(("D", "2026-10-15")), "D");
+        assert_eq!(current.text(), "D  2026-10-15");
+        // A page added since the latest revision has none yet.
+        assert_eq!(revisions(None, "D").text(), "(set D)");
+        assert!(ps.set_revisions(doc.project(), Some(current)));
+        assert!(!ps.set_revisions(
+            doc.project(),
+            Some(revisions(Some(("D", "2026-10-15")), "D"))
+        ));
     }
 
     #[test]
