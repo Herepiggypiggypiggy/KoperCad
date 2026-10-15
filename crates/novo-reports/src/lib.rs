@@ -41,6 +41,10 @@
 //!   like the page (`20`), or as `20a`, `20b`, ... when its report needs
 //!   more, skipping `i`, `l` and `o` ([`LiveReports::sheets_of_page`],
 //!   [`LiveReports::layout_sheet`], [`sheet_names`]).
+//! - **Which pages**: [`default_generated_pages`] proposes the generated
+//!   pages a project should have (contents list as section `0`, the other
+//!   reports in sections after the schematic pages), and
+//!   [`add_generated_pages`] adds them in one transaction.
 //! - **Live cache**: [`LiveReports`]. Call [`LiveReports::notify`] with every
 //!   transaction's change set; [`LiveReports::get`] regenerates only stale
 //!   reports. On the 10k-object stress project an edit plus regenerating and
@@ -72,6 +76,7 @@
 //! [`PageSetup::title_block_mm`] to match that frame.
 
 mod bom;
+mod defaults;
 mod devices;
 mod diagrams;
 mod export;
@@ -84,6 +89,9 @@ mod toc;
 mod wires;
 
 pub use bom::BillOfMaterials;
+pub use defaults::{
+    GeneratedPageSpec, add_generated_pages, default_generated_pages, default_generated_pages_with,
+};
 pub use devices::DeviceList;
 pub use diagrams::{CableDiagram, TerminalDiagram};
 pub use export::{CsvOptions, ExportError, save_xlsx, to_csv, xlsx_bytes};
