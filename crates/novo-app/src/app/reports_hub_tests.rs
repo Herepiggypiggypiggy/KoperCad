@@ -15,6 +15,8 @@ fn example() -> (tempfile::TempDir, Drive) {
     (dir, d)
 }
 
+use super::workspace::Workspace;
+
 #[test]
 fn the_hub_is_a_third_view_next_to_schematic_and_cabinet() {
     let (_dir, mut d) = example();
@@ -22,17 +24,17 @@ fn the_hub_is_a_third_view_next_to_schematic_and_cabinet() {
     assert!(d.app.is_enabled(Action::ShowReports));
     d.app.run(&ctx, Action::ShowReports);
     d.frame();
-    assert!(d.app.hub.open && !d.app.cabinet_open);
+    assert_eq!(d.app.workspace(), Workspace::Reports);
 
     d.app.run(&ctx, Action::ShowCabinet);
-    assert!(!d.app.hub.open && d.app.cabinet_open);
+    assert_eq!(d.app.workspace(), Workspace::Cabinet);
     d.app.run(&ctx, Action::ShowReports);
-    assert!(d.app.hub.open && !d.app.cabinet_open);
+    assert_eq!(d.app.workspace(), Workspace::Reports);
 
     // Picking a page leaves it, as it leaves the Cabinet.
     let page = d.app.current_page().unwrap();
     d.app.show_page(page);
-    assert!(!d.app.hub.open);
+    assert_eq!(d.app.workspace(), Workspace::Schematic);
 }
 
 #[test]
@@ -41,7 +43,7 @@ fn the_palette_opens_the_hub_and_knows_the_export_commands() {
     let ctx = d.ctx.clone();
     d.app.run_command(&ctx, "view.reports", None);
     d.frame();
-    assert!(d.app.hub.open);
+    assert_eq!(d.app.workspace(), Workspace::Reports);
     assert!(novo_workflow::commands::get("view.reports").is_some());
     assert!(super::workbench::app_runs("view.reports"));
     assert!(super::workbench::app_runs("export.reports"));

@@ -48,7 +48,6 @@ impl Format {
 /// The hub's own state: which report, which section of it, the row filter.
 #[derive(Default)]
 pub(crate) struct Hub {
-    pub(super) open: bool,
     /// The id of the report shown; the first one when empty or unknown.
     pub(super) selected: String,
     /// The section shown, for a report with several (a strip, a cable).
@@ -84,7 +83,7 @@ impl NovoApp {
         if ui.input(|i| i.key_pressed(egui::Key::Escape))
             && ui.ctx().memory(|m| m.focused().is_none())
         {
-            self.hub.open = false;
+            self.switch_workspace(super::workspace::Workspace::Schematic);
             return;
         }
         let mut asks: Vec<HubAsk> = Vec::new();
@@ -165,7 +164,7 @@ impl NovoApp {
                 };
                 match place {
                     Some(place) => {
-                        self.hub.open = false;
+                        self.switch_workspace(super::workspace::Workspace::Schematic);
                         self.jump(place, true);
                     }
                     None => self.message(Level::Info, "That row is not drawn on any page"),

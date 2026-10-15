@@ -303,6 +303,7 @@ pub(crate) fn read(project: &Project, id: AnyId, field: &Field) -> Cell {
 
 /// A cell understood for its column.
 #[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum Parsed {
     Text(String),
     /// A text that may be cleared (`None`).

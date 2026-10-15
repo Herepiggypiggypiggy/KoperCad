@@ -3,6 +3,7 @@
 //! toasts for messages, the dialogs and action dispatch. There is no menu
 //! bar and no status bar.
 
+mod assembly;
 mod cabinet;
 mod cabinet_inspector;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
@@ -42,8 +43,11 @@ mod title_revisions;
 mod userkeymap;
 mod wheel;
 mod workbench;
+mod workspace;
 mod xref;
 
+#[cfg(test)]
+mod assembly_tests;
 #[cfg(test)]
 mod cabinet_tests;
 #[cfg(test)]
@@ -69,6 +73,7 @@ use eframe::egui;
 use crate::actions::Action;
 
 /// Hover text of the bulk-edit exports (the data to edit, not the reports).
+const ASSEMBLY_HINT: &str = "The workshop sheet of every cabinet: prepare, drill, mount, wire, label and check, with a box to tick at each line. Needs a cabinet with a mounting plate.";
 const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel. Export only: bringing the edited file back comes with the import dialog. The generated reports are under Export all reports to Excel.";
 use novo_core::{Aspect, Command, DeviceTag, ModelError, Outcome, PageId, PageKind};
 use pages::{FormKind, PageForm, PageView};
@@ -77,7 +82,7 @@ use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows};
 use crate::canvas::{CanvasView, OpenPage};
 use crate::settings::Settings;
 use crate::{APP_MAKER, APP_NAME, PROJECT_EXTENSION};
-use novo_theme::widgets::{primary_button, section_label, segment};
+use novo_theme::widgets::{primary_button, section_label};
 pub(crate) use revisions::index_rule;
 use workbench::Workbench;
 pub(crate) use workbench::app_runs;
@@ -165,8 +170,9 @@ pub struct NovoApp {
     autosave_failing: bool,
     /// Focus mode (Ctrl+Shift+F) hides everything that is not pinned.
     focus_mode: bool,
-    /// The Cabinet canvas is shown instead of the schematic (Ctrl+2).
-    cabinet_open: bool,
+    /// What the canvas area shows (docs/design/workspaces.md). The Cabinet
+    /// is Ctrl+2.
+    workspace: workspace::Workspace,
     cabinet: cabinet::CabinetState,
     /// The Reports hub: every report as a live table, with exports.
     hub: reports_hub::Hub,
@@ -221,7 +227,7 @@ impl NovoApp {
         settings: Settings,
     ) -> Self {
         let wb = Workbench::with_recent(&settings.recent_actions);
-        Self {
+        let mut app = Self {
             backend,
             canvas,
             settings,
@@ -236,7 +242,7 @@ impl NovoApp {
             next_tick: Instant::now(),
             autosave_failing: false,
             focus_mode: false,
-            cabinet_open: false,
+            workspace: workspace::Workspace::Schematic,
             cabinet: cabinet::CabinetState::new(),
             hub: Default::default(),
             sizing: sizing::SizingState::new(),
@@ -248,7 +254,9 @@ impl NovoApp {
             renaming_page: None,
             renaming_level: None,
             window_width: 0.0,
-        }
+        };
+        app.restore_layout_at_start();
+        app
     }
 
     /// Opens `path` when the window first appears.
@@ -358,10 +366,14 @@ impl NovoApp {
             | Action::SaveProjectAs
             | Action::CloseProject
             | Action::ZoomToFit
-            | Action::ShowCabinet
-            | Action::ShowReports
             | Action::SizeEnclosure
             | Action::EnclosureList => open,
+            Action::ShowCabinet => self
+                .workspace_unavailable(workspace::Workspace::Cabinet)
+                .is_none(),
+            Action::ShowReports => self
+                .workspace_unavailable(workspace::Workspace::Reports)
+                .is_none(),
             Action::Undo => doc.is_some_and(|d| d.can_undo()),
             Action::Redo => doc.is_some_and(|d| d.can_redo()),
             _ => true,
@@ -395,26 +407,15 @@ impl NovoApp {
             Action::Undo => self.undo_redo(false),
             Action::Redo => self.undo_redo(true),
             Action::ZoomToFit => self.canvas.zoom_to_fit(),
-            Action::ShowSchematic => {
-                self.cabinet_open = false;
-                self.hub.open = false;
-            }
-            Action::ShowCabinet => {
-                self.cabinet_open = true;
-                self.hub.open = false;
-            }
-            Action::ShowReports => {
-                self.cabinet_open = false;
-                self.hub.open = true;
-            }
+            Action::ShowSchematic => self.switch_workspace(workspace::Workspace::Schematic),
+            Action::ShowCabinet => self.switch_workspace(workspace::Workspace::Cabinet),
+            Action::ShowReports => self.switch_workspace(workspace::Workspace::Reports),
             Action::SizeEnclosure => {
-                self.cabinet_open = true;
-                self.hub.open = false;
+                self.switch_workspace(workspace::Workspace::Cabinet);
                 self.sizing.panel_open = true;
             }
             Action::EnclosureList => {
-                self.cabinet_open = true;
-                self.hub.open = false;
+                self.switch_workspace(workspace::Workspace::Cabinet);
                 self.sizing.editor_open = true;
             }
             Action::PinOutline => {
@@ -559,6 +560,7 @@ impl NovoApp {
         {
             self.open_path(&last);
         }
+        self.restore_workspace_at_start();
     }
 
     /// Runs a model command on the open project the way the editor does:
@@ -737,12 +739,17 @@ impl NovoApp {
         } else {
             self.key_commands(&ctx)
         };
-        if self.cabinet_open || self.hub.open {
+        if matches!(
+            self.workspace(),
+            workspace::Workspace::Cabinet | workspace::Workspace::Reports
+        ) {
             // The schematic's keys must not edit the hidden page: rotate
             // and delete go to the Cabinet, the rest keep only the view,
             // file and undo actions.
             for id in &commands {
-                if self.cabinet_open && matches!(*id, "edit.rotate" | "edit.delete") {
+                if self.workspace() == workspace::Workspace::Cabinet
+                    && matches!(*id, "edit.rotate" | "edit.delete")
+                {
                     self.cabinet.keys.push((*id).to_owned());
                 }
             }
@@ -768,9 +775,9 @@ impl NovoApp {
         self.drawer(ui);
         let canvas_rect = egui::CentralPanel::no_frame()
             .show(ui, |ui| {
-                if self.is_open() && self.hub.open {
+                if self.is_open() && self.workspace() == workspace::Workspace::Reports {
                     self.hub_show(ui);
-                } else if self.is_open() && self.cabinet_open {
+                } else if self.is_open() && self.workspace() == workspace::Workspace::Cabinet {
                     self.cabinet_show(ui);
                 } else if self.is_open() {
                     self.update_marks();
@@ -793,7 +800,7 @@ impl NovoApp {
         if !self.focus_mode && !pinned && self.is_open() {
             self.outline_flyout(&ctx, canvas_rect, &mut picked);
         }
-        if !self.focus_mode && !self.cabinet_open && !self.hub.open {
+        if !self.focus_mode && self.workspace() == workspace::Workspace::Schematic {
             self.hud(&ctx, canvas_rect);
             self.sync_wiring_mode();
             self.sync_connect_mode();
@@ -918,10 +925,8 @@ impl NovoApp {
             self.wb.sheet = 0;
         }
         self.current_page = Some(page);
-        // A page is a schematic page: picking one leaves the Cabinet and
-        // the Reports hub.
-        self.cabinet_open = false;
-        self.hub.open = false;
+        // A page is a schematic page: picking one leaves the Cabinet.
+        self.switch_workspace(workspace::Workspace::Schematic);
     }
 
     /// Shows sheet `sheet` of a generated page (0 for any other page).
@@ -953,22 +958,12 @@ impl NovoApp {
                 self.project_menu(ui, picked)
             });
             ui.separator();
-            for (action, label) in [
-                (Action::ShowSchematic, "Schematic"),
-                (Action::ShowCabinet, "Cabinet"),
-                (Action::ShowReports, "Reports"),
-            ] {
-                let selected = match action {
-                    Action::ShowCabinet => self.cabinet_open && !self.hub.open,
-                    Action::ShowReports => self.hub.open,
-                    _ => !self.cabinet_open && !self.hub.open,
-                };
-                let response = ui
-                    .add_enabled_ui(self.is_enabled(action), |ui| segment(ui, label, selected))
-                    .inner;
-                if response.clicked() {
-                    picked.push(action);
-                }
+            if let Some(workspace) = self.workspace_switcher(ui) {
+                picked.push(match workspace {
+                    workspace::Workspace::Cabinet => Action::ShowCabinet,
+                    workspace::Workspace::Reports => Action::ShowReports,
+                    _ => Action::ShowSchematic,
+                });
             }
             ui.separator();
             self.breadcrumb(ui);
@@ -1018,6 +1013,16 @@ impl NovoApp {
         let export = egui::Button::new("Export PDF");
         if ui.add_enabled(self.is_open(), export).clicked() {
             self.export_pdf();
+            ui.close();
+        }
+        let assembly = egui::Button::new("Export assembly checklist (PDF)");
+        if ui
+            .add_enabled(self.is_open(), assembly)
+            .on_hover_text(ASSEMBLY_HINT)
+            .on_disabled_hover_text("Open a project first")
+            .clicked()
+        {
+            self.export_assembly();
             ui.close();
         }
         let sheets = egui::Button::new("Export for bulk edit (.xlsx)");
