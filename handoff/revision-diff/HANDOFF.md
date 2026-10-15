@@ -18,3 +18,6 @@ sibling revisions thread whether a "compare two revisions" needs anything more.
 - "Export change report (PDF)" command: change list per page between two revisions. Not built.
 - From/To pickers: owned by the Revision tracking thread (session_01SRPgw1A9Q7haevj9AyydQD); `compare` engine too, after #401 merges.
 - UI threads told: "UI integration: reports and checks", "Workspaces, menus and navigation".
+
+## Split settled 2026-10-15 (Supervisor)
+Revision tracking thread: engine #435 (compare/FieldChange), CLI #445, Python #450. This thread: ALL app UI: clickable change list (#442), From/To pickers (revision or now), Compare window, PDF change report, overlay legend and next/previous jump. Build on #435 once merged. Revisions menu entry: to be named with the "Workspaces, menus and navigation" thread (session_01WAQSEGkMbyreCPG18tsSPc).
