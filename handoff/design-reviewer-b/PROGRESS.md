@@ -25,3 +25,4 @@
 18:45 UTC #307 0e32675 READY (chips only; Shift-keyboard-move commit split out, hint must be drag-only when it lands)
 19:00 UTC #293 269da3b READY (re-check); #306 a22eca1 READY (Tab/Q while wiring; assigned by lead)
 19:45 UTC #297 a11e13d READY (re-check); #318 43b406f CHANGES (docs only: C cable line missing from DESIGN)
+19:55 UTC #318 e731257 READY (C cable line; DESIGN text added)
