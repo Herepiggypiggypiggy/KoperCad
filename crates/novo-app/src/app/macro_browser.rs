@@ -5,8 +5,8 @@
 //!
 //! Reach it with `macro.browser` (Ctrl+K: "macro", "macros", "bibliotheek"),
 //! or `macro.import` to pick a file straight away. Placing a macro belongs to
-//! the placement command of the Macros thread; the browser only manages the
-//! library.
+//! the `macro.place` window of the Macros thread, which the Place button
+//! opens with the macro's name.
 
 use std::path::{Path, PathBuf};
 
@@ -174,6 +174,7 @@ impl NovoApp {
         let mut open = true;
         let mut import = false;
         let mut export: Option<PathBuf> = None;
+        let mut place: Option<String> = None;
         egui::Window::new("Macros")
             .id(egui::Id::new("macro_browser"))
             .open(&mut open)
@@ -286,10 +287,9 @@ impl NovoApp {
                                     .set_file_name(format!("{}.kcmacro", e.name))
                                     .save_file();
                             }
-                            // Placing is the Macros thread's `macro.place`; until it
-                            // exists the button says so instead of disappearing.
-                            ui.add_enabled(false, egui::Button::new("Place"))
-                                .on_disabled_hover_text("Placing a macro is coming next");
+                            if ui.button("Place").clicked() {
+                                place = Some(e.name.clone());
+                            }
                             if ui.button("Delete").clicked() {
                                 b.trash_selected();
                             }
@@ -325,6 +325,9 @@ impl NovoApp {
         }
         if import {
             self.macro_import();
+        }
+        if let Some(name) = place {
+            self.open_macro_place(Some(&name));
         }
         self.wb.macros.open = open && self.wb.macros.open;
     }

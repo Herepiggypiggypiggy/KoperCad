@@ -120,3 +120,28 @@ fn another_project_starts_without_the_data() {
     );
     assert_eq!(d.app.backend.commissioning_json(), None);
 }
+
+#[test]
+fn the_drawing_cannot_be_edited_while_the_mode_is_showing() {
+    use novo_core::Point;
+    use novo_workflow::palette::Mode;
+    let (_dir, mut d) = example();
+    let ctx = d.ctx.clone();
+    let count = |d: &Drive| d.doc().project().symbols().count();
+    let before = count(&d);
+    d.app.run_command(&ctx, "view.commissioning", None);
+    d.frame();
+    assert!(d.app.commissioning_locks_edits());
+    assert!(d.app.type_command(&ctx, Mode::Place, "mcb3"));
+    d.click(Point::new(600.0, 400.0));
+    d.frame();
+    assert_eq!(count(&d), before, "the placed symbol was taken back");
+    // Leaving the mode lets the same click edit again.
+    d.app.run_command(&ctx, "view.commissioning", None);
+    d.frame();
+    assert!(!d.app.commissioning_locks_edits());
+    assert!(d.app.type_command(&ctx, Mode::Place, "mcb3"));
+    d.click(Point::new(600.0, 400.0));
+    d.frame();
+    assert_eq!(count(&d), before + 1);
+}

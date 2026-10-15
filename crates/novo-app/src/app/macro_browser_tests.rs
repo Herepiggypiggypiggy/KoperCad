@@ -73,3 +73,10 @@ fn the_window_draws_with_a_selection() {
     d.frame();
     d.frame();
 }
+
+#[test]
+fn the_place_button_opens_the_place_window_with_the_macro_name() {
+    let (_dir, mut d) = drive();
+    d.app.open_macro_place(Some("Motor starter DOL"));
+    assert!(d.app.wb.macro_place.open);
+}

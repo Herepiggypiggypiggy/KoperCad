@@ -57,19 +57,23 @@ newer `version` is refused with the file untouched; a file that fails validation
 - **Tags.** Already handled by `place_block`: each device keeps its letter code and takes the next
   free number from the numbering rule in the target page's structure. Placing three starters gives
   three distinct sets; no tag from the source project survives.
-- **Wire numbers.** The project has no wire numbering engine yet, so a macro's numbers are cleared on
-  placement by default and the wires stay unnumbered until one numbers them. A macro can opt in to
-  keeping its numbers (for a vendor panel with fixed labels); a number another wire already carries is
-  dropped and reported as a clash in the preview, never kept twice. Implemented in
-  `novo_workflow::macro_place` (`WireNumbers::Clear` / `Keep`).
+- **Wire numbers.** By default (`WireNumbers::Auto`) a macro's numbers are dropped and the placed
+  wires are numbered by the project's scheme (`novo-numbering`, design `wire-numbering.md`), continuing
+  the project's series without touching existing numbers. `Keep` retains a macro's numbers (for a
+  vendor panel with fixed labels) except where another wire already uses the number; those are numbered
+  by the scheme and reported as clashes in the preview. `Clear` leaves the placed wires unnumbered.
+  Implemented in `novo_workflow::macro_place`; the report lists the numbers given.
 - **Potentials, feeds, interruptions, terminals.** As for blocks: the first three cannot be part of a
   macro (they join nets across the project). Terminals are allowed in a macro as devices in a strip
   (the same-name join rule then applies in the target project); this needs a core check and is the last step
   (step 6).
-- **Parts.** A part id is project-scoped, so a macro stores manufacturer and order number. On
-  placement each is looked up in the project's catalog (then the user catalog); a hit is assigned, a
-  miss leaves the device unassigned and the preview names it, after which the normal part proposals
-  run. Carrying parts is a checkbox, on by default.
+- **Parts.** A part id is project-scoped, so the macro file keeps the part itself next to the id of the
+  device in the definition (`parts`: manufacturer, order number, type number, description). On
+  placement the project's part with that manufacturer and order number is used, or one is added when
+  the project has none, and it is assigned to the placed device. So a macro works in a project whose
+  parts list is empty, and the same part is added once however often the macro is placed. Carrying
+  parts is a checkbox in the Place window, on by default when the macro has parts. Implemented in
+  `novo_workflow::macro_place` (`PartRef`, `captured_parts`, `PlaceOptions::parts`).
 - **Cabinet placement.** Stored as offsets relative to the macro's first device on its plate. On
   placement, if the target structure has a plate, the devices are placed at the offsets through the
   layout engine's overlap and rail rules; whatever does not fit lands in the Unplaced list. Off by
