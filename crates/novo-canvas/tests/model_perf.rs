@@ -1,14 +1,15 @@
-//! CPU timings of the model adapter on a big page: 3,000 symbols, each with
+//! CPU timings of the model adapter on a big page: 10,000 symbols, each with
 //! a bent wire. Run with
 //! `cargo test --release -p novo-canvas --test model_perf -- --nocapture`;
 //! in debug builds the bounds are deliberately loose.
 
-use novo_canvas::Vec2;
+use novo_canvas::model::{NoteAnchor, SymbolNote};
 use novo_canvas::model::{PageScene, PlaceholderArt};
+use novo_canvas::{Aabb, BoxMode, Vec2};
 use novo_core::{DeviceTag, Document, Endpoint, Pin, Placement, Point, SymbolRole};
 use std::time::{Duration, Instant};
 
-const SYMBOLS: usize = 3_000;
+const SYMBOLS: usize = 10_000;
 
 fn time<T>(label: &str, runs: u32, mut f: impl FnMut() -> T) -> Duration {
     let start = Instant::now();
@@ -62,6 +63,9 @@ fn big_page_cpu_budget() {
         let p = Vec2::new((i % 60) as f32 * 40.0 + 7.0, (i % 50) as f32 * 40.0);
         ps.wire_part_at(doc.project(), p, 2.0)
     });
+    time("page_contents (10k symbols, 10k wires)", 20, || {
+        doc.project().page_contents(page)
+    });
     let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
     let mut k = 0.0;
     let mut edit_worst = Duration::ZERO;
@@ -77,8 +81,44 @@ fn big_page_cpu_budget() {
         edit_worst = edit_worst.max(start.elapsed());
     }
     eprintln!("apply one moved symbol (worst of 20): {edit_worst:?}");
+    // Cross-reference notes are handed over every frame; unchanged notes
+    // must cost a comparison.
+    let notes: Vec<SymbolNote> = doc
+        .project()
+        .page_contents(page)
+        .symbols
+        .into_iter()
+        .map(|symbol| SymbolNote {
+            symbol,
+            lines: vec!["-K1 3.4".into()],
+            warning: false,
+            anchor: NoteAnchor::default(),
+        })
+        .collect();
+    let first_notes = time("set 10k notes (first)", 1, || {
+        ps.set_notes(doc.project(), notes.clone(), &PlaceholderArt)
+    });
+    let same_notes = time("set 10k notes (unchanged)", 5, || {
+        ps.set_notes(doc.project(), notes.clone(), &PlaceholderArt)
+    });
+    let zoom = 1.0;
+    let mut j = 0usize;
+    let pick = time("pick under the pointer", 200, || {
+        j += 1;
+        let p = Vec2::new((j % 60) as f32 * 40.0 + 1.0, (j % 160) as f32 * 40.0);
+        ps.scene().pick(p, 2.0, zoom)
+    });
+    let rect = Aabb::new(Vec2::new(0.0, 0.0), Vec2::new(600.0, 600.0));
+    let boxed = time("box select 15 x 15 symbols", 20, || {
+        ps.scene().box_select(&rect, BoxMode::Window, zoom)
+    });
     let limit = if cfg!(debug_assertions) { 2000 } else { 50 };
-    assert!(edit_worst < Duration::from_millis(if cfg!(debug_assertions) { 500 } else { 20 }));
+    assert!(edit_worst < Duration::from_millis(if cfg!(debug_assertions) { 1000 } else { 40 }));
+    let debug = cfg!(debug_assertions);
+    assert!(first_notes < Duration::from_secs(if debug { 30 } else { 2 }));
+    assert!(same_notes < Duration::from_millis(if debug { 500 } else { 40 }));
+    assert!(pick < Duration::from_millis(if debug { 50 } else { 2 }));
+    assert!(boxed < Duration::from_millis(if debug { 100 } else { 5 }));
     assert!(build < Duration::from_secs(20));
     assert!(part < Duration::from_millis(limit), "{part:?}");
 }
