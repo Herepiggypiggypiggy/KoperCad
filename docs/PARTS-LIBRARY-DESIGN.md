@@ -117,6 +117,64 @@ documents a public API with terms that allow it, KoperCAD fetches it with
 the user's own account. We never proxy through a server of ours, and
 nothing is needed beyond a normal user profile.
 
+## 3a. One-click Import (owner direction, 2026-10-15)
+
+Direction: the user downloads the models themselves, the data is saved on
+their device, and importing a part is one click, like the Eplan Data
+Portal. Nothing goes through our servers and nothing is bundled.
+
+**The part browser.** A drawer lists parts from the local catalog (the
+authored core set plus everything already imported) and from a small
+bundled **index of article numbers and maker page links** (links only,
+no maker content; to be confirmed with the makers in section 2a). Each row
+has one button:
+- **In library** (green) when the part and its files are saved locally;
+- **Import** when it is not.
+
+**What "Import" does, by flow.** Two flows exist; each maker uses the one its
+terms allow (table below). Both end the same way: the files are copied to
+`%LOCALAPPDATA%\KoperCAD\Catalog\Sources\<maker>\`, hashed, parsed into a
+`CatalogPart` with `provenance` (maker URL, file name, date, user), and the
+row turns to **In library**. No admin rights, no service.
+
+- **Flow A, in-app fetch.** KoperCAD requests the file from the maker's
+  own server, on the user's machine, with the user's own network and (if the
+  maker needs one) account. Only allowed where the maker documents a
+  public API or file URL and its terms permit automated access, ideally in
+  writing. Never through our servers; never scraping.
+- **Flow B, hand-off (default).** Import opens the maker's product page in the
+  user's browser, KoperCAD watches the user's `Downloads` folder (their own
+  profile folder, readable without admin; the user can switch the watch off
+  or pick another folder) for a matching STEP, DXF, BMEcat or zip, and imports
+  it when it lands, with a preview. A "drop a file here" area covers other
+  cases. For the user this is: click Import, click the maker's download
+  button, done. The download itself is the user's own, under the maker's own
+  terms and any login.
+
+**Per maker, from the terms in section 2a.**
+
+| Maker | Terms found | Flow now | Flow A when |
+| --- | --- | --- | --- |
+| WAGO | Silent on automated access; says its CAE data is free; no API or login mentioned | B | WAGO confirms in writing, or documents an API |
+| Phoenix Contact | Website terms not found; names EPLAN Data Portal and other portals as channels | B | Terms read and a documented feed or written OK |
+| Siemens | Clause text not read; the CAx tool is an interactive Java download manager | B | Terms read and a documented feed or written OK |
+| Schneider | Strictest: copying only for personal, non-commercial use; page-level terms may apply; automated access not addressed | B (opens the page, user downloads) | Written OK only |
+
+So today every maker is flow B. That is not a downgrade of the experience:
+the click-through is the same, and we stay on the right side of terms we
+have not fully read. If a maker says yes to flow A, only the fetch step of the
+importer changes.
+
+**What the app must not do:** crawl a maker's site, download in the
+background without the user's click, cache a maker's files for other users,
+sync imported files between users, or include imported files in a shared
+project export unless the user chooses to (the project keeps only the
+part data it uses, not the CAD file, and a project that embeds a maker
+file warns that redistribution is the user's responsibility).
+
+**Same pattern for ETIM.** The ETIM model is openly licensed, so the
+model file itself can be bundled with attribution (section 3) and needs no import click.
+
 ## 4. Offline and no admin rights
 
 - The catalog is a file under `%LOCALAPPDATA%\KoperCAD\Catalog\` (already so in
@@ -221,7 +279,7 @@ We do not paste maker descriptions.
 | --- | --- | --- |
 | P0 | Terms read for WAGO, Phoenix (manual only), Siemens (headings only), Schneider (section 2a). Still to read: Phoenix website terms, Siemens A.4/A.5, ECLASS licence, product-page terms. The owner sends the draft questions in section 2a; record answers here. | A person; nothing to build |
 | P1 | Schema v2 in `novo-parts` (read v1, write v2), `provenance`, `terminals`, `class` fields. Authored sets for the 4 makers (section 7). Attribution screen for ETIM. | WS-07 |
-| P2 | BMEcat importer and STEP bounding-box reader, with preview. User points at a file or folder. | One real BMEcat and a few STEP files per maker |
+| P2 | Part browser with per-part Import (flow B: open page, watch Downloads, import with preview), BMEcat importer, STEP bounding-box reader. Flow A per maker only after written OK. | One real BMEcat and a few STEP files per maker |
 | P3 | Asset store, outline-from-STEP for cabinet layout, symbol choice by `function`. | WS-15, WS-05 |
 | P4 | Optional EDZ reader, optional maker web fetch where terms allow, company-folder catalogs, 3D view. | P0 answers |
 
