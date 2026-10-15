@@ -353,8 +353,14 @@ fn merge_collinear(points: &mut Vec<Point>) {
     for &p in points.iter() {
         while out.len() >= 2 {
             let (a, b) = (out[out.len() - 2], out[out.len() - 1]);
-            let same_x = (a.x - b.x).abs() < EPS && (b.x - p.x).abs() < EPS;
-            let same_y = (a.y - b.y).abs() < EPS && (b.y - p.y).abs() < EPS;
+            // Only a point between its neighbours goes; a point where the
+            // wire turns back on itself is a real end of a run.
+            let between =
+                |lo: f64, mid: f64, hi: f64| mid >= lo.min(hi) - EPS && mid <= lo.max(hi) + EPS;
+            let same_x =
+                (a.x - b.x).abs() < EPS && (b.x - p.x).abs() < EPS && between(a.y, b.y, p.y);
+            let same_y =
+                (a.y - b.y).abs() < EPS && (b.y - p.y).abs() < EPS && between(a.x, b.x, p.x);
             if same_x || same_y {
                 out.pop();
             } else {
