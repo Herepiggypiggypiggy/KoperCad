@@ -273,6 +273,11 @@ pub const DUTCH: &[Aliases] = &[
         &["afdrukken"],
     ),
     nl(
+        "import.spreadsheet",
+        &["importeer spreadsheet", "importeer excel"],
+        &["spreadsheet", "excel", "csv"],
+    ),
+    nl(
         "export.bom",
         &["exporteer stuklijst", "stuklijst"],
         &["onderdelenlijst"],

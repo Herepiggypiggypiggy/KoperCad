@@ -200,7 +200,7 @@ enum Import {
         /// take the sheet's value or keep the project's. Left unsettled,
         /// conflicts are not applied.
         #[arg(long, value_enum)]
-        resolve: Option<Side>,
+        resolve: Option<ResolveSide>,
         /// Leave out one row, as `Devices:5` (sheet name, row); repeat for
         /// several.
         #[arg(long = "skip", value_name = "SHEET:ROW")]
@@ -210,7 +210,7 @@ enum Import {
 
 /// Which side wins a conflict.
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
-enum Side {
+enum ResolveSide {
     Sheet,
     Project,
 }
@@ -435,7 +435,7 @@ fn import_sheet(
     sheet: &Path,
     json: bool,
     output: Option<&Path>,
-    resolve: Option<Side>,
+    resolve: Option<ResolveSide>,
     skip: &[String],
     out: &mut dyn Write,
 ) -> Result<i32, Failure> {
@@ -483,8 +483,8 @@ fn import_sheet(
     let catalog = novo_parts::Catalog::load_default().unwrap_or_default();
     let mut plan = plan_import_with(&project, &book, &catalog);
     match resolve {
-        Some(Side::Sheet) => plan.resolve(Resolution::Sheet),
-        Some(Side::Project) => plan.resolve(Resolution::Project),
+        Some(ResolveSide::Sheet) => plan.resolve(Resolution::Sheet),
+        Some(ResolveSide::Project) => plan.resolve(Resolution::Project),
         None => {}
     }
     for index in 0..plan.changes.len() {

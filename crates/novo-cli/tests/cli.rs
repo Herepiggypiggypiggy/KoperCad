@@ -429,16 +429,6 @@ fn revised(dir: &Path) -> PathBuf {
     session.record(&changes);
     session.save(doc.project()).unwrap();
     session.close().unwrap();
-/// An edited export of `project`: the first device's description set to
-/// `text`, saved as `edited.xlsx` next to it.
-fn edited_sheet(project: &Path, text: &str) -> PathBuf {
-    use novo_interop::sheets::{Cell, export_project, xlsx_bytes};
-    let loaded = novo_storage::ProjectFile::read(project).unwrap();
-    let mut book = export_project(&loaded);
-    let col = book.tables[0].column("Description").unwrap();
-    book.tables[0].rows[0].cells[col] = Cell::text(text);
-    let path = project.with_file_name("edited.xlsx");
-    std::fs::write(&path, xlsx_bytes(&book).unwrap()).unwrap();
     path
 }
 
@@ -508,6 +498,22 @@ fn export_terminals_writes_the_strip_diagram_with_wire_and_bridge_columns() {
         "{}",
         run.out
     );
+}
+
+/// An edited export of `project`: the first device's description set to
+/// `text`, saved as `edited.xlsx` next to it.
+fn edited_sheet(project: &Path, text: &str) -> PathBuf {
+    use novo_interop::sheets::{Cell, export_project, xlsx_bytes};
+    let loaded = novo_storage::ProjectFile::read(project).unwrap();
+    let mut book = export_project(&loaded);
+    let col = book.tables[0].column("Description").unwrap();
+    book.tables[0].rows[0].cells[col] = Cell::text(text);
+    let path = project.with_file_name("edited.xlsx");
+    std::fs::write(&path, xlsx_bytes(&book).unwrap()).unwrap();
+    path
+}
+
+#[test]
 fn import_sheet_previews_and_never_touches_the_project() {
     let dir = tempfile::tempdir().unwrap();
     let path = project(dir.path(), false);

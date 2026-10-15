@@ -257,6 +257,16 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     // Draw
+    verb(
+        cmd(
+            "import.spreadsheet",
+            "Import spreadsheet",
+            "Project",
+            &["excel", "csv", "xlsx", "device list"],
+            Needs::Project,
+        ),
+        &["import spreadsheet", "import sheet", "import excel"],
+    ),
     cmd(
         "tool.repeat",
         "Repeat last tool",
@@ -789,16 +799,6 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export pdf", "pdf"],
-    ),
-    verb(
-        cmd(
-            "import.spreadsheet",
-            "Import spreadsheet",
-            "Import",
-            &["excel", "csv", "xlsx", "device list"],
-            Needs::Project,
-        ),
-        &["import spreadsheet", "import sheet", "import excel"],
     ),
     verb(
         cmd(
