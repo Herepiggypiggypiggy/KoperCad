@@ -335,6 +335,12 @@ pub enum Command {
     },
     /// Records a declined proposal; see [`Tx::dismiss`]. Remove the
     /// dismissal to bring the proposal back.
+    /// Switches the drawing standard and re-keys the listed symbols to its
+    /// pack, in one undo step; see [`Tx::switch_standard`].
+    SwitchStandard {
+        standard: String,
+        symbols: Vec<(SymbolId, SymbolKey)>,
+    },
     Dismiss {
         proposal: String,
         subjects: Vec<AnyId>,
@@ -448,6 +454,7 @@ impl Command {
             Command::PlaceDevice { .. } => "Place device".into(),
             Command::RotatePlacement { .. } => "Rotate device".into(),
             Command::RemovePlacement { .. } => "Remove from plate".into(),
+            Command::SwitchStandard { .. } => "Switch drawing standard".into(),
             Command::Dismiss { .. } => "Dismiss proposal".into(),
             Command::AssignPart { .. } => "Assign part".into(),
             Command::SetProperty { .. } => "Set property".into(),
@@ -779,6 +786,10 @@ impl Tx<'_> {
             }
             Command::RemovePlacement { placement } => {
                 self.remove(placement)?;
+                return Ok(Vec::new());
+            }
+            Command::SwitchStandard { standard, symbols } => {
+                self.switch_standard(&standard, &symbols)?;
                 return Ok(Vec::new());
             }
             Command::Dismiss { proposal, subjects } => self.dismiss(proposal, subjects)?.into(),
