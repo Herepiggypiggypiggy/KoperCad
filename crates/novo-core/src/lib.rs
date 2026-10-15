@@ -96,7 +96,9 @@ pub use id::{
     StructureId, SymbolId, TerminalId, TextId, WireId,
 };
 pub use json::JSON_FORMAT_VERSION;
-pub use project::{CONTENTS_GENERATOR, PageContents, Panel, Project, RATED_CURRENT_A, natural_cmp};
+pub use project::{
+    CONTENTS_GENERATOR, PAGE_ORDER, PageContents, Panel, Project, RATED_CURRENT_A, natural_cmp,
+};
 pub use record::{ChangeSet, Entity, Op, Record, Transaction};
 pub use search::{Match, SearchHit};
 pub use tag::{Aspect, DeviceTag, TagError, split_code};

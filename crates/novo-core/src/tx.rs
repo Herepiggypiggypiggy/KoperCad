@@ -16,7 +16,7 @@ use crate::id::{
     PotentialId, PotentialSystemId, RailId, RevisionId, StructureId, SymbolId, TerminalId, TextId,
     WireId,
 };
-use crate::project::Project;
+use crate::project::{PAGE_ORDER, Project};
 use crate::record::{Entity, Op, Record};
 use crate::tag::{Aspect, DeviceTag};
 
@@ -1126,6 +1126,51 @@ impl<'p> Tx<'p> {
                 d.parts.push(part);
             }
         })
+    }
+
+    /// Puts the pages of one group and panel in the given reading order by
+    /// numbering them 10, 20, 30, ... in the `order` property. `pages` must
+    /// list every page that shares the first page's group, panel and
+    /// section ([`Project::sibling_pages`]), each once. Page names, and so
+    /// the references that print them, do not change.
+    pub fn reorder_pages(&mut self, pages: &[PageId]) -> Result<()> {
+        let refuse = |reason: &str| ModelError::Refused {
+            what: "Reorder".into(),
+            reason: reason.into(),
+        };
+        let Some(&first) = pages.first() else {
+            return Err(refuse("there are no pages to order"));
+        };
+        if !self.project.contains(first.into()) {
+            return Err(ModelError::NotFound(first.into()));
+        }
+        let siblings = self.project.sibling_pages(first);
+        let listed: BTreeSet<PageId> = pages.iter().copied().collect();
+        if listed.len() != pages.len() {
+            return Err(refuse("a page is listed twice"));
+        }
+        if let Some(page) = pages.iter().find(|p| !siblings.contains(p)) {
+            if !self.project.contains((*page).into()) {
+                return Err(ModelError::NotFound((*page).into()));
+            }
+            return Err(refuse("the pages are not all in one group and panel"));
+        }
+        if siblings.len() != pages.len() {
+            return Err(refuse("list every page of the group and panel"));
+        }
+        for (n, &page) in pages.iter().enumerate() {
+            let order = Value::Int(10 * (n as i64 + 1));
+            let unchanged = self
+                .project
+                .page(page)
+                .is_some_and(|p| p.properties.get(PAGE_ORDER) == Some(&order));
+            if !unchanged {
+                self.update::<crate::Page>(page, |p| {
+                    p.properties.insert(PAGE_ORDER.into(), order);
+                })?;
+            }
+        }
+        Ok(())
     }
 
     /// Renames a group (function aspect) or panel (location aspect): every

@@ -9,11 +9,12 @@ Scope: crate `novo-routing`, pure engine that routes wires through ducts on the 
 - Follow-up PR: non-finite ducts ignored, route points keep only bends, reach rule (max_stub_mm, default 150) so wires don't cross the plate in free air, doc marks fill as planned. 15 tests.
 - Fix PR: merge_collinear keeps a turn-back point (16 tests).
 
+- Fill PR: `plan` (longest first, fill penalty from 80%, DuctFill, Problem::{FreeAir, GuessedWire, OverfullDuct}), `Job.diameter_mm`, `Rules.fill_limit`. 21 tests.
+
 ## Next
-1. Duct fill (cross-section area, fill limit), fill penalty in the path cost, job order longest first, problems (overfull duct, free air).
-2. Ask WS-02 for duct and pin storage; commands.
-3. Wire list lengths (novo-reports), checks (novo-checks).
-4. Thin Cabinet canvas drawing.
+1. Ask WS-02 for duct and pin storage; commands.
+2. Wire list lengths (novo-reports), checks (novo-checks).
+3. Thin Cabinet canvas drawing.
 
 ## Open questions
 - Default fill limit 0.5 and slack 50 mm are guesses; confirm with Tadjiro's cabinets.

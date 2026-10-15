@@ -6,8 +6,10 @@
 //! project; routes are derived and never stored.
 
 mod graph;
+mod plan;
 
 pub use graph::Network;
+pub use plan::{DuctFill, Plan, Problem, plan};
 
 /// Point on the plate.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -59,7 +61,13 @@ pub struct Job {
     pub id: u64,
     pub from: Anchor,
     pub to: Anchor,
+    /// Outer diameter of the wire. `None` (no part, no cross-section) uses
+    /// [`DEFAULT_WIRE_DIAMETER_MM`] and is reported as a problem.
+    pub diameter_mm: Option<f64>,
 }
+
+/// Outer diameter assumed for a wire of unknown size (about 1.5 mm2).
+pub const DEFAULT_WIRE_DIAMETER_MM: f64 = 3.0;
 
 /// Routing parameters.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -70,6 +78,8 @@ pub struct Rules {
     /// entries are used only when no duct is within this reach, so a wire
     /// does not cross the plate in free air to save length in a duct.
     pub max_stub_mm: f64,
+    /// Share of a duct's cross-section that wires may fill (0..1).
+    pub fill_limit: f64,
 }
 
 impl Default for Rules {
@@ -77,6 +87,7 @@ impl Default for Rules {
         Rules {
             slack_mm: 50.0,
             max_stub_mm: 150.0,
+            fill_limit: 0.5,
         }
     }
 }

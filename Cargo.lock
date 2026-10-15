@@ -1955,6 +1955,9 @@ dependencies = [
 [[package]]
 name = "novo-layout"
 version = "0.1.0"
+dependencies = [
+ "novo-core",
+]
 
 [[package]]
 name = "novo-parts"

@@ -47,6 +47,11 @@ pub enum Command {
         from: Vec<String>,
         to: Vec<String>,
     },
+    /// Puts the pages of one group and panel in the given reading order;
+    /// see [`Tx::reorder_pages`]. Names are not touched.
+    ReorderPages {
+        pages: Vec<PageId>,
+    },
     AddPage {
         name: String,
         #[serde(default)]
@@ -267,8 +272,6 @@ pub enum Command {
         #[serde(default)]
         enclosure: bool,
     },
-    /// Records a declined proposal; see [`Tx::dismiss`]. Remove the
-    /// dismissal to bring the proposal back.
     /// Sets the mounting plate of an enclosure; `None` removes it.
     SetPlateSize {
         structure: StructureId,
@@ -330,6 +333,8 @@ pub enum Command {
     RemovePlacement {
         placement: CabinetPlacementId,
     },
+    /// Records a declined proposal; see [`Tx::dismiss`]. Remove the
+    /// dismissal to bring the proposal back.
     Dismiss {
         proposal: String,
         subjects: Vec<AnyId>,
@@ -397,6 +402,7 @@ impl Command {
                 crate::tag::Aspect::Function => "Rename group".into(),
                 _ => "Rename panel".into(),
             },
+            Command::ReorderPages { .. } => "Reorder pages".into(),
             Command::AddPage { .. } => "Add page".into(),
             Command::SetPageStructure { .. } => "Move page to group or panel".into(),
             Command::AddDevice { .. } => "Add device".into(),
@@ -475,6 +481,10 @@ impl Tx<'_> {
             }
             Command::RenameLevel { aspect, from, to } => {
                 self.rename_level(aspect, &from, &to)?;
+                return Ok(Vec::new());
+            }
+            Command::ReorderPages { pages } => {
+                self.reorder_pages(&pages)?;
                 return Ok(Vec::new());
             }
             Command::DeletePage { page } => {
