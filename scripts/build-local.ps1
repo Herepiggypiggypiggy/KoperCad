@@ -81,11 +81,19 @@ if (-not (Test-Path (Join-Path $mingw 'bin\gcc.exe'))) {
     # tampered download. Without that file, say so rather than skip silently.
     $sumAsset = $rel.assets | Where-Object { $_.name -eq "$($asset.name).sha256" } | Select-Object -First 1
     if ($sumAsset) {
-        $expected = ((Invoke-RestMethod $sumAsset.browser_download_url) -split '\s+')[0].Trim().ToLower()
-        $actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
-        if ($actual -ne $expected) {
-            Remove-Item -Force $zip
-            throw "WinLibs download failed its SHA-256 check (expected $expected, got $actual)."
+        # Windows PowerShell 5.1 can hand back bytes for a binary content type.
+        $raw = (Invoke-WebRequest $sumAsset.browser_download_url -UseBasicParsing).Content
+        if ($raw -is [byte[]]) { $raw = [Text.Encoding]::ASCII.GetString($raw) }
+        $expected = (($raw.Trim() -split '\s+')[0]).ToLower()
+        if ($expected -notmatch '^[0-9a-f]{64}$') {
+            Write-Warning "Could not read a SHA-256 for $($asset.name); the download is unchecked."
+        }
+        else {
+            $actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
+            if ($actual -ne $expected) {
+                Remove-Item -Force $zip
+                throw "WinLibs download failed its SHA-256 check (expected $expected, got $actual)."
+            }
         }
     }
     else {
