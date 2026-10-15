@@ -35,6 +35,8 @@ pub struct Settings {
     /// Whether the live view skips its animations: states switch at once
     /// and a running motor shows an arrow instead of spinning.
     pub reduce_motion: bool,
+    /// Commissioning's large touch buttons: a tablet user sets it once.
+    pub large_buttons: bool,
     /// The workspace shown when the app last ran (`Workspace::id`),
     /// reopened with the project when it is available again
     /// (docs/design/workspaces.md §4.1).
@@ -44,6 +46,11 @@ pub struct Settings {
     pub workspaces: BTreeMap<String, WorkspaceLayout>,
     /// How far the fast-keys walk-through is (docs/ONBOARDING-DESIGN.md §2).
     pub onboarding: Onboarding,
+    /// The start of the name a new page group gets (`G` makes `=G1`) in a
+    /// project with no group to continue. Empty: the default.
+    pub group_prefix: String,
+    /// The same for a new cabinet (`A` makes `+A1`). Empty: the default.
+    pub cabinet_prefix: String,
 }
 
 /// The walk-through's progress, per user: kept so closing the app mid-way

@@ -550,6 +550,59 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["jump", "renumber", "continuation", "off page"],
         Needs::Project,
     ),
+    // Wire numbering (novo-numbering). `wires.number` fills what has no
+    // number; the window shows the scheme, a preview and the conflicts.
+    cmd(
+        "wires.number",
+        "Number wires",
+        "Edit",
+        &["wire number", "numbering", "potential", "automatic", "fill"],
+        Needs::Project,
+    ),
+    verb(
+        cmd(
+            "wires.numbering",
+            "Wire numbering",
+            "Edit",
+            &["scheme", "wire number", "numbering", "preview"],
+            Needs::Project,
+        ),
+        &["wire numbering"],
+    ),
+    verb(
+        cmd(
+            "wires.renumber",
+            "Renumber wires",
+            "Edit",
+            &["wire number", "numbering", "start over"],
+            Needs::Project,
+        ),
+        &["renumber wires"],
+    ),
+    cmd(
+        "wires.check_numbers",
+        "Check wire numbers",
+        "Edit",
+        &["duplicate", "conflict", "wire number", "numbering"],
+        Needs::Project,
+    ),
+    verb(
+        cmd(
+            "wires.set_number",
+            "Set wire number",
+            "Edit",
+            &["type", "manual", "lock", "wire number"],
+            Needs::Selection,
+        ),
+        &["number wire"],
+    ),
+    cmd(
+        "wires.unlock_number",
+        "Unlock wire number",
+        "Edit",
+        &["manual", "lock", "wire number"],
+        Needs::Selection,
+    ),
     // Navigate
     cmd(
         "nav.partner",
@@ -690,10 +743,45 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "simulate.motor-start",
+        "Simulate motor start",
+        "View",
+        &[
+            "simulate",
+            "motor",
+            "start",
+            "star-delta",
+            "soft starter",
+            "inrush",
+        ],
+        Needs::Project,
+    ),
+    cmd(
         "view.cabinet_table",
         "Cabinet as table",
         "View",
         &["table"],
+        Needs::Project,
+    ),
+    cmd(
+        "heat.toggle",
+        "Show or hide heat",
+        "View",
+        &["heat", "temperature", "thermal", "map", "cabinet"],
+        Needs::Project,
+    ),
+    cmd(
+        "heat.airflow",
+        "Show or hide airflow",
+        "View",
+        &["heat", "air", "flow", "streamlines", "cabinet"],
+        Needs::Project,
+    ),
+    cmd(
+        "heat.contours",
+        "Show or hide heat contours",
+        "View",
+        &["heat", "contour", "lines", "isotherms", "cabinet"],
         Needs::Project,
     ),
     cmd(
@@ -819,6 +907,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.plate",
+            "Export plate drawing",
+            "Export",
+            &["mounting plate", "drill table", "drilling"],
+            Needs::Project,
+        ),
+        &["export plate"],
+    ),
+    verb(
+        cmd(
             "export.bom",
             "Export bill of materials",
             "Export",
@@ -856,6 +954,73 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export csv", "csv"],
+    ),
+    verb(
+        cmd(
+            "plc.import_tags",
+            "Import PLC tags",
+            "Export",
+            &[
+                "plc",
+                "tia",
+                "codesys",
+                "studio 5000",
+                "comments",
+                "read back",
+            ],
+            Needs::Project,
+        ),
+        &["import plc", "import tags"],
+    ),
+    verb(
+        cmd(
+            "export.plc_csv",
+            "Export PLC I/O list (CSV)",
+            "Export",
+            &["plc", "i/o", "tags", "excel"],
+            Needs::Project,
+        ),
+        &["export plc", "export io"],
+    ),
+    verb(
+        cmd(
+            "export.plc_plcopen",
+            "Export PLC tags (PLCopen XML)",
+            "Export",
+            &["plc", "codesys", "plcopen", "tags", "symbols"],
+            Needs::Project,
+        ),
+        &["export plcopen", "export codesys"],
+    ),
+    verb(
+        cmd(
+            "export.plc_tia",
+            "Export PLC tags for TIA Portal",
+            "Export",
+            &["plc", "siemens", "tia", "tag table", "s7"],
+            Needs::Project,
+        ),
+        &["export tia", "export siemens"],
+    ),
+    verb(
+        cmd(
+            "export.plc_studio5000",
+            "Export PLC tags for Studio 5000",
+            "Export",
+            &["plc", "rockwell", "allen-bradley", "logix", "tags"],
+            Needs::Project,
+        ),
+        &["export studio 5000", "export rockwell"],
+    ),
+    verb(
+        cmd(
+            "export.plc_address_plan",
+            "Export PLC address plan",
+            "Export",
+            &["plc", "hardware", "slots", "addresses"],
+            Needs::Project,
+        ),
+        &["export address plan"],
     ),
 ];
 

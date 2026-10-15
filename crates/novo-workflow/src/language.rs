@@ -187,6 +187,28 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["onderbrekingspunten nummeren"],
     ),
+    nl("wires.number", &[], &["draden nummeren", "draadnummers"]),
+    nl(
+        "wires.numbering",
+        &["draadnummering"],
+        &["draadnummers instellen", "nummerschema"],
+    ),
+    nl(
+        "wires.renumber",
+        &["hernummer draden"],
+        &["draden opnieuw nummeren"],
+    ),
+    nl(
+        "wires.check_numbers",
+        &[],
+        &["draadnummers controleren", "dubbele draadnummers"],
+    ),
+    nl(
+        "wires.set_number",
+        &["nummer draad"],
+        &["draadnummer typen", "draadnummer vastzetten"],
+    ),
+    nl("wires.unlock_number", &[], &["draadnummer ontgrendelen"]),
     nl("terminal.reset_pe", &["herstel"], &["aarde", "klemmen"]),
     nl("terminal.connect", &["verbind"], &["klemmen", "brug"]),
     nl("terminal.disconnect", &["ontkoppel"], &["klemmen", "brug"]),
@@ -217,6 +239,13 @@ pub const DUTCH: &[Aliases] = &[
     nl("view.full_screen", &[], &["volledig scherm"]),
     nl("view.cabinet_table", &[], &["kast als tabel", "tabel"]),
     nl(
+        "heat.toggle",
+        &[],
+        &["warmte tonen", "temperatuur", "warmtebeeld"],
+    ),
+    nl("heat.airflow", &[], &["luchtstroom", "luchtstroming"]),
+    nl("heat.contours", &[], &["isothermen", "warmtelijnen"]),
+    nl(
         "cabinet.size-enclosure",
         &[],
         &["kast dimensioneren", "kastmaat", "koeling", "warmte"],
@@ -225,6 +254,16 @@ pub const DUTCH: &[Aliases] = &[
         "cabinet.enclosures",
         &[],
         &["kasten", "kastenlijst", "behuizingen"],
+    ),
+    nl(
+        "simulate.motor-start",
+        &[],
+        &[
+            "motor starten",
+            "ster-driehoek",
+            "aanloopstroom",
+            "zachtstarter",
+        ],
     ),
     nl("view.changes", &["wijzigingen"], &["vergelijk", "verschil"]),
     nl(
@@ -280,6 +319,11 @@ pub const DUTCH: &[Aliases] = &[
         &["afdrukken"],
     ),
     nl(
+        "export.plate",
+        &["exporteer montageplaat", "montageplaat exporteren"],
+        &["boortabel", "boren"],
+    ),
+    nl(
         "export.bom",
         &["exporteer stuklijst", "stuklijst"],
         &["onderdelenlijst"],
@@ -299,6 +343,36 @@ pub const DUTCH: &[Aliases] = &[
         &["werkplaats", "boren"],
     ),
     nl("export.sheets_csv", &["exporteer csv"], &["csv"]),
+    nl(
+        "plc.import_tags",
+        &["importeer plc", "importeer tags"],
+        &["plc", "tags", "inlezen"],
+    ),
+    nl(
+        "export.plc_csv",
+        &["exporteer plc", "exporteer io"],
+        &["plc", "io lijst"],
+    ),
+    nl(
+        "export.plc_plcopen",
+        &["exporteer plcopen", "exporteer codesys"],
+        &["plcopen", "codesys"],
+    ),
+    nl(
+        "export.plc_tia",
+        &["exporteer tia", "exporteer siemens"],
+        &["tia", "siemens"],
+    ),
+    nl(
+        "export.plc_studio5000",
+        &["exporteer studio 5000", "exporteer rockwell"],
+        &["rockwell", "studio 5000"],
+    ),
+    nl(
+        "export.plc_address_plan",
+        &["exporteer adresplan"],
+        &["adresplan"],
+    ),
 ];
 
 /// Dutch command arguments and the English chip each one stands for.

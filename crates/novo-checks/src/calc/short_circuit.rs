@@ -91,6 +91,17 @@ impl Source {
     /// 60909-0 §3.3.3, `KT = 0.95·c_max / (1 + 0.6·x_T)`, which is below 1
     /// and so raises the maximum short-circuit current by a few percent.
     pub fn from_transformer(sn_kva: f64, uk_percent: f64, voltage: f64) -> Option<Source> {
+        Self::transformer(sn_kva, uk_percent, voltage, true)
+    }
+
+    /// Like [`Source::from_transformer`] without `KT`, for the minimum
+    /// short-circuit current ([`ik1_min`]): IEC 60909-0 applies `KT` to the
+    /// maximum case only, and leaving it out gives the lower current.
+    pub fn from_transformer_min(sn_kva: f64, uk_percent: f64, voltage: f64) -> Option<Source> {
+        Self::transformer(sn_kva, uk_percent, voltage, false)
+    }
+
+    fn transformer(sn_kva: f64, uk_percent: f64, voltage: f64, with_kt: bool) -> Option<Source> {
         if !(sn_kva.is_finite()
             && sn_kva > 0.0
             && uk_percent.is_finite()
@@ -103,7 +114,11 @@ impl Source {
         let z = uk_percent / 100.0 * voltage * voltage / (sn_kva * 1000.0);
         // Relative reactance of the transformer: X = Z / sqrt(1 + 0.2²).
         let x_t = uk_percent / 100.0 / (1.0 + 0.2_f64 * 0.2).sqrt();
-        let kt = 0.95 * C_MAX / (1.0 + 0.6 * x_t);
+        let kt = if with_kt {
+            0.95 * C_MAX / (1.0 + 0.6 * x_t)
+        } else {
+            1.0
+        };
         Some(Source {
             impedance: from_magnitude(z * kt, 0.2),
             voltage,
@@ -280,6 +295,9 @@ mod tests {
         near(ik, 24_540.0, 0.01);
         // Larger than without the correction factor.
         assert!(ik > 1.05 * 22_746.0);
+        // The minimum case leaves KT out and has the larger impedance.
+        let min = Source::from_transformer_min(630.0, 4.0, 400.0).unwrap();
+        near(min.impedance.magnitude(), z_uncorrected, 1e-9);
     }
 
     #[test]
