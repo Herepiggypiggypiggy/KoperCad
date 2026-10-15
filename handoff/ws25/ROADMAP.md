@@ -11,14 +11,16 @@ Design: `docs/design/symbol-packs.md`. Format: `crates/novo-symbols/FORMAT.md`.
 | --- | --- |
 | #335 | Design doc for packs and the NFPA pack (merged) |
 | #351 (merged) | `Pack`, `builtin_pack`, `load_dir_pack`, 135 NFPA symbols, `tests/packs.rs` |
-| growth PR | 18 new IEC symbols plus NFPA counterparts (148 NFPA in total): mushroom, foot and pull-cord switches, flow switch, brake and solenoid coils, pressure, speed and flow meters, coloured lamps; letter codes for them |
+| growth PR (merged) | 18 new IEC symbols plus NFPA counterparts (148 NFPA in total): mushroom, foot and pull-cord switches, flow switch, brake and solenoid coils, pressure, speed and flow meters, coloured lamps; letter codes for them |
+| #380, #390, #407, #418, #424 | Audit of literal `iec/` keys: terminals, sim, plc, canvas, editor, workflow recognise NFPA symbols through `Pack::path_of`/`same_device`/`Catalog::in_pack`, each with `tests/nfpa_keys.rs` |
+| audit 6/6 | xref and checks tests that NFPA contacts classify like IEC |
 
 ## Next, in order
 
-0. **Audit of literal `iec/` keys** (reviewer ask on #335, listed in the design doc Risks): 20 non-test files match `iec/...` keys and would ignore `nfpa/...` symbols. Switch each to `function` or a pack-independent key and add one test per engine on `nfpa` keys. Owners are the engine threads; the pack is not usable from the app before this.
+0. ~~Audit of literal `iec/` keys~~ done (see Done).
 1. **NFPA breadth**, devices that exist in IEC but have no NFPA drawing yet (`gen_nfpa.py` has no entry): resistors and heaters (zigzag), inductors, potentiometers and variable passives, varistor, bell/buzzer/horn, 3-phase transformer, current transformer, emc filter, rcd/rcbo (GFCI), mcb with N, dahlander motor, changeover switch, surge arrester, sensors pt100 look.
-2. **Project standard setting** that picks the pack and `Catalog::new(Library::builtin_pack(pack))`. This is WS-01/WS-02 work; ask them.
-3. **Switch standard command** built on `Pack::counterpart`: rewrite symbol keys, report devices with no counterpart.
+2. **Project standard setting**: `ProjectRules.standard` is on main (#369); WS-01 wires `Catalog::builtin_pack` in the app (#383).
+3. **Switch standard**: `Command::SwitchStandard` is on main (#387); a caller that computes keys with `Pack::counterpart` and reports devices without counterpart is still to be written (app or workflow).
 4. **More IEC growth**: 3-wire inductive/capacitive/photoelectric sensors, illuminated push buttons, solid-state relay, beacon, encoder, fans.
 5. **Hands-on check by Tadjiro** of the NFPA artwork: delay-contact arcs, pressure and temperature letters, breaker arc, fuse S-curve, pilot-light letters.
 
