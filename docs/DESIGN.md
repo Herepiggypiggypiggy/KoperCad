@@ -357,10 +357,10 @@ can be seen. A dot sits on every grid point and every fifth is a little
 larger (a major dot); the dot colour is Layout's and stays faint enough
 never to compete with wires. Dots are screen sized (1 px, major 2 px) and
 thin out with zoom: when the grid pitch on screen falls under 8 px only
-the major dots show, and when the major pitch falls under 8 px none do. The HUD
-still names the grid. Snap works the same whether or not the dots show,
-and `grid` in the command surface (or the View chip) shows and hides
-them; it is a per-user setting like the wiring mode.
+the major dots show, and when the major pitch falls under 8 px none do.
+The HUD still names the grid. Snap works the same whether or not the dots
+show. `grid` in the command surface shows and hides them; it is a
+per-user setting like the wiring mode.
 
 **Escape ladder.** Cancel the step in progress, then leave the tool, then
 clear the selection.
