@@ -1886,6 +1886,7 @@ dependencies = [
  "glam",
  "naga",
  "novo-core",
+ "novo-symbols",
  "pollster 1.0.1",
  "wgpu",
 ]
