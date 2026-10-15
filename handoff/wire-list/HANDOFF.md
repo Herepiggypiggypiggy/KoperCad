@@ -3,7 +3,8 @@
 ## State
 - #417 merged (wire list Cut length mm / Length basis, `cutlist` report, docs/design/cut-list.md).
 - Follow-up PR on `claude/project-thread-qpde09`: `kopercad-cli export cutlist`.
-- Next (asked by the coordinator): labels export (wire, terminal, device, cable labels; CSV layouts, PDF sheet with user-set sizes, app preview, CLI).
+- Labels PR 1 (engine + CSV + CLI `export labels`) is committed locally on top of #437's commit, push after #437 merges (restart branch from main). Then PR 2: PDF label sheet with user sizes (novo-pdf), PR 3: app preview.
+- Labels export (asked by the coordinator) (wire, terminal, device, cable labels; CSV layouts, PDF sheet with user-set sizes, app preview, CLI).
 
 ## How the user opens it
 - Wire list with cut lengths: generated "Wire list" page (default page), `kopercad-cli export wires`, Excel via `export reports`.

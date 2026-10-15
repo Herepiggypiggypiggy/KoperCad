@@ -88,8 +88,28 @@ struct ReportArgs {
     delimiter: char,
 }
 
+/// Which labels, and in which layout.
+#[derive(Debug, clap::Args)]
+struct LabelArgs {
+    file: PathBuf,
+    /// Output file (.csv); standard output when left out.
+    #[arg(short, long)]
+    output: Option<PathBuf>,
+    /// Which labels: wires, terminals, devices or cables. Repeat for
+    /// several; all when left out.
+    #[arg(short, long = "kind")]
+    kinds: Vec<String>,
+    /// CSV layout: `generic` (header row, for any software) or `brother`
+    /// (P-touch Editor database: no header, tab separated). Use one kind
+    /// per file with `brother`.
+    #[arg(long, default_value = "generic")]
+    layout: String,
+}
+
 #[derive(Debug, Subcommand)]
 enum Export {
+    /// Labels for a label printer: wire, terminal, device and cable labels.
+    Labels(LabelArgs),
     /// Bill of materials: every part with its quantity, plus devices
     /// without a part.
     Bom(ReportArgs),
@@ -210,6 +230,7 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             }
             Ok(exit::OK)
         }
+        Cmd::Export(Export::Labels(args)) => export_labels(&args, out),
         Cmd::Export(Export::Bom(args)) => export_reports(&args.file, &["bom"], &args, out),
         Cmd::Export(Export::Devices(args)) => export_reports(&args.file, &["devices"], &args, out),
         Cmd::Export(Export::Wires(args)) => export_reports(&args.file, &["wires"], &args, out),
@@ -322,6 +343,45 @@ fn export_reports(
             let format = ReportFormat::Csv(CsvOptions { bom: false, ..csv });
             let bytes = novo_py::report_bytes(&project, ids, format).map_err(usage)?;
             out.write_all(&bytes)
+                .map_err(|e| Failure::new(exit::WRITE, format!("cannot write output: {e}")))?;
+        }
+    }
+    Ok(exit::OK)
+}
+
+fn export_labels(args: &LabelArgs, out: &mut dyn Write) -> Result<i32, Failure> {
+    let usage = |m: String| Failure::new(exit::USAGE, m);
+    let layout = novo_reports::LabelLayout::parse(&args.layout).ok_or_else(|| {
+        usage(format!(
+            "unknown label layout `{}` (generic or brother)",
+            args.layout
+        ))
+    })?;
+    for kind in &args.kinds {
+        if !novo_reports::Labels::KINDS.contains(&kind.as_str()) {
+            return Err(usage(format!(
+                "unknown label kind `{kind}` ({})",
+                novo_reports::Labels::KINDS.join(", ")
+            )));
+        }
+    }
+    let project = read(&args.file)?;
+    let labels = novo_reports::Report::generate(&novo_reports::Labels, &project);
+    let kinds: Vec<&str> = args.kinds.iter().map(String::as_str).collect();
+    let mut text = novo_reports::labels_csv(&labels, &kinds, layout);
+    match &args.output {
+        Some(path) => {
+            if novo_py::is_project_path(path) {
+                return write_output(&args.file, path, &[]).map(|()| exit::OK);
+            }
+            write_output(&args.file, path, text.as_bytes())?;
+        }
+        None => {
+            // A byte order mark is only noise on a terminal or in a pipe.
+            if let Some(stripped) = text.strip_prefix('\u{feff}') {
+                text = stripped.to_owned();
+            }
+            out.write_all(text.as_bytes())
                 .map_err(|e| Failure::new(exit::WRITE, format!("cannot write output: {e}")))?;
         }
     }
