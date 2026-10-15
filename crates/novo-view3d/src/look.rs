@@ -40,6 +40,15 @@ pub struct Highlight {
     pub edge: Rgb,
 }
 
+/// Colours of what the widget draws over the image: label chips and the view
+/// cube (straight sRGB with alpha).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Overlay {
+    pub chip: [u8; 4],
+    pub chip_text: [u8; 4],
+    pub chip_border: [u8; 4],
+}
+
 /// Plain data, rebuilt when the app theme changes (no function pointers, so a
 /// theme can fill it from its own state).
 #[derive(Debug, Clone, Copy)]
@@ -53,6 +62,7 @@ pub struct Look {
     pub selection: Highlight,
     pub hover: Highlight,
     pub related: Highlight,
+    pub overlay: Overlay,
     /// Direction the light comes from (towards the light), world space.
     pub light: [f32; 3],
     /// Share of the shading that comes from the hemisphere term, 0 to 1.
@@ -181,6 +191,11 @@ impl Look {
                 tint: rgb3(c.hover),
                 tint_amount: 0.15,
                 edge: rgb3(c.hover),
+            },
+            overlay: Overlay {
+                chip: c.label_chip,
+                chip_text: c.label_text,
+                chip_border: c.label_border,
             },
             // Towards the light: front left above, +Y up, +Z out of the plate.
             light: [az.sin() * el.cos(), el.sin(), az.cos() * el.cos()],

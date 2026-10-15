@@ -17,6 +17,7 @@ use novo_layout::plan::Plan;
 use novo_layout::state::CabinetLayout;
 
 use super::cabinet_inspector;
+use super::cabinet_rules;
 use super::{Level, NovoApp};
 use crate::theme;
 
@@ -48,6 +49,8 @@ pub(super) struct CabinetState {
     pub(super) table: bool,
     /// The plate card of the inspector is shown with nothing selected.
     pub(super) plate_card: bool,
+    /// The place rules, why `Place all` chose what it did, and the cut list.
+    pub(super) rules: cabinet_rules::RulesState,
     /// The Heat view over the plate.
     pub(super) heat: super::heat::HeatState,
 }
@@ -79,6 +82,7 @@ impl CabinetState {
             keys: Vec::new(),
             table: false,
             plate_card: false,
+            rules: cabinet_rules::RulesState::new(),
             heat: super::heat::HeatState::new(),
         }
     }
@@ -102,6 +106,8 @@ pub(super) enum Ask {
     Drop(u64, f64, f64),
     Rotate(Vec<u64>),
     Remove(Vec<u64>),
+    /// Cut rails to new lengths (rail id, length in mm), from the cut list.
+    SetRailLengths(Vec<(u64, f64)>),
 }
 
 /// The Cabinet drawing of a layout, with the layout's problems as box states.
@@ -333,6 +339,11 @@ impl NovoApp {
                 .map(|s| s.id)
         });
         let layout = structure.and_then(|s| load(project, s));
+        self.cabinet.rules.ensure_loaded();
+        let judged = match (structure, &layout) {
+            (Some(s), Some(_)) => Some(cabinet_rules::judge(project, s, &self.cabinet.rules.rules)),
+            _ => None,
+        };
         let cands = structure
             .map(|s| candidates(project, s))
             .unwrap_or_default();
@@ -450,6 +461,20 @@ impl NovoApp {
                 if ui.button("Size enclosure").clicked() {
                     self.sizing.panel_open = !self.sizing.panel_open;
                 }
+                if ui
+                    .button("Rules")
+                    .on_hover_text("Where Place all puts each kind of device")
+                    .clicked()
+                {
+                    self.cabinet.rules.editor_open ^= true;
+                }
+                if ui
+                    .button("Cut list")
+                    .on_hover_text("Bars of rail and duct to buy and cut")
+                    .clicked()
+                {
+                    self.cabinet.rules.cut_open ^= true;
+                }
                 ui.weak(format!("{placed} placed, {unplaced} unplaced"));
                 let label = format!(
                     "{problems} {}",
@@ -472,6 +497,18 @@ impl NovoApp {
                                 ask = Some(Ask::Select(p.id));
                                 ui.close();
                             }
+                        }
+                    });
+                }
+                if let Some(j) = judged.as_ref().filter(|j| !j.violations.is_empty()) {
+                    let n = j.violations.len();
+                    ui.weak(format!(
+                        "{n} rule {}",
+                        if n == 1 { "problem" } else { "problems" }
+                    ))
+                    .on_hover_ui(|ui| {
+                        for v in j.violations.iter().take(12) {
+                            ui.label(v.describe(&self.cabinet.rules.rules, &|id| tag_of(id)));
                         }
                     });
                 }
@@ -542,9 +579,12 @@ impl NovoApp {
                 // is switched on; otherwise the plate gets the whole window.
                 let inspector = match (&layout, structure) {
                     (Some(stored), Some(s)) if !selected.is_empty() || self.cabinet.plate_card => {
-                        let facts = cabinet_inspector::gather(
+                        let mut facts = cabinet_inspector::gather(
                             project, s, stored, &shown, &selected, &tag_of,
                         );
+                        if let Some(j) = &judged {
+                            cabinet_rules::annotate(&mut facts, &self.cabinet.rules, j, &tag_of);
+                        }
                         // On the side away from the selection.
                         let centre = shown
                             .placements
@@ -755,6 +795,17 @@ impl NovoApp {
 
         super::sizing::show_window(ui.ctx(), &mut self.sizing, &sizing_devices);
         super::sizing::show_editor(ui.ctx(), &mut self.sizing);
+        cabinet_rules::show_rules_window(ui.ctx(), &mut self.cabinet.rules);
+        let lists = if self.cabinet.rules.cut_open {
+            structure.and_then(|s| cabinet_rules::cut_lists(project, s))
+        } else {
+            None
+        };
+        if let Some(a) =
+            cabinet_rules::show_cut_window(ui.ctx(), &mut self.cabinet.rules, lists.as_ref())
+        {
+            ask = Some(a);
+        }
 
         if let Some(ask) = ask {
             self.cabinet_ask(ask, structure, layout, &cands);
@@ -772,6 +823,7 @@ impl NovoApp {
             Ask::Panel(l) => {
                 self.cabinet.location = Some(l);
                 self.cabinet.preview = None;
+                self.cabinet.rules.explain = None;
             }
             Ask::Cancel => self.cabinet.preview = None,
             Ask::ToggleTable => self.cabinet.table ^= true,
@@ -785,7 +837,17 @@ impl NovoApp {
             }
             Ask::PlaceAll => {
                 if let Some(layout) = layout {
-                    let plan = layout.preview(cands);
+                    self.cabinet.rules.ensure_loaded();
+                    let project = self.backend.document().map(|d| d.project());
+                    let plan = match (structure, project) {
+                        (Some(s), Some(project)) => {
+                            let (plan, why) =
+                                cabinet_rules::plan(project, s, &layout, &self.cabinet.rules.rules);
+                            self.cabinet.rules.explain = Some(why);
+                            plan
+                        }
+                        _ => layout.preview(cands),
+                    };
                     if plan.placements.is_empty() {
                         self.message(Level::Info, "Nothing fits on the plate");
                     } else {
@@ -793,6 +855,19 @@ impl NovoApp {
                             self.message(
                                 Level::Warning,
                                 format!("{} devices do not fit on the plate", plan.unplaced.len()),
+                            );
+                        }
+                        if self
+                            .cabinet
+                            .rules
+                            .explain
+                            .as_ref()
+                            .is_some_and(|e| e.separation_relaxed)
+                        {
+                            self.message(
+                                Level::Warning,
+                                "The plate is too small to keep power and signal ducts apart; \
+                                 the separation was given up to fit every device",
                             );
                         }
                         self.cabinet.preview = Some(plan);
@@ -815,6 +890,24 @@ impl NovoApp {
                     .is_some_and(|p| p.rotated);
                 self.cabinet_edit("Place device", move |tx| {
                     place_device(tx, structure, device, x, y, rotated)
+                });
+            }
+            Ask::SetRailLengths(lengths) => {
+                self.cabinet_edit("Cut rails to length", move |tx| {
+                    for (id, length) in lengths {
+                        let rail = novo_core::RailId::from(id);
+                        let Some(r) = tx.project().get::<novo_core::Rail>(rail) else {
+                            continue;
+                        };
+                        let (width, height) = (r.width, r.height);
+                        tx.execute(Command::SetRailSize {
+                            rail,
+                            length,
+                            width,
+                            height,
+                        })?;
+                    }
+                    Ok(())
                 });
             }
             Ask::Rotate(devices) => {
