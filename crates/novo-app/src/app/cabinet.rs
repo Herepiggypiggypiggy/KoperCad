@@ -46,6 +46,8 @@ pub(super) struct CabinetState {
     pub(super) keys: Vec<String>,
     /// The table face (Ctrl+T) is shown instead of the plate.
     pub(super) table: bool,
+    /// The plate card of the inspector is shown with nothing selected.
+    pub(super) plate_card: bool,
 }
 
 /// A placed device being dragged across the plate.
@@ -74,6 +76,7 @@ impl CabinetState {
             ghost: None,
             keys: Vec::new(),
             table: false,
+            plate_card: false,
         }
     }
 }
@@ -89,6 +92,7 @@ pub(super) enum Ask {
     Accept,
     Cancel,
     ToggleTable,
+    TogglePlateCard,
     /// Place or move a device with its top left at `(x, y)` mm.
     Drop(u64, f64, f64),
     Rotate(Vec<u64>),
@@ -368,6 +372,14 @@ impl NovoApp {
                         ask = Some(Ask::PlaceAll);
                     }
                 }
+                if !self.cabinet.table
+                    && ui
+                        .selectable_label(self.cabinet.plate_card, "Plate")
+                        .on_hover_text("Size and fill of the mounting plate")
+                        .clicked()
+                {
+                    ask = Some(Ask::TogglePlateCard);
+                }
                 if ui
                     .selectable_label(self.cabinet.table, "Table")
                     .on_hover_text("Devices as a table (Ctrl+T)")
@@ -438,17 +450,25 @@ impl NovoApp {
                     .iter()
                     .filter_map(|i| novo_canvas::cabinet::box_of(*i))
                     .collect();
-                if let (Some(stored), Some(s)) = (&layout, structure) {
-                    let facts = cabinet_inspector::gather(project, s, stored, &shown, &selected);
-                    egui::Panel::right("cabinet_inspector")
-                        .exact_size(240.0)
-                        .resizable(false)
-                        .show(ui, |ui| {
-                            if let Some(a) = cabinet_inspector::show(ui, &facts) {
-                                ask = Some(a);
-                            }
-                        });
-                }
+                // The inspector: with a selection, or the plate card when it
+                // is switched on; otherwise the plate gets the whole window.
+                let inspector = match (&layout, structure) {
+                    (Some(stored), Some(s)) if !selected.is_empty() || self.cabinet.plate_card => {
+                        let facts = cabinet_inspector::gather(
+                            project, s, stored, &shown, &selected, &tag_of,
+                        );
+                        // On the side away from the selection.
+                        let centre = shown
+                            .placements
+                            .iter()
+                            .filter(|p| selected.contains(&p.id))
+                            .map(|p| p.footprint().x + p.footprint().w / 2.0)
+                            .sum::<f64>()
+                            / selected.len().max(1) as f64;
+                        Some((facts, centre > shown.plate.width / 2.0))
+                    }
+                    _ => None,
+                };
 
                 let view = cabinet_view(&shown, &tag_of);
                 self.cabinet.scene.set(&view);
@@ -457,6 +477,12 @@ impl NovoApp {
                     self.cabinet.fitted = location.clone();
                 }
                 let out = self.cabinet.view.show(ui, self.cabinet.scene.scene());
+                if let Some((facts, left)) = &inspector
+                    && let Some(a) =
+                        cabinet_inspector::overlay(ui.ctx(), out.response.rect, *left, facts)
+                {
+                    ask = Some(a);
+                }
                 if let Some(id) = out.hovered.and_then(novo_canvas::cabinet::box_of) {
                     let lines = problem_lines(&shown, id, &tag_of);
                     out.response.clone().on_hover_ui_at_pointer(|ui| {
@@ -602,6 +628,7 @@ impl NovoApp {
             }
             Ask::Cancel => self.cabinet.preview = None,
             Ask::ToggleTable => self.cabinet.table ^= true,
+            Ask::TogglePlateCard => self.cabinet.plate_card ^= true,
             Ask::PlaceAll => {
                 if let Some(layout) = layout {
                     let plan = layout.preview(cands);

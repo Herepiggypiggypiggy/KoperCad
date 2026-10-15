@@ -242,6 +242,12 @@ fn inspector_sets_the_plate_size_and_lists_a_device_s_problems() {
     let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
     d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
 
+    // The plate card is off until asked for, so the plate gets the window.
+    assert!(!d.app.cabinet.plate_card);
+    d.app
+        .cabinet_ask(Ask::TogglePlateCard, Some(cab), None, &[]);
+    assert!(d.app.cabinet.plate_card);
+
     // The plate size comes from the inspector, as one undo step.
     let plate = novo_core::MountingPlate {
         width: 500.0,
@@ -266,14 +272,17 @@ fn inspector_sets_the_plate_size_and_lists_a_device_s_problems() {
             .cabinet_ask(Ask::Drop(*id, 100.0, 100.0), Some(cab), l, &[]);
     }
     let stored = layout_of(&d, cab).unwrap();
-    let Facts::Devices(facts) = gather(project(&d), cab, &stored, &stored, &ids[..1]) else {
+    let Facts::Devices(facts) = gather(project(&d), cab, &stored, &stored, &ids[..1], &|id| {
+        id.to_string()
+    }) else {
         panic!("a device is selected");
     };
     assert_eq!(facts.len(), 1);
     assert!(facts[0].problems.iter().any(|p| p.starts_with("Overlaps")));
     assert!(facts[0].part.as_deref().unwrap().starts_with("ACME"));
     assert!(matches!(
-        gather(project(&d), cab, &stored, &stored, &[]),
+        gather(project(&d), cab, &stored, &stored, &[], &|id| id
+            .to_string()),
         Facts::Plate { placed: 2, .. }
     ));
 }

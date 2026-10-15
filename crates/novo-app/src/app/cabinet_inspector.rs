@@ -7,7 +7,13 @@ use eframe::egui;
 use novo_core::{Device, DeviceId, MountingPlate, Part, Project, StructureId};
 use novo_layout::state::CabinetLayout;
 
-use super::cabinet::Ask;
+use novo_theme::widgets;
+
+use super::cabinet::{Ask, problem_lines};
+/// The inspector's width, the same as the schematic's.
+const WIDTH: f32 = super::inspector::INSPECTOR_WIDTH;
+const MARGIN: f32 = 12.0;
+const TOP: f32 = 40.0;
 
 /// The widest a plate dimension can be set to, in mm.
 const MAX_MM: f64 = 5000.0;
@@ -44,8 +50,8 @@ pub(super) fn gather(
     stored: &CabinetLayout,
     shown: &CabinetLayout,
     selected: &[u64],
+    tag_of: &impl Fn(u64) -> String,
 ) -> Facts {
-    let report = shown.report();
     let name = |id: u64| {
         project
             .get::<Device>(DeviceId::from(id))
@@ -72,27 +78,7 @@ pub(super) fn gather(
                 })
             });
             let f = p.footprint();
-            let mut problems = Vec::new();
-            for &(a, b) in &report.collisions {
-                if a == p.id || b == p.id {
-                    problems.push(format!("Overlaps {}", name(if a == p.id { b } else { a })));
-                }
-            }
-            if report.outside.contains(&p.id) {
-                problems.push("Reaches past the usable plate area".to_owned());
-            }
-            for &(a, b, gap) in &report.too_close {
-                if a == p.id || b == p.id {
-                    problems.push(format!(
-                        "{:.0} mm from {}, wants more room",
-                        gap,
-                        name(if a == p.id { b } else { a })
-                    ));
-                }
-            }
-            if p.size.guessed {
-                problems.push("Size is a guess: the part has no dimensions".to_owned());
-            }
+            let problems = problem_lines(shown, p.id, tag_of);
             DeviceFacts {
                 id: p.id,
                 tag: name(p.id),
@@ -128,17 +114,47 @@ pub(super) fn gather(
     }
 }
 
-fn row(ui: &mut egui::Ui, label: &str, value: &str) {
-    ui.horizontal_wrapped(|ui| {
-        ui.weak(label);
-        ui.label(value);
-    });
+/// Draws the inspector; returns what the user asked for.
+/// The inspector as an overlay on the canvas (DESIGN.md section 3), on the
+/// side away from the selection so it never hides it.
+pub(super) fn overlay(
+    ctx: &egui::Context,
+    canvas: egui::Rect,
+    left: bool,
+    facts: &Facts,
+) -> Option<Ask> {
+    let (pivot, at) = if left {
+        (
+            egui::Align2::LEFT_TOP,
+            canvas.left_top() + egui::vec2(MARGIN, TOP),
+        )
+    } else {
+        (
+            egui::Align2::RIGHT_TOP,
+            canvas.right_top() + egui::vec2(-MARGIN, TOP),
+        )
+    };
+    let max_height = (canvas.height() - TOP - 72.0).max(120.0);
+    egui::Area::new(egui::Id::new("cabinet_inspector"))
+        .order(egui::Order::Middle)
+        .pivot(pivot)
+        .fixed_pos(at)
+        .show(ctx, |ui| {
+            egui::Frame::popup(ui.style())
+                .show(ui, |ui| {
+                    ui.set_width(WIDTH);
+                    egui::ScrollArea::vertical()
+                        .max_height(max_height)
+                        .show(ui, |ui| show(ui, facts))
+                        .inner
+                })
+                .inner
+        })
+        .inner
 }
 
-/// Draws the inspector; returns what the user asked for.
-pub(super) fn show(ui: &mut egui::Ui, facts: &Facts) -> Option<Ask> {
+fn show(ui: &mut egui::Ui, facts: &Facts) -> Option<Ask> {
     let mut ask = None;
-    ui.add_space(6.0);
     match facts {
         Facts::Devices(devices) => {
             for d in devices {
@@ -147,8 +163,8 @@ pub(super) fn show(ui: &mut egui::Ui, facts: &Facts) -> Option<Ask> {
                     ui.weak(&d.description);
                 }
                 ui.add_space(4.0);
-                row(ui, "Part", d.part.as_deref().unwrap_or("none assigned"));
-                row(
+                widgets::field(ui, "Part", d.part.as_deref().unwrap_or("none assigned"));
+                widgets::field(
                     ui,
                     "Size",
                     &if d.guessed {
@@ -157,24 +173,26 @@ pub(super) fn show(ui: &mut egui::Ui, facts: &Facts) -> Option<Ask> {
                         d.size.clone()
                     },
                 );
-                row(ui, "Position", &d.position);
-                row(ui, "Rotated", if d.rotated { "90 degrees" } else { "no" });
+                widgets::field(ui, "Position", &d.position);
+                if d.rotated {
+                    widgets::field(ui, "Rotated", "90 degrees");
+                }
                 if let Some(rail) = &d.rail {
-                    row(ui, "Mounted on", rail);
+                    widgets::field(ui, "Mounted on", rail);
                 }
                 if !d.problems.is_empty() {
                     ui.add_space(4.0);
-                    ui.strong("Problems");
+                    widgets::section_label(ui, "Problems");
                     for p in &d.problems {
                         ui.label(format!("\u{2022} {p}"));
                     }
                 }
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
-                    if ui.button("Rotate  (R)").clicked() {
+                    if ui.button("Rotate").clicked() {
                         ask = Some(Ask::Rotate(vec![d.id]));
                     }
-                    if ui.button("Remove  (Del)").clicked() {
+                    if ui.button("Remove from plate").clicked() {
                         ask = Some(Ask::Remove(vec![d.id]));
                     }
                 });
@@ -187,7 +205,7 @@ pub(super) fn show(ui: &mut egui::Ui, facts: &Facts) -> Option<Ask> {
             used_percent,
             placed,
         } => {
-            ui.strong("Mounting plate");
+            widgets::section_label(ui, "Mounting plate (mm)");
             ui.weak("Select a device to see its data");
             ui.add_space(6.0);
             let mut p = *plate;
@@ -202,8 +220,7 @@ pub(super) fn show(ui: &mut egui::Ui, facts: &Facts) -> Option<Ask> {
                     changed |= ui
                         .add(
                             egui::DragValue::new(value)
-                                .range(if label == "Margin" { 0.0 } else { 100.0 }..=max)
-                                .suffix(" mm"),
+                                .range(if label == "Margin" { 0.0 } else { 100.0 }..=max),
                         )
                         .changed();
                 });
@@ -212,8 +229,8 @@ pub(super) fn show(ui: &mut egui::Ui, facts: &Facts) -> Option<Ask> {
                 ask = Some(Ask::SetPlateSize(*structure, p));
             }
             ui.add_space(6.0);
-            row(ui, "Placed", &placed.to_string());
-            row(ui, "Plate used", &format!("{used_percent:.0} %"));
+            widgets::field(ui, "Placed", &placed.to_string());
+            widgets::field(ui, "Plate used", &format!("{used_percent:.0} %"));
         }
     }
     ask
