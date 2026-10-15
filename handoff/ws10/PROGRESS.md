@@ -17,3 +17,4 @@
 2026-10-14 21:55 UTC Design review on #93: contact image compact (kind dropped when EN 50005 numbers say it) and Label.anchor (Below for coils, Right for contacts). #89 merged at its READY head 8b5ddb2 before this landed, so it goes in a new PR. Kept 3.4 without slash per DESIGN §3.
 2026-10-14 21:49 UTC #89 merged (READY 8b5ddb2). Contact-image commit moved to a new PR from main.
 2026-10-15 03:15 UTC WS-02 #119 page freeze merged; xref follows it via location_of with no code change. Added a test; new PR from main.
+2026-10-15 09:30 UTC Bug 4/5: added link_to_device_command (rename a contact to an existing coil's tag links it). Editor changes F2; workflow registers bare 'link' verb.

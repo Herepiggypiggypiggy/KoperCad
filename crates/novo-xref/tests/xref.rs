@@ -9,7 +9,7 @@ use novo_core::{
 };
 use novo_xref::{
     ContactKind, FromKey, Issue, LabelAnchor, LinkError, LiveXref, Navigator, Place, XrefAction,
-    XrefIndex, link_command,
+    XrefIndex, link_command, link_to_device_command,
 };
 
 fn coil(tx: &mut Tx<'_>, page: PageId, x: f64, device: DeviceId) -> SymbolId {
@@ -764,4 +764,42 @@ fn references_into_a_frozen_page_do_not_move() {
             .lines
             .contains(&"33-34 3.10".to_owned())
     );
+}
+
+#[test]
+fn link_to_a_named_device_is_one_undo_step() {
+    let mut f = fixture();
+    let page = f.pages[0];
+    let (lone, _) = f
+        .doc
+        .transact("Place", |tx| {
+            let k9 = tx.add_device(DeviceTag::parse("-K9")?, "")?;
+            Ok(contact(tx, page, 20.0, "iec/contacts/no", ["23", "24"], k9))
+        })
+        .unwrap();
+    let depth = f.doc.undo_depth();
+    let cmd = link_to_device_command(f.doc.project(), &FromKey, lone, f.k1).unwrap();
+    f.doc.execute(cmd).unwrap();
+    assert_eq!(f.doc.undo_depth(), depth + 1);
+    assert_eq!(f.doc.project().symbol(lone).unwrap().device(), Some(f.k1));
+    assert!(
+        f.doc
+            .project()
+            .devices_by_tag(&DeviceTag::parse("-K9").unwrap())
+            .is_empty()
+    );
+
+    // A coil may not join a device that has one.
+    let coil_sym = unassigned_coil(&mut f);
+    assert_eq!(
+        link_to_device_command(f.doc.project(), &FromKey, coil_sym, f.k1),
+        Err(LinkError::DeviceHasMain)
+    );
+    assert_eq!(
+        link_to_device_command(f.doc.project(), &FromKey, lone, f.k1),
+        Err(LinkError::AlreadyLinked)
+    );
+    f.doc.undo().unwrap(); // the coil placed above
+    f.doc.undo().unwrap(); // the link
+    assert_ne!(f.doc.project().symbol(lone).unwrap().device(), Some(f.k1));
 }
