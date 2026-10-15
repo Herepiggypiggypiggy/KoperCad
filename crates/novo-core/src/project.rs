@@ -557,7 +557,8 @@ impl Project {
                     });
                 }
                 if let Some(freeze) = &page.frozen
-                    && freeze.columns.windows(2).any(|w| w[0].0 >= w[1].0)
+                    && (freeze.revision.trim().is_empty()
+                        || freeze.columns.windows(2).any(|w| w[0].0 >= w[1].0))
                 {
                     return Err(ModelError::InvalidValue {
                         id: page.id.into(),

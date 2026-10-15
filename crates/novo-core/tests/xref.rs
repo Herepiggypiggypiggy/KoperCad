@@ -390,6 +390,14 @@ fn frozen_pages_keep_their_printed_references() {
             .collect()
     };
     assert_eq!(labels(&doc), ["3.2"]);
+    // A freeze names its revision.
+    assert!(
+        doc.execute(Command::FreezePage {
+            page,
+            revision: " ".into(),
+        })
+        .is_err()
+    );
     doc.execute(Command::FreezePage {
         page,
         revision: "A".into(),
