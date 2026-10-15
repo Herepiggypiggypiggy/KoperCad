@@ -254,6 +254,13 @@ impl<'a> ImportJob<'a> {
         &self.state
     }
 
+    /// What has been stored so far. After [`ImportState::Failed`] this still
+    /// lists the files that were stored before the failure, so the app can
+    /// show them (or remove them) instead of losing track of them.
+    pub fn stored_so_far(&self) -> &ImportOutcome {
+        &self.outcome
+    }
+
     fn key(&self) -> PartKey {
         PartKey::new(&self.manufacturer, &self.order_number)
     }
@@ -487,6 +494,8 @@ const ZIP_MAX_DXF: usize = 8;
 const ZIP_MAX_XML: usize = 16;
 const ZIP_MAX_ENTRIES: usize = 64;
 const ZIP_MAX_MEMBER_BYTES: u64 = 200 * 1024 * 1024;
+/// All members read from one archive together.
+const ZIP_MAX_TOTAL_BYTES: u64 = 256 * 1024 * 1024;
 
 /// Reads a ZIP in memory (nothing is written to disk, so member names can
 /// never escape anywhere). Only the first STEP file and text files are read.
@@ -506,6 +515,7 @@ fn read_zip(bytes: &[u8]) -> Result<ZipContent, String> {
         xml: Vec::new(),
         dxf: Vec::new(),
     };
+    let mut total_read = 0u64;
     for i in 0..archive.len() {
         let Ok(file) = archive.by_index(i) else {
             continue;
@@ -526,10 +536,19 @@ fn read_zip(bytes: &[u8]) -> Result<ZipContent, String> {
         {
             continue;
         }
+        // Check the declared size first, and keep a budget for the whole archive.
+        let room = ZIP_MAX_TOTAL_BYTES - total_read;
+        if file.size() > ZIP_MAX_MEMBER_BYTES.min(room) {
+            return Err(format!(
+                "{name} in the ZIP is too large ({} bytes) to read",
+                file.size()
+            ));
+        }
         let mut raw = Vec::new();
-        file.take(ZIP_MAX_MEMBER_BYTES)
+        file.take(ZIP_MAX_MEMBER_BYTES.min(room))
             .read_to_end(&mut raw)
             .map_err(|e| format!("cannot read {name} in the ZIP ({e})"))?;
+        total_read += raw.len() as u64;
         let text = String::from_utf8_lossy(&raw).into_owned();
         if is_step {
             out.step = Some((name, text));
@@ -592,6 +611,16 @@ pub fn default_downloads_dir() -> Option<PathBuf> {
     dirs::download_dir()
 }
 
+/// A finished file found in Downloads.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Arrival {
+    pub path: PathBuf,
+    /// Whether the file name carries the order number. When false (catalog
+    /// XML and EDZ files are matched by type alone) the app should ask the
+    /// user before importing it.
+    pub names_the_part: bool,
+}
+
 /// Watches the user's Downloads folder for the file they are downloading
 /// from a maker's page. Poll it from the UI timer while the page is open;
 /// it only looks at the one folder, only at files newer than the click, and
@@ -619,7 +648,7 @@ impl DownloadsWatcher {
     /// the order number in its name (makers name files after the article);
     /// an XML file is accepted by type since catalog files are named by
     /// date or maker.
-    pub fn poll(&mut self) -> Vec<PathBuf> {
+    pub fn poll(&mut self) -> Vec<Arrival> {
         let Ok(entries) = fs::read_dir(&self.dir) else {
             return Vec::new();
         };
@@ -635,10 +664,9 @@ impl DownloadsWatcher {
                 continue;
             }
             let kind = FileKind::of_file_name(&name);
+            let names_the_part = crate::search::normalize_code(&name).contains(&self.order_code);
             let suits = match kind {
-                FileKind::Step | FileKind::Dxf | FileKind::Zip => {
-                    crate::search::normalize_code(&name).contains(&self.order_code)
-                }
+                FileKind::Step | FileKind::Dxf | FileKind::Zip => names_the_part,
                 FileKind::Bmecat | FileKind::Edz => true,
                 FileKind::Other => false,
             };
@@ -648,10 +676,13 @@ impl DownloadsWatcher {
             }
             let size = meta.len();
             if size > 0 && self.last_sizes.insert(path.clone(), size) == Some(size) {
-                ready.push(path);
+                ready.push(Arrival {
+                    path,
+                    names_the_part,
+                });
             }
         }
-        ready.sort();
+        ready.sort_by(|a, b| a.path.cmp(&b.path));
         ready
     }
 }

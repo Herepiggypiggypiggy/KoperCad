@@ -4,7 +4,7 @@
 //! under different page groups share one panel, hence one cabinet layout.
 
 use eframe::egui;
-use novo_core::{Aspect, Command, DeviceTag, PageId, Project};
+use novo_core::{Aspect, Command, DeviceTag, PageId, PageKind, Project, panel_contents_generator};
 
 use super::{Level, NovoApp};
 
@@ -177,6 +177,41 @@ pub(super) fn order_after_step(
         at.checked_sub(1).and_then(|n| siblings.get(n))
     }?;
     order_after_drop(siblings, page, *neighbour, down)
+}
+
+/// Whether `panel` already has its own contents page.
+pub(super) fn has_panel_contents(project: &Project, panel: &DeviceTag) -> bool {
+    let id = panel_contents_generator(&panel.location);
+    project
+        .pages()
+        .any(|p| matches!(&p.kind, PageKind::Generated { generator } if *generator == id))
+}
+
+/// The command that adds the contents page of `panel`: a generated page in
+/// the panel (no page group) that lists the panel's pages. One per panel.
+pub(super) fn panel_contents_command(
+    project: &Project,
+    panel: &DeviceTag,
+) -> Result<Command, String> {
+    if panel.location.is_empty() {
+        return Err("Name a panel".into());
+    }
+    if has_panel_contents(project, panel) {
+        return Err(format!("{panel} already has a contents page"));
+    }
+    let structure = DeviceTag {
+        location: panel.location.clone(),
+        ..Default::default()
+    };
+    Ok(Command::AddPage {
+        name: "0".into(),
+        title: format!("Contents {structure}"),
+        kind: PageKind::Generated {
+            generator: panel_contents_generator(&structure.location),
+        },
+        format: Default::default(),
+        structure,
+    })
 }
 
 /// What a rename of `from` touches, for the line that reports it:
@@ -540,6 +575,41 @@ mod tests {
             &k1,
             "bad/name"
         ));
+    }
+
+    #[test]
+    fn a_panel_gets_one_contents_page_that_lists_its_pages() {
+        let mut doc = Document::default();
+        let mut form = PageForm::new(FormKind::Pages, "10D41", "K1B1G1");
+        form.count = 2;
+        run(&mut doc, &form).unwrap();
+        let panel = DeviceTag::parse("+K1B1G1").unwrap();
+        assert!(!has_panel_contents(doc.project(), &panel));
+        let command = panel_contents_command(doc.project(), &panel).unwrap();
+        doc.execute(command).unwrap();
+        assert!(has_panel_contents(doc.project(), &panel));
+        assert!(panel_contents_command(doc.project(), &panel).is_err());
+        assert!(panel_contents_command(doc.project(), &DeviceTag::default()).is_err());
+        // It reads first, ahead of the drawn pages, shows in the outline with
+        // the panel's pages in it, and follows a rename.
+        let first = doc.project().pages_in_order()[0];
+        assert_eq!(first.title, "Contents +K1B1G1");
+        let mut reports = novo_reports::LiveReports::standard();
+        let rows = crate::backend::page_rows(doc.project(), &mut reports);
+        assert!(rows.iter().any(|r| r.page == first.id), "{rows:?}");
+        assert_eq!(
+            reports.get(doc.project(), "toc@+K1B1G1").unwrap().sections[0]
+                .rows
+                .len(),
+            3
+        );
+        let rename = rename_level_command(Aspect::Location, &panel, "K2")
+            .unwrap()
+            .unwrap();
+        doc.execute(rename).unwrap();
+        let moved = DeviceTag::parse("+K2").unwrap();
+        assert!(has_panel_contents(doc.project(), &moved));
+        assert!(!has_panel_contents(doc.project(), &panel));
     }
 
     #[test]

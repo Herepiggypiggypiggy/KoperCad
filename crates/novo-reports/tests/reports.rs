@@ -4,12 +4,12 @@ use std::io::Cursor;
 
 use calamine::{Data, Reader, Xlsx, open_workbook_from_rs};
 use novo_core::{
-    Device, DeviceTag, Document, Endpoint, Page, PageFormat, PaperSize, Pin, Placement, Point,
-    SymbolRole, Terminal, Wire,
+    Device, DeviceTag, Document, Endpoint, MountingPlate, Page, PageFormat, PaperSize, Pin,
+    Placement, Point, RailKind, SymbolRole, Terminal, Wire,
 };
 use novo_reports::{
-    Cell, CsvOptions, LiveReports, PageSetup, ReportOutput, generate_all, layout_page, paginate,
-    tag_cmp, to_csv, xlsx_bytes,
+    Cell, CsvOptions, CutList, LiveReports, PageSetup, ReportOutput, generate_all, layout_page,
+    paginate, tag_cmp, to_csv, xlsx_bytes,
 };
 use novo_tests::{MotorStarter, motor_starter};
 
@@ -282,8 +282,12 @@ fn device_list_has_structure_parts_and_locations() {
 fn wire_list_runs_pin_to_pin() {
     let (doc, _) = starter();
     let wires = report(&doc, "wires");
+    // The first eight columns; the cut length has its own tests.
+    let first_eight = |rows: Vec<Vec<String>>| -> Vec<Vec<String>> {
+        rows.into_iter().map(|r| r[..8].to_vec()).collect()
+    };
     assert_eq!(
-        rows(&wires, "wires"),
+        first_eight(rows(&wires, "wires")),
         strings(&[
             &["", "=A1+CAB-F1:2", "=A1+CAB-K1:1", "L1", "", "", "", "1.1"],
             &["", "=A1+CAB-K1:2", "=A1+CAB-F2:1", "L1", "", "", "", "1.1"],
@@ -586,6 +590,7 @@ fn xlsx_round_trips() {
             "Bill of materials",
             "Device list",
             "Wire list",
+            "Cut list",
             "Terminal diagram",
             "Cable diagram",
             "IO list"
@@ -737,4 +742,181 @@ fn save_xlsx_replaces_the_file_whole() {
     assert!(novo_reports::save_xlsx(&refs, &missing).is_err());
     assert_eq!(std::fs::read(&path).expect("still there"), bytes);
     std::fs::remove_dir_all(&dir).expect("cleanup");
+}
+
+fn wire_row(wires: &ReportOutput, from: &str, to: &str) -> Vec<String> {
+    rows(wires, "wires")
+        .into_iter()
+        .find(|r| r[1] == from && r[2] == to)
+        .unwrap_or_else(|| panic!("no wire {from} to {to}"))
+}
+
+#[test]
+fn wire_list_estimates_lengths_until_devices_are_placed() {
+    let (doc, _) = starter();
+    let wires = report(&doc, "wires");
+    let headers: Vec<&str> = wires.section("wires").unwrap().columns[8..]
+        .iter()
+        .map(|c| c.header.as_str())
+        .collect();
+    assert_eq!(headers, ["Cut length mm", "Length basis"]);
+    for row in rows(&wires, "wires") {
+        assert_eq!(row[9], "estimate", "{row:?}");
+        // At least the minimum run plus a service loop at each end.
+        assert!(row[8].parse::<f64>().unwrap() >= 200.0, "{row:?}");
+    }
+    let cell = &wires.section("wires").unwrap().rows[0].cells[8];
+    assert!(matches!(cell, Cell::Number(_)), "stays a number for Excel");
+}
+
+#[test]
+fn wire_list_routes_lengths_through_the_ducts_of_the_plate() {
+    let (mut doc, h) = starter();
+    let (cab, duct) = doc
+        .transact("Cabinet", |tx| {
+            let cab = tx.add_structure(DeviceTag::parse("+CAB")?, "Cabinet", true)?;
+            tx.set_plate(
+                cab,
+                Some(MountingPlate {
+                    width: 800.0,
+                    height: 600.0,
+                    margin: 10.0,
+                }),
+            )?;
+            tx.place_device(h.f1, cab, Point::new(100.0, 100.0), false, None)?;
+            tx.place_device(h.k1, cab, Point::new(400.0, 100.0), false, None)?;
+            let duct = tx.add_rail(cab, 50.0, 250.0, 700.0, RailKind::Duct)?;
+            tx.set_rail_size(duct, 700.0, 50.0, 60.0)?;
+            Ok((cab, duct))
+        })
+        .expect("layout")
+        .0;
+    let wires = report(&doc, "wires");
+    // Both footprints are the default 45 x 90 mm: anchors at the centres,
+    // 105 mm down to the duct each, 300 mm along it, 50 mm slack per end.
+    let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
+    assert_eq!((row[8].as_str(), row[9].as_str()), ("610", "routed"));
+    // F2 is not placed: that wire stays an estimate.
+    let row = wire_row(&wires, "=A1+CAB-K1:2", "=A1+CAB-F2:1");
+    assert_eq!(row[9], "estimate");
+
+    // Without the duct the same wire runs in free air: Manhattan + slack.
+    doc.transact("Remove duct", |tx| tx.remove(duct))
+        .expect("delete");
+    let wires = report(&doc, "wires");
+    let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
+    assert_eq!((row[8].as_str(), row[9].as_str()), ("400", "free air"));
+
+    // Moving a device changes the length with no extra edit.
+    doc.transact("Move", |tx| {
+        tx.place_device(h.k1, cab, Point::new(500.0, 100.0), false, None)
+    })
+    .expect("move");
+    let wires = report(&doc, "wires");
+    let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
+    assert_eq!(row[8], "500");
+}
+
+#[test]
+fn wire_list_csv_carries_the_cut_length() {
+    let (doc, _) = starter();
+    let csv = to_csv(&report(&doc, "wires"), &CsvOptions::default());
+    let header = csv.lines().next().expect("header");
+    assert!(
+        header.ends_with("Location,Cut length mm,Length basis"),
+        "{header}"
+    );
+    assert!(csv.contains(",estimate\r\n"));
+}
+
+#[test]
+fn cut_list_groups_by_size_and_colour_longest_first() {
+    use novo_reports::Report;
+    let (mut doc, h) = starter();
+    doc.transact("Colours", |tx| {
+        let wire = tx
+            .project()
+            .wires_at(Endpoint::pin(h.k1_coil, 0))
+            .next()
+            .expect("coil wire");
+        tx.update::<Wire>(wire, |w| {
+            w.color = Some("BU".into());
+            w.cross_section_mm2 = Some(0.75);
+        })
+    })
+    .expect("edit");
+    let cuts = CutList::default().generate(doc.project());
+    let wires = report(&doc, "wires");
+    let total_wires = wires.section("wires").unwrap().rows.len();
+
+    // Summary first, then one table per cross-section and colour.
+    let summary = cuts.section("summary").expect("summary");
+    let counts: i64 = summary
+        .rows
+        .iter()
+        .map(|r| match r.cells[1] {
+            Cell::Int(n) => n,
+            _ => panic!("count is an integer"),
+        })
+        .sum();
+    assert_eq!(counts as usize, total_wires);
+    let titles: Vec<String> = summary
+        .text_rows()
+        .into_iter()
+        .map(|r| r[0].clone())
+        .collect();
+    assert_eq!(titles.first().map(String::as_str), Some("0.75 mm² BU"));
+    assert_eq!(titles.last().map(String::as_str), Some("Size unknown"));
+    assert!(titles.contains(&"1.5 mm²".to_owned()), "{titles:?}");
+
+    // Ferrule allowance: 10 mm at each end on top of the wire list's length.
+    let table = &cuts.sections[1];
+    let row = &table.text_rows()[0];
+    let (wire, ends, cut): (f64, f64, f64) = (
+        row[5].parse().unwrap(),
+        row[6].parse().unwrap(),
+        row[7].parse().unwrap(),
+    );
+    assert_eq!((ends, cut), (20.0, wire + 20.0));
+    // Longest first within a table.
+    for table in &cuts.sections[1..] {
+        let lengths: Vec<f64> = table
+            .text_rows()
+            .iter()
+            .map(|r| r[7].parse().unwrap())
+            .collect();
+        assert!(lengths.windows(2).all(|w| w[0] >= w[1]), "{lengths:?}");
+    }
+}
+
+#[test]
+fn cut_list_gives_big_wires_lug_allowance() {
+    use novo_reports::Report;
+    let (mut doc, h) = starter();
+    doc.transact("Big wire", |tx| {
+        let wire = tx
+            .project()
+            .wires_at(Endpoint::pin(h.k1_coil, 0))
+            .next()
+            .expect("coil wire");
+        tx.update::<Wire>(wire, |w| w.cross_section_mm2 = Some(35.0))
+    })
+    .expect("edit");
+    let cuts = CutList::default().generate(doc.project());
+    let table = cuts
+        .sections
+        .iter()
+        .find(|s| s.title == "35 mm²")
+        .expect("35 mm² table");
+    assert_eq!(table.text_rows()[0][6], "40");
+}
+
+#[test]
+fn cut_list_is_empty_without_wires_and_exports_to_csv() {
+    use novo_reports::Report;
+    let doc = Document::default();
+    assert_eq!(CutList::default().generate(doc.project()).row_count(), 0);
+    let (doc, _) = starter();
+    let csv = to_csv(&report(&doc, "cutlist"), &CsvOptions::default());
+    assert!(csv.contains("Wire no.,From,To,Cable,Length basis,Wire mm,Ends mm,Cut mm"));
 }
