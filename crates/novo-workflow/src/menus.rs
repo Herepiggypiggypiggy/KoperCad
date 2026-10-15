@@ -131,6 +131,58 @@ pub fn entries(menu: &str) -> Vec<(&'static CommandInfo, MenuPlace)> {
         .collect()
 }
 
+/// Commands drawn at the bottom of their menu.
+const LAST: &[&str] = &["file.quit"];
+
+/// One row of a drawn menu.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MenuItem {
+    Command(&'static CommandInfo),
+    Submenu {
+        name: &'static str,
+        items: Vec<&'static CommandInfo>,
+    },
+    Separator,
+}
+
+/// What a menu draws: its plain commands in registry order, then its
+/// submenus in the order they first appear, then the [`LAST`] commands, with
+/// a separator between the blocks. An empty menu gives an empty list, and
+/// the bar leaves it out.
+pub fn layout(menu: &str) -> Vec<MenuItem> {
+    let mut plain = Vec::new();
+    let mut subs: Vec<(&'static str, Vec<&'static CommandInfo>)> = Vec::new();
+    let mut last = Vec::new();
+    for (info, place) in entries(menu) {
+        if LAST.contains(&info.id) {
+            last.push(MenuItem::Command(info));
+        } else if let Some(name) = place.submenu {
+            match subs.iter_mut().find(|(n, _)| *n == name) {
+                Some((_, items)) => items.push(info),
+                None => subs.push((name, vec![info])),
+            }
+        } else {
+            plain.push(MenuItem::Command(info));
+        }
+    }
+    let mut out = plain;
+    let blocks = [
+        subs.into_iter()
+            .map(|(name, items)| MenuItem::Submenu { name, items })
+            .collect::<Vec<_>>(),
+        last,
+    ];
+    for block in blocks {
+        if !block.is_empty() {
+            if !out.is_empty() {
+                out.push(MenuItem::Separator);
+            }
+            out.extend(block);
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -191,6 +243,39 @@ mod tests {
             let place = group_default(group).unwrap_or_else(|| panic!("group {group}"));
             assert!(MENUS.contains(&place.menu));
         }
+    }
+
+    #[test]
+    fn quit_ends_the_file_menu_and_submenus_follow_the_plain_commands() {
+        let file = layout("File");
+        assert_eq!(
+            file.last(),
+            Some(&MenuItem::Command(
+                crate::commands::get("file.quit").unwrap()
+            ))
+        );
+        let export = file
+            .iter()
+            .position(|i| matches!(i, MenuItem::Submenu { name: "Export", .. }))
+            .expect("an Export submenu");
+        let new = file
+            .iter()
+            .position(|i| matches!(i, MenuItem::Command(c) if c.id == "file.new"))
+            .unwrap();
+        assert!(new < export);
+        // Every command appears exactly once across the menus.
+        let mut count = 0;
+        for menu in MENUS {
+            for item in layout(menu) {
+                match item {
+                    MenuItem::Command(_) => count += 1,
+                    MenuItem::Submenu { items, .. } => count += items.len(),
+                    MenuItem::Separator => {}
+                }
+            }
+        }
+        let placed = COMMANDS.iter().filter(|c| place(c).is_some()).count();
+        assert_eq!(count, placed);
     }
 
     #[test]

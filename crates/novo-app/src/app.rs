@@ -14,6 +14,7 @@ mod inspector;
 mod link;
 mod live;
 mod live_anim;
+mod menu_bar;
 mod pages;
 mod pdf;
 mod plc;
@@ -881,8 +882,11 @@ impl NovoApp {
     fn top_bar(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
         ui.horizontal_centered(|ui| {
             ui.menu_button(egui::RichText::new(APP_NAME).strong(), |ui| {
-                self.project_menu(ui, picked)
+                self.mark_menu(ui)
             });
+            if self.menu_bar_wide() {
+                self.menu_bar(ui);
+            }
             ui.separator();
             if let Some(workspace) = self.workspace_switcher(ui) {
                 picked.push(match workspace {
@@ -908,42 +912,6 @@ impl NovoApp {
                 }
             });
         });
-    }
-
-    /// The short project menu behind the mark. Everything in it is also in
-    /// the command palette.
-    fn project_menu(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
-        for a in [Action::NewProject, Action::OpenProject, Action::OpenExample] {
-            self.action_button(ui, a, picked);
-        }
-        ui.add_enabled_ui(!self.settings.recent_projects.is_empty(), |ui| {
-            ui.menu_button("Recent", |ui| {
-                for path in self.settings.recent_projects.clone() {
-                    if ui.button(path.display().to_string()).clicked() {
-                        let ctx = ui.ctx().clone();
-                        self.leave_then(&ctx, Leaving::OpenPath(path));
-                    }
-                }
-            });
-        });
-        ui.separator();
-        for a in [
-            Action::SaveProject,
-            Action::SaveProjectAs,
-            Action::CloseProject,
-        ] {
-            self.action_button(ui, a, picked);
-        }
-        ui.separator();
-        let export = egui::Button::new("Export PDF");
-        if ui.add_enabled(self.is_open(), export).clicked() {
-            self.export_pdf();
-            ui.close();
-        }
-        ui.separator();
-        for a in [Action::About, Action::Quit] {
-            self.action_button(ui, a, picked);
-        }
     }
 
     /// project / page. A click on the page opens the outline.
