@@ -45,10 +45,14 @@ Mockups (SVG, drawn with the real colour ramp and tokens, data synthetic):
 - **Legend and summary** sit in the right rail of the Cabinet workspace (where the heat legend open question
   in `handoff/ui-cabinet` points to). The summary is plain text: hottest device, count over limit, air at the
   top, inlet air, total loss. It is also the screen reader text.
-- **Command palette** entries: `Heat: show` / `Heat: hide`, `Heat: run simulation`, `Heat: show airflow`,
-  `Heat: show heat flux`, `Heat: animate airflow`, `Heat: compare with a saved result`, `Heat: keep this as
-  A`, `Heat: temperature or rise over ambient`. Every entry is one command, so scripts and the Python layer
-  reach it the same way.
+- **Command palette** entries, one command each so scripts and the Python layer reach them the same way,
+  named like the existing ones (`Show marks`, `Export PDF`): `heat.show` "Show heat", `heat.hide` "Hide heat",
+  `heat.run` "Run heat simulation", `heat.airflow` "Show airflow", `heat.flux` "Show heat flux",
+  `heat.animate` "Animate airflow", `heat.compare` "Compare heat results", `heat.keep_a` "Keep this result as A",
+  `heat.rise` "Show temperature rise over ambient", `heat.play` "Play heat over time", `heat.focus_time` "Focus
+  the time bar".
+- **Narrow windows:** below about 1100 px the five layer chips fold into one `Layers ▾` menu and the status
+  text moves under the legend.
 - **Run** is `Ctrl+Enter` while Heat is on, or the chip's `Run` button. Until the engine can run, the chip
   shows the first-order #406 result (box average only) and says "estimate".
 
@@ -130,8 +134,8 @@ flow rate in the tooltip. Selecting one highlights the streamlines passing throu
 
 **Time slider (transient results).** A bar under the plate: play, the time as `t = 38 min`, a curve of the
 hottest device against time with the limit as a dashed line, and a scrub handle. Dragging scrubs; `Left`
-and `Right` step one frame while the time bar has focus (click it, or `Heat: focus time bar` from the palette;
-`Esc` returns focus to the drawing). Playing is the play button or `Heat: play time` only, never `Space`
+and `Right` step one frame while the time bar has focus (click it, or `Focus the time bar` from the palette;
+`Esc` returns focus to the drawing). Playing is the play button or the `Play heat over time` command only, never `Space`
 (that is the command field); it is opt in, runs until the end then stops, never loops. A steady
 result hides the bar and shows `Steady state, converged (residual 1e-4)` in the header.
 
@@ -183,7 +187,7 @@ A real solve takes seconds to minutes, so the view is alive while it runs:
    badges turn solid and show digits when the level is final or the change per level is under 0.5 K.
 3. **Progress indicator.** A slim bar in the header: level, cells, and a small residual sparkline on a log
    axis with the target as a dashed line, `converged` when below it. Elapsed time and ETA in text. `Esc`
-   or the bar's cancel button stops the run and keeps the latest preview, labelled `Not converged`.
+   (only while a run is going, otherwise it keeps its usual meaning) or the bar's cancel button stops the run and keeps the latest preview, labelled `Not converged`.
 4. **No jumping.** Colour range changes during a run ease (the legend range only grows while running, then
    settles on the final value) so the picture does not flicker as the hot spot sharpens.
 5. A run never blocks the UI; the model can be edited, which marks the preview `Out of date`.
@@ -244,6 +248,6 @@ Each step is its own pull request and names, in its description, where the user 
 
 - Solver resolution decides the texture size: 150 by 100 cells is smooth with bicubic; below 60 by 40 we
   upsample first.
-- Whether the lowest device limit or the user's `inside_max` from the sizing request drives the legend
-  marker (default: the lowest device limit; the sizing limit is a second dashed marker when different).
+- Decided: the legend marker is the lowest device limit; the sizing request's `inside_max` is a second dashed
+  marker only when it differs.
 - Printing: a PDF page of the heat map (vector contours, raster map) is a later step in `novo-pdf`.
