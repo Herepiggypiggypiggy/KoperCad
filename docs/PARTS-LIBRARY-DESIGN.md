@@ -175,6 +175,59 @@ file warns that redistribution is the user's responsibility).
 **Same pattern for ETIM.** The ETIM model is openly licensed, so the
 model file itself can be bundled with attribution (section 3) and needs no import click.
 
+## 3b. Decision: true one-click Import, fetched inside KoperCAD (2026-10-15)
+
+Owner decision (decision card, relayed by the coordinator): Import downloads
+inside KoperCAD. This replaces "flow B by default" in section 3a; flow B
+stays as the fallback. The limits below are part of the design.
+
+**Limits (all must hold)**
+1. A fetch happens only when the user clicks Import on one part. No background
+   fetching, no prefetch, no bulk or crawl, no "import all".
+2. The request goes from the user's machine to the maker's own public source.
+   Never through a server of ours; nothing is bundled.
+3. Saved to the per-user library with its source record (URL, date, hash,
+   maker, file name). No sharing between users, no sync of maker files.
+4. Rate limit: one fetch in flight, a pause between fetches, honour
+   `robots.txt`, `Retry-After` and 429/403 (stop, do not retry around it),
+   identify honestly with a `KoperCAD/<version>` user agent.
+5. **First-use notice**, shown once per maker, text: "This data belongs to
+   <maker>. KoperCAD downloads it to your computer for your own use in your
+   projects. Do not share or resell it." The user confirms once.
+6. No admin rights; HTTPS through the Windows certificate store; the user's
+   proxy settings are respected.
+
+**Fallback to flow B (open the page, watch Downloads, import)** whenever
+the source needs a login, blocks automated fetching (403/captcha/consent
+wall), returns something that is not the expected file type, or the maker is
+not marked "fetch enabled" in the app's source table. The button then reads
+"Open page" and the rest is as in 3a.
+
+**Source adapters.** One small adapter per maker: `resolve(article) ->
+list of file URLs + kinds` and `fetch(url) -> bytes`. The table of enabled
+makers ships in the app as data, so a maker can be switched off without a
+release if it objects or changes its site.
+
+**What is not yet known (blocks the Wago/Phoenix adapter).**
+- WAGO's product page loads its Downloads tab dynamically. The static
+  page fetch showed no file links or API, and this build environment cannot
+  open the live site (outbound connection blocked), so **the real file URLs
+  are unverified**. They must be captured once on a normal machine
+  (browser developer tools, network tab on the Downloads tab) and written
+  into the adapter with a sample file for tests.
+- Phoenix Contact: the product page could not be fetched at all here, and its
+  website terms are unread. Its engineering data is documented as going through
+  the EPLAN Data Portal and other portals, not as a plain file link.
+- Both remain flow B until their real URLs and terms are confirmed, then the
+  adapter switches on. We do not guess endpoints.
+
+**Risk the owner accepted.** The terms read so far are silent on automated
+download, and Schneider limits copying to personal, non-commercial use.
+In-app fetch on the user's click is the closest equivalent to the user clicking
+the download button themselves, but it is not confirmed by any maker.
+Switching a maker off is a data change, and the section 2a questions still
+should be sent.
+
 ## 4. Offline and no admin rights
 
 - The catalog is a file under `%LOCALAPPDATA%\KoperCAD\Catalog\` (already so in
@@ -279,7 +332,7 @@ We do not paste maker descriptions.
 | --- | --- | --- |
 | P0 | Terms read for WAGO, Phoenix (manual only), Siemens (headings only), Schneider (section 2a). Still to read: Phoenix website terms, Siemens A.4/A.5, ECLASS licence, product-page terms. The owner sends the draft questions in section 2a; record answers here. | A person; nothing to build |
 | P1 | Schema v2 in `novo-parts` (read v1, write v2), `provenance`, `terminals`, `class` fields. Authored sets for the 4 makers (section 7). Attribution screen for ETIM. | WS-07 |
-| P2 | Part browser with per-part Import (flow B: open page, watch Downloads, import with preview), BMEcat importer, STEP bounding-box reader. Flow A per maker only after written OK. | One real BMEcat and a few STEP files per maker |
+| P2 | Part browser with per-part Import (flow B first, then in-app fetch per section 3b), BMEcat importer, STEP bounding-box reader. Flow A per maker only after written OK. | One real BMEcat and a few STEP files per maker |
 | P3 | Asset store, outline-from-STEP for cabinet layout, symbol choice by `function`. | WS-15, WS-05 |
 | P4 | Optional EDZ reader, optional maker web fetch where terms allow, company-folder catalogs, 3D view. | P0 answers |
 
