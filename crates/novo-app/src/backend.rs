@@ -209,6 +209,10 @@ pub struct StorageBackend {
     untitled_dir: Option<PathBuf>,
     /// The open project's file is a temporary one in `untitled_dir`.
     untitled: Option<PathBuf>,
+    /// The per-user folder for the recovery files of saved projects, so
+    /// nothing is written next to the user's files. `None` keeps them
+    /// beside the project. Untitled projects already live in app data.
+    recovery_dir: Option<PathBuf>,
     /// The open untitled project came from a kept file, so it is kept
     /// again on close even without new changes.
     keep: bool,
@@ -227,6 +231,23 @@ impl StorageBackend {
         let mut backend = Self::default();
         backend.untitled_dir = Some(dir.into());
         backend
+    }
+
+    /// Keeps the recovery files of saved projects in `dir` (created when
+    /// needed) instead of beside them.
+    pub fn with_recovery_dir(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.recovery_dir = Some(dir.into());
+        self
+    }
+
+    /// The recovery folder for the project file at `path`: none for
+    /// untitled projects, whose files are already in app data.
+    fn recovery_dir_for(&self, path: &Path) -> Option<&Path> {
+        if self.in_untitled_dir(path) {
+            None
+        } else {
+            self.recovery_dir.as_deref()
+        }
     }
 
     /// Writes and closes the open project's file. If the write fails,
@@ -348,7 +369,7 @@ impl ProjectBackend for StorageBackend {
     }
 
     fn open(&mut self, path: &Path) -> Result<OpenReport, BackendError> {
-        let opened = Session::open(path)?;
+        let opened = Session::open_in(path, self.recovery_dir_for(path))?;
         self.close_session()?;
         self.document = Some(Document::new(opened.project));
         self.session = Some(opened.session);
@@ -363,13 +384,23 @@ impl ProjectBackend for StorageBackend {
     }
 
     fn save(&mut self, path: &Path) -> Result<(), BackendError> {
+        let recovery_dir = self.recovery_dir_for(path).map(Path::to_owned);
         let Some(document) = self.document.as_mut() else {
             return Ok(());
         };
         match self.session.as_mut() {
             Some(session) if session.path() == path => session.save(document.project())?,
-            Some(session) => session.save_as(path, document.project())?,
-            None => self.session = Some(Session::create(path, document.project())?),
+            Some(session) => {
+                session.save_as(path, document.project())?;
+                session.set_recovery_dir(recovery_dir.as_deref());
+            }
+            None => {
+                self.session = Some(Session::create_in(
+                    path,
+                    document.project(),
+                    recovery_dir.as_deref(),
+                )?)
+            }
         }
         document.mark_saved();
         self.restored_unsaved = false;
@@ -814,6 +845,40 @@ pub(crate) mod tests {
         // A crash: the session goes away without close(), so the recovery
         // file stays.
         drop(backend.session.take());
+    }
+
+    #[test]
+    fn recovery_files_go_to_the_recovery_folder_not_beside_the_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let recovery = dir.path().join("appdata").join("recovery");
+        let path = dir.path().join("plant.novo");
+
+        // A new project is saved, then edited and autosaved, then crashes.
+        let mut backend = StorageBackend::default().with_recovery_dir(&recovery);
+        backend.new_project("Plant").unwrap();
+        edit(&mut backend, "2");
+        backend.save(&path).unwrap();
+        edit(&mut backend, "3");
+        let session = backend.session.as_mut().unwrap();
+        session
+            .autosave(backend.document.as_ref().unwrap().project())
+            .unwrap();
+        let file = session.recovery_path();
+        assert_eq!(file.parent(), Some(recovery.as_path()));
+        assert!(file.exists());
+        assert!(!autosave_path(&path).exists(), "nothing beside the file");
+        drop(backend.session.take());
+
+        // The next start offers the work back; the saved file is untouched.
+        let mut next = StorageBackend::default().with_recovery_dir(&recovery);
+        next.open(&path).unwrap();
+        assert!(next.recovery_offer().is_some());
+        assert_eq!(page_names(&next), vec!["1", "2"]);
+        next.resolve_recovery(true).unwrap();
+        assert_eq!(page_names(&next), vec!["1", "2", "3"]);
+        next.save(&path).unwrap();
+        next.close().unwrap();
+        assert!(!file.exists());
     }
 
     #[test]

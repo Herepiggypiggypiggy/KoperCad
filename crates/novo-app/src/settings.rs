@@ -37,6 +37,10 @@ pub struct Settings {
     pub walkthrough_done: Vec<String>,
     pub walkthrough_shown: bool,
     pub walkthrough_seen: bool,
+
+    /// Whether the live view skips its animations: states switch at once
+    /// and a running motor shows an arrow instead of spinning.
+    pub reduce_motion: bool,
 }
 
 impl Settings {

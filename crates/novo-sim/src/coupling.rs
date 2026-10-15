@@ -74,6 +74,13 @@ impl Clock {
         self.now += seconds.max(0.0);
     }
 
+    /// Whether `coil` was on at its last change and how many seconds ago that
+    /// was; `None` for a coil the clock has not seen. A coil first seen off
+    /// reports an infinite age.
+    pub fn coil_age(&self, coil: SymbolId) -> Option<(bool, f64)> {
+        self.coils.get(&coil).map(|&(on, at)| (on, self.now - at))
+    }
+
     /// Forgets all coil history: every timer starts from rest.
     pub fn reset(&mut self) {
         self.coils.clear();

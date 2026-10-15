@@ -1,16 +1,12 @@
-//! Onboarding (docs/ONBOARDING-DESIGN.md): an example project and the
-//! fast-keys walk-through, a card whose six steps tick when the person really
+//! Onboarding (docs/ONBOARDING-DESIGN.md): the fast-keys walk-through, a card whose six steps tick when the person really
 //! does the thing. Thin UI over existing commands: nothing here edits the
-//! model except by building the example and the practice project.
+//! model except by building the practice project.
 
 use eframe::egui;
 use novo_core::{DeviceTag, Document, ModelError, Placement, Point, Project, SymbolRole};
 use novo_theme::{tokens, widgets};
 
 use super::{Level, NovoApp};
-
-/// Name of the example project.
-const EXAMPLE_NAME: &str = "Motor starter (example)";
 
 /// Name of the practice project the walk-through starts on.
 const PRACTICE_NAME: &str = "Fast keys practice";
@@ -149,26 +145,7 @@ pub(super) fn practice_document() -> Result<Document, ModelError> {
     Ok(doc)
 }
 
-/// The example project: the Gate 1 motor starter, one undo step.
-fn example_document() -> Result<Document, ModelError> {
-    let mut doc = Document::new(Project::new(EXAMPLE_NAME));
-    novo_tests::motor_starter(&mut doc)?;
-    // Joins the fixture's step, so the whole example is one step to undo.
-    doc.amend_last("Draw example", |tx| {
-        tx.set_info(|i| i.name = EXAMPLE_NAME.into())
-    })?;
-    Ok(doc)
-}
-
 impl NovoApp {
-    /// Open example: the motor starter as a new, untitled project.
-    pub(super) fn open_example(&mut self) {
-        match example_document() {
-            Ok(doc) => self.start_from(doc, "the example"),
-            Err(e) => self.message(Level::Error, format!("Could not build the example: {e}")),
-        }
-    }
-
     /// Try the fast keys: with a project open, the card starts again on it;
     /// with none, on a practice project.
     pub(super) fn fast_keys(&mut self) {
@@ -392,15 +369,6 @@ mod tests {
         assert_eq!(doc.project().symbols().count(), 4);
         assert!(doc.undo().expect("undo").is_some());
         assert_eq!(doc.project().symbols().count(), 0);
-        assert!(!doc.can_undo());
-    }
-
-    #[test]
-    fn the_example_is_one_undo_step_named_as_an_example() {
-        let mut doc = example_document().expect("builds");
-        assert_eq!(doc.project().info().name, EXAMPLE_NAME);
-        assert_eq!(doc.project().pages().count(), 2);
-        assert!(doc.undo().expect("undo").is_some());
         assert!(!doc.can_undo());
     }
 }

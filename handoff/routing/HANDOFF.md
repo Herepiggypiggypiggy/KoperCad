@@ -2,7 +2,7 @@
 
 ## State
 - Repo herepiggypiggypiggy/kopercad, my branch `claude/project-thread-euksez` (restart from main after each merge).
-- Fill PR (plan, DuctFill, Problem) on this branch; earlier PRs merged. Next: storage request to WS-02, then wire list lengths.
+- Connection PR on this branch (route_connections); earlier PRs merged. Next: WireList Length column, then checks.
 
 ## Resume
 ```

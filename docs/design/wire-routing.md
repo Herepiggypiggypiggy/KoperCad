@@ -94,6 +94,22 @@ to force a wire through chosen ducts. A pin is the only stored routing data.
 `route all` shows a preview like `place all`; lengths flow to the wire list
 (`novo-reports`) and the checks (`novo-checks`) through the query, never copies.
 
+## 6a. Reading the model
+
+Ducts are stored as rails of kind Duct on an enclosure's plate (WS-02 `Rail`:
+`x, y, length, vertical, width, height`; width and height 0 while unknown).
+`novo_routing::model::ducts` and `network` read them; engine duct ids are the
+raw rail ids.
+
+`route_connections` takes the wire list's connections (from pin, to pin,
+optional wire diameter), puts each end on the mounting plate and routes them
+with one `plan` per enclosure. The model does not know where a terminal sits
+inside its device, so an end is the middle of the footprint edge the pin leaves
+through (from the pin's direction; the centre when it has none or the device
+is turned). A connection whose device is not placed, or whose ends are on
+different plates, is returned as **unrouted**: it gets no length rather than
+a wrong one. Terminals of a strip sit on the strip device.
+
 ## 7. Out of scope here
 
 3D routing, bend radius, wire bundles with twisted pairs, cable (as opposed to

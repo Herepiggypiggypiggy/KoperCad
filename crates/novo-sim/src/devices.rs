@@ -13,7 +13,7 @@ use novo_core::{
     Endpoint, Netlist, PotentialId, PotentialKind, Project, SymbolId, SymbolInstance, Value,
 };
 
-use crate::{Live, Settled};
+use crate::{Clock, Live, Settled, delay_seconds, is_coil};
 
 /// How a motor behaves right now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -198,4 +198,67 @@ fn three_phase(
         (_, 2) | (_, 3) => MotorRun::PhaseLoss,
         _ => MotorRun::Stopped,
     }
+}
+
+/// Which delay a timer counts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TimerKind {
+    /// Its contacts operate once the coil has been on for the set time.
+    OnDelay,
+    /// Its contacts release the set time after the coil went off.
+    OffDelay,
+}
+
+/// A timer that is counting right now.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TimerProgress {
+    pub kind: TimerKind,
+    /// Share of the set time that has passed, 0 to 1 (exclusive of 1: a
+    /// finished timer is not reported).
+    pub elapsed: f64,
+    /// Seconds still to go.
+    pub remaining: f64,
+}
+
+/// The timers counting on `clock`, keyed by the coil symbol of their device.
+/// A device is a timer when it has an on-delay or off-delay contact.
+pub fn timer_progress(project: &Project, clock: &Clock) -> BTreeMap<SymbolId, TimerProgress> {
+    let mut out = BTreeMap::new();
+    for coil in project.symbols().filter(|s| is_coil(s)) {
+        let Some(device) = coil.device() else {
+            continue;
+        };
+        let kind = project
+            .symbols()
+            .filter(|s| s.device() == Some(device))
+            .find_map(|s| {
+                let name = s.symbol.0.rsplit('/').next().unwrap_or("");
+                if name.contains("_delay_on") {
+                    Some(TimerKind::OnDelay)
+                } else if name.contains("_delay_off") {
+                    Some(TimerKind::OffDelay)
+                } else {
+                    None
+                }
+            });
+        let (Some(kind), Some((on, age))) = (kind, clock.coil_age(coil.id)) else {
+            continue;
+        };
+        let wait = delay_seconds(project, device);
+        let counting = match kind {
+            TimerKind::OnDelay => on,
+            TimerKind::OffDelay => !on,
+        };
+        if counting && wait > 0.0 && age < wait {
+            out.insert(
+                coil.id,
+                TimerProgress {
+                    kind,
+                    elapsed: (age / wait).clamp(0.0, 1.0),
+                    remaining: wait - age,
+                },
+            );
+        }
+    }
+    out
 }

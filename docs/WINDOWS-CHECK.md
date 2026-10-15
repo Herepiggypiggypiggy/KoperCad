@@ -58,10 +58,8 @@ No step needs admin rights. If one asks for it, stop and say so.
 
 ## 6. Onboarding (needs a build with the onboarding PR)
 
-- **Start panel.** With no project open it offers **Open example** and **Try the fast keys** next to
+- **Start panel.** With no project open it offers **Try the fast keys** next to
   New and Open. On a first run it says "New here? Start with Try the fast keys."
-- **Open example.** A two-page motor starter opens as an untitled project named "Motor starter
-  (example)". Undo once empties it. Ctrl+S asks for a name like any new project.
 - **Try the fast keys.** A practice page opens with a motor and three terminals, and a card at the
   bottom right lists six keys with "0 of 6". Each ticks only when you really use it: Q place (hold for the
   wheel), W wire, R rotate, Ctrl+D duplicate, C cable, Ctrl+K palette. Paste or undo must not tick

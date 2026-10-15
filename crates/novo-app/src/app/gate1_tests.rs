@@ -2616,18 +2616,3 @@ fn skipping_the_walk_through_keeps_it_away_and_the_menu_brings_it_back() {
     assert!(d.app.settings.walkthrough_done.is_empty());
     assert!(d.app.settings.walkthrough_shown);
 }
-
-#[test]
-fn open_example_builds_the_motor_starter_as_an_unsaved_project() {
-    let dir = tempfile::tempdir().unwrap();
-    let mut d = Drive::new(&dir.path().join("untitled"));
-    let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::OpenExample);
-    d.frame();
-    assert!(d.app.is_open());
-    assert_eq!(d.doc().project().info().name, "Motor starter (example)");
-    assert!(d.doc().project().pages().count() >= 2);
-    assert!(d.doc().project().devices().count() >= 8);
-    assert!(d.app.current_page().is_some(), "a page is shown");
-    assert!(d.app.project_path.is_none(), "untitled until it is named");
-}
