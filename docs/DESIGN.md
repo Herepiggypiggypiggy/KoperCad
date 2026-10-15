@@ -276,7 +276,63 @@ still win within their grab zone, so a drag from a pin connects (§4, pin
 or body). The move snaps to the grid, shows the wires stretching, follows
 the no-overlap rules, and Esc during the drag puts everything back. M
 keeps working as the keyboard move: it picks the selection up at the
-pointer and a click puts it down. Undo takes back one whole move.
+pointer and a click puts it down. Undo takes back one whole move. A
+press and drag on a wire selects it and moves nothing.
+
+**Placing a row.** With a symbol on the pointer (any way of getting it
+there), a click places one; a press and drag of more than 4 px places a
+row of them, evenly spaced, as far as the pointer stretches.
+
+- **Direction.** The row runs along the axis the pointer has travelled
+  furthest from the press, locked to horizontal or vertical; it switches
+  axis only when the other distance leads by more than 8 px, so a shaky
+  hand does not flip it. The first symbol sits at the press point.
+- **Spacing.** The pitch is the symbol's own (its width or height plus its
+  clearance, rounded up to the grid; a terminal takes its strip's pitch).
+  The mouse wheel, or the + and - keys, shrink or grow it by one grid
+  step while dragging, and the hint shows the pitch. Every symbol sits on
+  the grid.
+  Per kind: a terminal takes its strip's pitch (so a row of terminals
+  matches the strip it joins); fuses, breakers and contacts take their
+  width plus one grid step; anything else its bounding box plus one grid
+  step.
+- **Count.** The number of symbols is the pointer's distance divided by
+  the pitch, rounded down, plus the first, at most 50. A ghost of every
+  symbol is shown live with the count beside the pointer ("×6"). Moving
+  back under one pitch shows the single symbol again.
+- **Collisions.** The row stops before the first position that would
+  overlap another device and shows that position with the refusal mark of
+  §5; it never places over something. Wires are not created between the
+  symbols of a row.
+- **With the wheel and Q.** A symbol picked from the wheel or the place
+  surface is on the pointer like any other, so the row drag works the same.
+  A flick through the wheel only picks the symbol; the row is a second
+  press and drag.
+- **Release** places the whole row as one undo step. R and X during the
+  drag turn or mirror all of them. Esc cancels the drag and keeps the
+  symbol on the pointer.
+- **Tags and proposals.** Auto tags run in order from the press point
+  outward (-F1, -F2, ...), as if placed one by one; terminals continue
+  the strip's numbering (-X1:1, -X1:2, ...).
+  Each symbol raises its usual proposals; Tab and Enter work through them
+  in row order, so the row is wired by accepting, not by hand.
+
+**Linking a contact to a coil.** Four routes make one action, one undo
+step, no confirmation: drag the contact onto the coil (a drag of a
+contact that ends with the pointer over a coil links instead of moving:
+the ghost reads "Link to -K1" while the pointer is over the coil, and Esc
+cancels; over anything else it moves as usual); right-click the
+contact and pick "Link to coil…"; `link` in the command surface (pick the
+contact, then the coil; or `link -K3 -K1`); and renaming the contact (F2
+or the double click) to the tag of an existing coil. The contact takes the
+coil's device and cross reference, and a toast says "Linked to -K1". A tag
+that belongs to something a contact cannot link to is refused with the
+reason in the hint and nothing changes.
+
+**A click on a pin.** With the Connect tool, a click on a pin (anywhere in
+its grab zone) starts a wire there and the next click or drag continues
+it; in any other tool a click on a pin selects its device and a drag from
+it connects (§4, pin or body).
 
 **Escape ladder.** Cancel the step in progress, then leave the tool, then
 clear the selection.
@@ -296,6 +352,7 @@ clear the selection.
 | 1 to 9 | Favourite symbols, only while the place query is empty |
 | W | Connect, for chains (one connection is a drag from a pin); Shift+W switches Corners / Lines, also in the middle of a wire |
 | R / X | Rotate / mirror while placing or on the selection |
+| + / - | While dragging a row: wider / narrower pitch |
 | M | Move the selection with the pointer (a drag does the same, no key needed) |
 | F2 | Edit the selected tag or text |
 | Enter | Accept the highlighted proposal |
@@ -606,6 +663,13 @@ Acceptance:
     moves it in one gesture. M still picks up and drops.
 19. A slow second click of a double click never loses the selection or
     starts a drag.
+20. Place a fuse, press and drag right over 5 pitches: a ghost row with
+    "×6", tags -F1 to -F6 in order, release gives one undo step; the
+    wheel widens the pitch; dragging into another device stops the row
+    before it with the refusal mark. A plain click places one.
+21. Rename a contact to an existing coil's tag: it links in one undoable
+    step with the toast and no dialog. The same with `link`, the context
+    menu and drag. A tag of a motor is refused with the reason.
 
 Keys match the logical character, not the physical position, so `?`,
 Ctrl+Z and Ctrl+Y work on Dutch, German (QWERTZ) and US layouts alike.
