@@ -209,7 +209,7 @@ Marked in place and listed in Issues (WS-14 runs them through `novo-plc`):
 | Two cards in one station share a slot | Warning; an error with the Rockwell style, where slot and channel are the address | both cards |
 | A card's `plc.channels` text does not parse | Error, once for the card, not again on each of its channels | the card |
 | A channel symbol has no `plc.channel` | Warning | the symbol |
-| A card has channels in a space but no start there (made by a script) | Warning | the card |
+| A card has channels in a space but no start there (made by a script) | Warning; not with the Rockwell style, whose addresses need no start | the card |
 
 With the Rockwell style, addresses are slot and channel, so byte overlaps are
 not reported (§11).

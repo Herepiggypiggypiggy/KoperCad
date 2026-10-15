@@ -3,6 +3,7 @@
 
 use novo_core::{AnyId, DeviceId, DeviceTag, Endpoint, Netlist, Project, SymbolRole, Value};
 
+use crate::address::AddressStyle;
 use crate::card::SIGNAL;
 use crate::index::PlcIndex;
 use crate::layout::ChannelType;
@@ -16,7 +17,7 @@ pub struct IoRow {
     /// The section title: `PLC` or `PLC station <name>`.
     pub station_title: String,
     /// The address in the project's style; `None` when the card has no
-    /// start in the channel's space.
+    /// start in the channel's space (Rockwell addresses need none).
     pub address: Option<String>,
     pub kind: ChannelType,
     pub card: DeviceId,
@@ -43,10 +44,15 @@ impl PlcIndex {
     /// Every channel of every card, spares included, grouped by station in
     /// station order and in address order inside a station (inputs, then
     /// outputs, by byte and bit; channels without an address last, in card
-    /// order). A channel drawn more than once is listed once, at its first
+    /// order; under Rockwell, card order then channel). A channel drawn more than once is listed once, at its first
     /// symbol; the extra drawings are a problem, not rows.
     pub fn io_rows(&self, project: &Project) -> Vec<IoRow> {
-        let netlist = Netlist::build(project);
+        self.io_rows_with(project, &Netlist::build(project))
+    }
+
+    /// [`io_rows`](PlcIndex::io_rows) with a netlist the caller already
+    /// built for this state of the project.
+    pub fn io_rows_with(&self, project: &Project, netlist: &Netlist) -> Vec<IoRow> {
         let mut rows = Vec::new();
         for (order, card) in self.cards().iter().enumerate() {
             let card_tag = project
@@ -54,7 +60,7 @@ impl PlcIndex {
                 .map(|d| d.tag.to_string())
                 .unwrap_or_default();
             for channel in card.channels().channels() {
-                let address = card.address(channel.kind, channel.number);
+                let address = card.address_in(channel.kind, channel.number, self.style);
                 let drawn = self.drawn(card.device, channel.kind, channel.number);
                 let mut row = IoRow {
                     station: card.station.clone(),
@@ -73,10 +79,13 @@ impl PlcIndex {
                     spare: drawn.is_empty(),
                 };
                 if let Some(&symbol) = drawn.first() {
-                    fill_drawn(&mut row, project, &netlist, symbol);
+                    fill_drawn(&mut row, project, netlist, symbol);
                 }
-                let key = address.map(|a| (a.space(), a.byte, a.bit));
-                rows.push((card.station.clone(), key.is_none(), key, order, row));
+                // Rockwell rows read slot and channel: card order, not bytes.
+                let key = address
+                    .filter(|_| self.style != AddressStyle::Rockwell)
+                    .map(|a| (a.space(), a.byte, a.bit));
+                rows.push((card.station.clone(), address.is_none(), key, order, row));
             }
         }
         rows.sort_by(|a, b| {

@@ -129,6 +129,22 @@ impl Card {
         let start = self.start[kind.space() as usize]?;
         Some(Address::of(&channel, start, self.slot))
     }
+
+    /// [`address`](Card::address) as written in `style`. Rockwell
+    /// addresses are slot and channel, so they need no start.
+    pub fn address_in(
+        &self,
+        kind: ChannelType,
+        number: u16,
+        style: AddressStyle,
+    ) -> Option<Address> {
+        if style == AddressStyle::Rockwell {
+            let channel = self.channels().channel(kind, number)?;
+            let start = self.start[kind.space() as usize].unwrap_or(0);
+            return Some(Address::of(&channel, start, self.slot));
+        }
+        self.address(kind, number)
+    }
 }
 
 /// Every PLC card, by station, then slot (cards without a slot last), then
