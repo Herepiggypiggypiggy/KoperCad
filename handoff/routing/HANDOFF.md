@@ -2,7 +2,7 @@
 
 ## State
 - Repo herepiggypiggypiggy/kopercad, my branch `claude/project-thread-euksez` (restart from main after each merge).
-- PR: design doc plus engine (steps 1 and 2 of the plan), crate `novo-routing`. Fill and problems are next.
+- #334 (design + engine) MERGED. Follow-up PR from main on this branch: guards, merged points, reach rule. Next: duct fill, fill penalty, job order, problems.
 
 ## Resume
 ```

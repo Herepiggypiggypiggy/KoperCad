@@ -23,7 +23,10 @@ fn job(id: u64, from: Anchor, to: Anchor) -> Job {
     Job { id, from, to }
 }
 
-const NO_SLACK: Rules = Rules { slack_mm: 0.0 };
+const NO_SLACK: Rules = Rules {
+    slack_mm: 0.0,
+    max_stub_mm: 150.0,
+};
 
 #[test]
 fn two_terminals_above_one_duct_run_down_along_and_up() {
@@ -49,7 +52,13 @@ fn slack_is_added_once_per_end() {
         anchor(50.0, 40.0, Facing::Down),
         anchor(350.0, 40.0, Facing::Down),
     );
-    let r = net.route(&j, &Rules { slack_mm: 25.0 });
+    let r = net.route(
+        &j,
+        &Rules {
+            slack_mm: 25.0,
+            ..NO_SLACK
+        },
+    );
     assert_eq!(r.length_mm, 420.0 + 50.0);
 }
 
@@ -218,4 +227,67 @@ fn route_all_keeps_job_order() {
     ];
     let r = route_all(&net, &jobs, &NO_SLACK);
     assert_eq!(r.iter().map(|r| r.job).collect::<Vec<_>>(), vec![9, 3]);
+}
+
+#[test]
+fn non_finite_ducts_are_ignored_not_a_panic() {
+    let net = Network::new(&[
+        duct(1, f64::NAN, 100.0, f64::NAN, 100.0),
+        duct(2, 0.0, f64::NAN, 400.0, f64::NAN),
+        duct(3, 0.0, 100.0, 400.0, 100.0),
+    ]);
+    assert_eq!(net.ignored, vec![1, 2]);
+    let j = job(
+        1,
+        anchor(50.0, 40.0, Facing::Down),
+        anchor(350.0, 40.0, Facing::Down),
+    );
+    assert_eq!(net.route(&j, &NO_SLACK).ducts, vec![3]);
+}
+
+#[test]
+fn route_points_keep_only_bends_and_ends() {
+    // Crossing ducts: the wire runs straight through the crossing at (300,100).
+    let net = Network::new(&[
+        duct(1, 0.0, 100.0, 500.0, 100.0),
+        duct(2, 300.0, 80.0, 300.0, 120.0),
+    ]);
+    let j = job(
+        1,
+        anchor(50.0, 60.0, Facing::Down),
+        anchor(450.0, 60.0, Facing::Down),
+    );
+    let r = net.route(&j, &NO_SLACK);
+    assert_eq!(
+        r.points,
+        vec![
+            Point::new(50.0, 60.0),
+            Point::new(50.0, 100.0),
+            Point::new(450.0, 100.0),
+            Point::new(450.0, 60.0),
+        ]
+    );
+    assert_eq!(r.length_mm, 40.0 + 400.0 + 40.0);
+}
+
+#[test]
+fn a_wire_does_not_cross_the_plate_in_free_air_to_save_duct_length() {
+    // Ducts 1 and 2 touch; the far end of duct 2 is 250 mm from each
+    // terminal in a straight line, which would beat 400 mm along duct 1.
+    let net = Network::new(&[
+        duct(1, 0.0, 100.0, 500.0, 100.0),
+        duct(2, 300.0, 80.0, 300.0, 120.0),
+    ]);
+    let j = job(
+        1,
+        anchor(50.0, 60.0, Facing::Down),
+        anchor(450.0, 60.0, Facing::Down),
+    );
+    let r = net.route(&j, &NO_SLACK);
+    assert_eq!(r.length_mm, 480.0);
+    let far = Rules {
+        max_stub_mm: 1000.0,
+        ..NO_SLACK
+    };
+    assert!(net.route(&j, &far).length_mm < 480.0);
 }
