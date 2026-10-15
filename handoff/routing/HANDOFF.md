@@ -18,3 +18,12 @@ Roster with session ids: /mnt/project-files/coordination/threads.md. Message the
 ## Decisions
 - Routes are derived, not stored; only pins are stored.
 - Free-air fallback is flagged, never length zero.
+
+## UI entry points needed (engine is not done without them)
+Sent to "UI integration: cabinet, 3D, enclosure" (2026-10-15):
+1. Cabinet: "Route wires" per enclosure via `route_connections(project, &connections, &Rules::default())`.
+2. Cabinet drawing: route polylines over the plate, ducts tinted by fill ratio, selecting a duct lists its wires.
+3. Wire list: Length column from `Route.length_mm` (wire list thread); unrouted shows no length.
+4. Issues: free air and overfull duct come from `check()` (#413); unsized duct and guessed wire infos follow after #413.
+5. Add and size a duct on the Cabinet (rail of kind Duct, `set_rail_size`).
+Open: whether a `route_project(project)` that builds the connections itself is wanted.

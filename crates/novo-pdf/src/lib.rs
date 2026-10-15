@@ -30,6 +30,7 @@
 mod draw;
 mod font;
 mod inter;
+mod report;
 
 use novo_canvas::model::{
     ModelStyle, PageScene, PlaceholderArt, SheetContent, SheetLine, SheetText, SymbolArt,
@@ -45,6 +46,7 @@ use std::path::Path;
 
 pub use draw::PT_PER_MM;
 pub use novo_canvas::model::{NoteAnchor, SymbolNote};
+pub use report::{ReportPdfOptions, export_report_pdf};
 
 /// Which pages to export.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
