@@ -3,6 +3,7 @@
 //! toasts for messages, the dialogs and action dispatch. There is no menu
 //! bar and no status bar.
 
+mod cabinet;
 mod changes;
 mod checks;
 mod dock;
@@ -26,6 +27,8 @@ mod wheel;
 mod workbench;
 mod xref;
 
+#[cfg(test)]
+mod cabinet_tests;
 #[cfg(test)]
 mod changes_tests;
 #[cfg(test)]
@@ -128,6 +131,9 @@ pub struct NovoApp {
     autosave_failing: bool,
     /// Focus mode (Ctrl+Shift+F) hides everything that is not pinned.
     focus_mode: bool,
+    /// The Cabinet canvas is shown instead of the schematic (Ctrl+2).
+    cabinet_open: bool,
+    cabinet: cabinet::CabinetState,
     /// The outline flyout is showing over the canvas.
     outline_open: bool,
     /// What the outline lists.
@@ -192,6 +198,8 @@ impl NovoApp {
             next_tick: Instant::now(),
             autosave_failing: false,
             focus_mode: false,
+            cabinet_open: false,
+            cabinet: cabinet::CabinetState::new(),
             outline_open: false,
             outline_mode: OutlineMode::Pages,
             breadcrumb_link: None,
@@ -309,8 +317,8 @@ impl NovoApp {
             Action::SaveProject
             | Action::SaveProjectAs
             | Action::CloseProject
-            | Action::ZoomToFit => open,
-            Action::ShowCabinet => false,
+            | Action::ZoomToFit
+            | Action::ShowCabinet => open,
             Action::Undo => doc.is_some_and(|d| d.can_undo()),
             Action::Redo => doc.is_some_and(|d| d.can_redo()),
             _ => true,
@@ -339,8 +347,8 @@ impl NovoApp {
             Action::Undo => self.undo_redo(false),
             Action::Redo => self.undo_redo(true),
             Action::ZoomToFit => self.canvas.zoom_to_fit(),
-            // The only canvas so far; Cabinet stays disabled until it exists.
-            Action::ShowSchematic | Action::ShowCabinet => {}
+            Action::ShowSchematic => self.cabinet_open = false,
+            Action::ShowCabinet => self.cabinet_open = true,
             Action::PinOutline => {
                 let pinned = !self.outline_pinned();
                 self.settings.outline_pinned = Some(pinned);
@@ -678,7 +686,9 @@ impl NovoApp {
         self.drawer(ui);
         let canvas_rect = egui::CentralPanel::no_frame()
             .show(ui, |ui| {
-                if self.is_open() {
+                if self.is_open() && self.cabinet_open {
+                    self.cabinet_show(ui);
+                } else if self.is_open() {
                     self.update_marks();
                     self.update_sheet();
                     let open = self
@@ -695,10 +705,10 @@ impl NovoApp {
             .response
             .rect;
 
-        if !self.focus_mode {
-            if !pinned && self.is_open() {
-                self.outline_flyout(&ctx, canvas_rect, &mut picked);
-            }
+        if !self.focus_mode && !pinned && self.is_open() {
+            self.outline_flyout(&ctx, canvas_rect, &mut picked);
+        }
+        if !self.focus_mode && !self.cabinet_open {
             self.hud(&ctx, canvas_rect);
             self.sync_wiring_mode();
             self.sync_connect_mode();
@@ -850,15 +860,10 @@ impl NovoApp {
                 (Action::ShowSchematic, "Schematic"),
                 (Action::ShowCabinet, "Cabinet"),
             ] {
-                let selected = action == Action::ShowSchematic;
+                let selected = (action == Action::ShowCabinet) == self.cabinet_open;
                 let response = ui
                     .add_enabled_ui(self.is_enabled(action), |ui| segment(ui, label, selected))
                     .inner;
-                let response = if action == Action::ShowCabinet {
-                    response.on_disabled_hover_text("The cabinet canvas comes later")
-                } else {
-                    response
-                };
                 if response.clicked() {
                     picked.push(action);
                 }
@@ -2339,7 +2344,7 @@ mod tests {
     }
 
     #[test]
-    fn cabinet_waits_for_its_canvas() {
+    fn cabinet_needs_an_open_project() {
         let app = app_with(MemoryBackend::default());
         assert!(!app.is_enabled(Action::ShowCabinet));
         assert!(app.is_enabled(Action::ShowSchematic));
