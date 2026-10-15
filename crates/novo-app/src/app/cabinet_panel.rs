@@ -8,14 +8,15 @@
 use eframe::egui;
 use novo_core::{AnyId, Device, DeviceId, Project};
 use novo_parts::{PanelData, keys};
+use novo_theme::widgets::section_label;
 
 /// The fields in the order they are shown: key, label, unit.
-const NUMBERS: [(&str, &str); 5] = [
-    (keys::POWER_LOSS_W, "Power loss (W)"),
-    (keys::CLEARANCE_ABOVE_MM, "Space above (mm)"),
-    (keys::CLEARANCE_BELOW_MM, "Space below (mm)"),
-    (keys::CLEARANCE_LEFT_MM, "Space left (mm)"),
-    (keys::CLEARANCE_RIGHT_MM, "Space right (mm)"),
+const NUMBERS: [(&str, &str, &str); 5] = [
+    (keys::POWER_LOSS_W, "Power loss", "W"),
+    (keys::CLEARANCE_ABOVE_MM, "Space above", "mm"),
+    (keys::CLEARANCE_BELOW_MM, "Space below", "mm"),
+    (keys::CLEARANCE_LEFT_MM, "Space left", "mm"),
+    (keys::CLEARANCE_RIGHT_MM, "Space right", "mm"),
 ];
 
 /// Text buffers of the inspector, one per field (the numbers, then the
@@ -65,55 +66,65 @@ pub(super) fn show(
         shown(data.clearances.right_mm),
     ];
     let mut edit = None;
+    let mut picked: Option<String> = None;
     ui.add_space(6.0);
-    ui.strong("Panel data");
-    ui.weak("A value here overrides the part's.");
+    section_label(ui, "PANEL DATA");
+    if current.iter().all(String::is_empty) && data.mounting.is_none() {
+        ui.weak("No data from the part. Type it here, or pick a part with a data sheet.");
+    } else {
+        ui.weak("A value here overrides the part's.");
+    }
+    ui.weak("Space is measured as the part is drawn, before rotating.");
     ui.add_space(6.0);
-    for (i, (key, label)) in NUMBERS.iter().enumerate() {
-        ui.label(*label);
-        let response = ui.add(
-            egui::TextEdit::singleline(&mut fields.text[i])
+    for (i, (key, label, unit)) in NUMBERS.iter().enumerate() {
+        ui.horizontal(|ui| {
+            ui.label(*label);
+            let typed = fields.text[i].trim();
+            let bad = !typed.is_empty() && novo_parts::parse_number(typed).is_none_or(|v| v < 0.0);
+            let mut field = egui::TextEdit::singleline(&mut fields.text[i])
                 .id_salt(("cabinet_panel_field", id, *key))
                 .hint_text("not set")
-                .desired_width(120.0),
-        );
-        if !response.has_focus() && !response.lost_focus() {
-            fields.text[i] = current[i].clone();
-        }
-        if response.lost_focus() && fields.text[i].trim() != current[i] {
-            edit = Some(PanelEdit {
-                device: id,
-                key,
-                text: fields.text[i].clone(),
-            });
-        }
-        ui.add_space(2.0);
-    }
-    ui.label("Mounting");
-    let mounting = data.mounting.map(|m| m.as_str()).unwrap_or("");
-    let mut picked = None;
-    egui::ComboBox::from_id_salt(("cabinet_panel_mounting", id))
-        .selected_text(if mounting.is_empty() {
-            "not set"
-        } else {
-            mounting
-        })
-        .show_ui(ui, |ui| {
-            if ui
-                .selectable_label(mounting.is_empty(), "not set")
-                .clicked()
-            {
-                picked = Some(String::new());
+                .desired_width(64.0);
+            if bad {
+                field = field.text_color(ui.visuals().error_fg_color);
             }
-            for m in novo_parts::Mounting::ALL {
-                if ui
-                    .selectable_label(mounting == m.as_str(), m.as_str())
-                    .clicked()
-                {
-                    picked = Some(m.as_str().to_owned());
-                }
+            let response = ui.add(field);
+            ui.weak(*unit);
+            if bad {
+                response.clone().on_hover_text("A number of 0 or more");
+            }
+            if !response.has_focus() && !response.lost_focus() && !bad {
+                fields.text[i] = current[i].clone();
+            }
+            if response.lost_focus() && fields.text[i].trim() != current[i] {
+                edit = Some(PanelEdit {
+                    device: id,
+                    key,
+                    text: fields.text[i].clone(),
+                });
             }
         });
+    }
+    ui.horizontal(|ui| {
+        ui.label("Mounting");
+        let mounting = data.mounting;
+        egui::ComboBox::from_id_salt(("cabinet_panel_mounting", id))
+            .selected_text(mounting.map_or("not set", |m| m.label()))
+            .show_ui(ui, |ui| {
+                if ui.selectable_label(mounting.is_none(), "not set").clicked() {
+                    picked = Some(String::new());
+                }
+                for m in novo_parts::Mounting::ALL {
+                    if ui
+                        .selectable_label(mounting == Some(m), m.label())
+                        .clicked()
+                    {
+                        picked = Some(m.as_str().to_owned());
+                    }
+                }
+            });
+    });
+    let mounting = data.mounting.map_or("", |m| m.as_str());
     if let Some(text) = picked
         && text != mounting
     {

@@ -2,3 +2,4 @@
 2026-10-15 18:40 UTC UI gap recorded: no property sheet panel in novo-app; UI integration threads asked.
 2026-10-15 18:45 UTC Cabinet inspector fields added (cabinet_panel.rs); merged main.
 2026-10-15 18:47 UTC Inspector panel turned into a section for #443's cabinet_inspector.rs.
+2026-10-15 18:49 UTC Review fixes: Mounting::label, themed section, error colour, hints.

@@ -38,6 +38,16 @@ impl Mounting {
         }
     }
 
+    /// The name shown to people: `DIN rail`, `Screw`, `Plate`, `Door cut-out`.
+    pub fn label(self) -> &'static str {
+        match self {
+            Mounting::DinRail => "DIN rail",
+            Mounting::Screw => "Screw",
+            Mounting::Plate => "Plate",
+            Mounting::DoorCutout => "Door cut-out",
+        }
+    }
+
     /// Reads the stored value or what a person or a maker file would type
     /// (`DIN rail`, `Hutschiene`, `door cut-out`, `Schraubmontage`).
     pub fn parse(text: &str) -> Option<Mounting> {
@@ -200,6 +210,7 @@ mod tests {
         assert_eq!(Mounting::parse("glue"), None);
         for m in Mounting::ALL {
             assert_eq!(Mounting::parse(m.as_str()), Some(m));
+            assert_eq!(Mounting::parse(m.label()), Some(m));
         }
     }
 

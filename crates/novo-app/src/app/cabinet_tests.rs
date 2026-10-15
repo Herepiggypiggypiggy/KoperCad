@@ -223,3 +223,32 @@ fn panel_data_edits_are_one_undo_step_and_bad_input_changes_nothing() {
     assert_eq!(panel.power_loss_w, None);
     assert_eq!(panel.mounting, Some(novo_parts::Mounting::DinRail));
 }
+
+#[test]
+fn the_panel_data_section_draws_and_reads_the_devices_values() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    let device = project(&d).all::<novo_core::Device>().next().unwrap().id;
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("loss", |tx| {
+            tx.set_property(device, "power_loss_w", Some(Value::Float(7.5)))
+        })
+        .unwrap();
+    let mut fields = super::cabinet_panel::PanelFields::default();
+    let egui_ctx = d.ctx.clone();
+    let mut edit = None;
+    for _ in 0..2 {
+        let mut out = egui_ctx.run_ui(Default::default(), |ui| {
+            edit = super::cabinet_panel::show(ui, &mut fields, project(&d), device.raw());
+        });
+        out.textures_delta.clear();
+    }
+    assert!(edit.is_none(), "drawing alone changes nothing");
+}
