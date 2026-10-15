@@ -122,5 +122,8 @@ claude/data-model-amzaxu origin/main`, then new PR for new work.
   `SwitchStandard { standard, symbols: [(SymbolId, SymbolKey)] }` sets it and re-keys the listed
   symbols in one undo step; the caller computes the keys (`Pack::counterpart`), the model has no
   symbol packs and pins stay as they are.
+- Macros: `Command::AdoptBlockDefinition { definition }` (`Tx::adopt_block_definition`) copies a
+  definition from a macro file in under a fresh id; same checks as a captured one, now also no
+  parts, feeds or potentials in members. Members keep their file-local ids.
 - PRs get squash-merged: rebase follow-ups with `git rebase --onto origin/main <old-head>`.
 - Commit trailers: Co-Authored-By Claude line + Claude-Session link (see git log).
