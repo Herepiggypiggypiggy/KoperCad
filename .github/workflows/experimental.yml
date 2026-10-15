@@ -231,6 +231,7 @@ jobs:
           name: experimental
           path: out
       - name: Publish to the latest-build branch
+        continue-on-error: true
         run: |
           # One orphan commit with the exe, run.cmd and README, force-pushed
           # each build so the branch never grows and deleting it removes the
