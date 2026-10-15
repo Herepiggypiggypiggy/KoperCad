@@ -47,12 +47,13 @@ No step needs admin rights. If one asks for it, stop and say so.
 - **Moving preference.** Preferences, "Moving a symbol": "Leaves its wires" is the default. Drag
   a symbol: it moves alone and its wires stay. Switch to "Takes its wires along": a plain drag now
   carries the wires. Shift always does the other one.
-- **Shift+M.** With the pointer over a symbol, M moves it as the preference says; Shift+M does
-  the opposite (picks it up with its wires if the preference is "Leaves its wires"). Esc cancels
-  and puts it back.
+- **Shift+M (needs a build that includes #294; skip it otherwise).** Select a symbol and press
+  M: it moves as the Moving preference says. Shift+M always carries the wires, and keeps
+  carrying them after you release Shift. Esc cancels and puts it back.
 - **Shift+L, live potentials.** Shift+L turns the live view on: a badge sits on each switched
   pole, click it to close or open the pole. Lit wires show the potential colour, unreached
-  wires are dimmed, a net where two potentials meet is red. Shift+L (or the close button) leaves
-  the view and the drawing is unchanged.
+  wires are dimmed, a net where two potentials meet is red. Hover a wire for a tip about what it
+  carries. Coils get a badge too and timers count down. Shift+L (or the close button) leaves the
+  view and the drawing is unchanged.
 
 Send the result to the thread you got the build from, or write it next to the build number.
