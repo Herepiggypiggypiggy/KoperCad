@@ -1898,6 +1898,7 @@ dependencies = [
  "novo-core",
  "novo-parts",
  "novo-plc",
+ "novo-routing",
  "novo-terminals",
  "novo-tests",
 ]
