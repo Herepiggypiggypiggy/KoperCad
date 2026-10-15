@@ -349,6 +349,7 @@ impl NovoApp {
             }
         }
         self.draw_wheel(ctx, centre, shown, &items, at);
+        self.hidden_note(ctx, centre, shown, &items);
 
         if close {
             self.wb.wheel = None;
@@ -366,6 +367,39 @@ impl NovoApp {
                 view.editor.begin_place(&id, None);
             }
         }
+    }
+
+    /// One weak line under the wheel when the project's standard has no
+    /// drawing for some items of the sector shown; hovering lists them.
+    fn hidden_note(&self, ctx: &egui::Context, centre: Pos2, shown: Option<usize>, items: &[Item]) {
+        let (Some(sector), Some(view)) = (shown, self.canvas.schematic_ref()) else {
+            return;
+        };
+        let hidden: Vec<&str> = CATEGORIES[sector]
+            .1
+            .iter()
+            .filter(|(key, _)| !items.iter().any(|(k, _)| k == key))
+            .map(|(_, label)| *label)
+            .collect();
+        if hidden.is_empty() {
+            return;
+        }
+        let pack = view
+            .editor
+            .catalog
+            .library()
+            .pack()
+            .map_or("this".to_owned(), |p| p.id().to_uppercase());
+        egui::Area::new(egui::Id::new("place_wheel_hidden"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(centre + Vec2::new(-90.0, REACH + 8.0))
+            .show(ctx, |ui| {
+                ui.set_width(180.0);
+                ui.vertical_centered(|ui| {
+                    ui.weak(format!("{} symbols have no {pack} version", hidden.len()))
+                        .on_hover_text(hidden.join(", "));
+                });
+            });
     }
 
     fn draw_wheel(

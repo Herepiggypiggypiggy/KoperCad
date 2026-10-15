@@ -91,6 +91,15 @@ impl NovoApp {
                 catalog.used(&id);
             }
         }
+        // The favourites row keeps its order, each in the new pack.
+        let favourites: Vec<String> = view
+            .editor
+            .catalog
+            .favourites()
+            .iter()
+            .map(|id| catalog.in_pack(id))
+            .collect();
+        catalog.set_favourites(favourites);
         view.editor.catalog = catalog;
     }
 

@@ -2574,7 +2574,14 @@ fn the_editor_catalog_follows_the_project_standard_and_the_wheel_hides_missing_t
     };
     assert_eq!(pack(&mut d), Some(Pack::Iec));
     let breaker = |d: &Drive| d.app.wheel_items(3);
-    assert!(breaker(&d).iter().any(|(k, _)| k.ends_with("rcbo_2p")));
+    // A breaker item with no twin in the NFPA pack, found from the packs.
+    let nfpa = novo_symbols::Library::builtin_pack(Pack::Nfpa).unwrap();
+    let no_twin = breaker(&d)
+        .into_iter()
+        .map(|(k, _)| k)
+        .find(|k| Pack::counterpart(k, Pack::Nfpa).is_none_or(|t| nfpa.get(&t).is_none()))
+        .expect("a breaker item without an NFPA drawing");
+    assert!(breaker(&d).iter().any(|(k, _)| *k == no_twin));
     d.app
         .canvas
         .schematic()
@@ -2583,9 +2590,54 @@ fn the_editor_catalog_follows_the_project_standard_and_the_wheel_hides_missing_t
         .catalog
         .used("iec/contacts/no");
 
+    // A reordered favourites row survives the switch and the undo.
+    let mut order: Vec<String> = d
+        .app
+        .canvas
+        .schematic()
+        .unwrap()
+        .editor
+        .catalog
+        .favourites()
+        .to_vec();
+    order.reverse();
+    d.app
+        .canvas
+        .schematic()
+        .unwrap()
+        .editor
+        .catalog
+        .set_favourites(order.clone());
+
     d.app.set_standard(Pack::Nfpa);
     d.frame();
     assert_eq!(pack(&mut d), Some(Pack::Nfpa));
+    // The favourites keep their order in the new pack, and still place.
+    let favs = d
+        .app
+        .canvas
+        .schematic()
+        .unwrap()
+        .editor
+        .catalog
+        .favourites()
+        .to_vec();
+    assert!(
+        !favs.is_empty() && favs.iter().all(|f| f.starts_with("nfpa/")),
+        "{favs:?}"
+    );
+    let expected: Vec<String> = order
+        .iter()
+        .map(|f| Pack::counterpart(f, Pack::Nfpa).unwrap())
+        .filter(|f| nfpa.get(f).is_some())
+        .collect();
+    assert_eq!(favs, expected);
+    let view = d.app.canvas.schematic().unwrap();
+    assert!(
+        view.editor.begin_place(&favs[0], None),
+        "a favourite places"
+    );
+    view.editor.leave_tool();
     // A recently used symbol follows to the new pack.
     let catalog = &d.app.canvas.schematic().unwrap().editor.catalog;
     assert_eq!(
@@ -2603,4 +2655,14 @@ fn the_editor_catalog_follows_the_project_standard_and_the_wheel_hides_missing_t
     d.app.run(&ctx, Action::Undo);
     d.frame();
     assert_eq!(pack(&mut d), Some(Pack::Iec));
+    let back = d
+        .app
+        .canvas
+        .schematic()
+        .unwrap()
+        .editor
+        .catalog
+        .favourites()
+        .to_vec();
+    assert_eq!(back, order, "the reordered row comes back");
 }
