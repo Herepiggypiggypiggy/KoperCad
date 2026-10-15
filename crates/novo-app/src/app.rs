@@ -1954,6 +1954,7 @@ mod tests {
             title: String::new(),
             kind: Default::default(),
             format: Default::default(),
+            structure: Default::default(),
         };
         assert!(app.execute(add()).is_none());
         app.run(&ctx, Action::NewProject);
