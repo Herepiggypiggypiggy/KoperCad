@@ -13,7 +13,7 @@ use eframe::egui;
 use novo_canvas::SelectOp;
 use novo_canvas::model::item_id;
 use novo_checks::Problem;
-use novo_core::{AnyId, ChangeSet, DeviceId, Document, SymbolId};
+use novo_core::{AnyId, ChangeSet, DeviceId, Document, PageId, SymbolId};
 use novo_editor::EditorKey;
 use novo_editor::tool::WiringMode;
 use novo_symbols::Library;
@@ -58,6 +58,10 @@ pub(crate) struct Workbench {
     pub(super) preferences: bool,
     /// The Parts window (browser and one-click import), while open.
     pub(super) parts: Option<super::parts::PartsWindow>,
+    /// The Save as macro window, while it is open.
+    pub(super) macro_save: Option<super::macro_actions::SaveDraft>,
+    /// The Place macro window.
+    pub(super) macro_place: super::macro_actions::PlaceWindow,
     /// The Project settings window (drawing standard) is open.
     pub(super) project_settings: bool,
     /// The Issue revision window, while it is open.
@@ -71,6 +75,9 @@ pub(crate) struct Workbench {
     pub(super) nav: Navigator,
     /// Where to select and centre once the canvas shows its page.
     pub(super) pending: Option<Place>,
+    /// An item to select and centre once its page is shown (a row of the
+    /// Changes list).
+    pub(super) pending_item: Option<(PageId, AnyId)>,
     /// The drawing's layer and rect last frame: a focused widget there is
     /// the canvas, anywhere else a panel.
     pub(super) canvas_area: Option<(egui::LayerId, egui::Rect)>,
@@ -105,6 +112,9 @@ pub(crate) struct Workbench {
     pub(super) problem_at: Option<usize>,
     /// The last PDF written, for tests and the toast.
     pub(super) last_export: Option<PathBuf>,
+    /// Hash of each spreadsheet export this session wrote, by path: only a
+    /// file still identical to what we wrote is replaced by the next export.
+    pub(super) sheet_exports: std::collections::BTreeMap<PathBuf, u64>,
     /// The live potentials view (Shift+L).
     pub(super) live: super::live::LiveView,
     /// Changes mode, while it is on.
@@ -141,6 +151,8 @@ impl Default for Workbench {
             renumber: None,
             preferences: false,
             parts: None,
+            macro_save: None,
+            macro_place: Default::default(),
             project_settings: false,
             issue: None,
             compare: None,
@@ -148,6 +160,7 @@ impl Default for Workbench {
             sheet: 0,
             nav: Navigator::default(),
             pending: None,
+            pending_item: None,
             canvas_area: None,
             occurrences: None,
             drawer: None,
@@ -164,6 +177,7 @@ impl Default for Workbench {
             issue_filter: [true; 3],
             problem_at: None,
             last_export: None,
+            sheet_exports: Default::default(),
             live: Default::default(),
             changes: None,
             commissioning: None,
@@ -199,6 +213,8 @@ const APP_COMMANDS: &[&str] = &[
     "edit.mirror",
     "edit.delete",
     "edit.duplicate",
+    "macro.save",
+    "macro.place",
     "edit.rename",
     "edit.escape",
     "nav.next_page",
@@ -223,6 +239,8 @@ const APP_COMMANDS: &[&str] = &[
     "check.previous_problem",
     "export.pdf",
     "export.commissioning",
+    "export.sheets",
+    "export.sheets_csv",
     "file.import_dxf_background",
     "view.background",
     "file.remove_background",
@@ -494,6 +512,8 @@ impl NovoApp {
             "edit.rotate" => self.editor_key(EditorKey::Rotate),
             "edit.mirror" => self.editor_key(EditorKey::Mirror),
             "edit.duplicate" => self.duplicate_selection(),
+            "macro.save" => self.open_macro_save(argument),
+            "macro.place" => self.open_macro_place(argument),
             "edit.delete" if self.declines_proposal() => self.dismiss_proposal(),
             "edit.delete" => self.editor_key(EditorKey::Delete),
             "nav.next_page" | "nav.previous_page" => {
@@ -562,6 +582,12 @@ impl NovoApp {
                 self.export_pdf();
             }
             "export.commissioning" => self.export_commissioning_pdf(),
+            "export.sheets" => {
+                self.export_spreadsheet();
+            }
+            "export.sheets_csv" => {
+                self.export_spreadsheet_csv();
+            }
             "file.import_dxf_background" => self.import_dxf_background(),
             "view.background" => self.toggle_background(),
             "file.remove_background" => self.remove_background(),
@@ -747,6 +773,17 @@ impl NovoApp {
             self.wb.pending = None;
             if let (Some(symbol), Some(view)) = (place.symbol, self.canvas.schematic()) {
                 let item = item_id(AnyId::Symbol(symbol));
+                view.canvas.selection.clear();
+                view.canvas.selection.apply([item], SelectOp::Replace);
+                view.canvas.reveal([item]);
+            }
+        }
+        if let Some((page, id)) = self.wb.pending_item
+            && Some(page) == self.current_page
+        {
+            self.wb.pending_item = None;
+            if let Some(view) = self.canvas.schematic() {
+                let item = item_id(id);
                 view.canvas.selection.clear();
                 view.canvas.selection.apply([item], SelectOp::Replace);
                 view.canvas.reveal([item]);

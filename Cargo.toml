@@ -37,6 +37,9 @@ novo-terminals = { path = "crates/novo-terminals" }
 novo-tests = { path = "crates/novo-tests" }
 novo-theme = { path = "crates/novo-theme" }
 novo-view3d = { path = "crates/novo-view3d" }
+novo-learn = { path = "crates/novo-learn" }
+novo-heatview = { path = "crates/novo-heatview" }
+novo-thermal = { path = "crates/novo-thermal" }
 novo-workflow = { path = "crates/novo-workflow" }
 novo-xref = { path = "crates/novo-xref" }
 

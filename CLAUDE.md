@@ -60,6 +60,9 @@ coordinator in its own small PR first.
 | `novo-theme` | Layout and branding | Dark theme, design tokens, icons, logo (`assets/branding`) |
 | `novo-view3d` | WS-29 | 3D cabinet view: renderer, scene from cabinet data, camera (design `docs/design/3d-view.md`) |
 | `novo-commissioning` | Commissioning | Commissioning mode: checks, progress and punch list (pure engine; design PR #399) |
+| `novo-learn` | Learning | Learning modules engine: lessons, steps, checks, progress (design `docs/design/learning-modules.md`) |
+| `novo-heatview` | Thermal visuals | Heat field engine: contours, hot spots, streamlines, compare, synthetic field (pure, no UI deps) |
+| `novo-thermal` | Thermal simulation | Physical heat and airflow simulation engine (pure, depends on novo-layout) |
 | `novo-tests` | Tester | Cross-crate tests and the Gate 1 fixture |
 | `novo-app` | WS-01 | Application shell, wiring crates together |
 

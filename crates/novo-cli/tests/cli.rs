@@ -377,7 +377,9 @@ fn export_reports_as_excel_and_csv() {
             "Cut list",
             "Terminal diagram",
             "Cable diagram",
-            "IO list"
+            "IO list",
+            "Cable schedule",
+            "Plug connection list"
         ]
     );
 
@@ -508,4 +510,25 @@ fn commissioning_report_writes_pdf_csv_and_xlsx() {
         dir.path().join("report.txt").to_str().unwrap(),
     ]);
     assert_eq!(bad.code, exit::USAGE);
+}
+
+#[test]
+fn export_terminals_writes_the_strip_diagram_with_wire_and_bridge_columns() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("strip.novo");
+    let mut p = ScriptProject::create(&path, "Strip", false).unwrap();
+    p.add_page("1", "Main").unwrap();
+    let x1 = p.add_device("-X1", "Strip", "terminal_strip").unwrap();
+    p.add_terminal(x1, "1").unwrap();
+    p.save().unwrap();
+    p.close().unwrap();
+
+    let run = novo(&["export", "terminals", s(&path)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert!(
+        run.out
+            .contains("Internal,Wire in,Terminal,Kind,Bridged to,Wire out,External"),
+        "{}",
+        run.out
+    );
 }
