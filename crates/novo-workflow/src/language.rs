@@ -54,6 +54,11 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("tool.place", &[], &["plaatsen", "invoegen", "component"]),
     nl("tool.connect", &[], &["verbinden", "draad"]),
+    nl(
+        "wire.mode",
+        &["bedradingsmodus"],
+        &["modus", "hoeken", "lijnen", "tekenen"],
+    ),
     nl("edit.rotate", &[], &["draaien", "roteren"]),
     nl("edit.mirror", &[], &["spiegelen"]),
     nl(
@@ -83,6 +88,21 @@ pub const DUTCH: &[Aliases] = &[
         "edit.renumber",
         &["hernummeren", "hernummer"],
         &["nummering", "apparaten hernummeren"],
+    ),
+    nl(
+        "plc.add_card",
+        &["kaart toevoegen"],
+        &["plc kaart", "plc module"],
+    ),
+    nl(
+        "plc.to_plc",
+        &["naar plc"],
+        &["signaal naar plc", "ingang uitgang"],
+    ),
+    nl(
+        "plc.renumber_io",
+        &["hernummer io"],
+        &["adressen hernummeren"],
     ),
     nl("edit.escape", &[], &["annuleren"]),
     // Navigate
@@ -149,6 +169,8 @@ pub const DUTCH: &[Aliases] = &[
 /// Dutch command arguments and the English chip each one stands for.
 pub const DUTCH_ARGUMENTS: &[(&str, &str)] = &[
     ("pagina", "page"),
+    ("hoeken", "corners"),
+    ("lijnen", "lines"),
     ("selectie", "selection"),
     ("project", "project"),
 ];

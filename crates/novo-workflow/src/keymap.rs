@@ -340,6 +340,9 @@ impl Keymap {
         // Draw.
         bind(Chord::plain(l('i')), Canvas, "tool.place");
         bind(Chord::plain(l('w')), Canvas, "tool.connect");
+        // Corners / Lines (DESIGN §4): works mid-wire. The app shell ignores
+        // key repeat for this chord, so a held key does not flip back and forth.
+        bind(Chord::shift(l('w')), Canvas, "wire.mode");
         bind(Chord::plain(l('r')), Canvas, "edit.rotate");
         bind(Chord::plain(l('x')), Canvas, "edit.mirror");
         for digit in 1..=9 {

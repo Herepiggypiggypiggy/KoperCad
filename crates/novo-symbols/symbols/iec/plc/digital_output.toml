@@ -5,8 +5,8 @@ description = "One digital output channel of a PLC card."
 standard = "IEC 60617"
 category = "plc"
 function = "plc.output.digital"
-keywords = ["plc", "output", "do", "digital", "i/o"]
-aliases = ["do"]
+keywords = ["plc", "output", "do", "dq", "digital", "uitgang", "i/o"]
+aliases = ["do", "dq"]
 
 connections = [
   { id = "1", at = [0, 8], dir = "down" },

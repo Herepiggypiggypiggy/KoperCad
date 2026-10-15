@@ -5,8 +5,8 @@ description = "One analog output channel of a PLC card (for example 0-10 V)."
 standard = "IEC 60617"
 category = "plc"
 function = "plc.output.analog"
-keywords = ["plc", "output", "ao", "analog", "0-10v", "i/o"]
-aliases = ["ao"]
+keywords = ["plc", "output", "ao", "aq", "analog", "uitgang", "0-10v", "i/o"]
+aliases = ["ao", "aq"]
 
 connections = [
   { id = "1", at = [0, 8], dir = "down" },
