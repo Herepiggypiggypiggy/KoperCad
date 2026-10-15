@@ -33,6 +33,8 @@
 //! | [`UnplacedDevice`](ProblemKind::UnplacedDevice) | info | A device not yet placed on a mounting plate |
 //! | [`WireWithoutDuct`](ProblemKind::WireWithoutDuct) | warning | A wire between placed devices that no duct serves |
 //! | [`OverfullDuct`](ProblemKind::OverfullDuct) | warning | A duct filled beyond its limit |
+//! | [`DisconnectionTime`](ProblemKind::DisconnectionTime) | error | A fault at the end of a cable too small to trip its protective device |
+//! | [`ProtectiveConductor`](ProblemKind::ProtectiveConductor) | warning | A cable's earth core thinner than its live cores need |
 //!
 //! A problem can be waived with a reason ([`waive`]); [`check_open`] leaves
 //! waived problems out and [`waived_problems`] lists them for the report.
@@ -159,11 +161,18 @@ pub enum ProblemKind {
     WireWithoutDuct,
     /// A duct carrying more wires than its fill limit (novo-routing).
     OverfullDuct,
+    /// The smallest fault current at the end of a protected cable is below
+    /// what the device needs to trip at once (`trip_curve` B, C or D on the
+    /// device; calc::short_circuit).
+    DisconnectionTime,
+    /// A cable's protective core is thinner than IEC 60364-5-54 asks next
+    /// to its largest live core (calc::pe).
+    ProtectiveConductor,
 }
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 22] = [
+    pub const ALL: [ProblemKind; 24] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -186,6 +195,8 @@ impl ProblemKind {
         ProblemKind::UnplacedDevice,
         ProblemKind::WireWithoutDuct,
         ProblemKind::OverfullDuct,
+        ProblemKind::DisconnectionTime,
+        ProblemKind::ProtectiveConductor,
     ];
 
     pub fn severity(self) -> Severity {
@@ -193,7 +204,8 @@ impl ProblemKind {
             ProblemKind::DuplicateTag
             | ProblemKind::TooManyContacts
             | ProblemKind::PotentialConflict
-            | ProblemKind::ShortCircuit => Severity::Error,
+            | ProblemKind::ShortCircuit
+            | ProblemKind::DisconnectionTime => Severity::Error,
             ProblemKind::UnconnectedPin
             | ProblemKind::LoneInterruption
             | ProblemKind::NoMainFunction
@@ -209,6 +221,7 @@ impl ProblemKind {
             | ProblemKind::VoltageDrop
             | ProblemKind::WireWithoutDuct
             | ProblemKind::OverfullDuct
+            | ProblemKind::ProtectiveConductor
             | ProblemKind::Plc => Severity::Warning,
             ProblemKind::MissingPart | ProblemKind::UnplacedDevice => Severity::Info,
         }
@@ -239,6 +252,8 @@ impl ProblemKind {
             ProblemKind::UnplacedDevice => "Unplaced device",
             ProblemKind::WireWithoutDuct => "Wire without duct",
             ProblemKind::OverfullDuct => "Overfull duct",
+            ProblemKind::DisconnectionTime => "Disconnection time",
+            ProblemKind::ProtectiveConductor => "Protective conductor",
         }
     }
 
@@ -267,6 +282,8 @@ impl ProblemKind {
             ProblemKind::UnplacedDevice => "check.unplaced_device",
             ProblemKind::WireWithoutDuct => "check.wire_without_duct",
             ProblemKind::OverfullDuct => "check.overfull_duct",
+            ProblemKind::DisconnectionTime => "check.disconnection_time",
+            ProblemKind::ProtectiveConductor => "check.protective_conductor",
         }
     }
 }
@@ -377,6 +394,8 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     checks::open_wires(&cx, &mut problems);
     electrical::voltage_drop(&cx, netlist, &mut problems);
     electrical::short_circuit(&cx, &mut problems);
+    electrical::disconnection(&cx, netlist, &mut problems);
+    electrical::protective_conductors(&cx, &mut problems);
     physical::unplaced_devices(&cx, &mut problems);
     physical::routing(&cx, &mut problems);
     cx.sort(&mut problems);
