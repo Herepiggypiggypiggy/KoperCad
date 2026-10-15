@@ -17,6 +17,7 @@ use novo_layout::plan::Plan;
 use novo_layout::state::CabinetLayout;
 use novo_layout::thermal;
 
+use super::cabinet_inspector;
 use super::{Level, NovoApp};
 use crate::theme;
 
@@ -46,9 +47,17 @@ pub(super) struct CabinetState {
     pub(super) keys: Vec<String>,
     /// The Heat layer: the loss-density overlay and its legend strip.
     pub(super) heat: bool,
+    /// The Heat layer's last result with the inputs it was computed from, so
+    /// an idle plate costs nothing.
+    heat_cache: Option<(Vec<u64>, HeatInfo)>,
+    /// The table face (Ctrl+T) is shown instead of the plate.
+    pub(super) table: bool,
+    /// The plate card of the inspector is shown with nothing selected.
+    pub(super) plate_card: bool,
 }
 
 /// What the Heat layer shows besides the overlay.
+#[derive(Clone)]
 struct HeatInfo {
     view: HeatView,
     /// Placed devices with known loss, and without.
@@ -56,18 +65,35 @@ struct HeatInfo {
     unknown: usize,
     /// Total of the known losses, W.
     total_w: f64,
-    /// Biggest source: tag and its share of the total.
-    top: Option<(String, f64)>,
+    /// Biggest source: device id and its share of the total.
+    top: Option<(u64, f64)>,
     top_third: f64,
+}
+
+/// What the Heat layer's result depends on: the plate, the footprints and the
+/// losses. Equal keys give equal results.
+fn heat_key(layout: &CabinetLayout, losses: &[(u64, Option<f64>)]) -> Vec<u64> {
+    let mut key = vec![layout.plate.width.to_bits(), layout.plate.height.to_bits()];
+    for p in &layout.placements {
+        let f = p.footprint();
+        key.extend([
+            p.id,
+            f.x.to_bits(),
+            f.y.to_bits(),
+            f.w.to_bits(),
+            f.h.to_bits(),
+        ]);
+    }
+    key.push(u64::MAX);
+    for (id, loss) in losses {
+        key.extend([*id, loss.map_or(u64::MAX, f64::to_bits)]);
+    }
+    key
 }
 
 /// The Heat layer for a layout: loss per placed device from the project's
 /// part data (a device without loss data is counted, not drawn).
-fn heat_info(
-    layout: &CabinetLayout,
-    losses: &[(u64, Option<f64>)],
-    tag_of: &impl Fn(u64) -> String,
-) -> HeatInfo {
+fn heat_info(layout: &CabinetLayout, losses: &[(u64, Option<f64>)]) -> HeatInfo {
     let loss = |id: u64| losses.iter().find(|l| l.0 == id).and_then(|l| l.1);
     let sources = thermal::sources(&layout.placements, loss);
     let map = thermal::heat_map(
@@ -83,6 +109,7 @@ fn heat_info(
             cols: map.cols,
             rows: map.rows,
             bands: map.bands(&thermal::DEFAULT_BAND_LIMITS),
+            hot: thermal::hot_sources(&sources, &thermal::DEFAULT_BAND_LIMITS),
         },
         known: sources.len(),
         unknown: layout.placements.len() - sources.len(),
@@ -90,7 +117,7 @@ fn heat_info(
         top: thermal::hot_devices(&sources)
             .first()
             .filter(|t| t.1 > 0.0)
-            .map(|t| (tag_of(t.0), t.1)),
+            .map(|t| (t.0, t.1)),
         top_third: thermal::top_third_share(&layout.plate, &sources),
     }
 }
@@ -121,6 +148,9 @@ impl CabinetState {
             ghost: None,
             keys: Vec::new(),
             heat: false,
+            heat_cache: None,
+            table: false,
+            plate_card: false,
         }
     }
 }
@@ -130,9 +160,13 @@ pub(super) enum Ask {
     Panel(DeviceTag),
     CreateCabinet(DeviceTag),
     SetPlate(StructureId),
+    /// Set the plate to new dimensions from the inspector.
+    SetPlateSize(StructureId, MountingPlate),
     PlaceAll,
     Accept,
     Cancel,
+    ToggleTable,
+    TogglePlateCard,
     /// Place or move a device with its top left at `(x, y)` mm.
     Drop(u64, f64, f64),
     Rotate(Vec<u64>),
@@ -193,6 +227,97 @@ pub(super) fn cabinet_view(layout: &CabinetLayout, tag_of: &impl Fn(u64) -> Stri
             .collect(),
         heat: None,
     }
+}
+
+/// What is wrong with a placed device, in words: the hover text of its mark
+/// and the table's Problems column.
+pub(super) fn problem_lines(
+    layout: &CabinetLayout,
+    id: u64,
+    tag_of: &impl Fn(u64) -> String,
+) -> Vec<String> {
+    let report = layout.report();
+    let mut lines = Vec::new();
+    for &(a, b) in &report.collisions {
+        if a == id || b == id {
+            lines.push(format!("Overlaps {}", tag_of(if a == id { b } else { a })));
+        }
+    }
+    if report.outside.contains(&id) {
+        lines.push("Reaches past the usable plate".to_owned());
+    }
+    for &(a, b, gap) in &report.too_close {
+        if a == id || b == id {
+            lines.push(format!(
+                "Only {gap:.0} mm from {}",
+                tag_of(if a == id { b } else { a })
+            ));
+        }
+    }
+    if let Some(p) = layout.placements.iter().find(|p| p.id == id) {
+        for &(rail, over) in &report.rail_overflows {
+            if p.rail == Some(rail) {
+                lines.push(format!("Its rail is {over:.0} mm too short"));
+            }
+        }
+        if p.size.guessed {
+            lines.push("Size is a guess: the part has none".to_owned());
+        }
+    }
+    lines
+}
+
+/// The table face (Ctrl+T): every device of the panel with where it is and
+/// what is wrong.
+fn cabinet_table(
+    ui: &mut egui::Ui,
+    layout: &CabinetLayout,
+    cands: &[novo_layout::plan::Candidate],
+    tag_of: &impl Fn(u64) -> String,
+) {
+    egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
+        egui::Grid::new("cabinet_table")
+            .striped(true)
+            .num_columns(7)
+            .spacing([18.0, 4.0])
+            .show(ui, |ui| {
+                for head in [
+                    "Device",
+                    "Size (mm)",
+                    "X",
+                    "Y",
+                    "Turned",
+                    "Rail",
+                    "Problems",
+                ] {
+                    ui.strong(head);
+                }
+                ui.end_row();
+                for c in cands {
+                    ui.label(tag_of(c.id));
+                    let size = format!("{} x {}", c.size.width, c.size.height);
+                    match layout.placements.iter().find(|p| p.id == c.id) {
+                        Some(p) => {
+                            ui.label(size);
+                            ui.label(format!("{}", p.x));
+                            ui.label(format!("{}", p.y));
+                            ui.label(if p.rotated { "yes" } else { "" });
+                            ui.label(p.rail.map(|r| format!("#{r}")).unwrap_or_default());
+                            ui.label(problem_lines(layout, c.id, tag_of).join("; "));
+                        }
+                        None => {
+                            ui.label(size);
+                            ui.weak("");
+                            ui.weak("");
+                            ui.weak("");
+                            ui.weak("");
+                            ui.weak("Unplaced");
+                        }
+                    }
+                    ui.end_row();
+                }
+            });
+    });
 }
 
 impl NovoApp {
@@ -328,6 +453,21 @@ impl NovoApp {
                 }
                 ui.toggle_value(&mut self.cabinet.heat, "Heat")
                     .on_hover_text("Show where heat concentrates on the plate (Heat layer)");
+                if !self.cabinet.table
+                    && ui
+                        .selectable_label(self.cabinet.plate_card, "Plate")
+                        .on_hover_text("Size and fill of the mounting plate")
+                        .clicked()
+                {
+                    ask = Some(Ask::TogglePlateCard);
+                }
+                if ui
+                    .selectable_label(self.cabinet.table, "Table")
+                    .on_hover_text("Devices as a table (Ctrl+T)")
+                    .clicked()
+                {
+                    ask = Some(Ask::ToggleTable);
+                }
                 ui.weak(format!(
                     "{placed} placed, {unplaced} unplaced, {problems} {}",
                     if problems == 1 { "problem" } else { "problems" }
@@ -337,6 +477,14 @@ impl NovoApp {
         ui.separator();
 
         match shown {
+            Some(shown) if self.cabinet.table => {
+                // Keys, drags and the landing box belong to the plate: none
+                // may wait there while the table is shown.
+                self.cabinet.keys.clear();
+                self.cabinet.drag = None;
+                self.cabinet.ghost = None;
+                cabinet_table(ui, &shown, &cands, &tag_of);
+            }
             Some(shown) => {
                 let unplaced_list: Vec<(u64, String, String)> = layout
                     .as_ref()
@@ -375,10 +523,42 @@ impl NovoApp {
                         }
                     });
 
+                let selected: Vec<u64> = self
+                    .cabinet
+                    .view
+                    .selection
+                    .ids()
+                    .iter()
+                    .filter_map(|i| novo_canvas::cabinet::box_of(*i))
+                    .collect();
+                // The inspector: with a selection, or the plate card when it
+                // is switched on; otherwise the plate gets the whole window.
+                let inspector = match (&layout, structure) {
+                    (Some(stored), Some(s)) if !selected.is_empty() || self.cabinet.plate_card => {
+                        let facts = cabinet_inspector::gather(
+                            project, s, stored, &shown, &selected, &tag_of,
+                        );
+                        // On the side away from the selection.
+                        let centre = shown
+                            .placements
+                            .iter()
+                            .filter(|p| selected.contains(&p.id))
+                            .map(|p| p.footprint().x + p.footprint().w / 2.0)
+                            .sum::<f64>()
+                            / selected.len().max(1) as f64;
+                        Some((facts, centre > shown.plate.width / 2.0))
+                    }
+                    _ => None,
+                };
+
                 let mut view = cabinet_view(&shown, &tag_of);
                 if self.cabinet.heat {
-                    let info = heat_info(&shown, &losses, &tag_of);
-                    self.heat_strip(ui, &info);
+                    let key = heat_key(&shown, &losses);
+                    if self.cabinet.heat_cache.as_ref().is_none_or(|c| c.0 != key) {
+                        self.cabinet.heat_cache = Some((key, heat_info(&shown, &losses)));
+                    }
+                    let info = self.cabinet.heat_cache.as_ref().unwrap().1.clone();
+                    self.heat_strip(ui, &info, &tag_of);
                     view.heat = Some(info.view);
                 }
                 self.cabinet.scene.set(&view);
@@ -387,6 +567,24 @@ impl NovoApp {
                     self.cabinet.fitted = location.clone();
                 }
                 let out = self.cabinet.view.show(ui, self.cabinet.scene.scene());
+                if let Some((facts, left)) = &inspector
+                    && let Some(a) =
+                        cabinet_inspector::overlay(ui.ctx(), out.response.rect, *left, facts)
+                {
+                    ask = Some(a);
+                }
+                if let Some(id) = out.hovered.and_then(novo_canvas::cabinet::box_of) {
+                    let lines = problem_lines(&shown, id, &tag_of);
+                    out.response.clone().on_hover_ui_at_pointer(|ui| {
+                        ui.strong(tag_of(id));
+                        if lines.is_empty() {
+                            ui.weak("No problems");
+                        }
+                        for line in &lines {
+                            ui.label(line);
+                        }
+                    });
+                }
                 // Enter and Escape belong to the palette or a text field when
                 // one is open.
                 let typing = self.wb.field.is_open()
@@ -507,7 +705,7 @@ impl NovoApp {
     }
 
     /// The legend and numbers of the Heat layer, along the bottom.
-    fn heat_strip(&self, ui: &mut egui::Ui, info: &HeatInfo) {
+    fn heat_strip(&self, ui: &mut egui::Ui, info: &HeatInfo, tag_of: &impl Fn(u64) -> String) {
         let limits = thermal::DEFAULT_BAND_LIMITS;
         let legend = thermal::legend(&limits);
         let colors = self.cabinet.scene.style().heat;
@@ -546,8 +744,12 @@ impl NovoApp {
                     info.unknown
                 ));
             }
-            if let Some((tag, share)) = &info.top {
-                line.push_str(&format!(", most from {tag} ({:.0}%)", share * 100.0));
+            if let Some((id, share)) = &info.top {
+                line.push_str(&format!(
+                    ", most from {} ({:.0}%)",
+                    tag_of(*id),
+                    share * 100.0
+                ));
             }
             if info.known > 0 {
                 line.push_str(&format!(
@@ -573,6 +775,8 @@ impl NovoApp {
                 self.cabinet.preview = None;
             }
             Ask::Cancel => self.cabinet.preview = None,
+            Ask::ToggleTable => self.cabinet.table ^= true,
+            Ask::TogglePlateCard => self.cabinet.plate_card ^= true,
             Ask::PlaceAll => {
                 if let Some(layout) = layout {
                     let plan = layout.preview(cands);
@@ -616,6 +820,9 @@ impl NovoApp {
                 self.cabinet_edit("Remove from plate", move |tx| {
                     devices.iter().try_for_each(|d| unplace_device(tx, *d))
                 });
+            }
+            Ask::SetPlateSize(s, plate) => {
+                self.cabinet_edit("Set plate size", move |tx| set_plate(tx, s, plate));
             }
             Ask::SetPlate(s) => {
                 self.cabinet_edit("Set plate", move |tx| set_plate(tx, s, DEFAULT_PLATE));

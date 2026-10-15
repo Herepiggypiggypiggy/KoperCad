@@ -189,6 +189,16 @@ pub fn band_of(density: f64, limits: &[f64; 4]) -> usize {
     limits.iter().filter(|l| density >= **l).count()
 }
 
+/// Ids of the sources whose own loss density is in the top band (at or
+/// above the last limit), in input order.
+pub fn hot_sources(sources: &[HeatSource], limits: &[f64; 4]) -> Vec<u64> {
+    sources
+        .iter()
+        .filter(|s| band_of(s.density(), limits) == 4)
+        .map(|s| s.id)
+        .collect()
+}
+
 /// Heat sources ranked by share of the total loss, biggest first.
 pub fn hot_devices(sources: &[HeatSource]) -> Vec<(u64, f64)> {
     let total: f64 = sources.iter().map(|s| s.loss_w).sum();

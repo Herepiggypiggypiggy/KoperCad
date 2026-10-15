@@ -181,3 +181,13 @@ fn fine_cells_are_coarsened_and_negative_loss_is_zero() {
     let s = thermal::sources(&[p], |_| Some(-5.0));
     assert_eq!(s[0].loss_w, 0.0);
 }
+
+#[test]
+fn hot_sources_are_the_ones_in_the_top_band() {
+    // 40 x 40 mm = 0.16 dm2: 2 W is 12.5 W/dm2 (top band), 1 W is 6.25.
+    let s = [
+        source(1, 0.0, 0.0, 40.0, 40.0, 2.0),
+        source(2, 100.0, 0.0, 40.0, 40.0, 1.0),
+    ];
+    assert_eq!(thermal::hot_sources(&s, &DEFAULT_BAND_LIMITS), vec![1]);
+}

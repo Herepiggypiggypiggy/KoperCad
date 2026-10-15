@@ -195,6 +195,24 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "parts.browser",
+            "Parts",
+            "Project",
+            &[
+                "part library",
+                "catalog",
+                "import part",
+                "wago",
+                "phoenix",
+                "schneider",
+                "siemens",
+            ],
+            Needs::Nothing,
+        ),
+        &["parts", "part library"],
+    ),
+    verb(
+        cmd(
             "revision.issue",
             "Issue revision",
             "Project",
@@ -202,6 +220,16 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["issue", "revision"],
+    ),
+    verb(
+        cmd(
+            "revision.compare",
+            "Compare revisions",
+            "Project",
+            &["diff", "what changed", "between revisions", "revision list"],
+            Needs::Project,
+        ),
+        &["compare"],
     ),
     cmd("file.quit", "Quit", "Project", &["exit"], Needs::Nothing),
     // Draw
@@ -601,6 +629,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Cabinet as table",
         "View",
         &["table"],
+        Needs::Project,
+    ),
+    cmd(
+        "cabinet.layer.heat",
+        "Heat layer",
+        "View",
+        &["heat", "warmte", "thermal", "loss", "cooling", "hot spots"],
         Needs::Project,
     ),
     cmd(

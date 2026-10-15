@@ -51,12 +51,22 @@ pub const DUTCH: &[Aliases] = &[
         &["voorkeuren"],
         &["instellingen", "opties"],
     ),
+    nl(
+        "parts.browser",
+        &["onderdelen"],
+        &["artikelen", "onderdeel"],
+    ),
     nl("project.standard", &["tekennorm"], &["norm", "standaard"]),
     nl("terminal.toggle_pe", &["pe-klem"], &["aardklem", "aarde"]),
     nl(
         "revision.issue",
         &["revisie"],
         &["uitgeven", "versie", "vrijgeven"],
+    ),
+    nl(
+        "revision.compare",
+        &["vergelijk"],
+        &["verschil", "revisies vergelijken"],
     ),
     nl("file.quit", &[], &["afsluiten", "stoppen"]),
     // Draw
@@ -193,6 +203,11 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("view.full_screen", &[], &["volledig scherm"]),
     nl("view.cabinet_table", &[], &["kast als tabel", "tabel"]),
+    nl(
+        "cabinet.layer.heat",
+        &[],
+        &["warmtelaag", "warmte", "verlies"],
+    ),
     nl("view.changes", &["wijzigingen"], &["vergelijk", "verschil"]),
     nl(
         "sim.live",

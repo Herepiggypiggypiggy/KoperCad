@@ -82,7 +82,9 @@ reports how much of the placed loss sits in the upper third of the plate
 
 ## 5. Where it shows
 
-- Cabinet canvas: a "Heat" overlay toggle draws the map under the devices,
+- Cabinet canvas: a "Heat" overlay toggle (header button, and the palette
+  command `cabinet.layer.heat`, also found by "heat" or "warmte"; it is a
+  per-session view option, not saved with the project) draws the map under the devices,
   with a legend of the bands and the balance numbers from `sizing` in a small
   strip. Colour is never the only carrier: the legend names each band and
   devices above the top band get a mark.

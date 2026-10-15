@@ -70,6 +70,9 @@ pub struct HeatView {
     pub cols: usize,
     pub rows: usize,
     pub bands: Vec<u8>,
+    /// Devices whose own loss density is in the top band: they get a mark
+    /// next to their tag, so heat never rests on colour alone.
+    pub hot: Vec<u64>,
 }
 
 /// Everything the Cabinet canvas draws.
@@ -249,7 +252,8 @@ impl CabinetScene {
             out.push((rail_item(r.id), item));
         }
         for b in &view.boxes {
-            out.push((box_item(b.id), self.device(b)));
+            let hot = view.heat.as_ref().is_some_and(|h| h.hot.contains(&b.id));
+            out.push((box_item(b.id), self.device(b, hot)));
             if b.clearance > 0.0 {
                 out.push((clearance_item(b.id), self.clearance(b)));
             }
@@ -295,7 +299,7 @@ impl CabinetScene {
         }
     }
 
-    fn device(&self, b: &BoxView) -> Item {
+    fn device(&self, b: &BoxView, hot: bool) -> Item {
         let s = &self.style;
         let min = Vec2::new(b.x, b.y);
         let max = min + Vec2::new(b.width, b.height);
@@ -320,6 +324,21 @@ impl CabinetScene {
                     .anchored(Anchor::Center)
                     .colored(color),
             );
+        }
+        if hot {
+            // A small upward triangle in the top left corner, in the top
+            // heat colour.
+            let m = (b.width.min(b.height) * 0.25).clamp(2.0, 6.0);
+            let tip = Vec2::new(min.x + m * 1.5, min.y + m * 0.6);
+            let (l, r) = (
+                tip + Vec2::new(-m * 0.6, m * 1.0),
+                tip + Vec2::new(m * 0.6, m * 1.0),
+            );
+            let mark = Stroke::world(0.6, Color(self.style.heat[3].0).with_alpha(255));
+            for (a, c) in [(tip, l), (l, r), (r, tip)] {
+                item.primitives
+                    .push(Primitive::stroked(Shape::line(a, c), mark));
+            }
         }
         // The mark in the top right corner, so state never rests on colour.
         let m = (b.width.min(b.height) * 0.25).clamp(2.0, 6.0);
@@ -458,6 +477,27 @@ mod tests {
     }
 
     #[test]
+    fn a_hot_device_gets_a_mark_beyond_colour() {
+        let mut c = CabinetScene::new(CabinetStyle::default());
+        let mut v = view();
+        c.set(&v);
+        let plain = c.scene().get(box_item(1)).unwrap().primitives.len();
+        v.heat = Some(HeatView {
+            cell: 10.0,
+            cols: 1,
+            rows: 1,
+            bands: vec![0],
+            hot: vec![1],
+        });
+        c.set(&v);
+        assert_eq!(
+            c.scene().get(box_item(1)).unwrap().primitives.len(),
+            plain + 3
+        );
+        assert_eq!(c.scene().get(box_item(2)).unwrap().primitives.len(), plain);
+    }
+
+    #[test]
     fn heat_overlay_merges_runs_skips_cool_cells_and_goes_away() {
         let mut c = CabinetScene::new(CabinetStyle::default());
         let mut v = view();
@@ -471,6 +511,7 @@ mod tests {
             cols: 5,
             rows: 2,
             bands: vec![0, 2, 2, 2, 4, 0, 0, 0, 0, 0],
+            hot: vec![],
         });
         c.set(&v);
         assert_eq!(c.scene().iter().count(), base + 2);

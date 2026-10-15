@@ -1,0 +1,30 @@
+format = 1
+id = "nfpa/passive/thermistor_ptc"
+name = "PTC thermistor"
+description = "Thermistor with positive temperature coefficient, as used for motor winding protection."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "passive"
+function = "passive.resistor.ptc"
+keywords = ["ptc", "thermistor", "motor protection", "temperature", "nfpa", "ansi"]
+
+connections = [
+  { id = "T1", at = [0, 0], dir = "up" },
+  { id = "T2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "polyline", points = [[0, 4], [-2, 5], [2, 7], [-2, 9], [2, 11], [0, 12]] },
+  { kind = "polyline", points = [[-3.5, 12], [-2.5, 12], [3, 5]] },
+  { kind = "text", at = [4, 10.5], text = "θ", size = 2.2, align = "left" },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+]
+
+[behavior]
+kind = "passive"
+type = "thermistor"
+poles = [["T1", "T2"]]

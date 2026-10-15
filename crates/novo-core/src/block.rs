@@ -133,6 +133,21 @@ impl Tx<'_> {
         })
     }
 
+    /// Copies a block definition made elsewhere (a user macro file) into the
+    /// project under a fresh id. Name, parameters, members and source are
+    /// kept as given; the members keep the ids they have in the file, which
+    /// are local to the definition. Refused, like a captured definition,
+    /// for a name the project already uses, members that are not devices,
+    /// device symbols, junctions, wires or texts, members that refer to
+    /// anything outside the definition, or project-wide references (parts,
+    /// feeds, potentials).
+    pub fn adopt_block_definition(
+        &mut self,
+        definition: BlockDefinition,
+    ) -> Result<BlockDefinitionId> {
+        self.insert(|id| BlockDefinition { id, ..definition })
+    }
+
     /// Places a block: copies the definition's members onto `page` at
     /// `origin` with fresh ids, gives each device the next free number for
     /// its letter code in the page's structure, and fills in parameter
