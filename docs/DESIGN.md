@@ -42,7 +42,7 @@ The user manipulates five kinds of things. Everything else is derived.
 | --- | --- | --- |
 | Wire routes and corners | Routed once when a connection is made, then stored | Automatic; `tidy` re-routes on request |
 | Junction dots and T-junctions | Where stored routes meet | Automatic; a dot can be dragged. A dot means three or more conductors join: a straight run of two connections through a point, a corner and a crossing without a connection get no dot (IEC 60617) |
-| Connections between placed pins | Where a placed or moved symbol's pins land | Automatic when pins touch or a pin lands on a connection. Free pins that face each other at a distance are proposed: drawn as proposals in the placement preview, so the click is informed, and still there after the drop for Enter or Tab. Moving a symbol never makes a connection the preview did not show |
+| Connections between placed pins | Where a placed or moved symbol's pins land | Automatic when pins touch or a pin lands on a connection. Free pins that face each other at a distance follow the Preferences choice (§4, Auto connections): drawn solid by default, or proposed (dashed, for Enter or Tab), or left alone; the placement preview shows them either way, so the click is informed. Moving a symbol never makes a connection the preview did not show |
 | Potentials (L1, L2, L3, N, PE, 24 V) | The declared source, flowing through conductors, contacts and terminals | Automatic. Recognising PE, N and PEN by name (`X4:PE`) is a visible, switchable rule; one conductor can be overridden |
 | Cross references and contact images | Which device a contact belongs to | Automatic |
 | Terminals and cables | Connections that cross a location boundary (`+CAB1` to `+FIELD`) | Proposed |
@@ -261,7 +261,7 @@ never changes meaning in the middle of work.
 | A device | Properties open, cursor in the tag | Nothing |
 | A wire | Edit its number in place | Ends or starts a wire |
 | A pin | Starts a wire | Starts a wire |
-| Empty canvas | Nothing | Starts a free wire, or ends the one in progress |
+| Empty canvas | Starts a free wire | Starts a free wire, or ends the one in progress |
 | A page tab | Rename the page | Rename the page |
 
 A double click in the Place mode places like a click and has no further
@@ -277,7 +277,8 @@ or body). The move snaps to the grid, shows the wires stretching, follows
 the no-overlap rules, and Esc during the drag puts everything back. M
 keeps working as the keyboard move: it picks the selection up at the
 pointer and a click puts it down. Undo takes back one whole move. A
-press and drag on a wire selects it and moves nothing.
+press and drag on a wire moves the corner or segment under the pointer
+("Selecting a wire" below).
 
 **Placing a row.** With a symbol on the pointer (any way of getting it
 there), a click places one; a press and drag of more than 4 px places a
@@ -367,6 +368,70 @@ the major dots show, and when the major pitch falls under 8 px none do.
 The HUD still names the grid. Snap works the same whether or not the dots
 show. `grid` in the command surface shows and hides them; it is a
 per-user setting like the wiring mode.
+
+### Selecting a wire, auto connections, feeds, PE and bridged terminals
+
+**Selecting a wire.** A single click never selects a whole wire. Every
+corner of every wire is drawn as a small handle (a 5 px square on screen,
+shown whenever the wire is shown and left out only when zoomed out so far
+that wires are hairlines), so each corner can be seen and aimed at.
+
+- A click on a **corner** selects that corner only. Dragging it moves just
+  that corner; the two segments at it stay horizontal or vertical.
+- A click on a **straight segment** selects the segment and lights its two
+  corners individually. Dragging it moves it sideways, and its two corners
+  move with it.
+- A **double click** anywhere on the wire selects the whole wire (for its
+  number, Delete, or properties).
+- Shift adds to the selection and Ctrl toggles. Delete on a corner removes
+  the bend; on a segment or a whole wire it deletes the wire.
+- Moves follow the no-overlap rules of the wiring modes: a corner or
+  segment dragged over another wire is refused live, as in §5.
+- Box selection (above) still takes whole wires it touches.
+
+**Auto connections.** The setting lives in Preferences, Connections, per
+user, as "Auto connections" with three choices:
+
+| Choice | What happens when pins end up facing each other |
+| --- | --- |
+| Draw them (default) | The connections are drawn solid when the symbol is dropped, in the same undo step as the placement; the placement preview still shows them before the click |
+| Ask me each time | They are proposals (dashed): Enter accepts, Tab cycles, as in §5 |
+| Never | Nothing is drawn or proposed; only touching pins connect |
+
+The wording in Preferences is exactly those three phrases. Moving a symbol
+follows the same choice and never connects something the preview did not
+show. The §2 row for connections between placed pins is read through this
+setting.
+
+**Potential feeds.** A feed is a symbol on the drawing that declares a
+potential (L1, L2, L3, N, PE, 24 V, 0 V). Wires and terminals connected to
+it take its potential, and the potential shown on the drawing is the
+declared one; a simulation may show a different live state for a moment
+(a contact opening) without changing what is stored.
+
+- A new feed takes the next free name of its system in order: L1, then L2,
+  then L3, then N, then PE; a row of three feeds placed by dragging reads
+  L1, L2, L3.
+- **Right-click a feed** gives: Set potential ▸ (the project's potentials,
+  most used first, and "New…"), Rename, Properties, Delete. Choosing a
+  potential is one click and one undo step, and with several feeds
+  selected it sets all of them.
+- Feed names sit on the same side as terminal numbers (the reader's
+  left of the symbol, mirrored with the symbol), so the two never differ.
+
+**PE terminals.** Select one terminal or several and right-click:
+"Toggle PE terminal" (also `pe` in the command surface). A terminal
+becomes a PE terminal on its own when it is connected to a wire of PE
+potential or to a ground or PE symbol, and the menu row shows that state.
+A toggle by hand is an override (the override diamond of §5) and sticks
+until reset. With a mixed selection the toggle turns them all on.
+
+**Bridged terminals.** Select two or more terminals of one strip that sit
+next to each other and right-click: "Connect terminals". Their symbol
+changes to the connected-terminal form and they carry one conductor
+between them; "Separate terminals" reverses it, both as one undo step.
+Terminals that are not neighbours on the same strip are refused with the
+reason in the hint, and nothing changes.
 
 **Escape ladder.** Cancel the step in progress, then leave the tool, then
 clear the selection.
@@ -588,9 +653,10 @@ in place mode. The wheel has two rings and no hidden level.
 
 - Inner ring, five sectors: **Terminal**, **Switch** (switches, buttons,
   contacts), **Relay** (coils, contactors), **Breaker** (MCB, MPCB,
-  fuses) and **More…**, which opens the place surface (also the centre
-  hold). Wedges run from an inner radius of 38 px to an outer 110 px; the
-  centre says "Place".
+  fuses) and **Points** (interruption points, potential feeds, ground and
+  PE symbols). The centre is **Other…**, which opens the place surface
+  for everything else. Wedges run from an inner radius of 38 px to an
+  outer 110 px.
 - Outer ring, up to eight items for the sector under the pointer, shown on
   hover: the favourites used in this project first, then the defaults of
   that category. Relays, for example: coil, normally open, normally
@@ -615,8 +681,8 @@ click adds no extra corner and no zero-length segment.
   in the Issues total as "Unconnected wire end". It is listed in Issues as
   `wire.open`, a warning, not an error, so a half-drawn page can be saved
   and printed with the flags visible.
-- **A wire can also start in empty space.** With the Connect tool and no
-  wire in progress, a double click on empty canvas starts a wire at that
+- **A wire can also start in empty space.** In every tool except Place,
+  with no wire in progress, a double click on empty canvas starts a wire at that
   grid point (on a pin, a junction or a wire it starts connected, as a
   click does). The two clicks land on one point, so there is no
   zero-length segment. It then goes on like any wire: in Corners the
@@ -715,6 +781,21 @@ Acceptance:
 23. Zoom out: grid dots thin to major dots then to none, never shimmer;
     zoom in: all dots return. `grid` hides them and the choice survives a
     restart. Snap is unchanged either way.
+24. Click a straight wire segment: the segment and its two corners show;
+    drag it sideways and both corners move. Click a corner: only it moves.
+    Double click: the whole wire. A single click never selects a whole
+    wire.
+25. Preferences, Connections: the three auto connection phrases; Draw
+    them drops solid connections in the placement's undo step, Ask me
+    shows dashed proposals, Never shows nothing.
+26. Right-click an L2 feed: Set potential ▸ lists the potentials; picking
+    N changes it and the wires on it in one undo step. Three feeds placed
+    in a row read L1, L2, L3. Wheel: centre reads Other…, sector 5 reads
+    Points.
+27. Connect a terminal to a PE wire: it becomes a PE terminal by itself.
+    Select two terminals, right-click: Toggle PE terminal turns both on.
+    Select two neighbours on a strip: Connect terminals changes their
+    symbol; two non-neighbours are refused with the reason.
 
 Keys match the logical character, not the physical position, so `?`,
 Ctrl+Z and Ctrl+Y work on Dutch, German (QWERTZ) and US layouts alike.
