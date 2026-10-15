@@ -49,9 +49,8 @@ Windows: CI runs on main pushes since #175; first result is Round 16.
 ## Round 14 (2026-10-15, main `5a6f30f`): wires never overlap
 
 Tadjiro asked for two wiring modes with one hard rule: lines never overlap.
-Two designs were open (#168 Corners/Lines and #169 Auto/Draw); the #168
-owner is converging on #169 with the states named Corners | Lines. Both
-agree on the rule, so `crates/novo-tests/tests/wire_overlap.rs` tests it
+Two designs were open (#168 and #169); #169 merged with the modes named
+Corners and Lines. `crates/novo-tests/tests/wire_overlap.rs` tests the rule
 without waiting for the mode implementation.
 
 | Test | Checks | State |
