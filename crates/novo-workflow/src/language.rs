@@ -265,6 +265,11 @@ pub const DUTCH: &[Aliases] = &[
         &["kasten", "kastenlijst", "behuizingen"],
     ),
     nl(
+        "check.standards",
+        &[],
+        &["normen", "normencontrole", "conformiteit", "nen"],
+    ),
+    nl(
         "simulate.motor-start",
         &[],
         &[
