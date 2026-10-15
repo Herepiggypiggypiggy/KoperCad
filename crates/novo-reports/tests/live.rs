@@ -1,10 +1,15 @@
 //! Live reports: change tracking, never-stale output, and the WS-13
 //! done-criterion "reports regenerate within a second of any edit".
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use novo_core::{Device, Document, Page, Wire};
-use novo_reports::{LiveReports, PageSetup, layout_page, paginate};
+use novo_core::{Device, Document, EntityKind, Page, PageKind, Project, Wire};
+use novo_reports::{
+    Cell, Column, Dependencies, LiveReports, PageSetup, Report, ReportOutput, Section,
+    TableOfContents, layout_page, paginate,
+};
 use novo_tests::{motor_starter, stress_page};
 
 #[test]
@@ -95,6 +100,22 @@ fn a_missed_notification_never_leaves_a_stale_report() {
 fn reports_regenerate_within_a_second_on_10k_objects() {
     let mut doc = Document::default();
     stress_page(&mut doc, 10_000).expect("stress page");
+    // A page for every report, so the contents list counts their sheets.
+    doc.transact("Report pages", |tx| {
+        for (i, generator) in ["bom", "devices", "wires", "terminals", "cables"]
+            .into_iter()
+            .enumerate()
+        {
+            let page = tx.add_page((90 + i).to_string())?;
+            tx.update::<Page>(page, |p| {
+                p.kind = PageKind::Generated {
+                    generator: generator.into(),
+                }
+            })?;
+        }
+        Ok(())
+    })
+    .expect("report pages");
     let objects = doc.project().devices().count()
         + doc.project().symbols().count()
         + doc.project().wires().count();
@@ -156,4 +177,120 @@ fn reports_regenerate_within_a_second_on_10k_objects() {
     assert!(reports.notify(doc.project(), &changes).is_empty());
     reports.all(doc.project());
     assert!(start.elapsed() < Duration::from_millis(100) * slack);
+}
+
+/// A report that counts how often it is generated, with `rows` rows.
+struct Counted {
+    runs: Arc<AtomicUsize>,
+    rows: usize,
+}
+
+impl Report for Counted {
+    fn id(&self) -> &str {
+        "counted"
+    }
+    fn title(&self) -> String {
+        "Counted".into()
+    }
+    fn dependencies(&self) -> Dependencies {
+        Dependencies::on(&[EntityKind::Device])
+    }
+    fn generate(&self, project: &Project) -> ReportOutput {
+        self.runs.fetch_add(1, Ordering::SeqCst);
+        let mut section = Section::new("rows", "Rows", vec![Column::new("n", "N", 20.0)]);
+        for n in 0..self.rows {
+            section.push(vec![Cell::text(n.to_string())], Vec::new());
+        }
+        ReportOutput {
+            report: "counted".into(),
+            title: self.title(),
+            revision: project.revision(),
+            sections: vec![section],
+        }
+    }
+}
+
+#[test]
+fn the_contents_list_reuses_the_cached_reports() {
+    let mut doc = Document::default();
+    motor_starter(&mut doc).expect("fixture");
+    doc.transact("Pages", |tx| {
+        for (name, generator) in [("20", "counted"), ("21", "counted"), ("30", "toc")] {
+            let page = tx.add_page(name)?;
+            tx.update::<Page>(page, |p| {
+                p.kind = PageKind::Generated {
+                    generator: generator.into(),
+                }
+            })?;
+        }
+        Ok(())
+    })
+    .expect("pages");
+    let runs = Arc::new(AtomicUsize::new(0));
+    let mut reports = LiveReports::standard();
+    reports.register(Box::new(Counted {
+        runs: runs.clone(),
+        rows: 200,
+    }));
+
+    let toc = reports.get(doc.project(), "toc").expect("toc").clone();
+    // Built once for two pages, and the page itself then reuses it.
+    assert_eq!(runs.load(Ordering::SeqCst), 1);
+    reports.get(doc.project(), "counted");
+    reports.all(doc.project());
+    assert_eq!(runs.load(Ordering::SeqCst), 1);
+
+    // A registered report the standard set does not know is listed per
+    // sheet too; 200 rows take more than one sheet.
+    let rows = toc.sections[0].text_rows();
+    let counted: Vec<&str> = rows
+        .iter()
+        .filter(|r| r[3] == "Generated: counted")
+        .map(|r| r[0].as_str())
+        .collect();
+    assert!(counted.len() >= 4, "{counted:?}");
+    assert!(
+        counted.contains(&"20a") && counted.contains(&"21b"),
+        "{counted:?}"
+    );
+    // Otherwise the cached path and the standalone one agree.
+    let standalone = TableOfContents.generate(doc.project());
+    let without = |o: &ReportOutput| -> Vec<Vec<String>> {
+        o.sections[0]
+            .text_rows()
+            .into_iter()
+            .filter(|r| r[3] != "Generated: counted")
+            .collect()
+    };
+    assert_eq!(without(&toc), without(&standalone));
+}
+
+#[test]
+fn a_long_contents_list_reflows_onto_lettered_sheets() {
+    let mut doc = Document::default();
+    motor_starter(&mut doc).expect("fixture");
+    let toc = doc
+        .transact("Pages", |tx| {
+            let toc = tx.add_page("0")?;
+            tx.update::<Page>(toc, |p| {
+                p.kind = PageKind::Generated {
+                    generator: "toc".into(),
+                }
+            })?;
+            for i in 100..300 {
+                tx.add_page(i.to_string())?;
+            }
+            Ok(toc)
+        })
+        .expect("pages")
+        .0;
+    let mut reports = LiveReports::standard();
+    let sheets = reports.sheets_of_page(doc.project(), toc);
+    assert!(sheets.len() >= 2, "{} sheets", sheets.len());
+    let names: Vec<&str> = sheets.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(&names[..2], ["0a", "0b"]);
+    // Every page is listed exactly once across the sheets.
+    let output = reports.get(doc.project(), "toc").expect("toc");
+    let rows = output.sections[0].text_rows();
+    assert_eq!(rows.iter().filter(|r| r[0] == "299").count(), 1);
 }
