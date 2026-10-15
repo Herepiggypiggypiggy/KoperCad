@@ -22,6 +22,7 @@ use novo_workflow::keymap::{FAVOURITE_COMMANDS, Focus, Keymap};
 use novo_workflow::palette::{Mode, Sources, Target};
 use novo_xref::{LiveXref, Navigator, Place, Reference};
 
+use super::workspace::Workspace;
 use super::{Level, NovoApp};
 use crate::actions::Action;
 use crate::command_field::CommandField;
@@ -58,6 +59,10 @@ pub(crate) struct Workbench {
     pub(super) preferences: bool,
     /// The Parts window (browser and one-click import), while open.
     pub(super) parts: Option<super::parts::PartsWindow>,
+    /// The Save as macro window, while it is open.
+    pub(super) macro_save: Option<super::macro_actions::SaveDraft>,
+    /// The Place macro window.
+    pub(super) macro_place: super::macro_actions::PlaceWindow,
     /// The Project settings window (drawing standard) is open.
     pub(super) project_settings: bool,
     /// The Issue revision window, while it is open.
@@ -106,6 +111,8 @@ pub(crate) struct Workbench {
     pub(super) issue_filter: [bool; 3],
     /// F8 position in the problem list.
     pub(super) problem_at: Option<usize>,
+    /// A problem being waived (its index in the list) and the reason typed.
+    pub(super) waiving: Option<(usize, String)>,
     /// The last PDF written, for tests and the toast.
     pub(super) last_export: Option<PathBuf>,
     /// Hash of each spreadsheet export this session wrote, by path: only a
@@ -149,6 +156,8 @@ impl Default for Workbench {
             renumber: None,
             preferences: false,
             parts: None,
+            macro_save: None,
+            macro_place: Default::default(),
             project_settings: false,
             issue: None,
             compare: None,
@@ -172,6 +181,7 @@ impl Default for Workbench {
             pill_rect: egui::Rect::NOTHING,
             issue_filter: [true; 3],
             problem_at: None,
+            waiving: None,
             last_export: None,
             sheet_exports: Default::default(),
             live: Default::default(),
@@ -210,6 +220,8 @@ const APP_COMMANDS: &[&str] = &[
     "edit.mirror",
     "edit.delete",
     "edit.duplicate",
+    "macro.save",
+    "macro.place",
     "edit.rename",
     "edit.escape",
     "nav.next_page",
@@ -233,6 +245,7 @@ const APP_COMMANDS: &[&str] = &[
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "export.assembly",
     "export.sheets",
     "export.sheets_csv",
     "file.import_dxf_background",
@@ -466,15 +479,16 @@ impl NovoApp {
         if id == "edit.duplicate" {
             self.tour_tick("duplicate");
         }
-        if self.cabinet_open && matches!(id, "edit.rotate" | "edit.delete") {
+        if self.workspace() == Workspace::Cabinet && matches!(id, "edit.rotate" | "edit.delete") {
             self.cabinet.keys.push(id.to_owned());
             return;
         }
         let pointer = ctx.pointer_latest_pos();
         match id {
             "view.cabinet_table" if self.is_open() => {
-                self.cabinet.table = !(self.cabinet_open && self.cabinet.table);
-                self.cabinet_open = true;
+                let showing = self.workspace() == Workspace::Cabinet && self.cabinet.table;
+                self.cabinet.table = !showing;
+                self.switch_workspace(Workspace::Cabinet);
             }
             "tool.place" => match argument.filter(|a| !a.trim().is_empty()) {
                 Some(text) => self.wb.field.open_with(Mode::Place, text, pointer),
@@ -506,6 +520,8 @@ impl NovoApp {
             "edit.rotate" => self.editor_key(EditorKey::Rotate),
             "edit.mirror" => self.editor_key(EditorKey::Mirror),
             "edit.duplicate" => self.duplicate_selection(),
+            "macro.save" => self.open_macro_save(argument),
+            "macro.place" => self.open_macro_place(argument),
             "edit.delete" if self.declines_proposal() => self.dismiss_proposal(),
             "edit.delete" => self.editor_key(EditorKey::Delete),
             "nav.next_page" | "nav.previous_page" => {
@@ -572,6 +588,9 @@ impl NovoApp {
             }
             "export.pdf" => {
                 self.export_pdf();
+            }
+            "export.assembly" => {
+                self.export_assembly();
             }
             "export.sheets" => {
                 self.export_spreadsheet();

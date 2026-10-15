@@ -75,6 +75,7 @@ pub const DUTCH: &[Aliases] = &[
         &["verschil", "revisies vergelijken"],
     ),
     nl("file.quit", &[], &["afsluiten", "stoppen"]),
+    nl("help.about", &[], &["over", "versie"]),
     // Draw
     nl(
         "tool.repeat",
@@ -124,6 +125,12 @@ pub const DUTCH: &[Aliases] = &[
     nl("edit.paste", &[], &["plakken"]),
     nl("edit.paste_keep_tags", &[], &["plakken met originele tags"]),
     nl("edit.duplicate", &[], &["dupliceren", "kopie"]),
+    nl("macro.save", &["macro opslaan"], &["opslaan als macro"]),
+    nl(
+        "macro.place",
+        &["macro plaatsen"],
+        &["plaats macro", "macro"],
+    ),
     nl("edit.select_all", &[], &["alles selecteren"]),
     nl("edit.delete", &[], &["verwijderen", "wissen"]),
     nl("edit.rename", &[], &["hernoemen", "tag wijzigen"]),
@@ -219,6 +226,16 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["kasten", "kastenlijst", "behuizingen"],
     ),
+    nl(
+        "simulate.motor-start",
+        &[],
+        &[
+            "motor starten",
+            "ster-driehoek",
+            "aanloopstroom",
+            "zachtstarter",
+        ],
+    ),
     nl("view.changes", &["wijzigingen"], &["vergelijk", "verschil"]),
     nl(
         "view.commissioning",
@@ -285,6 +302,11 @@ pub const DUTCH: &[Aliases] = &[
             "excel exporteren",
         ],
         &["excel"],
+    ),
+    nl(
+        "export.assembly",
+        &["exporteer montagelijst", "montagelijst"],
+        &["werkplaats", "boren"],
     ),
     nl("export.sheets_csv", &["exporteer csv"], &["csv"]),
 ];

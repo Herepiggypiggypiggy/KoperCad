@@ -197,11 +197,24 @@ fn every_deliberate_error_is_flagged_exactly_once() {
     for p in &problems {
         by_kind.entry(p.kind).or_default().push(p);
     }
-    for kind in ProblemKind::ALL {
+    // The starter has no lengths, supply rating or cabinet layout, so the
+    // checks that read those are tested in design_checks.rs.
+    let needs_more = [
+        ProblemKind::VoltageDrop,
+        ProblemKind::ShortCircuit,
+        ProblemKind::UnplacedDevice,
+        ProblemKind::WireWithoutDuct,
+        ProblemKind::OverfullDuct,
+    ];
+    let kinds: Vec<ProblemKind> = ProblemKind::ALL
+        .into_iter()
+        .filter(|k| !needs_more.contains(k))
+        .collect();
+    for &kind in &kinds {
         let found = by_kind.get(&kind).map_or(0, Vec::len);
         assert_eq!(found, 1, "{kind:?} flagged {found} times: {problems:#?}");
     }
-    assert_eq!(problems.len(), ProblemKind::ALL.len());
+    assert_eq!(problems.len(), kinds.len());
 
     let one = |kind| by_kind[&kind][0];
     let ids = |list: &[AnyId]| list.to_vec();
