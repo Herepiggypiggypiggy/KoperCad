@@ -47,6 +47,19 @@ impl<'p> Tx<'p> {
         }
     }
 
+    /// The wires this edit added so far.
+    pub(crate) fn added_wires(&self) -> Vec<WireId> {
+        self.ops
+            .iter()
+            .filter_map(|op| match op {
+                Op::Insert {
+                    record: Record::Wire(w),
+                } => Some(w.id),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// The project as edited so far.
     pub fn project(&self) -> &Project {
         self.project
@@ -709,7 +722,10 @@ impl<'p> Tx<'p> {
     /// a 230 V 1/N/PE system taken from it have the same `N` and `PE`,
     /// which is right in a TN network. An isolated supply (a control
     /// transformer's secondary, a second incoming feed) passes a `prefix`
-    /// so its potentials are its own: `T1-` gives `T1-L`, `T1-N`, `T1-PE`.
+    /// so its potentials are its own: `T1-` gives `T1-L` and `T1-N`. PE is
+    /// never prefixed, because an isolated secondary is still earthed to
+    /// the cabinet's protective conductor. A prefix with leading or
+    /// trailing spaces is refused ([`ModelError::InvalidPrefix`]).
     pub fn add_potential_system(
         &mut self,
         name: impl Into<String>,
@@ -717,10 +733,15 @@ impl<'p> Tx<'p> {
         frequency_hz: Option<f64>,
         prefix: &str,
     ) -> Result<(PotentialSystemId, Vec<PotentialId>)> {
+        if prefix.trim() != prefix {
+            return Err(ModelError::InvalidPrefix(prefix.to_owned()));
+        }
         let mut members = Vec::new();
         let mut created = Vec::new();
         for mut spec in set.specs() {
-            spec.name.insert_str(0, prefix);
+            if spec.kind != PotentialKind::ProtectiveEarth {
+                spec.name.insert_str(0, prefix);
+            }
             let (potential, new) = self.ensure_potential(spec)?;
             if new {
                 created.push(potential);

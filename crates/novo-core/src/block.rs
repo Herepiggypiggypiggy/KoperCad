@@ -29,7 +29,9 @@ impl Tx<'_> {
     /// stored relative to `origin`. Wires to objects outside the selection
     /// are left out (they are how the block connects). References to
     /// project-wide objects (parts, potentials, feeds) are not captured.
-    /// Terminal symbols and potential feeds cannot be part of a block.
+    /// Terminal symbols, potential feeds and interruption points cannot be
+    /// part of a block: an interruption point joins nets by name across the
+    /// project, so two placements would be tied together.
     pub fn define_block(
         &mut self,
         name: impl Into<String>,
@@ -44,13 +46,15 @@ impl Tx<'_> {
                 AnyId::Symbol(s) => {
                     let symbol = project.symbol(s).ok_or(ModelError::NotFound(item))?;
                     match symbol.role {
-                        SymbolRole::Terminal { .. } | SymbolRole::PotentialFeed { .. } => {
+                        SymbolRole::Terminal { .. }
+                        | SymbolRole::PotentialFeed { .. }
+                        | SymbolRole::Interruption { .. } => {
                             return Err(ModelError::NotInBlock(item));
                         }
                         SymbolRole::Device { device, .. } => {
                             picked.insert(device.into());
                         }
-                        SymbolRole::Unassigned | SymbolRole::Interruption { .. } => {}
+                        SymbolRole::Unassigned => {}
                     }
                     picked.insert(item);
                 }
@@ -60,7 +64,8 @@ impl Tx<'_> {
                 AnyId::Text(t) if project.text(t).is_some() => {
                     picked.insert(item);
                 }
-                other => return Err(ModelError::NotFound(other)),
+                AnyId::Junction(_) | AnyId::Text(_) => return Err(ModelError::NotFound(item)),
+                other => return Err(ModelError::NotInBlock(other)),
             }
         }
         let wires: Vec<WireId> = picked
@@ -337,6 +342,99 @@ impl Tx<'_> {
         Ok(())
     }
 
+    /// Called at the end of every edit: a device outside any block whose
+    /// wires (two or more) all land on members of one placed block, and
+    /// that is drawn within the members' extent, was added inside it, a
+    /// structural edit that detaches it. A load drawn outside and wired to
+    /// the block's outputs is how the block is used and keeps the link; so
+    /// does a device with only its first wire in.
+    pub(crate) fn detach_enclosed_devices(&mut self) -> Result<()> {
+        let added = self.added_wires();
+        if added.is_empty() || self.project().block_instances().next().is_none() {
+            return Ok(());
+        }
+        let member_of = |project: &crate::Project, id: AnyId| {
+            project
+                .block_instances()
+                .find(|b| b.members.iter().any(|m| m.actual == id))
+                .map(|b| b.id)
+        };
+        let device_of = |project: &crate::Project, id: AnyId| match id {
+            AnyId::Symbol(s) => match project.symbol(s).map(|s| &s.role) {
+                Some(SymbolRole::Device { device, .. }) => Some(*device),
+                _ => None,
+            },
+            _ => None,
+        };
+        let mut candidates = BTreeSet::new();
+        for wire in added {
+            let Some(w) = self.project().wire(wire) else {
+                continue;
+            };
+            for end in w.ends() {
+                let owner = endpoint_owner(end);
+                if let Some(device) = device_of(self.project(), owner)
+                    && member_of(self.project(), device.into()).is_none()
+                {
+                    candidates.insert(device);
+                }
+            }
+        }
+        let mut detach = Vec::new();
+        for device in candidates {
+            let project = self.project();
+            let symbols: BTreeSet<AnyId> = project
+                .symbols_of_device(device)
+                .iter()
+                .map(|s| AnyId::Symbol(s.id))
+                .collect();
+            let mut blocks = BTreeSet::new();
+            let mut count = 0;
+            let mut outside = false;
+            for &symbol in &symbols {
+                for referrer in project.referrers(symbol) {
+                    let AnyId::Wire(w) = referrer else { continue };
+                    let Some(w) = project.wire(w) else { continue };
+                    for end in w.ends() {
+                        let owner = endpoint_owner(end);
+                        if symbols.contains(&owner) {
+                            continue;
+                        }
+                        count += 1;
+                        match member_of(project, owner) {
+                            Some(b) => {
+                                blocks.insert(b);
+                            }
+                            None => outside = true,
+                        }
+                    }
+                }
+            }
+            if outside || count < 2 || blocks.len() != 1 {
+                continue;
+            }
+            let block = blocks.into_iter().next().expect("one block");
+            // Wiring alone cannot tell a device inside from a load wired to
+            // the block's outputs: it must also be drawn within the block.
+            if project
+                .block_instance(block)
+                .is_some_and(|b| b.detached.is_none())
+                && drawn_within(project, block, &symbols)
+            {
+                let tag = project
+                    .device(device)
+                    .map(|d| d.tag.to_string())
+                    .filter(|t| !t.is_empty())
+                    .unwrap_or_else(|| device.to_string());
+                detach.push((block, format!("device {tag} added inside the block")));
+            }
+        }
+        for (block, reason) in detach {
+            self.detach_block(block, reason)?;
+        }
+        Ok(())
+    }
+
     /// How a wire end reads to the user: `-K1:13` for a pin of a tagged
     /// device, the id otherwise.
     fn endpoint_name(&self, end: Endpoint) -> String {
@@ -396,6 +494,8 @@ impl Tx<'_> {
     /// The tag a placed device gets: the template's product levels in the
     /// page's structure, numbered next free for its letter code. A device
     /// without a tag in the template stays without one.
+    // TODO: follow the project's numbering rule (DESIGN §7) once per-page
+    // numbering (-K301) is live; this always numbers per letter code.
     fn allocate_tag(&self, structure: &DeviceTag, template: &DeviceTag) -> DeviceTag {
         if template.product.is_empty() {
             return DeviceTag::default();
@@ -504,5 +604,67 @@ fn remap_end(map: &BTreeMap<AnyId, AnyId>, end: Endpoint) -> Result<Endpoint> {
         Endpoint::Junction { junction } => Endpoint::Junction {
             junction: JunctionId(raw(map, junction.into())?),
         },
+    })
+}
+
+/// How far outside the members' extent a symbol still counts as drawn
+/// within a block, in millimetres.
+const WITHIN_MARGIN: f64 = 5.0;
+
+/// Whether all of `symbols` sit on one page, within the extent (inflated by
+/// [`WITHIN_MARGIN`]) of the block's member symbols and junctions there.
+fn drawn_within(
+    project: &crate::Project,
+    block: BlockInstanceId,
+    symbols: &BTreeSet<AnyId>,
+) -> bool {
+    let Some(instance) = project.block_instance(block) else {
+        return false;
+    };
+    let placed: Vec<(PageId, Point)> = symbols
+        .iter()
+        .filter_map(|&id| match id {
+            AnyId::Symbol(s) => project.symbol(s).map(|s| (s.page, s.placement.origin)),
+            _ => None,
+        })
+        .collect();
+    let Some(&(page, _)) = placed.first() else {
+        return false;
+    };
+    if placed.iter().any(|&(p, _)| p != page) {
+        return false;
+    }
+    let mut points = Vec::new();
+    for member in &instance.members {
+        match member.actual {
+            AnyId::Symbol(s) => {
+                if let Some(symbol) = project.symbol(s).filter(|s| s.page == page) {
+                    points.push(symbol.placement.origin);
+                    points.extend(
+                        (0..symbol.pins.len() as u16).filter_map(|i| symbol.pin_position(i)),
+                    );
+                }
+            }
+            AnyId::Junction(j) => {
+                if let Some(junction) = project.junction(j).filter(|j| j.page == page) {
+                    points.push(junction.position);
+                }
+            }
+            _ => {}
+        }
+    }
+    let Some(&first) = points.first() else {
+        return false;
+    };
+    let (mut lo, mut hi) = (first, first);
+    for p in &points {
+        lo = Point::new(lo.x.min(p.x), lo.y.min(p.y));
+        hi = Point::new(hi.x.max(p.x), hi.y.max(p.y));
+    }
+    placed.iter().all(|&(_, p)| {
+        p.x >= lo.x - WITHIN_MARGIN
+            && p.x <= hi.x + WITHIN_MARGIN
+            && p.y >= lo.y - WITHIN_MARGIN
+            && p.y <= hi.y + WITHIN_MARGIN
     })
 }

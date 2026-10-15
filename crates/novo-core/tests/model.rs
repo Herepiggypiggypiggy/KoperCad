@@ -1890,4 +1890,14 @@ fn moving_to_another_page_carries_wires_and_labels() {
         .unwrap_err();
     assert!(matches!(err, ModelError::WireLeavesSelection(_)));
     assert_eq!(doc.project().to_json(), before);
+    // The editor can show every wire such a move would cut.
+    let leaving = doc.project().wires_leaving(&[a.into(), b.into()]);
+    assert_eq!(leaving.len(), 1);
+    let cut = doc.project().wire(leaving[0]).unwrap();
+    assert!(cut.ends().contains(&Endpoint::pin(stay, 0)));
+    assert!(
+        doc.project()
+            .wires_leaving(&[a.into(), b.into(), stay.into()])
+            .is_empty()
+    );
 }

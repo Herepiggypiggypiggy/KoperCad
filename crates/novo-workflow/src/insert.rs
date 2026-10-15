@@ -331,7 +331,10 @@ mod tests {
         assert!(child_queries("motor three").is_empty());
         let lib = library();
         assert_eq!(mnemonic(&lib, "NO").unwrap().id, "iec/contacts/no");
-        assert!(mnemonic(&lib, "contactor").is_none());
+        assert_eq!(
+            mnemonic(&lib, "contactor").unwrap().id,
+            "iec/coils/contactor"
+        );
     }
 
     #[test]

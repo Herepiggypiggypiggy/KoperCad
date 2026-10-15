@@ -414,6 +414,65 @@ fn a_connection_inside_the_block_detaches_it() {
             .detached
             .is_none()
     );
+
+    let detached = |doc: &Document| {
+        doc.project()
+            .block_instance(block)
+            .unwrap()
+            .detached
+            .clone()
+    };
+    // A load drawn outside and wired only to the block is how the block
+    // is used: a motor on the starter's outputs keeps the link.
+    doc.transact("Motor", |tx| {
+        let motor = tx.add_device(tag("=A1-M9"), "Motor")?;
+        let s = tx.place_symbol(
+            d.p2,
+            "x",
+            Placement::at(Point::new(20.0, 100.0)),
+            two_pins(),
+            SymbolRole::Device {
+                device: motor,
+                main: true,
+            },
+        )?;
+        tx.connect(Endpoint::pin(s, 0), Endpoint::pin(q, 1))?;
+        tx.connect(Endpoint::pin(s, 1), Endpoint::pin(m, 1))
+            .map(|_| ())
+    })
+    .unwrap();
+    assert_eq!(detached(&doc), None);
+    // A new device drawn within the block with its first wire in a member
+    // stays linked ...
+    let k9 = doc
+        .transact("Relay", |tx| {
+            let k = tx.add_device(tag("=A1-K9"), "Relay")?;
+            let s = tx.place_symbol(
+                d.p2,
+                "x",
+                Placement::at(Point::new(20.0, 5.0)),
+                two_pins(),
+                SymbolRole::Device {
+                    device: k,
+                    main: true,
+                },
+            )?;
+            tx.connect(Endpoint::pin(s, 0), Endpoint::pin(q, 0))?;
+            Ok(s)
+        })
+        .unwrap()
+        .0;
+    assert_eq!(detached(&doc), None);
+    // ... and is inside once its wires all land on members.
+    doc.transact("Wire in", |tx| {
+        tx.connect(Endpoint::pin(k9, 1), Endpoint::pin(m, 0))
+            .map(|_| ())
+    })
+    .unwrap();
+    assert_eq!(
+        detached(&doc).as_deref(),
+        Some("device =A1-K9 added inside the block")
+    );
 }
 
 #[test]
@@ -426,6 +485,29 @@ fn what_a_block_cannot_hold() {
         })
         .unwrap_err();
     assert_eq!(err, ModelError::NotInBlock(d.terminal.into()));
+    // An interruption point joins nets by name across the project, so two
+    // placements would be tied together.
+    let err = doc
+        .transact("Define", |tx| {
+            let point = tx.place_symbol(
+                d.p1,
+                "interruption",
+                Placement::at(Point::new(120.0, 0.0)),
+                two_pins(),
+                SymbolRole::Interruption { name: "L1".into() },
+            )?;
+            tx.define_block("i", &[point.into()], Point::default(), Vec::new())
+        })
+        .unwrap_err();
+    assert!(matches!(err, ModelError::NotInBlock(AnyId::Symbol(_))));
+    // A wire is captured with its ends, not picked on its own.
+    let wire = doc.project().wires().next().unwrap().id;
+    let err = doc
+        .transact("Define", |tx| {
+            tx.define_block("w", &[wire.into()], Point::default(), Vec::new())
+        })
+        .unwrap_err();
+    assert_eq!(err, ModelError::NotInBlock(wire.into()));
     let err = doc
         .transact("Define", |tx| {
             tx.define_block("a", &[d.outside.into()], Point::default(), Vec::new())?;

@@ -1,11 +1,11 @@
 format = 1
 id = "iec/coils/relay"
-name = "Relay or contactor coil"
-description = "Operating coil of a relay or contactor; its contacts carry the same device tag."
+name = "Relay coil"
+description = "Operating coil of a control relay; its contacts carry the same device tag."
 standard = "IEC 60617"
 category = "coils"
 function = "coil.relay"
-keywords = ["coil", "relay", "contactor", "a1", "a2"]
+keywords = ["coil", "relay", "auxiliary", "a1", "a2"]
 aliases = ["coil", "k"]
 favorite = true
 

@@ -86,6 +86,7 @@ pub enum Command {
         page: PageId,
         revision: String,
     },
+    /// Releases a frozen page: references to it follow the drawing again.
     UnfreezePage {
         page: PageId,
     },

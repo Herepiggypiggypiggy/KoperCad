@@ -2,9 +2,9 @@
 //! and contacts, G / Shift+G, Alt+Left / Alt+Right and jumps to a device.
 
 use eframe::egui;
-use novo_canvas::model::{SymbolNote, item_id};
+use novo_canvas::model::{NoteAnchor, SymbolNote, item_id};
 use novo_core::{AnyId, DeviceId, PageId, SymbolId};
-use novo_xref::{Label, LiveXref, Place, Reference, XrefIndex};
+use novo_xref::{Label, LabelAnchor, LiveXref, Place, Reference, XrefIndex};
 use std::collections::BTreeMap;
 
 use super::{Level, NovoApp};
@@ -188,5 +188,9 @@ pub(crate) fn note(label: Label) -> SymbolNote {
         symbol: label.symbol,
         lines: label.lines,
         warning: label.warning,
+        anchor: match label.anchor {
+            LabelAnchor::Below => NoteAnchor::Below,
+            LabelAnchor::Right => NoteAnchor::Right,
+        },
     }
 }

@@ -120,6 +120,7 @@ fn cross_reference_notes_are_printed_on_their_page() {
             symbol: h.k1_coil,
             lines: vec!["1-2 /1.3".into(), "13-14 /2.4".into()],
             warning: false,
+            anchor: Default::default(),
         }],
     );
     let pdf = parse(&export_pdf(doc.project(), &options).unwrap());
