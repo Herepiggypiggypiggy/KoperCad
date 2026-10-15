@@ -287,6 +287,8 @@ pub struct CanvasView {
     hovered: Option<ItemId>,
     hovered_hit: Option<Hit>,
     band: Option<Vec2>,
+    /// What the box being dragged would select now (see `CanvasOutput`).
+    band_ids: Vec<ItemId>,
     right_drag: Option<RightDrag>,
     fit_pending: bool,
     /// What to bring into view; see [`Self::reveal`].
@@ -327,7 +329,30 @@ pub struct CanvasOutput {
     /// Marks (indices into `CanvasView::marks.list`) under the cursor's
     /// glyph; their text is shown as a hover note.
     pub hovered_marks: Vec<usize>,
+    /// While a selection box is dragged: how many items it would select if
+    /// released now, for an "N selected" hint.
+    pub band_count: Option<usize>,
 }
+
+/// `a` to `b` cut into dashes of length `dash` with `gap` between them.
+fn dashes(a: Vec2, b: Vec2, dash: f32, gap: f32) -> Vec<[Vec2; 2]> {
+    let len = a.distance(b);
+    if len <= 0.0 || dash <= 0.0 {
+        return Vec::new();
+    }
+    let dir = (b - a) / len;
+    let mut out = Vec::new();
+    let mut t = 0.0;
+    while t < len {
+        let e = (t + dash).min(len);
+        out.push([a + dir * t, a + dir * e]);
+        t = e + gap.max(f32::EPSILON);
+    }
+    out
+}
+
+/// Most items a selection box lights up while it is dragged.
+const BAND_HIGHLIGHT_MAX: usize = 2000;
 
 /// Frames a [`CanvasView::reveal`] waits for its target to appear in the
 /// scene before it is dropped.
@@ -373,6 +398,7 @@ impl CanvasView {
             hovered_hit: None,
             hovered: None,
             band: None,
+            band_ids: Vec::new(),
             right_drag: None,
             fit_pending: true,
             reveal_pending: None,
@@ -560,6 +586,15 @@ impl CanvasView {
         if !ui.ctx().input(|i| i.pointer.primary_down()) && !response.dragged() {
             self.band = None;
         }
+        // What the box would select now, for the live highlight.
+        self.band_ids = match (self.band, cursor_raw) {
+            (Some(start), Some(end)) => scene.box_select(
+                &Aabb::from_corners(start, end),
+                BoxMode::from_drag(start, end),
+                self.viewport.zoom,
+            ),
+            _ => Vec::new(),
+        };
         let mut escape = None;
         if self.interaction.escape_on_hover
             && response.hovered()
@@ -608,6 +643,7 @@ impl CanvasView {
             context_click: context_click.then_some(cursor).flatten(),
             escape,
             hovered_marks,
+            band_count: self.band.map(|_| self.band_ids.len()),
         }
     }
 
@@ -813,12 +849,42 @@ impl CanvasView {
                 BoxMode::Window => self.style.band_window,
                 BoxMode::Crossing => self.style.band_crossing,
             };
-            let rect = Primitive {
+            // Items the box would select light up as they do under the
+            // hover, up to a cap that keeps the frame cheap.
+            if self.band_ids.len() <= BAND_HIGHLIGHT_MAX {
+                for id in &self.band_ids {
+                    if let Some(item) = scene.get(*id) {
+                        self.tessellator
+                            .item_highlighted(&mut over, item, &self.style.hover);
+                    }
+                }
+            }
+            let fill = Primitive {
                 shape: Shape::rect(start, end),
-                stroke: Some(Stroke::screen(1.0, color)),
+                stroke: None,
                 fill: Some(color.with_alpha(40)),
             };
-            self.tessellator.primitive(&mut over, &rect);
+            self.tessellator.primitive(&mut over, &fill);
+            let (lo, hi) = (start.min(end), start.max(end));
+            let corners = [lo, Vec2::new(hi.x, lo.y), hi, Vec2::new(lo.x, hi.y)];
+            let edge = Stroke::screen(1.0, color);
+            for i in 0..4 {
+                let (a, b) = (corners[i], corners[(i + 1) % 4]);
+                match BoxMode::from_drag(start, end) {
+                    // Enclosing box: a solid outline.
+                    BoxMode::Window => {
+                        tessellate::stroke_run(&mut over, &[a, b], &edge);
+                    }
+                    // Crossing box: dashed.
+                    BoxMode::Crossing => {
+                        let dash = self.viewport.screen_to_world_len(6.0);
+                        let gap = self.viewport.screen_to_world_len(4.0);
+                        for [p, q] in dashes(a, b, dash, gap) {
+                            tessellate::stroke_run(&mut over, &[p, q], &edge);
+                        }
+                    }
+                }
+            }
         }
         if self.interaction.snap_marker
             && let Some(c) = cursor
@@ -1193,6 +1259,17 @@ impl CanvasView {
 
 #[cfg(test)]
 mod tests {
+    use super::dashes;
+
+    #[test]
+    fn a_dashed_edge_has_gaps_and_ends_on_the_corner() {
+        let d = dashes(Vec2::ZERO, Vec2::new(20.0, 0.0), 6.0, 4.0);
+        assert_eq!(d.len(), 2);
+        assert_eq!(d[0], [Vec2::ZERO, Vec2::new(6.0, 0.0)]);
+        assert_eq!(d[1][0], Vec2::new(10.0, 0.0));
+        assert_eq!(d[1][1], Vec2::new(16.0, 0.0));
+        assert!(dashes(Vec2::ZERO, Vec2::ZERO, 6.0, 4.0).is_empty());
+    }
     use super::*;
     use crate::scene::Item;
     use crate::shape::Shape;
