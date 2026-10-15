@@ -1,8 +1,8 @@
 //! The place wheel (DESIGN.md §4, "Place wheel"): a radial picker at the
 //! pointer for the common parts. Five fixed wedges on the inner ring
-//! (Terminal, Switch, Relay, Breaker, More…); the sector under the pointer
-//! fans its items out on the outer ring, the ones used most in the project
-//! first. Click, flick or keys (1 to 5, then 1 to 8) pick; Backspace goes
+//! (Terminal, Switch, Relay, Breaker, Points) around a centre, Other…, that
+//! opens the place surface; the sector under the pointer fans its items
+//! out on the outer ring, the ones used most in the project first. Click, flick or keys (1 to 5, then 1 to 8) pick; Backspace goes
 //! back a ring and Esc closes. A picked symbol is attached to the pointer
 //! exactly as the place mode does.
 
@@ -28,7 +28,7 @@ const DWELL: f64 = 0.18;
 type Item = (&'static str, &'static str);
 
 /// The categories are fixed so muscle memory forms; the items inside
-/// follow use. The last wedge has no items: it opens the place surface.
+/// follow use. The centre of the wheel (Other…) opens the place surface.
 const CATEGORIES: [(&str, &[Item]); 5] = [
     (
         "Terminal",
@@ -80,11 +80,21 @@ const CATEGORIES: [(&str, &[Item]); 5] = [
             ("iec/protection/surge_arrester", "Surge"),
         ],
     ),
-    ("More…", &[]),
+    (
+        "Points",
+        &[
+            ("iec/connectivity/potential_feed", "Feed"),
+            ("iec/connectivity/interruption_point", "Interruption"),
+            ("iec/earth/protective_earth", "PE"),
+            ("iec/earth/earth", "Earth"),
+            ("iec/earth/chassis", "Chassis"),
+        ],
+    ),
 ];
 
-/// The wedge that opens the place surface.
-const MORE: usize = CATEGORIES.len() - 1;
+/// "Other…", the wheel's centre: it opens the place surface. Not a wedge
+/// index; it travels in `sector` beside them.
+const OTHER: usize = usize::MAX;
 
 /// Where the pointer is on the wheel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -221,7 +231,7 @@ impl NovoApp {
 
     /// The items of wedge `sector` that the library has, the symbols used
     /// most in this project first, the defaults after them in order.
-    fn wheel_items(&self, sector: usize) -> Vec<Item> {
+    pub(super) fn wheel_items(&self, sector: usize) -> Vec<Item> {
         let Some(view) = self.canvas.schematic_ref() else {
             return Vec::new();
         };
@@ -261,7 +271,7 @@ impl NovoApp {
         if pending.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(DWELL));
         }
-        let shown = locked.or(hover).filter(|&i| i != MORE);
+        let shown = locked.or(hover);
         let items = shown.map_or_else(Vec::new, |i| self.wheel_items(i));
         let at = region(offset, items.len());
 
@@ -281,7 +291,7 @@ impl NovoApp {
             match at {
                 Region::Item(j) => pick = Some(j),
                 Region::Wedge(i) => sector = Some(i),
-                Region::Hub => sector = Some(MORE),
+                Region::Hub => sector = Some(OTHER),
                 Region::Outside => close = true,
             }
         } else if key_released
@@ -327,7 +337,7 @@ impl NovoApp {
             if back {
                 w.locked = None;
             }
-            if let Some(i) = sector.filter(|&i| i != MORE) {
+            if let Some(i) = sector.filter(|&i| i != OTHER) {
                 w.locked = Some(i);
             }
         }
@@ -335,7 +345,7 @@ impl NovoApp {
 
         if close {
             self.wb.wheel = None;
-        } else if sector == Some(MORE) {
+        } else if sector == Some(OTHER) {
             self.wb.wheel = None;
             self.wb.field.open(Mode::Place, pointer);
         } else if let Some(j) = pick
@@ -451,7 +461,7 @@ impl NovoApp {
         painter.text(
             centre,
             egui::Align2::CENTER_CENTER,
-            "Place",
+            "Other…",
             egui::FontId::proportional(13.0),
             text,
         );

@@ -1286,6 +1286,25 @@ fn a_held_place_key_opens_the_wheel_and_keys_pick_from_it() {
         Tool::Place(p) => assert_eq!(p.symbol, "iec/coils/relay"),
         other => panic!("expected the coil to be in hand, got {other:?}"),
     }
+
+    // Key 5 is Points: its first item is the potential feed, and every
+    // item of every wedge exists in the library.
+    d.app.run_command(&ctx, "tool.place_wheel", None);
+    frame_at(&mut d, 40.0, vec![]);
+    frame_at(&mut d, 40.1, vec![key_event(egui::Key::Num5, true)]);
+    frame_at(&mut d, 40.2, vec![key_event(egui::Key::Num1, true)]);
+    assert!(d.app.wb.wheel.is_none());
+    match d.app.canvas.schematic().unwrap().editor.tool().clone() {
+        Tool::Place(p) => assert_eq!(p.symbol, "iec/connectivity/potential_feed"),
+        other => panic!("expected the feed in hand, got {other:?}"),
+    }
+    d.app.run_command(&ctx, "tool.place_wheel", None);
+    frame_at(&mut d, 50.0, vec![]);
+    for wedge in 0..5 {
+        let items = d.app.wheel_items(wedge);
+        assert!(!items.is_empty(), "wedge {wedge} has items");
+    }
+    assert_eq!(d.app.wheel_items(4).len(), 5, "Points has all five items");
 }
 
 #[test]
