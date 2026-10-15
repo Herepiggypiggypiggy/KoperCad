@@ -45,7 +45,6 @@ pub(crate) struct Workbench {
     pub(super) xref: LiveXref,
     /// The generated pages' reports, live.
     pub(super) reports: super::reports::Reports,
-    /// The `renumber io` preview waiting for Enter or Esc, per station.
     /// The place wheel, when open.
     pub(super) wheel: Option<super::wheel::Wheel>,
     /// A key that opens the wheel went down at this time (egui seconds),
@@ -53,6 +52,7 @@ pub(crate) struct Workbench {
     pub(super) place_hold: Option<(f64, Vec<egui::Key>)>,
     /// Commands the canvas asked for, run next frame by id.
     pub(super) queued: Vec<&'static str>,
+    /// The `renumber io` preview waiting for Enter or Esc, per station.
     pub(super) renumber: Option<Vec<novo_plc::commands::RenumberPlan>>,
     /// Which sheet of a generated page the canvas shows (0 for the first).
     pub(super) sheet: usize,
@@ -78,6 +78,8 @@ pub(crate) struct Workbench {
     pub(super) space_pan: Option<egui::Pos2>,
     /// The tool dock's size last frame, to tell where it would sit.
     pub(super) dock_size: egui::Vec2,
+    /// The inspector's fields while they are edited.
+    pub(super) inspector: super::inspector::InspectorState,
     /// Shift+P: false hides the marks on the drawing (counters stay).
     pub(super) marks: bool,
     /// Design-check results for one project revision.
@@ -128,6 +130,7 @@ impl Default for Workbench {
             pointer_world: None,
             space_pan: None,
             dock_size: egui::Vec2::ZERO,
+            inspector: Default::default(),
             marks: true,
             problems: None,
             pill_rect: egui::Rect::NOTHING,
@@ -436,6 +439,18 @@ impl NovoApp {
             "check.problems" => self.show_issues(false),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),
+            "edit.properties" => {
+                // The inspector shows with the selection; the cursor goes in
+                // its tag.
+                let selection = self.selection();
+                let device = self
+                    .backend
+                    .document()
+                    .and_then(|d| super::inspector::selected_device(d.project(), &selection));
+                if device.is_some() {
+                    ctx.memory_mut(|m| m.request_focus(egui::Id::new("inspector_tag")));
+                }
+            }
             "tool.place_wheel" => self.open_wheel(ctx, Vec::new()),
             "wire.mode" => {
                 let mode = match self.settings.wiring_mode() {

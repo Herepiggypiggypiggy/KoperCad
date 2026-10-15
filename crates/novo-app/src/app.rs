@@ -6,6 +6,7 @@
 mod checks;
 mod dock;
 mod drawers;
+mod inspector;
 mod pdf;
 mod plc;
 mod reports;
@@ -679,6 +680,7 @@ impl NovoApp {
             self.hud(&ctx, canvas_rect);
             self.sync_wiring_mode();
             self.tool_dock(&ctx, canvas_rect);
+            self.inspector(&ctx, canvas_rect);
         }
         self.toasts(&ctx, canvas_rect);
 

@@ -1305,3 +1305,103 @@ fn a_refusal_in_the_dock_and_the_place_key_come_from_the_keymap() {
     let text = d.app.canvas.schematic().unwrap().status_text();
     assert!(text.is_some_and(|t| t.contains("No symbol")));
 }
+
+#[test]
+fn the_inspector_edits_the_selected_device_in_one_undo_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let inspector = || ctx.memory(|m| m.area_rect(egui::Id::new("inspector")));
+    let k = d.place("km3", 80.0, 96.0);
+    d.editor_leave();
+    d.app.canvas.schematic().unwrap().canvas.selection.clear();
+    d.frame();
+    d.frame();
+    let layer = egui::LayerId::new(egui::Order::Middle, egui::Id::new("inspector"));
+    let shown = |ctx: &egui::Context| ctx.memory(|m| m.areas().visible_last_frame(&layer));
+    assert!(!shown(&ctx), "nothing selected, no inspector");
+
+    d.select(k);
+    d.frame();
+    assert!(shown(&ctx), "{:?}", inspector());
+    let device = novo_editor::edit::device_of(d.doc().project(), AnyId::Symbol(k)).unwrap();
+    let before = d
+        .doc()
+        .project()
+        .device(device)
+        .unwrap()
+        .description
+        .clone();
+
+    // Type into the description and press Enter.
+    ctx.memory_mut(|m| m.request_focus(egui::Id::new("inspector_description")));
+    d.frame();
+    d.frame_with(vec![
+        egui::Event::Key {
+            key: egui::Key::A,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::COMMAND,
+        },
+        egui::Event::Text("Pump contactor".into()),
+    ]);
+    d.key(egui::Key::Enter, egui::Modifiers::NONE);
+    d.frame();
+    let now = d
+        .doc()
+        .project()
+        .device(device)
+        .unwrap()
+        .description
+        .clone();
+    assert_eq!(now, "Pump contactor");
+
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(
+        d.doc().project().device(device).unwrap().description,
+        before
+    );
+}
+
+#[test]
+fn a_double_click_on_a_device_puts_the_cursor_in_its_tag() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let coil = d.place("coil", 200.0, 144.0);
+    d.frame();
+
+    // The coil's body, on screen.
+    let origin = d.doc().project().symbol(coil).unwrap().placement.origin;
+    let view = d.app.canvas.schematic().unwrap();
+    let at = view.canvas.viewport.world_to_screen(novo_canvas::Vec2::new(
+        origin.x as f32 + 4.0,
+        origin.y as f32 + 8.0,
+    ));
+    let rect = d.app.wb.canvas_area.unwrap().1;
+    let pos = rect.min + egui::vec2(at.x, at.y);
+
+    let button = |pressed| egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    frame_at(&mut d, 50.0, vec![egui::Event::PointerMoved(pos)]);
+    for (i, t) in [50.1, 50.15, 50.2, 50.25].into_iter().enumerate() {
+        frame_at(&mut d, t, vec![button(i % 2 == 0)]);
+    }
+    frame_at(&mut d, 50.3, vec![]);
+    frame_at(&mut d, 50.35, vec![]);
+    assert_eq!(
+        ctx.memory(|m| m.focused()),
+        Some(egui::Id::new("inspector_tag")),
+        "the tag field has the cursor"
+    );
+}
