@@ -25,14 +25,17 @@ The crate is `novo-revisions`. It is already listed in
      table).
 
 ## State
-- 2026-10-15: DESIGN merged (#142).
-- Revision record and `IssueRevision` PR open from `claude/data-model-amzaxu`.
-- Ready locally, opened one at a time after it:
-  - the `novo-revisions` engine: `IndexRule`, `diff` into a `ChangeSet`
-    by page;
-  - the novo-storage snapshot table: schema v2, zlib project JSON per
-    revision id, `Session::put_snapshot`, save as copies snapshots, and
-    orphans are dropped on open when no recovery is offered.
-- Next: title block fields (project revision, page revision from change
-  sets, revision table), then an issue flow that pairs the command with
-  `put_snapshot`.
+- 2026-10-15: DESIGN (#142), the Revision record and `IssueRevision`
+  (#157), and the storage snapshot table (#159) are merged.
+- Open: the `novo-revisions` engine PR (`IndexRule`, `diff` into a
+  `ChangeSet` by page, `PageRevisions` for the title block; a page's
+  re-taken freeze is not a change).
+- Ready locally (branch `ws02-outputs`): generated pages sort after every
+  drawn page, `ProjectRules.generated_pages`, and Remove refuses an issued
+  revision.
+- Next:
+  - an issue flow in the app that pairs `IssueRevision` with
+    `Session::put_snapshot`; wrap the snapshot writes in one transaction
+    if issues ever come in bulk (Reviewer B's #159 note);
+  - Changes mode (latest revision against now), with WS-03 and WS-06
+    owning the marks and WS-09 owning the PDF.
