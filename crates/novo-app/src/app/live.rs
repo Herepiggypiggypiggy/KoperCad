@@ -16,7 +16,7 @@ use eframe::egui;
 use novo_core::{
     NetId, Netlist, PageId, Potential, PotentialId, PotentialKind, Project, SymbolId, SymbolRole,
 };
-use novo_sim::{Live, PoleState, Settled, Solution, is_coil, settle};
+use novo_sim::{Clock, Live, PoleState, Settled, Solution, is_coil, settle_timed};
 use novo_theme::{tokens, widgets};
 
 use super::{Level, NovoApp};
@@ -35,6 +35,8 @@ pub(crate) struct LiveView {
     pub(super) poles: PoleState,
     /// Coils switched on by hand, whatever feeds them.
     pub(super) forced: BTreeSet<SymbolId>,
+    /// Seconds the bench has run, for timer contacts.
+    clock: Clock,
     solved: Option<Solved>,
 }
 
@@ -50,14 +52,28 @@ struct Solved {
 impl LiveView {
     /// The solution for `project` under the current poles, solved again only
     /// when the drawing or the poles changed.
-    fn solved(&mut self, project: &Project) -> &Solved {
-        let stale = self.solved.as_ref().is_none_or(|s| {
+    fn solved(&mut self, project: &Project, dt: f64) -> &Solved {
+        let changed = self.solved.as_ref().is_none_or(|s| {
             s.revision != project.revision()
                 || s.poles != self.poles
                 || s.forced != self.forced
                 || !s.netlist.is_current(project)
         });
-        if stale {
+        let counting = self.solved.as_ref().is_some_and(|s| s.settled.timing);
+        if counting && !changed {
+            // A timer is running: time passes and the contacts may follow.
+            self.clock.advance(dt);
+            if let Some(s) = self.solved.as_mut() {
+                s.settled = settle_timed(
+                    project,
+                    &s.netlist,
+                    &s.poles,
+                    &s.forced,
+                    &s.settled.energized,
+                    &mut self.clock,
+                );
+            }
+        } else if changed {
             let netlist = project.netlist();
             // The coils that were on stay on while their own contacts feed
             // them, so a seal-in circuit holds after the button is released.
@@ -66,7 +82,14 @@ impl LiveView {
                 .as_ref()
                 .map(|s| s.settled.energized.clone())
                 .unwrap_or_default();
-            let settled = settle(project, &netlist, &self.poles, &self.forced, &held);
+            let settled = settle_timed(
+                project,
+                &netlist,
+                &self.poles,
+                &self.forced,
+                &held,
+                &mut self.clock,
+            );
             self.solved = Some(Solved {
                 revision: project.revision(),
                 poles: self.poles.clone(),
@@ -280,7 +303,9 @@ impl NovoApp {
         };
         let project = doc.project();
         let live = &mut self.wb.live;
-        let solved = live.solved(project);
+        let dt = f64::from(ctx.input(|i| i.stable_dt));
+        let solved = live.solved(project, dt);
+        let timing = solved.settled.timing;
         let wires = lit_wires(project, page, &solved.netlist, &solved.settled.solution);
         let legend = legend(
             &wires,
@@ -461,6 +486,9 @@ impl NovoApp {
                             ),
                         );
                     }
+                    if timing {
+                        ui.weak("A timer is running");
+                    }
                     if legend.carried.is_empty() && legend.shorted == 0 {
                         ui.weak("Nothing is energized");
                     }
@@ -468,7 +496,7 @@ impl NovoApp {
             });
 
         // Draws again only when something changed; egui repaints on input.
-        if leave || open_all || clicked.is_some() {
+        if leave || open_all || clicked.is_some() || timing {
             ctx.request_repaint();
         }
         if leave {
@@ -477,6 +505,7 @@ impl NovoApp {
         if open_all {
             self.wb.live.poles = PoleState::all_open();
             self.wb.live.forced.clear();
+            self.wb.live.clock.reset();
         }
         if let Some(coil) = coil_clicked
             && !self.wb.live.forced.remove(&coil)
@@ -552,7 +581,7 @@ mod tests {
         let (page, contact) = circuit(&mut doc);
         let mut live = LiveView::default();
         let carrying = |live: &mut LiveView| {
-            let solved = live.solved(doc.project());
+            let solved = live.solved(doc.project(), 0.0);
             lit_wires(
                 doc.project(),
                 page,
@@ -580,7 +609,7 @@ mod tests {
         let (page, contact) = circuit(&mut doc);
         let mut live = LiveView::default();
         live.flip(contact, 0);
-        let solved = live.solved(doc.project());
+        let solved = live.solved(doc.project(), 0.0);
         let wires = lit_wires(
             doc.project(),
             page,

@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use novo_core::{
     DeviceTag, Document, Endpoint, Pin, Placement, Point, PotentialKind, SymbolId, SymbolRole, Tx,
 };
-use novo_sim::{Live, PoleState, settle};
+use novo_sim::{Clock, Live, PoleState, settle, settle_timed};
 
 fn put(tx: &mut Tx<'_>, page: novo_core::PageId, key: &str, y: f64, role: SymbolRole) -> SymbolId {
     let id = tx
@@ -188,4 +188,109 @@ fn a_changeover_contact_switches_between_its_two_sides() {
     );
     assert_eq!(on.solution.of(&netlist, a), &Live::Dead);
     assert!(on.solution.of(&netlist, b).potential().is_some());
+}
+
+struct Timer {
+    doc: Document,
+    start: SymbolId,
+    lamp: Endpoint,
+}
+
+/// L1 -> start (hand-set) -> coil K1 -> N; L1 -> `contact` of K1 -> lamp.
+/// K1 has a 2 second delay.
+fn timer(contact: &str) -> Timer {
+    let mut doc = Document::default();
+    let (t, _) = doc
+        .transact("Draw", |tx| {
+            let page = tx.add_page("1")?;
+            let l1 = tx.add_potential("L1", PotentialKind::Line)?;
+            let n = tx.add_potential("N", PotentialKind::Neutral)?;
+            let k1 = tx.add_device(DeviceTag::product("K1"), "")?;
+            tx.update::<novo_core::Device>(k1, |d| {
+                d.properties.insert("delay".into(), "2 s".into());
+            })?;
+            let s2 = tx.add_device(DeviceTag::product("S2"), "")?;
+            let dev = |d, main| SymbolRole::Device { device: d, main };
+            let f1 = put(
+                tx,
+                page,
+                "t/feed",
+                0.0,
+                SymbolRole::PotentialFeed { potential: l1 },
+            );
+            let fnn = put(
+                tx,
+                page,
+                "t/feed",
+                10.0,
+                SymbolRole::PotentialFeed { potential: n },
+            );
+            let start = put(tx, page, "t/contact/no", 20.0, dev(s2, true));
+            let coil = put(tx, page, "t/coil/timer", 30.0, dev(k1, true));
+            let delayed = put(tx, page, contact, 40.0, dev(k1, false));
+            let lamp = put(tx, page, "t/lamp", 50.0, SymbolRole::Unassigned);
+            tx.connect(Endpoint::pin(f1, 1), Endpoint::pin(start, 0))?;
+            tx.connect(Endpoint::pin(start, 1), Endpoint::pin(coil, 0))?;
+            tx.connect(Endpoint::pin(coil, 1), Endpoint::pin(fnn, 1))?;
+            tx.connect(Endpoint::pin(f1, 1), Endpoint::pin(delayed, 0))?;
+            tx.connect(Endpoint::pin(delayed, 1), Endpoint::pin(lamp, 0))?;
+            Ok(Timer {
+                doc: Document::default(),
+                start,
+                lamp: Endpoint::pin(lamp, 0),
+            })
+        })
+        .unwrap();
+    Timer { doc, ..t }
+}
+
+fn lit(
+    t: &Timer,
+    pressed: bool,
+    held: &BTreeSet<SymbolId>,
+    clock: &mut Clock,
+) -> (bool, bool, BTreeSet<SymbolId>) {
+    let project = t.doc.project();
+    let netlist = project.netlist();
+    let mut hand = PoleState::all_open();
+    if pressed {
+        hand.set_all(project, t.start, true);
+    }
+    let s = settle_timed(project, &netlist, &hand, &BTreeSet::new(), held, clock);
+    (
+        s.solution.of(&netlist, t.lamp).potential().is_some(),
+        s.timing,
+        s.energized,
+    )
+}
+
+#[test]
+fn an_on_delay_contact_operates_after_its_time_and_releases_at_once() {
+    let t = timer("t/contact/no_delay_on");
+    let mut clock = Clock::new();
+    let (lamp, timing, held) = lit(&t, true, &BTreeSet::new(), &mut clock);
+    assert!(!lamp && timing, "the coil is on, the timer is counting");
+    clock.advance(1.0);
+    assert!(!lit(&t, true, &held, &mut clock).0);
+    clock.advance(1.5);
+    let (lamp, timing, held) = lit(&t, true, &held, &mut clock);
+    assert!(lamp && !timing, "2 s have passed");
+    let (lamp, _, _) = lit(&t, false, &held, &mut clock);
+    assert!(!lamp, "dropping the coil releases at once");
+}
+
+#[test]
+fn an_off_delay_contact_operates_at_once_and_releases_after_its_time() {
+    let t = timer("t/contact/no_delay_off");
+    let mut clock = Clock::new();
+    let (lamp, _, held) = lit(&t, true, &BTreeSet::new(), &mut clock);
+    assert!(lamp, "operates with the coil");
+    let (lamp, timing, held) = lit(&t, false, &held, &mut clock);
+    assert!(lamp && timing, "held while the time runs");
+    clock.advance(1.0);
+    let (lamp, _, held) = lit(&t, false, &held, &mut clock);
+    assert!(lamp);
+    clock.advance(1.5);
+    let (lamp, timing, _) = lit(&t, false, &held, &mut clock);
+    assert!(!lamp && !timing, "released after 2 s");
 }
