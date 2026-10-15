@@ -1,0 +1,61 @@
+format = 1
+id = "nfpa/transformers/transformer_3ph"
+name = "Three-phase transformer"
+description = "Three-phase transformer with two windings."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "transformers"
+function = "transformer.3ph"
+keywords = ["transformer", "3 phase", "power transformer", "nfpa", "ansi"]
+aliases = ["tr3"]
+
+connections = [
+  { id = "1U", at = [0, 0], dir = "up" },
+  { id = "1V", at = [8, 0], dir = "up" },
+  { id = "1W", at = [16, 0], dir = "up" },
+  { id = "2U", at = [0, 40], dir = "down" },
+  { id = "2V", at = [8, 40], dir = "down" },
+  { id = "2W", at = [16, 40], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-3.5, 20], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 6] },
+  { kind = "line", from = [0, 34], to = [0, 40] },
+  { kind = "arc", center = [0, 7], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [0, 9], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [0, 11], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [0, 13], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [0, 27], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [0, 29], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [0, 31], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [0, 33], r = 1, start = -90, end = 90 },
+  { kind = "line", from = [8, 0], to = [8, 6] },
+  { kind = "line", from = [8, 34], to = [8, 40] },
+  { kind = "arc", center = [8, 7], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [8, 9], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [8, 11], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [8, 13], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [8, 27], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [8, 29], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [8, 31], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [8, 33], r = 1, start = -90, end = 90 },
+  { kind = "line", from = [16, 0], to = [16, 6] },
+  { kind = "line", from = [16, 34], to = [16, 40] },
+  { kind = "arc", center = [16, 7], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [16, 9], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [16, 11], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [16, 13], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [16, 27], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [16, 29], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [16, 31], r = 1, start = -90, end = 90 },
+  { kind = "arc", center = [16, 33], r = 1, start = -90, end = 90 },
+  { kind = "line", from = [-2, 19], to = [18, 19] },
+  { kind = "line", from = [-2, 21], to = [18, 21] },
+]
+
+[behavior]
+kind = "transformer"
+ports = [["1U", "1V", "1W"], ["2U", "2V", "2W"]]

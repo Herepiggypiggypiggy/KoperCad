@@ -1117,7 +1117,15 @@ impl Project {
                 .refs()
                 .into_iter()
                 .all(|r| matches!(r, AnyId::Page(_)) || ids.contains(&r));
-            if !allowed || !closed {
+            // Parts, feeds and potentials belong to the project, not to a
+            // template: a captured definition has none.
+            let project_wide = match member {
+                Record::Device(d) => !d.parts.is_empty(),
+                Record::Symbol(s) => !s.feeds.is_empty(),
+                Record::Wire(w) => w.potential.is_some(),
+                _ => false,
+            };
+            if !allowed || !closed || project_wide {
                 return Err(bad("members"));
             }
         }
