@@ -41,6 +41,8 @@ impl NovoApp {
         let chips = self.mode_chips();
         let saved = self.saved_state();
         let path = self.project_path.clone();
+        let recent = self.recent_messages();
+        let unsaved = matches!(saved, "Not saved yet" | "Not saved");
         let mut run = None;
         egui::Panel::bottom("status_bar")
             .exact_size(STATUS_BAR)
@@ -48,19 +50,51 @@ impl NovoApp {
                 ui.style_mut().override_text_style = Some(egui::TextStyle::Small);
                 ui.visuals_mut().override_text_color = Some(tokens::TEXT_MUTED);
                 ui.horizontal_centered(|ui| {
-                    match &message {
-                        Some((text, _)) => ui.label(text),
-                        None => ui.label(self.workspace_hint()),
-                    };
+                    // The message gives way to the slots on its right: it is
+                    // cut to half the bar, with the whole text on hover.
+                    let room = ui.available_width() * 0.5;
+                    ui.scope(|ui| {
+                        ui.set_max_width(room);
+                        match &message {
+                            Some((text, _)) => {
+                                let label = ui.add(egui::Label::new(text).truncate());
+                                label.on_hover_text(text);
+                            }
+                            None => {
+                                let hint =
+                                    ui.add(egui::Label::new(self.workspace_hint()).truncate());
+                                if !recent.is_empty() {
+                                    hint.on_hover_text(format!("Recent:\n{}", recent.join("\n")));
+                                }
+                            }
+                        }
+                    });
                     if let Some(selection) = &selection {
                         ui.separator();
                         ui.label(selection);
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if !saved.is_empty() {
-                            let label = ui.label(saved);
-                            if let Some(path) = &path {
-                                label.on_hover_text(path.display().to_string());
+                            let label = ui.add(egui::Label::new(saved).sense(if unsaved {
+                                egui::Sense::click()
+                            } else {
+                                egui::Sense::hover()
+                            }));
+                            let mut tip = path
+                                .as_ref()
+                                .map(|p| p.display().to_string())
+                                .unwrap_or_default();
+                            if unsaved {
+                                if !tip.is_empty() {
+                                    tip.push('\n');
+                                }
+                                tip.push_str("Click to save");
+                                if label.clicked() {
+                                    run = Some("file.save");
+                                }
+                            }
+                            if !tip.is_empty() {
+                                label.on_hover_text(tip);
                             }
                         }
                         if let Some(values) = &values {
@@ -99,13 +133,28 @@ impl NovoApp {
         Some((message.text.clone(), left))
     }
 
+    /// The last three info messages, oldest first, for the hover on the
+    /// idle hint: a message that faded is still one hover away.
+    fn recent_messages(&self) -> Vec<String> {
+        let mut texts: Vec<String> = self
+            .messages
+            .iter()
+            .rev()
+            .filter(|m| m.level == Level::Info)
+            .take(3)
+            .map(|m| m.text.clone())
+            .collect();
+        texts.reverse();
+        texts
+    }
+
     /// What to say when nothing else is happening.
     fn workspace_hint(&self) -> &'static str {
         if !self.is_open() {
             return "";
         }
         match self.workspace() {
-            Workspace::Schematic => "Q or Space to place · Ctrl+K to search · ? for keys",
+            Workspace::Schematic => "Q or Space to place · Ctrl+K to search",
             Workspace::Cabinet => "Drag a device onto the plate · Ctrl+K to search",
             _ => "",
         }

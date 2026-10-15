@@ -189,6 +189,10 @@ impl NovoApp {
         if let Err(reason) = commands::availability(info, &self.command_context()) {
             return Some(reason);
         }
+        if matches!(info.id, "file.remove_background" | "view.background") && !self.has_background()
+        {
+            return Some("This page has no DXF background");
+        }
         match Action::from_id(info.id) {
             Some(action) if !self.is_enabled(action) => Some("Not available now"),
             _ => None,

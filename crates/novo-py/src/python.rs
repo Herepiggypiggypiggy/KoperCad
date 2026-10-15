@@ -310,6 +310,21 @@ impl PyProject {
         to_py(py, &self.get()?.info())
     }
 
+    /// The issued revisions: index, date, author, description, and
+    /// ``snapshot`` (a kept copy exists to compare with).
+    fn revisions<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        to_py(py, &self.get()?.revisions())
+    }
+
+    /// What changed between two states; each is a revision index such as
+    /// ``"B"`` or ``"now"``. Gives ``rows`` (group, kind, label, page and
+    /// the fields with old and new values), ``info`` and ``sheets``.
+    /// Read only.
+    #[pyo3(signature = (from_, to = "now"))]
+    fn compare<'py>(&self, py: Python<'py>, from_: &str, to: &str) -> PyResult<Bound<'py, PyAny>> {
+        to_py(py, &self.get()?.compare(from_, to).map_err(err)?)
+    }
+
     fn pages<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         to_py(py, &self.get()?.pages())
     }

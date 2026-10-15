@@ -51,7 +51,11 @@ fn group_default(group: &str) -> Option<MenuPlace> {
 
 /// Commands whose menu differs from their group's.
 const PLACEMENTS: &[(&str, MenuPlace)] = &[
-    ("revision.issue", at("Check")),
+    ("revision.issue", under("File", "Revisions")),
+    ("revision.compare", under("File", "Revisions")),
+    ("file.import_dxf_background", under("File", "Import")),
+    ("file.remove_background", under("File", "Import")),
+    ("help.walkthrough", at("Help")),
     ("help.about", at("Help")),
     ("view.shortcuts", at("Help")),
     // Edit
