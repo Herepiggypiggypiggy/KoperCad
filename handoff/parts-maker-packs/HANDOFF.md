@@ -1,6 +1,6 @@
 # Handoff: Parts: maker packs
 
-Branch: `claude/project-thread-w953l7` (stacked on #512, branch `claude/project-thread-kmmhnd`). PR: see PROGRESS.md.
+Branch: `claude/project-thread-w953l7`, PR #547 (base main; #512 is merged).
 
 State: recipes, mapping engine, import wiring, Parts window steps and golden tests are in. Run `cargo test -p novo-parts` and `cargo test -p novo-app parts_import`.
 
