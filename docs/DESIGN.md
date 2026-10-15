@@ -178,9 +178,13 @@ references, so a page name never contains one: a page inserted where no
 whole number fits takes the next free letter (`3a` between `3` and `4`,
 then `3b`; the same 23 letters as generated sheets, §8), and a reference
 to it reads `3a.4`. Renaming a page to a name with a dot is refused with
-that reason. Revision fields come from the
-project's revisions, which also drive Changes mode and the pinned-flow
-freeze (§8). Owners: WS-03 draws the frame (`PageScene::frame`), WS-10 owns
+that reason. Between `3` and an existing `3a` no letter fits, so the
+lettered run moves up one letter (`3a` becomes `3b`) and the new page takes
+`3a`; references follow, since they point at pages. Frozen names never
+move: if the run has a frozen page, the new page goes at the end of the run
+and the status line says so ("inserted as 3d: 3a–3c are frozen").
+Revision fields come from the project's revisions, which also drive
+Changes mode and the pinned-flow freeze (§8). Owners: WS-03 draws the frame (`PageScene::frame`), WS-10 owns
 the reference format, and the frame choice is a rule like any other.
 
 **Saving.** There are no save prompts and no Save step to remember. A named

@@ -16,3 +16,4 @@
 2026-10-14 21:38 UTC Single click selects a symbol in the editor harness (new test); the Xvfb failure is outside SchematicView's input path; asked WS-03.
 2026-10-14 21:40 UTC Lead's letter-code call (K default, rule K|Q; MCB F, MPCB Q, overload F): editor already matches; pinned in catalog test. K|Q rule left for a later PR (needs a project-rule store and a contactor marker).
 2026-10-14 22:14 UTC #91 merged (READY from reviewer A and design reviewer). Branch restarted from main 97c9e34; follow-ups cherry-picked: dashed proposals per #92 + theme colours, pointer-scoped Delete, remembered declines, Pin.optional from library, artwork text + tag anchors.
+2026-10-15 03:10 UTC #113 merged (READY from reviewer A and design reviewer). Branch restarted from main; follow-up: declines as Dismissal records (#117), page names with letters and no dot (#116), 3/3a re-letter with frozen pages (#119), rename refusals.

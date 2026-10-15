@@ -574,3 +574,53 @@ fn undersized_wires_on_protective_devices() {
     let (project, _) = breaker_with_wire("iec/protection/rcd_2p", 40.0, Some(1.5));
     assert!(of_kind(&check(&project), ProblemKind::UndersizedWire).is_empty());
 }
+
+#[test]
+fn undersized_wires_are_found_past_terminals_on_the_load_side() {
+    // -F1 (16 A) -> 2.5 mm² -> -X1:1 -> 1.0 mm² -> -H1. The far wire is
+    // protected by -F1 too; a 1.0 mm² wire beyond -H1 is not -F1's.
+    let (project, (breaker, far, beyond)) = build(|tx| {
+        let page = tx.add_page("1")?;
+        let f1 = tx.add_device(tag("-F1"), "Breaker")?;
+        tx.set_property(f1, RATED_CURRENT_A, Some(Value::Float(16.0)))?;
+        let breaker = tx.place_symbol(
+            page,
+            "iec/protection/mcb_1p",
+            Placement::at(Point::new(0.0, 0.0)),
+            two_pin("1", "2"),
+            device_role(f1, true),
+        )?;
+        let x1 = tx.add_terminal_strip(tag("-X1"))?;
+        let t1 = tx.add_terminal(x1, "1")?;
+        let terminal = tx.place_symbol(
+            page,
+            "iec/terminals/terminal",
+            Placement::at(Point::new(0.0, 40.0)),
+            two_pin("1", "2"),
+            SymbolRole::Terminal {
+                terminals: vec![t1],
+            },
+        )?;
+        let h1 = tx.add_device(tag("-H1"), "Lamp")?;
+        let lamp = tx.place_symbol(
+            page,
+            "iec/signals/lamp",
+            Placement::at(Point::new(0.0, 80.0)),
+            two_pin("X1", "X2"),
+            device_role(h1, true),
+        )?;
+        let near = tx.connect(Endpoint::pin(breaker, 1), Endpoint::pin(terminal, 0))?;
+        let far = tx.connect(Endpoint::pin(terminal, 1), Endpoint::pin(lamp, 0))?;
+        let n = tx.add_junction(page, Point::new(0.0, 120.0))?;
+        let beyond = tx.connect(Endpoint::pin(lamp, 1), Endpoint::junction(n))?;
+        tx.update::<Wire>(near, |w| w.cross_section_mm2 = Some(2.5))?;
+        tx.update::<Wire>(far, |w| w.cross_section_mm2 = Some(1.0))?;
+        tx.update::<Wire>(beyond, |w| w.cross_section_mm2 = Some(1.0))?;
+        Ok((breaker, far, beyond))
+    });
+    let problems = check(&project);
+    let thin = of_kind(&problems, ProblemKind::UndersizedWire);
+    assert_eq!(thin.len(), 1, "{problems:#?}");
+    assert_eq!(thin[0].at, vec![AnyId::from(breaker), AnyId::from(far)]);
+    assert!(!thin[0].at.contains(&AnyId::from(beyond)));
+}

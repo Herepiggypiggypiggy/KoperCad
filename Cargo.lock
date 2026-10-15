@@ -1842,6 +1842,7 @@ dependencies = [
  "env_logger",
  "log",
  "lopdf",
+ "novo-cables",
  "novo-canvas",
  "novo-checks",
  "novo-core",
@@ -1888,6 +1889,7 @@ dependencies = [
 name = "novo-checks"
 version = "0.1.0"
 dependencies = [
+ "novo-cables",
  "novo-core",
  "novo-parts",
  "novo-terminals",

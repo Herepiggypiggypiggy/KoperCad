@@ -22,3 +22,4 @@
 2026-10-14 22:05 UTC main 067e56a merged into #87: fmt/clippy clean, 646/0/3.
 2026-10-14 22:15 UTC #99 (854f8cf) re-tested on main 067e56a + #87: 647/0/4. F4 split: (a) missing parts lists the strip device -> fixed by #99; (b) assign_part still puts a terminal block on the strip device -> open. outputs test now assigns terminal articles (3 x UT 2,5 + UT 2,5-PE) and checks the BOM. #99's own gap test gives PE the grey block.
 2026-10-14 22:20 UTC #99 merged; main c3c51a0 merged into #87, F4 tests un-ignored, textures_delta comment added. 659/0/2. F4 closed.
+2026-10-15 04:15 UTC Round 11 (F5 closed by #126) and Round 12 (Gate 2 assessment, gate2_live_pages.rs: engine live; gaps G2-1..G2-4) on main f3534dc: 722/0/3.

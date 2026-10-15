@@ -236,14 +236,39 @@ impl Editor {
     pub fn new_page(&mut self, document: &mut Document, after: PageId) -> Option<PageId> {
         self.leave_tool();
         match document.transact("New page", |tx| crate::pages::add_page(tx, Some(after))) {
-            Ok((page, changes)) => {
+            Ok(((page, note), changes)) => {
                 self.changes.merge(&changes);
-                self.notice = None;
+                self.notice = note;
                 Some(page)
             }
             Err(e) => {
                 self.notice = Some(e.to_string());
                 None
+            }
+        }
+    }
+
+    /// Renames a page as one undo step. A dotted, empty or taken name is
+    /// refused with the reason in the notice (DESIGN.md §3).
+    pub fn rename_page(&mut self, document: &mut Document, page: PageId, name: &str) -> bool {
+        let mut refused = None;
+        let result = document.transact("Rename page", |tx| {
+            refused = crate::pages::rename_page(tx, page, name).err();
+            Ok(())
+        });
+        match (refused, result) {
+            (Some(problem), _) => {
+                self.notice = Some(problem);
+                false
+            }
+            (None, Ok((_, changes))) => {
+                self.changes.merge(&changes);
+                self.notice = None;
+                true
+            }
+            (None, Err(e)) => {
+                self.notice = Some(e.to_string());
+                false
             }
         }
     }

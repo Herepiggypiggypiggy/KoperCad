@@ -24,6 +24,45 @@ How a PR is tested: its branch is merged onto the current `main` (a
 main `11363c1` passes fmt, clippy and all 232 workspace tests on Linux.
 **Every Gate 0 criterion is met.**
 
+## Round 12 (2026-10-15, main `f3534dc`): Gate 2, "terminal, cable and report pages generate live"
+
+New test file `crates/novo-tests/tests/gate2_live_pages.rs`. It starts from
+the Gate 1 motor starter with five generated pages (`20` terminals, `21`
+cables, `22` bill of materials, `23` devices, `24` wires), changes the
+schematic, and checks every report without a regenerate step.
+
+**The engine is live.** `novo_reports::LiveReports`, fed each change set,
+follows every edit, and the printed PDF follows too:
+
+| Test | Checks | State |
+| --- | --- | --- |
+| `reports_follow_every_edit` | Add `-X1:4`: a spare row on the strip, and the BOM orders 4 × UT 2,5. Add a core `BU` to `-W1`: the overview shows 5 cores, 4 used, and the cable table lists BU. Add `-K2`: the device list has it right after `-K1`. Add a wire: the wire list grows by one. After every edit, each live report equals a fresh generate, and the generated sheets draw the new rows. Undo of all four gives every report back | Passes |
+| `a_new_strip_gets_its_own_sheet` | A second strip `-X2` turns terminal page `20` into sheets `20a` and `20b`, and the strip tag is printed | Passes |
+| `the_pdf_prints_the_edit` | `-K2` and core `BU` appear in the next PDF export with no other step | Passes |
+
+**The app does not use any of it yet.** These are the Gate 2 gaps:
+
+| Gap | What is missing | Evidence | Suggested owner |
+| --- | --- | --- | --- |
+| **G2-1** | Nothing adds the generated pages. A project with a strip, a cable and parts has no terminal, cable, BOM, device or wire list page unless someone adds `PageKind::Generated` records by hand. A new project gets page `1` only. DESIGN.md §2 says these pages are automatic and live, in their own numbered sections after the schematic pages (§8) | `gap_the_project_gets_its_generated_pages` (ignored): the starter opened in `NovoApp` has none | WS-13 (which pages a project gets) with WS-01 (adding them on open and new) |
+| **G2-2** | The project panel lists a generated page once, by its record name (`20`), even when its report needs several sheets. It should list each sheet (`20a  Terminals · -X1`, `20b  Terminals · -X2`) so a sheet can be opened from the panel | `gap_the_project_panel_lists_each_generated_sheet` (ignored): `page_labels` gives `20`, not `20a`/`20b` | WS-01 |
+| **G2-3** | In the app, a generated page shows an empty frame. `novo-app` does not depend on `novo-reports`, holds no `LiveReports`, and never calls `PageScene::set_sheet`; only `novo-pdf` does. The printed PDF is right, the screen is not | Code: `crates/novo-app/Cargo.toml`, and `set_sheet` is only called in `crates/novo-pdf/src/lib.rs`. No headless test: the canvas draws through the GPU | WS-01 (hold one `LiveReports` per document, notify it where change sets go to storage and the canvas, pass sheets to the scene) |
+| **G2-4** | The Cables and Devices drawers say "come later" (`crates/novo-app/src/app/workbench.rs`, `view.cables_drawer` / `view.devices_drawer`). The Terminals drawer exists | Code | WS-01 with WS-12 (cables) |
+
+Not a gap: the 1-second budget for regenerating every report after an edit
+on the 10k stress project is covered by `novo-reports`' `tests/live.rs`.
+
+main `f3534dc` plus this round: fmt and clippy clean; **722 passed, 0
+failed, 3 ignored** (G2-1, G2-2 and the `widget.rs` doc example). Linux
+only; GitHub Actions is still down.
+
+## Round 11 (2026-10-15, main `f3534dc`): F5 closed, Gate 1 has no open gap
+
+#126 (WS-03) prints the strip tag beside the first terminal of each run, so
+`gap_pdf_names_the_terminal_strip` is un-ignored and passes. Re-tested on
+main `134576f` with #126 before it merged: 689 passed, 0 failed. Every
+Gate 1 gap test in `gate1_scenario.rs` now runs.
+
 ## Round 10 (2026-10-14, main `7bb466d` to `c3c51a0`): main after the cloud merges; the starter's outputs; F4 closed
 
 GitHub Actions is down, so main was re-tested locally after the cloud

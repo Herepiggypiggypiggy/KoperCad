@@ -212,6 +212,50 @@ fn generated_pages_print_as_named_sheets() {
     let (w, h) = doc.project().page(devices).expect("page").format.size_mm();
     assert_eq!((layout.width, layout.height), (w, h));
     assert!(layout.texts.iter().any(|t| t.text == "page 2 / 3"));
+
+    // The contents list names every sheet with what it shows; the page of
+    // an unknown report is listed as itself.
+    let toc = reports.get(doc.project(), "toc").expect("toc");
+    let listed: Vec<[String; 2]> = toc.sections[0]
+        .text_rows()
+        .into_iter()
+        .map(|r| [r[0].clone(), r[1].clone()])
+        .collect();
+    let expect = |n: &str, t: &str| [n.to_owned(), t.to_owned()];
+    assert_eq!(
+        listed,
+        [
+            expect("1", "Main circuit"),
+            expect("2", "Control circuit"),
+            expect("20a", "Devices"),
+            expect("20b", "Devices"),
+            expect("20c", "Devices"),
+            expect("21", ""),
+        ]
+    );
+}
+
+#[test]
+fn the_contents_list_names_what_each_sheet_shows() {
+    let mut doc = starter();
+    doc.transact("Terminal page", |tx| {
+        let page = tx.add_page("30")?;
+        tx.update::<Page>(page, |p| {
+            p.title = "Terminals".into();
+            p.kind = PageKind::Generated {
+                generator: "terminals".into(),
+            };
+        })
+    })
+    .expect("page");
+    let toc = LiveReports::standard()
+        .get(doc.project(), "toc")
+        .expect("toc")
+        .clone();
+    let last = toc.sections[0].text_rows().pop().expect("rows");
+    assert_eq!(last[0], "30");
+    assert_eq!(last[1], "Terminals · =A1+CAB-X1");
+    assert_eq!(last[3], "Generated: terminals");
 }
 
 #[test]

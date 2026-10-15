@@ -16,11 +16,10 @@ integration lead (session_011PfTJ1QaP1JQJPwXcFnxBE).
 - Standard-user installer verified in #3's CI.
 
 ## Next, in order
-1. Drive #87 to merge (main reviewer delta check after the #99 merge).
-2. When WS-03's F5 fix (after #103) merges: un-ignore `gap_pdf_names_the_terminal_strip` in a new PR from main.
-3. Gate 1 output test for generated pages in the PDF once #96 merges.
-4. Keep re-testing main after every merge; new round in TEST_REPORT.
-5. Windows run once GitHub Actions is back.
+1. Drive the Round 11-12 PR (Gate 2 assessment) to merge.
+2. Un-ignore G2-1 / G2-2 as their fixes merge; add a window test for G2-3 once the app holds `LiveReports` (e.g. a public way to read the sheet a page shows).
+3. Keep re-testing main after every merge; new round in TEST_REPORT.
+4. Windows run once GitHub Actions is back.
 
 ## Open questions
 - None blocking.

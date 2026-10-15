@@ -28,6 +28,7 @@ use novo_core::{Page, PageId, PageKind, Project};
 
 use crate::page::{PageLayout, PageSetup, ReportPage, layout_page, paginate};
 use crate::report::LiveReports;
+use crate::table::ReportOutput;
 
 /// The 23 letters sheet names use: no `i`, `l` or `o`.
 const ALPHABET: &[u8; 23] = b"abcdefghjkmnpqrstuvwxyz";
@@ -99,28 +100,10 @@ impl LiveReports {
         let PageKind::Generated { generator } = &page.kind else {
             return Vec::new();
         };
-        let setup = PageSetup::for_format(page.format);
         let Some(output) = self.get(project, generator) else {
             return Vec::new();
         };
-        let sheets = paginate(output, &setup);
-        // Every other page's name is taken, generated pages' own names too.
-        let others: BTreeSet<&str> = project
-            .pages()
-            .filter(|p| p.id != page.id)
-            .map(|p| p.name.as_str())
-            .collect();
-        let names = sheet_names(&page.name, sheets.len(), |n| others.contains(n));
-        sheets
-            .into_iter()
-            .zip(names)
-            .map(|(sheet, name)| GeneratedSheet {
-                page: page.id,
-                report: generator.clone(),
-                name,
-                sheet,
-            })
-            .collect()
+        sheets_for(project, page, generator, output)
     }
 
     /// Every sheet of every generated page, in page order.
@@ -151,4 +134,32 @@ impl LiveReports {
             &PageSetup::for_format(format),
         ))
     }
+}
+
+/// The sheets `output` fills on generated `page`, named by [`sheet_names`]
+/// with every other page's name taken.
+pub(crate) fn sheets_for(
+    project: &Project,
+    page: &Page,
+    generator: &str,
+    output: &ReportOutput,
+) -> Vec<GeneratedSheet> {
+    let sheets = paginate(output, &PageSetup::for_format(page.format));
+    // Every other page's name is taken, generated pages' own names too.
+    let others: BTreeSet<&str> = project
+        .pages()
+        .filter(|p| p.id != page.id)
+        .map(|p| p.name.as_str())
+        .collect();
+    let names = sheet_names(&page.name, sheets.len(), |n| others.contains(n));
+    sheets
+        .into_iter()
+        .zip(names)
+        .map(|(sheet, name)| GeneratedSheet {
+            page: page.id,
+            report: generator.to_owned(),
+            name,
+            sheet,
+        })
+        .collect()
 }

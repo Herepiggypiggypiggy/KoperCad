@@ -1,39 +1,38 @@
 # Tester handoff (rewritten each update)
 
-Updated: 2026-10-14 22:20 UTC (Round 10)
+Updated: 2026-10-15 04:15 UTC (Round 12)
 
 ## Where things are
-- Repo: Herepiggypiggypiggy/NovoElectric. Branch: `claude/project-thread-dft1m7` (the only branch this thread pushes).
-- Open PR **#87** (Rounds 9-10, tests only): Gate 1 through `NovoApp::execute`, the #38 gap tests, `outputs_of_the_starter` (checks, xrefs, BOM incl. one terminal block per terminal, PDF), F4 gap tests (both pass since #99). Main reviewer said READY on 2df3673; the main merge after #99 needs a delta check.
-- Only ignored test left in `gate1_scenario.rs`: `gap_pdf_names_the_terminal_strip` (F5). WS-03 has the fix queued after #103; un-ignore it in a new PR from main once that merges.
-- F4 closed by #99. The PE-article design check (PE terminal with a non-PE block) went to the outputs thread (novo-checks).
-- O1 (mcb3 tagged -F1 vs -Q1) is still an open WS-08 question; tests pin current behaviour.
+- Repo: Herepiggypiggypiggy/NovoElectric. Branch: `claude/project-thread-dft1m7` (the only branch this thread pushes), restarted from main `f3534dc` after #87 merged.
+- Gate 1: no open gap. #87 merged (window scenario, outputs, F4), #99 closed F4, #126 closed F5.
+- Gate 2 (Round 12, this branch's PR): `crates/novo-tests/tests/gate2_live_pages.rs`. Engine tests pass (LiveReports follows terminal, core, device and wire edits; new strip gets a sheet; PDF prints edits). Gaps G2-1 (nothing adds generated pages) and G2-2 (project panel lists sheets) are ignored tests; G2-3 (app shows generated pages empty, no LiveReports in novo-app) and G2-4 (Cables/Devices drawers "come later") are by inspection. The list went to the lead to route.
+- When a gap's fix merges: un-ignore its test in a new PR from main.
 
 ## How to resume
 ```
 cd NovoElectric && git fetch origin
-git checkout -B claude/project-thread-dft1m7 origin/main   # if #87 merged
-export CARGO_TARGET_DIR=$HOME/target-tester                # one per worktree
+git checkout -B claude/project-thread-dft1m7 origin/main   # if the PR merged
+export CARGO_TARGET_DIR=$HOME/target-tester
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
-GitHub Actions is down (billing), so checks run locally. Disk allowance is small: delete old target dirs (also in the scratchpad) before a full build.
+GitHub Actions is down (billing), so checks run locally. Disk allowance is small: a full build needs ~15 GB; delete the target dir when a build fails with "No space left".
 
 ## Rules (coordination/threads.md)
-- Before pushing, check the PR is still open and **not READY**. After READY, don't push unless the lead asks; follow-ups go in a new PR from main.
+- Before pushing, check the PR is still open and not READY. After READY, don't push unless the lead asks; follow-ups go in a new PR from main.
 - After every push, message the main reviewer (cse_016C9nTT8cN7voW8t1NQUG4W) with the new head SHA.
 - Commits end with Co-Authored-By and Claude-Session lines. PR bodies start with the claude-projects attribution block.
-- Only WS-02 changes the novo-core API. novo-tests uses public APIs only. Never edit the crate list or `[workspace.dependencies]`; new novo-tests deps use `.workspace = true`.
+- novo-tests uses public APIs only, deps with `.workspace = true`. Never edit the crate list or `[workspace.dependencies]`.
 
 ## Who to talk to
 - Integration lead: cse_01FiLvRBKEcNNHbQEGhYyL1S
 - Main reviewer: cse_016C9nTT8cN7voW8t1NQUG4W
-- WS-07 parts: cse_01H3m3ufThxMEzTtG41NrXaB; WS-03 canvas: cse_013KCL5cYRtSrq4yndv3Z7TD; Outputs (PDF/reports/checks): cse_01GNLWH7SKcFppZwCxZoC1rw
+- WS-07 parts: cse_01H3m3ufThxMEzTtG41NrXaB; WS-03 canvas: cse_013KCL5cYRtSrq4yndv3Z7TD; Outputs (PDF/reports/checks): cse_01GNLWH7SKcFppZwCxZoC1rw; WS-01 app shell: cse_01AYuFPxz6eQReQdtzYKLMmW
 
 ## Traps and decisions
-- `gate1_scenario.rs` `Store` trait: `doc()` and `run(Command)`; `FileStore`, `StorageBackend` and `Window` (`NovoApp`) implement it.
-- `starter_with_parts` gives devices their catalog part and -X1's terminals their articles via `assign_terminal_part` (UT 2,5 feed-through, `pe` query for UT 2,5-PE).
-- `NovoApp::with_settings(.., Default::default())`; a headless frame needs `novo_theme::apply(&ctx)`.
-- PDF text: terminals print only their names; `/Type /Page\n` counts page objects (`/Type /PageLabel` and `/Pages` also match the bare prefix).
-- Refused edits still advance `next_id`. Gate 1 fixture: 16 nets, 48 pins; since #99 the fixture keeps -X1's blocks in the strip style, not its part list.
+- `gate1_scenario.rs`: `Store` trait (`doc()`, `run(Command)`) over `FileStore`, `StorageBackend` and `Window` (`NovoApp`). A headless `NovoApp` frame needs `novo_theme::apply(&ctx)`.
+- Cable overview: `spare` counts cores marked spare (`cable.spare`), not unused ones; `used` counts cores with a wire.
+- PDF text checks: strings are uncompressed `(text)` operands; `/Type /Page\n` counts page objects.
+- Refused edits still advance `next_id`. Gate 1 fixture: -X1's blocks are in the strip style since #99.
+- O1 (MCB as -F1 or -Q1) is WS-08's call; tests pin current behaviour.

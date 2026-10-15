@@ -4,6 +4,7 @@
 //! bar and no status bar.
 
 mod checks;
+mod drawers;
 mod pdf;
 mod terminals;
 mod workbench;

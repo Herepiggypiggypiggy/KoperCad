@@ -1191,3 +1191,18 @@ fn a_declined_proposal_does_not_return() {
         3
     );
 }
+
+#[test]
+fn renaming_a_page_refuses_a_dot_without_an_undo_step() {
+    let (mut doc, page, mut editor) = setup();
+    assert!(!editor.rename_page(&mut doc, page, "1.1"));
+    assert_eq!(
+        editor.notice(),
+        Some("a dot is reserved for page.column references")
+    );
+    assert_eq!(doc.undo_label(), Some("Add page"));
+    assert!(editor.rename_page(&mut doc, page, "1a"));
+    assert_eq!(editor.notice(), None);
+    assert_eq!(doc.project().page(page).unwrap().name, "1a");
+    assert_eq!(doc.undo_label(), Some("Rename page"));
+}
