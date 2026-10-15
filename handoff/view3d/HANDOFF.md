@@ -1,15 +1,13 @@
 # 3D view (WS-29): handoff
 
-Updated 2026-10-15 19:15 UTC.
+Updated 2026-10-15 19:45 UTC.
 
 ## State
-- Repo herepiggypiggypiggy/kopercad. Branch `claude/project-thread-8laqbm` (the only branch this thread may push to; restart it from main after each merge).
-- Merged: #395 (design doc), #439 (crate skeleton: scene contract, camera, picking, culling, demo cabinet).
-- Renderer PR (draft, this branch): offscreen wgpu renderer (`render`, feature `gpu`), egui widget (`widget`, feature `egui`, default), `orbit` and `window` examples, GPU tests, measured numbers in the doc, wires as tubes with picking and marquee. Review nits from #439 are folded in (wires pickable, marquee across the eye plane, NaN note).
-- Stacked on the skeleton by other threads: scene model `build` (#391), look values and feel (#457), part geometry (#449, novo-interop).
-- Decisions already made (details in the doc): own small wgpu renderer drawing offscreen with its own depth, flat scene with instanced boxes, CPU picking and culling, render on demand, interactive and settled quality tiers, labels and view cube drawn by egui over the image.
-- UI entry point (section 12): third face of the Cabinet canvas (Plate / Table / 3D) and command `cabinet.view3d`; the host wiring belongs to the UI integration thread, no menu entry until hands-on tested.
-- Not done: no measurement on a real GPU (needs the owner's Windows laptop: `cargo run --release -p novo-view3d --example window`), hinge animation of the door, view cube and label layout (look thread, #457).
+- Repo herepiggypiggypiggy/kopercad. Branch `claude/project-thread-8laqbm` (the only branch this thread may push to; after a merge, `git fetch origin main && git merge origin/main`, since forced restarts are denied here).
+- Merged: #395 design doc, #439 skeleton, #481 renderer (offscreen wgpu, egui widget `widget::View3d`, `orbit` and `window` examples, GPU tests, wires as tubes with picking). Also on main from other threads: scene model `build` (#391), look values, feel, cube, labels, governor (#457).
+- Open work for this thread (follow-up PR): hinge/door animation driver, overlay colours in widget.rs moving into Look/palette, "?" badge vs dashed edge for guessed size (doc), hover tooltip and label chip, feel constants from the look thread's feel module. The look thread said it will wire cube, labels, outlines and governor into widget.rs: agree the split with it before touching widget.rs.
+- UI entry point (section 12): third face of the Cabinet canvas (Plate / Table / 3D) and command `cabinet.view3d`; host wiring belongs to the UI integration thread (session_01G52sVY5N34jPsrkqWukApR), who got the exact calls: `widget::install`, `View3d::new`, `View3d::show`. No menu entry until hands-on tested.
+- Not done: no measurement on a real GPU (owner's Windows laptop: `cargo run --release -p novo-view3d --example window`); coordinator PR to move dev-dependencies naga and pollster into `[workspace.dependencies]`.
 
 ## Resume
 ```
