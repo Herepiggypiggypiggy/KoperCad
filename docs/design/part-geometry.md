@@ -54,3 +54,13 @@ prints per level triangle counts, feature edges, GPU size and mesh health (open 
 ## Home
 
 The module is in `novo-interop` because the crate list is fixed. The final home is the `import` feature of `novo-view3d`, or a geometry crate the coordinator adds; the API is pure functions plus an optional disk cache, so moving it is mechanical.
+
+## Where the user meets it
+
+Proposed entries (to be built by the UI integration threads, not in this PR):
+
+- Parts library / part sheet: action "Import 3D model (STEP)" on a part, plus a status line "3D model: STEP, 480 triangles" or "Box from catalog size (reason)" using `MeshOrigin` and `Fallback`.
+- 3D cabinet view: parts show their mesh while `GeometryService` builds (box first, mesh when `Ready`).
+- Status of a failed model uses the cached failure message; "Retry" calls `forget(key)`.
+
+Status of the engine: complete and tested; no UI yet. Whether maker meshes are wanted at all is the owner's decision (3d-view.md section 12); this PR is a draft until then.
