@@ -2221,6 +2221,7 @@ fn never_mode_draws_and_proposes_nothing() {
     assert_eq!(doc.project().wires().count(), 0);
     assert!(editor.proposals().is_empty());
 }
+
 #[test]
 fn joining_a_wire_lands_on_the_grid_not_where_the_pointer_crosses() {
     let (mut doc, page, mut editor) = setup();
