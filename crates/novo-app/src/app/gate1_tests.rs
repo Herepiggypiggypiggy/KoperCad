@@ -610,6 +610,25 @@ fn marks_keys_and_export_follow_the_design() {
     d.key(egui::Key::Escape, egui::Modifiers::NONE);
     assert!(!d.app.wb.field.is_open());
 
+    // Held and dragged more than 4 px, Space pans the drawing with the
+    // pointer and opens nothing.
+    let viewport = |d: &mut Drive| d.app.canvas.schematic_ref().unwrap().canvas.viewport;
+    let before = viewport(&mut d);
+    d.frame_with(vec![at.clone(), space(true)]);
+    d.frame_with(vec![egui::Event::PointerMoved(egui::pos2(703.0, 400.0))]);
+    assert_eq!(viewport(&mut d).center, before.center, "not within 4 px");
+    d.frame_with(vec![egui::Event::PointerMoved(egui::pos2(760.0, 430.0))]);
+    d.frame_with(vec![egui::Event::PointerMoved(egui::pos2(780.0, 440.0))]);
+    d.frame_with(vec![space(false)]);
+    d.frame();
+    let after = viewport(&mut d);
+    let moved = (after.center - before.center) * before.zoom;
+    assert!(
+        (moved.x + 80.0).abs() < 0.5 && (moved.y + 40.0).abs() < 0.5,
+        "the drawing followed the pointer: {moved:?}"
+    );
+    assert!(!d.app.wb.field.is_open(), "a pan opens no field");
+
     // Picked from the command field (or run by a script), it opens at once.
     d.app.run_command(&ctx, "view.command_field_here", None);
     assert!(d.app.wb.field.is_open());
@@ -1046,4 +1065,146 @@ fn plc_commands_add_a_card_send_a_signal_and_renumber() {
     d.key(egui::Key::Enter, egui::Modifiers::NONE);
     assert!(last(&d).starts_with("Renumbered"), "{}", last(&d));
     assert_eq!(d.doc().undo_depth(), depth + 1);
+}
+
+#[test]
+fn the_tool_dock_switches_tools_and_steps_aside_for_a_drag() {
+    use novo_editor::Tool;
+    use novo_workflow::keymap::Focus;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    d.frame();
+    let dock = || ctx.memory(|m| m.area_rect(egui::Id::new("tool_dock")));
+    let home = dock().expect("the dock is shown");
+    let (_, canvas) = d.app.wb.canvas_area.unwrap();
+    assert!(
+        (home.center().x - canvas.center().x).abs() < 1.0,
+        "bottom centre"
+    );
+
+    // Connect is the third button: one click starts wiring, and keys stay
+    // with the drawing.
+    let side = novo_theme::tokens::CONTROL_HEIGHT + 4.0;
+    let spacing = ctx.global_style().spacing.item_spacing.x;
+    let margin = egui::Frame::popup(&ctx.global_style()).inner_margin.left as f32;
+    let at = egui::pos2(
+        home.left() + margin + 2.5 * side + 2.0 * spacing,
+        home.center().y,
+    );
+    let button = |pressed| egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    d.frame_with(vec![egui::Event::PointerMoved(at), button(true)]);
+    d.frame_with(vec![button(false)]);
+    d.frame();
+    let tool = |d: &Drive| d.app.canvas.schematic_ref().unwrap().editor.tool().clone();
+    assert!(matches!(tool(&d), Tool::Wire(_)), "{:?}", tool(&d));
+    assert_eq!(d.app.key_focus(&ctx), Focus::Canvas);
+    let centred =
+        |r: Option<egui::Rect>| r.is_some_and(|r| (r.center().x - canvas.center().x).abs() < 1.0);
+    assert!(centred(dock()), "an active tool alone does not move it");
+
+    // A drag from the drawing that comes near the dock moves it aside.
+    let home = dock().unwrap();
+    let from = canvas.center();
+    let near = egui::pos2(home.center().x, home.top() - 10.0);
+    let press = |pos, pressed| egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    d.frame_with(vec![egui::Event::PointerMoved(from), press(from, true)]);
+    d.frame_with(vec![egui::Event::PointerMoved(near)]);
+    d.frame();
+    let aside = dock().unwrap();
+    assert!(aside.center().x > home.right(), "{aside:?} vs {home:?}");
+    d.frame_with(vec![press(near, false)]);
+    d.frame();
+    d.key(egui::Key::Escape, egui::Modifiers::NONE);
+    d.key(egui::Key::Escape, egui::Modifiers::NONE);
+    d.frame();
+    assert!(matches!(tool(&d), Tool::Select), "{:?}", tool(&d));
+    assert!(centred(dock()), "back once the gesture ends");
+}
+
+#[test]
+fn shift_w_switches_the_wiring_mode_and_the_setting_keeps_it() {
+    use novo_editor::tool::WiringMode;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let mode = |d: &mut Drive| d.app.canvas.schematic().unwrap().editor.wire_mode();
+    assert_eq!(mode(&mut d), WiringMode::Corners, "Corners is the default");
+
+    let shift = egui::Modifiers::SHIFT;
+    d.key(egui::Key::W, shift);
+    d.frame();
+    assert_eq!(mode(&mut d), WiringMode::Lines);
+    assert_eq!(d.app.settings().wiring_mode(), WiringMode::Lines);
+
+    // A held key repeats; only the first press counts.
+    d.frame_with(vec![egui::Event::Key {
+        key: egui::Key::W,
+        physical_key: None,
+        pressed: true,
+        repeat: true,
+        modifiers: shift,
+    }]);
+    d.frame();
+    assert_eq!(mode(&mut d), WiringMode::Lines, "a repeat does not flip it");
+    d.frame_with(vec![egui::Event::Key {
+        key: egui::Key::W,
+        physical_key: None,
+        pressed: false,
+        repeat: false,
+        modifiers: shift,
+    }]);
+
+    d.key(egui::Key::W, shift);
+    d.frame();
+    assert_eq!(mode(&mut d), WiringMode::Corners);
+
+    // A new session starts in the saved mode.
+    let mut settings = Settings::default();
+    settings.set_wiring_mode(WiringMode::Lines);
+    let mut again = NovoApp::with_settings(
+        Box::new(StorageBackend::with_untitled_dir(dir.path().join("u2"))),
+        Box::new(EditorCanvas::default()),
+        settings,
+    );
+    let ctx2 = egui::Context::default();
+    novo_theme::apply(&ctx2);
+    let mut out = ctx2.run_ui(egui::RawInput::default(), |ui| again.show(ui));
+    out.textures_delta.clear();
+    assert_eq!(
+        again.canvas.schematic().map(|v| v.editor.wire_mode()),
+        Some(WiringMode::Lines)
+    );
+}
+
+#[test]
+fn a_refusal_in_the_dock_and_the_place_key_come_from_the_keymap() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert!(d.app.wb.keymap.shortcut_text("tool.place").is_some());
+    // A refusal sets the editor's notice; the dock draws it (Error tint and
+    // icon) without trouble, and the notice is what tells it apart.
+    let view = d.app.canvas.schematic().unwrap();
+    assert!(!view.editor.begin_place("no/such/symbol", None));
+    assert!(view.editor.notice().is_some());
+    d.frame();
+    let text = d.app.canvas.schematic().unwrap().status_text();
+    assert!(text.is_some_and(|t| t.contains("No symbol")));
 }

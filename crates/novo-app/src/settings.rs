@@ -1,5 +1,6 @@
 //! Preferences remembered between sessions.
 
+use novo_editor::tool::WiringMode;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -18,10 +19,29 @@ pub struct Settings {
     pub recent_projects: Vec<PathBuf>,
     /// Ids of recently run actions, newest first; the palette lists them first.
     pub recent_actions: Vec<String>,
+    /// How the wire tool takes clicks, `"corners"` or `"lines"`: the
+    /// person's preference, not the project's (docs/design/wiring-modes.md).
+    pub wiring_mode: String,
 }
 
 impl Settings {
     pub const STORAGE_KEY: &str = "novo_settings";
+
+    /// The wiring mode; Corners unless the person chose Lines.
+    pub fn wiring_mode(&self) -> WiringMode {
+        match self.wiring_mode.as_str() {
+            "lines" => WiringMode::Lines,
+            _ => WiringMode::Corners,
+        }
+    }
+
+    pub fn set_wiring_mode(&mut self, mode: WiringMode) {
+        self.wiring_mode = match mode {
+            WiringMode::Corners => "corners",
+            WiringMode::Lines => "lines",
+        }
+        .to_owned();
+    }
 
     pub fn remember_recent(&mut self, path: &Path) {
         self.recent_projects.retain(|p| p != path);

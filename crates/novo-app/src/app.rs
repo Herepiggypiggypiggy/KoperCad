@@ -4,6 +4,7 @@
 //! bar and no status bar.
 
 mod checks;
+mod dock;
 mod drawers;
 mod pdf;
 mod plc;
@@ -625,6 +626,7 @@ impl NovoApp {
 
         let mut picked: Vec<Action> = Vec::new();
         self.escape_popups(&ctx);
+        self.space_pan(&ctx);
         self.space_released(&ctx);
         self.track_pointer(&ctx);
         let commands = if self.modal_open() {
@@ -674,6 +676,8 @@ impl NovoApp {
                 self.outline_flyout(&ctx, canvas_rect, &mut picked);
             }
             self.hud(&ctx, canvas_rect);
+            self.sync_wiring_mode();
+            self.tool_dock(&ctx, canvas_rect);
         }
         self.toasts(&ctx, canvas_rect);
 
@@ -1076,9 +1080,17 @@ impl NovoApp {
         });
     }
 
-    /// Cursor position and friends, faint, at the canvas's top right.
+    /// Cursor position and friends, faint, at the canvas's top right. On
+    /// the drawing, the step hint is in the tool dock instead.
     fn hud(&self, ctx: &egui::Context, canvas: egui::Rect) {
-        let Some(text) = self.canvas.status_text() else {
+        let text = match self.canvas.schematic_ref() {
+            Some(view) => view
+                .editor
+                .cursor()
+                .map(|p| format!("X {:.1} mm  Y {:.1} mm", p.x, p.y)),
+            None => self.canvas.status_text(),
+        };
+        let Some(text) = text else {
             return;
         };
         egui::Area::new(egui::Id::new("hud"))

@@ -15,6 +15,7 @@ use novo_canvas::model::item_id;
 use novo_checks::Problem;
 use novo_core::{AnyId, ChangeSet, DeviceId, Document, SymbolId};
 use novo_editor::EditorKey;
+use novo_editor::tool::WiringMode;
 use novo_symbols::Library;
 use novo_workflow::commands::Context;
 use novo_workflow::keymap::{FAVOURITE_COMMANDS, Focus, Keymap};
@@ -65,6 +66,11 @@ pub(crate) struct Workbench {
     pub(super) space_down: Option<egui::Pos2>,
     /// The pointer on the drawing (mm), when it is over the canvas.
     pub(super) pointer_world: Option<novo_core::Point>,
+    /// Where a Space-held pan last moved the drawing from, once the
+    /// pointer has gone more than 4 px from `space_down`.
+    pub(super) space_pan: Option<egui::Pos2>,
+    /// The tool dock's size last frame, to tell where it would sit.
+    pub(super) dock_size: egui::Vec2,
     /// Shift+P: false hides the marks on the drawing (counters stay).
     pub(super) marks: bool,
     /// Design-check results for one project revision.
@@ -110,6 +116,8 @@ impl Default for Workbench {
             proposal: 0,
             space_down: None,
             pointer_world: None,
+            space_pan: None,
+            dock_size: egui::Vec2::ZERO,
             marks: true,
             problems: None,
             pill_rect: egui::Rect::NOTHING,
@@ -166,6 +174,7 @@ const APP_COMMANDS: &[&str] = &[
     "plc.add_card",
     "plc.to_plc",
     "plc.renumber_io",
+    "wire.mode",
 ];
 
 /// Whether the app can run a command now (not "comes later").
@@ -415,6 +424,13 @@ impl NovoApp {
             "check.problems" => self.show_issues(false),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),
+            "wire.mode" => {
+                let mode = match self.settings.wiring_mode() {
+                    WiringMode::Corners => WiringMode::Lines,
+                    WiringMode::Lines => WiringMode::Corners,
+                };
+                self.set_wiring_mode(mode, false);
+            }
             "export.pdf" => {
                 self.export_pdf();
             }
@@ -615,6 +631,32 @@ impl NovoApp {
         }
     }
 
+    /// Space held and dragged more than 4 px pans the drawing with the
+    /// pointer (DESIGN.md §4); a tap opens the field on release.
+    pub(super) fn space_pan(&mut self, ctx: &egui::Context) {
+        let Some(down) = self.wb.space_down else {
+            self.wb.space_pan = None;
+            return;
+        };
+        let Some(pointer) = ctx.input(|i| i.pointer.latest_pos()) else {
+            return;
+        };
+        let from = match self.wb.space_pan {
+            Some(from) => from,
+            None if pointer.distance(down) > 4.0 => down,
+            None => return,
+        };
+        let delta = pointer - from;
+        if let Some(view) = self.canvas.schematic() {
+            view.canvas
+                .viewport
+                .pan_by_screen(novo_canvas::Vec2::new(delta.x, delta.y));
+        }
+        self.wb.space_pan = Some(pointer);
+        ctx.set_cursor_icon(egui::CursorIcon::Grabbing);
+        ctx.request_repaint();
+    }
+
     /// Opens the field for a tapped Space once it is released.
     pub(super) fn space_released(&mut self, ctx: &egui::Context) {
         let Some(down) = self.wb.space_down else {
@@ -633,12 +675,16 @@ impl NovoApp {
             });
             (up, i.pointer.latest_pos())
         });
-        if !released {
+        // A Space let go while another window had the keyboard sends no
+        // release; it is no longer down either way.
+        let held = ctx.input(|i| i.key_down(egui::Key::Space));
+        if !released && held {
             return;
         }
         self.wb.space_down = None;
+        let panned = self.wb.space_pan.take().is_some();
         let moved = pointer.map_or(0.0, |p| p.distance(down));
-        if moved <= 4.0 {
+        if released && !panned && moved <= 4.0 {
             self.wb.field.open(Mode::All, pointer.or(Some(down)));
         }
     }
