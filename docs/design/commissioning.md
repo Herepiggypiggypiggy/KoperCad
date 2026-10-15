@@ -33,7 +33,7 @@ through its terminals). Each target kind has the checks that make sense for it:
 | Device | Labelled, Tested |
 
 A *check* is a fixed kind (`Continuity`, `Torque`, `Labelled`, `Tested`) with a state per target:
-`Open`, `Passed`, `Failed`. Defaults: everything starts `Open`. Which checks apply is a pure function
+`Pending`, `Passed`, `Failed`, `NotApplicable`. Defaults: everything starts `Pending`. Which checks apply is a pure function
 of the target kind, so progress totals are computed from the model, never stored. A target added after
 commissioning started simply appears as open; a deleted target's records are ignored and cleaned up on
 save.
@@ -46,11 +46,11 @@ the continuity reading in ohm) and note.
 
 A punch item is an open issue, either linked to a target or free-standing:
 
-- title, note, severity (Blocker, Major, Minor), state (Open, Fixed, Closed), raised by/at, closed by/at;
+- title, note, severity (Minor, Major, Blocking), state (Open, Fixed, Verified, WontFix), raised by/at, closed by/at;
 - optional target (wire, terminal, device, or a page) so a click jumps to it on the canvas.
 
 A `Failed` check creates a linked punch item automatically (so a failure can never be forgotten);
-fixing the item sets the check back to `Open` for a re-test. Items can also be added by hand for
+fixing the item sets the check back to `Pending` for a re-test. Items can also be added by hand for
 things that are not drawn ("door seal damaged").
 
 ## Progress
@@ -92,6 +92,10 @@ tables; a newer file is refused as today.
 - `novo-cli`: `kopercad-cli commissioning-report project.novo --csv out.csv --pdf out.pdf`.
 
 ## Report
+
+Owned by the sibling thread "Commissioning report and tablet layout". It defines a plain
+`novo_reports::commissioning::CommissioningInput` (sign-offs, check rows, punch rows); this crate only
+provides `to_report_input`. The sections below are the agreed content.
 
 A `ReportOutput` with these sections, so the PDF and the CSV come from the same rows:
 
