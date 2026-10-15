@@ -13,7 +13,7 @@
 //! IEC 60617 artwork; until then [`PlaceholderArt`] draws a box with pin
 //! stubs so every symbol is visible and connectable.
 
-use crate::scene::{Item, ItemId, Layer, LayerId, Scene, Sheet, SnapPoint};
+use crate::scene::{Hit, Item, ItemId, Layer, LayerId, Scene, Sheet, SnapPoint};
 use crate::shape::{Placement, Primitive, Shape};
 use crate::style::{Color, Stroke};
 use crate::text::{Anchor, Label};
@@ -492,6 +492,16 @@ pub struct PageScene {
     pub style: ModelStyle,
 }
 
+/// What a double click acts on ([`PageScene::double_click_target`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DoubleClickTarget {
+    /// Text to edit: the object that owns it (a symbol, wire or text record).
+    Text(AnyId),
+    Component(SymbolId),
+    Wire(WireId),
+    Empty,
+}
+
 /// Item id of a model object.
 pub fn item_id(id: impl Into<AnyId>) -> ItemId {
     ItemId(id.into().raw())
@@ -550,6 +560,26 @@ impl PageScene {
     /// The model object behind a canvas item.
     pub fn model_id(&self, item: ItemId) -> Option<AnyId> {
         self.ids.get(&item).copied()
+    }
+
+    /// What a double click at a pick should act on: the text when text was
+    /// hit (a tag, a wire number or a free text), else the component or
+    /// wire, else nothing. Wires are told from components so a double click
+    /// on a wire can end it there while one on text edits it.
+    pub fn double_click_target(&self, hit: Option<&Hit>) -> DoubleClickTarget {
+        let Some(hit) = hit else {
+            return DoubleClickTarget::Empty;
+        };
+        let Some(id) = self.model_id(hit.id) else {
+            return DoubleClickTarget::Empty;
+        };
+        match id {
+            AnyId::Text(_) => DoubleClickTarget::Text(id),
+            _ if hit.label.is_some() => DoubleClickTarget::Text(id),
+            AnyId::Symbol(s) => DoubleClickTarget::Component(s),
+            AnyId::Wire(w) => DoubleClickTarget::Wire(w),
+            _ => DoubleClickTarget::Empty,
+        }
     }
 
     /// Replaces the notes drawn next to symbols (cross references). Only
@@ -1212,6 +1242,14 @@ impl PageScene {
                     Shape::circle(p, self.style.pin_joint_radius),
                     self.style.pin_joint_color,
                 ));
+            }
+        }
+        // An open end (a wire ended unconnected) shows a ring and a flag.
+        let n = pts.len();
+        for (e, end, inner) in [(w.from, pts[0], pts[1]), (w.to, pts[n - 1], pts[n - 2])] {
+            if matches!(e, Endpoint::Free { .. }) {
+                item.primitives
+                    .extend(wire_end_glyph(end, end - inner, &self.style));
             }
         }
         if let Some(n) = w.number.as_deref().filter(|n| !n.is_empty()) {
@@ -2325,6 +2363,89 @@ mod tests {
         // Text is pickable on its own.
         let hit = ps.scene().pick(Vec2::new(100.0, 101.0), 0.5, 2.0).unwrap();
         assert_eq!(hit.label, Some(1));
+    }
+
+    #[test]
+    fn an_open_wire_end_shows_a_ring_and_a_flag() {
+        let mut doc = Document::default();
+        let ((page, closed, open), _) = doc
+            .transact("wires", |tx| {
+                let page = tx.add_page("1")?;
+                let x1 = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+                let mut pins = Vec::new();
+                for x in [100.0, 140.0] {
+                    let t = tx.add_terminal(x1, "1")?;
+                    pins.push(tx.place_symbol(
+                        page,
+                        "iec/terminal",
+                        MPlacement::at(Point::new(x, 50.0)),
+                        vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                        SymbolRole::Terminal { terminals: vec![t] },
+                    )?);
+                }
+                let closed = tx.connect(Endpoint::pin(pins[0], 1), Endpoint::pin(pins[1], 0))?;
+                let open = tx.connect(
+                    Endpoint::pin(pins[0], 0),
+                    Endpoint::Free {
+                        at: Point::new(100.0, 20.0),
+                    },
+                )?;
+                Ok((page, closed, open))
+            })
+            .unwrap();
+        let ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let count = |w| ps.scene().get(item_id(w)).unwrap().primitives.len();
+        // The open wire has the closed wire's line and dot plus ring, pole
+        // and pennant.
+        assert_eq!(count(open), 1 + 1 + 3);
+        assert_eq!(count(closed), 1 + 2);
+        // The ring sits on the open end.
+        let ring = &ps.scene().get(item_id(open)).unwrap().primitives[2];
+        let b = ring.shape.bounds();
+        assert!((b.center() - Vec2::new(100.0, 20.0)).length() < 1e-3);
+    }
+
+    #[test]
+    fn double_click_tells_text_component_and_wire_apart() {
+        let mut doc = Document::default();
+        let ((page, sym, wire), _) = doc
+            .transact("dc", |tx| {
+                let page = tx.add_page("1")?;
+                let x1 = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+                let t = tx.add_terminal(x1, "1")?;
+                let sym = tx.place_symbol(
+                    page,
+                    "iec/terminal",
+                    MPlacement::at(Point::new(100.0, 50.0)),
+                    vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                    SymbolRole::Terminal { terminals: vec![t] },
+                )?;
+                let wire = tx.connect(
+                    Endpoint::pin(sym, 0),
+                    Endpoint::Free {
+                        at: Point::new(100.0, 20.0),
+                    },
+                )?;
+                Ok((page, sym, wire))
+            })
+            .unwrap();
+        let ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let hit = |id: ItemId, label| Hit {
+            id,
+            distance: 0.0,
+            label,
+        };
+        let t = |h| ps.double_click_target(Some(&h));
+        assert_eq!(
+            t(hit(item_id(sym), None)),
+            DoubleClickTarget::Component(sym)
+        );
+        assert_eq!(t(hit(item_id(wire), None)), DoubleClickTarget::Wire(wire));
+        assert_eq!(
+            t(hit(item_id(sym), Some(0))),
+            DoubleClickTarget::Text(AnyId::Symbol(sym))
+        );
+        assert_eq!(ps.double_click_target(None), DoubleClickTarget::Empty);
     }
 
     #[test]
