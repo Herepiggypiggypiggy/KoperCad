@@ -236,6 +236,8 @@ pub enum SolveOp {
     Command(CommandOp),
     Place(PlaceOp),
     Wire(WireOp),
+    Tee(TeeOp),
+    FeedRow(FeedRowOp),
     Select(SelectOp),
     Page(PageOp),
 }
@@ -261,12 +263,54 @@ pub struct PlaceArgs {
     pub page: String,
     pub x: f64,
     pub y: f64,
+    /// Place it as another function of this existing device (a contact
+    /// image of `-K1`) instead of a new device.
+    #[serde(default)]
+    pub parent: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WireOp {
     pub wire: [String; 2],
+    /// Bend points the person clicks on the way, in millimetres.
+    #[serde(default)]
+    pub via: Vec<[f64; 2]>,
+    /// `corners` or `lines`; the wiring mode the wire is drawn in.
+    #[serde(default)]
+    pub mode: Option<String>,
+}
+
+/// A wire from a pin to a pin that starts with a T on `onto`'s wire at a
+/// point, as dragging a wire onto another one does.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TeeOp {
+    pub tee: TeeArgs,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TeeArgs {
+    pub from: String,
+    pub onto: String,
+    pub at: [f64; 2],
+}
+
+/// A row of potential feeds, one per name, side by side from a point.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FeedRowOp {
+    pub feed_row: FeedRowArgs,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FeedRowArgs {
+    pub names: Vec<String>,
+    pub page: String,
+    pub x: f64,
+    pub y: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -396,6 +440,9 @@ impl Lesson {
                     .validate()
                     .map_err(|why| invalid(at(&step.id), why))?;
                 markup::parse_markup(&note.text).map_err(markup_fail)?;
+            }
+            if let Some(check) = &step.expect {
+                check.validate().map_err(|why| invalid(at(&step.id), why))?;
             }
             if step.expect.is_none() && !step.solve.is_empty() {
                 return Err(invalid(at(&step.id), "a reading step has nothing to solve"));
@@ -544,6 +591,24 @@ text = "That is all of it."
             Lesson::parse(&bad),
             Err(LessonError::UnknownKind(_))
         ));
+    }
+
+    #[test]
+    fn solve_operations_parse() {
+        let text = GOOD.replace(
+            "solve = [ { wire = [\"-F1:2\", \"-K1:1\"] }, { command = \"edit.escape\" } ]",
+            "solve = [ { wire = [\"-F1:2\", \"-K1:1\"], via = [[40, 8], [40, 16]], mode = \"lines\" }, { tee = { from = \"-K1:13\", onto = \"-S2:13\", at = [80, 96] } }, { feed_row = { names = [\"L1\", \"L2\"], page = \"1\", x = 80, y = 20 } }, { place = { symbol = \"iec/contacts/no\", parent = \"-K1\", page = \"1\", x = 1, y = 2 } }, { select = \"-K1\" }, { page = \"1\" } ]",
+        );
+        let lesson = Lesson::parse(&text).unwrap();
+        let ops = &lesson.steps[1].solve;
+        assert!(
+            matches!(&ops[0], SolveOp::Wire(w) if w.via.len() == 2 && w.mode.as_deref() == Some("lines"))
+        );
+        assert!(matches!(&ops[1], SolveOp::Tee(_)));
+        assert!(matches!(&ops[2], SolveOp::FeedRow(f) if f.feed_row.names.len() == 2));
+        assert!(matches!(&ops[3], SolveOp::Place(p) if p.place.parent.as_deref() == Some("-K1")));
+        assert!(matches!(&ops[4], SolveOp::Select(_)));
+        assert!(matches!(&ops[5], SolveOp::Page(_)));
     }
 
     #[test]

@@ -312,6 +312,39 @@ fn lint_lesson(
                         format!("command `{}` is not in this build", c.command),
                     );
                 }
+                SolveOp::Tee(t) => {
+                    for pin in [&t.tee.from, &t.tee.onto] {
+                        if project.is_some_and(|p| pins_named(p, pin).is_empty()) {
+                            sink.warn(
+                                Some(step),
+                                format!("pin `{pin}` is not in the sample project"),
+                            );
+                        }
+                    }
+                }
+                SolveOp::Place(pl) => {
+                    if let Some(parent) = &pl.place.parent
+                        && project
+                            .is_some_and(|p| !p.devices().any(|d| tag_matches(&d.tag, parent)))
+                    {
+                        sink.warn(
+                            Some(step),
+                            format!("device `{parent}` is not in the sample project at the start"),
+                        );
+                    }
+                    if !pages_ok(&pl.place.page) {
+                        sink.warn(
+                            Some(step),
+                            format!("page `{}` is not in the sample project", pl.place.page),
+                        );
+                    }
+                }
+                SolveOp::FeedRow(f) if !pages_ok(&f.feed_row.page) => {
+                    sink.warn(
+                        Some(step),
+                        format!("page `{}` is not in the sample project", f.feed_row.page),
+                    );
+                }
                 SolveOp::Wire(w) => {
                     for pin in &w.wire {
                         if project.is_some_and(|p| pins_named(p, pin).is_empty()) {

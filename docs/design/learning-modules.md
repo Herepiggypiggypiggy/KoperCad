@@ -210,14 +210,15 @@ now has X".
 | Check | True when |
 | --- | --- |
 | `{ wire = { from = "-F1:2", to = "-K1:1" } }` | a wire (or a routed chain through junctions) joins those pins |
-| `{ device = { tag = "-K2", symbol = "iec/contactors/coil" } }` | a device with that tag (and optional symbol key) exists |
-| `{ count = { kind = "symbol", page = "Main circuit", at_least = 4 } }` | that many entities exist |
+| `{ device = { tag = "-K2", symbol = "iec/contactors/coil" } }` | a device with that tag and/or a symbol of that key exists; give `symbol` alone when the program assigns the tag, and `at_least` to count |
+| `{ count = { kind = "symbol", page = "Main circuit", at_least = 4 } }` | that many entities exist; kinds are symbol, wire, device, page, cable, text, junction and feed (feed symbols and pins that define a potential) |
 | `{ field = { device = "-M1", name = "part", is_set = true } }` | a property is set or equals a value |
 | `{ cable = { name = "-W1", cores_at_least = 4 } }` | a cable exists |
 | `{ problem_free = "wire.overlap" }` | the named design check reports nothing (the shell passes the ids that report something in `Facts`, so the engine needs no `novo-checks`) |
 | `{ potential = { wire = "-F1:2", is = "L1" } }` | the net of that pin carries that potential |
+| `{ potential_kind = { kind = "protective_earth", page = "Motor feeder" } }` | some wire (on that page) is on a net with a potential of that kind |
 | `{ wiring_mode = "lines" }` | the wiring mode setting |
-| `{ live = true }`, `{ coil_on = "-K1" }`, `{ lit = "-K1:A1" }` | the live view is on, a coil is energized, a pin carries voltage (the shell passes these in `Facts`) |
+| `{ live = true }`, `{ coil_on = "-K1" }`, `{ pole_closed = "-S1" }`, `{ lit = "-K1:A1" }` | the live view is on, a coil is energized, a pole is closed, a pin carries voltage (the shell passes these in `Facts`; "released" is `{ not = { coil_on = ... } }`) |
 
 Anything that is shell or simulation state rather than document state (tool, page, selection,
 zoom, wiring mode, live view, design-check results) arrives in `Facts`, filled in by the app. That is
@@ -331,9 +332,11 @@ CI (all run in the normal `cargo test --workspace`, Linux, no window)
   opened, then every step's `solve` is run in order through the real command path and the step's
   `expect` must become true. If a lesson passes, a person who does the same things gets the same
   ticks. This is also how a cloud thread without a screen knows its lesson works.
-- `solve` operations: `{ command = "id", arg = "..." }`, `{ place = { symbol, page, x, y } }`,
-  `{ wire = ["tag:pin", "tag:pin"] }`, `{ select = "-K1" }`, `{ page = "name" }`,
-  `{ cable = { name, wires = [...] } }`. New operations are added with the check kinds above.
+- `solve` operations: `{ command = "id", arg = "..." }`, `{ place = { symbol, page, x, y, parent } }`
+  (`parent` places it as another function of an existing device, such as a contact image of `-K1`),
+  `{ wire = ["tag:pin", "tag:pin"], via = [[x, y]], mode = "lines" }`,
+  `{ tee = { from, onto, at = [x, y] } }` (a wire that starts with a T on another wire),
+  `{ feed_row = { names = ["L1", "L2"], page, x, y } }`, `{ select = "-K1" }`, `{ page = "name" }`. New operations are added with the check kinds above.
 
 Authoring loop for a thread with no window: write `lesson.toml` and `project.json`, run
 `cargo test -p novo-learn -p novo-app learn`, read the report. For someone with the app:

@@ -9,7 +9,7 @@
 
 use std::collections::BTreeSet;
 
-use novo_core::{DeviceTag, Netlist, PinRef, Project, Value};
+use novo_core::{DeviceTag, Netlist, PinRef, PotentialKind, Project, Value};
 use serde::Deserialize;
 
 /// Something the person did, reported by the application.
@@ -48,6 +48,8 @@ pub struct Facts {
     pub live_coils: BTreeSet<String>,
     /// Pin designations (`-K1:A1`) that carry voltage in the live view.
     pub live_pins: BTreeSet<String>,
+    /// Tags of the devices with a pole closed in the live view.
+    pub live_closed: BTreeSet<String>,
 }
 
 /// A check, as written in a lesson file (`expect = { ... }`).
@@ -67,7 +69,9 @@ pub enum Check {
     Live(bool),
     CoilOn(String),
     Lit(String),
+    PoleClosed(String),
     Potential(PotentialCheck),
+    PotentialKind(PotentialKindCheck),
     Wire(WireCheck),
     Device(DeviceCheck),
     Count(CountCheck),
@@ -88,6 +92,17 @@ pub struct PotentialCheck {
     pub is: String,
 }
 
+/// Some wire (on this page, when given) is on a net whose potential is of
+/// this kind: `line`, `neutral`, `protective_earth`, `pen`, `dc_positive`,
+/// `dc_negative`, ...
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PotentialKindCheck {
+    pub kind: PotentialKind,
+    #[serde(default)]
+    pub page: Option<String>,
+}
+
 /// Two pins, written `tag:pin` as the inspector shows them, are on one net.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -96,13 +111,22 @@ pub struct WireCheck {
     pub to: String,
 }
 
-/// A device with this tag exists, optionally with a symbol of this key.
+/// Devices exist: with this tag, with a symbol of this key, or both. Give
+/// `symbol` alone when the tag is assigned by the program (auto tags); then
+/// `at_least` counts the devices.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DeviceCheck {
-    pub tag: String,
+    #[serde(default)]
+    pub tag: Option<String>,
     #[serde(default)]
     pub symbol: Option<String>,
+    #[serde(default = "one")]
+    pub at_least: usize,
+}
+
+fn one() -> usize {
+    1
 }
 
 /// Which kind of thing a count check counts.
@@ -116,6 +140,8 @@ pub enum CountKind {
     Cable,
     Text,
     Junction,
+    /// Potential feeds: feed symbols and pins that define a potential.
+    Feed,
 }
 
 /// At least this many of a kind exist, optionally on one page or of one
@@ -183,6 +209,12 @@ impl Check {
                 .live_coils
                 .iter()
                 .any(|have| tag_matches_text(have, tag)),
+            Check::PoleClosed(tag) => cx
+                .facts
+                .live_closed
+                .iter()
+                .any(|have| tag_matches_text(have, tag)),
+            Check::PotentialKind(p) => potential_kind_holds(cx, p),
             Check::Lit(pin) => cx.facts.live_pins.iter().any(|have| same_pin(have, pin)),
             Check::Potential(p) => potential_holds(cx, p),
             Check::Wire(w) => wire_joined(cx, &w.from, &w.to),
@@ -207,6 +239,19 @@ impl Check {
             Check::All(v) | Check::Any(v) => v.iter().any(Check::reads_events),
             Check::Not(c) => c.reads_events(),
             _ => false,
+        }
+    }
+
+    /// Shape rules a lesson parse cannot express.
+    pub fn validate(&self) -> Result<(), String> {
+        match self {
+            Check::Device(d) if d.tag.is_none() && d.symbol.is_none() => {
+                Err("a device check needs a tag, a symbol or both".to_owned())
+            }
+            Check::Device(d) if d.at_least == 0 => Err("at_least starts at 1".to_owned()),
+            Check::All(v) | Check::Any(v) => v.iter().try_for_each(Check::validate),
+            Check::Not(c) => c.validate(),
+            _ => Ok(()),
         }
     }
 
@@ -293,6 +338,21 @@ fn same_pin(have: &str, want: &str) -> bool {
     }
 }
 
+fn potential_kind_holds(cx: &Context<'_>, check: &PotentialKindCheck) -> bool {
+    cx.project
+        .wires()
+        .filter(|w| {
+            check
+                .page
+                .as_ref()
+                .is_none_or(|name| page_matches(cx.project, w.page, name))
+        })
+        .filter_map(|w| cx.netlist.net_of_wire(w))
+        .filter_map(|net| cx.netlist.net(net).potential())
+        .filter_map(|id| cx.project.potential(id))
+        .any(|p| p.kind == check.kind)
+}
+
 fn potential_holds(cx: &Context<'_>, check: &PotentialCheck) -> bool {
     pins_named(cx.project, &check.wire).into_iter().any(|pin| {
         cx.netlist
@@ -310,15 +370,22 @@ fn wire_joined(cx: &Context<'_>, from: &str, to: &str) -> bool {
 }
 
 fn device_present(project: &Project, check: &DeviceCheck) -> bool {
-    project.devices().any(|device| {
-        tag_matches(&device.tag, &check.tag)
-            && check.symbol.as_ref().is_none_or(|key| {
-                project
-                    .symbols_of_device(device.id)
-                    .iter()
-                    .any(|s| s.symbol.0 == *key)
-            })
-    })
+    project
+        .devices()
+        .filter(|device| {
+            check
+                .tag
+                .as_ref()
+                .is_none_or(|tag| tag_matches(&device.tag, tag))
+                && check.symbol.as_ref().is_none_or(|key| {
+                    project
+                        .symbols_of_device(device.id)
+                        .iter()
+                        .any(|s| s.symbol.0 == *key)
+                })
+        })
+        .count()
+        >= check.at_least
 }
 
 /// Whether a page is named by a lesson's text: by its name or its title.
@@ -344,6 +411,18 @@ fn count(project: &Project, check: &CountCheck) -> usize {
         CountKind::Wire => project.wires().filter(|w| on_page(w.page)).count(),
         CountKind::Text => project.texts().filter(|t| on_page(t.page)).count(),
         CountKind::Junction => project.junctions().filter(|j| on_page(j.page)).count(),
+        CountKind::Feed => {
+            project
+                .symbols()
+                .filter(|s| on_page(s.page))
+                .filter(|s| matches!(s.role, novo_core::SymbolRole::PotentialFeed { .. }))
+                .count()
+                + project
+                    .symbols()
+                    .filter(|s| on_page(s.page))
+                    .map(|s| s.feeds.len())
+                    .sum::<usize>()
+        }
         CountKind::Page => project.pages().count(),
         CountKind::Device => project.devices().count(),
         CountKind::Cable => project.cables().count(),
@@ -521,6 +600,100 @@ mod tests {
             &doc,
             &facts,
             &[]
+        ));
+    }
+
+    #[test]
+    fn devices_by_symbol_alone_and_counted() {
+        let doc = starter();
+        let facts = Facts::default();
+        let any_symbol = doc
+            .project()
+            .symbols_of_device(doc.project().devices().next().unwrap().id)
+            .first()
+            .map(|s| s.symbol.0.clone())
+            .unwrap();
+        let yes = |text: &str| holds(&check(text), &doc, &facts, &[]);
+        assert!(yes(&format!(
+            "{{ device = {{ symbol = \"{any_symbol}\" }} }}"
+        )));
+        assert!(!yes("{ device = { symbol = \"iec/none/nothing\" } }"));
+        let many = doc.project().devices().count();
+        assert!(yes("{ device = { tag = \"-K1\", at_least = 1 } }"));
+        assert!(!holds(
+            &check(&format!(
+                "{{ device = {{ symbol = \"{any_symbol}\", at_least = {} }} }}",
+                many + 1
+            )),
+            &doc,
+            &facts,
+            &[]
+        ));
+        assert!(check("{ device = { symbol = \"x\" } }").validate().is_ok());
+        assert!(check("{ device = { at_least = 2 } }").validate().is_err());
+        assert!(
+            check("{ all = [ { device = { at_least = 1 } } ] }")
+                .validate()
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn feeds_potential_kinds_and_closed_poles() {
+        let doc = starter();
+        let mut facts = Facts::default();
+        facts.live_closed.insert("=A1+CAB-K1".into());
+        let yes = |text: &str, facts: &Facts| holds(&check(text), &doc, facts, &[]);
+        assert!(yes("{ pole_closed = \"-K1\" }", &facts));
+        assert!(!yes("{ pole_closed = \"-F1\" }", &facts));
+        // Feed symbols plus pins that define a potential.
+        let feeds: usize = doc
+            .project()
+            .symbols()
+            .map(|s| {
+                usize::from(matches!(
+                    s.role,
+                    novo_core::SymbolRole::PotentialFeed { .. }
+                )) + s.feeds.len()
+            })
+            .sum();
+        assert!(yes(
+            &format!("{{ count = {{ kind = \"feed\", at_least = {feeds} }} }}"),
+            &facts
+        ));
+        assert!(!yes(
+            &format!(
+                "{{ count = {{ kind = \"feed\", at_least = {} }} }}",
+                feeds + 1
+            ),
+            &facts
+        ));
+        assert!(!yes(
+            "{ count = { kind = \"feed\", at_least = 9999 } }",
+            &facts
+        ));
+        let any_kind = doc
+            .project()
+            .wires()
+            .filter_map(|w| {
+                doc.project()
+                    .netlist()
+                    .net_of_wire(w)
+                    .and_then(|n| doc.project().netlist().net(n).potential())
+            })
+            .filter_map(|id| doc.project().potential(id))
+            .map(|p| p.kind)
+            .next();
+        if let Some(kind) = any_kind {
+            let name = serde_json::to_string(&kind).unwrap();
+            assert!(yes(
+                &format!("{{ potential_kind = {{ kind = {name} }} }}"),
+                &facts
+            ));
+        }
+        assert!(!yes(
+            "{ potential_kind = { kind = \"dc_negative\", page = \"nowhere\" } }",
+            &facts
         ));
     }
 
