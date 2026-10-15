@@ -16,7 +16,9 @@ use novo_core::{PageId, Project};
 use novo_editor::art::LibraryArt;
 use novo_pdf::{NoteAnchor, PageSet, PdfOptions, SymbolNote};
 use novo_py::ReportFormat;
+use novo_py::{comparison_json, group_name, kind_name, page_label, revisions_json};
 use novo_reports::CsvOptions;
+use novo_revisions::{Comparison, FieldChange, Side, group_of};
 use novo_storage::ProjectFile;
 use serde_json::{Value, json};
 
@@ -66,10 +68,36 @@ enum Cmd {
     /// Export a project.
     #[command(subcommand)]
     Export(Export),
+    /// Revisions: list them, or compare two states of the project.
+    #[command(subcommand)]
+    Revisions(Revisions),
     /// Run the design checks; exits with 1 when there are errors or
     /// warnings (infos such as missing parts do not count).
     Check {
         file: PathBuf,
+        /// Print JSON instead of text.
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum Revisions {
+    /// List the issued revisions: index, date, author, description.
+    List {
+        file: PathBuf,
+        /// Print JSON instead of text.
+        #[arg(long)]
+        json: bool,
+    },
+    /// What changed between two states: a revision index (`B`) or `now`.
+    /// Differences are not an error; the exit code is 0 either way.
+    Diff {
+        file: PathBuf,
+        /// The older state: a revision index, or `now`.
+        from: String,
+        /// The newer state: a revision index, or `now`.
+        to: String,
         /// Print JSON instead of text.
         #[arg(long)]
         json: bool,
@@ -119,8 +147,15 @@ enum Export {
     Wires(ReportArgs),
     /// Cut list: the wires grouped by size and colour, with end allowances.
     Cutlist(ReportArgs),
+    /// Terminal diagram: every terminal strip with wires in and out, bridges,
+    /// destinations and pages.
+    Terminals(ReportArgs),
     /// Table of contents (the pages).
     Toc(ReportArgs),
+    /// Cable schedule: one row per cable core with its two ends.
+    Cables(ReportArgs),
+    /// Plug connection lists: every pin of every plug with its wire.
+    Plugs(ReportArgs),
     /// Every report in one workbook, one sheet each.
     Reports {
         file: PathBuf,
@@ -235,7 +270,14 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
         Cmd::Export(Export::Devices(args)) => export_reports(&args.file, &["devices"], &args, out),
         Cmd::Export(Export::Wires(args)) => export_reports(&args.file, &["wires"], &args, out),
         Cmd::Export(Export::Cutlist(args)) => export_reports(&args.file, &["cutlist"], &args, out),
+        Cmd::Export(Export::Terminals(args)) => {
+            export_reports(&args.file, &["terminals"], &args, out)
+        }
         Cmd::Export(Export::Toc(args)) => export_reports(&args.file, &["toc"], &args, out),
+        Cmd::Export(Export::Cables(args)) => {
+            export_reports(&args.file, &["cableschedule"], &args, out)
+        }
+        Cmd::Export(Export::Plugs(args)) => export_reports(&args.file, &["plugs"], &args, out),
         Cmd::Export(Export::Reports { file, output }) => {
             let args = ReportArgs {
                 file,
@@ -272,6 +314,69 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             export_dxf(&project, &file, &output, &pages)?;
             Ok(exit::OK)
         }
+        Cmd::Revisions(Revisions::List { file, json }) => {
+            let project = read(&file)?;
+            let file_ = ProjectFile::read_only(&file).map_err(|e| read_failure(&file, &e))?;
+            let kept = file_.snapshot_revisions().unwrap_or_default();
+            let rows: Vec<_> = project
+                .revisions()
+                .map(|r| (r, kept.contains(&r.id)))
+                .collect();
+            if json {
+                print(out, &format!("{:#}", revisions_json(&project, &kept)))?;
+            } else if rows.is_empty() {
+                print(out, "No revisions issued yet")?;
+            } else {
+                for (r, kept) in rows {
+                    let note = if kept { "" } else { "  (no kept copy)" };
+                    print(
+                        out,
+                        &format!(
+                            "{}  {}  {}  {}{note}",
+                            r.index, r.date, r.author, r.description
+                        ),
+                    )?;
+                }
+            }
+            Ok(exit::OK)
+        }
+        Cmd::Revisions(Revisions::Diff {
+            file,
+            from,
+            to,
+            json,
+        }) => {
+            let file_ = ProjectFile::read_only(&file).map_err(|e| read_failure(&file, &e))?;
+            let project = file_.load().map_err(|e| read_failure(&file, &e))?;
+            let side = |name: &str| -> Result<Side, Failure> {
+                if name.eq_ignore_ascii_case("now") {
+                    return Ok(Side::Now);
+                }
+                project
+                    .revision_by_index(name)
+                    .map(|r| Side::Revision(r.id))
+                    .ok_or_else(|| {
+                        Failure::new(
+                            exit::USAGE,
+                            format!("no revision `{name}` (use an index from `revisions list`, or `now`)"),
+                        )
+                    })
+            };
+            let (a, b) = (side(&from)?, side(&to)?);
+            let comparison = novo_revisions::compare(&project, |id| file_.snapshot(id), a, b)
+                .map_err(|e| Failure::new(exit::READ, e.to_string()))?;
+            if json {
+                print(
+                    out,
+                    &format!("{:#}", comparison_json(&project, &from, &to, &comparison)),
+                )?;
+            } else {
+                for line in comparison_text(&project, &from, &to, &comparison) {
+                    print(out, &line)?;
+                }
+            }
+            Ok(exit::OK)
+        }
         Cmd::Check { file, json } => {
             let project = read(&file)?;
             let problems = novo_checks::check(&project);
@@ -295,8 +400,51 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
 }
 
 fn read(path: &Path) -> Result<Project, Failure> {
-    ProjectFile::read(path)
-        .map_err(|e| Failure::new(exit::READ, format!("cannot read {}: {e}", path.display())))
+    ProjectFile::read(path).map_err(|e| read_failure(path, &e))
+}
+
+fn read_failure(path: &Path, e: &novo_storage::StorageError) -> Failure {
+    Failure::new(exit::READ, format!("cannot read {}: {e}", path.display()))
+}
+
+/// One field as `name: old -> new`, with the plain-words note after it.
+fn field_text(f: &FieldChange) -> String {
+    let show = |v: &Option<String>| v.clone().unwrap_or_else(|| "(none)".into());
+    let values = format!("{}: {} -> {}", f.name, show(&f.old), show(&f.new));
+    match &f.note {
+        Some(note) => format!("{values} ({note})"),
+        None => values,
+    }
+}
+
+fn comparison_text(project: &Project, from: &str, to: &str, c: &Comparison) -> Vec<String> {
+    if c.is_empty() {
+        return vec![format!("No differences between {from} and {to}")];
+    }
+    let mut lines = vec![format!("{from} -> {to}")];
+    let mut rows: Vec<_> = c.rows.iter().collect();
+    // Stable, so rows keep their page order within a group.
+    rows.sort_by_key(|r| group_of(r.id));
+    let mut group = None;
+    for r in rows {
+        let g = group_of(r.id);
+        if group != Some(g) {
+            lines.push(format!("{}:", group_name(g)));
+            group = Some(g);
+        }
+        let page = page_label(project, r.page).map_or_else(String::new, |p| format!(" (page {p})"));
+        lines.push(format!("  {} {}{page}", kind_name(&r.kind), r.label));
+        for f in &r.fields {
+            lines.push(format!("    {}", field_text(f)));
+        }
+    }
+    for f in &c.info {
+        lines.push(format!("project info {}", field_text(f)));
+    }
+    for s in &c.sheets {
+        lines.push(format!("sheet {} ({}): {:?}", s.name, s.report, s.kind));
+    }
+    lines
 }
 
 fn print(out: &mut dyn Write, text: &str) -> Result<(), Failure> {

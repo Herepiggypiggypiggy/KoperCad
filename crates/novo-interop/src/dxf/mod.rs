@@ -10,4 +10,4 @@ mod write;
 
 pub use model::{Drawing, Entity, EntityKind, HAlign, Layer, Point, TextAlign, VAlign};
 pub use read::{DxfError, DxfRead, read_dxf};
-pub use write::write_dxf;
+pub use write::{PRODUCER_COMMENT, is_written_by_us, write_dxf};

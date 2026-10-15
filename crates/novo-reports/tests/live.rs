@@ -38,9 +38,11 @@ fn edits_regenerate_only_affected_reports() {
         stale,
         [
             "cables",
+            "cableschedule",
             "cutlist",
             "io",
             "labels",
+            "plugs",
             "terminals",
             "toc",
             "wires"
@@ -71,10 +73,12 @@ fn edits_regenerate_only_affected_reports() {
         stale,
         [
             "cables",
+            "cableschedule",
             "cutlist",
             "devices",
             "io",
             "labels",
+            "plugs",
             "terminals",
             "toc",
             "wires"
@@ -166,7 +170,7 @@ fn reports_regenerate_within_a_second_on_10k_objects() {
     let slack = if cfg!(debug_assertions) { 3 } else { 1 };
     let start = Instant::now();
     let stale = reports.notify(doc.project(), &changes).len();
-    assert_eq!(stale, 9);
+    assert_eq!(stale, 11);
     let mut pages = 0;
     for output in reports.all(doc.project()) {
         let paged = paginate(output, &setup);

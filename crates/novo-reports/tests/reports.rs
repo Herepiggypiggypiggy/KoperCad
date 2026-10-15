@@ -594,6 +594,8 @@ fn xlsx_round_trips() {
             "Terminal diagram",
             "Cable diagram",
             "IO list",
+            "Cable schedule",
+            "Plug connection list",
             "Labels"
         ]
     );
