@@ -4,9 +4,11 @@
 //! bar and no status bar.
 
 mod cabinet;
+mod cabinet_inspector;
 mod changes;
 mod checks;
 mod commissioning;
+mod compare;
 mod dock;
 mod drawers;
 mod duplicate;
@@ -38,6 +40,7 @@ mod cabinet_tests;
 mod changes_tests;
 #[cfg(test)]
 mod commissioning_tests;
+mod compare_tests;
 #[cfg(test)]
 mod example_tests;
 #[cfg(test)]
@@ -754,6 +757,7 @@ impl NovoApp {
         self.parts_window(&ctx);
         self.project_settings_dialog(&ctx);
         self.issue_revision_dialog(&ctx);
+        self.compare_window(&ctx);
         self.page_form_dialog(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {
             self.run_command(&ctx, id, None);
