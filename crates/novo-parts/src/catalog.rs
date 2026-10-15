@@ -423,6 +423,23 @@ impl Catalog {
         Some(part)
     }
 
+    /// Keeps the parts for which `keep` is true and returns how many were
+    /// removed. One pass and one re-index, so removing thousands of parts from
+    /// a large catalog stays linear.
+    pub fn retain(&mut self, mut keep: impl FnMut(&CatalogPart) -> bool) -> usize {
+        let before = self.parts.len();
+        let mut flags = Vec::with_capacity(before);
+        self.parts.retain(|p| {
+            let k = keep(p);
+            flags.push(k);
+            k
+        });
+        let mut flags = flags.into_iter();
+        self.docs.retain(|_| flags.next().unwrap_or(true));
+        self.reindex();
+        before - self.parts.len()
+    }
+
     fn reindex(&mut self) {
         self.index.clear();
         self.by_order.clear();
@@ -476,7 +493,7 @@ impl Catalog {
             .parts
             .iter()
             .zip(&self.docs)
-            .filter_map(|(p, doc)| matcher.score_doc(p, doc).map(|s| (s, p)))
+            .filter_map(|(p, doc)| matcher.score_doc(doc).map(|s| (s, p)))
             .collect();
         hits.sort_by(|a, b| {
             b.0.cmp(&a.0)
@@ -509,7 +526,7 @@ impl Catalog {
                 if matcher.is_empty() {
                     Some((base, p))
                 } else {
-                    matcher.score_doc(p, doc).map(|s| (s * 10 + base, p))
+                    matcher.score_doc(doc).map(|s| (s * 10 + base, p))
                 }
             })
             .collect();

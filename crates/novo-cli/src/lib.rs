@@ -116,8 +116,28 @@ struct ReportArgs {
     delimiter: char,
 }
 
+/// Which labels, and in which layout.
+#[derive(Debug, clap::Args)]
+struct LabelArgs {
+    file: PathBuf,
+    /// Output file (.csv); standard output when left out.
+    #[arg(short, long)]
+    output: Option<PathBuf>,
+    /// Which labels: wires, terminals, devices or cables. Repeat for
+    /// several; all when left out.
+    #[arg(short, long = "kind")]
+    kinds: Vec<String>,
+    /// CSV layout: `generic` (header row, for any software) or `brother`
+    /// (P-touch Editor database: no header, tab separated). Use one kind
+    /// per file with `brother`.
+    #[arg(long, default_value = "generic")]
+    layout: String,
+}
+
 #[derive(Debug, Subcommand)]
 enum Export {
+    /// Labels for a label printer: wire, terminal, device and cable labels.
+    Labels(LabelArgs),
     /// Bill of materials: every part with its quantity, plus devices
     /// without a part.
     Bom(ReportArgs),
@@ -161,6 +181,22 @@ enum Export {
         /// when left out.
         #[arg(long = "page", value_name = "NAME")]
         pages: Vec<String>,
+    },
+    /// The PLC I/O as the file a PLC programming tool imports: one file per
+    /// station for `plcopen`, `tia` and `studio5000`, one table for `csv`.
+    Plc {
+        file: PathBuf,
+        /// `csv`, `plcopen` (CODESYS and compatible), `tia` (TIA Portal
+        /// tag table, .xlsx), `studio5000` (tag CSV) or `hardware` (the
+        /// address plan).
+        #[arg(long, default_value = "csv")]
+        format: String,
+        /// Directory to write into; it is created when missing.
+        #[arg(short, long)]
+        output: PathBuf,
+        /// Also write a tag for every spare channel.
+        #[arg(long)]
+        spares: bool,
     },
     /// Schematic pages as DXF drawings (millimetres, y up), for CAD
     /// programs and laser or plotter shops.
@@ -245,6 +281,7 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             }
             Ok(exit::OK)
         }
+        Cmd::Export(Export::Labels(args)) => export_labels(&args, out),
         Cmd::Export(Export::Bom(args)) => export_reports(&args.file, &["bom"], &args, out),
         Cmd::Export(Export::Devices(args)) => export_reports(&args.file, &["devices"], &args, out),
         Cmd::Export(Export::Wires(args)) => export_reports(&args.file, &["wires"], &args, out),
@@ -282,6 +319,16 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             let project = read(&file)?;
             let bytes = pdf(&project, &pages)?;
             write_output(&file, &output, &bytes)?;
+            Ok(exit::OK)
+        }
+        Cmd::Export(Export::Plc {
+            file,
+            format,
+            output,
+            spares,
+        }) => {
+            let project = read(&file)?;
+            export_plc(&project, &file, &format, &output, spares, out)?;
             Ok(exit::OK)
         }
         Cmd::Export(Export::Dxf {
@@ -476,6 +523,45 @@ fn export_reports(
     Ok(exit::OK)
 }
 
+fn export_labels(args: &LabelArgs, out: &mut dyn Write) -> Result<i32, Failure> {
+    let usage = |m: String| Failure::new(exit::USAGE, m);
+    let layout = novo_reports::LabelLayout::parse(&args.layout).ok_or_else(|| {
+        usage(format!(
+            "unknown label layout `{}` (generic or brother)",
+            args.layout
+        ))
+    })?;
+    for kind in &args.kinds {
+        if !novo_reports::Labels::KINDS.contains(&kind.as_str()) {
+            return Err(usage(format!(
+                "unknown label kind `{kind}` ({})",
+                novo_reports::Labels::KINDS.join(", ")
+            )));
+        }
+    }
+    let project = read(&args.file)?;
+    let labels = novo_reports::Report::generate(&novo_reports::Labels, &project);
+    let kinds: Vec<&str> = args.kinds.iter().map(String::as_str).collect();
+    let mut text = novo_reports::labels_csv(&labels, &kinds, layout);
+    match &args.output {
+        Some(path) => {
+            if novo_py::is_project_path(path) {
+                return write_output(&args.file, path, &[]).map(|()| exit::OK);
+            }
+            write_output(&args.file, path, text.as_bytes())?;
+        }
+        None => {
+            // A byte order mark is only noise on a terminal or in a pipe.
+            if let Some(stripped) = text.strip_prefix('\u{feff}') {
+                text = stripped.to_owned();
+            }
+            out.write_all(text.as_bytes())
+                .map_err(|e| Failure::new(exit::WRITE, format!("cannot write output: {e}")))?;
+        }
+    }
+    Ok(exit::OK)
+}
+
 /// The PDF of the given pages (all when empty), drawn with the symbol
 /// library's artwork.
 fn pdf(project: &Project, pages: &[String]) -> Result<Vec<u8>, Failure> {
@@ -553,6 +639,54 @@ fn file_stem(name: &str) -> String {
 
 /// Writes the pages as DXF: one `.dxf` file when `output` ends in `.dxf`
 /// (exactly one page), otherwise one file per page in the directory.
+fn export_plc(
+    project: &Project,
+    input: &Path,
+    format: &str,
+    output: &Path,
+    spares: bool,
+    out: &mut dyn Write,
+) -> Result<(), Failure> {
+    let format = novo_plc::link::LinkFormat::from_key(format).ok_or_else(|| {
+        Failure::new(
+            exit::USAGE,
+            format!("unknown format {format:?}: use csv, plcopen, tia, studio5000 or hardware"),
+        )
+    })?;
+    let library = novo_py::library().map_err(|e| Failure::new(exit::UNAVAILABLE, e.to_string()))?;
+    let index = novo_plc::PlcIndex::build(project, library);
+    if index.cards().is_empty() {
+        return Err(Failure::new(exit::USAGE, "the project has no PLC cards"));
+    }
+    let options = novo_plc::link::ExportOptions {
+        include_spares: spares,
+        stamp: String::new(),
+        project: project.info().name.clone(),
+    };
+    let exported = novo_plc::link::export(project, &index, format, &options);
+    std::fs::create_dir_all(output).map_err(|e| {
+        Failure::new(
+            exit::WRITE,
+            format!("cannot create {}: {e}", output.display()),
+        )
+    })?;
+    let stem = file_stem(&input.file_stem().unwrap_or_default().to_string_lossy());
+    for file in &exported.files {
+        let name = if file.suffix.is_empty() {
+            format!("{stem} PLC.{}", file.extension)
+        } else {
+            format!("{stem} PLC {}.{}", file_stem(&file.suffix), file.extension)
+        };
+        let path = output.join(name);
+        write_output(input, &path, &file.bytes)?;
+        print(out, &format!("{} ({} tags)", path.display(), file.tags))?;
+    }
+    for warning in &exported.warnings {
+        print(out, &format!("note: {warning}"))?;
+    }
+    Ok(())
+}
+
 fn export_dxf(
     project: &Project,
     input: &Path,

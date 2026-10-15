@@ -52,6 +52,8 @@ pub(super) struct CabinetState {
     pub(super) table: bool,
     /// The plate card of the inspector is shown with nothing selected.
     pub(super) plate_card: bool,
+    /// The Heat view over the plate.
+    pub(super) heat: super::heat::HeatState,
 }
 
 /// A placed device being dragged across the plate.
@@ -82,6 +84,7 @@ impl CabinetState {
             door: DoorState::default(),
             table: false,
             plate_card: false,
+            heat: super::heat::HeatState::new(),
         }
     }
 }
@@ -215,12 +218,41 @@ pub(super) fn problem_lines(
 
 /// The table face (Ctrl+T): every device of the panel with where it is and
 /// what is wrong.
-fn cabinet_table(
+/// A sort key in which numbers count by value: -K2 comes before -K10.
+pub(super) fn natural_key(tag: &str) -> String {
+    let mut key = String::new();
+    let mut digits = String::new();
+    for ch in tag.chars().chain(std::iter::once(' ')) {
+        if ch.is_ascii_digit() {
+            digits.push(ch);
+            continue;
+        }
+        if !digits.is_empty() {
+            key.push_str(&format!("{digits:0>12}"));
+            digits.clear();
+        }
+        key.push(ch);
+    }
+    key.pop();
+    key
+}
+
+pub(super) fn cabinet_table(
     ui: &mut egui::Ui,
     layout: &CabinetLayout,
     cands: &[novo_layout::plan::Candidate],
     tag_of: &impl Fn(u64) -> String,
-) {
+    selected: &[u64],
+) -> Option<u64> {
+    let mut clicked = None;
+    let mut rows: Vec<_> = cands.iter().collect();
+    rows.sort_by_key(|c| natural_key(&tag_of(c.id)));
+    // Numbers read best flush right.
+    let num = |ui: &mut egui::Ui, text: String| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.label(text);
+        });
+    };
     egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
         egui::Grid::new("cabinet_table")
             .striped(true)
@@ -239,34 +271,54 @@ fn cabinet_table(
                     ui.strong(head);
                 }
                 ui.end_row();
-                for c in cands {
-                    ui.label(tag_of(c.id));
+                for c in rows {
+                    if ui
+                        .selectable_label(selected.contains(&c.id), tag_of(c.id))
+                        .clicked()
+                    {
+                        clicked = Some(c.id);
+                    }
                     let size = format!("{} x {}", c.size.width, c.size.height);
                     match layout.placements.iter().find(|p| p.id == c.id) {
                         Some(p) => {
-                            ui.label(size);
-                            ui.label(format!("{}", p.x));
-                            ui.label(format!("{}", p.y));
+                            num(ui, size);
+                            num(ui, format!("{}", p.x));
+                            num(ui, format!("{}", p.y));
                             ui.label(if p.rotated { "yes" } else { "" });
                             ui.label(p.rail.map(|r| format!("#{r}")).unwrap_or_default());
                             ui.label(problem_lines(layout, c.id, tag_of).join("; "));
                         }
                         None => {
-                            ui.label(size);
+                            num(ui, size);
                             ui.weak("");
                             ui.weak("");
                             ui.weak("");
                             ui.weak("");
-                            ui.weak("Unplaced");
+                            ui.colored_label(
+                                ui.visuals().warn_fg_color,
+                                "Unplaced (use Place all, or drag it in)",
+                            );
                         }
                     }
                     ui.end_row();
                 }
             });
     });
+    clicked
 }
 
 impl NovoApp {
+    /// The devices selected on the plate.
+    fn cabinet_selected(&self) -> Vec<u64> {
+        self.cabinet
+            .view
+            .selection
+            .ids()
+            .iter()
+            .filter_map(|i| novo_canvas::cabinet::box_of(*i))
+            .collect()
+    }
+
     /// The Cabinet canvas, in place of the schematic canvas.
     pub(super) fn cabinet_show(&mut self, ui: &mut egui::Ui) {
         let Some(doc) = self.backend.document() else {
@@ -405,6 +457,9 @@ impl NovoApp {
                 {
                     ask = Some(Ask::TogglePlateCard);
                 }
+                if !self.cabinet.table {
+                    super::heat::chips(ui, &mut self.cabinet.heat);
+                }
                 if ui
                     .selectable_label(self.cabinet.table, "Table")
                     .on_hover_text("Devices as a table (Ctrl+T)")
@@ -451,7 +506,11 @@ impl NovoApp {
                 self.cabinet.keys.clear();
                 self.cabinet.drag = None;
                 self.cabinet.ghost = None;
-                cabinet_table(ui, &shown, &cands, &tag_of);
+                let selected = self.cabinet_selected();
+                if let Some(id) = cabinet_table(ui, &shown, &cands, &tag_of, &selected) {
+                    // A row is its device: select it and show it on the plate.
+                    ask = Some(Ask::Select(id));
+                }
             }
             Some(shown) => {
                 let unplaced_list: Vec<(u64, String, String)> = layout
@@ -525,7 +584,70 @@ impl NovoApp {
                     self.cabinet.view.viewport.fit(&view_bounds(&view), 24.0);
                     self.cabinet.fitted = location.clone();
                 }
+                let heat_input = self.cabinet.heat.on.then(|| {
+                    let items = shown
+                        .placements
+                        .iter()
+                        .map(|p| {
+                            let f = p.footprint();
+                            let loss =
+                                project
+                                    .get::<Device>(DeviceId::from(p.id))
+                                    .map_or(0.0, |d| {
+                                        let s =
+                                            novo_layout::sizing_model::sizing_device(project, d);
+                                        s.power_loss * s.load_factor
+                                    });
+                            super::heat::Item {
+                                id: p.id,
+                                tag: tag_of(p.id),
+                                x: f.x,
+                                y: f.y,
+                                w: f.w,
+                                h: f.h,
+                                loss_w: loss,
+                            }
+                        })
+                        .collect();
+                    super::heat::Input {
+                        plate: (shown.plate.width, shown.plate.height),
+                        ambient: self.sizing.request().ambient_max,
+                        items,
+                    }
+                });
+                let dragging = self.cabinet.drag.is_some();
+                // The map goes under the canvas: it paints no background of
+                // its own while the map is on.
+                let backdrop = theme::canvas_style().background;
+                self.cabinet.view.style.background = if self.cabinet.heat.under_canvas() {
+                    novo_canvas::Color([0, 0, 0, 0])
+                } else {
+                    backdrop
+                };
+                let canvas_rect = ui.available_rect_before_wrap();
+                if let Some(input) = &heat_input {
+                    let [r, g, b, a] = backdrop.0;
+                    super::heat::paint_under(
+                        ui,
+                        canvas_rect,
+                        &self.cabinet.view.viewport,
+                        &mut self.cabinet.heat,
+                        input,
+                        dragging,
+                        egui::Color32::from_rgba_unmultiplied(r, g, b, a),
+                    );
+                }
                 let out = self.cabinet.view.show(ui, self.cabinet.scene.scene());
+                if let Some(input) = &heat_input {
+                    super::heat::paint_over(
+                        ui,
+                        out.response.rect,
+                        &self.cabinet.view.viewport,
+                        &mut self.cabinet.heat,
+                        input,
+                        dragging,
+                    );
+                }
                 if let Some((facts, left)) = &inspector
                     && let Some(a) = cabinet_inspector::overlay(
                         ui.ctx(),
@@ -628,14 +750,7 @@ impl NovoApp {
                         ask = Some(Ask::Drop(d.id, d.at.0, d.at.1));
                     }
                     // Rotate and delete act on the selected devices.
-                    let selected: Vec<u64> = self
-                        .cabinet
-                        .view
-                        .selection
-                        .ids()
-                        .iter()
-                        .filter_map(|i| novo_canvas::cabinet::box_of(*i))
-                        .collect();
+                    let selected = self.cabinet_selected();
                     for key in std::mem::take(&mut self.cabinet.keys) {
                         match key.as_str() {
                             "edit.rotate" if !selected.is_empty() => {
