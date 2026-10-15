@@ -278,3 +278,8 @@ mod tests {
         );
     }
 }
+
+/// `page.column` as printed in lists (`3.4`, or `=A2/3.4` with a structure).
+pub fn place(location: &novo_core::Location) -> String {
+    location.qualified(&novo_core::DeviceTag::default())
+}

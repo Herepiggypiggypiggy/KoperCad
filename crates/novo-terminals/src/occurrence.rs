@@ -106,7 +106,7 @@ fn pins_of(symbol: &SymbolInstance, terminal: TerminalId) -> Vec<u16> {
 
 /// Follows wires from `pins` of `symbol` through junctions and collects the
 /// first connection points of other symbols they reach.
-fn side(project: &Project, symbol: &SymbolInstance, pins: Vec<u16>) -> Side {
+pub fn side(project: &Project, symbol: &SymbolInstance, pins: Vec<u16>) -> Side {
     let mut wires = BTreeSet::new();
     let mut targets = BTreeSet::new();
     for &pin in &pins {

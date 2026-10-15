@@ -5,7 +5,7 @@
 
 use novo_core::{DeviceKind, EntityKind, Project};
 
-use crate::order::tag_cmp;
+use crate::order::{join_distinct, location_text, tag_cmp};
 use crate::report::{Dependencies, Report};
 use crate::table::{Cell, Column, ReportOutput, Section};
 
@@ -54,32 +54,47 @@ impl Report for TerminalDiagram {
             .into_iter()
             .map(|strip| {
                 let screen = novo_terminals::screen(project, strip.id);
+                let views = novo_terminals::strip_view(project, strip.id);
                 let tag = strip.tag.to_string();
                 let mut section = Section::new(
                     &tag,
                     &tag,
                     vec![
                         Column::new("internal", "Internal", 40.0),
+                        Column::new("wire_in", "Wire in", 14.0),
                         Column::new("terminal", "Terminal", 14.0),
                         Column::new("kind", "Kind", 18.0),
+                        Column::new("bridged", "Bridged to", 16.0),
+                        Column::new("wire_out", "Wire out", 14.0),
                         Column::new("external", "External", 40.0),
                         Column::new("cable", "Cable", 25.0),
                         Column::new("jumper", "Jumper", 10.0).right(),
                         Column::new("pages", "Pages", 15.0),
+                        Column::new("location", "Location", 15.0),
                         Column::new("build", "Build", 30.0),
                         Column::new("spare", "Spare", 10.0),
                     ],
                 );
-                for row in screen.rows {
+                for (row, view) in screen.rows.into_iter().zip(&views.rows) {
+                    let location = join_distinct(
+                        view.occurrences
+                            .iter()
+                            .filter_map(|o| project.location_of(o.symbol))
+                            .map(|l| location_text(&l)),
+                    );
                     section.push(
                         vec![
                             Cell::text(row.internal.join(", ")),
+                            Cell::text(row.wires_internal.join(", ")),
                             Cell::text(row.terminal),
                             Cell::text(row.kind),
+                            Cell::text(row.bridged_with.join(", ")),
+                            Cell::text(row.wires_external.join(", ")),
                             Cell::text(row.external.join(", ")),
                             Cell::text(row.cables.join(", ")),
                             row.jumper.map(i64::from).into(),
                             Cell::text(row.pages.join(", ")),
+                            Cell::text(location),
                             Cell::text(row.build),
                             Cell::text(if row.spare { "spare" } else { "" }),
                         ],
@@ -210,6 +225,70 @@ impl Report for CableDiagram {
             }
             sections.push(section);
         }
+        ReportOutput {
+            report: Self::ID.into(),
+            title: self.title(),
+            revision: project.revision(),
+            sections,
+        }
+    }
+}
+
+/// Plug lists: one section per connector device, one row per contact with
+/// the wires on it, what they reach, the cable core and where it is drawn.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PlugList;
+
+impl PlugList {
+    pub const ID: &'static str = "plugs";
+}
+
+impl Report for PlugList {
+    fn id(&self) -> &str {
+        Self::ID
+    }
+
+    fn title(&self) -> String {
+        "Plug list".into()
+    }
+
+    fn dependencies(&self) -> Dependencies {
+        model_dependencies()
+    }
+
+    fn generate(&self, project: &Project) -> ReportOutput {
+        let sections = novo_terminals::connectors(project)
+            .into_iter()
+            .filter_map(|device| novo_terminals::plug_list(project, device))
+            .map(|list| {
+                let mut section = Section::new(
+                    &list.tag,
+                    &list.tag,
+                    vec![
+                        Column::new("contact", "Contact", 14.0),
+                        Column::new("wire", "Wire no.", 15.0),
+                        Column::new("to", "Connected to", 40.0),
+                        Column::new("cable", "Cable", 25.0),
+                        Column::new("location", "Location", 15.0),
+                        Column::new("state", "State", 10.0),
+                    ],
+                );
+                for contact in list.contacts {
+                    section.push(
+                        vec![
+                            Cell::text(contact.name),
+                            Cell::text(contact.wires.join(", ")),
+                            Cell::text(contact.targets.join(", ")),
+                            Cell::text(contact.cables.join(", ")),
+                            Cell::text(contact.places.join(", ")),
+                            Cell::text(if contact.open { "open" } else { "" }),
+                        ],
+                        vec![list.device.into()],
+                    );
+                }
+                section
+            })
+            .collect();
         ReportOutput {
             report: Self::ID.into(),
             title: self.title(),

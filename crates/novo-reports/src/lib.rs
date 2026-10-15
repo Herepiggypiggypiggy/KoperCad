@@ -94,7 +94,7 @@ pub use defaults::{
     GeneratedPageSpec, add_generated_pages, default_generated_pages, default_generated_pages_with,
 };
 pub use devices::DeviceList;
-pub use diagrams::{CableDiagram, TerminalDiagram};
+pub use diagrams::{CableDiagram, PlugList, TerminalDiagram};
 pub use export::{CsvOptions, ExportError, save_xlsx, to_csv, xlsx_bytes};
 pub use io::IoList;
 pub use order::{function_of, location_of, location_text, tag_cmp};
@@ -116,6 +116,7 @@ pub fn standard_reports() -> Vec<Box<dyn Report>> {
         Box::new(WireList),
         Box::new(TerminalDiagram),
         Box::new(CableDiagram),
+        Box::new(PlugList),
         Box::new(IoList),
     ]
 }

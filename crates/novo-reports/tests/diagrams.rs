@@ -40,45 +40,61 @@ fn terminal_diagram_has_one_section_per_strip() {
         strings(&[
             &[
                 "=A1+CAB-F2:2",
+                "",
                 "1",
                 "feed-through",
+                "",
+                "",
                 "=A1+FLD-M1:U1",
                 "=A1-W1 BK",
                 "",
                 "1",
+                "1.1",
                 "1 clamp",
                 ""
             ],
             &[
                 "=A1+CAB-F2:4",
+                "",
                 "2",
                 "feed-through",
+                "",
+                "",
                 "=A1+FLD-M1:V1",
                 "=A1-W1 BN",
                 "",
                 "1",
+                "1.2",
                 "1 clamp",
                 ""
             ],
             &[
                 "=A1+CAB-F2:6",
+                "",
                 "3",
                 "feed-through",
+                "",
+                "",
                 "=A1+FLD-M1:W1",
                 "=A1-W1 GY",
                 "",
                 "1",
+                "1.2",
                 "1 clamp",
                 ""
             ],
             &[
                 "PE",
+                "",
                 "PE",
                 "PE",
+                "",
+                "",
                 "=A1+FLD-M1:PE",
                 "=A1-W1 GNYE",
                 "",
                 "1",
+                "1.2",
                 "1 clamp",
                 ""
             ],
@@ -411,4 +427,55 @@ fn the_contents_list_splits_group_and_panel_and_lists_panels() {
     // One panel, two groups, two pages.
     let panels = toc.sections[1].text_rows();
     assert_eq!(panels, [["+K1", "=10D41, =11D21", "2"]]);
+}
+
+#[test]
+fn plug_list_has_a_section_per_connector_with_wires_and_targets() {
+    use novo_core::{Device, DeviceKind, Endpoint, Pin, Placement, Point, SymbolRole, Wire};
+
+    let mut doc = Document::default();
+    doc.transact("Plug", |tx| {
+        let page = tx.add_page("1")?;
+        let x5 = tx.add_device(DeviceTag::parse("-X5")?, "Sensor plug")?;
+        tx.update::<Device>(x5, |d| d.kind = DeviceKind::Connector)?;
+        let b1 = tx.add_device(DeviceTag::parse("-B1")?, "Sensor")?;
+        let plug = tx.place_symbol(
+            page,
+            "iec/connectors/plug",
+            Placement::at(Point::new(40.0, 20.0)),
+            vec![Pin::new("2", 0.0, 10.0), Pin::new("1", 0.0, 0.0)],
+            SymbolRole::Device {
+                device: x5,
+                main: true,
+            },
+        )?;
+        let sensor = tx.place_symbol(
+            page,
+            "iec/sensors/sensor",
+            Placement::at(Point::new(40.0, 80.0)),
+            vec![Pin::new("BN", 0.0, 0.0), Pin::new("BU", 0.0, 10.0)],
+            SymbolRole::Device {
+                device: b1,
+                main: true,
+            },
+        )?;
+        let wire = tx.connect(Endpoint::pin(plug, 1), Endpoint::pin(sensor, 0))?;
+        tx.update::<Wire>(wire, |w| w.number = Some("101".into()))?;
+        Ok(())
+    })
+    .expect("plug builds");
+    let plugs = LiveReports::standard()
+        .get(doc.project(), "plugs")
+        .expect("built in")
+        .clone();
+    assert_eq!(plugs.sections.len(), 1);
+    assert_eq!(plugs.sections[0].title, "-X5");
+    // Contacts sort naturally; the wired one shows number, target and place.
+    assert_eq!(
+        rows(&plugs, "-X5"),
+        strings(&[
+            &["1", "101", "-B1:BN", "", "1.1", ""],
+            &["2", "", "", "", "1.1", "open"],
+        ])
+    );
 }
