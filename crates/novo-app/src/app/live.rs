@@ -412,6 +412,7 @@ impl NovoApp {
         let badges = pole_badges(project, page, &solved.settled.poles);
         let driven = solved.settled.driven.clone();
         let energized = solved.settled.energized.clone();
+        let poles = solved.settled.poles.clone();
         let coils = coil_badges(project, page, &energized, &solved.forced);
         let seen = inputs_seen(project, &solved.netlist, &solved.settled.solution);
         let inputs = input_marks(project, page, &seen);
@@ -439,6 +440,8 @@ impl NovoApp {
             page,
             &states,
             &energized,
+            (&driven, &poles),
+            self.settings.reduced_motion,
             dt as f32,
         );
 

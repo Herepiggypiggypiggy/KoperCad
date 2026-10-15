@@ -58,8 +58,11 @@ A shorted net (`Live::Shorted`) on any winding pin is `Fault`.
 1. `novo-sim/src/devices.rs` + `tests/devices.rs`: the models.
 2. `novo-app/src/app/live_anim.rs`: lamp, motor and contact animation, one
    hook in `live.rs`.
-3. Polish: reduced motion, per-timer progress ring if `Settled` grows a
-   per-device remaining time (Potentials thread).
+3. Polish (done): contact blades swing between open and closed, a timer
+   coil shows a progress ring (counted in `live_anim` from the coil's on/off
+   time and the device `delay`, since `Settled` only has one global
+   remaining time), and Preferences > Live view > Reduce motion
+   (`Settings::reduced_motion`) switches everything at once.
 
 ## Out of scope
 

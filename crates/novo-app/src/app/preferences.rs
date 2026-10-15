@@ -12,6 +12,7 @@ impl NovoApp {
         }
         let mut mode = self.settings.connect_mode();
         let mut carries = self.settings.move_carries;
+        let mut reduced = self.settings.reduced_motion;
         let modal = egui::Modal::new(egui::Id::new("preferences")).show(ctx, |ui| {
             ui.set_width(340.0);
             ui.heading("Preferences");
@@ -33,12 +34,17 @@ impl NovoApp {
             ui.radio_value(&mut carries, false, "Leaves its wires (default)");
             ui.radio_value(&mut carries, true, "Takes its wires along");
             ui.add_space(8.0);
+            ui.strong("Live view");
+            ui.checkbox(&mut reduced, "Reduce motion");
+            ui.weak("Contacts, lamps and coils switch at once; motors show an arrow.");
+            ui.add_space(8.0);
             ui.button("Close (Esc)").clicked()
         });
         if mode != self.settings.connect_mode() {
             self.settings.set_connect_mode(mode);
         }
         self.settings.move_carries = carries;
+        self.settings.reduced_motion = reduced;
         if modal.inner || modal.should_close() {
             self.wb.preferences = false;
         }

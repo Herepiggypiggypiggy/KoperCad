@@ -31,6 +31,9 @@ pub struct Settings {
     /// Whether moving a symbol takes its wires along by default (Shift
     /// does the other one): a per-user preference.
     pub move_carries: bool,
+    /// Turns the live view's animation off: lamps, contacts and coils
+    /// switch at once and motors show a direction arrow instead of turning.
+    pub reduced_motion: bool,
 }
 
 impl Settings {
