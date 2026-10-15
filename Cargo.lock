@@ -1845,6 +1845,7 @@ dependencies = [
  "novo-cables",
  "novo-canvas",
  "novo-checks",
+ "novo-commissioning",
  "novo-core",
  "novo-editor",
  "novo-layout",
