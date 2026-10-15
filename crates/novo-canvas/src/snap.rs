@@ -1,6 +1,6 @@
 //! Snapping the cursor to connection points, geometry and the grid.
 
-use crate::geom::Aabb;
+use crate::geom::{self, Aabb};
 use crate::grid::Grid;
 use crate::scene::{ItemId, Scene};
 use crate::viewport::Viewport;
@@ -96,13 +96,6 @@ pub fn snap(
                     p.shape.snap_points(&mut pts);
                 }
             }
-            if settings.connections {
-                pts.extend(
-                    item.snap_lines
-                        .iter()
-                        .map(|l| (l.nearest(cursor), SnapKind::OnLine)),
-                );
-            }
             for &(p, kind) in &pts {
                 let d = p.distance(cursor);
                 if d > radius {
@@ -118,6 +111,25 @@ pub fn snap(
                             item: Some(id),
                         },
                     ));
+                }
+            }
+            // A rail is captured by the cursor's distance to the line
+            // itself; its pitch only decides where along it the point
+            // lands, so a wide pitch cannot push the point out of reach.
+            if settings.connections {
+                for l in &item.snap_lines {
+                    let d = geom::dist_point_segment(cursor, l.a, l.b);
+                    let score = d * SnapKind::OnLine.weight();
+                    if d <= radius && best.is_none_or(|(b, _)| score < b) {
+                        best = Some((
+                            score,
+                            Snapped {
+                                point: l.nearest(cursor),
+                                kind: SnapKind::OnLine,
+                                item: Some(id),
+                            },
+                        ));
+                    }
                 }
             }
         });
@@ -312,5 +324,12 @@ mod tests {
         );
         let r = at(&s, Vec2::new(40.0, 53.0));
         assert_eq!(r.kind, SnapKind::Connection);
+        // A wide pitch does not push the point out of reach: the cursor is
+        // 1 mm from the rail, its step point 20 mm away along it.
+        let wide = SnapLine::new((0.0, 50.0), (100.0, 50.0)).stepped(40.0);
+        let mut s2 = Scene::new();
+        s2.insert(ItemId(8), Item::new(LayerId(0)).with_snap_line(wide));
+        let r = at(&s2, Vec2::new(20.0, 51.0));
+        assert_eq!((r.kind, r.point), (SnapKind::OnLine, Vec2::new(40.0, 50.0)));
     }
 }

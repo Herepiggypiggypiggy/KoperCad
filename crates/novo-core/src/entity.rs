@@ -668,6 +668,13 @@ pub struct Wire {
     /// Bend points between the two ends, in page coordinates.
     #[serde(default)]
     pub route: Vec<Point>,
+    /// Whether the user placed the bend points (Lines mode, or Corners
+    /// with clicked corners) rather than the router. `tidy` keeps a
+    /// hand-drawn route unless it is selected, and moving a symbol moves
+    /// only its end segments (DESIGN §4 "Wiring modes"). The model only
+    /// stores the mark; the editor sets and clears it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hand_drawn: bool,
     /// Wire number, when numbered.
     #[serde(default)]
     pub number: Option<String>,
@@ -694,6 +701,7 @@ impl Wire {
             from,
             to,
             route: Vec::new(),
+            hand_drawn: false,
             number: None,
             color: None,
             cross_section_mm2: None,
