@@ -17,3 +17,5 @@ Next
 - Two views. Declared: what the drawing says (feeds, `Net::potentials`, `carried`, `reachable`), stored and unchanged by simulation. Live: what a conductor carries under a contact state, computed by `novo_sim::solve(project, netlist, &PoleState)`, never stored.
 - `PoleState` = set of closed poles `(symbol, pass_through group)`; default all open. A potential flows from nets that define it through closed poles into undefined nets, never into a net with its own definition; two potentials meeting = `Live::Shorted`.
 - Next steps (not in the first PR): coil -> contact coupling (a coil with live potential on both pins closes the poles of its device's contacts, via xref device links), iterate to a fixpoint for latching circuits; timers; canvas shows live state as a tint, declared label unchanged (DESIGN §Potential feeds).
+
+Live view v1 done (app overlay, Shift+L). Next: coil coupling in the UI once novo-sim has it; tint terminals and pins; show live potential in the wire hover tip.

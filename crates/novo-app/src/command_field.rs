@@ -8,7 +8,9 @@ use novo_workflow::keymap::Focus;
 use novo_workflow::palette::{Kind, Mode, Palette, Row, Sources, Target};
 
 /// Rows shown at once; the rest scroll.
-const MAX_HEIGHT: f32 = 380.0;
+const MAX_HEIGHT: f32 = 460.0;
+/// The list keeps at least this much room when it has rows to fill it.
+const MIN_HEIGHT: f32 = 300.0;
 const WIDTH: f32 = 480.0;
 
 struct OpenField {
@@ -205,6 +207,7 @@ impl CommandField {
                     }
                     egui::ScrollArea::vertical()
                         .max_height(MAX_HEIGHT)
+                        .min_scrolled_height(MIN_HEIGHT)
                         .show(ui, |ui| {
                             let mut group = "";
                             for (i, row) in rows.iter().enumerate() {

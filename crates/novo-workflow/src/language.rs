@@ -50,6 +50,7 @@ pub const DUTCH: &[Aliases] = &[
         &["voorkeuren"],
         &["instellingen", "opties"],
     ),
+    nl("terminal.toggle_pe", &["pe-klem"], &["aardklem", "aarde"]),
     nl("file.quit", &[], &["afsluiten", "stoppen"]),
     // Draw
     nl(
@@ -179,6 +180,11 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("view.full_screen", &[], &["volledig scherm"]),
     nl("view.cabinet_table", &[], &["kast als tabel", "tabel"]),
+    nl(
+        "sim.live",
+        &[],
+        &["live potentialen tonen", "contacten sluiten", "spanning"],
+    ),
     nl(
         "view.toggle_marks",
         &[],

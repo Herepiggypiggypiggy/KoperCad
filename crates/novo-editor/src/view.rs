@@ -18,14 +18,25 @@ use novo_canvas::model::{
 use novo_canvas::widget::{CanvasView, EscapeTarget};
 use novo_canvas::{Anchor, Color, Item, ItemId, Label, Primitive, SelectOp, Shape, Stroke, Vec2};
 use novo_core::{
-    AnyId, ChangeSet, Command, DeviceId, Document, PageId, Point, SymbolId, SymbolRole, WireId,
+    AnyId, ChangeSet, Command, DeviceId, Document, PageId, Point, SymbolId, SymbolRole,
+    TextContent, WireId,
 };
 
 use crate::art::LibraryArt;
 use crate::catalog::Match;
 use crate::edit::device_of;
 use crate::potential::PotentialMenu;
-use crate::tool::{Editor, EditorKey};
+use crate::tool::{Editor, EditorKey, LabelSource};
+
+/// A label dragged on its own, from the press to the release.
+struct LabelDrag {
+    source: LabelSource,
+    /// The label as drawn when it was picked up.
+    label: Label,
+    /// The press, and the pointer now (world, raw).
+    from: Point,
+    to: Point,
+}
 
 /// A wire part dragged from the press to the release.
 struct PartDrag {
@@ -36,7 +47,10 @@ struct PartDrag {
 }
 
 /// Rows shown in the insert search.
-const SEARCH_ROWS: usize = 8;
+const SEARCH_ROWS: usize = 14;
+/// Room the part search keeps below its field, so it opens upward from
+/// the bottom of the window instead of showing two rows.
+const SEARCH_HEIGHT: f32 = 340.0;
 /// Opacity of things that follow the pointer, in the hover colour.
 const GHOST_ALPHA: u8 = 200;
 /// The hint on the highlighted proposal (DESIGN.md §5).
@@ -125,6 +139,8 @@ pub struct SchematicView {
     part_drag: Option<PartDrag>,
     /// The wire part the scene shows emphasised now.
     wire_focus: Option<WirePart>,
+    /// A label picked up on its own: only the text follows the pointer.
+    label_drag: Option<LabelDrag>,
     /// Where the canvas was drawn last frame, in screen points.
     rect: egui::Rect,
     /// Text the shell draws next to symbols (cross references).
@@ -170,6 +186,40 @@ fn part_exists(project: &novo_core::Project, part: WirePart) -> bool {
     })
 }
 
+/// The label a press at `at` picked up, when it is text that can move on its
+/// own: a text record, or text the canvas draws for a tag or wire number.
+fn label_drag_at(
+    scene: &PageScene,
+    document: &Document,
+    hit: &novo_canvas::scene::Hit,
+    at: Point,
+) -> Option<LabelDrag> {
+    let project = document.project();
+    let found = scene.label_hit(project, hit)?;
+    if found.kind == LabelKind::Fixed {
+        return None;
+    }
+    let label = scene.scene().get(hit.id)?.labels.get(hit.label?)?.clone();
+    let source = match found.text {
+        Some(text) => LabelSource::Record(text),
+        None => LabelSource::Drawn {
+            owner: found.owner,
+            content: match found.owner {
+                AnyId::Wire(_) => TextContent::WireNumber,
+                _ => TextContent::DeviceTag,
+            },
+            at: point(label.pos),
+            anchor: model::text_anchor(label.anchor),
+        },
+    };
+    Some(LabelDrag {
+        source,
+        label,
+        from: at,
+        to: at,
+    })
+}
+
 fn point(v: Vec2) -> Point {
     Point::new(f64::from(v.x), f64::from(v.y))
 }
@@ -201,6 +251,7 @@ impl SchematicView {
             wire_part: None,
             part_drag: None,
             wire_focus: None,
+            label_drag: None,
             rect: egui::Rect::NOTHING,
             notes: Vec::new(),
             notes_dirty: false,
@@ -299,6 +350,17 @@ impl SchematicView {
         if let Some(r) = &mut self.rename {
             r.text = text.to_string();
         }
+    }
+
+    /// Opens the part search at `anchor` (the I key does this at the
+    /// pointer).
+    pub fn open_insert_at(&mut self, anchor: egui::Pos2) {
+        self.insert = Some(InsertSearch {
+            query: String::new(),
+            anchor,
+            selected: 0,
+            focus: true,
+        });
     }
 
     /// Whether the in-place rename box is open.
@@ -463,6 +525,17 @@ impl SchematicView {
                 ghost,
             )));
         }
+        if let Some(drag) = &self.label_drag {
+            let d = self.editor.label_delta(drag.from, drag.to);
+            let mut label = drag.label.clone();
+            label.pos += Vec2::new(d.x as f32, d.y as f32);
+            label.color = ghost_color;
+            items.push(
+                Item::new(scene.layers().texts)
+                    .unselectable()
+                    .with_label(label),
+            );
+        }
         if preview.wire.len() >= 2 {
             let pts = preview.wire.iter().map(|p| model::vec(*p));
             items.push(
@@ -616,6 +689,7 @@ impl SchematicView {
             if let Some(hit) = scene.scene().pick(w, tol, self.canvas.viewport.zoom)
                 && scene.model_id(hit.id).is_some()
             {
+                let label_drag = label_drag_at(scene, document, &hit, point(w));
                 // Cancel the band the canvas may have begun, then select.
                 // A press on a selected object keeps the whole selection.
                 let keep: Vec<ItemId> = if self.canvas.selection.contains(hit.id) {
@@ -629,7 +703,10 @@ impl SchematicView {
                 let selection = self.selection();
                 // Only devices drag; a wire is selected and nothing else
                 // (a moved wire would have to keep the no-overlap rule).
-                if matches!(scene.model_id(hit.id), Some(AnyId::Symbol(_))) {
+                if label_drag.is_some() {
+                    // A press on text moves the text and nothing else.
+                    self.label_drag = label_drag;
+                } else if matches!(scene.model_id(hit.id), Some(AnyId::Symbol(_))) {
                     let carry = ui.input(|i| i.modifiers.shift);
                     self.drag_move = self.editor.begin_move_with(&selection, carry);
                 }
@@ -645,6 +722,17 @@ impl SchematicView {
             && let Some(w) = out.cursor_raw
         {
             self.editor.click(document, page, point(w), tolerance);
+        }
+        if let Some(drag) = &mut self.label_drag {
+            if let Some(w) = out.cursor_raw {
+                drag.to = point(w);
+            }
+            if response.drag_stopped_by(egui::PointerButton::Primary) {
+                let delta = self.editor.label_delta(drag.from, drag.to);
+                let source = drag.source.clone();
+                self.label_drag = None;
+                self.editor.move_label(document, page, &source, delta);
+            }
         }
         if self.drag_move
             && let Some(w) = out.cursor_raw
@@ -686,6 +774,20 @@ impl SchematicView {
         {
             let selection = self.selection();
             self.editor.key(document, EditorKey::StartFree, &selection);
+        } else if !self.swallow
+            && !self.popup_open()
+            && matches!(self.editor.tool(), crate::tool::Tool::Select)
+            && out.hit.is_none()
+            && !self.wire_under(document, out.cursor_raw)
+            && response.double_clicked_by(egui::PointerButton::Primary)
+        {
+            // A double click on bare grid starts a wire there, without the
+            // wire tool; text, devices and wires keep their own double click.
+            self.editor.begin_wire();
+            let selection = self.selection();
+            if !self.editor.key(document, EditorKey::StartFree, &selection) {
+                self.editor.leave_tool();
+            }
         } else if response.clicked_by(egui::PointerButton::Primary)
             && !self.swallow
             && let Some(w) = out.cursor_raw
@@ -888,6 +990,17 @@ impl SchematicView {
         }
     }
 
+    /// Whether a wire's line is under the pointer. Wires are not canvas
+    /// hits, so "bare grid" has to ask.
+    fn wire_under(&self, document: &Document, at: Option<Vec2>) -> bool {
+        let tol = self
+            .canvas
+            .viewport
+            .screen_to_world_len(self.canvas.pick_tolerance);
+        at.zip(self.scene.as_ref())
+            .is_some_and(|(w, scene)| scene.wire_part_at(document.project(), w, tol).is_some())
+    }
+
     /// Wires are picked by part: a click selects the corner or the run
     /// under the pointer, a double click all of the wire, Esc drops the
     /// part. The part under the pointer is emphasised while nothing else
@@ -903,6 +1016,7 @@ impl SchematicView {
             && !self.editor.dragging()
             && !self.drag_move
             && self.part_drag.is_none()
+            && self.label_drag.is_none()
             && !self.popup_open()
             && !self.swallow;
         let tol = self
@@ -992,8 +1106,12 @@ impl SchematicView {
             }
         }
         if pressed(Key::Escape) {
-            // The first Esc drops a selected wire part.
-            if self.part_drag.take().is_none() && self.wire_part.take().is_none() {
+            // The first Esc puts a dragged label or wire part back, the next
+            // drops a selected wire part.
+            if self.label_drag.take().is_none()
+                && self.part_drag.take().is_none()
+                && self.wire_part.take().is_none()
+            {
                 self.canvas.escape_with(Some(&mut Ladder(&mut self.editor)));
             }
         }
@@ -1038,15 +1156,20 @@ impl SchematicView {
                     continue;
                 }
                 // Delete on a selected corner takes that bend out; on a run
-                // it waits for a double click to select the whole wire.
+                // it deletes the wire (DESIGN.md §4).
                 if key == Key::Delete
                     && selection.is_empty()
                     && let Some(part) = self.wire_part
                 {
-                    if let WirePartKind::Corner(i) = part.kind {
-                        self.editor.remove_corner(document, part.wire, i);
-                        self.wire_part = None;
+                    match part.kind {
+                        WirePartKind::Corner(i) => {
+                            self.editor.remove_corner(document, part.wire, i);
+                        }
+                        WirePartKind::Segment(_) => {
+                            self.editor.delete(document, &[AnyId::Wire(part.wire)]);
+                        }
                     }
+                    self.wire_part = None;
                     continue;
                 }
                 self.editor.key(document, action, &selection);
@@ -1133,7 +1256,14 @@ impl SchematicView {
             .collect();
         egui::Area::new(egui::Id::new("novo-editor-insert"))
             .order(egui::Order::Foreground)
-            .fixed_pos(search.anchor)
+            .fixed_pos(egui::pos2(
+                search.anchor.x,
+                search
+                    .anchor
+                    .y
+                    .min(ctx.content_rect().bottom() - SEARCH_HEIGHT - 60.0)
+                    .max(ctx.content_rect().top() + 8.0),
+            ))
             .show(ctx, |ui| {
                 egui::Frame::popup(ui.style()).show(ui, |ui| {
                     ui.set_width(320.0);
@@ -1157,16 +1287,25 @@ impl SchematicView {
                         });
                     }
                     ui.separator();
-                    for (i, hit) in hits.iter().enumerate() {
-                        let text = match (&hit.parent, hit.hint.is_empty()) {
-                            (Some(p), _) => format!("{}  ·  of {p}", hit.name),
-                            (None, false) => format!("{}  ·  {}", hit.name, hit.hint),
-                            (None, true) => hit.name.clone(),
-                        };
-                        if ui.selectable_label(i == search.selected, text).clicked() {
-                            pick = Some(hit.clone());
-                        }
-                    }
+                    egui::ScrollArea::vertical()
+                        .max_height(SEARCH_HEIGHT)
+                        .min_scrolled_height(SEARCH_HEIGHT.min(hits.len() as f32 * 24.0))
+                        .show(ui, |ui| {
+                            for (i, hit) in hits.iter().enumerate() {
+                                let text = match (&hit.parent, hit.hint.is_empty()) {
+                                    (Some(p), _) => format!("{}  ·  of {p}", hit.name),
+                                    (None, false) => format!("{}  ·  {}", hit.name, hit.hint),
+                                    (None, true) => hit.name.clone(),
+                                };
+                                let r = ui.selectable_label(i == search.selected, text);
+                                if i == search.selected && (up || down) {
+                                    r.scroll_to_me(None);
+                                }
+                                if r.clicked() {
+                                    pick = Some(hit.clone());
+                                }
+                            }
+                        });
                     if hits.is_empty() {
                         ui.weak("No symbol matches");
                     }
@@ -1331,6 +1470,9 @@ impl SchematicView {
                             if ui.button("Disconnect terminals").clicked() {
                                 chosen = Some(MenuChoice::Command("terminal.disconnect"));
                             }
+                        }
+                        if ui.button("Toggle PE terminal").clicked() {
+                            chosen = Some(MenuChoice::Command("terminal.toggle_pe"));
                         }
                         if ui.button("Strip number up   Up").clicked() {
                             chosen = Some(MenuChoice::Command("terminal.strip_up"));
@@ -2082,14 +2224,42 @@ mod tests {
     }
 
     #[test]
+    fn delete_on_a_selected_run_deletes_the_wire() {
+        let mut h = Harness::new();
+        let (wire, corner) = wire_with_a_corner(&mut h);
+        h.click(corner.x + 20.0, corner.y, egui::PointerButton::Primary);
+        h.key(Key::Delete);
+        assert!(h.doc.project().wire(wire).is_none());
+        assert_eq!(h.view.wire_part, None);
+    }
+
+    #[test]
+    fn a_double_click_on_a_wire_does_not_start_a_new_one() {
+        let mut h = Harness::new();
+        let (_, corner) = wire_with_a_corner(&mut h);
+        for _ in 0..60 {
+            h.frame(Vec::new());
+        }
+        let pos = h.screen(corner.x + 20.0, corner.y);
+        h.frame(vec![egui::Event::PointerMoved(pos)]);
+        for pressed in [true, false, true, false] {
+            h.frame(vec![egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Modifiers::NONE,
+            }]);
+        }
+        h.frame(Vec::new());
+        assert!(!h.view.editor.tool_active());
+        assert_eq!(h.doc.project().wires().count(), 1);
+    }
+
+    #[test]
     fn delete_on_a_selected_corner_takes_the_bend_out() {
         let mut h = Harness::new();
         let (wire, corner) = wire_with_a_corner(&mut h);
         let depth = h.doc.undo_depth();
-        // Delete on a run does nothing: that takes the whole wire.
-        h.click(corner.x + 20.0, corner.y, egui::PointerButton::Primary);
-        h.key(Key::Delete);
-        assert_eq!(h.doc.project().wire(wire).unwrap().route.len(), 1);
         h.click(corner.x, corner.y, egui::PointerButton::Primary);
         h.key(Key::Delete);
         assert!(h.doc.project().wire(wire).unwrap().route.is_empty());
@@ -2172,6 +2342,43 @@ mod tests {
         let after = at(&h);
         assert_eq!(after, Point::new(before.x + 40.0, before.y + 20.0));
         assert!(!h.view.editor.tool_active());
+    }
+
+    #[test]
+    fn dragging_a_tag_moves_the_text_and_not_the_device() {
+        let mut h = Harness::new();
+        h.view.editor.auto_connect = false;
+        h.view.editor.begin_place("iec/coils/relay", None);
+        h.click(60.0, 60.0, egui::PointerButton::Primary);
+        h.view.editor.leave_tool();
+        let sym = h.doc.project().symbols().next().unwrap().id;
+        let origin = h.doc.project().symbol(sym).unwrap().placement.origin;
+        let depth = h.doc.undo_depth();
+        let scene = h.view.scene.as_ref().unwrap().scene();
+        let id = item_id(AnyId::Symbol(sym));
+        let tag = scene.get(id).unwrap().labels[0].clone();
+        let grab = tag.bounds().center();
+        let grab = (f64::from(grab.x), f64::from(grab.y));
+        h.drag(grab, (grab.0 + 20.0, grab.1 + 10.0));
+        assert_eq!(
+            h.doc.project().symbol(sym).unwrap().placement.origin,
+            origin
+        );
+        assert_eq!(h.doc.undo_depth(), depth + 1);
+        let record = h.doc.project().texts_of(sym).into_iter().next().unwrap();
+        let at = h.doc.project().text_position(record).unwrap();
+        // The move snaps to the grid, so it is within one step of the drag.
+        let step = h.view.editor.grid;
+        assert!(
+            (at.x - (f64::from(tag.pos.x) + 20.0)).abs() <= step,
+            "{at:?}"
+        );
+        assert!(
+            (at.y - (f64::from(tag.pos.y) + 10.0)).abs() <= step,
+            "{at:?}"
+        );
+        assert!(at.x > f64::from(tag.pos.x) && at.y > f64::from(tag.pos.y));
+        assert!(h.view.label_drag.is_none());
     }
 
     /// A point the canvas picks as `sym` that no pin target covers.

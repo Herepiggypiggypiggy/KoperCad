@@ -53,3 +53,4 @@
 - 2026-10-15: labels win picks over ink under them; label_hit kinds follow the symbol role (PR open).
 - 2026-10-15: wires pick by part in the editor view (wires_pick_whole off): click selects a corner or a run, double click the whole wire, Esc drops the part, Delete on a corner removes the bend (edit::remove_corner). Right click still selects the wire for the menu.
 - 2026-10-15: drag a selected wire part: a corner moves alone, a run moves its two corners (inner run slides across itself, end run along itself), grid-snapped, ghost while dragging, Esc cancels (edit::move_wire_part, Editor::part_delta).
+- 2026-10-15: text-only drag. Press and drag on a label moves only the text: Editor::move_label (LabelSource Record or Drawn; a drawn tag gets a text record at the place it is drawn), view ghost while dragging, Esc puts it back.
