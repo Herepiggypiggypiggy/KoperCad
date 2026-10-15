@@ -556,7 +556,19 @@ pub struct PageScene {
     strip_heads: HashMap<SymbolId, String>,
     /// The wire part under the pointer or selected, drawn emphasised.
     focus: Option<WirePart>,
+    /// Wires drawn in another colour and width than the style's; see
+    /// [`Self::set_wire_looks`].
+    wire_looks: HashMap<WireId, WireLook>,
     pub style: ModelStyle,
+}
+
+/// A wire's own stroke, in place of [`ModelStyle::wire`]: the live view
+/// lights wires in the colour of what they carry.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WireLook {
+    pub color: Color,
+    /// Screen points, the same at every zoom.
+    pub width: f32,
 }
 
 /// What a double click acts on ([`PageScene::double_click_target`]).
@@ -654,6 +666,7 @@ impl PageScene {
             revisions: None,
             strip_heads: HashMap::new(),
             focus: None,
+            wire_looks: HashMap::new(),
             style: ModelStyle::default(),
         };
         s.rebuild(project, art);
@@ -720,6 +733,25 @@ impl PageScene {
             }
         }
         best.map(|(_, part)| part)
+    }
+
+    /// Draws the given wires in their own look, in the wire layer under
+    /// symbols and text; every other wire goes back to the style's. Only the
+    /// wires whose look changed are redrawn.
+    pub fn set_wire_looks(&mut self, project: &Project, looks: HashMap<WireId, WireLook>) {
+        if looks == self.wire_looks {
+            return;
+        }
+        let old = std::mem::replace(&mut self.wire_looks, looks);
+        let changed: Vec<WireId> = old
+            .keys()
+            .chain(self.wire_looks.keys())
+            .copied()
+            .filter(|w| old.get(w) != self.wire_looks.get(w))
+            .collect();
+        for wire in changed {
+            self.sync_wire(project, wire);
+        }
     }
 
     /// Emphasises one wire part (or none): the pointer's, or the selected
@@ -1489,10 +1521,14 @@ impl PageScene {
             self.remove(id.into());
             return;
         };
+        let stroke = self
+            .wire_looks
+            .get(&id)
+            .map_or(self.style.wire, |l| Stroke::screen(l.width, l.color));
         let mut item = Item::new(self.layers.wires)
             .with(Primitive::stroked(
                 Shape::polyline(pts.clone(), false),
-                self.style.wire,
+                stroke,
             ))
             .with_snap(SnapPoint::connection(pts[0]))
             .with_snap(SnapPoint::connection(pts[pts.len() - 1]));
@@ -1737,6 +1773,10 @@ fn strip_heads(project: &Project, page: PageId) -> HashMap<SymbolId, String> {
         }
         for i in 0..syms.len() {
             for j in i + 1..syms.len() {
+                // Sorted by x: nothing further right can be near either.
+                if syms[j].0.x - syms[i].0.x > STRIP_RUN_GAP {
+                    break;
+                }
                 if near(syms[i].0, syms[j].0) {
                     let (a, b) = (root(&mut run, i), root(&mut run, j));
                     // The earlier terminal stays the root, so it heads the run.
@@ -2961,6 +3001,25 @@ mod tests {
             })
             .unwrap();
         (doc, page, wire)
+    }
+
+    #[test]
+    fn a_wire_look_replaces_the_stroke_and_clears() {
+        let (doc, page, wire) = bent_wire();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let stroke_of = |ps: &PageScene| {
+            let item = ps.scene().get(item_id(wire)).unwrap();
+            item.primitives[0].stroke.unwrap()
+        };
+        assert_eq!(stroke_of(&ps), ps.style.wire);
+        let look = WireLook {
+            color: Color::rgb(10, 200, 30),
+            width: 4.5,
+        };
+        ps.set_wire_looks(doc.project(), HashMap::from([(wire, look)]));
+        assert_eq!(stroke_of(&ps), Stroke::screen(4.5, look.color));
+        ps.set_wire_looks(doc.project(), HashMap::new());
+        assert_eq!(stroke_of(&ps), ps.style.wire);
     }
 
     #[test]
