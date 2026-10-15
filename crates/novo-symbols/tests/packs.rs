@@ -151,3 +151,24 @@ fn directory_loader_reads_one_pack() {
         }
     }
 }
+
+#[test]
+fn path_of_ignores_the_pack() {
+    assert_eq!(Pack::path_of("iec/contacts/no"), "contacts/no");
+    assert_eq!(Pack::path_of("nfpa/contacts/no"), "contacts/no");
+    assert_eq!(Pack::path_of("acme/contacts/no"), "acme/contacts/no");
+    assert_eq!(Pack::path_of("no"), "no");
+    assert!(Pack::same_device("iec/coils/relay", "nfpa/coils/relay"));
+    assert!(!Pack::same_device(
+        "iec/coils/relay",
+        "nfpa/coils/contactor"
+    ));
+}
+
+#[test]
+fn a_library_knows_its_pack() {
+    for p in Pack::ALL {
+        assert_eq!(pack(p).pack(), Some(p));
+    }
+    assert_eq!(Library::default().pack(), None);
+}
