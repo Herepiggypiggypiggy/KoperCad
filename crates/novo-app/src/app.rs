@@ -19,6 +19,7 @@ mod drawers;
 mod duplicate;
 mod dxf;
 mod example;
+mod faults;
 mod heat;
 mod inspector;
 mod learn;
@@ -54,6 +55,7 @@ mod status_bar;
 mod terminals;
 mod title_revisions;
 mod userkeymap;
+mod variants;
 mod wheel;
 mod workbench;
 mod workspace;
@@ -83,6 +85,8 @@ mod numbering_tests;
 mod onboarding_tests;
 #[cfg(test)]
 mod outline_tests;
+#[cfg(test)]
+mod variants_tests;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -867,8 +871,11 @@ impl NovoApp {
         self.project_settings_dialog(&ctx);
         self.macro_save_dialog(&ctx);
         self.macro_place_window(&ctx);
+        self.options_window(&ctx);
+        self.generate_window(&ctx);
         self.issue_revision_dialog(&ctx);
         self.compare_window(&ctx);
+        self.faults_window(&ctx);
         self.numbering_window(&ctx);
         self.page_form_dialog(&ctx);
         self.outline_dialogs(&ctx);

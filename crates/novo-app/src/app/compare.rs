@@ -4,8 +4,15 @@
 //! comparison is `novo_revisions::compare`.
 
 use eframe::egui;
+use novo_canvas::marks::{Mark, MarkKind};
+use novo_canvas::model::{PageScene, item_id};
+use novo_canvas::widget::CanvasView;
 use novo_core::{PageId, Project, RevisionId};
+use novo_editor::art::LibraryArt;
 use novo_revisions::{ChangeKind, ChangeRow, Comparison, FieldChange, Group, Side, group_of};
+use novo_symbols::Library;
+
+use super::changes::shown_on;
 
 use super::{Level, NovoApp};
 
@@ -17,6 +24,74 @@ pub(crate) struct CompareWindow {
     /// there is none.
     pub(super) shown: Option<(u64, Side, Side, Result<Comparison, String>)>,
     filter: String,
+    /// The read-only drawing of one side, while "Show drawing" is on.
+    drawing: Option<DrawView>,
+}
+
+impl CompareWindow {
+    /// Turns the drawing pane on, showing the To side.
+    #[cfg(test)]
+    pub(super) fn show_drawing(&mut self) {
+        self.drawing = Some(DrawView::new(true));
+    }
+
+    /// The marks on the drawing pane now (None while it is off).
+    #[cfg(test)]
+    pub(super) fn drawing_marks(&self) -> Option<&[Mark]> {
+        self.drawing
+            .as_ref()
+            .map(|d| d.canvas.marks.list.as_slice())
+    }
+}
+
+/// A page of one side's state, drawn read only with the change marks: what
+/// was removed is outlined on the From side, what was added on the To side,
+/// what changed on both.
+struct DrawView {
+    /// Whether the To side is shown (otherwise the From side).
+    show_to: bool,
+    /// The shown state, kept while neither side nor the project changes.
+    state: Option<(u64, Side, Project)>,
+    page: Option<PageId>,
+    scene: Option<(PageId, PageScene)>,
+    marks_for: Option<(u64, Side, Side, bool, PageId)>,
+    canvas: CanvasView,
+}
+
+impl DrawView {
+    fn new(show_to: bool) -> Self {
+        let mut canvas = CanvasView::new();
+        canvas.style = crate::theme::canvas_style();
+        canvas.bold_family = Some(novo_theme::fonts::strong_family());
+        DrawView {
+            show_to,
+            state: None,
+            page: None,
+            scene: None,
+            marks_for: None,
+            canvas,
+        }
+    }
+}
+
+/// The marks for `page` of the shown state: an outline on each added
+/// object (To side), removed one (From side) and changed one (both).
+fn marks_of(c: &Comparison, state: &Project, page: PageId, show_to: bool) -> Vec<Mark> {
+    let mut marks = Vec::new();
+    for row in &c.rows {
+        let kind = match row.kind {
+            ChangeKind::Added if show_to => MarkKind::Added,
+            ChangeKind::Removed if !show_to => MarkKind::Removed,
+            ChangeKind::Changed { .. } => MarkKind::Modified,
+            _ => continue,
+        };
+        for id in shown_on(state, row.id, page) {
+            let mut mark = Mark::on(kind, item_id(id));
+            mark.text = format!("{}: {}", kind_word(&row.kind), row.label);
+            marks.push(mark);
+        }
+    }
+    marks
 }
 
 fn group_title(group: Group) -> &'static str {
@@ -126,6 +201,7 @@ impl NovoApp {
                     to,
                     shown: None,
                     filter: String::new(),
+                    drawing: None,
                 });
             }
             Err(text) => self.message(Level::Info, text),
@@ -160,6 +236,20 @@ impl NovoApp {
             win.shown = Some((project.revision(), win.from, win.to, result));
         }
         // Newest first, then Now.
+        if let Some(d) = win.drawing.as_mut() {
+            let side = if d.show_to { win.to } else { win.from };
+            let key = (project.revision(), side);
+            if d.state.as_ref().is_none_or(|(r, s, _)| (*r, *s) != key) {
+                let state = match side {
+                    Side::Now => Some(project.clone()),
+                    Side::Revision(id) => self.backend.revision_snapshot(id),
+                };
+                d.state = state.map(|p| (key.0, key.1, p));
+                d.scene = None;
+                d.marks_for = None;
+            }
+        }
+        let library = self.library();
         let mut options: Vec<Side> = project.revisions().map(|r| Side::Revision(r.id)).collect();
         options.reverse();
         options.push(Side::Now);
@@ -178,10 +268,28 @@ impl NovoApp {
                     ui.label("To");
                     side_picker(ui, "compare_to", project, &options, &mut win.to);
                 });
+                let mut drawing_on = win.drawing.is_some();
+                if ui
+                    .checkbox(&mut drawing_on, "Show drawing")
+                    .on_hover_text("Draw one side read only, with the changes outlined")
+                    .changed()
+                {
+                    win.drawing = drawing_on.then(|| DrawView::new(true));
+                }
                 ui.add_space(4.0);
                 let Some((_, _, _, result)) = &win.shown else {
                     return;
                 };
+                if let Some(d) = win.drawing.as_mut() {
+                    drawing_ui(
+                        ui,
+                        d,
+                        library,
+                        result.as_ref().ok(),
+                        (project.revision(), win.from, win.to),
+                    );
+                    ui.separator();
+                }
                 match result {
                     Err(why) => {
                         ui.colored_label(ui.visuals().warn_fg_color, why);
@@ -216,6 +324,73 @@ impl NovoApp {
         if open {
             self.wb.compare = Some(win);
         }
+    }
+}
+
+/// The drawing pane: which side and page, then the read-only canvas.
+fn drawing_ui(
+    ui: &mut egui::Ui,
+    d: &mut DrawView,
+    library: Option<&Library>,
+    comparison: Option<&Comparison>,
+    (rev, from, to): (u64, Side, Side),
+) {
+    ui.horizontal(|ui| {
+        ui.label("Draw");
+        ui.selectable_value(&mut d.show_to, false, "From");
+        ui.selectable_value(&mut d.show_to, true, "To");
+    });
+    let Some((_, _, state)) = &d.state else {
+        ui.weak("This revision has no stored drawing");
+        return;
+    };
+    let pages = state.pages_in_order();
+    if d.page.is_none_or(|p| state.page(p).is_none()) {
+        d.page = pages.first().map(|p| p.id);
+        d.scene = None;
+    }
+    let Some(page) = d.page else {
+        ui.weak("No pages");
+        return;
+    };
+    let name = |id: PageId| state.page(id).map_or_else(String::new, |p| p.name.clone());
+    let mut picked = page;
+    egui::ComboBox::from_id_salt("compare_page")
+        .selected_text(format!("Page {}", name(page)))
+        .show_ui(ui, |ui| {
+            for p in &pages {
+                ui.selectable_value(&mut picked, p.id, format!("Page {}", p.name));
+            }
+        });
+    if picked != page {
+        d.page = Some(picked);
+        d.scene = None;
+        d.canvas.zoom_to_fit();
+    }
+    let page = picked;
+    if d.scene.as_ref().is_none_or(|(p, _)| *p != page) {
+        let scene = match library {
+            Some(lib) => PageScene::new(
+                state,
+                page,
+                &LibraryArt::new(lib, crate::theme::model_style().symbol),
+            ),
+            None => PageScene::new(state, page, &novo_canvas::model::PlaceholderArt),
+        };
+        d.scene = Some((page, scene));
+        d.marks_for = None;
+        d.canvas.zoom_to_fit();
+    }
+    let key = (rev, from, to, d.show_to, page);
+    if d.marks_for != Some(key) {
+        d.canvas.marks.list =
+            comparison.map_or_else(Vec::new, |c| marks_of(c, state, page, d.show_to));
+        d.marks_for = Some(key);
+    }
+    if let Some((_, scene)) = &d.scene {
+        ui.allocate_ui(egui::vec2(ui.available_width(), 300.0), |ui| {
+            d.canvas.show(ui, scene.scene());
+        });
     }
 }
 

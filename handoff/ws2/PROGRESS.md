@@ -34,3 +34,4 @@
 - 2026-10-15 18:05 UTC: ProjectRules.standard (drawing standard / symbol pack id) for WS-01.
 - 2026-10-15 18:25 UTC: Command::SwitchStandard for the symbols thread (standard + re-keyed symbols, one undo step).
 - 2026-10-15 18:45 UTC: AdoptBlockDefinition for the Macros thread; doc fixes from the #387 review.
+- 2026-10-15 19:20 UTC: IssueRevision.note for Revision tracking.
