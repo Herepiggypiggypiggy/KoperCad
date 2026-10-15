@@ -652,6 +652,9 @@ impl Project {
                 if rail.length <= 0.0 {
                     return Err(bad("length"));
                 }
+                if rail.width < 0.0 || rail.height < 0.0 {
+                    return Err(bad("cross_section"));
+                }
                 let on_plate = self
                     .structures
                     .get(&rail.structure)

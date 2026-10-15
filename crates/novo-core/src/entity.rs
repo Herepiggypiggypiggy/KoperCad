@@ -961,7 +961,8 @@ pub enum RailKind {
 }
 
 /// A DIN rail or wiring duct on the mounting plate of an enclosure. It runs
-/// to the right from `(x, y)`, its start, for `length` millimetres.
+/// from `(x, y)`, its start, for `length` millimetres: to the right, or down
+/// when `vertical`. A duct's `width` and `height` are its cross-section.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Rail {
     pub id: RailId,
@@ -972,8 +973,20 @@ pub struct Rail {
     pub length: f64,
     #[serde(default)]
     pub kind: RailKind,
+    /// Runs down from the start instead of to the right.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub vertical: bool,
+    /// Cross-section of a duct in millimetres; 0 while unknown.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub width: f64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub height: f64,
     #[serde(default)]
     pub properties: Properties,
+}
+
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
 }
 
 /// Where a device sits on the mounting plate of an enclosure. A device has
