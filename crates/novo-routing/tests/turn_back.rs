@@ -16,12 +16,12 @@ fn a_wire_that_turns_back_keeps_its_turning_point() {
         from: Anchor {
             pos: Point::new(50.0, 20.0),
             facing: Facing::Down,
-            z_mm: None,
+            z_mm: Some(30.0),
         },
         to: Anchor {
             pos: Point::new(50.0, 60.0),
             facing: Facing::Down,
-            z_mm: None,
+            z_mm: Some(30.0),
         },
         diameter_mm: None,
     };

@@ -16,7 +16,7 @@ fn anchor(x: f64, y: f64, facing: Facing) -> Anchor {
     Anchor {
         pos: Point::new(x, y),
         facing,
-        z_mm: None,
+        z_mm: Some(30.0),
     }
 }
 
