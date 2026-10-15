@@ -292,8 +292,8 @@ A jump (G, an exact tag, F8, Alt+Left/Right, a drawer row, Tab to an
 off-screen proposal) moves the view only when it has to. If the target is
 already readable (2.5 mm text at 10 px or larger) and at least 48 px inside
 the view, nothing moves. Otherwise the view centres on the target and zooms
-in to readable size, never further out than the user had it, unless the
-target is too big to fit, when it zooms out just enough.
+in to readable size (a closer zoom the user already had is kept), unless
+the target is too big to fit, when it zooms out just enough.
 
 There are no keys for corners, T-pieces, terminals, cables or potentials,
 because the user does not place those. "Repeat last tool" is the first item
