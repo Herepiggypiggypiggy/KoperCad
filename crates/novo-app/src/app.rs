@@ -841,11 +841,8 @@ impl NovoApp {
         self.command_field(&ctx, canvas_rect);
         self.recovery_dialog(&ctx);
         self.about_dialog(&ctx);
-<<<<<<< HEAD
         self.standards_window(&ctx);
-=======
         self.learn_window(&ctx);
->>>>>>> origin/main
         self.motor_start_window(&ctx);
         self.renumber_dialog(&ctx);
         self.plc_import_dialog(&ctx);
