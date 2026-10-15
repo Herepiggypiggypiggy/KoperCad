@@ -5,7 +5,7 @@
 
 use eframe::egui;
 use novo_canvas::cabinet::{
-    BoxState, BoxView, CabinetScene, CabinetView, PlateView, RailView, view_bounds,
+    BoxState, BoxView, CabinetScene, CabinetView, HeatView, PlateView, RailView, view_bounds,
 };
 use novo_canvas::widget::CanvasView;
 use novo_canvas::{Vec2, vec2};
@@ -15,6 +15,7 @@ use novo_layout::model::{
 };
 use novo_layout::plan::Plan;
 use novo_layout::state::CabinetLayout;
+use novo_layout::thermal;
 
 use super::{Level, NovoApp};
 use crate::theme;
@@ -28,7 +29,7 @@ const DEFAULT_PLATE: MountingPlate = MountingPlate {
 
 pub(super) struct CabinetState {
     view: CanvasView,
-    scene: CabinetScene,
+    pub(super) scene: CabinetScene,
     /// The panel shown, by its location (`+K1B1G1`).
     pub(super) location: Option<DeviceTag>,
     /// A `Place all` plan waiting for Enter.
@@ -43,6 +44,55 @@ pub(super) struct CabinetState {
     /// Keys the shell left for the Cabinet this frame (`edit.rotate`,
     /// `edit.delete`).
     pub(super) keys: Vec<String>,
+    /// The Heat layer: the loss-density overlay and its legend strip.
+    pub(super) heat: bool,
+}
+
+/// What the Heat layer shows besides the overlay.
+struct HeatInfo {
+    view: HeatView,
+    /// Placed devices with known loss, and without.
+    known: usize,
+    unknown: usize,
+    /// Total of the known losses, W.
+    total_w: f64,
+    /// Biggest source: tag and its share of the total.
+    top: Option<(String, f64)>,
+    top_third: f64,
+}
+
+/// The Heat layer for a layout: loss per placed device from the project's
+/// part data (a device without loss data is counted, not drawn).
+fn heat_info(
+    layout: &CabinetLayout,
+    losses: &[(u64, Option<f64>)],
+    tag_of: &impl Fn(u64) -> String,
+) -> HeatInfo {
+    let loss = |id: u64| losses.iter().find(|l| l.0 == id).and_then(|l| l.1);
+    let sources = thermal::sources(&layout.placements, loss);
+    let map = thermal::heat_map(
+        &layout.plate,
+        &sources,
+        thermal::DEFAULT_CELL_MM,
+        thermal::DEFAULT_SPREAD_MM,
+    );
+    let total_w = sources.iter().map(|s| s.loss_w).sum();
+    HeatInfo {
+        view: HeatView {
+            cell: map.cell_mm as f32,
+            cols: map.cols,
+            rows: map.rows,
+            bands: map.bands(&thermal::DEFAULT_BAND_LIMITS),
+        },
+        known: sources.len(),
+        unknown: layout.placements.len() - sources.len(),
+        total_w,
+        top: thermal::hot_devices(&sources)
+            .first()
+            .filter(|t| t.1 > 0.0)
+            .map(|t| (tag_of(t.0), t.1)),
+        top_third: thermal::top_third_share(&layout.plate, &sources),
+    }
 }
 
 /// A placed device being dragged across the plate.
@@ -70,6 +120,7 @@ impl CabinetState {
             drag: None,
             ghost: None,
             keys: Vec::new(),
+            heat: false,
         }
     }
 }
@@ -181,6 +232,10 @@ impl NovoApp {
         let cands = structure
             .map(|s| candidates(project, s))
             .unwrap_or_default();
+        let losses = structure
+            .filter(|_| self.cabinet.heat)
+            .map(|s| thermal::model::losses(project, s))
+            .unwrap_or_default();
         let tag_of = |id: u64| {
             project
                 .get::<Device>(DeviceId::from(id))
@@ -271,6 +326,8 @@ impl NovoApp {
                         ask = Some(Ask::PlaceAll);
                     }
                 }
+                ui.toggle_value(&mut self.cabinet.heat, "Heat")
+                    .on_hover_text("Show where heat concentrates on the plate (Heat layer)");
                 ui.weak(format!(
                     "{placed} placed, {unplaced} unplaced, {problems} {}",
                     if problems == 1 { "problem" } else { "problems" }
@@ -318,7 +375,12 @@ impl NovoApp {
                         }
                     });
 
-                let view = cabinet_view(&shown, &tag_of);
+                let mut view = cabinet_view(&shown, &tag_of);
+                if self.cabinet.heat {
+                    let info = heat_info(&shown, &losses, &tag_of);
+                    self.heat_strip(ui, &info);
+                    view.heat = Some(info.view);
+                }
                 self.cabinet.scene.set(&view);
                 if self.cabinet.fitted != location {
                     self.cabinet.view.viewport.fit(&view_bounds(&view), 24.0);
@@ -442,6 +504,60 @@ impl NovoApp {
         if let Some(ask) = ask {
             self.cabinet_ask(ask, structure, layout, &cands);
         }
+    }
+
+    /// The legend and numbers of the Heat layer, along the bottom.
+    fn heat_strip(&self, ui: &mut egui::Ui, info: &HeatInfo) {
+        let limits = thermal::DEFAULT_BAND_LIMITS;
+        let legend = thermal::legend(&limits);
+        let colors = self.cabinet.scene.style().heat;
+        egui::Panel::bottom("cabinet_heat").show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.strong("Heat");
+                for (i, band) in legend.iter().enumerate() {
+                    let swatch = if i == 0 {
+                        egui::Color32::TRANSPARENT
+                    } else {
+                        let [r, g, b, a] = colors[i - 1].0;
+                        egui::Color32::from_rgba_unmultiplied(r, g, b, a.max(120))
+                    };
+                    let (rect, _) =
+                        ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
+                    ui.painter().rect_filled(rect, 2.0, swatch);
+                    ui.painter().rect_stroke(
+                        rect,
+                        2.0,
+                        egui::Stroke::new(1.0, ui.visuals().weak_text_color()),
+                        egui::StrokeKind::Inside,
+                    );
+                    let text = match legend.get(i + 1) {
+                        Some(next) => {
+                            format!("{} ({} to {} W/dm\u{b2})", band.label, band.from, next.from)
+                        }
+                        None => format!("{} (over {} W/dm\u{b2})", band.label, band.from),
+                    };
+                    ui.weak(text);
+                }
+            });
+            let mut line = format!("{:.0} W of known loss", info.total_w);
+            if info.unknown > 0 {
+                line.push_str(&format!(
+                    ", {} placed without loss data (at least)",
+                    info.unknown
+                ));
+            }
+            if let Some((tag, share)) = &info.top {
+                line.push_str(&format!(", most from {tag} ({:.0}%)", share * 100.0));
+            }
+            if info.known > 0 {
+                line.push_str(&format!(
+                    ", {:.0}% in the top third of the plate",
+                    info.top_third * 100.0
+                ));
+            }
+            ui.weak(line);
+            ui.weak(thermal::NOTE);
+        });
     }
 
     pub(super) fn cabinet_ask(

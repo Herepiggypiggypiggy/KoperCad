@@ -161,3 +161,50 @@ fn a_ghost_is_drawn_but_never_stored() {
     // Without a hovering payload the ghost is cleared again.
     assert!(d.app.cabinet.ghost.is_none());
 }
+
+#[test]
+fn heat_layer_draws_the_overlay_from_part_losses_and_goes_away() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    let part = project(&d).all::<novo_core::Part>().next().unwrap().id;
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Loss", |tx| {
+            tx.set_property(part, "power_loss_w", Some(Value::Float(30.0)))
+        })
+        .unwrap();
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    let layout = layout_of(&d, cab);
+    let cands = novo_layout::model::candidates(project(&d), cab);
+    d.app.cabinet_ask(Ask::PlaceAll, Some(cab), layout, &cands);
+    d.app.cabinet_ask(Ask::Accept, Some(cab), None, &[]);
+
+    let heat_cells = |d: &Drive| {
+        let layer = d.app.cabinet.scene.layers().heat;
+        d.app
+            .cabinet
+            .scene
+            .scene()
+            .iter()
+            .filter(|(_, item)| item.layer == layer)
+            .count()
+    };
+    d.frame();
+    assert!(!d.app.cabinet.heat);
+    assert_eq!(heat_cells(&d), 0);
+    d.app.cabinet.heat = true;
+    d.frame();
+    assert!(heat_cells(&d) > 0);
+    d.app.cabinet.heat = false;
+    d.frame();
+    assert_eq!(heat_cells(&d), 0);
+}

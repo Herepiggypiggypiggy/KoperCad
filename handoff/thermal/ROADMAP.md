@@ -9,7 +9,7 @@ the plate hot-spot map and legend, and `docs/design/thermal.md`.
 
 ## Next
 1. Heat overlay scene and legend in `novo-canvas` (bands plus marks, not colour alone).
-2. App "Heat" toggle on the Cabinet canvas.
+2. (done) App "Heat" toggle and legend strip on the Cabinet canvas. Next: palette command.
 3. Result strip from `sizing::thermal` after #402 merges; agree files with the sizing thread.
 4. Vertical gradient / fan or cooler position if the mean is not enough.
 
