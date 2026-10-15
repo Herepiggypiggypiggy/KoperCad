@@ -27,9 +27,10 @@ fn edits_regenerate_only_affected_reports() {
         .expect("edit");
     let mut stale = reports.notify(doc.project(), &changes);
     stale.sort_unstable();
-    // The diagrams read wires too.
-    assert_eq!(stale, ["cables", "terminals", "wires"]);
-    for id in ["toc", "bom", "devices"] {
+    // The diagrams read wires too, and the contents list follows the
+    // sheets of every report.
+    assert_eq!(stale, ["cables", "terminals", "toc", "wires"]);
+    for id in ["bom", "devices"] {
         assert!(reports.is_current(doc.project(), id), "{id}");
         // Rolled forward, so the output itself says it is current.
         let output = reports.get(doc.project(), id).expect("built in");
