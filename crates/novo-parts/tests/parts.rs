@@ -1184,3 +1184,40 @@ fn a_terminal_block_given_to_a_strip_is_ordered_per_terminal() {
     );
     assert!(missing_parts(p).is_empty());
 }
+
+#[test]
+fn a_pe_terminal_is_offered_a_pe_block_first_and_accessories_stay_on_the_strip() {
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let catalog = Catalog::starter();
+    let p = doc.project();
+    let terminals = p.terminals_of_strip(gate.x1);
+    let first = |t: &novo_core::Terminal| {
+        novo_parts::suggest_for_terminal(&catalog, p, t.id, "", 1)[0]
+            .order_number
+            .clone()
+    };
+    assert_eq!(first(terminals[0]), "3044076");
+    assert_eq!(first(terminals[3]), "3044089");
+
+    // An end cover is coded X but connects nothing: it is an accessory of
+    // the strip device, not a terminal article.
+    let mut cover = CatalogPart::new("Phoenix Contact", "3047028");
+    cover.description = "End cover".into();
+    cover.letter_codes = vec!["X".into()];
+    assert!(!novo_parts::is_terminal_block(&cover));
+    let command = assign_part(p, &[gate.x1], &cover, AssignMode::Add);
+    run(&mut doc, command);
+    let p = doc.project();
+    let x1 = p.device(gate.x1).unwrap();
+    assert_eq!(x1.parts.len(), 1);
+    assert_eq!(p.part(x1.parts[0]).unwrap().order_number, "3047028");
+    // The terminals keep their blocks.
+    let t = p.terminals_of_strip(gate.x1)[0].id;
+    assert_eq!(
+        p.part(novo_parts::terminal_part(p, t).unwrap())
+            .unwrap()
+            .order_number,
+        "3044076"
+    );
+}
