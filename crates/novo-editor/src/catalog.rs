@@ -395,7 +395,10 @@ pub fn model_pins(symbol: &Symbol) -> Vec<Pin> {
     symbol
         .connections
         .iter()
-        .map(|c| Pin::new(c.id.clone(), c.at[0], c.at[1]).with_direction(direction(c.dir)))
+        .map(|c| {
+            let pin = Pin::new(c.id.clone(), c.at[0], c.at[1]).with_direction(direction(c.dir));
+            if c.optional { pin.optional() } else { pin }
+        })
         .collect()
 }
 
@@ -503,6 +506,25 @@ mod tests {
         let hits = catalog.search("");
         assert_eq!(hits[0].symbol, "iec/motors/motor_3ph");
         assert_eq!(hits[1].symbol, "iec/signalling/lamp");
+    }
+
+    #[test]
+    fn spare_pins_stay_optional_in_the_model() {
+        let catalog = Catalog::builtin();
+        for (id, spare) in [
+            ("iec/drives/frequency_converter", "PE2"),
+            ("iec/transformers/emc_filter", "PE'"),
+        ] {
+            let pins = model_pins(catalog.get(id).unwrap());
+            let optional: Vec<&str> = pins
+                .iter()
+                .filter(|p| p.optional)
+                .map(|p| p.name.as_str())
+                .collect();
+            assert_eq!(optional, [spare], "{id}");
+        }
+        let coil = model_pins(catalog.get("iec/coils/relay").unwrap());
+        assert!(coil.iter().all(|p| !p.optional));
     }
 
     #[test]

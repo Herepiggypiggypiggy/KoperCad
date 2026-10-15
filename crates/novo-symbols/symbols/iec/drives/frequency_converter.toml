@@ -16,7 +16,7 @@ connections = [
   { id = "U", at = [0, 24], dir = "down" },
   { id = "V", at = [8, 24], dir = "down" },
   { id = "W", at = [16, 24], dir = "down" },
-  { id = "PE2", at = [24, 24], dir = "down", role = "pe" },
+  { id = "PE2", at = [24, 24], dir = "down", role = "pe", optional = true },
 ]
 
 anchors = [

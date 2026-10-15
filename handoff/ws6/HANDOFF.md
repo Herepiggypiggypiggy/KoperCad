@@ -1,9 +1,10 @@
 # WS-06 Schematic editor: handoff
 
 ## State
-- Repo: github.com/Herepiggypiggypiggy/NovoElectric. Branch `claude/project-thread-lw2vpz`, restarted from main 7bb466d after #38 merged.
-- Merged: #38 (editor), #62 (`coil K1`), #70 (`art` feature). `SchematicView::set_style` is on main (#53).
-- Open: PR #91 (proposals follow DESIGN.md §5; scripts refuse a second main symbol), head f73279d + this handoff commit. Locally fmt, clippy -D warnings and `cargo test --workspace` (627 passed) are clean. CI (Actions) is down; local checks are the signal.
+- Repo: github.com/Herepiggypiggypiggy/NovoElectric. Branch `claude/project-thread-lw2vpz`, restarted from main 97c9e34 after #91 merged.
+- Merged: #38 (editor), #62 (`coil K1`), #70 (`art` feature), #91 (proposal highlight, second main refused).
+- Open: the follow-up PR from this branch (number and head in PROGRESS.md): dashed proposals per #92 with theme colours, pointer-scoped Delete, remembered declines, Pin.optional from the library, artwork text and tag anchors. Reviewers: reviewer A (correctness) and the design reviewer.
+- CI (Actions) is down; local fmt, clippy -D warnings and `cargo test --workspace` are the signal.
 - Nothing half-done in the working tree.
 
 ## Resume
@@ -26,7 +27,7 @@ catalog.rs (search, classify, letter codes, MNEMONICS), naming.rs (tags from Pag
 ## Rules and decisions
 - One PR at a time from this branch; after READY no pushes; check the PR is open before pushing; message the reviewer with the head SHA after each push.
 - Only WS-02 changes novo-core's API; edit through Tx/commands. One gesture = one undo step.
-- Proposals (DESIGN.md §5 since #80): dashed steel blue at 55%; the highlighted one solid steel blue with "↵ accept · Tab next". The highlight follows the pointer to the nearest proposal; Tab moves it and holds until the pointer travels > 24 px; Enter accepts; Delete declines.
+- Proposals (DESIGN.md §5 since #92): never solid. Dashed in CanvasStyle.proposal (about 55%) at 1 px; the highlighted one dashed at full strength, 2 px, with "↵ accept · Tab next". The highlight follows the pointer; Tab moves it and holds until the pointer travels > 24 px; Enter accepts; Delete with the pointer on it declines for good (symbol property `connect.declined`, undoable).
 - Junctions are derived; the editor joins 2-wire junctions (tidy_junctions), so dots only stay at 3+ conductors.
 
 ## Traps

@@ -629,16 +629,27 @@ impl Editor {
         true
     }
 
-    /// Delete on the highlighted proposal: declines it, drawing nothing.
-    pub fn decline_proposal(&mut self) -> bool {
+    /// Whether `at` is on the highlighted proposal, within `tolerance`.
+    pub fn on_highlighted(&self, at: Point, tolerance: f64) -> bool {
+        self.highlighted().is_some_and(|i| {
+            let f = &self.proposals[i];
+            let (q, _) = crate::geometry::closest_on_segment(at, f.a, f.b);
+            q.distance(at) <= tolerance
+        })
+    }
+
+    /// Delete on the highlighted proposal: declines it for good, as one
+    /// undo step, drawing nothing; it is not proposed again.
+    pub fn decline_proposal(&mut self, doc: &mut Document) -> bool {
         let Some(i) = self.highlighted() else {
             return false;
         };
-        self.proposals.remove(i);
+        let proposal = self.proposals.remove(i);
         if self.proposal >= self.proposals.len() {
             self.proposal = 0;
         }
-        true
+        let result = doc.transact("Decline connection", |tx| edit::decline(tx, &proposal));
+        self.finish(result.map(|(_, c)| c), None) == Clicked::Edited
     }
 
     /// Enter: accepts the highlighted proposal as one undo step.

@@ -90,7 +90,7 @@ keys in `[behavior]` (see below).
 
 ## Connections
 
-`{ id, at, dir, role? }`
+`{ id, at, dir, role?, optional? }`
 
 - `id`: default designation printed at the point, unique within the symbol.
 - `at`: `[x, y]` on the 4 mm grid. A line or polyline of the artwork must
@@ -98,6 +98,8 @@ keys in `[behavior]` (see below).
 - `dir`: `up`, `down`, `left` or `right`: the direction a wire leaves the
   point. Nothing in the symbol lies beyond the point in that direction.
 - `role` (optional): `pe` for protective earth, `n` for neutral.
+- `optional` (default `false`): a spare point that may stay unconnected,
+  such as a second PE clamp. Design checks do not report it as open.
 
 ## Anchors
 
