@@ -29,14 +29,15 @@ The `novo-revisions` engine and its model and storage parts are on main:
 DESIGN §7 (#142), `Revision` and `IssueRevision` (#157), snapshot table
 (#159), index rule, `diff`, `PageRevisions` (#163), project info diff and
 taken-index skip (#179), changed generated sheets (#190), plus the core
-items asked on the way (#167 page order, `DeletePage`, `amend_last`;
+items asked on the way, and the one-call `issue_revision` helper (#167 page order, `DeletePage`, `amend_last`;
 #185 `Wire.hand_drawn`, `ModelError::Refused`).
 
 Left, owned by others:
-- the Issue revision dialog and command line: call `IssueRevision`, then
-  `Session::put_snapshot(revision, project)`; use `IndexRule::next` for the
-  proposal; batch snapshot writes in one transaction if issues ever come
-  in bulk (WS-01);
+- the Issue revision dialog and command line: call
+  `novo_revisions::issue_revision` (index from the rule, one undo step,
+  snapshot kept; `issue_revision_as` for a typed index; `unchanged_since`
+  gives "no changes since B"); batch snapshot writes in one transaction if
+  issues ever come in bulk (WS-01);
 - Changes mode and marks from `diff` and `changed_sheets`; show
   `ChangeSet.info.rules` more quietly than name and description (WS-03,
   WS-06); call `changed_sheets` when an issue is made, not per frame;
