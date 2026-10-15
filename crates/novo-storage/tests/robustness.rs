@@ -34,7 +34,7 @@ fn saved(path: &Path) -> Document {
 /// table.
 fn downgrade_to_v1(path: &Path) {
     let conn = Connection::open(path).unwrap();
-    conn.execute_batch("DROP TABLE snapshots; PRAGMA user_version = 1;")
+    conn.execute_batch("DROP TABLE snapshots; DROP TABLE sidecar; PRAGMA user_version = 1;")
         .unwrap();
 }
 

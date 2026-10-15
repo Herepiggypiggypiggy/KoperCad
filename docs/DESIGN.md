@@ -240,7 +240,8 @@ lives only in a menu, and nothing opens a modal dialog in the drawing loop.
    Space open it at the pointer, acting on what is under it. Empty, it
    lists every command grouped (Project, Draw, Edit, Navigate, View, Check,
    Export) with shortcuts and disabled reasons: this is the menu, and there
-   is no menu bar. Its grammar:
+   is no separate menu index: the menu bar is generated from the same commands
+   (`docs/design/workspaces.md` §5). Its grammar:
    - a noun selects or jumps: `K1`, `12`, `X2:1`. Enter on an exact tag
      jumps to the device's main location, and every other location is
      listed below;
@@ -1164,8 +1165,8 @@ Changes mode, WS-09 the PDF.
 | Routing | Manual; always automatic; route once and keep | **Route once and keep:** a plain drag moves the symbol alone and leaves its wire ends open where its pins were; Shift+drag stretches the connections; `tidy` re-routes on request |
 | Where a project starts | Page-first; structure-first; intent-first | **Structure-first**, with the empty page offering "type what you are building" |
 | Window | A Workbench; B Focus; C Split | **A**, with B as Focus mode and C as the drawer docked right |
-| Top-level places | Five lenses; two canvases plus drawers | **Two canvases (Schematic, Cabinet) and one drawer (Terminals, Cables, Devices)**; reports are commands |
-| Menu | Menu bar; empty command surface | **No menu bar**; the empty command surface is the menu |
+| Top-level places | Five lenses; two canvases plus drawers; workspaces | **Five workspaces (Schematic, Cabinet, 3D, Reports, Commissioning)** with a drawer whose tabs depend on the workspace (`docs/design/workspaces.md`); reports are also commands |
+| Menu | Menu bar; empty command surface | **Both, one registry:** the menu bar is generated from the command registry, so it is the same index drawn where a new person looks first (`docs/design/workspaces.md` §5; reversed from "no menu bar" on 2026-10-15) |
 | Command line | Permanent; on demand | **On demand**, at the top or at the pointer |
 | Tab | Orientation; next proposal | **Next proposal**; R and X orient |
 | Facing pins at a distance | Connect on placement; propose; ignore | **Propose**, in the placement preview; touching pins connect |
@@ -1193,9 +1194,9 @@ Changes mode, WS-09 the PDF.
 | Start screens and tips of the day | Most CAD | A click between the user and their project; hints sit where the next action is. The empty-canvas New/Open/Recent view is not one: it appears only when no project is open, never in front of one |
 | Tabbed property dialogs | Windows CAD | Relations first, then search |
 | Update, build and check runs | EPLAN | Everything is live; problems are marked in place |
-| File/Edit/View menu bar | Windows applications | A second, worse index of commands |
+| A hand-written File/Edit/View menu bar | Windows applications | A second, worse index of commands. A bar generated from the one command registry is not this (`docs/design/workspaces.md`) |
 | Permanent command line and jargon commands | AutoCAD | Splits attention; our surface opens where you look and every form is pickable |
-| Status bar | Most CAD | Hint in the dock, coordinates in the HUD, checks in the pill |
+| A status bar of unrelated readouts | Most CAD | Returns as a 22 px bar with five defined slots (`docs/design/workspaces.md` §7); the HUD moves into it |
 | Page tab strip | Most CAD | Fails at 500 pages; the outline's filter and groups do its job |
 | Infinite canvas | Figma, Miro | IEC documentation is printed and referenced by page and column |
 | Floating panels everywhere | Figma-style tools | Weak spatial memory; only the dock and inspector float |
