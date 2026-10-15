@@ -55,3 +55,11 @@
 2026-10-15 03:20 UTC Checked WS-06 #133 (page letters, re-letter/frozen, dotted rename refused): matches DESIGN §3; flagged 'Cover a' → 'Cover a a' (should be 'Cover b')
 2026-10-15 03:21 UTC WS-06 fixed 'Cover a' → 'Cover b' in #133 (c689e70)
 2026-10-15 03:47 UTC Design reviewer asked to record jump/reveal behaviour from WS-03 #144; opening docs PR
+2026-10-15 03:50 UTC Opened #148 (jump/reveal behaviour, head ae95b7e); sent to design reviewer and lead
+2026-10-15 03:46 UTC #148 READY (ae95b7e); lead merges
+2026-10-15 03:47 UTC #148 merged. No open PR of mine.
+2026-10-15 07:35 UTC Tadjiro asked for both wiring styles (EPLAN corners, AutoCAD lines), never overlapping, with a toggle + shortcut. Decided Auto + Draw (Draw = corners and lines as one gesture), W again toggles, dock switch, no-overlap rule; DESIGN PR opened, Layout to critique
+2026-10-15 07:50 UTC Reconciled with the Two wiring modes thread (PR #168): two modes Corners (default) | Lines, Shift+W toggles (also mid-wire), dock switch, no-overlap enforced in engine (Corners nudge, Lines refuse, reason as data). #169 reworked to carry it; #168 to close after folding its detail; diagonals in DESIGN §12
+2026-10-15 07:55 UTC #169 folded in: reviewer items 1-9, Layout chip/refusal feedback, main reviewer (a)(b)(c); wiring thread agreed to close #168
+2026-10-15 08:00 UTC #169: dropped wire merging (reviewer: nudge/refuse any wire), nudge preview note; wiring thread cut #168 to engine plan
+2026-10-15 08:10 UTC #169: interactive moves are refused like corners (Tadjiro's words), scripts/AI/undo/open accept+report; decision row moved to §8
