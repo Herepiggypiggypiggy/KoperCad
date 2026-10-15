@@ -128,6 +128,8 @@ pub(super) fn overlay(
     canvas: egui::Rect,
     left: bool,
     facts: &Facts,
+    project: &Project,
+    fields: &mut super::cabinet_panel::PanelFields,
 ) -> Option<Ask> {
     let (pivot, at) = if left {
         (
@@ -151,7 +153,7 @@ pub(super) fn overlay(
                     ui.set_width(WIDTH);
                     egui::ScrollArea::vertical()
                         .max_height(max_height)
-                        .show(ui, |ui| show(ui, facts))
+                        .show(ui, |ui| show(ui, facts, project, fields))
                         .inner
                 })
                 .inner
@@ -159,7 +161,12 @@ pub(super) fn overlay(
         .inner
 }
 
-fn show(ui: &mut egui::Ui, facts: &Facts) -> Option<Ask> {
+fn show(
+    ui: &mut egui::Ui,
+    facts: &Facts,
+    project: &Project,
+    fields: &mut super::cabinet_panel::PanelFields,
+) -> Option<Ask> {
     let mut ask = None;
     match facts {
         Facts::Devices(devices) => {
@@ -192,6 +199,13 @@ fn show(ui: &mut egui::Ui, facts: &Facts) -> Option<Ask> {
                 if let Some(why) = &d.why {
                     ui.add_space(2.0);
                     ui.weak(why);
+                }
+                // One device only: the text buffers are shared, and bulk edits
+                // belong to the property sheet.
+                if devices.len() == 1
+                    && let Some(edit) = super::cabinet_panel::show(ui, fields, project, d.id)
+                {
+                    ask = Some(Ask::SetPanelValue(edit));
                 }
                 if !d.problems.is_empty() {
                     ui.add_space(4.0);

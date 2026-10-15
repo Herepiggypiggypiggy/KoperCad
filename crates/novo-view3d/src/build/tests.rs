@@ -21,6 +21,7 @@ fn layout() -> CabinetLayout {
         rotated: false,
         size: Size::from_part(Some(45.0), Some(90.0)),
         clearance: None,
+        margins: Default::default(),
         rail: Some(2),
     });
     l
@@ -114,6 +115,7 @@ fn marks_follow_the_layout_report() {
         rotated: false,
         size: Size::from_part(Some(45.0), Some(90.0)),
         clearance: None,
+        margins: Default::default(),
         rail: None,
     });
     l.placements.push(Placement {
@@ -123,6 +125,7 @@ fn marks_follow_the_layout_report() {
         rotated: false,
         size: Size::from_part(Some(45.0), Some(90.0)),
         clearance: None,
+        margins: Default::default(),
         rail: None,
     });
     let s = from_layout(&l, &inputs(), &Options::default());
