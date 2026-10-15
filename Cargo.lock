@@ -2008,6 +2008,7 @@ dependencies = [
  "novo-core",
  "novo-layout",
  "novo-parts",
+ "novo-routing",
  "novo-tests",
  "novo-view3d",
  "rust_xlsxwriter",

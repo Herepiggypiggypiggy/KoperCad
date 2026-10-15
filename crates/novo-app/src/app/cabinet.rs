@@ -19,6 +19,7 @@ use novo_layout::state::CabinetLayout;
 
 use super::cabinet_door::DoorState;
 use super::cabinet_inspector;
+use super::cabinet_routes;
 use super::cabinet_rules;
 use super::{Level, NovoApp};
 use crate::theme;
@@ -55,6 +56,10 @@ pub(super) struct CabinetState {
     pub(super) table: bool,
     /// The plate card of the inspector is shown with nothing selected.
     pub(super) plate_card: bool,
+    /// Every wire's route is drawn over the plate, with the route table
+    /// beside it (Route all).
+    pub(super) routes: bool,
+    routes_cache: cabinet_routes::OverlayCache,
     /// The place rules, why `Place all` chose what it did, and the cut list.
     pub(super) rules: cabinet_rules::RulesState,
     /// The Heat view over the plate.
@@ -90,6 +95,8 @@ impl CabinetState {
             panel_fields: Default::default(),
             table: false,
             plate_card: false,
+            routes: false,
+            routes_cache: Default::default(),
             rules: cabinet_rules::RulesState::new(),
             heat: super::heat::HeatState::new(),
         }
@@ -108,6 +115,10 @@ pub(super) enum Ask {
     Cancel,
     ToggleTable,
     TogglePlateCard,
+    ToggleRoutes,
+    ExportWireCut,
+    ExportWireProduction,
+    ExportWiringDxf(StructureId),
     /// Select a placed device (from the problems list), on the plate.
     Select(u64),
     /// Place or move a device with its top left at `(x, y)` mm.
@@ -473,6 +484,16 @@ impl NovoApp {
                 {
                     ask = Some(Ask::TogglePlateCard);
                 }
+                if !self.cabinet.table
+                    && ui
+                        .selectable_label(self.cabinet.routes, "Route all")
+                        .on_hover_text(
+                            "Route every wire through the ducts: lengths, duct fill and problems",
+                        )
+                        .clicked()
+                {
+                    ask = Some(Ask::ToggleRoutes);
+                }
                 if !self.cabinet.table {
                     super::heat::chips(ui, &mut self.cabinet.heat);
                 }
@@ -592,6 +613,15 @@ impl NovoApp {
                         }
                     });
 
+                if self.cabinet.routes
+                    && let Some(s) = structure
+                {
+                    let overlay = self.cabinet.routes_cache.get(project, s);
+                    if let Some(a) = cabinet_routes::panel(ui, overlay, s) {
+                        ask = Some(a);
+                    }
+                }
+
                 let selected: Vec<u64> = self
                     .cabinet
                     .view
@@ -683,6 +713,18 @@ impl NovoApp {
                     );
                 }
                 let out = self.cabinet.view.show(ui, self.cabinet.scene.scene());
+                if self.cabinet.routes
+                    && let Some(s) = structure
+                {
+                    let overlay = self.cabinet.routes_cache.get(project, s);
+                    let rect = out.response.rect;
+                    cabinet_routes::draw(
+                        &ui.painter_at(rect),
+                        rect,
+                        &self.cabinet.view.viewport,
+                        overlay,
+                    );
+                }
                 if let Some(input) = &heat_input {
                     super::heat::paint_over(
                         ui,
@@ -864,6 +906,16 @@ impl NovoApp {
             Ask::Cancel => self.cabinet.preview = None,
             Ask::ToggleTable => self.cabinet.table ^= true,
             Ask::TogglePlateCard => self.cabinet.plate_card ^= true,
+            Ask::ToggleRoutes => self.cabinet.routes ^= true,
+            Ask::ExportWireCut => {
+                self.export_wire_cut();
+            }
+            Ask::ExportWireProduction => {
+                self.export_wire_production();
+            }
+            Ask::ExportWiringDxf(s) => {
+                self.export_wiring_dxf(s);
+            }
             Ask::Select(device) => {
                 self.cabinet.table = false;
                 self.cabinet.view.selection.apply(
@@ -993,6 +1045,20 @@ impl NovoApp {
                 self.cabinet_edit("Create cabinet", move |tx| tx.execute(command).map(|_| ()));
             }
         }
+    }
+
+    /// Route all (Ctrl+K): shows the Cabinet with every wire's route.
+    pub(super) fn toggle_cabinet_routes(&mut self) {
+        if self.backend.document().is_none() {
+            return;
+        }
+        if self.workspace() == super::workspace::Workspace::Cabinet && self.cabinet.routes {
+            self.cabinet.routes = false;
+            return;
+        }
+        self.switch_workspace(super::workspace::Workspace::Cabinet);
+        self.cabinet.table = false;
+        self.cabinet.routes = true;
     }
 
     /// Runs an edit of the model from the Cabinet canvas as one undo step.

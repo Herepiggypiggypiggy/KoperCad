@@ -342,6 +342,16 @@ fn export_wires_and_cut_list_carry_cut_lengths() {
     assert_eq!(run.code, exit::OK, "{}", run.err);
     // This project has no wire between two device pins, so no groups.
     assert!(run.out.is_empty(), "{}", run.out);
+
+    // The wire production job file is always there, with its header.
+    let run = novo(&["export", "wirecut", s(&path)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert!(
+        run.out
+            .starts_with("No,Wire no.,Qty,mm2,Colour,Cut mm,Wire mm,"),
+        "{}",
+        run.out
+    );
 }
 
 #[test]
@@ -407,6 +417,7 @@ fn export_reports_as_excel_and_csv() {
             "Device list",
             "Wire list",
             "Cut list",
+            "Wire production",
             "Terminal diagram",
             "Cable diagram",
             "IO list",

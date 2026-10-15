@@ -79,7 +79,9 @@ fn a_connection_is_routed_from_edge_to_edge_through_the_duct() {
     // K1's bottom edge midpoint (72.5, 140), K2's top (72.5, 250), the
     // duct at x=150: 77.5 across, 110 down the duct, 77.5 across, plus
     // 50 mm slack at each end.
-    assert_eq!(route.length_mm, 77.5 + 110.0 + 77.5 + 100.0);
+    // The parts have no depth, so the terminals count as on the plate and the
+    // wire drops 30 mm to the middle of the 60 mm duct at each end.
+    assert_eq!(route.length_mm, 77.5 + 110.0 + 77.5 + 100.0 + 60.0);
     assert_eq!(r.plans.len(), 1);
     assert_eq!(r.plans[0].0, cab);
 }

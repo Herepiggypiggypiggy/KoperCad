@@ -22,3 +22,4 @@ pub mod report;
 pub mod sheets;
 pub mod step;
 pub mod underlay;
+pub mod wiring;

@@ -282,6 +282,11 @@ const APP_COMMANDS: &[&str] = &[
     "export.assembly",
     "export.sheets",
     "export.sheets_csv",
+    "export.wirecut",
+    "export.wirecut_xlsx",
+    "export.wiring_dxf",
+    "export.wirecut_page",
+    "cabinet.routes",
     "export.bom",
     "export.reports",
     "view.reports",
@@ -718,6 +723,15 @@ impl NovoApp {
             "export.sheets" => {
                 self.export_spreadsheet();
             }
+            "cabinet.routes" => self.toggle_cabinet_routes(),
+            "export.wirecut" => {
+                self.export_wire_cut();
+            }
+            "export.wirecut_xlsx" => {
+                self.export_wire_production();
+            }
+            "export.wiring_dxf" => self.export_wiring_dxf_of_panel(),
+            "export.wirecut_page" => self.add_wire_production_page(),
             "export.sheets_csv" => {
                 self.export_spreadsheet_csv();
             }

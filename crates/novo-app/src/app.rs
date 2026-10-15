@@ -64,6 +64,7 @@ mod title_revisions;
 mod userkeymap;
 mod variants;
 mod wheel;
+mod wire_production;
 mod workbench;
 mod workspace;
 mod xref;
@@ -94,6 +95,8 @@ mod onboarding_tests;
 mod outline_tests;
 #[cfg(test)]
 mod protection_tests;
+#[cfg(test)]
+mod route_all_tests;
 #[cfg(test)]
 mod variants_tests;
 

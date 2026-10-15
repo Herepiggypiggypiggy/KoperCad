@@ -1032,6 +1032,16 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["underlay", "dxf", "reference drawing"],
         Needs::Page,
     ),
+    verb(
+        cmd(
+            "cabinet.routes",
+            "Route all wires (Cabinet)",
+            "View",
+            &["route", "wire length", "duct fill", "cut length"],
+            Needs::Project,
+        ),
+        &["route all", "route wires"],
+    ),
     cmd(
         "view.background_place",
         "Move and scale the DXF background",
@@ -1241,6 +1251,52 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export bulk edit", "export for editing"],
+    ),
+    verb(
+        cmd(
+            "export.wirecut",
+            "Export wire cut list (CSV)",
+            "Export",
+            &[
+                "wire cut",
+                "wire machine",
+                "ferrule",
+                "labels",
+                "production",
+            ],
+            Needs::Project,
+        ),
+        &["export wire cut", "wire cut"],
+    ),
+    verb(
+        cmd(
+            "export.wirecut_xlsx",
+            "Export wire production (.xlsx)",
+            "Export",
+            &["wire cut", "stock", "ferrules", "duct fill"],
+            Needs::Project,
+        ),
+        &["export wire production"],
+    ),
+    verb(
+        cmd(
+            "export.wiring_dxf",
+            "Export wiring plan as DXF",
+            "Export",
+            &["routes", "ducts", "cabinet drawing"],
+            Needs::Project,
+        ),
+        &["export wiring plan"],
+    ),
+    verb(
+        cmd(
+            "export.wirecut_page",
+            "Add wire production page (PDF)",
+            "Export",
+            &["wire cut", "print", "pdf", "ferrule", "labels"],
+            Needs::Project,
+        ),
+        &["add wire production page"],
     ),
     verb(
         cmd(

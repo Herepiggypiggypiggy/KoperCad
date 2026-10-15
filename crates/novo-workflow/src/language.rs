@@ -454,6 +454,34 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("export.sheets_csv", &["exporteer csv"], &["csv"]),
     nl(
+        "cabinet.routes",
+        &["bedraad alles", "routeer alle draden"],
+        &["draadlengte", "bedrading", "kanaalvulling"],
+    ),
+    nl(
+        "export.wirecut",
+        &[
+            "exporteer draadlijst voor machine",
+            "exporteer draadsnijlijst",
+        ],
+        &["draadsnijmachine", "adereindhulzen", "labels"],
+    ),
+    nl(
+        "export.wiring_dxf",
+        &["exporteer bedradingsplan"],
+        &["kanalen", "routes", "dxf"],
+    ),
+    nl(
+        "export.wirecut_page",
+        &["voeg draadproductiepagina toe"],
+        &["pdf", "afdrukken", "draadsnijden"],
+    ),
+    nl(
+        "export.wirecut_xlsx",
+        &["exporteer draadproductie"],
+        &["draadsnijden", "adereindhulzen", "kanaalvulling"],
+    ),
+    nl(
         "export.variant_pdf",
         &["exporteer variant"],
         &["pdf van een variant", "uitvoering exporteren"],
