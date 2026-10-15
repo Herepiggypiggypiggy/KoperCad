@@ -1,7 +1,7 @@
 //! Table of contents: every page in reading order, each sheet of a
 //! generated page on its own row.
 
-use novo_core::{EntityKind, PageKind, Project};
+use novo_core::{DeviceTag, EntityKind, Page, PageKind, Project};
 
 use crate::report::{Dependencies, Report, Reports};
 use crate::sheets::sheets_for;
@@ -74,7 +74,8 @@ impl Report for TableOfContents {
             vec![
                 Column::new("page", "Page", 15.0),
                 Column::new("title", "Title", 60.0),
-                Column::new("structure", "Structure", 25.0),
+                Column::new("group", "Page group", 20.0),
+                Column::new("panel", "Panel", 20.0),
                 Column::new("kind", "Kind", 25.0),
             ],
         );
@@ -99,7 +100,8 @@ impl Report for TableOfContents {
                             vec![
                                 Cell::text(sheet.name.clone()),
                                 Cell::text(title.join(" · ")),
-                                Cell::text(page.structure.to_string()),
+                                Cell::text(group_of(page)),
+                                Cell::text(panel_of(page)),
                                 Cell::text(kind.clone()),
                             ],
                             vec![page.id.into()],
@@ -119,17 +121,67 @@ impl Report for TableOfContents {
                 vec![
                     Cell::text(page.name.clone()),
                     Cell::text(page.title.clone()),
-                    Cell::text(page.structure.to_string()),
+                    Cell::text(group_of(page)),
+                    Cell::text(panel_of(page)),
                     Cell::text(kind),
                 ],
                 vec![page.id.into()],
             );
         }
+        let mut sections = vec![section];
+        let panels = project.panels();
+        if !panels.is_empty() {
+            // Pages of one panel under several page groups are one layout.
+            let mut by_panel = Section::new(
+                "panels",
+                "Panels",
+                vec![
+                    Column::new("panel", "Panel", 25.0),
+                    Column::new("groups", "Page groups", 50.0),
+                    Column::new("pages", "Pages", 15.0),
+                ],
+            );
+            for panel in panels {
+                let groups: Vec<String> = panel
+                    .groups
+                    .iter()
+                    .filter(|g| !g.is_empty())
+                    .map(|g| g.to_string())
+                    .collect();
+                by_panel.push(
+                    vec![
+                        Cell::text(panel.location.to_string()),
+                        Cell::text(groups.join(", ")),
+                        Cell::text(panel.pages.len().to_string()),
+                    ],
+                    panel.pages.iter().map(|&p| p.into()).collect(),
+                );
+            }
+            sections.push(by_panel);
+        }
         ReportOutput {
             report: Self::ID.into(),
             title: self.title(),
             revision: project.revision(),
-            sections: vec![section],
+            sections,
         }
     }
+}
+
+/// The page group of a page (`=10D41`), empty for a page in none.
+fn group_of(page: &Page) -> String {
+    DeviceTag {
+        function: page.structure.function.clone(),
+        ..Default::default()
+    }
+    .to_string()
+}
+
+/// The panel of a page (`+K1B1G1`), empty for a page in none.
+fn panel_of(page: &Page) -> String {
+    DeviceTag {
+        location: page.structure.location.clone(),
+        ..Default::default()
+    }
+    .to_string()
 }

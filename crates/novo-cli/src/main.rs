@@ -1,4 +1,4 @@
-//! `novo`: see the crate documentation in `lib.rs`.
+//! `kopercad-cli`: see the crate documentation in `lib.rs`.
 
 fn main() {
     let code = novo_cli::run(

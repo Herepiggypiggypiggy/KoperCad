@@ -3,7 +3,7 @@
 # no Windows machine. Used by Claude sessions and by anyone with a Linux box.
 #
 #   scripts/cross-build-windows.sh check     # clippy -D warnings for Windows
-#   scripts/cross-build-windows.sh zip DIR   # release build into DIR/novoelectric-<sha>-windows.zip
+#   scripts/cross-build-windows.sh zip DIR   # release build into DIR/kopercad-<sha>-windows.zip
 #
 # Uses the GNU target with MinGW-w64 (apt: gcc-mingw-w64-x86-64). The result
 # links only system DLLs and needs no install or admin rights on Windows, but
@@ -25,17 +25,17 @@ case "${1:-}" in
       cargo build --release -p novo-app --target "$target"
     stage=$(mktemp -d)
     trap 'rm -rf "$stage"' EXIT
-    x86_64-w64-mingw32-strip -o "$stage/novoelectric.exe" "${CARGO_TARGET_DIR:-target}/$target/release/novoelectric.exe"
-    printf 'KoperCAD %s, cross-built on Linux %s.\nNo install needed: unzip anywhere in your user folder and run novoelectric.exe.\nCompiled and linked only; not run on Windows by the build.\n' \
+    x86_64-w64-mingw32-strip -o "$stage/kopercad.exe" "${CARGO_TARGET_DIR:-target}/$target/release/kopercad.exe"
+    printf 'KoperCAD %s, cross-built on Linux %s.\nNo install needed: unzip anywhere in your user folder and run kopercad.exe.\nCompiled and linked only; not run on Windows by the build.\n' \
       "$sha" "$(date -u +%Y-%m-%dT%H:%MZ)" > "$stage/BUILD_INFO.txt"
     mkdir -p "$out"
     out=$(cd "$out" && pwd)
     (cd "$stage" && python3 -c "
 import zipfile,sys
 z=zipfile.ZipFile(sys.argv[1],'w',zipfile.ZIP_DEFLATED)
-[z.write(f) for f in ('novoelectric.exe','BUILD_INFO.txt')]
-z.close()" "$out/novoelectric-$sha-windows.zip")
-    echo "$out/novoelectric-$sha-windows.zip"
+[z.write(f) for f in ('kopercad.exe','BUILD_INFO.txt')]
+z.close()" "$out/kopercad-$sha-windows.zip")
+    echo "$out/kopercad-$sha-windows.zip"
     ;;
   *)
     echo "usage: $0 check | zip DIR" >&2
