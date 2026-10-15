@@ -147,10 +147,7 @@ pub fn draw_wire_exact(
         &wires_at_pin(project, Some(from)),
         &wires_at_pin(project, Some(to)),
     )
-    .map_err(|r| ModelError::InvalidValue {
-        id: r.other.into(),
-        field: "route overlaps this wire",
-    })?;
+    .map_err(|r| crate::edit::refusal_error(Some(project), r))?;
     let wire = tx.connect(from, to)?;
     if !bends.is_empty() {
         tx.update::<Wire>(wire, |w| w.route = bends)?;

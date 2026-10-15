@@ -1771,3 +1771,88 @@ fn dropping_a_moved_selection_onto_another_wire_is_refused_in_the_editor() {
     assert_eq!(doc.undo_depth(), depth);
     assert!(page_has_no_overlaps(&doc, page));
 }
+
+#[test]
+fn connecting_a_pin_onto_the_side_of_another_wire_is_allowed() {
+    let (mut doc, page, [a, b, c, _d]) = two_rows();
+    let w1 = doc
+        .transact("w1", |tx| {
+            edit::draw_wire(
+                tx,
+                page,
+                target(tx.project(), a, "14"),
+                &[],
+                target(tx.project(), c, "13"),
+            )
+        })
+        .unwrap()
+        .0;
+    let pts = novo_editor::geometry::wire_points(doc.project(), w1).unwrap();
+    // The middle of the first vertical stretch of the first wire.
+    let (p0, p1) = (pts[0], pts[1]);
+    let at = p((p0.x + p1.x) / 2.0, (p0.y + p1.y) / 2.0);
+    let start = target(doc.project(), b, "14");
+    let end = novo_editor::geometry::Target::Wire(w1, at);
+    let checked = edit::check_draw(doc.project(), page, start, &[], end);
+    assert!(checked.is_ok(), "{checked:?} pts {pts:?} at {at:?}");
+    doc.transact("w2", |tx| edit::draw_wire(tx, page, start, &[], end))
+        .unwrap();
+    assert!(page_has_no_overlaps(&doc, page));
+}
+
+#[test]
+fn a_pin_beside_a_horizontal_stretch_ends_on_its_side() {
+    let (mut doc, page, [a, b, c, _d]) = two_rows();
+    let w1 = doc
+        .transact("w1", |tx| {
+            edit::draw_wire(
+                tx,
+                page,
+                target(tx.project(), a, "14"),
+                &[],
+                target(tx.project(), c, "13"),
+            )
+        })
+        .unwrap()
+        .0;
+    // The horizontal stretch of w1 is y = 88 from x = 40 to 60; b is to its
+    // right, so a route arriving along it would share its length.
+    let end = novo_editor::geometry::Target::Wire(w1, p(50.0, 88.0));
+    let start = target(doc.project(), b, "14");
+    assert!(edit::check_draw(doc.project(), page, start, &[], end).is_ok());
+    doc.transact("w2", |tx| edit::draw_wire(tx, page, start, &[], end))
+        .unwrap();
+    assert!(page_has_no_overlaps(&doc, page));
+}
+
+#[test]
+fn a_refusal_names_the_other_wire_and_says_why() {
+    let (mut doc, page, [a, _b, c, d]) = two_rows();
+    doc.transact("w1", |tx| {
+        edit::draw_wire(
+            tx,
+            page,
+            target(tx.project(), a, "14"),
+            &[],
+            target(tx.project(), c, "13"),
+        )
+    })
+    .unwrap();
+    // A clicked corner on the first wire's vertical run makes the new wire
+    // run along it.
+    let err = doc
+        .transact("w2", |tx| {
+            edit::draw_wire(
+                tx,
+                page,
+                target(tx.project(), d, "13"),
+                &[p(40.0, 72.0)],
+                target(tx.project(), c, "14"),
+            )
+        })
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("would run along the wire from"), "{err}");
+    assert!(err.contains("not share its length"), "{err}");
+    assert!(!err.contains("out of range"), "{err}");
+}

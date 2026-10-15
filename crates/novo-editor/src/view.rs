@@ -36,7 +36,7 @@ const HINT_PX: f32 = 11.0;
 /// in screen points (DESIGN.md §5).
 const HOLD_PX: f32 = 24.0;
 /// A pin wins over the symbol body within this many screen points.
-const PIN_RADIUS: f32 = 6.0;
+const PIN_RADIUS: f32 = 9.0;
 /// First preview item id; previews count down from here.
 const PREVIEW_BASE: u64 = u64::MAX - 16;
 
@@ -418,6 +418,9 @@ impl SchematicView {
             self.editor.hover(document, page, point(w), tolerance);
             if self.editor.begin_drag() {
                 self.canvas.selection.clear();
+                // The canvas started a selection band on the same press; a
+                // wire drag must not also box-select on release.
+                self.canvas.escape();
             }
         }
         if let Some(w) = out.cursor_raw {
@@ -1426,6 +1429,23 @@ mod tests {
         h.drag((a.x, a.y), (b.x, b.y));
         assert_eq!(h.doc.project().wires().count(), 1);
         assert!(!h.view.editor.tool_active());
+    }
+
+    #[test]
+    fn a_press_just_off_a_pin_starts_a_wire_and_does_not_box_select() {
+        let mut h = Harness::new();
+        h.view.editor.auto_connect = false;
+        h.view.editor.begin_place("iec/coils/relay", None);
+        h.click(60.0, 60.0, egui::PointerButton::Primary);
+        h.click(140.0, 120.0, egui::PointerButton::Primary);
+        h.view.editor.leave_tool();
+        let a = pin_at(&h.doc, Point::new(60.0, 60.0), "A2");
+        let b = pin_at(&h.doc, Point::new(140.0, 120.0), "A1");
+        // Within the pin target but outside the old, smaller one.
+        let off = f64::from(PIN_RADIUS - 1.0) / f64::from(h.view.canvas.viewport.zoom);
+        h.drag((a.x - off, a.y), (b.x, b.y));
+        assert_eq!(h.doc.project().wires().count(), 1);
+        assert!(h.view.canvas.selection.is_empty());
     }
 
     #[test]
