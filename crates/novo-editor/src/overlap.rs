@@ -206,6 +206,30 @@ fn blocking(
     found
 }
 
+/// The first blocking stretch a fixed polyline shares with other wires on
+/// `page` (ignoring `ignore`, and the contiguous stretch from the pins `a`
+/// and `b` along `start_wires` and `end_wires`), as a [`Refusal`]. For
+/// routes that must not be moved: a translated hand-drawn wire, a straight
+/// facing wire.
+pub fn route_refusal(
+    project: &Project,
+    page: PageId,
+    points: &[Point],
+    ignore: &[WireId],
+    start_wires: &[WireId],
+    end_wires: &[WireId],
+) -> Option<Refusal> {
+    let (a, b) = (*points.first()?, *points.last()?);
+    let found = SegmentIndex::new(project, page).overlaps(points, ignore);
+    blocking(found, a, start_wires, b, end_wires)
+        .first()
+        .map(|o| Refusal {
+            other: o.wire,
+            from: o.from,
+            to: o.to,
+        })
+}
+
 /// The bends for a wire from `a` to `b` through the user's `corners` that
 /// share no stretch with the wires on `page`. `start_wires` and `end_wires`
 /// are the wires already at the pins `a` and `b` (empty for a junction or a
@@ -302,5 +326,40 @@ mod tests {
     fn a_wire_laid_along_another_overlaps_even_inside_it() {
         let o = segment_overlap(p(2.0, 0.0), p(4.0, 0.0), p(0.0, 0.0), p(10.0, 0.0)).unwrap();
         assert_eq!(o, (p(2.0, 0.0), p(4.0, 0.0)));
+    }
+
+    /// A page with 10 000 straight wires in rows, nothing overlapping: the
+    /// whole-page query must stay interactive. Run with
+    /// `cargo test -p novo-editor --release -- --ignored overlap_benchmark`.
+    #[test]
+    #[ignore = "benchmark"]
+    fn overlap_benchmark_on_a_dense_page() {
+        use novo_core::{Document, Endpoint};
+        let mut doc = Document::default();
+        let (page, _) = doc.transact("page", |tx| tx.add_page("1")).unwrap();
+        doc.transact("wires", |tx| {
+            for row in 0..100 {
+                for col in 0..100 {
+                    let (x, y) = (f64::from(col) * 20.0, f64::from(row) * 5.0);
+                    let a = tx.add_junction(page, p(x, y))?;
+                    let b = tx.add_junction(page, p(x + 10.0, y))?;
+                    tx.connect(Endpoint::junction(a), Endpoint::junction(b))?;
+                }
+            }
+            Ok(())
+        })
+        .unwrap();
+        let start = std::time::Instant::now();
+        let index = SegmentIndex::new(doc.project(), page);
+        let built = start.elapsed();
+        let probe = [p(0.0, 2.5), p(2000.0, 2.5)];
+        let start = std::time::Instant::now();
+        let found = index.overlaps(&probe, &[]);
+        let queried = start.elapsed();
+        let start = std::time::Instant::now();
+        let all = page_overlaps(doc.project(), page);
+        let whole = start.elapsed();
+        eprintln!("index {built:?}, one query {queried:?}, whole page {whole:?}");
+        assert!(found.is_empty() && all.is_empty());
     }
 }
