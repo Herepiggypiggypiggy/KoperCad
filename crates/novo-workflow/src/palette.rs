@@ -144,6 +144,10 @@ pub const RECENT_LIMIT: usize = 30;
 pub const RECENT_SHOWN: usize = 5;
 
 const EXACT: i32 = 100_000;
+/// Added to a command's match on its own label.
+const LABEL_BONUS: i32 = 50;
+/// The lowest score (a whole word prefix) a recent pick is lifted from.
+const RECENT_MIN_MATCH: i32 = 250;
 
 /// Group heading of the recent rows of an empty field.
 pub const RECENT_GROUP: &str = "Recent";
@@ -264,7 +268,11 @@ impl Palette {
         // Recent picks first for a short query.
         if query.chars().count() <= 3 {
             for row in &mut rows {
-                if let Some(rank) = self.recent.iter().position(|t| *t == row.target) {
+                // Only a real match is lifted: `ro` after Mirror must not
+                // bring Mirror up just because it contains an r and an o.
+                if row.score >= RECENT_MIN_MATCH
+                    && let Some(rank) = self.recent.iter().position(|t| *t == row.target)
+                {
                     row.score += 5_000 - i32::try_from(rank).unwrap_or(0) * 100;
                 }
             }
@@ -649,7 +657,13 @@ fn command_rows(query: &str, wants_next: bool, sources: &Sources<'_>, rows: &mut
             .chain(info.keywords.iter().copied())
             .chain(verbs_of(info))
             .chain(dutch.iter().copied());
-        let score = fuzzy::score(query, &full).max(fuzzy::best_score(query, words));
+        // The label itself counts for more than a keyword or a Dutch
+        // word: `ro` lists Rotate before the commands with a keyword
+        // like `route`.
+        let by_label = fuzzy::score(query, info.label).map(|s| s + LABEL_BONUS);
+        let score = fuzzy::score(query, &full)
+            .max(fuzzy::best_score(query, words))
+            .max(by_label);
         if let Some(score) = score {
             let mut row = command_row(info, sources, "", score);
             // A verb that takes chips completes to itself first.
