@@ -24,6 +24,7 @@ mod example;
 mod faults;
 mod heat;
 mod inspector;
+mod interop;
 mod learn;
 mod learn_ui;
 mod link;
@@ -49,6 +50,7 @@ mod preferences;
 mod project_settings;
 mod protection;
 mod reports;
+mod reports_view;
 mod revisions;
 mod sheet_import;
 mod sheets;
@@ -202,6 +204,7 @@ pub struct NovoApp {
     /// is Ctrl+2.
     workspace: workspace::Workspace,
     cabinet: cabinet::CabinetState,
+    reports_view: reports_view::ReportsView,
     /// The "Size the enclosure" panel and the Enclosures list.
     sizing: sizing::SizingState,
     protection: protection::ProtectionState,
@@ -276,6 +279,7 @@ impl NovoApp {
             focus_mode: false,
             workspace: workspace::Workspace::Schematic,
             cabinet: cabinet::CabinetState::new(),
+            reports_view: Default::default(),
             sizing: sizing::SizingState::new(),
             protection: protection::ProtectionState::new(),
             outline_open: false,
@@ -779,12 +783,13 @@ impl NovoApp {
         } else {
             self.key_commands(&ctx)
         };
-        if self.workspace() == workspace::Workspace::Cabinet {
+        if self.workspace() != workspace::Workspace::Schematic {
             // The schematic's keys must not edit the hidden page: rotate
             // and delete go to the Cabinet, the rest keep only the view,
             // file and undo actions.
+            let cabinet = self.workspace() == workspace::Workspace::Cabinet;
             for id in &commands {
-                if matches!(*id, "edit.rotate" | "edit.delete") {
+                if cabinet && matches!(*id, "edit.rotate" | "edit.delete") {
                     self.cabinet.keys.push((*id).to_owned());
                 }
             }
@@ -806,7 +811,13 @@ impl NovoApp {
             .exact_size(TOP_BAR)
             .show(ui, |ui| self.top_bar(ui, &mut picked));
         self.status_bar(ui);
-        if pinned && self.is_open() {
+        let reports = self.workspace() == workspace::Workspace::Reports && self.is_open();
+        if reports {
+            egui::Panel::left("reports_list")
+                .exact_size(OUTLINE_WIDTH)
+                .resizable(false)
+                .show(ui, |ui| self.reports_list(ui));
+        } else if pinned && self.is_open() {
             egui::Panel::left("outline")
                 .exact_size(OUTLINE_WIDTH)
                 .resizable(false)
@@ -817,6 +828,8 @@ impl NovoApp {
             .show(ui, |ui| {
                 if self.is_open() && self.workspace() == workspace::Workspace::Cabinet {
                     self.cabinet_show(ui);
+                } else if reports {
+                    self.reports_central(ui);
                 } else if self.is_open() {
                     self.update_marks();
                     self.update_sheet();
@@ -835,7 +848,7 @@ impl NovoApp {
             .response
             .rect;
 
-        if !self.focus_mode && !pinned && self.is_open() {
+        if !self.focus_mode && !pinned && !reports && self.is_open() {
             self.outline_flyout(&ctx, canvas_rect, &mut picked);
         }
         if !self.focus_mode && self.workspace() == workspace::Workspace::Schematic {
@@ -873,6 +886,8 @@ impl NovoApp {
         self.generate_window(&ctx);
         self.issue_revision_dialog(&ctx);
         self.compare_window(&ctx);
+        self.aml_import_dialog(&ctx);
+        self.poll_dwg(&ctx);
         self.protection_window(&ctx);
         self.faults_window(&ctx);
         self.numbering_window(&ctx);
@@ -988,6 +1003,9 @@ impl NovoApp {
             self.wb.sheet = 0;
         }
         self.current_page = Some(page);
+        if self.wb.pending.is_some_and(|p| p.page != page) {
+            self.wb.pending = None;
+        }
         // A page is a schematic page: picking one leaves the Cabinet.
         self.switch_workspace(workspace::Workspace::Schematic);
     }
@@ -1027,10 +1045,7 @@ impl NovoApp {
             }
             ui.separator();
             if let Some(workspace) = self.workspace_switcher(ui, fit.short_switcher) {
-                picked.push(match workspace {
-                    workspace::Workspace::Cabinet => Action::ShowCabinet,
-                    _ => Action::ShowSchematic,
-                });
+                self.wb.queued.push(workspace.command());
             }
             ui.separator();
             self.breadcrumb(ui, fit.name_chars);

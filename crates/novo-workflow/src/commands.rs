@@ -309,6 +309,40 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["import dxf"],
     ),
+    verb(
+        cmd(
+            "file.import_dwg",
+            "Import DWG as background",
+            "Project",
+            &["autocad", "converter", "libredwg", "oda"],
+            Needs::Page,
+        ),
+        &["import dwg"],
+    ),
+    cmd(
+        "file.choose_dwg_converter",
+        "Choose the DWG converter",
+        "Project",
+        &["dwg2dxf", "libredwg", "oda file converter"],
+        Needs::Nothing,
+    ),
+    verb(
+        cmd(
+            "file.import_aml",
+            "Import AutomationML",
+            "Project",
+            &[
+                "aml",
+                "caex",
+                "plant",
+                "migrate",
+                "other tool",
+                "engineering",
+            ],
+            Needs::Project,
+        ),
+        &["import aml", "import automationml"],
+    ),
     cmd(
         "file.remove_background",
         "Remove the DXF background",
@@ -993,6 +1027,74 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     // Check
+    // Reports workspace (docs/design/workspaces.md section 3.4).
+    cmd(
+        "view.reports",
+        "Reports",
+        "View",
+        &["tables", "lists", "workspace"],
+        Needs::Project,
+    ),
+    verb(
+        cmd(
+            "report.toc",
+            "Contents",
+            "View",
+            &["table of contents", "index", "page list"],
+            Needs::Project,
+        ),
+        &["contents"],
+    ),
+    verb(
+        cmd(
+            "report.bom",
+            "Bill of materials",
+            "View",
+            &["parts list", "bom", "quantities"],
+            Needs::Project,
+        ),
+        &["bom", "bill of materials"],
+    ),
+    verb(
+        cmd(
+            "report.devices",
+            "Device list",
+            "View",
+            &["devices", "tags", "locations"],
+            Needs::Project,
+        ),
+        &["device list"],
+    ),
+    verb(
+        cmd(
+            "report.wires",
+            "Wire list",
+            "View",
+            &["wires", "cores", "connections"],
+            Needs::Project,
+        ),
+        &["wire list"],
+    ),
+    verb(
+        cmd(
+            "report.terminals",
+            "Terminal diagram",
+            "View",
+            &["terminal list", "strips", "klemmen"],
+            Needs::Project,
+        ),
+        &["terminal diagram"],
+    ),
+    verb(
+        cmd(
+            "report.cables",
+            "Cable diagram",
+            "View",
+            &["cable list", "cable schedule", "cores"],
+            Needs::Project,
+        ),
+        &["cable diagram"],
+    ),
     verb(
         cmd(
             "check.problems",
@@ -1034,6 +1136,34 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Export",
         &["cad", "autocad"],
         Needs::Project,
+    ),
+    verb(
+        cmd(
+            "export.step",
+            "Export the cabinet as STEP",
+            "Export",
+            &[
+                "3d",
+                "mechanical",
+                "solidworks",
+                "inventor",
+                "freecad",
+                "stp",
+                "step",
+            ],
+            Needs::Project,
+        ),
+        &["export step"],
+    ),
+    verb(
+        cmd(
+            "export.aml",
+            "Export the plant as AutomationML",
+            "Export",
+            &["aml", "caex", "iec 62714", "exchange", "engineering"],
+            Needs::Project,
+        ),
+        &["export aml", "export automationml"],
     ),
     verb(
         cmd(
@@ -1080,7 +1210,14 @@ pub const COMMANDS: &[CommandInfo] = &[
             &["parts list"],
             Needs::Project,
         ),
-        &["export bom", "bom"],
+        &["export bom"],
+    ),
+    cmd(
+        "export.reports",
+        "Export all reports to Excel",
+        "Export",
+        &["excel", "xlsx", "spreadsheet", "all reports"],
+        Needs::Project,
     ),
     verb(
         cmd(

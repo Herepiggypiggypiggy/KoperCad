@@ -365,12 +365,38 @@ pub const DUTCH: &[Aliases] = &[
         &["cad", "autocad", "pagina"],
     ),
     nl("export.dxf_all", &[], &["alle paginas", "cad", "autocad"]),
+    nl(
+        "export.step",
+        &["exporteer step"],
+        &["kast", "mechanisch", "3d", "stp"],
+    ),
+    nl(
+        "export.aml",
+        &["exporteer aml"],
+        &["installatie", "automationml", "uitwisselen"],
+    ),
+    nl(
+        "file.import_aml",
+        &["importeer aml"],
+        &["automationml", "installatie", "overnemen", "migreren"],
+    ),
+    nl(
+        "file.import_dwg",
+        &["importeer dwg"],
+        &["autocad", "converter", "achtergrond"],
+    ),
+    nl(
+        "file.choose_dwg_converter",
+        &[],
+        &["dwg converter", "dwg2dxf", "omzetter"],
+    ),
     // Export
     nl(
         "export.pdf",
         &["exporteer pdf", "pdf exporteren"],
         &["afdrukken"],
     ),
+    nl("export.bom", &["exporteer stuklijst"], &["onderdelenlijst"]),
     nl(
         "import.spreadsheet",
         &["importeer spreadsheet", "importeer excel"],
@@ -392,10 +418,21 @@ pub const DUTCH: &[Aliases] = &[
         &["boortabel", "boren"],
     ),
     nl(
-        "export.bom",
-        &["exporteer stuklijst", "stuklijst"],
+        "export.reports",
+        &[],
+        &["alle rapporten", "excel exporteren"],
+    ),
+    nl("view.reports", &[], &["rapporten", "lijsten"]),
+    nl("report.toc", &["inhoud", "inhoudsopgave"], &["paginalijst"]),
+    nl(
+        "report.bom",
+        &["stuklijst", "materiaallijst"],
         &["onderdelenlijst"],
     ),
+    nl("report.devices", &["apparatenlijst"], &["apparaten"]),
+    nl("report.wires", &["draadlijst"], &["draden", "aders"]),
+    nl("report.terminals", &["klemmenlijst"], &["klemmenstrook"]),
+    nl("report.cables", &["kabellijst"], &["kabels"]),
     nl(
         "export.sheets",
         &[

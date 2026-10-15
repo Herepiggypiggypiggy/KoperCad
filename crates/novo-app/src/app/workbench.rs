@@ -145,6 +145,10 @@ pub(crate) struct Workbench {
     /// edited before they are committed.
     pub(super) background_panel: Option<Option<super::background_panel::Placement>>,
     pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
+    /// An AutomationML import waiting for the person to confirm.
+    pub(super) aml_import: Option<super::interop::AmlImport>,
+    /// A DWG being converted in the background.
+    pub(super) dwg_job: Option<super::interop::DwgJob>,
 }
 
 impl Workbench {
@@ -212,6 +216,8 @@ impl Default for Workbench {
             background_panel: None,
             commissioning: None,
             underlay_seen: None,
+            aml_import: None,
+            dwg_job: None,
         }
     }
 }
@@ -275,6 +281,15 @@ const APP_COMMANDS: &[&str] = &[
     "export.assembly",
     "export.sheets",
     "export.sheets_csv",
+    "export.bom",
+    "export.reports",
+    "view.reports",
+    "report.toc",
+    "report.bom",
+    "report.devices",
+    "report.wires",
+    "report.terminals",
+    "report.cables",
     "file.import_dxf_background",
     "view.background",
     "view.background_place",
@@ -282,6 +297,11 @@ const APP_COMMANDS: &[&str] = &[
     "export.dxf_page",
     "export.dxf_all",
     "import.spreadsheet",
+    "export.step",
+    "export.aml",
+    "file.import_aml",
+    "file.import_dwg",
+    "file.choose_dwg_converter",
     "plc.add_card",
     "plc.to_plc",
     "plc.renumber_io",
@@ -384,7 +404,11 @@ impl NovoApp {
             focus
         } else if ctx.text_edit_focused() {
             Focus::TextField
-        } else if self.is_open() && !self.panel_has_focus(ctx) {
+        } else if self.is_open()
+            && self.workspace() != Workspace::Reports
+            && !self.panel_has_focus(ctx)
+        {
+            // The Reports table has the keyboard, not the hidden drawing.
             Focus::Canvas
         } else {
             Focus::Panel
@@ -631,7 +655,25 @@ impl NovoApp {
             "view.cables_drawer" => self.toggle_drawer(Drawer::Cables),
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
             "view.toggle_marks" => self.wb.marks ^= true,
+            "view.reports" => self.switch_workspace(super::workspace::Workspace::Reports),
+            "export.bom" => {
+                self.export_report("bom", super::reports_view::ReportFormat::Excel);
+            }
+            "export.reports" => {
+                self.export_all_reports();
+            }
             "sim.live" => self.toggle_live(),
+            _ if super::reports_view::REPORT_COMMANDS
+                .iter()
+                .any(|(c, _)| *c == id) =>
+            {
+                if let Some((_, report)) = super::reports_view::REPORT_COMMANDS
+                    .iter()
+                    .find(|(c, _)| *c == id)
+                {
+                    self.show_report(report);
+                }
+            }
             "sim.faults" => self.toggle_faults(),
             "view.changes" => self.toggle_changes(argument),
             "view.commissioning" => self.toggle_commissioning(),
@@ -688,6 +730,15 @@ impl NovoApp {
                 self.export_dxf(super::dxf::DxfScope::AllPages);
             }
             "import.spreadsheet" => self.import_sheet(),
+            "export.step" => {
+                self.export_step();
+            }
+            "export.aml" => {
+                self.export_aml();
+            }
+            "file.import_aml" => self.import_aml(),
+            "file.import_dwg" => self.import_dwg(),
+            "file.choose_dwg_converter" => self.choose_dwg_converter(),
             "plc.add_card" => self.plc_add_card(argument),
             "plc.to_plc" => self.plc_to_plc(),
             "plc.renumber_io" => self.plc_renumber_io(),
