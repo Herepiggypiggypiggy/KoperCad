@@ -9,6 +9,7 @@ license.workspace = true
 novo-core.workspace = true
 # Only the model adapter, as novo-pdf: no egui widget.
 novo-canvas = { path = "../novo-canvas", default-features = false, features = ["model"] }
+novo-layout.workspace = true
 novo-parts.workspace = true
 thiserror.workspace = true
 # Pure-Rust Excel writer and reader: no Excel install, nothing to elevate.
