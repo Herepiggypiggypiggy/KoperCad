@@ -29,6 +29,8 @@ eframe = { workspace = true }
 flate2 = { workspace = true }
 naga = { version = "30", features = ["wgsl-in"] }
 pollster = "1"
+egui = { workspace = true }
+novo-theme = { workspace = true }
 
 [[example]]
 name = "orbit"
