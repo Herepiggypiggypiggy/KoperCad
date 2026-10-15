@@ -282,7 +282,9 @@ setting decides whether they connect. Shift+drag takes the wires along,
 stretching them under the no-overlap rules. Preferences, Moving, has the
 choice "Moving a symbol: leaves its wires / takes its wires along"; the
 choice only sets the default, and Shift always does the other one (the
-dock hint says "Shift: take wires" or "Shift: leave wires"). M
+dock hint says "Shift: take the wires along" or "Shift: leave the wires"
+and follows the key while it is down, and the status line after the drop
+says how many wire ends were left open: "3 wire ends left open · Ctrl+Z"). M
 keeps working as the keyboard move: it picks the selection up at the
 pointer and a click puts it down. Undo takes back one whole move. A
 press and drag on a wire moves the corner or segment under the pointer
@@ -473,8 +475,9 @@ it is drawn for.
 - If a terminal joined a strip you did not want, select it (or several)
   and press Up to move their strip name up by one number (-X1 becomes
   -X2), Down to move it down, or Ctrl+Up to give them the lowest free
-  number. With only terminals selected these arrow keys do this; the
-  hint says so.
+  number. With only terminals selected these arrow keys do this and the
+  hint says so. There is no arrow-key nudge of a selection; if one is added
+  it uses Shift+arrows, so these keys stay as they are.
 - A terminal placed by a row drag follows the same rule once for the
   whole row.
 
@@ -854,7 +857,8 @@ Acceptance:
 28. Corners mode: a click places an oriented corner piece shown in the
     preview, R flips it, clicking a wire drops a T. The stored route is
     unchanged. A plain drag of a device leaves its wires as open ends;
-    Shift+drag stretches them.
+    Shift+drag stretches them; Shift can be pressed or released mid-drag and
+    the preview follows.
 29. Outline, Location view: right-click, New panel, then add pages to it
     from two different groups; both groups' pages show under the panel and
     the Cabinet canvas of that panel shows them together.
