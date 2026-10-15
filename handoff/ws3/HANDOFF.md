@@ -44,3 +44,9 @@ CI (Actions) is down: paste local results in the PR.
 ## People
 - Integration lead cse_01FiLvRBKEcNNHbQEGhYyL1S (merges).
 - Design reviewer session_0114emQ5fSFrzcALbR4S18TU. Coordinator session_018btnHEHYdedX4jueCivWjT.
+
+## State at 2026-10-15 07:55 UTC
+- Merged: #120, #126, #144, #154, #164. Open: #176 (drafting primitives, READY from B and design).
+- Unpushed: ce5c595 on local branch canvas-drafting-followup (B's non-blocking notes on #176). Rebase on main after #176 merges, push to claude/canvas-engine-ymvwu2, open a small PR.
+- Parked per the lead. Possible next tasks: wiring-mode preview/refusal drawing (needs Refusal data from the wiring-modes thread), PLC channel address labels (novo-plc PlcIndex::address_label).
+- Cabinet canvas note from design: rails and ducts must take colours from novo-theme, not the demo's fixed greys.

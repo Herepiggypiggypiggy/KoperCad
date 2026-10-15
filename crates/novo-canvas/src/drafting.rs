@@ -9,6 +9,9 @@ use crate::style::{Color, Stroke};
 use crate::text::{Anchor, Label};
 use glam::Vec2;
 
+/// Most lines one [`hatch`] call produces.
+pub const MAX_HATCH_LINES: f32 = 2000.0;
+
 /// Parallel hatch lines across `area`, `spacing` mm apart at `angle`
 /// radians (clockwise on screen from the +x axis; `-FRAC_PI_4` rises to
 /// the right). The lines are clipped to the area and placed on a fixed
@@ -18,6 +21,9 @@ pub fn hatch(area: &Aabb, spacing: f32, angle: f32, stroke: Stroke) -> Vec<Primi
     if area.is_empty() || spacing <= 0.0 || !spacing.is_finite() {
         return Vec::new();
     }
+    // Data from a part catalog must not be able to ask for millions of
+    // lines: past the cap the pattern is too dense to read anyway.
+    let spacing = spacing.max(area.size().length() / MAX_HATCH_LINES);
     let dir = Vec2::new(angle.cos(), angle.sin());
     let normal = Vec2::new(-dir.y, dir.x);
     // Offsets along the normal that the area covers.
@@ -215,15 +221,12 @@ impl Dimension {
         // Text above the line (away from the measured points), reading
         // left to right or bottom to top.
         let mut angle = dir.y.atan2(dir.x);
-        let mut up = side;
+        let up = side;
         if dir.x < -1e-4 || (dir.x.abs() <= 1e-4 && dir.y > 0.0) {
             angle += std::f32::consts::PI;
         }
         if angle > std::f32::consts::PI {
             angle -= std::f32::consts::TAU;
-        }
-        if up.length_squared() < 1e-12 {
-            up = Vec2::new(0.0, -1.0);
         }
         let mid = (a + b) * 0.5 + up * (style.text_height * 0.3);
         // Bottom centre on the line when `up` is the text's own up,
@@ -244,6 +247,18 @@ impl Dimension {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn hatch_line_count_is_capped() {
+        let area = Aabb::new(Vec2::ZERO, Vec2::new(600.0, 800.0));
+        let lines = hatch(&area, 1e-4, 0.0, Stroke::default());
+        assert!(
+            lines.len() <= MAX_HATCH_LINES as usize + 1,
+            "{}",
+            lines.len()
+        );
+        assert!(!lines.is_empty());
+    }
+
     use super::*;
 
     fn stroke() -> Stroke {
