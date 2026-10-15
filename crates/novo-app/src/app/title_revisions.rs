@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use novo_canvas::model::TitleRevisions;
+use novo_canvas::model::{RevisionRow, TitleRevisions};
 use novo_core::PageId;
 
 use super::NovoApp;
@@ -37,6 +37,18 @@ impl NovoApp {
                 .and_then(|r| r.of(project, page))
                 .map(|r| (r.index.clone(), r.date.clone())),
             project: Some(latest.index.clone()),
+            table: project
+                .revisions()
+                .map(|r| RevisionRow {
+                    index: r.index.clone(),
+                    date: r.date.clone(),
+                    author: r.author.clone(),
+                    description: r.description.clone(),
+                })
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect(),
         })
     }
 
