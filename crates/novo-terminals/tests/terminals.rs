@@ -1803,6 +1803,16 @@ fn up_moves_terminals_to_the_next_strip_and_ctrl_up_to_the_lowest_free() {
     assert_eq!(strip_of(&doc, a), "-X3");
     assert_eq!(name_of(&doc, a), "2");
     assert_eq!(name_of(&doc, b), "3");
+    // Down: -X3 back to -X2; below -X1 is refused.
+    doc.transact("Down", |tx| move_to_strip(tx, &[a], MoveTo::PreviousNumber))
+        .unwrap();
+    assert_eq!(strip_of(&doc, a), "-X2");
+    doc.transact("Up", |tx| move_to_strip(tx, &[a], MoveTo::NextNumber))
+        .unwrap();
+    assert!(
+        doc.transact("Down", |tx| move_to_strip(tx, &[c], MoveTo::PreviousNumber))
+            .is_err()
+    );
     // -X2 had nothing left and is gone, so the lowest free number is 2.
     assert!(doc.project().devices().all(|d| d.tag.to_string() != "-X2"));
     doc.transact("Ctrl+Up", |tx| move_to_strip(tx, &[c], MoveTo::LowestFree))
@@ -1885,4 +1895,87 @@ fn connecting_terminals_jumpers_them_and_changes_their_symbol() {
     })
     .unwrap();
     assert_eq!(key(&doc, ts[1].1), "iec/terminals/terminal_pe_end");
+}
+
+#[test]
+fn terminals_on_an_earthed_net_become_pe_and_toggle_back() {
+    let mut doc = Document::default();
+    let ((a, b, c), _) = doc
+        .transact("Draw", |tx| {
+            let page = tx.add_page("1")?;
+            tx.add_potential("PE", PotentialKind::ProtectiveEarth)?;
+            let x1 = strip_by_tag(tx, "X1")?;
+            let mut ids = Vec::new();
+            for (i, name) in ["1", "2", "3"].iter().enumerate() {
+                let t = tx.add_terminal(x1, *name)?;
+                let s = tx.place_symbol(
+                    page,
+                    "iec/terminals/terminal",
+                    Placement::at(Point::new(20.0 * i as f64, 10.0)),
+                    terminal_pins(8.0),
+                    SymbolRole::Terminal { terminals: vec![t] },
+                )?;
+                ids.push((t, s));
+            }
+            let earth = tx.place_symbol(
+                page,
+                "iec/earth/protective_earth",
+                Placement::at(Point::new(0.0, 60.0)),
+                vec![Pin::new("PE", 0.0, 0.0)],
+                SymbolRole::Unassigned,
+            )?;
+            tx.connect(Endpoint::pin(ids[0].1, 1), Endpoint::pin(earth, 0))?;
+            // Terminal 3 is wired to a PE-defined wire instead.
+            let m = tx.add_device(tag("-M1"), "")?;
+            let ms = row_of_pins(tx, page, m, &["GND"], 40.0, 100.0)?;
+            let wire = tx.connect(Endpoint::pin(ids[2].1, 1), Endpoint::pin(ms, 0))?;
+            let pe = named_potential(tx.project(), "PE").unwrap().id;
+            tx.set_wire_potential(wire, Some(pe))?;
+            Ok((ids[0].0, ids[1].0, ids[2].0))
+        })
+        .unwrap();
+    let (changed, _) = doc.transact("Auto PE", mark_earthed).unwrap();
+    assert_eq!(changed, vec![a, c]);
+    let kind = |doc: &Document, id| doc.project().terminal(id).unwrap().kind;
+    assert_eq!(kind(&doc, a), TerminalKind::ProtectiveEarth);
+    assert_eq!(kind(&doc, b), TerminalKind::Feedthrough);
+    // The toggle flips a mixed selection to PE, then all back.
+    let (k, _) = doc.transact("T", |tx| toggle_pe(tx, &[a, b])).unwrap();
+    assert_eq!(k, TerminalKind::ProtectiveEarth);
+    let (k, _) = doc.transact("T", |tx| toggle_pe(tx, &[a, b])).unwrap();
+    assert_eq!(k, TerminalKind::Feedthrough);
+    assert_eq!(kind(&doc, a), TerminalKind::Feedthrough);
+    // Already-marked terminals are not touched twice.
+    let (again, _) = doc.transact("Auto PE", mark_earthed).unwrap();
+    assert_eq!(again, vec![a]);
+}
+
+#[test]
+fn connecting_keeps_existing_jumper_groups_and_merges_them() {
+    let mut doc = Document::default();
+    let (ts, _) = doc
+        .transact("Strip", |tx| {
+            let strip = strip_by_tag(tx, "-X1")?;
+            (1..=5)
+                .map(|i| tx.add_terminal(strip, i.to_string()))
+                .collect::<Result<Vec<_>>>()
+        })
+        .unwrap();
+    let jumper = |doc: &Document, t| doc.project().terminal(t).unwrap().jumper;
+    // 1+2 and 4+5 are already bridged.
+    doc.transact("Bridge", |tx| set_jumper(tx, &[ts[0], ts[1]], Some(1)))
+        .unwrap();
+    doc.transact("Bridge", |tx| set_jumper(tx, &[ts[3], ts[4]], Some(2)))
+        .unwrap();
+    // Connecting 2 and 3 grows group 1: 1 stays bridged to 2, and 3 joins.
+    doc.transact("Connect", |tx| connect_terminals(tx, &[ts[1], ts[2]]))
+        .unwrap();
+    assert_eq!(
+        [0, 1, 2, 3, 4].map(|i| jumper(&doc, ts[i])),
+        [Some(1), Some(1), Some(1), Some(2), Some(2)]
+    );
+    // Connecting 3 and 4 merges the two groups into the lower one.
+    doc.transact("Connect", |tx| connect_terminals(tx, &[ts[2], ts[3]]))
+        .unwrap();
+    assert!((0..5).all(|i| jumper(&doc, ts[i]) == Some(1)));
 }

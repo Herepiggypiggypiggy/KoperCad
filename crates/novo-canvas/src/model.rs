@@ -183,6 +183,18 @@ pub struct ModelStyle {
     pub wire_end_color: Color,
     /// Flag pole and pennant beside that ring.
     pub unconnected_color: Color,
+    /// Whether a click on a wire's line picks the whole wire. Turn it off
+    /// once the editor picks wires by corner and segment
+    /// ([`PageScene::wire_part_at`]); a box still selects whole wires.
+    pub wires_pick_whole: bool,
+    /// Half-size (mm) of the square shown on every wire corner; `0.0` draws
+    /// none (print).
+    pub corner_half: f32,
+    /// Colour of a wire's corners.
+    pub corner_color: Color,
+    /// Colour of the wire part under the pointer or selected, and of the
+    /// corners that belong to it.
+    pub focus_color: Color,
     /// Radius of the ring, in mm; the flag scales with it (world size for
     /// now, not zoom-stable).
     pub wire_end_radius: f32,
@@ -211,6 +223,10 @@ impl Default for ModelStyle {
             pin_joint_radius: 0.6,
             wire_end_color: Color::rgb(176, 104, 56),
             unconnected_color: Color::rgb(190, 120, 20),
+            wires_pick_whole: true,
+            corner_half: 0.55,
+            corner_color: Color::rgb(30, 70, 200),
+            focus_color: Color::rgb(255, 150, 30),
             wire_end_radius: 0.9,
             tag_height: 2.5,
             tag_color: Color::rgb(20, 24, 32),
@@ -489,6 +505,8 @@ pub struct PageScene {
     /// The first terminal symbol of each run of one strip on this page,
     /// with the strip's tag it shows (see [`strip_heads`]).
     strip_heads: HashMap<SymbolId, String>,
+    /// The wire part under the pointer or selected, drawn emphasised.
+    focus: Option<WirePart>,
     pub style: ModelStyle,
 }
 
@@ -526,6 +544,23 @@ pub struct LabelHit {
     pub kind: LabelKind,
 }
 
+/// A part of a wire that can be picked on its own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WirePart {
+    pub wire: WireId,
+    pub kind: WirePartKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WirePartKind {
+    /// A bend point: index into the wire's `route`.
+    Corner(usize),
+    /// A straight run between two points: 0 is the one leaving the first
+    /// end; the last is the one reaching the second end. Its corners are
+    /// the route points at `i - 1` and `i` (an end is not a corner).
+    Segment(usize),
+}
+
 /// Item id of a model object.
 pub fn item_id(id: impl Into<AnyId>) -> ItemId {
     ItemId(id.into().raw())
@@ -552,6 +587,7 @@ impl PageScene {
             notes: HashMap::new(),
             sheet: None,
             strip_heads: HashMap::new(),
+            focus: None,
             style: ModelStyle::default(),
         };
         s.rebuild(project, art);
@@ -584,6 +620,52 @@ impl PageScene {
     /// The model object behind a canvas item.
     pub fn model_id(&self, item: ItemId) -> Option<AnyId> {
         self.ids.get(&item).copied()
+    }
+
+    /// The wire part at `p` within `tolerance` (mm): a corner when one is
+    /// near, else the nearest straight run. Wires are never picked whole by
+    /// a click; a double click selects the whole wire.
+    pub fn wire_part_at(&self, project: &Project, p: Vec2, tolerance: f32) -> Option<WirePart> {
+        let mut best: Option<(f32, WirePart)> = None;
+        let mut offer = |d: f32, part: WirePart, pref: f32| {
+            let score = d - pref;
+            if d <= tolerance && best.is_none_or(|(b, _)| score < b) {
+                best = Some((score, part));
+            }
+        };
+        for wire in project.page_contents(self.page).wires {
+            let Some(pts) = self.wire_points(project, wire) else {
+                continue;
+            };
+            // A corner within reach beats a run through the same spot.
+            for (i, c) in pts[1..pts.len().saturating_sub(1)].iter().enumerate() {
+                let part = WirePart {
+                    wire,
+                    kind: WirePartKind::Corner(i),
+                };
+                offer(c.distance(p), part, tolerance);
+            }
+            for (k, w) in pts.windows(2).enumerate() {
+                let part = WirePart {
+                    wire,
+                    kind: WirePartKind::Segment(k),
+                };
+                offer(crate::geom::dist_point_segment(p, w[0], w[1]), part, 0.0);
+            }
+        }
+        best.map(|(_, part)| part)
+    }
+
+    /// Emphasises one wire part (or none): the pointer's, or the selected
+    /// one. Only the wires involved are redrawn.
+    pub fn set_wire_focus(&mut self, project: &Project, focus: Option<WirePart>) {
+        if self.focus == focus {
+            return;
+        }
+        let old = std::mem::replace(&mut self.focus, focus);
+        for wire in [old, focus].into_iter().flatten().map(|p| p.wire) {
+            self.sync_wire(project, wire);
+        }
     }
 
     /// What a double click at a pick should act on: the text when text was
@@ -1316,6 +1398,46 @@ impl PageScene {
                 item = item.with(Primitive::filled(
                     Shape::circle(p, self.style.pin_joint_radius),
                     self.style.pin_joint_color,
+                ));
+            }
+        }
+        item.click_select = self.style.wires_pick_whole;
+        // Every corner shows as a small square, so it can be told from the
+        // straight runs and picked on its own.
+        let h = Vec2::splat(self.style.corner_half);
+        if self.style.corner_half > 0.0 {
+            for c in &pts[1..pts.len() - 1] {
+                item.primitives.push(Primitive::filled(
+                    Shape::rect(*c - h, *c + h),
+                    self.style.corner_color,
+                ));
+            }
+        }
+        // The part under the pointer or selected: that run drawn heavier,
+        // with its corners filled in the focus colour.
+        if let Some(part) = self.focus.filter(|p| p.wire == id) {
+            let focus = self.style.focus_color;
+            let big = Vec2::splat(self.style.corner_half * 1.8);
+            let mut corners = Vec::new();
+            match part.kind {
+                WirePartKind::Segment(k) if k + 1 < pts.len() => {
+                    item.primitives.push(Primitive::stroked(
+                        Shape::line(pts[k], pts[k + 1]),
+                        Stroke::world(self.style.wire.width * 2.5, focus),
+                    ));
+                    corners.extend(
+                        [k, k + 1]
+                            .into_iter()
+                            .filter(|&i| i > 0 && i + 1 < pts.len()),
+                    );
+                }
+                WirePartKind::Corner(c) if c + 2 < pts.len() => corners.push(c + 1),
+                _ => {}
+            }
+            for i in corners {
+                item.primitives.push(Primitive::filled(
+                    Shape::rect(pts[i] - big, pts[i] + big),
+                    focus,
                 ));
             }
         }
@@ -2585,6 +2707,114 @@ mod tests {
         assert_eq!((lit.kind, lit.text), (LabelKind::Literal, Some(free)));
         // A hit on a line, not on text, is no label hit.
         assert_eq!(label(item_id(sym), None), None);
+    }
+
+    /// A wire from a terminal's pin up and over to an open end, with two
+    /// corners at (100, 30) and (140, 30).
+    fn bent_wire() -> (Document, PageId, WireId) {
+        let mut doc = Document::default();
+        let ((page, wire), _) = doc
+            .transact("bent", |tx| {
+                let page = tx.add_page("1")?;
+                let x1 = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+                let t = tx.add_terminal(x1, "1")?;
+                let sym = tx.place_symbol(
+                    page,
+                    "iec/terminal",
+                    MPlacement::at(Point::new(100.0, 50.0)),
+                    vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                    SymbolRole::Terminal { terminals: vec![t] },
+                )?;
+                let wire = tx.connect(
+                    Endpoint::pin(sym, 0),
+                    Endpoint::Free {
+                        at: Point::new(140.0, 47.5),
+                    },
+                )?;
+                tx.update::<novo_core::Wire>(wire, |w| {
+                    w.route = vec![Point::new(100.0, 30.0), Point::new(140.0, 30.0)];
+                })?;
+                Ok((page, wire))
+            })
+            .unwrap();
+        (doc, page, wire)
+    }
+
+    #[test]
+    fn a_click_on_a_wire_never_picks_it_whole() {
+        let (doc, page, wire) = bent_wire();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        // By default a click picks the wire whole (until the editor picks
+        // its parts)...
+        assert!(ps.scene().pick(Vec2::new(120.0, 30.0), 2.0, 4.0).is_some());
+        let style = ModelStyle {
+            wires_pick_whole: false,
+            ..ps.style
+        };
+        ps.set_style(style, doc.project(), &PlaceholderArt);
+        // On the straight run, and right on a corner: no pick by click.
+        assert!(ps.scene().pick(Vec2::new(120.0, 30.0), 2.0, 4.0).is_none());
+        assert!(ps.scene().pick(Vec2::new(100.0, 30.0), 2.0, 4.0).is_none());
+        // A box still selects it.
+        let rect = crate::Aabb::from_corners(Vec2::new(90.0, 20.0), Vec2::new(150.0, 55.0));
+        let ids = ps
+            .scene()
+            .box_select(&rect, crate::scene::BoxMode::Crossing, 4.0);
+        assert!(ids.contains(&item_id(wire)));
+    }
+
+    #[test]
+    fn wire_parts_are_corners_and_segments() {
+        let (doc, page, wire) = bent_wire();
+        let ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let part = |x, y| ps.wire_part_at(doc.project(), Vec2::new(x, y), 1.5);
+        let kind = |x, y| part(x, y).map(|p| (p.wire, p.kind));
+        // A corner wins where it is within reach, even on a run.
+        assert_eq!(kind(100.0, 30.5), Some((wire, WirePartKind::Corner(0))));
+        assert_eq!(kind(140.0, 29.6), Some((wire, WirePartKind::Corner(1))));
+        // Mid run: the segment (0 up, 1 across, 2 down).
+        assert_eq!(kind(100.0, 40.0), Some((wire, WirePartKind::Segment(0))));
+        assert_eq!(kind(120.0, 30.2), Some((wire, WirePartKind::Segment(1))));
+        assert_eq!(kind(140.0, 40.0), Some((wire, WirePartKind::Segment(2))));
+        assert_eq!(kind(120.0, 20.0), None);
+    }
+
+    #[test]
+    fn corners_are_drawn_and_a_focused_run_lights_its_corners() {
+        let (doc, page, wire) = bent_wire();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let count = |ps: &PageScene| ps.scene().get(item_id(wire)).unwrap().primitives.len();
+        // Line, the dot on the pin, two corner squares, open end (ring,
+        // pole, pennant).
+        let plain = count(&ps);
+        assert_eq!(plain, 1 + 1 + 2 + 3);
+        let focus = ps.style.focus_color;
+        let lit = |ps: &PageScene| {
+            ps.scene()
+                .get(item_id(wire))
+                .unwrap()
+                .primitives
+                .iter()
+                .filter(|p| p.fill == Some(focus) || p.stroke.is_some_and(|s| s.color == focus))
+                .count()
+        };
+        assert_eq!(lit(&ps), 0);
+        // The across run: the run itself and both of its corners.
+        let seg = WirePart {
+            wire,
+            kind: WirePartKind::Segment(1),
+        };
+        ps.set_wire_focus(doc.project(), Some(seg));
+        assert_eq!(lit(&ps), 3);
+        // A corner lights just itself.
+        let corner = WirePart {
+            wire,
+            kind: WirePartKind::Corner(0),
+        };
+        ps.set_wire_focus(doc.project(), Some(corner));
+        assert_eq!(lit(&ps), 1);
+        ps.set_wire_focus(doc.project(), None);
+        assert_eq!(count(&ps), plain);
     }
 
     #[test]

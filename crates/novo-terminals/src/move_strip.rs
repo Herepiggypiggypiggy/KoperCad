@@ -13,6 +13,9 @@ pub enum MoveTo {
     /// The strip numbered one higher than their current one (`-X1` goes to
     /// `-X2`), created when it does not exist.
     NextNumber,
+    /// The strip numbered one lower (`-X2` goes to `-X1`), created when it
+    /// does not exist. Refused below `-X1`.
+    PreviousNumber,
     /// The strip with the lowest number nobody uses yet.
     LowestFree,
 }
@@ -96,6 +99,8 @@ pub fn move_to_strip(tx: &mut Tx<'_>, terminals: &[TerminalId], to: MoveTo) -> R
     let (tag, number) = strip_number(tx.project(), from).ok_or_else(invalid)?;
     let target_number = match to {
         MoveTo::NextNumber => number + 1,
+        MoveTo::PreviousNumber if number > 1 => number - 1,
+        MoveTo::PreviousNumber => return Err(invalid()),
         MoveTo::LowestFree => lowest_free(tx.project(), from).ok_or_else(invalid)?,
     };
     if target_number == number {

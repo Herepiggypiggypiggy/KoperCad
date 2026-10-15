@@ -59,6 +59,20 @@ pub const DUTCH: &[Aliases] = &[
         &["bedradingsmodus"],
         &["modus", "hoeken", "lijnen", "tekenen"],
     ),
+    nl("tool.cable", &["kabel"], &["kabel tekenen", "aders"]),
+    nl(
+        "wire.end_on_part",
+        &[],
+        &[
+            "draad op component laten eindigen",
+            "afsluiten op component",
+        ],
+    ),
+    nl(
+        "wire.next_pin",
+        &[],
+        &["volgend aansluitpunt", "volgende pin"],
+    ),
     nl("edit.rotate", &[], &["draaien", "roteren"]),
     nl("edit.mirror", &[], &["spiegelen"]),
     nl(
@@ -137,6 +151,11 @@ pub const DUTCH: &[Aliases] = &[
     nl(
         "terminal.strip_up",
         &["hoger"],
+        &["klemmenstrook", "nummer"],
+    ),
+    nl(
+        "terminal.strip_down",
+        &["lager"],
         &["klemmenstrook", "nummer"],
     ),
     nl(

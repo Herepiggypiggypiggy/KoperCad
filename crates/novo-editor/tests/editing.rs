@@ -20,7 +20,9 @@ fn p(x: f64, y: f64) -> Point {
 fn setup() -> (Document, PageId, Editor) {
     let mut doc = Document::default();
     let (page, _) = doc.transact("Add page", |tx| tx.add_page("1")).unwrap();
-    (doc, page, Editor::default())
+    let mut editor = Editor::default();
+    editor.set_connect_mode(novo_editor::tool::ConnectMode::Ask);
+    (doc, page, editor)
 }
 
 fn tags(doc: &Document) -> Vec<String> {
@@ -1176,7 +1178,7 @@ fn a_declined_proposal_does_not_return() {
     let f = symbol_at(&doc, page, p(40.0, 40.0));
     for s in [k, f] {
         let sym = doc.project().symbol(s).unwrap().clone();
-        let again = edit::facing_wires(doc.project(), &[sym], &|s| editor.body(s));
+        let again = edit::facing_wires(doc.project(), &[sym], &|s| editor.outline(s));
         assert_eq!(again.len(), 2);
         assert!(again.iter().all(|w| {
             let pair = [w.from, w.to];
@@ -1187,7 +1189,7 @@ fn a_declined_proposal_does_not_return() {
     doc.undo().unwrap();
     let sym = doc.project().symbol(k).unwrap().clone();
     assert_eq!(
-        edit::facing_wires(doc.project(), &[sym], &|s| editor.body(s)).len(),
+        edit::facing_wires(doc.project(), &[sym], &|s| editor.outline(s)).len(),
         3
     );
 }
@@ -2147,4 +2149,33 @@ fn dragging_a_one_pole_breaker_places_one_multi_pole_device() {
         .find(|s| s.symbol.0 == "iec/protection/mcb_4p")
         .expect("a 4-pole breaker");
     assert_eq!(four.placement.origin, p(176.0, 100.0));
+}
+
+#[test]
+fn facing_pins_are_wired_with_the_drop_by_default() {
+    let (mut doc, page, mut editor) = setup();
+    editor.set_connect_mode(novo_editor::tool::ConnectMode::Draw);
+    editor.begin_place("iec/protection/fuse_3p", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    let depth = doc.undo_depth();
+    editor.begin_place("iec/contactors/main_3p", None);
+    editor.click(&mut doc, page, p(40.0, 120.0), TOL);
+    // Three wires, no proposals, and the drop is still one undo step.
+    assert_eq!(doc.project().wires().count(), 3);
+    assert!(editor.proposals().is_empty());
+    assert_eq!(doc.undo_depth(), depth + 1);
+    doc.undo().unwrap();
+    assert_eq!(doc.project().wires().count(), 0);
+}
+
+#[test]
+fn never_mode_draws_and_proposes_nothing() {
+    let (mut doc, page, mut editor) = setup();
+    editor.set_connect_mode(novo_editor::tool::ConnectMode::Never);
+    editor.begin_place("iec/protection/fuse_3p", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.begin_place("iec/contactors/main_3p", None);
+    editor.click(&mut doc, page, p(40.0, 120.0), TOL);
+    assert_eq!(doc.project().wires().count(), 0);
+    assert!(editor.proposals().is_empty());
 }

@@ -48,6 +48,7 @@
 //! ```
 
 mod check;
+mod earth;
 mod geometry;
 mod move_strip;
 mod naming;
@@ -61,6 +62,7 @@ mod style;
 mod suggest;
 
 pub use check::{Issue, IssueKind, Severity, check};
+pub use earth::{earthed_terminals, is_earth_symbol, mark_earthed, toggle_pe};
 pub use geometry::{redraw, symbol_length, symbol_pins};
 pub use move_strip::{MoveTo, move_to_strip};
 pub use naming::{

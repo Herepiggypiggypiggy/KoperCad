@@ -297,13 +297,32 @@ impl NovoApp {
         out
     }
 
+    /// Whether the selection holds drawn terminals and nothing else.
+    fn only_terminals_selected(&self) -> bool {
+        let Some(doc) = self.backend.document() else {
+            return false;
+        };
+        let selection = self.selection();
+        !selection.is_empty()
+            && selection.iter().all(|id| match id {
+                AnyId::Symbol(s) => doc
+                    .project()
+                    .symbol(*s)
+                    .is_some_and(|s| matches!(s.role, SymbolRole::Terminal { .. })),
+                _ => false,
+            })
+    }
+
     /// Connect and Disconnect terminals, and moving the selected terminals
     /// to another strip number (Up, Ctrl+Up). Says what happened or why
     /// not; nothing happens without terminals in the selection.
     pub(super) fn terminal_command(&mut self, id: &str) {
         use novo_terminals::MoveTo;
         let terminals = self.selected_terminals();
-        if terminals.is_empty() {
+        // The arrow keys act only when nothing but terminals is selected.
+        if terminals.is_empty()
+            || (id.starts_with("terminal.strip_") && !self.only_terminals_selected())
+        {
             return;
         }
         let Some(doc) = self.backend.document_mut() else {
@@ -323,10 +342,10 @@ impl NovoApp {
                 }),
             ),
             _ => {
-                let to = if id == "terminal.strip_up" {
-                    MoveTo::NextNumber
-                } else {
-                    MoveTo::LowestFree
+                let to = match id {
+                    "terminal.strip_up" => MoveTo::NextNumber,
+                    "terminal.strip_down" => MoveTo::PreviousNumber,
+                    _ => MoveTo::LowestFree,
                 };
                 (
                     "Move terminals to another strip",
