@@ -22,3 +22,18 @@ Updated 2026-10-15.
   view boxes are not coloured for depth (that needs a `BoxState` in novo-canvas).
 - Not hands-on tested in a running window (cloud session).
 - Design: docs/design/cabinet-layout.md section 5c.
+
+## Next (for a fresh session, from main after #409 merges)
+
+- Door checks as `novo-checks` Problems: add a plain function
+  `fn(cx: &Context<'_>, out: &mut Vec<Problem>)` in
+  `crates/novo-checks/src/physical.rs`, called from `check_with` in `lib.rs`
+  next to `physical::unplaced_devices` (#413 interface). New `ProblemKind`
+  variants (ALL length, `severity()`, `label()`, key `check.<snake>`); `at` is
+  `AnyId::Device` / `AnyId::Structure`. Quiet when no enclosure exists. Source:
+  `CabinetLayout::door_report()`.
+- One device-depth rule shared with thermal (#406; a device property may
+  override the part) and agreed property key names with #402 and #395.
+- Door-mounted devices (hole and cut-out work, R5).
+- Main reviewer B's notes: say in the form hint that the plate is centred
+  (done); the form draft resets when the stored enclosure changes.
