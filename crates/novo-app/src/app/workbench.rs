@@ -97,6 +97,8 @@ pub(crate) struct Workbench {
     pub(super) issue_filter: [bool; 3],
     /// F8 position in the problem list.
     pub(super) problem_at: Option<usize>,
+    /// A problem being waived (its index in the list) and the reason typed.
+    pub(super) waiving: Option<(usize, String)>,
     /// The last PDF written, for tests and the toast.
     pub(super) last_export: Option<PathBuf>,
     /// The live potentials view (Shift+L).
@@ -149,6 +151,7 @@ impl Default for Workbench {
             pill_rect: egui::Rect::NOTHING,
             issue_filter: [true; 3],
             problem_at: None,
+            waiving: None,
             last_export: None,
             live: Default::default(),
             changes: None,
