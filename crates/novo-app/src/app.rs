@@ -11,6 +11,7 @@ mod cabinet_panel;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
 mod cabinet_rules;
+mod change_report;
 mod changes;
 mod checks;
 mod commissioning;
@@ -53,6 +54,7 @@ mod revisions;
 mod sheets;
 mod simulate;
 mod sizing;
+mod status_bar;
 mod terminals;
 mod title_revisions;
 mod userkeymap;
@@ -803,6 +805,7 @@ impl NovoApp {
         egui::Panel::top("top_bar")
             .exact_size(TOP_BAR)
             .show(ui, |ui| self.top_bar(ui, &mut picked));
+        self.status_bar(ui);
         if pinned && self.is_open() {
             egui::Panel::left("outline")
                 .exact_size(OUTLINE_WIDTH)
@@ -1034,7 +1037,9 @@ impl NovoApp {
             let left_end = ui.min_rect().right();
 
             let right = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.weak(self.saved_state());
+                if !self.status_bar_shown() {
+                    ui.weak(self.saved_state());
+                }
                 self.issue_pill(ui);
                 let shortcut = Action::CommandPalette
                     .shortcut()
@@ -1357,6 +1362,10 @@ impl NovoApp {
     /// Cursor position and friends, faint, at the canvas's top right. On
     /// the drawing, the step hint is in the tool dock instead.
     fn hud(&self, ctx: &egui::Context, canvas: egui::Rect) {
+        // The status bar carries these values when it is on.
+        if self.status_bar_shown() {
+            return;
+        }
         let text = match self.canvas.schematic_ref() {
             Some(view) => view
                 .editor
@@ -1392,6 +1401,10 @@ impl NovoApp {
                 }
                 if m.level != Level::Info {
                     return true;
+                }
+                // The status bar shows info messages when it is on.
+                if self.status_bar_shown() {
+                    return false;
                 }
                 let left = TOAST_INFO.saturating_sub(now - m.at);
                 if !left.is_zero() {
