@@ -8,8 +8,8 @@ use novo_core::{
     Placement, Point, RailKind, SymbolRole, Terminal, Wire,
 };
 use novo_reports::{
-    Cell, CsvOptions, LiveReports, PageSetup, ReportOutput, generate_all, layout_page, paginate,
-    tag_cmp, to_csv, xlsx_bytes,
+    Cell, CsvOptions, CutList, LiveReports, PageSetup, ReportOutput, generate_all, layout_page,
+    paginate, tag_cmp, to_csv, xlsx_bytes,
 };
 use novo_tests::{MotorStarter, motor_starter};
 
@@ -590,6 +590,7 @@ fn xlsx_round_trips() {
             "Bill of materials",
             "Device list",
             "Wire list",
+            "Cut list",
             "Terminal diagram",
             "Cable diagram",
             "IO list"
@@ -826,4 +827,96 @@ fn wire_list_csv_carries_the_cut_length() {
         "{header}"
     );
     assert!(csv.contains(",estimate\r\n"));
+}
+
+#[test]
+fn cut_list_groups_by_size_and_colour_longest_first() {
+    use novo_reports::Report;
+    let (mut doc, h) = starter();
+    doc.transact("Colours", |tx| {
+        let wire = tx
+            .project()
+            .wires_at(Endpoint::pin(h.k1_coil, 0))
+            .next()
+            .expect("coil wire");
+        tx.update::<Wire>(wire, |w| {
+            w.color = Some("BU".into());
+            w.cross_section_mm2 = Some(0.75);
+        })
+    })
+    .expect("edit");
+    let cuts = CutList::default().generate(doc.project());
+    let wires = report(&doc, "wires");
+    let total_wires = wires.section("wires").unwrap().rows.len();
+
+    // Summary first, then one table per cross-section and colour.
+    let summary = cuts.section("summary").expect("summary");
+    let counts: i64 = summary
+        .rows
+        .iter()
+        .map(|r| match r.cells[1] {
+            Cell::Int(n) => n,
+            _ => panic!("count is an integer"),
+        })
+        .sum();
+    assert_eq!(counts as usize, total_wires);
+    let titles: Vec<String> = summary
+        .text_rows()
+        .into_iter()
+        .map(|r| r[0].clone())
+        .collect();
+    assert_eq!(titles.first().map(String::as_str), Some("0.75 mm² BU"));
+    assert_eq!(titles.last().map(String::as_str), Some("Size unknown"));
+    assert!(titles.contains(&"1.5 mm²".to_owned()), "{titles:?}");
+
+    // Ferrule allowance: 10 mm at each end on top of the wire list's length.
+    let table = &cuts.sections[1];
+    let row = &table.text_rows()[0];
+    let (wire, ends, cut): (f64, f64, f64) = (
+        row[5].parse().unwrap(),
+        row[6].parse().unwrap(),
+        row[7].parse().unwrap(),
+    );
+    assert_eq!((ends, cut), (20.0, wire + 20.0));
+    // Longest first within a table.
+    for table in &cuts.sections[1..] {
+        let lengths: Vec<f64> = table
+            .text_rows()
+            .iter()
+            .map(|r| r[7].parse().unwrap())
+            .collect();
+        assert!(lengths.windows(2).all(|w| w[0] >= w[1]), "{lengths:?}");
+    }
+}
+
+#[test]
+fn cut_list_gives_big_wires_lug_allowance() {
+    use novo_reports::Report;
+    let (mut doc, h) = starter();
+    doc.transact("Big wire", |tx| {
+        let wire = tx
+            .project()
+            .wires_at(Endpoint::pin(h.k1_coil, 0))
+            .next()
+            .expect("coil wire");
+        tx.update::<Wire>(wire, |w| w.cross_section_mm2 = Some(35.0))
+    })
+    .expect("edit");
+    let cuts = CutList::default().generate(doc.project());
+    let table = cuts
+        .sections
+        .iter()
+        .find(|s| s.title == "35 mm²")
+        .expect("35 mm² table");
+    assert_eq!(table.text_rows()[0][6], "40");
+}
+
+#[test]
+fn cut_list_is_empty_without_wires_and_exports_to_csv() {
+    use novo_reports::Report;
+    let doc = Document::default();
+    assert_eq!(CutList::default().generate(doc.project()).row_count(), 0);
+    let (doc, _) = starter();
+    let csv = to_csv(&report(&doc, "cutlist"), &CsvOptions::default());
+    assert!(csv.contains("Wire no.,From,To,Cable,Length basis,Wire mm,Ends mm,Cut mm"));
 }
