@@ -344,8 +344,12 @@ one gesture, so nothing is chosen in advance.
 
 - **Live highlight.** While the pointer moves, every item the box would
   take is shown in the hover colour (steel blue, never copper) and the
-  hint counts them ("5 selected"). Release takes exactly what was
-  highlighted; Esc cancels and leaves the selection as it was.
+  hint counts them ("5 selected"). Release takes exactly what the
+  box covers; Esc cancels and leaves the selection as it was.
+  Above 2000 items in the box the highlight stops (the cap keeps a large
+  sheet responsive) but the box and the count go on updating, and release
+  still takes everything. The count shows once the box has started (past
+  the 4 px threshold), never as "0 selected" before it.
 - **Modifiers.** Shift adds to the selection and Ctrl toggles, both
   decided at release, so the highlight shows the result of the gesture.
 - **What counts as an item.** A device is taken as a whole (its tag and
