@@ -16,6 +16,7 @@
 mod check;
 mod progress;
 mod punch;
+mod report;
 mod store;
 
 pub use check::{CheckKind, CheckRecord, CheckState, Target};
@@ -23,4 +24,5 @@ pub use progress::{
     Progress, Scope, TargetInfo, progress, progress_by_cabinet, progress_by_page, targets,
 };
 pub use punch::{PunchItem, PunchState, Severity};
+pub use report::to_report_input;
 pub use store::{CommissioningError, CommissioningStore};

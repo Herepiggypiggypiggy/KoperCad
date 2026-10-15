@@ -140,3 +140,41 @@ fn the_store_round_trips_through_json() {
     });
     assert_eq!(next, 2, "ids continue after a reload");
 }
+
+#[test]
+fn the_report_input_lists_every_check_and_punch_item() {
+    let (doc, m) = starter();
+    let project = doc.project();
+    let mut store = CommissioningStore::new();
+    let wire = Target::Wire(m.motor_wires[0]);
+    let mut r = rec(wire, CheckKind::Continuity, CheckState::Failed);
+    r.value = "open".into();
+    store.set_check(r).unwrap();
+    store
+        .set_check(rec(
+            Target::Device(m.k1),
+            CheckKind::Tested,
+            CheckState::Passed,
+        ))
+        .unwrap();
+    let input = to_report_input(project, &store, Vec::new());
+    let expected: usize = targets(project)
+        .iter()
+        .map(|t| t.target.checks().len())
+        .sum();
+    assert_eq!(input.checks.len(), expected);
+    assert_eq!(input.project_name, project.info().name);
+    let failed: Vec<_> = input
+        .checks
+        .iter()
+        .filter(|c| c.state == novo_reports::commissioning::CheckState::Failed)
+        .collect();
+    assert_eq!(failed.len(), 1);
+    assert_eq!(failed[0].what, "Continuity");
+    assert_eq!(failed[0].note, "open");
+    assert_eq!(failed[0].by, "tv");
+    assert_eq!(input.punch.len(), 1);
+    assert_eq!(input.punch[0].tag, failed[0].tag);
+    let output = novo_reports::commissioning::commissioning_report(&input);
+    assert!(output.row_count() > 0);
+}
