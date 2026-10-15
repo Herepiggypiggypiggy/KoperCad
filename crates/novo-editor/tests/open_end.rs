@@ -107,3 +107,28 @@ fn a_cap_is_found_only_near_it_and_w_resumes_the_wire() {
     assert_eq!(wires.len(), 1, "the wire was extended, not duplicated");
     assert_eq!(wires[0].to, Endpoint::Free { at: next });
 }
+
+#[test]
+fn a_pulled_wire_stays_on_its_cable_core() {
+    let (mut doc, page, mut editor, w, cap) = open_ended();
+    let cable = doc
+        .transact("cable", |tx| {
+            let cable = tx.add_cable(
+                novo_core::DeviceTag::parse("-W1").unwrap(),
+                vec![novo_core::CableCore::new("1")],
+            )?;
+            tx.assign_core(cable, 0, Some(w))?;
+            Ok(cable)
+        })
+        .unwrap()
+        .0;
+    editor.hover(&doc, page, cap, TOL);
+    assert!(editor.begin_open_end(&doc, page, cap, TOL, true));
+    let to = p(cap.x + 8.0, cap.y + 16.0);
+    editor.hover(&doc, page, to, TOL);
+    editor.click(&mut doc, page, to, TOL);
+    let new = doc.project().wires().next().unwrap().id;
+    assert_eq!(doc.project().core_of_wire(new), Some((cable, 0)));
+    doc.undo().unwrap();
+    assert_eq!(doc.project().core_of_wire(w), Some((cable, 0)));
+}

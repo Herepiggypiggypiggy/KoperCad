@@ -1572,7 +1572,12 @@ impl Editor {
         // The wire being replaced goes first and its numbering and colour
         // come back on the new one, all in this one undo step.
         let old = replacing.and_then(|id| doc.project().wire(id).cloned());
+        // The cable core the old wire is on: removing the wire frees it.
+        let core = replacing.and_then(|id| doc.project().core_of_wire(id));
         let swap = |tx: &mut novo_core::Tx<'_>, new: WireId| -> novo_core::Result<()> {
+            if let Some((cable, index)) = core {
+                tx.assign_core(cable, index, Some(new))?;
+            }
             if let Some(old) = &old {
                 tx.update::<novo_core::Wire>(new, |n| {
                     n.number = old.number.clone();
