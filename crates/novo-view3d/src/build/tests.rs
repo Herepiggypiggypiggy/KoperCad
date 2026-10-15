@@ -12,6 +12,7 @@ fn layout() -> CabinetLayout {
         x: 20.0,
         y: 100.0,
         length: 300.0,
+        vertical: false,
     });
     l.placements.push(Placement {
         id: 5,
@@ -267,4 +268,17 @@ fn refresh_bumps_the_right_counter() {
     });
     refresh(&mut s, from_layout(&l, &inputs(), &o));
     assert_eq!((s.revision, s.pose_revision), (1, 1));
+}
+
+#[test]
+fn a_vertical_rail_runs_down_the_plate() {
+    let mut l = layout();
+    l.rails[0].vertical = true;
+    let s = from_layout(&l, &inputs(), &Options::default());
+    let rail = s.get(id(ItemKind::Rail, 2)).unwrap();
+    // Starts at 2D (20, 100) and runs 300 down: centre 2D (20, 250) -> world y 250.
+    assert_eq!(rail.pose.translation, Vec3::new(20.0, 250.0, 0.0));
+    assert_eq!(rail.pose.rotation, Quat::from_rotation_z(FRAC_PI_2));
+    let b = s.world_bounds(rail);
+    assert!((b.size().y - 300.0).abs() < 1e-3);
 }

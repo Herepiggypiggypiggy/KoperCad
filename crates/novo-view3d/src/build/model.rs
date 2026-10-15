@@ -33,7 +33,7 @@ pub fn device_depth(project: &Project, device: &Device) -> Depth {
     Depth::from_part(None)
 }
 
-/// Depths, labels, ducts and rail orientation of an enclosure.
+/// Depths, labels and ducts of an enclosure.
 pub fn inputs(project: &Project, id: StructureId) -> Inputs {
     let mut inputs = Inputs::default();
     for p in project
@@ -52,10 +52,8 @@ pub fn inputs(project: &Project, id: StructureId) -> Inputs {
         }
     }
     for r in project.all::<ModelRail>().filter(|r| r.structure == id) {
-        match r.kind {
-            RailKind::DinRail if r.vertical => inputs.vertical_rails.push(r.id.raw()),
-            RailKind::DinRail => {}
-            RailKind::Duct => inputs.ducts.push(DuctShape {
+        if r.kind == RailKind::Duct {
+            inputs.ducts.push(DuctShape {
                 id: r.id.raw(),
                 x: r.x,
                 y: r.y,
@@ -63,7 +61,7 @@ pub fn inputs(project: &Project, id: StructureId) -> Inputs {
                 vertical: r.vertical,
                 width: r.width,
                 height: r.height,
-            }),
+            });
         }
     }
     inputs

@@ -135,8 +135,6 @@ pub struct DuctShape {
 pub struct Inputs {
     pub depths: BTreeMap<u64, Depth>,
     pub ducts: Vec<DuctShape>,
-    /// Layout rails that run down the plate instead of across.
-    pub vertical_rails: Vec<u64>,
     /// Device labels, for example `-K1`.
     pub labels: BTreeMap<u64, Arc<str>>,
 }
@@ -216,7 +214,7 @@ pub fn from_layout(layout: &CabinetLayout, inputs: &Inputs, options: &Options) -
             Profile::TopHat35x7_5,
             (r.x, r.y),
             r.length,
-            inputs.vertical_rails.contains(&r.id),
+            r.vertical,
             (DIN_RAIL_WIDTH_MM, DIN_RAIL_HEIGHT_MM),
             &frame,
         ));
