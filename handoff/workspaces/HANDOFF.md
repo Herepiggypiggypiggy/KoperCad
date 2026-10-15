@@ -3,18 +3,21 @@
 Design: `docs/design/workspaces.md` (PR #438, draft). Plan is §10, decisions for other threads §11.
 Repo herepiggypiggypiggy/kopercad. Coordinator told us Tadjiro chose "Menu and status bar" at 18:44Z: go with the design.
 
-## PRs (stacked in this order; each branch contains the ones above it)
-| Step | PR | Branch |
-| --- | --- | --- |
-| 1 design doc | #438 | claude/project-thread-xni9es (design READY from 0114 with notes, folded in) |
-| 2 workspace enum, switcher, layouts | #453 | ...-workspace (main A READY, needs design 0114) |
-| 3 menu placements in novo-workflow | #459 | ...-registry (main A READY) |
-| 4 menu bar | #463 | ...-menubar (design B changes made: F10, widths, bar width; main B) |
-| 5 status bar | #467 | ...-statusbar (design C, main C) |
-| 8 Reports workspace | #475 | ...-reports (design B changes made; main B) |
-Reviewers: routing in coordination/threads.md (design reviewers by PR parity, main reviewers by mod 3). Message them after each push.
+## PRs (2026-10-15 19:55 UTC; merge in this order, merge main into the next after each)
+| Step | PR | Branch | State |
+| --- | --- | --- | --- |
+| 1 design doc | #438 | merged | |
+| 2 workspace enum, switcher, layouts | #453 | merged | |
+| 3 menu placements in novo-workflow | #459 | merged | |
+| docs follow-up (widths, hub order, touch layout, anchors) | #515 | claude/project-thread-xni9es | design C READY with notes folded in |
+| 4 menu bar | #463 | ...-menubar afb185d | main B + design B re-review after the main merge |
+| 5 status bar | #467 | ...-statusbar 096198d | design C READY; stacked on #463 |
+| 8 Reports workspace | #475 | ...-reports 33ff374 | design B items done; stacked on #467 |
+Reviewers: routing in coordination/threads.md. Message them after each push.
 
-## Next
+## Next (not started; wind-down 19:45 UTC, usage at 80%)
+still clippy: main's novo-interop `large_enum_variant` (sheets/fields.rs Parsed) fails `-D warnings`, not ours.
+Workspace icons + segmented_icons from the design system (#501) replace the short chip names; Commissioning migrates onto Workspace::Commissioning (its thread); Alt+letter access not built.
 Small registry PR after #459 merges: Revisions under File (PLACEMENTS in menus.rs). Merge up the stack as lower PRs squash-merge (rebase onto main and say so).
 Trap found: egui MenuBar takes the whole row; menu_bar.rs gives it the width measured last frame.
 Trap: COMMANDS rows must stay in GROUPS order (test); keys: Reports workspace uses Focus::Panel so the table gets arrows.
