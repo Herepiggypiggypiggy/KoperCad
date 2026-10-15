@@ -39,6 +39,7 @@ mod project_settings;
 mod reports;
 mod revisions;
 mod sheets;
+mod simulate;
 mod sizing;
 mod terminals;
 mod title_revisions;
@@ -367,7 +368,8 @@ impl NovoApp {
             | Action::CloseProject
             | Action::ZoomToFit
             | Action::SizeEnclosure
-            | Action::EnclosureList => open,
+            | Action::EnclosureList
+            | Action::MotorStart => open,
             Action::ShowCabinet => self
                 .workspace_unavailable(workspace::Workspace::Cabinet)
                 .is_none(),
@@ -414,6 +416,7 @@ impl NovoApp {
                 self.switch_workspace(workspace::Workspace::Cabinet);
                 self.sizing.editor_open = true;
             }
+            Action::MotorStart => self.open_motor_start(),
             Action::PinOutline => {
                 let pinned = !self.outline_pinned();
                 self.settings.outline_pinned = Some(pinned);
@@ -811,6 +814,7 @@ impl NovoApp {
         self.command_field(&ctx, canvas_rect);
         self.recovery_dialog(&ctx);
         self.about_dialog(&ctx);
+        self.motor_start_window(&ctx);
         self.renumber_dialog(&ctx);
         self.plc_import_dialog(&ctx);
         self.preferences_dialog(&ctx);

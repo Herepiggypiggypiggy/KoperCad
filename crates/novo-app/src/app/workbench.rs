@@ -125,6 +125,8 @@ pub(crate) struct Workbench {
     pub(super) sheet_exports: std::collections::BTreeMap<PathBuf, u64>,
     /// The live potentials view (Shift+L).
     pub(super) live: super::live::LiveView,
+    /// Electrical values for the live view and the motor start window.
+    pub(super) sim: super::simulate::SimState,
     /// Changes mode, while it is on.
     pub(super) changes: Option<super::changes::ChangesMode>,
     /// Commissioning mode's data and panel state, once opened.
@@ -190,6 +192,7 @@ impl Default for Workbench {
             last_export: None,
             sheet_exports: Default::default(),
             live: Default::default(),
+            sim: super::simulate::SimState::new(),
             changes: None,
             commissioning: None,
             underlay_seen: None,

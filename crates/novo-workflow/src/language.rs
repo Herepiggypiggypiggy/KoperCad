@@ -255,6 +255,16 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["kasten", "kastenlijst", "behuizingen"],
     ),
+    nl(
+        "simulate.motor-start",
+        &[],
+        &[
+            "motor starten",
+            "ster-driehoek",
+            "aanloopstroom",
+            "zachtstarter",
+        ],
+    ),
     nl("view.changes", &["wijzigingen"], &["vergelijk", "verschil"]),
     nl(
         "view.commissioning",

@@ -743,6 +743,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "simulate.motor-start",
+        "Simulate motor start",
+        "View",
+        &[
+            "simulate",
+            "motor",
+            "start",
+            "star-delta",
+            "soft starter",
+            "inrush",
+        ],
+        Needs::Project,
+    ),
+    cmd(
         "view.cabinet_table",
         "Cabinet as table",
         "View",
