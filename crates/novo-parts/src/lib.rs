@@ -29,6 +29,7 @@ mod catalog;
 mod csv;
 mod import;
 mod library;
+mod macros;
 mod search;
 mod sheet;
 mod step;
@@ -57,6 +58,11 @@ pub use import::{
 pub use library::{
     FileKind, ImportFlow, LIBRARY_FORMAT_VERSION, LibraryError, LocalLibrary, NewSource,
     SourceRecord, default_library_root,
+};
+pub use macros::{
+    Imported, MACRO_EXTENSION, MACRO_FORMAT, MACRO_FORMAT_VERSION, MACRO_PACK_EXTENSION,
+    MACRO_PACK_FORMAT, MacroEntry, MacroError, MacroFile, MacroLibrary, MacroPack, OnConflict,
+    PackEntry, STARTER_FOLDER, starter_macros, user_macros_dir,
 };
 pub use search::{Matcher, normalize_code};
 pub use sheet::{
