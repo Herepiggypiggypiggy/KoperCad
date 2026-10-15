@@ -237,7 +237,6 @@ impl SchematicView {
         self.status.clone()
     }
 
-    /// The selection as model ids.
     /// The model object the canvas picks under world point `w`.
     fn model_at(&self, w: Vec2) -> Option<AnyId> {
         let scene = self.scene.as_ref()?;
@@ -249,6 +248,7 @@ impl SchematicView {
         scene.model_id(hit.id)
     }
 
+    /// The selection as model ids.
     pub fn selection(&self) -> Vec<AnyId> {
         let Some(scene) = &self.scene else {
             return Vec::new();

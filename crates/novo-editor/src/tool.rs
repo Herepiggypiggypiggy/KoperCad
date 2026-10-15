@@ -567,6 +567,7 @@ impl Editor {
 
     /// Picks up the selection to move it with the pointer.
     pub fn begin_move(&mut self, selection: &[AnyId]) -> bool {
+        self.link_hint = None;
         let ids: Vec<AnyId> = selection
             .iter()
             .copied()
