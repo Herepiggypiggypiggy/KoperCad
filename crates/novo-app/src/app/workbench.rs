@@ -105,6 +105,9 @@ pub(crate) struct Workbench {
     pub(super) problem_at: Option<usize>,
     /// The last PDF written, for tests and the toast.
     pub(super) last_export: Option<PathBuf>,
+    /// Hash of each spreadsheet export this session wrote, by path: only a
+    /// file still identical to what we wrote is replaced by the next export.
+    pub(super) sheet_exports: std::collections::BTreeMap<PathBuf, u64>,
     /// The live potentials view (Shift+L).
     pub(super) live: super::live::LiveView,
     /// Changes mode, while it is on.
@@ -164,6 +167,7 @@ impl Default for Workbench {
             issue_filter: [true; 3],
             problem_at: None,
             last_export: None,
+            sheet_exports: Default::default(),
             live: Default::default(),
             changes: None,
             commissioning: None,
@@ -222,6 +226,8 @@ const APP_COMMANDS: &[&str] = &[
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "export.sheets",
+    "export.sheets_csv",
     "file.import_dxf_background",
     "view.background",
     "file.remove_background",
@@ -563,6 +569,12 @@ impl NovoApp {
             }
             "export.pdf" => {
                 self.export_pdf();
+            }
+            "export.sheets" => {
+                self.export_spreadsheet();
+            }
+            "export.sheets_csv" => {
+                self.export_spreadsheet_csv();
             }
             "file.import_dxf_background" => self.import_dxf_background(),
             "view.background" => self.toggle_background(),
