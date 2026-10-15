@@ -429,31 +429,21 @@ pub fn analyse(project: &Project, netlist: &Netlist, state: &PoleState) -> Analy
     out
 }
 
-/// A three-phase motor at its rated point: three equal impedances to a
-/// floating star point. Returns the elements to read the current from.
-fn motor_load(b: &mut Builder<'_>, symbol: &SymbolInstance) -> Option<Vec<Branch>> {
-    let windings: Vec<usize> = symbol
+/// The winding pins of a motor symbol (everything but the PE clamp).
+fn winding_pins(symbol: &SymbolInstance) -> Vec<usize> {
+    symbol
         .pins
         .iter()
         .enumerate()
         .filter(|(_, p)| !p.name.eq_ignore_ascii_case("pe"))
         .map(|(i, _)| i)
-        .collect();
-    if windings.len() != 3 {
-        b.note(
-            NoteKind::Limit,
-            Some(symbol.id),
-            "only three-winding motors are simulated",
-        );
-        return None;
-    }
-    let nodes: Vec<Node> = windings
-        .iter()
-        .filter_map(|&i| b.pin_node(symbol, i))
-        .collect();
-    if nodes.len() != 3 {
-        return None;
-    }
+        .collect()
+}
+
+/// The equivalent circuit of a motor from its device data, with typical
+/// values (listed in a note) for what the drawing does not say.
+fn motor_model(b: &mut Builder<'_>, symbol: &SymbolInstance) -> Option<Motor> {
+    let windings = winding_pins(symbol);
     let Some(kw) = number(b.project, symbol, &["power_kw", "rated_power_kw"]) else {
         b.note(
             NoteKind::Missing,
@@ -466,7 +456,7 @@ fn motor_load(b: &mut Builder<'_>, symbol: &SymbolInstance) -> Option<Vec<Branch
     let v_ll = number(b.project, symbol, &["voltage_v", "rated_voltage_v"])
         .or_else(|| {
             // Line-to-line voltage of the lines feeding it.
-            let (a, c) = (net(windings[0])?, net(windings[1])?);
+            let (a, c) = (net(*windings.first()?)?, net(*windings.get(1)?)?);
             b.nominal(a, c)
         })
         .unwrap_or_else(|| {
@@ -507,7 +497,7 @@ fn motor_load(b: &mut Builder<'_>, symbol: &SymbolInstance) -> Option<Vec<Branch
             format!("typical IE3 values used for: {}", assumed.join(", ")),
         );
     }
-    let motor = match Motor::from_nameplate(Nameplate {
+    match Motor::from_nameplate(Nameplate {
         power_w: kw * 1000.0,
         v_ll,
         hz: b.hz,
@@ -518,18 +508,83 @@ fn motor_load(b: &mut Builder<'_>, symbol: &SymbolInstance) -> Option<Vec<Branch
         lr_current_ratio: ilr,
         connection,
     }) {
-        Ok(m) => m,
+        Ok(m) => Some(m),
         Err(e) => {
             b.note(
                 NoteKind::Missing,
                 Some(symbol.id),
                 format!("motor nameplate does not fit a motor model ({e:?}): not simulated"),
             );
-            return None;
+            None
         }
+    }
+}
+
+/// The motor model of a motor symbol and the notes about what was assumed,
+/// for the start simulation. The frequency is the supply's (50 Hz when the
+/// drawing does not say).
+pub fn motor_of(
+    project: &Project,
+    netlist: &Netlist,
+    symbol: SymbolId,
+) -> Result<(Motor, Vec<Note>), String> {
+    let symbol = project
+        .symbol(symbol)
+        .filter(|s| is_motor(s))
+        .ok_or("not a motor")?;
+    let hz = project
+        .potentials()
+        .filter(|p| p.kind == PotentialKind::Line)
+        .find_map(|p| {
+            project
+                .potential_systems()
+                .find(|s| s.members.contains(&p.id))
+                .and_then(|s| s.frequency_hz)
+        })
+        .unwrap_or(50.0);
+    let mut b = Builder {
+        project,
+        netlist,
+        circuit: Circuit::new(),
+        hz,
+        notes: Vec::new(),
+        three_phase: true,
     };
+    match motor_model(&mut b, symbol) {
+        Some(m) => Ok((m, b.notes)),
+        None => Err(b
+            .notes
+            .iter()
+            .find(|n| n.kind == NoteKind::Missing)
+            .map_or_else(
+                || "motor cannot be modelled".to_string(),
+                |n| n.text.clone(),
+            )),
+    }
+}
+
+/// A three-phase motor at its rated point: three equal impedances to a
+/// floating star point. Returns the branches to read the current from.
+fn motor_load(b: &mut Builder<'_>, symbol: &SymbolInstance) -> Option<Vec<Branch>> {
+    let windings = winding_pins(symbol);
+    if windings.len() != 3 {
+        b.note(
+            NoteKind::Limit,
+            Some(symbol.id),
+            "only three-winding motors are simulated",
+        );
+        return None;
+    }
+    let nodes: Vec<Node> = windings
+        .iter()
+        .filter_map(|&i| b.pin_node(symbol, i))
+        .collect();
+    if nodes.len() != 3 {
+        return None;
+    }
+    let motor = motor_model(b, symbol)?;
     let zw = motor.z_in(motor.rated_slip());
-    let zy = match connection {
+    let zy = match motor.connection {
         Connection::Star => zw,
         Connection::Delta => zw / Complex::real(3.0),
     };

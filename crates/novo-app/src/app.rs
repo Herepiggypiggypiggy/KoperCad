@@ -32,6 +32,7 @@ mod project_settings;
 mod reports;
 mod revisions;
 mod sheets;
+mod simulate;
 mod sizing;
 mod terminals;
 mod title_revisions;
@@ -351,7 +352,8 @@ impl NovoApp {
             | Action::ZoomToFit
             | Action::ShowCabinet
             | Action::SizeEnclosure
-            | Action::EnclosureList => open,
+            | Action::EnclosureList
+            | Action::MotorStart => open,
             Action::Undo => doc.is_some_and(|d| d.can_undo()),
             Action::Redo => doc.is_some_and(|d| d.can_redo()),
             _ => true,
@@ -395,6 +397,7 @@ impl NovoApp {
                 self.cabinet_open = true;
                 self.sizing.editor_open = true;
             }
+            Action::MotorStart => self.open_motor_start(),
             Action::PinOutline => {
                 let pinned = !self.outline_pinned();
                 self.settings.outline_pinned = Some(pinned);
@@ -787,6 +790,7 @@ impl NovoApp {
         self.command_field(&ctx, canvas_rect);
         self.recovery_dialog(&ctx);
         self.about_dialog(&ctx);
+        self.motor_start_window(&ctx);
         self.renumber_dialog(&ctx);
         self.preferences_dialog(&ctx);
         self.parts_window(&ctx);
