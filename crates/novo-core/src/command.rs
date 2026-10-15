@@ -272,8 +272,6 @@ pub enum Command {
         #[serde(default)]
         enclosure: bool,
     },
-    /// Records a declined proposal; see [`Tx::dismiss`]. Remove the
-    /// dismissal to bring the proposal back.
     /// Sets the mounting plate of an enclosure; `None` removes it.
     SetPlateSize {
         structure: StructureId,
@@ -308,6 +306,8 @@ pub enum Command {
     RemovePlacement {
         placement: CabinetPlacementId,
     },
+    /// Records a declined proposal; see [`Tx::dismiss`]. Remove the
+    /// dismissal to bring the proposal back.
     Dismiss {
         proposal: String,
         subjects: Vec<AnyId>,
