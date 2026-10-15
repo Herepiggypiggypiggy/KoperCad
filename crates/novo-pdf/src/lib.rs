@@ -503,9 +503,6 @@ pub fn sheet_content(name: &str, number: (usize, usize), layout: &PageLayout) ->
     }
 }
 
-/// `20b  Terminal diagram · =A1+CAB-X1`: the sheet name, the page title,
-/// then what the sheet shows, so a reflowed sheet is found by name
-/// (docs/DESIGN.md, generated pages under pinned flow).
 /// The bookmark of a sheet: its title, with a dot in front when its page
 /// has changes since the latest revision.
 fn bookmark_text(sheet: &Sheet, options: &PdfOptions) -> String {
@@ -517,6 +514,9 @@ fn bookmark_text(sheet: &Sheet, options: &PdfOptions) -> String {
     }
 }
 
+/// `20b  Terminal diagram · =A1+CAB-X1`: the sheet name, the page title,
+/// then what the sheet shows, so a reflowed sheet is found by name
+/// (docs/DESIGN.md, generated pages under pinned flow).
 fn sheet_bookmark(sheet: &Sheet) -> String {
     let mut title = sheet.name.clone();
     let what: Vec<&str> = [sheet.page.title.as_str(), sheet.section.as_str()]
