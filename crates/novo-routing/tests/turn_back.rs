@@ -16,10 +16,12 @@ fn a_wire_that_turns_back_keeps_its_turning_point() {
         from: Anchor {
             pos: Point::new(50.0, 20.0),
             facing: Facing::Down,
+            z_mm: None,
         },
         to: Anchor {
             pos: Point::new(50.0, 60.0),
             facing: Facing::Down,
+            z_mm: None,
         },
         diameter_mm: None,
     };
@@ -29,6 +31,7 @@ fn a_wire_that_turns_back_keeps_its_turning_point() {
             slack_mm: 0.0,
             max_stub_mm: 150.0,
             fill_limit: 0.5,
+            bend_mm: 0.0,
         },
     );
     assert_eq!(r.length_mm, 80.0 + 40.0);

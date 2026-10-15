@@ -11,6 +11,9 @@ use novo_routing::{Kind, Rules};
 pub(crate) enum Basis {
     /// Through the ducts of the mounting plate both devices are placed on.
     Routed,
+    /// Routed, but a device has no depth: the wire is measured from the plate,
+    /// so it is too short by the rise to the terminals.
+    RoutedFlat,
     /// Both devices are placed on one plate but no duct reaches both: a
     /// straight Manhattan line, which the routing engine flags as a problem.
     FreeAir,
@@ -22,6 +25,7 @@ impl Basis {
     pub(crate) fn text(self) -> &'static str {
         match self {
             Basis::Routed => "routed",
+            Basis::RoutedFlat => "routed, no depth",
             Basis::FreeAir => "free air",
             Basis::Estimate => "estimate",
         }
@@ -109,6 +113,9 @@ pub(crate) fn cut_lengths(project: &Project, connections: &[Connection]) -> Vec<
                 Some(route) => CutLength {
                     mm: route.length_mm,
                     basis: match route.kind {
+                        Kind::Ducted if routed.unknown_height.contains(&(i as u64)) => {
+                            Basis::RoutedFlat
+                        }
                         Kind::Ducted => Basis::Routed,
                         Kind::FreeAir => Basis::FreeAir,
                     },

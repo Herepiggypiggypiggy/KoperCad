@@ -793,9 +793,30 @@ fn wire_list_routes_lengths_through_the_ducts_of_the_plate() {
         .0;
     let wires = report(&doc, "wires");
     // Both footprints are the default 45 x 90 mm: anchors at the centres,
-    // 105 mm down to the duct each, 300 mm along it, 50 mm slack per end.
+    // 105 mm down to the duct each, 300 mm along it, 50 mm slack per end, and
+    // 30 mm per end from the plate to the middle of the 60 mm duct: the
+    // parts have no depth yet, so the list says it measured from the plate.
     let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
-    assert_eq!((row[8].as_str(), row[9].as_str()), ("610", "routed"));
+    assert_eq!(
+        (row[8].as_str(), row[9].as_str()),
+        ("670", "routed, no depth")
+    );
+    // With a depth the terminals stand 80 mm off the plate: 50 mm to the duct.
+    let parts: Vec<_> = [h.f1, h.k1]
+        .iter()
+        .flat_map(|d| doc.project().device(*d).unwrap().parts.clone())
+        .collect();
+    assert!(!parts.is_empty(), "the starter's devices have parts");
+    doc.transact("Depth", |tx| {
+        for part in &parts {
+            tx.set_property(*part, "depth_mm", Some(novo_core::Value::Float(80.0)))?;
+        }
+        Ok(())
+    })
+    .expect("depth");
+    let wires = report(&doc, "wires");
+    let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
+    assert_eq!((row[8].as_str(), row[9].as_str()), ("710", "routed"));
     // F2 is not placed: that wire stays an estimate.
     let row = wire_row(&wires, "=A1+CAB-K1:2", "=A1+CAB-F2:1");
     assert_eq!(row[9], "estimate");
