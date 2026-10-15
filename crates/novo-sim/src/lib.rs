@@ -18,6 +18,7 @@ mod coupling;
 mod devices;
 mod loads;
 mod plc;
+pub mod program;
 
 pub use coupling::{
     Clock, DEFAULT_DELAY, Settled, delay_seconds, is_coil, is_timer_contact, settle, settle_timed,
