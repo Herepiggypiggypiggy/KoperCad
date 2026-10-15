@@ -1,6 +1,4 @@
 # Cable and terminal strip plans: handoff
 
-Updated 2026-10-15. Crate: novo-reports (`schedule.rs`, `plugs.rs`). Branch `claude/project-thread-8920qu`.
-- `cableschedule`: not proposed as a default generated page (`Report::proposed_by_default`), it is an export first.
-- `plugs`: sections per `DeviceKind::Connector` device; pins from the device's symbols; destinations followed through junctions only.
-- Tests: `crates/novo-reports/tests/plugs_schedule.rs`.
+Updated 2026-10-15. Scope per Supervisor: cable schedule/plan and tabular terminal strip plan. Strip diagram (graphical) and plug lists belong to the sibling "Terminal diagrams and plug lists" thread. Plug list code from this thread is at commit d56063e (`plugs.rs`), removed from #416.
+- `cableschedule` report in `crates/novo-reports/src/schedule.rs`; not a default generated page.
