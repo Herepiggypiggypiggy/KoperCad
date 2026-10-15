@@ -21,10 +21,21 @@ pub enum ExportError {
 /// A sheet name Excel accepts: at most 31 characters, none of `[]:*?/\`,
 /// unique within the workbook (`Wire list (2)`).
 fn sheet_name(title: &str, taken: &[String]) -> String {
-    let clean: String = title
-        .chars()
-        .map(|c| if "[]:*?/\\".contains(c) { '_' } else { c })
-        .collect();
+    let chars: Vec<char> = title.chars().collect();
+    let mut clean = String::new();
+    for (i, &c) in chars.iter().enumerate() {
+        if !"[]:*?/\\".contains(c) {
+            clean.push(c);
+        } else if c == '/'
+            && i > 0
+            && chars[i - 1].is_alphanumeric()
+            && chars.get(i + 1).is_some_and(|n| n.is_alphanumeric())
+        {
+            // "I/O list" reads as "IO list", not "I_O list".
+        } else {
+            clean.push('_');
+        }
+    }
     // Excel rejects a leading or trailing apostrophe (also after cutting to
     // 31 characters) and the reserved name `History`.
     let tidy = |s: &str| s.trim().trim_matches('\'').trim().to_owned();
@@ -258,4 +269,19 @@ pub fn to_csv(report: &ReportOutput, options: &CsvOptions) -> String {
         csv_section(section, options, &mut out);
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sheet_name;
+
+    #[test]
+    fn sheet_names_excel_accepts() {
+        assert_eq!(sheet_name("I/O list", &[]), "IO list");
+        assert_eq!(sheet_name("a / b: c?", &[]), "a _ b_ c_");
+        assert_eq!(
+            sheet_name("Wire list", &["Wire list".into()]),
+            "Wire list (2)"
+        );
+    }
 }

@@ -326,7 +326,8 @@ fn export_reports_as_excel_and_csv() {
             "Device list",
             "Wire list",
             "Terminal diagram",
-            "Cable diagram"
+            "Cable diagram",
+            "IO list"
         ]
     );
 

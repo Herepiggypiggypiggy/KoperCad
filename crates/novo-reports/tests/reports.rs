@@ -587,7 +587,8 @@ fn xlsx_round_trips() {
             "Device list",
             "Wire list",
             "Terminal diagram",
-            "Cable diagram"
+            "Cable diagram",
+            "IO list"
         ]
     );
     // Cell by cell for the one-table sheets (a sheet with several sections
