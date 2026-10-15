@@ -1950,6 +1950,7 @@ name = "novo-interop"
 version = "0.1.0"
 dependencies = [
  "calamine",
+ "novo-cables",
  "novo-canvas",
  "novo-core",
  "novo-parts",

@@ -58,7 +58,8 @@ fn export_has_every_table_with_ids() {
             TableKind::Devices,
             TableKind::Terminals,
             TableKind::Wires,
-            TableKind::Cables
+            TableKind::Cables,
+            TableKind::Cores
         ]
     );
     let devices = book.table(TableKind::Devices).unwrap();

@@ -54,14 +54,17 @@ pub enum TableKind {
     Terminals,
     Wires,
     Cables,
+    /// One row per cable core.
+    Cores,
 }
 
 impl TableKind {
-    pub const ALL: [TableKind; 4] = [
+    pub const ALL: [TableKind; 5] = [
         TableKind::Devices,
         TableKind::Terminals,
         TableKind::Wires,
         TableKind::Cables,
+        TableKind::Cores,
     ];
 
     /// The sheet name in a workbook.
@@ -71,6 +74,7 @@ impl TableKind {
             TableKind::Terminals => "Terminals",
             TableKind::Wires => "Wires",
             TableKind::Cables => "Cables",
+            TableKind::Cores => "Cores",
         }
     }
 
@@ -87,6 +91,7 @@ impl TableKind {
             TableKind::Terminals => "terminal",
             TableKind::Wires => "wire",
             TableKind::Cables => "cable",
+            TableKind::Cores => "cable core",
         }
     }
 }
