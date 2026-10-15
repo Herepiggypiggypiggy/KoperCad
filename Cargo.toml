@@ -23,6 +23,7 @@ novo-core = { path = "crates/novo-core" }
 novo-editor = { path = "crates/novo-editor" }
 novo-interop = { path = "crates/novo-interop" }
 novo-layout = { path = "crates/novo-layout" }
+novo-numbering = { path = "crates/novo-numbering" }
 novo-parts = { path = "crates/novo-parts" }
 novo-pdf = { path = "crates/novo-pdf" }
 novo-plc = { path = "crates/novo-plc" }
