@@ -106,6 +106,38 @@ fn a_generated_page_prints_one_pdf_page_per_sheet() {
 }
 
 #[test]
+fn report_headers_print_in_helvetica_bold() {
+    let (doc, _, _) = project();
+    let pdf = parse(&export_pdf(doc.project(), &PdfOptions::default()).unwrap());
+    let fonts = |n: u32| -> Vec<Vec<u8>> {
+        let page = pdf.get_dictionary(pdf.get_pages()[&n]).unwrap();
+        let resources = match page.get(b"Resources").unwrap() {
+            Object::Reference(r) => pdf.get_dictionary(*r).unwrap(),
+            Object::Dictionary(d) => d,
+            other => panic!("resources {other:?}"),
+        };
+        let fonts = match resources.get(b"Font").unwrap() {
+            Object::Reference(r) => pdf.get_dictionary(*r).unwrap(),
+            Object::Dictionary(d) => d,
+            other => panic!("fonts {other:?}"),
+        };
+        fonts.iter().map(|(name, _)| name.clone()).collect()
+    };
+    // A schematic page has no bold text; a report sheet's header row does.
+    assert_eq!(fonts(1), [b"F1".to_vec()]);
+    assert_eq!(fonts(3), [b"F1".to_vec(), b"F3".to_vec()]);
+    let c = content(&pdf, 3);
+    assert!(c.contains("/F3 1 Tf"), "{c}");
+    let bold = pdf
+        .objects
+        .values()
+        .filter_map(|o| o.as_dict().ok())
+        .filter(|d| d.get(b"BaseFont").and_then(Object::as_name).ok() == Some(b"Helvetica-Bold"))
+        .count();
+    assert_eq!(bold, 1, "one shared Helvetica-Bold font object");
+}
+
+#[test]
 fn sheet_bookmarks_name_what_each_sheet_shows() {
     let (mut doc, _, _) = project();
     doc.transact("Terminal page", |tx| {

@@ -25,6 +25,7 @@ pub struct PageWriter<'a> {
     /// The export's Inter subset, for lines outside WinAnsi.
     inter: &'a mut Inter,
     uses_inter: bool,
+    uses_bold: bool,
 }
 
 impl<'a> PageWriter<'a> {
@@ -42,6 +43,7 @@ impl<'a> PageWriter<'a> {
             fill: None,
             inter,
             uses_inter: false,
+            uses_bold: false,
         }
     }
 
@@ -49,6 +51,11 @@ impl<'a> PageWriter<'a> {
     /// font).
     pub fn uses_inter(&self) -> bool {
         self.uses_inter
+    }
+
+    /// Whether the page set any text in Helvetica-Bold.
+    pub fn uses_bold(&self) -> bool {
+        self.uses_bold
     }
 
     pub fn finish(self) -> Vec<u8> {
@@ -150,7 +157,9 @@ impl<'a> PageWriter<'a> {
 
     /// Draws a label in Helvetica, anchored and rotated like the canvas
     /// draws it. Lines are aligned within the text box by the anchor. A
-    /// line Helvetica cannot carry is set in Inter (see [`inter`]).
+    /// line Helvetica cannot carry is set in Inter (see [`inter`]). A bold
+    /// label is set in Helvetica-Bold (Inter has no bold here, so a bold
+    /// line outside WinAnsi prints regular).
     pub fn label(&mut self, label: &Label) {
         let size = label.height;
         if size <= 0.0 || label.color.0[3] == 0 || label.text.trim().is_empty() {
@@ -161,7 +170,12 @@ impl<'a> PageWriter<'a> {
             .text
             .lines()
             .map(|line| {
-                if font::is_winansi(line) {
+                if font::is_winansi(line) && label.bold {
+                    let bytes = font::encode(line);
+                    let w = font::bold_text_width(&bytes) * size;
+                    self.uses_bold = true;
+                    (font::BOLD_NAME, bytes, w)
+                } else if font::is_winansi(line) {
                     let bytes = font::encode(line);
                     let w = font::text_width(&bytes) * size;
                     (font::FONT_NAME, bytes, w)
@@ -272,6 +286,19 @@ mod tests {
         );
         let s = text(w);
         assert_eq!(s.lines().last(), Some("S"), "{s}");
+    }
+
+    #[test]
+    fn bold_labels_are_set_in_helvetica_bold() {
+        let mut inter = Inter::new();
+        let mut w = PageWriter::new(100.0, &mut inter);
+        w.label(&Label::new(Vec2::ZERO, "Qty", 2.5).bolded(true));
+        w.label(&Label::new(Vec2::ZERO, "12", 2.5));
+        assert!(w.uses_bold());
+        assert!(!w.uses_inter());
+        let s = text(w);
+        let fonts: Vec<&str> = s.lines().filter(|l| l.ends_with(" Tf")).collect();
+        assert_eq!(fonts, ["/F3 1 Tf", "/F1 1 Tf"], "{s}");
     }
 
     #[test]

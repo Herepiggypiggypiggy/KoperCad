@@ -11,6 +11,10 @@
 /// Name of the font resource in every page's resource dictionary.
 pub const FONT_NAME: &[u8] = b"F1";
 
+/// Name of Helvetica-Bold (table headers) in the resources of pages that
+/// use it.
+pub const BOLD_NAME: &[u8] = b"F3";
+
 /// Distance from the top of a text line to its baseline, as a fraction of
 /// the font size. Helvetica's ascender is 0.718 and its descender 0.207; the
 /// remaining 0.075 of a line is split above and below, so the glyphs sit in
@@ -25,6 +29,16 @@ const ASCII_WIDTHS: [u16; 95] = [
     667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556, // 0x50
     333, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556, // 0x60
     556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584, // 0x70
+];
+
+/// Helvetica-Bold widths of 0x20..=0x7E.
+const BOLD_ASCII_WIDTHS: [u16; 95] = [
+    278, 333, 474, 556, 556, 889, 722, 238, 333, 333, 389, 584, 278, 333, 278, 278, // 0x20
+    556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 333, 333, 584, 584, 584, 611, // 0x30
+    975, 722, 722, 722, 722, 667, 611, 778, 722, 278, 556, 722, 611, 833, 722, 778, // 0x40
+    667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 333, 278, 333, 584, 556, // 0x50
+    333, 556, 611, 556, 611, 556, 333, 611, 611, 278, 278, 556, 278, 889, 611, 611, // 0x60
+    611, 611, 389, 556, 333, 611, 556, 778, 556, 556, 500, 389, 280, 389, 584, // 0x70
 ];
 
 /// The WinAnsi code of a character, or `?` when it has none.
@@ -93,9 +107,34 @@ pub fn width(code: u8) -> u16 {
     }
 }
 
+/// Width of a WinAnsi code in Helvetica-Bold, in 1/1000 of the font size.
+pub fn bold_width(code: u8) -> u16 {
+    match code {
+        0x20..=0x7E => BOLD_ASCII_WIDTHS[(code - 0x20) as usize],
+        0x91 | 0x92 | 0x82 | 0xB7 => 278,
+        0x93 | 0x94 | 0x84 => 500,
+        0x96 => 556,
+        0xC4..=0xC6 => 722,
+        0xD6 | 0xD8 => 778,
+        0xDC => 722,
+        0xE4 | 0xE5 => 556,
+        0xF6 | 0xFC => 611,
+        _ => width(code),
+    }
+}
+
 /// Width of encoded text in units of the font size.
 pub fn text_width(encoded: &[u8]) -> f32 {
     encoded.iter().map(|&c| f32::from(width(c))).sum::<f32>() / 1000.0
+}
+
+/// Width of encoded text in Helvetica-Bold, in units of the font size.
+pub fn bold_text_width(encoded: &[u8]) -> f32 {
+    encoded
+        .iter()
+        .map(|&c| f32::from(bold_width(c)))
+        .sum::<f32>()
+        / 1000.0
 }
 
 #[cfg(test)]
@@ -110,6 +149,17 @@ mod tests {
         assert_eq!(width(b'W'), 944);
         assert_eq!(width(b'~'), 584);
         assert!((text_width(b"10") - 1.112).abs() < 1e-6);
+    }
+
+    #[test]
+    fn bold_widths_follow_helvetica_bold() {
+        assert_eq!(bold_width(b' '), 278);
+        assert_eq!(bold_width(b'0'), 556);
+        assert_eq!(bold_width(b'b'), 611);
+        assert_eq!(bold_width(b'@'), 975);
+        assert_eq!(bold_width(b'~'), 584);
+        // "Qty" is wider in bold than in regular.
+        assert!(bold_text_width(b"Qty") > text_width(b"Qty"));
     }
 
     #[test]
