@@ -83,3 +83,5 @@
 21:50 UTC #472 2c2274a READY; #463 c2edddd READY; #475 f022249 READY (wind-down: no new reviews)
 22:05 UTC #553 157c9f6 READY (switch placed symbols); #406 aea752e awaiting conflict fix
 22:35 UTC #487 0ff3c5d READY (Compare: Show drawing); #532 8ace103 re-READY
+22:50 UTC #517 b337257 READY (route all, wire exports)
+22:50 UTC #541 65b64d1 CHANGES (conflict only; design OK, checkboxes follow-up)
