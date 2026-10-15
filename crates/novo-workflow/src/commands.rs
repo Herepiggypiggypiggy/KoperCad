@@ -191,6 +191,28 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     cmd("edit.rotate", "Rotate", "Draw", &["turn"], Needs::Selection),
     cmd("edit.mirror", "Mirror", "Draw", &["flip"], Needs::Selection),
+    // PLC and I/O (docs/design/plc.md section 4): the command surface only
+    // names them; the app shell runs them through novo-plc.
+    verb(
+        cmd(
+            "plc.add_card",
+            "Add PLC card",
+            "Draw",
+            &["plc", "card", "module", "i/o"],
+            Needs::Page,
+        ),
+        &["add card"],
+    ),
+    verb(
+        cmd(
+            "plc.to_plc",
+            "Send signal to PLC",
+            "Draw",
+            &["plc", "channel", "input", "output", "i/o"],
+            Needs::Selection,
+        ),
+        &["to plc"],
+    ),
     verb(
         cmd(
             "proposal.accept",
@@ -281,6 +303,16 @@ pub const COMMANDS: &[CommandInfo] = &[
             &["renumber"],
         ),
         &["page", "selection", "project"],
+    ),
+    verb(
+        cmd(
+            "plc.renumber_io",
+            "Renumber I/O",
+            "Edit",
+            &["plc", "addresses", "i/o"],
+            Needs::Project,
+        ),
+        &["renumber io"],
     ),
     cmd("edit.escape", "Cancel", "Edit", &["escape"], Needs::Nothing),
     // Navigate

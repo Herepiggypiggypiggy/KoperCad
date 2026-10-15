@@ -5,7 +5,8 @@ description = "One relay output channel of a PLC card: a potential-free make con
 standard = "IEC 60617"
 category = "plc"
 function = "plc.output.relay"
-keywords = ["plc", "relay output", "do", "contact", "i/o"]
+keywords = ["plc", "relay output", "ro", "do", "contact", "uitgang", "i/o"]
+aliases = ["ro"]
 
 connections = [
   { id = "1", at = [0, 0], dir = "up" },

@@ -84,6 +84,21 @@ pub const DUTCH: &[Aliases] = &[
         &["hernummeren", "hernummer"],
         &["nummering", "apparaten hernummeren"],
     ),
+    nl(
+        "plc.add_card",
+        &["kaart toevoegen"],
+        &["plc kaart", "plc module"],
+    ),
+    nl(
+        "plc.to_plc",
+        &["naar plc"],
+        &["signaal naar plc", "ingang uitgang"],
+    ),
+    nl(
+        "plc.renumber_io",
+        &["hernummer io"],
+        &["adressen hernummeren"],
+    ),
     nl("edit.escape", &[], &["annuleren"]),
     // Navigate
     nl("nav.partner", &[], &["naar partner", "kruisverwijzing"]),
