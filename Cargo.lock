@@ -2032,6 +2032,7 @@ dependencies = [
  "novo-cables",
  "novo-core",
  "novo-plc",
+ "novo-routing",
  "novo-terminals",
  "novo-tests",
  "rust_xlsxwriter",
