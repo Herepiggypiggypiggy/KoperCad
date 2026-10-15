@@ -251,19 +251,22 @@ impl Editor {
     /// Renames a page as one undo step. A dotted, empty or taken name is
     /// refused with the reason in the notice (DESIGN.md §3).
     pub fn rename_page(&mut self, document: &mut Document, page: PageId, name: &str) -> bool {
-        if let Some(problem) = crate::pages::rename_problem(document.project(), page, name) {
-            self.notice = Some(problem);
-            return false;
-        }
-        match document.transact("Rename page", |tx| {
-            tx.update::<novo_core::Page>(page, |p| p.name = name.to_string())
-        }) {
-            Ok((_, changes)) => {
+        let mut refused = None;
+        let result = document.transact("Rename page", |tx| {
+            refused = crate::pages::rename_page(tx, page, name).err();
+            Ok(())
+        });
+        match (refused, result) {
+            (Some(problem), _) => {
+                self.notice = Some(problem);
+                false
+            }
+            (None, Ok((_, changes))) => {
                 self.changes.merge(&changes);
                 self.notice = None;
                 true
             }
-            Err(e) => {
+            (None, Err(e)) => {
                 self.notice = Some(e.to_string());
                 false
             }

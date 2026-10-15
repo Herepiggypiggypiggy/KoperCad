@@ -114,56 +114,87 @@ pub fn plan_insert(
     {
         return plain(n);
     }
-    // Between `3` and `3a`: no letter sorts before `a`. The run is the
-    // lettered pages that follow the anchor.
+    // Between `3` and `3a` no letter sorts before `a`. The run is every
+    // page after the anchor whose name is the anchor's prefix plus a page
+    // letter and anything after it (`3a`, `3b`, `3ba`, `3c`).
+    let prefix = if name.ends_with(|c: char| c.is_ascii_digit()) || letter_suffix(name).is_some() {
+        name.to_string()
+    } else {
+        format!("{name} ")
+    };
+    let first_letter = |n: &str| {
+        n.strip_prefix(prefix.as_str())
+            .and_then(|rest| rest.chars().next())
+            .and_then(|c| PAGE_LETTERS.find(c))
+    };
     let run: Vec<&Page> = pages[index + 1..]
         .iter()
         .copied()
-        .take_while(|p| letter_suffix(&p.name).is_some_and(|(s, _)| s == stem))
+        .take_while(|p| first_letter(&p.name).is_some())
         .collect();
     let after_run = pages.get(index + 1 + run.len()).copied();
-    let moved: Vec<String> = (1..=run.len())
-        .map(|i| letters.get(i).map(|l| format!("{stem}{l}")))
-        .collect::<Option<_>>()
-        .unwrap_or_default();
-    let fits_run = |n: &str| {
-        !pages
-            .iter()
-            .any(|p| p.name == n && !run.iter().any(|r| r.id == p.id))
-            && fits_before(n, after_run)
+    let in_run = |id: PageId| run.iter().any(|r| r.id == id);
+    // Each run page moves up by its first letter only, so `3ba` becomes
+    // `3ca` and the order stays the same.
+    let shift = |n: &str| {
+        let i = first_letter(n)?;
+        let next = letters.get(i + 1)?;
+        let rest = &n[prefix.len() + letters[i].len_utf8()..];
+        Some(format!("{prefix}{next}{rest}"))
     };
-    if !run.is_empty()
-        && !run.iter().any(|p| frozen(p))
-        && moved.len() == run.len()
-        && moved.iter().all(|n| fits_run(n))
-    {
-        return PageInsert {
-            name: format!("{stem}{}", letters[0]),
-            renames: run
-                .iter()
-                .zip(moved)
-                .rev()
-                .map(|(p, n)| (p.id, n))
-                .collect(),
-            note: None,
-        };
+    let frozen_pages: Vec<&Page> = run.iter().copied().filter(|p| frozen(p)).collect();
+    if !run.is_empty() && frozen_pages.is_empty() {
+        let moved: Option<Vec<String>> = run.iter().map(|p| shift(&p.name)).collect();
+        if let Some(moved) = moved
+            && moved.iter().all(|n| {
+                !pages.iter().any(|p| p.name == *n && !in_run(p.id)) && fits_before(n, after_run)
+            })
+        {
+            return PageInsert {
+                name: format!("{prefix}{}", letters[0]),
+                renames: run
+                    .iter()
+                    .zip(moved)
+                    .rev()
+                    .map(|(p, n)| (p.id, n))
+                    .collect(),
+                note: None,
+            };
+        }
     }
-    // Frozen names never move: the page goes at the end of the run.
+    // Frozen names never move (and a run that cannot shift stays put): the
+    // page goes at the end of the run.
     let last = run.last().map_or(name, |p| p.name.as_str());
     let end = |n: &str| free(n) && fits_before(n, after_run) && natural_cmp(n, last).is_gt();
-    let (end_stem, end_from) = letter_suffix(last).unwrap_or((stem.clone(), 0));
-    let n = letters[end_from.min(letters.len())..]
+    let n = letters
         .iter()
-        .map(|l| format!("{end_stem}{l}"))
+        .map(|l| format!("{prefix}{l}"))
         .chain(letters.iter().map(|l| format!("{last}{l}")))
+        .chain((1..=letters.len()).map(|i| match i {
+            1 => format!("{last} new"),
+            i => format!("{last} new {i}"),
+        }))
         .find(|n| end(n))
-        .expect("some page letter is free");
-    let note = match (run.first(), run.last()) {
-        (Some(first), Some(last)) if first.id != last.id => {
+        // Nothing fits in order: any free name, never a crash.
+        .unwrap_or_else(|| {
+            (1..)
+                .map(|i| format!("{name} new {i}"))
+                .find(|n| free(n))
+                .expect("some name is free")
+        });
+    let note = match frozen_pages.as_slice() {
+        [] => format!("inserted as {n}"),
+        [only] => format!("inserted as {n}: {} is frozen", only.name),
+        [first, .., last] if frozen_pages.len() == run.len() => {
             format!("inserted as {n}: {}–{} are frozen", first.name, last.name)
         }
-        (Some(only), _) => format!("inserted as {n}: {} is frozen", only.name),
-        _ => format!("inserted as {n}"),
+        some => format!(
+            "inserted as {n}: {} are frozen",
+            some.iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
     };
     PageInsert {
         name: n,
@@ -367,6 +398,85 @@ mod tests {
     }
 
     #[test]
+    fn two_letter_pages_in_a_run_move_with_it() {
+        // 3ba comes from inserting after 3b with 3c taken; inserting after
+        // 3 then shifts every first letter: 3ba becomes 3ca.
+        let (d, ids) = doc(&["3", "3a", "3b", "3ba", "3c"]);
+        let plan = plan_insert(d.project(), Some(ids[0]), |_| false);
+        assert_eq!(plan.name, "3a");
+        assert_eq!(
+            plan.renames,
+            vec![
+                (ids[4], "3d".to_string()),
+                (ids[3], "3ca".into()),
+                (ids[2], "3c".into()),
+                (ids[1], "3b".into()),
+            ]
+        );
+        let (d, ids) = doc(&["3", "3a", "3b", "3ba", "4"]);
+        let plan = plan_insert(d.project(), Some(ids[0]), |_| false);
+        assert_eq!(plan.name, "3a");
+        assert_eq!(plan.renames.len(), 3);
+        assert_eq!(plan.note, None);
+        // Frozen: nothing moves and nothing panics; only the frozen page
+        // is named.
+        let plan = plan_insert(d.project(), Some(ids[0]), |p| p.id == ids[3]);
+        assert_eq!(plan.name, "3c");
+        assert_eq!(plan.note.as_deref(), Some("inserted as 3c: 3ba is frozen"));
+        // A run that cannot shift (z is the last letter) is not frozen and
+        // says nothing about freezing.
+        let (d, ids) = doc(&["3", "3a", "3z"]);
+        let plan = plan_insert(d.project(), Some(ids[0]), |_| false);
+        assert_eq!(plan.name, "3za");
+        assert_eq!(plan.note.as_deref(), Some("inserted as 3za"));
+        // Inserting after 3b, just before 3ba: a letter after the anchor.
+        let (d, ids) = doc(&["3", "3a", "3b", "3ba", "3c"]);
+        let plan = plan_insert(d.project(), Some(ids[2]), |_| false);
+        assert_eq!(plan.name, "3ba");
+        assert_eq!(plan.renames, vec![(ids[3], "3bb".to_string())]);
+    }
+
+    #[test]
+    fn every_insert_gets_a_new_dotless_name() {
+        let sets: [&[&str]; 6] = [
+            &["3", "3a", "3b", "3ba", "3c"],
+            &["3", "3a", "3b", "3ba", "4"],
+            &["3", "3a", "3z"],
+            &["3", "3a", "3aa", "3ab", "3b"],
+            &["Cover", "Cover a", "Cover b", "1"],
+            &["1", "1a", "1b", "1c", "2", "2a"],
+        ];
+        for names in sets {
+            let (d, ids) = doc(names);
+            for &at in &ids {
+                for all_frozen in [false, true] {
+                    let plan = plan_insert(d.project(), Some(at), |_| all_frozen);
+                    // The names after the insert: all distinct, none dotted.
+                    let mut after: Vec<String> = ids
+                        .iter()
+                        .zip(names)
+                        .map(|(id, n)| {
+                            plan.renames
+                                .iter()
+                                .find(|(r, _)| r == id)
+                                .map_or(n.to_string(), |(_, m)| m.clone())
+                        })
+                        .collect();
+                    after.push(plan.name.clone());
+                    assert!(
+                        after.iter().all(|n| !n.contains('.')),
+                        "{names:?} after {at}"
+                    );
+                    let count = after.len();
+                    after.sort();
+                    after.dedup();
+                    assert_eq!(after.len(), count, "{names:?} after {at}: {plan:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
     fn inserting_before_a_lettered_run_re_letters_it() {
         let (mut d, ids) = doc(&["3", "3a", "3b", "4"]);
         let ((page, note), _) = d
@@ -401,7 +511,8 @@ mod tests {
             .unwrap();
         assert_eq!(d.project().page(page).unwrap().name, "3c");
         assert_eq!(d.project().page(ids[1]).unwrap().name, "3a");
-        assert_eq!(note.as_deref(), Some("inserted as 3c: 3a–3b are frozen"));
+        // Only the frozen page is named.
+        assert_eq!(note.as_deref(), Some("inserted as 3c: 3a is frozen"));
         assert_eq!(
             rename_problem(d.project(), ids[1], "3x"),
             Some("page 3a is frozen (issued in revision B)".into())
