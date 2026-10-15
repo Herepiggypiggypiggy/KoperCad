@@ -1971,6 +1971,7 @@ name = "novo-plc"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+ "novo-editor",
  "novo-symbols",
  "thiserror 2.0.21",
 ]
