@@ -272,3 +272,97 @@ pub(super) fn proposal_marks(proposals: &[Suggestion], current: usize) -> Vec<Ma
     }
     marks
 }
+
+impl NovoApp {
+    /// The terminals drawn by the selected symbols, each once.
+    fn selected_terminals(&self) -> Vec<novo_core::TerminalId> {
+        let Some(doc) = self.backend.document() else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        for id in self.selection() {
+            let AnyId::Symbol(s) = id else {
+                continue;
+            };
+            if let Some(SymbolRole::Terminal { terminals }) =
+                doc.project().symbol(s).map(|s| &s.role)
+            {
+                for &t in terminals {
+                    if !out.contains(&t) {
+                        out.push(t);
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// Whether the selection holds drawn terminals and nothing else.
+    fn only_terminals_selected(&self) -> bool {
+        let Some(doc) = self.backend.document() else {
+            return false;
+        };
+        let selection = self.selection();
+        !selection.is_empty()
+            && selection.iter().all(|id| match id {
+                AnyId::Symbol(s) => doc
+                    .project()
+                    .symbol(*s)
+                    .is_some_and(|s| matches!(s.role, SymbolRole::Terminal { .. })),
+                _ => false,
+            })
+    }
+
+    /// Connect and Disconnect terminals, and moving the selected terminals
+    /// to another strip number (Up, Ctrl+Up). Says what happened or why
+    /// not; nothing happens without terminals in the selection.
+    pub(super) fn terminal_command(&mut self, id: &str) {
+        use novo_terminals::MoveTo;
+        let terminals = self.selected_terminals();
+        // The arrow keys act only when nothing but terminals is selected.
+        if terminals.is_empty()
+            || (id.starts_with("terminal.strip_") && !self.only_terminals_selected())
+        {
+            return;
+        }
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let (label, result) = match id {
+            "terminal.connect" => (
+                "Connect terminals",
+                doc.transact("Connect terminals", |tx| {
+                    novo_terminals::connect_terminals(tx, &terminals).map(|_| None)
+                }),
+            ),
+            "terminal.disconnect" => (
+                "Disconnect terminals",
+                doc.transact("Disconnect terminals", |tx| {
+                    novo_terminals::set_jumper(tx, &terminals, None).map(|_| None)
+                }),
+            ),
+            _ => {
+                let to = match id {
+                    "terminal.strip_up" => MoveTo::NextNumber,
+                    "terminal.strip_down" => MoveTo::PreviousNumber,
+                    _ => MoveTo::LowestFree,
+                };
+                (
+                    "Move terminals to another strip",
+                    doc.transact("Move terminals to another strip", |tx| {
+                        novo_terminals::move_to_strip(tx, &terminals, to).map(Some)
+                    }),
+                )
+            }
+        };
+        match result {
+            Ok((strip, changes)) => {
+                if let (Some(strip), Some(view)) = (strip, self.canvas.schematic()) {
+                    view.editor.strip = Some(strip);
+                }
+                self.changed_outside_canvas(&changes);
+            }
+            Err(e) => self.message(Level::Error, format!("{label}: {e}")),
+        }
+    }
+}

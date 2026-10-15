@@ -33,9 +33,10 @@ const CATEGORIES: [(&str, &[Item]); 5] = [
     (
         "Terminal",
         &[
-            ("iec/terminals/terminal", "Terminal"),
-            ("iec/terminals/terminal_pe", "PE"),
-            ("iec/terminals/terminal_n", "N"),
+            ("iec/terminals/terminal_end", "Terminal"),
+            ("iec/terminals/terminal_pe_end", "PE"),
+            ("iec/terminals/terminal_n_end", "N"),
+            ("iec/terminals/terminal", "Through"),
             ("iec/terminals/terminal_2level", "2-level"),
             ("iec/terminals/terminal_fused", "Fused"),
             ("iec/terminals/terminal_disconnect", "Disconnect"),

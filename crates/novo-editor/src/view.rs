@@ -17,7 +17,7 @@ use novo_canvas::model::{
 };
 use novo_canvas::widget::{CanvasView, EscapeTarget};
 use novo_canvas::{Anchor, Color, Item, ItemId, Label, Primitive, SelectOp, Shape, Stroke, Vec2};
-use novo_core::{AnyId, ChangeSet, Command, DeviceId, Document, PageId, Point, WireId};
+use novo_core::{AnyId, ChangeSet, Command, DeviceId, Document, PageId, Point, SymbolRole, WireId};
 
 use crate::art::LibraryArt;
 use crate::catalog::Match;
@@ -73,6 +73,8 @@ struct ContextMenu {
     empty: bool,
     potentials: PotentialMenu,
     device: Option<DeviceId>,
+    /// Drawn terminals in the selection (terminal actions show for these).
+    terminals: usize,
     page: PageId,
     opened: bool,
 }
@@ -690,12 +692,23 @@ impl SchematicView {
             let device = selection
                 .iter()
                 .find_map(|&id| device_of(document.project(), id));
+            let terminals = selection
+                .iter()
+                .filter(|&&id| match id {
+                    AnyId::Symbol(s) => document
+                        .project()
+                        .symbol(s)
+                        .is_some_and(|s| matches!(s.role, SymbolRole::Terminal { .. })),
+                    _ => false,
+                })
+                .count();
             let anchor = ctx.pointer_latest_pos().unwrap_or(rect.center());
             self.menu = Some(ContextMenu {
                 anchor,
                 empty: selection.is_empty(),
                 potentials,
                 device,
+                terminals,
                 page,
                 opened: true,
             });
@@ -1059,6 +1072,26 @@ impl SchematicView {
                     }
                     if menu.device.is_some() && ui.button("Go to partner   G").clicked() {
                         chosen = Some(MenuChoice::Command("nav.partner"));
+                    }
+                    if menu.terminals > 0 {
+                        if menu.terminals > 1 {
+                            if ui.button("Connect terminals").clicked() {
+                                chosen = Some(MenuChoice::Command("terminal.connect"));
+                            }
+                            if ui.button("Disconnect terminals").clicked() {
+                                chosen = Some(MenuChoice::Command("terminal.disconnect"));
+                            }
+                        }
+                        if ui.button("Strip number up   Up").clicked() {
+                            chosen = Some(MenuChoice::Command("terminal.strip_up"));
+                        }
+                        if ui.button("Strip number down   Down").clicked() {
+                            chosen = Some(MenuChoice::Command("terminal.strip_down"));
+                        }
+                        if ui.button("Lowest free strip number   Ctrl+Up").clicked() {
+                            chosen = Some(MenuChoice::Command("terminal.strip_lowest"));
+                        }
+                        ui.separator();
                     }
                     for (label, choice) in [
                         ("Move   M", MenuChoice::Key(EditorKey::Move)),

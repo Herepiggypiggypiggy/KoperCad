@@ -369,6 +369,42 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["link"],
     ),
     cmd("edit.escape", "Cancel", "Edit", &["escape"], Needs::Nothing),
+    // Terminals
+    cmd(
+        "terminal.connect",
+        "Connect terminals",
+        "Edit",
+        &["jumper", "bridge", "cross connect"],
+        Needs::Selection,
+    ),
+    cmd(
+        "terminal.disconnect",
+        "Disconnect terminals",
+        "Edit",
+        &["jumper", "bridge", "unbridge"],
+        Needs::Selection,
+    ),
+    cmd(
+        "terminal.strip_up",
+        "Terminal strip number up",
+        "Edit",
+        &["rename strip", "x number", "next strip"],
+        Needs::Selection,
+    ),
+    cmd(
+        "terminal.strip_down",
+        "Terminal strip number down",
+        "Edit",
+        &["rename strip", "x number", "previous strip"],
+        Needs::Selection,
+    ),
+    cmd(
+        "terminal.strip_lowest",
+        "Terminal strip lowest free number",
+        "Edit",
+        &["rename strip", "x number", "free strip"],
+        Needs::Selection,
+    ),
     // Navigate
     cmd(
         "nav.partner",

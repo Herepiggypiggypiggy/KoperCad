@@ -2069,11 +2069,11 @@ fn a_row_of_terminals_takes_the_pitch_of_the_strip_it_joins() {
     editor.auto_connect = false;
     editor.begin_place("iec/terminals/terminal", None);
     editor.click(&mut doc, page, p(40.0, 40.0), TOL);
-    editor.click(&mut doc, page, p(100.0, 40.0), TOL);
-    // The strip is 60 mm apart; a row dragged out after it matches.
-    editor.hover(&doc, page, p(160.0, 40.0), TOL);
+    editor.click(&mut doc, page, p(56.0, 40.0), TOL);
+    // The strip is 16 mm apart; a row dragged out after it matches.
+    editor.hover(&doc, page, p(72.0, 40.0), TOL);
     assert!(editor.begin_row());
-    editor.row_follow(p(400.0, 40.0), 8.0);
+    editor.row_follow(p(160.0, 40.0), 8.0);
     assert_eq!(editor.end_row(&mut doc, page), Clicked::Edited);
     let mut xs: Vec<f64> = doc
         .project()
@@ -2081,11 +2081,74 @@ fn a_row_of_terminals_takes_the_pitch_of_the_strip_it_joins() {
         .map(|s| s.placement.origin.x)
         .collect();
     xs.sort_by(f64::total_cmp);
-    assert_eq!(xs.len(), 2 + 5, "{xs:?}");
+    assert_eq!(xs.len(), 2 + 6, "{xs:?}");
     assert!(
-        xs.windows(2).all(|w| (w[1] - w[0] - 60.0).abs() < 1e-9),
+        xs.windows(2).all(|w| (w[1] - w[0] - 16.0).abs() < 1e-9),
         "{xs:?}"
     );
+    // One strip all along.
+    assert_eq!(strip_tags(&doc), ["-X1"]);
+}
+
+fn strip_tags(doc: &Document) -> Vec<String> {
+    let mut t: Vec<String> = doc
+        .project()
+        .devices()
+        .filter(|d| d.kind == novo_core::DeviceKind::TerminalStrip)
+        .map(|d| d.tag.to_string())
+        .collect();
+    t.sort_by(|a, b| novo_core::natural_cmp(a, b));
+    t
+}
+
+#[test]
+fn a_terminal_next_to_a_strip_joins_it_and_one_elsewhere_starts_the_next_strip() {
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/terminals/terminal", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    // Next to it, and directly left of it: both join -X1.
+    editor.click(&mut doc, page, p(48.0, 40.0), TOL);
+    editor.click(&mut doc, page, p(32.0, 40.0), TOL);
+    assert_eq!(strip_tags(&doc), ["-X1"]);
+    // Far away: a new strip with the next free number, not -X1 again.
+    editor.click(&mut doc, page, p(140.0, 40.0), TOL);
+    assert_eq!(strip_tags(&doc), ["-X1", "-X2"]);
+    // Out of line with -X1 is not adjacent either.
+    editor.click(&mut doc, page, p(40.0, 90.0), TOL);
+    assert_eq!(strip_tags(&doc), ["-X1", "-X2", "-X3"]);
+    // Next to the second strip joins that one.
+    editor.click(&mut doc, page, p(148.0, 40.0), TOL);
+    assert_eq!(strip_tags(&doc).len(), 3);
+}
+
+#[test]
+fn dragging_a_one_pole_breaker_places_one_multi_pole_device() {
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/protection/mcb_1p", None);
+    editor.hover(&doc, page, p(40.0, 40.0), TOL);
+    assert!(editor.begin_row());
+    // 20 mm along: poles at 0, 8 and 16 mm, so a 3-pole breaker.
+    editor.row_follow(p(60.0, 41.0), 8.0);
+    let depth = doc.undo_depth();
+    assert_eq!(editor.end_row(&mut doc, page), Clicked::Edited);
+    assert_eq!(doc.undo_depth(), depth + 1);
+    let symbols: Vec<_> = doc.project().symbols().collect();
+    assert_eq!(symbols.len(), 1);
+    assert_eq!(symbols[0].symbol.0, "iec/protection/mcb_3p");
+    assert_eq!(symbols[0].placement.origin, p(40.0, 40.0));
+    // Past four poles it stops at four; backwards it grows to the left.
+    editor.hover(&doc, page, p(200.0, 100.0), TOL);
+    editor.begin_row();
+    editor.row_follow(p(120.0, 100.0), 8.0);
+    editor.end_row(&mut doc, page);
+    let four = doc
+        .project()
+        .symbols()
+        .find(|s| s.symbol.0 == "iec/protection/mcb_4p")
+        .expect("a 4-pole breaker");
+    assert_eq!(four.placement.origin, p(176.0, 100.0));
 }
 
 #[test]

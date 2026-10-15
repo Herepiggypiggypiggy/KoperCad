@@ -63,6 +63,77 @@ impl RowDrag {
     }
 }
 
+/// Distance between neighbouring poles of a multi-pole symbol, which is also
+/// the pitch of a terminal strip, in millimetres.
+pub const POLE_PITCH: f64 = 8.0;
+
+/// Library ids of one device in 1 to 4 poles, in pole order.
+const POLE_FAMILIES: [&[&str]; 3] = [
+    &[
+        "iec/protection/mcb_1p",
+        "iec/protection/mcb_2p",
+        "iec/protection/mcb_3p",
+        "iec/protection/mcb_4p",
+    ],
+    &[
+        "iec/protection/fuse",
+        "iec/protection/fuse_2p",
+        "iec/protection/fuse_3p",
+        "iec/protection/fuse_4p",
+    ],
+    &[
+        "iec/contactors/main_1p",
+        "iec/contactors/main_2p",
+        "iec/contactors/main_3p",
+        "iec/contactors/main_4p",
+    ],
+];
+
+/// The 1 to 4 pole variants of a 1-pole symbol, or `None` for any other
+/// symbol.
+pub fn pole_family(symbol: &str) -> Option<&'static [&'static str]> {
+    POLE_FAMILIES.iter().copied().find(|f| f[0] == symbol)
+}
+
+/// A drag with a 1-pole symbol in hand: the multi-pole variant to place
+/// instead of a row of single poles, and where its first pole goes.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PoleRow {
+    /// Library id of the 2 to 4 pole variant.
+    pub symbol: &'static str,
+    pub origin: Point,
+    pub poles: usize,
+}
+
+/// Turns a row drag of a 1-pole symbol along its pole axis into one
+/// multi-pole symbol, one pole per [`POLE_PITCH`] dragged. `None` when the
+/// symbol has no variants, the drag runs across the pole axis, or it has not
+/// reached the second pole yet.
+pub fn pole_row(symbol: &str, placement: &Placement, row: &RowDrag) -> Option<PoleRow> {
+    let family = pole_family(symbol)?;
+    let axis = placement.apply(Point::new(1.0, 0.0)) - placement.apply(Point::ZERO);
+    // The poles of a symbol sit side by side along its x axis.
+    if (axis.x.abs() > 0.5) != row.horizontal {
+        return None;
+    }
+    let along = (row.to.x - row.press.x) * axis.x + (row.to.y - row.press.y) * axis.y;
+    let poles = ((along.abs() / POLE_PITCH).floor() as usize + 1).min(family.len());
+    if poles < 2 {
+        return None;
+    }
+    // Dragging backwards grows the symbol the other way.
+    let back = if along < 0.0 {
+        (poles - 1) as f64 * POLE_PITCH
+    } else {
+        0.0
+    };
+    Some(PoleRow {
+        symbol: family[poles - 1],
+        origin: Point::new(row.press.x - axis.x * back, row.press.y - axis.y * back),
+        poles,
+    })
+}
+
 /// The page-space box `(min, max)` of `symbol` placed as `placement`.
 pub fn bounds_on_page(symbol: &Symbol, placement: &Placement) -> (Point, Point) {
     let (lo, hi) = symbol.bounds();

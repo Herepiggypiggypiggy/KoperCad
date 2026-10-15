@@ -81,14 +81,29 @@ pub fn strip_style(project: &Project, strip: DeviceId, kind: TerminalKind) -> St
     }
 }
 
-/// The style a terminal actually uses: its own override, else its strip's.
+/// The symbol a connected (jumpered) terminal is drawn with, for the
+/// feed-through symbol; every other symbol has no such variant.
+fn connected(symbol: &SymbolKey) -> Option<SymbolKey> {
+    match symbol.0.as_str() {
+        "iec/terminals/terminal" => Some(SymbolKey("iec/terminals/terminal_bridged".into())),
+        _ => None,
+    }
+}
+
+/// The style a terminal actually uses: its own override, else its strip's,
+/// drawn as a connected terminal while it is in a jumper group.
 pub fn style_of(project: &Project, terminal: TerminalId) -> Option<Style> {
     let t = project.terminal(terminal)?;
     let strip = strip_style(project, t.strip, t.kind);
+    let own = as_text(t.properties.get("symbol")).map(SymbolKey);
+    let inherited = own.is_none();
+    let symbol = own.unwrap_or(strip.symbol);
+    let symbol = match t.jumper {
+        Some(_) if inherited => connected(&symbol).unwrap_or(symbol),
+        _ => symbol,
+    };
     Some(Style {
-        symbol: as_text(t.properties.get("symbol"))
-            .map(SymbolKey)
-            .unwrap_or(strip.symbol),
+        symbol,
         part: t.part.filter(|&p| project.part(p).is_some()).or(strip.part),
     })
 }

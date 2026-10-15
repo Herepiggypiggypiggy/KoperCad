@@ -550,10 +550,9 @@ impl Editor {
             mirrored: p.mirrored,
         };
         // A row of terminals matches the strip it joins.
-        let strip_pitch = match (classify(symbol), self.strip) {
-            (SymbolClass::Terminal { .. }, Some(strip)) => {
-                row::strip_pitch(doc.project(), page, strip, r, self.grid)
-            }
+        let strip_pitch = match classify(symbol) {
+            SymbolClass::Terminal { .. } => edit::adjacent_strip(doc.project(), page, r.press)
+                .and_then(|strip| row::strip_pitch(doc.project(), page, strip, r, self.grid)),
             _ => None,
         };
         let pitch = row::pitch(symbol, &placement, r, self.grid, strip_pitch);
@@ -569,9 +568,31 @@ impl Editor {
         Some((at, stopped, pitch))
     }
 
+    /// A drag with a 1-pole symbol along its pole axis places one
+    /// multi-pole symbol (poles at the strip pitch), not several 1-poles.
+    fn pole_plan(&self) -> Option<row::PoleRow> {
+        let (Tool::Place(p), Some(r)) = (&self.tool, &self.row) else {
+            return None;
+        };
+        let placement = Placement {
+            origin: r.press,
+            rotation: p.rotation,
+            mirrored: p.mirrored,
+        };
+        row::pole_row(&p.symbol, &placement, r)
+    }
+
     /// Release: places the whole row as one undo step (a drag that never
     /// got past one pitch places the single symbol).
     pub fn end_row(&mut self, doc: &mut Document, page: PageId) -> Clicked {
+        if let (Some(poles), Tool::Place(p)) = (self.pole_plan(), self.tool.clone()) {
+            self.row = None;
+            let multi = PlaceTool {
+                symbol: poles.symbol.to_owned(),
+                ..p
+            };
+            return self.commit_place(doc, page, &multi, poles.origin);
+        }
         let Some((at, _, _)) = self.row_plan(doc, page) else {
             self.row = None;
             return Clicked::Unhandled;
@@ -589,13 +610,13 @@ impl Editor {
         };
         let options = PlaceOptions {
             parent: None,
-            strip: self.strip,
             auto_connect: self.auto_connect,
             numbering: self.numbering,
             ..PlaceOptions::default()
         };
         let label = format!("Place {} x{}", symbol.name, at.len());
         let result = doc.transact(label, |tx| {
+            let mut options = options.clone();
             let mut ids = Vec::new();
             for &origin in &at {
                 let placement = Placement {
@@ -603,7 +624,12 @@ impl Editor {
                     rotation: p.rotation,
                     mirrored: p.mirrored,
                 };
-                ids.push(edit::place(tx, page, &symbol, placement, &options)?);
+                let id = edit::place(tx, page, &symbol, placement, &options)?;
+                // The whole row is one strip, wherever its first terminal went.
+                if options.strip.is_none() {
+                    options.strip = edit::strip_of_symbol(tx.project(), id);
+                }
+                ids.push(id);
             }
             self.draw_facing(tx, &ids);
             Ok(ids)
@@ -876,7 +902,6 @@ impl Editor {
         };
         let options = PlaceOptions {
             parent: p.parent.clone(),
-            strip: self.strip,
             auto_connect: self.auto_connect,
             numbering: self.numbering,
             ..PlaceOptions::default()
@@ -1687,6 +1712,13 @@ impl Editor {
             // Quiet until something is in hand (DESIGN.md §3).
             Tool::Select if self.pin_hovered() => "Drag from the pin to connect".into(),
             Tool::Select => String::new(),
+            Tool::Place(_) if self.pole_plan().is_some() => {
+                let poles = self.pole_plan().map_or(0, |p| p.poles);
+                format!(
+                    "{poles}-pole · pitch {} mm · R/X turn · Esc cancels",
+                    row::POLE_PITCH
+                )
+            }
             Tool::Place(_) if self.row.is_some() => {
                 match self.row_plan(doc, page) {
                     Some((at, stopped, pitch)) => format!(
@@ -1783,11 +1815,16 @@ impl Editor {
         match &self.tool {
             Tool::Select => {}
             Tool::Place(p) => {
-                if let Some(symbol) = self.catalog.get(&p.symbol) {
+                let pole_plan = self.pole_plan();
+                let shown = pole_plan.as_ref().map_or(p.symbol.as_str(), |r| r.symbol);
+                if let Some(symbol) = self.catalog.get(shown) {
                     let (bridges, pass_through) = model_groups(symbol);
-                    let origins = match self.row_plan(doc, page) {
-                        Some((at, _, _)) if !at.is_empty() => at,
-                        _ => vec![cursor],
+                    let origins = match pole_plan.as_ref() {
+                        Some(r) => vec![r.origin],
+                        None => match self.row_plan(doc, page) {
+                            Some((at, _, _)) if !at.is_empty() => at,
+                            _ => vec![cursor],
+                        },
                     };
                     for origin in origins {
                         preview.symbols.push(SymbolInstance {

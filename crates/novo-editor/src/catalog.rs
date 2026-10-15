@@ -101,7 +101,7 @@ pub const MNEMONICS: &[(&str, &str)] = &[
     ("estop", "iec/operators/emergency_stop"),
     ("lamp", "iec/signalling/lamp"),
     ("term", "iec/terminals/terminal"),
-    ("x", "iec/terminals/terminal"),
+    ("x", "iec/terminals/terminal_end"),
     ("pe", "iec/terminals/terminal_pe"),
     ("ms", "iec/switches/main_switch_3p"),
     ("ip", "iec/connectivity/interruption_point"),
@@ -121,7 +121,7 @@ pub const DEFAULT_FAVOURITES: [&str; 9] = [
     "iec/protection/mcb_1p",
     "iec/operators/pushbutton_no",
     "iec/signalling/lamp",
-    "iec/terminals/terminal",
+    "iec/terminals/terminal_end",
 ];
 
 /// One row of the insert search.
