@@ -2,7 +2,7 @@
 
 ## State
 - Repo herepiggypiggypiggy/kopercad, my branch `claude/project-thread-euksez` (restart from main after each merge).
-- PR 1: design doc `docs/design/wire-routing.md` (open). Engine PR follows after it merges.
+- PR: design doc plus engine (steps 1 and 2 of the plan), crate `novo-routing`. Fill and problems are next.
 
 ## Resume
 ```

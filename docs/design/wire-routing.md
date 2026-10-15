@@ -49,7 +49,12 @@ overrides the designer makes (see §6) are stored.
 2. **Anchor stubs.** A terminal does not sit on a duct. From each anchor a
    stub runs to the nearest point on a duct by Manhattan distance, but only
    in the direction the terminal faces (a terminal on top of a device exits
-   upwards). Ties break on the lower duct id, so results are stable.
+   upwards). A duct behind the terminal is still reachable: the wire leaves,
+   turns and comes back, which costs twice the backwards distance as a
+   **detour** (shown separately from the path). A stub that would run across
+   another duct is not used while a clear one exists. The three nearest ducts
+   are tried per end and the cheapest total wins; ties break on the lower duct
+   id, so results are stable.
 3. **Shortest path.** Dijkstra over the duct graph between the two stub entry
    points, edge cost = length plus a **fill penalty** that rises as the duct
    passes 80% of its capacity, so wires spread to a second duct before the
