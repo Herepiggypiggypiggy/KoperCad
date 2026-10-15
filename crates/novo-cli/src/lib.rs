@@ -158,6 +158,22 @@ enum Export {
         #[arg(long = "page", value_name = "NAME")]
         pages: Vec<String>,
     },
+    /// The PLC I/O as the file a PLC programming tool imports: one file per
+    /// station for `plcopen`, `tia` and `studio5000`, one table for `csv`.
+    Plc {
+        file: PathBuf,
+        /// `csv`, `plcopen` (CODESYS and compatible), `tia` (TIA Portal
+        /// tag table, .xlsx), `studio5000` (tag CSV) or `hardware` (the
+        /// address plan).
+        #[arg(long, default_value = "csv")]
+        format: String,
+        /// Directory to write into; it is created when missing.
+        #[arg(short, long)]
+        output: PathBuf,
+        /// Also write a tag for every spare channel.
+        #[arg(long)]
+        spares: bool,
+    },
     /// Schematic pages as DXF drawings (millimetres, y up), for CAD
     /// programs and laser or plotter shops.
     Dxf {
@@ -274,6 +290,16 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             let project = read(&file)?;
             let bytes = pdf(&project, &pages)?;
             write_output(&file, &output, &bytes)?;
+            Ok(exit::OK)
+        }
+        Cmd::Export(Export::Plc {
+            file,
+            format,
+            output,
+            spares,
+        }) => {
+            let project = read(&file)?;
+            export_plc(&project, &file, &format, &output, spares, out)?;
             Ok(exit::OK)
         }
         Cmd::Export(Export::Dxf {
@@ -545,6 +571,54 @@ fn file_stem(name: &str) -> String {
 
 /// Writes the pages as DXF: one `.dxf` file when `output` ends in `.dxf`
 /// (exactly one page), otherwise one file per page in the directory.
+fn export_plc(
+    project: &Project,
+    input: &Path,
+    format: &str,
+    output: &Path,
+    spares: bool,
+    out: &mut dyn Write,
+) -> Result<(), Failure> {
+    let format = novo_plc::link::LinkFormat::from_key(format).ok_or_else(|| {
+        Failure::new(
+            exit::USAGE,
+            format!("unknown format {format:?}: use csv, plcopen, tia, studio5000 or hardware"),
+        )
+    })?;
+    let library = novo_py::library().map_err(|e| Failure::new(exit::UNAVAILABLE, e.to_string()))?;
+    let index = novo_plc::PlcIndex::build(project, library);
+    if index.cards().is_empty() {
+        return Err(Failure::new(exit::USAGE, "the project has no PLC cards"));
+    }
+    let options = novo_plc::link::ExportOptions {
+        include_spares: spares,
+        stamp: String::new(),
+        project: project.info().name.clone(),
+    };
+    let exported = novo_plc::link::export(project, &index, format, &options);
+    std::fs::create_dir_all(output).map_err(|e| {
+        Failure::new(
+            exit::WRITE,
+            format!("cannot create {}: {e}", output.display()),
+        )
+    })?;
+    let stem = file_stem(&input.file_stem().unwrap_or_default().to_string_lossy());
+    for file in &exported.files {
+        let name = if file.suffix.is_empty() {
+            format!("{stem} PLC.{}", file.extension)
+        } else {
+            format!("{stem} PLC {}.{}", file_stem(&file.suffix), file.extension)
+        };
+        let path = output.join(name);
+        write_output(input, &path, &file.bytes)?;
+        print(out, &format!("{} ({} tags)", path.display(), file.tags))?;
+    }
+    for warning in &exported.warnings {
+        print(out, &format!("note: {warning}"))?;
+    }
+    Ok(())
+}
+
 fn export_dxf(
     project: &Project,
     input: &Path,

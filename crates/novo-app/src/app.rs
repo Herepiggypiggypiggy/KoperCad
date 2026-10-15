@@ -26,6 +26,7 @@ mod parts;
 mod parts_import;
 mod pdf;
 mod plc;
+mod plc_link;
 mod potentials;
 mod preferences;
 mod project_settings;
@@ -65,6 +66,7 @@ use crate::actions::Action;
 /// Hover text of the bulk-edit exports (the data to edit, not the reports).
 const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel. Export only: bringing the edited file back comes with the import dialog. The generated reports are under Export all reports to Excel.";
 use novo_core::{Aspect, Command, DeviceTag, ModelError, Outcome, PageId, PageKind};
+use novo_plc::link::LinkFormat;
 use pages::{FormKind, PageForm, PageView};
 
 use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows};
@@ -787,6 +789,7 @@ impl NovoApp {
         self.recovery_dialog(&ctx);
         self.about_dialog(&ctx);
         self.renumber_dialog(&ctx);
+        self.plc_import_dialog(&ctx);
         self.preferences_dialog(&ctx);
         self.parts_window(&ctx);
         self.project_settings_dialog(&ctx);
@@ -1044,6 +1047,30 @@ impl NovoApp {
                     ui.close();
                 }
             });
+        });
+        ui.add_enabled_ui(self.is_open(), |ui| {
+            ui.menu_button("Export PLC", |ui| {
+                for (id, format) in [
+                    ("export.plc_csv", LinkFormat::Csv),
+                    ("export.plc_plcopen", LinkFormat::PlcOpen),
+                    ("export.plc_tia", LinkFormat::Tia),
+                    ("export.plc_studio5000", LinkFormat::Studio5000),
+                    ("export.plc_address_plan", LinkFormat::Hardware),
+                ] {
+                    if ui.button(format.label()).clicked() {
+                        self.wb.queued.push(id);
+                        ui.close();
+                    }
+                }
+            });
+            if ui
+                .button("Import PLC tags...")
+                .on_hover_text("Read the programmer's tag file back: comments and tag names update, addresses never change")
+                .clicked()
+            {
+                self.wb.queued.push("plc.import_tags");
+                ui.close();
+            }
         });
         ui.separator();
         for a in [Action::About, Action::Quit] {
