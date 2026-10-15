@@ -732,6 +732,14 @@ impl Editor {
         self.begin_move_with(selection, false)
     }
 
+    /// Whether the move in hand takes the wires along; the view sets it
+    /// from the default and the Shift key while the move runs.
+    pub fn set_move_carry(&mut self, carry: bool) {
+        if let Tool::Move(m) = &mut self.tool {
+            m.carry = carry;
+        }
+    }
+
     /// [`Self::begin_move`], with `carry` taking the wires along (Shift).
     pub fn begin_move_with(&mut self, selection: &[AnyId], carry: bool) -> bool {
         self.link_hint = None;
@@ -2026,8 +2034,13 @@ impl Editor {
                 "Corners: click a pin or wire to finish, empty space for a corner · R flips the bend · Backspace undo · Esc cancels · Shift+W lines"
                     .into()
             }
-            Tool::Move(_) => self.link_hint.clone().unwrap_or_else(|| {
-                "Click to drop · R rotate · X mirror · Esc cancels the move".into()
+            Tool::Move(m) => self.link_hint.clone().unwrap_or_else(|| {
+                let shift = if m.carry {
+                    "Shift: leave the wires"
+                } else {
+                    "Shift: take the wires along"
+                };
+                format!("Click to drop · R rotate · X mirror · {shift} · Esc cancels the move")
             }),
         };
         let text = if self.proposals.is_empty() {

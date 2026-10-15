@@ -25,6 +25,9 @@ pub struct Settings {
     /// What a drop does about facing free pins, `"draw"`, `"ask"` or
     /// `"never"` (docs/DESIGN.md §2): a per-user preference.
     pub connect_mode: String,
+    /// Whether moving a symbol takes its wires along by default (Shift
+    /// does the other one): a per-user preference.
+    pub move_carries: bool,
 }
 
 impl Settings {
