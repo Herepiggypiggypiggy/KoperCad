@@ -5,3 +5,4 @@
 2026-10-15 18:50 UTC #355 merged. Fill PR: plan(), DuctFill, Problem, penalty, 6 tests in tests/fill.rs.
 2026-10-15 19:10 UTC #358 merged. Follow-up PR for reviewer notes: unsized ducts, duplicate ids.
 2026-10-15 19:40 UTC #364 merged, WS-02 #362 merged. Bridge PR: model::ducts/network with tests/model.rs.
+2026-10-15 20:15 UTC #371 merged. Connection PR: route_connections, anchors at footprint edge midpoints.
