@@ -190,7 +190,7 @@ left. An untitled project closed with work in it is kept in
 `%LOCALAPPDATA%\NovoElectric\Unsaved` and offered back (under Unsaved with
 Recent, and reopened at start-up if it was the last one open); naming it
 moves it to `<Documents>\NovoElectric\<name>.novo`. The
-deliberate checkpoints are revisions and exports (§8), not Save. Ctrl+S
+deliberate checkpoints are revisions (§7, §8), not Save. Ctrl+S
 names an untitled project and otherwise only confirms Saved; Ctrl+Shift+S
 saves a copy under a new name and keeps working in the original.
 
@@ -474,19 +474,29 @@ date and the user's initials, and takes only the description. The model
 records a `Revision` (index, date, author, description); storage keeps a
 snapshot of the whole project under the revision's id beside the records,
 so the `.novo` file stays one file and an older revision can be opened
-read-only or compared. Undo removes the record and the freezes; the
-orphaned snapshot is dropped on the next write.
+read-only or compared. Snapshots are stored compressed, so twenty
+revisions cost little more than a few copies of the project. Undo removes
+the record and puts every page's freeze back as it was before the issue
+(undoing B restores the A freezes). A snapshot whose revision is undone is
+kept while the undo history can still redo it, and dropped only on open or
+close, so undo, autosave and redo never bring back a revision without its
+snapshot. Issuing with nothing changed since the last revision is allowed
+(a reissue is a real event), and the command line says "no changes since
+B".
 
 **Pinned flow.** Issuing a revision freezes every schematic page with that
 index (`FreezePage`, #119), so a `page.column` reference in the issued set
 never moves. Issuing the next revision re-takes every freeze, so the new
-set prints where things are now. Generated sheets are never frozen; they
-reflow (§8). A plain export is not a checkpoint: it prints the current
+set prints where things are now. The freeze carries the project's index,
+which is what the issued set was; a page deleted after A is simply absent
+from B's set, and Changes lists it as removed. Generated sheets are never
+frozen; they reflow (§8). A plain export is not a checkpoint: it prints the current
 state and freezes nothing. Issuing is the way to say "this set went out".
 
 **Title block.** The project revision is the latest one. Each page shows
 its own revision: the latest one in which that page changed, with its date
-(an untouched page keeps "A" while the project is at "D"). Frames with a
+(an untouched page keeps "A" while the project is at "D"), worked out
+from the change sets between revisions rather than stored. Frames with a
 revision table list every revision: index, date, author, description.
 
 **What changes compare.** Changes (Outline) and the change marks compare
@@ -500,7 +510,6 @@ page (parts, potentials, rules, structure) are listed under Project. On the
 canvas, Changes mode shows the change marks (§5); removed objects are
 drawn as ghosts from the older state, so the user sees what went. Pages
 with changes are marked in Pages and in the PDF bookmarks.
-Revision clouds in the PDF come later.
 
 Owners: WS-02 the `Revision` record and its commands, WS-04 the snapshot
 table, WS-18 (`novo-revisions`) the index rule, issuing, the per-page
@@ -523,7 +532,7 @@ Changes mode, WS-09 the PDF.
 | Facing pins at a distance | Connect on placement; propose; ignore | **Propose**, in the placement preview; touching pins connect |
 | Command language | English only; translated words; aliases | **Aliases**: English and Dutch words both match; tags and IEC codes never translate |
 | Start-up | Start screen; last project | **Last project**, where it was left; the empty canvas offers New, Open, Example and Recent |
-| Saving | Save command and prompts; continuous | **Continuous**, into the project's own file; revisions and exports are the checkpoints |
+| Saving | Save command and prompts; continuous | **Continuous**, into the project's own file; revisions are the checkpoints (see Checkpoints) |
 | Checkpoints | Every export; revisions only; both | **Revisions only:** issuing a revision freezes the schematic pages and keeps a snapshot; a plain export prints the current state and checkpoints nothing, so Changes always compares against something with a name |
 | Junction dots | Every meeting point; three or more conductors | **Three or more**; straight runs, corners and crossings get none |
 
@@ -578,6 +587,7 @@ Model additions for WS-02:
 | Page frame with column grid, `page.column` references | Dutch command aliases |
 | Start-up, first-run hints, `?` overlay | Revision fields filled from revisions |
 | | Part proposals (needs the WS-07 parts database) |
+| | Revision clouds in the PDF |
 
 ## 11. Principles and review checklist
 
