@@ -44,7 +44,7 @@ pub use geom::Aabb;
 pub use glam::{Vec2, vec2};
 pub use grid::{Grid, GridStyle};
 pub use marks::{Mark, MarkKind, MarkTarget, Marks};
-pub use scene::{BoxMode, Hit, Item, ItemId, Layer, LayerId, Scene, SnapLine, SnapPoint};
+pub use scene::{BoxMode, Handle, Hit, Item, ItemId, Layer, LayerId, Scene, SnapLine, SnapPoint};
 pub use selection::{SelectOp, Selection};
 pub use shape::{Placement, Primitive, Shape};
 pub use snap::{SnapKind, SnapSettings, Snapped, ortho, snap};
