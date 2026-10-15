@@ -24,6 +24,28 @@ How a PR is tested: its branch is merged onto the current `main` (a
 main `11363c1` passes fmt, clippy and all 232 workspace tests on Linux.
 **Every Gate 0 criterion is met.**
 
+## Round 15 (2026-10-15, main `84fefd2`): Gate 2 met
+
+Gate 2: "terminal, cable and report pages generate live". #172 (WS-01,
+merged as `2533063`) closed the three gaps from Round 12.
+
+| Gap | Fix | Evidence |
+| --- | --- | --- |
+| **G2-1** pages never added | Generated pages are added when a project is opened or created; an issued (frozen) project is skipped | `gap_the_project_gets_its_generated_pages` now runs and passes: the starter opened in the window has terminals, cables, bom, devices and wires pages |
+| **G2-2** panel listed `20` once | The panel lists each sheet (`20a`, `20b`) | `gap_the_project_panel_lists_each_generated_sheet` passes |
+| **G2-3** empty frame in the app | `novo-app` holds one `LiveReports` per document and gives the page frame its `SheetContent` | `a_generated_page_shows_its_report_and_follows_each_edit` and `the_outline_lists_each_sheet_of_a_generated_page_and_opens_it` (`app/gate1_tests.rs`) read `canvas.schematic_ref().sheet()` (name, "n of m", table texts) |
+
+Result on main `84fefd2` (Linux): fmt and clippy clean; **826 passed, 0
+failed, 2 ignored** (the `widget.rs` doc example and
+`gap_random_moves_never_leave_overlapping_wires`, which waits for the
+wiring engine). `gate2_live_pages`: 5 of 5 pass. **Every Gate 2 criterion
+is met.**
+
+Limits: G2-3 is checked on the content the frame draws, not on pixels (the
+canvas draws through the GPU, which headless tests do not see). The two
+`gap_` test names stay so the history reads; they are ordinary tests now.
+Windows: CI runs on main pushes since #175; first result is Round 16.
+
 ## Round 14 (2026-10-15, main `5a6f30f`): wires never overlap
 
 Tadjiro asked for two wiring modes with one hard rule: lines never overlap.
@@ -38,10 +60,15 @@ without waiting for the mode implementation.
 | `the_motor_starter_has_no_overlapping_wires` | The Gate 1 starter has no two wires of different nets sharing length | Passes |
 | `gap_random_moves_never_leave_overlapping_wires` | 200 random symbol moves (whole grid steps, fixed seed); after each, no overlap | **Ignored, fails**: step 2 already leaves four overlapping wire pairs. Needs the no-overlap rule in `edit::transform` (the editor engine PR) |
 
-Still to write when the implementation lands: Auto and Draw journeys
+Still to write when the implementation lands: Corners and Lines journeys
 (DESIGN §4 acceptance 1-8), the refusal reason as returned data, the
 toggle and its persistence, tidy and the router output under the same
-check, and the merge of same-conductor overlaps.
+check, and same-conductor overlaps (the rule is no merging). The guard
+skips pairs on one net today; drop that filter when the engine lands, as
+DESIGN §4 bans same-conductor overlap too. The random moves use
+`Transform::Move`, the non-interactive path; once the interactive flag
+exists the guard should call the interactive form, and the script path
+(which may overlap and report `wire.overlap`) gets its own test.
 
 ## Round 13 (2026-10-15, main `3cd3772`): G2-4 closed
 

@@ -1,11 +1,13 @@
 # Tester handoff (rewritten each update)
 
-Updated: 2026-10-15 04:15 UTC (Round 12)
+Updated: 2026-10-15 08:15 UTC (Round 15)
 
 ## Where things are
 - Repo: Herepiggypiggypiggy/NovoElectric. Branch: `claude/project-thread-dft1m7` (the only branch this thread pushes), restarted from main `f3534dc` after #87 merged.
 - Gate 1: no open gap. #87 merged (window scenario, outputs, F4), #99 closed F4, #126 closed F5.
-- Gate 2 (Round 12, merged in #146): `crates/novo-tests/tests/gate2_live_pages.rs`. Engine tests pass (LiveReports follows terminal, core, device and wire edits; new strip gets a sheet; PDF prints edits). Gaps G2-1 (nothing adds generated pages) and G2-2 (project panel lists sheets) are ignored tests; G2-3 (app shows generated pages empty, no LiveReports in novo-app) is by inspection. G2-4 (Cables/Devices drawers) closed by #138 (Round 13). The list went to the lead to route.
+- Gate 2: met (Round 15, main `84fefd2`, 826/0/2). #172 closed G2-1..G2-3; their tests run now.
+- Wire overlap (Round 14, #173 merged): `wire_overlap.rs`. Engine PR 1 is #181 (`novo_editor::overlap::{page_overlaps, route_overlaps, plan_route, Refusal}`); Lines lands in engine PR 2. Next: Corners journey (wiring-modes test 2), Lines journey (test 3), drop the same-net filter in the guard, interactive move form, `wire.overlap` script-path test.
+- Windows: CI runs on main since #175; check the first result and the real build with the release thread.
 - When a gap's fix merges: un-ignore its test in a new PR from main.
 
 ## How to resume
