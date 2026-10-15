@@ -6,7 +6,6 @@ use novo_core::{DeviceTag, PageKind};
 use super::example::EXAMPLE_NAME;
 use super::gate1_tests::Drive;
 use crate::actions::Action;
-use crate::backend::ProjectBackend;
 
 fn drive() -> (tempfile::TempDir, Drive) {
     let dir = tempfile::tempdir().unwrap();
