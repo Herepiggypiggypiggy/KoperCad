@@ -7,6 +7,7 @@
 pub mod model;
 pub mod plan;
 pub mod state;
+pub mod thermal;
 
 /// Footprint used for a device whose part has no dimensions (marked guessed).
 pub const DEFAULT_FOOTPRINT_MM: (f64, f64) = (45.0, 90.0);
