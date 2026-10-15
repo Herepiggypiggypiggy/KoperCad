@@ -59,3 +59,7 @@
 19:35 UTC #448 2338d9d CHANGES (design): pointer pulse vs no-loop rule, accent on wash contrast, card vs status bar
 19:45 UTC #409 a9acd31 CHANGES (design): raw 10 px fonts, top-view bars colour-only
 19:55 UTC #406 da254d8 CHANGES (merge conflict only; design items all fixed)
+20:05 UTC #409 f74f25b READY (font token, non-colour bar cues)
+20:05 UTC #430 3ff277c READY (labels, conflict fixed; second of #430/#440 drops hand-written File buttons)
+20:10 UTC #463 2109571 CHANGES (app.rs conflict; sync workspaces.md §5.3 to 1100/1250/1700)
+20:10 UTC #475 7735eb8 CHANGES (conflict only, stacked on #463; design items done)
