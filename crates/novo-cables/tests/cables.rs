@@ -1,6 +1,6 @@
 use novo_cables::{
     CableType, Conductor, Finding, ShieldConnection, accept_proposals, add_shield, assign_core,
-    cable_screen, check, connect_shield, dismiss_proposal, overview, propose_cables,
+    cable_screen, check, check_with, connect_shield, dismiss_proposal, overview, propose_cables,
     restore_proposal, set_spare, summarize_proposals, swap_cores, unassign_core,
 };
 use novo_core::{
@@ -298,6 +298,8 @@ fn core_edits_and_checks() {
         .transact("Swap", |tx| swap_cores(tx, cable, 0, 2))
         .unwrap();
     let findings = check(s.doc.project());
+    let netlist = s.doc.project().netlist();
+    assert_eq!(check_with(s.doc.project(), &netlist), findings);
     assert!(findings.contains(&Finding::ProtectiveOnOtherCore {
         cable,
         core: 0,

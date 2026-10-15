@@ -248,7 +248,7 @@ fn every_deliberate_error_is_flagged_exactly_once() {
     let named = one(ProblemKind::TerminalUse);
     assert_eq!(
         named.message,
-        "=A1+CAB-X1:N is named like a N terminal but is a feed-through terminal"
+        "=A1+CAB-X1:N is named like an N terminal but is a feed-through terminal"
     );
     assert_eq!(named.at, vec![AnyId::from(ms.x1_syms[1])]);
 

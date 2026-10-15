@@ -67,10 +67,20 @@ pub fn kind_differs_from_name(
     actual: TerminalKind,
 ) -> String {
     format!(
-        "{designation} is named like a {} terminal but is a {} terminal.",
-        kind_label(expected),
-        kind_label(actual)
+        "{designation} is named like {} terminal but is {} terminal.",
+        with_article(expected),
+        with_article(actual)
     )
+}
+
+/// The kind label with its indefinite article, read as spoken: "an N",
+/// "a PE".
+fn with_article(kind: TerminalKind) -> String {
+    let article = match kind {
+        TerminalKind::Neutral => "an",
+        _ => "a",
+    };
+    format!("{article} {}", kind_label(kind))
 }
 
 pub fn unwired(designation: &str) -> String {
@@ -241,5 +251,26 @@ pub fn rename_problem(new: &str, problem: crate::RenameProblem, taken_by: &str) 
     match problem {
         crate::RenameProblem::Empty => "The new name would be empty.".to_owned(),
         crate::RenameProblem::Taken(_) => format!("{new} is already used by {taken_by}."),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kind_names_take_the_spoken_article() {
+        assert_eq!(
+            kind_differs_from_name("-X1:N", TerminalKind::Neutral, TerminalKind::Feedthrough),
+            "-X1:N is named like an N terminal but is a feed-through terminal."
+        );
+        assert_eq!(
+            kind_differs_from_name(
+                "-X1:PE",
+                TerminalKind::ProtectiveEarth,
+                TerminalKind::Neutral
+            ),
+            "-X1:PE is named like a PE terminal but is an N terminal."
+        );
     }
 }
