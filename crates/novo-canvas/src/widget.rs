@@ -1075,9 +1075,10 @@ impl CanvasView {
         {
             let zoom = self.viewport.zoom;
             let major_step = (self.grid.spacing * self.grid.major_every.max(1) as f32).max(g.step);
-            // Quieter when zoomed out: minor dots need 6 px between them,
-            // major dots 12 px.
-            let (minor, major) = (g.step * zoom >= 6.0, major_step * zoom >= 12.0);
+            // Quieter when zoomed out (DESIGN section 4): dots need 8 px
+            // between them, so only the majors remain at first and then
+            // none.
+            let (minor, major) = (g.step * zoom >= 8.0, major_step * zoom >= 8.0);
             let boxes: Vec<Aabb> = scene
                 .query(&vis)
                 .into_iter()
