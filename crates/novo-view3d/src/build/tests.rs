@@ -206,23 +206,30 @@ fn wires_are_runs_mid_duct_or_in_free_air() {
         ..Options::default()
     };
     let s = from_layout(&layout(), &inputs(), &o);
-    let run = |w: u64, n: u64| {
-        s.get(id(ItemKind::Wire, (w << WIRE_SEGMENT_BITS) | n))
+    let wire = |n: u64| {
+        s.wires
+            .iter()
+            .find(|w| w.id == id(ItemKind::Wire, n))
             .unwrap()
     };
-    // First run: along x, centred half way up the 60 mm duct.
-    let a = run(1, 0);
-    assert_eq!(a.size, Vec3::new(100.0, 4.0, 4.0));
-    assert_eq!(a.pose.translation, Vec3::new(70.0, 250.0, 28.0));
-    // Second run: along y.
-    let b = run(1, 1);
-    assert_eq!(b.size.x, 50.0);
-    assert_eq!(b.pose.rotation, Quat::from_rotation_z(FRAC_PI_2));
+    // Ducted: half way up the 60 mm duct, radius from the 4 mm diameter.
+    let a = wire(1);
+    assert_eq!(a.radius, 2.0);
+    assert_eq!(a.mark, Mark::None);
+    assert_eq!(a.points[0], Vec3::new(20.0, 250.0, 30.0));
+    assert_eq!(a.points[2], Vec3::new(120.0, 300.0, 30.0));
     // Free air: flagged, default diameter, 15 mm up.
-    let c = run(2, 0);
-    assert_eq!(c.mark, Mark::Outside);
-    assert_eq!(c.size.y, WIRE_DIAMETER_MM as f32);
-    assert_eq!(c.pose.translation.z, 15.0 - 1.5);
+    let b = wire(2);
+    assert_eq!(b.mark, Mark::Outside);
+    assert_eq!(b.radius, WIRE_DIAMETER_MM as f32 / 2.0);
+    assert_eq!(b.points[0].z, 15.0);
+    assert_eq!(
+        s.items
+            .iter()
+            .filter(|i| i.id.kind == ItemKind::Wire)
+            .count(),
+        0
+    );
 }
 
 #[test]

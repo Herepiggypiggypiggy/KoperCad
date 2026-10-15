@@ -18,7 +18,7 @@ use glam::{Quat, Vec3};
 use novo_layout::state::CabinetLayout;
 
 use crate::scene::{
-    Group, GroupId, Item, ItemId, ItemKind, Mark, PlateFrame, Pose, Profile, Scene, Shape,
+    Group, GroupId, Item, ItemId, ItemKind, Mark, PlateFrame, Pose, Profile, Scene, Shape, Wire,
 };
 
 /// Thickness of the mounting plate, behind the plate surface (z < 0).
@@ -40,10 +40,6 @@ pub const DEFAULT_ENCLOSURE_DEPTH_MM: f64 = 250.0;
 pub const WIRE_DIAMETER_MM: f64 = 3.0;
 /// The hinge group of the door.
 pub const DOOR_HINGE: GroupId = GroupId(1);
-
-/// Wire items are ids `(wire id << WIRE_SEGMENT_BITS) | segment`; shift by
-/// this to get the wire id back from `ItemId::raw`.
-pub const WIRE_SEGMENT_BITS: u32 = 16;
 
 /// A device's depth, from its part.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -185,7 +181,8 @@ fn line_item(
 }
 
 /// Builds the scene of one cabinet. Item order is fixed (shell, plate,
-/// rails, ducts, devices, door, wires), each group by id.
+/// rails, ducts, devices, door), each group by id; wires follow in the given
+/// order. Ids are unique per kind, which is asserted in debug builds.
 pub fn from_layout(layout: &CabinetLayout, inputs: &Inputs, options: &Options) -> Scene {
     let plate = &layout.plate;
     let frame = PlateFrame {
@@ -320,7 +317,14 @@ pub fn from_layout(layout: &CabinetLayout, inputs: &Inputs, options: &Options) -
     for w in &options.wires {
         push_wire(&mut scene, w, &ducts);
     }
+    debug_assert!(unique_ids(&scene), "duplicate id in the scene");
     scene
+}
+
+fn unique_ids(scene: &Scene) -> bool {
+    let mut seen = std::collections::HashSet::new();
+    scene.items.iter().map(|i| i.id).all(|id| seen.insert(id))
+        && scene.wires.iter().map(|w| w.id).all(|id| seen.insert(id))
 }
 
 /// Height of a wire: halfway up the shallowest duct it lies in, else free air.
@@ -343,41 +347,31 @@ fn wire_height(w: &WireInput, ducts: &[DuctShape]) -> f64 {
     }
 }
 
-/// A wire is one thin box per run, so the contract needs no polyline shape.
+/// A wire is a path of points at one height with a tube radius.
 fn push_wire(scene: &mut Scene, w: &WireInput, ducts: &[DuctShape]) {
     let z = wire_height(w, ducts);
     let dia = w
         .diameter_mm
         .filter(|d| *d > 0.0)
         .unwrap_or(WIRE_DIAMETER_MM);
-    for (n, pair) in w.points.windows(2).enumerate() {
-        let ((x0, y0), (x1, y1)) = (pair[0], pair[1]);
-        let (dx, dy) = (x1 - x0, y1 - y0);
-        let length = dx.abs().max(dy.abs());
-        if length <= 0.0 {
-            continue;
-        }
-        let vertical = dy.abs() > dx.abs();
-        let frame = scene.frame;
-        // Box z runs [0, dia]; lift by half so the wire is centred on z.
-        let mut item = Item::new(
-            ItemId::new(ItemKind::Wire, (w.id << WIRE_SEGMENT_BITS) | n as u64),
-            Shape::Box,
-            Pose {
-                translation: frame.world((x0 + x1) / 2.0, (y0 + y1) / 2.0, z - dia / 2.0),
-                rotation: if vertical {
-                    Quat::from_rotation_z(FRAC_PI_2)
-                } else {
-                    Quat::IDENTITY
-                },
-            },
-            Vec3::new(length as f32, dia as f32, dia as f32),
-        );
-        if w.kind == WireKind::FreeAir {
-            item.mark = Mark::Outside;
-        }
-        scene.push(item);
-    }
+    let frame = scene.frame;
+    scene.wires.push(Wire {
+        id: ItemId::new(ItemKind::Wire, w.id),
+        points: w
+            .points
+            .iter()
+            .map(|&(x, y)| frame.world(x, y, z))
+            .collect(),
+        radius: (dia / 2.0) as f32,
+        tint: None,
+        // A wire in free air found no duct: flag it like the routing engine does.
+        mark: if w.kind == WireKind::FreeAir {
+            Mark::Outside
+        } else {
+            Mark::None
+        },
+        label: None,
+    });
 }
 
 /// Devices whose back-to-front extent reaches the inside of the door, with
@@ -406,6 +400,7 @@ pub fn reaching_door(scene: &Scene) -> Vec<(u64, f64)> {
 pub fn refresh(current: &mut Scene, mut next: Scene) {
     let items_same = current.frame == next.frame
         && current.items == next.items
+        && current.wires == next.wires
         && current.groups.len() == next.groups.len()
         && current
             .groups
