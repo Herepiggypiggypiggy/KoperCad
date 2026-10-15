@@ -47,10 +47,10 @@
 //! # Ok::<(), novo_core::ModelError>(())
 //! ```
 
-mod bridge;
 mod check;
 mod earth;
 mod geometry;
+mod move_strip;
 mod naming;
 mod occurrence;
 mod place;
@@ -61,10 +61,12 @@ mod strip;
 mod style;
 mod suggest;
 
-pub use bridge::{BRIDGE_PITCH, bridged_symbol, connect, disconnect};
 pub use check::{Issue, IssueKind, Severity, check};
-pub use earth::{earthed_terminals, is_earth_symbol, mark_earthed, toggle_pe};
+pub use earth::{
+    earthed_terminals, has_pe_override, is_earth_symbol, mark_earthed, reset_pe_override, toggle_pe,
+};
 pub use geometry::{redraw, symbol_length, symbol_pins};
+pub use move_strip::{MoveTo, move_to_strip};
 pub use naming::{
     base_name_for_potential, compare_names, kind_for_name, kind_for_potential, kind_key,
     named_potential, next_free_name, next_free_number, next_order, potential_fits,
@@ -80,9 +82,9 @@ pub use rules::{
 pub use screen::{Screen, ScreenRow, screen};
 pub use strings::{kind_label, rule_sentence};
 pub use strip::{
-    Build, RenameChange, RenameProblem, Row, StripView, add_spares, explain, free_jumper,
-    join_duplicates, rename, rename_preview, renumber, renumber_preview, reorder, set_jumper,
-    set_kind, set_level, strip_view, strips,
+    Build, RenameChange, RenameProblem, Row, StripView, add_spares, connect_terminals, explain,
+    free_jumper, join_duplicates, rename, rename_preview, renumber, renumber_preview, reorder,
+    set_jumper, set_kind, set_level, strip_view, strips,
 };
 pub use style::{
     Style, clear_override, default_symbol, overrides, set_strip_style, strip_part_key, strip_style,

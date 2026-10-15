@@ -44,29 +44,15 @@ pub fn symbol_pins(symbol: &SymbolKey) -> Result<Vec<Pin>> {
         .ok_or_else(|| ModelError::Format(strings::not_a_terminal_symbol(symbol)))
 }
 
-/// All connection points of a library symbol, in library order.
-fn all_pins(definition: &Symbol) -> Vec<Pin> {
-    definition
+fn terminal_pins(definition: &Symbol) -> Option<Vec<Pin>> {
+    let pins: Vec<Pin> = definition
         .connections
         .iter()
         .map(|c| {
             let pin = Pin::new(c.id.clone(), c.at[0], c.at[1]).with_direction(direction(c.dir));
             if c.optional { pin.optional() } else { pin }
         })
-        .collect()
-}
-
-/// Connection points of any library symbol, for symbols that draw several
-/// terminals (the bridged ones); refused when the library lacks it.
-pub(crate) fn library_pins(symbol: &SymbolKey) -> Result<Vec<Pin>> {
-    library()
-        .and_then(|l| l.get(&symbol.0))
-        .map(all_pins)
-        .ok_or_else(|| ModelError::Format(strings::not_a_terminal_symbol(symbol)))
-}
-
-fn terminal_pins(definition: &Symbol) -> Option<Vec<Pin>> {
-    let pins = all_pins(definition);
+        .collect();
     match pins.as_slice() {
         [one, two]
             if one.offset == Point::new(0.0, 0.0) && two.offset.x == 0.0 && two.offset.y > 0.0 =>
@@ -74,6 +60,42 @@ fn terminal_pins(definition: &Symbol) -> Option<Vec<Pin>> {
             Some(pins)
         }
         _ => None,
+    }
+}
+
+/// The one-ended drawing of a terminal symbol: the same terminal with one
+/// connection point, a wire ending in the clamp. `None` for a symbol that
+/// has no such drawing (fused and disconnect terminals).
+pub fn one_ended(symbol: &SymbolKey) -> Option<SymbolKey> {
+    let id = match symbol.0.as_str() {
+        "iec/terminals/terminal" => "iec/terminals/terminal_end",
+        "iec/terminals/terminal_pe" => "iec/terminals/terminal_pe_end",
+        "iec/terminals/terminal_n" => "iec/terminals/terminal_n_end",
+        "iec/terminals/terminal_bridged" => "iec/terminals/terminal_end_bridged",
+        _ => return None,
+    };
+    Some(SymbolKey(id.into()))
+}
+
+/// Connection point of a one-ended terminal symbol from the library: `1` at
+/// the origin. Anything else is refused.
+fn end_pins(symbol: &SymbolKey) -> Result<Vec<Pin>> {
+    let pins = library()
+        .and_then(|l| l.get(&symbol.0))
+        .map(|d| {
+            d.connections
+                .iter()
+                .map(|c| {
+                    let pin =
+                        Pin::new(c.id.clone(), c.at[0], c.at[1]).with_direction(direction(c.dir));
+                    if c.optional { pin.optional() } else { pin }
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    match pins.as_slice() {
+        [one] if one.offset == Point::new(0.0, 0.0) => Ok(pins),
+        _ => Err(ModelError::Format(strings::not_a_terminal_symbol(symbol))),
     }
 }
 
@@ -116,12 +138,24 @@ fn still_fits(old: Point, new: Point, q: Point) -> bool {
 /// points, as part of a transaction. Refused when the symbol is not a
 /// single-level terminal symbol or the wires leave no room.
 pub fn redraw(tx: &mut Tx<'_>, id: SymbolId, symbol: &SymbolKey) -> Result<()> {
-    let pins = symbol_pins(symbol)?;
     let current = tx
         .project()
         .symbol(id)
         .ok_or(ModelError::NotFound(id.into()))?
         .clone();
+    // A one-ended drawing stays one-ended: it takes the one-ended variant of
+    // the new symbol.
+    let one_ended_drawing = current.pins.len() == 1;
+    let symbol = &if one_ended_drawing {
+        one_ended(symbol).unwrap_or_else(|| symbol.clone())
+    } else {
+        symbol.clone()
+    };
+    let pins = if one_ended_drawing {
+        end_pins(symbol)?
+    } else {
+        symbol_pins(symbol)?
+    };
     if current.symbol == *symbol && current.pins == pins {
         return Ok(());
     }

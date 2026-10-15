@@ -547,13 +547,18 @@ impl Scene {
                 // Ink beats text: a label counts as `tolerance` further away
                 // than it is, so a tag running over a neighbour's body never
                 // steals the click from that body. Text still wins where no
-                // line is near.
+                // line is near, and a pointer inside the label box always
+                // takes the label, even where the symbol's own ink runs
+                // under it.
                 let (mut ink, text) = slot.item.parts_distance(p, zoom);
                 if !slot.item.click_select {
                     ink = f32::INFINITY;
                 }
                 let (score, d, label) = match text {
-                    Some((t, i)) if t <= tolerance && (ink > tolerance || t + tolerance < ink) => {
+                    Some((t, i))
+                        if t <= tolerance
+                            && (ink > tolerance || t + tolerance < ink || t <= 1e-4) =>
+                    {
                         (t + tolerance, t, Some(i))
                     }
                     _ => (ink, ink, None),
@@ -901,6 +906,26 @@ mod label_pick_tests {
         assert_eq!((on_text.id, on_text.label), (ItemId(1), Some(0)));
         let on_line = scene.pick(Vec2::new(0.1, 8.0), 0.5, 2.0).unwrap();
         assert_eq!(on_line.label, None);
+    }
+
+    #[test]
+    fn a_label_wins_over_ink_under_it() {
+        let mut scene = Scene::new();
+        scene.insert(
+            ItemId(1),
+            Item::new(LayerId(0))
+                .with(Primitive::stroked(
+                    Shape::line(Vec2::new(0.0, 5.0), Vec2::new(20.0, 5.0)),
+                    Stroke::default(),
+                ))
+                .with_label(Label::new(Vec2::new(5.0, 5.0), "-K1", 2.5)),
+        );
+        // Inside the label box, right on the line.
+        let inside = scene.pick(Vec2::new(6.0, 5.0), 0.5, 2.0).unwrap();
+        assert_eq!(inside.label, Some(0));
+        // Past the box the line still wins.
+        let past = scene.pick(Vec2::new(18.0, 5.0), 0.5, 2.0).unwrap();
+        assert_eq!(past.label, None);
     }
 
     /// A junction drawn plain has no ink or text, but is still picked and

@@ -191,8 +191,6 @@ const APP_COMMANDS: &[&str] = &[
     "plc.to_plc",
     "plc.renumber_io",
     "xref.link",
-    "terminals.connect",
-    "terminals.disconnect",
     "wire.mode",
 ];
 
@@ -438,6 +436,11 @@ impl NovoApp {
                 self.next_proposal();
             }
             "proposal.accept_all" => self.accept_all_proposals(),
+            "terminal.connect"
+            | "terminal.disconnect"
+            | "terminal.strip_up"
+            | "terminal.strip_down"
+            | "terminal.strip_lowest" => self.terminal_command(id),
             "view.terminals_drawer" => self.toggle_drawer(Drawer::Terminals),
             "view.cables_drawer" => self.toggle_drawer(Drawer::Cables),
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
@@ -472,8 +475,6 @@ impl NovoApp {
             "plc.to_plc" => self.plc_to_plc(),
             "plc.renumber_io" => self.plc_renumber_io(),
             "xref.link" => self.xref_link(argument),
-            "terminals.connect" => self.connect_terminals(),
-            "terminals.disconnect" => self.disconnect_terminals(),
             other => {
                 let label = novo_workflow::commands::get(other).map_or(other, |c| c.label);
                 self.message(Level::Info, format!("{label} is not in the app yet"));

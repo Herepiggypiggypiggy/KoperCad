@@ -359,6 +359,13 @@ impl Keymap {
             );
         }
 
+        // Terminals (DESIGN §4, strip naming): with only terminals selected,
+        // Up and Down move them to the next or previous strip number, Ctrl+Up
+        // to the lowest free one.
+        bind(Chord::plain(ArrowUp), Canvas, "terminal.strip_up");
+        bind(Chord::plain(ArrowDown), Canvas, "terminal.strip_down");
+        bind(Chord::ctrl(ArrowUp), Canvas, "terminal.strip_lowest");
+
         // Proposals and problems.
         bind(Chord::plain(Enter), Canvas, "proposal.accept");
         bind(Chord::plain(Tab), Canvas, "proposal.next");

@@ -1663,3 +1663,126 @@ fn a_held_place_key_with_repeats_opens_only_the_wheel() {
         "the part search does not open under the wheel"
     );
 }
+
+#[test]
+fn double_clicking_a_terminal_a_feed_or_an_interruption_name_renames_it() {
+    use novo_canvas::model::LabelKind;
+    use novo_core::{Pin, Point, PotentialKind, SymbolRole, TerminalKind};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let page = d.doc().project().pages().next().unwrap().id;
+    let (syms, _) = d
+        .app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("roles", |tx| {
+            let x1 = tx.add_terminal_strip(novo_core::DeviceTag::parse("-X1")?)?;
+            let t = tx.add_terminal(x1, "1")?;
+            let pins = || vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)];
+            let terminal = tx.place_symbol(
+                page,
+                "iec/terminals/end_bracket",
+                novo_core::Placement::at(Point::new(100.0, 100.0)),
+                pins(),
+                SymbolRole::Terminal { terminals: vec![t] },
+            )?;
+            let l1 = tx.add_potential("L1", PotentialKind::Line)?;
+            let feed = tx.place_symbol(
+                page,
+                "iec/connectivity/potential_feed",
+                novo_core::Placement::at(Point::new(200.0, 100.0)),
+                vec![Pin::new("1", 0.0, 8.0)],
+                SymbolRole::PotentialFeed { potential: l1 },
+            )?;
+            let _ = TerminalKind::Feedthrough;
+            let jump = tx.place_symbol(
+                page,
+                "iec/connectivity/interruption",
+                novo_core::Placement::at(Point::new(300.0, 100.0)),
+                vec![Pin::new("1", 0.0, 0.0)],
+                SymbolRole::Interruption { name: "5".into() },
+            )?;
+            Ok((terminal, feed, jump))
+        })
+        .unwrap();
+    d.frame();
+    let (terminal, feed, jump) = syms;
+
+    let double_click_label = |d: &mut Drive, sym, t0: f64| -> bool {
+        let project = d.doc().project().clone();
+        let rect = d.app.wb.canvas_area.unwrap().1;
+        let view = d.app.canvas.schematic().unwrap();
+        let origin = project.symbol(sym).unwrap().placement.origin;
+        let scene = view.scene().unwrap();
+        let zoom = view.canvas.viewport.zoom;
+        // The tolerance the canvas itself picks with.
+        let tol = view.canvas.viewport.screen_to_world_len(5.0);
+        let mut found = None;
+        'scan: for dy in -80..=80 {
+            for dx in -80..=80 {
+                let w = novo_canvas::Vec2::new(
+                    origin.x as f32 + dx as f32 * 0.5,
+                    origin.y as f32 + dy as f32 * 0.5,
+                );
+                if let Some(hit) = scene.scene().pick(w, tol, zoom)
+                    && let Some(l) = scene.label_hit(&project, &hit)
+                    && matches!(
+                        l.kind,
+                        LabelKind::DeviceTag
+                            | LabelKind::TerminalName
+                            | LabelKind::InterruptionName
+                            | LabelKind::Potential
+                    )
+                {
+                    found = Some(w);
+                    break 'scan;
+                }
+            }
+        }
+        let Some(w) = found else { return false };
+        let at = view.canvas.viewport.world_to_screen(w);
+        let pos = rect.min + egui::vec2(at.x, at.y);
+        let button = |pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        frame_at(d, t0, vec![egui::Event::PointerMoved(pos)]);
+        for (i, dt) in [0.1, 0.15, 0.2, 0.25].into_iter().enumerate() {
+            frame_at(d, t0 + dt, vec![button(i % 2 == 0)]);
+        }
+        frame_at(d, t0 + 0.3, vec![]);
+        true
+    };
+
+    for (sym, t0, text) in [(terminal, 50.0, "7"), (feed, 60.0, "L3"), (jump, 70.0, "9")] {
+        assert!(
+            double_click_label(&mut d, sym, t0),
+            "the label is on the canvas"
+        );
+        let view = d.app.canvas.schematic().unwrap();
+        assert!(view.renaming(), "the rename box opens for {text}");
+        view.set_rename_text(text);
+        frame_at(&mut d, t0 + 1.0, vec![key_event(egui::Key::Enter, true)]);
+        frame_at(&mut d, t0 + 1.1, vec![key_event(egui::Key::Enter, false)]);
+        assert!(!d.app.canvas.schematic().unwrap().renaming(), "{text}");
+    }
+    let project = d.doc().project();
+    let SymbolRole::Terminal { terminals } = &project.symbol(terminal).unwrap().role else {
+        panic!()
+    };
+    assert_eq!(project.terminal(terminals[0]).unwrap().name, "7");
+    let SymbolRole::PotentialFeed { potential } = project.symbol(feed).unwrap().role else {
+        panic!()
+    };
+    assert_eq!(project.potential(potential).unwrap().name, "L3");
+    let SymbolRole::Interruption { name } = &project.symbol(jump).unwrap().role else {
+        panic!()
+    };
+    assert_eq!(name, "9");
+}

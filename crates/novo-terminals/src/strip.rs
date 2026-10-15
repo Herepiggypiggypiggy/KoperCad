@@ -298,7 +298,67 @@ pub fn set_jumper(
     for &id in terminals {
         tx.update::<Terminal>(id, |t| t.jumper = jumper)?;
     }
+    // Connected terminals are drawn with their own symbol (see
+    // `style::style_of`): redraw the drawings that follow the strip's style.
+    for &id in terminals {
+        if let Some(style) = style_of(tx.project(), id) {
+            let symbols: Vec<_> = tx
+                .project()
+                .symbols_of_terminal(id)
+                .into_iter()
+                .filter(|s| crate::style::draws_only_inherited(tx.project(), s))
+                .map(|s| s.id)
+                .collect();
+            for symbol in symbols {
+                redraw(tx, symbol, &style.symbol)?;
+            }
+        }
+    }
     Ok(jumper)
+}
+
+/// Connects terminals of one strip, the Connect terminals command, without
+/// disturbing what is already bridged: when some of the terminals are
+/// already in jumper groups, those groups are merged into the lowest of them
+/// (their other members join too) and the rest of the selection joins it;
+/// with none, they get a new group (`free_jumper`). Returns the group.
+/// Fewer than two terminals are refused.
+pub fn connect_terminals(tx: &mut Tx<'_>, terminals: &[TerminalId]) -> Result<u32> {
+    let mut ids = terminals.to_vec();
+    ids.sort();
+    ids.dedup();
+    let Some(first) = ids.first().and_then(|&t| tx.project().terminal(t)) else {
+        return Err(ModelError::Format(strings::not_on_one_strip()));
+    };
+    if ids.len() < 2 {
+        return Err(ModelError::Format(strings::connect_needs_two()));
+    }
+    let strip = first.strip;
+    let mut existing: Vec<u32> = Vec::new();
+    for &id in &ids {
+        let t = tx
+            .project()
+            .terminal(id)
+            .ok_or(ModelError::NotFound(id.into()))?;
+        if t.strip != strip {
+            return Err(ModelError::Format(strings::not_on_one_strip()));
+        }
+        existing.extend(t.jumper);
+    }
+    let group = existing
+        .iter()
+        .copied()
+        .min()
+        .unwrap_or_else(|| free_jumper(tx.project(), strip));
+    // Every member of a merged group comes along.
+    let mut members = ids;
+    for t in tx.project().terminals_of_strip(strip) {
+        if t.jumper.is_some_and(|j| existing.contains(&j)) && !members.contains(&t.id) {
+            members.push(t.id);
+        }
+    }
+    set_jumper(tx, &members, Some(group))?;
+    Ok(group)
 }
 
 /// Changes the kind of a terminal and redraws it with its strip's symbol for

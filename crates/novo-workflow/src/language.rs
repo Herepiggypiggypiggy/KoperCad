@@ -146,15 +146,26 @@ pub const DUTCH: &[Aliases] = &[
     nl("view.fit", &[], &["passend zoomen", "alles tonen"]),
     nl("view.schematic", &[], &["schema"]),
     nl("view.cabinet", &[], &["kast", "kastindeling"]),
+    nl("terminal.connect", &["verbind"], &["klemmen", "brug"]),
+    nl("terminal.disconnect", &["ontkoppel"], &["klemmen", "brug"]),
+    nl(
+        "terminal.strip_up",
+        &["hoger"],
+        &["klemmenstrook", "nummer"],
+    ),
+    nl(
+        "terminal.strip_down",
+        &["lager"],
+        &["klemmenstrook", "nummer"],
+    ),
+    nl(
+        "terminal.strip_lowest",
+        &["laagste"],
+        &["klemmenstrook", "nummer"],
+    ),
     nl("view.terminals_drawer", &[], &["klemmen", "klemmenstroken"]),
     nl("view.cables_drawer", &[], &["kabels", "aders"]),
     nl("view.devices_drawer", &[], &["apparaten", "onderdelen"]),
-    nl("terminals.connect", &[], &["klemmen verbinden", "brug"]),
-    nl(
-        "terminals.disconnect",
-        &[],
-        &["klemmen losmaken", "brug weghalen"],
-    ),
     nl("view.focus", &[], &["focusmodus"]),
     nl(
         "view.pin_outline",

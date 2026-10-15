@@ -12,7 +12,7 @@
 
 use novo_core::{
     Endpoint, Netlist, PageId, Placement, Point, PotentialKind, Project, Result, Rotation,
-    SymbolRole, TerminalKind, Tx, WireId,
+    SymbolId, SymbolRole, TerminalKind, Tx, WireId,
 };
 use novo_symbols::Symbol;
 
@@ -390,6 +390,30 @@ fn feed_placement(project: &Project, wire: WireId) -> Option<Placement> {
         rotation: Rotation::R0,
         mirrored: false,
     })
+}
+
+/// Right-click a feed, Set potential: gives every feed in `feeds` the named
+/// potential (created from `spec` when missing). The wires and terminals on
+/// them follow through the netlist, so this is one undo step for the lot.
+/// Symbols that are not potential feeds are skipped; returns those changed.
+pub fn set_feed_potential(
+    tx: &mut Tx<'_>,
+    feeds: &[SymbolId],
+    spec: &PotentialSpec,
+) -> Result<Vec<SymbolId>> {
+    let potential = find_or_add_potential(tx, &spec.name, spec.kind, spec.voltage)?;
+    let mut changed = Vec::new();
+    for &feed in feeds {
+        let is_feed = matches!(
+            tx.project().symbol(feed).map(|s| &s.role),
+            Some(SymbolRole::PotentialFeed { potential: p }) if *p != potential
+        );
+        if is_feed {
+            tx.set_role(feed, SymbolRole::PotentialFeed { potential })?;
+            changed.push(feed);
+        }
+    }
+    Ok(changed)
 }
 
 /// The potential names of a wire's net, for status text.

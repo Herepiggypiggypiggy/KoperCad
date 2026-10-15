@@ -241,9 +241,8 @@ pub fn no_room_to_refit(symbol: &SymbolKey) -> String {
     )
 }
 
-/// Why terminals cannot be drawn as connected terminals.
-pub fn cannot_connect(reason: &str) -> String {
-    format!("these terminals cannot be connected: {reason}")
+pub fn connect_needs_two() -> String {
+    "select two or more terminals to connect".to_owned()
 }
 
 pub fn not_on_one_strip() -> String {

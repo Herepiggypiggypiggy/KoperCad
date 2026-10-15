@@ -28,7 +28,7 @@ pub const DEFAULT_FAVOURITES: [&str; 9] = [
     "iec/protection/overload_relay",
     "iec/motors/motor_3ph",
     "iec/operators/pushbutton_no",
-    "iec/terminals/terminal",
+    "iec/terminals/terminal_end",
 ];
 
 /// A child placement read from a query: a symbol search plus the device

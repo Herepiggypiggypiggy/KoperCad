@@ -5,7 +5,7 @@
 
 use eframe::egui;
 use novo_canvas::{Aabb, Mark, MarkKind, MarkTarget, Vec2};
-use novo_core::{AnyId, DeviceId, SymbolRole, TerminalId};
+use novo_core::{AnyId, DeviceId, SymbolRole};
 use novo_terminals::{Occurrence, Suggestion};
 
 use super::workbench::Drawer;
@@ -154,68 +154,6 @@ impl NovoApp {
         };
     }
 
-    /// Connect terminals: the selected terminals become one bridged symbol
-    /// with a jumper (2 or 3, side by side).
-    pub(super) fn connect_terminals(&mut self) {
-        let selection = self.selection();
-        let Some(doc) = self.backend.document_mut() else {
-            return;
-        };
-        let terminals: Vec<TerminalId> = selection
-            .iter()
-            .filter_map(|id| match id {
-                AnyId::Symbol(s) => match &doc.project().symbol(*s)?.role {
-                    SymbolRole::Terminal { terminals } if terminals.len() == 1 => {
-                        Some(terminals[0])
-                    }
-                    _ => None,
-                },
-                _ => None,
-            })
-            .collect();
-        match doc.transact("Connect terminals", |tx| {
-            novo_terminals::connect(tx, &terminals)
-        }) {
-            Ok((_, changes)) => {
-                self.changed_outside_canvas(&changes);
-                self.message(Level::Info, "Terminals connected");
-            }
-            Err(e) => self.message(Level::Error, format!("{e}")),
-        }
-    }
-
-    /// Disconnect terminals: selected bridged symbols go back to single
-    /// terminals without a jumper.
-    pub(super) fn disconnect_terminals(&mut self) {
-        let selection = self.selection();
-        let Some(doc) = self.backend.document_mut() else {
-            return;
-        };
-        let symbols: Vec<_> = selection
-            .iter()
-            .filter_map(|id| match id {
-                AnyId::Symbol(s) => Some(*s),
-                _ => None,
-            })
-            .collect();
-        match doc.transact("Disconnect terminals", |tx| {
-            let mut split = 0;
-            for &s in &symbols {
-                if novo_terminals::disconnect(tx, s)? {
-                    split += 1;
-                }
-            }
-            Ok(split)
-        }) {
-            Ok((0, _)) => self.message(Level::Info, "Select connected terminals first"),
-            Ok((_, changes)) => {
-                self.changed_outside_canvas(&changes);
-                self.message(Level::Info, "Terminals disconnected");
-            }
-            Err(e) => self.message(Level::Error, format!("{e}")),
-        }
-    }
-
     /// The strip the Terminals drawer shows: the selection's strip, else
     /// the one the editor is using, else the first.
     pub(super) fn drawer_strip(&self) -> Option<DeviceId> {
@@ -333,4 +271,98 @@ pub(super) fn proposal_marks(proposals: &[Suggestion], current: usize) -> Vec<Ma
         marks.extend(heavier);
     }
     marks
+}
+
+impl NovoApp {
+    /// The terminals drawn by the selected symbols, each once.
+    fn selected_terminals(&self) -> Vec<novo_core::TerminalId> {
+        let Some(doc) = self.backend.document() else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        for id in self.selection() {
+            let AnyId::Symbol(s) = id else {
+                continue;
+            };
+            if let Some(SymbolRole::Terminal { terminals }) =
+                doc.project().symbol(s).map(|s| &s.role)
+            {
+                for &t in terminals {
+                    if !out.contains(&t) {
+                        out.push(t);
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// Whether the selection holds drawn terminals and nothing else.
+    fn only_terminals_selected(&self) -> bool {
+        let Some(doc) = self.backend.document() else {
+            return false;
+        };
+        let selection = self.selection();
+        !selection.is_empty()
+            && selection.iter().all(|id| match id {
+                AnyId::Symbol(s) => doc
+                    .project()
+                    .symbol(*s)
+                    .is_some_and(|s| matches!(s.role, SymbolRole::Terminal { .. })),
+                _ => false,
+            })
+    }
+
+    /// Connect and Disconnect terminals, and moving the selected terminals
+    /// to another strip number (Up, Ctrl+Up). Says what happened or why
+    /// not; nothing happens without terminals in the selection.
+    pub(super) fn terminal_command(&mut self, id: &str) {
+        use novo_terminals::MoveTo;
+        let terminals = self.selected_terminals();
+        // The arrow keys act only when nothing but terminals is selected.
+        if terminals.is_empty()
+            || (id.starts_with("terminal.strip_") && !self.only_terminals_selected())
+        {
+            return;
+        }
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let (label, result) = match id {
+            "terminal.connect" => (
+                "Connect terminals",
+                doc.transact("Connect terminals", |tx| {
+                    novo_terminals::connect_terminals(tx, &terminals).map(|_| None)
+                }),
+            ),
+            "terminal.disconnect" => (
+                "Disconnect terminals",
+                doc.transact("Disconnect terminals", |tx| {
+                    novo_terminals::set_jumper(tx, &terminals, None).map(|_| None)
+                }),
+            ),
+            _ => {
+                let to = match id {
+                    "terminal.strip_up" => MoveTo::NextNumber,
+                    "terminal.strip_down" => MoveTo::PreviousNumber,
+                    _ => MoveTo::LowestFree,
+                };
+                (
+                    "Move terminals to another strip",
+                    doc.transact("Move terminals to another strip", |tx| {
+                        novo_terminals::move_to_strip(tx, &terminals, to).map(Some)
+                    }),
+                )
+            }
+        };
+        match result {
+            Ok((strip, changes)) => {
+                if let (Some(strip), Some(view)) = (strip, self.canvas.schematic()) {
+                    view.editor.strip = Some(strip);
+                }
+                self.changed_outside_canvas(&changes);
+            }
+            Err(e) => self.message(Level::Error, format!("{label}: {e}")),
+        }
+    }
 }
