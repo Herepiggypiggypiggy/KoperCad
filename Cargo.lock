@@ -1888,6 +1888,7 @@ dependencies = [
 name = "novo-checks"
 version = "0.1.0"
 dependencies = [
+ "novo-cables",
  "novo-core",
  "novo-parts",
  "novo-terminals",

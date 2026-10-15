@@ -122,6 +122,18 @@ fn break_it(doc: &mut Document, ms: &MotorStarter) -> Broken {
                 "terminal_part.protective_earth",
                 Some(Value::Int(i64::try_from(grey.0).expect("small id"))),
             )?;
+            // 13. The motor cable's grey core marked spare while it
+            //     carries W1.
+            novo_cables::set_spare(tx, ms.w1, 2, true)?;
+            // 14. -X1:2 renamed N, a name that defines a neutral terminal.
+            let x1_2 = tx
+                .project()
+                .terminals_of_strip(ms.x1)
+                .into_iter()
+                .find(|t| t.name == "2")
+                .expect("-X1:2")
+                .id;
+            tx.update::<Terminal>(x1_2, |t| t.name = "N".into())?;
             Ok(Broken {
                 lamp,
                 s0_sym: ms.s0_sym,
@@ -224,9 +236,28 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         "=A1+CAB-X1:PE is a PE terminal on a block that is not a PE block"
     );
 
+    let spare = one(ProblemKind::CableCore);
+    assert_eq!(
+        spare.message,
+        "=A1-W1: core GY is marked spare but carries a wire"
+    );
+    assert_eq!(
+        spare.at,
+        vec![AnyId::from(ms.motor_wires[2]), AnyId::from(ms.w1)]
+    );
+    let named = one(ProblemKind::TerminalUse);
+    assert_eq!(
+        named.message,
+        "=A1+CAB-X1:N is named like a N terminal but is a feed-through terminal"
+    );
+    assert_eq!(named.at, vec![AnyId::from(ms.x1_syms[1])]);
+
     let summary = Summary::of(&problems);
-    assert_eq!((summary.errors, summary.warnings, summary.infos), (3, 8, 1));
-    assert_eq!(summary.pill_text(), "3 errors · 8 warnings");
+    assert_eq!(
+        (summary.errors, summary.warnings, summary.infos),
+        (3, 10, 1)
+    );
+    assert_eq!(summary.pill_text(), "3 errors · 10 warnings");
 
     // Reading order: main circuit page, then control page.
     let pages: Vec<Option<PageId>> = problems.iter().map(|p| p.page).collect();
@@ -369,4 +400,42 @@ fn plain_terminals_on_a_pe_block_are_flagged() {
         "=A1+CAB-X1:1, 2, 3 are built with a PE block but are not PE terminals"
     );
     assert_eq!(problems[0].at.len(), 3);
+}
+
+#[test]
+fn green_yellow_core_misuse_is_an_error() {
+    let (mut doc, ms) = starter();
+    // L1 on the green-yellow core, PE on the black one.
+    doc.transact("Swap", |tx| novo_cables::swap_cores(tx, ms.w1, 0, 3))
+        .unwrap();
+    let problems = check(doc.project());
+    assert_eq!(problems.len(), 2, "{problems:#?}");
+    assert!(problems.iter().all(|p| p.kind == ProblemKind::CableCore));
+    assert!(problems.iter().all(|p| p.severity == Severity::Error));
+}
+
+#[test]
+fn a_shield_on_a_deleted_terminal_floats_again() {
+    let (mut doc, ms) = starter();
+    let (terminal, _) = doc
+        .transact("Shield", |tx| {
+            let core = novo_cables::add_shield(tx, ms.w1)?;
+            let terminal = tx.add_terminal(ms.x1, "SH")?;
+            novo_cables::connect_shield(
+                tx,
+                ms.w1,
+                core,
+                Some(novo_cables::ShieldConnection::Terminal(terminal)),
+            )?;
+            Ok(terminal)
+        })
+        .unwrap();
+    assert!(check(doc.project()).is_empty());
+
+    doc.transact("Delete", |tx| tx.remove(terminal)).unwrap();
+    let problems = check(doc.project());
+    assert_eq!(problems.len(), 1, "{problems:#?}");
+    assert_eq!(problems[0].kind, ProblemKind::CableCore);
+    assert_eq!(problems[0].severity, Severity::Warning);
+    assert_eq!(problems[0].at, vec![AnyId::from(ms.w1)]);
 }

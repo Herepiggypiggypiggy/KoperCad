@@ -9,7 +9,7 @@ use novo_core::{
 };
 
 use crate::contacts::{ContactKind, contact_limit_property};
-use crate::{Context, Problem, ProblemKind};
+use crate::{Context, Problem, ProblemKind, Severity};
 
 /// Positions closer than this (mm) are one point.
 const EPS: f64 = 1e-6;
@@ -641,5 +641,81 @@ pub(crate) fn wrong_terminal_blocks(cx: &Context<'_>, out: &mut Vec<Problem>) {
                 format!("{}:{} {what}", strip.tag, names.join(", ")),
             ));
         }
+    }
+}
+
+/// novo-cables' cable checks, each finding marking the wire concerned (when
+/// there is one) and the cable.
+pub(crate) fn cable_cores(cx: &Context<'_>, out: &mut Vec<Problem>) {
+    use novo_cables::Finding;
+    let project = cx.project;
+    for finding in novo_cables::check(project) {
+        let mut at: Vec<AnyId> = match &finding {
+            Finding::ProtectiveCoreMisused { wire, .. }
+            | Finding::ProtectiveOnOtherCore { wire, .. }
+            | Finding::UndersizedCore { wire, .. } => vec![(*wire).into()],
+            Finding::SpareInUse { cable, core } | Finding::ShieldUnconnected { cable, core } => {
+                project
+                    .cable(*cable)
+                    .and_then(|c| c.cores.get(*core))
+                    .and_then(|c| c.wire)
+                    .map(AnyId::from)
+                    .into_iter()
+                    .collect()
+            }
+            Finding::CoreCountExceeded { unassigned, .. } => {
+                unassigned.iter().map(|&w| w.into()).collect()
+            }
+            Finding::MoreCoresThanPart { .. } => Vec::new(),
+        };
+        at.push(finding.cable().into());
+        let mut problem = Problem::new(ProblemKind::CableCore, at, finding.message(project));
+        if matches!(
+            finding,
+            Finding::ProtectiveCoreMisused { .. } | Finding::ProtectiveOnOtherCore { .. }
+        ) {
+            problem.severity = Severity::Error;
+        }
+        out.push(problem);
+    }
+}
+
+/// novo-terminals' terminal checks, leaving out what other checks here
+/// already report: an unwired terminal (an unconnected point), a duplicate
+/// record under the off rule (a duplicate terminal) and a terminal's own
+/// symbol or part (a deliberate choice, not a problem).
+pub(crate) fn terminal_use(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Problem>) {
+    use novo_terminals::IssueKind;
+    let project = cx.project;
+    let refuse = project.info().rules.terminals.same_name == SameName::Refuse;
+    for issue in novo_terminals::check(project, netlist) {
+        let keep = match issue.kind {
+            IssueKind::KindDiffersFromName { .. }
+            | IssueKind::PotentialDiffersFromKind { .. }
+            | IssueKind::SingleSided => true,
+            IssueKind::DuplicateName => refuse,
+            IssueKind::Unwired | IssueKind::StyleOverride => false,
+        };
+        if !keep {
+            continue;
+        }
+        let at: Vec<AnyId> = match issue.symbol {
+            Some(symbol) => vec![symbol.into()],
+            None => match cx.by_terminal.get(&issue.terminal) {
+                Some(symbols) if !symbols.is_empty() => {
+                    symbols.iter().map(|s| s.id.into()).collect()
+                }
+                _ => vec![issue.terminal.into()],
+            },
+        };
+        // The list's sentences end without a stop.
+        let message = issue.message.trim_end_matches('.').to_owned();
+        let mut problem = Problem::new(ProblemKind::TerminalUse, at, message);
+        problem.severity = match issue.severity {
+            novo_terminals::Severity::Error => Severity::Error,
+            novo_terminals::Severity::Warning => Severity::Warning,
+            novo_terminals::Severity::Info => Severity::Info,
+        };
+        out.push(problem);
     }
 }

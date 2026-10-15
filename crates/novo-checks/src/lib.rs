@@ -22,6 +22,8 @@
 //! | [`ZeroLengthWire`](ProblemKind::ZeroLengthWire) | warning | A wire of zero length that is not two touching pins |
 //! | [`WrongTerminalBlock`](ProblemKind::WrongTerminalBlock) | warning | A PE terminal built with a block that is not a PE block, or another terminal built with a PE block |
 //! | [`UndersizedWire`](ProblemKind::UndersizedWire) | warning | A wire on an overcurrent protective device that carries less than the device's rated current |
+//! | [`CableCore`](ProblemKind::CableCore) | warning, error for green-yellow misuse | A cable core used against its marking or the cable's limits (novo-cables' checks) |
+//! | [`TerminalUse`](ProblemKind::TerminalUse) | warning, error for a wrong potential or a one-sided fuse terminal | A terminal used against its kind (novo-terminals' checks) |
 //! | [`MissingPart`](ProblemKind::MissingPart) | info | A device or cable without a part |
 //!
 //! Not checked here:
@@ -100,11 +102,23 @@ pub enum ProblemKind {
     /// unbonded, or another terminal built with a PE block, which bonds a
     /// live conductor to the rail.
     WrongTerminalBlock,
+    /// A cable core used against its marking or the cable's limits
+    /// (novo-cables): a live conductor on the green-yellow core (error), PE
+    /// on another core (error), a spare core in use, more wires than free
+    /// cores, more cores than the cable's part, a floating shield, or a
+    /// core thinner than its wire.
+    CableCore,
+    /// A terminal used against its kind (novo-terminals): a name that
+    /// defines another kind (`PE` on a feed-through terminal), a wire whose
+    /// potential does not fit the kind (error), a fuse or disconnect
+    /// terminal wired on one side (error), or, under the refuse rule, a
+    /// terminal drawn twice (error).
+    TerminalUse,
 }
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 12] = [
+    pub const ALL: [ProblemKind; 14] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -114,6 +128,8 @@ impl ProblemKind {
         ProblemKind::SeveralMainFunctions,
         ProblemKind::DuplicateTerminal,
         ProblemKind::ZeroLengthWire,
+        ProblemKind::CableCore,
+        ProblemKind::TerminalUse,
         ProblemKind::WrongTerminalBlock,
         ProblemKind::UndersizedWire,
         ProblemKind::MissingPart,
@@ -131,7 +147,9 @@ impl ProblemKind {
             | ProblemKind::DuplicateTerminal
             | ProblemKind::ZeroLengthWire
             | ProblemKind::UndersizedWire
-            | ProblemKind::WrongTerminalBlock => Severity::Warning,
+            | ProblemKind::WrongTerminalBlock
+            | ProblemKind::CableCore
+            | ProblemKind::TerminalUse => Severity::Warning,
             ProblemKind::MissingPart => Severity::Info,
         }
     }
@@ -151,6 +169,8 @@ impl ProblemKind {
             ProblemKind::MissingPart => "No part",
             ProblemKind::UndersizedWire => "Undersized wire",
             ProblemKind::WrongTerminalBlock => "Wrong terminal block",
+            ProblemKind::CableCore => "Cable core",
+            ProblemKind::TerminalUse => "Terminal use",
         }
     }
 }
@@ -254,6 +274,8 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     checks::missing_parts(&cx, &mut problems);
     checks::undersized_wires(&cx, &mut problems);
     checks::wrong_terminal_blocks(&cx, &mut problems);
+    checks::cable_cores(&cx, &mut problems);
+    checks::terminal_use(&cx, netlist, &mut problems);
     cx.sort(&mut problems);
     problems
 }
