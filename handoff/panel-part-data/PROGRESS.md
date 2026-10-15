@@ -3,3 +3,4 @@
 2026-10-15 18:45 UTC Cabinet inspector fields added (cabinet_panel.rs); merged main.
 2026-10-15 18:47 UTC Inspector panel turned into a section for #443's cabinet_inspector.rs.
 2026-10-15 18:49 UTC Review fixes: Mounting::label, themed section, error colour, hints.
+2026-10-15 19:04 UTC Merged #443; section called from the inspector overlay; docked panel gone.

@@ -1088,7 +1088,7 @@ user has edited:
 
 **Where blocks live.** A definition lives in the project, so a `.novo` file
 is always complete on its own. Libraries are sources to copy from: the
-user's own `%APPDATA%\NovoElectric\Blocks` and, optionally, a company
+user's own `%APPDATA%\KoperCAD\Macros` and, optionally, a company
 folder the user points at (any readable path, no admin rights). A project
 copy remembers its source and version, so a newer library version is
 offered as an update, never applied silently.

@@ -49,7 +49,6 @@ pub(super) fn panel_data(project: &Project, device: &Device) -> PanelData {
 
 /// Draws the section for a placed device and returns the edit the user just
 /// committed (Enter or leaving the field), if any.
-#[allow(dead_code)] // called by the Cabinet inspector once it is on main
 pub(super) fn show(
     ui: &mut egui::Ui,
     fields: &mut PanelFields,

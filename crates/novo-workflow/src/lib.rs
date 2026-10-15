@@ -19,6 +19,8 @@
 //! - [`locate`]: where a device occurs, as page and column (`/3.4`), on top
 //!   of novo-core's cross references.
 //! - [`renumber`]: renumber devices with a preview, as one undo step (J4).
+//! - [`switch`]: switch the project between IEC and NFPA, with a preview of
+//!   what has no counterpart, as one undo step.
 //! - [`userkeys`]: the user's keymap file, applied on top of the defaults.
 //! - [`history`]: back and forward through jumps (Alt+Left, Alt+Right).
 //! - [`duplicate`]: smart duplicate and paste with the next free tags (J4).
@@ -37,4 +39,5 @@ pub mod locate;
 pub mod orientation;
 pub mod palette;
 pub mod renumber;
+pub mod switch;
 pub mod userkeys;
