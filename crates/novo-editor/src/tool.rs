@@ -8,8 +8,8 @@
 //! tool, then the selection.
 
 use novo_core::{
-    AnyId, ChangeSet, DeviceId, DeviceTag, Document, Endpoint, PageId, Placement, Point, Rotation,
-    SymbolId, SymbolInstance, SymbolKey, SymbolRole, WireId,
+    AnyId, ChangeSet, DeviceId, DeviceTag, Document, Endpoint, PageId, Placement, Point, Project,
+    Rotation, SymbolId, SymbolInstance, SymbolKey, SymbolRole, WireId,
 };
 
 use crate::catalog::{Catalog, SymbolClass, classify, model_groups, model_pins};
@@ -160,6 +160,9 @@ fn pin_of(target: Target) -> Option<Endpoint> {
         _ => None,
     }
 }
+
+/// The reason shown when a line would run back over the wire being drawn.
+const SELF_OVERLAP_NOTICE: &str = "A line cannot run back over the wire";
 
 /// The reason shown when a line would lie over another wire.
 fn overlap_notice(_refusal: &Refusal) -> String {
@@ -539,6 +542,13 @@ impl Editor {
                                         Some("Move away from the last point to draw a line".into());
                                     return Clicked::Refused;
                                 }
+                                let mut so_far = vec![start.position()];
+                                so_far.extend(w.corners.iter().copied());
+                                so_far.push(p);
+                                if lines::route_overlaps_itself(&so_far).is_some() {
+                                    self.notice = Some(SELF_OVERLAP_NOTICE.into());
+                                    return Clicked::Refused;
+                                }
                                 let from_pin = (w.corners.is_empty()).then(|| pin_of(start));
                                 let check = lines::check_leg(
                                     doc.project(),
@@ -568,6 +578,15 @@ impl Editor {
                             self.notice = Some("Pick a different end for the wire".into());
                             return Clicked::Refused;
                         }
+                        // Ask first: a refused final click keeps the wire in
+                        // progress instead of discarding every point.
+                        if let Err(reason) = self.preflight(doc.project(), page, &w, start, end) {
+                            self.notice = Some(reason);
+                            if w.drag {
+                                self.tool = Tool::Select;
+                            }
+                            return Clicked::Refused;
+                        }
                         self.commit_wire(doc, page, w, start, end)
                     }
                 }
@@ -577,15 +596,15 @@ impl Editor {
                 let grid = self.grid;
                 let result = doc.transact("Move", |tx| {
                     if delta != Point::ZERO {
-                        edit::transform(tx, &m.ids, Transform::Move(delta))?;
+                        edit::transform_interactive(tx, &m.ids, Transform::Move(delta))?;
                     }
                     let pivot = edit::pivot(tx.project(), &m.ids, grid);
                     if let Some(c) = pivot {
                         for _ in 0..m.turns {
-                            edit::transform(tx, &m.ids, Transform::Rotate(c))?;
+                            edit::transform_interactive(tx, &m.ids, Transform::Rotate(c))?;
                         }
                         if m.mirrored {
-                            edit::transform(tx, &m.ids, Transform::Mirror(c))?;
+                            edit::transform_interactive(tx, &m.ids, Transform::Mirror(c))?;
                         }
                     }
                     if self.auto_connect {
@@ -866,12 +885,50 @@ impl Editor {
                 lines::draw_wire_exact(tx, page, start, &corners, end)
             }),
         };
-        self.tool = if w.drag {
-            Tool::Select
-        } else {
-            Tool::Wire(WireTool::default())
-        };
+        // A wire that could not be stored leaves the one in progress as it
+        // was (a drag, which has nothing to go back to, ends).
+        if result.is_ok() {
+            self.tool = if w.drag {
+                Tool::Select
+            } else {
+                Tool::Wire(WireTool::default())
+            };
+        } else if w.drag {
+            self.tool = Tool::Select;
+        }
         self.finish(result.map(|(_, c)| c), None)
+    }
+
+    /// Whether the wire in progress may end at `end`, asked of the same
+    /// overlap rule the commit uses, as the reason to show when it may not.
+    fn preflight(
+        &self,
+        project: &Project,
+        page: PageId,
+        w: &WireTool,
+        start: Target,
+        end: Target,
+    ) -> std::result::Result<(), String> {
+        let (a, b) = (start.position(), end.position());
+        let lines = self.wire_mode == WiringMode::Lines && !w.drag;
+        let corners = if lines {
+            let drawn = exact_bends(a, &w.corners, b);
+            let mut route = vec![a];
+            route.extend(drawn.iter().copied());
+            route.push(b);
+            if lines::route_overlaps_itself(&route).is_some() {
+                return Err(SELF_OVERLAP_NOTICE.into());
+            }
+            drawn
+        } else {
+            let mut corners = w.corners.clone();
+            if w.flip && !w.drag {
+                let last = corners.last().copied().unwrap_or(a);
+                corners.extend(elbow(last, b, true));
+            }
+            corners
+        };
+        edit::check_draw(project, page, start, &corners, end).map_err(|r| overlap_notice(&r))
     }
 
     /// Enter or a double click: finishes on the last point of the wire in
@@ -1023,7 +1080,7 @@ impl Editor {
         };
         let settle = self.auto_connect;
         self.run(doc, "Rotate", |tx| {
-            edit::transform(tx, selection, Transform::Rotate(c))?;
+            edit::transform_interactive(tx, selection, Transform::Rotate(c))?;
             // No preview here, so only pins dropped inside wires connect.
             if settle {
                 edit::settle(tx, &edit::symbols_in(selection))?;
@@ -1039,7 +1096,7 @@ impl Editor {
         };
         let settle = self.auto_connect;
         self.run(doc, "Mirror", |tx| {
-            edit::transform(tx, selection, Transform::Mirror(c))?;
+            edit::transform_interactive(tx, selection, Transform::Mirror(c))?;
             // No preview here, so only pins dropped inside wires connect.
             if settle {
                 edit::settle(tx, &edit::symbols_in(selection))?;
@@ -1057,7 +1114,7 @@ impl Editor {
     ) -> bool {
         let settle = self.auto_connect;
         self.run(doc, "Move", |tx| {
-            edit::transform(tx, selection, Transform::Move(delta))?;
+            edit::transform_interactive(tx, selection, Transform::Move(delta))?;
             // No preview here, so only pins dropped inside wires connect.
             if settle {
                 edit::settle(tx, &edit::symbols_in(selection))?;
@@ -1168,7 +1225,7 @@ impl Editor {
         page: PageId,
         w: &WireTool,
         cursor: Point,
-    ) -> (Vec<Point>, Option<Refusal>) {
+    ) -> (Vec<Point>, Option<(Point, Point)>) {
         let Some(start) = w.start else {
             return (Vec::new(), None);
         };
@@ -1182,8 +1239,14 @@ impl Editor {
             None => vec![lock_axis(last, cursor)],
         };
         let mut legal = Vec::new();
+        let mut so_far = vec![start.position()];
+        so_far.extend(w.corners.iter().copied());
         let mut prev = last;
         for (i, &q) in points.iter().enumerate() {
+            so_far.push(q);
+            if let Some(stretch) = lines::route_overlaps_itself(&so_far) {
+                return (legal, Some(stretch));
+            }
             let from_pin = (w.corners.is_empty() && i == 0).then(|| pin_of(start));
             let to_pin = (i + 1 == points.len())
                 .then(|| self.target.and_then(pin_of))
@@ -1191,7 +1254,7 @@ impl Editor {
             if let Err(r) =
                 lines::check_leg(doc.project(), page, prev, q, from_pin.flatten(), to_pin)
             {
-                return (legal, Some(r));
+                return (legal, Some((r.from, r.to)));
             }
             legal.push(q);
             prev = q;
@@ -1313,7 +1376,7 @@ impl Editor {
                         let (legal, refusal) = self.lines_pending(doc, page, w, cursor);
                         preview.wire.extend(w.corners.iter().copied());
                         preview.wire.extend(legal);
-                        preview.blocked.extend(refusal.map(|r| (r.from, r.to)));
+                        preview.blocked.extend(refusal);
                     } else {
                         let from = match start {
                             Target::Endpoint(e, _) => endpoint_direction(project, e),
