@@ -59,6 +59,31 @@ pub enum Rule {
 }
 
 impl Rule {
+    /// Every rule, in the order of the table above.
+    pub const ALL: [Rule; 7] = [
+        Rule::CableRating,
+        Rule::VoltageDrop,
+        Rule::BreakingCapacity,
+        Rule::DisconnectionTime,
+        Rule::ThermalWithstand,
+        Rule::MotorStarter,
+        Rule::ProtectiveConductor,
+    ];
+
+    /// A stable key, `check.<snake_case>`, for waivers and saved reports.
+    /// Never renamed once released: waivers are stored under it.
+    pub fn key(self) -> &'static str {
+        match self {
+            Rule::CableRating => "check.cable_rating",
+            Rule::VoltageDrop => "check.voltage_drop",
+            Rule::BreakingCapacity => "check.breaking_capacity",
+            Rule::DisconnectionTime => "check.disconnection_time",
+            Rule::ThermalWithstand => "check.thermal_withstand",
+            Rule::MotorStarter => "check.motor_starter",
+            Rule::ProtectiveConductor => "check.protective_conductor",
+        }
+    }
+
     /// A short plain name for lists and filter chips.
     pub fn label(self) -> &'static str {
         match self {
@@ -161,6 +186,14 @@ mod tests {
         assert!((copper_resistivity(20.0) - 0.017_241).abs() < 1e-9);
         // 70 °C: about 0.0206 (0.0225 is the rounded-up figure used in practice).
         assert!((copper_resistivity(70.0) - 0.0206).abs() < 0.0005);
+    }
+
+    #[test]
+    fn keys_are_unique_and_stable() {
+        let keys: std::collections::BTreeSet<_> = Rule::ALL.iter().map(|r| r.key()).collect();
+        assert_eq!(keys.len(), Rule::ALL.len());
+        assert!(keys.iter().all(|k| k.starts_with("check.")));
+        assert_eq!(Rule::BreakingCapacity.key(), "check.breaking_capacity");
     }
 
     #[test]
