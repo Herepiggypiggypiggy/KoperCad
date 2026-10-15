@@ -42,6 +42,15 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["rondleiding", "snelle toetsen uitleg"],
     ),
+    nl(
+        "help.learn",
+        &["leren", "les"],
+        &["leren", "training", "cursus", "uitleg"],
+    ),
+    nl("learn.next", &[], &["les volgende stap", "les verder"]),
+    nl("learn.back", &[], &["les vorige stap", "les terug"]),
+    nl("learn.restart", &[], &["les opnieuw", "les herstarten"]),
+    nl("learn.close", &[], &["les sluiten"]),
     nl("file.save", &[], &["opslaan", "bewaren"]),
     nl("file.save_as", &[], &["opslaan als"]),
     nl("file.close", &[], &["project sluiten", "sluiten"]),
@@ -322,6 +331,11 @@ pub const DUTCH: &[Aliases] = &[
         "export.pdf",
         &["exporteer pdf", "pdf exporteren"],
         &["afdrukken"],
+    ),
+    nl(
+        "export.commissioning",
+        &["exporteer inbedrijfstelling", "inbedrijfstellingsrapport"],
+        &["restpuntenlijst", "oplevering"],
     ),
     nl(
         "export.plate",
