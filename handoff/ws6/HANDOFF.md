@@ -36,3 +36,5 @@ catalog.rs (search, classify, letter codes, MNEMONICS), naming.rs (tags from Pag
 - Deleting a feed must keep wires (keep_wires_through).
 - Xvfb render needs libxkbcommon-x11, mesa-vulkan-drivers.
 - One CARGO_TARGET_DIR per worktree; a shared one runs stale tests.
+
+- Wiring modes (DESIGN.md §4): `Editor::wire_mode` (Corners default | Lines), `toggle_wire_mode` (Shift+W, also mid-wire; the points stay). Lines: each click adds one axis-locked vertex (`lines::lock_axis`), a click on a pin or wire ends the wire with one right-angle bend if the last point is not aligned (`lines::exact_bends`), stored by `lines::draw_wire_exact`; an overlap is refused, never nudged (preview shows `Preview::blocked`, status says "Overlaps another wire"). Corners keeps `edit::draw_wire` (router and nudge); R sets `WireTool::flip` so the leg in progress runs the other axis first. Backspace = `EditorKey::Back`, Enter/double click = `EditorKey::Finish` (the last point must be on a pin or wire). A drag from a pin is routed in both modes.

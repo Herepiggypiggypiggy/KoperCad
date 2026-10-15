@@ -6,7 +6,7 @@
 use novo_core::{AnyId, Document, Endpoint, PageId, Point, PotentialKind, SymbolRole};
 use novo_editor::edit::{self, PlaceOptions};
 use novo_editor::potential;
-use novo_editor::tool::{Clicked, Tool};
+use novo_editor::tool::{Clicked, Tool, WiringMode};
 use novo_editor::{Editor, EditorKey};
 
 /// Pick radius in millimetres, as at a normal zoom.
@@ -1366,5 +1366,197 @@ fn wires_from_one_pin_may_share_only_the_stretch_before_they_part() {
             .iter()
             .all(|(_, o)| o.from.approx_eq(pin, 1e-6) || o.to.approx_eq(pin, 1e-6)),
         "{overlaps:?}"
+    );
+}
+
+// Wiring modes (DESIGN.md §4): Corners and Lines.
+
+/// Three contacts: a and b side by side, c lower right. Auto-connect off.
+fn three_contacts() -> (Document, PageId, Editor, [novo_core::SymbolId; 3]) {
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/contacts/no", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.click(&mut doc, page, p(80.0, 40.0), TOL);
+    editor.click(&mut doc, page, p(120.0, 80.0), TOL);
+    editor.leave_tool();
+    let a = symbol_at(&doc, page, p(40.0, 40.0));
+    let b = symbol_at(&doc, page, p(80.0, 40.0));
+    let c = symbol_at(&doc, page, p(120.0, 80.0));
+    (doc, page, editor, [a, b, c])
+}
+
+fn only_wire_route(doc: &Document) -> Vec<Point> {
+    doc.project().wires().next().unwrap().route.clone()
+}
+
+#[test]
+fn corners_is_the_default_and_the_toggle_keeps_the_points() {
+    let (mut doc, page, mut editor, [a, b, _]) = three_contacts();
+    assert_eq!(editor.wire_mode(), WiringMode::Corners);
+    editor.begin_wire();
+    click_pin(&mut editor, &mut doc, page, a, "14");
+    // A corner in Corners, then the mode changes mid-wire.
+    editor.click(&mut doc, page, p(40.0, 72.0), TOL);
+    editor.key(&mut doc, EditorKey::WireMode, &[]);
+    assert_eq!(editor.wire_mode(), WiringMode::Lines);
+    let Tool::Wire(w) = editor.tool() else {
+        panic!("still wiring")
+    };
+    assert_eq!(w.corners, vec![p(40.0, 72.0)]);
+    // The next click follows Lines: locked to the axis, so 80,72.
+    assert_eq!(
+        editor.click(&mut doc, page, p(80.0, 73.0), TOL),
+        Clicked::Step
+    );
+    assert_eq!(
+        click_pin(&mut editor, &mut doc, page, b, "14"),
+        Clicked::Edited
+    );
+    assert_eq!(only_wire_route(&doc), vec![p(40.0, 72.0), p(80.0, 72.0)]);
+    // Switching back changes no wire.
+    editor.toggle_wire_mode();
+    assert_eq!(only_wire_route(&doc), vec![p(40.0, 72.0), p(80.0, 72.0)]);
+}
+
+#[test]
+fn lines_stores_what_was_drawn_and_corners_lets_the_router_join_the_points() {
+    for mode in [WiringMode::Corners, WiringMode::Lines] {
+        let (mut doc, page, mut editor, [a, _, c]) = three_contacts();
+        editor.set_wire_mode(mode);
+        editor.begin_wire();
+        click_pin(&mut editor, &mut doc, page, a, "14");
+        assert_eq!(
+            click_pin(&mut editor, &mut doc, page, c, "13"),
+            Clicked::Edited
+        );
+        let route = only_wire_route(&doc);
+        let (from, to) = (pin_pos(&doc, a, "14"), pin_pos(&doc, c, "13"));
+        match mode {
+            // Down, across, down: the router's Z.
+            WiringMode::Corners => assert_eq!(route.len(), 2),
+            // Along the longer axis first, then one right angle onto the pin.
+            WiringMode::Lines => assert_eq!(route, vec![p(to.x, from.y)]),
+        }
+        // Either way the model is the same kind of wire: connected, one step.
+        assert!(connected(&doc, pin(&doc, a, "14"), pin(&doc, c, "13")));
+        doc.undo().unwrap();
+        assert_eq!(doc.project().wires().count(), 0);
+    }
+}
+
+#[test]
+fn a_line_over_another_wire_is_refused_and_changes_nothing() {
+    let (mut doc, page, mut editor, [a, b, _]) = three_contacts();
+    editor.set_wire_mode(WiringMode::Lines);
+    editor.begin_wire();
+    click_pin(&mut editor, &mut doc, page, a, "14");
+    editor.click(&mut doc, page, p(40.0, 72.0), TOL);
+    editor.click(&mut doc, page, p(80.0, 72.0), TOL);
+    click_pin(&mut editor, &mut doc, page, b, "14");
+    assert_eq!(doc.project().wires().count(), 1);
+    // Start on the wire, then draw along it.
+    editor.click(&mut doc, page, p(60.0, 72.0), TOL);
+    let before = doc.undo_label().map(str::to_owned);
+    assert_eq!(
+        editor.click(&mut doc, page, p(100.0, 75.0), TOL),
+        Clicked::Refused
+    );
+    assert_eq!(editor.notice(), Some("Overlaps another wire"));
+    assert_eq!(doc.undo_label().map(str::to_owned), before);
+    assert_eq!(doc.project().wires().count(), 1);
+    // The preview keeps the wire up to the last legal point and marks the
+    // clash.
+    editor.hover(&doc, page, p(100.0, 75.0), TOL);
+    let preview = editor.preview(&doc, page);
+    assert!(!preview.blocked.is_empty());
+    assert_eq!(preview.wire, vec![p(60.0, 72.0)]);
+    assert!(
+        editor
+            .status(&doc, page)
+            .starts_with("Overlaps another wire")
+    );
+    // Crossing it is fine: a line from above straight down through the wire.
+    editor.cancel_step();
+    editor.click(&mut doc, page, p(60.0, 72.0), TOL);
+    assert_eq!(
+        editor.click(&mut doc, page, p(60.0, 90.0), TOL),
+        Clicked::Step
+    );
+}
+
+#[test]
+fn backspace_takes_back_the_last_line_then_the_start() {
+    let (mut doc, page, mut editor, [a, _, _]) = three_contacts();
+    editor.set_wire_mode(WiringMode::Lines);
+    editor.begin_wire();
+    click_pin(&mut editor, &mut doc, page, a, "14");
+    editor.click(&mut doc, page, p(40.0, 72.0), TOL);
+    editor.click(&mut doc, page, p(80.0, 72.0), TOL);
+    let corners = |e: &Editor| match e.tool() {
+        Tool::Wire(w) => (w.start.is_some(), w.corners.len()),
+        _ => panic!("not wiring"),
+    };
+    assert_eq!(corners(&editor), (true, 2));
+    assert!(editor.key(&mut doc, EditorKey::Back, &[]));
+    assert_eq!(corners(&editor), (true, 1));
+    assert!(editor.key(&mut doc, EditorKey::Back, &[]));
+    assert!(editor.key(&mut doc, EditorKey::Back, &[]));
+    assert_eq!(corners(&editor), (false, 0));
+    // Nothing to take back now; the model was never touched.
+    assert!(!editor.key(&mut doc, EditorKey::Back, &[]));
+    assert_eq!(doc.project().wires().count(), 0);
+}
+
+#[test]
+fn r_flips_the_elbow_in_corners_and_does_nothing_in_lines() {
+    let (mut doc, page, mut editor, [a, _, _]) = three_contacts();
+    editor.begin_wire();
+    let from = click_pin(&mut editor, &mut doc, page, a, "14");
+    assert_eq!(from, Clicked::Step);
+    let start = pin_pos(&doc, a, "14");
+    // Without R the elbow runs along the longer move first (horizontal).
+    // On the 2.5 mm grid, so the click is not snapped.
+    let to = p(start.x + 60.0, start.y + 25.0 - 1.0);
+    editor.key(&mut doc, EditorKey::Rotate, &[]);
+    editor.click(&mut doc, page, to, TOL);
+    let Tool::Wire(w) = editor.tool() else {
+        panic!("still wiring")
+    };
+    // Flipped: down first, then across, then the clicked corner.
+    assert_eq!(w.corners, vec![p(start.x, to.y), to]);
+    assert!(!w.flip);
+    // In Lines, R is consumed and flips nothing.
+    editor.set_wire_mode(WiringMode::Lines);
+    assert!(editor.key(&mut doc, EditorKey::Rotate, &[]));
+    let Tool::Wire(w) = editor.tool() else {
+        panic!("still wiring")
+    };
+    assert!(!w.flip);
+}
+
+#[test]
+fn enter_finishes_on_a_last_point_that_lies_on_a_pin() {
+    let (mut doc, page, mut editor, [a, _, c]) = three_contacts();
+    editor.set_wire_mode(WiringMode::Lines);
+    editor.begin_wire();
+    click_pin(&mut editor, &mut doc, page, a, "14");
+    let (from, to) = (pin_pos(&doc, a, "14"), pin_pos(&doc, c, "13"));
+    // Along y to above the third contact, then down with the pointer well
+    // to the side of the pin: the vertical lock lands exactly on it.
+    editor.click(&mut doc, page, p(to.x, from.y + 1.0), TOL);
+    editor.click(&mut doc, page, p(to.x + 5.0, to.y), TOL);
+    assert_eq!(doc.project().wires().count(), 0);
+    assert!(editor.key(&mut doc, EditorKey::Finish, &[]));
+    assert_eq!(doc.project().wires().count(), 1);
+    assert!(connected(&doc, pin(&doc, a, "14"), pin(&doc, c, "13")));
+    assert_eq!(only_wire_route(&doc), vec![p(to.x, from.y)]);
+    // And Enter with nothing under the last point explains itself.
+    click_pin(&mut editor, &mut doc, page, a, "14");
+    editor.click(&mut doc, page, p(from.x, from.y + 15.0), TOL);
+    assert!(editor.key(&mut doc, EditorKey::Finish, &[]));
+    assert_eq!(
+        editor.notice(),
+        Some("The last point is not on a pin or a wire")
     );
 }

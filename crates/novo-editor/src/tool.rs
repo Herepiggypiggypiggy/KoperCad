@@ -14,8 +14,10 @@ use novo_core::{
 
 use crate::catalog::{Catalog, SymbolClass, classify, model_groups, model_pins};
 use crate::edit::{self, PlaceOptions, Transform};
-use crate::geometry::{Target, endpoint_direction, route_through, snap, target_at};
+use crate::geometry::{EPS, Target, endpoint_direction, route_through, snap, target_at};
+use crate::lines::{self, elbow, exact_bends, lock_axis};
 use crate::naming::{self, Numbering, parse_tag_input, tag_conflict};
+use crate::overlap::Refusal;
 use crate::potential::{self, FEED_SYMBOL, PotentialMenu, Suggestion};
 
 /// Placing one symbol, over and over.
@@ -39,6 +41,22 @@ pub struct WireTool {
     /// Started by dragging from a pin (DESIGN.md §4): the release ends the
     /// wire and the editor goes back to selecting.
     pub drag: bool,
+    /// Corners: R flipped the elbow of the leg in progress to run along the
+    /// other axis first (DESIGN.md §4). Cleared by the next click.
+    pub flip: bool,
+}
+
+/// How the wire tool turns clicks into a route (DESIGN.md §4, "Wiring
+/// modes"). A preference of the person at the keyboard, not of the project.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum WiringMode {
+    /// Click where the wire should turn; the lines between the clicks
+    /// connect by themselves (EPLAN style).
+    #[default]
+    Corners,
+    /// Each click commits one straight segment locked to an axis; nothing is
+    /// routed (AutoCAD style).
+    Lines,
 }
 
 /// Moving the selection: it follows the pointer until the next click.
@@ -90,6 +108,14 @@ pub enum EditorKey {
     /// Repeat the last tool when nothing is in progress (the first item of
     /// the context menu on empty canvas; Enter is for proposals).
     Repeat,
+    /// Shift+W: switch between Corners and Lines, also mid-wire.
+    WireMode,
+    /// Backspace: takes back the last corner or segment of the wire in
+    /// progress.
+    Back,
+    /// Enter or a double click while a wire is in progress: finishes on the
+    /// last point when it is on a pin or a wire.
+    Finish,
 }
 
 /// What a click did.
@@ -122,6 +148,22 @@ pub struct Preview {
     pub proposals: Vec<(Point, Point)>,
     /// The proposal Enter would accept (an index into `proposals`).
     pub current: Option<usize>,
+    /// Lines: the stretch of another wire the next line would lie over, to
+    /// tint; `wire` is then kept up to the last legal point (DESIGN.md §4).
+    pub blocked: Vec<(Point, Point)>,
+}
+
+/// The pin a target is, if it is one.
+fn pin_of(target: Target) -> Option<Endpoint> {
+    match target {
+        Target::Endpoint(e @ Endpoint::Pin { .. }, _) => Some(e),
+        _ => None,
+    }
+}
+
+/// The reason shown when a line would lie over another wire.
+fn overlap_notice(_refusal: &Refusal) -> String {
+    "Overlaps another wire".into()
 }
 
 /// Id used for preview symbols; never a real model id.
@@ -153,6 +195,10 @@ pub struct Editor {
     pointer: Option<Point>,
     /// The terminal strip in use, once the user placed or chose one.
     pub strip: Option<DeviceId>,
+    wire_mode: WiringMode,
+    /// The page and pick radius of the last pointer move, for keys that act
+    /// at the end of the wire in progress.
+    hovered: Option<(PageId, f64)>,
     notice: Option<String>,
     changes: ChangeSet,
     select: Option<Vec<AnyId>>,
@@ -181,6 +227,8 @@ impl Editor {
             supply_names: true,
             numbering: Numbering::default(),
             strip: None,
+            wire_mode: WiringMode::default(),
+            hovered: None,
             notice: None,
             changes: ChangeSet::default(),
             select: None,
@@ -322,6 +370,31 @@ impl Editor {
         true
     }
 
+    /// How the wire tool turns clicks into a route.
+    pub fn wire_mode(&self) -> WiringMode {
+        self.wire_mode
+    }
+
+    /// Chooses the wiring mode. The points of a wire in progress stay and
+    /// the next click follows the new mode; wires that exist do not change.
+    pub fn set_wire_mode(&mut self, mode: WiringMode) {
+        if self.wire_mode != mode {
+            self.wire_mode = mode;
+            if let Tool::Wire(w) = &mut self.tool {
+                w.flip = false;
+            }
+        }
+        self.notice = None;
+    }
+
+    /// Shift+W.
+    pub fn toggle_wire_mode(&mut self) {
+        self.set_wire_mode(match self.wire_mode {
+            WiringMode::Corners => WiringMode::Lines,
+            WiringMode::Lines => WiringMode::Corners,
+        });
+    }
+
     /// Starts the wire tool.
     pub fn begin_wire(&mut self) {
         self.set_tool(Tool::Wire(WireTool::default()));
@@ -396,6 +469,7 @@ impl Editor {
     /// The pointer moved to `raw` (page millimetres). `tolerance` is the
     /// pick radius in millimetres at the current zoom.
     pub fn hover(&mut self, doc: &Document, page: PageId, raw: Point, tolerance: f64) {
+        self.hovered = Some((page, tolerance));
         let project = doc.project();
         self.target = match &self.tool {
             Tool::Wire(_) => target_at(project, page, raw, tolerance),
@@ -446,9 +520,43 @@ impl Editor {
                         self.tool = Tool::Select;
                         Clicked::Step
                     }
-                    (Some(_), None) => {
-                        w.corners.push(at);
+                    (Some(start), None) => {
+                        let last = w.corners.last().copied().unwrap_or(start.position());
+                        match self.wire_mode {
+                            WiringMode::Corners => {
+                                if w.flip
+                                    && let Some(e) = elbow(last, at, true)
+                                {
+                                    w.corners.push(e);
+                                }
+                                w.flip = false;
+                                w.corners.push(at);
+                            }
+                            WiringMode::Lines => {
+                                let p = lock_axis(last, at);
+                                if p.approx_eq(last, EPS) {
+                                    self.notice =
+                                        Some("Move away from the last point to draw a line".into());
+                                    return Clicked::Refused;
+                                }
+                                let from_pin = (w.corners.is_empty()).then(|| pin_of(start));
+                                let check = lines::check_leg(
+                                    doc.project(),
+                                    page,
+                                    last,
+                                    p,
+                                    from_pin.flatten(),
+                                    None,
+                                );
+                                if let Err(r) = check {
+                                    self.notice = Some(overlap_notice(&r));
+                                    return Clicked::Refused;
+                                }
+                                w.corners.push(p);
+                            }
+                        }
                         self.tool = Tool::Wire(w);
+                        self.notice = None;
                         Clicked::Step
                     }
                     (Some(start), Some(end)) => {
@@ -460,16 +568,7 @@ impl Editor {
                             self.notice = Some("Pick a different end for the wire".into());
                             return Clicked::Refused;
                         }
-                        let corners = w.corners.clone();
-                        let result = doc.transact("Draw wire", |tx| {
-                            edit::draw_wire(tx, page, start, &corners, end)
-                        });
-                        self.tool = if w.drag {
-                            Tool::Select
-                        } else {
-                            Tool::Wire(WireTool::default())
-                        };
-                        self.finish(result.map(|(_, c)| c), None)
+                        self.commit_wire(doc, page, w, start, end)
                     }
                 }
             }
@@ -717,6 +816,7 @@ impl Editor {
             start: Some(start),
             corners: Vec::new(),
             drag: true,
+            flip: false,
         });
         self.notice = None;
         true
@@ -731,6 +831,74 @@ impl Editor {
     /// Whether a wire is being dragged from a pin.
     pub fn dragging(&self) -> bool {
         matches!(&self.tool, Tool::Wire(w) if w.drag)
+    }
+
+    /// Stores the wire in progress from `start` to `end`: Corners lets the
+    /// router join the points, Lines stores them exactly as drawn.
+    fn commit_wire(
+        &mut self,
+        doc: &mut Document,
+        page: PageId,
+        w: WireTool,
+        start: Target,
+        end: Target,
+    ) -> Clicked {
+        let mut corners = w.corners.clone();
+        // A drag from a pin is always routed, in either mode (DESIGN.md §4).
+        let mode = if w.drag {
+            WiringMode::Corners
+        } else {
+            self.wire_mode
+        };
+        let result = match mode {
+            WiringMode::Corners => {
+                if w.flip {
+                    let last = corners.last().copied().unwrap_or(start.position());
+                    if let Some(e) = elbow(last, end.position(), true) {
+                        corners.push(e);
+                    }
+                }
+                doc.transact("Draw wire", |tx| {
+                    edit::draw_wire(tx, page, start, &corners, end)
+                })
+            }
+            WiringMode::Lines => doc.transact("Draw wire", |tx| {
+                lines::draw_wire_exact(tx, page, start, &corners, end)
+            }),
+        };
+        self.tool = if w.drag {
+            Tool::Select
+        } else {
+            Tool::Wire(WireTool::default())
+        };
+        self.finish(result.map(|(_, c)| c), None)
+    }
+
+    /// Enter or a double click: finishes on the last point of the wire in
+    /// progress when that point is on a pin or a wire.
+    fn finish_wire_here(&mut self, doc: &mut Document) -> bool {
+        let Tool::Wire(w) = self.tool.clone() else {
+            return false;
+        };
+        let (Some(start), Some((page, tolerance))) = (w.start, self.hovered) else {
+            return false;
+        };
+        let Some(&last) = w.corners.last() else {
+            self.notice = Some("Click a pin or wire to finish".into());
+            return true;
+        };
+        let Some(end) = target_at(doc.project(), page, last, tolerance) else {
+            self.notice = Some("The last point is not on a pin or a wire".into());
+            return true;
+        };
+        let mut rest = w;
+        rest.corners.pop();
+        if start == end {
+            self.notice = Some("Pick a different end for the wire".into());
+            return true;
+        }
+        self.commit_wire(doc, page, rest, start, end);
+        true
     }
 
     fn finish(&mut self, result: novo_core::Result<ChangeSet>, select: Option<AnyId>) -> Clicked {
@@ -753,9 +921,34 @@ impl Editor {
     /// A key press while the drawing has focus. Returns whether it was used.
     pub fn key(&mut self, doc: &mut Document, key: EditorKey, selection: &[AnyId]) -> bool {
         match key {
+            EditorKey::WireMode => {
+                self.toggle_wire_mode();
+                true
+            }
+            EditorKey::Back => match &mut self.tool {
+                Tool::Wire(w) if w.start.is_some() && !w.drag => {
+                    w.flip = false;
+                    if w.corners.pop().is_none() {
+                        // Nothing left to take back: the start goes too.
+                        *w = WireTool::default();
+                    }
+                    true
+                }
+                _ => false,
+            },
+            EditorKey::Finish => self.finish_wire_here(doc),
             EditorKey::Rotate | EditorKey::Mirror => {
                 let rotate = key == EditorKey::Rotate;
+                let corners = self.wire_mode == WiringMode::Corners;
                 match &mut self.tool {
+                    // R flips the elbow of the leg in progress; in Lines it
+                    // does nothing, and it never rotates the wire.
+                    Tool::Wire(w) if rotate && w.start.is_some() => {
+                        if corners {
+                            w.flip = !w.flip;
+                        }
+                        true
+                    }
                     Tool::Place(p) => {
                         if rotate {
                             p.rotation = p.rotation.then(Rotation::R90);
@@ -965,6 +1158,47 @@ impl Editor {
         })
     }
 
+    /// Lines: the points the pointer would add to the wire in progress, up
+    /// to the first line that would lie over another wire, which is returned
+    /// as the reason. A pin or wire under the pointer ends the wire, with one
+    /// right-angle bend when the last point is not lined up with it.
+    fn lines_pending(
+        &self,
+        doc: &Document,
+        page: PageId,
+        w: &WireTool,
+        cursor: Point,
+    ) -> (Vec<Point>, Option<Refusal>) {
+        let Some(start) = w.start else {
+            return (Vec::new(), None);
+        };
+        let last = w.corners.last().copied().unwrap_or(start.position());
+        let points = match self.target {
+            Some(_) => {
+                let mut v = exact_bends(last, &[], cursor);
+                v.push(cursor);
+                v
+            }
+            None => vec![lock_axis(last, cursor)],
+        };
+        let mut legal = Vec::new();
+        let mut prev = last;
+        for (i, &q) in points.iter().enumerate() {
+            let from_pin = (w.corners.is_empty() && i == 0).then(|| pin_of(start));
+            let to_pin = (i + 1 == points.len())
+                .then(|| self.target.and_then(pin_of))
+                .flatten();
+            if let Err(r) =
+                lines::check_leg(doc.project(), page, prev, q, from_pin.flatten(), to_pin)
+            {
+                return (legal, Some(r));
+            }
+            legal.push(q);
+            prev = q;
+        }
+        (legal, None)
+    }
+
     /// What the next click would do, for the status bar (principle 8).
     pub fn status(&self, doc: &Document, page: PageId) -> String {
         let text = match &self.tool {
@@ -997,8 +1231,21 @@ impl Editor {
             Tool::Wire(w) if w.start.is_none() => {
                 "Click a pin, junction or wire to start a wire · Esc to stop".into()
             }
+            Tool::Wire(w) if self.wire_mode == WiringMode::Lines && !w.drag => {
+                let blocked = self.cursor.is_some_and(|c| {
+                    self.lines_pending(doc, page, w, c)
+                        .1
+                        .is_some()
+                });
+                if blocked {
+                    "Overlaps another wire · Backspace takes back the last line".into()
+                } else {
+                    "Lines: click a pin to finish, empty space to draw a line · Backspace undo · Esc cancels · Shift+W corners"
+                        .into()
+                }
+            }
             Tool::Wire(_) => {
-                "Click a pin or wire to finish, empty space for a corner · Esc cancels this wire"
+                "Corners: click a pin or wire to finish, empty space for a corner · R flips the bend · Backspace undo · Esc cancels · Shift+W lines"
                     .into()
             }
             Tool::Move(_) => "Click to drop · R rotate · X mirror · Esc cancels the move".into(),
@@ -1061,18 +1308,30 @@ impl Editor {
             Tool::Wire(w) => {
                 if let Some(start) = w.start {
                     let a = start.position();
-                    let from = match start {
-                        Target::Endpoint(e, _) => endpoint_direction(project, e),
-                        Target::Wire(..) => None,
-                    };
-                    let to = match self.target {
-                        Some(Target::Endpoint(e, _)) => endpoint_direction(project, e),
-                        _ => None,
-                    };
-                    let bends = route_through(a, from, &w.corners, cursor, to);
                     preview.wire.push(a);
-                    preview.wire.extend(bends);
-                    preview.wire.push(cursor);
+                    if self.wire_mode == WiringMode::Lines && !w.drag {
+                        let (legal, refusal) = self.lines_pending(doc, page, w, cursor);
+                        preview.wire.extend(w.corners.iter().copied());
+                        preview.wire.extend(legal);
+                        preview.blocked.extend(refusal.map(|r| (r.from, r.to)));
+                    } else {
+                        let from = match start {
+                            Target::Endpoint(e, _) => endpoint_direction(project, e),
+                            Target::Wire(..) => None,
+                        };
+                        let to = match self.target {
+                            Some(Target::Endpoint(e, _)) => endpoint_direction(project, e),
+                            _ => None,
+                        };
+                        let mut corners = w.corners.clone();
+                        if w.flip {
+                            let last = corners.last().copied().unwrap_or(a);
+                            corners.extend(elbow(last, cursor, true));
+                        }
+                        let bends = route_through(a, from, &corners, cursor, to);
+                        preview.wire.extend(bends);
+                        preview.wire.push(cursor);
+                    }
                 }
             }
             Tool::Move(m) => {
