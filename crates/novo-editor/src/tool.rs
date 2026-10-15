@@ -1251,13 +1251,24 @@ impl Editor {
         edit::check_draw(project, page, start, &corners, end).map_err(|r| overlap_notice(&r))
     }
 
-    /// A double click with the Connect tool and no wire in progress starts
-    /// a wire open at the pointer, on empty canvas only.
+    /// A double click with the Connect tool (or none) and no wire in
+    /// progress starts a wire open at the pointer, on empty canvas only.
     fn start_free(&mut self) -> bool {
-        let (Tool::Wire(w), Some(at)) = (&mut self.tool, self.cursor) else {
+        let Some(at) = self.cursor else {
             return false;
         };
-        if w.start.is_some() || self.target.is_some() {
+        if self.target.is_some() {
+            return false;
+        }
+        // With nothing in hand a double click on bare grid takes the wire
+        // tool and starts there, so no tool switch comes first.
+        if matches!(self.tool, Tool::Select) {
+            self.set_tool(Tool::Wire(WireTool::default()));
+        }
+        let Tool::Wire(w) = &mut self.tool else {
+            return false;
+        };
+        if w.start.is_some() {
             return false;
         }
         w.start = Some(Target::Endpoint(Endpoint::Free { at }, at));

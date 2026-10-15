@@ -619,7 +619,13 @@ impl SchematicView {
             self.editor.key(document, EditorKey::FinishOpen, &selection);
         } else if !wiring
             && !self.swallow
-            && matches!(self.editor.tool(), crate::tool::Tool::Wire(_))
+            && !self.popup_open()
+            && match self.editor.tool() {
+                crate::tool::Tool::Wire(_) => true,
+                // Nothing in hand: bare grid only, not ink, text or a symbol.
+                crate::tool::Tool::Select => out.hit.is_none(),
+                _ => false,
+            }
             && response.double_clicked_by(egui::PointerButton::Primary)
         {
             let selection = self.selection();

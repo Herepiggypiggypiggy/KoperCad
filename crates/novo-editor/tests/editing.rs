@@ -1942,6 +1942,25 @@ fn a_double_click_on_nothing_ends_the_wire_as_an_open_end_in_both_modes() {
 }
 
 #[test]
+fn a_double_click_on_bare_grid_with_nothing_in_hand_starts_a_wire() {
+    let (mut doc, page, mut editor, [a, _, _]) = three_contacts();
+    let at = p(200.0, 200.0);
+    editor.click(&mut doc, page, at, TOL);
+    assert!(matches!(editor.tool(), Tool::Select));
+    assert!(editor.key(&mut doc, EditorKey::StartFree, &[]));
+    assert!(matches!(
+        editor.tool(),
+        Tool::Wire(w) if matches!(w.start, Some(Target::Endpoint(Endpoint::Free { .. }, _)))
+    ));
+    assert_eq!(
+        click_pin(&mut editor, &mut doc, page, a, "14"),
+        Clicked::Edited
+    );
+    let wire = doc.project().wires().next().expect("a wire is stored");
+    assert!(matches!(wire.from, Endpoint::Free { at: f } if f == at));
+}
+
+#[test]
 fn a_double_click_on_empty_canvas_starts_a_wire_open_at_that_end() {
     for lines in [false, true] {
         let (mut doc, page, mut editor, [a, _, _]) = three_contacts();
