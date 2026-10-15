@@ -35,6 +35,7 @@ pub const DUTCH: &[Aliases] = &[
     // Project
     nl("file.new", &[], &["nieuw project", "nieuw"]),
     nl("file.open", &[], &["project openen", "openen"]),
+    nl("file.example", &[], &["voorbeeld openen", "voorbeeld"]),
     nl("file.save", &[], &["opslaan", "bewaren"]),
     nl("file.save_as", &[], &["opslaan als"]),
     nl("file.close", &[], &["project sluiten", "sluiten"]),
@@ -50,6 +51,7 @@ pub const DUTCH: &[Aliases] = &[
         &["voorkeuren"],
         &["instellingen", "opties"],
     ),
+    nl("project.standard", &["tekennorm"], &["norm", "standaard"]),
     nl("terminal.toggle_pe", &["pe-klem"], &["aardklem", "aarde"]),
     nl(
         "revision.issue",

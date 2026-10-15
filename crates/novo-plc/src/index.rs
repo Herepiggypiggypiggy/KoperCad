@@ -30,12 +30,12 @@ pub struct FromKey;
 
 impl Functions for FromKey {
     fn function(&self, symbol: &SymbolKey) -> Option<&str> {
-        Some(match symbol.0.as_str() {
-            "iec/plc/digital_input" => "plc.input.digital",
-            "iec/plc/digital_output" => "plc.output.digital",
-            "iec/plc/relay_output" => "plc.output.relay",
-            "iec/plc/analog_input" => "plc.input.analog",
-            "iec/plc/analog_output" => "plc.output.analog",
+        Some(match novo_symbols::Pack::path_of(&symbol.0) {
+            "plc/digital_input" => "plc.input.digital",
+            "plc/digital_output" => "plc.output.digital",
+            "plc/relay_output" => "plc.output.relay",
+            "plc/analog_input" => "plc.input.analog",
+            "plc/analog_output" => "plc.output.analog",
             _ => return None,
         })
     }

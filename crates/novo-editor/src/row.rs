@@ -68,7 +68,7 @@ impl RowDrag {
 pub const POLE_PITCH: f64 = 8.0;
 
 /// Library ids of one device in 1 to 4 poles, in pole order.
-const POLE_FAMILIES: [&[&str]; 3] = [
+const POLE_FAMILIES: [&[&str]; 6] = [
     &[
         "iec/protection/mcb_1p",
         "iec/protection/mcb_2p",
@@ -86,6 +86,24 @@ const POLE_FAMILIES: [&[&str]; 3] = [
         "iec/contactors/main_2p",
         "iec/contactors/main_3p",
         "iec/contactors/main_4p",
+    ],
+    &[
+        "nfpa/protection/mcb_1p",
+        "nfpa/protection/mcb_2p",
+        "nfpa/protection/mcb_3p",
+        "nfpa/protection/mcb_4p",
+    ],
+    &[
+        "nfpa/protection/fuse",
+        "nfpa/protection/fuse_2p",
+        "nfpa/protection/fuse_3p",
+        "nfpa/protection/fuse_4p",
+    ],
+    &[
+        "nfpa/contactors/main_1p",
+        "nfpa/contactors/main_2p",
+        "nfpa/contactors/main_3p",
+        "nfpa/contactors/main_4p",
     ],
 ];
 

@@ -102,7 +102,7 @@ pub use page::{Line, Margins, PageLayout, PageSetup, ReportPage, TextBox, layout
 pub use report::{Dependencies, LiveReports, Report, Reports};
 pub use sheets::{GeneratedSheet, SheetFingerprint, fingerprint, sheet_name, sheet_names};
 pub use table::{Align, Cell, Column, ReportOutput, Row, Section};
-pub use toc::TableOfContents;
+pub use toc::{PanelContents, TableOfContents};
 pub use wires::WireList;
 
 use novo_core::Project;

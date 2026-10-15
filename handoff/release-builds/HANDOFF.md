@@ -40,3 +40,14 @@ scripts/setup-new-pc.ps1, scripts/build-local.ps1, scripts/cross-build-windows.s
 1. Wait for Tadjiro to ask for a build (via coordinator or lead); then dispatch experimental.yml.
 2. Hands-on checks on his PC (shortcut, build-local, installer upgrade).
 3. Drop the novoelectric.exe copy later; consider pinning a WinLibs release and hash.
+
+## latest-build branch (2026-10-15, Tadjiro's request)
+
+Tadjiro runs builds from a laptop and wants a file that updates or vanishes with git. The
+`publish` job in `experimental.yml` now also force-pushes an orphan branch `latest-build` (one
+commit: `kopercad.exe`, `BUILD_INFO.txt`, `run.cmd`, `README.md`; sources in `scripts/latest-build/`).
+Skipped with a log line if the exe is over 95 MB. Clone once, then run `run.cmd` (fetch, reset, start):
+
+    git clone --branch latest-build --single-branch --depth 1 https://github.com/Herepiggypiggypiggy/KoperCad.git KoperCAD-latest
+
+Delete the branch to remove the build. The release zip is still published. Not yet run on GitHub.
