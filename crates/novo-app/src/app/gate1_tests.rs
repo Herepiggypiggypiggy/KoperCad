@@ -1786,3 +1786,37 @@ fn double_clicking_a_terminal_a_feed_or_an_interruption_name_renames_it() {
     };
     assert_eq!(name, "9");
 }
+
+#[test]
+fn the_preferences_window_sets_the_auto_connection_mode() {
+    use novo_editor::tool::ConnectMode;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert_eq!(
+        d.app.canvas.schematic().unwrap().editor.connect_mode(),
+        ConnectMode::Draw,
+        "drawn by default"
+    );
+    assert!(super::workbench::app_runs("app.preferences"));
+    d.app.run_command(&ctx, "app.preferences", None);
+    d.frame();
+    assert!(d.app.wb.preferences, "the window opens");
+    d.frame();
+    d.app.settings.set_connect_mode(ConnectMode::Ask);
+    d.frame();
+    assert_eq!(
+        d.app.canvas.schematic().unwrap().editor.connect_mode(),
+        ConnectMode::Ask
+    );
+    d.app.settings.set_connect_mode(ConnectMode::Never);
+    d.frame();
+    assert_eq!(
+        d.app.canvas.schematic().unwrap().editor.connect_mode(),
+        ConnectMode::Never
+    );
+    frame_at(&mut d, 90.0, vec![key_event(egui::Key::Escape, true)]);
+    assert!(!d.app.wb.preferences, "Esc closes it");
+}

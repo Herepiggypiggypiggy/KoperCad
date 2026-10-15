@@ -11,6 +11,7 @@ mod link;
 mod pages;
 mod pdf;
 mod plc;
+mod preferences;
 mod reports;
 mod terminals;
 mod wheel;
@@ -678,6 +679,7 @@ impl NovoApp {
             }
             self.hud(&ctx, canvas_rect);
             self.sync_wiring_mode();
+            self.sync_connect_mode();
             self.tool_dock(&ctx, canvas_rect);
             self.inspector(&ctx, canvas_rect);
         }
@@ -688,6 +690,7 @@ impl NovoApp {
         self.recovery_dialog(&ctx);
         self.about_dialog(&ctx);
         self.renumber_dialog(&ctx);
+        self.preferences_dialog(&ctx);
         self.page_form_dialog(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {
             self.run_command(&ctx, id, None);

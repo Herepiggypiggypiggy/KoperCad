@@ -507,9 +507,10 @@ fn move_and_rotate_keep_wires_connected_and_orthogonal() {
     click_pin(&mut editor, &mut doc, page, b, "13");
     editor.leave_tool();
 
-    // M picks the contact up, the pointer carries it, a click drops it.
+    // Shift+M picks the contact up with its wires, the pointer carries it,
+    // a click drops it.
     editor.hover(&doc, page, p(80.0, 100.0), TOL);
-    assert!(editor.key(&mut doc, EditorKey::Move, &[AnyId::Symbol(b)]));
+    assert!(editor.begin_move_with(&[AnyId::Symbol(b)], true));
     editor.hover(&doc, page, p(120.0, 120.0), TOL);
     let preview = editor.preview(&doc, page);
     assert_eq!(preview.symbols[0].placement.origin, p(120.0, 120.0));
@@ -2220,6 +2221,41 @@ fn never_mode_draws_and_proposes_nothing() {
     editor.click(&mut doc, page, p(40.0, 120.0), TOL);
     assert_eq!(doc.project().wires().count(), 0);
     assert!(editor.proposals().is_empty());
+}
+
+#[test]
+fn moving_a_device_leaves_its_wires_behind_as_open_ends() {
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/contacts/no", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.click(&mut doc, page, p(80.0, 100.0), TOL);
+    let a = symbol_at(&doc, page, p(40.0, 40.0));
+    let b = symbol_at(&doc, page, p(80.0, 100.0));
+    editor.begin_wire();
+    click_pin(&mut editor, &mut doc, page, a, "14");
+    click_pin(&mut editor, &mut doc, page, b, "13");
+    editor.leave_tool();
+    let w = doc.project().wires().next().unwrap().id;
+    let was = pin_pos(&doc, b, "13");
+    let depth = doc.undo_depth();
+
+    editor.hover(&doc, page, p(80.0, 100.0), TOL);
+    assert!(editor.key(&mut doc, EditorKey::Move, &[AnyId::Symbol(b)]));
+    editor.hover(&doc, page, p(200.0, 160.0), TOL);
+    assert_eq!(
+        editor.click(&mut doc, page, p(200.0, 160.0), TOL),
+        Clicked::Edited,
+        "{:?}",
+        editor.notice()
+    );
+    assert_eq!(doc.undo_depth(), depth + 1);
+    // The device moved alone; the wire still starts at the first device and
+    // now ends in the air where the pin was.
+    let wire = doc.project().wire(w).unwrap();
+    assert_eq!(wire.from, Endpoint::pin(a, 1));
+    assert_eq!(wire.to, Endpoint::Free { at: was });
+    assert_ne!(pin_pos(&doc, b, "13"), was);
 }
 
 #[test]

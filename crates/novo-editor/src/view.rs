@@ -569,7 +569,8 @@ impl SchematicView {
                 // Only devices drag; a wire is selected and nothing else
                 // (a moved wire would have to keep the no-overlap rule).
                 if matches!(scene.model_id(hit.id), Some(AnyId::Symbol(_))) {
-                    self.drag_move = self.editor.begin_move(&selection);
+                    let carry = ui.input(|i| i.modifiers.shift);
+                    self.drag_move = self.editor.begin_move_with(&selection, carry);
                 }
             }
         }
