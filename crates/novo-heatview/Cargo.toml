@@ -1,0 +1,9 @@
+[package]
+name = "novo-heatview"
+description = "KoperCAD heat view engine: contours, hot spots, streamlines, ranges and compare for thermal results"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true

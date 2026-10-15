@@ -12,9 +12,9 @@ use std::path::{Path, PathBuf};
 use eframe::egui;
 use novo_core::Value;
 use novo_parts::{
-    Catalog, CatalogPart, ImportFlow, LocalLibrary, PartKey, RowAction, SourceRecord, SourceTable,
-    browser_rows, default_downloads_dir, display_value, is_internal_key, property_label,
-    user_catalog_path,
+    Catalog, CatalogPart, ConnectionKind, DataSource, ImportFlow, Lifecycle, LocalLibrary, PartKey,
+    RowAction, Side, SourceRecord, SourceTable, browser_rows, default_downloads_dir, display_value,
+    is_internal_key, property_label, user_catalog_path,
 };
 
 use super::parts_import::{Import, Phase, import_path};
@@ -178,6 +178,22 @@ const POWER_LOSS: &str = "Power loss";
 const CLEARANCES: &str = "Clearances";
 const CONNECTIONS: &str = "Connections";
 const TECHNICAL: &str = "Technical data";
+const CLASSIFICATION: &str = "Classification";
+const ORDER_DATA: &str = "Order data";
+const TERMINALS: &str = "Terminals";
+const LET_THROUGH: &str = "Let-through";
+const SOURCE: &str = "Source";
+
+/// What a value's source tag says, or nothing when the source is unknown
+/// (an unknown source is not labelled; a known one always is).
+fn source_label(source: DataSource) -> Option<&'static str> {
+    match source {
+        DataSource::MakerDatasheet => Some("maker datasheet"),
+        DataSource::Typed => Some("typed"),
+        DataSource::Estimated => Some("estimated"),
+        DataSource::Unknown => None,
+    }
+}
 
 /// Which block a data key belongs to: by words in the key, so the keys the
 /// power loss and clearance work adds (`power_loss_w`, `clearance_side_mm`,
@@ -221,14 +237,24 @@ fn mm(v: f64) -> String {
 /// The detail of a part, grouped: dimensions first, then power loss,
 /// clearances, connection data and the rest. Empty blocks are left out.
 pub(crate) fn detail_sections(part: &CatalogPart) -> Vec<DetailSection> {
-    let mut blocks: Vec<DetailSection> =
-        [DIMENSIONS, POWER_LOSS, CLEARANCES, CONNECTIONS, TECHNICAL]
-            .into_iter()
-            .map(|title| DetailSection {
-                title,
-                rows: Vec::new(),
-            })
-            .collect();
+    let mut blocks: Vec<DetailSection> = [
+        DIMENSIONS,
+        POWER_LOSS,
+        CLEARANCES,
+        CONNECTIONS,
+        TECHNICAL,
+        CLASSIFICATION,
+        ORDER_DATA,
+        TERMINALS,
+        LET_THROUGH,
+        SOURCE,
+    ]
+    .into_iter()
+    .map(|title| DetailSection {
+        title,
+        rows: Vec::new(),
+    })
+    .collect();
     if let Some(d) = part.dimensions {
         blocks[0].rows.push((
             "Width \u{d7} height \u{d7} depth".into(),
@@ -245,10 +271,13 @@ pub(crate) fn detail_sections(part: &CatalogPart) -> Vec<DetailSection> {
             continue;
         }
         let (label, unit) = property_label(key);
-        let text = match value {
+        let mut text = match value {
             Value::Text(t) if t.is_empty() => continue,
             other => with_unit(display_value(other), unit),
         };
+        if let Some(label) = source_label(part.source_of(key)) {
+            text = format!("{text}  ({label})");
+        }
         let title = section_of(key);
         let block = blocks
             .iter_mut()
@@ -256,8 +285,135 @@ pub(crate) fn detail_sections(part: &CatalogPart) -> Vec<DetailSection> {
             .expect("every title has a block");
         block.rows.push((label, text));
     }
+    push_v2_rows(part, &mut blocks);
     blocks.retain(|b| !b.rows.is_empty());
     blocks
+}
+
+/// The schema v2 blocks: classification, order data, terminals, the
+/// let-through table and where the part came from. Nothing is filled in for
+/// fields the part does not have.
+fn push_v2_rows(part: &CatalogPart, blocks: &mut [DetailSection]) {
+    let mut add = |title: &str, label: &str, value: String| {
+        blocks
+            .iter_mut()
+            .find(|b| b.title == title)
+            .expect("every title has a block")
+            .rows
+            .push((label.to_owned(), value));
+    };
+    if let Some(code) = &part.class.etim {
+        add(CLASSIFICATION, "ETIM class", code.clone());
+    }
+    if let Some(code) = &part.class.eclass {
+        add(CLASSIFICATION, "ECLASS", code.clone());
+    }
+    if !part.function.is_empty() {
+        add(CLASSIFICATION, "Function", part.function.clone());
+    }
+    let lifecycle = match part.lifecycle {
+        Lifecycle::Active => Some("active"),
+        Lifecycle::PhasingOut => Some("phasing out"),
+        Lifecycle::Discontinued => Some("discontinued"),
+        Lifecycle::Unknown => None,
+    };
+    if let Some(text) = lifecycle {
+        add(CLASSIFICATION, "Lifecycle", text.into());
+    }
+    if let Some(r) = &part.replaced_by {
+        add(
+            CLASSIFICATION,
+            "Replaced by",
+            format!("{} {}", r.manufacturer, r.order_number),
+        );
+    }
+    if !part.alternatives.is_empty() {
+        let list: Vec<String> = part
+            .alternatives
+            .iter()
+            .map(|r| format!("{} {}", r.manufacturer, r.order_number))
+            .collect();
+        add(CLASSIFICATION, "Alternatives", list.join(", "));
+    }
+    if let Some(price) = &part.price {
+        let per = if price.per > 1 {
+            format!(" per {}", price.per)
+        } else {
+            String::new()
+        };
+        let date = if price.date.is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", price.date)
+        };
+        add(
+            ORDER_DATA,
+            "List price",
+            format!("{:.2} {}{per}{date}", price.amount, price.currency),
+        );
+    }
+    for t in &part.terminals {
+        let mut bits = Vec::new();
+        if let Some((lo, hi)) = t.wire_mm2 {
+            bits.push(format!("{lo}\u{2013}{hi} mm\u{b2}"));
+        }
+        if let Some(label) = connection_label(t.kind) {
+            bits.push(label.to_owned());
+        }
+        if let Some(label) = side_label(t.side) {
+            bits.push(label.to_owned());
+        }
+        if let Some([x, y, z]) = t.position_mm {
+            bits.push(format!("at {x}, {y}, {z} mm"));
+        }
+        add(TERMINALS, &format!("Terminal {}", t.name), bits.join(", "));
+    }
+    for p in &part.let_through {
+        add(
+            LET_THROUGH,
+            &format!("At {} kA", p.ik_ka),
+            format!("{} A\u{b2}s, peak {} kA", p.i2t_a2s, p.ip_ka),
+        );
+    }
+    if let Some(p) = &part.provenance {
+        {
+            add(SOURCE, "Origin", p.source.clone());
+            if !p.file.is_empty() {
+                add(SOURCE, "File", p.file.clone());
+            }
+            if !p.imported.is_empty() {
+                add(SOURCE, "Imported", p.imported.clone());
+            }
+            if !p.licence_note.is_empty() {
+                add(SOURCE, "Licence", p.licence_note.clone());
+            }
+        }
+    }
+}
+
+fn connection_label(kind: ConnectionKind) -> Option<&'static str> {
+    Some(match kind {
+        ConnectionKind::Screw => "screw",
+        ConnectionKind::PushIn => "push-in",
+        ConnectionKind::Spring => "spring",
+        ConnectionKind::Screwless => "screwless",
+        ConnectionKind::Lug => "lug",
+        ConnectionKind::Pin => "pin",
+        ConnectionKind::Faston => "faston",
+        ConnectionKind::SolderPin => "solder pin",
+        ConnectionKind::Unknown => return None,
+    })
+}
+
+fn side_label(side: Side) -> Option<&'static str> {
+    Some(match side {
+        Side::Top => "top",
+        Side::Bottom => "bottom",
+        Side::Left => "left",
+        Side::Right => "right",
+        Side::Front => "front",
+        Side::Unknown => return None,
+    })
 }
 
 /// What a click in the window asks for; run after drawing, so drawing only
@@ -726,6 +882,82 @@ mod tests {
             all.iter().flat_map(|s| &s.rows).all(|r| r.1 != "hidden"),
             "internal keys stay out"
         );
+    }
+
+    #[test]
+    fn detail_shows_schema_v2_fields_and_labels_known_sources_only() {
+        use novo_parts::{
+            Classification, LetThroughPoint, PartRef, PartTerminal, Price, Provenance,
+        };
+        let mut p = part(&[
+            ("rated_current_a", Value::Int(16)),
+            ("breaking_capacity_icu_ka", Value::Float(10.0)),
+        ]);
+        p.sources
+            .insert("rated_current_a".into(), DataSource::MakerDatasheet);
+        p.class = Classification {
+            etim: Some("EC000042".into()),
+            eclass: None,
+        };
+        p.lifecycle = Lifecycle::PhasingOut;
+        p.replaced_by = Some(PartRef {
+            manufacturer: "Acme".into(),
+            order_number: "A-2".into(),
+        });
+        p.price = Some(Price {
+            amount: 12.5,
+            currency: "EUR".into(),
+            per: 10,
+            date: "2026-10-15".into(),
+        });
+        p.terminals = vec![PartTerminal {
+            name: "1".into(),
+            kind: ConnectionKind::PushIn,
+            wire_mm2: Some((0.5, 4.0)),
+            side: Side::Top,
+            position_mm: None,
+        }];
+        p.let_through = vec![LetThroughPoint {
+            ik_ka: 6.0,
+            i2t_a2s: 20000.0,
+            ip_ka: 3.1,
+        }];
+        p.provenance = Some(Provenance {
+            source: "import:bmecat".into(),
+            file: "acme.xml".into(),
+            ..Default::default()
+        });
+        let all = detail_sections(&p);
+        let find = |title: &str, label: &str| -> String {
+            all.iter()
+                .find(|s| s.title == title)
+                .and_then(|s| s.rows.iter().find(|r| r.0 == label))
+                .unwrap_or_else(|| panic!("{title} / {label} missing"))
+                .1
+                .clone()
+        };
+        assert_eq!(
+            find("Technical data", "Rated current"),
+            "16 A  (maker datasheet)"
+        );
+        // No source recorded, so no label: unknown is not dressed up.
+        assert!(!find("Technical data", "Breaking capacity icu").contains('('));
+        assert_eq!(find("Classification", "ETIM class"), "EC000042");
+        assert_eq!(find("Classification", "Lifecycle"), "phasing out");
+        assert_eq!(find("Classification", "Replaced by"), "Acme A-2");
+        assert_eq!(
+            find("Order data", "List price"),
+            "12.50 EUR per 10 (2026-10-15)"
+        );
+        assert_eq!(
+            find("Terminals", "Terminal 1"),
+            "0.5\u{2013}4 mm\u{b2}, push-in, top"
+        );
+        assert_eq!(
+            find("Let-through", "At 6 kA"),
+            "20000 A\u{b2}s, peak 3.1 kA"
+        );
+        assert_eq!(find("Source", "Origin"), "import:bmecat");
     }
 
     #[test]
