@@ -347,6 +347,14 @@ impl NovoApp {
                     novo_terminals::set_jumper(tx, &terminals, None).map(|_| None)
                 }),
             ),
+            "terminal.reset_pe" => (
+                "Reset PE override",
+                doc.transact("Reset PE override", |tx| {
+                    novo_terminals::reset_pe_override(tx, &terminals)?;
+                    // The rule decides again, right away.
+                    novo_terminals::mark_earthed(tx).map(|_| None)
+                }),
+            ),
             _ => {
                 let to = match id {
                     "terminal.strip_up" => MoveTo::NextNumber,

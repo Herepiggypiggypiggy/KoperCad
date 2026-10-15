@@ -1936,6 +1936,7 @@ dependencies = [
  "novo-canvas",
  "novo-core",
  "novo-symbols",
+ "novo-terminals",
  "novo-xref",
 ]
 
