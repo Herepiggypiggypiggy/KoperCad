@@ -233,6 +233,15 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["kasten", "kastenlijst", "behuizingen"],
     ),
+    nl(
+        "view.protection",
+        &["beveiliging"],
+        &[
+            "selectiviteit",
+            "uitschakelkarakteristiek",
+            "kortsluitvastheid",
+        ],
+    ),
     nl("view.changes", &["wijzigingen"], &["vergelijk", "verschil"]),
     nl(
         "view.commissioning",
