@@ -103,6 +103,36 @@ impl Viewport {
         self.center = bounds.center();
     }
 
+    /// Brings `bounds` into view for a jump, moving as little as it can:
+    /// nothing when it already sits inside the view, `margin` screen points
+    /// in from the edges; otherwise centred on it. Zooms in to
+    /// `readable_zoom` when the view is further out than that, and out when
+    /// `bounds` does not fit.
+    pub fn reveal(&mut self, bounds: &Aabb, margin: f32, readable_zoom: f32) {
+        if bounds.is_empty() {
+            return;
+        }
+        let avail = (self.size - Vec2::splat(2.0 * margin)).max(Vec2::ONE);
+        let size = bounds.size().max(Vec2::splat(1e-3));
+        let fits = (avail / size).min_element();
+        let zoom = self
+            .zoom
+            .max(readable_zoom)
+            .min(fits)
+            .clamp(self.min_zoom, self.max_zoom);
+        if zoom == self.zoom {
+            let inner = Aabb::new(
+                self.screen_to_world(Vec2::splat(margin)),
+                self.screen_to_world(self.size - Vec2::splat(margin)),
+            );
+            if inner.min.cmple(bounds.min).all() && bounds.max.cmple(inner.max).all() {
+                return;
+            }
+        }
+        self.zoom = zoom;
+        self.center = bounds.center();
+    }
+
     /// Uniform data for the GPU: maps world to clip space.
     #[cfg(feature = "gpu")]
     pub(crate) fn clip_transform(&self) -> (Vec2, Vec2) {
@@ -187,5 +217,53 @@ mod tests {
         let vis = v.visible_world();
         assert!(vis.contains(&page));
         assert!((v.zoom - (760.0 / 420.0)).abs() < 1e-4);
+    }
+
+    #[test]
+    fn reveal_moves_only_when_it_must() {
+        let mut v = Viewport {
+            center: Vec2::new(100.0, 100.0),
+            zoom: 4.0,
+            size: Vec2::new(800.0, 600.0),
+            ..Default::default()
+        };
+        // Inside the view: nothing moves.
+        let near = Aabb::new(Vec2::new(90.0, 95.0), Vec2::new(110.0, 105.0));
+        let before = v;
+        v.reveal(&near, 24.0, 4.0);
+        assert_eq!(v, before);
+        // Outside: centred, zoom kept.
+        let far = Aabb::new(Vec2::new(300.0, 200.0), Vec2::new(320.0, 220.0));
+        v.reveal(&far, 24.0, 4.0);
+        assert_eq!(v.center, Vec2::new(310.0, 210.0));
+        assert_eq!(v.zoom, 4.0);
+        // Under the margin of the edge counts as outside.
+        let mut v2 = before;
+        let edge = Aabb::new(Vec2::new(190.0, 95.0), Vec2::new(198.0, 105.0));
+        v2.reveal(&edge, 24.0, 4.0);
+        assert_eq!(v2.center, Vec2::new(194.0, 100.0));
+    }
+
+    #[test]
+    fn reveal_zooms_in_to_readable_and_out_to_fit() {
+        let mut v = Viewport {
+            center: Vec2::ZERO,
+            zoom: 0.5,
+            size: Vec2::new(800.0, 600.0),
+            ..Default::default()
+        };
+        // Zoomed far out over the target: zoom in so its text reads.
+        let small = Aabb::new(Vec2::new(-10.0, -10.0), Vec2::new(10.0, 10.0));
+        v.reveal(&small, 24.0, 4.0);
+        assert_eq!(v.zoom, 4.0);
+        // Bigger than the view at that zoom: zoom out until it fits.
+        let big = Aabb::new(Vec2::ZERO, Vec2::new(400.0, 100.0));
+        v.reveal(&big, 24.0, 4.0);
+        assert!((v.zoom - (800.0 - 48.0) / 400.0).abs() < 1e-4);
+        assert_eq!(v.center, Vec2::new(200.0, 50.0));
+        // An empty box changes nothing.
+        let before = v;
+        v.reveal(&Aabb::EMPTY, 24.0, 4.0);
+        assert_eq!(v, before);
     }
 }

@@ -10,8 +10,8 @@
 use std::path::PathBuf;
 
 use eframe::egui;
+use novo_canvas::SelectOp;
 use novo_canvas::model::item_id;
-use novo_canvas::{SelectOp, Vec2};
 use novo_checks::Problem;
 use novo_core::{AnyId, ChangeSet, DeviceId, Document, SymbolId};
 use novo_editor::EditorKey;
@@ -564,20 +564,11 @@ impl NovoApp {
             && Some(place.page) == self.current_page
         {
             self.wb.pending = None;
-            let origin = place.symbol.and_then(|s| {
-                self.backend
-                    .document()
-                    .and_then(|d| d.project().symbol(s))
-                    .map(|s| s.placement.origin)
-            });
             if let (Some(symbol), Some(view)) = (place.symbol, self.canvas.schematic()) {
+                let item = item_id(AnyId::Symbol(symbol));
                 view.canvas.selection.clear();
-                view.canvas
-                    .selection
-                    .apply([item_id(AnyId::Symbol(symbol))], SelectOp::Replace);
-                if let Some(o) = origin {
-                    view.canvas.viewport.center = Vec2::new(o.x as f32, o.y as f32);
-                }
+                view.canvas.selection.apply([item], SelectOp::Replace);
+                view.canvas.reveal([item]);
             }
         }
         self.highlight_related();

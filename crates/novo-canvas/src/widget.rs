@@ -260,6 +260,9 @@ pub struct CanvasView {
     pub wheel_zoom_step: f32,
     /// Labels smaller than this many screen points are not drawn.
     pub min_label_size: f32,
+    /// Screen points per world unit that [`Self::reveal`] zooms in to at
+    /// least: 4 shows 2.5 mm text at 10 points.
+    pub reveal_zoom: f32,
     /// At most this many labels are drawn per frame, the largest first;
     /// text costs CPU time per glyph, and a page dense enough to exceed it
     /// is too small to read anyway.
@@ -280,6 +283,8 @@ pub struct CanvasView {
     band: Option<Vec2>,
     right_drag: Option<RightDrag>,
     fit_pending: bool,
+    /// Items to bring into view on the next frame; see [`Self::reveal`].
+    reveal_pending: Vec<ItemId>,
     stats: FrameStats,
 }
 
@@ -352,6 +357,8 @@ impl CanvasView {
             band: None,
             right_drag: None,
             fit_pending: true,
+            reveal_pending: Vec::new(),
+            reveal_zoom: 4.0,
             stats: FrameStats::default(),
         }
     }
@@ -387,6 +394,14 @@ impl CanvasView {
     /// Fits the scene into view on the next frame.
     pub fn zoom_to_fit(&mut self) {
         self.fit_pending = true;
+    }
+
+    /// Brings `ids` into view on the next frame, for a jump: the view stays
+    /// put when they are already in it, else centres on them, zooming in to
+    /// [`Self::reveal_zoom`] or out until they fit (see
+    /// [`Viewport::reveal`]). Ids the scene does not hold are ignored.
+    pub fn reveal(&mut self, ids: impl IntoIterator<Item = ItemId>) {
+        self.reveal_pending = ids.into_iter().collect();
     }
 
     pub fn hovered(&self) -> Option<ItemId> {
@@ -430,6 +445,14 @@ impl CanvasView {
         if self.fit_pending && rect.width() > 1.0 {
             self.viewport.fit(&scene.bounds(), 24.0);
             self.fit_pending = false;
+        }
+        if !self.reveal_pending.is_empty() && rect.width() > 1.0 {
+            let bounds = self
+                .reveal_pending
+                .drain(..)
+                .filter_map(|id| scene.item_bounds(id))
+                .fold(Aabb::EMPTY, |b, i| b.union(&i));
+            self.viewport.reveal(&bounds, 48.0, self.reveal_zoom);
         }
         let to_local = |p: egui::Pos2| Vec2::new(p.x - rect.min.x, p.y - rect.min.y);
         let hover_local = response.hover_pos().map(to_local);
@@ -1289,5 +1312,25 @@ mod tests {
         let (_, esc) = frame(&ctx, &mut view, &scene, vec![key]);
         assert_eq!(esc, None);
         assert_eq!(view.selection.len(), 1);
+    }
+
+    /// A reveal waits for the next frame, where the scene is at hand, and
+    /// is used up by it; ids the scene lacks leave the view alone.
+    #[test]
+    fn reveal_centres_an_item_out_of_view_on_the_next_frame() {
+        let (ctx, mut view, scene) = setup();
+        view.viewport.center = Vec2::new(5000.0, 5000.0);
+        view.viewport.zoom = 4.0;
+        view.reveal([ItemId(99)]);
+        frame(&ctx, &mut view, &scene, vec![]);
+        assert_eq!(view.viewport.center, Vec2::new(5000.0, 5000.0));
+        view.reveal([ItemId(1)]);
+        frame(&ctx, &mut view, &scene, vec![]);
+        let at = view.viewport.world_to_screen(Vec2::new(50.0, 0.0));
+        assert!((at - Vec2::new(400.0, 300.0)).length() < 1.0, "{at}");
+        // Panning away afterwards is not undone.
+        view.viewport.center = Vec2::new(-700.0, 0.0);
+        frame(&ctx, &mut view, &scene, vec![]);
+        assert!(view.viewport.center.x < -600.0);
     }
 }

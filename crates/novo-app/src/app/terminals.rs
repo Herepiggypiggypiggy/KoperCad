@@ -105,7 +105,10 @@ impl NovoApp {
 
     fn bring_into_view(&mut self, s: &Suggestion) {
         if let Some(view) = self.canvas.schematic() {
-            view.canvas.viewport.center = Vec2::new(s.at.x as f32, s.at.y as f32);
+            let at = Vec2::new(s.at.x as f32, s.at.y as f32);
+            let near = novo_canvas::Aabb::new(at - Vec2::splat(5.0), at + Vec2::splat(5.0));
+            let zoom = view.canvas.reveal_zoom;
+            view.canvas.viewport.reveal(&near, 48.0, zoom);
         }
     }
 
