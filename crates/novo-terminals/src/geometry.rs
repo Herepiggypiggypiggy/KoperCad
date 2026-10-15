@@ -14,7 +14,7 @@ use std::sync::OnceLock;
 use novo_core::{
     Direction, Endpoint, ModelError, Pin, Point, Result, SymbolId, SymbolInstance, SymbolKey, Tx,
 };
-use novo_symbols::Library;
+use novo_symbols::{Library, Symbol};
 
 use crate::strings;
 
@@ -33,26 +33,33 @@ fn direction(d: novo_symbols::Direction) -> Direction {
 }
 
 /// Connection points of a single-level terminal symbol from the library:
-/// `1` at the origin and `2` straight below it. Any other symbol, or one
+/// `1` at the origin and `2` straight below it, with the library's
+/// direction and `optional` flag, so they match the pins the editor draws. Any other symbol, or one
 /// the library does not know, is refused, because a terminal could not be
 /// put into a wire with it.
 pub fn symbol_pins(symbol: &SymbolKey) -> Result<Vec<Pin>> {
-    let refuse = || ModelError::Format(strings::not_a_terminal_symbol(symbol));
-    let definition = library()
+    library()
         .and_then(|l| l.get(&symbol.0))
-        .ok_or_else(refuse)?;
+        .and_then(terminal_pins)
+        .ok_or_else(|| ModelError::Format(strings::not_a_terminal_symbol(symbol)))
+}
+
+fn terminal_pins(definition: &Symbol) -> Option<Vec<Pin>> {
     let pins: Vec<Pin> = definition
         .connections
         .iter()
-        .map(|c| Pin::new(c.id.clone(), c.at[0], c.at[1]).with_direction(direction(c.dir)))
+        .map(|c| {
+            let pin = Pin::new(c.id.clone(), c.at[0], c.at[1]).with_direction(direction(c.dir));
+            if c.optional { pin.optional() } else { pin }
+        })
         .collect();
     match pins.as_slice() {
         [one, two]
             if one.offset == Point::new(0.0, 0.0) && two.offset.x == 0.0 && two.offset.y > 0.0 =>
         {
-            Ok(pins)
+            Some(pins)
         }
-        _ => Err(refuse()),
+        _ => None,
     }
 }
 
@@ -130,4 +137,22 @@ pub fn redraw(tx: &mut Tx<'_>, id: SymbolId, symbol: &SymbolKey) -> Result<()> {
         s.symbol = symbol.clone();
         s.pins = pins;
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn terminal_pins_keep_the_library_optional_flag() {
+        let text = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../novo-symbols/symbols/iec/terminals/terminal.toml"
+        ))
+        .unwrap()
+        .replace(r#"dir = "down" }"#, r#"dir = "down", optional = true }"#);
+        let symbol = Symbol::from_toml(&text).unwrap();
+        let pins = terminal_pins(&symbol).unwrap();
+        assert!(!pins[0].optional && pins[1].optional);
+    }
 }
