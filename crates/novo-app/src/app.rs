@@ -166,6 +166,11 @@ pub struct NovoApp {
     renaming_level: Option<(Aspect, DeviceTag, String)>,
     /// Window width last frame, which decides whether the outline pins.
     window_width: f32,
+    /// Free room between the top bar's left and right groups last frame;
+    /// below zero they overlap. Read by the width test.
+    top_bar_gap: f32,
+    /// Width the menu names took last frame (`menu_bar`).
+    menu_bar_width: f32,
 }
 
 /// Most messages remembered; older ones are forgotten.
@@ -222,6 +227,8 @@ impl NovoApp {
             renaming_page: None,
             renaming_level: None,
             window_width: 0.0,
+            top_bar_gap: 0.0,
+            menu_bar_width: 380.0,
         };
         app.restore_layout_at_start();
         app
@@ -888,47 +895,67 @@ impl NovoApp {
     /// Mark (project menu), Schematic | Cabinet, breadcrumb, then "Search
     /// or run" and the saved state on the right.
     fn top_bar(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
+        let fit = menu_bar::TopBarFit::at(self.window_width);
+        let focus = self.menu_key_pressed(ui.ctx());
         ui.horizontal_centered(|ui| {
-            ui.menu_button(egui::RichText::new(APP_NAME).strong(), |ui| {
-                self.mark_menu(ui)
-            });
             if self.menu_bar_wide() {
-                self.menu_bar(ui);
+                self.mark(ui, false);
+                self.menu_bar(ui, focus);
+            } else {
+                self.mark(ui, focus);
             }
             ui.separator();
-            if let Some(workspace) = self.workspace_switcher(ui) {
+            if let Some(workspace) = self.workspace_switcher(ui, fit.short_switcher) {
                 picked.push(match workspace {
                     workspace::Workspace::Cabinet => Action::ShowCabinet,
                     _ => Action::ShowSchematic,
                 });
             }
             ui.separator();
-            self.breadcrumb(ui);
+            self.breadcrumb(ui, fit.name_chars);
+            let left_end = ui.min_rect().right();
 
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let right = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.weak(self.saved_state());
                 self.issue_pill(ui);
                 let shortcut = Action::CommandPalette
                     .shortcut()
                     .map(|s| ui.ctx().format_shortcut(&s))
                     .unwrap_or_default();
-                let search = egui::Button::new("Search or run")
-                    .shortcut_text(shortcut)
-                    .min_size(egui::vec2(240.0, 0.0));
-                if ui.add(search).clicked() {
+                let label = if fit.search.is_empty() {
+                    shortcut.clone()
+                } else {
+                    fit.search.to_owned()
+                };
+                let mut search =
+                    egui::Button::new(label).min_size(egui::vec2(fit.search_width, 0.0));
+                if !fit.search.is_empty() && fit.search_width > 0.0 {
+                    search = search.shortcut_text(shortcut.clone());
+                }
+                let search = ui
+                    .add(search)
+                    .on_hover_text(format!("Search or run ({shortcut})"));
+                if search.clicked() {
                     picked.push(Action::CommandPalette);
                 }
             });
+            self.top_bar_gap = right.response.rect.left() - left_end;
         });
     }
 
     /// project / page. A click on the page opens the outline.
-    fn breadcrumb(&mut self, ui: &mut egui::Ui) {
+    fn breadcrumb(&mut self, ui: &mut egui::Ui, name_chars: usize) {
         let Some(name) = self.project_name() else {
             ui.weak("No project open");
             return;
         };
-        ui.label(name);
+        let shown = if name.chars().count() > name_chars {
+            let cut: String = name.chars().take(name_chars.saturating_sub(1)).collect();
+            format!("{cut}…")
+        } else {
+            name.clone()
+        };
+        ui.label(shown).on_hover_text(name);
         let page = self.current_page.and_then(|id| {
             let sheet = self.wb.sheet;
             let rows = self.page_rows();
