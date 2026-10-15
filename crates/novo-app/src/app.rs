@@ -26,6 +26,7 @@ mod macro_actions;
 #[cfg(test)]
 mod macro_actions_tests;
 mod menu_bar;
+mod numbering;
 mod onboarding;
 mod pages;
 mod parts;
@@ -39,6 +40,7 @@ mod project_settings;
 mod reports;
 mod revisions;
 mod sheets;
+mod simulate;
 mod sizing;
 mod status_bar;
 mod terminals;
@@ -63,6 +65,8 @@ mod compare_tests;
 mod example_tests;
 #[cfg(test)]
 mod gate1_tests;
+#[cfg(test)]
+mod numbering_tests;
 #[cfg(test)]
 mod onboarding_tests;
 
@@ -372,7 +376,8 @@ impl NovoApp {
             | Action::CloseProject
             | Action::ZoomToFit
             | Action::SizeEnclosure
-            | Action::EnclosureList => open,
+            | Action::EnclosureList
+            | Action::MotorStart => open,
             Action::ShowCabinet => self
                 .workspace_unavailable(workspace::Workspace::Cabinet)
                 .is_none(),
@@ -419,6 +424,7 @@ impl NovoApp {
                 self.switch_workspace(workspace::Workspace::Cabinet);
                 self.sizing.editor_open = true;
             }
+            Action::MotorStart => self.open_motor_start(),
             Action::PinOutline => {
                 let pinned = !self.outline_pinned();
                 self.settings.outline_pinned = Some(pinned);
@@ -817,6 +823,7 @@ impl NovoApp {
         self.command_field(&ctx, canvas_rect);
         self.recovery_dialog(&ctx);
         self.about_dialog(&ctx);
+        self.motor_start_window(&ctx);
         self.renumber_dialog(&ctx);
         self.plc_import_dialog(&ctx);
         self.preferences_dialog(&ctx);
@@ -826,6 +833,7 @@ impl NovoApp {
         self.macro_place_window(&ctx);
         self.issue_revision_dialog(&ctx);
         self.compare_window(&ctx);
+        self.numbering_window(&ctx);
         self.page_form_dialog(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {
             self.run_command(&ctx, id, None);
