@@ -511,6 +511,14 @@ fn protects_against_overload(symbol: &SymbolInstance) -> bool {
     .any(|kind| name.starts_with(kind))
 }
 
+/// A protective device set within a range (overload relay, motor
+/// protection breaker), whose rated current is the top of that range.
+fn is_adjustable(symbol: &SymbolInstance) -> bool {
+    let key = symbol.symbol.0.as_str();
+    let name = key.rsplit('/').next().unwrap_or_default();
+    name.starts_with("overload_relay") || name.starts_with("motor_protection_breaker")
+}
+
 /// Wires an overcurrent protective device protects that are thinner than
 /// its rated current needs ([`Project::rated_current_a`]: the device's own
 /// `rated_current_a`, else its part's): the wires ending on it, and on its
@@ -527,7 +535,13 @@ pub(crate) fn undersized_wires(cx: &Context<'_>, netlist: &Netlist, out: &mut Ve
             project.cable(cable)?.cores.get(core)?.cross_section_mm2
         })
     };
-    type Found = (BTreeSet<SymbolId>, BTreeSet<novo_core::WireId>, Option<f64>);
+    // (symbols, wires, thinnest cross-section, adjustable)
+    type Found = (
+        BTreeSet<SymbolId>,
+        BTreeSet<novo_core::WireId>,
+        Option<f64>,
+        bool,
+    );
     let mut by_device: BTreeMap<DeviceId, Found> = BTreeMap::new();
     for symbol in project.symbols().filter(|s| protects_against_overload(s)) {
         let SymbolRole::Device { device, .. } = symbol.role else {
@@ -557,30 +571,46 @@ pub(crate) fn undersized_wires(cx: &Context<'_>, netlist: &Netlist, out: &mut Ve
                     entry.0.insert(symbol.id);
                     entry.1.insert(wire.id);
                     entry.2 = Some(entry.2.map_or(mm2, |t| t.min(mm2)));
+                    entry.3 |= is_adjustable(symbol);
                 }
             }
         }
     }
-    for (device, (symbols, wires, thinnest)) in by_device {
+    for (device, (symbols, wires, thinnest, adjustable)) in by_device {
         let Some(d) = project.device(device) else {
             continue;
         };
         let rated = project.rated_current_a(device).unwrap_or_default();
         let thinnest = thinnest.unwrap_or_default();
         let carries = ampacity(thinnest).unwrap_or_default();
+        let count = wires.len();
         let mut at: Vec<AnyId> = symbols.into_iter().map(AnyId::from).collect();
         at.extend(wires.into_iter().map(AnyId::from));
-        out.push(Problem::new(
-            ProblemKind::UndersizedWire,
-            at,
+        // An overload relay or motor protection breaker is set within a
+        // range: its rating is the top of it.
+        let rated = format!(
+            "{} {} A",
+            if adjustable { "rated up to" } else { "rated" },
+            number(rated)
+        );
+        // A supply net (L+, L1) can hold many wires: count them rather
+        // than leave the reader to guess from the marks.
+        let message = if count == 1 {
             format!(
-                "{} is rated {} A, but a {} mm² wire on it carries about {} A",
+                "{} is {rated}, but a {} mm² wire on it carries about {} A",
                 d.tag,
-                number(rated),
                 number(thinnest),
                 number(carries)
-            ),
-        ));
+            )
+        } else {
+            format!(
+                "{} is {rated}, but {count} wires on it are too thin; the thinnest, {} mm², carries about {} A",
+                d.tag,
+                number(thinnest),
+                number(carries)
+            )
+        };
+        out.push(Problem::new(ProblemKind::UndersizedWire, at, message));
     }
 }
 
@@ -631,10 +661,12 @@ pub(crate) fn wrong_terminal_blocks(cx: &Context<'_>, out: &mut Vec<Problem>) {
             let names: Vec<&str> = terminals.iter().map(|t| t.name.as_str()).collect();
             let one = names.len() == 1;
             let what = match (i, one) {
-                (0, true) => "is a PE terminal on a block that is not a PE block",
-                (0, false) => "are PE terminals on a block that is not a PE block",
-                (_, true) => "is built with a PE block but is not a PE terminal",
-                (_, false) => "are built with a PE block but are not PE terminals",
+                // Said as what the catalog shows: a PE block the catalog
+                // does not mark (WAGO "WPE" without keywords) is possible.
+                (0, true) => "is a PE terminal, but its block is not marked PE in the catalog",
+                (0, false) => "are PE terminals, but their block is not marked PE in the catalog",
+                (_, true) => "is not a PE terminal, but its block is marked PE in the catalog",
+                (_, false) => "are not PE terminals, but their block is marked PE in the catalog",
             };
             let mut at: Vec<AnyId> = terminals
                 .iter()
@@ -657,15 +689,10 @@ pub(crate) fn wrong_terminal_blocks(cx: &Context<'_>, out: &mut Vec<Problem>) {
 
 /// novo-cables' cable checks, each finding marking the wire concerned (when
 /// there is one) and the cable.
-pub(crate) fn cable_cores(cx: &Context<'_>, out: &mut Vec<Problem>) {
+pub(crate) fn cable_cores(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Problem>) {
     use novo_cables::Finding;
     let project = cx.project;
-    // novo-cables builds its own netlist; skip that when there is nothing
-    // for it to check.
-    if project.cables().next().is_none() {
-        return;
-    }
-    for finding in novo_cables::check(project) {
+    for finding in novo_cables::check_with(project, netlist) {
         let mut at: Vec<AnyId> = match &finding {
             Finding::ProtectiveCoreMisused { wire, .. }
             | Finding::ProtectiveOnOtherCore { wire, .. }

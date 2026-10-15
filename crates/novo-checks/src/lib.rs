@@ -20,7 +20,7 @@
 //! | [`SeveralMainFunctions`](ProblemKind::SeveralMainFunctions) | warning | A device drawn with more than one main function |
 //! | [`DuplicateTerminal`](ProblemKind::DuplicateTerminal) | warning | Two terminals with one name on a strip while the same-name rule is off |
 //! | [`ZeroLengthWire`](ProblemKind::ZeroLengthWire) | warning | A wire of zero length that is not two touching pins |
-//! | [`WrongTerminalBlock`](ProblemKind::WrongTerminalBlock) | warning | A PE terminal built with a block that is not a PE block, or another terminal built with a PE block |
+//! | [`WrongTerminalBlock`](ProblemKind::WrongTerminalBlock) | warning | A PE terminal built with a block the catalog does not mark PE, or another terminal built with a block it does |
 //! | [`UndersizedWire`](ProblemKind::UndersizedWire) | warning | A wire on an overcurrent protective device that carries less than the device's rated current |
 //! | [`CableCore`](ProblemKind::CableCore) | warning, error for green-yellow misuse | A cable core used against its marking or the cable's limits (novo-cables' checks) |
 //! | [`TerminalUse`](ProblemKind::TerminalUse) | warning, error for a wrong potential or a one-sided fuse terminal | A terminal used against its kind (novo-terminals' checks) |
@@ -274,7 +274,7 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     checks::missing_parts(&cx, &mut problems);
     checks::undersized_wires(&cx, netlist, &mut problems);
     checks::wrong_terminal_blocks(&cx, &mut problems);
-    checks::cable_cores(&cx, &mut problems);
+    checks::cable_cores(&cx, netlist, &mut problems);
     checks::terminal_use(&cx, netlist, &mut problems);
     cx.sort(&mut problems);
     problems
