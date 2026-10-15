@@ -30,6 +30,10 @@ pub(super) struct DeviceFacts {
     pub rotated: bool,
     pub rail: Option<String>,
     pub problems: Vec<String>,
+    /// The place rule that applies to the device, as written in the rule file.
+    pub rule: Option<String>,
+    /// Why the last `Place all` put the device where it is.
+    pub why: Option<String>,
 }
 
 /// What the inspector shows: the selected devices, or the plate.
@@ -90,6 +94,8 @@ pub(super) fn gather(
                 rotated: p.rotated,
                 rail: p.rail.map(|r| format!("Rail {r}")),
                 problems,
+                rule: None,
+                why: None,
             }
         })
         .collect();
@@ -179,6 +185,13 @@ fn show(ui: &mut egui::Ui, facts: &Facts) -> Option<Ask> {
                 }
                 if let Some(rail) = &d.rail {
                     widgets::field(ui, "Mounted on", rail);
+                }
+                if let Some(rule) = &d.rule {
+                    widgets::field(ui, "Place rule", rule);
+                }
+                if let Some(why) = &d.why {
+                    ui.add_space(2.0);
+                    ui.weak(why);
                 }
                 if !d.problems.is_empty() {
                     ui.add_space(4.0);

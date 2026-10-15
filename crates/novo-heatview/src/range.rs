@@ -52,9 +52,17 @@ pub fn ticks(range: Range) -> Vec<f64> {
     levels(range, step)
 }
 
+/// Most levels one list may hold.
+const MAX_LEVELS: usize = 10_000;
+
 /// Multiples of `step` inside the range (inclusive).
 pub fn levels(range: Range, step: f64) -> Vec<f64> {
-    if step <= 0.0 || range.hi < range.lo {
+    // A diverged solve can hand over infinite or absurd ends: no levels,
+    // never an allocation of that size.
+    if step <= 0.0 || !range.lo.is_finite() || !range.hi.is_finite() || range.hi < range.lo {
+        return Vec::new();
+    }
+    if (range.hi - range.lo) / step > MAX_LEVELS as f64 {
         return Vec::new();
     }
     let first = (range.lo / step).ceil() as i64;
@@ -121,6 +129,48 @@ mod tests {
         );
         let labelled: Vec<f64> = c.iter().filter(|l| l.1).map(|l| l.0).collect();
         assert_eq!(labelled, vec![40.0, 60.0, 80.0]);
+    }
+
+    #[test]
+    fn a_diverged_range_gives_no_levels() {
+        assert!(
+            levels(
+                Range {
+                    lo: 35.0,
+                    hi: f64::INFINITY
+                },
+                5.0
+            )
+            .is_empty()
+        );
+        assert!(
+            levels(
+                Range {
+                    lo: f64::NAN,
+                    hi: 80.0
+                },
+                5.0
+            )
+            .is_empty()
+        );
+        assert!(levels(Range { lo: 0.0, hi: 1e15 }, 5.0).is_empty());
+        assert!(
+            ticks(Range {
+                lo: 0.0,
+                hi: f64::INFINITY
+            })
+            .is_empty()
+        );
+        assert!(
+            contour_levels(
+                Range {
+                    lo: 0.0,
+                    hi: f64::INFINITY
+                },
+                8
+            )
+            .is_empty()
+        );
     }
 
     #[test]
