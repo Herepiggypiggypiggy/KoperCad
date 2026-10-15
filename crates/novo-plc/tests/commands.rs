@@ -176,8 +176,9 @@ fn renumber_io_repacks_in_slot_order() {
     doc.transact("Delete", |tx| tx.remove(a)).unwrap();
     // -K2 sat at byte 2 and -K3 at 4; re-packed they start at 0 and 2.
     let plan = renumber_plan(doc.project(), "");
+    assert!(plan.skipped.is_empty());
     assert_eq!(
-        plan,
+        plan.moves,
         [
             StartMove {
                 card: b,
@@ -197,7 +198,34 @@ fn renumber_io_repacks_in_slot_order() {
         .unwrap();
     assert!(renumber_plan(doc.project(), "").is_empty());
     doc.undo().unwrap();
-    assert_eq!(renumber_plan(doc.project(), "").len(), 2);
+    assert_eq!(renumber_plan(doc.project(), "").moves.len(), 2);
+}
+
+#[test]
+fn renumber_lists_cards_it_cannot_size() {
+    let mut doc = Document::default();
+    let (a, b) = doc
+        .transact("Cards", |tx| {
+            let a = add_card(tx, DeviceTag::parse("-K1")?, "", typed("DI16"), "", Some(1))?;
+            let b = add_card(tx, DeviceTag::parse("-K2")?, "", typed("DI8"), "", Some(2))?;
+            tx.set_property(a, CHANNELS, Some(Value::from("DI0")))?;
+            Ok((a, b))
+        })
+        .unwrap()
+        .0;
+    // -K1 can't be sized, so it stays put and -K2 packs from byte 0.
+    let plan = renumber_plan(doc.project(), "");
+    assert_eq!(plan.skipped, [a]);
+    assert_eq!(
+        plan.moves,
+        [StartMove {
+            card: b,
+            space: Space::Input,
+            from: Some(2),
+            to: 0
+        }]
+    );
+    assert!(!plan.is_empty());
 }
 
 #[test]

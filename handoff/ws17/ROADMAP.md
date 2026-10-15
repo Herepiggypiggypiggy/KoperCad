@@ -38,3 +38,8 @@ AnyId (None for spare), spare flag. `novo_plc::READS` lists record kinds read
 (plus project info). Checks: Issue::is_error(), Issue::message(project) with no
 trailing period, Issue::at() AnyIds (done in PR 3). Ping Outputs
 (session_01GNLWH7SKcFppZwCxZoC1rw) when io_rows lands.
+
+## Follow-ups (after #165)
+- renumber_plan: report cards skipped because their layout does not parse, so the preview can say "-K3 skipped: layout does not parse". PR opened from main after #165 merged (f74e14e).
+- ModelError::Format is used for "no free channel" and layout errors; ask WS-02 whether an InvalidValue-style variant is wanted.
+- Brief integration owners: WS-08/WS-06 (`di K4`, `to plc`, aliases), WS-03/WS-10 (address label at the `address` anchor, channel image, G between channel and overview), WS-01 (Devices drawer card rows from io_rows), WS-07 (`plc.channels` on catalog parts).
