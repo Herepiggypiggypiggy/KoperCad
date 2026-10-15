@@ -8,6 +8,7 @@ use novo_canvas::Viewport;
 use novo_core::{Project, Rail, RailKind, StructureId};
 use novo_routing::Kind;
 use novo_routing::model::route_project;
+use novo_theme::tokens;
 
 /// One routed wire, as a polyline in plate millimetres.
 #[derive(Debug, Clone, PartialEq)]
@@ -116,12 +117,40 @@ pub(super) fn overlay(project: &Project, structure: StructureId) -> Overlay {
 /// Green up to 80% of the allowed fill, amber to 100%, red above.
 fn tint(ratio: f64) -> egui::Color32 {
     if ratio > 1.0 {
-        egui::Color32::from_rgb(215, 60, 60)
+        tokens::ERROR
     } else if ratio > 0.8 {
-        egui::Color32::from_rgb(190, 120, 20)
+        tokens::WARNING
     } else {
-        egui::Color32::from_rgb(60, 160, 90)
+        tokens::SUCCESS
     }
+}
+
+/// The overlay of the panel shown, rebuilt only when the project changed or
+/// another panel is shown: routing walks every wire, which is too much work
+/// for every frame.
+#[derive(Default)]
+pub(super) struct OverlayCache {
+    key: Option<(u64, StructureId)>,
+    overlay: Overlay,
+}
+
+impl OverlayCache {
+    pub(super) fn get(&mut self, project: &Project, structure: StructureId) -> &Overlay {
+        let key = (project.revision(), structure);
+        if self.key != Some(key) {
+            self.overlay = overlay(project, structure);
+            self.key = Some(key);
+        }
+        &self.overlay
+    }
+}
+
+/// A fill label needs this much room on screen (points), else it is left
+/// off and the tint alone shows the duct.
+const LABEL_MIN: egui::Vec2 = egui::vec2(30.0, 14.0);
+
+fn fits(area: egui::Rect) -> bool {
+    area.width() >= LABEL_MIN.x && area.height() >= LABEL_MIN.y
 }
 
 /// Paints the overlay. `rect` is the canvas widget's screen rectangle.
@@ -137,25 +166,25 @@ pub(super) fn draw(painter: &egui::Painter, rect: egui::Rect, view: &Viewport, o
             Some(ratio) => {
                 let c = tint(ratio);
                 painter.rect_filled(area, 0.0, c.gamma_multiply(0.25));
-                if d.wires > 0 {
+                if d.wires > 0 && fits(area) {
                     painter.text(
                         area.center(),
                         egui::Align2::CENTER_CENTER,
                         format!("{:.0}%", ratio * 100.0),
-                        egui::FontId::proportional(11.0),
+                        egui::FontId::proportional(tokens::FONT_SMALL),
                         c,
                     );
                 }
             }
             None => {
-                painter.rect_filled(area, 0.0, egui::Color32::GRAY.gamma_multiply(0.2));
-                if d.wires > 0 {
+                painter.rect_filled(area, 0.0, tokens::TEXT_MUTED.gamma_multiply(0.2));
+                if d.wires > 0 && fits(area) {
                     painter.text(
                         area.center(),
                         egui::Align2::CENTER_CENTER,
                         "no size",
-                        egui::FontId::proportional(11.0),
-                        egui::Color32::GRAY,
+                        egui::FontId::proportional(tokens::FONT_SMALL),
+                        tokens::TEXT_MUTED,
                     );
                 }
             }
@@ -164,10 +193,10 @@ pub(super) fn draw(painter: &egui::Painter, rect: egui::Rect, view: &Viewport, o
     for r in &overlay.routes {
         let points: Vec<egui::Pos2> = r.points.iter().map(|&(x, y)| to_screen(x, y)).collect();
         if r.free_air {
-            let stroke = egui::Stroke::new(1.5, egui::Color32::from_rgb(215, 60, 60));
+            let stroke = egui::Stroke::new(1.5, tokens::ERROR);
             painter.extend(egui::Shape::dashed_line(&points, stroke, 6.0, 4.0));
         } else {
-            let stroke = egui::Stroke::new(1.5, egui::Color32::from_rgb(90, 160, 235));
+            let stroke = egui::Stroke::new(1.5, tokens::INFO);
             painter.add(egui::Shape::line(points, stroke));
         }
     }
@@ -269,5 +298,20 @@ mod tests {
     fn a_plate_nothing_is_routed_on_has_an_empty_overlay() {
         let (p, _) = cabinet(None);
         assert_eq!(overlay(&p, StructureId::from(9999)), Overlay::default());
+    }
+
+    #[test]
+    fn the_cache_rebuilds_only_when_the_project_or_panel_changes() {
+        let (mut p, cab) = cabinet(Some((40.0, 60.0)));
+        let mut cache = OverlayCache::default();
+        assert_eq!(cache.get(&p, cab).routes.len(), 1);
+        // Poison the stored copy: an unchanged project must not rebuild it.
+        cache.overlay.routes.clear();
+        assert!(cache.get(&p, cab).routes.is_empty());
+        // Any edit bumps the revision and the overlay is built again.
+        p.transact("edit", |tx| tx.add_page("2")).unwrap();
+        assert_eq!(cache.get(&p, cab).routes.len(), 1);
+        // Another panel is another key.
+        assert!(cache.get(&p, StructureId::from(9999)).routes.is_empty());
     }
 }
