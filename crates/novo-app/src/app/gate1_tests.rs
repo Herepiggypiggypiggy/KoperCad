@@ -169,11 +169,16 @@ impl Drive {
     }
 }
 
-/// What a saved and reopened project must keep: pages, devices, symbols,
-/// wires, terminals and potentials, in a comparable form.
+/// What a saved and reopened project must keep: drawing pages, devices,
+/// symbols, wires, terminals and potentials, in a comparable form. Opening
+/// adds the generated pages a project lacks, so they are left out.
 fn summary(project: &Project) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
-    for page in project.pages_in_order() {
+    for page in project
+        .pages_in_order()
+        .into_iter()
+        .filter(|p| !matches!(p.kind, novo_core::PageKind::Generated { .. }))
+    {
         out.push(format!("page {} {}", page.name, page.title));
     }
     let mut devices: Vec<String> = project.devices().map(|d| d.tag.to_string()).collect();
@@ -430,6 +435,22 @@ fn gate1_motor_starter_through_the_window() {
     e.app.open_path(&file);
     e.frame();
     assert_eq!(summary(e.doc().project()), before, "the reopened project");
+    // Opening gave it its generated pages, after the drawing pages, and
+    // still shows the first drawing page.
+    let generated: Vec<String> = e
+        .doc()
+        .project()
+        .pages_in_order()
+        .into_iter()
+        .filter(|p| matches!(p.kind, novo_core::PageKind::Generated { .. }))
+        .map(|p| format!("{} {}", p.name, p.title))
+        .collect();
+    assert!(
+        generated.iter().any(|p| p == "40 Terminal diagram"),
+        "{generated:?}"
+    );
+    let shown = e.app.current_page.and_then(|p| e.doc().project().page(p));
+    assert_eq!(shown.map(|p| p.name.as_str()), Some("1"));
     if let Some(out) = std::env::var_os("NOVO_GATE1_OUT") {
         e.app.run(&e.ctx.clone(), Action::CloseProject);
         std::fs::copy(&file, std::path::Path::new(&out).join("Starter.novo")).unwrap();
@@ -771,4 +792,195 @@ fn delete_declines_a_terminal_proposal_until_undone() {
     d.app.run(&ctx, Action::Undo);
     d.frame();
     assert_eq!(d.app.page_proposals().len(), before, "undo brings it back");
+}
+
+#[test]
+fn a_generated_page_shows_its_report_and_follows_each_edit() {
+    use novo_core::{DeviceTag, Page, PageKind};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let schematic = d.page();
+    let tag = DeviceTag::parse("-X1").unwrap();
+    let doc = d.app.backend.document_mut().unwrap();
+    let ((strip, page), changes) = doc
+        .transact("Strip and its page", |tx| {
+            let strip = tx.add_terminal_strip(tag)?;
+            tx.add_terminal(strip, "1")?;
+            let page = tx.add_page("20")?;
+            tx.update::<Page>(page, |p| {
+                p.kind = PageKind::Generated {
+                    generator: "terminals".into(),
+                }
+            })?;
+            Ok((strip, page))
+        })
+        .unwrap();
+    d.app.changed_outside_canvas(&changes);
+    d.app.show_page(page);
+    d.frame();
+    let texts = |d: &Drive| -> Vec<String> {
+        let view = d.app.canvas.schematic_ref().unwrap();
+        let sheet = view.sheet().expect("the generated page shows its sheet");
+        assert_eq!(sheet.name, "20");
+        sheet.texts.iter().map(|t| t.text.clone()).collect()
+    };
+    let before = texts(&d);
+    assert!(before.iter().any(|t| t.contains("X1")), "{before:?}");
+    assert!(!before.iter().any(|t| t == "77"), "{before:?}");
+
+    // An edit shows on the sheet in the next frame, with no regenerate step.
+    let doc = d.app.backend.document_mut().unwrap();
+    let (_, changes) = doc
+        .transact("Add 77", |tx| tx.add_terminal(strip, "77"))
+        .unwrap();
+    d.app.changed_outside_canvas(&changes);
+    d.frame();
+    let after = texts(&d);
+    assert!(after.iter().any(|t| t == "77"), "{after:?}");
+
+    // Undo takes it back.
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(texts(&d), before);
+
+    // A schematic page draws no sheet.
+    d.app.show_page(schematic);
+    d.frame();
+    assert!(d.app.canvas.schematic_ref().unwrap().sheet().is_none());
+}
+
+#[test]
+fn the_outline_lists_each_sheet_of_a_generated_page_and_opens_it() {
+    use novo_core::{DeviceTag, Page, PageKind};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let doc = d.app.backend.document_mut().unwrap();
+    let (page, changes) = doc
+        .transact("Two strips and their page", |tx| {
+            for tag in ["-X1", "-X2"] {
+                let strip = tx.add_terminal_strip(DeviceTag::parse(tag).unwrap())?;
+                tx.add_terminal(strip, "1")?;
+            }
+            let page = tx.add_page("20")?;
+            tx.update::<Page>(page, |p| {
+                p.kind = PageKind::Generated {
+                    generator: "terminals".into(),
+                }
+            })?;
+            Ok(page)
+        })
+        .unwrap();
+    d.app.changed_outside_canvas(&changes);
+
+    // One row per strip, each by its sheet name and what it shows.
+    let rows: Vec<_> = d
+        .app
+        .page_rows()
+        .into_iter()
+        .filter(|r| r.page == page)
+        .collect();
+    let labels: Vec<_> = rows.iter().map(|r| r.label.as_str()).collect();
+    assert_eq!(labels.len(), 2, "{labels:?}");
+    assert!(
+        labels[0].starts_with("20a  Terminal diagram · ") && labels[0].ends_with("-X1"),
+        "{labels:?}"
+    );
+    assert!(
+        labels[1].starts_with("20b") && labels[1].ends_with("-X2"),
+        "{labels:?}"
+    );
+
+    // Opening the second row shows that sheet.
+    d.app.show_sheet(page, rows[1].sheet);
+    d.frame();
+    let view = d.app.canvas.schematic_ref().unwrap();
+    assert_eq!(view.sheet().map(|s| s.name.as_str()), Some("20b"));
+    assert_eq!(view.sheet().and_then(|s| s.number), Some((2, 2)));
+}
+
+#[test]
+fn a_deleted_generated_page_stays_deleted() {
+    use novo_core::{DeviceTag, PageKind};
+    let page_of = |d: &Drive, kind: &str| {
+        d.doc()
+            .project()
+            .pages()
+            .find(|p| matches!(&p.kind, PageKind::Generated { generator } if generator == kind))
+            .map(|p| p.id)
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert_eq!(page_of(&d, "toc"), None, "an empty project gets none");
+    let doc = d.app.backend.document_mut().unwrap();
+    let (_, changes) = doc
+        .transact("A strip", |tx| {
+            let strip = tx.add_terminal_strip(DeviceTag::parse("-X1").unwrap())?;
+            tx.add_terminal(strip, "1").map(drop)
+        })
+        .unwrap();
+    d.app.changed_outside_canvas(&changes);
+
+    // As on open: the terminal diagram and the contents arrive.
+    d.app.add_generated_pages();
+    let terminals = page_of(&d, "terminals").expect("a terminal diagram page");
+    assert!(page_of(&d, "toc").is_some());
+
+    // The user deletes it; the next open does not bring it back.
+    let doc = d.app.backend.document_mut().unwrap();
+    let (_, changes) = doc
+        .transact("Delete page", |tx| tx.delete_page(terminals))
+        .unwrap();
+    d.app.changed_outside_canvas(&changes);
+    d.app.add_generated_pages();
+    assert_eq!(page_of(&d, "terminals"), None);
+}
+
+#[test]
+fn opening_an_issued_project_adds_no_generated_pages() {
+    use novo_core::{DeviceTag, PageKind};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let doc = d.app.backend.document_mut().unwrap();
+    let (_, changes) = doc
+        .transact("A strip and an issue", |tx| {
+            let strip = tx.add_terminal_strip(DeviceTag::parse("-X1").unwrap())?;
+            tx.add_terminal(strip, "1")?;
+            tx.issue_revision("A", "2026-10-15", "T", "First issue")
+                .map(drop)
+        })
+        .unwrap();
+    d.app.changed_outside_canvas(&changes);
+    assert!(
+        d.doc().project().pages().any(|p| p.frozen.is_some()),
+        "the issue froze the drawing page"
+    );
+
+    d.app.add_generated_pages();
+    let generated = d
+        .doc()
+        .project()
+        .pages()
+        .filter(|p| matches!(p.kind, PageKind::Generated { .. }))
+        .count();
+    assert_eq!(generated, 0, "an issued project is left as it is");
+    assert!(
+        d.app
+            .messages()
+            .iter()
+            .any(|m| m.text == "Generated pages not added: the project has frozen pages"),
+        "{:?}",
+        d.app.messages()
+    );
 }

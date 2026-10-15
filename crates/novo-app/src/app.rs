@@ -6,6 +6,7 @@
 mod checks;
 mod drawers;
 mod pdf;
+mod reports;
 mod terminals;
 mod workbench;
 mod xref;
@@ -19,9 +20,9 @@ use std::time::{Duration, Instant, SystemTime};
 use eframe::egui;
 
 use crate::actions::Action;
-use novo_core::{Command, ModelError, Outcome, PageId};
+use novo_core::{Command, ModelError, Outcome, PageId, PageKind};
 
-use crate::backend::{BackendError, ProjectBackend, page_labels};
+use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows};
 use crate::canvas::{CanvasView, OpenPage};
 use crate::settings::Settings;
 use crate::{APP_NAME, PROJECT_EXTENSION};
@@ -210,17 +211,48 @@ impl NovoApp {
         })
     }
 
+    #[cfg(test)]
     fn pages(&self) -> Vec<(PageId, String)> {
-        self.backend.document().map(page_labels).unwrap_or_default()
+        self.backend
+            .document()
+            .map(crate::backend::page_labels)
+            .unwrap_or_default()
+    }
+
+    /// The project panel's rows: each page, and each sheet of a generated
+    /// page, from the live reports.
+    fn page_rows(&mut self) -> Vec<PageRow> {
+        match self.backend.document() {
+            Some(doc) => {
+                let project = doc.project();
+                page_rows(project, self.wb.reports.live(project))
+            }
+            None => Vec::new(),
+        }
     }
 
     /// Keeps the shown page valid after undo, redo or a reload removed it.
+    /// Without one, shows the first drawing page rather than the contents.
     fn fix_current_page(&mut self) {
-        let pages = self.pages();
+        let pages: Vec<(PageId, bool)> = self
+            .backend
+            .document()
+            .map(|doc| {
+                doc.project()
+                    .pages_in_order()
+                    .into_iter()
+                    .map(|p| (p.id, matches!(p.kind, PageKind::Generated { .. })))
+                    .collect()
+            })
+            .unwrap_or_default();
         self.recent_pages
             .retain(|r| pages.iter().any(|(id, _)| id == r));
         if !pages.iter().any(|(id, _)| Some(*id) == self.current_page) {
-            self.current_page = pages.first().map(|(id, _)| *id);
+            self.current_page = pages
+                .iter()
+                .find(|(_, generated)| !generated)
+                .or(pages.first())
+                .map(|(id, _)| *id);
         }
     }
 
@@ -233,6 +265,7 @@ impl NovoApp {
             Ok(Some(changes)) => {
                 self.canvas.document_changed(doc, &changes);
                 self.backend.record(&changes);
+                self.reports_heard(&changes);
             }
             Ok(None) => {}
             Err(e) => {
@@ -349,7 +382,7 @@ impl NovoApp {
             Ok(()) => {
                 self.project_path = None;
                 self.current_page = None;
-                self.canvas.document_replaced();
+                self.document_replaced();
                 self.fix_current_page();
             }
             Err(e) => self.message(Level::Error, format!("Could not create a project: {e}")),
@@ -360,7 +393,7 @@ impl NovoApp {
         match self.backend.open(path) {
             Ok(report) => {
                 self.current_page = None;
-                self.canvas.document_replaced();
+                self.document_replaced();
                 self.fix_current_page();
                 if self.backend.is_untitled() {
                     self.project_path = None;
@@ -395,7 +428,7 @@ impl NovoApp {
             Ok(true) => {
                 self.project_path = None;
                 self.current_page = None;
-                self.canvas.document_replaced();
+                self.document_replaced();
                 self.fix_current_page();
                 true
             }
@@ -435,6 +468,7 @@ impl NovoApp {
         };
         self.canvas.document_changed(doc, &outcome.changes);
         self.backend.record(&outcome.changes);
+        self.reports_heard(&outcome.changes);
         self.fix_current_page();
         Some(Ok(outcome))
     }
@@ -449,6 +483,15 @@ impl NovoApp {
         self.current_page
     }
 
+    /// A different project was opened, created or closed: nothing cached
+    /// for the old one carries over.
+    fn document_replaced(&mut self) {
+        self.canvas.document_replaced();
+        self.wb.reports = Default::default();
+        self.wb.sheet = 0;
+        self.add_generated_pages();
+    }
+
     fn close_project(&mut self) {
         if let Err(e) = self.backend.close() {
             self.message(
@@ -461,7 +504,7 @@ impl NovoApp {
         }
         self.project_path = None;
         self.current_page = None;
-        self.canvas.document_replaced();
+        self.document_replaced();
     }
 
     /// Gives the backend its chance to autosave, and wakes the app up in
@@ -610,6 +653,7 @@ impl NovoApp {
             .show(ui, |ui| {
                 if self.is_open() {
                     self.update_marks();
+                    self.update_sheet();
                     let open = self
                         .current_page
                         .and_then(|page| OpenPage::new(&mut *self.backend, page));
@@ -650,6 +694,7 @@ impl NovoApp {
     fn after_canvas(&mut self) {
         let changes = self.canvas.take_changes();
         if !changes.is_empty() {
+            self.reports_heard(&changes);
             self.fix_current_page();
         }
         if let Some(page) = self.canvas.take_page_request() {
@@ -685,10 +730,19 @@ impl NovoApp {
 
     /// Shows `page` on the canvas and puts it first under "Recent".
     fn show_page(&mut self, page: PageId) {
+        if self.current_page != Some(page) {
+            self.wb.sheet = 0;
+        }
         self.current_page = Some(page);
         self.recent_pages.retain(|&p| p != page);
         self.recent_pages.insert(0, page);
         self.recent_pages.truncate(MAX_RECENT_PAGES);
+    }
+
+    /// Shows sheet `sheet` of a generated page (0 for any other page).
+    pub(crate) fn show_sheet(&mut self, page: PageId, sheet: usize) {
+        self.show_page(page);
+        self.wb.sheet = sheet;
     }
 
     /// Autosave state for the top bar.
@@ -794,10 +848,17 @@ impl NovoApp {
             return;
         };
         ui.label(name);
-        let page = self
-            .current_page
-            .and_then(|id| self.pages().into_iter().find(|(p, _)| *p == id));
-        if let Some((_, label)) = page {
+        let page = self.current_page.and_then(|id| {
+            let sheet = self.wb.sheet;
+            let rows = self.page_rows();
+            let mine = rows.iter().filter(|r| r.page == id);
+            // The shown sheet, or the page's last when it has fewer now.
+            mine.clone()
+                .find(|r| r.sheet == sheet)
+                .or_else(|| mine.clone().next_back())
+                .cloned()
+        });
+        if let Some(PageRow { label, .. }) = page {
             ui.weak("/");
             let link = ui.add(egui::Button::new(egui::RichText::new(label).strong()).frame(false));
             if link.clicked() && !self.outline_pinned() {
@@ -851,7 +912,7 @@ impl NovoApp {
         );
         ui.add_space(4.0);
 
-        let pages = self.pages();
+        let pages = self.page_rows();
         let filter = self.page_filter.to_lowercase();
         let mut chosen = None;
         egui::ScrollArea::vertical()
@@ -861,13 +922,13 @@ impl NovoApp {
                     let recent: Vec<_> = self
                         .recent_pages
                         .iter()
-                        .filter_map(|id| pages.iter().find(|(p, _)| p == id))
+                        .filter_map(|id| pages.iter().find(|r| r.page == *id))
                         .collect();
                     if !recent.is_empty() {
                         section_label(ui, "Recent");
-                        for (id, label) in recent {
-                            if self.page_row(ui, *id, label) {
-                                chosen = Some(*id);
+                        for row in recent {
+                            if self.page_row(ui, row) {
+                                chosen = Some((row.page, row.sheet));
                             }
                         }
                         ui.add_space(6.0);
@@ -875,11 +936,11 @@ impl NovoApp {
                 }
                 section_label(ui, "All pages");
                 let mut any = false;
-                for (id, label) in &pages {
-                    if filter.is_empty() || label.to_lowercase().contains(&filter) {
+                for row in &pages {
+                    if filter.is_empty() || row.label.to_lowercase().contains(&filter) {
                         any = true;
-                        if self.page_row(ui, *id, label) {
-                            chosen = Some(*id);
+                        if self.page_row(ui, row) {
+                            chosen = Some((row.page, row.sheet));
                         }
                     }
                 }
@@ -887,14 +948,15 @@ impl NovoApp {
                     ui.weak("No page matches");
                 }
             });
-        if let Some(page) = chosen {
-            self.show_page(page);
+        if let Some((page, sheet)) = chosen {
+            self.show_sheet(page, sheet);
             self.outline_open = false;
         }
     }
 
-    fn page_row(&self, ui: &mut egui::Ui, id: PageId, label: &str) -> bool {
-        let selected = self.current_page == Some(id);
+    fn page_row(&self, ui: &mut egui::Ui, row: &PageRow) -> bool {
+        let selected = self.current_page == Some(row.page) && self.wb.sheet == row.sheet;
+        let label = row.label.as_str();
         ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
             ui.add(egui::Button::selectable(selected, label).min_size(egui::vec2(0.0, 22.0)))
         })
@@ -1136,7 +1198,7 @@ impl NovoApp {
     fn resolve_recovery(&mut self, restore: bool) {
         match self.backend.resolve_recovery(restore) {
             Ok(()) if restore => {
-                self.canvas.document_replaced();
+                self.document_replaced();
                 self.fix_current_page();
                 self.message(Level::Info, "Restored the unsaved work. Save to keep it.");
             }
@@ -1144,7 +1206,7 @@ impl NovoApp {
                 if !self.is_open() {
                     self.project_path = None;
                     self.current_page = None;
-                    self.canvas.document_replaced();
+                    self.document_replaced();
                 }
                 self.message(Level::Info, "Discarded the unsaved work");
             }

@@ -42,6 +42,10 @@ pub(crate) struct Workbench {
     pub(super) field: CommandField,
     pub(super) keymap: Keymap,
     pub(super) xref: LiveXref,
+    /// The generated pages' reports, live.
+    pub(super) reports: super::reports::Reports,
+    /// Which sheet of a generated page the canvas shows (0 for the first).
+    pub(super) sheet: usize,
     pub(super) nav: Navigator,
     /// Where to select and centre once the canvas shows its page.
     pub(super) pending: Option<Place>,
@@ -92,6 +96,8 @@ impl Default for Workbench {
             field: CommandField::default(),
             keymap: Keymap::workflow(),
             xref: LiveXref::default(),
+            reports: Default::default(),
+            sheet: 0,
             nav: Navigator::default(),
             pending: None,
             canvas_area: None,
@@ -550,6 +556,7 @@ impl NovoApp {
             self.canvas.document_changed(doc, changes);
         }
         self.backend.record(changes);
+        self.reports_heard(changes);
         self.fix_current_page();
     }
 

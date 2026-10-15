@@ -570,21 +570,74 @@ pub fn new_document(name: &str) -> Result<Document, ModelError> {
     Ok(Document::new(project))
 }
 
-/// Pages in display order, with the label the project panel shows.
+/// The project panel's labels in display order: each page, and each sheet
+/// of a generated page (see [`page_rows`]).
 pub fn page_labels(document: &Document) -> Vec<(PageId, String)> {
-    document
-        .project()
-        .pages_in_order()
-        .into_iter()
-        .map(|p| {
+    page_rows(
+        document.project(),
+        &mut novo_reports::LiveReports::standard(),
+    )
+    .into_iter()
+    .map(|row| (row.page, row.label))
+    .collect()
+}
+
+/// One row of the project panel: a page, or one sheet of a generated page
+/// whose report needs several.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PageRow {
+    pub page: PageId,
+    /// The sheet of a generated page (0 for the first, and for any other
+    /// page).
+    pub sheet: usize,
+    pub label: String,
+}
+
+/// The project panel's rows in page order. A generated page lists each of
+/// its sheets by name and what it shows (`20a  Terminal diagram · -X1`,
+/// DESIGN.md §8), so any sheet can be opened from the panel.
+pub fn page_rows(project: &Project, reports: &mut novo_reports::LiveReports) -> Vec<PageRow> {
+    let mut rows = Vec::new();
+    for p in project.pages_in_order() {
+        let sheets = reports.sheets_of_page(project, p.id);
+        if sheets.is_empty() {
             let label = if p.title.is_empty() {
                 p.name.clone()
             } else {
                 format!("{} {}", p.name, p.title)
             };
-            (p.id, label)
-        })
-        .collect()
+            rows.push(PageRow {
+                page: p.id,
+                sheet: 0,
+                label,
+            });
+            continue;
+        }
+        let output = reports.get(project, &sheets[0].report);
+        for (i, sheet) in sheets.iter().enumerate() {
+            let (title, shows) = output
+                .map(|o| {
+                    let section = o
+                        .sections
+                        .get(sheet.sheet.section)
+                        .map(|s| s.title.as_str())
+                        .unwrap_or_default();
+                    (o.title.as_str(), section)
+                })
+                .unwrap_or_default();
+            let mut label = format!("{}  {title}", sheet.name);
+            if !shows.is_empty() {
+                label.push_str(" · ");
+                label.push_str(shows);
+            }
+            rows.push(PageRow {
+                page: p.id,
+                sheet: i,
+                label,
+            });
+        }
+    }
+    rows
 }
 
 #[cfg(test)]
