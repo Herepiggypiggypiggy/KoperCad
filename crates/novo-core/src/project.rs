@@ -909,7 +909,10 @@ impl Project {
             let allowed = matches!(
                 member,
                 Record::Device(_)
-                    | Record::Symbol(_)
+                    | Record::Symbol(SymbolInstance {
+                        role: SymbolRole::Device { .. } | SymbolRole::Unassigned,
+                        ..
+                    })
                     | Record::Junction(_)
                     | Record::Wire(_)
                     | Record::Text(_)

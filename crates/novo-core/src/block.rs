@@ -29,7 +29,9 @@ impl Tx<'_> {
     /// stored relative to `origin`. Wires to objects outside the selection
     /// are left out (they are how the block connects). References to
     /// project-wide objects (parts, potentials, feeds) are not captured.
-    /// Terminal symbols and potential feeds cannot be part of a block.
+    /// Terminal symbols, potential feeds and interruption points cannot be
+    /// part of a block: an interruption point joins nets by name across the
+    /// project, so two placements would be tied together.
     pub fn define_block(
         &mut self,
         name: impl Into<String>,
@@ -44,13 +46,15 @@ impl Tx<'_> {
                 AnyId::Symbol(s) => {
                     let symbol = project.symbol(s).ok_or(ModelError::NotFound(item))?;
                     match symbol.role {
-                        SymbolRole::Terminal { .. } | SymbolRole::PotentialFeed { .. } => {
+                        SymbolRole::Terminal { .. }
+                        | SymbolRole::PotentialFeed { .. }
+                        | SymbolRole::Interruption { .. } => {
                             return Err(ModelError::NotInBlock(item));
                         }
                         SymbolRole::Device { device, .. } => {
                             picked.insert(device.into());
                         }
-                        SymbolRole::Unassigned | SymbolRole::Interruption { .. } => {}
+                        SymbolRole::Unassigned => {}
                     }
                     picked.insert(item);
                 }
@@ -60,7 +64,8 @@ impl Tx<'_> {
                 AnyId::Text(t) if project.text(t).is_some() => {
                     picked.insert(item);
                 }
-                other => return Err(ModelError::NotFound(other)),
+                AnyId::Junction(_) | AnyId::Text(_) => return Err(ModelError::NotFound(item)),
+                other => return Err(ModelError::NotInBlock(other)),
             }
         }
         let wires: Vec<WireId> = picked
@@ -484,6 +489,8 @@ impl Tx<'_> {
     /// The tag a placed device gets: the template's product levels in the
     /// page's structure, numbered next free for its letter code. A device
     /// without a tag in the template stays without one.
+    // TODO: follow the project's numbering rule (DESIGN §7) once per-page
+    // numbering (-K301) is live; this always numbers per letter code.
     fn allocate_tag(&self, structure: &DeviceTag, template: &DeviceTag) -> DeviceTag {
         if template.product.is_empty() {
             return DeviceTag::default();

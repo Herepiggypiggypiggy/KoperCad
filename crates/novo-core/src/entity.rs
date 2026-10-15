@@ -864,8 +864,9 @@ pub struct Dismissal {
 
 /// A parametric circuit kept in the project (DESIGN §7): devices, symbols,
 /// junctions, wires and texts captured from a drawing, placed again as
-/// [`BlockInstance`]s. The members are records with their own ids, local to
-/// the definition; they sit on no page (page id 0) and their positions are
+/// [`BlockInstance`]s. The members are records with the ids they had when
+/// captured, local to the definition (never look them up in the project);
+/// they sit on no page (page id 0) and their positions are
 /// relative to the block origin. Device properties, descriptions and
 /// literal texts may name a parameter as `{name}`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -912,6 +913,8 @@ pub struct BlockSource {
 pub struct BlockInstance {
     pub id: BlockInstanceId,
     pub definition: BlockDefinitionId,
+    /// The page it was placed on. Members moved later with
+    /// [`Command::MoveToPage`](crate::Command::MoveToPage) may be elsewhere.
     pub page: PageId,
     /// Where the definition's origin was placed.
     pub origin: Point,

@@ -464,6 +464,29 @@ fn what_a_block_cannot_hold() {
         })
         .unwrap_err();
     assert_eq!(err, ModelError::NotInBlock(d.terminal.into()));
+    // An interruption point joins nets by name across the project, so two
+    // placements would be tied together.
+    let err = doc
+        .transact("Define", |tx| {
+            let point = tx.place_symbol(
+                d.p1,
+                "interruption",
+                Placement::at(Point::new(120.0, 0.0)),
+                two_pins(),
+                SymbolRole::Interruption { name: "L1".into() },
+            )?;
+            tx.define_block("i", &[point.into()], Point::default(), Vec::new())
+        })
+        .unwrap_err();
+    assert!(matches!(err, ModelError::NotInBlock(AnyId::Symbol(_))));
+    // A wire is captured with its ends, not picked on its own.
+    let wire = doc.project().wires().next().unwrap().id;
+    let err = doc
+        .transact("Define", |tx| {
+            tx.define_block("w", &[wire.into()], Point::default(), Vec::new())
+        })
+        .unwrap_err();
+    assert_eq!(err, ModelError::NotInBlock(wire.into()));
     let err = doc
         .transact("Define", |tx| {
             tx.define_block("a", &[d.outside.into()], Point::default(), Vec::new())?;
