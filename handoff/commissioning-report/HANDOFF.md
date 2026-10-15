@@ -8,7 +8,7 @@ sign-offs), progress per cabinet and page, `readiness`, and `commissioning_repor
 (summary, cabinets, pages, checks, punch, signoff). CSV works through the existing `to_csv`.
 
 Interface proposed to the sibling: they provide a mapping from their records to `CommissioningInput`.
-No reply yet (see PROGRESS.md).
+Agreed by the sibling: they provide `to_report_input(&Project, &CommissioningStore)` in the new crate novo-commissioning (design PR #399); wait for their message that it landed, then register the report.
 
-Resume: `cargo test -p novo-reports commissioning`. Next is the standalone report PDF in novo-pdf (the
-existing exporter only prints project pages inside the schematic frame).
+Resume: `cargo test -p novo-reports commissioning`. `novo_pdf::export_report_pdf` (crates/novo-pdf/src/report.rs) writes any ReportOutput as a stand-alone PDF.
+Next: export command (menu, CLI), then the large-target tablet layout in novo-app.
