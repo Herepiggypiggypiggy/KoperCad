@@ -14,15 +14,19 @@ checks, waivers and the report. Draft PRs, no build.
   thermal withstand), motor (full-load current, starter checks), pe
   (section rule, adiabatic, loop impedance, path resistance).
 
+- PR 2 (stacked on #412): six ProblemKinds (VoltageDrop, ShortCircuit,
+  DisconnectionTime, ThermalWithstand, MotorStarter, ProtectiveConductor)
+  and `calc_checks.rs`, the adapter reading properties (table in its module
+  doc). Motor starter chain found by walking even-numbered pins upstream.
+
 ## Next, in order
-1. Agree with the panel thread how results become `Problem`s (new
-   `ProblemKind`s, one `checks::calc_checks` call). Small PR first.
-2. Adapter: read the model into calc inputs. Needs properties for
-   installation method, ambient, grouping, supply voltage and source data
-   (project properties), breaking capacity and trip curve on parts.
-3. Motor starter adapter: find the starter chain (breaker, contactor,
-   overload relay, motor) from the netlist.
-4. PE continuity over the netlist (every PE terminal reaches the PE source).
+1. Cable rating with installation method, ambient and grouping
+   (`calc::cable::Circuit`) replacing the single-column ampacity in
+   `checks::undersized_wires`; map Rule::CableRating to UndersizedWire.
+2. Short-circuit current reduced along cables (needs the feeder chain).
+3. PE continuity over the netlist (every PE terminal reaches the PE source).
+4. "Planning value, verify" wording on table-based results once the cable
+   rating check uses the calc tables.
 
 ## Open
 - Table values are from memory of IEC 60364-5-52; verify against the

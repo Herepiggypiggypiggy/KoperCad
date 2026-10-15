@@ -27,6 +27,12 @@
 //! | [`Plc`](ProblemKind::Plc) | warning, error where the I/O list would be wrong | A PLC card or channel that cannot be addressed or wired as drawn (novo-plc's checks) |
 //! | [`WireOverlap`](ProblemKind::WireOverlap) | warning | Two wires on a page sharing a stretch of line |
 //! | [`OpenWire`](ProblemKind::OpenWire) | warning | A wire with an open end that is connected to nothing |
+//! | [`VoltageDrop`](ProblemKind::VoltageDrop) | warning, error above twice the limit | A wire whose voltage drop exceeds the limit (calc::drop) |
+//! | [`ShortCircuit`](ProblemKind::ShortCircuit) | error | A device that cannot break the supply's short-circuit current |
+//! | [`DisconnectionTime`](ProblemKind::DisconnectionTime) | error | A wire so long that an earth fault cannot trip its protective device in time |
+//! | [`ThermalWithstand`](ProblemKind::ThermalWithstand) | error | A wire that cannot take the let-through energy of its protective device |
+//! | [`MotorStarter`](ProblemKind::MotorStarter) | warning, error where it cannot work | A motor starter whose relay, contactor or fuse does not suit the motor |
+//! | [`ProtectiveConductor`](ProblemKind::ProtectiveConductor) | warning | A protective conductor thinner than its phase conductors need |
 //! | [`MissingPart`](ProblemKind::MissingPart) | info | A device or cable without a part |
 //!
 //! Not checked here:
@@ -47,6 +53,7 @@
 //! ```
 
 pub mod calc;
+mod calc_checks;
 mod checks;
 mod contacts;
 
@@ -132,11 +139,29 @@ pub enum ProblemKind {
     /// A wire with an open end (`wire.open`, DESIGN.md §4): an end connected
     /// to nothing. Open ends are allowed while sketching; they join no net.
     OpenWire,
+    /// A wire whose voltage drop over its length and load is above the
+    /// limit (`calc::drop`). Warning; an error above twice the limit.
+    VoltageDrop,
+    /// A protective device with a breaking capacity below the prospective
+    /// short-circuit current of the supply (`calc::short_circuit`).
+    ShortCircuit,
+    /// A wire whose smallest earth-fault current is too low for its
+    /// protective device to trip at once.
+    DisconnectionTime,
+    /// A wire thinner than its protective device's let-through energy
+    /// allows (`k²S²`).
+    ThermalWithstand,
+    /// A motor starter whose overload relay, contactor or short-circuit
+    /// device does not suit the motor or each other (`calc::motor`).
+    MotorStarter,
+    /// A protective conductor thinner than the rule for its phase
+    /// conductors (`calc::pe`).
+    ProtectiveConductor,
 }
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 17] = [
+    pub const ALL: [ProblemKind; 23] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -154,13 +179,22 @@ impl ProblemKind {
         ProblemKind::MissingPart,
         ProblemKind::WireOverlap,
         ProblemKind::OpenWire,
+        ProblemKind::VoltageDrop,
+        ProblemKind::ShortCircuit,
+        ProblemKind::DisconnectionTime,
+        ProblemKind::ThermalWithstand,
+        ProblemKind::MotorStarter,
+        ProblemKind::ProtectiveConductor,
     ];
 
     pub fn severity(self) -> Severity {
         match self {
             ProblemKind::DuplicateTag
             | ProblemKind::TooManyContacts
-            | ProblemKind::PotentialConflict => Severity::Error,
+            | ProblemKind::PotentialConflict
+            | ProblemKind::ShortCircuit
+            | ProblemKind::DisconnectionTime
+            | ProblemKind::ThermalWithstand => Severity::Error,
             ProblemKind::UnconnectedPin
             | ProblemKind::LoneInterruption
             | ProblemKind::NoMainFunction
@@ -173,6 +207,9 @@ impl ProblemKind {
             | ProblemKind::TerminalUse
             | ProblemKind::WireOverlap
             | ProblemKind::OpenWire
+            | ProblemKind::VoltageDrop
+            | ProblemKind::MotorStarter
+            | ProblemKind::ProtectiveConductor
             | ProblemKind::Plc => Severity::Warning,
             ProblemKind::MissingPart => Severity::Info,
         }
@@ -198,6 +235,12 @@ impl ProblemKind {
             ProblemKind::Plc => "PLC",
             ProblemKind::WireOverlap => "Wires overlap",
             ProblemKind::OpenWire => "Open wire end",
+            ProblemKind::VoltageDrop => "Voltage drop",
+            ProblemKind::ShortCircuit => "Breaking capacity",
+            ProblemKind::DisconnectionTime => "Disconnection time",
+            ProblemKind::ThermalWithstand => "Thermal withstand",
+            ProblemKind::MotorStarter => "Motor starter",
+            ProblemKind::ProtectiveConductor => "Protective conductor",
         }
     }
 }
@@ -306,6 +349,7 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     checks::plc(&cx, &mut problems);
     checks::wire_overlaps(&cx, &mut problems);
     checks::open_wires(&cx, &mut problems);
+    calc_checks::run(&cx, netlist, &mut problems);
     cx.sort(&mut problems);
     problems
 }
