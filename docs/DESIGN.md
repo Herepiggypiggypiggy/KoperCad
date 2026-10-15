@@ -90,7 +90,8 @@ What the screen must do:
 4. **Quiet until needed:** at rest, the drawing plus one thin bar.
 5. **Works on a site laptop:** 1366x768 and 1536x864 effective (1920x1080 at
    125%) are design targets. With the outline as a flyout and the drawer
-   closed, the canvas gets 95% of the window.
+   closed, the canvas gets 92% of the window (the 22 px status bar,
+   docs/design/workspaces.md §4 and §7, replaced the earlier 95% target).
 
 **Top bar (42 px).**
 - The **mark** opens a short project menu: New, Open, Recent, Export PDF,
@@ -156,11 +157,11 @@ height, keeps the canvas-centre world point fixed, docks right above
 
 | Screen (effective) | Outline | Drawer | Canvas |
 | --- | --- | --- | --- |
-| 1920x1080 at 100% | pinned, 248 | bottom, 30% | 1672 x 714 |
-| 1536x864 (1080p at 125%) | flyout | closed | 1536 x 822 (95%) |
-| 1536x864 | flyout | bottom, 35% | 1536 x 520 |
-| 1366x768 | flyout | closed | 1366 x 726 (95%) |
-| 1366x768 | flyout | bottom, capped at 35% | 1366 x 457 |
+| 1920x1080 at 100% | pinned, 248 | bottom, 30% | 1672 x 692 |
+| 1536x864 (1080p at 125%) | flyout | closed | 1536 x 800 (92%) |
+| 1536x864 | flyout | bottom, 35% | 1536 x 498 |
+| 1366x768 | flyout | closed | 1366 x 704 (92%) |
+| 1366x768 | flyout | bottom, capped at 35% | 1366 x 435 |
 
 **Focus mode** (Ctrl+Shift+F) hides every unpinned panel, for reviewing
 and presenting (layout B). F11 is full screen.
