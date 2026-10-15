@@ -14,6 +14,9 @@ pub enum SnapKind {
     Endpoint,
     Center,
     Midpoint,
+    /// Somewhere along a [`SnapLine`](crate::scene::SnapLine) (a rail, a
+    /// duct).
+    OnLine,
     Grid,
     /// No snap applied.
     Free,
@@ -28,6 +31,8 @@ impl SnapKind {
             SnapKind::Endpoint => 0.7,
             SnapKind::Center => 0.9,
             SnapKind::Midpoint => 1.0,
+            // Points on or near a line win over sliding along it.
+            SnapKind::OnLine => 1.5,
             SnapKind::Grid | SnapKind::Free => f32::INFINITY,
         }
     }
@@ -90,6 +95,13 @@ pub fn snap(
                 for p in &item.primitives {
                     p.shape.snap_points(&mut pts);
                 }
+            }
+            if settings.connections {
+                pts.extend(
+                    item.snap_lines
+                        .iter()
+                        .map(|l| (l.nearest(cursor), SnapKind::OnLine)),
+                );
             }
             for &(p, kind) in &pts {
                 let d = p.distance(cursor);
@@ -263,5 +275,42 @@ mod tests {
             ortho(Vec2::ZERO, Vec2::new(-2.0, -7.0)),
             Vec2::new(0.0, -7.0)
         );
+    }
+
+    /// A rail: the cursor slides along it, on its pitch when it has one,
+    /// never past its ends; a point target in range still wins.
+    #[test]
+    fn snaps_onto_a_line_along_its_pitch() {
+        use crate::scene::SnapLine;
+        let mut s = Scene::new();
+        s.insert(
+            ItemId(7),
+            Item::new(LayerId(0))
+                .with_snap_line(SnapLine::new((0.0, 50.0), (100.0, 50.0)).stepped(9.0)),
+        );
+        let at = |s: &Scene, c: Vec2| snap(s, &view(), None, &SnapSettings::default(), c, &[]);
+        let r = at(&s, Vec2::new(40.0, 53.0));
+        assert_eq!((r.kind, r.item), (SnapKind::OnLine, Some(ItemId(7))));
+        assert_eq!(r.point, Vec2::new(36.0, 50.0));
+        // Past the end: the last whole step, not the end itself.
+        let r = at(&s, Vec2::new(103.0, 50.0));
+        assert_eq!(r.point, Vec2::new(99.0, 50.0));
+        // Too far from the line: free.
+        assert_eq!(at(&s, Vec2::new(40.0, 70.0)).kind, SnapKind::Free);
+        // Without a pitch, straight under the cursor.
+        let free = SnapLine::new((0.0, 0.0), (0.0, 30.0));
+        assert_eq!(free.nearest(Vec2::new(4.0, 12.5)), Vec2::new(0.0, 12.5));
+        assert_eq!(
+            SnapLine::new((0.0, 0.0), (0.0, 0.0)).nearest(Vec2::ONE),
+            Vec2::ZERO
+        );
+        assert_eq!(free.stepped(-1.0).step, None);
+        // A connection point near the line beats the line.
+        s.insert(
+            ItemId(8),
+            Item::new(LayerId(0)).with_snap(SnapPoint::connection(Vec2::new(42.0, 51.0))),
+        );
+        let r = at(&s, Vec2::new(40.0, 53.0));
+        assert_eq!(r.kind, SnapKind::Connection);
     }
 }

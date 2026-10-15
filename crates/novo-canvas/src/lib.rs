@@ -11,6 +11,7 @@
 //! - [`Grid`]: snap grid and adaptive grid display.
 //! - [`Scene`]: items, layers and a spatial index for picking and box selection.
 //! - [`snap()`]: connection, geometry and grid snapping.
+//! - [`drafting`]: hatched areas and linear dimensions for layout drawings.
 //! - [`Selection`]: the selection set.
 //! - [`Tessellator`]: primitives to triangles; zoom-independent meshes.
 //! - `render::CanvasRenderer`: wgpu pipeline that draws meshes (feature
@@ -19,6 +20,7 @@
 //! - [`model`] (feature `model`): keeps a scene in sync with a `novo-core` page.
 
 pub mod demo;
+pub mod drafting;
 pub mod geom;
 pub mod grid;
 pub mod marks;
@@ -37,11 +39,12 @@ pub mod viewport;
 #[cfg(feature = "egui")]
 pub mod widget;
 
+pub use drafting::{Dimension, DimensionStyle, hatch, hatched_rect};
 pub use geom::Aabb;
 pub use glam::{Vec2, vec2};
 pub use grid::{Grid, GridStyle};
 pub use marks::{Mark, MarkKind, MarkTarget, Marks};
-pub use scene::{BoxMode, Hit, Item, ItemId, Layer, LayerId, Scene, SnapPoint};
+pub use scene::{BoxMode, Hit, Item, ItemId, Layer, LayerId, Scene, SnapLine, SnapPoint};
 pub use selection::{SelectOp, Selection};
 pub use shape::{Placement, Primitive, Shape};
 pub use snap::{SnapKind, SnapSettings, Snapped, ortho, snap};

@@ -1117,6 +1117,15 @@ impl CanvasView {
                 ],
                 true,
             ),
+            SnapKind::OnLine => Shape::polyline(
+                [
+                    p + Vec2::new(0.0, -r),
+                    p + Vec2::new(r, 0.0),
+                    p + Vec2::new(0.0, r),
+                    p + Vec2::new(-r, 0.0),
+                ],
+                true,
+            ),
             SnapKind::Grid => {
                 let h = r * 0.6;
                 tessellate::stroke_run(mesh, &[p - Vec2::X * h, p + Vec2::X * h], &stroke);
