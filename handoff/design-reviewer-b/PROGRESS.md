@@ -77,3 +77,6 @@
 21:00 UTC #463 531ac66 CHANGES (conflict again with main: #489/#411/#479)
 21:10 UTC #478 24ef928 READY (Cabinet problem list)
 21:20 UTC #528 347b1c0 READY (Parts window schema v2 fields)
+21:35 UTC #463 afb185d READY (registry menus, conflicts fixed)
+21:35 UTC #475 33ff374 READY (stacked on #467/#463)
+21:40 UTC #532 08f4461 READY (Learn UI: lesson card, pointer, Learn window)
