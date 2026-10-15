@@ -48,6 +48,7 @@
 
 mod checks;
 mod contacts;
+pub mod protection;
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
