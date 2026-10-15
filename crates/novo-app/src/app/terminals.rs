@@ -275,7 +275,7 @@ pub(super) fn proposal_marks(proposals: &[Suggestion], current: usize) -> Vec<Ma
 
 impl NovoApp {
     /// The terminals drawn by the selected symbols, each once.
-    fn selected_terminals(&self) -> Vec<novo_core::TerminalId> {
+    pub(super) fn selected_terminals(&self) -> Vec<novo_core::TerminalId> {
         let Some(doc) = self.backend.document() else {
             return Vec::new();
         };
@@ -335,10 +335,24 @@ impl NovoApp {
                     novo_terminals::connect_terminals(tx, &terminals).map(|_| None)
                 }),
             ),
+            "terminal.toggle_pe" => (
+                "Toggle PE terminal",
+                doc.transact("Toggle PE terminal", |tx| {
+                    novo_terminals::toggle_pe(tx, &terminals).map(|_| None)
+                }),
+            ),
             "terminal.disconnect" => (
                 "Disconnect terminals",
                 doc.transact("Disconnect terminals", |tx| {
                     novo_terminals::set_jumper(tx, &terminals, None).map(|_| None)
+                }),
+            ),
+            "terminal.reset_pe" => (
+                "Reset PE override",
+                doc.transact("Reset PE override", |tx| {
+                    novo_terminals::reset_pe_override(tx, &terminals)?;
+                    // The rule decides again, right away.
+                    novo_terminals::mark_earthed(tx).map(|_| None)
                 }),
             ),
             _ => {

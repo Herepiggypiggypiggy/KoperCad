@@ -13,7 +13,7 @@
 //! IEC 60617 artwork; until then [`PlaceholderArt`] draws a box with pin
 //! stubs so every symbol is visible and connectable.
 
-use crate::scene::{Hit, Item, ItemId, Layer, LayerId, Scene, Sheet, SnapPoint};
+use crate::scene::{Handle, Hit, Item, ItemId, Layer, LayerId, Scene, Sheet, SnapPoint};
 use crate::shape::{Placement, Primitive, Shape};
 use crate::style::{Color, Stroke};
 use crate::text::{Anchor, Label};
@@ -66,6 +66,21 @@ pub fn anchor(a: TextAnchor) -> Anchor {
         TextAnchor::BottomLeft => Anchor::BottomLeft,
         TextAnchor::BottomCenter => Anchor::BottomCenter,
         TextAnchor::BottomRight => Anchor::BottomRight,
+    }
+}
+
+/// A canvas anchor as a model text anchor (the inverse of [`anchor`]).
+pub fn text_anchor(a: Anchor) -> TextAnchor {
+    match a {
+        Anchor::TopLeft => TextAnchor::TopLeft,
+        Anchor::TopCenter => TextAnchor::TopCenter,
+        Anchor::TopRight => TextAnchor::TopRight,
+        Anchor::CenterLeft => TextAnchor::MiddleLeft,
+        Anchor::Center => TextAnchor::MiddleCenter,
+        Anchor::CenterRight => TextAnchor::MiddleRight,
+        Anchor::BottomLeft => TextAnchor::BottomLeft,
+        Anchor::BottomCenter => TextAnchor::BottomCenter,
+        Anchor::BottomRight => TextAnchor::BottomRight,
     }
 }
 
@@ -187,8 +202,8 @@ pub struct ModelStyle {
     /// once the editor picks wires by corner and segment
     /// ([`PageScene::wire_part_at`]); a box still selects whole wires.
     pub wires_pick_whole: bool,
-    /// Half-size (mm) of the square shown on every wire corner; `0.0` draws
-    /// none (print).
+    /// Half-size (screen points, the same at every zoom) of the square shown
+    /// on every wire corner; `0.0` draws none (print).
     pub corner_half: f32,
     /// Colour of a wire's corners.
     pub corner_color: Color,
@@ -224,7 +239,7 @@ impl Default for ModelStyle {
             wire_end_color: Color::rgb(176, 104, 56),
             unconnected_color: Color::rgb(190, 120, 20),
             wires_pick_whole: true,
-            corner_half: 0.55,
+            corner_half: 2.5,
             corner_color: Color::rgb(30, 70, 200),
             focus_color: Color::rgb(255, 150, 30),
             wire_end_radius: 0.9,
@@ -835,6 +850,7 @@ impl PageScene {
         for id in contents.symbols {
             self.sync_symbol(project, id, art);
         }
+        self.sync_bars(project);
         for id in contents.junctions {
             self.sync_junction(project, id);
         }
@@ -945,6 +961,7 @@ impl PageScene {
             _ => false,
         });
         if terminals_touched {
+            self.sync_bars(project);
             let heads = strip_heads(project, self.page);
             for (s, tag) in self.strip_heads.iter().chain(&heads) {
                 if self.strip_heads.get(s) != Some(tag) || heads.get(s) != Some(tag) {
@@ -1187,6 +1204,21 @@ impl PageScene {
         }
     }
 
+    /// Redraws the bridge bars of the page's jumper groups.
+    fn sync_bars(&mut self, project: &Project) {
+        let bars = bridge_bars(project, self.page);
+        if bars.is_empty() {
+            self.scene.remove(BARS_ITEM);
+            return;
+        }
+        let stroke = Stroke::world(0.5, self.style.symbol.color);
+        let mut item = Item::new(self.layers.symbols).unselectable();
+        for (a, b) in bars {
+            item = item.with(Primitive::stroked(Shape::line(a, b), stroke));
+        }
+        self.scene.insert(BARS_ITEM, item);
+    }
+
     fn sync_symbol(&mut self, project: &Project, id: SymbolId, art: &dyn SymbolArt) {
         let Some(sym) = project.symbol(id).filter(|s| s.page == self.page) else {
             self.remove(id.into());
@@ -1426,11 +1458,11 @@ impl PageScene {
         item.click_select = self.style.wires_pick_whole;
         // Every corner shows as a small square, so it can be told from the
         // straight runs and picked on its own.
-        let h = Vec2::splat(self.style.corner_half);
         if self.style.corner_half > 0.0 {
             for c in &pts[1..pts.len() - 1] {
-                item.primitives.push(Primitive::filled(
-                    Shape::rect(*c - h, *c + h),
+                item.handles.push(Handle::square(
+                    *c,
+                    self.style.corner_half,
                     self.style.corner_color,
                 ));
             }
@@ -1439,7 +1471,7 @@ impl PageScene {
         // with its corners filled in the focus colour.
         if let Some(part) = self.focus.filter(|p| p.wire == id) {
             let focus = self.style.focus_color;
-            let big = Vec2::splat(self.style.corner_half * 1.8);
+            let big = self.style.corner_half * 1.8;
             let mut corners = Vec::new();
             match part.kind {
                 WirePartKind::Segment(k) if k + 1 < pts.len() => {
@@ -1457,10 +1489,7 @@ impl PageScene {
                 _ => {}
             }
             for i in corners {
-                item.primitives.push(Primitive::filled(
-                    Shape::rect(pts[i] - big, pts[i] + big),
-                    focus,
-                ));
+                item.handles.push(Handle::square(pts[i], big, focus));
             }
         }
         // An open end (a wire ended unconnected) shows a ring and a flag.
@@ -1549,6 +1578,65 @@ pub fn symbol_text(project: &Project, sym: &SymbolInstance) -> Option<String> {
 /// Terminals of one strip further apart than this (mm, between symbol
 /// origins) start a new run, which names its strip again.
 const STRIP_RUN_GAP: f64 = 20.0;
+
+/// Item id of the bridge bars of a page's jumper groups (no model object
+/// has this id).
+const BARS_ITEM: ItemId = ItemId(u64::MAX - 1);
+
+/// Height of a connected terminal's bridge bar in its symbol, in mm
+/// (`terminal_bridged.toml`: the dot sits on the upper lead at this height).
+const BRIDGE_BAR_Y: f64 = 1.4;
+
+/// The symbol that carries the bridge dot.
+const BRIDGED_SYMBOL: &str = "iec/terminals/terminal_bridged";
+
+/// One heavy bar per run of connected terminals on a page, from the first
+/// lead to the last, never past them: the connected terminals of a jumper
+/// group on one strip that are chained by neighbours at most
+/// [`STRIP_RUN_GAP`] apart. A lone terminal gets none.
+fn bridge_bars(project: &Project, page: PageId) -> Vec<(Vec2, Vec2)> {
+    let mut groups: HashMap<(novo_core::DeviceId, u32), Vec<Point>> = HashMap::new();
+    for id in project.page_contents(page).symbols {
+        let Some(sym) = project.symbol(id) else {
+            continue;
+        };
+        let SymbolRole::Terminal { terminals } = &sym.role else {
+            continue;
+        };
+        if sym.symbol.0 != BRIDGED_SYMBOL {
+            continue;
+        }
+        let [t] = terminals.as_slice() else {
+            continue;
+        };
+        if let Some((strip, group)) = project
+            .terminal(*t)
+            .and_then(|t| t.jumper.map(|j| (t.strip, j)))
+        {
+            groups
+                .entry((strip, group))
+                .or_default()
+                .push(sym.placement.apply(Point::new(0.0, BRIDGE_BAR_Y)));
+        }
+    }
+    let mut bars = Vec::new();
+    for (_, mut leads) in groups {
+        leads.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+        let mut start = 0;
+        for i in 1..=leads.len() {
+            let broken = i == leads.len()
+                || (leads[i].x - leads[i - 1].x).hypot(leads[i].y - leads[i - 1].y) > STRIP_RUN_GAP;
+            if broken {
+                if i - start >= 2 {
+                    bars.push((vec(leads[start]), vec(leads[i - 1])));
+                }
+                start = i;
+            }
+        }
+    }
+    bars.sort_by(|a, b| a.0.x.total_cmp(&b.0.x).then(a.0.y.total_cmp(&b.0.y)));
+    bars
+}
 
 /// The symbols that name their strip on `page`: the first terminal (left
 /// most, then top most) of each run of adjacent terminals of one strip, as
@@ -1952,6 +2040,69 @@ mod tests {
                 .collect();
             assert_eq!(named, expect, "{at:?}");
         }
+    }
+
+    #[test]
+    fn a_run_of_connected_terminals_gets_one_bar_first_lead_to_last() {
+        let mut doc = Document::default();
+        let ((page, last), _) = doc
+            .transact("strip", |tx| {
+                let page = tx.add_page("1")?;
+                let x1 = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+                // Three connected in a row, one far away in the same group,
+                // one connected alone in another group.
+                let at = [(100.0, 50.0, 1), (108.0, 50.0, 1), (116.0, 50.0, 1)]
+                    .into_iter()
+                    .chain([(200.0, 50.0, 1), (100.0, 150.0, 2)]);
+                let mut last = None;
+                for (i, (x, y, group)) in at.enumerate() {
+                    let t = tx.add_terminal(x1, (i + 1).to_string())?;
+                    tx.update::<novo_core::Terminal>(t, |t| t.jumper = Some(group))?;
+                    let sym = tx.place_symbol(
+                        page,
+                        BRIDGED_SYMBOL,
+                        MPlacement::at(Point::new(x, y)),
+                        vec![Pin::new("1", 0.0, 0.0), Pin::new("2", 0.0, 8.0)],
+                        SymbolRole::Terminal { terminals: vec![t] },
+                    )?;
+                    if i == 2 {
+                        last = Some((t, sym));
+                    }
+                }
+                Ok((page, last.unwrap()))
+            })
+            .unwrap();
+        let bars = bridge_bars(doc.project(), page);
+        assert_eq!(
+            bars,
+            vec![(Vec2::new(100.0, 51.4), Vec2::new(116.0, 51.4))],
+            "one bar across the run; lone terminals draw none"
+        );
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        assert!(ps.scene().contains(BARS_ITEM));
+        // Taking the far terminal's neighbour into the run extends the bar.
+        let (_, changes) = doc
+            .transact("move", |tx| {
+                tx.move_symbol(last.1, MPlacement::at(Point::new(124.0, 50.0)))
+            })
+            .unwrap();
+        assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
+        assert_eq!(
+            bridge_bars(doc.project(), page)[0].1,
+            Vec2::new(124.0, 51.4)
+        );
+        // Unjumpering them removes the bars.
+        let (_, changes) = doc
+            .transact("free", |tx| {
+                let ids: Vec<_> = tx.project().terminals().map(|t| t.id).collect();
+                for t in ids {
+                    tx.update::<novo_core::Terminal>(t, |t| t.jumper = None)?;
+                }
+                Ok(())
+            })
+            .unwrap();
+        ps.apply(doc.project(), &changes, &PlaceholderArt);
+        assert!(!ps.scene().contains(BARS_ITEM));
     }
 
     #[test]
@@ -2805,20 +2956,24 @@ mod tests {
     fn corners_are_drawn_and_a_focused_run_lights_its_corners() {
         let (doc, page, wire) = bent_wire();
         let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
-        let count = |ps: &PageScene| ps.scene().get(item_id(wire)).unwrap().primitives.len();
-        // Line, the dot on the pin, two corner squares, open end (ring,
-        // pole, pennant).
-        let plain = count(&ps);
-        assert_eq!(plain, 1 + 1 + 2 + 3);
+        let handles = |ps: &PageScene| ps.scene().get(item_id(wire)).unwrap().handles.clone();
+        let prims = |ps: &PageScene| ps.scene().get(item_id(wire)).unwrap().primitives.len();
+        // Corners are screen-size handles; the line, the pin dot and the
+        // open end (ring, pole, pennant) stay primitives.
+        let plain = prims(&ps);
+        assert_eq!(plain, 1 + 1 + 3);
+        let base = handles(&ps);
+        assert_eq!(base.len(), 2);
+        assert!(base.iter().all(|h| h.half == ps.style.corner_half));
         let focus = ps.style.focus_color;
         let lit = |ps: &PageScene| {
-            ps.scene()
-                .get(item_id(wire))
-                .unwrap()
-                .primitives
-                .iter()
-                .filter(|p| p.fill == Some(focus) || p.stroke.is_some_and(|s| s.color == focus))
-                .count()
+            let item = ps.scene().get(item_id(wire)).unwrap();
+            item.handles.iter().filter(|h| h.color == focus).count()
+                + item
+                    .primitives
+                    .iter()
+                    .filter(|p| p.stroke.is_some_and(|s| s.color == focus))
+                    .count()
         };
         assert_eq!(lit(&ps), 0);
         // The across run: the run itself and both of its corners.
@@ -2828,15 +2983,17 @@ mod tests {
         };
         ps.set_wire_focus(doc.project(), Some(seg));
         assert_eq!(lit(&ps), 3);
-        // A corner lights just itself.
+        // A corner lights just itself, drawn larger than the plain ones.
         let corner = WirePart {
             wire,
             kind: WirePartKind::Corner(0),
         };
         ps.set_wire_focus(doc.project(), Some(corner));
         assert_eq!(lit(&ps), 1);
+        assert!(handles(&ps).iter().any(|h| h.half > ps.style.corner_half));
         ps.set_wire_focus(doc.project(), None);
-        assert_eq!(count(&ps), plain);
+        assert_eq!(prims(&ps), plain);
+        assert_eq!(handles(&ps), base);
     }
 
     #[test]

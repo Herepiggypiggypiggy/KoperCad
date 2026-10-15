@@ -166,6 +166,16 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["rules"],
     ),
+    verb(
+        cmd(
+            "app.preferences",
+            "Preferences",
+            "Project",
+            &["settings", "options", "auto connections", "autoconnect"],
+            Needs::Nothing,
+        ),
+        &["preferences", "prefs"],
+    ),
     cmd("file.quit", "Quit", "Project", &["exit"], Needs::Nothing),
     // Draw
     cmd(
@@ -377,11 +387,33 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["jumper", "bridge", "cross connect"],
         Needs::Selection,
     ),
+    verb(
+        cmd(
+            "terminal.toggle_pe",
+            "Toggle PE terminal",
+            "Edit",
+            &[
+                "pe",
+                "protective earth",
+                "earth terminal",
+                "ground terminal",
+            ],
+            Needs::Selection,
+        ),
+        &["pe"],
+    ),
     cmd(
         "terminal.disconnect",
         "Disconnect terminals",
         "Edit",
         &["jumper", "bridge", "unbridge"],
+        Needs::Selection,
+    ),
+    cmd(
+        "terminal.reset_pe",
+        "Reset PE override",
+        "Edit",
+        &["protective earth", "automatic pe"],
         Needs::Selection,
     ),
     cmd(
@@ -404,6 +436,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Edit",
         &["rename strip", "x number", "free strip"],
         Needs::Selection,
+    ),
+    cmd(
+        "interruption.renumber",
+        "Number interruption points automatically",
+        "Edit",
+        &["jump", "renumber", "continuation", "off page"],
+        Needs::Project,
     ),
     // Navigate
     cmd(
@@ -542,6 +581,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Show or hide marks",
         "View",
         &["problems", "proposals"],
+        Needs::Page,
+    ),
+    cmd(
+        "sim.live",
+        "Show live potentials",
+        "View",
+        &["simulate", "contacts", "close", "energized", "try"],
         Needs::Page,
     ),
     cmd(

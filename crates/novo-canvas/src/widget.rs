@@ -858,6 +858,21 @@ impl CanvasView {
                 None => {}
             }
         }
+        // Handles keep their size on screen, so they are tessellated for
+        // this zoom every frame (only those of items in view).
+        for id in scene.query(&self.viewport.visible_world()) {
+            let Some(item) = scene.get(id) else { continue };
+            for h in &item.handles {
+                let r = self.viewport.screen_to_world_len(h.half);
+                let shape = if h.round {
+                    Shape::circle(h.at, r)
+                } else {
+                    Shape::rect(h.at - Vec2::splat(r), h.at + Vec2::splat(r))
+                };
+                self.tessellator
+                    .primitive(&mut over, &Primitive::filled(shape, h.color));
+            }
+        }
         if let (Some(start), Some(end)) = (self.band, cursor_raw) {
             let color = match BoxMode::from_drag(start, end) {
                 BoxMode::Window => self.style.band_window,

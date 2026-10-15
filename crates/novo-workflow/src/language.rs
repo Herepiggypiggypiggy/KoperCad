@@ -45,6 +45,12 @@ pub const DUTCH: &[Aliases] = &[
         &["pagina", "blad"],
     ),
     nl("project.rules", &["regels"], &["nummering", "instellingen"]),
+    nl(
+        "app.preferences",
+        &["voorkeuren"],
+        &["instellingen", "opties"],
+    ),
+    nl("terminal.toggle_pe", &["pe-klem"], &["aardklem", "aarde"]),
     nl("file.quit", &[], &["afsluiten", "stoppen"]),
     // Draw
     nl(
@@ -146,6 +152,12 @@ pub const DUTCH: &[Aliases] = &[
     nl("view.fit", &[], &["passend zoomen", "alles tonen"]),
     nl("view.schematic", &[], &["schema"]),
     nl("view.cabinet", &[], &["kast", "kastindeling"]),
+    nl(
+        "interruption.renumber",
+        &[],
+        &["onderbrekingspunten nummeren"],
+    ),
+    nl("terminal.reset_pe", &["herstel"], &["aarde", "klemmen"]),
     nl("terminal.connect", &["verbind"], &["klemmen", "brug"]),
     nl("terminal.disconnect", &["ontkoppel"], &["klemmen", "brug"]),
     nl(
@@ -174,6 +186,11 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("view.full_screen", &[], &["volledig scherm"]),
     nl("view.cabinet_table", &[], &["kast als tabel", "tabel"]),
+    nl(
+        "sim.live",
+        &[],
+        &["live potentialen tonen", "contacten sluiten", "spanning"],
+    ),
     nl(
         "view.toggle_marks",
         &[],

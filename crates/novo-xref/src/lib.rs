@@ -76,4 +76,6 @@ pub use index::{
 };
 pub use link::{LINK_LABEL, LinkError, can_link, link_command, link_to_device_command};
 pub use nav::{Go, JumpHistory, Navigator, Place};
-pub use number::{auto_name_interruption, auto_name_interruptions, next_interruption_name};
+pub use number::{
+    auto_name_interruption, auto_name_interruptions, next_interruption_name, renumber_interruptions,
+};

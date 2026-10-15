@@ -8,9 +8,12 @@ mod dock;
 mod drawers;
 mod inspector;
 mod link;
+mod live;
 mod pages;
 mod pdf;
 mod plc;
+mod potentials;
+mod preferences;
 mod reports;
 mod terminals;
 mod wheel;
@@ -80,8 +83,6 @@ const TOP_BAR: f32 = 42.0;
 const OUTLINE_WIDTH: f32 = 248.0;
 /// Windows at least this wide pin the outline unless the user chose.
 const PIN_OUTLINE_FROM: f32 = 1700.0;
-/// Pages listed under "Recent" in the outline.
-const MAX_RECENT_PAGES: usize = 5;
 
 /// An action that replaces or closes the open project. Nothing asks first:
 /// the backend keeps the work (docs/DESIGN.md: no save prompts).
@@ -127,8 +128,6 @@ pub struct NovoApp {
     page_filter: String,
     /// Whether the outline files pages by page group or by panel.
     page_view: PageView,
-    /// Pages visited this session, newest first.
-    recent_pages: Vec<PageId>,
     /// Window width last frame, which decides whether the outline pins.
     window_width: f32,
 }
@@ -180,7 +179,6 @@ impl NovoApp {
             breadcrumb_link: None,
             page_filter: String::new(),
             page_view: PageView::Function,
-            recent_pages: Vec::new(),
             window_width: 0.0,
         }
     }
@@ -255,8 +253,6 @@ impl NovoApp {
                     .collect()
             })
             .unwrap_or_default();
-        self.recent_pages
-            .retain(|r| pages.iter().any(|(id, _)| id == r));
         if !pages.iter().any(|(id, _)| Some(*id) == self.current_page) {
             self.current_page = pages
                 .iter()
@@ -685,8 +681,10 @@ impl NovoApp {
             }
             self.hud(&ctx, canvas_rect);
             self.sync_wiring_mode();
+            self.sync_connect_mode();
             self.tool_dock(&ctx, canvas_rect);
             self.inspector(&ctx, canvas_rect);
+            self.live_view(&ctx, canvas_rect);
         }
         self.toasts(&ctx, canvas_rect);
 
@@ -695,6 +693,7 @@ impl NovoApp {
         self.recovery_dialog(&ctx);
         self.about_dialog(&ctx);
         self.renumber_dialog(&ctx);
+        self.preferences_dialog(&ctx);
         self.page_form_dialog(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {
             self.run_command(&ctx, id, None);
@@ -716,6 +715,7 @@ impl NovoApp {
         let changes = self.canvas.take_changes();
         if !changes.is_empty() {
             self.reports_heard(&changes);
+            self.mark_earthed_terminals(&changes);
             self.fix_current_page();
         }
         if let Some(page) = self.canvas.take_page_request() {
@@ -723,6 +723,30 @@ impl NovoApp {
         }
         let asked = self.canvas.take_commands();
         self.wb.queued.extend(asked);
+    }
+
+    /// A wire drawn to ground or a PE potential earths the terminals on
+    /// its net (DESIGN.md §4, PE terminals). Runs only when a wire was
+    /// added, never on every edit, and joins the edit's undo step; a
+    /// terminal toggled by hand is left alone.
+    fn mark_earthed_terminals(&mut self, changes: &novo_core::ChangeSet) {
+        if !changes
+            .added
+            .iter()
+            .any(|id| matches!(id, novo_core::AnyId::Wire(_)))
+        {
+            return;
+        }
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let netlist = novo_core::Netlist::build(doc.project());
+        if novo_terminals::earthed_terminals(doc.project(), &netlist).is_empty() {
+            return;
+        }
+        if let Ok((_, extra)) = doc.amend_last("Mark PE terminals", novo_terminals::mark_earthed) {
+            self.changed_outside_canvas(&extra);
+        }
     }
 
     fn modal_open(&self) -> bool {
@@ -755,15 +779,12 @@ impl NovoApp {
             .unwrap_or(self.window_width >= PIN_OUTLINE_FROM)
     }
 
-    /// Shows `page` on the canvas and puts it first under "Recent".
+    /// Shows `page` on the canvas.
     fn show_page(&mut self, page: PageId) {
         if self.current_page != Some(page) {
             self.wb.sheet = 0;
         }
         self.current_page = Some(page);
-        self.recent_pages.retain(|&p| p != page);
-        self.recent_pages.insert(0, page);
-        self.recent_pages.truncate(MAX_RECENT_PAGES);
     }
 
     /// Shows sheet `sheet` of a generated page (0 for any other page).
@@ -985,22 +1006,6 @@ impl NovoApp {
         egui::ScrollArea::vertical()
             .auto_shrink(false)
             .show(ui, |ui| {
-                if filter.is_empty() {
-                    let recent: Vec<_> = self
-                        .recent_pages
-                        .iter()
-                        .filter_map(|id| pages.iter().find(|r| r.page == *id))
-                        .collect();
-                    if !recent.is_empty() {
-                        section_label(ui, "Recent");
-                        for row in recent {
-                            if self.page_row(ui, row) {
-                                chosen = Some((row.page, row.sheet));
-                            }
-                        }
-                        ui.add_space(6.0);
-                    }
-                }
                 section_label(ui, "All pages");
                 let mut any = false;
                 let mut shown = DeviceTag::default();
@@ -2084,24 +2089,23 @@ mod tests {
     }
 
     #[test]
+    fn live_potentials_toggle_from_the_command_and_survive_frames() {
+        let ctx = themed_ctx();
+        let mut app = app_with(MemoryBackend::default());
+        app.run(&ctx, Action::NewProject);
+        assert!(!app.wb.live.on);
+        app.run_command(&ctx, "sim.live", None);
+        assert!(app.wb.live.on);
+        frame(&ctx, &mut app, sized(1366.0));
+        app.run_command(&ctx, "sim.live", None);
+        assert!(!app.wb.live.on);
+    }
+
+    #[test]
     fn cabinet_waits_for_its_canvas() {
         let app = app_with(MemoryBackend::default());
         assert!(!app.is_enabled(Action::ShowCabinet));
         assert!(app.is_enabled(Action::ShowSchematic));
-    }
-
-    #[test]
-    fn visited_pages_lead_the_recent_list_and_vanish_with_their_page() {
-        let ctx = themed_ctx();
-        let mut app = app_with(DirtyBackend::default());
-        app.run(&ctx, Action::NewProject);
-        let (one, two) = (app.pages()[0].0, app.pages()[1].0);
-        app.show_page(one);
-        app.show_page(two);
-        app.show_page(one);
-        assert_eq!(app.recent_pages, vec![one, two]);
-        app.run(&ctx, Action::Undo);
-        assert_eq!(app.recent_pages, vec![one]);
     }
 
     #[test]

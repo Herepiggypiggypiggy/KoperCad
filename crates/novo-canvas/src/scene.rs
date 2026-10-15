@@ -125,6 +125,39 @@ pub struct Item {
     /// box to select it (and a click on its text): a wire is picked by its
     /// corners and segments instead, never as a whole by a single click.
     pub click_select: bool,
+    /// Small markers that keep their size on screen at every zoom (wire
+    /// corners, pin dots), painted by the view over the drawing.
+    pub handles: Vec<Handle>,
+}
+
+/// A marker with a fixed size in screen points, centred on a world point.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Handle {
+    pub at: Vec2,
+    /// Half the side of the square (or the radius of the dot), in points.
+    pub half: f32,
+    pub color: Color,
+    pub round: bool,
+}
+
+impl Handle {
+    pub fn square(at: Vec2, half: f32, color: Color) -> Self {
+        Self {
+            at,
+            half,
+            color,
+            round: false,
+        }
+    }
+
+    pub fn dot(at: Vec2, radius: f32, color: Color) -> Self {
+        Self {
+            at,
+            half: radius,
+            color,
+            round: true,
+        }
+    }
 }
 
 impl Item {
@@ -137,6 +170,7 @@ impl Item {
             labels: Vec::new(),
             selectable: true,
             click_select: true,
+            handles: Vec::new(),
         }
     }
 

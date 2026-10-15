@@ -8,13 +8,14 @@
 //! tool, then the selection.
 
 use novo_core::{
-    AnyId, ChangeSet, DeviceId, DeviceTag, Document, Endpoint, PageId, Placement, Point, Project,
-    Rotation, SymbolId, SymbolInstance, SymbolKey, SymbolRole, WireId,
+    AnyId, ChangeSet, DeviceId, DeviceTag, Direction, Document, Endpoint, PageId, Placement, Point,
+    Project, Rotation, SymbolId, SymbolInstance, SymbolKey, SymbolRole, TextAnchor, TextContent,
+    TextId, TextPlacement, WireId,
 };
 
 use crate::catalog::{Catalog, SymbolClass, classify, model_groups, model_pins};
 use crate::edit::{self, PlaceOptions, Transform};
-use crate::geometry::{EPS, Target, endpoint_direction, route_through, snap, target_at};
+use crate::geometry::{self, EPS, Target, endpoint_direction, route_through, snap, target_at};
 use crate::lines::{self, elbow, exact_bends, lock_axis};
 use crate::naming::{self, Numbering, parse_tag_input, tag_conflict};
 use crate::overlap::Refusal;
@@ -83,6 +84,25 @@ pub struct MoveTool {
     /// Quarter turns and mirroring applied on drop.
     pub turns: u8,
     pub mirrored: bool,
+    /// Shift: the wires on the moved pins stretch along instead of staying
+    /// behind as open ends.
+    pub carry: bool,
+}
+
+/// A label that is dragged on its own, leaving what it names where it is.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LabelSource {
+    /// A text record: its offset changes.
+    Record(TextId),
+    /// Text the canvas draws by itself (a symbol's tag, a wire's number):
+    /// the first drag gives it a record at the place it is drawn.
+    Drawn {
+        owner: AnyId,
+        content: TextContent,
+        /// Where it is drawn now, and which point of its box sits there.
+        at: Point,
+        anchor: TextAnchor,
+    },
 }
 
 /// The active tool.
@@ -173,6 +193,68 @@ pub struct Preview {
     /// Lines: the stretch of another wire the next line would lie over, to
     /// tint; `wire` is then kept up to the last legal point (DESIGN.md §4).
     pub blocked: Vec<(Point, Point)>,
+    /// Corners: the corner or T piece the next click places, with the arms
+    /// it would have (DESIGN.md §4 "Wiring modes"). R flips the elbow.
+    pub piece: Option<WirePiece>,
+}
+
+/// A corner (two arms) or T (three arms) piece of a wire in progress.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WirePiece {
+    pub at: Point,
+    pub arms: Vec<Direction>,
+}
+
+/// The direction of the axis-parallel stretch from `a` towards `b`.
+fn arm(a: Point, b: Point) -> Option<Direction> {
+    if a.approx_eq(b, EPS) {
+        None
+    } else if (a.x - b.x).abs() < EPS {
+        Some(if b.y > a.y {
+            Direction::Down
+        } else {
+            Direction::Up
+        })
+    } else if (a.y - b.y).abs() < EPS {
+        Some(if b.x > a.x {
+            Direction::Right
+        } else {
+            Direction::Left
+        })
+    } else {
+        None
+    }
+}
+
+/// The piece at the last bend of `path` (start, bends, pointer), or the T
+/// piece at the pointer when it is on another wire: the branch points back
+/// the way the wire came, the other two arms run along the wire joined.
+fn pending_piece(
+    project: &Project,
+    page: PageId,
+    path: &[Point],
+    on: Option<Target>,
+) -> Option<WirePiece> {
+    let n = path.len();
+    if let Some(Target::Wire(w, at)) = on {
+        let branch = arm(at, *path.get(n.checked_sub(2)?)?)?;
+        let (_, seg) = geometry::wires_through(project, page, at)
+            .into_iter()
+            .find(|(id, _)| *id == w)?;
+        let pts = geometry::wire_points(project, w)?;
+        let (a, b) = (arm(at, pts[seg])?, arm(at, pts[seg + 1])?);
+        return Some(WirePiece {
+            at,
+            arms: vec![branch, a, b],
+        });
+    }
+    if n < 3 {
+        return None;
+    }
+    let (prev, at, next) = (path[n - 3], path[n - 2], path[n - 1]);
+    let arms = vec![arm(at, prev)?, arm(at, next)?];
+    // Two arms on one line are a straight stretch, not a corner.
+    (arms[0].vector() != -arms[1].vector()).then_some(WirePiece { at, arms })
 }
 
 /// The pin a target is, if it is one.
@@ -647,6 +729,11 @@ impl Editor {
 
     /// Picks up the selection to move it with the pointer.
     pub fn begin_move(&mut self, selection: &[AnyId]) -> bool {
+        self.begin_move_with(selection, false)
+    }
+
+    /// [`Self::begin_move`], with `carry` taking the wires along (Shift).
+    pub fn begin_move_with(&mut self, selection: &[AnyId], carry: bool) -> bool {
         self.link_hint = None;
         let ids: Vec<AnyId> = selection
             .iter()
@@ -665,6 +752,7 @@ impl Editor {
             from,
             turns: 0,
             mirrored: false,
+            carry,
         }));
         true
     }
@@ -729,6 +817,11 @@ impl Editor {
                 .filter(|t| matches!(t, Target::Endpoint(Endpoint::Pin { .. }, _))),
             _ => None,
         };
+        // A wire is joined on the grid, not wherever the pointer crosses it.
+        if let Some(Target::Wire(w, q)) = self.target {
+            let at = geometry::snap_along_wire(project, w, q, self.grid);
+            self.target = Some(Target::Wire(w, at));
+        }
         self.cursor = Some(match self.target {
             Some(t) => t.position(),
             None => snap(raw, self.grid),
@@ -857,7 +950,12 @@ impl Editor {
                 let grid = self.grid;
                 let result = doc.transact("Move", |tx| {
                     if delta != Point::ZERO {
-                        edit::transform_interactive(tx, &m.ids, Transform::Move(delta))?;
+                        let how = Transform::Move(delta);
+                        if m.carry {
+                            edit::transform_interactive(tx, &m.ids, how)?;
+                        } else {
+                            edit::transform_detached(tx, &m.ids, how)?;
+                        }
                     }
                     let pivot = edit::pivot(tx.project(), &m.ids, grid);
                     if let Some(c) = pivot {
@@ -1450,6 +1548,103 @@ impl Editor {
         })
     }
 
+    /// How far a label dragged from `from` to `to` moves: both ends snap to
+    /// the grid, as a moved symbol does.
+    pub fn label_delta(&self, from: Point, to: Point) -> Point {
+        snap(to, self.grid) - snap(from, self.grid)
+    }
+
+    /// Moves one label by `delta`, one undo step. The thing it names stays.
+    pub fn move_label(
+        &mut self,
+        doc: &mut Document,
+        page: PageId,
+        source: &LabelSource,
+        delta: Point,
+    ) -> bool {
+        if delta == Point::ZERO {
+            return false;
+        }
+        self.run(doc, "Move label", |tx| {
+            match source {
+                LabelSource::Record(id) => {
+                    let mut placement = tx
+                        .project()
+                        .text(*id)
+                        .map(|t| t.placement)
+                        .ok_or(novo_core::ModelError::NotFound(AnyId::Text(*id)))?;
+                    placement.offset = placement.offset + delta;
+                    tx.move_text(*id, placement)
+                }
+                LabelSource::Drawn {
+                    owner,
+                    content,
+                    at,
+                    anchor,
+                } => {
+                    let id = tx.add_text(
+                        page,
+                        content.clone(),
+                        TextPlacement {
+                            anchor: *anchor,
+                            ..Default::default()
+                        },
+                        Some(*owner),
+                    )?;
+                    // The offset is from the host's own origin, whatever
+                    // the host is: read it back instead of knowing it.
+                    let origin = tx
+                        .project()
+                        .text_position(id)
+                        .ok_or(novo_core::ModelError::NotFound(AnyId::Text(id)))?;
+                    tx.move_text(
+                        id,
+                        TextPlacement {
+                            offset: *at + delta - origin,
+                            anchor: *anchor,
+                            ..Default::default()
+                        },
+                    )
+                }
+            }
+        })
+    }
+
+    /// Drops a dragged wire part `delta` further on, one undo step.
+    pub fn move_wire_part(
+        &mut self,
+        doc: &mut Document,
+        wire: WireId,
+        kind: edit::PartKind,
+        delta: Point,
+    ) -> bool {
+        if delta == Point::ZERO {
+            return false;
+        }
+        self.run(doc, "Move wire", |tx| {
+            edit::move_wire_part(tx, wire, kind, delta)
+        })
+    }
+
+    /// How far a wire part dragged from `from` to `to` moves.
+    pub fn part_delta(
+        &self,
+        doc: &Document,
+        wire: WireId,
+        kind: edit::PartKind,
+        from: Point,
+        to: Point,
+    ) -> Point {
+        edit::part_delta(doc.project(), wire, kind, self.grid, from, to)
+    }
+
+    /// Removes one corner of a wire's route, one undo step.
+    pub fn remove_corner(&mut self, doc: &mut Document, wire: WireId, index: usize) -> bool {
+        self.run(doc, "Delete corner", |tx| {
+            edit::remove_corner(tx, wire, index)
+        })
+    }
+
     /// Moves the selection by a distance in one step (arrow keys, scripts).
     pub fn move_selection(
         &mut self,
@@ -1640,6 +1835,43 @@ impl Editor {
             })
             .collect();
         potential::menu(doc.project(), &wires, self.supply_names)
+    }
+
+    /// Right-click a feed, Set potential: one undo step for all `feeds`.
+    pub fn set_feed_potential(
+        &mut self,
+        doc: &mut Document,
+        feeds: &[novo_core::SymbolId],
+        spec: &potential::PotentialSpec,
+    ) -> bool {
+        let label = format!("Set potential {}", spec.name);
+        self.run(doc, &label, |tx| {
+            potential::set_feed_potential(tx, feeds, spec).map(|_| ())
+        })
+    }
+
+    /// Right-click wires, Override potential: each wire takes `spec` for
+    /// itself, or with `None` goes back to what its net carries. One step.
+    pub fn override_wire_potential(
+        &mut self,
+        doc: &mut Document,
+        wires: &[WireId],
+        spec: Option<&potential::PotentialSpec>,
+    ) -> bool {
+        let label = match spec {
+            Some(s) => format!("Override potential {}", s.name),
+            None => "Remove potential override".to_string(),
+        };
+        self.run(doc, &label, |tx| {
+            let id = match spec {
+                Some(s) => Some(edit::find_or_add_potential(tx, &s.name, s.kind, s.voltage)?),
+                None => None,
+            };
+            for &w in wires {
+                tx.set_wire_potential(w, id)?;
+            }
+            Ok(())
+        })
     }
 
     /// Applies a potential suggestion to wires in page order, as one step.
@@ -1872,6 +2104,7 @@ impl Editor {
                         let bends = route_through(a, from, &corners, cursor, to);
                         preview.wire.extend(bends);
                         preview.wire.push(cursor);
+                        preview.piece = pending_piece(project, page, &preview.wire, self.target);
                     }
                 }
             }
