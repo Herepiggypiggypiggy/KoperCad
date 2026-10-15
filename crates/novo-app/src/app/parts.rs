@@ -36,6 +36,9 @@ pub(crate) struct PartsWindow {
     downloads: Option<PathBuf>,
     /// The user's catalog file, where read data is saved.
     catalog_path: Option<PathBuf>,
+    /// The part whose Remove from library awaits a second click.
+    confirm_remove: Option<PartKey>,
+    focus_search: bool,
 }
 
 impl PartsWindow {
@@ -54,6 +57,8 @@ impl PartsWindow {
             import: None,
             downloads: default_downloads_dir(),
             catalog_path: user_catalog_path(),
+            confirm_remove: None,
+            focus_search: true,
         }
     }
 
@@ -264,6 +269,8 @@ enum PartsAction {
     ChooseFile,
     ChooseFolder,
     StopImport,
+    AskRemove(PartKey),
+    CancelRemove,
     Remove(PartKey),
     Close,
 }
@@ -356,7 +363,10 @@ impl NovoApp {
                     }
                 }
                 PartsAction::StopImport => win.import = None,
+                PartsAction::AskRemove(key) => win.confirm_remove = Some(key),
+                PartsAction::CancelRemove => win.confirm_remove = None,
                 PartsAction::Remove(key) => {
+                    win.confirm_remove = None;
                     if let Some(Err(e)) = win.library.as_ref().map(|l| l.remove(&key)) {
                         error = Some(format!("Parts library: {e}"));
                     }
@@ -379,12 +389,17 @@ fn parts_ui(
     dragging: bool,
     actions: &mut Vec<PartsAction>,
 ) {
+    let mut search_focused = false;
     ui.horizontal(|ui| {
-        ui.add(
+        let search = ui.add(
             egui::TextEdit::singleline(&mut win.query)
                 .hint_text("Search order number, type or description")
                 .desired_width(280.0),
         );
+        if std::mem::take(&mut win.focus_search) {
+            search.request_focus();
+        }
+        search_focused = search.has_focus();
         let label = win.maker.clone().unwrap_or_else(|| "All makers".into());
         egui::ComboBox::from_id_salt("parts_maker")
             .selected_text(label)
@@ -402,6 +417,28 @@ fn parts_ui(
     });
     ui.separator();
     let rows = win.rows();
+    let (up, down, esc) = ui.input(|i| {
+        (
+            i.key_pressed(egui::Key::ArrowUp),
+            i.key_pressed(egui::Key::ArrowDown),
+            i.key_pressed(egui::Key::Escape),
+        )
+    });
+    if search_focused && (up || down) && !rows.is_empty() {
+        let at = win
+            .selected
+            .as_ref()
+            .and_then(|k| rows.iter().position(|(r, _)| r == k));
+        let next = match (at, down) {
+            (None, _) => 0,
+            (Some(i), true) => (i + 1).min(rows.len() - 1),
+            (Some(i), false) => i.saturating_sub(1),
+        };
+        actions.push(PartsAction::Select(rows[next].0.clone()));
+    }
+    if esc && (search_focused || ui.memory(|m| m.focused()).is_none()) {
+        actions.push(PartsAction::Close);
+    }
     if win.import.is_some() || dragging {
         egui::Panel::bottom("parts_status")
             .resizable(false)
@@ -421,31 +458,34 @@ fn parts_ui(
                 let Some(part) = win.catalog.get(key) else {
                     continue;
                 };
-                ui.horizontal(|ui| {
-                    let selected = win.selected.as_ref() == Some(key);
-                    let text = format!(
-                        "{}  {}  {}",
-                        part.manufacturer, part.order_number, part.description
-                    );
-                    if ui
-                        .selectable_label(selected, egui::RichText::new(text))
-                        .clicked()
-                    {
-                        actions.push(PartsAction::Select(key.clone()));
-                    }
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        match action {
-                            RowAction::InLibrary => {
-                                ui.colored_label(
-                                    egui::Color32::from_rgb(90, 190, 120),
-                                    "In library",
-                                );
-                            }
-                            RowAction::Import | RowAction::OpenPage(_) => {
-                                if ui.small_button("Import").clicked() {
-                                    actions.push(PartsAction::Import(key.clone()));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    match action {
+                        RowAction::InLibrary => {
+                            ui.colored_label(novo_theme::tokens::SUCCESS, "In library");
+                        }
+                        RowAction::Import | RowAction::OpenPage(_) => {
+                            let hint = match action {
+                                RowAction::OpenPage(Some(_)) => {
+                                    "Opens the maker's page. Save the file there and KoperCAD imports it from Downloads."
                                 }
+                                _ => "Save the maker's file, then drop it on this window.",
+                            };
+                            if ui.small_button("Import").on_hover_text(hint).clicked() {
+                                actions.push(PartsAction::Import(key.clone()));
                             }
+                        }
+                    }
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                        let selected = win.selected.as_ref() == Some(key);
+                        let text = format!(
+                            "{}  {}  {}",
+                            part.manufacturer, part.order_number, part.description
+                        );
+                        if ui
+                            .add(egui::Button::selectable(selected, text).truncate())
+                            .clicked()
+                        {
+                            actions.push(PartsAction::Select(key.clone()));
                         }
                     });
                 });
@@ -506,7 +546,7 @@ on the maker's site and drop the file here.",
         }
         Phase::Done(summary) => {
             ui.colored_label(
-                egui::Color32::from_rgb(90, 190, 120),
+                novo_theme::tokens::SUCCESS,
                 format!("Imported {} ({})", import.label, summary.file),
             );
             for line in &summary.lines {
@@ -582,8 +622,20 @@ fn detail_ui(ui: &mut egui::Ui, win: &PartsWindow, actions: &mut Vec<PartsAction
                 ui.hyperlink_to("Terms", url);
             }
         }
-        if !records.is_empty() && ui.small_button("Remove from library").clicked() {
-            actions.push(PartsAction::Remove(key));
+        if !records.is_empty() {
+            if win.confirm_remove.as_ref() == Some(&key) {
+                ui.label("Delete the saved files? You can download them again from the maker.");
+                ui.horizontal(|ui| {
+                    if ui.small_button("Remove").clicked() {
+                        actions.push(PartsAction::Remove(key.clone()));
+                    }
+                    if ui.small_button("Cancel").clicked() {
+                        actions.push(PartsAction::CancelRemove);
+                    }
+                });
+            } else if ui.small_button("Remove from library").clicked() {
+                actions.push(PartsAction::AskRemove(key));
+            }
         }
     });
 }
