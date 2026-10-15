@@ -39,6 +39,7 @@ pub mod network;
 pub mod pe;
 pub mod selectivity;
 pub mod short_circuit;
+pub mod spec;
 pub mod tables;
 
 use crate::Severity;

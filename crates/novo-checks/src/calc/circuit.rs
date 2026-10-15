@@ -30,6 +30,8 @@ use super::{Insulation, Rule, num, within};
 /// The protective device at the start of the circuit.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Device {
+    /// Order number or part id, the key into maker selectivity tables.
+    pub id: Option<String>,
     pub rated_a: f64,
     /// Time-current characteristic, when known.
     pub characteristic: Option<Characteristic>,
@@ -71,12 +73,18 @@ pub struct CircuitDesign {
     pub cable: CableData,
     /// Drop limit, percent.
     pub drop_limit_percent: f64,
+    /// Assumptions made while building the design (a defaulted power
+    /// factor, a drop limit nobody stated), carried into the report.
+    pub notes: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
     Pass,
     Fail,
+    /// Not a breach of a rule, but something the designer should know
+    /// (partial selectivity). Does not count as a failure.
+    Warning,
     Unknown,
 }
 
@@ -122,6 +130,29 @@ impl CircuitReport {
 
     pub fn has_failure(&self) -> bool {
         self.failures().next().is_some()
+    }
+
+    /// The report as plain text: one line per row, then the assumptions and
+    /// the table disclosure. ASCII status tags so it reads in any console.
+    pub fn to_text(&self) -> String {
+        let mut out = format!("Circuit {}\n", self.name);
+        for r in &self.rows {
+            let tag = match r.status {
+                Status::Pass => "PASS   ",
+                Status::Fail => "FAIL   ",
+                Status::Warning => "WARN   ",
+                Status::Unknown => "UNKNOWN",
+            };
+            out.push_str(&format!("  {tag} {}: {}\n", r.title, r.text));
+        }
+        if !self.assumptions.is_empty() {
+            out.push_str("  Assumed:\n");
+            for a in &self.assumptions {
+                out.push_str(&format!("    - {a}\n"));
+            }
+        }
+        out.push_str(&format!("  {}\n", self.tables));
+        out
     }
 }
 
@@ -194,6 +225,7 @@ pub fn evaluate(
         Supply::TwoWire => Loaded::Two,
     };
     let mut assumptions = network.source().assumptions.clone();
+    assumptions.extend(design.notes.iter().cloned());
     if let Some(c) = &design.device.characteristic {
         assumptions.extend(c.assumptions());
     }
@@ -351,23 +383,11 @@ pub fn evaluate(
         None => {}
         Some(f) => {
             let ik = f.ik3_max_a;
-            let i2t = design
-                .device
-                .let_through_i2t
-                .or_else(|| clearing_time(&design.device, ik).map(|t| ik * ik * t));
-            match i2t {
-                None => rows.push(unknown(
-                    Rule::ThermalWithstand,
-                    "Short-circuit (maximum)",
-                    "the device's let-through energy and clearing time are not known",
-                )),
-                Some(e) => {
+            let stated = design.device.let_through_i2t;
+            let bound = clearing_time(&design.device, ik).map(|t| ik * ik * t);
+            match (stated, bound) {
+                (Some(e), _) => {
                     let ok = within(e, allowed);
-                    let basis = if design.device.let_through_i2t.is_some() {
-                        "stated let-through"
-                    } else {
-                        "upper bound Ik² × clearing time (a current-limiting device lets less through)"
-                    };
                     rows.push(row(
                         Rule::ThermalWithstand,
                         "Short-circuit (maximum)",
@@ -376,13 +396,54 @@ pub fn evaluate(
                         Some(allowed),
                         "A²s",
                         format!(
-                            "{} A²s let through ({basis}) against k²S² = {} A²s for {} mm²",
+                            "{} A²s let through (stated by the maker) against k²S² = {} A²s for {} mm²",
                             num(e.round()),
                             num(allowed.round()),
                             num(s_total)
                         ),
                     ));
                 }
+                // Without the maker's let-through energy only an upper bound
+                // exists (the full prospective current for the whole
+                // guaranteed clearing time). It can prove a pass; it cannot
+                // prove a fail, because a current-limiting device lets far
+                // less through.
+                (None, Some(e)) if within(e, allowed) => {
+                    rows.push(row(
+                        Rule::ThermalWithstand,
+                        "Short-circuit (maximum)",
+                        Status::Pass,
+                        Some(e),
+                        Some(allowed),
+                        "A²s",
+                        format!(
+                            "even the unlimited energy {} A²s stays below k²S² = {} A²s for {} mm²",
+                            num(e.round()),
+                            num(allowed.round()),
+                            num(s_total)
+                        ),
+                    ));
+                }
+                (None, Some(e)) => rows.push(row(
+                    Rule::ThermalWithstand,
+                    "Short-circuit (maximum)",
+                    Status::Unknown,
+                    Some(e),
+                    Some(allowed),
+                    "A²s",
+                    format!(
+                        "the unlimited energy {} A²s would exceed k²S² = {} A²s for {} mm²; add the device's let-through I²t at {} kA from its datasheet to decide",
+                        num(e.round()),
+                        num(allowed.round()),
+                        num(s_total),
+                        num((ik / 1000.0 * 10.0).round() / 10.0)
+                    ),
+                )),
+                (None, None) => rows.push(unknown(
+                    Rule::ThermalWithstand,
+                    "Short-circuit (maximum)",
+                    "the device's let-through energy and clearing time are not known",
+                )),
             }
         }
     }
@@ -425,6 +486,9 @@ pub fn evaluate(
                 1.0
             };
         let final_circuit = design.device.rated_a <= 32.0;
+        // The table of IEC 60364-4-41 is by the nominal voltage to earth
+        // (230 V on a 400 V system), not the 230.94 V that √3 gives.
+        let u0 = (u0 / 5.0).round() * 5.0;
         let t_req = if final_circuit {
             max_disconnection_time(u0)
         } else {
@@ -551,6 +615,7 @@ mod tests {
             supply: Supply::ThreePhase,
             voltage: 400.0,
             device: Device {
+                id: None,
                 rated_a: 16.0,
                 characteristic: Some(Characteristic::Mcb {
                     curve: McbCurve::C,
@@ -571,6 +636,7 @@ mod tests {
                 pe_mm2: Some(section),
             },
             drop_limit_percent: 5.0,
+            notes: Vec::new(),
         }
     }
 

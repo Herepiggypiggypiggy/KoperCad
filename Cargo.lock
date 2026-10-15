@@ -1929,6 +1929,7 @@ dependencies = [
  "novo-symbols",
  "novo-terminals",
  "novo-tests",
+ "serde_json",
 ]
 
 [[package]]

@@ -571,3 +571,59 @@ fn export_plc_writes_the_address_plan_and_refuses_what_it_cannot() {
     assert_eq!(run.code, exit::USAGE);
     assert!(run.err.contains("unknown format"), "{}", run.err);
 }
+
+#[test]
+fn calc_judges_circuits_and_exits_one_on_failure() {
+    let dir = tempfile::tempdir().unwrap();
+    let sample =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/protection-sample.json");
+    let r = novo(&["calc", sample.to_str().unwrap()]);
+    assert_eq!(r.code, exit::PROBLEMS, "{}", r.err);
+    assert!(r.out.contains("Circuit Q1"));
+    assert!(r.out.contains("FAIL    Voltage drop"));
+    assert!(r.out.contains("UNKNOWN Short-circuit (maximum)"));
+    assert!(r.out.contains("not checked against the standard"));
+
+    // JSON output parses and carries the statuses.
+    let j = novo(&["calc", sample.to_str().unwrap(), "--json"]);
+    let v: serde_json::Value = serde_json::from_str(&j.out).unwrap();
+    assert_eq!(v.as_array().unwrap().len(), 3);
+    assert_eq!(v[2]["rows"][1]["status"], "fail");
+
+    // A licensed table is reported as such, and a bad file is a usage error.
+    let csv = dir.path().join("tables.csv");
+    std::fs::write(&csv, "ampacity,PVC,C,3,2.5,24\n").unwrap();
+    let l = novo(&[
+        "calc",
+        sample.to_str().unwrap(),
+        "--tables",
+        csv.to_str().unwrap(),
+    ]);
+    assert!(l.out.contains("licensed copy tables.csv"));
+    std::fs::write(&csv, "ampacity,PVC,C,3,2.5\n").unwrap();
+    let bad = novo(&[
+        "calc",
+        sample.to_str().unwrap(),
+        "--tables",
+        csv.to_str().unwrap(),
+    ]);
+    assert_eq!(bad.code, exit::USAGE);
+    assert!(bad.err.contains("line 1"));
+
+    // Maker back-up table turns the failed breaking capacity into a pass.
+    let pairs = dir.path().join("pairs.csv");
+    std::fs::write(&pairs, "backup,MCCB160,MCB16C10,25\n").unwrap();
+    let mut spec: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&sample).unwrap()).unwrap();
+    spec["circuits"][0]["device"]["id"] = "MCCB160".into();
+    spec["circuits"][1]["device"]["id"] = "MCB16C10".into();
+    let file = dir.path().join("plant.json");
+    std::fs::write(&file, spec.to_string()).unwrap();
+    let b = novo(&[
+        "calc",
+        file.to_str().unwrap(),
+        "--pairs",
+        pairs.to_str().unwrap(),
+    ]);
+    assert!(b.out.contains("backed up by Q1"), "{}", b.out);
+}
