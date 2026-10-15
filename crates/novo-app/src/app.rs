@@ -25,6 +25,7 @@ mod live_anim;
 mod macro_actions;
 #[cfg(test)]
 mod macro_actions_tests;
+mod numbering;
 mod onboarding;
 mod pages;
 mod parts;
@@ -61,6 +62,8 @@ mod compare_tests;
 mod example_tests;
 #[cfg(test)]
 mod gate1_tests;
+#[cfg(test)]
+mod numbering_tests;
 #[cfg(test)]
 mod onboarding_tests;
 
@@ -817,6 +820,7 @@ impl NovoApp {
         self.macro_place_window(&ctx);
         self.issue_revision_dialog(&ctx);
         self.compare_window(&ctx);
+        self.numbering_window(&ctx);
         self.page_form_dialog(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {
             self.run_command(&ctx, id, None);

@@ -72,6 +72,8 @@ pub(crate) struct Workbench {
     pub(super) issue: Option<super::revisions::IssueDraft>,
     /// The Compare revisions window, while it is open.
     pub(super) compare: Option<super::compare::CompareWindow>,
+    /// The Wire numbering window, while it is open.
+    pub(super) numbering: Option<super::numbering::NumberingWindow>,
     /// The new pages, group and panel form, while open.
     pub(super) page_form: Option<super::pages::PageForm>,
     /// Which sheet of a generated page the canvas shows (0 for the first).
@@ -163,6 +165,7 @@ impl Default for Workbench {
             project_settings: false,
             issue: None,
             compare: None,
+            numbering: None,
             page_form: None,
             sheet: 0,
             nav: Navigator::default(),
@@ -273,6 +276,12 @@ const APP_COMMANDS: &[&str] = &[
     "terminal.reset_pe",
     "wire.mode",
     "interruption.renumber",
+    "wires.number",
+    "wires.numbering",
+    "wires.renumber",
+    "wires.check_numbers",
+    "wires.set_number",
+    "wires.unlock_number",
 ];
 
 /// Whether the app can run a command now (not "comes later").
@@ -568,6 +577,19 @@ impl NovoApp {
             | "terminal.strip_down"
             | "terminal.strip_lowest" => self.terminal_command(id),
             "interruption.renumber" => self.renumber_interruptions(),
+            "wires.number" => self.number_wires(),
+            "wires.numbering" => {
+                self.open_numbering(novo_numbering::Mode::Fill, super::numbering::Tab::Preview)
+            }
+            "wires.renumber" => self.open_numbering(
+                novo_numbering::Mode::Renumber,
+                super::numbering::Tab::Preview,
+            ),
+            "wires.check_numbers" => {
+                self.open_numbering(novo_numbering::Mode::Fill, super::numbering::Tab::Conflicts)
+            }
+            "wires.set_number" => self.set_wire_number(argument),
+            "wires.unlock_number" => self.unlock_wire_number(),
             "view.terminals_drawer" => self.toggle_drawer(Drawer::Terminals),
             "view.cables_drawer" => self.toggle_drawer(Drawer::Cables),
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
