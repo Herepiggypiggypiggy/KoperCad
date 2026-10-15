@@ -6,3 +6,5 @@
 2026-10-15 14:15 UTC #261 6bc814c READY (Preferences window; checked from code and tests, not in a window). Nits: Connections heading, (default), mark menu + Ctrl+,.
 2026-10-15 14:25 UTC #262 81cdca1 READY (grid join; tests-file conflict with main, keep both).
 2026-10-15 14:30 UTC #263 bb94e15 READY (corner/T preview; follow-ups: stored handle, hide piece on Lines pin drag).
+2026-10-15 14:40 UTC #262 re-READY on 9530630 (merge of main only).
+2026-10-15 14:45 UTC #266 baff400 READY (PE toggle, part search, grid double-click wire; even PR, taken at WS-01's request).
