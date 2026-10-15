@@ -17,7 +17,7 @@
       "revision": 3
     }
   },
-  "next_id": 29,
+  "next_id": 34,
   "parts": [
     {
       "id": 3,
@@ -133,6 +133,16 @@
       "kind": "terminal_strip",
       "parts": [],
       "properties": {}
+    },
+    {
+      "id": 30,
+      "tag": "=A2+CAB1-K1",
+      "description": "Main contactor",
+      "kind": "general",
+      "parts": [],
+      "properties": {
+        "note": "spare contact"
+      }
     }
   ],
   "terminals": [
@@ -380,6 +390,63 @@
       "pins": [],
       "bridges": [],
       "properties": {}
+    },
+    {
+      "id": 31,
+      "page": 2,
+      "symbol": "iec/contacts/changeover",
+      "placement": {
+        "origin": {
+          "x": 150.0,
+          "y": 50.0
+        },
+        "rotation": "90",
+        "mirrored": true
+      },
+      "role": {
+        "type": "device",
+        "device": 30,
+        "main": false
+      },
+      "pins": [
+        {
+          "name": "11",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "12",
+          "offset": {
+            "x": -5.0,
+            "y": 10.0
+          },
+          "direction": "down"
+        },
+        {
+          "name": "14",
+          "offset": {
+            "x": 5.0,
+            "y": 10.0
+          }
+        }
+      ],
+      "bridges": [],
+      "pass_through": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          2
+        ]
+      ],
+      "properties": {
+        "label_offset": 2.5
+      }
     }
   ],
   "junctions": [
@@ -541,6 +608,27 @@
       },
       "height_mm": 2.5,
       "properties": {}
+    },
+    {
+      "id": 32,
+      "page": 2,
+      "attached_to": {
+        "kind": "symbol",
+        "id": 31
+      },
+      "content": {
+        "type": "device_tag"
+      },
+      "placement": {
+        "offset": {
+          "x": 6.0,
+          "y": -2.0
+        },
+        "rotation": "90",
+        "anchor": "middle_left"
+      },
+      "height_mm": 3.5,
+      "properties": {}
     }
   ],
   "potential_systems": [
@@ -572,6 +660,171 @@
         {
           "kind": "symbol",
           "id": 10
+        }
+      ],
+      "properties": {}
+    }
+  ],
+  "block_definitions": [
+    {
+      "id": 29,
+      "name": "contact",
+      "description": "Changeover contact",
+      "parameters": [
+        {
+          "name": "coil",
+          "default": "24 V DC",
+          "description": "Coil voltage"
+        }
+      ],
+      "members": [
+        {
+          "record": "device",
+          "id": 4,
+          "tag": "=A1+CAB1-K1",
+          "description": "Main contactor",
+          "kind": "general",
+          "parts": [],
+          "properties": {
+            "note": "spare contact"
+          }
+        },
+        {
+          "record": "symbol",
+          "id": 11,
+          "page": 0,
+          "symbol": "iec/contacts/changeover",
+          "placement": {
+            "origin": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "rotation": "90",
+            "mirrored": true
+          },
+          "role": {
+            "type": "device",
+            "device": 4,
+            "main": false
+          },
+          "pins": [
+            {
+              "name": "11",
+              "offset": {
+                "x": 0.0,
+                "y": 0.0
+              },
+              "direction": "up"
+            },
+            {
+              "name": "12",
+              "offset": {
+                "x": -5.0,
+                "y": 10.0
+              },
+              "direction": "down"
+            },
+            {
+              "name": "14",
+              "offset": {
+                "x": 5.0,
+                "y": 10.0
+              }
+            }
+          ],
+          "bridges": [],
+          "pass_through": [
+            [
+              0,
+              1
+            ],
+            [
+              0,
+              2
+            ]
+          ],
+          "properties": {
+            "label_offset": 2.5
+          }
+        },
+        {
+          "record": "text",
+          "id": 22,
+          "page": 0,
+          "attached_to": {
+            "kind": "symbol",
+            "id": 11
+          },
+          "content": {
+            "type": "device_tag"
+          },
+          "placement": {
+            "offset": {
+              "x": 6.0,
+              "y": -2.0
+            },
+            "rotation": "90",
+            "anchor": "middle_left"
+          },
+          "height_mm": 3.5,
+          "properties": {}
+        }
+      ],
+      "source": {
+        "library": "company",
+        "version": 2
+      },
+      "properties": {}
+    }
+  ],
+  "block_instances": [
+    {
+      "id": 33,
+      "definition": 29,
+      "page": 2,
+      "origin": {
+        "x": 150.0,
+        "y": 50.0
+      },
+      "values": [
+        [
+          "coil",
+          "230 V AC"
+        ]
+      ],
+      "members": [
+        {
+          "template": {
+            "kind": "device",
+            "id": 4
+          },
+          "actual": {
+            "kind": "device",
+            "id": 30
+          },
+          "overrides": [
+            "position"
+          ]
+        },
+        {
+          "template": {
+            "kind": "symbol",
+            "id": 11
+          },
+          "actual": {
+            "kind": "symbol",
+            "id": 31
+          }
+        },
+        {
+          "template": {
+            "kind": "text",
+            "id": 22
+          },
+          "actual": {
+            "kind": "text",
+            "id": 32
+          }
         }
       ],
       "properties": {}

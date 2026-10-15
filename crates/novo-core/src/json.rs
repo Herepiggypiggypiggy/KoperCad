@@ -6,8 +6,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::entity::{
-    Cable, Device, Dismissal, Junction, Page, Part, Potential, PotentialSystem, ProjectInfo,
-    Structure, SymbolInstance, Terminal, Text, Wire,
+    BlockDefinition, BlockInstance, Cable, Device, Dismissal, Junction, Page, Part, Potential,
+    PotentialSystem, ProjectInfo, Structure, SymbolInstance, Terminal, Text, Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::project::Project;
@@ -53,6 +53,10 @@ struct ProjectJson {
     structures: Vec<Structure>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     dismissals: Vec<Dismissal>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    block_definitions: Vec<BlockDefinition>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    block_instances: Vec<BlockInstance>,
 }
 
 impl Project {
@@ -76,6 +80,8 @@ impl Project {
             potential_systems: self.potential_systems.values().cloned().collect(),
             structures: self.structures.values().cloned().collect(),
             dismissals: self.dismissals.values().cloned().collect(),
+            block_definitions: self.block_definitions.values().cloned().collect(),
+            block_instances: self.block_instances.values().cloned().collect(),
         };
         serde_json::to_string_pretty(&file).expect("project serializes to JSON")
     }
@@ -106,7 +112,13 @@ impl Project {
                     .map(Record::PotentialSystem),
             )
             .chain(file.structures.into_iter().map(Record::Structure))
-            .chain(file.dismissals.into_iter().map(Record::Dismissal));
+            .chain(file.dismissals.into_iter().map(Record::Dismissal))
+            .chain(
+                file.block_definitions
+                    .into_iter()
+                    .map(Record::BlockDefinition),
+            )
+            .chain(file.block_instances.into_iter().map(Record::BlockInstance));
         Project::from_records(file.info, file.next_id, records)
     }
 }

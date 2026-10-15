@@ -110,4 +110,8 @@ define_ids! {
     StructureId => Structure, "Structure";
     /// A proposal the user declined, so it does not come back.
     DismissalId => Dismissal, "Dismissal";
+    /// A parametric circuit kept in the project, to place as blocks.
+    BlockDefinitionId => BlockDefinition, "BlockDefinition";
+    /// One placement of a block definition.
+    BlockInstanceId => BlockInstance, "BlockInstance";
 }

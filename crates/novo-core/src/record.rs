@@ -10,8 +10,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 
 use crate::entity::{
-    Cable, Device, Dismissal, Junction, Page, Part, Potential, PotentialSystem, ProjectInfo,
-    Properties, Structure, SymbolInstance, SymbolRole, Terminal, Text, Wire,
+    BlockDefinition, BlockInstance, Cable, Device, Dismissal, Junction, Page, Part, Potential,
+    PotentialSystem, ProjectInfo, Properties, Structure, SymbolInstance, SymbolRole, Terminal,
+    Text, Wire,
 };
 use crate::geom::Point;
 use crate::id::{AnyId, EntityKind, PageId};
@@ -36,6 +37,8 @@ pub enum Record {
     PotentialSystem(PotentialSystem),
     Structure(Structure),
     Dismissal(Dismissal),
+    BlockDefinition(BlockDefinition),
+    BlockInstance(BlockInstance),
 }
 
 impl Record {
@@ -54,6 +57,8 @@ impl Record {
             Record::PotentialSystem(r) => r.id.into(),
             Record::Structure(r) => r.id.into(),
             Record::Dismissal(r) => r.id.into(),
+            Record::BlockDefinition(r) => r.id.into(),
+            Record::BlockInstance(r) => r.id.into(),
         }
     }
 
@@ -117,6 +122,14 @@ impl Record {
             }
             Record::Structure(_) => {}
             Record::Dismissal(r) => out.extend(r.subjects.iter().copied()),
+            // Template members have ids of their own, not project ids.
+            Record::BlockDefinition(_) => {}
+            // Members are not references: deleting one detaches the
+            // instance instead of deleting it (see `Tx::remove`).
+            Record::BlockInstance(r) => {
+                out.push(r.definition.into());
+                out.push(r.page.into());
+            }
         }
         out.sort();
         out.dedup();
@@ -138,6 +151,8 @@ impl Record {
             Record::PotentialSystem(r) => &r.properties,
             Record::Structure(r) => &r.properties,
             Record::Dismissal(r) => &r.properties,
+            Record::BlockDefinition(r) => &r.properties,
+            Record::BlockInstance(r) => &r.properties,
         }
     }
 
@@ -157,6 +172,8 @@ impl Record {
             Record::PotentialSystem(r) => &mut r.properties,
             Record::Structure(r) => &mut r.properties,
             Record::Dismissal(r) => &mut r.properties,
+            Record::BlockDefinition(r) => &mut r.properties,
+            Record::BlockInstance(r) => &mut r.properties,
         })
     }
 
@@ -218,6 +235,30 @@ impl Record {
                     None
                 }
             }
+            Record::BlockDefinition(r) => {
+                if r.members.iter().any(|m| m.non_finite_field().is_some()) {
+                    Some("members")
+                } else if !r.parameters.iter().all(|p| match p.default {
+                    crate::entity::Value::Float(f) => f.is_finite(),
+                    _ => true,
+                }) {
+                    Some("parameters")
+                } else {
+                    None
+                }
+            }
+            Record::BlockInstance(r) => {
+                if !point(&r.origin) {
+                    Some("origin")
+                } else if !r.values.iter().all(|(_, v)| match v {
+                    crate::entity::Value::Float(f) => f.is_finite(),
+                    _ => true,
+                }) {
+                    Some("values")
+                } else {
+                    None
+                }
+            }
             Record::Page(_)
             | Record::Device(_)
             | Record::Terminal(_)
@@ -244,6 +285,8 @@ impl Record {
             EntityKind::PotentialSystem => 10,
             EntityKind::Structure => 11,
             EntityKind::Dismissal => 12,
+            EntityKind::BlockDefinition => 13,
+            EntityKind::BlockInstance => 14,
         }
     }
 }
@@ -485,4 +528,6 @@ impl_entity! {
     PotentialSystem => PotentialSystem, crate::id::PotentialSystemId, potential_systems;
     Structure => Structure, crate::id::StructureId, structures;
     Dismissal => Dismissal, crate::id::DismissalId, dismissals;
+    BlockDefinition => BlockDefinition, crate::id::BlockDefinitionId, block_definitions;
+    BlockInstance => BlockInstance, crate::id::BlockInstanceId, block_instances;
 }
