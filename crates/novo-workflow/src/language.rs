@@ -398,6 +398,11 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("export.bom", &["exporteer stuklijst"], &["onderdelenlijst"]),
     nl(
+        "import.spreadsheet",
+        &["importeer spreadsheet", "importeer excel"],
+        &["spreadsheet", "excel", "csv"],
+    ),
+    nl(
         "export.change_report",
         &["wijzigingenrapport exporteren", "wijzigingsrapport"],
         &["wijzigingen pdf", "revisierapport"],

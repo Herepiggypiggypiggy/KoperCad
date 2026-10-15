@@ -1,7 +1,8 @@
 //! The `kopercad-cli` command-line tool (owned by WS-28).
 //!
 //! Every subcommand opens the project read-only ([`ProjectFile::read`]): it
-//! never writes to the project file, takes no lock that outlives the run,
+//! never writes to the project file (`import sheet` writes a new project
+//! file only when given `--output`, never over an existing one), takes no lock that outlives the run,
 //! and writes nothing but the output path it was given. Edits belong to the
 //! app and to Python scripts, which go through the command API.
 //!
@@ -46,7 +47,7 @@ pub mod exit {
     version,
     about = "KoperCAD command-line tool: inspect, check and export project files",
     long_about = "KoperCAD command-line tool: inspect, check and export project files.\n\n\
-                  Project files are only read, never changed.\n\
+                  Project files are only read, never changed (`import sheet --output` writes a new one).\n\
                   Exit codes: 0 done, 1 check found problems, 2 bad command line, \
                   3 project not readable, 4 output not writable, 5 not available in this build.\n\
                   An export is never written over a project file."
@@ -71,6 +72,9 @@ enum Cmd {
     /// Revisions: list them, or compare two states of the project.
     #[command(subcommand)]
     Revisions(Revisions),
+    /// Bring edited data back into a project.
+    #[command(subcommand)]
+    Import(Import),
     /// Convert a DWG to DXF with the free converter on this computer
     /// (LibreDWG's dwg2dxf or the ODA File Converter), ready for the DXF
     /// import. KoperCAD never bundles either one.
@@ -290,6 +294,44 @@ enum Export {
         #[arg(long = "page", value_name = "NAME")]
         pages: Vec<String>,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum Import {
+    /// Preview an edited spreadsheet (`.xlsx` or CSV from the spreadsheet
+    /// export) against a project: every cell that would change, conflicts
+    /// with later edits and rows that cannot be used, with line and reason.
+    /// Nothing is written unless `--output` names a new project file; the
+    /// project given is never changed. Exits with 1 when rows were rejected.
+    Sheet {
+        /// The project the sheet was exported from.
+        project: PathBuf,
+        /// The edited `.xlsx` or CSV file.
+        sheet: PathBuf,
+        /// Print JSON instead of text.
+        #[arg(long)]
+        json: bool,
+        /// Write the project with the import applied (one undo step) to
+        /// this new `.novo` file. It must not exist yet.
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Settle conflicts (cells the project changed since the export):
+        /// take the sheet's value or keep the project's. Left unsettled,
+        /// conflicts are not applied.
+        #[arg(long, value_enum)]
+        resolve: Option<ResolveSide>,
+        /// Leave out one row, as `Devices:5` (sheet name, row); repeat for
+        /// several.
+        #[arg(long = "skip", value_name = "SHEET:ROW")]
+        skip: Vec<String>,
+    },
+}
+
+/// Which side wins a conflict.
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+enum ResolveSide {
+    Sheet,
+    Project,
 }
 
 /// A failure with its exit code.
@@ -544,6 +586,22 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             }
             Ok(exit::OK)
         }
+        Cmd::Import(Import::Sheet {
+            project,
+            sheet,
+            json,
+            output,
+            resolve,
+            skip,
+        }) => import_sheet(
+            &project,
+            &sheet,
+            json,
+            output.as_deref(),
+            resolve,
+            &skip,
+            out,
+        ),
         Cmd::Calc {
             file,
             tables,
@@ -570,6 +628,223 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             })
         }
     }
+}
+
+/// `kopercad-cli import sheet`: previews the sheet, and with `output`
+/// writes the imported project to a new file.
+fn import_sheet(
+    file: &Path,
+    sheet: &Path,
+    json: bool,
+    output: Option<&Path>,
+    resolve: Option<ResolveSide>,
+    skip: &[String],
+    out: &mut dyn Write,
+) -> Result<i32, Failure> {
+    use novo_interop::sheets::{Resolution, plan_import_with, read_file};
+
+    let project = read(file)?;
+    let name = sheet
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let bytes = std::fs::read(sheet)
+        .map_err(|e| Failure::new(exit::READ, format!("cannot read {}: {e}", sheet.display())))?;
+    let book = read_file(&name, &bytes)
+        .map_err(|e| Failure::new(exit::READ, format!("cannot import {name}: {e}")))?;
+    let mut skipped = Vec::new();
+    for spec in skip {
+        let parsed = spec.split_once(':').and_then(|(table, line)| {
+            let kind = novo_interop::sheets::TableKind::from_name(table)?;
+            Some((kind, line.trim().parse::<usize>().ok()?))
+        });
+        match parsed {
+            Some(row) => skipped.push(row),
+            None => {
+                return Err(Failure::new(
+                    exit::USAGE,
+                    format!("--skip wants SHEET:ROW such as Devices:5, not {spec:?}"),
+                ));
+            }
+        }
+    }
+    // Check the output before any work is shown as done.
+    if let Some(path) = output
+        && (!novo_py::is_project_path(path) || path.exists())
+    {
+        let why = if path.exists() {
+            "already exists; import never replaces a project file"
+        } else {
+            "is not a .novo project file name"
+        };
+        return Err(Failure::new(
+            exit::WRITE,
+            format!("cannot write {}: it {why}", path.display()),
+        ));
+    }
+    let catalog = novo_parts::Catalog::load_default().unwrap_or_default();
+    let mut plan = plan_import_with(&project, &book, &catalog);
+    match resolve {
+        Some(ResolveSide::Sheet) => plan.resolve(Resolution::Sheet),
+        Some(ResolveSide::Project) => plan.resolve(Resolution::Project),
+        None => {}
+    }
+    for index in 0..plan.changes.len() {
+        let change = &plan.changes[index];
+        if skipped.contains(&(change.table, change.line)) {
+            plan.select(index, false);
+        }
+    }
+    for index in 0..plan.new_devices.len() {
+        if skipped.contains(&(
+            novo_interop::sheets::TableKind::Devices,
+            plan.new_devices[index].line,
+        )) {
+            plan.select_new(index, false);
+        }
+    }
+    let mut written = false;
+    if let Some(path) = output
+        && let Some(command) = plan
+            .command(&project)
+            .map_err(|e| Failure::new(exit::USAGE, e.to_string()))?
+    {
+        let mut doc = novo_core::Document::new(project.clone());
+        doc.execute(command)
+            .map_err(|e| Failure::new(exit::USAGE, e.to_string()))?;
+        ProjectFile::create(path, doc.project()).map_err(|e| {
+            Failure::new(exit::WRITE, format!("cannot write {}: {e}", path.display()))
+        })?;
+        written = true;
+    }
+    if json {
+        let changes: Vec<Value> = plan
+            .changes
+            .iter()
+            .map(|c| {
+                json!({
+                    "sheet": c.table.name(),
+                    "row": c.line,
+                    "item": c.item,
+                    "column": c.header,
+                    "before": c.before,
+                    "after": c.after,
+                    "conflict": c.conflict.is_some(),
+                    "applied": c.selected,
+                })
+            })
+            .collect();
+        let new_devices: Vec<Value> = plan
+            .new_devices
+            .iter()
+            .map(|n| {
+                json!({
+                    "row": n.line,
+                    "tag": n.tag.to_string(),
+                    "description": n.description,
+                    "kind": format!("{:?}", n.kind),
+                    "order_number": n.order_number(),
+                    "applied": n.selected,
+                })
+            })
+            .collect();
+        let rejected: Vec<Value> = plan
+            .rejected
+            .iter()
+            .map(|r| {
+                json!({
+                    "sheet": r.table.name(),
+                    "row": r.line,
+                    "item": r.item,
+                    "reasons": r.reasons,
+                })
+            })
+            .collect();
+        let value = json!({
+            "summary": plan.summary(),
+            "changes": changes,
+            "new_devices": new_devices,
+            "rejected": rejected,
+            "warnings": plan.warnings,
+            "notes": plan.notes,
+            "rows_unchanged": plan.rows_unchanged,
+            "written": written,
+        });
+        print(out, &format!("{value:#}"))?;
+    } else {
+        for c in &plan.changes {
+            let mark = match (&c.conflict, c.selected) {
+                (Some(_), _) => "conflict",
+                (None, true) => "change",
+                (None, false) => "skipped",
+            };
+            let shown = |v: &str| {
+                if v.is_empty() {
+                    "(empty)".to_owned()
+                } else {
+                    v.to_owned()
+                }
+            };
+            print(
+                out,
+                &format!(
+                    "{mark}: {} row {} {}: {} = {} -> {}",
+                    c.table.name(),
+                    c.line,
+                    c.item,
+                    c.header,
+                    shown(&c.before),
+                    shown(&c.after)
+                ),
+            )?;
+        }
+        for n in &plan.new_devices {
+            let mark = if n.selected { "new" } else { "skipped" };
+            let order = n
+                .order_number()
+                .map_or(String::new(), |o| format!(", order number {o}"));
+            print(
+                out,
+                &format!(
+                    "{mark}: Devices row {} {}: {:?}{order}, {:?}",
+                    n.line, n.tag, n.description, n.kind
+                ),
+            )?;
+        }
+        for r in &plan.rejected {
+            let item = if r.item.is_empty() {
+                String::new()
+            } else {
+                format!(" ({})", r.item)
+            };
+            print(
+                out,
+                &format!(
+                    "rejected: {} row {}{item}: {}",
+                    r.table.name(),
+                    r.line,
+                    r.reasons.join("; ")
+                ),
+            )?;
+        }
+        for text in &plan.warnings {
+            print(out, &format!("warning: {text}"))?;
+        }
+        for text in &plan.notes {
+            print(out, &format!("note: {text}"))?;
+        }
+        print(out, &plan.summary())?;
+        match (output, written) {
+            (Some(path), true) => print(out, &format!("wrote {}", path.display()))?,
+            (Some(_), false) => print(out, "nothing to apply, no file written")?,
+            (None, _) => print(out, "preview only: give --output <new.novo> to apply")?,
+        }
+    }
+    Ok(if plan.rejected.is_empty() {
+        exit::OK
+    } else {
+        exit::PROBLEMS
+    })
 }
 
 /// `kopercad-cli calc`: reads the plant JSON, optionally the licensed

@@ -37,6 +37,7 @@ mod export;
 mod fields;
 mod files;
 mod grid;
+mod open;
 mod plan;
 mod rejects;
 mod spec;
@@ -47,6 +48,7 @@ pub use export::{export_project, export_table};
 pub use fields::PROPERTY_PREFIX;
 pub use files::{CsvOptions, FORMAT_VERSION, SheetError, read_csv, read_xlsx, to_csv, xlsx_bytes};
 pub use grid::{Cell, Meta, Row, Table, TableKind, Workbook, number_text};
+pub use open::read_file;
 pub use plan::{
     ApplyError, Change, ImportPlan, Rejected, Resolution, plan_import, plan_import_with,
 };
