@@ -7,3 +7,6 @@
 2026-10-15 09:20 UTC #181 READY on de8aaf3 (main reviewer, CI-gated); frozen, lead merges. Next engine PR 2 (WiringMode, Lines) starts from main after merge.
 2026-10-15 10:10 UTC #181 merged (2cd9310). Engine PR 2 (settle): check_draw typed pre-flight, transform_interactive (atomic refusal), reroute nudge, accept guard, 10k benchmark (index 4 ms). WS-06 to call transform_interactive from tool.rs and use check_draw for preview.
 2026-10-15 10:55 UTC #188 merged (4928fd4). #192 (WS-06 Lines/Corners tool) READY on 4cb5450. Next PR: wire.overlap check + transform order fix. Outputs thread OK'd checks change.
+2026-10-15 11:00 UTC #195 READY on 101e3b7; waiting for lead merge. Remaining: tool #192, keys #180, chip (WS-01), #185 hand_drawn.
+2026-10-15 11:20 UTC WS-06 #197 fixes my reroute_with bug (own old bends counted as overlap) found once the tool used transform_interactive. Base further edit.rs work on it.
+2026-10-15 12:00 UTC Fix: wire-to-wire connect refused 'route overlaps this wire is out of range'. Cause: a route to a point on a wire had no arrival direction and could run along that wire. Now arrives at right angles (approach_direction); refusals read 'This route: it would run along the wire from X to Y for N mm; ...' (Error::Refused). PR from claude/project-thread-s1dfbt.

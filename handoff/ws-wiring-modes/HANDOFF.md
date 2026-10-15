@@ -29,3 +29,6 @@ Diagonals are out of v1, so segment_overlap stays axis-aligned (state it in docs
 
 ## Split agreed with WS-06 (2026-10-15, lead-assigned)
 Me: overlap engine (#181, then settle_wire for accept/insert_into_wires/transform/tidy_junctions with interactive flag, typed try_draw_wire/DrawError, wire.overlap check, 10k benchmark and cached index). WS-06: WiringMode on Editor, Lines in WireTool, draw_wire_exact, Backspace/Shift/R, hand_drawn mark. Tell WS-06 the merge SHA of #181.
+
+## State 2026-10-15 ~11:00 UTC
+Merged: #168 plan, #169 DESIGN, #181, #188 (overlap engine, typed check_draw, transform_interactive). READY awaiting lead: #195 (wire.overlap + move order, 101e3b7), #192 (WS-06 Lines/Corners tool, 4cb5450). Open elsewhere: #180 WS-08 Shift+W/wire.mode; app shell chip + Shift key-repeat guard (WS-01); WS-02 #185 Wire.hand_drawn. Left for later: hand-drawn end-segment bend on move (needs #185), route through another conductor's pin/junction (test 6), derived junction for same-pin runs, property test (tester).

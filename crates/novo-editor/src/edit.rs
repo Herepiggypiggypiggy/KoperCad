@@ -8,9 +8,9 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use novo_core::{
-    AnyId, Device, DeviceId, DeviceKind, DeviceTag, Endpoint, JunctionId, ModelError, PageId,
-    PinRef, Placement, Point, PotentialId, PotentialKind, Project, Result, Rotation, SymbolId,
-    SymbolInstance, SymbolRole, Terminal, TerminalId, TerminalKind, Tx, Wire, WireId,
+    AnyId, Device, DeviceId, DeviceKind, DeviceTag, Direction, Endpoint, JunctionId, ModelError,
+    PageId, PinRef, Placement, Point, PotentialId, PotentialKind, Project, Result, Rotation,
+    SymbolId, SymbolInstance, SymbolRole, Terminal, TerminalId, TerminalKind, Tx, Wire, WireId,
 };
 use novo_symbols::Symbol;
 
@@ -667,11 +667,84 @@ pub fn resolve_target(tx: &mut Tx<'_>, page: PageId, target: Target) -> Result<E
 }
 
 /// The model error a refused route fails with, for callers that cannot use
-/// [`Refusal`] as data (scripts, [`draw_wire`]).
-fn refused(r: Refusal) -> ModelError {
-    ModelError::InvalidValue {
-        id: r.other.into(),
-        field: "route overlaps this wire",
+/// [`Refusal`] as data (scripts, [`draw_wire`]). The reason names the other
+/// wire by its ends and says in plain words what is wrong.
+pub(crate) fn refused(r: Refusal) -> ModelError {
+    refusal_error(None, r)
+}
+
+/// As [`refused`], naming the wire the refusal is about when the project is
+/// at hand to label the other wire's ends.
+pub(crate) fn refusal_error(project: Option<&Project>, r: Refusal) -> ModelError {
+    let label = |e: Endpoint| match e {
+        Endpoint::Pin { symbol, pin } => project
+            .and_then(|p| {
+                let s = p.symbol(symbol)?;
+                let tag = s
+                    .device()
+                    .and_then(|d| p.device(d))
+                    .map(|d| d.tag.to_string());
+                Some(format!(
+                    "{} pin {}",
+                    tag.unwrap_or_else(|| "a symbol".into()),
+                    s.pins.get(usize::from(pin))?.name
+                ))
+            })
+            .unwrap_or_else(|| "a pin".into()),
+        Endpoint::Junction { .. } => "a junction".into(),
+    };
+    let which = project.and_then(|p| p.wire(r.other)).map_or_else(
+        || "another wire".to_string(),
+        |w| format!("the wire from {} to {}", label(w.from), label(w.to)),
+    );
+    let length = ((r.to.x - r.from.x).abs() + (r.to.y - r.from.y).abs()).round();
+    ModelError::Refused {
+        what: "This route".into(),
+        reason: format!(
+            "it would run along {which} for {length} mm; wires may cross or end on the side of another wire but not share its length. Move a corner or end the wire on its side."
+        ),
+    }
+}
+
+/// How a wire end on another wire's side should arrive: at right angles to
+/// that wire, from the side `toward` lies on. A pin or junction keeps its
+/// own exit direction. Without this a route to a point on a wire could
+/// arrive along the wire and be refused as sharing its length.
+fn approach_direction(
+    project: &Project,
+    page: PageId,
+    t: Target,
+    toward: Point,
+) -> Option<Direction> {
+    match t {
+        Target::Endpoint(e, _) => endpoint_direction(project, e),
+        Target::Wire(w, at) => {
+            if geometry::junction_at(project, page, at).is_some() {
+                return None;
+            }
+            let seg = wires_through(project, page, at)
+                .into_iter()
+                .find(|(x, _)| *x == w)
+                .or_else(|| wires_through(project, page, at).into_iter().next())?
+                .1;
+            let pts = wire_points(project, w)?;
+            let (a, b) = (*pts.get(seg)?, *pts.get(seg + 1)?);
+            if (a.y - b.y).abs() < EPS {
+                Some(if toward.y < at.y {
+                    Direction::Up
+                } else {
+                    Direction::Down
+                })
+            } else if (a.x - b.x).abs() < EPS {
+                Some(if toward.x < at.x {
+                    Direction::Left
+                } else {
+                    Direction::Right
+                })
+            } else {
+                None
+            }
+        }
     }
 }
 
@@ -705,16 +778,15 @@ pub fn check_draw(
         Target::Endpoint(e, _) => Some(e),
         Target::Wire(..) => None,
     };
-    let dir = |t: Target| endpoint(t).and_then(|e| endpoint_direction(project, e));
     let wires = |t: Target| endpoint(t).map_or_else(Vec::new, |e| pin_wires(project, e, &[]));
     plan_route(
         project,
         page,
         start.position(),
-        dir(start),
+        approach_direction(project, page, start, end.position()),
         corners,
         end.position(),
-        dir(end),
+        approach_direction(project, page, end, start.position()),
         &wires(start),
         &wires(end),
     )
@@ -731,6 +803,13 @@ pub fn draw_wire(
     corners: &[Point],
     end: Target,
 ) -> Result<WireId> {
+    let (start_dir, end_dir) = {
+        let project = tx.project();
+        (
+            approach_direction(project, page, start, end.position()),
+            approach_direction(project, page, end, start.position()),
+        )
+    };
     let from = resolve_target(tx, page, start)?;
     let to = resolve_target(tx, page, end)?;
     let project = tx.project();
@@ -746,14 +825,14 @@ pub fn draw_wire(
         project,
         page,
         a,
-        endpoint_direction(project, from),
+        start_dir,
         corners,
         b,
-        endpoint_direction(project, to),
+        end_dir,
         &pin_wires(project, from, &[]),
         &pin_wires(project, to, &[]),
     )
-    .map_err(refused)?;
+    .map_err(|r| refusal_error(Some(project), r))?;
     let wire = tx.connect(from, to)?;
     if !bends.is_empty() {
         tx.update::<Wire>(wire, |w| w.route = bends)?;
