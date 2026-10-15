@@ -3,3 +3,4 @@
 2026-10-15 08:10 UTC Layout, design reviewer back Corners|Lines + Shift+W. Pushed 86c3c39 to #168 with DESIGN.md text (modes, no-overlap, dock switch) and engine plan/tests. Asked Workflow to close #169; main+design reviewers to re-check. Diagonals out of v1.
 2026-10-15 08:25 UTC Workflow rebuilt #169 on Corners|Lines (Corners nudges, Lines refuses, no diagonals) and is the DESIGN PR. #168 cut to engine plan + tests at c21e49c; awaiting both reviewers. Engine PR 1 starts after #168 merges.
 2026-10-15 08:55 UTC #168 merged. Engine PR 1 open: #181 head 2b79dad (overlap.rs, plan_route, draw_wire). Next: settle_wire for other paths, WiringMode+Lines, wire.overlap check.
+2026-10-15 09:05 UTC #168 and #169 merged; #181 open for review. WS-08 #180 binds Shift+W. Recorded #177 clarifications in HANDOFF.
