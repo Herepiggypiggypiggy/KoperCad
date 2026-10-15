@@ -48,3 +48,10 @@
 2026-10-14 22:15 UTC #110 merged. No open PR of mine.
 2026-10-14 22:17 UTC WS-02 blocks model checked vs DESIGN §7: matches; flagged that adding a device/connection inside a block must detach too (suggested 'inside' rule)
 2026-10-14 22:24 UTC Found novo-editor names inserted pages 1.1 (clashes with page.column); DESIGN PR: page names never contain a dot, inserted pages take letters (3a)
+2026-10-15 02:56 UTC WS-02 built 'connection inside block detaches'; suggested end-of-transaction check for a device wired only to members. Re-pinged design reviewer on #116
+2026-10-15 02:57 UTC #116 READY (e68a605). Sent WS-06 the insert-before-3a rule (re-letter unfrozen run; frozen names never move)
+2026-10-15 02:56 UTC #116 merged. No open PR of mine.
+2026-10-15 03:01 UTC WS-02 built the device-inside-block detach rule (follow-ups PR after blocks)
+2026-10-15 03:20 UTC Checked WS-06 #133 (page letters, re-letter/frozen, dotted rename refused): matches DESIGN §3; flagged 'Cover a' → 'Cover a a' (should be 'Cover b')
+2026-10-15 03:21 UTC WS-06 fixed 'Cover a' → 'Cover b' in #133 (c689e70)
+2026-10-15 03:47 UTC Design reviewer asked to record jump/reveal behaviour from WS-03 #144; opening docs PR
