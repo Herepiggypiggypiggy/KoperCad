@@ -20,6 +20,10 @@ pub(crate) struct ChangesMode {
     snapshot: Project,
     /// The comparison with the project as of `.0` (its revision counter).
     changes: Option<(u64, ChangeSet)>,
+    /// The dashed marks for what was removed on a page, kept for the
+    /// project revision and page they were worked out for: building them
+    /// draws the page of the older state.
+    ghosts: Option<((u64, PageId), Vec<Mark>)>,
 }
 
 impl ChangesMode {
@@ -122,6 +126,7 @@ impl NovoApp {
             index,
             snapshot,
             changes: None,
+            ghosts: None,
         });
     }
 
@@ -133,10 +138,9 @@ impl NovoApp {
         };
         let project = doc.project();
         let since = mode.index.clone();
-        let changes = mode.changes(project).on_page(page).to_vec();
         let mut marks = Vec::new();
         let mut removed = Vec::new();
-        for change in &changes {
+        for change in mode.changes(project).on_page(page) {
             let kind = match change.kind {
                 ChangeKind::Added => MarkKind::Added,
                 ChangeKind::Changed { .. } => MarkKind::Modified,
@@ -152,24 +156,29 @@ impl NovoApp {
         if removed.is_empty() {
             return marks;
         }
-        let ids: Vec<AnyId> = removed.iter().map(|(id, _)| *id).collect();
-        let Some(mode) = self.wb.changes.as_ref() else {
-            return marks;
-        };
-        let Some(view) = self.canvas.schematic_ref() else {
-            return marks;
-        };
-        for (id, area) in view.bounds_in(&mode.snapshot, page, &ids) {
-            let text = removed
-                .iter()
-                .find(|(r, _)| *r == id)
-                .map(|(_, t)| t.clone())
-                .unwrap_or_default();
-            marks.push(Mark {
-                kind: MarkKind::Removed,
-                target: MarkTarget::Area(area),
-                text,
-            });
+        let key = (project.revision(), page);
+        if mode.ghosts.as_ref().is_none_or(|(k, _)| *k != key) {
+            let Some(view) = self.canvas.schematic_ref() else {
+                return marks;
+            };
+            let ids: Vec<AnyId> = removed.iter().map(|(id, _)| *id).collect();
+            let ghosts = view
+                .bounds_in(&mode.snapshot, page, &ids)
+                .into_iter()
+                .map(|(id, area)| Mark {
+                    kind: MarkKind::Removed,
+                    target: MarkTarget::Area(area),
+                    text: removed
+                        .iter()
+                        .find(|(r, _)| *r == id)
+                        .map(|(_, t)| t.clone())
+                        .unwrap_or_default(),
+                })
+                .collect();
+            mode.ghosts = Some((key, ghosts));
+        }
+        if let Some((_, ghosts)) = &mode.ghosts {
+            marks.extend(ghosts.iter().cloned());
         }
         marks
     }
@@ -188,7 +197,7 @@ impl NovoApp {
             .revisions()
             .map(|r| (r.id, format!("{} · {}", r.index, r.date)))
             .collect();
-        let set = mode.changes(project).clone();
+        let set = mode.changes(project);
         let here = set.on_page(page);
         let count = |f: fn(&ChangeKind) -> bool| here.iter().filter(|c| f(&c.kind)).count();
         let (added, changed, removed) = (
@@ -196,6 +205,7 @@ impl NovoApp {
             count(|k| matches!(k, ChangeKind::Changed { .. })),
             count(|k| matches!(k, ChangeKind::Removed)),
         );
+        let nothing_here = here.is_empty();
         let pages = set.pages.len();
         let elsewhere = set.project.len() + usize::from(!set.info.is_empty());
         let mut pick = None;
@@ -230,7 +240,7 @@ impl NovoApp {
                                 }
                             });
                     });
-                    if here.is_empty() {
+                    if nothing_here {
                         ui.weak("Nothing changed on this page");
                     } else {
                         ui.label(format!(
