@@ -37,6 +37,10 @@ pub enum ModelError {
     },
     #[error("{id}: `{field}` is out of range")]
     InvalidValue { id: AnyId, field: &'static str },
+    /// A refused edit that has no object to name: a tool's own rule
+    /// (no free channel on a card, a layout that does not parse).
+    #[error("{what}: {reason}")]
+    Refused { what: String, reason: String },
     #[error("{0} was issued and cannot be deleted; undo the issue instead")]
     IssuedRevision(RevisionId),
     #[error("{text} cannot be attached to {target}; only symbols, junctions and wires carry texts")]

@@ -2011,3 +2011,36 @@ fn follow_up_work_joins_the_last_undo_step() {
     assert_eq!(doc.undo_label(), Some("Add report"));
     assert!(!doc.can_redo());
 }
+
+#[test]
+fn a_hand_drawn_mark_survives_copies_splits_and_files() {
+    let mut doc = Document::default();
+    let s = build_starter(&mut doc);
+    let wire = doc.project().wires().next().expect("a wire").id;
+    doc.transact("Hand-draw", |tx| {
+        tx.update::<Wire>(wire, |w| {
+            w.route = vec![Point::new(30.0, 30.0), Point::new(30.0, 50.0)];
+            w.hand_drawn = true;
+        })
+    })
+    .unwrap();
+    let json = doc.project().to_json();
+    assert!(json.contains("hand_drawn"));
+    let back = Project::from_json(&json).unwrap();
+    assert!(back.wire(wire).unwrap().hand_drawn);
+    let _ = s;
+    let (_, second) = doc
+        .transact("Branch", |tx| tx.split_wire(wire, Point::new(30.0, 40.0)))
+        .unwrap()
+        .0;
+    assert!(doc.project().wire(second).unwrap().hand_drawn);
+}
+
+#[test]
+fn a_tools_own_refusal_names_what_and_why() {
+    let err = ModelError::Refused {
+        what: "channel".into(),
+        reason: "no free channel on this card".into(),
+    };
+    assert_eq!(err.to_string(), "channel: no free channel on this card");
+}
