@@ -110,16 +110,14 @@ floor (TEXT on BG_2 is above 7:1). Labels never block picking: they are not pick
 
 ## 6. Camera
 
-Z is up and units are millimetres; the architecture contract fixes how the plate and the cabinet axes map onto it. A new view opens fitted from the front, the way the door opens.
+Axes and units are those of `docs/design/3d-view.md` section 4: millimetres, +Y up the plate, +Z out of the plate towards the door. A new view opens fitted from the front, the way the door opens.
 
 - **Turntable orbit**, no roll: yaw free, pitch clamped to -89 to 89 degrees.
-- **Projection**: perspective, 30 degree vertical field of view (low distortion, reads as CAD). Orthographic
+- **Projection**: perspective, 35 degree vertical field of view, the contract's `Camera` default (low distortion, reads as CAD). Orthographic
   is a toggle and is chosen automatically when a standard view (front, top, left) is entered by view cube
   or key, and left again on the first orbit.
-- **Mouse**: middle drag or right drag orbits (right drag keeps the 2D 4 point threshold: under it, release is a plain right click and opens the context menu); Shift plus that drags pans; Space plus left drag pans
-  (same as the schematic); wheel zooms **to the cursor** (the world point under the pointer stays fixed;
-  the point comes from the last frame's depth, falling back to the plate plane); Alt plus left drag
-  orbits for trackpads; two finger drag pans and pinch zooms where the platform reports it. Left click
+- **Mouse**, the 2D habits: middle drag pans, Space plus left drag pans; right drag past 4 points orbits (under it, release is a plain right click and opens the context menu); Alt plus left drag orbits for trackpads; wheel zooms **to the cursor** (the world point under the pointer stays fixed;
+  the point comes from the CPU pick under the pointer, falling back to the plate plane); two finger drag pans and pinch zooms where the platform reports it. Left click
   selects, left drag is a rubber band, as in the other canvases.
 - **Feel**: orbit speed 0.25 degrees per pixel; wheel zoom is exponential, 12% per notch; after a drag
   release the motion keeps going with a 90 ms half life (inertia) and stops at once on any click. Pan
@@ -136,12 +134,13 @@ Z is up and units are millimetres; the architecture contract fixes how the plate
 - **Standard views**: Front, Back, Left, Right, Top, Bottom, Isometric. Home is `view.fit` exactly as in the 2D
   canvases (fit all, keeping the current direction); it is not a view of its own. Isometric lives on the view cube
   and a `view.iso` command. Fit all and fit selection use the bounding sphere plus 8% margin.
-- **Saved views**: a named camera (eye, target, projection, cutaway on or off). Stored in the project
-  next to the cabinet it belongs to, listed in the view menu, up to nine bound to recall keys. Keys are
-  assigned through the workflow keymap (proposal: Home `view.fit` fit all, F fit selection, `view.iso`, `1` to `9` recall,
-  Ctrl+`1` to `9` save, Numpad for standard views); this thread does not add keys outside it.
+- **Saved views**: a named camera (eye, target, projection, cutaway on or off). Per user, like the other
+  camera and display options (nothing 3D goes in the project file, `3d-view.md`); storing them with the project is a
+  later WS-02 request (section 10). Listed in the view menu. This page names only the commands (`view.save`,
+  `view.recall`, `view.fit`, `view.fit_selection`, `view.iso`, the standard views); the Workflow thread assigns every
+  key, and nothing here depends on the numpad.
 - **Cutaway**: one toggle hides the enclosure walls and door so the plate and parts are seen
-  from any side; saved with the view.
+  from any side; part of a saved view.
 
 ## 7. Themes
 
@@ -174,7 +173,7 @@ names go through the command palette and keymap (`novo-workflow`); the UI integr
 | Perspective or orthographic | 3D toolbar toggle, palette | `view.projection_toggle` |
 | Cutaway (hide enclosure walls and door) | 3D toolbar toggle, palette | `view.cutaway` |
 | Focus mode (dim the unselected) | 3D toolbar toggle, palette | `view.focus` |
-| Saved views | View menu list, palette ("View: name"), keys `1` to `9` | `view.save`, `view.recall`, `view.delete_saved` |
+| Saved views | View menu list, palette ("View: name") | `view.save`, `view.recall`, `view.delete_saved` |
 | Labels on or off | 3D toolbar toggle | `view.labels` |
 | Quality tier | Settings, 3D view: Auto, Low, Standard, High (Auto is the default) | per user setting |
 | Theme | follows the app; Settings, 3D view: Follow app, Dark, Light | per user setting |
@@ -185,17 +184,16 @@ Hover tooltips show tag, part number, kind and position; right click on a device
 in the 2D canvases (so a right drag under 4 points must stay a click). Keys and menu placement are decided with the
 workflow and layout threads; this page fixes names and what each does.
 
-## 9. What this needs from the architecture contract
+## 9. What this uses from the architecture contract
 
-- A pick and outline source: an object id for every selectable, drawn to an id buffer (or an equivalent),
-  and a depth sample at a pixel for zoom to cursor.
-- Instanced geometry per part so the draw call budget holds, and a way to draw overlay passes (outline,
-  labels, view cube) after the scene.
-- A scene change signal so the shadow and contact bake run only on edits.
-- Look data (`Look`: materials, light rig, quality tier, theme, label rules) and camera maths (`Camera`,
-  transitions, view cube hit testing, saved views) as plain Rust with no GPU types, so they are unit
-  tested without a window. Proposed home: palette and tokens in `novo-theme` (a `view3d` module),
-  camera in the view crate.
+- Picking: the CPU pick of `novo-view3d` (`ItemId`, hit point and distance) gives the object under the
+  pointer and the depth for zoom to cursor; outlines are drawn for items by id. No GPU id buffer.
+- Instanced geometry per part so the draw call budget holds, and overlay passes (outline, labels, view cube)
+  after the scene.
+- `Scene::revision` and `pose_revision` as the scene change signal, so the shadow and contact bake run only on edits.
+- `Look` as plain data filled by `Look::for_theme`, and the feel layer (`feel`, `cube`, `labels`, `governor`) as
+  plain Rust beside `Camera`, unit tested without a window. Room and overlay colours move to the design system
+  palette once it has a 3D section.
 
 ## 10. Implementation order
 
@@ -203,4 +201,5 @@ workflow and layout threads; this page fixes names and what each does.
 2. Camera: orbit, pan, zoom to cursor, transitions, standard views, saved views, with unit tests.
 3. View cube geometry and hit testing.
 4. Renderer passes: ambient and key light, contact bake, edges, outline, labels.
-5. Quality tiers and the frame governor, measured on an integrated GPU.
+5. Quality tiers and the frame governor, measured on an integrated GPU (the governor logic and values are in `novo-view3d`).
+6. Later WS-02 request: store saved views with the project.
