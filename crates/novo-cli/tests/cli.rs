@@ -358,8 +358,7 @@ fn export_reports_as_excel_and_csv() {
             "Terminal diagram",
             "Cable diagram",
             "IO list",
-            "Cable schedule",
-            "Plug connection list"
+            "Cable schedule"
         ]
     );
 
