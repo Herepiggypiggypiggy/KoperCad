@@ -101,12 +101,16 @@ impl NovoApp {
     /// Adds the generated pages the project should have and lacks (DESIGN.md
     /// §2: automatic): the contents first, the reports after the drawing
     /// pages, each once it has something to list. Runs on new and open, as
-    /// one undo step.
+    /// one undo step. A kind the user turned off (deleting a generated page
+    /// does, in `ProjectRules::generated_pages_off`) is not added again.
     pub(super) fn add_generated_pages(&mut self) {
         let Some(doc) = self.backend.document_mut() else {
             return;
         };
-        let specs = novo_reports::default_generated_pages(doc.project());
+        let project = doc.project();
+        let rules = &project.info().rules;
+        let specs =
+            novo_reports::default_generated_pages_with(project, &|id| rules.wants_generated(id));
         // The contents comes with the first report that has something to
         // list, so a new, empty project stays a single drawing page.
         if specs

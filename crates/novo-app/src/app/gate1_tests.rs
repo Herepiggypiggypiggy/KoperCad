@@ -903,3 +903,43 @@ fn the_outline_lists_each_sheet_of_a_generated_page_and_opens_it() {
     assert_eq!(view.sheet().map(|s| s.name.as_str()), Some("20b"));
     assert_eq!(view.sheet().and_then(|s| s.number), Some((2, 2)));
 }
+
+#[test]
+fn a_deleted_generated_page_stays_deleted() {
+    use novo_core::{DeviceTag, PageKind};
+    let page_of = |d: &Drive, kind: &str| {
+        d.doc()
+            .project()
+            .pages()
+            .find(|p| matches!(&p.kind, PageKind::Generated { generator } if generator == kind))
+            .map(|p| p.id)
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert_eq!(page_of(&d, "toc"), None, "an empty project gets none");
+    let doc = d.app.backend.document_mut().unwrap();
+    let (_, changes) = doc
+        .transact("A strip", |tx| {
+            let strip = tx.add_terminal_strip(DeviceTag::parse("-X1").unwrap())?;
+            tx.add_terminal(strip, "1").map(drop)
+        })
+        .unwrap();
+    d.app.changed_outside_canvas(&changes);
+
+    // As on open: the terminal diagram and the contents arrive.
+    d.app.add_generated_pages();
+    let terminals = page_of(&d, "terminals").expect("a terminal diagram page");
+    assert!(page_of(&d, "toc").is_some());
+
+    // The user deletes it; the next open does not bring it back.
+    let doc = d.app.backend.document_mut().unwrap();
+    let (_, changes) = doc
+        .transact("Delete page", |tx| tx.delete_page(terminals))
+        .unwrap();
+    d.app.changed_outside_canvas(&changes);
+    d.app.add_generated_pages();
+    assert_eq!(page_of(&d, "terminals"), None);
+}

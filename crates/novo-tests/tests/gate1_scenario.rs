@@ -988,7 +988,7 @@ fn gap_assign_parts_from_the_catalog() {
 /// first frame, every edit runs through `NovoApp::execute`, File > Save
 /// writes it and File > Close closes it. A fresh window opens the same
 /// starter, and nothing was reported along the way.
-/// A project's file content without its generated pages and id counter,
+/// A project's file content without its generated pages and the id counter,
 /// which opening a project may add to.
 fn drawing_json(project: &Project) -> serde_json::Value {
     let mut json: serde_json::Value = serde_json::from_str(&project.to_json()).unwrap();
