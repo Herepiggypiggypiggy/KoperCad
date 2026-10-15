@@ -1904,3 +1904,78 @@ fn a_double_click_on_bare_grid_starts_a_wire_without_the_wire_tool() {
         other => panic!("expected the wire tool, got {other:?}"),
     }
 }
+
+#[test]
+fn toggle_pe_is_a_command_and_an_earthing_wire_marks_terminals() {
+    use novo_core::{Endpoint, Pin, Point, Rotation, SymbolRole, TerminalKind};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let page = d.doc().project().pages().next().unwrap().id;
+    let ((term, earth), _) = d
+        .app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("setup", |tx| {
+            let x1 = tx.add_terminal_strip(novo_core::DeviceTag::parse("-X1")?)?;
+            let t = tx.add_terminal(x1, "1")?;
+            let pins = || vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)];
+            let term = tx.place_symbol(
+                page,
+                "iec/terminals/end_bracket",
+                novo_core::Placement::at(Point::new(100.0, 100.0)),
+                pins(),
+                SymbolRole::Terminal { terminals: vec![t] },
+            )?;
+            let earth = tx.place_symbol(
+                page,
+                "iec/earth/earth",
+                novo_core::Placement::at(Point::new(100.0, 140.0)),
+                vec![Pin::new("1", 0.0, -2.5)],
+                SymbolRole::Unassigned,
+            )?;
+            let _ = Rotation::R0;
+            Ok((term, earth))
+        })
+        .unwrap();
+    d.frame();
+    let kind = |d: &Drive| {
+        let p = d.doc().project();
+        let SymbolRole::Terminal { terminals } = &p.symbol(term).unwrap().role else {
+            panic!()
+        };
+        p.terminal(terminals[0]).unwrap().kind
+    };
+    assert_eq!(kind(&d), TerminalKind::Feedthrough);
+
+    // The toggle works on the selected terminal and undoes in one step.
+    d.select(term);
+    d.frame();
+    assert!(super::workbench::app_runs("terminal.toggle_pe"));
+    d.app.run_command(&ctx, "terminal.toggle_pe", None);
+    d.frame();
+    assert_eq!(kind(&d), TerminalKind::ProtectiveEarth);
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(kind(&d), TerminalKind::Feedthrough);
+
+    // A wire drawn to the earth symbol earths the terminal on its own, in
+    // the same undo step as the wire.
+    let (_, changes) = d
+        .app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("wire", |tx| {
+            tx.connect(Endpoint::pin(term, 1), Endpoint::pin(earth, 0))
+        })
+        .unwrap();
+    d.app.mark_earthed_terminals(&changes);
+    assert_eq!(kind(&d), TerminalKind::ProtectiveEarth);
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(kind(&d), TerminalKind::Feedthrough, "one undo takes both");
+}

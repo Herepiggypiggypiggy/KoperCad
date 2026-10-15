@@ -1163,6 +1163,9 @@ impl SchematicView {
                                 chosen = Some(MenuChoice::Command("terminal.disconnect"));
                             }
                         }
+                        if ui.button("Toggle PE terminal").clicked() {
+                            chosen = Some(MenuChoice::Command("terminal.toggle_pe"));
+                        }
                         if ui.button("Strip number up   Up").clicked() {
                             chosen = Some(MenuChoice::Command("terminal.strip_up"));
                         }
