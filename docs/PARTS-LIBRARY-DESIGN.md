@@ -155,7 +155,7 @@ row turns to **In library**. No admin rights, no service.
 
 | Maker | Terms found | Flow now | Flow A when |
 | --- | --- | --- | --- |
-| WAGO | Silent on automated access; says its CAE data is free; no API or login mentioned | B | WAGO confirms in writing, or documents an API |
+| WAGO | Silent on automated access. Captured: CAD comes from CADENAS PARTcommunity behind a WAGO login (section 3c) | B, permanently | Only a CADENAS/WAGO API agreement |
 | Phoenix Contact | Website terms not found; names EPLAN Data Portal and other portals as channels | B | Terms read and a documented feed or written OK |
 | Siemens | Clause text not read; the CAx tool is an interactive Java download manager | B | Terms read and a documented feed or written OK |
 | Schneider | Strictest: copying only for personal, non-commercial use; page-level terms may apply; automated access not addressed | B (opens the page, user downloads) | Written OK only |
@@ -227,6 +227,38 @@ In-app fetch on the user's click is the closest equivalent to the user clicking
 the download button themselves, but it is not confirmed by any maker.
 Switching a maker off is a data change, and the section 2a questions still
 should be sent.
+
+## 3c. Capture results (owner, 2026-10-15)
+
+**WAGO 2002-1201, captured by the owner in a browser.** The CAD button on the
+product page leads to CADENAS PARTcommunity
+(`wago.partcommunity.com/3d-cad-models/?catalog=wago&part=2002-1201`).
+- A WAGO account login is required.
+- The user picks a format (STEP AP214), the server builds the file through a
+  JSF session (POST `index.xhtml`, then polling `.../comet?cwid=...`), and the
+  download is `partserver/preview/<job id>/WAGO_20021201HI.zip` with a
+  per-request job id. There is no static URL, and the site sits behind Cloudflare.
+- The ZIP (about 50 KB) holds `2002-1201_HI.stp` (STEP AP214, about 278 KB)
+  and a readme that links `https://www.cadenas.de/terms-of-use-3d-cad-models`.
+  No terms are shown to accept.
+
+**Consequences.**
+1. **WAGO is flow B only.** In-app fetch is not feasible: it needs the user's
+   login and a server-side build, and driving that session from the app would
+   be exactly the automated access we ruled out. "Import" opens the PARTcommunity
+   page; the Downloads watch imports the ZIP. WAGO stays `fetch_enabled: false`.
+2. **The importer takes the ZIP as served.** It reads the STEP file inside
+   (size) and the readme (terms link), stores the ZIP unchanged and records the
+   terms link in the source record (`terms_url`). The watcher recognises the
+   file by the digits of the order number in `WAGO_20021201HI.zip`.
+3. **The terms that apply are CADENAS's**, not only WAGO's. Not read yet; the
+   section 2a questions to WAGO should also ask about the PARTcommunity route.
+4. **Later option, not now:** a CADENAS PARTcommunity API or the Eplan Data
+   Portal. Either needs its own agreement or account terms. The Eplan Data Portal
+   is EPLAN's platform, so it is a source only if its terms permit use outside
+   EPLAN; do not assume so.
+5. **Phoenix Contact** stays on flow B: its product page returned a server
+   error on 2026-10-15, so there is no capture yet. Retry later.
 
 ## 4. Offline and no admin rights
 

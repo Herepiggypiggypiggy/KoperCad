@@ -56,6 +56,8 @@ calamine = { version = "0.36", default-features = false }
 # Known-folder lookup for Documents (SHGetKnownFolderPath on Windows), so
 # redirected or OneDrive Documents folders resolve without our own unsafe.
 dirs = "6"
+# Reads the ZIP a maker portal serves a STEP file in (novo-parts).
+zip = { version = "8", default-features = false, features = ["deflate"] }
 # Reads BMEcat catalogs (novo-parts).
 quick-xml = "0.41"
 # Hashes imported maker files for their source record (novo-parts).

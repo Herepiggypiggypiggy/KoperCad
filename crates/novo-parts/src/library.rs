@@ -26,6 +26,8 @@ pub enum FileKind {
     Step,
     Dxf,
     Bmecat,
+    /// A ZIP holding a STEP or DXF file and a readme, as maker portals serve them.
+    Zip,
     Other,
 }
 
@@ -41,6 +43,7 @@ impl FileKind {
             Some("stp" | "step" | "p21") => FileKind::Step,
             Some("dxf") => FileKind::Dxf,
             Some("xml" | "bmecat") => FileKind::Bmecat,
+            Some("zip") => FileKind::Zip,
             _ => FileKind::Other,
         }
     }
@@ -71,6 +74,10 @@ pub struct SourceRecord {
     /// The address it was fetched from, when the app fetched it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
+    /// The terms the file came with (a link in its readme), kept so the
+    /// user can see under what terms they hold it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terms_url: Option<String>,
     pub sha256: String,
     pub bytes: u64,
     /// Date of the import as the caller writes it (`2026-10-15`).
@@ -118,6 +125,8 @@ pub struct NewSource<'a> {
     pub flow: ImportFlow,
     /// Date of the import as the caller writes it (`2026-10-15`).
     pub imported: &'a str,
+    /// Link to the terms that came with the file, if it named any.
+    pub terms_url: Option<&'a str>,
 }
 
 /// The files and records of one user. Cheap to create; it reads the
@@ -220,6 +229,7 @@ impl LocalLibrary {
             url,
             flow,
             imported,
+            terms_url: _,
         } = *source;
         let name = safe_file_name(file_name);
         let stored_path = format!(
@@ -235,6 +245,7 @@ impl LocalLibrary {
             file_name: name,
             stored_path,
             url: url.map(str::to_owned),
+            terms_url: source.terms_url.map(str::to_owned),
             sha256: hex(&Sha256::digest(bytes)),
             bytes: bytes.len() as u64,
             imported: imported.to_owned(),

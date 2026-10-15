@@ -327,6 +327,19 @@ impl<'a> ImportJob<'a> {
         url: Option<&str>,
         flow: ImportFlow,
     ) -> Result<(), String> {
+        // A ZIP is read once here: its STEP file for the size, its readme for
+        // the terms link. The ZIP itself is what gets stored.
+        let (inner_step, terms) = if FileKind::of_file_name(name) == FileKind::Zip {
+            match read_zip(bytes) {
+                Ok(z) => (z.step, z.terms_url),
+                Err(e) => {
+                    self.outcome.notes.push(format!("{name}: {e}"));
+                    (None, None)
+                }
+            }
+        } else {
+            (None, None)
+        };
         let record = self
             .library
             .store(
@@ -337,6 +350,7 @@ impl<'a> ImportJob<'a> {
                     url,
                     flow,
                     imported: &self.today,
+                    terms_url: terms.as_deref(),
                 },
                 bytes,
             )
@@ -362,6 +376,21 @@ impl<'a> ImportJob<'a> {
                     .notes
                     .push(format!("{name}: no parts read ({e})")),
             },
+            FileKind::Zip => {
+                if let Some((inner, text)) = inner_step {
+                    match step_box(&text) {
+                        Ok(b) => self.outcome.dimensions = Some(b.as_dimensions()),
+                        Err(e) => self
+                            .outcome
+                            .notes
+                            .push(format!("{name}: {inner}: no size read ({e})")),
+                    }
+                } else {
+                    self.outcome
+                        .notes
+                        .push(format!("{name}: no STEP file inside"));
+                }
+            }
             FileKind::Dxf | FileKind::Other => {}
         }
         self.outcome.records.push(record);
@@ -371,6 +400,76 @@ impl<'a> ImportJob<'a> {
 
 /// What a [`ScriptedFetcher`] answers for a part: its files, or an error.
 pub type ScriptedAnswer = Result<Vec<(RemoteFile, Vec<u8>)>, FetchError>;
+
+/// What a maker's ZIP holds.
+struct ZipContent {
+    /// Name and text of the first STEP file.
+    step: Option<(String, String)>,
+    /// The first link to terms of use found in a readme.
+    terms_url: Option<String>,
+}
+
+const ZIP_MAX_ENTRIES: usize = 64;
+const ZIP_MAX_MEMBER_BYTES: u64 = 200 * 1024 * 1024;
+
+/// Reads a ZIP in memory (nothing is written to disk, so member names can
+/// never escape anywhere). Only the first STEP file and text files are read.
+fn read_zip(bytes: &[u8]) -> Result<ZipContent, String> {
+    use std::io::Read;
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes))
+        .map_err(|e| format!("not a readable ZIP ({e})"))?;
+    if archive.len() > ZIP_MAX_ENTRIES {
+        return Err(format!(
+            "ZIP has {} files, more than {ZIP_MAX_ENTRIES}",
+            archive.len()
+        ));
+    }
+    let mut out = ZipContent {
+        step: None,
+        terms_url: None,
+    };
+    for i in 0..archive.len() {
+        let Ok(file) = archive.by_index(i) else {
+            continue;
+        };
+        if !file.is_file() {
+            continue;
+        }
+        let name = file.name().to_owned();
+        let lower = name.to_ascii_lowercase();
+        let is_step = FileKind::of_file_name(&name) == FileKind::Step;
+        let is_text = lower.ends_with(".txt");
+        if !(is_step && out.step.is_none() || is_text && out.terms_url.is_none()) {
+            continue;
+        }
+        let mut raw = Vec::new();
+        file.take(ZIP_MAX_MEMBER_BYTES)
+            .read_to_end(&mut raw)
+            .map_err(|e| format!("cannot read {name} in the ZIP ({e})"))?;
+        let text = String::from_utf8_lossy(&raw).into_owned();
+        if is_step {
+            out.step = Some((name, text));
+        } else {
+            out.terms_url = find_terms_url(&text);
+        }
+    }
+    Ok(out)
+}
+
+/// The first `http(s)` link in a readme that mentions terms, or failing
+/// that nothing: we do not guess which link is the terms.
+fn find_terms_url(text: &str) -> Option<String> {
+    text.split_whitespace()
+        .map(|w| {
+            w.trim_matches(|c: char| "()<>[],;\"'".contains(c))
+                .trim_end_matches('.')
+        })
+        .find(|w| {
+            let l = w.to_ascii_lowercase();
+            (l.starts_with("http://") || l.starts_with("https://")) && l.contains("terms")
+        })
+        .map(str::to_owned)
+}
 
 /// A fetcher with canned answers, for tests and for building the UI before
 /// a real source is verified. Never used by the app in a release.
@@ -449,7 +548,7 @@ impl DownloadsWatcher {
             }
             let kind = FileKind::of_file_name(&name);
             let suits = match kind {
-                FileKind::Step | FileKind::Dxf => {
+                FileKind::Step | FileKind::Dxf | FileKind::Zip => {
                     crate::search::normalize_code(&name).contains(&self.order_code)
                 }
                 FileKind::Bmecat => true,
