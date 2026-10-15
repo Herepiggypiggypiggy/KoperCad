@@ -62,3 +62,4 @@
 2026-10-15 07:50 UTC Reconciled with the Two wiring modes thread (PR #168): two modes Corners (default) | Lines, Shift+W toggles (also mid-wire), dock switch, no-overlap enforced in engine (Corners nudge, Lines refuse, reason as data). #169 reworked to carry it; #168 to close after folding its detail; diagonals in DESIGN §12
 2026-10-15 07:55 UTC #169 folded in: reviewer items 1-9, Layout chip/refusal feedback, main reviewer (a)(b)(c); wiring thread agreed to close #168
 2026-10-15 08:00 UTC #169: dropped wire merging (reviewer: nudge/refuse any wire), nudge preview note; wiring thread cut #168 to engine plan
+2026-10-15 08:10 UTC #169: interactive moves are refused like corners (Tadjiro's words), scripts/AI/undo/open accept+report; decision row moved to §8

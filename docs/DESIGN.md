@@ -304,7 +304,7 @@ surface; it has no key, so Enter always means accept.
 **Wiring modes.** The Connect tool has two modes, named for the two ways
 CAD programs let you wire. Both make the same thing: a connection with a
 stored route (corners here are the bend points of a route, never pieces
-the user places, §8), so a project drawn in one mode edits the same in the
+the user places, §9), so a project drawn in one mode edits the same in the
 other.
 
 - **Corners** (the default, EPLAN style): click where the wire should turn
@@ -380,13 +380,18 @@ the screen:
 - the reason is returned as data (the other conductor and the stretch), not
   only drawn as text, so the dock, the tester and scripts read the same
   answer;
-- moving a symbol is never refused: the check re-runs on its wires as part
-  of the same undo step, a wire that would overlap is nudged where it can
-  be, and otherwise the overlap is accepted and shows in Issues;
-- a file that arrives with overlaps (imported, older, or from that move) is
-  not rewritten on load; novo-checks reports each as a warning (`wire.overlap`)
-  that marks both segments, with the nudge as its fix. It is a warning, not
-  an error: connectivity lives in the model, not in where the lines are;
+- an interactive move (dragging or nudging a symbol) is held to the same
+  rule: the check runs on its wires while the ghost moves, a wire that
+  would overlap is nudged where it can be, and where no nudge clears it the
+  move is refused live with the same cursor, tint, outline and hint. The
+  owner's words are that lines are never allowed or able to overlap, so a
+  person's action cannot create one;
+- paths that cannot ask (scripts, AI edits, undo and redo, opening a file)
+  accept an overlap and report it: the file is not rewritten on load, and
+  novo-checks reports each overlap as a warning (`wire.overlap`) that
+  marks both segments, with the nudge as its fix. It is a warning, not an
+  error: connectivity lives in the model, not in where the lines are, and
+  an overlap can only arrive from these paths;
 - a refusal changes nothing and leaves the undo depth as it was. There is
   no merging of overlapping wires, so a wire's number and text are never
   at stake.
@@ -421,9 +426,11 @@ Acceptance, for testers and reviewers, run in both modes unless marked:
    different declared potential is refused with the reason.
 8. Esc mid-wire cancels the whole wire; Backspace removes one corner or
    segment; undo removes one whole wire.
-9. Moving a symbol never fails; an overlap it cannot avoid shows in Issues
-   and marks both segments. A file with existing overlaps opens unchanged
-   and shows them in Issues.
+9. Dragging a symbol so that a wire would lie over another wire nudges
+   that wire, or, where no nudge clears it, is refused live with the
+   reason. A script, an AI edit or an undo that would overlap goes through
+   and shows in Issues, marking both segments. A file with existing
+   overlaps opens unchanged and shows them in Issues.
 10. Quit and reopen: the mode is the one last used, read from the user's
     Preferences and not from the project file.
 
@@ -686,6 +693,7 @@ Changes mode, WS-09 the PDF.
 | Saving | Save command and prompts; continuous | **Continuous**, into the project's own file; revisions are the checkpoints (see Checkpoints) |
 | Checkpoints | Every export; revisions only; both | **Revisions only:** issuing a revision freezes the schematic pages and keeps a snapshot; a plain export prints the current state and checkpoints nothing, so Changes always compares against something with a name |
 | Junction dots | Every meeting point; three or more conductors | **Three or more**; straight runs, corners and crossings get none |
+| Wiring modes | One automatic mode only; Corners and Lines as one merged mode; Corners and Lines as two modes | **Two modes, Corners (default) and Lines.** They match the two ways Tadjiro knows from EPLAN and AutoCAD, and they differ in a real way: Corners lets the router join the points and nudges its own legs clear, Lines routes nothing and refuses an overlap instead of nudging it. A drag from pin to pin stays the cheapest connection in both. Overlaps are refused wherever a person is acting (drawing, an interactive move) and only reported where nothing can ask (scripts, AI edits, undo, opening a file) |
 
 ## 9. What we leave behind
 
@@ -697,7 +705,6 @@ Changes mode, WS-09 the PDF.
 | Insert centre, symbol trees, ribbon | EPLAN, AutoCAD Electrical | Spatial hunting; the command surface finds by name |
 | Frozen macros | Most CAD | Go stale on placement; blocks stay linked |
 | Corner and T-piece symbols | EPLAN | Drawing artefacts of connectivity, not intent. The corners of a wire are bend points of its route, not objects |
-| Wiring modes | One way; Auto plus a merged Draw; Corners and Lines as two modes | **Two modes, Corners (default) and Lines.** They match the two ways Tadjiro knows from EPLAN and AutoCAD, and they differ in a real way: Corners lets the router join the points, Lines routes nothing and refuses an overlap instead of nudging it. A drag from pin to pin stays the cheapest connection in both |
 | Linking cross references by hand | EPLAN | References follow ownership |
 | Assigning potentials wire by wire | EPLAN | The source declares it once |
 | Save prompts and "save before closing?" | Most desktop software | Work is never lost and never asked about |
