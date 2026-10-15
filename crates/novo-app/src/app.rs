@@ -327,7 +327,9 @@ impl NovoApp {
             | Action::SaveProjectAs
             | Action::CloseProject
             | Action::ZoomToFit
-            | Action::ShowCabinet => open,
+            | Action::ShowCabinet
+            | Action::SizeEnclosure
+            | Action::EnclosureList => open,
             Action::Undo => doc.is_some_and(|d| d.can_undo()),
             Action::Redo => doc.is_some_and(|d| d.can_redo()),
             _ => true,
@@ -359,6 +361,14 @@ impl NovoApp {
             Action::ZoomToFit => self.canvas.zoom_to_fit(),
             Action::ShowSchematic => self.cabinet_open = false,
             Action::ShowCabinet => self.cabinet_open = true,
+            Action::SizeEnclosure => {
+                self.cabinet_open = true;
+                self.sizing.panel_open = true;
+            }
+            Action::EnclosureList => {
+                self.cabinet_open = true;
+                self.sizing.editor_open = true;
+            }
             Action::PinOutline => {
                 let pinned = !self.outline_pinned();
                 self.settings.outline_pinned = Some(pinned);

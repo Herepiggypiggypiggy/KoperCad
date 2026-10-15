@@ -83,6 +83,8 @@ pub(super) struct SizingState {
     standing: Standing,
     ambient: f64,
     inside: f64,
+    /// The "Size the enclosure" window is open.
+    pub(super) panel_open: bool,
     pub(super) editor_open: bool,
     /// One line for the editor: what the last import or save did.
     notice: Option<String>,
@@ -100,6 +102,7 @@ impl SizingState {
             standing: Standing::Floor,
             ambient: defaults.ambient_max,
             inside: defaults.inside_max,
+            panel_open: false,
             editor_open: false,
             notice: None,
         }
@@ -247,11 +250,24 @@ pub(super) fn result_lines(rec: &Recommendation) -> Vec<String> {
     lines
 }
 
-/// The side panel. `devices` are the panel's devices from the project.
-pub(super) fn show_panel(ui: &mut egui::Ui, state: &mut SizingState, devices: &[SizingDevice]) {
+/// The floating "Size the enclosure" window; the right side of the Cabinet
+/// view belongs to the inspector.
+pub(super) fn show_window(ctx: &egui::Context, state: &mut SizingState, devices: &[SizingDevice]) {
+    if !state.panel_open {
+        return;
+    }
+    let mut open = true;
+    egui::Window::new("Size the enclosure")
+        .open(&mut open)
+        .default_width(280.0)
+        .resizable(false)
+        .show(ctx, |ui| show_panel(ui, state, devices));
+    state.panel_open = open;
+}
+
+/// The content of the window. `devices` are the panel's devices from the project.
+fn show_panel(ui: &mut egui::Ui, state: &mut SizingState, devices: &[SizingDevice]) {
     state.ensure_loaded();
-    ui.add_space(6.0);
-    ui.strong("Size the enclosure");
     ui.weak("Planning values. The enclosure maker's own sizing wins.");
     ui.add_space(4.0);
 

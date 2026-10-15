@@ -5,9 +5,9 @@ Branch `claude/project-thread-4m13wx`. #402 merged: engine `novo-layout/src/sizi
 API: `EnclosureCatalog` (user list; `from_csv` accepts `;`, `,` or tab and decimal comma, `to_csv`), `recommend(devices, catalog, request)`, `thermal(enclosure, loss, request)`, `effective_surface`, `sizing_model::sizing_devices(project, structure)`. Part keys read: `width_mm`, `height_mm`, `depth_mm`, `power_loss_w`, `clearance_*_mm`, `load_factor`; device property overrides part.
 
 ## How to reach it
-- Cabinet view (Ctrl+2), right side panel "Size the enclosure": free space, ducts, temperatures, how it stands; result block with enclosure, plate fill, inside temperature, "Natural cooling is enough" or "Needs about N W of cooling, or a fan of about V m3/h", and notes. Code: `crates/novo-app/src/app/sizing.rs`, hooked in `app/cabinet.rs`.
-- "Enclosures..." button in that panel opens the list window (edit rows, Add, Remove, Import CSV, Export CSV). The list is saved on every change as `enclosures.csv` in `%APPDATA%\KoperCAD` (no admin rights).
-- Not yet: command palette ids (`cabinet.size-enclosure`, `cabinet.enclosures`), and the Issues-list problem "needs about N W of cooling" (waits for #409's inside size; outside surface needs a wall thickness input).
+- Cabinet view (Ctrl+2): header button "Size enclosure", or palette "Size the enclosure…" (`cabinet.size-enclosure`), opens a floating window (the right side belongs to the inspector, #443): free space, ducts, temperatures, how it stands; result with enclosure, plate fill, inside temperature, "Natural cooling is enough" or "Needs about N W of cooling, or a fan of about V m3/h", notes. Code: `crates/novo-app/src/app/sizing.rs`.
+- "Enclosures..." button in the window, or palette `cabinet.enclosures`, opens the list window (edit rows, Add, Remove, Import CSV, Export CSV). Saved on every change as `enclosures.csv` in `%APPDATA%\KoperCAD` (no admin rights).
+- Not yet: the Issues-list problem "needs about N W of cooling" (left to the Heat model thread by the lead; needs #409 inside size plus a wall thickness input).
 
 ## Traps
 - Constants (K_*, surface factors) are planning values, unverified against a maker handbook; the UI must say so.

@@ -273,6 +273,9 @@ impl NovoApp {
                         ask = Some(Ask::PlaceAll);
                     }
                 }
+                if ui.button("Size enclosure").clicked() {
+                    self.sizing.panel_open = !self.sizing.panel_open;
+                }
                 ui.weak(format!(
                     "{placed} placed, {unplaced} unplaced, {problems} {}",
                     if problems == 1 { "problem" } else { "problems" }
@@ -318,13 +321,6 @@ impl NovoApp {
                         if unplaced_list.is_empty() {
                             ui.weak("Every device is placed");
                         }
-                    });
-
-                egui::Panel::right("cabinet_sizing")
-                    .exact_size(260.0)
-                    .resizable(false)
-                    .show(ui, |ui| {
-                        super::sizing::show_panel(ui, &mut self.sizing, &sizing_devices);
                     });
 
                 let view = cabinet_view(&shown, &tag_of);
@@ -448,6 +444,7 @@ impl NovoApp {
             }
         }
 
+        super::sizing::show_window(ui.ctx(), &mut self.sizing, &sizing_devices);
         super::sizing::show_editor(ui.ctx(), &mut self.sizing);
 
         if let Some(ask) = ask {
