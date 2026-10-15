@@ -29,10 +29,12 @@ use crate::keys;
 /// Drawer height as a share of the window (docs/DESIGN.md §3: at most 35%).
 pub(super) const DRAWER_SHARE: f32 = 0.3;
 
-/// The drawer's tabs. Only Terminals exists so far.
+/// The drawer's tabs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Drawer {
     Terminals,
+    Cables,
+    Devices,
 }
 
 /// State of the hosted engines, owned by [`NovoApp`].
@@ -49,6 +51,8 @@ pub(crate) struct Workbench {
     /// Shift+G: every occurrence of the selection's device.
     pub(super) occurrences: Option<Vec<Reference>>,
     pub(super) drawer: Option<Drawer>,
+    /// The cable whose cores the Cables tab shows.
+    pub(super) drawer_cable: Option<novo_core::CableId>,
     /// The terminal proposal Enter accepts, an index into this page's.
     pub(super) proposal: usize,
     /// Where the pointer was when Space went down, until it comes up.
@@ -93,6 +97,7 @@ impl Default for Workbench {
             canvas_area: None,
             occurrences: None,
             drawer: None,
+            drawer_cable: None,
             proposal: 0,
             space_down: None,
             pointer_world: None,
@@ -142,6 +147,8 @@ const APP_COMMANDS: &[&str] = &[
     "proposal.next",
     "proposal.accept_all",
     "view.terminals_drawer",
+    "view.cables_drawer",
+    "view.devices_drawer",
     "view.toggle_marks",
     "check.problems",
     "check.next_problem",
@@ -390,9 +397,8 @@ impl NovoApp {
             }
             "proposal.accept_all" => self.accept_all_proposals(),
             "view.terminals_drawer" => self.toggle_drawer(Drawer::Terminals),
-            "view.cables_drawer" | "view.devices_drawer" => {
-                self.message(Level::Info, "The Cables and Devices drawers come later");
-            }
+            "view.cables_drawer" => self.toggle_drawer(Drawer::Cables),
+            "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
             "view.toggle_marks" => self.wb.marks ^= true,
             "check.problems" => self.wb.issues_open = true,
             "check.next_problem" => self.step_problem(true),
