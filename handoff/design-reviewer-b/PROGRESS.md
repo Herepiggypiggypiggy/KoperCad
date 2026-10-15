@@ -4,3 +4,5 @@
 2026-10-15 13:50 UTC #251 72dccf0 READY (look matches Layout mock-up; 4 mm end overhang accepted).
 2026-10-15 14:05 UTC #259 b60400a READY (plain drag leaves wires as open ends, Shift carries). WS-01 follow-ups: Shift read at drop + dock hint, status line, Preferences default, tests.
 2026-10-15 14:15 UTC #261 6bc814c READY (Preferences window; checked from code and tests, not in a window). Nits: Connections heading, (default), mark menu + Ctrl+,.
+2026-10-15 14:25 UTC #262 81cdca1 READY (grid join; tests-file conflict with main, keep both).
+2026-10-15 14:30 UTC #263 bb94e15 READY (corner/T preview; follow-ups: stored handle, hide piece on Lines pin drag).
