@@ -1,0 +1,114 @@
+# Macros: reusable circuits in a per-user library
+
+Owner: Macros thread. Status: design, nothing implemented yet. Builds on `Tx::define_block` and
+`Tx::place_block` in `novo-core` (DESIGN section 7); no new model records are needed for step 1.
+
+## Goal
+
+Select a motor starter (breaker, contactor, overload, terminals), save it once as a macro, and drop it
+on any page of any project: tags and wire numbers come out right, the user sees a preview before
+placing, and parts and cabinet positions can come along. Macros live in a library on the user's
+device and can be exported to and imported from a single file, so a team can share them.
+
+## Decisions
+
+1. **A macro is a block definition.** Saving a macro runs `define_block` on the selection; placing one
+   runs `place_block`. The placed result is a linked block instance, so DESIGN's rule against frozen
+   macros holds: parameter edits and library updates behave as for any block. The user word is
+   "macro"; the model word stays "block".
+2. **The library is a folder of files**, one macro per file, in the user's profile and never anywhere
+   needing admin rights: `%APPDATA%\KoperCAD\Macros\` on Windows, `$XDG_DATA_HOME/novoelectric/macros/`
+   elsewhere (same convention as `parts.json` and `keymap.txt`). A second, optional folder (a team
+   share the user points at) is read the same way and listed with its folder name; it is read-only
+   unless the user saves into it.
+3. **One file format for library and sharing.** `<name>.kcmacro` is UTF-8 JSON (diffable, no
+   binary). Export of several macros is the same file with a list; import accepts either.
+4. **Macros are copies, like any library source.** Placing one into a project copies the definition into
+   the project (so a `.novo` file stays complete) and records `BlockSource` (library, name, version);
+   a newer library version is offered as an update, never applied silently.
+
+## File format (version 1)
+
+```
+{ "format": "kopercad-macro", "version": 1,
+  "macros": [ {
+    "name": "dol-starter", "description": "...", "revision": 3,
+    "parameters": [ { "name": "power", "default": 4.0, "description": "kW" } ],
+    "definition": { ...BlockDefinition members, as in the project JSON... },
+    "parts": [ { "device": <template id>, "manufacturer": "...", "order_no": "..." } ],
+    "cabinet": [ { "device": <template id>, "dx": 0.0, "dy": 0.0, "rotated": false } ],
+    "thumbnail": <optional small outline of the symbols> } ] }
+```
+
+Unknown fields are ignored on read and kept on re-export. A newer `version` is refused with a message,
+the file untouched. A file that fails validation is rejected whole; nothing partial is imported.
+
+## What a placement does
+
+- **Tags.** Already handled by `place_block`: each device keeps its letter code and takes the next
+  free number from the numbering rule in the target page's structure. Placing three starters gives
+  three distinct sets; no tag from the source project survives.
+- **Wire numbers.** Wire numbers in a macro are dropped on save and handed out by the project's wire
+  numbering rule on placement, so they continue the target project's series. A macro can opt in to
+  keeping fixed numbers (for a vendor panel with fixed labels); a clash with an existing number is
+  reported in the preview, never silently renumbered.
+- **Potentials, feeds, interruptions, terminals.** As for blocks: the first three cannot be part of a
+  macro (they join nets across the project). Terminals are allowed in a macro as devices in a strip
+  (the same-name join rule then applies in the target project); this needs a core check and is step 3,
+  not step 1.
+- **Parts.** A part id is project-scoped, so a macro stores manufacturer and order number. On
+  placement each is looked up in the project's catalog (then the user catalog); a hit is assigned, a
+  miss leaves the device unassigned and the preview names it, after which the normal part proposals
+  run. Carrying parts is a checkbox, on by default.
+- **Cabinet placement.** Stored as offsets relative to the macro's first device on its plate. On
+  placement, if the target structure has a plate, the devices are placed at the offsets through the
+  layout engine's overlap and rail rules; whatever does not fit lands in the Unplaced list. Off by
+  default, since a different cabinet usually has a different arrangement.
+- **One undo step.** Placement, with its parts and cabinet positions, is a single command batch.
+
+## Preview before placing
+
+The macro follows the pointer as a ghost on the page (no model change), with a one-line summary: the
+tags it will take ("-Q4, -K4, -F4, -X5:1..6"), wire numbers it will take, parts it cannot find, and
+anything off the page. Click or Enter places it; Esc cancels; R turns it before placing (as for any
+symbol). Parameters are asked in the inspector while the ghost is shown.
+
+## Browser
+
+Command surface: `macro` opens the browser as a drawer, `save macro` takes the current selection.
+Rows show name, description, device count, source folder, and the thumbnail. Actions: place, rename,
+delete, edit description, export, import. Rename is a file rename plus the name inside; delete asks
+once and moves the file to a `.trash` subfolder of the library (recoverable, never silently
+destroyed). Search filters by name and description; recently used macros sort first.
+
+## Saving a macro
+
+`save macro` needs a selection that `define_block` accepts, and asks only for a name (prefilled from
+the main device, "dol-starter"). It lists what it left out and why (wires to objects outside the
+selection, terminals before step 3). Saving over a name asks first and bumps `revision`.
+
+## Where the code goes
+
+| Piece | Crate | Notes |
+| --- | --- | --- |
+| Macro file read and write, library folder scan, trash, validation | `novo-workflow` | Pure, no UI; tested on temp folders |
+| Placement helper: parts lookup, wire numbers, cabinet offsets, preview summary | `novo-workflow` using `novo-core` commands and `novo-parts` / `novo-layout` queries | No change to `novo-core` public API |
+| Ghost, browser drawer, save and import dialogs, commands | `novo-app` | Thin, per DESIGN |
+
+If a model gap shows up (for example the terminal case), it is described in the pull request and sent
+to WS-02, not patched here.
+
+## Steps (each a small draft pull request)
+
+1. This note.
+2. Macro file format, read and write, validation and version handling.
+3. Library folder: list, save, rename, delete to trash, export and import, with tests on temp folders.
+4. Placement helper: block placement plus wire numbers and the preview summary.
+5. Parts and cabinet offsets on save and placement.
+6. App: `save macro`, browser drawer, ghost preview, import and export menu items.
+7. Terminals inside macros (needs WS-02 review), update from library.
+
+## Not in this design
+
+Cloud or account-based sharing (a file and a shared folder are enough), macro marketplaces, and
+editing a macro's contents in place (open it by placing it, change it, and save over the name).
