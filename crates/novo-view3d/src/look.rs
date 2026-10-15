@@ -101,9 +101,15 @@ fn mark_style(mark: Mark) -> MarkStyle {
     const ERROR: Rgb = [0xE0, 0x76, 0x6C];
     const WARNING: Rgb = [0xD6, 0xA5, 0x5C];
     match mark {
+<<<<<<< HEAD
         Mark::Collision => status(Glyph::Cross, ERROR, 0.40),
         Mark::TooClose => status(Glyph::Bang, WARNING, 0.30),
-        Mark::Outside => status(Glyph::Bang, ERROR, 0.25),
+        Mark::Outside => status(Glyph::Cross, ERROR, 0.25),
+=======
+        Mark::Collision => m(Glyph::Cross, [0xe5, 0x48, 0x4d], 0.55, [0xff, 0x6b, 0x6b]),
+        Mark::TooClose => m(Glyph::Bang, [0xf0, 0xa2, 0x2e], 0.40, [0xff, 0xb7, 0x4a]),
+        Mark::Outside => m(Glyph::Cross, [0xe5, 0x48, 0x4d], 0.30, [0xff, 0x6b, 0x6b]),
+>>>>>>> origin/claude/project-thread-8laqbm
         Mark::GuessedSize => MarkStyle {
             glyph: Glyph::DashedEdge,
             tint: None,
