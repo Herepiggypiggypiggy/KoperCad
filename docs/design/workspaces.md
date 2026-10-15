@@ -332,7 +332,7 @@ returns; Commissioning turns Live off because it recolours the drawing.
 
 | Slot | Shows | Replaces |
 | --- | --- | --- |
-| Message | The last status message for 6 s, then the workspace's idle hint ("Press Q or Space to place · ? for keys"). Errors stay until the next action. | The scattered toasts that carry a status; blocking errors still use a toast |
+| Message | The last status message for 5 s, then the workspace's idle hint ("Press Q or Space to place · ? for keys"). Errors stay until the next action. | The scattered toasts that carry a status; blocking errors still use a toast |
 | Selection | "-K1 · Contactor · +CAB1" for one, "3 devices, 5 wires" for many, nothing for none | The "N selected" text on the canvas |
 | Modes | A chip per active mode (Live, Changes, Marks hidden, Read-only), each a button that turns it off | New |
 | Values | Cursor in mm, grid, snap, zoom, only in canvas workspaces; the camera distance in 3D | The floating HUD (`docs/DESIGN.md` §3), which goes away |
