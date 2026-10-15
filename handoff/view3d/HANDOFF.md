@@ -1,12 +1,15 @@
 # 3D view (WS-29): handoff
 
-Updated 2026-10-15 18:50 UTC.
+Updated 2026-10-15 19:15 UTC.
 
 ## State
 - Repo herepiggypiggypiggy/kopercad. Branch `claude/project-thread-8laqbm` (the only branch this thread may push to; restart it from main after each merge).
-- #395 (design doc) merged. PR 2 (draft): crate skeleton, headless only: scene contract, camera, picking, culling, demo cabinet.
-- Next PR: renderer, egui widget, examples (`orbit`, `window`), GPU tests, measured numbers in the doc. Developed on local branch view3d-spike (not pushed).
+- Merged: #395 (design doc), #439 (crate skeleton: scene contract, camera, picking, culling, demo cabinet).
+- Renderer PR (draft, this branch): offscreen wgpu renderer (`render`, feature `gpu`), egui widget (`widget`, feature `egui`, default), `orbit` and `window` examples, GPU tests, measured numbers in the doc, wires as tubes with picking and marquee. Review nits from #439 are folded in (wires pickable, marquee across the eye plane, NaN note).
+- Stacked on the skeleton by other threads: scene model `build` (#391), look values and feel (#457), part geometry (#449, novo-interop).
 - Decisions already made (details in the doc): own small wgpu renderer drawing offscreen with its own depth, flat scene with instanced boxes, CPU picking and culling, render on demand, interactive and settled quality tiers, labels and view cube drawn by egui over the image.
+- UI entry point (section 12): third face of the Cabinet canvas (Plate / Table / 3D) and command `cabinet.view3d`; the host wiring belongs to the UI integration thread, no menu entry until hands-on tested.
+- Not done: no measurement on a real GPU (needs the owner's Windows laptop: `cargo run --release -p novo-view3d --example window`), hinge animation of the door, view cube and label layout (look thread, #457).
 
 ## Resume
 ```
