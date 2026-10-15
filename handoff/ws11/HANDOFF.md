@@ -1,39 +1,32 @@
 # WS-11 Terminals: handoff (rewrite whole file each time)
 
-Updated: 2026-10-14 17:07 UTC
+Updated: 2026-10-15 18:30 UTC
 
 ## State
-- Repo: github.com/Herepiggypiggypiggy/NovoElectric. Branch `claude/project-thread-xqeqyw` (the harness-assigned branch name).
-- PR #30 "WS-11: terminal strips ...", open. Head 800680b453aba766886881118167047f71f62caa.
-- CI: 532d23b was green on Linux, Windows and installer; check the latest head with get_check_runs.
-- Review: head SHA sent to the main reviewer; no verdict yet.
-- The session is subscribed to PR activity for #30.
+- Everything WS-11 opened is merged: #30 and its follow-ups, #85, #95, #104, #122, #129, #135, #139, #147, #251, #299 and #330 (the Terminals drawer's Kind, Jumper and Cable columns). Nothing of WS-11 is open apart from the storage robustness PR (see PROGRESS.md).
+- Repo is `kopercad` on GitHub; the old name `NovoElectric` still resolves. Shared branch `claude/project-thread-xqeqyw`. After a squash merge, restart the next PR from main and push it as a fast-forward: commit-tree the new tree with parents (old branch head, new work); never force-push.
+- GitHub Actions: Linux runs per PR. Local fmt, clippy and tests are the signal I trust; build with `CARGO_PROFILE_DEV_DEBUG=0` or the container disk fills at about 40 GB.
 
 ## Code
-crates/novo-terminals/src: settings.rs (rule, TEMPORARY property keys), naming.rs, occurrence.rs (sides/targets/state; pin 0 is internal, the rest external), strip.rs (rows plus edits), style.rs, place.rs, check.rs, screen.rs, suggest.rs. Tests: tests/terminals.rs (dev-deps novo-symbols and novo-tests). Also edited: a CLAUDE.md crate table row and Cargo.lock.
+- crates/novo-terminals/src: strip.rs (rows, edits, `connect_terminals` by #249), style.rs (`connected()` picks `terminal_bridged` for jumpered terminals), place.rs, geometry.rs (`redraw`, `symbol_pins`), screen.rs (connection screen incl. cables), suggest.rs (dismissals as `Dismissal` records), check.rs, naming.rs, occurrence.rs.
+- The bridge bar: `bridge_bars` in crates/novo-canvas/src/model.rs draws one heavy bar per run of connected terminals from first to last lead; `terminal_bridged` and `terminal_end_bridged` carry only the dot.
+- Drawer: crates/novo-app/src/app/terminals.rs `strip_table` (columns in `STRIP_HEADS`).
 
 ## Resume
 ```
-git fetch origin && git checkout claude/project-thread-xqeqyw
-cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings && cargo test -p novo-terminals
+git fetch origin && git checkout -B claude/project-thread-xqeqyw origin/main
+CARGO_PROFILE_DEV_DEBUG=0 cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
 ```
-After each push, send_message the reviewer the new head SHA. Check the PR is still open before pushing. No pushes after READY.
+After each push, send the head SHA to the main reviewer (session_01QSnXFBDRyvwwzhT1S1gFGN) and the lead (session_01FiLvRBKEcNNHbQEGhYyL1S). No pushes after READY.
 
 ## Half-done or waiting
-- Switch to WS-02's typed rule (info.rules.terminals) once #35 merges; see ROADMAP Next 1 for the exact semantics. Nothing has started on it yet.
+- Storage robustness (lead's item): new tests in crates/novo-storage/tests/robustness.rs. They found no bug: a v1 file upgrades with a `.v1.bak`, a cut file never panics, a crash image mid-save rolls back, an older recovery file is still offered. A migration that fails midway is not tested because `migrate` is crate-private; that needs a unit test inside novo-storage (the storage owner's call).
+- Parked: pitch of connected terminals in symbols is 8 mm (the library grid is 4 mm), the bar overhang is solved; nothing else outstanding for the bridge.
 
-## People (send_message session ids)
-- Integration lead/coordinator: session_011PfTJ1QaP1JQJPwXcFnxBE (merges). Main reviewer: cse_016C9nTT8cN7voW8t1NQUG4W
-- WS-02 data model: cse_01B1jpjzeDiXvWoBCsv1BWt9 (#35). Workflow/DESIGN.md: cse_01JHYmmTDsVHDL7pEab8MGwy
-- WS-06 editor: cse_019siuxbyyRNZRgBBww1KocJ. Tester: cse_01LMMcDMt9qaHXoSXy7iDu58. Full roster: /mnt/project-files/coordination/threads.md
+## People
+Roster with session ids: /mnt/project-files/coordination/threads.md. Main reviewer: session_01QSnXFBDRyvwwzhT1S1gFGN. Lead: session_01FiLvRBKEcNNHbQEGhYyL1S. Layout: session_01UXbCeQW22y6tv74F2Xvbvm.
 
 ## Decisions and traps
-- No novo-core API change; edits happen inside a novo_core::Tx so each is one undo step.
-- Defaults: join with a connector; PE terminals named PE, then PE2...; numbering fills gaps; pin 1 sits top or left.
-- WS-02 Refuse rejects a duplicate record on insert, so do not create a second record under Refuse.
-- The Gate 1 fixture's X1:PE has kind feed-through; the checker flags it on purpose (tester informed).
-- Reviewer for PRs: GitHub refuses Tadjiro as reviewer (he is the author); he is assigned instead.
-- Keep UI out of #30 (lead rule 4/5).
-
-## Lead fixes waiting (read first)
-See lead-fixes/README.md: review items and #35 fallout fixed locally at 351d8cc by the integration lead; ALREADY PUSHED at 18:06 UTC; just `git pull` the PR branch.
+- No novo-core API change; edits happen inside a `novo_core::Tx` so each is one undo step.
+- A symbol with several terminals needs its bridges at insert time (`TerminalLevels` error otherwise).
+- Do not edit `[workspace.dependencies]`; keep canvas free of a novo-terminals dependency (that is why `bridge_bars` lives in the canvas).

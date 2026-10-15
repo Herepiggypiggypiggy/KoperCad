@@ -42,5 +42,6 @@ mod session;
 pub use error::{Result, StorageError};
 pub use file::{PROJECT_EXTENSION, ProjectFile};
 pub use session::{
-    AUTOSAVE_SUFFIX, DEFAULT_AUTOSAVE_INTERVAL, Opened, Recovered, Session, SetAside, autosave_path,
+    AUTOSAVE_SUFFIX, DEFAULT_AUTOSAVE_INTERVAL, Opened, Recovered, Session, SetAside,
+    autosave_path, recovery_path_in,
 };

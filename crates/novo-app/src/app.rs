@@ -3,21 +3,26 @@
 //! toasts for messages, the dialogs and action dispatch. There is no menu
 //! bar and no status bar.
 
+mod cabinet;
 mod changes;
 mod checks;
 mod dock;
 mod drawers;
 mod duplicate;
 mod dxf;
+mod example;
 mod inspector;
 mod link;
 mod live;
 mod live_anim;
 mod pages;
+mod parts;
+mod parts_import;
 mod pdf;
 mod plc;
 mod potentials;
 mod preferences;
+mod project_settings;
 mod reports;
 mod revisions;
 mod terminals;
@@ -28,7 +33,11 @@ mod workbench;
 mod xref;
 
 #[cfg(test)]
+mod cabinet_tests;
+#[cfg(test)]
 mod changes_tests;
+#[cfg(test)]
+mod example_tests;
 #[cfg(test)]
 mod gate1_tests;
 
@@ -103,6 +112,7 @@ enum Leaving {
     New,
     Open,
     OpenPath(PathBuf),
+    Example,
     Close,
     Quit,
 }
@@ -129,6 +139,9 @@ pub struct NovoApp {
     autosave_failing: bool,
     /// Focus mode (Ctrl+Shift+F) hides everything that is not pinned.
     focus_mode: bool,
+    /// The Cabinet canvas is shown instead of the schematic (Ctrl+2).
+    cabinet_open: bool,
+    cabinet: cabinet::CabinetState,
     /// The outline flyout is showing over the canvas.
     outline_open: bool,
     /// What the outline lists.
@@ -193,6 +206,8 @@ impl NovoApp {
             next_tick: Instant::now(),
             autosave_failing: false,
             focus_mode: false,
+            cabinet_open: false,
+            cabinet: cabinet::CabinetState::new(),
             outline_open: false,
             outline_mode: OutlineMode::Pages,
             breadcrumb_link: None,
@@ -310,8 +325,8 @@ impl NovoApp {
             Action::SaveProject
             | Action::SaveProjectAs
             | Action::CloseProject
-            | Action::ZoomToFit => open,
-            Action::ShowCabinet => false,
+            | Action::ZoomToFit
+            | Action::ShowCabinet => open,
             Action::Undo => doc.is_some_and(|d| d.can_undo()),
             Action::Redo => doc.is_some_and(|d| d.can_redo()),
             _ => true,
@@ -329,6 +344,7 @@ impl NovoApp {
         match action {
             Action::NewProject => self.leave_then(ctx, Leaving::New),
             Action::OpenProject => self.leave_then(ctx, Leaving::Open),
+            Action::OpenExample => self.leave_then(ctx, Leaving::Example),
             Action::SaveProject => {
                 self.save();
             }
@@ -340,8 +356,8 @@ impl NovoApp {
             Action::Undo => self.undo_redo(false),
             Action::Redo => self.undo_redo(true),
             Action::ZoomToFit => self.canvas.zoom_to_fit(),
-            // The only canvas so far; Cabinet stays disabled until it exists.
-            Action::ShowSchematic | Action::ShowCabinet => {}
+            Action::ShowSchematic => self.cabinet_open = false,
+            Action::ShowCabinet => self.cabinet_open = true,
             Action::PinOutline => {
                 let pinned = !self.outline_pinned();
                 self.settings.outline_pinned = Some(pinned);
@@ -397,6 +413,7 @@ impl NovoApp {
                 }
             }
             Leaving::OpenPath(path) => self.open_path(&path),
+            Leaving::Example => self.open_example(),
             Leaving::Close => self.close_project(),
             Leaving::Quit => {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -654,11 +671,22 @@ impl NovoApp {
         self.space_pan(&ctx);
         self.space_released(&ctx);
         self.track_pointer(&ctx);
-        let commands = if self.modal_open() {
+        let mut commands = if self.modal_open() {
             Vec::new()
         } else {
             self.key_commands(&ctx)
         };
+        if self.cabinet_open {
+            // The schematic's keys must not edit the hidden page: rotate
+            // and delete go to the Cabinet, the rest keep only the view,
+            // file and undo actions.
+            for id in &commands {
+                if matches!(*id, "edit.rotate" | "edit.delete") {
+                    self.cabinet.keys.push((*id).to_owned());
+                }
+            }
+            commands.retain(|id| Action::from_id(id).is_some() || *id == "view.cabinet_table");
+        }
 
         self.window_width = ctx.content_rect().width();
         let pinned = self.outline_pinned() && !self.focus_mode;
@@ -679,7 +707,9 @@ impl NovoApp {
         self.drawer(ui);
         let canvas_rect = egui::CentralPanel::no_frame()
             .show(ui, |ui| {
-                if self.is_open() {
+                if self.is_open() && self.cabinet_open {
+                    self.cabinet_show(ui);
+                } else if self.is_open() {
                     self.update_marks();
                     self.update_sheet();
                     self.update_underlay();
@@ -697,10 +727,10 @@ impl NovoApp {
             .response
             .rect;
 
-        if !self.focus_mode {
-            if !pinned && self.is_open() {
-                self.outline_flyout(&ctx, canvas_rect, &mut picked);
-            }
+        if !self.focus_mode && !pinned && self.is_open() {
+            self.outline_flyout(&ctx, canvas_rect, &mut picked);
+        }
+        if !self.focus_mode && !self.cabinet_open {
             self.hud(&ctx, canvas_rect);
             self.sync_wiring_mode();
             self.sync_connect_mode();
@@ -717,6 +747,8 @@ impl NovoApp {
         self.about_dialog(&ctx);
         self.renumber_dialog(&ctx);
         self.preferences_dialog(&ctx);
+        self.parts_window(&ctx);
+        self.project_settings_dialog(&ctx);
         self.issue_revision_dialog(&ctx);
         self.page_form_dialog(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {
@@ -791,7 +823,7 @@ impl NovoApp {
 
     fn update_title(&mut self, ctx: &egui::Context) {
         let title = match self.project_name() {
-            Some(name) => format!("{name} - {APP_NAME}"),
+            Some(name) => format!("{name}{} - {APP_NAME}", self.standard_suffix()),
             None => APP_NAME.to_owned(),
         };
         if title != self.window_title {
@@ -817,6 +849,8 @@ impl NovoApp {
             self.wb.sheet = 0;
         }
         self.current_page = Some(page);
+        // A page is a schematic page: picking one leaves the Cabinet.
+        self.cabinet_open = false;
     }
 
     /// Shows sheet `sheet` of a generated page (0 for any other page).
@@ -852,15 +886,10 @@ impl NovoApp {
                 (Action::ShowSchematic, "Schematic"),
                 (Action::ShowCabinet, "Cabinet"),
             ] {
-                let selected = action == Action::ShowSchematic;
+                let selected = (action == Action::ShowCabinet) == self.cabinet_open;
                 let response = ui
                     .add_enabled_ui(self.is_enabled(action), |ui| segment(ui, label, selected))
                     .inner;
-                let response = if action == Action::ShowCabinet {
-                    response.on_disabled_hover_text("The cabinet canvas comes later")
-                } else {
-                    response
-                };
                 if response.clicked() {
                     picked.push(action);
                 }
@@ -888,7 +917,7 @@ impl NovoApp {
     /// The short project menu behind the mark. Everything in it is also in
     /// the command palette.
     fn project_menu(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
-        for a in [Action::NewProject, Action::OpenProject] {
+        for a in [Action::NewProject, Action::OpenProject, Action::OpenExample] {
             self.action_button(ui, a, picked);
         }
         ui.add_enabled_ui(!self.settings.recent_projects.is_empty(), |ui| {
@@ -1142,6 +1171,8 @@ impl NovoApp {
         let drops =
             std::cell::RefCell::new(Vec::<(PageId, Option<DeviceTag>, Option<DeviceTag>)>::new());
         let forms = std::cell::RefCell::new(Vec::<PageForm>::new());
+        let contents = std::cell::RefCell::new(None::<DeviceTag>);
+        let has_contents = pages::has_panel_contents(project, &panel_of(&structure));
         // The header being renamed shows a text box; the rename starts from
         // a double click or the context menu.
         let editing = std::cell::RefCell::new(self.renaming_level.take());
@@ -1227,6 +1258,14 @@ impl NovoApp {
                         Some((Aspect::Location, panel.clone(), rename_text(&panel)));
                     ui.close();
                 }
+                if ui
+                    .add_enabled(!has_contents, egui::Button::new("Add contents page"))
+                    .on_disabled_hover_text("This panel already has a contents page")
+                    .clicked()
+                {
+                    *contents.borrow_mut() = Some(panel.clone());
+                    ui.close();
+                }
                 if ui.button("New pages in this panel…").clicked() {
                     forms.borrow_mut().push(PageForm::new(
                         FormKind::Pages,
@@ -1268,8 +1307,30 @@ impl NovoApp {
         for (page, g, p) in drops.into_inner() {
             self.move_page(page, g, p);
         }
+        if let Some(panel) = contents.into_inner() {
+            self.add_panel_contents(&panel);
+        }
         if let Some(form) = forms.into_inner().pop() {
             self.wb.page_form = Some(form);
+        }
+    }
+
+    /// Adds the contents page of a panel, which lists the panel's pages and
+    /// follows it when it is renamed.
+    fn add_panel_contents(&mut self, panel: &DeviceTag) {
+        let Some(project) = self.backend.document().map(|d| d.project()) else {
+            return;
+        };
+        match pages::panel_contents_command(project, panel) {
+            Ok(command) => {
+                if let Some(Err(e)) = self.execute(command) {
+                    self.message(
+                        Level::Error,
+                        format!("Could not add the contents page: {e}"),
+                    );
+                }
+            }
+            Err(e) => self.message(Level::Warning, e),
         }
     }
 
@@ -1548,7 +1609,7 @@ impl NovoApp {
             ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
                 ui.weak("No project open");
                 ui.add_space(8.0);
-                for a in [Action::NewProject, Action::OpenProject] {
+                for a in [Action::NewProject, Action::OpenProject, Action::OpenExample] {
                     self.action_button(ui, a, picked);
                 }
                 let unsaved = self.backend.unsaved_projects();
@@ -2378,7 +2439,7 @@ mod tests {
     }
 
     #[test]
-    fn cabinet_waits_for_its_canvas() {
+    fn cabinet_needs_an_open_project() {
         let app = app_with(MemoryBackend::default());
         assert!(!app.is_enabled(Action::ShowCabinet));
         assert!(app.is_enabled(Action::ShowSchematic));

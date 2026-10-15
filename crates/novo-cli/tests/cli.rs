@@ -188,33 +188,33 @@ fn export_pdf_draws_every_page_or_the_ones_asked() {
 }
 
 #[test]
-fn export_dxf_writes_one_file_or_a_folder_of_pages() {
+fn export_dxf_writes_one_file_or_one_per_page() {
     let dir = tempfile::tempdir().unwrap();
     let path = project(dir.path(), false);
-
-    let one = dir.path().join("page2.dxf");
-    let run = novo(&["export", "dxf", s(&path), "-o", s(&one), "--page", "2"]);
-    assert_eq!(run.code, exit::OK, "{}", run.err);
-    let text = std::fs::read_to_string(&one).unwrap();
-    assert!(text.starts_with("999\r\nWritten by KoperCAD"));
-    assert!(text.contains("ENTITIES"));
 
     let folder = dir.path().join("dxf");
     let run = novo(&["export", "dxf", s(&path), "-o", s(&folder)]);
     assert_eq!(run.code, exit::OK, "{}", run.err);
-    for name in ["demo - 1.dxf", "demo - 2.dxf"] {
-        let drawing = std::fs::read(folder.join(name)).unwrap();
-        assert!(novo_interop::dxf::is_written_by_us(&drawing), "{name}");
-        assert!(novo_interop::dxf::read_dxf(&drawing).is_ok(), "{name}");
+    for name in ["1.dxf", "2.dxf"] {
+        let text = std::fs::read_to_string(folder.join(name)).unwrap();
+        assert!(text.contains("SECTION") && text.contains("EOF"), "{name}");
     }
 
+    let one = dir.path().join("page1.dxf");
+    let run = novo(&["export", "dxf", s(&path), "-o", s(&one), "--page", "1"]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert_eq!(
+        std::fs::read(&one).unwrap(),
+        std::fs::read(folder.join("1.dxf")).unwrap()
+    );
+
+    // Two pages cannot share one .dxf file.
+    let run = novo(&["export", "dxf", s(&path), "-o", s(&one)]);
+    assert_eq!(run.code, exit::USAGE);
+    assert!(run.err.contains("--page"));
     let run = novo(&["export", "dxf", s(&path), "-o", s(&one), "--page", "9"]);
     assert_eq!(run.code, exit::USAGE);
     assert!(run.err.contains("no page `9`"));
-
-    // Never over a project file.
-    let run = novo(&["export", "dxf", s(&path), "-o", s(&path), "--page", "1"]);
-    assert_eq!(run.code, exit::WRITE);
 }
 
 #[test]
@@ -355,6 +355,7 @@ fn export_reports_as_excel_and_csv() {
             "Bill of materials",
             "Device list",
             "Wire list",
+            "Cut list",
             "Terminal diagram",
             "Cable diagram",
             "IO list"

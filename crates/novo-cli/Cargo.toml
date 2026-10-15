@@ -11,11 +11,11 @@ path = "src/main.rs"
 
 [dependencies]
 novo-core.workspace = true
+novo-interop.workspace = true
 novo-storage.workspace = true
 novo-py.workspace = true
 novo-checks.workspace = true
 novo-pdf.workspace = true
-novo-interop.workspace = true
 novo-reports.workspace = true
 novo-xref.workspace = true
 # Symbol artwork for PDF export, without the egui widget or wgpu.

@@ -130,6 +130,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["load"],
         Needs::Nothing,
     ),
+    cmd(
+        "file.example",
+        "Open example",
+        "Project",
+        &["sample", "motor starter", "demo"],
+        Needs::Nothing,
+    ),
     cmd("file.save", "Save", "Project", &[], Needs::Project),
     cmd(
         "file.save_as",
@@ -168,6 +175,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "project.standard",
+            "Drawing standard",
+            "Project",
+            &["iec", "nfpa", "standard", "symbols", "project settings"],
+            Needs::Project,
+        ),
+        &["standard"],
+    ),
+    verb(
+        cmd(
             "app.preferences",
             "Preferences",
             "Project",
@@ -175,6 +192,24 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Nothing,
         ),
         &["preferences", "prefs"],
+    ),
+    verb(
+        cmd(
+            "parts.browser",
+            "Parts",
+            "Project",
+            &[
+                "part library",
+                "catalog",
+                "import part",
+                "wago",
+                "phoenix",
+                "schneider",
+                "siemens",
+            ],
+            Needs::Nothing,
+        ),
+        &["parts", "part library"],
     ),
     verb(
         cmd(

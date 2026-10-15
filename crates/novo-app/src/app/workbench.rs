@@ -56,6 +56,10 @@ pub(crate) struct Workbench {
     pub(super) renumber: Option<Vec<novo_plc::commands::RenumberPlan>>,
     /// The Preferences window is open.
     pub(super) preferences: bool,
+    /// The Parts window (browser and one-click import), while open.
+    pub(super) parts: Option<super::parts::PartsWindow>,
+    /// The Project settings window (drawing standard) is open.
+    pub(super) project_settings: bool,
     /// The Issue revision window, while it is open.
     pub(super) issue: Option<super::revisions::IssueDraft>,
     /// The new pages, group and panel form, while open.
@@ -132,6 +136,8 @@ impl Default for Workbench {
             queued: Vec::new(),
             renumber: None,
             preferences: false,
+            parts: None,
+            project_settings: false,
             issue: None,
             page_form: None,
             sheet: 0,
@@ -214,6 +220,8 @@ const APP_COMMANDS: &[&str] = &[
     "plc.renumber_io",
     "xref.link",
     "app.preferences",
+    "parts.browser",
+    "project.standard",
     "revision.issue",
     "terminal.toggle_pe",
     "terminal.reset_pe",
@@ -427,8 +435,16 @@ impl NovoApp {
             }
             return;
         }
+        if self.cabinet_open && matches!(id, "edit.rotate" | "edit.delete") {
+            self.cabinet.keys.push(id.to_owned());
+            return;
+        }
         let pointer = ctx.pointer_latest_pos();
         match id {
+            "view.cabinet_table" if self.is_open() => {
+                self.cabinet.table = !(self.cabinet_open && self.cabinet.table);
+                self.cabinet_open = true;
+            }
             "tool.place" => match argument.filter(|a| !a.trim().is_empty()) {
                 Some(text) => self.wb.field.open_with(Mode::Place, text, pointer),
                 None => self.wb.field.open(Mode::Place, pointer),
@@ -530,6 +546,8 @@ impl NovoApp {
             "plc.renumber_io" => self.plc_renumber_io(),
             "xref.link" => self.xref_link(argument),
             "app.preferences" => self.wb.preferences = true,
+            "parts.browser" => self.open_parts_browser(),
+            "project.standard" => self.wb.project_settings = true,
             "revision.issue" => self.open_issue_revision(argument),
             other => {
                 let label = novo_workflow::commands::get(other).map_or(other, |c| c.label);

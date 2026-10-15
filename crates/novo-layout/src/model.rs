@@ -11,7 +11,11 @@ use novo_core::{
     RailKind, Result, Structure, StructureId, Tx, Value,
 };
 
+use crate::drill::{
+    CUTOUT_KEY, DeviceFeatures, DrillTable, HOLE_PATTERN_KEY, MOUNTING_KEY, features_from_text,
+};
 use crate::plan::{Candidate, Plan};
+use crate::plate_drawing::{PlateDocument, documents};
 use crate::state::CabinetLayout;
 use crate::{Placement, Plate, Rail, Size};
 
@@ -63,6 +67,7 @@ pub fn load(project: &Project, id: StructureId) -> Option<CabinetLayout> {
             x: r.x,
             y: r.y,
             length: r.length,
+            vertical: r.vertical,
         })
         .collect();
     layout.placements = project
@@ -149,6 +154,92 @@ pub fn apply_plan(tx: &mut Tx<'_>, id: StructureId, plan: &Plan) -> Result<()> {
             rotated: false,
             rail,
         })?;
+    }
+    Ok(())
+}
+
+fn text_property(project: &Project, device: &Device, key: &str) -> Option<String> {
+    device.parts.iter().find_map(|part| {
+        match project.get::<novo_core::Part>(*part)?.properties.get(key)? {
+            Value::Text(t) if !t.trim().is_empty() => Some(t.clone()),
+            _ => None,
+        }
+    })
+}
+
+/// What a placed device needs machined, read from the first of its parts
+/// that has each of the mounting, hole pattern and cut-out keys.
+pub fn features(project: &Project, device: &Device) -> DeviceFeatures {
+    features_from_text(
+        device.id.raw(),
+        device.tag.to_string(),
+        text_property(project, device, MOUNTING_KEY).as_deref(),
+        text_property(project, device, HOLE_PATTERN_KEY).as_deref(),
+        text_property(project, device, CUTOUT_KEY).as_deref(),
+    )
+}
+
+/// The plate drawing documents and drill table of an enclosure; `None`
+/// when it has no plate.
+pub fn plate_documents(
+    project: &Project,
+    id: StructureId,
+) -> Option<(Vec<PlateDocument>, DrillTable)> {
+    let layout = load(project, id)?;
+    let features: Vec<DeviceFeatures> = layout
+        .placements
+        .iter()
+        .filter_map(|p| project.get::<Device>(DeviceId::from(p.id)))
+        .map(|d| features(project, d))
+        .collect();
+    let title = structure(project, id)?.tag.to_string();
+    Some(documents(&title, &layout, &features))
+}
+
+/// Places a device on the plate at `(x, y)`, or moves it there; it leaves
+/// any rail it was on.
+pub fn place_device(
+    tx: &mut Tx<'_>,
+    id: StructureId,
+    device: u64,
+    x: f64,
+    y: f64,
+    rotated: bool,
+) -> Result<()> {
+    tx.execute(Command::PlaceDevice {
+        device: DeviceId::from(device),
+        structure: id,
+        x,
+        y,
+        rotated,
+        rail: None,
+    })
+    .map(|_| ())
+}
+
+fn placement_of(tx: &Tx<'_>, device: u64) -> Option<(novo_core::CabinetPlacementId, bool)> {
+    let device = DeviceId::from(device);
+    tx.project()
+        .all::<CabinetPlacement>()
+        .find(|p| p.device == device)
+        .map(|p| (p.id, p.rotated))
+}
+
+/// Turns a placed device by 90 degrees. A device that is not placed is left alone.
+pub fn rotate_device(tx: &mut Tx<'_>, device: u64) -> Result<()> {
+    if let Some((placement, rotated)) = placement_of(tx, device) {
+        tx.execute(Command::RotatePlacement {
+            placement,
+            rotated: !rotated,
+        })?;
+    }
+    Ok(())
+}
+
+/// Takes a device off the plate. A device that is not placed is left alone.
+pub fn unplace_device(tx: &mut Tx<'_>, device: u64) -> Result<()> {
+    if let Some((placement, _)) = placement_of(tx, device) {
+        tx.execute(Command::RemovePlacement { placement })?;
     }
     Ok(())
 }

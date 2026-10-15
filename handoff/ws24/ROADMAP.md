@@ -13,7 +13,7 @@ engines first; everything offline, no admin rights. Design: `docs/design/interop
 - `bridge` module (PR #354): `page_drawing` / `scene_to_drawing`, page scene to DXF drawing (y flip, text per line); `tests/bridge.rs`.
 
 ## Next, in order
-1. Entry points: CLI `export dxf` and File > Export DXF are in the entry-points PR; Python binding (`novo-py`) still open.
+1. Entry points: CLI `export dxf` is on main; File > Export DXF is in #385; Python binding (`novo-py`) still open.
 2. DXF as page background: option B accepted and built (interop `underlay`, canvas `Underlay` layer, File > DXF background). Left: move/scale controls, per-layer visibility, print option, `kopercad-cli` inspect.
 3. Excel round trip for the parts list and the I/O list (after the PLC tag table export).
 

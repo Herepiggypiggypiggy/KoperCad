@@ -6,6 +6,7 @@ use novo_core::{
     AnyId, Endpoint, EntityKind, PageId, PinRef, Project, SymbolRole, Wire, natural_cmp,
 };
 
+use crate::lengths::{self, Connection as Measured};
 use crate::order::{join_distinct, location_text};
 use crate::report::{Dependencies, Report};
 use crate::table::{Cell, Column, ReportOutput, Section};
@@ -26,6 +27,14 @@ use crate::table::{Cell, Column, ReportOutput, Section};
 /// cable core's), cable and core, and the `page.column` of the from pin.
 /// Connections sort by the reading order of their first pin: page, then
 /// left to right, then top to bottom.
+///
+/// The last two columns are the cut length in millimetres and how it was
+/// found. A wire between two devices placed on one mounting plate is routed
+/// through that plate's ducts by `novo-routing` (`routed`; `free air` when
+/// no duct reaches both, which the cabinet checks flag); anything else is an
+/// `estimate` from the schematic distance of the two pins. Lengths include a
+/// service loop at each end and are rounded up to a whole millimetre; see
+/// the `lengths` module for the estimate rules.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct WireList;
 
@@ -61,7 +70,18 @@ impl Report for WireList {
         use EntityKind::*;
         // The netlist (potentials) also reads the project rules.
         Dependencies::on(&[
-            Page, Device, Symbol, Junction, Wire, Potential, Terminal, Cable,
+            Page,
+            Device,
+            Symbol,
+            Junction,
+            Wire,
+            Potential,
+            Terminal,
+            Cable,
+            CabinetPlacement,
+            Rail,
+            Part,
+            Structure,
         ])
         .with_info()
     }
@@ -178,15 +198,47 @@ impl Report for WireList {
                 Column::new("cross_section_mm2", "mm²", 10.0).right(),
                 Column::new("cable", "Cable", 25.0),
                 Column::new("location", "Location", 15.0),
+                Column::new("length_mm", "Cut length mm", 14.0).right(),
+                Column::new("length_basis", "Length basis", 12.0),
             ],
         );
-        for connection in connections {
+        // The wire's own cross-section, else its cable core's.
+        let cross_sections = |members: &[&Wire]| -> Vec<f64> {
+            let mut sections: Vec<f64> = Vec::new();
+            for wire in members {
+                let core = project.core_of_wire(wire.id).and_then(|(cable, core)| {
+                    let cable = project.cable(cable)?;
+                    cable.cores.get(core)
+                });
+                if let Some(value) = wire
+                    .cross_section_mm2
+                    .or(core.and_then(|c| c.cross_section_mm2))
+                    && !sections.iter().any(|s| s.to_bits() == value.to_bits())
+                {
+                    sections.push(value);
+                }
+            }
+            sections.sort_by(f64::total_cmp);
+            sections
+        };
+        let measured: Vec<Measured> = connections
+            .iter()
+            .map(|c| {
+                let members: Vec<&Wire> = c.wires.iter().map(|&i| wires[i]).collect();
+                Measured {
+                    from: c.from,
+                    to: c.to,
+                    cross_section_mm2: cross_sections(&members).last().copied(),
+                }
+            })
+            .collect();
+        let lengths = lengths::cut_lengths(project, &measured);
+        for (connection, length) in connections.into_iter().zip(lengths) {
             let members: Vec<&Wire> = connection.wires.iter().map(|&i| wires[i]).collect();
             let mut numbers: Vec<&str> =
                 members.iter().filter_map(|w| w.number.as_deref()).collect();
             numbers.sort_by(|a, b| natural_cmp(a, b));
             let mut cores = Vec::new();
-            let mut sections: Vec<f64> = Vec::new();
             for wire in &members {
                 let core = project.core_of_wire(wire.id).and_then(|(cable, core)| {
                     let cable = project.cable(cable)?;
@@ -195,16 +247,8 @@ impl Report for WireList {
                 if let Some((cable, core)) = core {
                     cores.push(format!("{} {}", cable.tag, core.name));
                 }
-                let section = wire
-                    .cross_section_mm2
-                    .or_else(|| core.and_then(|(_, c)| c.cross_section_mm2));
-                if let Some(value) = section
-                    && !sections.iter().any(|s| s.to_bits() == value.to_bits())
-                {
-                    sections.push(value);
-                }
             }
-            sections.sort_by(f64::total_cmp);
+            let sections = cross_sections(&members);
             let cross_section = match sections.as_slice() {
                 [] => Cell::Empty,
                 [single] => Cell::Number(*single),
@@ -243,6 +287,8 @@ impl Report for WireList {
                     cross_section,
                     Cell::text(join_distinct(cores)),
                     location.into(),
+                    Cell::Number(length.mm),
+                    Cell::text(length.basis.text()),
                 ],
                 members.iter().map(|w| AnyId::from(w.id)).collect(),
             );

@@ -541,6 +541,31 @@ impl<'p> Tx<'p> {
         Ok(())
     }
 
+    /// Switches the project's drawing standard and gives the listed symbols
+    /// the keys of that standard's pack, as one step. The caller works out
+    /// the keys (the model does not know the packs) and reports symbols
+    /// that have no counterpart; those are simply not listed. Pins stay as
+    /// they are. Refused as a whole for an unknown symbol or an empty key,
+    /// and, where the project info is checked, for a bad standard id
+    /// ([`ProjectRules::is_standard_id`](crate::ProjectRules::is_standard_id)).
+    pub fn switch_standard(
+        &mut self,
+        standard: &str,
+        symbols: &[(SymbolId, SymbolKey)],
+    ) -> Result<()> {
+        if let Some((id, _)) = symbols.iter().find(|(_, key)| key.0.is_empty()) {
+            return Err(ModelError::InvalidValue {
+                id: (*id).into(),
+                field: "symbol",
+            });
+        }
+        self.set_info(|i| i.rules.standard = standard.to_owned())?;
+        for (id, key) in symbols {
+            self.update::<SymbolInstance>(*id, |s| s.symbol = key.clone())?;
+        }
+        Ok(())
+    }
+
     /// Places a symbol on a page.
     pub fn place_symbol(
         &mut self,

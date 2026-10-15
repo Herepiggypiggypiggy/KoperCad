@@ -95,7 +95,9 @@ What the screen must do:
 **Top bar (42 px).**
 - The **mark** opens a short project menu: New, Open, Recent, Export PDF,
   Print, Project settings, Preferences, Quit. Every item is also in the
-  command surface; the mark is a shortcut list, not a second index.
+  command surface; the mark is a shortcut list, not a second index. The
+  Parts window (browse and import maker parts) is opened by the `parts`
+  command only for now; it is not in the mark menu.
 - **Schematic | Cabinet:** the two canvases, as a segmented switch.
 - **Breadcrumb:** project / `=function` / `+location` / page. A click on a
   segment filters the outline to it.
@@ -170,7 +172,10 @@ breadcrumb and the outline filter, not as a separate place.
 
 **Rules document.** `rules` (or Project settings) replaces the canvas with
 the project's rules as sentences with inline choices: "Devices are numbered
-[per letter code ▾]". Esc returns.
+[per letter code ▾]". Esc returns. The drawing standard is one of these
+rules ("Symbols follow [IEC 60617 ▾]", default IEC, or NFPA 79); until the
+Rules document is built, `standard` opens a small Project settings window
+with the same choice.
 
 **Page frame.** Every page is drawn and printed in a frame, chosen by a rule
 ("Pages use [A3 landscape, company frame ▾]"), never per page by hand. The
@@ -1083,7 +1088,7 @@ user has edited:
 
 **Where blocks live.** A definition lives in the project, so a `.novo` file
 is always complete on its own. Libraries are sources to copy from: the
-user's own `%APPDATA%\NovoElectric\Blocks` and, optionally, a company
+user's own `%APPDATA%\KoperCAD\Macros` and, optionally, a company
 folder the user points at (any readable path, no admin rights). A project
 copy remembers its source and version, so a newer library version is
 offered as an update, never applied silently.

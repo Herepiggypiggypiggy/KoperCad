@@ -1,6 +1,6 @@
 # Handoff: Device models and animation
 
-Branch `claude/project-thread-z7l1h2` (repo kopercad). One PR: design doc, `novo-sim/src/devices.rs` with `tests/devices.rs`, `novo-app/src/app/live_anim.rs`, one hook in `live.rs` (`LiveView.anim`, `anim.paint`).
+#346 merged. Follow-up PR from main (same branch name): contact blades, timer ring, `Settings.reduce_motion`. First PR: design doc, `novo-sim/src/devices.rs` with `tests/devices.rs`, `novo-app/src/app/live_anim.rs`, one hook in `live.rs` (`LiveView.anim`, `anim.paint`).
 
 How it works: `device_states(project, netlist, &Settled)` reads the settled solution; lamps and motors are recognised by library key (`iec/signalling/lamp*`, `iec/motors/motor_*`). The app eases the values per frame and paints over the canvas. Nothing is stored in the project.
 
