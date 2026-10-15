@@ -695,6 +695,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["export pdf", "pdf"],
     ),
+    cmd(
+        "export.change_report",
+        "Export change report",
+        "Export",
+        &["what changed", "revision report", "diff pdf"],
+        Needs::Project,
+    ),
     verb(
         cmd(
             "export.bom",

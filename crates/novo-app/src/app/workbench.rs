@@ -211,6 +211,7 @@ const APP_COMMANDS: &[&str] = &[
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "export.change_report",
     "plc.add_card",
     "plc.to_plc",
     "plc.renumber_io",
@@ -528,6 +529,9 @@ impl NovoApp {
             }
             "export.pdf" => {
                 self.export_pdf();
+            }
+            "export.change_report" => {
+                self.export_change_report();
             }
             "plc.add_card" => self.plc_add_card(argument),
             "plc.to_plc" => self.plc_to_plc(),
