@@ -16,6 +16,7 @@ mod drawers;
 mod duplicate;
 mod dxf;
 mod example;
+mod heat;
 mod inspector;
 mod link;
 mod live;

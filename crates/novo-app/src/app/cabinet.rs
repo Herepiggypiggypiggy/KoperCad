@@ -48,6 +48,8 @@ pub(super) struct CabinetState {
     pub(super) table: bool,
     /// The plate card of the inspector is shown with nothing selected.
     pub(super) plate_card: bool,
+    /// The Heat view over the plate.
+    pub(super) heat: super::heat::HeatState,
 }
 
 /// A placed device being dragged across the plate.
@@ -77,6 +79,7 @@ impl CabinetState {
             keys: Vec::new(),
             table: false,
             plate_card: false,
+            heat: super::heat::HeatState::new(),
         }
     }
 }
@@ -383,6 +386,9 @@ impl NovoApp {
                 {
                     ask = Some(Ask::TogglePlateCard);
                 }
+                if !self.cabinet.table {
+                    super::heat::chips(ui, &mut self.cabinet.heat);
+                }
                 if ui
                     .selectable_label(self.cabinet.table, "Table")
                     .on_hover_text("Devices as a table (Ctrl+T)")
@@ -483,6 +489,43 @@ impl NovoApp {
                     self.cabinet.fitted = location.clone();
                 }
                 let out = self.cabinet.view.show(ui, self.cabinet.scene.scene());
+                if self.cabinet.heat.on {
+                    let items = shown
+                        .placements
+                        .iter()
+                        .map(|p| {
+                            let f = p.footprint();
+                            let loss =
+                                project
+                                    .get::<Device>(DeviceId::from(p.id))
+                                    .map_or(0.0, |d| {
+                                        let s =
+                                            novo_layout::sizing_model::sizing_device(project, d);
+                                        s.power_loss * s.load_factor
+                                    });
+                            super::heat::Item {
+                                id: p.id,
+                                tag: tag_of(p.id),
+                                x: f.x,
+                                y: f.y,
+                                w: f.w,
+                                h: f.h,
+                                loss_w: loss,
+                            }
+                        })
+                        .collect();
+                    let input = super::heat::Input {
+                        plate: (shown.plate.width, shown.plate.height),
+                        items,
+                    };
+                    super::heat::paint(
+                        ui,
+                        out.response.rect,
+                        &self.cabinet.view.viewport,
+                        &mut self.cabinet.heat,
+                        &input,
+                    );
+                }
                 if let Some((facts, left)) = &inspector
                     && let Some(a) =
                         cabinet_inspector::overlay(ui.ctx(), out.response.rect, *left, facts)

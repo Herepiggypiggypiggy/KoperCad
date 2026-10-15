@@ -9,6 +9,7 @@
 pub mod brand;
 pub mod canvas;
 pub mod fonts;
+pub mod heat;
 pub mod icons;
 mod style;
 pub mod tokens;
