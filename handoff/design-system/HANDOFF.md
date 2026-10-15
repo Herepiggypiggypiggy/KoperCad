@@ -4,8 +4,8 @@ Updated 2026-10-15 19:55 UTC. The thread is winding down (usage limit); a fresh 
 
 ## State
 - Repo herepiggypiggypiggy/kopercad, branch `claude/project-thread-mr5n3b` (the only branch pushed; restart it from main after each merge).
-- #448 (spec) merged. #501 (novo-theme roles, light theme, density, widgets, gallery, `Palette::room`) is READY on a94c63b from the design reviewer and main reviewer B, undrafted, waiting for the integration lead. Do not push to it.
-- Local only (not on GitHub): git branches `ds-pr3` (on top of #501: `border.control` commit 9c47a6b) and `ds-appearance` (the panel stack, based on the pre-merge spec). A copy is in the project folder: `design/design-system-stack/` (`stack.bundle`, patches, README). This handoff itself is only in the local stack until the next PR, so it is mirrored there too.
+- #448 (spec) and #501 (novo-theme roles, light theme, density, widgets, gallery, `Palette::room`) are merged. The 3D look thread has been told.
+- Local only (not on GitHub): git branches `ds-pr3` (on top of #501: `border.control`, commit 9c47a6b) and `ds-appearance` (the panel stack, based on the pre-merge spec). A copy is in the project folder: `design/design-system-stack/` (`stack.bundle`, patches, README). This handoff itself is only in the local stack until the next PR, so it is mirrored there too.
 
 ## The local stack, in PR order (cherry-pick from `ds-appearance`)
 1. `border.control` role (3:1 outlines for checks, radios, buttons, fields), new gallery pictures (reviewer nit).
