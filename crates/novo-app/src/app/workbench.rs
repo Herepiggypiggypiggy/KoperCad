@@ -56,6 +56,8 @@ pub(crate) struct Workbench {
     pub(super) renumber: Option<Vec<novo_plc::commands::RenumberPlan>>,
     /// The Preferences window is open.
     pub(super) preferences: bool,
+    /// The macro browser window.
+    pub(super) macros: super::macro_browser::MacroBrowser,
     /// The Project settings window (drawing standard) is open.
     pub(super) project_settings: bool,
     /// The Issue revision window, while it is open.
@@ -131,6 +133,7 @@ impl Default for Workbench {
             queued: Vec::new(),
             renumber: None,
             preferences: false,
+            macros: Default::default(),
             project_settings: false,
             issue: None,
             page_form: None,
@@ -214,6 +217,8 @@ const APP_COMMANDS: &[&str] = &[
     "xref.link",
     "app.preferences",
     "project.standard",
+    "macro.browser",
+    "macro.import",
     "revision.issue",
     "terminal.toggle_pe",
     "terminal.reset_pe",
@@ -531,6 +536,8 @@ impl NovoApp {
             "xref.link" => self.xref_link(argument),
             "app.preferences" => self.wb.preferences = true,
             "project.standard" => self.wb.project_settings = true,
+            "macro.browser" => self.wb.macros.show(),
+            "macro.import" => self.macro_import(),
             "revision.issue" => self.open_issue_revision(argument),
             other => {
                 let label = novo_workflow::commands::get(other).map_or(other, |c| c.label);

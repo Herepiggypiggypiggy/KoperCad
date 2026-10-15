@@ -29,6 +29,7 @@ novo-terminals.workspace = true
 novo-plc.workspace = true
 novo-revisions.workspace = true
 novo-sim.workspace = true
+novo-parts.workspace = true
 novo-tests.workspace = true
 log = "0.4"
 env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }

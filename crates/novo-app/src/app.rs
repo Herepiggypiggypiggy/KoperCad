@@ -14,6 +14,9 @@ mod inspector;
 mod link;
 mod live;
 mod live_anim;
+mod macro_browser;
+#[cfg(test)]
+mod macro_browser_tests;
 mod pages;
 mod pdf;
 mod plc;
@@ -744,6 +747,7 @@ impl NovoApp {
         self.renumber_dialog(&ctx);
         self.preferences_dialog(&ctx);
         self.project_settings_dialog(&ctx);
+        self.macro_browser_window(&ctx);
         self.issue_revision_dialog(&ctx);
         self.page_form_dialog(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {

@@ -51,6 +51,8 @@ pub const DUTCH: &[Aliases] = &[
         &["voorkeuren"],
         &["instellingen", "opties"],
     ),
+    nl("macro.browser", &["bibliotheek"], &["macro's", "macros"]),
+    nl("macro.import", &["macro importeren"], &["importeer macro"]),
     nl("project.standard", &["tekennorm"], &["norm", "standaard"]),
     nl("terminal.toggle_pe", &["pe-klem"], &["aardklem", "aarde"]),
     nl(
