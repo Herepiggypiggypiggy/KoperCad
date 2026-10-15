@@ -185,6 +185,11 @@ pub const DUTCH: &[Aliases] = &[
     nl("view.terminals_drawer", &[], &["klemmen", "klemmenstroken"]),
     nl("view.cables_drawer", &[], &["kabels", "aders"]),
     nl("view.devices_drawer", &[], &["apparaten", "onderdelen"]),
+    nl(
+        "view.reports",
+        &[],
+        &["rapporten", "lijsten", "draadlijst", "stuklijsten"],
+    ),
     nl("view.focus", &[], &["focusmodus"]),
     nl(
         "view.pin_outline",
@@ -219,6 +224,11 @@ pub const DUTCH: &[Aliases] = &[
         "export.pdf",
         &["exporteer pdf", "pdf exporteren"],
         &["afdrukken"],
+    ),
+    nl(
+        "export.reports",
+        &["exporteer rapporten", "rapporten exporteren"],
+        &["excel", "werkmap"],
     ),
     nl(
         "export.bom",

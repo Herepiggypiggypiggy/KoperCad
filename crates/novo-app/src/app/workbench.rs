@@ -219,6 +219,8 @@ const APP_COMMANDS: &[&str] = &[
     "terminal.reset_pe",
     "wire.mode",
     "interruption.renumber",
+    "export.reports",
+    "export.bom",
 ];
 
 /// Whether the app can run a command now (not "comes later").
@@ -524,6 +526,10 @@ impl NovoApp {
             }
             "export.pdf" => {
                 self.export_pdf();
+            }
+            "export.reports" => self.export_reports_dialog(None, super::reports_hub::Format::Xlsx),
+            "export.bom" => {
+                self.export_reports_dialog(Some("bom"), super::reports_hub::Format::Xlsx)
             }
             "plc.add_card" => self.plc_add_card(argument),
             "plc.to_plc" => self.plc_to_plc(),

@@ -21,6 +21,7 @@ mod potentials;
 mod preferences;
 mod project_settings;
 mod reports;
+mod reports_hub;
 mod revisions;
 mod terminals;
 mod title_revisions;
@@ -37,6 +38,8 @@ mod changes_tests;
 mod example_tests;
 #[cfg(test)]
 mod gate1_tests;
+#[cfg(test)]
+mod reports_hub_tests;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -139,6 +142,8 @@ pub struct NovoApp {
     /// The Cabinet canvas is shown instead of the schematic (Ctrl+2).
     cabinet_open: bool,
     cabinet: cabinet::CabinetState,
+    /// The Reports hub (Ctrl+6): every report as a live table, with exports.
+    hub: reports_hub::Hub,
     /// The outline flyout is showing over the canvas.
     outline_open: bool,
     /// What the outline lists.
@@ -205,6 +210,7 @@ impl NovoApp {
             focus_mode: false,
             cabinet_open: false,
             cabinet: cabinet::CabinetState::new(),
+            hub: Default::default(),
             outline_open: false,
             outline_mode: OutlineMode::Pages,
             breadcrumb_link: None,
@@ -323,7 +329,8 @@ impl NovoApp {
             | Action::SaveProjectAs
             | Action::CloseProject
             | Action::ZoomToFit
-            | Action::ShowCabinet => open,
+            | Action::ShowCabinet
+            | Action::ShowReports => open,
             Action::Undo => doc.is_some_and(|d| d.can_undo()),
             Action::Redo => doc.is_some_and(|d| d.can_redo()),
             _ => true,
@@ -353,8 +360,18 @@ impl NovoApp {
             Action::Undo => self.undo_redo(false),
             Action::Redo => self.undo_redo(true),
             Action::ZoomToFit => self.canvas.zoom_to_fit(),
-            Action::ShowSchematic => self.cabinet_open = false,
-            Action::ShowCabinet => self.cabinet_open = true,
+            Action::ShowSchematic => {
+                self.cabinet_open = false;
+                self.hub.open = false;
+            }
+            Action::ShowCabinet => {
+                self.cabinet_open = true;
+                self.hub.open = false;
+            }
+            Action::ShowReports => {
+                self.cabinet_open = false;
+                self.hub.open = true;
+            }
             Action::PinOutline => {
                 let pinned = !self.outline_pinned();
                 self.settings.outline_pinned = Some(pinned);
@@ -673,12 +690,12 @@ impl NovoApp {
         } else {
             self.key_commands(&ctx)
         };
-        if self.cabinet_open {
+        if self.cabinet_open || self.hub.open {
             // The schematic's keys must not edit the hidden page: rotate
             // and delete go to the Cabinet, the rest keep only the view,
             // file and undo actions.
             for id in &commands {
-                if matches!(*id, "edit.rotate" | "edit.delete") {
+                if self.cabinet_open && matches!(*id, "edit.rotate" | "edit.delete") {
                     self.cabinet.keys.push((*id).to_owned());
                 }
             }
@@ -704,7 +721,9 @@ impl NovoApp {
         self.drawer(ui);
         let canvas_rect = egui::CentralPanel::no_frame()
             .show(ui, |ui| {
-                if self.is_open() && self.cabinet_open {
+                if self.is_open() && self.hub.open {
+                    self.hub_show(ui);
+                } else if self.is_open() && self.cabinet_open {
                     self.cabinet_show(ui);
                 } else if self.is_open() {
                     self.update_marks();
@@ -726,7 +745,7 @@ impl NovoApp {
         if !self.focus_mode && !pinned && self.is_open() {
             self.outline_flyout(&ctx, canvas_rect, &mut picked);
         }
-        if !self.focus_mode && !self.cabinet_open {
+        if !self.focus_mode && !self.cabinet_open && !self.hub.open {
             self.hud(&ctx, canvas_rect);
             self.sync_wiring_mode();
             self.sync_connect_mode();
@@ -844,8 +863,10 @@ impl NovoApp {
             self.wb.sheet = 0;
         }
         self.current_page = Some(page);
-        // A page is a schematic page: picking one leaves the Cabinet.
+        // A page is a schematic page: picking one leaves the Cabinet and
+        // the Reports hub.
         self.cabinet_open = false;
+        self.hub.open = false;
     }
 
     /// Shows sheet `sheet` of a generated page (0 for any other page).
@@ -880,8 +901,13 @@ impl NovoApp {
             for (action, label) in [
                 (Action::ShowSchematic, "Schematic"),
                 (Action::ShowCabinet, "Cabinet"),
+                (Action::ShowReports, "Reports"),
             ] {
-                let selected = (action == Action::ShowCabinet) == self.cabinet_open;
+                let selected = match action {
+                    Action::ShowCabinet => self.cabinet_open && !self.hub.open,
+                    Action::ShowReports => self.hub.open,
+                    _ => !self.cabinet_open && !self.hub.open,
+                };
                 let response = ui
                     .add_enabled_ui(self.is_enabled(action), |ui| segment(ui, label, selected))
                     .inner;
@@ -934,11 +960,9 @@ impl NovoApp {
             self.action_button(ui, a, picked);
         }
         ui.separator();
-        let export = egui::Button::new("Export PDF");
-        if ui.add_enabled(self.is_open(), export).clicked() {
-            self.export_pdf();
-            ui.close();
-        }
+        ui.add_enabled_ui(self.is_open(), |ui| {
+            ui.menu_button("Export", |ui| self.export_menu(ui, picked));
+        });
         ui.separator();
         for a in [Action::About, Action::Quit] {
             self.action_button(ui, a, picked);

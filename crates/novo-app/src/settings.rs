@@ -34,6 +34,9 @@ pub struct Settings {
     /// Whether the live view skips its animations: states switch at once
     /// and a running motor shows an arrow instead of spinning.
     pub reduce_motion: bool,
+    /// CSV exports separate fields with `;` (what Excel expects with a
+    /// decimal comma, as in Dutch or German) instead of `,`.
+    pub csv_semicolon: bool,
 }
 
 impl Settings {

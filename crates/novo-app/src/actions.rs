@@ -18,6 +18,7 @@ pub enum Action {
     ZoomToFit,
     ShowSchematic,
     ShowCabinet,
+    ShowReports,
     PinOutline,
     FocusMode,
     FullScreen,
@@ -39,6 +40,7 @@ impl Action {
         Action::ZoomToFit,
         Action::ShowSchematic,
         Action::ShowCabinet,
+        Action::ShowReports,
         Action::PinOutline,
         Action::FocusMode,
         Action::FullScreen,
@@ -62,6 +64,7 @@ impl Action {
             Action::ZoomToFit => "view.fit",
             Action::ShowSchematic => "view.schematic",
             Action::ShowCabinet => "view.cabinet",
+            Action::ShowReports => "view.reports",
             Action::PinOutline => "view.pin_outline",
             Action::FocusMode => "view.focus",
             Action::FullScreen => "view.full_screen",
@@ -88,6 +91,7 @@ impl Action {
             Action::ZoomToFit => "Zoom to fit",
             Action::ShowSchematic => "Schematic",
             Action::ShowCabinet => "Cabinet",
+            Action::ShowReports => "Reports",
             Action::PinOutline => "Pin outline",
             Action::FocusMode => "Focus mode",
             Action::FullScreen => "Full screen",
@@ -112,6 +116,7 @@ impl Action {
             Action::ZoomToFit
             | Action::ShowSchematic
             | Action::ShowCabinet
+            | Action::ShowReports
             | Action::PinOutline
             | Action::FocusMode
             | Action::FullScreen
@@ -134,6 +139,7 @@ impl Action {
             Action::ZoomToFit => (Modifiers::NONE, Key::Home),
             Action::ShowSchematic => (cmd, Key::Num1),
             Action::ShowCabinet => (cmd, Key::Num2),
+            Action::ShowReports => (cmd, Key::Num6),
             Action::FocusMode => (cmd_shift, Key::F),
             Action::FullScreen => (Modifiers::NONE, Key::F11),
             Action::CommandPalette => (cmd, Key::K),

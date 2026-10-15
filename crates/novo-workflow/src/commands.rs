@@ -555,6 +555,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.reports",
+        "Reports",
+        "View",
+        &["lists", "wire list", "bom", "export", "excel", "csv"],
+        Needs::Project,
+    ),
+    cmd(
         "view.terminals_drawer",
         "Terminals",
         "View",
@@ -676,6 +683,16 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export pdf", "pdf"],
+    ),
+    verb(
+        cmd(
+            "export.reports",
+            "Export reports to Excel",
+            "Export",
+            &["workbook", "xlsx", "lists"],
+            Needs::Project,
+        ),
+        &["export reports", "excel"],
     ),
     verb(
         cmd(
