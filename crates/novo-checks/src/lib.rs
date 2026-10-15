@@ -28,8 +28,8 @@
 //! | [`WireOverlap`](ProblemKind::WireOverlap) | warning | Two wires on a page sharing a stretch of line |
 //! | [`OpenWire`](ProblemKind::OpenWire) | warning | A wire with an open end that is connected to nothing |
 //! | [`MissingPart`](ProblemKind::MissingPart) | info | A device or cable without a part |
-//! | [`VoltageDrop`](ProblemKind::VoltageDrop) | warning | A wire with a known length that drops more than 5 % of the supply |
-//! | [`ShortCircuit`](ProblemKind::ShortCircuit) | error | A protective device that cannot break the supply's short-circuit current |
+//! | [`VoltageDrop`](ProblemKind::VoltageDrop) | warning | Filled by novo-checks::calc, not yet |
+//! | [`ShortCircuit`](ProblemKind::ShortCircuit) | error | Filled by novo-checks::calc, not yet |
 //! | [`UnplacedDevice`](ProblemKind::UnplacedDevice) | info | A device not yet placed on a mounting plate |
 //! | [`WireWithoutDuct`](ProblemKind::WireWithoutDuct) | warning | A wire between placed devices that no duct serves |
 //! | [`OverfullDuct`](ProblemKind::OverfullDuct) | warning | A duct filled beyond its limit |
@@ -57,7 +57,6 @@
 pub mod calc;
 mod checks;
 mod contacts;
-mod electrical;
 mod physical;
 mod waiver;
 
@@ -144,13 +143,15 @@ pub enum ProblemKind {
     /// A wire with an open end (`wire.open`, DESIGN.md §4): an end connected
     /// to nothing. Open ends are allowed while sketching; they join no net.
     OpenWire,
-    /// A wire of known length and cross-section that drops more of the
-    /// supply voltage than the limit (5 % unless the project sets
-    /// `check.voltage_drop_pct`).
+    /// A wire that drops too much of the supply voltage. Filled by the
+    /// electrical calculations (novo-checks::calc), which read the wire
+    /// property `length_m` (or a cable's length), `load_current_a` and the
+    /// project property `check.voltage_drop_pct`.
     VoltageDrop,
-    /// A protective device whose breaking capacity is below the supply's
-    /// prospective short-circuit current (`supply.short_circuit_ka` in the
-    /// project's properties).
+    /// A protective device that cannot break the prospective short-circuit
+    /// current. Filled by the electrical calculations, which read the device
+    /// or part property `breaking_capacity_ka` and the project property
+    /// `supply.short_circuit_ka`.
     ShortCircuit,
     /// A device drawn in the schematic but not placed on any mounting plate,
     /// in a project where the cabinet layout has been started.
@@ -375,8 +376,6 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     checks::plc(&cx, &mut problems);
     checks::wire_overlaps(&cx, &mut problems);
     checks::open_wires(&cx, &mut problems);
-    electrical::voltage_drop(&cx, netlist, &mut problems);
-    electrical::short_circuit(&cx, &mut problems);
     physical::unplaced_devices(&cx, &mut problems);
     physical::routing(&cx, &mut problems);
     cx.sort(&mut problems);
