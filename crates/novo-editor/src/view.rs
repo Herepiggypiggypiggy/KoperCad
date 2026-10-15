@@ -167,6 +167,9 @@ pub struct SchematicView {
     sheet: Option<SheetContent>,
     /// `sheet` changed since it was last handed to the scene.
     sheet_dirty: bool,
+    /// What "Show where it goes" lit up, with the selection it was shown
+    /// for; any change of selection puts it out.
+    where_shown: Option<(Vec<ItemId>, Vec<ItemId>)>,
 }
 
 impl Default for SchematicView {
@@ -274,6 +277,7 @@ impl SchematicView {
             notes_dirty: false,
             sheet: None,
             sheet_dirty: false,
+            where_shown: None,
         }
     }
 
@@ -408,6 +412,18 @@ impl SchematicView {
             .screen_to_world_len(self.canvas.pick_tolerance);
         let hit = scene.scene().pick(w, tol, self.canvas.viewport.zoom)?;
         scene.model_id(hit.id)
+    }
+
+    /// What "Show where it goes" lights up now; empty once the selection
+    /// has changed since.
+    pub fn where_lit(&mut self) -> Vec<ItemId> {
+        match &self.where_shown {
+            Some((lit, at)) if at.as_slice() == self.canvas.selection.ids() => lit.clone(),
+            _ => {
+                self.where_shown = None;
+                Vec::new()
+            }
+        }
     }
 
     /// The selection as model ids.
@@ -1570,7 +1586,7 @@ impl SchematicView {
                         }
                         if ui
                             .button("Show where it goes")
-                            .on_hover_text("Selects what carries it on this page")
+                            .on_hover_text("Lights up what carries it on this page")
                             .clicked()
                         {
                             chosen = Some(MenuChoice::ShowWhere);
@@ -1699,7 +1715,10 @@ impl SchematicView {
                     .flat_map(|f| f.feeds.iter())
                     .flat_map(|&feed| potential_menu::where_it_goes(document.project(), page, feed))
                     .collect::<Vec<_>>();
-                self.select(&found);
+                // Lit, not selected: a Delete right after must not remove
+                // every wire on the potential.
+                let lit = found.iter().map(|&id| item_id(id)).collect();
+                self.where_shown = Some((lit, self.canvas.selection.ids().to_vec()));
             }
             Some(MenuChoice::WireOverride(i)) => {
                 if let Some(w) = &wire_override {
@@ -2172,6 +2191,20 @@ mod tests {
         h.click(x, 120.0, egui::PointerButton::Primary);
         assert_eq!(h.view.editor.proposals().len(), 3);
         assert_eq!(h.doc.project().wires().count(), 0);
+    }
+
+    #[test]
+    fn the_lit_potential_goes_out_when_the_selection_changes() {
+        let mut h = Harness::new();
+        let lit = vec![ItemId(7)];
+        h.view.where_shown = Some((lit.clone(), Vec::new()));
+        assert_eq!(h.view.where_lit(), lit);
+        h.view
+            .canvas
+            .selection
+            .apply([ItemId(3)], SelectOp::Replace);
+        assert!(h.view.where_lit().is_empty());
+        assert!(h.view.where_shown.is_none());
     }
 
     #[test]
