@@ -55,6 +55,9 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("revision.compare", under("File", "Revisions")),
     ("file.import_dxf_background", under("File", "Import")),
     ("file.remove_background", under("File", "Import")),
+    ("file.import_aml", under("File", "Import")),
+    ("file.import_dwg", under("File", "Import")),
+    ("file.choose_dwg_converter", under("File", "Import")),
     ("help.walkthrough", at("Help")),
     ("help.about", at("Help")),
     ("view.shortcuts", at("Help")),
@@ -85,8 +88,15 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("view.cables_drawer", under("View", "Panels")),
     ("view.devices_drawer", under("View", "Panels")),
     ("view.pin_outline", under("View", "Panels")),
+    ("view.reports", under("View", "Workspace")),
     // Reports
-    ("export.bom", at("Reports")),
+    ("export.reports", at("Reports")),
+    ("report.toc", at("Reports")),
+    ("report.bom", at("Reports")),
+    ("report.devices", at("Reports")),
+    ("report.wires", at("Reports")),
+    ("report.terminals", at("Reports")),
+    ("report.cables", at("Reports")),
 ];
 
 /// Commands that are a key or a pointer gesture and have no menu row.

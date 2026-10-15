@@ -22,10 +22,10 @@ N-shaped logo; not a copy of EPLAN; be critical; don't wait on him.
   it into docs/DESIGN.md.
 
 ## Next, in order
-1. Snap marker colour PR (quiet grey, not copper) to READY and merge.
-2. Support WS-01 on the remaining chrome from DESIGN.md (Issues outline
-   mode, Cables/Devices drawers, inspector, dock), with theme widgets as
-   needed. Design notes owed: handoff/design-reviewer/HANDOFF.md on main.
+1. Land #461, #472, #444 (the lead merges once READY and CI green).
+2. Hands-on test of the cabinet drag and the table in the running app.
+3. Duct checks in collision/clearance, with the routing thread's tools.
+4. Support the design-system pass (#448): no raw colours in cabinet code.
 
 ## Open questions
 - Structure board on first run: how much form, how much drawing.
