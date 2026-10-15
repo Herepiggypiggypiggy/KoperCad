@@ -55,7 +55,10 @@ impl NovoApp {
             ui.heading("Project settings");
             ui.add_space(6.0);
             ui.strong("Drawing standard");
-            ui.weak("Picks the symbol pack for new symbols. Placed symbols stay as drawn.");
+            ui.weak(
+                "Picks the symbol pack for new symbols; placed symbols stay as drawn. \
+NFPA symbols appear once the editor loads that pack.",
+            );
             for (value, label) in [
                 (Pack::Iec, "IEC 60617 (default)"),
                 (Pack::Nfpa, "NFPA 79 / ANSI Y32.2"),
