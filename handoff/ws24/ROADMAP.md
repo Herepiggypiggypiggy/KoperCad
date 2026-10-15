@@ -13,7 +13,7 @@ engines first; everything offline, no admin rights. Design: `docs/design/interop
 - `bridge` module (PR #354): `page_drawing` / `scene_to_drawing`, page scene to DXF drawing (y flip, text per line); `tests/bridge.rs`.
 
 ## Next, in order
-1. Entry points: `kopercad-cli export dxf`, Python, app menu (one file per page).
+1. Entry points: `kopercad-cli export dxf` (done, own PR), Python, app menu (one file per page).
 2. DXF as page background: needs a WS-02 decision on an underlay record.
 3. Excel round trip for the parts list and the I/O list (after the PLC tag table export).
 

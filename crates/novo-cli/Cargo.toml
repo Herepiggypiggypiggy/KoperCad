@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 novo-core.workspace = true
+novo-interop.workspace = true
 novo-storage.workspace = true
 novo-py.workspace = true
 novo-checks.workspace = true
