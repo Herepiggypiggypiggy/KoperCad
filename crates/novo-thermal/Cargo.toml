@@ -1,0 +1,13 @@
+[package]
+name = "novo-thermal"
+description = "Thermal and airflow simulation of an enclosure: temperature field, reduced-order airflow, device temperatures, hot spots and advice"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+novo-layout.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

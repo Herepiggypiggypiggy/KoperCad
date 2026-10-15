@@ -1,10 +1,13 @@
 # Learning modules: handoff
 
 ## State
-- Repo herepiggypiggypiggy/kopercad, branch `claude/project-thread-7lpw0d` (restart from main after each merge).
-- Merged: design (#456), tracks and glossary (#474). Open: engine PR (crate `novo-learn`: markup, lesson format, checks, runner, catalog, lint, progress; 46 unit tests plus `tests/repo_lessons.rs`) with `assets/lessons/README.md`.
-- Next: app shell (card, pointer overlay, Learn window, entries, event funnel and signals, anchors), after #428 merges (it owns `onboarding.rs`; do not edit it before then). The crate is not yet in `[workspace.dependencies]`; the lead registers it when `novo-app` needs it.
-- Content threads write lessons as drafts against `assets/lessons/README.md`.
+- Repo herepiggypiggypiggy/kopercad, branch `claude/project-thread-7lpw0d` (restart from main after each merge; it is the only branch this thread may push to).
+- Merged: design (#456), tracks and glossary (#474), engine `novo-learn` (#479), `novo-learn` registered (#466), walk-through #428 (not mine).
+- Open: the app shell PR (this branch): `crates/novo-app/src/app/learn.rs` (state, catalog, events, facts, run, start/restart/continue, progress), `learn_ui.rs` (card, pointer ring, numbered notes, Learn window), `learn_tests.rs` (headless tests incl. anchors doc check and the app-side lint), `build.rs` embeds `assets/lessons`, `ProjectBackend::new_project_from`, `Action::Learn` + `help.learn`/`learn.*` commands (novo-workflow, with Dutch words), `assets/lessons/ui.toml` + `novo_learn::UiStrings`, `docs/design/lesson-anchors.md` (generated: `UPDATE_ANCHORS_DOC=1 cargo test -p novo-app anchors_doc`). Engine additions in the same PR: scalar `field.equals`, pin pairs in `potential`, `terminal` check, solve ops `cable`, `issue_revision`, `assign_part`, `place.turns`, `select.add`, `page_title` fact, progress file not UTF-8 set aside, folder depth cap.
+- Deviations from the design (recorded in the doc): Continue works only while the lesson's own project is still open; authoring folder is the env var `KOPERCAD_LESSONS` (no `--lessons` flag yet); `zoom_at_least` is relative to the fit zoom of the page; language is English until a language setting exists (`LearnState.lang`).
+- Content PRs (all drafts, not merged): #484 drawing, #488 productivity, #495 cabinet, #510 terminals. Against the real engine, #484/#488/#495 parse; #510 still has 4 things the engine lacks (`field.cable`, `rename` solve, `set_potential` solve; told that thread). All four edit `glossary.toml` and conflict there.
+- Next after the shell: replay test (`solve` ops through the real command path, per step, in `learn_tests.rs`), more anchors (start panel buttons, outline, wheel, live card, inspector, parts, preferences, shortcuts sheet), the `fast-keys` conversion with the first-run thread, a problem-id registry for `problem_free`, a language setting.
+- Anchors requested by content threads: drawing (wheel, live.card, pages.list, menu.canvas.place_component, outline.toggle, palette.field, dock.wire_mode, dock.xref, dock.live); productivity (issue.pill, outline.issues, inspector.part, parts.*, changes.list, compare.swap, preferences.*, shortcuts.sheet, project_settings.standard); cabinet (see `handoff/cabinet-lessons/HANDOFF.md`).
 
 ## Resume
 ```

@@ -57,20 +57,31 @@ impl Default for Progress {
     }
 }
 
+/// Renames a file the program cannot use to `<name>.bad`.
+fn set_aside(path: &Path) {
+    let mut bad = path.as_os_str().to_owned();
+    bad.push(".bad");
+    let _ = std::fs::rename(path, bad);
+}
+
 impl Progress {
     /// Reads the file. A missing file is a fresh start. A file that does not
     /// parse, or is from a newer build, is renamed to `<name>.bad` and
     /// replaced by a fresh start: the app never fails over it.
     pub fn load(path: &Path) -> Progress {
-        let Ok(text) = std::fs::read_to_string(path) else {
-            return Progress::default();
+        let text = match std::fs::read_to_string(path) {
+            Ok(text) => text,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Progress::default(),
+            // Present but unreadable (not UTF-8, say): set it aside too.
+            Err(_) => {
+                set_aside(path);
+                return Progress::default();
+            }
         };
         match serde_json::from_str::<Progress>(&text) {
             Ok(p) if p.format == FORMAT => p,
             _ => {
-                let mut bad = path.as_os_str().to_owned();
-                bad.push(".bad");
-                let _ = std::fs::rename(path, bad);
+                set_aside(path);
                 Progress::default()
             }
         }
@@ -243,6 +254,17 @@ text = "t"
         let run = progress.run_for(lesson);
         assert_eq!(run.done(), ["a"]);
         assert_eq!(run.step().unwrap().id, "b");
+    }
+
+    #[test]
+    fn a_file_that_is_not_text_is_set_aside() {
+        let dir = std::env::temp_dir().join(format!("novo-learn-{}-bin", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("learn.json");
+        std::fs::write(&path, [0xff, 0xfe, 0x00, 0x80]).unwrap();
+        assert_eq!(Progress::load(&path), Progress::default());
+        assert!(dir.join("learn.json.bad").exists());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

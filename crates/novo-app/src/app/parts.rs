@@ -750,6 +750,12 @@ you can also drop it on this window.",
                 )),
                 _ => ui.label("Drop the downloaded file on this window, or choose it."),
             };
+            if let Some(w) = &import.order_warning {
+                ui.colored_label(ui.visuals().warn_fg_color, w);
+            }
+            for (i, step) in import.steps.iter().enumerate() {
+                ui.label(format!("{}. {step}", i + 1));
+            }
             if import.page_url.is_some() && !import.page_verified {
                 ui.weak(
                     "This page address is not confirmed. If it does not show the part, find it \

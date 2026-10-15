@@ -14,10 +14,19 @@
 //! A pole is one group of `SymbolInstance::pass_through`: with the group
 //! closed every pin of it conducts to every other.
 
+pub mod analog;
 mod coupling;
 mod devices;
+pub mod fault;
+pub mod feeder;
 mod loads;
+pub mod network;
 mod plc;
+pub mod protection;
+pub mod scenario;
+pub mod study;
+pub mod timing;
+pub mod trace;
 
 pub use coupling::{
     Clock, DEFAULT_DELAY, Settled, delay_seconds, is_coil, is_timer_contact, settle, settle_timed,

@@ -329,6 +329,10 @@ pub const FRAME_MARGIN: f32 = 10.0;
 const TITLE_BLOCK_WIDTH: f32 = 140.0;
 const TITLE_ROW: f32 = 6.0;
 const TITLE_ROWS: usize = 6;
+/// The revision table above the title block: a header and at most this many
+/// revisions, newest nearest the title block.
+const TABLE_ROW: f32 = 5.0;
+const TABLE_ROWS: usize = 5;
 
 /// Length of the orientation stubs on oriented junctions, in mm.
 pub const JUNCTION_STUB: f32 = 1.5;
@@ -440,6 +444,18 @@ pub struct TitleRevisions {
     pub page: Option<(String, String)>,
     /// The project's revision, the latest index; `None` before the first.
     pub project: Option<String>,
+    /// Every issued revision, newest first, for the revision table above
+    /// the title block (DESIGN §7). Empty draws no table.
+    pub table: Vec<RevisionRow>,
+}
+
+/// One line of the revision table.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct RevisionRow {
+    pub index: String,
+    pub date: String,
+    pub author: String,
+    pub description: String,
 }
 
 impl TitleRevisions {
@@ -1350,6 +1366,9 @@ impl PageScene {
                 );
             }
         }
+        if let Some(revisions) = self.revisions.as_ref().filter(|r| !r.table.is_empty()) {
+            self.revision_table(&revisions.table, min, size.x, item);
+        }
     }
 
     /// Redraws the bridge bars of the page's jumper groups.
@@ -1365,6 +1384,48 @@ impl PageScene {
             item = item.with(Primitive::stroked(Shape::line(a, b), stroke));
         }
         self.scene.insert(BARS_ITEM, item);
+    }
+
+    /// The revision table: Rev, Date, By and what changed, in the width of
+    /// the title block and directly above it (`block_min` is the title
+    /// block's top left). Shows the latest revisions that fit; the oldest
+    /// are left off.
+    fn revision_table(&self, rows: &[RevisionRow], block_min: Vec2, width: f32, item: &mut Item) {
+        let color = self.style.frame_color;
+        let thin = Stroke::world(0.25, color);
+        let shown = rows.len().min(TABLE_ROWS);
+        let height = TABLE_ROW * (shown + 1) as f32;
+        let min = Vec2::new(block_min.x, block_min.y - height);
+        item.primitives.push(Primitive::stroked(
+            Shape::rect(min, Vec2::new(min.x + width, block_min.y)),
+            thin,
+        ));
+        for r in 1..=shown {
+            let y = min.y + TABLE_ROW * r as f32;
+            item.primitives.push(Primitive::stroked(
+                Shape::line(Vec2::new(min.x, y), Vec2::new(min.x + width, y)),
+                thin,
+            ));
+        }
+        // Columns: Rev, Date, By, Description.
+        let columns = [2.0, 12.0, 36.0, 48.0];
+        let mut put = |row: usize, cells: [&str; 4]| {
+            let y = min.y + TABLE_ROW * (row as f32 + 0.5);
+            for (x, text) in columns.into_iter().zip(cells) {
+                if !text.is_empty() {
+                    item.labels.push(
+                        Label::new(Vec2::new(min.x + x, y), text, 2.5)
+                            .anchored(Anchor::CenterLeft)
+                            .colored(color),
+                    );
+                }
+            }
+        };
+        put(0, ["Rev", "Date", "By", "Changed"]);
+        // Newest at the bottom, nearest the title block.
+        for (i, r) in rows.iter().take(shown).enumerate() {
+            put(shown - i, [&r.index, &r.date, &r.author, &r.description]);
+        }
     }
 
     fn sync_symbol(&mut self, project: &Project, id: SymbolId, art: &dyn SymbolArt) {
@@ -3396,6 +3457,7 @@ mod tests {
         let revisions = |page: Option<(&str, &str)>, project: &str| TitleRevisions {
             page: page.map(|(i, d)| (i.to_owned(), d.to_owned())),
             project: Some(project.to_owned()),
+            ..TitleRevisions::default()
         };
         // An untouched page keeps its own index while the set moves on.
         let old = revisions(Some(("A", "2026-09-01")), "D");
