@@ -1,0 +1,466 @@
+//! Macros in the drawing: `macro.save` stores the selection in the user's
+//! macro library, `macro.place` picks one from it and puts it on the
+//! current page with the next free tags (docs/design/macros.md). The
+//! engine is `novo_workflow::macro_place` over `novo_parts::MacroLibrary`;
+//! the library window with rename, delete, import and export is
+//! `macro.browser`.
+//!
+//! The Place window previews before it changes anything: the tags the
+//! devices will take, wire numbers kept or cleared, and clashes. A placed
+//! macro lands to the right of what is on the page and is selected, so it
+//! can be moved with the usual keys.
+
+use eframe::egui;
+use novo_core::{AnyId, BlockDefinition, Value};
+use novo_parts::{MacroEntry, MacroFile, MacroLibrary};
+use novo_workflow::macro_place::{self, PlaceOptions, Report, WireNumbers};
+
+use super::{Level, NovoApp};
+
+/// Gap between the drawing and a placed macro, in mm.
+const PLACE_GAP: f64 = 20.0;
+
+/// What the Save macro window holds while it is open.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SaveDraft {
+    pub name: String,
+    pub description: String,
+    pub error: Option<String>,
+    focused: bool,
+}
+
+/// What the Place macro preview was computed for, and its result.
+struct Shown {
+    key: (String, u64, bool, Vec<(String, Value)>),
+    definition: BlockDefinition,
+    report: Result<Report, String>,
+}
+
+/// State of the Place macro window.
+pub(crate) struct PlaceWindow {
+    pub(super) open: bool,
+    library: Option<MacroLibrary>,
+    started: bool,
+    query: String,
+    selected: Option<String>,
+    keep_numbers: bool,
+    values: Vec<(String, Value)>,
+    shown: Option<Shown>,
+    status: String,
+}
+
+impl PlaceWindow {
+    pub(crate) fn new(library: Option<MacroLibrary>) -> Self {
+        PlaceWindow {
+            open: false,
+            library,
+            started: false,
+            query: String::new(),
+            selected: None,
+            keep_numbers: false,
+            values: Vec::new(),
+            shown: None,
+            status: String::new(),
+        }
+    }
+
+    fn entries(&self) -> Vec<MacroEntry> {
+        self.library
+            .as_ref()
+            .map(|l| l.search(&self.query))
+            .unwrap_or_default()
+    }
+
+    fn options(&self) -> PlaceOptions {
+        PlaceOptions {
+            values: self.values.clone(),
+            wire_numbers: if self.keep_numbers {
+                WireNumbers::Keep
+            } else {
+                WireNumbers::Clear
+            },
+        }
+    }
+
+    /// Picks a macro and loads its parameters with their defaults.
+    pub(super) fn select(&mut self, path: &str) {
+        self.selected = Some(path.to_owned());
+        self.shown = None;
+        self.values = self
+            .library
+            .as_ref()
+            .and_then(|l| l.load(path).ok())
+            .map(|f| {
+                f.definition
+                    .parameters
+                    .iter()
+                    .map(|p| (p.name.clone(), p.default.clone()))
+                    .collect()
+            })
+            .unwrap_or_default();
+    }
+}
+
+impl PlaceWindow {
+    /// The preview line of the picked macro, once it is computed.
+    #[cfg(test)]
+    pub(super) fn preview_text(&self) -> Option<String> {
+        match &self.shown.as_ref()?.report {
+            Ok(report) => Some(describe(report)),
+            Err(reason) => Some(reason.clone()),
+        }
+    }
+}
+
+impl Default for PlaceWindow {
+    fn default() -> Self {
+        PlaceWindow::new(MacroLibrary::user())
+    }
+}
+
+/// The preview line: what a placement will do.
+pub(crate) fn describe(report: &Report) -> String {
+    let tags: Vec<String> = report.tags.iter().map(|t| t.to_string()).collect();
+    let mut text = if tags.is_empty() {
+        "No devices".to_owned()
+    } else {
+        format!("Takes {}", tags.join(", "))
+    };
+    if !report.kept_wire_numbers.is_empty() {
+        text += &format!(" · wire numbers {}", report.kept_wire_numbers.join(", "));
+    } else if report.cleared_wires > 0 {
+        text += &format!(" · {} wires without a number", report.cleared_wires);
+    }
+    if !report.clashes.is_empty() {
+        text += &format!(" · already used: {}", report.clashes.join(", "));
+    }
+    text
+}
+
+impl NovoApp {
+    /// `macro.save`: asks for a name and stores the selection as a macro.
+    pub(super) fn open_macro_save(&mut self, name: Option<&str>) {
+        let selection = self.selection();
+        if selection.is_empty() {
+            self.message(Level::Info, "Select the circuit to save as a macro first");
+            return;
+        }
+        let hint = name
+            .map(str::trim)
+            .filter(|n| !n.is_empty())
+            .map(str::to_owned)
+            .unwrap_or_else(|| self.suggested_macro_name(&selection));
+        self.wb.macro_save = Some(SaveDraft {
+            name: hint,
+            description: String::new(),
+            error: None,
+            focused: false,
+        });
+    }
+
+    /// The description of the first selected device, or `macro`.
+    fn suggested_macro_name(&self, selection: &[AnyId]) -> String {
+        let Some(project) = self.backend.document().map(|d| d.project()) else {
+            return "macro".into();
+        };
+        selection
+            .iter()
+            .filter_map(|id| match id {
+                AnyId::Symbol(s) => project.symbol(*s),
+                _ => None,
+            })
+            .filter_map(|s| match s.role {
+                novo_core::SymbolRole::Device { device, .. } => project.device(device),
+                _ => None,
+            })
+            .map(|d| d.description.trim().to_owned())
+            .find(|d| !d.is_empty())
+            .unwrap_or_else(|| "macro".into())
+    }
+
+    pub(super) fn macro_save_dialog(&mut self, ctx: &egui::Context) {
+        let Some(mut draft) = self.wb.macro_save.take() else {
+            return;
+        };
+        let mut save = false;
+        let modal = egui::Modal::new(egui::Id::new("macro_save")).show(ctx, |ui| {
+            ui.set_width(380.0);
+            ui.heading("Save as macro");
+            ui.weak("Keeps the selected circuit in your library, to place on any page.");
+            ui.add_space(8.0);
+            ui.label("Name");
+            let text = ui.add(
+                egui::TextEdit::singleline(&mut draft.name)
+                    .hint_text("Motor starter")
+                    .desired_width(f32::INFINITY),
+            );
+            if !draft.focused {
+                text.request_focus();
+                draft.focused = true;
+            }
+            if text.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                save = true;
+            }
+            ui.add_space(6.0);
+            ui.label("Description");
+            ui.add(egui::TextEdit::singleline(&mut draft.description).desired_width(f32::INFINITY));
+            if let Some(error) = &draft.error {
+                ui.add_space(4.0);
+                ui.colored_label(ui.visuals().error_fg_color, error);
+            }
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(!draft.name.trim().is_empty(), egui::Button::new("Save"))
+                    .clicked()
+                {
+                    save = true;
+                }
+                ui.weak("Enter saves · Esc cancels");
+            });
+        });
+        if modal.should_close() {
+            return;
+        }
+        if save {
+            self.submit_macro_save(draft);
+        } else {
+            self.wb.macro_save = Some(draft);
+        }
+    }
+
+    /// Captures the selection and writes it to the library. On a refusal
+    /// the window stays, saying why.
+    pub(crate) fn submit_macro_save(&mut self, mut draft: SaveDraft) {
+        let name = draft.name.trim().to_owned();
+        let result = self.save_selection_as_macro(&name, draft.description.trim());
+        match result {
+            Ok(path) => self.message(Level::Info, format!("Saved macro {path}")),
+            Err(reason) => {
+                draft.error = Some(reason);
+                self.wb.macro_save = Some(draft);
+            }
+        }
+    }
+
+    fn save_selection_as_macro(&mut self, name: &str, description: &str) -> Result<String, String> {
+        let selection = self.selection();
+        let project = self
+            .backend
+            .document()
+            .map(|d| d.project())
+            .ok_or("No project is open")?;
+        let definition = macro_place::capture(project, name, description, &selection)
+            .map_err(|e| e.to_string())?;
+        let library = self
+            .wb
+            .macro_place
+            .library
+            .as_ref()
+            .ok_or("There is no macro folder on this computer")?;
+        let file = MacroFile::new(definition).with_author(self.settings.initials.clone());
+        library.save("", &file).map_err(|e| e.to_string())
+    }
+
+    /// `macro.place`: opens the window that picks a macro and previews it.
+    pub(super) fn open_macro_place(&mut self, query: Option<&str>) {
+        let win = &mut self.wb.macro_place;
+        win.status.clear();
+        if let Some(query) = query {
+            win.query = query.trim().to_owned();
+        }
+        if !win.started {
+            win.started = true;
+            if let Some(Err(e)) = win.library.as_ref().map(|l| l.install_starters()) {
+                win.status = format!("Starter macros: {e}");
+            }
+        }
+        win.open = true;
+    }
+
+    pub(super) fn macro_place_window(&mut self, ctx: &egui::Context) {
+        if !self.wb.macro_place.open {
+            return;
+        }
+        let page = self.current_page;
+        // Recompute the preview when the pick, the options or the drawing
+        // changed; the clone behind it is not paid for on every frame.
+        if let (Some(project), Some(page)) = (self.backend.document().map(|d| d.project()), page) {
+            let win = &mut self.wb.macro_place;
+            if let Some(path) = win.selected.clone() {
+                let key = (
+                    path.clone(),
+                    project.revision(),
+                    win.keep_numbers,
+                    win.values.clone(),
+                );
+                if win.shown.as_ref().is_none_or(|s| s.key != key) {
+                    let loaded = win
+                        .library
+                        .as_ref()
+                        .ok_or_else(|| "No macro folder".to_owned())
+                        .and_then(|l| l.definition_for_project(&path).map_err(|e| e.to_string()));
+                    win.shown = loaded.ok().map(|definition| {
+                        let origin = macro_place::free_origin(project, page, PLACE_GAP);
+                        let report = macro_place::preview(
+                            project,
+                            &definition,
+                            page,
+                            origin,
+                            &win.options(),
+                        )
+                        .map_err(|e| e.to_string());
+                        Shown {
+                            key,
+                            definition,
+                            report,
+                        }
+                    });
+                }
+            }
+        }
+        let mut open = true;
+        let mut pick: Option<String> = None;
+        let mut place = false;
+        let can_place = page.is_some();
+        let win = &mut self.wb.macro_place;
+        let entries = win.entries();
+        egui::Window::new("Place macro")
+            .open(&mut open)
+            .default_size([420.0, 440.0])
+            .show(ctx, |ui| {
+                ui.add(
+                    egui::TextEdit::singleline(&mut win.query)
+                        .hint_text("Search macros")
+                        .desired_width(f32::INFINITY),
+                );
+                ui.add_space(4.0);
+                egui::ScrollArea::vertical()
+                    .max_height(180.0)
+                    .show(ui, |ui| {
+                        if entries.is_empty() {
+                            ui.weak("No macros. Select a circuit and use Save as macro.");
+                        }
+                        for entry in &entries {
+                            let selected = win.selected.as_deref() == Some(entry.path.as_str());
+                            let label = if entry.description.is_empty() {
+                                entry.name.clone()
+                            } else {
+                                format!("{} · {}", entry.name, entry.description)
+                            };
+                            if ui.selectable_label(selected, label).clicked() {
+                                pick = Some(entry.path.clone());
+                            }
+                        }
+                    });
+                ui.separator();
+                match &win.shown {
+                    None if win.selected.is_some() => {
+                        ui.weak("This macro could not be read.");
+                    }
+                    None => {
+                        ui.weak("Pick a macro to see what it will do.");
+                    }
+                    Some(shown) => {
+                        for parameter in &shown.definition.parameters {
+                            if let Some((_, value)) =
+                                win.values.iter_mut().find(|(n, _)| *n == parameter.name)
+                            {
+                                ui.horizontal(|ui| {
+                                    ui.label(&parameter.name);
+                                    match value {
+                                        Value::Float(v) => {
+                                            ui.add(egui::DragValue::new(v).speed(0.1));
+                                        }
+                                        Value::Int(v) => {
+                                            ui.add(egui::DragValue::new(v));
+                                        }
+                                        Value::Bool(v) => {
+                                            ui.checkbox(v, "");
+                                        }
+                                        Value::Text(v) => {
+                                            ui.text_edit_singleline(v);
+                                        }
+                                    }
+                                    if !parameter.description.is_empty() {
+                                        ui.weak(&parameter.description);
+                                    }
+                                });
+                            }
+                        }
+                        ui.checkbox(&mut win.keep_numbers, "Keep the macro's wire numbers");
+                        match &shown.report {
+                            Ok(report) => {
+                                ui.label(describe(report));
+                            }
+                            Err(reason) => {
+                                ui.colored_label(ui.visuals().error_fg_color, reason);
+                            }
+                        }
+                    }
+                }
+                if !win.status.is_empty() {
+                    ui.weak(&win.status);
+                }
+                ui.add_space(6.0);
+                let ready = can_place && win.shown.as_ref().is_some_and(|s| s.report.is_ok());
+                if ui
+                    .add_enabled(ready, egui::Button::new("Place"))
+                    .on_disabled_hover_text("Open a page and pick a macro")
+                    .clicked()
+                {
+                    place = true;
+                }
+            });
+        if let Some(path) = pick {
+            self.wb.macro_place.select(&path);
+        }
+        if place {
+            self.place_picked_macro();
+        }
+        if !open {
+            self.wb.macro_place.open = false;
+        }
+    }
+
+    /// Places what the window previewed, as one undo step, and selects it.
+    pub(super) fn place_picked_macro(&mut self) {
+        let Some(page) = self.current_page else {
+            return;
+        };
+        let Some(shown) = self.wb.macro_place.shown.take() else {
+            return;
+        };
+        let options = self.wb.macro_place.options();
+        let name = shown.definition.name.clone();
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let origin = macro_place::free_origin(doc.project(), page, PLACE_GAP);
+        let result = doc.transact("Place macro", |tx| {
+            macro_place::place_macro(tx, shown.definition, page, origin, &options)
+        });
+        match result {
+            Ok((placed, changes)) => {
+                let ids: Vec<AnyId> = doc
+                    .project()
+                    .block_instance(placed.instance)
+                    .map(|i| i.members.iter().map(|m| m.actual).collect())
+                    .unwrap_or_default();
+                self.changed_outside_canvas(&changes);
+                if let Some(view) = self.canvas.schematic() {
+                    view.select_ids(&ids);
+                }
+                self.message(
+                    Level::Info,
+                    format!("Placed {name} · {}", describe(&placed.report)),
+                );
+                self.wb.macro_place.open = false;
+            }
+            Err(e) => {
+                self.wb.macro_place.status = format!("Could not place: {e}");
+                self.message(Level::Error, format!("Could not place {name}: {e}"));
+            }
+        }
+    }
+}

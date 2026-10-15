@@ -375,6 +375,26 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["copy", "clone"],
         Needs::Selection,
     ),
+    verb(
+        cmd(
+            "macro.save",
+            "Save selection as macro",
+            "Edit",
+            &["macro", "block", "reuse", "template", "library"],
+            Needs::Selection,
+        ),
+        &["save macro"],
+    ),
+    verb(
+        cmd(
+            "macro.place",
+            "Place macro",
+            "Edit",
+            &["macro", "block", "insert", "starter", "library"],
+            Needs::Page,
+        ),
+        &["place macro", "macro"],
+    ),
     cmd(
         "edit.select_all",
         "Select all on page",

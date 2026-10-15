@@ -1,7 +1,9 @@
 //! Placing a macro: tags, wire numbers, preview and undo.
 
 use novo_core::*;
-use novo_workflow::macro_place::{PlaceOptions, WireNumbers, place_macro, preview};
+use novo_workflow::macro_place::{
+    PlaceOptions, WireNumbers, capture, free_origin, place_macro, preview, selection_origin,
+};
 
 fn tag(text: &str) -> DeviceTag {
     DeviceTag::parse(text).unwrap()
@@ -170,4 +172,55 @@ fn a_different_definition_under_the_same_name_is_refused() {
         place_macro(tx, other, page, Point::default(), &PlaceOptions::default())
     });
     assert!(matches!(result, Err(ModelError::DuplicateBlock(_))));
+}
+
+#[test]
+fn capture_leaves_the_project_alone_and_places_elsewhere() {
+    let (mut doc, page) = target();
+    let items: Vec<AnyId> = doc.project().symbols().map(|s| s.id.into()).collect();
+    let before = doc.project().to_json();
+    let def = capture(doc.project(), "pair", "Two symbols", &items).unwrap();
+    assert_eq!(doc.project().to_json(), before);
+    assert_eq!(def.name, "pair");
+    assert_eq!(def.description, "Two symbols");
+    assert_eq!(
+        selection_origin(doc.project(), &items),
+        Point::new(0.0, 0.0)
+    );
+
+    let origin = free_origin(doc.project(), page, 20.0);
+    assert_eq!(origin, Point::new(20.0, 0.0));
+    let (placed, _) = doc
+        .transact("Place macro", |tx| {
+            place_macro(tx, def, page, origin, &PlaceOptions::default())
+        })
+        .unwrap();
+    assert_eq!(placed.report.tags, vec![tag("=A1-Q2")]);
+}
+
+#[test]
+fn capture_refuses_terminals_and_an_empty_page_has_the_origin() {
+    let mut doc = Document::default();
+    let (_page, _) = doc
+        .transact("Draw", |tx| {
+            let page = tx.add_page("1")?;
+            let strip = tx.add_terminal_strip(tag("=A1-X1"))?;
+            let t = tx.add_terminal(strip, "1")?;
+            tx.place_symbol(
+                page,
+                "terminal",
+                Placement::at(Point::new(5.0, 5.0)),
+                pins(),
+                SymbolRole::Terminal { terminals: vec![t] },
+            )?;
+            Ok(page)
+        })
+        .unwrap();
+    let items: Vec<AnyId> = doc.project().symbols().map(|s| s.id.into()).collect();
+    assert!(capture(doc.project(), "x", "", &items).is_err());
+    let (empty, _) = doc.transact("Page", |tx| tx.add_page("2")).unwrap();
+    assert_eq!(
+        free_origin(doc.project(), empty, 20.0),
+        Point::new(0.0, 0.0)
+    );
 }

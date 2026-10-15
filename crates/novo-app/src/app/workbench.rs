@@ -58,6 +58,10 @@ pub(crate) struct Workbench {
     pub(super) preferences: bool,
     /// The Parts window (browser and one-click import), while open.
     pub(super) parts: Option<super::parts::PartsWindow>,
+    /// The Save as macro window, while it is open.
+    pub(super) macro_save: Option<super::macro_actions::SaveDraft>,
+    /// The Place macro window.
+    pub(super) macro_place: super::macro_actions::PlaceWindow,
     /// The Project settings window (drawing standard) is open.
     pub(super) project_settings: bool,
     /// The Issue revision window, while it is open.
@@ -136,6 +140,8 @@ impl Default for Workbench {
             renumber: None,
             preferences: false,
             parts: None,
+            macro_save: None,
+            macro_place: Default::default(),
             project_settings: false,
             issue: None,
             compare: None,
@@ -192,6 +198,8 @@ const APP_COMMANDS: &[&str] = &[
     "edit.mirror",
     "edit.delete",
     "edit.duplicate",
+    "macro.save",
+    "macro.place",
     "edit.rename",
     "edit.escape",
     "nav.next_page",
@@ -475,6 +483,8 @@ impl NovoApp {
             "edit.rotate" => self.editor_key(EditorKey::Rotate),
             "edit.mirror" => self.editor_key(EditorKey::Mirror),
             "edit.duplicate" => self.duplicate_selection(),
+            "macro.save" => self.open_macro_save(argument),
+            "macro.place" => self.open_macro_place(argument),
             "edit.delete" if self.declines_proposal() => self.dismiss_proposal(),
             "edit.delete" => self.editor_key(EditorKey::Delete),
             "nav.next_page" | "nav.previous_page" => {

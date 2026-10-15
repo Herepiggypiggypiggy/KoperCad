@@ -118,6 +118,12 @@ pub const DUTCH: &[Aliases] = &[
     nl("edit.paste", &[], &["plakken"]),
     nl("edit.paste_keep_tags", &[], &["plakken met originele tags"]),
     nl("edit.duplicate", &[], &["dupliceren", "kopie"]),
+    nl("macro.save", &["macro opslaan"], &["opslaan als macro"]),
+    nl(
+        "macro.place",
+        &["macro plaatsen"],
+        &["plaats macro", "macro"],
+    ),
     nl("edit.select_all", &[], &["alles selecteren"]),
     nl("edit.delete", &[], &["verwijderen", "wissen"]),
     nl("edit.rename", &[], &["hernoemen", "tag wijzigen"]),
