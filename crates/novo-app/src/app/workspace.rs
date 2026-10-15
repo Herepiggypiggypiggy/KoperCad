@@ -75,8 +75,8 @@ impl Workspace {
             Workspace::Schematic => "Sch",
             Workspace::Cabinet => "Cab",
             Workspace::View3d => "3D",
-            Workspace::Reports => "Rep",
-            Workspace::Commissioning => "Com",
+            Workspace::Reports => "Rpt",
+            Workspace::Commissioning => "Cmn",
         }
     }
 
