@@ -11,9 +11,14 @@ novo-core.workspace = true
 novo-canvas = { path = "../novo-canvas", default-features = false, features = ["model"] }
 novo-parts.workspace = true
 thiserror.workspace = true
+# Polygon triangulation (port of Mapbox earcut), pure Rust.
+earcutr = "0.5"
+# Per-user cache folder.
+dirs.workspace = true
 
 [dev-dependencies]
 novo-tests = { path = "../novo-tests" }
+tempfile.workspace = true
 
 [lints]
 workspace = true
