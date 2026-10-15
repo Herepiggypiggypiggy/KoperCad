@@ -62,8 +62,7 @@ mod suggest;
 
 pub use check::{Issue, IssueKind, Severity, check};
 pub use earth::{
-    PE_OVERRIDE, earthed_terminals, has_pe_override, is_earth_symbol, mark_earthed,
-    reset_pe_override, toggle_pe,
+    earthed_terminals, has_pe_override, is_earth_symbol, mark_earthed, reset_pe_override, toggle_pe,
 };
 pub use geometry::{redraw, symbol_length, symbol_pins};
 pub use naming::{

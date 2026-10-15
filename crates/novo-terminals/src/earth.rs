@@ -8,29 +8,22 @@
 //! reports a mismatch.
 
 use novo_core::{
-    Endpoint, Netlist, PotentialKind, Project, Result, TerminalId, TerminalKind, Tx, Value,
+    Endpoint, Netlist, PeOverride, PotentialKind, Project, Result, TerminalId, TerminalKind, Tx,
 };
 
 use crate::strip::set_kind;
 
-/// Property that marks a PE state set by hand (DESIGN §5 override): the
-/// automatic marking leaves such a terminal alone until it is reset.
-pub const PE_OVERRIDE: &str = "pe_override";
-
-/// Whether a terminal's PE state was set by hand.
+/// Whether a terminal's PE state was set by hand ([`PeOverride`]).
 pub fn has_pe_override(project: &Project, terminal: TerminalId) -> bool {
     project
         .terminal(terminal)
-        .is_some_and(|t| t.properties.contains_key(PE_OVERRIDE))
+        .is_some_and(|t| !t.pe_override.is_auto())
 }
 
 /// Gives the terminals back to the automatic rule. Does not change their
 /// kind; the next [`mark_earthed`] decides.
 pub fn reset_pe_override(tx: &mut Tx<'_>, terminals: &[TerminalId]) -> Result<()> {
-    for &t in terminals {
-        tx.set_property(t, PE_OVERRIDE, None)?;
-    }
-    Ok(())
+    tx.set_terminal_pe(terminals, PeOverride::Auto)
 }
 
 /// Whether a symbol key is an earth/ground symbol that earths its net.
@@ -61,7 +54,7 @@ pub fn earthed_terminals(project: &Project, netlist: &Netlist) -> Vec<TerminalId
         .collect();
     let mut found: Vec<TerminalId> = project
         .terminals()
-        .filter(|t| t.kind == TerminalKind::Feedthrough && !t.properties.contains_key(PE_OVERRIDE))
+        .filter(|t| t.kind == TerminalKind::Feedthrough && t.pe_override.is_auto())
         .filter(|t| {
             project.symbols_of_terminal(t.id).iter().any(|s| {
                 (0..s.pins.len()).any(|pin| {
@@ -105,7 +98,12 @@ pub fn toggle_pe(tx: &mut Tx<'_>, terminals: &[TerminalId]) -> Result<TerminalKi
     };
     for &t in terminals {
         set_kind(tx, t, kind)?;
-        tx.set_property(t, PE_OVERRIDE, Some(Value::Bool(true)))?;
     }
+    let mode = if kind == TerminalKind::ProtectiveEarth {
+        PeOverride::ForcedPe
+    } else {
+        PeOverride::ForcedNotPe
+    };
+    tx.set_terminal_pe(terminals, mode)?;
     Ok(kind)
 }

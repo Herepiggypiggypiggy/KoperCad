@@ -81,10 +81,11 @@ pub use document::{DEFAULT_HISTORY_LIMIT, Document, Outcome};
 pub use entity::{
     BlockDefinition, BlockInstance, BlockMember, BlockOverride, BlockParameter, BlockSource, Cable,
     CableCore, Device, DeviceKind, Dismissal, Endpoint, JoinLink, Junction, Page, PageFormat,
-    PageFreeze, PageKind, PaperSize, Part, Pin, PinFeed, PinRef, Potential, PotentialKind,
-    PotentialRules, PotentialSet, PotentialSpec, PotentialSystem, ProjectInfo, ProjectRules,
-    Properties, Revision, SameName, Structure, SymbolInstance, SymbolKey, SymbolRole, Terminal,
-    TerminalKind, TerminalRules, Text, TextAnchor, TextContent, TextPlacement, Value, Wire,
+    PageFreeze, PageKind, PaperSize, Part, PeOverride, Pin, PinFeed, PinRef, Potential,
+    PotentialKind, PotentialRules, PotentialSet, PotentialSpec, PotentialSystem, ProjectInfo,
+    ProjectRules, Properties, Revision, SameName, Structure, SymbolInstance, SymbolKey, SymbolRole,
+    Terminal, TerminalKind, TerminalRules, Text, TextAnchor, TextContent, TextPlacement, Value,
+    Wire,
 };
 pub use error::{ModelError, Result};
 pub use geom::{Direction, Placement, Point, Rotation};
@@ -95,7 +96,7 @@ pub use id::{
     TerminalId, TextId, WireId,
 };
 pub use json::JSON_FORMAT_VERSION;
-pub use project::{CONTENTS_GENERATOR, PageContents, Project, RATED_CURRENT_A, natural_cmp};
+pub use project::{CONTENTS_GENERATOR, PageContents, Panel, Project, RATED_CURRENT_A, natural_cmp};
 pub use record::{ChangeSet, Entity, Op, Record, Transaction};
 pub use search::{Match, SearchHit};
 pub use tag::{Aspect, DeviceTag, TagError, split_code};

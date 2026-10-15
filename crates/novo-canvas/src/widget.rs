@@ -319,6 +319,12 @@ pub struct CanvasOutput {
     pub selection_changed: bool,
     /// World position of a primary click, after snapping.
     pub clicked: Option<Snapped>,
+    /// What a primary click hit, with the label when it landed on text, so
+    /// the editor can select just a component's text.
+    pub clicked_hit: Option<Hit>,
+    /// World position of a primary double click, after snapping: on empty
+    /// canvas it starts a wire.
+    pub double_clicked: Option<Snapped>,
     /// World position of a right click that did not turn into a pan (moved
     /// less than [`RIGHT_PAN_THRESHOLD`]), after snapping. Open context menus
     /// on this rather than `response.secondary_clicked()`, whose click
@@ -542,11 +548,17 @@ impl CanvasView {
 
         let mut selection_changed = false;
         let mut clicked = None;
+        let mut clicked_hit = None;
+        let mut double_clicked = None;
         let (shift, command) = ui.ctx().input(|i| (i.modifiers.shift, i.modifiers.command));
         let op = SelectOp::from_modifiers(shift, command);
 
+        if response.double_clicked_by(egui::PointerButton::Primary) {
+            double_clicked = cursor;
+        }
         if response.clicked_by(egui::PointerButton::Primary) {
             clicked = cursor;
+            clicked_hit = cursor_raw.and_then(|w| scene.pick(w, tol, self.viewport.zoom));
             if self.interaction.select
                 && let Some(w) = cursor_raw
             {
@@ -640,6 +652,8 @@ impl CanvasView {
             hit,
             selection_changed,
             clicked,
+            clicked_hit,
+            double_clicked,
             context_click: context_click.then_some(cursor).flatten(),
             escape,
             hovered_marks,

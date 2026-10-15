@@ -60,6 +60,20 @@ pub enum WiringMode {
     Lines,
 }
 
+/// What happens to the wires between facing free pins after a drop
+/// (DESIGN.md §2). Joining pins that touch, and splitting a wire a pin lands
+/// in, happen in every mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ConnectMode {
+    /// Draw them with the drop, as one undo step.
+    #[default]
+    Draw,
+    /// Propose each one; Enter accepts, Delete declines.
+    Ask,
+    /// Draw and propose nothing.
+    Never,
+}
+
 /// Moving the selection: it follows the pointer until the next click.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MoveTool {
@@ -249,6 +263,7 @@ pub struct Editor {
     /// The terminal strip in use, once the user placed or chose one.
     pub strip: Option<DeviceId>,
     wire_mode: WiringMode,
+    connect: ConnectMode,
     /// The page and pick radius of the last pointer move, for keys that act
     /// at the end of the wire in progress.
     hovered: Option<(PageId, f64)>,
@@ -283,6 +298,7 @@ impl Editor {
             numbering: Numbering::default(),
             strip: None,
             wire_mode: WiringMode::default(),
+            connect: ConnectMode::default(),
             hovered: None,
             notice: None,
             link_hint: None,
@@ -427,6 +443,36 @@ impl Editor {
         true
     }
 
+    /// What dropping a symbol does about facing free pins.
+    pub fn connect_mode(&self) -> ConnectMode {
+        self.connect
+    }
+
+    /// Chooses the facing-pin behavior (a per-user setting).
+    pub fn set_connect_mode(&mut self, mode: ConnectMode) {
+        self.connect = mode;
+        if mode != ConnectMode::Ask {
+            self.clear_proposals();
+        }
+    }
+
+    /// Draws the facing wires of `symbols` inside the transaction that
+    /// dropped them, when the mode is [`ConnectMode::Draw`]. A line that
+    /// cannot be drawn is left out, not an error.
+    fn draw_facing(&self, tx: &mut novo_core::Tx<'_>, symbols: &[SymbolId]) {
+        if !self.auto_connect || self.connect != ConnectMode::Draw {
+            return;
+        }
+        let placed: Vec<SymbolInstance> = symbols
+            .iter()
+            .filter_map(|&s| tx.project().symbol(s).cloned())
+            .collect();
+        let found = edit::facing_wires(tx.project(), &placed, &|s| self.outline(s));
+        for f in found {
+            let _ = edit::accept(tx, &f);
+        }
+    }
+
     /// How the wire tool turns clicks into a route.
     pub fn wire_mode(&self) -> WiringMode {
         self.wire_mode
@@ -559,6 +605,7 @@ impl Editor {
                 };
                 ids.push(edit::place(tx, page, &symbol, placement, &options)?);
             }
+            self.draw_facing(tx, &ids);
             Ok(ids)
         });
         let ids = result.as_ref().ok().map(|(ids, _)| ids.clone());
@@ -797,6 +844,7 @@ impl Editor {
                     }
                     if self.auto_connect {
                         edit::settle(tx, &edit::symbols_in(&m.ids))?;
+                        self.draw_facing(tx, &edit::symbols_in(&m.ids));
                     }
                     Ok(())
                 });
@@ -860,7 +908,9 @@ impl Editor {
             }
         }
         let result = doc.transact(format!("Place {}", symbol.name), |tx| {
-            edit::place(tx, page, &symbol, placement, &options)
+            let id = edit::place(tx, page, &symbol, placement, &options)?;
+            self.draw_facing(tx, &[id]);
+            Ok(id)
         });
         let placed = result.as_ref().ok().map(|(id, _)| AnyId::Symbol(*id));
         if let Ok((id, _)) = &result {
@@ -883,7 +933,7 @@ impl Editor {
 
     /// Proposes the facing-pin wires of symbols just dropped.
     fn propose(&mut self, doc: &Document, symbols: &[SymbolId]) {
-        if !self.auto_connect {
+        if !self.auto_connect || self.connect != ConnectMode::Ask {
             return;
         }
         let project = doc.project();
@@ -891,7 +941,7 @@ impl Editor {
             .iter()
             .filter_map(|&s| project.symbol(s).cloned())
             .collect();
-        self.proposals = edit::facing_wires(project, &placed, &|s| self.body(s));
+        self.proposals = edit::facing_wires(project, &placed, &|s| self.outline(s));
         self.proposal = 0;
         self.held = None;
     }
@@ -908,6 +958,63 @@ impl Editor {
             .iter()
             .fold(corners[0], |m, c| Point::new(m.x.max(c.x), m.y.max(c.y)));
         Some((min, max))
+    }
+
+    /// The drawn lines of a placed symbol on its page, as segments: what a
+    /// proposed wire may not run through. Curves are flattened; text and the
+    /// empty space inside the bounding box do not count.
+    pub fn outline(&self, sym: &SymbolInstance) -> Option<Vec<(Point, Point)>> {
+        use novo_symbols::Graphic;
+        let def = self.catalog.get(&sym.symbol.0)?;
+        let at = |p: [f64; 2]| sym.placement.apply(Point::new(p[0], p[1]));
+        let mut out = Vec::new();
+        let mut chain = |pts: Vec<[f64; 2]>, closed: bool| {
+            for w in pts.windows(2) {
+                out.push((at(w[0]), at(w[1])));
+            }
+            if closed && pts.len() > 2 {
+                out.push((at(pts[pts.len() - 1]), at(pts[0])));
+            }
+        };
+        let curve = |c: [f64; 2], rx: f64, ry: f64, a0: f64, a1: f64| -> Vec<[f64; 2]> {
+            const STEPS: usize = 24;
+            (0..=STEPS)
+                .map(|i| {
+                    let a = (a0 + (a1 - a0) * i as f64 / STEPS as f64).to_radians();
+                    [c[0] + rx * a.cos(), c[1] + ry * a.sin()]
+                })
+                .collect()
+        };
+        for g in &def.graphics {
+            match g {
+                Graphic::Line { from, to, .. } => chain(vec![*from, *to], false),
+                Graphic::Polyline { points, closed, .. } => chain(points.clone(), *closed),
+                Graphic::Rect { at: a, size, .. } => chain(
+                    vec![
+                        *a,
+                        [a[0] + size[0], a[1]],
+                        [a[0] + size[0], a[1] + size[1]],
+                        [a[0], a[1] + size[1]],
+                    ],
+                    true,
+                ),
+                Graphic::Circle { center, r, .. } => {
+                    chain(curve(*center, *r, *r, 0.0, 360.0), false)
+                }
+                Graphic::Ellipse { center, rx, ry, .. } => {
+                    chain(curve(*center, *rx, *ry, 0.0, 360.0), false);
+                }
+                Graphic::Arc {
+                    center,
+                    r,
+                    start,
+                    end,
+                    ..
+                } => chain(curve(*center, *r, *r, *start, *end), false),
+                Graphic::Text { .. } => {}
+            }
+        }
+        Some(out)
     }
 
     /// The facing-pin wires the last drop proposes.
@@ -1739,8 +1846,11 @@ impl Editor {
         if !self.proposals.is_empty() {
             preview.proposals = self.proposals.iter().map(|f| (f.a, f.b)).collect();
             preview.current = Some(self.proposal.min(self.proposals.len() - 1));
-        } else if matches!(self.tool, Tool::Place(_) | Tool::Move(_)) && self.auto_connect {
-            preview.proposals = edit::facing_wires(project, &preview.symbols, &|s| self.body(s))
+        } else if matches!(self.tool, Tool::Place(_) | Tool::Move(_))
+            && self.auto_connect
+            && self.connect != ConnectMode::Never
+        {
+            preview.proposals = edit::facing_wires(project, &preview.symbols, &|s| self.outline(s))
                 .into_iter()
                 .map(|f| (f.a, f.b))
                 .collect();

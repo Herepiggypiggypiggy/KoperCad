@@ -206,6 +206,29 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["corners", "lines"],
     ),
+    // C: draw a line; every wire it touches becomes a core of one cable.
+    cmd(
+        "tool.cable",
+        "Cable",
+        "Draw",
+        &["cable", "cores", "bundle"],
+        Needs::Page,
+    ),
+    // Only while a wire is being drawn (Keymap::resolve_while_wiring).
+    cmd(
+        "wire.end_on_part",
+        "End wire on part",
+        "Draw",
+        &["terminate", "end wire", "finish on part"],
+        Needs::Page,
+    ),
+    cmd(
+        "wire.next_pin",
+        "Next connection point",
+        "Draw",
+        &["cycle pin", "next pin", "next connection"],
+        Needs::Page,
+    ),
     cmd("edit.rotate", "Rotate", "Draw", &["turn"], Needs::Selection),
     cmd("edit.mirror", "Mirror", "Draw", &["flip"], Needs::Selection),
     // PLC and I/O (docs/design/plc.md section 4): the command surface only

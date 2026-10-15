@@ -1622,3 +1622,44 @@ fn double_clicking_a_tag_opens_a_rename_box() {
     );
     assert!(d.app.wb.queued.is_empty(), "no properties command queued");
 }
+
+#[test]
+fn a_held_place_key_with_repeats_opens_only_the_wheel() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let place = egui::Key::I;
+    let repeat = egui::Event::Key {
+        key: place,
+        physical_key: None,
+        pressed: true,
+        repeat: true,
+        modifiers: egui::Modifiers::NONE,
+    };
+    frame_at(
+        &mut d,
+        10.0,
+        vec![egui::Event::PointerMoved(egui::pos2(800.0, 450.0))],
+    );
+    frame_at(&mut d, 10.1, vec![key_event(place, true)]);
+    frame_at(
+        &mut d,
+        10.2,
+        vec![repeat.clone(), egui::Event::Text("i".into())],
+    );
+    frame_at(
+        &mut d,
+        10.3,
+        vec![repeat.clone(), egui::Event::Text("i".into())],
+    );
+    frame_at(&mut d, 10.4, vec![repeat, egui::Event::Text("i".into())]);
+    assert!(d.app.wb.wheel.is_some(), "repeats do not delay the wheel");
+    frame_at(&mut d, 10.5, vec![key_event(place, false)]);
+    assert!(d.app.wb.wheel.is_some());
+    assert!(
+        !d.app.wb.field.is_open(),
+        "the part search does not open under the wheel"
+    );
+}

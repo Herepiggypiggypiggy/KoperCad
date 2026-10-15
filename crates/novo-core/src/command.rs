@@ -9,9 +9,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::entity::{
-    BlockOverride, BlockParameter, CableCore, DeviceKind, Endpoint, PageFormat, PageKind, Pin,
-    PotentialKind, PotentialSet, PotentialSpec, ProjectInfo, SymbolKey, SymbolRole, TextContent,
-    TextPlacement, Value,
+    BlockOverride, BlockParameter, CableCore, DeviceKind, Endpoint, PageFormat, PageKind,
+    PeOverride, Pin, PotentialKind, PotentialSet, PotentialSpec, ProjectInfo, SymbolKey,
+    SymbolRole, TextContent, TextPlacement, Value,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::{Placement, Point};
@@ -42,6 +42,14 @@ pub enum Command {
         kind: PageKind,
         #[serde(default)]
         format: PageFormat,
+        /// Page group (`=10D41`) and panel (`+K1B1G1`); see [`Page::structure`].
+        #[serde(default)]
+        structure: DeviceTag,
+    },
+    /// Moves a page into another page group and/or panel.
+    SetPageStructure {
+        page: PageId,
+        structure: DeviceTag,
     },
     AddDevice {
         tag: DeviceTag,
@@ -190,6 +198,12 @@ pub enum Command {
         terminal: TerminalId,
         potential: Option<PotentialId>,
     },
+    /// Sets whether the terminals are PE terminals by rule or by hand
+    /// ("Toggle PE terminal"); see [`PeOverride`].
+    SetTerminalPe {
+        terminals: Vec<TerminalId>,
+        mode: PeOverride,
+    },
     AddPotential {
         name: String,
         #[serde(default)]
@@ -305,6 +319,7 @@ impl Command {
             Command::SetProjectInfo { .. } => "Edit project info".into(),
             Command::DeletePage { .. } => "Delete page".into(),
             Command::AddPage { .. } => "Add page".into(),
+            Command::SetPageStructure { .. } => "Move page to group or panel".into(),
             Command::AddDevice { .. } => "Add device".into(),
             Command::SetTag { .. } => "Rename device".into(),
             Command::PlaceSymbol { .. } => "Place symbol".into(),
@@ -325,6 +340,7 @@ impl Command {
             Command::FeedSystem { .. }
             | Command::SetPinFeed { .. }
             | Command::SetTerminalFeed { .. } => "Feed potential".into(),
+            Command::SetTerminalPe { .. } => "Toggle PE terminal".into(),
             Command::AddTerminal { .. } => "Add terminal".into(),
             Command::AddCable { .. } => "Add cable".into(),
             Command::AssignCore { .. } => "Assign cable core".into(),
@@ -368,14 +384,20 @@ impl Tx<'_> {
                 title,
                 kind,
                 format,
+                structure,
             } => {
                 let page = self.add_page(name)?;
                 self.update::<crate::Page>(page, |p| {
                     p.title = title;
                     p.kind = kind;
                     p.format = format;
+                    p.structure = structure;
                 })?;
                 page.into()
+            }
+            Command::SetPageStructure { page, structure } => {
+                self.update::<crate::Page>(page, |p| p.structure = structure)?;
+                return Ok(Vec::new());
             }
             Command::AddDevice {
                 tag,
@@ -514,6 +536,10 @@ impl Tx<'_> {
                     self.update::<crate::Potential>(id, |p| p.voltage = voltage)?;
                 }
                 id.into()
+            }
+            Command::SetTerminalPe { terminals, mode } => {
+                self.set_terminal_pe(&terminals, mode)?;
+                return Ok(Vec::new());
             }
             Command::AddTerminal { strip, name } => self.add_terminal(strip, name)?.into(),
             Command::AddCable { tag, cores } => self.add_cable(tag, cores)?.into(),

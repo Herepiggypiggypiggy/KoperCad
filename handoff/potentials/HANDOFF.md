@@ -1,10 +1,10 @@
 # Handoff: Potentials, PE and interruption points
 
-Merged: #239 (novo-terminals PE toggle/auto-PE), #240 (novo-xref interruption numbering). Branch `potentials-set-and-override`: manual PE toggle becomes an override (`pe_override` terminal property, DESIGN §5) plus `potential::set_feed_potential` in novo-editor (right-click feed, Set potential). Roster: coordination/threads.md.
+Merged: #239 (novo-terminals PE toggle/auto-PE), #240 (novo-xref interruption numbering). Branch `potentials-set-and-override`: manual PE toggle becomes an override (core `Terminal.pe_override`, #253) plus `potential::set_feed_potential` in novo-editor (right-click feed, Set potential). Roster: coordination/threads.md.
 
 Decisions
 - PE = `TerminalKind::ProtectiveEarth`; earthed net = PE/PEN potential defined on it or a pin of `iec/earth/earth` or `iec/earth/protective_earth` (chassis excluded).
-- `mark_earthed` only touches plain feed-through terminals without `pe_override`; the app runs it when a wire connects to ground (on demand, not every edit). `reset_pe_override` hands terminals back.
+- `mark_earthed` only touches plain feed-through terminals without `Terminal.pe_override`; the app runs it when a wire connects to ground (on demand, not every edit). `reset_pe_override` hands terminals back.
 - Menu placement is specced in DESIGN PR #238 (feed right-click: Set potential, terminal right-click: Toggle PE terminal / `pe`). App shell thread wires the menus.
 - Interruption names: whole numbers, lowest unused; an unnamed partner takes the other's name on link.
 

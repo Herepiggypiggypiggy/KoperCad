@@ -112,6 +112,19 @@ pub struct PageContents {
     pub wires: Vec<WireId>,
 }
 
+/// A panel: every page with the same location (`+K1B1G1`), whatever page
+/// group (`=10D41`) it is filed under. Those pages are one cabinet layout.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Panel {
+    /// The location levels only, e.g. `+K1B1G1`.
+    pub location: DeviceTag,
+    /// The page groups holding pages of the panel, in order; the empty
+    /// tag stands for pages in no group.
+    pub groups: Vec<DeviceTag>,
+    /// The panel's pages in reading order.
+    pub pages: Vec<PageId>,
+}
+
 /// The generator id of the contents list, the one generated page that
 /// opens the set rather than following the drawing.
 pub const CONTENTS_GENERATOR: &str = "toc";
@@ -125,23 +138,25 @@ pub(crate) fn page_cmp(a: &Page, b: &Page) -> Ordering {
         PageKind::Generated { .. } => 2,
         _ => 1,
     };
-    let levels = |a: &[String], b: &[String]| {
-        a.iter()
-            .zip(b)
-            .map(|(a, b)| natural_cmp(a, b))
-            .find(|o| o.is_ne())
-            .unwrap_or_else(|| a.len().cmp(&b.len()))
-    };
     section(a)
         .cmp(&section(b))
-        .then_with(|| levels(&a.structure.function, &b.structure.function))
-        .then_with(|| levels(&a.structure.location, &b.structure.location))
+        .then_with(|| levels_cmp(&a.structure.function, &b.structure.function))
+        .then_with(|| levels_cmp(&a.structure.location, &b.structure.location))
         .then_with(|| natural_cmp(&a.name, &b.name))
         .then(a.id.cmp(&b.id))
 }
 
 /// Property key for a rated current in amperes, on a part or a device.
 pub const RATED_CURRENT_A: &str = "rated_current_a";
+
+/// Compares tag levels one by one in natural order, shorter first.
+fn levels_cmp(a: &[String], b: &[String]) -> Ordering {
+    a.iter()
+        .zip(b)
+        .map(|(a, b)| natural_cmp(a, b))
+        .find(|o| o.is_ne())
+        .unwrap_or_else(|| a.len().cmp(&b.len()))
+}
 
 /// Compares strings so that embedded numbers sort by value: `2` before `10`.
 pub fn natural_cmp(a: &str, b: &str) -> Ordering {
@@ -1139,6 +1154,84 @@ impl Project {
         let mut pages: Vec<&Page> = self.pages.values().collect();
         pages.sort_by(|a, b| page_cmp(a, b));
         pages
+    }
+
+    /// The page groups (`=10D41`): the function levels of drawn pages and
+    /// of structure nodes, in natural order. Pages in no group are not
+    /// listed.
+    pub fn page_groups(&self) -> Vec<DeviceTag> {
+        let mut groups: Vec<DeviceTag> = self
+            .pages
+            .values()
+            .map(|p| &p.structure)
+            .chain(self.structures.values().map(|s| &s.tag))
+            .filter(|t| !t.function.is_empty())
+            .map(|t| DeviceTag {
+                function: t.function.clone(),
+                ..Default::default()
+            })
+            .collect();
+        groups.sort_by(|a, b| levels_cmp(&a.function, &b.function));
+        groups.dedup();
+        groups
+    }
+
+    /// The panels (locations) of the project, in natural order. A panel
+    /// exists once a page or a structure node has its location, so pages
+    /// in different page groups under the same location share one panel:
+    /// `=10D41+K1B1G1` and `=11D21+K1B1G1` are the same cabinet layout.
+    pub fn panels(&self) -> Vec<Panel> {
+        let mut locations: Vec<DeviceTag> = self
+            .pages
+            .values()
+            .map(|p| &p.structure)
+            .chain(self.structures.values().map(|s| &s.tag))
+            .filter(|t| !t.location.is_empty())
+            .map(|t| DeviceTag {
+                location: t.location.clone(),
+                ..Default::default()
+            })
+            .collect();
+        locations.sort_by(|a, b| levels_cmp(&a.location, &b.location));
+        locations.dedup();
+        let ordered = self.pages_in_order();
+        locations
+            .into_iter()
+            .map(|location| {
+                let pages: Vec<&Page> = ordered
+                    .iter()
+                    .copied()
+                    .filter(|p| p.structure.location == location.location)
+                    .collect();
+                let mut groups: Vec<DeviceTag> = pages
+                    .iter()
+                    .map(|p| DeviceTag {
+                        function: p.structure.function.clone(),
+                        ..Default::default()
+                    })
+                    .collect();
+                groups.dedup();
+                Panel {
+                    location,
+                    groups,
+                    pages: pages.iter().map(|p| p.id).collect(),
+                }
+            })
+            .collect()
+    }
+
+    /// The name for a new page in `structure`: one more than the highest
+    /// whole number among that group's and panel's page names (`1` for the
+    /// first).
+    pub fn next_page_name(&self, structure: &DeviceTag) -> String {
+        let highest = self
+            .pages
+            .values()
+            .filter(|p| p.structure.same_structure(structure))
+            .filter_map(|p| p.name.parse::<u32>().ok())
+            .max()
+            .unwrap_or(0);
+        (highest + 1).to_string()
     }
 
     /// Everything drawn on a page.
