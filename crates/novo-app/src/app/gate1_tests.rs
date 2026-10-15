@@ -1998,3 +1998,110 @@ fn toggle_pe_is_a_command_and_an_earthing_wire_marks_terminals() {
     d.frame();
     assert_eq!(kind(&d), TerminalKind::Feedthrough, "one undo takes both");
 }
+
+/// A page with two terminals, one of them next to an earth symbol (not yet
+/// wired), and three interruption points out of order.
+fn potentials_page(d: &mut Drive) -> (SymbolId, SymbolId, SymbolId, Vec<SymbolId>) {
+    use novo_core::{Endpoint, Pin, PotentialKind, SymbolRole};
+    let page = d.page();
+    let ((t1, t2, earth, jumps), _) = d
+        .app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("setup", |tx| {
+            let x1 = tx.add_terminal_strip(novo_core::DeviceTag::parse("-X1")?)?;
+            tx.add_potential("PE", PotentialKind::ProtectiveEarth)?;
+            let mut terminal = |name: &str, x: f64| {
+                let t = tx.add_terminal(x1, name)?;
+                tx.place_symbol(
+                    page,
+                    "iec/terminals/terminal",
+                    novo_core::Placement::at(Point::new(x, 100.0)),
+                    vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                    SymbolRole::Terminal { terminals: vec![t] },
+                )
+            };
+            let t1 = terminal("1", 100.0)?;
+            let t2 = terminal("2", 120.0)?;
+            let earth = tx.place_symbol(
+                page,
+                "iec/earth/protective_earth",
+                novo_core::Placement::at(Point::new(100.0, 160.0)),
+                vec![Pin::new("PE", 0.0, 0.0)],
+                SymbolRole::Unassigned,
+            )?;
+            let mut jumps = Vec::new();
+            for (x, name) in [(300.0, "7"), (260.0, "7"), (220.0, "3")] {
+                jumps.push(tx.place_symbol(
+                    page,
+                    "iec/connectivity/interruption",
+                    novo_core::Placement::at(Point::new(x, 40.0)),
+                    vec![Pin::new("1", 0.0, 0.0)],
+                    SymbolRole::Interruption { name: name.into() },
+                )?);
+            }
+            let _ = Endpoint::pin(t1, 0);
+            Ok((t1, t2, earth, jumps))
+        })
+        .unwrap();
+    (t1, t2, earth, jumps)
+}
+
+fn interruption_names(d: &Drive, ids: &[SymbolId]) -> Vec<String> {
+    ids.iter()
+        .map(|&i| match &d.doc().project().symbol(i).unwrap().role {
+            novo_core::SymbolRole::Interruption { name } => name.clone(),
+            _ => unreachable!(),
+        })
+        .collect()
+}
+
+#[test]
+fn number_automatically_renumbers_interruption_points_in_one_undo_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let (_, _, _, jumps) = potentials_page(&mut d);
+    d.frame();
+    assert!(super::workbench::app_runs("interruption.renumber"));
+    // Nothing selected: every point, reading order, the pair stays a pair.
+    d.app.run_command(&ctx, "interruption.renumber", None);
+    d.frame();
+    assert_eq!(interruption_names(&d, &jumps), ["2", "2", "1"]);
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(interruption_names(&d, &jumps), ["7", "7", "3"]);
+}
+
+#[test]
+fn a_pe_terminal_set_by_hand_carries_the_override_diamond() {
+    use novo_canvas::MarkKind;
+    use novo_core::{PeOverride, SymbolRole, TerminalKind};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let (t1, _, _, _) = potentials_page(&mut d);
+    d.select(t1);
+    let terminal = |d: &Drive| {
+        let SymbolRole::Terminal { terminals } = &d.doc().project().symbol(t1).unwrap().role else {
+            panic!()
+        };
+        d.doc().project().terminal(terminals[0]).unwrap().clone()
+    };
+    assert!(super::workbench::app_runs("terminal.toggle_pe"));
+    d.app.run_command(&ctx, "terminal.toggle_pe", None);
+    d.frame();
+    let t = terminal(&d);
+    assert_eq!(t.kind, TerminalKind::ProtectiveEarth);
+    assert_eq!(t.pe_override, PeOverride::ForcedPe);
+    let marks = &d.app.canvas.schematic_ref().unwrap().canvas.marks.list;
+    assert!(
+        marks.iter().any(|m| m.kind == MarkKind::Override),
+        "a by-hand PE terminal carries the override diamond"
+    );
+}
