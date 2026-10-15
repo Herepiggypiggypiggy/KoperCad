@@ -87,14 +87,22 @@ fn a_generated_page_prints_one_pdf_page_per_sheet() {
         let c = content(&pdf, n);
         assert!(c.contains(&format!("(page {k} / 3) Tj")), "sheet {k}");
         assert!(c.contains("(Device list"), "heading on sheet {k}");
-        // Every cell is clipped to its box.
-        assert!(c.contains(" re\nW\nn\n"), "clip on sheet {k}");
+        // The title block names the sheet and counts within page 20.
+        let name = ["20a", "20b", "20c"][k - 1];
+        assert!(
+            c.contains(&format!("({name}  Devices) Tj")),
+            "name on sheet {k}"
+        );
+        assert!(c.contains(&format!("({k} of 3) Tj")), "n of m on sheet {k}");
     }
+    // Schematic pages count schematic pages only; 21 is a section of one.
+    assert!(content(&pdf, 2).contains("(2 of 2) Tj"));
+    assert!(content(&pdf, 6).contains("(1 of 1) Tj"));
     assert!(content(&pdf, 3).contains("(=A9-K1) Tj"));
     assert!(content(&pdf, 5).contains("(=A9-K80) Tj"));
     assert!(!content(&pdf, 3).contains("(=A9-K80) Tj"));
     // The unknown report prints an empty frame, no table.
-    assert!(!content(&pdf, 6).contains("\nW\n"));
+    assert!(!content(&pdf, 6).contains("(Device list"));
 }
 
 #[test]

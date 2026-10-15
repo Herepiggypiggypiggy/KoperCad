@@ -5,7 +5,9 @@
 //! terminal diagram, ...) prints as one PDF page per sheet of its report,
 //! each named like the sheet (`20`, or `20a`, `20b`, ...; see
 //! [`novo_reports::sheet_names`]) in the page labels and bookmarks, with
-//! the report's table drawn inside the page frame.
+//! the report's table drawn inside the page frame and the sheet's name and
+//! "n of m" (counted within the generated page, DESIGN.md §8) in its title
+//! block, through the same [`PageScene::set_sheet`] the canvas shows.
 //!
 //! The PDF is drawn from the same [`PageScene`] the canvas shows, so what
 //! prints is exactly what is on screen (symbols, wires, junction glyphs,
@@ -28,10 +30,12 @@
 mod draw;
 mod font;
 
-use novo_canvas::model::{ModelStyle, PageScene, PlaceholderArt, SymbolArt};
-use novo_canvas::{Color, ItemId, Stroke};
+use novo_canvas::model::{
+    ModelStyle, PageScene, PlaceholderArt, SheetContent, SheetLine, SheetText, SymbolArt,
+};
+use novo_canvas::{Anchor, Color, ItemId, Stroke, Vec2};
 use novo_core::{AnyId, Page, PageId, PageKind, Project, SymbolId, SymbolRole, TextContent};
-use novo_reports::{GeneratedSheet, LiveReports, PageLayout};
+use novo_reports::{Align, GeneratedSheet, LiveReports, PageLayout};
 use pdf_writer::types::{ActionType, AnnotationType, PageMode};
 use pdf_writer::{Finish, Name, Pdf, Rect, Ref, TextStr};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -149,6 +153,10 @@ struct Sheet<'a> {
     name: String,
     /// The report sheet drawn inside the frame of a generated page.
     generated: Option<GeneratedSheet>,
+    /// "n of m" within a generated page: `(1, 1)` for one that prints a
+    /// single sheet (or an empty frame); `None` for schematic pages, whose
+    /// title block counts schematic pages.
+    number: Option<(usize, usize)>,
     /// What the sheet shows, for its bookmark: its report section's title
     /// (`=A1+CAB-X1`, `Devices without parts`), which one-table reports leave
     /// empty; empty for schematic pages.
@@ -163,16 +171,20 @@ fn sheets_of<'a>(project: &Project, page: &'a Page, reports: &mut LiveReports) -
         _ => Vec::new(),
     };
     if generated.is_empty() {
+        let number = matches!(page.kind, PageKind::Generated { .. }).then_some((1, 1));
         return vec![Sheet {
             page,
             name: page.name.clone(),
             generated: None,
+            number,
             section: String::new(),
         }];
     }
+    let count = generated.len();
     generated
         .into_iter()
-        .map(|g| {
+        .enumerate()
+        .map(|(k, g)| {
             let section = reports
                 .get(project, &g.report)
                 .and_then(|o| o.sections.get(g.sheet.section))
@@ -182,6 +194,7 @@ fn sheets_of<'a>(project: &Project, page: &'a Page, reports: &mut LiveReports) -
                 page,
                 name: g.name.clone(),
                 generated: Some(g),
+                number: Some((k + 1, count)),
                 section,
             }
         })
@@ -292,6 +305,14 @@ pub fn export_pdf_with_reports(
             if let Some(notes) = options.notes.get(&page.id) {
                 scene.set_notes(project, notes.iter().cloned(), art);
             }
+            if let Some(number) = sheet.number {
+                let layout = sheet
+                    .generated
+                    .as_ref()
+                    .and_then(|g| reports.layout_sheet(project, g))
+                    .unwrap_or_default();
+                scene.set_sheet(project, Some(sheet_content(&sheet.name, number, &layout)));
+            }
             let s = scene.scene();
             // A report sheet shows its frame and table only: anything
             // drawn on a generated page by accident would repeat on every
@@ -312,13 +333,6 @@ pub fn export_pdf_with_reports(
                 for l in &item.labels {
                     writer.label(l);
                 }
-            }
-            if let Some(layout) = sheet
-                .generated
-                .as_ref()
-                .and_then(|g| reports.layout_sheet(project, g))
-            {
-                draw_layout(&mut writer, &layout, options.style.frame_color);
             }
             if options.links {
                 for (item, _) in &items {
@@ -408,21 +422,40 @@ fn select_pages<'a>(project: &'a Project, set: &PageSet) -> Result<Vec<&'a Page>
     }
 }
 
-/// A report table, its rules and text boxes, in the frame colour.
-fn draw_layout(writer: &mut draw::PageWriter, layout: &PageLayout, ink: Color) {
-    use novo_canvas::{Primitive, Shape, Vec2};
-    let heavy = Stroke::world(0.35, ink);
-    let thin = Stroke::world(0.18, ink);
-    for line in &layout.lines {
-        let at = |(x, y): (f64, f64)| Vec2::new(x as f32, y as f32);
-        let stroke = if line.heavy { heavy } else { thin };
-        writer.primitive(&Primitive::stroked(
-            Shape::line(at(line.from), at(line.to)),
-            stroke,
-        ));
-    }
-    for text in &layout.texts {
-        writer.text_box(text, ink);
+/// One sheet of a generated page as the canvas draws it inside the page
+/// frame: the report's table, the sheet `name` and `number` ("n of m"
+/// within its page) for the title block. Screen and PDF share this, so a
+/// sheet prints as it shows.
+pub fn sheet_content(name: &str, number: (usize, usize), layout: &PageLayout) -> SheetContent {
+    let at = |x: f64, y: f64| Vec2::new(x as f32, y as f32);
+    SheetContent {
+        name: name.to_owned(),
+        number: Some(number),
+        texts: layout
+            .texts
+            .iter()
+            .map(|t| SheetText {
+                min: at(t.x, t.y),
+                size: at(t.width, t.height),
+                // A table cell never wraps.
+                text: t.text.lines().next().unwrap_or_default().to_owned(),
+                height: t.text_mm as f32,
+                align: match t.align {
+                    Align::Left => Anchor::CenterLeft,
+                    Align::Center => Anchor::Center,
+                    Align::Right => Anchor::CenterRight,
+                },
+            })
+            .collect(),
+        lines: layout
+            .lines
+            .iter()
+            .map(|l| SheetLine {
+                from: at(l.from.0, l.from.1),
+                to: at(l.to.0, l.to.1),
+                heavy: l.heavy,
+            })
+            .collect(),
     }
 }
 

@@ -12,9 +12,9 @@
 //!   Never a dot, so a sheet name cannot read as a `page.column` cross
 //!   reference (`3.4`) (DESIGN.md §8).
 //!
-//! Schematic pages never take a letter suffix, so these names are free. A
-//! page the user named like a sheet anyway (`20b`) keeps its name, and the
-//! clashing sheet gets `'` marks (`20b'`), so printed names stay distinct.
+//! A page whose name a sheet would take (`20b`, inserted or named so by
+//! the user) keeps its name, and the clashing sheet gets `'` marks
+//! (`20b'`), so printed names stay distinct.
 //!
 //! Each sheet is laid out with [`PageSetup::for_format`] of the page's
 //! format, so it fits the same frame and title block as the schematic
