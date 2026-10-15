@@ -93,6 +93,13 @@ pub trait ProjectBackend {
     /// the open project as it was, if that one cannot be written first.
     fn new_project(&mut self, name: &str) -> Result<(), BackendError>;
 
+    /// Starts a new, unsaved project holding `project`, replacing any open
+    /// one, as [`Self::new_project`] does. It is the way a lesson's sample
+    /// project opens. The project counts as saved until the first edit.
+    fn new_project_from(&mut self, _project: Project) -> Result<(), BackendError> {
+        Err(BackendError::Unavailable("Opening a sample project"))
+    }
+
     /// Opens a project file, replacing any open project. A file from
     /// [`Self::unsaved_projects`] opens as an untitled project. Fails,
     /// leaving the open project as it was, if that one cannot be written
@@ -365,6 +372,13 @@ impl ProjectBackend for StorageBackend {
         let document = new_document(name)?;
         self.close_session()?;
         self.document = Some(document);
+        self.start_untitled();
+        Ok(())
+    }
+
+    fn new_project_from(&mut self, project: Project) -> Result<(), BackendError> {
+        self.close_session()?;
+        self.document = Some(Document::new(project));
         self.start_untitled();
         Ok(())
     }
@@ -677,6 +691,11 @@ impl ProjectBackend for MemoryBackend {
 
     fn new_project(&mut self, name: &str) -> Result<(), BackendError> {
         self.document = Some(new_document(name)?);
+        Ok(())
+    }
+
+    fn new_project_from(&mut self, project: Project) -> Result<(), BackendError> {
+        self.document = Some(Document::new(project));
         Ok(())
     }
 

@@ -96,6 +96,7 @@ impl NovoApp {
         let text = egui::RichText::new(super::APP_NAME).strong();
         if self.menu_bar_wide() {
             let button = ui.add(egui::Button::new(text).frame(false));
+            self.anchor_response("menu.project", &button, super::APP_NAME);
             if focus {
                 button.request_focus();
             }
@@ -109,6 +110,10 @@ impl NovoApp {
                 let _ = self.menu(ui, menu, false);
             }
         });
+        self.anchor_response("menu.project", &response.response, super::APP_NAME);
+        if response.inner.is_some() {
+            self.learn_event(novo_learn::Event::Opened("menu.project".to_owned()));
+        }
         if focus {
             response.response.request_focus();
         }
