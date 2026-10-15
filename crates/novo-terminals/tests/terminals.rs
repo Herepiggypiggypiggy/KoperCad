@@ -1769,3 +1769,56 @@ fn parallel_wires_restore_from_either_and_doors_count_for_their_cabinet() {
         .unwrap();
     assert_eq!(suggest_terminals(doc.project()).len(), 1);
 }
+
+#[test]
+fn terminals_on_an_earthed_net_become_pe_and_toggle_back() {
+    let mut doc = Document::default();
+    let ((a, b, c), _) = doc
+        .transact("Draw", |tx| {
+            let page = tx.add_page("1")?;
+            tx.add_potential("PE", PotentialKind::ProtectiveEarth)?;
+            let x1 = strip_by_tag(tx, "X1")?;
+            let mut ids = Vec::new();
+            for (i, name) in ["1", "2", "3"].iter().enumerate() {
+                let t = tx.add_terminal(x1, *name)?;
+                let s = tx.place_symbol(
+                    page,
+                    "iec/terminals/terminal",
+                    Placement::at(Point::new(20.0 * i as f64, 10.0)),
+                    terminal_pins(8.0),
+                    SymbolRole::Terminal { terminals: vec![t] },
+                )?;
+                ids.push((t, s));
+            }
+            let earth = tx.place_symbol(
+                page,
+                "iec/earth/protective_earth",
+                Placement::at(Point::new(0.0, 60.0)),
+                vec![Pin::new("PE", 0.0, 0.0)],
+                SymbolRole::Unassigned,
+            )?;
+            tx.connect(Endpoint::pin(ids[0].1, 1), Endpoint::pin(earth, 0))?;
+            // Terminal 3 is wired to a PE-defined wire instead.
+            let m = tx.add_device(tag("-M1"), "")?;
+            let ms = row_of_pins(tx, page, m, &["GND"], 40.0, 100.0)?;
+            let wire = tx.connect(Endpoint::pin(ids[2].1, 1), Endpoint::pin(ms, 0))?;
+            let pe = named_potential(tx.project(), "PE").unwrap().id;
+            tx.set_wire_potential(wire, Some(pe))?;
+            Ok((ids[0].0, ids[1].0, ids[2].0))
+        })
+        .unwrap();
+    let (changed, _) = doc.transact("Auto PE", mark_earthed).unwrap();
+    assert_eq!(changed, vec![a, c]);
+    let kind = |doc: &Document, id| doc.project().terminal(id).unwrap().kind;
+    assert_eq!(kind(&doc, a), TerminalKind::ProtectiveEarth);
+    assert_eq!(kind(&doc, b), TerminalKind::Feedthrough);
+    // The toggle flips a mixed selection to PE, then all back.
+    let (k, _) = doc.transact("T", |tx| toggle_pe(tx, &[a, b])).unwrap();
+    assert_eq!(k, TerminalKind::ProtectiveEarth);
+    let (k, _) = doc.transact("T", |tx| toggle_pe(tx, &[a, b])).unwrap();
+    assert_eq!(k, TerminalKind::Feedthrough);
+    assert_eq!(kind(&doc, a), TerminalKind::Feedthrough);
+    // Already-marked terminals are not touched twice.
+    let (again, _) = doc.transact("Auto PE", mark_earthed).unwrap();
+    assert_eq!(again, vec![a]);
+}
