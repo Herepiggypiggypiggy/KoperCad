@@ -339,3 +339,48 @@ fn issues_have_messages_and_marks() {
         assert!(!issue.message(f.doc.project()).ends_with('.'));
     }
 }
+
+#[test]
+fn shared_slots_clash_under_rockwell() {
+    let mut f = fixture();
+    let shared = |f: &Fixture| {
+        f.index()
+            .issues()
+            .iter()
+            .find(|i| matches!(i, Issue::SharedSlot { .. }))
+            .cloned()
+            .unwrap()
+    };
+    f.doc
+        .transact("Same slot", |tx| {
+            let k2 = tx.add_device_of_kind(DeviceTag::parse("-K2")?, "", DeviceKind::Plc)?;
+            tx.set_property(k2, CHANNELS, Some(Value::from("DQ8")))?;
+            tx.set_property(k2, SLOT, Some(Value::Int(1)))?;
+            tx.set_property(k2, "plc.start.q", Some(Value::Int(1)))
+        })
+        .unwrap();
+    assert!(!shared(&f).is_error());
+    f.doc
+        .transact("Rockwell", |tx| {
+            tx.set_info(|i| {
+                i.properties
+                    .insert(ADDRESS_STYLE.into(), Value::from("rockwell"));
+            })
+        })
+        .unwrap();
+    assert!(shared(&f).is_error());
+}
+
+#[test]
+fn a_bad_layout_is_reported_once() {
+    let mut f = fixture();
+    f.place(DI, Some("DI 0"), 10.0);
+    f.doc
+        .transact("Typo", |tx| {
+            tx.set_property(f.card, CHANNELS, Some(Value::from("DX8")))
+        })
+        .unwrap();
+    let mut found = kinds(&f.index());
+    found.retain(|k| *k != "unconnected");
+    assert_eq!(found, ["bad_layout"]);
+}

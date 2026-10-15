@@ -206,7 +206,8 @@ Marked in place and listed in Issues (WS-14 runs them through `novo-plc`):
 | A channel symbol's type does not match its stored channel (a DI symbol with `"DQ 3"`) | Error | the symbol |
 | A card has no layout (no part and no `plc.channels`) | Warning | the card |
 | A drawn channel is connected to nothing | Warning | the symbol |
-| Two cards in one station share a slot | Warning | both cards |
+| Two cards in one station share a slot | Warning; an error with the Rockwell style, where slot and channel are the address | both cards |
+| A card's `plc.channels` text does not parse | Error, once for the card, not again on each of its channels | the card |
 | A channel symbol has no `plc.channel` | Warning | the symbol |
 | A card has channels in a space but no start there (made by a script) | Warning | the card |
 
