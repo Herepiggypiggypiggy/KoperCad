@@ -1,12 +1,18 @@
 # Design system and aesthetics: handoff
 
-Updated 2026-10-15 18:47 UTC.
+Updated 2026-10-15 19:20 UTC.
 
 ## State
 - Repo herepiggypiggypiggy/kopercad, branch `claude/project-thread-mr5n3b`
   (the only branch I push to; restart it from main after each merge).
-- PR 1 (spec, `docs/design/design-system.md`, `scripts/screenshot.sh`, this
-  folder): in review.
+- PR 1 (#448: spec, `docs/design/design-system.md`, `scripts/screenshot.sh`, this
+  folder): READY on 2338d9d, waiting for the integration lead to merge. Do not
+  push to it.
+- Local branches ds-tokens, ds-appearance hold the code PRs (stacked): tokens and
+  light theme, Preferences, start screen, dock, drawers, toasts, command field,
+  top bar. Split into small PRs from main once #448 is in. Still to do: outline
+  flyout tabs, inspector, dialogs, live view colours, empty states, icons,
+  canvas polish (with the canvas thread), learning widgets (after #456).
 - Before screenshots of the app and preview example taken at main 074138a.
 
 ## Resume

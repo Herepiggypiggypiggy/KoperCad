@@ -345,6 +345,13 @@ For each panel and dialog, in both themes and all three densities:
 8. Guidance widgets (section 10) for the learning modules (the consumer is
    learning-modules.md §10), once their engine exists; until then the learning thread uses plain `novo_theme` tokens.
 
+### The gallery
+
+`cargo run -p novo-theme --example gallery` shows every token and widget in one
+window, with the theme and density switches in its top bar (`GALLERY_THEME` and
+`GALLERY_DENSITY` pick the start look). Pictures of both themes at Standard
+density: [dark](images/gallery-dark.png), [light](images/gallery-light.png).
+
 ## 10. Guidance: lesson cards, pointers, notes and tips
 
 The learning modules (`docs/design/learning-modules.md`) teach by pointing at
