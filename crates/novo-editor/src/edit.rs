@@ -20,7 +20,7 @@ use crate::geometry::{
     wire_points, wires_through,
 };
 use crate::naming::{Numbering, child_pin_names, complete_tag, new_device_tag, page_structure};
-use crate::overlap::plan_route;
+use crate::overlap::{Refusal, plan_route, route_refusal};
 
 /// What a placement attaches to, beyond the symbol itself.
 #[derive(Debug, Clone, Default)]
@@ -350,11 +350,23 @@ pub fn proposal_holds(project: &Project, proposal: &FacingWire) -> bool {
 /// Accepts a proposed facing wire: draws it if the proposal still holds
 /// ([`proposal_holds`]), and otherwise changes nothing.
 pub fn accept(tx: &mut Tx<'_>, proposal: &FacingWire) -> Result<Option<WireId>> {
-    if proposal_holds(tx.project(), proposal) {
-        tx.connect(proposal.from, proposal.to).map(Some)
-    } else {
-        Ok(None)
+    if !proposal_holds(tx.project(), proposal) {
+        return Ok(None);
     }
+    // A facing wire is straight and the user never placed its route, but it
+    // still may not run along another wire.
+    let project = tx.project();
+    let page = proposal
+        .from
+        .as_pin()
+        .and_then(|r| project.symbol(r.symbol))
+        .map(|s| s.page);
+    if let Some(refusal) =
+        page.and_then(|page| route_refusal(project, page, &[proposal.a, proposal.b], &[], &[], &[]))
+    {
+        return Err(refused(refusal));
+    }
+    tx.connect(proposal.from, proposal.to).map(Some)
 }
 
 fn pin_positions(project: &Project, symbol: SymbolId) -> Vec<(u16, Point)> {
@@ -652,6 +664,61 @@ pub fn resolve_target(tx: &mut Tx<'_>, page: PageId, target: Target) -> Result<E
     }
 }
 
+/// The model error a refused route fails with, for callers that cannot use
+/// [`Refusal`] as data (scripts, [`draw_wire`]).
+fn refused(r: Refusal) -> ModelError {
+    ModelError::InvalidValue {
+        id: r.other.into(),
+        field: "route overlaps this wire",
+    }
+}
+
+/// The wires already at a pin, other than `except`; nothing for a junction
+/// or a point on a wire. Wires that leave one pin together may share their
+/// first stretch (it becomes a derived junction later).
+fn pin_wires(project: &Project, end: Endpoint, except: &[WireId]) -> Vec<WireId> {
+    if matches!(end, Endpoint::Pin { .. }) {
+        project
+            .wires_at(end)
+            .filter(|w| !except.contains(w))
+            .collect()
+    } else {
+        Vec::new()
+    }
+}
+
+/// Whether drawing a wire from `start` through `corners` to `end` would be
+/// refused because it shares a stretch with another wire, as data: the
+/// other wire and the stretch. Read-only, for the live preview and for the
+/// click handler to ask before it commits ([`draw_wire`] makes the same
+/// check and fails with a model error).
+pub fn check_draw(
+    project: &Project,
+    page: PageId,
+    start: Target,
+    corners: &[Point],
+    end: Target,
+) -> std::result::Result<(), Refusal> {
+    let endpoint = |t: Target| match t {
+        Target::Endpoint(e, _) => Some(e),
+        Target::Wire(..) => None,
+    };
+    let dir = |t: Target| endpoint(t).and_then(|e| endpoint_direction(project, e));
+    let wires = |t: Target| endpoint(t).map_or_else(Vec::new, |e| pin_wires(project, e, &[]));
+    plan_route(
+        project,
+        page,
+        start.position(),
+        dir(start),
+        corners,
+        end.position(),
+        dir(end),
+        &wires(start),
+        &wires(end),
+    )
+    .map(|_| ())
+}
+
 /// Draws a wire from `start` through the user's `corners` to `end`, routed
 /// orthogonally with at most two bends per leg. Ends on wires become
 /// T-junctions.
@@ -673,13 +740,6 @@ pub fn draw_wire(
         .ok_or(ModelError::NotFound(endpoint_id(to)))?;
     // Wires that leave the same pin may run together for their first stretch;
     // that case becomes a derived junction later. Everything else is checked.
-    let at_pin = |end: Endpoint| -> Vec<WireId> {
-        if matches!(end, Endpoint::Pin { .. }) {
-            project.wires_at(end).collect()
-        } else {
-            Vec::new()
-        }
-    };
     let bends = plan_route(
         project,
         page,
@@ -688,13 +748,10 @@ pub fn draw_wire(
         corners,
         b,
         endpoint_direction(project, to),
-        &at_pin(from),
-        &at_pin(to),
+        &pin_wires(project, from, &[]),
+        &pin_wires(project, to, &[]),
     )
-    .map_err(|r| ModelError::InvalidValue {
-        id: r.other.into(),
-        field: "route overlaps this wire",
-    })?;
+    .map_err(refused)?;
     let wire = tx.connect(from, to)?;
     if !bends.is_empty() {
         tx.update::<Wire>(wire, |w| w.route = bends)?;
@@ -796,6 +853,18 @@ pub fn pivot(project: &Project, ids: &[AnyId], grid: f64) -> Option<Point> {
 /// re-routed. Nothing new connects here: callers finish with [`settle`]
 /// once every step of the gesture is done.
 pub fn transform(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform) -> Result<()> {
+    transform_with(tx, ids, how, false)
+}
+
+/// [`transform`] for a person's drag or key press: where no adjustment keeps
+/// the moved wires clear of other wires the whole move fails and changes
+/// nothing (the transaction rolls back). Scripts, AI edits, undo and redo
+/// use [`transform`], which accepts the overlap for `wire.overlap` to report.
+pub fn transform_interactive(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform) -> Result<()> {
+    transform_with(tx, ids, how, true)
+}
+
+fn transform_with(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform, refuse: bool) -> Result<()> {
     let mut symbols: BTreeSet<SymbolId> = BTreeSet::new();
     let mut junctions: BTreeSet<JunctionId> = BTreeSet::new();
     for id in ids {
@@ -839,6 +908,7 @@ pub fn transform(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform) -> Result<()> {
             junction.position = how.point(junction.position)
         })?;
     }
+    let moving: Vec<WireId> = wires.keys().copied().collect();
     for (wire, both) in wires {
         if both {
             tx.update::<Wire>(wire, |w| {
@@ -846,11 +916,32 @@ pub fn transform(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform) -> Result<()> {
                     *p = how.point(*p);
                 }
             })?;
+            // Moved with its ends, the route keeps its shape: it is checked,
+            // not adjusted. Wires that move together never clash.
+            if refuse {
+                check_kept(tx.project(), wire, &moving)?;
+            }
         } else {
-            reroute(tx, wire)?;
+            reroute_with(tx, wire, refuse)?;
         }
     }
     Ok(())
+}
+
+/// Fails if wire `wire` as it now lies shares a stretch with a wire that is
+/// not in `moving`.
+fn check_kept(project: &Project, wire: WireId, moving: &[WireId]) -> Result<()> {
+    let (Some(w), Some(points)) = (project.wire(wire), wire_points(project, wire)) else {
+        return Ok(());
+    };
+    let (start, end) = (
+        pin_wires(project, w.from, &[wire]),
+        pin_wires(project, w.to, &[wire]),
+    );
+    match route_refusal(project, w.page, &points, moving, &start, &end) {
+        Some(r) => Err(refused(r)),
+        None => Ok(()),
+    }
 }
 
 /// The symbols among `ids`, for [`settle`].
@@ -863,8 +954,15 @@ pub fn symbols_in(ids: &[AnyId]) -> Vec<SymbolId> {
         .collect()
 }
 
-/// Replaces a wire's bends with a fresh orthogonal route between its ends.
+/// Replaces a wire's bends with a fresh orthogonal route between its ends,
+/// moving the router's cross-over clear of other wires where it can.
 pub fn reroute(tx: &mut Tx<'_>, wire: WireId) -> Result<()> {
+    reroute_with(tx, wire, false)
+}
+
+/// [`reroute`]; with `refuse`, a wire that cannot be kept clear fails the
+/// transaction instead of keeping the plain route.
+fn reroute_with(tx: &mut Tx<'_>, wire: WireId, refuse: bool) -> Result<()> {
     let project = tx.project();
     let Some(w) = project.wire(wire) else {
         return Ok(());
@@ -875,12 +973,26 @@ pub fn reroute(tx: &mut Tx<'_>, wire: WireId) -> Result<()> {
     ) else {
         return Ok(());
     };
-    let bends = route(
-        a,
+    let (from_dir, to_dir) = (
         endpoint_direction(project, w.from),
-        b,
         endpoint_direction(project, w.to),
     );
+    let planned = plan_route(
+        project,
+        w.page,
+        a,
+        from_dir,
+        &[],
+        b,
+        to_dir,
+        &pin_wires(project, w.from, &[wire]),
+        &pin_wires(project, w.to, &[wire]),
+    );
+    let bends = match planned {
+        Ok(bends) => bends,
+        Err(r) if refuse => return Err(refused(r)),
+        Err(_) => route(a, from_dir, b, to_dir),
+    };
     tx.update::<Wire>(wire, |w| w.route = bends)
 }
 

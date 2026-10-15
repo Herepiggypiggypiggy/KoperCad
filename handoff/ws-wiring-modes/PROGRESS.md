@@ -4,3 +4,5 @@
 2026-10-15 08:25 UTC Workflow rebuilt #169 on Corners|Lines (Corners nudges, Lines refuses, no diagonals) and is the DESIGN PR. #168 cut to engine plan + tests at c21e49c; awaiting both reviewers. Engine PR 1 starts after #168 merges.
 2026-10-15 08:55 UTC #168 merged. Engine PR 1 open: #181 head 2b79dad (overlap.rs, plan_route, draw_wire). Next: settle_wire for other paths, WiringMode+Lines, wire.overlap check.
 2026-10-15 09:05 UTC #168 and #169 merged; #181 open for review. WS-08 #180 binds Shift+W. Recorded #177 clarifications in HANDOFF.
+2026-10-15 09:20 UTC #181 READY on de8aaf3 (main reviewer, CI-gated); frozen, lead merges. Next engine PR 2 (WiringMode, Lines) starts from main after merge.
+2026-10-15 10:10 UTC #181 merged (2cd9310). Engine PR 2 (settle): check_draw typed pre-flight, transform_interactive (atomic refusal), reroute nudge, accept guard, 10k benchmark (index 4 ms). WS-06 to call transform_interactive from tool.rs and use check_draw for preview.

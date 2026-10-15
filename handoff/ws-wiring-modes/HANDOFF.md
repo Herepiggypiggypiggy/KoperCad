@@ -23,3 +23,9 @@ Moving a symbol stretches a hand-drawn wire by moving only its end segment; if t
 - With clicked corners the whole gesture is refused when a leg would overlap (router legs between corners are not nudged); L routes are not nudged. Arriving along a wire's run is now an overlap (T-junction test changed).
 - Refusal reaches callers as ModelError::InvalidValue; a typed DrawError entry is due before the UI uses it.
 - SegmentIndex is rebuilt per call; 10k benchmark and a persistent index come before the move/ghost step. Test 6 (through another net's pin/junction) still to do.
+
+## WS-06 review notes for engine PR 2+ (on #181)
+Diagonals are out of v1, so segment_overlap stays axis-aligned (state it in docs when adding Lines). Cache SegmentIndex on the editor keyed on project.revision() before the live preview calls plan_route per pointer move; sort+dedup bucket hits instead of Vec::contains. Straight/L overlaps need a stub at the pin (settle_wire). Add a test that a route doesn't overlap itself (U-turn). Typed Refusal path for the preview. Send WS-06 the SHA of the settle_wire PR.
+
+## Split agreed with WS-06 (2026-10-15, lead-assigned)
+Me: overlap engine (#181, then settle_wire for accept/insert_into_wires/transform/tidy_junctions with interactive flag, typed try_draw_wire/DrawError, wire.overlap check, 10k benchmark and cached index). WS-06: WiringMode on Editor, Lines in WireTool, draw_wire_exact, Backspace/Shift/R, hand_drawn mark. Tell WS-06 the merge SHA of #181.
