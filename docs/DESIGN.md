@@ -467,19 +467,20 @@ the fast way for a mouse hand to put down the common parts. Holding I
 (over 250 ms) opens the same wheel; a tap of I stays the command surface
 in place mode. The wheel has two rings and no hidden level.
 
-- Inner ring, six sectors: **Terminals**, **Switches and buttons**,
-  **Relays and contactors**, **Breakers and protection**, **Loads and
-  sources** (motors, lamps, supplies), **Search** (opens the place
-  surface; also the centre).
+- Inner ring, five sectors: **Terminal**, **Switch** (switches, buttons,
+  contacts), **Relay** (coils, contactors), **Breaker** (MCB, MPCB,
+  fuses) and **More…**, which opens the place surface (also the centre
+  hold). Wedges run from an inner radius of 38 px to an outer 110 px; the
+  centre says "Place".
 - Outer ring, up to eight items for the sector under the pointer, shown on
   hover: the favourites used in this project first, then the defaults of
   that category. Relays, for example: coil, normally open, normally
   closed, changeover, timer coil.
-- Pick by clicking, by press-drag-release (a flick), or by keys 1 to 6
-  then 1 to 8; Backspace goes back a ring and Esc closes. Picking an
+- Pick by clicking, by press-drag-release (a flick), or by keys 1 to 5
+  then 1 to 8 (1 to 5 on the inner ring); Backspace goes back a ring and Esc closes. Picking an
   item attaches the symbol to the pointer exactly as the place mode does,
   so R, X and the auto tag work the same.
-- Sectors are large (at least 56 px wide at the outer edge) and the wheel
+- Wedges are large (at least 56 px wide at the outer edge) and the wheel
   never opens partly off-screen; it shifts to fit. The categories are
   fixed in v1 so muscle memory forms; the items inside follow use.
 
@@ -489,9 +490,10 @@ a pin or wire it connects, as a click does; on nothing it leaves an open
 end). The first click of the double click is the last corner; a double
 click adds no extra corner and no zero-length segment.
 
-- An open end carries an end cap (a small ring, 6 px on screen at every
-  zoom, in the accent colour, never copper) and the Warning flag of §5
-  with the text "Unconnected" on hover. It is listed in Issues as
+- An open end carries an end cap (an open ring, hollow where a joint is
+  filled, 4 px radius on screen at every zoom; Layout sets the colours) and the Warning flag of §5
+  with the text "Unconnected" on hover, counted in the Issues total as
+  "Unconnected wire end". It is listed in Issues as
   `wire.open`, a warning, not an error, so a half-drawn page can be saved
   and printed with the flags visible.
 - **A wire can also start in empty space.** With the Connect tool and no
