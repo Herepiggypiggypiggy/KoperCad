@@ -164,16 +164,19 @@ right, so it does not cross the gate.
 Mock-up: `docs/design/workflow-looks.png`.
 
 - **Connected terminals.** Terminals joined into a group keep their circles
-  and leads and get a bridge: a 3 px symbol-colour bar across the leads, 6 mm
-  above the circle centres, with a 2.5 px dot where it meets each lead. The
+  and leads and get a bridge: a heavy bar (about 0.5 mm) across the upper leads, 2.6 mm above the
+  circle centres (y 1.4 in terminal.toml), with a filled dot of about 0.4 mm
+  radius where it meets each lead. The
   bar stays clear of the numbers on the left. Plain terminals have one
   circle and one lead pair, as before.
 - **Potential menu** (right-click a feed): a "Potential" caption, a 4 by 2
-  grid of chips (L1, L2, L3, N, PE, +24 V, 0 V, Other...) 55 by 28 px, the
+  grid of chips (L1, L2, L3, N, PE, +24 V, 0 V, New...) 55 by 28 px, the
   current one with a copper outline on BG_3; then "Number automatically",
   "Rename..." (F2), "Show where it goes", and "Delete". One click on a chip
-  sets the potential and closes the menu.
-- **Pages navigator** (left panel, 300 px): rows 24 px high, group (=name),
+  sets the potential of all selected feeds and closes the menu; "New..."
+  creates a project potential.
+- **Pages navigator** (the outline's Pages section, 248 px wide, Function
+  view shown; the mock-up is wider and titled PAGES for legibility): rows 24 px high, group (=name),
   panel (+name) and page rows indented 16 px per level, caret to fold, page
   count at the right, the open page with a copper edge on BG_3. A panel name
   that occurs under more than one group gets a link icon in INFO and a
