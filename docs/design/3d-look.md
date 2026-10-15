@@ -160,7 +160,32 @@ Selection copper and hover steel blue are the same in both. The light theme exis
 screenshots; until the app has one, the view follows the dark theme and the palette type already carries
 both so the switch is one value.
 
-## 8. What this needs from the architecture contract
+## 8. UI entry points
+
+An engine with no UI entry is not done, so every part of the look has a place the designer reaches it. Command
+names go through the command palette and keymap (`novo-workflow`); the UI integration thread places the widgets.
+
+| What | Entry point | Command or setting |
+| --- | --- | --- |
+| View cube | top right of the 3D view, 88 px | click a face, edge or corner; drag to orbit; double click the cube to fit |
+| Fit all, fit selection | palette, keymap, 3D toolbar | `view.fit`, `view.fit_selection` (same names as 2D) |
+| Isometric | view cube corner, palette | `view.iso` |
+| Standard views | view cube faces, palette | `view.front`, `view.back`, `view.left`, `view.right`, `view.top`, `view.bottom` |
+| Perspective or orthographic | 3D toolbar toggle, palette | `view.projection_toggle` |
+| Cutaway (hide enclosure walls and door) | 3D toolbar toggle, palette | `view.cutaway` |
+| Focus mode (dim the unselected) | 3D toolbar toggle, palette | `view.focus` |
+| Saved views | View menu list, palette ("View: name"), keys `1` to `9` | `view.save`, `view.recall`, `view.delete_saved` |
+| Labels on or off | 3D toolbar toggle | `view.labels` |
+| Quality tier | Settings, 3D view: Auto, Low, Standard, High (Auto is the default) | per user setting |
+| Theme | follows the app; Settings, 3D view: Follow app, Dark, Light | per user setting |
+| Reduce motion | follows the system; Settings, 3D view: Follow system, On, Off | per user setting |
+| Frame time readout | debug HUD only | `debug.frame_time` |
+
+Hover tooltips show tag, part number, kind and position; right click on a device opens the same context menu as
+in the 2D canvases (so a right drag under 4 points must stay a click). Keys and menu placement are decided with the
+workflow and layout threads; this page fixes names and what each does.
+
+## 9. What this needs from the architecture contract
 
 - A pick and outline source: an object id for every selectable, drawn to an id buffer (or an equivalent),
   and a depth sample at a pixel for zoom to cursor.
@@ -172,7 +197,7 @@ both so the switch is one value.
   tested without a window. Proposed home: palette and tokens in `novo-theme` (a `view3d` module),
   camera in the view crate.
 
-## 9. Implementation order
+## 10. Implementation order
 
 1. Palette and light rig data, with tests (contrast of labels, selection never uses material colours).
 2. Camera: orbit, pan, zoom to cursor, transitions, standard views, saved views, with unit tests.
