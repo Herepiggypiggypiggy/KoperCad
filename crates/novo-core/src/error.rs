@@ -49,6 +49,8 @@ pub enum ModelError {
     WireLeavesSelection(WireId),
     #[error("a structure node `{0}` already exists")]
     DuplicateStructure(String),
+    #[error("`{0}` cannot prefix potential names: it starts or ends with a space")]
+    InvalidPrefix(String),
     #[error("a block definition named `{0}` already exists")]
     DuplicateBlock(String),
     #[error("{0} cannot be part of a block: terminals and potential feeds are project-wide")]

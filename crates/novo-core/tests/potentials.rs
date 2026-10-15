@@ -322,11 +322,34 @@ fn a_source_declares_its_system_once() {
         })
         .unwrap()
         .created;
-    assert_eq!(isolated.len(), 4, "the system and T1-L, T1-N, T1-PE");
+    // PE stays the cabinet's: the secondary is earthed to it.
+    assert_eq!(isolated.len(), 3, "the system, T1-L and T1-N");
     let AnyId::Potential(t1_n) = isolated[2] else {
         panic!("{isolated:?}")
     };
     assert_eq!(doc.project().potential(t1_n).unwrap().name, "T1-N");
+    let AnyId::PotentialSystem(t1) = isolated[0] else {
+        panic!("{isolated:?}")
+    };
+    let names: Vec<&str> = doc
+        .project()
+        .potential_systems()
+        .find(|s| s.id == t1)
+        .unwrap()
+        .members
+        .iter()
+        .map(|&p| doc.project().potential(p).unwrap().name.as_str())
+        .collect();
+    assert_eq!(names, ["T1-L", "T1-N", "PE"]);
+    let err = doc
+        .execute(Command::AddPotentialSystem {
+            name: "Blank".into(),
+            set: PotentialSet::SinglePhase { voltage: 230.0 },
+            frequency_hz: None,
+            prefix: " ".into(),
+        })
+        .unwrap_err();
+    assert_eq!(err, ModelError::InvalidPrefix(" ".into()));
 
     // More pins than the system has potentials is refused.
     assert!(

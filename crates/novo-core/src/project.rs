@@ -193,7 +193,10 @@ impl Project {
         edit: impl FnOnce(&mut Tx<'_>) -> Result<R>,
     ) -> Result<(R, Transaction)> {
         let mut tx = Tx::new(self);
-        let result = edit(&mut tx);
+        let result = edit(&mut tx).and_then(|value| {
+            tx.detach_enclosed_devices()?;
+            Ok(value)
+        });
         let ops = tx.finish(result.is_ok());
         let value = result?;
         if !ops.is_empty() {
@@ -554,7 +557,8 @@ impl Project {
                     });
                 }
                 if let Some(freeze) = &page.frozen
-                    && freeze.columns.windows(2).any(|w| w[0].0 >= w[1].0)
+                    && (freeze.revision.trim().is_empty()
+                        || freeze.columns.windows(2).any(|w| w[0].0 >= w[1].0))
                 {
                     return Err(ModelError::InvalidValue {
                         id: page.id.into(),
@@ -905,7 +909,10 @@ impl Project {
             let allowed = matches!(
                 member,
                 Record::Device(_)
-                    | Record::Symbol(_)
+                    | Record::Symbol(SymbolInstance {
+                        role: SymbolRole::Device { .. } | SymbolRole::Unassigned,
+                        ..
+                    })
                     | Record::Junction(_)
                     | Record::Wire(_)
                     | Record::Text(_)
@@ -1235,6 +1242,29 @@ impl Project {
             .filter_map(DeviceTag::number)
             .max()
             .map_or(1, |n| n + 1)
+    }
+
+    /// The wires with one end on the given symbols and junctions and the
+    /// other end elsewhere: what a move or a block capture of `items`
+    /// would cut. Sorted by id.
+    pub fn wires_leaving(&self, items: &[AnyId]) -> Vec<WireId> {
+        let inside: BTreeSet<AnyId> = items.iter().copied().collect();
+        let mut out: Vec<WireId> = inside
+            .iter()
+            .flat_map(|&id| self.referrers(id))
+            .filter_map(|r| match r {
+                AnyId::Wire(w) => self.wires.get(&w),
+                _ => None,
+            })
+            .filter(|w| {
+                let [a, b] = w.ends().map(crate::record::endpoint_owner);
+                inside.contains(&a) != inside.contains(&b)
+            })
+            .map(|w| w.id)
+            .collect();
+        out.sort();
+        out.dedup();
+        out
     }
 
     /// The cable whose core carries a wire, if any.
