@@ -53,6 +53,8 @@ pub(super) struct PageForm {
     /// Pages to add to each panel.
     pub count: u32,
     pub title: String,
+    /// The first field has taken focus (once, when the form opens).
+    pub focused: bool,
 }
 
 impl PageForm {
@@ -66,6 +68,7 @@ impl PageForm {
                 FormKind::Group | FormKind::Move(_) => 0,
             },
             title: String::new(),
+            focused: false,
         }
     }
 
@@ -217,7 +220,7 @@ impl NovoApp {
                         .hint_text("10D41")
                         .desired_width(200.0),
                 );
-                if matches!(form.kind, FormKind::Group | FormKind::Pages) {
+                if !form.focused && matches!(form.kind, FormKind::Group | FormKind::Pages) {
                     group.request_focus();
                 }
                 ui.end_row();
@@ -241,7 +244,7 @@ impl NovoApp {
                             .desired_width(200.0),
                     )
                     .on_hover_text("Pages with the same panel name in different page groups share one cabinet layout");
-                if matches!(form.kind, FormKind::Panel | FormKind::Move(_)) {
+                if !form.focused && matches!(form.kind, FormKind::Panel | FormKind::Move(_)) {
                     panel.request_focus();
                 }
                 ui.end_row();
@@ -273,6 +276,7 @@ impl NovoApp {
             })
             .inner
         });
+        form.focused = true;
         let (ok, cancel) = modal.inner;
         let enter = ctx.input(|i| i.key_pressed(egui::Key::Enter));
         if cancel || modal.should_close() {
