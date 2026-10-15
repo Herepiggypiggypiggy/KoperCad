@@ -1,5 +1,5 @@
 use novo_core::*;
-use novo_revisions::{ChangeKind, IndexRule, diff};
+use novo_revisions::{ChangeKind, IndexRule, PageRevisions, diff};
 
 fn pins() -> Vec<Pin> {
     vec![Pin::new("1", 0.0, 0.0), Pin::new("2", 0.0, 10.0)]
@@ -104,4 +104,57 @@ fn changes_land_on_the_pages_that_show_them() {
     assert_eq!(changes.project.len(), 1);
     assert!(matches!(changes.project[0].id, AnyId::Part(_)));
     assert_eq!(changes.project[0].kind, ChangeKind::Added);
+}
+
+#[test]
+fn each_page_shows_the_last_revision_that_changed_it() {
+    let mut doc = Document::default();
+    let mut snapshots = std::collections::BTreeMap::new();
+    let mut issue = |doc: &mut Document, index: &str| {
+        let created = doc
+            .execute(Command::IssueRevision {
+                index: index.into(),
+                date: "2026-10-15".into(),
+                author: "TV".into(),
+                description: String::new(),
+            })
+            .unwrap()
+            .created;
+        let AnyId::Revision(id) = created[0] else {
+            panic!("{created:?}")
+        };
+        snapshots.insert(id, doc.project().clone());
+        id
+    };
+    let ((p1, p2), _) = doc
+        .transact("Pages", |tx| Ok((tx.add_page("1")?, tx.add_page("2")?)))
+        .unwrap();
+    let a = issue(&mut doc, "A");
+    doc.transact("Edit 2", |tx| {
+        tx.update::<Page>(p2, |p| p.title = "Motor".into())
+    })
+    .unwrap();
+    let b = issue(&mut doc, "B");
+    // Issuing B re-took page 1's freeze, which is not a change.
+    assert!(diff(&snapshots[&a], &snapshots[&b]).on_page(p1).is_empty());
+    // Edits after the latest issue do not count yet.
+    let (p3, _) = doc
+        .transact("Edit", |tx| {
+            tx.update::<Page>(p1, |p| p.title = "Supply".into())?;
+            tx.add_page("3")
+        })
+        .unwrap();
+
+    let project = doc.project();
+    let revisions = PageRevisions::compute(project, |id| snapshots.get(&id).cloned());
+    let index = |page| revisions.of(project, page).map(|r| r.index.as_str());
+    assert_eq!(index(p1), Some("A"));
+    assert_eq!(index(p2), Some("B"));
+    assert_eq!(index(p3), None);
+
+    // Without A's snapshot, A's pages count toward B.
+    let revisions = PageRevisions::compute(project, |id| {
+        (id != a).then(|| snapshots.get(&id).cloned()).flatten()
+    });
+    assert_eq!(revisions.of(project, p1).map(|r| r.id), Some(b));
 }

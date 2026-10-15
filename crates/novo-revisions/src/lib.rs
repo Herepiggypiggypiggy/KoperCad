@@ -7,7 +7,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use novo_core::{AnyId, PageId, Project, Record};
+use novo_core::{AnyId, PageId, Project, Record, Revision, RevisionId};
 
 /// How revisions are indexed, a project rule ("Revisions are indexed
 /// [A, B, C, ... ▾]").
@@ -144,9 +144,18 @@ pub fn diff(old: &Project, new: &Project) -> ChangeSet {
         let kind = match (before.get(&id), after.get(&id)) {
             (None, Some(_)) => ChangeKind::Added,
             (Some(_), None) => ChangeKind::Removed,
-            (Some(a), Some(b)) if a != b => ChangeKind::Changed {
-                fields: changed_fields(a, b),
-            },
+            (Some(a), Some(b)) if a != b => {
+                let mut fields = changed_fields(a, b);
+                // Issuing re-takes every page's freeze; that is bookkeeping
+                // of the issue, not a change to the drawing.
+                if matches!(id, AnyId::Page(_)) {
+                    fields.retain(|f| f != "frozen");
+                    if fields.is_empty() {
+                        continue;
+                    }
+                }
+                ChangeKind::Changed { fields }
+            }
             _ => continue,
         };
         let mut pages = pages_showing(old, id);
@@ -205,4 +214,48 @@ fn pages_showing(project: &Project, id: AnyId) -> BTreeSet<PageId> {
         _ => {}
     }
     pages
+}
+
+/// The revision each page shows in its title block (DESIGN §7): the latest
+/// revision in which the page changed. Worked out from the change sets
+/// between consecutive issued snapshots, never stored. A page added since
+/// the latest revision has none yet.
+///
+/// The project revision is [`Project::latest_revision`], and a revision
+/// table lists [`Project::revisions`] (index, date, author, description).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PageRevisions {
+    pages: BTreeMap<PageId, RevisionId>,
+}
+
+impl PageRevisions {
+    /// Walks the revisions of `project` in issue order, comparing each
+    /// one's snapshot with the one before (the first with an empty
+    /// project, so every page it holds gets its index). `snapshot` reads a
+    /// kept snapshot; a revision without one is skipped, and its changes
+    /// count toward the next revision that has one.
+    pub fn compute(
+        project: &Project,
+        mut snapshot: impl FnMut(RevisionId) -> Option<Project>,
+    ) -> PageRevisions {
+        let mut pages = BTreeMap::new();
+        let mut before = Project::default();
+        for revision in project.revisions() {
+            let Some(after) = snapshot(revision.id) else {
+                continue;
+            };
+            for page in diff(&before, &after).changed_pages() {
+                if after.page(page).is_some() {
+                    pages.insert(page, revision.id);
+                }
+            }
+            before = after;
+        }
+        PageRevisions { pages }
+    }
+
+    /// The revision `page` shows, if any.
+    pub fn of<'p>(&self, project: &'p Project, page: PageId) -> Option<&'p Revision> {
+        project.issued_revision(*self.pages.get(&page)?)
+    }
 }
