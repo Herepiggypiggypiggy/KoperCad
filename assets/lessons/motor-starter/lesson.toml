@@ -1,0 +1,140 @@
+format = 1
+id = "motor-starter"
+version = 1
+status = "draft"
+title = "A motor starter"
+summary = "Draw the power circuit and the control circuit of a direct-on-line motor starter."
+track = "drawing"
+order = 40
+level = "intermediate"
+minutes = 12
+topics = ["motor", "control circuit", "tags"]
+needs = ["potentials"]
+next = ["cross-references"]
+project = "project.json"
+finished = "finished.json"
+page = "Main circuit"
+
+[[step]]
+id = "plan"
+title = "The plan"
+text = """
+Page 1 is the **power circuit**: a motor breaker, a contactor and the motor.
+Page 2 is the **control circuit**: a stop and a start button that hold in the contactor coil.
+"""
+point = { at = { device = "-M1" } }
+pause = true
+
+[[step]]
+id = "breaker"
+title = "Place the motor breaker"
+text = """
+Tap {key:tool.place}, then **5** for the motor protection breaker. Drop it under the three feeds.
+It becomes **-Q1**.
+"""
+point = { at = { page = "Main circuit", x = 80, y = 40 } }
+expect = { device = { symbol = "iec/protection/motor_protection_breaker" } }
+solve = [ { place = { symbol = "iec/protection/motor_protection_breaker", page = "Main circuit", x = 80, y = 40 } } ]
+
+[[step]]
+id = "contactor"
+title = "Place the main contacts"
+text = """
+Tap {key:tool.place}, then **4** for the three main contacts. Drop them under the breaker.
+The wires between the poles draw themselves.
+"""
+point = { at = { page = "Main circuit", x = 80, y = 72 } }
+expect = { device = { symbol = "iec/contactors/main_3p" } }
+solve = [ { place = { symbol = "iec/contactors/main_3p", page = "Main circuit", x = 80, y = 72 } } ]
+
+[[step]]
+id = "next-page"
+title = "Go to the control circuit"
+text = """
+Press {key:nav.next_page}.
+"""
+point = { ui = "pages.list" }
+expect = { page = "Control circuit" }
+solve = [ { command = "nav.next_page" } ]
+
+[[step]]
+id = "fuse"
+title = "Place the control breaker"
+text = """
+Type {key:tool.place} and **mcb**. Drop it under **L1**. It becomes **-F1**.
+"""
+point = { at = { page = "Control circuit", x = 80, y = 40 } }
+expect = { device = { symbol = "iec/protection/mcb_1p" } }
+solve = [ { place = { symbol = "iec/protection/mcb_1p", page = "Control circuit", x = 80, y = 40 } } ]
+
+[[step]]
+id = "stop"
+title = "Place the stop button"
+text = """
+Type {key:tool.place} and **pbnc** for a normally closed button. Drop it under the breaker. It becomes **-S1**.
+"""
+point = { at = { page = "Control circuit", x = 80, y = 72 } }
+expect = { device = { symbol = "iec/operators/pushbutton_nc" } }
+solve = [ { place = { symbol = "iec/operators/pushbutton_nc", page = "Control circuit", x = 80, y = 72 } } ]
+
+[[step]]
+id = "start"
+title = "Place the start button"
+text = """
+Type {key:tool.place} and **pb** for a normally open button. Drop it under the stop button. It becomes **-S2**.
+"""
+point = { at = { page = "Control circuit", x = 80, y = 104 } }
+expect = { device = { symbol = "iec/operators/pushbutton_no" } }
+solve = [ { place = { symbol = "iec/operators/pushbutton_no", page = "Control circuit", x = 80, y = 104 } } ]
+
+[[step]]
+id = "coil"
+title = "Place the coil of the contactor"
+text = """
+Type {key:tool.place} and **coil K1**. This puts the coil on the contactor you already placed, instead of a new device.
+Drop it under the start button.
+"""
+point = { at = { page = "Control circuit", x = 80, y = 136 } }
+expect = { device = { tag = "-K1", symbol = "iec/coils/relay" } }
+solve = [ { place = { symbol = "iec/coils/relay", parent = "-K1", page = "Control circuit", x = 80, y = 136 } } ]
+
+[[step]]
+id = "hold-contact"
+title = "Place the holding contact"
+text = """
+Type {key:tool.place} and **no K1**. Drop the contact beside the start button. It is the second contact of -K1, so it is numbered 13-14.
+"""
+point = { at = { page = "Control circuit", x = 96, y = 104 } }
+expect = { count = { kind = "symbol", page = "Control circuit", at_least = 6 } }
+solve = [ { place = { symbol = "iec/contacts/no", parent = "-K1", page = "Control circuit", x = 96, y = 104 } } ]
+
+[[step]]
+id = "hold-top"
+title = "Join the contact's upper pin"
+text = """
+Drag from the upper pin of the holding contact onto the wire above the start button, at the dot. The wire is tapped there.
+"""
+point = { at = { page = "Control circuit", x = 80, y = 96 } }
+note = [ { at = { device = "-K1", pin = "13" }, text = "Start here" } ]
+expect = { wire = { from = "-K1:13", to = "-S2:13" } }
+solve = [ { tee = { from = "-K1:13", onto = "-S2:13", at = [80, 96] } } ]
+
+[[step]]
+id = "hold-bottom"
+title = "Join the contact's lower pin"
+text = """
+Drag from the lower pin of the holding contact onto the wire above the coil, at the dot.
+"""
+point = { at = { page = "Control circuit", x = 80, y = 128 } }
+note = [ { at = { device = "-K1", pin = "14" }, text = "Start here" } ]
+expect = { wire = { from = "-K1:14", to = "-K1:A1" } }
+solve = [ { tee = { from = "-K1:14", onto = "-K1:A1", at = [80, 128] } } ]
+
+[[step]]
+id = "try"
+title = "Try it"
+text = """
+Press {key:sim.live} to see the starter work, and press it again to leave. The live-view lesson shows how to read it.
+"""
+point = { ui = "dock.live" }
+expect = { command = "sim.live" }
