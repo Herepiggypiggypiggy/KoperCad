@@ -20,26 +20,26 @@ layout and circuit simulation. Native Rust, no web technology, fully offline, sc
 
 It is a design of its own, aimed at what EPLAN Electric P8 and AutoCAD Electrical do, not a copy of either.
 
-## Status at a glance (2026-10-15, 15:30 CEST)
+## Status at a glance (2026-10-15, main `d91b4c2`)
 
 | Area | State |
 | --- | --- |
 | Phase 0 Foundation (gate 0) | Done |
 | Phase 1 Schematics (gate 1: motor starter over two pages, saved, printed to PDF) | Done |
 | Phase 2 Intelligence (gate 2: terminal, cable and report pages generate live) | Met on Linux, per the tester's report |
-| Phase 3 Physical design | Started: PLC and I/O, revisions. Cabinet layout and routing not started |
-| Phase 4 Simulation | Started: the first live-potentials solver is on main (`novo-sim`); device models and animation not started |
-| Phase 5 AI and interop | Not started |
+| Phase 3 Physical design | Started: PLC and I/O, revisions, cabinet layout engine with placement storage and canvas scene; wire routing has a design and a pure duct router |
+| Phase 4 Simulation | Started: live potentials with coils, changeover and timer contacts and glowing lamps and motors on main (awaiting hands-on test); device models and animation in review |
+| Phase 5 AI and interop | Started: DXF reader and writer on main; EPLAN parts import and the NFPA symbol pack in review; AI assistant not started |
 
-Where the work is today: the owner's 26-point workflow list (from the first hands-on tests of the
-experimental builds) is being built in parallel across nine threads. About two thirds of it is on main
-as engine, canvas or editor work; the rest is in review or in progress. See
-[Near-term roadmap](#near-term-roadmap-the-26-point-list) below and `docs/ROADMAP.md` for each point.
+Where the work is today: all 26 points of the owner's workflow list (from the first hands-on tests of the
+experimental builds) are merged on main. Points 14 and 16 and the live simulation view still need the
+owner's hands-on test on Windows. Ten pull requests are in review (see `docs/ROADMAP.md`). See
+[Near-term roadmap](#near-term-roadmap-the-26-point-list) below.
 
 What is verified and what is not:
 
 - **Verified on Linux:** `cargo fmt`, `cargo clippy -D warnings` and all workspace tests passed on
-  every merge (about 920 tests at the last full count, 0 failing, a few ignored).
+  every merge (several hundred tests per crate, about 920 at the last full count, 0 failing, a few ignored).
 - **Windows:** the repository is public, so GitHub Actions runs again. The Windows CI job on main
   builds and tests the workspace and passes on every recent main push. Experimental Windows builds
   1 to 4 have been published (build 4 is main `f6be257`). Everything merged after build 4 is not in
@@ -93,7 +93,7 @@ Application (`novo-app`):
   dropping a contact on a coil links it to that device. Right-click menu, tool dock with the wiring
   mode chip, `N selected` count, device properties on double-click and rename of tags and wire numbers
   by double-click.
-- **On main since build 4, not yet in a build:** autoconnect drawn with the drop (engine; the Preferences setting is still open); the pages
+- **On main since build 4, not yet in a build** (the full list is in `docs/ROADMAP.md`): live potentials and simulation view (Shift+L), Issue revision window and Changes mode, cable tool, user `keymap.txt`, Ctrl+D smart duplicate, the `kopercad.exe` rename, and earlier: autoconnect drawn with the drop (engine; the Preferences setting is still open); the pages
   navigator in the outline (Function and Location views, New page, group and panel, drag to move);
   one-ended terminals as the standard terminal, multi-pole drag of a one-pole part, strip naming by
   adjacency with Up and Ctrl+Up; PE terminal toggle and automatic PE marking; interruption auto-naming;
@@ -121,15 +121,13 @@ hands-on testing; plain drag moving only the component is the current decision (
 ## Near-term roadmap: the 26-point list
 
 The owner's workflow list of 2026-10-15 is the near-term roadmap. Its design is in `docs/DESIGN.md`
-(PRs #238, #242, #247). State on main at `05253e1`:
+(PRs #238, #242, #247). State on main at `d91b4c2`:
 
 | State | Points |
 | --- | --- |
-| Implemented on main | 12 pages navigator and page groups and panels, 13 label side, 14 wheel dwell, 15 multi-pole drag, 16 held place key (confirm hands-on), 24 connect terminals, 25 one-ended terminal, 26 strip naming |
-| Partly on main (engine or model merged, UI or behaviour still open) | 1 auto connections, 6 wire corners, 9 feed numbering, 10 interruption points, 11 PE terminals, 19 corner pieces, 20 cable key, 22 live potentials, 23 set potential |
-| In progress, no merged PR yet | 2, 3, 4, 5, 7, 17, 18, 21 |
-| Designed, not built | 8 wheel fifth wedge and Tab 5 |
-| In review | the Recent-list removal (#257), double-click rename of terminals and feeds (#252), and an overlapping connected-terminals PR (#251) |
+| Implemented on main | 1 to 13, 15, 17 to 21, 23 to 26 |
+| Implemented, awaiting hands-on test | 14 and 16 (wheel dwell, held place key), 22 (live potentials and simulation view) |
+| In review | palette ranking (#350), group and panel rename (#348), PLC potentials (#333), Shift+arrows nudge (#324) |
 
 The per-point table with owners and the PRs that closed each part is in `docs/ROADMAP.md`.
 
@@ -148,24 +146,28 @@ The full roadmap with dependencies and done-criteria is the artifact linked from
 
 ## Planned features
 
-- **The rest of the 26-point list** (above): the Preferences setting for auto connections, grid-only
-  snap, selecting and moving wire corners and segments, text-only drag, right-click menus for PE and
-  potentials, cable drawing, terminating a wire with Q and Tab, longer search menus.
-- **Revisions in the app:** the Issue revision dialog and command line, a Changes mode with marks on
-  the drawing, and revision fields in the title block (the engine is done).
-- **PLC in the app:** dialogs and commands mapped onto the finished PLC engine.
-- **Cabinet layout** (`novo-layout`): mounting plate and rail layout with hatches, dimensions and
-  snapping to rails and ducts. Panels are now a first-class name in the model, so pages in different
-  groups that share a panel share one layout. The canvas primitives are on main.
-- **Wire routing** (`novo-routing`): routing wires through ducts.
-- **Simulation** (`novo-sim`): the live-potentials solver exists; next are coil to contact coupling,
-  timers, animation and fault scenarios.
-- **AI assistant** (`novo-ai`) that edits through the same command path as the user.
-- **Import and export** (`novo-interop`): DXF, EPLAN parts, Excel round trip.
-- **Standards packs:** NFPA after IEC 60617.
+- **Hands-on test** of points 14, 16 and the simulation view on Windows.
+- **Revisions in the app:** the Issue revision window, Changes mode and title block revision fields are
+  on main; the revision table above the title block is a draft (#343).
+- **PLC in the app:** dialogs and commands mapped onto the finished PLC engine (add card, to PLC,
+  renumber exist as commands).
+- **Cabinet layout** (`novo-layout`): geometry engine, rails, place-all planner, layout state,
+  placement storage in the model and the canvas cabinet scene are on main (#287 to #349). Next: dialogs
+  and hatches, dimensions and snapping in the app.
+- **Wire routing** (`novo-routing`): design and the pure duct routing engine are on main (#334); next
+  is wiring it to the layout and the app.
+- **Simulation** (`novo-sim`): coil to contact coupling, changeover and timer contacts and glowing
+  lamps and motors are on main; device models and animation are in review (#346); next are latching
+  circuits and fault scenarios.
+- **AI assistant** (`novo-ai`) that edits through the same command path as the user (held until the
+  threads above land).
+- **Import and export** (`novo-interop`): DXF reader and writer are on main (#344); EPLAN parts import
+  is in review (#347); Excel round trip is next.
+- **Standards packs:** the NFPA core set is in review (#351), design in #335.
+- **Parts library:** plan for Wago, Phoenix Contact, Schneider and Siemens catalogues with a one-click
+  Import design (#342, in review).
 - **Python layer:** more of the app scriptable (Python is the integration layer, never the core).
-- The rest of the **rename**: the executable, Python module and data folders (with a migration).
-  The repository is already `kopercad`.
+- The rename is done for the executable, Python module and data folders; the `novo-*` crate names stay.
 
 ## Build and run
 
@@ -195,7 +197,7 @@ user: per-user install, writes only under `%LOCALAPPDATA%`, `%APPDATA%` and Docu
 | `crates/novo-*` | The Rust workspace; owners and purposes are listed in `CLAUDE.md` |
 | `docs/DESIGN.md` | The design of the app: interaction, pages, wiring, revisions |
 | `docs/design/` | Per-feature designs (PLC, wiring modes, UI guidelines) and mock-ups |
-| `docs/ROADMAP.md` | Roadmap summary, link and the near-term 26-point list |
+| `docs/ROADMAP.md` | Roadmap summary, link, the 26-point list and what is new since |
 | `docs/TEST_REPORT.md` | The tester's rounds and gate results |
 | `handoff/` | Per-workstream hand-over files and the project-wide `MAIN-HANDOFF.md` |
 | `assets/branding/` | Icons and the KoperCAD / KoperVonk lockup |
