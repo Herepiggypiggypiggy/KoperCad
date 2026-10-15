@@ -2654,7 +2654,9 @@ fn new_potential_feeds_count_up_from_l1_on_the_page() {
         doc.project().symbol(id).unwrap().role,
         SymbolRole::PotentialFeed { potential } if potential == l2
     ));
+}
 
+#[test]
 fn shift_m_keeps_carrying_when_the_per_frame_sync_says_otherwise() {
     use novo_editor::tool::Tool;
     let (mut doc, page, mut editor) = setup();
