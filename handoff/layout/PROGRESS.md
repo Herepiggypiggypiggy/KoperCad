@@ -17,3 +17,6 @@
 
 ## 2026-10-15 08:05 UTC
 Wiring-mode dock mock-up (chip, dimmed state, refusal look, Compact hint) saved to design/wiring/wiring-dock.png, source design/code/wiring_dock.rs (not committed). Critique sent to workflow (#169) and wiring-modes thread (#168). Next: check merged DESIGN text.
+
+## 2026-10-15 08:35 UTC
+Wiring dock mock-up and KoperCAD lockup merged (#174, docs/design/wiring-dock.png, assets/branding/lockup.svg/.png). Decision: product KoperCAD, maker KoperVonk (no clash found on crates.io, GitHub or web; Dutch registers unreachable, so not legal clearance). brand::NAME and installer/launcher/docs strings are in the Release rename PR, not mine (#198 closed). Layout is parked: no proactive work until the lead says otherwise.
