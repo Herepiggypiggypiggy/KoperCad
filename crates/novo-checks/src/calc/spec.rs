@@ -291,6 +291,7 @@ pub fn parse(root: &Value) -> Result<Plant, String> {
                 Supply::TwoWire => voltage / 3.0_f64.sqrt(),
             }),
             device: dev,
+            overload_setting_a: opt_number(c, "overload_setting_a", &path)?,
             cable: cab,
             drop_limit_percent: drop_limit,
             notes,

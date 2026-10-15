@@ -162,6 +162,14 @@ pub enum Characteristic {
         in_a: f64,
     },
     Electronic(Electronic),
+    /// Motor protection breaker: thermal release of a trip class at `ir_a`
+    /// and a magnetic release at `ii_a` (fixed or set). Same assumptions on
+    /// the magnetic stage as [`Electronic`].
+    ThermalMagnetic {
+        class: RelayClass,
+        ir_a: f64,
+        ii_a: f64,
+    },
     /// Maker points, `(current in A, time in s)`, ascending in current,
     /// one list per side of the band.
     Points {
@@ -175,7 +183,9 @@ impl Characteristic {
     pub fn rated_a(&self) -> Option<f64> {
         match self {
             Characteristic::Mcb { in_a, .. } | Characteristic::FuseGg { in_a } => Some(*in_a),
-            Characteristic::Relay { ir_a, .. } => Some(*ir_a),
+            Characteristic::Relay { ir_a, .. } | Characteristic::ThermalMagnetic { ir_a, .. } => {
+                Some(*ir_a)
+            }
             Characteristic::Electronic(e) => Some(e.ir_a),
             Characteristic::Points { .. } => None,
         }
@@ -196,6 +206,10 @@ impl Characteristic {
                 "gG fuse: only the conventional currents are guaranteed; the melting times need the maker's data"
                     .to_owned(),
             ],
+            Characteristic::ThermalMagnetic { .. } => vec![
+                "motor protection breaker: thermal band as for an overload relay; magnetic pickup ±20 %, break time 30 ms are assumed; use the maker's curve for guaranteed values"
+                    .to_owned(),
+            ],
             Characteristic::Electronic(_) => vec![
                 "electronic trip unit: pickup ±10 %, delay −20 %/+20 %, instantaneous break time 30 ms are assumed; use the maker's curve for guaranteed values"
                     .to_owned(),
@@ -214,6 +228,20 @@ impl Characteristic {
             Characteristic::Relay { class, ir_a } => relay_band(*class, *ir_a, i_a),
             Characteristic::FuseGg { in_a } => fuse_gg_band(*in_a, i_a),
             Characteristic::Electronic(e) => electronic_band(e, i_a),
+            Characteristic::ThermalMagnetic { class, ir_a, ii_a } => {
+                let thermal = relay_band(*class, *ir_a, i_a)?;
+                let (t_min, t_max) = if i_a >= ii_a * 1.2 {
+                    (INSTANT_MIN_S, 0.03)
+                } else if i_a >= ii_a * 0.8 {
+                    (INSTANT_MIN_S, f64::INFINITY)
+                } else {
+                    (f64::INFINITY, f64::INFINITY)
+                };
+                Some(TimeBand {
+                    t_min: thermal.t_min.min(t_min),
+                    t_max: thermal.t_max.min(t_max),
+                })
+            }
             Characteristic::Points { min, max } => {
                 let t_min = loglog(min, i_a)?;
                 let t_max = loglog(max, i_a)?;
@@ -549,6 +577,28 @@ mod tests {
         assert_eq!(b.t_max, 0.03);
         // Nothing guaranteed at rated current.
         assert!(e.band(250.0).unwrap().t_max.is_infinite());
+    }
+
+    #[test]
+    fn motor_breaker_combines_the_thermal_band_and_the_magnetic_stage() {
+        let m = Characteristic::ThermalMagnetic {
+            class: RelayClass::C10,
+            ir_a: 10.0,
+            ii_a: 130.0,
+        };
+        // Below the magnetic pickup it is the relay band.
+        let r = Characteristic::Relay {
+            class: RelayClass::C10,
+            ir_a: 10.0,
+        };
+        assert_eq!(m.band(72.0), r.band(72.0));
+        // Above 1.2 · Ii: 30 ms.
+        assert_eq!(m.band(200.0).unwrap().t_max, 0.03);
+        // In the pickup tolerance it may trip at once but is not guaranteed to.
+        let b = m.band(130.0).unwrap();
+        assert_eq!(b.t_min, INSTANT_MIN_S);
+        assert!(b.t_max > 0.03);
+        assert_eq!(m.rated_a(), Some(10.0));
     }
 
     #[test]

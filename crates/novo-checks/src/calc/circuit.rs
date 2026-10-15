@@ -70,6 +70,10 @@ pub struct CircuitDesign {
     /// Nominal voltage between the conductors the drop is counted on.
     pub voltage: f64,
     pub device: Device,
+    /// Setting of a separate overload device (relay) when the short-circuit
+    /// device does not protect against overload, as in a motor starter. The
+    /// overload row then uses this instead of the device's rating.
+    pub overload_setting_a: Option<f64>,
     pub cable: CableData,
     /// Drop limit, percent.
     pub drop_limit_percent: f64,
@@ -276,8 +280,17 @@ pub fn evaluate(
             ),
         )),
         Some(iz) => {
-            let (ib, inn) = (design.load_current_a, design.device.rated_a);
-            let i2 = i2_factor(&design.device) * inn;
+            let separate = design.overload_setting_a;
+            let (ib, inn) = (
+                design.load_current_a,
+                separate.unwrap_or(design.device.rated_a),
+            );
+            // A relay trips for sure at 1.2 Ir (IEC 60947-4-1).
+            let i2 = if separate.is_some() {
+                1.2 * inn
+            } else {
+                i2_factor(&design.device) * inn
+            };
             let fail_a = !within(ib, inn);
             let fail_b = !within(inn, iz);
             let fail_c = !within(i2, 1.45 * iz);
@@ -614,6 +627,7 @@ mod tests {
             power_factor: 0.85,
             supply: Supply::ThreePhase,
             voltage: 400.0,
+            overload_setting_a: None,
             device: Device {
                 id: None,
                 rated_a: 16.0,

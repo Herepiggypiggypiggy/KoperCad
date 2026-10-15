@@ -163,6 +163,7 @@ pub enum Limit {
 pub struct PairTable {
     selective: HashMap<(String, String), Limit>,
     backup: HashMap<(String, String), f64>,
+    coordination: HashMap<(String, String), u8>,
     /// Where the table came from, for the report.
     pub source: String,
 }
@@ -185,8 +186,9 @@ impl PairTable {
             .insert((upstream.to_owned(), downstream.to_owned()), limit_ka);
     }
 
-    /// Reads lines `selective,<upstream>,<downstream>,<kA|total>` and
-    /// `backup,<upstream>,<downstream>,<kA>`; `#` starts a comment.
+    /// Reads lines `selective,<upstream>,<downstream>,<kA|total>`,
+    /// `backup,<upstream>,<downstream>,<kA>` and
+    /// `coordination,<scpd>,<contactor>,<1|2>`; `#` starts a comment.
     pub fn from_csv(source: &str, csv: &str) -> Result<PairTable, String> {
         let mut table = PairTable::new(source);
         for (index, raw) in csv.lines().enumerate() {
@@ -205,6 +207,16 @@ impl PairTable {
                     };
                     table.add_selective(up, down, limit);
                 }
+                ["coordination", scpd, contactor, kind]
+                    if !scpd.is_empty() && !contactor.is_empty() =>
+                {
+                    let kind: u8 = kind
+                        .parse()
+                        .ok()
+                        .filter(|k| *k == 1 || *k == 2)
+                        .ok_or_else(|| err("coordination type is 1 or 2"))?;
+                    table.add_coordination(scpd, contactor, kind);
+                }
                 ["backup", up, down, ka] if !up.is_empty() && !down.is_empty() => {
                     table.add_backup(up, down, positive(ka).ok_or_else(|| err("limit is kA"))?);
                 }
@@ -212,6 +224,20 @@ impl PairTable {
             }
         }
         Ok(table)
+    }
+
+    /// Records that a short-circuit protective device and a contactor are
+    /// tested together to type 1 or type 2 coordination (IEC 60947-4-1).
+    pub fn add_coordination(&mut self, scpd: &str, contactor: &str, kind: u8) {
+        self.coordination
+            .insert((scpd.to_owned(), contactor.to_owned()), kind);
+    }
+
+    /// The best coordination type (2 is better than 1) tested for the pair.
+    pub fn coordination(&self, scpd: &str, contactor: &str) -> Option<u8> {
+        self.coordination
+            .get(&(scpd.to_owned(), contactor.to_owned()))
+            .copied()
     }
 
     pub fn selective(&self, upstream: &str, downstream: &str) -> Option<Limit> {
