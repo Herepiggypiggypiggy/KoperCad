@@ -1277,13 +1277,66 @@ pub fn part_delta(
     }
 }
 
-/// A wire's route with a dragged part moved by `delta`.
-pub fn moved_route(route: &[Point], kind: PartKind, delta: Point) -> Vec<Point> {
-    let mut moved = route.to_vec();
-    for i in part_corners(kind, route.len()) {
-        moved[i] = moved[i] + delta;
+/// A wire's route from `a` to `b` with a dragged part moved by `delta`.
+/// Stretches that were horizontal or vertical stay so: where a moved corner
+/// would leave one slanted, an elbow is added next to the corner that did
+/// not move, so the stretch keeps its direction at the fixed end. Stretches
+/// that were slanted to begin with (Lines mode) are left alone.
+pub fn moved_route(
+    a: Point,
+    route: &[Point],
+    b: Point,
+    kind: PartKind,
+    delta: Point,
+) -> Vec<Point> {
+    const EPS: f64 = 1e-6;
+    let aligned = |u: Point, v: Point| (u.x - v.x).abs() < EPS || (u.y - v.y).abs() < EPS;
+    let mut old = vec![a];
+    old.extend_from_slice(route);
+    old.push(b);
+    let moved: Vec<usize> = part_corners(kind, route.len())
+        .into_iter()
+        .map(|i| i + 1)
+        .collect();
+    let new: Vec<Point> = old
+        .iter()
+        .enumerate()
+        .map(|(i, &p)| if moved.contains(&i) { p + delta } else { p })
+        .collect();
+    let mut out: Vec<Point> = Vec::new();
+    for i in 0..new.len() - 1 {
+        if i > 0 {
+            out.push(new[i]);
+        }
+        let (u, v) = (new[i], new[i + 1]);
+        if aligned(u, v) || !aligned(old[i], old[i + 1]) {
+            continue;
+        }
+        let horizontal = (old[i].y - old[i + 1].y).abs() < EPS;
+        let elbow = match (moved.contains(&i), moved.contains(&(i + 1))) {
+            (false, _) if horizontal => Point::new(v.x, u.y),
+            (false, _) => Point::new(u.x, v.y),
+            (true, false) if horizontal => Point::new(u.x, v.y),
+            (true, false) => Point::new(v.x, u.y),
+            (true, true) => continue,
+        };
+        out.push(elbow);
     }
-    moved
+    // Drop bends that landed on their neighbour or on an end.
+    let mut route: Vec<Point> = Vec::new();
+    for p in out {
+        let prev = route.last().copied().unwrap_or(a);
+        if (p.x - prev.x).abs() > EPS || (p.y - prev.y).abs() > EPS {
+            route.push(p);
+        }
+    }
+    while route
+        .last()
+        .is_some_and(|p| (p.x - b.x).abs() < EPS && (p.y - b.y).abs() < EPS)
+    {
+        route.pop();
+    }
+    route
 }
 
 /// Moves a dragged wire part by `delta`; a result that would share a
@@ -1292,7 +1345,13 @@ pub fn move_wire_part(tx: &mut Tx<'_>, wire: WireId, kind: PartKind, delta: Poin
     let Some(w) = tx.project().wire(wire) else {
         return Ok(());
     };
-    let route = moved_route(&w.route, kind, delta);
+    let (Some(a), Some(b)) = (
+        tx.project().endpoint_position(w.from),
+        tx.project().endpoint_position(w.to),
+    ) else {
+        return Ok(());
+    };
+    let route = moved_route(a, &w.route, b, kind, delta);
     tx.update::<Wire>(wire, |w| w.route = route)?;
     check_kept(tx.project(), wire, &[wire])
 }

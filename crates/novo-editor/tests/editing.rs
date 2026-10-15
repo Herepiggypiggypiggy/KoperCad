@@ -1970,6 +1970,22 @@ fn dragging_an_inner_run_slides_both_its_corners_across_it() {
     let moved = &doc.project().wire(wire).unwrap().route;
     assert_eq!(moved[0], p(from.x, 20.0 + delta.y));
     assert_eq!(moved[1], p(to.x, 20.0 + delta.y));
+    let square = |doc: &Document| {
+        let w = doc.project().wire(wire).unwrap();
+        let mut pts = vec![from];
+        pts.extend(w.route.iter().copied());
+        pts.push(to);
+        pts.windows(2)
+            .all(|s| (s[0].x - s[1].x).abs() < 1e-6 || (s[0].y - s[1].y).abs() < 1e-6)
+    };
+    assert!(square(&doc));
+    // A dragged corner keeps both stretches at it straight: an elbow joins
+    // the fixed side.
+    let kick = editor.part_delta(&doc, wire, PartKind::Corner(0), p(0.0, 0.0), p(10.0, -10.0));
+    assert!(editor.move_wire_part(&mut doc, wire, PartKind::Corner(0), kick));
+    assert!(square(&doc));
+    assert!(doc.project().wire(wire).unwrap().route.len() >= 2);
+    doc.undo().unwrap();
     // A corner is free; the run next to an end only follows itself.
     let free = editor.part_delta(&doc, wire, PartKind::Corner(0), p(0.0, 0.0), p(10.0, 10.0));
     assert!(free.x > 0.0 && free.y > 0.0);

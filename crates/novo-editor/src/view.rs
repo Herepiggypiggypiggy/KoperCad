@@ -518,7 +518,7 @@ impl SchematicView {
                 .editor
                 .part_delta(document, drag.part.wire, kind, drag.from, drag.to);
             let mut pts = vec![a];
-            pts.extend(crate::edit::moved_route(&w.route, kind, delta));
+            pts.extend(crate::edit::moved_route(a, &w.route, b, kind, delta));
             pts.push(b);
             items.push(Item::new(layer).unselectable().with(Primitive::stroked(
                 Shape::polyline(pts.iter().map(|p| model::vec(*p)), false),
@@ -987,6 +987,8 @@ impl SchematicView {
                 .editor
                 .part_delta(document, part.wire, kind, drag.from, drag.to);
             self.part_drag = None;
+            // Bends may be added, so the index no longer names the part.
+            self.wire_part = None;
             self.editor.move_wire_part(document, part.wire, kind, delta);
         }
     }
@@ -2170,26 +2172,40 @@ mod tests {
         let mut h = Harness::new();
         let (wire, corner) = wire_with_a_corner(&mut h);
         let route = |h: &Harness| h.doc.project().wire(wire).unwrap().route.clone();
+        // Every stretch of the wire runs horizontally or vertically.
+        let orthogonal = |h: &Harness| {
+            let p = h.doc.project();
+            let w = p.wire(wire).unwrap();
+            let mut pts = vec![p.endpoint_position(w.from).unwrap()];
+            pts.extend(w.route.iter().copied());
+            pts.push(p.endpoint_position(w.to).unwrap());
+            pts.windows(2)
+                .all(|s| (s[0].x - s[1].x).abs() < 1e-6 || (s[0].y - s[1].y).abs() < 1e-6)
+        };
+        let near = |h: &Harness, at: Point, tol: f64| {
+            route(h)
+                .iter()
+                .find(|c| (c.x - at.x).abs() <= tol && (c.y - at.y).abs() <= tol)
+                .copied()
+        };
+        assert!(orthogonal(&h));
         let depth = h.doc.undo_depth();
         let step = h.view.editor.grid;
-        // The run reaching the open end slides its corner along itself only.
+        // The run reaching the open end slides its corner along itself, and
+        // the run to the pin stays vertical.
         h.drag(
             (corner.x + 20.0, corner.y),
             (corner.x + 30.0, corner.y + 10.0),
         );
-        let slid = route(&h)[0];
-        assert!(
-            slid.x > corner.x && (slid.x - (corner.x + 10.0)).abs() <= step,
-            "{slid:?}"
-        );
+        assert!(orthogonal(&h));
+        let slid = near(&h, Point::new(corner.x + 10.0, corner.y), step).expect("the slid corner");
         assert!((slid.y - corner.y).abs() < 1e-6, "{slid:?}");
         assert_eq!(h.doc.undo_depth(), depth + 1);
-        // The corner itself follows the pointer, in one undo step.
+        // The corner itself follows the pointer, in one undo step, and the
+        // stretches at it stay straight.
         h.drag((slid.x, slid.y), (slid.x - 10.0, slid.y - 10.0));
-        let first = route(&h)[0];
-        assert!((first.x - (slid.x - 10.0)).abs() <= step, "{first:?}");
-        assert!((first.y - (slid.y - 10.0)).abs() <= step, "{first:?}");
-        assert_eq!(route(&h).len(), 1);
+        assert!(orthogonal(&h));
+        let first = near(&h, Point::new(slid.x - 10.0, slid.y - 10.0), step).expect("the corner");
         assert_eq!(h.doc.undo_depth(), depth + 2);
         let after = first;
         // Esc mid-drag puts it back.
