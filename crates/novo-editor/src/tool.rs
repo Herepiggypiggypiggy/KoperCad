@@ -732,6 +732,14 @@ impl Editor {
         self.begin_move_with(selection, false)
     }
 
+    /// Whether the move in hand takes the wires along; the view sets it
+    /// from the default and the Shift key while the move runs.
+    pub fn set_move_carry(&mut self, carry: bool) {
+        if let Tool::Move(m) = &mut self.tool {
+            m.carry = carry;
+        }
+    }
+
     /// [`Self::begin_move`], with `carry` taking the wires along (Shift).
     pub fn begin_move_with(&mut self, selection: &[AnyId], carry: bool) -> bool {
         self.link_hint = None;
@@ -755,14 +763,6 @@ impl Editor {
             carry,
         }));
         true
-    }
-
-    /// Shift held while a move is in the air: the wires follow at the drop,
-    /// whichever way the move was picked up.
-    pub fn set_move_carry(&mut self, carry: bool) {
-        if let Tool::Move(m) = &mut self.tool {
-            m.carry = carry;
-        }
     }
 
     /// Escape, first rung: cancels the step in progress.
@@ -1638,9 +1638,27 @@ impl Editor {
         if delta == Point::ZERO {
             return false;
         }
+        let square = self.wire_mode == WiringMode::Corners;
         self.run(doc, "Move wire", |tx| {
-            edit::move_wire_part(tx, wire, kind, delta)
+            edit::move_wire_part(tx, wire, kind, delta, square)
         })
+    }
+
+    /// The route a wire would have with a part dragged by `delta`: what the
+    /// drop will store, in the current wiring mode.
+    pub fn moved_route(
+        &self,
+        doc: &Document,
+        wire: WireId,
+        kind: edit::PartKind,
+        delta: Point,
+    ) -> Option<Vec<Point>> {
+        let project = doc.project();
+        let w = project.wire(wire)?;
+        let a = project.endpoint_position(w.from)?;
+        let b = project.endpoint_position(w.to)?;
+        let square = self.wire_mode == WiringMode::Corners;
+        Some(edit::moved_route(a, &w.route, b, kind, delta, square))
     }
 
     /// How far a wire part dragged from `from` to `to` moves.
@@ -2031,13 +2049,18 @@ impl Editor {
                 } else {
                     match edit::detaching_ends(doc.project(), &m.ids) {
                         0 => String::new(),
-                        1 => " · 1 wire end stays behind open, Shift at the drop takes it along".into(),
-                        n => format!(
-                            " · {n} wire ends stay behind open, Shift at the drop takes them along"
-                        ),
+                        1 => " · 1 wire end stays behind open".into(),
+                        n => format!(" · {n} wire ends stay behind open"),
                     }
                 };
-                format!("Click to drop · R rotate · X mirror · Esc cancels the move{wires}")
+                let shift = if m.carry {
+                    "Shift: leave the wires"
+                } else {
+                    "Shift: take the wires along"
+                };
+                format!(
+                    "Click to drop · R rotate · X mirror · {shift} · Esc cancels the move{wires}"
+                )
             }),
         };
         let text = if self.proposals.is_empty() {

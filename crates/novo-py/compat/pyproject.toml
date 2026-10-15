@@ -1,0 +1,15 @@
+# The old module name. `pip install` this next to kopercad and `import novoelectric`
+# keeps working, with a warning. Delete this folder once nothing imports it.
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "novoelectric"
+version = "0.1.0"
+description = "Compatibility shim: the novoelectric module is now called kopercad"
+requires-python = ">=3.9"
+dependencies = ["kopercad"]
+
+[tool.setuptools]
+packages = ["novoelectric"]
