@@ -99,13 +99,48 @@ fn place(
 }
 
 #[test]
-fn tags_continue_and_wire_numbers_are_cleared() {
+fn tags_continue_and_placed_wires_are_numbered_by_the_scheme() {
     let (mut doc, page) = target();
     let placed = place(&mut doc, page, &PlaceOptions::default());
     assert_eq!(placed.report.tags, vec![tag("=A1-M1"), tag("=A1-Q2")]);
     assert_eq!(placed.report.cleared_wires, 1);
     assert!(placed.report.kept_wire_numbers.is_empty());
     assert!(!placed.report.reused_definition);
+    assert_eq!(placed.report.numbered_wires, vec!["1".to_string()]);
+    let mut numbers: Vec<_> = doc
+        .project()
+        .wires()
+        .filter_map(|w| w.number.clone())
+        .collect();
+    numbers.sort();
+    assert_eq!(numbers, ["1", "W1"], "the target's own number is untouched");
+}
+
+#[test]
+fn the_project_scheme_decides_the_placed_numbers() {
+    let (mut doc, page) = target();
+    doc.transact("Scheme", |tx| {
+        let mut scheme = novo_numbering::Scheme::new(novo_numbering::SchemeKind::ByPage);
+        scheme.prefix = "C".into();
+        scheme.store(tx)
+    })
+    .unwrap();
+    let placed = place(&mut doc, page, &PlaceOptions::default());
+    assert_eq!(placed.report.numbered_wires, vec!["C1.1".to_string()]);
+    // A second placement continues the series.
+    let again = place(&mut doc, page, &PlaceOptions::default());
+    assert_eq!(again.report.numbered_wires, vec!["C1.2".to_string()]);
+}
+
+#[test]
+fn clear_leaves_the_placed_wires_unnumbered() {
+    let (mut doc, page) = target();
+    let options = PlaceOptions {
+        wire_numbers: WireNumbers::Clear,
+        ..PlaceOptions::default()
+    };
+    let placed = place(&mut doc, page, &options);
+    assert!(placed.report.numbered_wires.is_empty());
     let numbered = doc.project().wires().filter(|w| w.number.is_some()).count();
     assert_eq!(numbered, 1, "only the target's own wire is numbered");
 }
@@ -120,6 +155,7 @@ fn keep_drops_a_clashing_number_and_says_so() {
     let placed = place(&mut doc, page, &options);
     assert_eq!(placed.report.clashes, vec!["W1".to_string()]);
     assert!(placed.report.kept_wire_numbers.is_empty());
+    assert_eq!(placed.report.numbered_wires, vec!["1".to_string()]);
 
     // In an empty project the number survives.
     let mut empty = Document::default();

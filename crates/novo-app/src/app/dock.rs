@@ -183,6 +183,8 @@ impl NovoApp {
         let chosen = self.settings.wiring_mode();
         let mut chip = None;
         let mut picked = None;
+        // Where the controls are, for the lessons: id, rect, clicked.
+        let mut spots: Vec<(&'static str, egui::Rect, bool)> = Vec::new();
         let area = egui::Area::new(egui::Id::new("tool_dock"))
             .order(egui::Order::Middle)
             .pivot(pivot)
@@ -190,16 +192,28 @@ impl NovoApp {
             .show(ctx, |ui| {
                 egui::Frame::popup(ui.style()).show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        for (tool, icon, tip) in [
-                            (DockTool::Select, icons::tool::SELECT, "Select · Esc"),
-                            (DockTool::Place, icons::tool::PLACE, place_tip.as_str()),
+                        for (tool, icon, tip, id) in [
+                            (
+                                DockTool::Select,
+                                icons::tool::SELECT,
+                                "Select · Esc",
+                                "dock.select",
+                            ),
+                            (
+                                DockTool::Place,
+                                icons::tool::PLACE,
+                                place_tip.as_str(),
+                                "dock.place",
+                            ),
                             (
                                 DockTool::Connect,
                                 icons::tool::CONNECT,
                                 "Connect · W · Shift+W switches",
+                                "dock.connect",
                             ),
                         ] {
                             let response = widgets::tool_button(ui, icon, active == tool, tip);
+                            spots.push((id, response.rect, response.clicked()));
                             if response.clicked() {
                                 picked = Some(tool);
                             }
@@ -209,9 +223,9 @@ impl NovoApp {
                         }
                         // The wiring mode: always there, faint while another
                         // tool is active; a click connects in that mode.
-                        for (mode, label) in [
-                            (WiringMode::Corners, "Corners"),
-                            (WiringMode::Lines, "Lines"),
+                        for (mode, label, id) in [
+                            (WiringMode::Corners, "Corners", "dock.corners"),
+                            (WiringMode::Lines, "Lines", "dock.lines"),
                         ] {
                             let mut text = egui::RichText::new(label).small();
                             if active != DockTool::Connect {
@@ -221,6 +235,7 @@ impl NovoApp {
                             let response = ui
                                 .selectable_label(selected, text)
                                 .on_hover_text("Wiring mode · Shift+W switches");
+                            spots.push((id, response.rect, response.clicked()));
                             if response.clicked() {
                                 chip = Some(mode);
                             }
@@ -238,18 +253,36 @@ impl NovoApp {
                                     format!("{} {hint}", icons::status::WARNING),
                                 );
                             } else {
-                                ui.label(egui::RichText::new(&hint).weak());
+                                let response = ui.label(egui::RichText::new(&hint).weak());
+                                spots.push(("dock.hint", response.rect, false));
                             }
                         }
                         if proposals > 0 {
                             ui.separator();
-                            ui.label(egui::RichText::new(format!("{proposals} proposed")).weak())
+                            let response = ui
+                                .label(egui::RichText::new(format!("{proposals} proposed")).weak())
                                 .on_hover_text("↵ accept · Tab next · Delete decline");
+                            spots.push(("dock.proposals", response.rect, false));
                         }
                     });
                 });
             });
         self.wb.dock_size = area.response.rect.size();
+        for (id, rect, clicked) in spots {
+            let label = match id {
+                "dock.select" => "Select",
+                "dock.place" => "Place",
+                "dock.connect" => "Connect",
+                "dock.corners" => "Corners",
+                "dock.lines" => "Lines",
+                "dock.hint" => "hint",
+                _ => "proposals",
+            };
+            self.anchor(id, rect, label);
+            if clicked {
+                self.learn_event(novo_learn::Event::Clicked(id.to_owned()));
+            }
+        }
 
         if let Some(mode) = chip {
             self.set_wiring_mode(mode, true);

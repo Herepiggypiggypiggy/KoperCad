@@ -46,6 +46,11 @@ pub struct Settings {
     pub workspaces: BTreeMap<String, WorkspaceLayout>,
     /// How far the fast-keys walk-through is (docs/ONBOARDING-DESIGN.md §2).
     pub onboarding: Onboarding,
+    /// The start of the name a new page group gets (`G` makes `=G1`) in a
+    /// project with no group to continue. Empty: the default.
+    pub group_prefix: String,
+    /// The same for a new cabinet (`A` makes `+A1`). Empty: the default.
+    pub cabinet_prefix: String,
 }
 
 /// The walk-through's progress, per user: kept so closing the app mid-way

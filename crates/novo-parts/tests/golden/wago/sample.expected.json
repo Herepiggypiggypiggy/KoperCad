@@ -1,0 +1,179 @@
+{
+  "notes": [],
+  "parts": [
+    {
+      "data": {
+        "anschlussart": "Push-in CAGE CLAMP",
+        "anschlussquerschnitt_mm²": "0,08 ... 4",
+        "anzahl_der_anschlüsse": 2,
+        "bemessungsspannung_v": 800,
+        "bemessungsstrom_a": 24,
+        "connection_count": 2,
+        "listenpreis": 0.42,
+        "produktstatus": "aktiv",
+        "rated_current_a": 24.0,
+        "rated_voltage_v": 800.0,
+        "width_mm": 5.2,
+        "wire_max_mm2": 4.0,
+        "wire_min_mm2": 0.08,
+        "währung": "EUR"
+      },
+      "description": "Durchgangsklemme 2-Leiter, 2,5 mm²",
+      "function": "terminal",
+      "letter_codes": [
+        "X"
+      ],
+      "lifecycle": "active",
+      "manufacturer": "WAGO",
+      "order_number": "2002-1201",
+      "price": {
+        "amount": 0.42,
+        "currency": "EUR"
+      },
+      "provenance": {
+        "file": "sample.csv",
+        "imported": "2026-10-15",
+        "licence_note": "user-supplied from WAGO; not redistributable",
+        "source": "import:csv"
+      },
+      "sources": {
+        "connection_count": "maker_datasheet",
+        "rated_current_a": "maker_datasheet",
+        "rated_voltage_v": "maker_datasheet",
+        "wire_max_mm2": "maker_datasheet",
+        "wire_min_mm2": "maker_datasheet"
+      },
+      "terminals": [
+        {
+          "kind": "push_in",
+          "name": "1",
+          "wire_mm2": [
+            0.08,
+            4.0
+          ]
+        },
+        {
+          "kind": "push_in",
+          "name": "2",
+          "wire_mm2": [
+            0.08,
+            4.0
+          ]
+        }
+      ]
+    },
+    {
+      "data": {
+        "anschlussart": "Push-in CAGE CLAMP",
+        "anschlussquerschnitt_mm²": "0,08 ... 4",
+        "anzahl_der_anschlüsse": 2,
+        "bemessungsspannung_v": 800,
+        "bemessungsstrom_a": 24,
+        "connection_count": 2,
+        "listenpreis": 0.45,
+        "produktstatus": "aktiv",
+        "rated_current_a": 24.0,
+        "rated_voltage_v": 800.0,
+        "width_mm": 5.2,
+        "wire_max_mm2": 4.0,
+        "wire_min_mm2": 0.08
+      },
+      "description": "Durchgangsklemme 2-Leiter, 2,5 mm², grau",
+      "function": "terminal",
+      "letter_codes": [
+        "X"
+      ],
+      "lifecycle": "active",
+      "manufacturer": "WAGO",
+      "order_number": "2002-1202",
+      "provenance": {
+        "file": "sample.csv",
+        "imported": "2026-10-15",
+        "licence_note": "user-supplied from WAGO; not redistributable",
+        "source": "import:csv"
+      },
+      "sources": {
+        "connection_count": "maker_datasheet",
+        "rated_current_a": "maker_datasheet",
+        "rated_voltage_v": "maker_datasheet",
+        "wire_max_mm2": "maker_datasheet",
+        "wire_min_mm2": "maker_datasheet"
+      },
+      "terminals": [
+        {
+          "kind": "push_in",
+          "name": "1",
+          "wire_mm2": [
+            0.08,
+            4.0
+          ]
+        },
+        {
+          "kind": "push_in",
+          "name": "2",
+          "wire_mm2": [
+            0.08,
+            4.0
+          ]
+        }
+      ]
+    },
+    {
+      "data": {
+        "bemessungsspannung_v": 800,
+        "bemessungsstrom_a": 24,
+        "rated_current_a": 24.0,
+        "rated_voltage_v": 800.0
+      },
+      "description": "Zu kurze Nummer",
+      "manufacturer": "WAGO",
+      "order_number": "2002-12",
+      "provenance": {
+        "file": "sample.csv",
+        "imported": "2026-10-15",
+        "licence_note": "user-supplied from WAGO; not redistributable",
+        "source": "import:csv"
+      },
+      "sources": {
+        "rated_current_a": "maker_datasheet",
+        "rated_voltage_v": "maker_datasheet"
+      }
+    }
+  ],
+  "report": {
+    "mapped": [
+      "2002-1201: anschlussart -> connection PushIn",
+      "2002-1201: anschlussquerschnitt_mm² -> conductor range",
+      "2002-1201: anzahl_der_anschlüsse -> connection_count = 2",
+      "2002-1201: bemessungsspannung_v -> rated_voltage_v = 800",
+      "2002-1201: bemessungsstrom_a -> rated_current_a = 24",
+      "2002-1201: produktstatus -> lifecycle Active",
+      "2002-1201: width_mm -> size width = 5.2 mm",
+      "2002-1201: price -> price 0.42 EUR",
+      "2002-1202: anschlussart -> connection PushIn",
+      "2002-1202: anschlussquerschnitt_mm² -> conductor range",
+      "2002-1202: anzahl_der_anschlüsse -> connection_count = 2",
+      "2002-1202: bemessungsspannung_v -> rated_voltage_v = 800",
+      "2002-1202: bemessungsstrom_a -> rated_current_a = 24",
+      "2002-1202: produktstatus -> lifecycle Active",
+      "2002-1202: width_mm -> size width = 5.2 mm",
+      "2002-12: bemessungsspannung_v -> rated_voltage_v = 800",
+      "2002-12: bemessungsstrom_a -> rated_current_a = 24"
+    ],
+    "parts": 3,
+    "skipped": [
+      "2002-1202: price (price without a currency)"
+    ],
+    "summary": [
+      "Read 17 value(s) into structured part data for 3 part(s), marked as from the maker's data.",
+      "Left as written: 1 price without a currency.",
+      "Terminal names are numbered 1 to N where the file gives only the count; check them against the part.",
+      "2002-12: “2002-12” does not look like a WAGO order number (two groups of three or four digits, such as 2002-1201). Check that it is the order number and not a type name."
+    ],
+    "unmapped": {},
+    "warnings": [
+      "Terminal names are numbered 1 to N where the file gives only the count; check them against the part.",
+      "2002-12: “2002-12” does not look like a WAGO order number (two groups of three or four digits, such as 2002-1201). Check that it is the order number and not a type name."
+    ]
+  }
+}

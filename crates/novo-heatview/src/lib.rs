@@ -13,4 +13,4 @@ pub mod range;
 pub mod streamline;
 pub mod synthetic;
 
-pub use field::{Scalar, Vector};
+pub use field::{FieldError, Scalar, Vector};

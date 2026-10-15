@@ -1,0 +1,194 @@
+{
+  "notes": [],
+  "parts": [
+    {
+      "class": {
+        "etim": "EC000897"
+      },
+      "data": {
+        "conductor_cross_section_flexible_max": "2.5 mm²",
+        "conductor_cross_section_flexible_min": "0.14 mm²",
+        "conductor_cross_section_rigid_max": "4 mm²",
+        "conductor_cross_section_rigid_min": "0.14 mm²",
+        "connection_count": 2,
+        "connection_method": "Screw connection",
+        "depth_ns_35_7_5_mm": 42.2,
+        "height_ns_35_7_5_mm": 47.1,
+        "insulating_material_group": "I",
+        "nominal_current_in": "24 A",
+        "nominal_voltage_un": "800 V",
+        "number_of_connections": 2,
+        "rated_current_a": 24.0,
+        "rated_voltage_v": 800.0,
+        "width_mm": 5.2,
+        "wire_max_mm2": 4.0,
+        "wire_min_mm2": 0.14
+      },
+      "description": "Feed-through terminal block, screw connection, 2.5 mm2",
+      "dimensions": {
+        "depth_mm": 42.2,
+        "height_mm": 47.1,
+        "width_mm": 5.2
+      },
+      "function": "terminal",
+      "keywords": [
+        "terminal",
+        "screw"
+      ],
+      "letter_codes": [
+        "X"
+      ],
+      "manufacturer": "Phoenix Contact",
+      "order_number": "3044076",
+      "provenance": {
+        "file": "sample.xml",
+        "imported": "2026-10-15",
+        "licence_note": "user-supplied from Phoenix Contact; not redistributable",
+        "source": "import:bmecat"
+      },
+      "sources": {
+        "connection_count": "maker_datasheet",
+        "rated_current_a": "maker_datasheet",
+        "rated_voltage_v": "maker_datasheet",
+        "wire_max_mm2": "maker_datasheet",
+        "wire_min_mm2": "maker_datasheet"
+      },
+      "terminals": [
+        {
+          "kind": "screw",
+          "name": "1",
+          "wire_mm2": [
+            0.14,
+            4.0
+          ]
+        },
+        {
+          "kind": "screw",
+          "name": "2",
+          "wire_mm2": [
+            0.14,
+            4.0
+          ]
+        }
+      ],
+      "type_number": "UT 2,5"
+    },
+    {
+      "class": {
+        "etim": "EC000897"
+      },
+      "data": {
+        "conductor_cross_section_solid_max": "4 mm²",
+        "conductor_cross_section_solid_min": "0.14 mm²",
+        "connection_count": 2,
+        "connection_method": "Push-in connection",
+        "nominal_current_in": "24 A",
+        "nominal_voltage_un": "800 V",
+        "number_of_connections": 2,
+        "product_status": "Active",
+        "rated_current_a": 24.0,
+        "rated_voltage_v": 800.0,
+        "width_mm": 5.2,
+        "wire_max_mm2": 4.0,
+        "wire_min_mm2": 0.14
+      },
+      "description": "Feed-through terminal block, push-in connection, 2.5 mm2",
+      "function": "terminal",
+      "letter_codes": [
+        "X"
+      ],
+      "lifecycle": "active",
+      "manufacturer": "Phoenix Contact",
+      "order_number": "3210567",
+      "provenance": {
+        "file": "sample.xml",
+        "imported": "2026-10-15",
+        "licence_note": "user-supplied from Phoenix Contact; not redistributable",
+        "source": "import:bmecat"
+      },
+      "sources": {
+        "connection_count": "maker_datasheet",
+        "rated_current_a": "maker_datasheet",
+        "rated_voltage_v": "maker_datasheet",
+        "wire_max_mm2": "maker_datasheet",
+        "wire_min_mm2": "maker_datasheet"
+      },
+      "terminals": [
+        {
+          "kind": "push_in",
+          "name": "1",
+          "wire_mm2": [
+            0.14,
+            4.0
+          ]
+        },
+        {
+          "kind": "push_in",
+          "name": "2",
+          "wire_mm2": [
+            0.14,
+            4.0
+          ]
+        }
+      ],
+      "type_number": "PT 2,5"
+    },
+    {
+      "data": {
+        "nominal_current_in": "24 A",
+        "rated_current_a": 24.0
+      },
+      "description": "A type name where an order number belongs",
+      "manufacturer": "Phoenix Contact",
+      "order_number": "UT 2,5",
+      "provenance": {
+        "file": "sample.xml",
+        "imported": "2026-10-15",
+        "licence_note": "user-supplied from Phoenix Contact; not redistributable",
+        "source": "import:bmecat"
+      },
+      "sources": {
+        "rated_current_a": "maker_datasheet"
+      }
+    }
+  ],
+  "report": {
+    "mapped": [
+      "3044076: conductor_cross_section_flexible_max -> conductor range",
+      "3044076: conductor_cross_section_flexible_min -> conductor range",
+      "3044076: conductor_cross_section_rigid_max -> conductor range",
+      "3044076: conductor_cross_section_rigid_min -> conductor range",
+      "3044076: connection_method -> connection Screw",
+      "3044076: depth_ns_35_7_5_mm -> size depth = 42.2 mm",
+      "3044076: height_ns_35_7_5_mm -> size height = 47.1 mm",
+      "3044076: nominal_current_in -> rated_current_a = 24",
+      "3044076: nominal_voltage_un -> rated_voltage_v = 800",
+      "3044076: number_of_connections -> connection_count = 2",
+      "3044076: width_mm -> size width = 5.2 mm",
+      "3210567: conductor_cross_section_solid_max -> conductor range",
+      "3210567: conductor_cross_section_solid_min -> conductor range",
+      "3210567: connection_method -> connection PushIn",
+      "3210567: nominal_current_in -> rated_current_a = 24",
+      "3210567: nominal_voltage_un -> rated_voltage_v = 800",
+      "3210567: number_of_connections -> connection_count = 2",
+      "3210567: product_status -> lifecycle Active",
+      "3210567: width_mm -> size width = 5.2 mm",
+      "UT 2,5: nominal_current_in -> rated_current_a = 24"
+    ],
+    "parts": 3,
+    "skipped": [],
+    "summary": [
+      "Read 20 value(s) into structured part data for 3 part(s), marked as from the maker's data.",
+      "1 other feature(s) kept as properties without special meaning.",
+      "Terminal names are numbered 1 to N where the file gives only the count; check them against the part.",
+      "UT 2,5: “UT 2,5” does not look like a Phoenix Contact order number (seven digits, such as 3044076). Check that it is the order number and not a type name."
+    ],
+    "unmapped": {
+      "insulating_material_group": 1
+    },
+    "warnings": [
+      "Terminal names are numbered 1 to N where the file gives only the count; check them against the part.",
+      "UT 2,5: “UT 2,5” does not look like a Phoenix Contact order number (seven digits, such as 3044076). Check that it is the order number and not a type name."
+    ]
+  }
+}
