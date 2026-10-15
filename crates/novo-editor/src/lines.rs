@@ -11,7 +11,7 @@ use novo_core::{Endpoint, ModelError, PageId, Point, Project, Result, Tx, Wire, 
 
 use crate::edit::resolve_target;
 use crate::geometry::{EPS, Target, endpoint_direction, simplify};
-use crate::overlap::{Refusal, plan_route};
+use crate::overlap::{Refusal, plan_route, segment_overlap};
 
 /// The point `to` moves to when the segment from `from` is locked to the
 /// axis the pointer is nearer to (a diagonal pointer takes the horizontal).
@@ -58,6 +58,23 @@ pub fn exact_bends(a: Point, vertices: &[Point], b: Point) -> Vec<Point> {
     // `b` is the wire's end, not a bend.
     out.pop();
     simplify(a, out, b)
+}
+
+/// The first stretch where a segment of `points` runs back over an earlier
+/// segment of the same polyline (a wire drawn out, up, back and along its
+/// own first leg). Segments that only meet at a bend do not overlap.
+pub fn route_overlaps_itself(points: &[Point]) -> Option<(Point, Point)> {
+    let segments: Vec<&[Point]> = points.windows(2).collect();
+    (1..segments.len()).find_map(|i| {
+        (0..i).find_map(|j| {
+            segment_overlap(
+                segments[i][0],
+                segments[i][1],
+                segments[j][0],
+                segments[j][1],
+            )
+        })
+    })
 }
 
 /// The wires already at a pin end (none for a junction or a point on a wire).
@@ -170,6 +187,36 @@ mod tests {
         assert_eq!(elbow(p(0.0, 0.0), p(10.0, 4.0), true), Some(p(0.0, 4.0)));
         assert_eq!(elbow(p(0.0, 0.0), p(4.0, 10.0), false), Some(p(0.0, 10.0)));
         assert_eq!(elbow(p(0.0, 0.0), p(10.0, 0.0), true), None);
+    }
+
+    #[test]
+    fn a_line_back_over_the_wire_itself_is_found() {
+        // Out, up, back along the first leg.
+        let back = [p(0.0, 0.0), p(10.0, 0.0), p(10.0, 5.0), p(10.0, 0.0)];
+        assert!(route_overlaps_itself(&back).is_some());
+        let over = [
+            p(0.0, 0.0),
+            p(10.0, 0.0),
+            p(10.0, 5.0),
+            p(0.0, 5.0),
+            p(0.0, 0.0),
+        ];
+        // Back down the first column is not along the first leg: no overlap.
+        assert!(route_overlaps_itself(&over).is_none());
+        let along = [
+            p(0.0, 0.0),
+            p(10.0, 0.0),
+            p(10.0, 5.0),
+            p(5.0, 5.0),
+            p(5.0, 0.0),
+            p(2.0, 0.0),
+        ];
+        assert_eq!(
+            route_overlaps_itself(&along),
+            Some((p(2.0, 0.0), p(5.0, 0.0)))
+        );
+        // A straight run on is not an overlap.
+        assert!(route_overlaps_itself(&[p(0.0, 0.0), p(5.0, 0.0), p(9.0, 0.0)]).is_none());
     }
 
     #[test]
