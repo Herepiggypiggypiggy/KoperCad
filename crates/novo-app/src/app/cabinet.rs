@@ -314,10 +314,16 @@ impl NovoApp {
                     self.cabinet.fitted = location.clone();
                 }
                 let out = self.cabinet.view.show(ui, self.cabinet.scene.scene());
+                // Enter and Escape belong to the palette or a text field when
+                // one is open.
+                let typing = self.wb.field.is_open()
+                    || self.wb.occurrences.is_some()
+                    || self.modal_open()
+                    || ui.ctx().egui_wants_keyboard_input();
                 let (enter, escape) = ui.input(|i| {
                     (
-                        i.key_pressed(egui::Key::Enter),
-                        i.key_pressed(egui::Key::Escape),
+                        !typing && i.key_pressed(egui::Key::Enter),
+                        !typing && i.key_pressed(egui::Key::Escape),
                     )
                 });
                 if has_plan && enter {

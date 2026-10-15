@@ -124,3 +124,18 @@ fn drop_move_rotate_and_remove_are_each_one_undo_step() {
     d.app.run(&ctx, Action::Undo);
     assert_eq!(placed(&d), Some((200.0, 40.0, true)));
 }
+
+#[test]
+fn picking_a_page_leaves_the_cabinet() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let page = d.app.current_page.expect("a page is shown");
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    assert!(d.app.cabinet_open);
+    d.app.show_page(page);
+    assert!(!d.app.cabinet_open);
+}

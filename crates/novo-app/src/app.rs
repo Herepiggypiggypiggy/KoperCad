@@ -836,6 +836,8 @@ impl NovoApp {
             self.wb.sheet = 0;
         }
         self.current_page = Some(page);
+        // A page is a schematic page: picking one leaves the Cabinet.
+        self.cabinet_open = false;
     }
 
     /// Shows sheet `sheet` of a generated page (0 for any other page).
