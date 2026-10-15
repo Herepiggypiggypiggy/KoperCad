@@ -45,7 +45,7 @@ pub(crate) const STEPS: [Step; 7] = [
         id: "wire",
         title: "Wire",
         command: "tool.connect",
-        text: "{key}, then click pin to pin. A drag from a pin does the same without the key.",
+        text: "{key}, then click pin to pin. A drag from a pin does the same, but only the key ticks this step.",
     },
     Step {
         id: "cable",
@@ -69,7 +69,7 @@ pub(crate) const STEPS: [Step; 7] = [
         id: "commands",
         title: "Every command",
         command: "view.command_palette",
-        text: "{key} lists everything; ? shows the keys. Nothing lives only in a menu.",
+        text: "{key} lists everything. Nothing lives only in a menu.",
     },
 ];
 
@@ -272,7 +272,15 @@ impl NovoApp {
                         }
                     }
                     ui.add_space(2.0);
-                    ui.weak("A tick means the tool opened, not that something was drawn.");
+                    if done < 3 {
+                        ui.weak("A tick means the tool opened, not that something was drawn.");
+                    }
+                    if next.is_some() {
+                        let key = self.step_key(&STEPS[STEPS.len() - 1]);
+                        ui.weak(format!(
+                            "Skip hides this. {key}, then "fast keys", brings it back."
+                        ));
+                    }
                     if next.is_none() {
                         ui.add_space(4.0);
                         ui.label("That is all of them. The command field finds the rest.");
