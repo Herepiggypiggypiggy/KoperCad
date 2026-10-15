@@ -195,6 +195,24 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "parts.browser",
+            "Parts",
+            "Project",
+            &[
+                "part library",
+                "catalog",
+                "import part",
+                "wago",
+                "phoenix",
+                "schneider",
+                "siemens",
+            ],
+            Needs::Nothing,
+        ),
+        &["parts", "part library"],
+    ),
+    verb(
+        cmd(
             "revision.issue",
             "Issue revision",
             "Project",

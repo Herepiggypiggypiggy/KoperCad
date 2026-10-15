@@ -1,0 +1,2 @@
+2026-10-15 19:10 UTC R7 engine, text rule format, tests and doc written; draft PR opened.
+2026-10-15 19:05 UTC Reviewer B (#436 head 4f62602): bottom rows ignored the gap under the top rows after the first row. Fixed in place_all_rules (lead counted for every kept row), new test several_bottom_rows_under_top_rows_never_leave_the_plate fails before and passes after; fmt, clippy and novo-layout tests green.
