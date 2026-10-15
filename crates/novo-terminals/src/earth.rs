@@ -7,9 +7,31 @@
 //! neutral terminal keeps its kind, and the check in [`crate::check`] still
 //! reports a mismatch.
 
-use novo_core::{Endpoint, Netlist, PotentialKind, Project, Result, TerminalId, TerminalKind, Tx};
+use novo_core::{
+    Endpoint, Netlist, PotentialKind, Project, Result, TerminalId, TerminalKind, Tx, Value,
+};
 
 use crate::strip::set_kind;
+
+/// Property that marks a PE state set by hand (DESIGN §5 override): the
+/// automatic marking leaves such a terminal alone until it is reset.
+pub const PE_OVERRIDE: &str = "pe_override";
+
+/// Whether a terminal's PE state was set by hand.
+pub fn has_pe_override(project: &Project, terminal: TerminalId) -> bool {
+    project
+        .terminal(terminal)
+        .is_some_and(|t| t.properties.contains_key(PE_OVERRIDE))
+}
+
+/// Gives the terminals back to the automatic rule. Does not change their
+/// kind; the next [`mark_earthed`] decides.
+pub fn reset_pe_override(tx: &mut Tx<'_>, terminals: &[TerminalId]) -> Result<()> {
+    for &t in terminals {
+        tx.set_property(t, PE_OVERRIDE, None)?;
+    }
+    Ok(())
+}
 
 /// Whether a symbol key is an earth/ground symbol that earths its net.
 /// Chassis (`iec/earth/chassis`) is bonding, not protective earth.
@@ -39,7 +61,7 @@ pub fn earthed_terminals(project: &Project, netlist: &Netlist) -> Vec<TerminalId
         .collect();
     let mut found: Vec<TerminalId> = project
         .terminals()
-        .filter(|t| t.kind == TerminalKind::Feedthrough)
+        .filter(|t| t.kind == TerminalKind::Feedthrough && !t.properties.contains_key(PE_OVERRIDE))
         .filter(|t| {
             project.symbols_of_terminal(t.id).iter().any(|s| {
                 (0..s.pins.len()).any(|pin| {
@@ -66,7 +88,9 @@ pub fn mark_earthed(tx: &mut Tx<'_>) -> Result<Vec<TerminalId>> {
 }
 
 /// The right-click action: when every selected terminal is PE they become
-/// feed-through, otherwise all become PE. Returns the kind they now have.
+/// feed-through, otherwise all become PE. The choice is an override that
+/// [`mark_earthed`] respects until [`reset_pe_override`]. Returns the kind
+/// they now have.
 pub fn toggle_pe(tx: &mut Tx<'_>, terminals: &[TerminalId]) -> Result<TerminalKind> {
     let all_pe = !terminals.is_empty()
         && terminals.iter().all(|&t| {
@@ -81,6 +105,7 @@ pub fn toggle_pe(tx: &mut Tx<'_>, terminals: &[TerminalId]) -> Result<TerminalKi
     };
     for &t in terminals {
         set_kind(tx, t, kind)?;
+        tx.set_property(t, PE_OVERRIDE, Some(Value::Bool(true)))?;
     }
     Ok(kind)
 }

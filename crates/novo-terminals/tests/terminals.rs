@@ -1818,7 +1818,13 @@ fn terminals_on_an_earthed_net_become_pe_and_toggle_back() {
     let (k, _) = doc.transact("T", |tx| toggle_pe(tx, &[a, b])).unwrap();
     assert_eq!(k, TerminalKind::Feedthrough);
     assert_eq!(kind(&doc, a), TerminalKind::Feedthrough);
-    // Already-marked terminals are not touched twice.
+    // A toggled-back terminal is an override and stays feed-through.
+    assert!(has_pe_override(doc.project(), a));
+    let (again, _) = doc.transact("Auto PE", mark_earthed).unwrap();
+    assert!(!again.contains(&a));
+    // Reset hands it back to the automatic rule.
+    doc.transact("Reset", |tx| reset_pe_override(tx, &[a]))
+        .unwrap();
     let (again, _) = doc.transact("Auto PE", mark_earthed).unwrap();
     assert_eq!(again, vec![a]);
 }
