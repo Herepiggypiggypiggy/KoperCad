@@ -792,6 +792,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "import.spreadsheet",
+            "Import spreadsheet",
+            "Import",
+            &["excel", "csv", "xlsx", "device list"],
+            Needs::Project,
+        ),
+        &["import spreadsheet", "import sheet", "import excel"],
+    ),
+    verb(
+        cmd(
             "export.bom",
             "Export bill of materials",
             "Export",

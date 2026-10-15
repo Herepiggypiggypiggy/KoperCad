@@ -32,6 +32,7 @@ mod project_settings;
 mod reports;
 mod revisions;
 mod sizing;
+mod sheet_import;
 mod terminals;
 mod title_revisions;
 mod userkeymap;
@@ -789,6 +790,7 @@ impl NovoApp {
         self.issue_revision_dialog(&ctx);
         self.compare_window(&ctx);
         self.page_form_dialog(&ctx);
+        self.sheet_import_dialog(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {
             self.run_command(&ctx, id, None);
         }
@@ -856,6 +858,7 @@ impl NovoApp {
             || self.wb.wheel.is_some()
             || self.wb.renumber.is_some()
             || self.wb.page_form.is_some()
+            || self.wb.sheet_import.is_some()
             || self.backend.recovery_offer().is_some()
     }
 
@@ -977,6 +980,11 @@ impl NovoApp {
             self.action_button(ui, a, picked);
         }
         ui.separator();
+        let import = egui::Button::new("Import spreadsheet…");
+        if ui.add_enabled(self.is_open(), import).clicked() {
+            self.import_sheet();
+            ui.close();
+        }
         let export = egui::Button::new("Export PDF");
         if ui.add_enabled(self.is_open(), export).clicked() {
             self.export_pdf();

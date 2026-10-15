@@ -429,6 +429,16 @@ fn revised(dir: &Path) -> PathBuf {
     session.record(&changes);
     session.save(doc.project()).unwrap();
     session.close().unwrap();
+/// An edited export of `project`: the first device's description set to
+/// `text`, saved as `edited.xlsx` next to it.
+fn edited_sheet(project: &Path, text: &str) -> PathBuf {
+    use novo_interop::sheets::{Cell, export_project, xlsx_bytes};
+    let loaded = novo_storage::ProjectFile::read(project).unwrap();
+    let mut book = export_project(&loaded);
+    let col = book.tables[0].column("Description").unwrap();
+    book.tables[0].rows[0].cells[col] = Cell::text(text);
+    let path = project.with_file_name("edited.xlsx");
+    std::fs::write(&path, xlsx_bytes(&book).unwrap()).unwrap();
     path
 }
 
@@ -498,4 +508,82 @@ fn export_terminals_writes_the_strip_diagram_with_wire_and_bridge_columns() {
         "{}",
         run.out
     );
+fn import_sheet_previews_and_never_touches_the_project() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+    let sheet = edited_sheet(&path, "Main contactor");
+    let before = std::fs::read(&path).unwrap();
+    let r = novo(&["import", "sheet", s(&path), s(&sheet)]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    assert!(
+        r.out.contains("Description = Contactor -> Main contactor"),
+        "{}",
+        r.out
+    );
+    assert!(r.out.contains("preview only"));
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    let r = novo(&["import", "sheet", s(&path), s(&sheet), "--json"]);
+    let v: serde_json::Value = serde_json::from_str(&r.out).unwrap();
+    assert_eq!(v["changes"][0]["after"], "Main contactor");
+    assert_eq!(v["written"], false);
+}
+
+#[test]
+fn import_sheet_output_writes_a_new_project_and_never_replaces_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+    let sheet = edited_sheet(&path, "Main contactor");
+    let before = std::fs::read(&path).unwrap();
+    let out_path = dir.path().join("imported.novo");
+    let r = novo(&["import", "sheet", s(&path), s(&sheet), "-o", s(&out_path)]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    let imported = novo_storage::ProjectFile::read(&out_path).unwrap();
+    assert_eq!(
+        imported.devices().next().unwrap().description,
+        "Main contactor"
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    // Over the input, over an existing file, or to a non-project name.
+    for target in [path.clone(), out_path.clone(), dir.path().join("x.txt")] {
+        let r = novo(&["import", "sheet", s(&path), s(&sheet), "-o", s(&target)]);
+        assert_eq!(r.code, exit::WRITE, "{}", target.display());
+    }
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+}
+
+#[test]
+fn import_sheet_skip_and_rejected_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+    let sheet = edited_sheet(&path, "Main contactor");
+    let out_path = dir.path().join("skipped.novo");
+    let r = novo(&[
+        "import",
+        "sheet",
+        s(&path),
+        s(&sheet),
+        "-o",
+        s(&out_path),
+        "--skip",
+        "Devices:2",
+    ]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    assert!(r.out.contains("skipped:"), "{}", r.out);
+    assert!(r.out.contains("no file written"));
+    assert!(!out_path.exists());
+    let r = novo(&["import", "sheet", s(&path), s(&sheet), "--skip", "nonsense"]);
+    assert_eq!(r.code, exit::USAGE);
+
+    let csv = dir.path().join("gone.csv");
+    std::fs::write(&csv, "Id,Tag,Description\n999999,-K9,Ghost\n").unwrap();
+    let r = novo(&["import", "sheet", s(&path), s(&csv)]);
+    assert_eq!(r.code, exit::PROBLEMS, "{}{}", r.out, r.err);
+    assert!(r.out.contains("rejected: Devices row"), "{}", r.out);
+    let r = novo(&[
+        "import",
+        "sheet",
+        s(&path),
+        s(&dir.path().join("none.xlsx")),
+    ]);
+    assert_eq!(r.code, exit::READ);
 }

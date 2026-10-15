@@ -66,6 +66,8 @@ pub(crate) struct Workbench {
     pub(super) compare: Option<super::compare::CompareWindow>,
     /// The new pages, group and panel form, while open.
     pub(super) page_form: Option<super::pages::PageForm>,
+    /// The spreadsheet import preview, while it is open.
+    pub(super) sheet_import: Option<super::sheet_import::SheetImport>,
     /// Which sheet of a generated page the canvas shows (0 for the first).
     pub(super) sheet: usize,
     pub(super) nav: Navigator,
@@ -145,6 +147,7 @@ impl Default for Workbench {
             issue: None,
             compare: None,
             page_form: None,
+            sheet_import: None,
             sheet: 0,
             nav: Navigator::default(),
             pending: None,
@@ -227,6 +230,7 @@ const APP_COMMANDS: &[&str] = &[
     "file.remove_background",
     "export.dxf_page",
     "export.dxf_all",
+    "import.spreadsheet",
     "plc.add_card",
     "plc.to_plc",
     "plc.renumber_io",
@@ -569,6 +573,7 @@ impl NovoApp {
             "export.dxf_all" => {
                 self.export_dxf(super::dxf::DxfScope::AllPages);
             }
+            "import.spreadsheet" => self.import_sheet(),
             "plc.add_card" => self.plc_add_card(argument),
             "plc.to_plc" => self.plc_to_plc(),
             "plc.renumber_io" => self.plc_renumber_io(),
