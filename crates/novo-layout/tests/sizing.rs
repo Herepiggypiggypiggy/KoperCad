@@ -160,3 +160,10 @@ fn free_standing_matches_the_handbook_closed_form() {
     let closed = 1.8 * 0.8 * (0.6 + 0.3) + 1.4 * 0.6 * 0.3;
     assert!((a - closed).abs() < 1e-9);
 }
+
+#[test]
+fn a_short_header_row_is_skipped() {
+    let (c, e) = EnclosureCatalog::from_csv("name;width\nA;400;500;210;350;450\n");
+    assert!(e.is_empty(), "{e:?}");
+    assert_eq!(c.items.len(), 1);
+}

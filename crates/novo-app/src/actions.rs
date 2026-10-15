@@ -20,6 +20,8 @@ pub enum Action {
     ZoomToFit,
     ShowSchematic,
     ShowCabinet,
+    SizeEnclosure,
+    EnclosureList,
     PinOutline,
     FocusMode,
     FullScreen,
@@ -43,6 +45,8 @@ impl Action {
         Action::ZoomToFit,
         Action::ShowSchematic,
         Action::ShowCabinet,
+        Action::SizeEnclosure,
+        Action::EnclosureList,
         Action::PinOutline,
         Action::FocusMode,
         Action::FullScreen,
@@ -68,6 +72,8 @@ impl Action {
             Action::ZoomToFit => "view.fit",
             Action::ShowSchematic => "view.schematic",
             Action::ShowCabinet => "view.cabinet",
+            Action::SizeEnclosure => "cabinet.size-enclosure",
+            Action::EnclosureList => "cabinet.enclosures",
             Action::PinOutline => "view.pin_outline",
             Action::FocusMode => "view.focus",
             Action::FullScreen => "view.full_screen",
@@ -96,6 +102,8 @@ impl Action {
             Action::ZoomToFit => "Zoom to fit",
             Action::ShowSchematic => "Schematic",
             Action::ShowCabinet => "Cabinet",
+            Action::SizeEnclosure => "Size the enclosure…",
+            Action::EnclosureList => "Enclosures…",
             Action::PinOutline => "Pin outline",
             Action::FocusMode => "Focus mode",
             Action::FullScreen => "Full screen",
@@ -121,6 +129,8 @@ impl Action {
             Action::ZoomToFit
             | Action::ShowSchematic
             | Action::ShowCabinet
+            | Action::SizeEnclosure
+            | Action::EnclosureList
             | Action::PinOutline
             | Action::FocusMode
             | Action::FullScreen
@@ -151,7 +161,9 @@ impl Action {
             | Action::About
             | Action::OpenExample
             | Action::TryFastKeys
-            | Action::ShowWalkthrough => return None,
+            | Action::ShowWalkthrough
+            | Action::SizeEnclosure
+            | Action::EnclosureList => return None,
         };
         Some(KeyboardShortcut::new(modifiers, key))
     }

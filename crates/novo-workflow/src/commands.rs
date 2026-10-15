@@ -632,6 +632,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "cabinet.size-enclosure",
+        "Size the enclosure",
+        "View",
+        &["enclosure", "cabinet", "heat", "cooling", "plate"],
+        Needs::Project,
+    ),
+    cmd(
+        "cabinet.enclosures",
+        "Enclosures",
+        "View",
+        &["enclosure", "list", "sizes", "catalog"],
+        Needs::Project,
+    ),
+    cmd(
         "view.cabinet_table",
         "Cabinet as table",
         "View",
