@@ -1249,6 +1249,41 @@ impl Editor {
         }
     }
 
+    /// A contact dragged onto a coil (DESIGN.md §4, "row place and link"):
+    /// links it to the coil's device instead of dropping it there. `true`
+    /// when the drop was a link (done or refused with a notice), `false`
+    /// when it is an ordinary drop. Esc has already cancelled nothing here:
+    /// the caller ends the move.
+    pub fn drop_link(&mut self, doc: &mut Document, selection: &[AnyId], target: AnyId) -> bool {
+        let ([AnyId::Symbol(mine)], AnyId::Symbol(coil)) = (selection, target) else {
+            return false;
+        };
+        let project = doc.project();
+        let (Some(a), Some(b)) = (project.symbol(*mine), project.symbol(coil)) else {
+            return false;
+        };
+        let (
+            SymbolRole::Device { main: false, .. } | SymbolRole::Unassigned,
+            SymbolRole::Device { device, main: true },
+        ) = (&a.role, &b.role)
+        else {
+            return false;
+        };
+        if a.id == b.id || a.device() == Some(*device) {
+            return false;
+        }
+        let Some(tag) = project.device(*device).map(|d| d.tag.clone()) else {
+            return false;
+        };
+        if let Err(reason) = self.link_contacts(doc, &[*mine], coil, &tag) {
+            self.notice = Some(reason);
+        }
+        if matches!(self.tool, Tool::Move(_)) {
+            self.tool = Tool::Select;
+        }
+        true
+    }
+
     /// Whether `mine` can be linked to `partner`, as the reason if not.
     fn check_link(
         &self,
