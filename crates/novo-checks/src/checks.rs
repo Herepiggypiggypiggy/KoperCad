@@ -762,3 +762,23 @@ pub(crate) fn terminal_use(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Pr
         out.push(problem);
     }
 }
+
+/// novo-plc's card and channel problems (plc.md §7), at novo-plc's
+/// severity. A channel with no wire is left to the unconnected-point check,
+/// which already marks its pins. Channels are recognised by the built-in
+/// symbol keys ([`novo_plc::FromKey`]); the checks have no symbol library.
+pub(crate) fn plc(cx: &Context<'_>, out: &mut Vec<Problem>) {
+    let project = cx.project;
+    let index = novo_plc::PlcIndex::build(project, &novo_plc::FromKey);
+    for issue in index.issues() {
+        if matches!(issue, novo_plc::Issue::Unconnected { .. }) {
+            continue;
+        }
+        let message = issue.message(project).trim_end_matches('.').to_owned();
+        let mut problem = Problem::new(ProblemKind::Plc, issue.at(), message);
+        if issue.is_error() {
+            problem.severity = Severity::Error;
+        }
+        out.push(problem);
+    }
+}

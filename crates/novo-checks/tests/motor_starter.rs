@@ -39,6 +39,7 @@ struct Broken {
     extra_terminal: TerminalId,
     f3_sym: SymbolId,
     thin_wire: WireId,
+    plc_card: DeviceId,
 }
 
 fn break_it(doc: &mut Document, ms: &MotorStarter) -> Broken {
@@ -134,6 +135,21 @@ fn break_it(doc: &mut Document, ms: &MotorStarter) -> Broken {
                 .expect("-X1:2")
                 .id;
             tx.update::<Terminal>(x1_2, |t| t.name = "N".into())?;
+            // 15. A PLC card whose part says nothing about its channels and
+            // that has no layout of its own.
+            let plc_card = tx.add_device_of_kind(tag("=A1+CAB-A2"), "PLC card", DeviceKind::Plc)?;
+            let card_part = tx.add_part("Siemens", "6ES7-DUMMY")?;
+            tx.assign_part(plc_card, card_part)?;
+            tx.place_symbol(
+                page,
+                "iec/plc/card",
+                Placement::at(Point::new(200.0, 40.0)),
+                vec![],
+                SymbolRole::Device {
+                    device: plc_card,
+                    main: true,
+                },
+            )?;
             Ok(Broken {
                 lamp,
                 s0_sym: ms.s0_sym,
@@ -147,6 +163,7 @@ fn break_it(doc: &mut Document, ms: &MotorStarter) -> Broken {
                 extra_terminal,
                 f3_sym: ms.f3_sym,
                 thin_wire,
+                plc_card,
             })
         })
         .unwrap();
@@ -252,12 +269,17 @@ fn every_deliberate_error_is_flagged_exactly_once() {
     );
     assert_eq!(named.at, vec![AnyId::from(ms.x1_syms[1])]);
 
+    let card = one(ProblemKind::Plc);
+    assert_eq!(card.at, vec![AnyId::from(b.plc_card)]);
+    assert_eq!(card.severity, Severity::Warning);
+    assert!(card.message.starts_with("=A1+CAB-A2"), "{}", card.message);
+
     let summary = Summary::of(&problems);
     assert_eq!(
         (summary.errors, summary.warnings, summary.infos),
-        (3, 10, 1)
+        (3, 11, 1)
     );
-    assert_eq!(summary.pill_text(), "3 errors · 10 warnings");
+    assert_eq!(summary.pill_text(), "3 errors · 11 warnings");
 
     // Reading order: main circuit page, then control page.
     let pages: Vec<Option<PageId>> = problems.iter().map(|p| p.page).collect();
