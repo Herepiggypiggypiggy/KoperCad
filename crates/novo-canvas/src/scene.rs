@@ -121,6 +121,10 @@ pub struct Item {
     /// Non-selectable items (page frames, title blocks) are drawn and can be
     /// snapped to, but clicks go through them.
     pub selectable: bool,
+    /// Whether a click on the item's lines picks it. `false` leaves only a
+    /// box to select it (and a click on its text): a wire is picked by its
+    /// corners and segments instead, never as a whole by a single click.
+    pub click_select: bool,
 }
 
 impl Item {
@@ -132,6 +136,7 @@ impl Item {
             snap_lines: Vec::new(),
             labels: Vec::new(),
             selectable: true,
+            click_select: true,
         }
     }
 
@@ -152,6 +157,13 @@ impl Item {
 
     pub fn with_label(mut self, l: Label) -> Self {
         self.labels.push(l);
+        self
+    }
+
+    /// Only a box (or a click on its text) selects the item, not a click on
+    /// its lines.
+    pub fn box_only(mut self) -> Self {
+        self.click_select = false;
         self
     }
 
@@ -536,7 +548,10 @@ impl Scene {
                 // than it is, so a tag running over a neighbour's body never
                 // steals the click from that body. Text still wins where no
                 // line is near.
-                let (ink, text) = slot.item.parts_distance(p, zoom);
+                let (mut ink, text) = slot.item.parts_distance(p, zoom);
+                if !slot.item.click_select {
+                    ink = f32::INFINITY;
+                }
                 let (score, d, label) = match text {
                     Some((t, i)) if t <= tolerance && (ink > tolerance || t + tolerance < ink) => {
                         (t + tolerance, t, Some(i))
