@@ -46,7 +46,7 @@ pub struct PageInsert {
 /// (`=A1/3` and `=A2/3` are different pages), so only pages of that
 /// structure are compared.
 pub fn next_page_name(project: &Project, after: Option<PageId>) -> String {
-    plan_insert(project, after, |_| false).name
+    plan_insert(project, after, |p| p.frozen.is_some()).name
 }
 
 /// Where and how a page inserted after `after` goes in (see
@@ -194,8 +194,7 @@ fn increment(name: &str) -> Option<String> {
 /// lettered pages to make room when needed ([`plan_insert`]). Returns the
 /// page and the note for the status line, if any.
 pub fn add_page(tx: &mut Tx<'_>, after: Option<PageId>) -> Result<(PageId, Option<String>)> {
-    // Nothing freezes pages yet; revisions (WS-18) will.
-    let plan = plan_insert(tx.project(), after, |_| false);
+    let plan = plan_insert(tx.project(), after, |p| p.frozen.is_some());
     for (page, name) in plan.renames {
         tx.update::<Page>(page, |p| p.name = name)?;
     }
@@ -215,12 +214,21 @@ pub fn add_page(tx: &mut Tx<'_>, after: Option<PageId>) -> Result<(PageId, Optio
 }
 
 /// Why `page` cannot be renamed to `name`, if it cannot: a dot, an empty
-/// name, or a name another page of its structure has.
+/// name, a name another page of its structure has, or a frozen page
+/// (frozen names never move).
 pub fn rename_problem(project: &Project, page: PageId, name: &str) -> Option<String> {
     if let Some(problem) = page_name_problem(name) {
         return Some(problem.into());
     }
     let this = project.page(page)?;
+    if let Some(freeze) = &this.frozen
+        && this.name != name
+    {
+        return Some(format!(
+            "page {} is frozen (issued in revision {})",
+            this.name, freeze.revision
+        ));
+    }
     project
         .pages()
         .any(|p| p.id != page && p.name == name && p.structure.same_structure(&this.structure))
@@ -375,6 +383,24 @@ mod tests {
                 (ids[3], "4".into()),
             ]
         );
+    }
+
+    #[test]
+    fn frozen_pages_keep_their_names() {
+        let (mut d, ids) = doc(&["3", "3a", "3b", "4"]);
+        d.transact("Issue", |tx| tx.freeze_page(ids[1], "B"))
+            .unwrap();
+        let ((page, note), _) = d
+            .transact("New page", |tx| add_page(tx, Some(ids[0])))
+            .unwrap();
+        assert_eq!(d.project().page(page).unwrap().name, "3c");
+        assert_eq!(d.project().page(ids[1]).unwrap().name, "3a");
+        assert_eq!(note.as_deref(), Some("inserted as 3c: 3a–3b are frozen"));
+        assert_eq!(
+            rename_problem(d.project(), ids[1], "3x"),
+            Some("page 3a is frozen (issued in revision B)".into())
+        );
+        assert_eq!(rename_problem(d.project(), ids[2], "3x"), None);
     }
 
     #[test]
