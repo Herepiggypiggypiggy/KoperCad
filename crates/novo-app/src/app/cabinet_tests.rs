@@ -161,3 +161,54 @@ fn a_ghost_is_drawn_but_never_stored() {
     // Without a hovering payload the ghost is cleared again.
     assert!(d.app.cabinet.ghost.is_none());
 }
+
+#[test]
+fn the_enclosure_is_set_in_one_undo_step_and_drawn_with_its_checks() {
+    use novo_layout::enclosure::{Door, Enclosure, Hinge};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    assert!(layout_of(&d, cab).unwrap().enclosure.is_none());
+
+    let e = Enclosure {
+        width: 650.0,
+        height: 850.0,
+        depth: 250.0,
+        plate_setback: 20.0,
+        door: Some(Door {
+            hinge: Hinge::Right,
+            max_angle: 110.0,
+            inner_depth: 0.0,
+        }),
+        front_clearance: Some(400.0),
+        hinge_side_clearance: None,
+    };
+    d.app
+        .cabinet_ask(Ask::SetEnclosure(e), Some(cab), None, &[]);
+    // Drawing the panel with the form, the checks and the top view works.
+    d.frame();
+    d.frame();
+    let layout = layout_of(&d, cab).unwrap();
+    assert_eq!(layout.enclosure, Some(e));
+    // 650 mm door at 110 degrees: 650 in front, 400 free is 250 short.
+    let report = layout.door_report().unwrap();
+    assert!((report.front_short.unwrap() - 250.0).abs() < 1e-6);
+    let lines = super::cabinet_door::sentences(&e, &report, &|id| format!("D{id}"));
+    assert!(
+        lines
+            .iter()
+            .any(|(bad, t)| *bad && t.contains("250 mm short"))
+    );
+
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert!(layout_of(&d, cab).unwrap().enclosure.is_none());
+}

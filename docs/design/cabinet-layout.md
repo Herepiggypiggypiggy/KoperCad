@@ -67,6 +67,34 @@ Ctrl+2 opens the canvas, Ctrl+T switches to its Table face, `place all`
 shows a preview and Enter accepts it as one undo step, and selection syncs
 both ways with the drawer rows.
 
+## 5b. Inside and door (R2)
+
+The Cabinet canvas has a right panel, "Inside and door". Its form stores the
+interior width, height and depth, the plate setback (back wall to plate
+surface), whether there is a door, its hinge side (seen from the front), how
+far it opens, how far things on its inside stand out, and the free room in
+front of and beside the hinge side of the cabinet when known. Apply is one
+undo step. The values are free-form properties of the enclosure `Structure`
+(`novo_layout::model::keys`), so there is no `novo-core` change.
+
+Checks (`novo_layout::enclosure::check`, planning values):
+
+- Usable depth is interior depth minus plate setback minus the door's inside
+  depth. A device whose part depth is larger is "too deep" (the door cannot
+  close); one that leaves less than 10 mm is "tight". Devices whose part has
+  no `depth_mm` are listed, not guessed.
+- The plate must fit inside the interior.
+- The open door, taken as wide as the interior, needs its width in front for
+  an opening of 90 degrees or more (width times sin of the angle below 90),
+  and width times -cos of the angle beside the hinge for more than 90. When
+  the free room is known and smaller, the shortfall is a problem.
+
+The top view in the panel draws the plate, each device as deep as its part,
+the closed door, the arc of the open door and the free-room line. Not done:
+the door is not checked against devices mounted on it (hole and cut-out work,
+R5), hinge play and frame thickness are ignored, and the plate is assumed
+centred across the interior.
+
 ## 6. Out of scope here
 
 Wire ducts routing and lengths (`novo-routing`), 3D, door cut-outs, thermal

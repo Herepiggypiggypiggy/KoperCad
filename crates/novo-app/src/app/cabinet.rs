@@ -11,11 +11,13 @@ use novo_canvas::widget::CanvasView;
 use novo_canvas::{Vec2, vec2};
 use novo_core::{Command, Device, DeviceId, DeviceTag, MountingPlate, StructureId};
 use novo_layout::model::{
-    apply_plan, candidates, load, place_device, rotate_device, set_plate, unplace_device,
+    apply_plan, candidates, load, place_device, rotate_device, set_enclosure, set_plate,
+    unplace_device,
 };
 use novo_layout::plan::Plan;
 use novo_layout::state::CabinetLayout;
 
+use super::cabinet_door::DoorState;
 use super::{Level, NovoApp};
 use crate::theme;
 
@@ -43,6 +45,8 @@ pub(super) struct CabinetState {
     /// Keys the shell left for the Cabinet this frame (`edit.rotate`,
     /// `edit.delete`).
     pub(super) keys: Vec<String>,
+    /// The door and depth panel: its form and the model value it follows.
+    door: DoorState,
 }
 
 /// A placed device being dragged across the plate.
@@ -70,6 +74,7 @@ impl CabinetState {
             drag: None,
             ghost: None,
             keys: Vec::new(),
+            door: DoorState::default(),
         }
     }
 }
@@ -86,6 +91,7 @@ pub(super) enum Ask {
     Drop(u64, f64, f64),
     Rotate(Vec<u64>),
     Remove(Vec<u64>),
+    SetEnclosure(novo_layout::enclosure::Enclosure),
 }
 
 /// The Cabinet drawing of a layout, with the layout's problems as box states.
@@ -214,7 +220,8 @@ impl NovoApp {
                 let problems = r.collisions.len()
                     + r.outside.len()
                     + r.too_close.len()
-                    + r.rail_overflows.len();
+                    + r.rail_overflows.len()
+                    + s.door_report().map_or(0, |d| d.problems());
                 (l.placements.len(), l.unplaced(&cands).len(), problems)
             }
             _ => (0, cands.len(), 0),
@@ -314,6 +321,15 @@ impl NovoApp {
                         }
                         if unplaced_list.is_empty() {
                             ui.weak("Every device is placed");
+                        }
+                    });
+
+                egui::Panel::right("cabinet_door")
+                    .exact_size(280.0)
+                    .resizable(false)
+                    .show(ui, |ui| {
+                        if let Some(a) = self.cabinet.door.show(ui, &shown, &tag_of) {
+                            ask = Some(a);
                         }
                     });
 
@@ -498,6 +514,14 @@ impl NovoApp {
             Ask::Remove(devices) => {
                 self.cabinet_edit("Remove from plate", move |tx| {
                     devices.iter().try_for_each(|d| unplace_device(tx, *d))
+                });
+            }
+            Ask::SetEnclosure(enclosure) => {
+                let Some(structure) = structure else {
+                    return;
+                };
+                self.cabinet_edit("Set inside and door", move |tx| {
+                    set_enclosure(tx, structure, &enclosure)
                 });
             }
             Ask::SetPlate(s) => {
