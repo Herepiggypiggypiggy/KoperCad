@@ -220,12 +220,18 @@ pub enum GeometryState { None, Pending, Ready(Arc<PartGeometry>), Failed(String)
 pub struct Look {
     pub background: [Color; 2],                 // top and bottom, behind the cabinet
     pub surface: fn(ItemKind) -> SurfaceStyle,  // base colour, matte factor, edge colour and width
-    pub mark: fn(Mark) -> MarkStyle,            // tint or edge colour for collisions, too-close, guessed
+    pub mark: fn(Mark) -> MarkStyle,            // tint, edge colour and glyph for collisions, too-close, guessed
     pub selection: Highlight, pub hover: Highlight, pub related: Highlight,
     pub light: Vec3, pub ambient: f32,          // one directional light and a hemisphere term
     pub ground_shadow: f32,                     // soft contact shadow under the plate, 0 = off
 }
 ```
+
+**Marks never rely on colour alone** (the same colour-blind rule as the 2D
+marks). Every `Mark` other than `None` also draws a glyph at the item, a cross
+for a collision, a bang for too close, outside and mismatch, a dashed edge for a
+guessed size, drawn by the overlay from `MarkStyle::glyph`, so a red and an
+amber tint are never the only difference.
 
 ## 6. Camera and input
 
@@ -240,7 +246,7 @@ pub struct Camera {
 ```
 
 - `fit(bounds, aspect)` frames the whole panel (key **F**), `fit_selection` frames the selected items.
-- Presets from a view cube drawn by the overlay: Front (looks at the plate), Back, Left, Right, Top, Bottom, Iso. Clicking one eases the camera there. The view cube, **F** and **Home** are all the keys 3D needs; there is no numpad dependency (laptops). Iso is a corner of the view cube and a command in the command surface; a key for it is the Workflow thread's to assign.
+- Presets from a view cube drawn by the overlay: Front (looks at the plate), Back, Left, Right, Top, Bottom, Iso. Clicking one eases the camera there. The view cube, **F** and **Home** are all the keys 3D needs; there is no numpad dependency (laptops). Home stays `view.fit`, as on the 2D canvas. Iso is a corner of the view cube and the command `view.iso` in the command surface; a key for it is the Workflow thread's to assign.
 - Near and far planes are computed each frame from the scene bounds and the camera, with **reversed-Z** and a `Depth32Float` buffer, so a 2.4 m cabinet seen from 30 cm has no z-fighting between a rail and the plate.
 - Pitch is clamped to +-89 degrees. Distance is clamped so the camera cannot enter the model by accident.
 
@@ -253,9 +259,9 @@ Input, matching the 2D canvas (`DESIGN.md` Keys: middle drag pans, Space held an
 | Wheel | Zoom towards the point under the pointer (the ray hit, else the plate plane, else the target) |
 | Left click | Select the nearest item under the pointer; Shift adds, Ctrl toggles; clicking empty space clears |
 | Left drag on empty space | Marquee select |
-| Alt + click | Select the deepest item under the pointer (the plate, or the rail under a device), ignoring everything in front of it |
+| Alt + click | Select the deepest item under the pointer (the plate, or the rail under a device), ignoring everything in front of it; repeating Alt + click at the same spot steps back up through the items in front, one per click |
 | Double click on an item | Fit it |
-| F / Home | Fit the selection (or the panel when nothing is selected) / fit the whole panel |
+| F / Home | `view.fit`: fit the selection (or the panel when nothing is selected) / fit the whole panel |
 | Esc | The Escape ladder, below |
 
 **Escape ladder** (the same ladder as the 2D canvas, `DESIGN.md` Keys): cancel the
