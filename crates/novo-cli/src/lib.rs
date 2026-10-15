@@ -127,6 +127,10 @@ enum Export {
     Wires(ReportArgs),
     /// Cut list: the wires grouped by size and colour, with end allowances.
     Cutlist(ReportArgs),
+    /// Wire production: the wires to cut in machine order with end
+    /// processing and labels. CSV is the plain job file (one row per
+    /// wire); .xlsx adds the stock, ferrule and duct fill sheets.
+    Wirecut(ReportArgs),
     /// Terminal diagram: every terminal strip with wires in and out, bridges,
     /// destinations and pages.
     Terminals(ReportArgs),
@@ -245,6 +249,7 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
         Cmd::Export(Export::Devices(args)) => export_reports(&args.file, &["devices"], &args, out),
         Cmd::Export(Export::Wires(args)) => export_reports(&args.file, &["wires"], &args, out),
         Cmd::Export(Export::Cutlist(args)) => export_reports(&args.file, &["cutlist"], &args, out),
+        Cmd::Export(Export::Wirecut(args)) => export_wirecut(&args, out),
         Cmd::Export(Export::Terminals(args)) => {
             export_reports(&args.file, &["terminals"], &args, out)
         }
@@ -464,6 +469,33 @@ fn export_reports(
             out.write_all(&bytes)
                 .map_err(|e| Failure::new(exit::WRITE, format!("cannot write output: {e}")))?;
         }
+    }
+    Ok(exit::OK)
+}
+
+/// The wire production export: the plain job file as CSV (to a `.csv` path
+/// or standard output), the whole report as a workbook for `.xlsx`.
+fn export_wirecut(args: &ReportArgs, out: &mut dyn Write) -> Result<i32, Failure> {
+    let csv_path = args
+        .output
+        .as_ref()
+        .is_none_or(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("csv")));
+    if !csv_path {
+        return export_reports(&args.file, &["wirecut"], args, out);
+    }
+    let project = read(&args.file)?;
+    let jobs = novo_reports::wire_cut_jobs(&project);
+    let options = CsvOptions {
+        delimiter: args.delimiter,
+        bom: args.output.is_some(),
+        ..CsvOptions::default()
+    };
+    let text = novo_reports::wire_cut_csv(&jobs, &options);
+    match &args.output {
+        Some(path) => write_output(&args.file, path, text.as_bytes())?,
+        None => out
+            .write_all(text.as_bytes())
+            .map_err(|e| Failure::new(exit::WRITE, format!("cannot write output: {e}")))?,
     }
     Ok(exit::OK)
 }

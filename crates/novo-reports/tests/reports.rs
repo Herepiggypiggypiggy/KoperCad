@@ -591,6 +591,7 @@ fn xlsx_round_trips() {
             "Device list",
             "Wire list",
             "Cut list",
+            "Wire production",
             "Terminal diagram",
             "Cable diagram",
             "IO list"

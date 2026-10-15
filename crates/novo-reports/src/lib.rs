@@ -91,6 +91,7 @@ mod sheets;
 mod strip_diagram;
 mod table;
 mod toc;
+mod wirecut;
 mod wires;
 
 pub use bom::BillOfMaterials;
@@ -111,6 +112,10 @@ pub use strip_diagram::{
 };
 pub use table::{Align, Cell, Column, ReportOutput, Row, Section};
 pub use toc::{PanelContents, TableOfContents};
+pub use wirecut::{
+    FERRULE_KEY, JOB_COLUMNS, STRIP_LENGTH_KEY, StripBasis, WireCut, WireCutJob, WireEnd,
+    typical_strip_mm, wire_cut_csv, wire_cut_jobs,
+};
 pub use wires::WireList;
 
 use novo_core::Project;
@@ -123,6 +128,7 @@ pub fn standard_reports() -> Vec<Box<dyn Report>> {
         Box::new(DeviceList),
         Box::new(WireList),
         Box::new(CutList::default()),
+        Box::new(WireCut),
         Box::new(TerminalDiagram),
         Box::new(CableDiagram),
         Box::new(IoList),

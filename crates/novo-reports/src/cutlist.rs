@@ -45,6 +45,16 @@ impl Default for CutList {
 
 impl CutList {
     pub const ID: &'static str = "cutlist";
+
+    /// What one end of a wire of this cross-section takes for its
+    /// termination: a ferrule below [`CutList::lug_from_mm2`], a cable lug
+    /// from there on (the ferrule when the size is unknown).
+    pub(crate) fn end_allowance_mm(&self, cross_section_mm2: Option<f64>) -> f64 {
+        match cross_section_mm2 {
+            Some(s) if s >= self.lug_from_mm2 => self.lug_mm,
+            _ => self.ferrule_mm,
+        }
+    }
 }
 
 /// The largest cross-section named in a wire-list cell: a number, or a text
@@ -158,13 +168,7 @@ impl Report for CutList {
                 .then_with(|| natural_cmp(&a.to, &b.to))
         });
 
-        let allowance = |w: &Wire| {
-            let end = match w.section {
-                Some(s) if s >= self.lug_from_mm2 => self.lug_mm,
-                _ => self.ferrule_mm,
-            };
-            2.0 * end
-        };
+        let allowance = |w: &Wire| 2.0 * self.end_allowance_mm(w.section);
 
         let mut summary = Section::new(
             "summary",
