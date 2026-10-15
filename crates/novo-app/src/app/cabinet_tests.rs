@@ -200,3 +200,29 @@ fn the_table_face_toggles_and_problems_are_in_words() {
     assert!(c.iter().any(|t| t.contains("past the usable plate")));
     assert!(c.iter().any(|t| t.contains("guess")));
 }
+
+#[test]
+fn keys_pressed_in_the_table_do_not_wait_for_the_plate() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    d.app.run_command(&ctx, "view.cabinet_table", None);
+    d.frame();
+    d.app.run_command(&ctx, "edit.delete", None);
+    assert_eq!(d.app.cabinet.keys.len(), 1);
+    d.frame();
+    assert!(d.app.cabinet.keys.is_empty(), "the table drops the key");
+    // Back on the plate, nothing is deleted by the stale key.
+    d.app.run_command(&ctx, "view.cabinet_table", None);
+    d.frame();
+    assert!(!d.app.cabinet.table);
+    assert!(d.app.cabinet.keys.is_empty());
+}

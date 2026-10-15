@@ -382,6 +382,11 @@ impl NovoApp {
 
         match shown {
             Some(shown) if self.cabinet.table => {
+                // Keys, drags and the landing box belong to the plate: none
+                // may wait there while the table is shown.
+                self.cabinet.keys.clear();
+                self.cabinet.drag = None;
+                self.cabinet.ghost = None;
                 cabinet_table(ui, &shown, &cands, &tag_of);
             }
             Some(shown) => {
