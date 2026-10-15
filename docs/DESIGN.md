@@ -409,9 +409,9 @@ Acceptance, for testers and reviewers, run in both modes unless marked:
    elbow, shown in the preview before the click.
 4. Lines, AutoCAD style: click pin, click two corners, click pin: the same
    wire, with no segment the user did not click.
-5. Lines: a segment over another conductor is refused live, with the
+5. Lines: a segment over another wire is refused live, with the
    cursor, tint, outline and reason in the hint, and nothing changes.
-   Corners: a clicked corner over another conductor is refused the same
+   Corners: a clicked corner over another wire is refused the same
    way; a router leg is nudged clear or refused.
 6. Two wires of one conductor leaving a shared pin store the shared
    stretch once, with a junction where they diverge; a wire laid over a
