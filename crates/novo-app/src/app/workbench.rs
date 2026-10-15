@@ -56,6 +56,8 @@ pub(crate) struct Workbench {
     pub(super) renumber: Option<Vec<novo_plc::commands::RenumberPlan>>,
     /// The Preferences window is open.
     pub(super) preferences: bool,
+    /// The Issue revision window, while it is open.
+    pub(super) issue: Option<super::revisions::IssueDraft>,
     /// The new pages, group and panel form, while open.
     pub(super) page_form: Option<super::pages::PageForm>,
     /// Which sheet of a generated page the canvas shows (0 for the first).
@@ -125,6 +127,7 @@ impl Default for Workbench {
             queued: Vec::new(),
             renumber: None,
             preferences: false,
+            issue: None,
             page_form: None,
             sheet: 0,
             nav: Navigator::default(),
@@ -169,6 +172,8 @@ const APP_COMMANDS: &[&str] = &[
     "tool.place",
     "tool.repeat",
     "tool.connect",
+    "wire.end_on_part",
+    "wire.next_pin",
     "view.command_field_here",
     "edit.rotate",
     "edit.mirror",
@@ -199,6 +204,7 @@ const APP_COMMANDS: &[&str] = &[
     "plc.renumber_io",
     "xref.link",
     "app.preferences",
+    "revision.issue",
     "terminal.toggle_pe",
     "terminal.reset_pe",
     "wire.mode",
@@ -371,7 +377,12 @@ impl NovoApp {
     /// The commands this frame's key presses run, taken out of the input.
     pub(super) fn key_commands(&self, ctx: &egui::Context) -> Vec<&'static str> {
         let focus = self.key_focus(ctx);
-        keys::take_commands(ctx, &self.wb.keymap, focus, |c| self.claims_key(c))
+        // A wire being drawn gives Q and Tab their own meaning.
+        let wiring = self
+            .canvas
+            .schematic_ref()
+            .is_some_and(|v| v.editor.is_wiring());
+        keys::take_commands(ctx, &self.wb.keymap, focus, wiring, |c| self.claims_key(c))
     }
 
     /// Runs a command from a key press. Space only arms the command field:
@@ -419,6 +430,17 @@ impl NovoApp {
                 }
             }
             "tool.repeat" => self.editor_key(EditorKey::Repeat),
+            "wire.end_on_part" => self.editor_key(EditorKey::EndOnPart),
+            "wire.next_pin" => {
+                // Tab must not leave the drawing: egui's own focus move to
+                // the next widget is undone, as for the next proposal.
+                ctx.memory_mut(|m| {
+                    if let Some(id) = m.focused() {
+                        m.surrender_focus(id);
+                    }
+                });
+                self.editor_key(EditorKey::NextPin)
+            }
             "edit.rotate" => self.editor_key(EditorKey::Rotate),
             "edit.mirror" => self.editor_key(EditorKey::Mirror),
             "edit.delete" if self.declines_proposal() => self.dismiss_proposal(),
@@ -491,6 +513,7 @@ impl NovoApp {
             "plc.renumber_io" => self.plc_renumber_io(),
             "xref.link" => self.xref_link(argument),
             "app.preferences" => self.wb.preferences = true,
+            "revision.issue" => self.open_issue_revision(argument),
             other => {
                 let label = novo_workflow::commands::get(other).map_or(other, |c| c.label);
                 self.message(Level::Info, format!("{label} is not in the app yet"));

@@ -13,7 +13,7 @@
 use egui::{Key, Modifiers};
 use novo_canvas::model::{
     self, LabelKind, ModelStyle, PageScene, PlaceholderArt, SheetContent, SymbolArt, SymbolNote,
-    WirePart, WirePartKind, item_id,
+    WireLook, WirePart, WirePartKind, item_id,
 };
 use novo_canvas::widget::{CanvasView, EscapeTarget};
 use novo_canvas::{Anchor, Color, Item, ItemId, Label, Primitive, SelectOp, Shape, Stroke, Vec2};
@@ -21,6 +21,7 @@ use novo_core::{
     AnyId, ChangeSet, Command, DeviceId, Document, PageId, Point, SymbolId, SymbolRole,
     TextContent, WireId,
 };
+use std::collections::HashMap;
 
 use crate::art::LibraryArt;
 use crate::catalog::Match;
@@ -392,6 +393,18 @@ impl SchematicView {
     /// The scene being drawn, for queries on what is under a point.
     pub fn scene(&self) -> Option<&PageScene> {
         self.scene.as_ref()
+    }
+
+    /// Draws these wires in their own colour and width, in the wire layer
+    /// under the symbols (the live view); an empty map restores them all.
+    pub fn set_wire_looks(
+        &mut self,
+        project: &novo_core::Project,
+        looks: HashMap<WireId, WireLook>,
+    ) {
+        if let Some(scene) = self.scene.as_mut() {
+            scene.set_wire_looks(project, looks);
+        }
     }
 
     pub fn zoom_to_fit(&mut self) {
@@ -1231,6 +1244,12 @@ impl SchematicView {
                     focus: true,
                 });
             }
+        }
+        if out.cursor_raw.is_some()
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, Key::M))
+        {
+            self.editor
+                .key(document, EditorKey::MoveWithWires, &selection);
         }
         for (key, action) in [
             (Key::W, EditorKey::Wire),
