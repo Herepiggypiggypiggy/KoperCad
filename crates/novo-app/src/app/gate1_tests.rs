@@ -830,3 +830,55 @@ fn a_generated_page_shows_its_report_and_follows_each_edit() {
     d.frame();
     assert!(d.app.canvas.schematic_ref().unwrap().sheet().is_none());
 }
+
+#[test]
+fn the_outline_lists_each_sheet_of_a_generated_page_and_opens_it() {
+    use novo_core::{DeviceTag, Page, PageKind};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let doc = d.app.backend.document_mut().unwrap();
+    let (page, changes) = doc
+        .transact("Two strips and their page", |tx| {
+            for tag in ["-X1", "-X2"] {
+                let strip = tx.add_terminal_strip(DeviceTag::parse(tag).unwrap())?;
+                tx.add_terminal(strip, "1")?;
+            }
+            let page = tx.add_page("20")?;
+            tx.update::<Page>(page, |p| {
+                p.kind = PageKind::Generated {
+                    generator: "terminals".into(),
+                }
+            })?;
+            Ok(page)
+        })
+        .unwrap();
+    d.app.changed_outside_canvas(&changes);
+
+    // One row per strip, each by its sheet name and what it shows.
+    let rows: Vec<_> = d
+        .app
+        .page_rows()
+        .into_iter()
+        .filter(|r| r.page == page)
+        .collect();
+    let labels: Vec<_> = rows.iter().map(|r| r.label.as_str()).collect();
+    assert_eq!(labels.len(), 2, "{labels:?}");
+    assert!(
+        labels[0].starts_with("20a  Terminal diagram · ") && labels[0].ends_with("-X1"),
+        "{labels:?}"
+    );
+    assert!(
+        labels[1].starts_with("20b") && labels[1].ends_with("-X2"),
+        "{labels:?}"
+    );
+
+    // Opening the second row shows that sheet.
+    d.app.show_sheet(page, rows[1].sheet);
+    d.frame();
+    let view = d.app.canvas.schematic_ref().unwrap();
+    assert_eq!(view.sheet().map(|s| s.name.as_str()), Some("20b"));
+    assert_eq!(view.sheet().and_then(|s| s.number), Some((2, 2)));
+}

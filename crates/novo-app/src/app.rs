@@ -22,7 +22,7 @@ use eframe::egui;
 use crate::actions::Action;
 use novo_core::{Command, ModelError, Outcome, PageId};
 
-use crate::backend::{BackendError, ProjectBackend, page_labels};
+use crate::backend::{BackendError, PageRow, ProjectBackend, page_labels, page_rows};
 use crate::canvas::{CanvasView, OpenPage};
 use crate::settings::Settings;
 use crate::{APP_NAME, PROJECT_EXTENSION};
@@ -213,6 +213,18 @@ impl NovoApp {
 
     fn pages(&self) -> Vec<(PageId, String)> {
         self.backend.document().map(page_labels).unwrap_or_default()
+    }
+
+    /// The project panel's rows: each page, and each sheet of a generated
+    /// page, from the live reports.
+    fn page_rows(&mut self) -> Vec<PageRow> {
+        match self.backend.document() {
+            Some(doc) => {
+                let project = doc.project();
+                page_rows(project, self.wb.reports.live(project))
+            }
+            None => Vec::new(),
+        }
     }
 
     /// Keeps the shown page valid after undo, redo or a reload removed it.
@@ -707,6 +719,12 @@ impl NovoApp {
         self.recent_pages.truncate(MAX_RECENT_PAGES);
     }
 
+    /// Shows sheet `sheet` of a generated page (0 for any other page).
+    pub(crate) fn show_sheet(&mut self, page: PageId, sheet: usize) {
+        self.show_page(page);
+        self.wb.sheet = sheet;
+    }
+
     /// Autosave state for the top bar.
     fn saved_state(&self) -> &'static str {
         if !self.is_open() {
@@ -810,10 +828,17 @@ impl NovoApp {
             return;
         };
         ui.label(name);
-        let page = self
-            .current_page
-            .and_then(|id| self.pages().into_iter().find(|(p, _)| *p == id));
-        if let Some((_, label)) = page {
+        let page = self.current_page.and_then(|id| {
+            let sheet = self.wb.sheet;
+            let rows = self.page_rows();
+            let mine = rows.iter().filter(|r| r.page == id);
+            // The shown sheet, or the page's last when it has fewer now.
+            mine.clone()
+                .find(|r| r.sheet == sheet)
+                .or_else(|| mine.clone().next_back())
+                .cloned()
+        });
+        if let Some(PageRow { label, .. }) = page {
             ui.weak("/");
             let link = ui.add(egui::Button::new(egui::RichText::new(label).strong()).frame(false));
             if link.clicked() && !self.outline_pinned() {
@@ -867,7 +892,7 @@ impl NovoApp {
         );
         ui.add_space(4.0);
 
-        let pages = self.pages();
+        let pages = self.page_rows();
         let filter = self.page_filter.to_lowercase();
         let mut chosen = None;
         egui::ScrollArea::vertical()
@@ -877,13 +902,13 @@ impl NovoApp {
                     let recent: Vec<_> = self
                         .recent_pages
                         .iter()
-                        .filter_map(|id| pages.iter().find(|(p, _)| p == id))
+                        .filter_map(|id| pages.iter().find(|r| r.page == *id))
                         .collect();
                     if !recent.is_empty() {
                         section_label(ui, "Recent");
-                        for (id, label) in recent {
-                            if self.page_row(ui, *id, label) {
-                                chosen = Some(*id);
+                        for row in recent {
+                            if self.page_row(ui, row) {
+                                chosen = Some((row.page, row.sheet));
                             }
                         }
                         ui.add_space(6.0);
@@ -891,11 +916,11 @@ impl NovoApp {
                 }
                 section_label(ui, "All pages");
                 let mut any = false;
-                for (id, label) in &pages {
-                    if filter.is_empty() || label.to_lowercase().contains(&filter) {
+                for row in &pages {
+                    if filter.is_empty() || row.label.to_lowercase().contains(&filter) {
                         any = true;
-                        if self.page_row(ui, *id, label) {
-                            chosen = Some(*id);
+                        if self.page_row(ui, row) {
+                            chosen = Some((row.page, row.sheet));
                         }
                     }
                 }
@@ -903,14 +928,15 @@ impl NovoApp {
                     ui.weak("No page matches");
                 }
             });
-        if let Some(page) = chosen {
-            self.show_page(page);
+        if let Some((page, sheet)) = chosen {
+            self.show_sheet(page, sheet);
             self.outline_open = false;
         }
     }
 
-    fn page_row(&self, ui: &mut egui::Ui, id: PageId, label: &str) -> bool {
-        let selected = self.current_page == Some(id);
+    fn page_row(&self, ui: &mut egui::Ui, row: &PageRow) -> bool {
+        let selected = self.current_page == Some(row.page) && self.wb.sheet == row.sheet;
+        let label = row.label.as_str();
         ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
             ui.add(egui::Button::selectable(selected, label).min_size(egui::vec2(0.0, 22.0)))
         })

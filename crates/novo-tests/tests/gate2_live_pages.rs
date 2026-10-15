@@ -334,7 +334,6 @@ fn gap_the_project_gets_its_generated_pages() {
 /// sheet by its name and what it shows (`20a  Terminals · -X1`, DESIGN.md
 /// §8), so a sheet can be opened from the panel.
 #[test]
-#[ignore = "Gate 2 gap G2-2: the project panel does not list generated sheets (TEST_REPORT Round 12)"]
 fn gap_the_project_panel_lists_each_generated_sheet() {
     let (mut doc, _, mut reports) = starter();
     edit(&mut doc, &mut reports, "Add -X2", |tx| {

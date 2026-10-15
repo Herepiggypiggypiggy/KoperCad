@@ -27,8 +27,8 @@ mod theme;
 pub use actions::{Action, RESERVED_SHORTCUTS};
 pub use app::NovoApp;
 pub use backend::{
-    BackendError, MemoryBackend, OpenReport, ProjectBackend, RecoveryOffer, StorageBackend,
-    new_document, page_labels,
+    BackendError, MemoryBackend, OpenReport, PageRow, ProjectBackend, RecoveryOffer,
+    StorageBackend, new_document, page_labels, page_rows,
 };
 pub use canvas::{CanvasView, OpenPage, PlaceholderCanvas};
 pub use editor_canvas::EditorCanvas;
