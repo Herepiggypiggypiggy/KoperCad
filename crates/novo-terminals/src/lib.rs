@@ -85,6 +85,6 @@ pub use style::{
     style_of, terminal_part,
 };
 pub use suggest::{
-    DISMISS_KEY, Suggestion, accept_suggestions, dismiss_suggestion, restore_suggestion,
-    suggest_terminals, summarize_suggestions,
+    DISMISS_KEY, Suggestion, accept_suggestions, dismiss_suggestion, migrate_legacy_dismissals,
+    restore_suggestion, suggest_terminals, summarize_suggestions,
 };

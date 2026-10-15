@@ -16,7 +16,7 @@
 //! `fuse` or `disconnect`.
 
 use novo_core::{
-    DeviceId, PartId, Project, Result, SymbolInstance, SymbolKey, SymbolRole, TerminalId,
+    DeviceId, PartId, Project, Result, SymbolInstance, SymbolKey, SymbolRole, Terminal, TerminalId,
     TerminalKind, Tx, Value,
 };
 
@@ -89,22 +89,17 @@ pub fn style_of(project: &Project, terminal: TerminalId) -> Option<Style> {
         symbol: as_text(t.properties.get("symbol"))
             .map(SymbolKey)
             .unwrap_or(strip.symbol),
-        part: as_part(t.properties.get("part"))
-            .filter(|&p| project.part(p).is_some())
-            .or(strip.part),
+        part: t.part.filter(|&p| project.part(p).is_some()).or(strip.part),
     })
 }
 
 /// The article a terminal is built with, the one answer every crate uses
 /// (strip editor, bill of materials, missing parts): the terminal's own
-/// `Terminal.part`, else its style ([`style_of`]: its own `part` override,
-/// else its strip's part for its kind). The strip device's own parts (end
-/// plates, accessories) are not the terminal's article.
+/// `Terminal.part`, else its strip's part for its kind ([`style_of`]). The
+/// strip device's own parts (end plates, accessories) are not the
+/// terminal's article.
 pub fn terminal_part(project: &Project, terminal: TerminalId) -> Option<PartId> {
-    let t = project.terminal(terminal)?;
-    t.part
-        .filter(|&p| project.part(p).is_some())
-        .or_else(|| style_of(project, terminal).and_then(|s| s.part))
+    style_of(project, terminal).and_then(|s| s.part)
 }
 
 /// Terminals that deliberately differ from their strip's style.
@@ -112,7 +107,7 @@ pub fn overrides(project: &Project, strip: DeviceId) -> Vec<TerminalId> {
     project
         .terminals_of_strip(strip)
         .into_iter()
-        .filter(|t| t.properties.contains_key("symbol") || t.properties.contains_key("part"))
+        .filter(|t| t.properties.contains_key("symbol") || t.part.is_some())
         .map(|t| t.id)
         .collect()
 }
@@ -159,11 +154,17 @@ pub fn set_strip_style(
     Ok(())
 }
 
-/// Removes a terminal's own symbol and part, so it follows its strip again,
-/// and redraws it with the strip's symbol (see [`crate::redraw`]).
+/// Removes a terminal's own symbol and article (`Terminal.part`), so it
+/// follows its strip again, and redraws it with the strip's symbol (see
+/// [`crate::redraw`]).
 pub fn clear_override(tx: &mut Tx<'_>, terminal: TerminalId) -> Result<()> {
     tx.set_property(terminal, "symbol", None)?;
-    tx.set_property(terminal, "part", None)?;
+    let Some(t) = tx.project().terminal(terminal) else {
+        return Ok(());
+    };
+    if t.part.is_some() {
+        tx.update::<Terminal>(terminal, |t| t.part = None)?;
+    }
     let Some(t) = tx.project().terminal(terminal) else {
         return Ok(());
     };
