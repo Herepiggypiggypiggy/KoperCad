@@ -24,9 +24,28 @@ reviewer with the head SHA after each push.
 ## App PR (claude/revision-compare-app)
 Compare window (`crates/novo-app/src/app/compare.rs`), command
 `revision.compare` ("Compare revisions", verb `compare`), and a "Compare…"
-button on the Changes card. Next: read-only revision view on the canvas,
-note field in the Issue window, `kind_name` match for sheet kinds in
-novo-py `comparison_json` (reviewer nit on #450).
+button on the Changes card.
+
+Revision view (PR claude/revision-view): "Show drawing" in the Compare
+window draws one side (From or To, any page) read only with
+`PageScene` + `CanvasView`, changes outlined with canvas marks (added on To,
+removed on From, changed on both). How to reach it: command palette
+"Compare revisions" (or Changes card "Compare…") → tick "Show drawing".
+
+Status (2026-10-15 evening): merged #400, #435 (engine), #445 (CLI), #450
+(Python), #468 (Compare window). Open: #487 (revision view) and #493
+(sheet kind `match` in novo-py, reviewer nit from #450), both with reviewer B.
+
+Next, for a fresh session: (1) note field. WS-02's #490 adds
+`note: String` to `Command::IssueRevision` (stored in
+`Revision.properties["note"]`, read with `Revision::note()`); after it
+merges, add a note box to the Issue revision window, show `note()` in the
+Compare window pickers and in `revisions list`, and pass it through
+`issue_revision_as`. (2) Workspaces thread moves the Issue/Compare menu
+items under File > Revisions; keep the `revision.*` command ids. (3) Reviewer
+leftovers: old-format snapshot test once a migration exists, fold batch moves
+("12 objects moved together"), `Side::Now` clones the project (borrow if slow).
+The revision table in the frame is #343 (Frame thread, not this one).
 
 ## How to reach it (user-visible entry points)
 

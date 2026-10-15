@@ -38,6 +38,7 @@ fn placements(plan: &Plan, specs: &[Spec]) -> Vec<Placement> {
             rotated: false,
             size: specs.iter().find(|s| s.id == p.id).unwrap().size,
             clearance: None,
+            margins: novo_layout::Margins::default(),
             rail: Some(p.rail),
         })
         .collect()
@@ -222,6 +223,7 @@ fn put(id: u64, x: f64, y: f64, w: f64, h: f64) -> Placement {
         rotated: false,
         size: Size::from_part(Some(w), Some(h)),
         clearance: None,
+        margins: novo_layout::Margins::default(),
         rail: None,
     }
 }

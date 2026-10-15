@@ -1930,6 +1930,7 @@ dependencies = [
  "novo-symbols",
  "novo-terminals",
  "novo-tests",
+ "serde_json",
 ]
 
 [[package]]
@@ -2147,6 +2148,8 @@ version = "0.1.0"
 dependencies = [
  "novo-core",
  "novo-symbols",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
