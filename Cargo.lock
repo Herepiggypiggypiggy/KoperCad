@@ -1949,6 +1949,7 @@ version = "0.1.0"
 dependencies = [
  "novo-canvas",
  "novo-core",
+ "novo-layout",
  "novo-parts",
  "novo-tests",
  "thiserror 2.0.21",
@@ -1981,6 +1982,7 @@ dependencies = [
  "lopdf",
  "novo-canvas",
  "novo-core",
+ "novo-layout",
  "novo-reports",
  "novo-tests",
  "pdf-writer",

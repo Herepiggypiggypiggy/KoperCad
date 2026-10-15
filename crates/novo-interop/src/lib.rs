@@ -10,3 +10,4 @@
 pub mod bridge;
 pub mod dxf;
 pub mod eplan;
+pub mod plate;

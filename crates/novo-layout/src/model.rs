@@ -11,7 +11,11 @@ use novo_core::{
     RailKind, Result, Structure, StructureId, Tx, Value,
 };
 
+use crate::drill::{
+    CUTOUT_KEY, DeviceFeatures, DrillTable, HOLE_PATTERN_KEY, MOUNTING_KEY, features_from_text,
+};
 use crate::plan::{Candidate, Plan};
+use crate::plate_drawing::{PlateDocument, documents};
 use crate::state::CabinetLayout;
 use crate::{Placement, Plate, Rail, Size};
 
@@ -151,4 +155,42 @@ pub fn apply_plan(tx: &mut Tx<'_>, id: StructureId, plan: &Plan) -> Result<()> {
         })?;
     }
     Ok(())
+}
+
+fn text_property(project: &Project, device: &Device, key: &str) -> Option<String> {
+    device.parts.iter().find_map(|part| {
+        match project.get::<novo_core::Part>(*part)?.properties.get(key)? {
+            Value::Text(t) if !t.trim().is_empty() => Some(t.clone()),
+            _ => None,
+        }
+    })
+}
+
+/// What a placed device needs machined, read from the first of its parts
+/// that has each of the mounting, hole pattern and cut-out keys.
+pub fn features(project: &Project, device: &Device) -> DeviceFeatures {
+    features_from_text(
+        device.id.raw(),
+        device.tag.to_string(),
+        text_property(project, device, MOUNTING_KEY).as_deref(),
+        text_property(project, device, HOLE_PATTERN_KEY).as_deref(),
+        text_property(project, device, CUTOUT_KEY).as_deref(),
+    )
+}
+
+/// The plate drawing documents and drill table of an enclosure; `None`
+/// when it has no plate.
+pub fn plate_documents(
+    project: &Project,
+    id: StructureId,
+) -> Option<(Vec<PlateDocument>, DrillTable)> {
+    let layout = load(project, id)?;
+    let features: Vec<DeviceFeatures> = layout
+        .placements
+        .iter()
+        .filter_map(|p| project.get::<Device>(DeviceId::from(p.id)))
+        .map(|d| features(project, d))
+        .collect();
+    let title = structure(project, id)?.tag.to_string();
+    Some(documents(&title, &layout, &features))
 }

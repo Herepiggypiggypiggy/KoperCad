@@ -30,6 +30,7 @@
 mod draw;
 mod font;
 mod inter;
+pub mod plate;
 
 use novo_canvas::model::{
     ModelStyle, PageScene, PlaceholderArt, SheetContent, SheetLine, SheetText, SymbolArt,
