@@ -284,7 +284,8 @@ choice "Moving a symbol: leaves its wires / takes its wires along"; the
 choice only sets the default, and Shift always does the other one (the
 dock hint says "Shift: take the wires along" or "Shift: leave the wires"
 and follows the key while it is down, and the status line after the drop
-says how many wire ends were left open: "3 wire ends left open · Ctrl+Z"). M
+says how many wire ends were left open ("3 wire ends left open ·
+Ctrl+Z"). M
 keeps working as the keyboard move: it picks the selection up at the
 pointer and a click puts it down. Undo takes back one whole move. A
 press and drag on a wire moves the corner or segment under the pointer
