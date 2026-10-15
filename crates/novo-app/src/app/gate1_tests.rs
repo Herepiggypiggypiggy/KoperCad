@@ -2503,3 +2503,131 @@ fn ctrl_d_copies_the_selection_with_the_next_tag_and_selects_the_copy() {
     d.app.backend.document_mut().unwrap().undo().unwrap();
     assert_eq!(symbols(&d), 2);
 }
+
+#[test]
+fn the_fast_keys_walk_through_ticks_each_step_when_its_key_is_used() {
+    use super::onboarding::Step;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    let done = |d: &Drive| d.app.settings.walkthrough_done.clone();
+
+    // With no project, the action builds the practice project and shows the card.
+    assert!(!d.app.is_open());
+    assert!(d.app.first_run(), "a fresh start is a first run");
+    d.app.run(&ctx, Action::FastKeys);
+    d.frame();
+    assert!(d.app.is_open() && d.app.settings.walkthrough_shown);
+    assert!(!d.app.first_run(), "started once, never highlighted again");
+    assert!(done(&d).is_empty());
+    let practice = d.doc().project().symbols().count();
+    assert_eq!(practice, 4, "a motor and three terminals");
+
+    // Undo and something that is not a step tick nothing.
+    d.app.undo_redo(false);
+    d.app.undo_redo(true);
+    assert!(done(&d).is_empty());
+
+    // Q: placing a symbol.
+    let coil = d.place("coil", 120.0, 60.0);
+    assert_eq!(done(&d), ["place"]);
+
+    // W: a wire from the first terminal to the motor's U1, and a second one.
+    let project = d.doc().project();
+    let mut terminals: Vec<_> = project
+        .symbols()
+        .filter(|s| matches!(s.role, novo_core::SymbolRole::Terminal { .. }))
+        .map(|s| (s.placement.origin.x, s.id))
+        .collect();
+    terminals.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let motor = project
+        .symbols()
+        .find(|s| matches!(s.role, novo_core::SymbolRole::Device { .. }) && s.id != coil)
+        .map(|s| s.id)
+        .expect("the motor");
+    let pin = |d: &Drive, s: SymbolId, i: u16| {
+        d.doc()
+            .project()
+            .symbol(s)
+            .unwrap()
+            .pin_position(i)
+            .unwrap()
+    };
+    d.wire(pin(&d, terminals[0].1, 1), pin(&d, motor, 0));
+    assert_eq!(done(&d), ["place", "wire"]);
+    d.wire(pin(&d, terminals[1].1, 1), pin(&d, motor, 1));
+
+    // R: rotate the selection.
+    d.select(coil);
+    d.app.run_command(&ctx, "edit.rotate", None);
+    assert_eq!(done(&d), ["place", "wire", "rotate"]);
+
+    // Ctrl+D: duplicate.
+    d.key(egui::Key::D, egui::Modifiers::COMMAND);
+    assert_eq!(done(&d), ["place", "wire", "rotate", "duplicate"]);
+
+    // C: a line across the two wires, Enter.
+    d.app.run_command(&ctx, "tool.cable", None);
+    d.click(Point::new(30.0, 84.0));
+    d.click(Point::new(70.0, 84.0));
+    {
+        let app = &mut d.app;
+        let view = app.canvas.schematic().expect("the editor canvas");
+        let doc = app.backend.document_mut().expect("a project");
+        assert!(view.editor.key(doc, novo_editor::EditorKey::Finish, &[]));
+    }
+    d.frame();
+    assert_eq!(d.doc().project().cables().count(), 1);
+    assert_eq!(done(&d), ["place", "wire", "rotate", "duplicate", "cable"]);
+
+    // Ctrl+K opens the palette; the sixth step ends the walk-through.
+    d.app.run(&ctx, Action::CommandPalette);
+    assert_eq!(done(&d).len(), 6);
+    assert!(!d.app.settings.walkthrough_shown, "all six: the card goes");
+    let _ = Step::ALL;
+}
+
+#[test]
+fn skipping_the_walk_through_keeps_it_away_and_the_menu_brings_it_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    // Not started: placing ticks nothing.
+    d.place("coil", 80.0, 60.0);
+    assert!(d.app.settings.walkthrough_done.is_empty());
+
+    // On an open project the action starts the card again, on that project.
+    let symbols = d.doc().project().symbols().count();
+    d.app.run(&ctx, Action::FastKeys);
+    assert!(d.app.settings.walkthrough_shown);
+    assert_eq!(d.doc().project().symbols().count(), symbols);
+    d.place("coil", 160.0, 60.0);
+    assert_eq!(d.app.settings.walkthrough_done, ["place"]);
+
+    // Skip hides it for good; a later edit ticks nothing.
+    d.app.settings.walkthrough_shown = false;
+    d.place("coil", 200.0, 60.0);
+    assert_eq!(d.app.settings.walkthrough_done, ["place"]);
+
+    // Starting again resets the progress.
+    d.app.run(&ctx, Action::FastKeys);
+    assert!(d.app.settings.walkthrough_done.is_empty());
+    assert!(d.app.settings.walkthrough_shown);
+}
+
+#[test]
+fn open_example_builds_the_motor_starter_as_an_unsaved_project() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    d.frame();
+    assert!(d.app.is_open());
+    assert_eq!(d.doc().project().info().name, "Motor starter (example)");
+    assert!(d.doc().project().pages().count() >= 2);
+    assert!(d.doc().project().devices().count() >= 8);
+    assert!(d.app.current_page().is_some(), "a page is shown");
+    assert!(d.app.project_path.is_none(), "untitled until it is named");
+}

@@ -101,6 +101,8 @@ pub(crate) struct Workbench {
     pub(super) last_export: Option<PathBuf>,
     /// The live potentials view (Shift+L).
     pub(super) live: super::live::LiveView,
+    /// The fast-keys card folded to its pill by hand.
+    pub(super) walkthrough_collapsed: bool,
     /// Changes mode, while it is on.
     pub(super) changes: Option<super::changes::ChangesMode>,
 }
@@ -151,6 +153,7 @@ impl Default for Workbench {
             problem_at: None,
             last_export: None,
             live: Default::default(),
+            walkthrough_collapsed: false,
             changes: None,
         }
     }
@@ -671,6 +674,7 @@ impl NovoApp {
             self.canvas.document_changed(doc, changes);
         }
         self.backend.record(changes);
+        self.steps_after_edit();
         self.reports_heard(changes);
         self.fix_current_page();
     }

@@ -56,4 +56,19 @@ No step needs admin rights. If one asks for it, stop and say so.
   carries. Coils get a badge too and timers count down. Shift+L (or the close button) leaves the
   view and the drawing is unchanged.
 
+## 6. Onboarding (needs a build with the onboarding PR)
+
+- **Start panel.** With no project open it offers **Open example** and **Try the fast keys** next to
+  New and Open. On a first run it says "New here? Start with Try the fast keys."
+- **Open example.** A two-page motor starter opens as an untitled project named "Motor starter
+  (example)". Undo once empties it. Ctrl+S asks for a name like any new project.
+- **Try the fast keys.** A practice page opens with a motor and three terminals, and a card at the
+  bottom right lists six keys with "0 of 6". Each ticks only when you really use it: Q place (hold for the
+  wheel), W wire, R rotate, Ctrl+D duplicate, C cable, Ctrl+K palette. Paste or undo must not tick
+  anything. The card does not block the canvas and the tool dock still works beside it.
+- **Fold and skip.** "–" folds the card to a "Fast keys 3 of 6" pill; Shift+L (live view) folds it by
+  itself. Skip closes it and it does not come back on its own. After the sixth tick it goes away.
+- **Again.** The project menu (the mark at top left) and the palette have **Try the fast keys**; it
+  starts the card again on the open project.
+
 Send the result to the thread you got the build from, or write it next to the build number.

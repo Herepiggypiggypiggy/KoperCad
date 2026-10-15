@@ -12,6 +12,7 @@ mod inspector;
 mod link;
 mod live;
 mod live_anim;
+mod onboarding;
 mod pages;
 mod pdf;
 mod plc;
@@ -328,6 +329,8 @@ impl NovoApp {
         match action {
             Action::NewProject => self.leave_then(ctx, Leaving::New),
             Action::OpenProject => self.leave_then(ctx, Leaving::Open),
+            Action::OpenExample => self.open_example(),
+            Action::FastKeys => self.fast_keys(),
             Action::SaveProject => {
                 self.save();
             }
@@ -354,7 +357,10 @@ impl NovoApp {
                 let full = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!full));
             }
-            Action::CommandPalette => self.wb.field.open(novo_workflow::palette::Mode::All, None),
+            Action::CommandPalette => {
+                self.wb.field.open(novo_workflow::palette::Mode::All, None);
+                self.step_heard(onboarding::Step::Palette);
+            }
             Action::About => self.show_about = true,
         }
     }
@@ -706,6 +712,7 @@ impl NovoApp {
             self.inspector(&ctx, canvas_rect);
             self.live_view(&ctx, canvas_rect);
             self.changes_card(&ctx, canvas_rect);
+            self.walkthrough_card(&ctx, canvas_rect);
         }
         self.toasts(&ctx, canvas_rect);
 
@@ -736,6 +743,7 @@ impl NovoApp {
     fn after_canvas(&mut self) {
         let changes = self.canvas.take_changes();
         if !changes.is_empty() {
+            self.steps_after_edit();
             self.reports_heard(&changes);
             self.mark_earthed_terminals(&changes);
             self.fix_current_page();
@@ -886,7 +894,12 @@ impl NovoApp {
     /// The short project menu behind the mark. Everything in it is also in
     /// the command palette.
     fn project_menu(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
-        for a in [Action::NewProject, Action::OpenProject] {
+        for a in [
+            Action::NewProject,
+            Action::OpenProject,
+            Action::OpenExample,
+            Action::FastKeys,
+        ] {
             self.action_button(ui, a, picked);
         }
         ui.add_enabled_ui(!self.settings.recent_projects.is_empty(), |ui| {
@@ -1508,8 +1521,16 @@ impl NovoApp {
         ui.scope_builder(egui::UiBuilder::new().max_rect(column), |ui| {
             ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
                 ui.weak("No project open");
+                if self.first_run() {
+                    ui.weak("New here? Start with Try the fast keys.");
+                }
                 ui.add_space(8.0);
-                for a in [Action::NewProject, Action::OpenProject] {
+                for a in [
+                    Action::NewProject,
+                    Action::OpenProject,
+                    Action::OpenExample,
+                    Action::FastKeys,
+                ] {
                     self.action_button(ui, a, picked);
                 }
                 let unsaved = self.backend.unsaved_projects();

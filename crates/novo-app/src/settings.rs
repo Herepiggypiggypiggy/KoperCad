@@ -31,6 +31,12 @@ pub struct Settings {
     /// Whether moving a symbol takes its wires along by default (Shift
     /// does the other one): a per-user preference.
     pub move_carries: bool,
+    /// The fast-keys walk-through (docs/ONBOARDING-DESIGN.md): the ids of
+    /// the steps done, whether its card is showing, and whether it was ever
+    /// started or skipped (so it is only highlighted on a first run).
+    pub walkthrough_done: Vec<String>,
+    pub walkthrough_shown: bool,
+    pub walkthrough_seen: bool,
 }
 
 impl Settings {

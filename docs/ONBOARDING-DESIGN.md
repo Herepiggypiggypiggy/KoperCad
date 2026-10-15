@@ -1,7 +1,8 @@
 # Onboarding: example project and first-run walk-through
 
-Status: proposal for review. Nothing here is built yet. Thin UI over existing commands, as
-`docs/DESIGN.md` asks.
+Status: built (`crates/novo-app/src/app/onboarding.rs`). Thin UI over existing commands, as
+`docs/DESIGN.md` asks. Step detection reads the undo label of the edit just made: `Place …`,
+`Draw wire`, `Rotate`, `Duplicate`, `Draw cable`, and the palette opening.
 
 ## Why
 

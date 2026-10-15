@@ -28,6 +28,9 @@ novo-terminals.workspace = true
 novo-plc.workspace = true
 novo-revisions.workspace = true
 novo-sim.workspace = true
+# The example project is the Gate 1 fixture (docs/ONBOARDING-DESIGN.md). Its
+# only normal dependency is novo-core; keep it that way.
+novo-tests.workspace = true
 log = "0.4"
 env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
 rfd = "0.17"
