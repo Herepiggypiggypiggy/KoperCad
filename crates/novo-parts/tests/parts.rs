@@ -1319,4 +1319,10 @@ fn pe_blocks_are_recognised_by_prefix_description_and_colour() {
         ft
     );
     assert_eq!(block("TYPE 4", "Open terminal"), ft);
+    assert_eq!(
+        block("UT 4", "Feed-through terminal block with protective cover"),
+        ft
+    );
+    assert_eq!(block("UT 4", "Terminal block for PE/N distribution"), ft);
+    assert_eq!(block("UT 4", "Terminal block, for PE"), ft);
 }
