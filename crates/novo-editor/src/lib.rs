@@ -42,6 +42,7 @@ pub mod catalog;
 pub mod edit;
 pub mod geometry;
 pub mod naming;
+pub mod overlap;
 pub mod pages;
 pub mod potential;
 pub mod tool;

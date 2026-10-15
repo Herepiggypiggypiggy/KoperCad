@@ -335,16 +335,17 @@ fn ending_on_a_wire_makes_a_t_junction_without_asking() {
         click_pin(&mut editor, &mut doc, page, b, "14"),
         Clicked::Edited
     );
-    // From the third contact's top pin onto the middle of that wire.
+    // From the third contact's top pin onto the side of the vertical run
+    // (arriving along the wire would be an overlap, which is refused).
     click_pin(&mut editor, &mut doc, page, c, "13");
     assert_eq!(
-        editor.click(&mut doc, page, p(60.0, 72.3), TOL),
+        editor.click(&mut doc, page, p(80.3, 64.0), TOL),
         Clicked::Edited
     );
 
     assert_eq!(doc.project().junctions().count(), 1);
     let j = doc.project().junctions().next().unwrap();
-    assert_eq!(j.position, p(60.0, 72.0));
+    assert_eq!(j.position, p(80.0, 64.0));
     assert_eq!(doc.project().wires_at(Endpoint::junction(j.id)).count(), 3);
     assert!(connected(&doc, pin(&doc, a, "14"), pin(&doc, c, "13")));
     assert!(connected(&doc, pin(&doc, b, "14"), pin(&doc, c, "13")));
@@ -1205,4 +1206,165 @@ fn renaming_a_page_refuses_a_dot_without_an_undo_step() {
     assert_eq!(editor.notice(), None);
     assert_eq!(doc.project().page(page).unwrap().name, "1a");
     assert_eq!(doc.undo_label(), Some("Rename page"));
+}
+
+/// Two contacts above, two below, so pin-to-pin wires route as Z shapes with
+/// their cross-over halfway: `top` pins 14 at x = 40 and 80, `low` pins 13 at
+/// x = 60 and 40.
+fn two_rows() -> (Document, PageId, [novo_core::SymbolId; 4]) {
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/contacts/no", None);
+    for at in [p(40.0, 40.0), p(80.0, 40.0), p(60.0, 120.0), p(40.0, 120.0)] {
+        editor.click(&mut doc, page, at, TOL);
+    }
+    let s = |x: f64, y: f64| symbol_at(&doc, page, p(x, y));
+    let syms = [s(40.0, 40.0), s(80.0, 40.0), s(60.0, 120.0), s(40.0, 120.0)];
+    (doc, page, syms)
+}
+
+fn target(
+    project: &novo_core::Project,
+    sym: novo_core::SymbolId,
+    name: &str,
+) -> novo_editor::geometry::Target {
+    let s = project.symbol(sym).unwrap();
+    let end = Endpoint::pin(sym, s.pin_index(name).unwrap());
+    novo_editor::geometry::Target::Endpoint(end, project.endpoint_position(end).unwrap())
+}
+
+fn page_has_no_overlaps(doc: &Document, page: PageId) -> bool {
+    novo_editor::overlap::page_overlaps(doc.project(), page).is_empty()
+}
+
+#[test]
+fn a_router_leg_that_would_overlap_is_moved_a_step() {
+    let (mut doc, page, [a, b, c, d]) = two_rows();
+    doc.transact("w1", |tx| {
+        edit::draw_wire(
+            tx,
+            page,
+            target(tx.project(), a, "14"),
+            &[],
+            target(tx.project(), c, "13"),
+        )
+    })
+    .unwrap();
+    doc.transact("w2", |tx| {
+        edit::draw_wire(
+            tx,
+            page,
+            target(tx.project(), b, "14"),
+            &[],
+            target(tx.project(), d, "13"),
+        )
+    })
+    .unwrap();
+    assert_eq!(doc.project().wires().count(), 2);
+    // The second wire's cross-over left the halfway line the first one uses.
+    let mid = (pin_pos(&doc, a, "14").y + pin_pos(&doc, c, "13").y) / 2.0;
+    let second = doc.project().wires().last().unwrap().id;
+    let pts = novo_editor::geometry::wire_points(doc.project(), second).unwrap();
+    assert!(
+        pts.iter()
+            .skip(1)
+            .take(pts.len() - 2)
+            .all(|q| (q.y - mid).abs() > 1.0)
+    );
+    assert!(page_has_no_overlaps(&doc, page));
+}
+
+#[test]
+fn a_clicked_corner_that_would_overlap_is_refused_and_nothing_changes() {
+    let (mut doc, page, [a, b, c, d]) = two_rows();
+    let mid = (pin_pos(&doc, a, "14").y + pin_pos(&doc, c, "13").y) / 2.0;
+    doc.transact("w1", |tx| {
+        edit::draw_wire(
+            tx,
+            page,
+            target(tx.project(), a, "14"),
+            &[],
+            target(tx.project(), c, "13"),
+        )
+    })
+    .unwrap();
+    let depth = doc.undo_depth();
+    let result = doc.transact("w2", |tx| {
+        edit::draw_wire(
+            tx,
+            page,
+            target(tx.project(), b, "14"),
+            &[p(50.0, mid)],
+            target(tx.project(), d, "13"),
+        )
+    });
+    assert!(result.is_err());
+    assert_eq!(doc.undo_depth(), depth);
+    assert_eq!(doc.project().wires().count(), 1);
+}
+
+#[test]
+fn crossing_wires_are_not_an_overlap() {
+    let (mut doc, page, [a, b, c, d]) = two_rows();
+    // a to d and b to c cross between the rows.
+    doc.transact("w1", |tx| {
+        edit::draw_wire(
+            tx,
+            page,
+            target(tx.project(), a, "14"),
+            &[],
+            target(tx.project(), d, "13"),
+        )
+    })
+    .unwrap();
+    doc.transact("w2", |tx| {
+        edit::draw_wire(
+            tx,
+            page,
+            target(tx.project(), b, "14"),
+            &[],
+            target(tx.project(), c, "13"),
+        )
+    })
+    .unwrap();
+    assert_eq!(doc.project().wires().count(), 2);
+    assert!(page_has_no_overlaps(&doc, page));
+}
+
+#[test]
+fn wires_from_one_pin_may_share_only_the_stretch_before_they_part() {
+    let (mut doc, page, [a, _b, c, d]) = two_rows();
+    let mid = (pin_pos(&doc, a, "14").y + pin_pos(&doc, c, "13").y) / 2.0;
+    // A leaves a.14, goes down, left, down to the middle line and across it.
+    doc.transact("A", |tx| {
+        edit::draw_wire(
+            tx,
+            page,
+            target(tx.project(), a, "14"),
+            &[p(40.0, 70.0), p(30.0, 70.0), p(30.0, mid), p(100.0, mid)],
+            target(tx.project(), d, "13"),
+        )
+    })
+    .unwrap();
+    // B starts at the same pin and its default Z route would run along A's
+    // horizontal at `mid` after the two have parted: it must be moved clear.
+    doc.transact("B", |tx| {
+        edit::draw_wire(
+            tx,
+            page,
+            target(tx.project(), a, "14"),
+            &[],
+            target(tx.project(), c, "13"),
+        )
+    })
+    .unwrap();
+    let overlaps = novo_editor::overlap::page_overlaps(doc.project(), page);
+    let pin = pin_pos(&doc, a, "14");
+    // Only the stretch that starts at the shared pin may be shared.
+    assert!(
+        overlaps
+            .iter()
+            .all(|(_, o)| o.from.approx_eq(pin, 1e-6) || o.to.approx_eq(pin, 1e-6)),
+        "{overlaps:?}"
+    );
 }

@@ -74,6 +74,19 @@ fn is_vertical(d: Direction) -> bool {
 /// the cross-over halfway, a vertical and a horizontal pin an L route that
 /// leaves each pin along its axis, and aligned points a straight wire.
 pub fn route(a: Point, from: Option<Direction>, b: Point, to: Option<Direction>) -> Vec<Point> {
+    route_offset(a, from, b, to, 0.0)
+}
+
+/// [`route`] with the cross-over of a Z route moved `shift` millimetres from
+/// halfway (down or right when positive). L and straight routes have no
+/// cross-over and ignore it.
+pub fn route_offset(
+    a: Point,
+    from: Option<Direction>,
+    b: Point,
+    to: Option<Direction>,
+    shift: f64,
+) -> Vec<Point> {
     let dx = (b.x - a.x).abs();
     let dy = (b.y - a.y).abs();
     if dx < EPS || dy < EPS {
@@ -83,11 +96,11 @@ pub fn route(a: Point, from: Option<Direction>, b: Point, to: Option<Direction>)
     let b_vert = to.map(is_vertical);
     match (a_vert, b_vert) {
         (Some(true), Some(true)) => {
-            let mid = (a.y + b.y) / 2.0;
+            let mid = (a.y + b.y) / 2.0 + shift;
             vec![Point::new(a.x, mid), Point::new(b.x, mid)]
         }
         (Some(false), Some(false)) => {
-            let mid = (a.x + b.x) / 2.0;
+            let mid = (a.x + b.x) / 2.0 + shift;
             vec![Point::new(mid, a.y), Point::new(mid, b.y)]
         }
         // Leave `a` vertically, or arrive at `b` horizontally.
