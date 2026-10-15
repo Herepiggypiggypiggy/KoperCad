@@ -38,6 +38,7 @@ mod fields;
 mod files;
 mod grid;
 mod plan;
+mod rejects;
 
 pub use create::NewDevice;
 pub use decode::decode_csv;
@@ -48,3 +49,4 @@ pub use grid::{Cell, Meta, Row, Table, TableKind, Workbook, number_text};
 pub use plan::{
     ApplyError, Change, ImportPlan, Rejected, Resolution, plan_import, plan_import_with,
 };
+pub use rejects::{WHY_HEADER, rejected_workbook};
