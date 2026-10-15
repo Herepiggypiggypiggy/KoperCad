@@ -25,6 +25,8 @@ pub enum BackendError {
     /// The open project could not be written before closing it, so it was
     /// left open (see [`ProjectBackend::close`]).
     NotWritten(StorageError),
+    /// No index follows the latest revision under the rule; type one.
+    NoNextIndex,
 }
 
 impl fmt::Display for BackendError {
@@ -33,6 +35,9 @@ impl fmt::Display for BackendError {
             BackendError::Unavailable(what) => write!(f, "{what} is not available yet"),
             BackendError::Model(e) => write!(f, "{e}"),
             BackendError::Storage(e) => write!(f, "{e}"),
+            BackendError::NoNextIndex => {
+                write!(f, "no index follows the latest revision, type one")
+            }
             BackendError::NotWritten(e) => {
                 write!(
                     f,
@@ -48,6 +53,16 @@ impl std::error::Error for BackendError {}
 impl From<ModelError> for BackendError {
     fn from(e: ModelError) -> Self {
         BackendError::Model(e)
+    }
+}
+
+impl From<novo_revisions::IssueError> for BackendError {
+    fn from(e: novo_revisions::IssueError) -> Self {
+        match e {
+            novo_revisions::IssueError::NoIndex => BackendError::NoNextIndex,
+            novo_revisions::IssueError::Model(e) => BackendError::Model(e),
+            novo_revisions::IssueError::Storage(e) => BackendError::Storage(e),
+        }
     }
 }
 
@@ -109,6 +124,19 @@ pub trait ProjectBackend {
     /// Unsaved work from a crash, waiting for [`Self::resolve_recovery`].
     fn recovery_offer(&self) -> Option<RecoveryOffer> {
         None
+    }
+
+    /// Issues a revision: the model command and the snapshot kept in the
+    /// project file, as one undo step (DESIGN §7). The caller passes
+    /// [`novo_revisions::Issued::changes`] on to the views.
+    fn issue_revision(
+        &mut self,
+        _index: Option<String>,
+        _date: &str,
+        _author: &str,
+        _description: &str,
+    ) -> Result<novo_revisions::Issued, BackendError> {
+        Err(BackendError::Unavailable("Issuing revisions"))
     }
 
     /// Restores (`true`) or throws away (`false`) the offered recovery.
@@ -349,6 +377,38 @@ impl ProjectBackend for StorageBackend {
 
     fn document_mut(&mut self) -> Option<&mut Document> {
         self.document.as_mut()
+    }
+
+    fn issue_revision(
+        &mut self,
+        index: Option<String>,
+        date: &str,
+        author: &str,
+        description: &str,
+    ) -> Result<novo_revisions::Issued, BackendError> {
+        let (Some(session), Some(document)) = (self.session.as_mut(), self.document.as_mut())
+        else {
+            return Err(BackendError::Unavailable("Issuing revisions"));
+        };
+        let issued = match index {
+            Some(index) => novo_revisions::issue_revision_as(
+                document,
+                session,
+                index,
+                date,
+                author,
+                description,
+            ),
+            None => novo_revisions::issue_revision(
+                document,
+                session,
+                crate::app::index_rule(document.project()),
+                date,
+                author,
+                description,
+            ),
+        }?;
+        Ok(issued)
     }
 
     fn record(&mut self, changes: &ChangeSet) {

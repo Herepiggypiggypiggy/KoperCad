@@ -15,6 +15,7 @@ mod plc;
 mod potentials;
 mod preferences;
 mod reports;
+mod revisions;
 mod terminals;
 mod wheel;
 mod workbench;
@@ -37,6 +38,7 @@ use crate::canvas::{CanvasView, OpenPage};
 use crate::settings::Settings;
 use crate::{APP_MAKER, APP_NAME, DATA_DIR_NAME, PROJECT_EXTENSION};
 use novo_theme::widgets::{primary_button, section_label, segment};
+pub(crate) use revisions::index_rule;
 use workbench::Workbench;
 pub(crate) use workbench::app_runs;
 
@@ -694,6 +696,7 @@ impl NovoApp {
         self.about_dialog(&ctx);
         self.renumber_dialog(&ctx);
         self.preferences_dialog(&ctx);
+        self.issue_revision_dialog(&ctx);
         self.page_form_dialog(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {
             self.run_command(&ctx, id, None);

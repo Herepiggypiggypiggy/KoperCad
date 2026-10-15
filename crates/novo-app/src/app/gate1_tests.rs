@@ -1841,6 +1841,54 @@ fn the_preferences_window_sets_the_auto_connection_mode() {
 }
 
 #[test]
+fn the_issue_revision_window_proposes_everything_and_issues_in_one_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert!(super::workbench::app_runs("revision.issue"));
+    d.app
+        .run_command(&ctx, "revision.issue", Some("Motor M3 added"));
+    d.frame();
+    let draft = d.app.wb.issue.take().expect("the window opens");
+    assert_eq!(draft.index, "A", "the first index of the rule");
+    assert_eq!(draft.description, "Motor M3 added", "text after the verb");
+    assert_eq!(draft.date.len(), 10);
+    let mut draft = draft;
+    draft.author = "TV".into();
+    d.app.submit_issue(draft);
+    d.frame();
+    assert!(d.app.wb.issue.is_none(), "the window closes: {:?}", d.app.wb.issue);
+    assert_eq!(d.app.settings.initials, "TV", "the initials are remembered");
+    let project = d.app.backend.document().unwrap().project();
+    let latest = project.latest_revision().unwrap();
+    assert_eq!(
+        (
+            latest.index.as_str(),
+            latest.author.as_str(),
+            latest.description.as_str()
+        ),
+        ("A", "TV", "Motor M3 added")
+    );
+    assert!(
+        project
+            .pages()
+            .all(|p| p.frozen.as_ref().is_some_and(|f| f.revision == "A"))
+    );
+    // The next proposal follows, and a taken index is refused in place.
+    d.app.run_command(&ctx, "revision.issue", None);
+    assert_eq!(d.app.wb.issue.as_ref().unwrap().index, "B");
+    let mut again = d.app.wb.issue.take().unwrap();
+    again.index = "A".into();
+    d.app.submit_issue(again);
+    assert!(d.app.wb.issue.as_ref().unwrap().error.is_some());
+    d.app.run(&ctx, Action::Undo);
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+}
+
+#[test]
 fn the_command_list_and_the_part_search_show_many_rows() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));

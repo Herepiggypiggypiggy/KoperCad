@@ -25,6 +25,9 @@ pub struct Settings {
     /// What a drop does about facing free pins, `"draw"`, `"ask"` or
     /// `"never"` (docs/DESIGN.md §2): a per-user preference.
     pub connect_mode: String,
+    /// The initials a revision is issued under (docs/DESIGN.md §7),
+    /// asked once and remembered.
+    pub initials: String,
 }
 
 impl Settings {
