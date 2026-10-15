@@ -483,6 +483,7 @@ impl ScriptProject {
                 from,
                 to,
                 route: Vec::new(),
+                page: None,
             },
             |id| match id {
                 AnyId::Wire(id) => Some(id),
@@ -740,6 +741,7 @@ pub fn endpoint_name(p: &Project, end: Endpoint) -> String {
     let (symbol, pin) = match end {
         Endpoint::Pin { symbol, pin } => (symbol, pin),
         Endpoint::Junction { junction } => return junction.to_string(),
+        Endpoint::Free { at } => return format!("open end ({:.1}, {:.1})", at.x, at.y),
     };
     let Some(instance) = p.symbol(symbol) else {
         return format!("{symbol} pin {pin}");
@@ -779,7 +781,7 @@ pub fn wires_json(p: &Project) -> Value {
             .into_iter()
             .map(|w| {
                 let potentials = netlist
-                    .net_of(w.from)
+                    .net_of_wire(w)
                     .map(|net| potential_names(p, &netlist.net(net).potentials))
                     .unwrap_or_default();
                 json!({

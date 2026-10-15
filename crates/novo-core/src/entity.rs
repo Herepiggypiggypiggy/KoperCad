@@ -530,11 +530,68 @@ impl PinRef {
 }
 
 /// Something a wire can end on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Endpoint {
-    Pin { symbol: SymbolId, pin: u16 },
-    Junction { junction: JunctionId },
+    Pin {
+        symbol: SymbolId,
+        pin: u16,
+    },
+    Junction {
+        junction: JunctionId,
+    },
+    /// An open end: a free position on the wire's page, connected to
+    /// nothing (DESIGN §4 "Open ends"). The wire's other end still
+    /// connects; an open end joins no net and makes no connection, and
+    /// checks report each one as `wire.open`. Moving it is an ordinary
+    /// `update` of the wire; connecting it replaces it with a pin or
+    /// junction endpoint.
+    Free {
+        at: Point,
+    },
+}
+
+impl Eq for Endpoint {}
+
+impl PartialOrd for Endpoint {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+/// Pins first, then junctions, then open ends by position.
+impl Ord for Endpoint {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        use Endpoint::*;
+        let rank = |e: &Endpoint| match e {
+            Pin { .. } => 0,
+            Junction { .. } => 1,
+            Free { .. } => 2,
+        };
+        match (self, other) {
+            (Pin { symbol: a, pin: p }, Pin { symbol: b, pin: q }) => (a, p).cmp(&(b, q)),
+            (Junction { junction: a }, Junction { junction: b }) => a.cmp(b),
+            (Free { at: a }, Free { at: b }) => {
+                a.x.total_cmp(&b.x).then_with(|| a.y.total_cmp(&b.y))
+            }
+            _ => rank(self).cmp(&rank(other)),
+        }
+    }
+}
+
+impl std::hash::Hash for Endpoint {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            Endpoint::Pin { symbol, pin } => (symbol, pin).hash(state),
+            Endpoint::Junction { junction } => junction.hash(state),
+            // `0.0 == -0.0`, so hash them alike.
+            Endpoint::Free { at } => {
+                (at.x + 0.0).to_bits().hash(state);
+                (at.y + 0.0).to_bits().hash(state);
+            }
+        }
+    }
 }
 
 impl Endpoint {
@@ -546,11 +603,20 @@ impl Endpoint {
         Endpoint::Junction { junction }
     }
 
+    pub fn free(at: Point) -> Self {
+        Endpoint::Free { at }
+    }
+
     pub fn as_pin(self) -> Option<PinRef> {
         match self {
             Endpoint::Pin { symbol, pin } => Some(PinRef { symbol, pin }),
-            Endpoint::Junction { .. } => None,
+            Endpoint::Junction { .. } | Endpoint::Free { .. } => None,
         }
+    }
+
+    /// Whether this is an open end.
+    pub fn is_free(self) -> bool {
+        matches!(self, Endpoint::Free { .. })
     }
 }
 

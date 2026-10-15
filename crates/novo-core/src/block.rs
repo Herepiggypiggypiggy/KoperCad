@@ -78,7 +78,7 @@ impl Tx<'_> {
             .filter(|w| {
                 w.ends()
                     .into_iter()
-                    .all(|end| picked.contains(&endpoint_owner(end)))
+                    .all(|end| endpoint_owner(end).is_none_or(|o| picked.contains(&o)))
             })
             .map(|w| w.id)
             .collect();
@@ -317,7 +317,9 @@ impl Tx<'_> {
     /// wire from a member out to the rest of the circuit is how a block is
     /// used and keeps the link.
     pub(crate) fn detach_on_connect(&mut self, from: Endpoint, to: Endpoint) -> Result<()> {
-        let (a, b) = (endpoint_owner(from), endpoint_owner(to));
+        let (Some(a), Some(b)) = (endpoint_owner(from), endpoint_owner(to)) else {
+            return Ok(());
+        };
         let blocks: Vec<BlockInstanceId> = self
             .project()
             .block_instances()
@@ -372,7 +374,9 @@ impl Tx<'_> {
                 continue;
             };
             for end in w.ends() {
-                let owner = endpoint_owner(end);
+                let Some(owner) = endpoint_owner(end) else {
+                    continue;
+                };
                 if let Some(device) = device_of(self.project(), owner)
                     && member_of(self.project(), device.into()).is_none()
                 {
@@ -396,7 +400,9 @@ impl Tx<'_> {
                     let AnyId::Wire(w) = referrer else { continue };
                     let Some(w) = project.wire(w) else { continue };
                     for end in w.ends() {
-                        let owner = endpoint_owner(end);
+                        let Some(owner) = endpoint_owner(end) else {
+                            continue;
+                        };
                         if symbols.contains(&owner) {
                             continue;
                         }
@@ -439,7 +445,10 @@ impl Tx<'_> {
     /// device, the id otherwise.
     fn endpoint_name(&self, end: Endpoint) -> String {
         let Endpoint::Pin { symbol, pin } = end else {
-            return endpoint_owner(end).to_string();
+            return match endpoint_owner(end) {
+                Some(owner) => owner.to_string(),
+                None => "open end".into(),
+            };
         };
         let Some(s) = self.project().symbol(symbol) else {
             return symbol.to_string();
@@ -604,6 +613,7 @@ fn remap_end(map: &BTreeMap<AnyId, AnyId>, end: Endpoint) -> Result<Endpoint> {
         Endpoint::Junction { junction } => Endpoint::Junction {
             junction: JunctionId(raw(map, junction.into())?),
         },
+        free @ Endpoint::Free { .. } => free,
     })
 }
 

@@ -484,6 +484,7 @@ impl Project {
                         Endpoint::Junction { junction } => {
                             (junction.into(), self.junctions[&junction].page)
                         }
+                        Endpoint::Free { .. } => continue,
                     };
                     if page != wire.page {
                         return Err(ModelError::WrongPage {
@@ -1248,6 +1249,7 @@ impl Project {
         match end {
             Endpoint::Pin { symbol, pin } => self.symbols.get(&symbol)?.pin_position(pin),
             Endpoint::Junction { junction } => self.junctions.get(&junction).map(|j| j.position),
+            Endpoint::Free { at } => Some(at),
         }
     }
 
@@ -1319,7 +1321,8 @@ impl Project {
             })
             .filter(|w| {
                 let [a, b] = w.ends().map(crate::record::endpoint_owner);
-                inside.contains(&a) != inside.contains(&b)
+                // An open end goes along with the end it is drawn from.
+                matches!((a, b), (Some(a), Some(b)) if inside.contains(&a) != inside.contains(&b))
             })
             .map(|w| w.id)
             .collect();

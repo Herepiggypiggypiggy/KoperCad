@@ -102,7 +102,7 @@ impl Record {
             Record::Wire(r) => {
                 out.push(r.page.into());
                 for end in r.ends() {
-                    out.push(endpoint_owner(end));
+                    out.extend(endpoint_owner(end));
                 }
                 out.extend(r.potential.map(AnyId::from));
             }
@@ -308,10 +308,12 @@ pub(crate) fn properties_finite(properties: &Properties) -> bool {
     })
 }
 
-pub(crate) fn endpoint_owner(end: crate::entity::Endpoint) -> AnyId {
+/// The symbol or junction an endpoint is on; `None` for an open end.
+pub(crate) fn endpoint_owner(end: crate::entity::Endpoint) -> Option<AnyId> {
     match end {
-        crate::entity::Endpoint::Pin { symbol, .. } => symbol.into(),
-        crate::entity::Endpoint::Junction { junction } => junction.into(),
+        crate::entity::Endpoint::Pin { symbol, .. } => Some(symbol.into()),
+        crate::entity::Endpoint::Junction { junction } => Some(junction.into()),
+        crate::entity::Endpoint::Free { .. } => None,
     }
 }
 

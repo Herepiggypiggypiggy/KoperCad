@@ -156,6 +156,8 @@ fn side(project: &Project, symbol: &SymbolInstance, pins: Vec<u16>) -> Side {
                             }
                         }
                     }
+                    // An open end leads nowhere.
+                    Endpoint::Free { .. } => {}
                 }
             }
         }

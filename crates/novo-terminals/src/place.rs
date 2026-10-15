@@ -112,7 +112,7 @@ pub fn strip_by_tag(tx: &mut Tx<'_>, tag: &str) -> Result<DeviceId> {
 /// novo-core's `rules.potentials.from_terminal_names` that includes a
 /// terminal named like a supply potential (`-X4:PE`) on the net.
 fn potential_of_wire(project: &Project, netlist: &Netlist, wire: &Wire) -> Option<PotentialKind> {
-    let net = netlist.net(netlist.net_of(wire.from)?);
+    let net = netlist.net(netlist.net_of_wire(wire)?);
     project.potential(net.potential()?).map(|p| p.kind)
 }
 

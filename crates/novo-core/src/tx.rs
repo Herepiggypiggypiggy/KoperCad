@@ -270,13 +270,11 @@ impl<'p> Tx<'p> {
         }
         for &w in &wires {
             let wire = self.project.wire(w).ok_or(ModelError::NotFound(w.into()))?;
-            let owner = |end: Endpoint| -> AnyId {
-                match end {
-                    Endpoint::Pin { symbol, .. } => symbol.into(),
-                    Endpoint::Junction { junction } => junction.into(),
-                }
+            // An open end moves with the wire.
+            let stays = |end: Endpoint| {
+                crate::record::endpoint_owner(end).is_some_and(|o| !moved.contains(&o))
             };
-            if !moved.contains(&owner(wire.from)) || !moved.contains(&owner(wire.to)) {
+            if stays(wire.from) || stays(wire.to) {
                 return Err(ModelError::WireLeavesSelection(w));
             }
         }
@@ -358,6 +356,11 @@ impl<'p> Tx<'p> {
             wire.page = page;
             for point in &mut wire.route {
                 *point = *point + offset;
+            }
+            for end in [&mut wire.from, &mut wire.to] {
+                if let Endpoint::Free { at } = end {
+                    *at = *at + offset;
+                }
             }
             self.insert_record(Record::Wire(wire))?;
         }
@@ -604,31 +607,59 @@ impl<'p> Tx<'p> {
         })
     }
 
-    /// Draws a wire between two endpoints on the same page.
+    /// Draws a wire between two endpoints on the same page. The page is
+    /// that of the pin or junction it ends on; a wire open at both ends has
+    /// none and is refused: use [`Tx::connect_on`].
     pub fn connect(
         &mut self,
         from: impl Into<Endpoint>,
         to: impl Into<Endpoint>,
     ) -> Result<WireId> {
         let (from, to) = (from.into(), to.into());
-        let page = self.endpoint_page(from)?;
+        let page = match (self.endpoint_page(from)?, self.endpoint_page(to)?) {
+            (Some(page), _) | (None, Some(page)) => page,
+            (None, None) => {
+                return Err(ModelError::Refused {
+                    what: "Wire".into(),
+                    reason: "a wire open at both ends needs a page".into(),
+                });
+            }
+        };
+        self.connect_on(page, from, to)
+    }
+
+    /// Like [`Tx::connect`] on a given page, which a wire open at both ends
+    /// needs. A pin or junction end must be on that page.
+    pub fn connect_on(
+        &mut self,
+        page: PageId,
+        from: impl Into<Endpoint>,
+        to: impl Into<Endpoint>,
+    ) -> Result<WireId> {
+        let (from, to) = (from.into(), to.into());
+        if !self.project.contains(page.into()) {
+            return Err(ModelError::NotFound(page.into()));
+        }
         let wire = self.insert(|id| Wire::new(id, page, from, to))?;
         self.detach_on_connect(from, to)?;
         Ok(wire)
     }
 
-    fn endpoint_page(&self, end: Endpoint) -> Result<PageId> {
+    /// The page of the symbol or junction an endpoint is on; `None` for an
+    /// open end.
+    fn endpoint_page(&self, end: Endpoint) -> Result<Option<PageId>> {
         match end {
             Endpoint::Pin { symbol, .. } => self
                 .project
                 .symbol(symbol)
-                .map(|s| s.page)
+                .map(|s| Some(s.page))
                 .ok_or(ModelError::NotFound(symbol.into())),
             Endpoint::Junction { junction } => self
                 .project
                 .junction(junction)
-                .map(|j| j.page)
+                .map(|j| Some(j.page))
                 .ok_or(ModelError::NotFound(junction.into())),
+            Endpoint::Free { .. } => Ok(None),
         }
     }
 

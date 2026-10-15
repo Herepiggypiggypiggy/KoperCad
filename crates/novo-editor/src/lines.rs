@@ -7,7 +7,7 @@
 //! Overlaps are refused here, never nudged, because the line is what the user
 //! drew; the check itself is [`crate::overlap`]'s.
 
-use novo_core::{Endpoint, ModelError, PageId, Point, Project, Result, Tx, Wire, WireId};
+use novo_core::{Endpoint, PageId, Point, Project, Result, Tx, Wire, WireId};
 
 use crate::edit::resolve_target;
 use crate::geometry::{EPS, Target, endpoint_direction, simplify};
@@ -129,10 +129,10 @@ pub fn draw_wire_exact(
     let project = tx.project();
     let a = project
         .endpoint_position(from)
-        .ok_or(ModelError::NotFound(endpoint_id(from)))?;
+        .ok_or_else(|| crate::edit::missing(from))?;
     let b = project
         .endpoint_position(to)
-        .ok_or(ModelError::NotFound(endpoint_id(to)))?;
+        .ok_or_else(|| crate::edit::missing(to))?;
     // The bends are already aligned, so the router keeps every one of them
     // and, being given corners, never moves them.
     let drawn = exact_bends(a, vertices, b);
@@ -153,13 +153,6 @@ pub fn draw_wire_exact(
         tx.update::<Wire>(wire, |w| w.route = bends)?;
     }
     Ok(wire)
-}
-
-fn endpoint_id(end: Endpoint) -> novo_core::AnyId {
-    match end {
-        Endpoint::Pin { symbol, .. } => symbol.into(),
-        Endpoint::Junction { junction } => junction.into(),
-    }
 }
 
 #[cfg(test)]

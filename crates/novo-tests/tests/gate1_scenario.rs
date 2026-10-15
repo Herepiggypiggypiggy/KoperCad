@@ -257,6 +257,7 @@ impl<'a, S: Store> Flow<'a, S> {
             from,
             to,
             route: vec![],
+            page: None,
         });
         created(&outcome, |id| match id {
             AnyId::Wire(w) => Some(w),

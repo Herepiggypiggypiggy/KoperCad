@@ -135,6 +135,11 @@ pub enum Command {
         to: Endpoint,
         #[serde(default)]
         route: Vec<Point>,
+        /// The page, only needed when both ends are open
+        /// ([`Endpoint::Free`]); otherwise it is that of the pin or
+        /// junction.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        page: Option<PageId>,
     },
     SplitWire {
         wire: WireId,
@@ -433,8 +438,16 @@ impl Tx<'_> {
                 self.set_text(text, content, height_mm)?;
                 return Ok(Vec::new());
             }
-            Command::Connect { from, to, route } => {
-                let wire = self.connect(from, to)?;
+            Command::Connect {
+                from,
+                to,
+                route,
+                page,
+            } => {
+                let wire = match page {
+                    Some(page) => self.connect_on(page, from, to)?,
+                    None => self.connect(from, to)?,
+                };
                 if !route.is_empty() {
                     self.update::<crate::Wire>(wire, |w| w.route = route)?;
                 }

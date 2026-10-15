@@ -61,6 +61,7 @@ fn non_finite_numbers_are_refused_everywhere() {
                     from: Endpoint::pin(s.f1_sym, 0),
                     to: Endpoint::pin(s.f1_sym, 2),
                     route: vec![Point::new(bad, 10.0)],
+                    page: None,
                 }),
             ),
             (
