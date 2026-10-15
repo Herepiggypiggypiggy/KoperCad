@@ -5,17 +5,22 @@
 
 mod cabinet;
 mod cabinet_inspector;
+#[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
+mod cabinet_routes;
 mod changes;
 mod checks;
+mod commissioning;
 mod compare;
 mod dock;
 mod drawers;
 mod duplicate;
+mod dxf;
 mod example;
 mod inspector;
 mod link;
 mod live;
 mod live_anim;
+mod onboarding;
 mod pages;
 mod parts;
 mod parts_import;
@@ -26,6 +31,7 @@ mod preferences;
 mod project_settings;
 mod reports;
 mod revisions;
+mod sizing;
 mod terminals;
 mod title_revisions;
 mod userkeymap;
@@ -39,11 +45,15 @@ mod cabinet_tests;
 #[cfg(test)]
 mod changes_tests;
 #[cfg(test)]
+mod commissioning_tests;
+#[cfg(test)]
 mod compare_tests;
 #[cfg(test)]
 mod example_tests;
 #[cfg(test)]
 mod gate1_tests;
+#[cfg(test)]
+mod onboarding_tests;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -69,6 +79,7 @@ enum OutlineMode {
     Pages,
     Issues,
     Changes,
+    Commissioning,
 }
 
 impl OutlineMode {
@@ -77,6 +88,7 @@ impl OutlineMode {
             OutlineMode::Pages => "Pages",
             OutlineMode::Issues => "Issues",
             OutlineMode::Changes => "Changes",
+            OutlineMode::Commissioning => "Commissioning",
         }
     }
 }
@@ -117,6 +129,7 @@ enum Leaving {
     Open,
     OpenPath(PathBuf),
     Example,
+    Practice,
     Close,
     Quit,
 }
@@ -147,6 +160,8 @@ pub struct NovoApp {
     /// is Ctrl+2.
     workspace: workspace::Workspace,
     cabinet: cabinet::CabinetState,
+    /// The "Size the enclosure" panel and the Enclosures list.
+    sizing: sizing::SizingState,
     /// The outline flyout is showing over the canvas.
     outline_open: bool,
     /// What the outline lists.
@@ -213,6 +228,7 @@ impl NovoApp {
             focus_mode: false,
             workspace: workspace::Workspace::Schematic,
             cabinet: cabinet::CabinetState::new(),
+            sizing: sizing::SizingState::new(),
             outline_open: false,
             outline_mode: OutlineMode::Pages,
             breadcrumb_link: None,
@@ -332,7 +348,9 @@ impl NovoApp {
             Action::SaveProject
             | Action::SaveProjectAs
             | Action::CloseProject
-            | Action::ZoomToFit => open,
+            | Action::ZoomToFit
+            | Action::SizeEnclosure
+            | Action::EnclosureList => open,
             Action::ShowCabinet => self
                 .workspace_unavailable(workspace::Workspace::Cabinet)
                 .is_none(),
@@ -349,11 +367,15 @@ impl NovoApp {
         }
         if action != Action::CommandPalette {
             self.settings.remember_action(action.id());
+        } else {
+            self.tour_tick("commands");
         }
         match action {
             Action::NewProject => self.leave_then(ctx, Leaving::New),
             Action::OpenProject => self.leave_then(ctx, Leaving::Open),
             Action::OpenExample => self.leave_then(ctx, Leaving::Example),
+            Action::TryFastKeys => self.leave_then(ctx, Leaving::Practice),
+            Action::ShowWalkthrough => self.show_walkthrough(),
             Action::SaveProject => {
                 self.save();
             }
@@ -367,6 +389,14 @@ impl NovoApp {
             Action::ZoomToFit => self.canvas.zoom_to_fit(),
             Action::ShowSchematic => self.switch_workspace(workspace::Workspace::Schematic),
             Action::ShowCabinet => self.switch_workspace(workspace::Workspace::Cabinet),
+            Action::SizeEnclosure => {
+                self.switch_workspace(workspace::Workspace::Cabinet);
+                self.sizing.panel_open = true;
+            }
+            Action::EnclosureList => {
+                self.switch_workspace(workspace::Workspace::Cabinet);
+                self.sizing.editor_open = true;
+            }
             Action::PinOutline => {
                 let pinned = !self.outline_pinned();
                 self.settings.outline_pinned = Some(pinned);
@@ -423,6 +453,7 @@ impl NovoApp {
             }
             Leaving::OpenPath(path) => self.open_path(&path),
             Leaving::Example => self.open_example(),
+            Leaving::Practice => self.start_practice(),
             Leaving::Close => self.close_project(),
             Leaving::Quit => {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -542,6 +573,7 @@ impl NovoApp {
     fn document_replaced(&mut self) {
         self.canvas.document_replaced();
         self.wb.reports = Default::default();
+        self.wb.commissioning = None;
         self.wb.sheet = 0;
         self.add_generated_pages();
     }
@@ -722,6 +754,7 @@ impl NovoApp {
                 } else if self.is_open() {
                     self.update_marks();
                     self.update_sheet();
+                    self.update_underlay();
                     let open = self
                         .current_page
                         .and_then(|page| OpenPage::new(&mut *self.backend, page));
@@ -746,6 +779,8 @@ impl NovoApp {
             self.tool_dock(&ctx, canvas_rect);
             self.inspector(&ctx, canvas_rect);
             self.live_view(&ctx, canvas_rect);
+            self.tour_watch(&ctx);
+            self.walkthrough_card(&ctx, canvas_rect);
             self.changes_card(&ctx, canvas_rect);
         }
         self.toasts(&ctx, canvas_rect);
@@ -948,6 +983,45 @@ impl NovoApp {
             self.export_pdf();
             ui.close();
         }
+        // The same commands as Ctrl+K: one code path.
+        let has_page = self.current_page.is_some();
+        let has = self.has_background();
+        ui.add_enabled_ui(has_page, |ui| {
+            ui.menu_button("DXF background", |ui| {
+                if ui.button("Import DXF...").clicked() {
+                    self.wb.queued.push("file.import_dxf_background");
+                    ui.close();
+                }
+                let label = if self.background_shown() {
+                    "Hide"
+                } else {
+                    "Show"
+                };
+                if ui.add_enabled(has, egui::Button::new(label)).clicked() {
+                    self.wb.queued.push("view.background");
+                    ui.close();
+                }
+                if ui.add_enabled(has, egui::Button::new("Remove")).clicked() {
+                    self.wb.queued.push("file.remove_background");
+                    ui.close();
+                }
+            });
+        });
+        ui.add_enabled_ui(self.is_open(), |ui| {
+            ui.menu_button("Export DXF", |ui| {
+                if ui
+                    .add_enabled(has_page, egui::Button::new("This page"))
+                    .clicked()
+                {
+                    self.wb.queued.push("export.dxf_page");
+                    ui.close();
+                }
+                if ui.button("All pages").clicked() {
+                    self.wb.queued.push("export.dxf_all");
+                    ui.close();
+                }
+            });
+        });
         ui.separator();
         for a in [Action::About, Action::Quit] {
             self.action_button(ui, a, picked);
@@ -979,6 +1053,31 @@ impl NovoApp {
             }
             self.breadcrumb_link = Some(link);
         }
+        // A background that hides the wiring must show it exists.
+        let background = self
+            .page_properties()
+            .and_then(novo_interop::underlay::stored_name)
+            .map(str::to_owned);
+        if let Some(file) = background {
+            let shown = self.background_shown();
+            let text = if shown {
+                format!("DXF background: {file}")
+            } else {
+                format!("DXF background hidden: {file}")
+            };
+            let tip = if shown {
+                "Click to hide"
+            } else {
+                "Click to show"
+            };
+            if ui
+                .add(egui::Button::new(egui::RichText::new(text).weak()).frame(false))
+                .on_hover_text(tip)
+                .clicked()
+            {
+                self.toggle_background();
+            }
+        }
     }
 
     /// The outline's content: mode tabs, then the pages or the issues.
@@ -990,6 +1089,7 @@ impl NovoApp {
                 OutlineMode::Pages,
                 OutlineMode::Issues,
                 OutlineMode::Changes,
+                OutlineMode::Commissioning,
             ] {
                 if ui
                     .selectable_label(self.outline_mode == mode, mode.label())
@@ -1016,6 +1116,12 @@ impl NovoApp {
         });
         if self.outline_mode == OutlineMode::Issues {
             if self.issues_list(ui) {
+                self.outline_open = false;
+            }
+            return;
+        }
+        if self.outline_mode == OutlineMode::Commissioning {
+            if self.commissioning_outline(ui) {
                 self.outline_open = false;
             }
             return;
@@ -1576,8 +1682,16 @@ impl NovoApp {
             ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
                 ui.weak("No project open");
                 ui.add_space(8.0);
+                if self.first_run() {
+                    self.action_button(ui, Action::TryFastKeys, picked);
+                    ui.weak("Two minutes: place, wire, cable, live view");
+                    ui.add_space(8.0);
+                }
                 for a in [Action::NewProject, Action::OpenProject, Action::OpenExample] {
                     self.action_button(ui, a, picked);
+                }
+                if !self.first_run() {
+                    self.action_button(ui, Action::TryFastKeys, picked);
                 }
                 let unsaved = self.backend.unsaved_projects();
                 if !unsaved.is_empty() {

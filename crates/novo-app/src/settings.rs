@@ -42,6 +42,44 @@ pub struct Settings {
     /// Each workspace's panels as the person left them, by `Workspace::id`.
     /// A workspace with no entry has its default layout.
     pub workspaces: BTreeMap<String, WorkspaceLayout>,
+    /// How far the fast-keys walk-through is (docs/ONBOARDING-DESIGN.md §2).
+    pub onboarding: Onboarding,
+}
+
+/// The walk-through's progress, per user: kept so closing the app mid-way
+/// resumes, and so a skipped walk-through never comes back by itself.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Onboarding {
+    /// Step ids the person has done, in the order they did them.
+    pub ticked: Vec<String>,
+    /// Skipped, or all steps done and closed: never shown by itself again.
+    pub dismissed: bool,
+    /// The walk-through has been opened at least once, so the start panel
+    /// stops pointing at it.
+    pub started: bool,
+}
+
+impl Onboarding {
+    pub fn is_ticked(&self, step: &str) -> bool {
+        self.ticked.iter().any(|t| t == step)
+    }
+
+    /// Ticks a step; true when it was not ticked before.
+    pub fn tick(&mut self, step: &str) -> bool {
+        if self.is_ticked(step) {
+            return false;
+        }
+        self.ticked.push(step.to_owned());
+        true
+    }
+
+    /// Starts over, shown again (the command's reset).
+    pub fn restart(&mut self) {
+        self.ticked.clear();
+        self.dismissed = false;
+        self.started = true;
+    }
 }
 
 /// What one workspace remembers about its panels: a snapshot taken when the

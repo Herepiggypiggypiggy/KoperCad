@@ -79,6 +79,7 @@ fn outline_mode_id(mode: OutlineMode) -> &'static str {
         OutlineMode::Pages => "pages",
         OutlineMode::Issues => "issues",
         OutlineMode::Changes => "changes",
+        OutlineMode::Commissioning => "commissioning",
     }
 }
 
@@ -86,6 +87,7 @@ fn outline_mode_from_id(id: &str) -> OutlineMode {
     match id {
         "issues" => OutlineMode::Issues,
         "changes" => OutlineMode::Changes,
+        "commissioning" => OutlineMode::Commissioning,
         _ => OutlineMode::Pages,
     }
 }
