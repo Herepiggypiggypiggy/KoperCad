@@ -488,8 +488,7 @@ impl NovoApp {
                     self.cabinet.view.viewport.fit(&view_bounds(&view), 24.0);
                     self.cabinet.fitted = location.clone();
                 }
-                let out = self.cabinet.view.show(ui, self.cabinet.scene.scene());
-                if self.cabinet.heat.on {
+                let heat_input = self.cabinet.heat.on.then(|| {
                     let items = shown
                         .placements
                         .iter()
@@ -514,16 +513,43 @@ impl NovoApp {
                             }
                         })
                         .collect();
-                    let input = super::heat::Input {
+                    super::heat::Input {
                         plate: (shown.plate.width, shown.plate.height),
+                        ambient: self.sizing.request().ambient_max,
                         items,
-                    };
-                    super::heat::paint(
+                    }
+                });
+                let dragging = self.cabinet.drag.is_some();
+                // The map goes under the canvas: it paints no background of
+                // its own while the map is on.
+                let backdrop = theme::canvas_style().background;
+                self.cabinet.view.style.background = if self.cabinet.heat.under_canvas() {
+                    novo_canvas::Color([0, 0, 0, 0])
+                } else {
+                    backdrop
+                };
+                let canvas_rect = ui.available_rect_before_wrap();
+                if let Some(input) = &heat_input {
+                    let [r, g, b, a] = backdrop.0;
+                    super::heat::paint_under(
+                        ui,
+                        canvas_rect,
+                        &self.cabinet.view.viewport,
+                        &mut self.cabinet.heat,
+                        input,
+                        dragging,
+                        egui::Color32::from_rgba_unmultiplied(r, g, b, a),
+                    );
+                }
+                let out = self.cabinet.view.show(ui, self.cabinet.scene.scene());
+                if let Some(input) = &heat_input {
+                    super::heat::paint_over(
                         ui,
                         out.response.rect,
                         &self.cabinet.view.viewport,
                         &mut self.cabinet.heat,
-                        &input,
+                        input,
+                        dragging,
                     );
                 }
                 if let Some((facts, left)) = &inspector

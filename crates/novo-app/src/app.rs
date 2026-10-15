@@ -725,7 +725,11 @@ impl NovoApp {
                     self.cabinet.keys.push((*id).to_owned());
                 }
             }
-            commands.retain(|id| Action::from_id(id).is_some() || *id == "view.cabinet_table");
+            commands.retain(|id| {
+                Action::from_id(id).is_some()
+                    || *id == "view.cabinet_table"
+                    || id.starts_with("heat.")
+            });
         }
 
         self.window_width = ctx.content_rect().width();

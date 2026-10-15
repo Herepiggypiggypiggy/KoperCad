@@ -210,6 +210,13 @@ pub const DUTCH: &[Aliases] = &[
     nl("view.full_screen", &[], &["volledig scherm"]),
     nl("view.cabinet_table", &[], &["kast als tabel", "tabel"]),
     nl(
+        "heat.toggle",
+        &[],
+        &["warmte tonen", "temperatuur", "warmtebeeld"],
+    ),
+    nl("heat.airflow", &[], &["luchtstroom", "luchtstroming"]),
+    nl("heat.contours", &[], &["isothermen", "warmtelijnen"]),
+    nl(
         "cabinet.size-enclosure",
         &[],
         &["kast dimensioneren", "kastmaat", "koeling", "warmte"],

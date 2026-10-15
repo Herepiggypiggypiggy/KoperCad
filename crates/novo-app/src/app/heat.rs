@@ -42,6 +42,8 @@ pub(super) struct Item {
 /// What the view draws from: the plate and its devices.
 pub(super) struct Input {
     pub plate: (f64, f64),
+    /// Outside air temperature, degrees C (the sizing request's).
+    pub ambient: f64,
     pub items: Vec<Item>,
 }
 
@@ -59,7 +61,8 @@ struct Cache {
     smooth: Scalar,
     range: Range,
     contours: Vec<(Contour, bool)>,
-    peaks: Vec<Peak>,
+    peaks: Vec<(Peak, String)>,
+    mean: f32,
     streams: Vec<Streamline>,
     scene: SynthScene,
 }
@@ -75,11 +78,49 @@ impl HeatState {
             cache: None,
         }
     }
+
+    /// `heat.toggle`, `heat.airflow` and `heat.contours`: the layer commands
+    /// switch the Heat view on when they show something.
+    pub(super) fn command(&mut self, id: &str) {
+        match id {
+            "heat.toggle" => self.on = !self.on,
+            "heat.airflow" => {
+                self.airflow = !(self.on && self.airflow);
+                self.on |= self.airflow;
+            }
+            "heat.contours" => {
+                self.contours = !(self.on && self.contours);
+                self.on |= self.contours;
+            }
+            _ => {}
+        }
+    }
+
+    /// The map is drawn under the canvas, which then must not paint its own
+    /// background.
+    pub(super) fn under_canvas(&self) -> bool {
+        self.on && self.map
+    }
+
+    fn refresh(&mut self, input: &Input, dragging: bool) -> bool {
+        // A device being dragged changes the layout every frame: keep the
+        // last field until it lands.
+        let stale = self.cache.as_ref().is_none_or(|c| c.key != key(input));
+        if stale && (!dragging || self.cache.is_none()) {
+            self.cache = Some(build(input));
+        }
+        self.cache.is_some()
+    }
 }
 
 fn key(input: &Input) -> u64 {
     let mut h = DefaultHasher::new();
-    (input.plate.0.to_bits(), input.plate.1.to_bits()).hash(&mut h);
+    (
+        input.plate.0.to_bits(),
+        input.plate.1.to_bits(),
+        input.ambient.to_bits(),
+    )
+        .hash(&mut h);
     for i in &input.items {
         (
             i.id,
@@ -98,7 +139,7 @@ fn build(input: &Input) -> Cache {
     let scene = SynthScene {
         width: input.plate.0,
         height: input.plate.1,
-        ambient: 35.0,
+        ambient: input.ambient,
         devices: input
             .items
             .iter()
@@ -129,7 +170,19 @@ fn build(input: &Input) -> Cache {
             contours.push((c, lab));
         }
     }
-    let peaks = hotspot::peaks(&smooth, 3, 60.0, 2.0);
+    let mean = smooth.values.iter().sum::<f32>() / smooth.values.len().max(1) as f32;
+    let peaks = hotspot::peaks(&smooth, 3, 60.0, 2.0)
+        .into_iter()
+        .map(|p| {
+            let tag = input
+                .items
+                .iter()
+                .min_by(|a, b| distance(a, &p).total_cmp(&distance(b, &p)))
+                .map(|i| i.tag.clone())
+                .unwrap_or_default();
+            (p, tag)
+        })
+        .collect();
     let velocity: Vector = scene.velocity_field(CELL_MM);
     let mut seeds: Vec<(f64, f64)> = Vec::new();
     let (w, h) = input.plate;
@@ -146,12 +199,20 @@ fn build(input: &Input) -> Cache {
     Cache {
         key: key(input),
         smooth,
+        mean,
         range,
         contours,
         peaks,
         streams,
         scene,
     }
+}
+
+/// Distance from a peak to a device rectangle, mm (0 inside).
+fn distance(i: &Item, p: &Peak) -> f64 {
+    let dx = (i.x - p.x).max(0.0).max(p.x - (i.x + i.w));
+    let dy = (i.y - p.y).max(0.0).max(p.y - (i.y + i.h));
+    dx.hypot(dy)
 }
 
 fn rgb(c: [u8; 3], alpha: f32) -> Color32 {
@@ -193,33 +254,56 @@ pub(super) fn chips(ui: &mut egui::Ui, state: &mut HeatState) {
     }
 }
 
-/// Draw the layers over the canvas in `rect`.
-pub(super) fn paint(
+fn screen_fn<'a>(rect: Rect, viewport: &'a Viewport) -> impl Fn(f64, f64) -> Pos2 + 'a {
+    move |x, y| {
+        let s = viewport.world_to_screen(novo_canvas::Vec2::new(x as f32, y as f32));
+        rect.min + Vec2::new(s.x, s.y)
+    }
+}
+
+/// Under the canvas, before it is shown: a backdrop in the canvas colour and
+/// the temperature map, so devices, wires and marks draw over the map.
+pub(super) fn paint_under(
     ui: &egui::Ui,
     rect: Rect,
     viewport: &Viewport,
     state: &mut HeatState,
     input: &Input,
+    dragging: bool,
+    backdrop: Color32,
 ) {
-    if !state.on || input.plate.0 <= 0.0 || input.plate.1 <= 0.0 {
+    if !state.under_canvas() || input.plate.0 <= 0.0 || input.plate.1 <= 0.0 {
         return;
     }
-    let k = key(input);
-    if state.cache.as_ref().is_none_or(|c| c.key != k) {
-        state.cache = Some(build(input));
+    if !state.refresh(input, dragging) {
+        return;
+    }
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(rect, 0.0, backdrop);
+    if let Some(cache) = state.cache.as_ref() {
+        paint_map(&painter, cache, &screen_fn(rect, viewport));
+    }
+}
+
+/// Over the canvas: contours, airflow, device rims, badges, hot spots and
+/// the legend.
+pub(super) fn paint_over(
+    ui: &egui::Ui,
+    rect: Rect,
+    viewport: &Viewport,
+    state: &mut HeatState,
+    input: &Input,
+    dragging: bool,
+) {
+    if !state.on || input.plate.0 <= 0.0 || input.plate.1 <= 0.0 || !state.refresh(input, dragging)
+    {
+        return;
     }
     let Some(cache) = state.cache.as_ref() else {
         return;
     };
     let painter = ui.painter_at(rect);
-    let to_screen = |x: f64, y: f64| -> Pos2 {
-        let s = viewport.world_to_screen(novo_canvas::Vec2::new(x as f32, y as f32));
-        rect.min + Vec2::new(s.x, s.y)
-    };
-
-    if state.map {
-        paint_map(&painter, cache, &to_screen);
-    }
+    let to_screen = screen_fn(rect, viewport);
     if state.airflow {
         paint_airflow(&painter, cache, &to_screen);
     }
@@ -422,28 +506,44 @@ fn paint_badges(
 }
 
 fn paint_peaks(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64, f64) -> Pos2) {
-    let font = FontId::proportional(t::FONT_SMALL);
-    for (n, p) in cache.peaks.iter().enumerate() {
+    let title = FontId::proportional(t::FONT_SMALL);
+    let mut placed: Vec<Rect> = Vec::new();
+    for (p, tag) in &cache.peaks {
         let at = to_screen(p.x, p.y);
         painter.circle_stroke(at, 4.0, Stroke::new(1.5, t::TEXT));
-        if n == 0 {
-            let card = Rect::from_min_size(at + Vec2::new(14.0, -26.0), Vec2::new(96.0, 22.0));
-            painter.line_segment([at, card.left_center()], Stroke::new(1.0, t::TEXT));
-            painter.rect(
-                card,
-                6.0,
-                t::BG_2,
-                Stroke::new(1.0, t::BORDER_STRONG),
-                egui::StrokeKind::Inside,
-            );
-            painter.text(
-                card.center(),
-                Align2::CENTER_CENTER,
-                format!("Hot spot {:.0} °C", p.value),
-                font.clone(),
-                t::TEXT,
-            );
+        let mut card = Rect::from_min_size(at + Vec2::new(14.0, -30.0), Vec2::new(150.0, 34.0));
+        // Cards never overlap each other: step down until there is room.
+        while placed.iter().any(|q| q.intersects(card.expand(2.0))) {
+            card = card.translate(Vec2::new(0.0, 38.0));
         }
+        placed.push(card);
+        painter.line_segment([at, card.left_center()], Stroke::new(1.0, t::TEXT));
+        painter.rect(
+            card,
+            6.0,
+            t::BG_2,
+            Stroke::new(1.0, t::BORDER_STRONG),
+            egui::StrokeKind::Inside,
+        );
+        let head = if tag.is_empty() {
+            format!("{:.0} °C", p.value)
+        } else {
+            format!("{tag}  {:.0} °C", p.value)
+        };
+        painter.text(
+            card.min + Vec2::new(8.0, 5.0),
+            Align2::LEFT_TOP,
+            head,
+            title.clone(),
+            t::TEXT,
+        );
+        painter.text(
+            card.min + Vec2::new(8.0, 19.0),
+            Align2::LEFT_TOP,
+            format!("{:.0} K above the plate mean", p.value - cache.mean),
+            title.clone(),
+            t::TEXT_MUTED,
+        );
     }
 }
 
@@ -515,6 +615,7 @@ mod tests {
     fn input() -> Input {
         Input {
             plate: (600.0, 800.0),
+            ambient: 35.0,
             items: vec![
                 Item {
                     id: 1,
@@ -558,6 +659,58 @@ mod tests {
         b.items[0].x -= 10.0;
         b.items[0].loss_w += 1.0;
         assert_ne!(key(&a), key(&b));
+    }
+
+    #[test]
+    fn ambient_is_part_of_the_key_and_the_scene() {
+        let a = input();
+        let mut b = input();
+        b.ambient = 45.0;
+        assert_ne!(key(&a), key(&b));
+        assert_eq!(build(&b).scene.ambient, 45.0);
+    }
+
+    #[test]
+    fn the_field_waits_for_a_drag_to_end() {
+        let mut state = HeatState::new();
+        let mut i = input();
+        assert!(state.refresh(&i, false));
+        let first = state.cache.as_ref().unwrap().key;
+        i.items[0].x += 20.0;
+        state.refresh(&i, true);
+        assert_eq!(
+            state.cache.as_ref().unwrap().key,
+            first,
+            "kept while dragging"
+        );
+        state.refresh(&i, false);
+        assert_ne!(
+            state.cache.as_ref().unwrap().key,
+            first,
+            "rebuilt on release"
+        );
+    }
+
+    #[test]
+    fn layer_commands_switch_the_view_on() {
+        let mut s = HeatState::new();
+        s.command("heat.toggle");
+        assert!(s.on);
+        s.command("heat.toggle");
+        assert!(!s.on);
+        s.command("heat.airflow");
+        assert!(s.on && s.airflow);
+        s.command("heat.airflow");
+        assert!(!s.airflow);
+        s.on = false;
+        s.command("heat.contours");
+        assert!(s.on && s.contours);
+    }
+
+    #[test]
+    fn peaks_are_named_after_the_nearest_device() {
+        let c = build(&input());
+        assert_eq!(c.peaks[0].1, "-U1");
     }
 
     #[test]
