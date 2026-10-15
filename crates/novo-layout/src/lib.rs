@@ -4,6 +4,7 @@
 //! Millimetres, origin top left, x right, y down. Nothing here mutates a
 //! project; the model storage and commands come later.
 
+pub mod check;
 pub mod drill;
 pub mod model;
 pub mod plan;
@@ -12,6 +13,7 @@ pub mod rules;
 pub mod sizing;
 pub mod sizing_model;
 pub mod state;
+pub mod stock;
 
 /// Footprint used for a device whose part has no dimensions (marked guessed).
 pub const DEFAULT_FOOTPRINT_MM: (f64, f64) = (45.0, 90.0);

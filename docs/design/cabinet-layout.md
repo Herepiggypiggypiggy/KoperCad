@@ -105,9 +105,44 @@ rule * zone=middle rail=shared
   `apply_plan` and the single undo step are unchanged.
   `rules::model::specs` reads kind, part clearances and loss from a project.
 
-Not done here: the app uses the rules (a rules file and a small editor on the
-Cabinet canvas), rotating devices to fit, and vertical stacking of small
-devices.
+### 5b.1 Power and signal, ducts, explanations (panel layout intelligence)
+
+New in the rule file (all optional; an old file still reads, with the new
+settings off):
+
+```text
+separate 40          # mm between a power duct and a signal duct; 0 = off
+duct 25 60           # width across the plate, height off the plate
+hot_gap 20           # extra room on each side of a hot device
+rule T zone=bottom rail=own class=power gap=20 above=80 below=80
+```
+
+- `class=power|signal|mixed` says what a kind carries. Shared rails never mix
+  power and signal. Between a power row and a signal row the planner leaves room for two
+  ducts and `separate` mm between them; rows of one class share one duct.
+  Drives (`T`) get 80 mm above and below and 20 mm beside them by default.
+  The numbers are practice values, not from a standard: edit them.
+- The plan carries the ducts (`Plan::ducts`, with their class); accepting it
+  adds them as duct rails with a `duct_class` property, in the same undo step.
+- When the plate is too small to keep power and signal apart, the separation
+  is given up before a device is left off; `Explanation::separation_relaxed`
+  says so and the check reports the separation as broken.
+- `place_all_explained` returns an `Explanation`: for every device the rule
+  (index and text), the zone, whether the hot rule moved it, its class, its
+  rail, and the gap to its neighbour with what set it; for every rail the
+  space above it and why; for every unplaced device the reason.
+- `check` judges a layout the user edited by hand: zone order, clearances per
+  side (part, rule or hot gap) and duct separation. Every violation names the
+  rule (index into the rule set) and by how much; the planner's own output
+  always passes (property-tested over 400 random plates).
+- `stock` is the rail and duct cut list: the fewest bars of stock (2000 mm,
+  2 mm kerf) by an exact search, rails trimmed to what their devices need only
+  when that saves a bar, spliced pieces longer than a bar, offcuts kept or
+  scrapped by length.
+
+Not done here: the app uses the rules (a rules file, a small editor, the
+explanation in the inspector, the cut list report), rotating devices to fit,
+and vertical stacking of small devices.
 
 ## 6. Out of scope here
 
