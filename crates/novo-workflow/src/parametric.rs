@@ -615,6 +615,7 @@ pub fn place_parametric(
             page,
             at,
             &PlaceOptions {
+                parts: Vec::new(),
                 values,
                 wire_numbers: opts.wire_numbers,
             },
