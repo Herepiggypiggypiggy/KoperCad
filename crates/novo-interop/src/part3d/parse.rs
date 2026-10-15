@@ -137,9 +137,11 @@ impl<'a> StepFile<'a> {
                 continue;
             }
             let mut i = pos + 1;
-            let mut id = 0u64;
+            let mut id = Some(0u32);
             while i < n && bytes[i].is_ascii_digit() {
-                id = id * 10 + u64::from(bytes[i] - b'0');
+                id = id
+                    .and_then(|v| v.checked_mul(10))
+                    .and_then(|v| v.checked_add(u32::from(bytes[i] - b'0')));
                 i += 1;
             }
             i = skip_ws_comments(bytes, i);
@@ -149,7 +151,11 @@ impl<'a> StepFile<'a> {
             }
             i = skip_ws_comments(bytes, i + 1);
             let end = statement_end(bytes, i);
-            let id = id as u32;
+            // An id that does not fit in 32 bits cannot be referenced.
+            let Some(id) = id else {
+                pos = end + 1;
+                continue;
+            };
             index.insert(id, (i, end));
             if bytes.get(i) == Some(&b'(') {
                 for name in complex_names(&text[i..end]) {
@@ -194,6 +200,7 @@ impl<'a> StepFile<'a> {
             b: self.text.as_bytes(),
             i: s,
             end: e,
+            depth: 0,
         };
         p.entity()
     }
@@ -301,7 +308,11 @@ struct Parser<'a> {
     b: &'a [u8],
     i: usize,
     end: usize,
+    depth: u32,
 }
+
+/// Deepest list nesting accepted; real files stay under 10.
+const MAX_DEPTH: u32 = 64;
 
 impl Parser<'_> {
     fn ws(&mut self) {
@@ -369,19 +380,29 @@ impl Parser<'_> {
         if self.peek()? != b'(' {
             return None;
         }
+        if self.depth >= MAX_DEPTH {
+            return None;
+        }
+        self.depth += 1;
         self.i += 1;
         let mut out = Vec::new();
-        loop {
+        let done = loop {
             self.ws();
-            match self.peek()? {
-                b')' => {
+            match self.peek() {
+                None => break None,
+                Some(b')') => {
                     self.i += 1;
-                    return Some(out);
+                    break Some(out);
                 }
-                b',' => self.i += 1,
-                _ => out.push(self.param()?),
+                Some(b',') => self.i += 1,
+                Some(_) => match self.param() {
+                    Some(p) => out.push(p),
+                    None => break None,
+                },
             }
-        }
+        };
+        self.depth -= 1;
+        done
     }
 
     fn param(&mut self) -> Option<Param> {
@@ -390,12 +411,14 @@ impl Parser<'_> {
         match c {
             b'#' => {
                 self.i += 1;
-                let mut v = 0u64;
+                let mut v = Some(0u32);
                 while self.i < self.end && self.b[self.i].is_ascii_digit() {
-                    v = v * 10 + u64::from(self.b[self.i] - b'0');
+                    v = v
+                        .and_then(|v| v.checked_mul(10))
+                        .and_then(|v| v.checked_add(u32::from(self.b[self.i] - b'0')));
                     self.i += 1;
                 }
-                Some(Param::Ref(v as u32))
+                Some(Param::Ref(v?))
             }
             b'$' | b'*' => {
                 self.i += 1;
@@ -508,5 +531,22 @@ mod tests {
             StepFile::parse("ISO-10303-21;\nHEADER;\nENDSEC;"),
             Err(ParseError::NoData)
         ));
+    }
+
+    #[test]
+    fn hostile_nesting_and_ids_are_rejected_not_fatal() {
+        let deep = "(".repeat(200_000);
+        let text = format!("ISO-10303-21;\nDATA;\n#1=FOO({deep});\n#2=BAR(#1);\nENDSEC;\n");
+        let f = StepFile::parse(&text).unwrap();
+        assert!(f.entity(1).is_none());
+        assert!(f.entity(2).is_some());
+        let big = "ISO-10303-21;\nDATA;\n#99999999999999999999=FOO(1);\n#4294967297=FOO(1);\n#3=BAR(#99999999999999999999);\nENDSEC;\n";
+        let f = StepFile::parse(big).unwrap();
+        assert_eq!(f.len(), 1, "ids above u32 are not indexed");
+        assert!(
+            f.entity(3).is_none(),
+            "a reference that overflows fails the entity"
+        );
+        assert!(f.entity(1).is_none());
     }
 }

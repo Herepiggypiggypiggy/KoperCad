@@ -37,6 +37,8 @@ pub struct Settings {
     pub reduce_motion: bool,
     /// Whether the status bar is switched off (docs/design/workspaces.md §7).
     pub hide_status_bar: bool,
+    /// Commissioning's large touch buttons: a tablet user sets it once.
+    pub large_buttons: bool,
     /// The workspace shown when the app last ran (`Workspace::id`),
     /// reopened with the project when it is available again
     /// (docs/design/workspaces.md §4.1).
