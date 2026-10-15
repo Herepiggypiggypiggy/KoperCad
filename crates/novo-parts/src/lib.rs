@@ -22,6 +22,7 @@
 mod assign;
 mod catalog;
 mod csv;
+mod panel;
 mod search;
 mod sheet;
 mod table;
@@ -40,6 +41,7 @@ pub use csv::{
     Column, DelimitedRow, ImportError, ImportReport, ParseError, column_for, import_catalog,
     parse_delimited,
 };
+pub use panel::{Clearances, Mounting, PanelData, is_panel_number_key, migrate_properties};
 pub use search::{Matcher, normalize_code};
 pub use sheet::{
     EditError, Group, INTERNAL_KEY_PREFIXES, PropertySheet, Row, RowKey, RowValue, display_value,

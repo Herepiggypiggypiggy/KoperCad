@@ -17,7 +17,11 @@ use thiserror::Error;
 use crate::search::{Matcher, normalize_code};
 
 /// Version of the catalog file format written by [`Catalog::save`].
-pub const CATALOG_FORMAT_VERSION: u32 = 1;
+///
+/// Format 2 adds the panel-building keys (`power_loss_w`, `mounting`,
+/// clearances); files of format 1 are migrated when read (legacy names
+/// renamed, mounting text normalized) and written back as format 2.
+pub const CATALOG_FORMAT_VERSION: u32 = 2;
 
 /// Property keys this crate writes into `novo_core::Part::properties`. Other
 /// workstreams read them (cabinet layout reads the dimensions, cables read
@@ -35,6 +39,18 @@ pub mod keys {
     pub const CORE_CROSS_SECTION_MM2: &str = "core_cross_section_mm2";
     /// Comma-separated IEC 81346-2 letter codes the part fits: `K,Q`.
     pub const LETTER_CODES: &str = "letter_codes";
+    /// Power loss at rated load in W; feeds the heat estimate.
+    pub const POWER_LOSS_W: &str = "power_loss_w";
+    /// How the part is fixed: `din_rail`, `screw`, `plate`, `door_cutout`.
+    pub const MOUNTING: &str = "mounting";
+    /// Free space the part wants above it, in mm (upright part).
+    pub const CLEARANCE_ABOVE_MM: &str = "clearance_above_mm";
+    /// Free space below, in mm.
+    pub const CLEARANCE_BELOW_MM: &str = "clearance_below_mm";
+    /// Free space to the left, in mm.
+    pub const CLEARANCE_LEFT_MM: &str = "clearance_left_mm";
+    /// Free space to the right, in mm.
+    pub const CLEARANCE_RIGHT_MM: &str = "clearance_right_mm";
 }
 
 /// Outer size of a part in millimetres.
@@ -488,7 +504,10 @@ impl Catalog {
             return Err(FromJsonError::TooNew(file.format));
         }
         let mut catalog = Catalog::new();
-        for part in file.parts {
+        for mut part in file.parts {
+            if file.format < 2 {
+                crate::panel::migrate_properties(&mut part.data);
+            }
             catalog.upsert(part);
         }
         Ok(catalog)

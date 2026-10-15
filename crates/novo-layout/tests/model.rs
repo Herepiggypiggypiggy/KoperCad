@@ -89,3 +89,56 @@ fn a_second_place_all_skips_placed_devices_and_stays_below_them() {
     p.transact("rest", |tx| apply_plan(tx, cab, &plan)).unwrap();
     assert!(load(&p, cab).unwrap().report().is_clean());
 }
+
+#[test]
+fn part_clearances_reach_the_clearance_check_and_a_device_can_override_them() {
+    use novo_core::{Command, Device};
+    let (mut p, cab) = project();
+    let part = p.all::<novo_core::Part>().next().unwrap().id;
+    let devices: Vec<_> = p
+        .all::<Device>()
+        .filter(|d| d.tag.location == ["CAB1"] && !d.parts.is_empty())
+        .map(|d| d.id)
+        .collect();
+    let (k1, q1) = (devices[0], devices[1]);
+    p.transact("place", |tx| {
+        for (device, x) in [(k1, 10.0), (q1, 75.0)] {
+            // 20 mm between the 45 mm wide footprints.
+            tx.execute(Command::PlaceDevice {
+                device,
+                structure: cab,
+                x,
+                y: 10.0,
+                rotated: false,
+                rail: None,
+            })?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    // Without data the default 10 mm gap is kept.
+    assert!(load(&p, cab).unwrap().report().too_close.is_empty());
+
+    // The part asks for 40 mm at its right; the left neighbour is its own.
+    p.transact("part data", |tx| {
+        tx.set_property(part, "clearance_right_mm", Some(Value::Int(40)))
+    })
+    .unwrap();
+    let too_close = load(&p, cab).unwrap().report().too_close;
+    assert_eq!(too_close.len(), 1);
+    assert_eq!(too_close[0].2, 20.0);
+
+    // A device can say it needs less than its part does (and a negative
+    // value is ignored, falling back to the part).
+    p.transact("override", |tx| {
+        tx.set_property(k1, "clearance_right_mm", Some(Value::Float(-5.0)))?;
+        tx.set_property(q1, "clearance_left_mm", Some(Value::Int(0)))
+    })
+    .unwrap();
+    assert_eq!(load(&p, cab).unwrap().report().too_close.len(), 1);
+    p.transact("override", |tx| {
+        tx.set_property(k1, "clearance_right_mm", Some(Value::Int(15)))
+    })
+    .unwrap();
+    assert!(load(&p, cab).unwrap().report().too_close.is_empty());
+}

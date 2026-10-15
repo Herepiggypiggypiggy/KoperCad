@@ -107,7 +107,7 @@ pub(super) fn cabinet_view(layout: &CabinetLayout, tag_of: impl Fn(u64) -> Strin
                     height: f.h as f32,
                     tag: tag_of(p.id),
                     guessed: p.size.guessed,
-                    clearance: p.clearance.unwrap_or(novo_layout::DEFAULT_CLEARANCE_MM) as f32,
+                    clearance: p.max_need() as f32,
                     state: state(p.id),
                 }
             })
