@@ -34,7 +34,7 @@ pub struct Migration {
 }
 
 /// Every schema step, oldest first.
-pub const MIGRATIONS: &[Migration] = &[Migration { to: 1, run: v1 }];
+pub const MIGRATIONS: &[Migration] = &[Migration { to: 1, run: v1 }, Migration { to: 2, run: v2 }];
 
 pub(crate) const fn latest(migrations: &[Migration]) -> u32 {
     match migrations.last() {
@@ -62,6 +62,22 @@ fn v1(tx: &Transaction<'_>) -> rusqlite::Result<()> {
          );
          CREATE INDEX records_kind ON records(kind);
          CREATE INDEX records_page ON records(page) WHERE page IS NOT NULL;",
+    )
+}
+
+/// Version 2: the project as it was when each revision was issued
+/// (DESIGN §7, Revisions), keyed by the revision's id.
+///
+/// `data` is the project JSON (`Project::to_json`), zlib-compressed;
+/// `format` is the record format it was written with, so a later format
+/// change can migrate snapshots along with the records.
+fn v2(tx: &Transaction<'_>) -> rusqlite::Result<()> {
+    tx.execute_batch(
+        "CREATE TABLE snapshots (
+             revision INTEGER PRIMARY KEY,
+             format   INTEGER NOT NULL,
+             data     BLOB NOT NULL
+         );",
     )
 }
 

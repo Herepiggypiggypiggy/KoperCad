@@ -776,3 +776,81 @@ fn closing_before_the_recovery_decision_keeps_the_work() {
     let recovered = opened.recovered.expect("still offered");
     assert_same(&recovered.project, doc.project());
 }
+
+fn issue(doc: &mut Document, index: &str) -> (RevisionId, ChangeSet) {
+    let outcome = doc
+        .execute(Command::IssueRevision {
+            index: index.into(),
+            date: "2026-10-15".into(),
+            author: "TV".into(),
+            description: String::new(),
+        })
+        .unwrap();
+    match outcome.created[..] {
+        [AnyId::Revision(id)] => (id, outcome.changes),
+        _ => panic!("{:?}", outcome.created),
+    }
+}
+
+#[test]
+fn revision_snapshots_are_kept_beside_the_records() {
+    let (_dir, path) = temp();
+    let mut doc = Document::default();
+    build_starter(&mut doc);
+    let mut file = ProjectFile::create(&path, doc.project()).unwrap();
+
+    let (a, _) = issue(&mut doc, "A");
+    let issued_a = doc.project().clone();
+    file.put_snapshot(a, &issued_a).unwrap();
+    file.save(doc.project()).unwrap();
+
+    // Later edits and saves leave the snapshot as issued.
+    doc.transact("Edit", |tx| tx.add_page("9").map(|_| ()))
+        .unwrap();
+    file.save(doc.project()).unwrap();
+    let (b, _) = issue(&mut doc, "B");
+    file.put_snapshot(b, doc.project()).unwrap();
+    file.save(doc.project()).unwrap();
+    file.close().unwrap();
+
+    let mut file = ProjectFile::open(&path).unwrap();
+    assert_eq!(file.snapshot_revisions().unwrap(), [a, b]);
+    assert_same(&file.snapshot(a).unwrap().unwrap(), &issued_a);
+    assert!(file.snapshot(RevisionId(9999)).unwrap().is_none());
+
+    // B is undone and the file saved: its snapshot stays while redo can
+    // still bring B back, and goes only when asked (on open or close).
+    doc.undo().unwrap();
+    file.save(doc.project()).unwrap();
+    assert_eq!(file.snapshot_revisions().unwrap(), [a, b]);
+    assert_eq!(file.drop_orphan_snapshots(doc.project()).unwrap(), 1);
+    assert_eq!(file.snapshot_revisions().unwrap(), [a]);
+}
+
+#[test]
+fn a_session_keeps_snapshots_through_save_as_and_drops_orphans_on_open() {
+    let (_dir, path) = temp();
+    let mut doc = Document::default();
+    build_starter(&mut doc);
+    let mut session = Session::create(&path, doc.project()).unwrap();
+    let (a, c) = issue(&mut doc, "A");
+    session.record(&c);
+    session.put_snapshot(a, doc.project()).unwrap();
+    let issued_a = doc.project().clone();
+
+    let copy = path.with_file_name("copy.novo");
+    session.save_as(&copy, doc.project()).unwrap();
+    assert_same(&session.snapshot(a).unwrap().unwrap(), &issued_a);
+
+    // B is issued but never saved: the next open drops its snapshot.
+    let (b, c) = issue(&mut doc, "B");
+    session.record(&c);
+    session.put_snapshot(b, doc.project()).unwrap();
+    session.close().unwrap();
+
+    let opened = Session::open(&copy).unwrap();
+    assert!(opened.recovered.is_none());
+    assert!(opened.session.snapshot(b).unwrap().is_none());
+    assert_same(&opened.session.snapshot(a).unwrap().unwrap(), &issued_a);
+    opened.session.close().unwrap();
+}
