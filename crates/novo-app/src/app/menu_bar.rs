@@ -194,6 +194,13 @@ impl NovoApp {
         if let Err(reason) = commands::availability(info, &self.command_context()) {
             return Some(reason);
         }
+        if !super::workbench::app_runs(info.id) {
+            return Some(if self.wb.keymap.shortcut_text(info.id).is_some() {
+                "Works with its key on the drawing, not from the menu yet"
+            } else {
+                "Not in the app yet"
+            });
+        }
         if matches!(info.id, "file.remove_background" | "view.background") && !self.has_background()
         {
             return Some("This page has no DXF background");
@@ -231,6 +238,26 @@ mod tests {
         d.app.wb.queued.push("view.cabinet");
         d.frame();
         assert_eq!(d.app.workspace(), crate::app::workspace::Workspace::Cabinet);
+    }
+
+    #[test]
+    fn a_row_the_app_cannot_run_is_greyed_with_a_reason() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::NewProject);
+        d.frame();
+        for menu in MENUS {
+            for (info, _) in menus::entries(menu) {
+                if !super::super::workbench::app_runs(info.id) {
+                    assert!(
+                        d.app.command_unavailable(info).is_some(),
+                        "{} is in the {menu} menu, not run by the app, and not greyed",
+                        info.id
+                    );
+                }
+            }
+        }
     }
 
     #[test]
