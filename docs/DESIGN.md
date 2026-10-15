@@ -276,8 +276,8 @@ still win within their grab zone, so a drag from a pin connects (§4, pin
 or body). The move snaps to the grid, shows the wires stretching, follows
 the no-overlap rules, and Esc during the drag puts everything back. M
 keeps working as the keyboard move: it picks the selection up at the
-pointer and a click puts it down. Undo takes back one whole move. A press and drag on a wire selects it
-and moves nothing.
+pointer and a click puts it down. Undo takes back one whole move. A
+press and drag on a wire selects it and moves nothing.
 
 **Placing a row.** With a symbol on the pointer (any way of getting it
 there), a click places one; a press and drag of more than 4 px places a
@@ -290,7 +290,8 @@ row of them, evenly spaced, as far as the pointer stretches.
 - **Spacing.** The pitch is the symbol's own (its width or height plus its
   clearance, rounded up to the grid; a terminal takes its strip's pitch).
   The mouse wheel, or the + and - keys, shrink or grow it by one grid
-  step while dragging, and the hint shows the pitch. Every symbol sits on the grid.
+  step while dragging, and the hint shows the pitch. Every symbol sits on
+  the grid.
   Per kind: a terminal takes its strip's pitch (so a row of terminals
   matches the strip it joins); fuses, breakers and contacts take their
   width plus one grid step; anything else its bounding box plus one grid
@@ -317,10 +318,10 @@ row of them, evenly spaced, as far as the pointer stretches.
   in row order, so the row is wired by accepting, not by hand.
 
 **Linking a contact to a coil.** Four routes make one action, one undo
-step, no confirmation: drag the contact onto the coil (a drag of a contact that ends with the
-pointer over a coil links instead of moving: the ghost reads "Link to
--K1" while the pointer is over the coil, and Esc cancels; over anything
-else it moves as usual); right-click the
+step, no confirmation: drag the contact onto the coil (a drag of a
+contact that ends with the pointer over a coil links instead of moving:
+the ghost reads "Link to -K1" while the pointer is over the coil, and Esc
+cancels; over anything else it moves as usual); right-click the
 contact and pick "Link to coil…"; `link` in the command surface (pick the
 contact, then the coil; or `link -K3 -K1`); and renaming the contact (F2
 or the double click) to the tag of an existing coil. The contact takes the
@@ -664,8 +665,8 @@ Acceptance:
     starts a drag.
 20. Place a fuse, press and drag right over 5 pitches: a ghost row with
     "×6", tags -F1 to -F6 in order, release gives one undo step; the
-    wheel widens the pitch; dragging into another device stops the row before it
-    with the refusal mark. A plain click places one.
+    wheel widens the pitch; dragging into another device stops the row
+    before it with the refusal mark. A plain click places one.
 21. Rename a contact to an existing coil's tag: it links in one undoable
     step with the toast and no dialog. The same with `link`, the context
     menu and drag. A tag of a motor is refused with the reason.
