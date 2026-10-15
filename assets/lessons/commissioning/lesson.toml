@@ -1,0 +1,68 @@
+format = 1
+id = "commissioning"
+version = 1
+# Draft until the Commissioning tab (PR #471) is on main.
+status = "draft"
+title = "Commission a panel with a tick list"
+summary = "Walk the commissioning checks, pass and fail them and keep a punch list."
+# Listed under `cabinet` in design section 10; owned by the productivity thread.
+track = "cabinet"
+order = 60
+level = "intermediate"
+minutes = 8
+topics = ["commissioning", "punch list", "test"]
+needs = []
+next = []
+project = "project.json"
+page = "Main circuit"
+
+[[step]]
+id = "what"
+title = "What commissioning mode is"
+text = "At the panel you test what was drawn. This mode turns the drawing into a tick list, so the checks and their results live with the project."
+
+[[step]]
+id = "open"
+title = "Open Commissioning"
+text = "Run **commissioning** from the command field, or pick the Commissioning tab."
+point = { ui = "workspace.commissioning" }
+expect = { command = "view.commissioning" }
+solve = [ { command = "view.commissioning" } ]
+
+[[step]]
+id = "next-open"
+title = "Go to the next open check"
+text = "Press **Next open**. It selects the first check nobody has done yet, and shows which device it belongs to."
+point = { ui = "commissioning.next_open" }
+expect = { clicked = "commissioning.next_open" }
+
+[[step]]
+id = "pass"
+title = "Pass one"
+text = "Press **Pass** when the check holds. The big buttons are made for a tablet or a gloved hand."
+point = { ui = "commissioning.pass" }
+expect = { clicked = "commissioning.pass" }
+
+[[step]]
+id = "fail"
+title = "Fail one"
+text = "Press **Fail** on the next check. A failed check offers to open a punch item with the device already filled in."
+point = { ui = "commissioning.fail" }
+expect = { clicked = "commissioning.fail" }
+
+[[step]]
+id = "punch"
+title = "Fill in the punch item"
+text = "Give it a severity and a short note. The punch list keeps everything that is not right yet."
+point = { ui = "commissioning.punch" }
+
+[[step]]
+id = "resolve"
+title = "Close it out"
+text = "When the fault is fixed, resolve the item. **Won't fix** closes it with your reason on record."
+point = { ui = "commissioning.resolve" }
+
+[[step]]
+id = "done"
+title = "A tick list that goes with the project"
+text = "Progress is saved in the project, so the next person sees what was done and what is open."
