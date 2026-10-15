@@ -22,6 +22,12 @@ param(
     [switch]$NoLaunch
 )
 
+# The shortcut opens a console that would vanish on an error; keep it open.
+trap {
+    Write-Host "`nBuild failed: $($_.Exception.Message)" -ForegroundColor Red
+    if (-not $NoLaunch) { Read-Host 'Press Enter to close' }
+    exit 1
+}
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -93,6 +99,11 @@ if (-not $token) { throw 'gh is not signed in. Run: gh auth login --web' }
 Invoke-WebRequest "https://api.github.com/repos/$Repo/tarball/$Ref" -Headers @{ Authorization = "Bearer $token" } -OutFile $archive -UseBasicParsing
 Invoke-Checked 'unpack' { tar -xzf $archive -C $src --strip-components=1 }
 Remove-Item -Force $archive
+# The tarball keeps commit times. Cargo skips a file that is older than its
+# last build, so a change from an earlier commit would ship a stale binary.
+# Stamp everything now; only the workspace crates recompile, not dependencies.
+$now = Get-Date
+Get-ChildItem -Recurse -Force -File $src | ForEach-Object { $_.LastWriteTime = $now }
 $commit = (gh api "repos/$Repo/commits/$Ref" --jq '.sha').Trim()
 
 # 4. Build. The target folder is kept between runs so only changes recompile.
