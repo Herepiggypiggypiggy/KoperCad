@@ -20,7 +20,7 @@ Design: `docs/design/symbol-packs.md`. Format: `crates/novo-symbols/FORMAT.md`.
 0. ~~Audit of literal `iec/` keys~~ done (see Done).
 1. ~~NFPA breadth~~ done: all 174 IEC symbols now have an NFPA twin (26 added: resistors, heaters, inductors, thermistors, varistor, potentiometer, horn/bell/buzzer, surge arrester, MCB with N, RCD/RCBO, Dahlander motor, EMC filter, 3-phase transformer; reactor, inductor and changeover switch share the IEC artwork). Render check in `docs/design/nfpa-breadth/`.
 2. **Project standard setting**: `ProjectRules.standard` is on main (#369); WS-01 wires `Catalog::builtin_pack` in the app (#383).
-3. **Switch standard**: `Command::SwitchStandard` is on main (#387); a caller that computes keys with `Pack::counterpart` and reports devices without counterpart is still to be written (app or workflow).
+3. ~~Switch standard~~ caller done (#447, `novo_workflow::switch`); the button is WS-01's.
 4. ~~More IEC growth~~ partly done: 3-wire sensors (inductive, capacitive, photoelectric, PNP and NPN), beacon, encoder, single-phase and DC fans, each with an NFPA twin. Left: illuminated push buttons and solid-state relay, which need a behavior kind with two circuits (contact plus lamp, input plus output) from WS-19.
 5. **Hands-on check by Tadjiro** of the NFPA artwork: delay-contact arcs, pressure and temperature letters, breaker arc, fuse S-curve, pilot-light letters.
 
