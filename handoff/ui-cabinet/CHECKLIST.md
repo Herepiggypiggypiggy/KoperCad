@@ -8,9 +8,10 @@ Status key: UI = reachable in the app today, ENGINE = engine only (on main or in
 | Plate, rails, placements canvas | #372 merged | UI | Ctrl+2 Cabinet |
 | Unplaced list, drag to place, landing box | #374 #376 #378 merged | UI | Left panel of the Cabinet |
 | Place all preview, Enter accepts | merged | UI | Header strip |
-| Plate size (width, height, margin) | this thread | UI (PR 1) | Inspector, nothing selected |
-| Device data, part, problems | this thread | UI (PR 1) | Inspector, device selected |
-| Table face and problem hover text | #403 open | UI pending merge | Ctrl+T on the Cabinet |
+| Problems list (count opens a list, a row selects the device) | this thread | UI (PR 2) | Cabinet header, "N problems" |
+| Plate size (width, height, margin) | #443 merged | UI | Inspector, nothing selected |
+| Device data, part, problems | #443 merged | UI | Inspector, device selected |
+| Table face and problem hover text | #403 merged | UI | Ctrl+T on the Cabinet |
 | Plate / Table / 3D face switch | design in #395 | ENGINE | Header strip, three faces |
 | Enclosure inside, depth, door swing check | #409 open | ENGINE | Inspector (enclosure section) and problems list |
 | Power loss, mounting type, per-side clearances | #419 open | ENGINE | Inspector, part data section |
