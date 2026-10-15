@@ -161,3 +161,14 @@ fn value_sources_and_let_through_tables_round_trip_and_default_to_unknown() {
     assert_eq!(part.source_of(eng::ICS_KA), DataSource::Unknown);
     assert_eq!(part.let_through.len(), 1);
 }
+
+#[test]
+fn retain_removes_many_parts_in_one_pass_and_keeps_lookups_right() {
+    let mut catalog = big(20_000);
+    let removed = catalog.retain(|p| p.manufacturer != "WAGO");
+    assert_eq!(removed, 5_000);
+    assert_eq!(catalog.len(), 15_000);
+    assert!(catalog.find("WAGO", "1002-000002").is_none());
+    assert!(catalog.find("Siemens", "1000-000000").is_some());
+    assert_eq!(catalog.search("1003-000003", 5).len(), 1);
+}
