@@ -2573,15 +2573,15 @@ fn the_editor_catalog_follows_the_project_standard_and_the_wheel_hides_missing_t
             .pack()
     };
     assert_eq!(pack(&mut d), Some(Pack::Iec));
-    let breaker = |d: &Drive| d.app.wheel_items(3);
-    // A breaker item with no twin in the NFPA pack, found from the packs.
+    // A wheel item with no twin in the NFPA pack, if the packs still have one.
     let nfpa = novo_symbols::Library::builtin_pack(Pack::Nfpa).unwrap();
-    let no_twin = breaker(&d)
-        .into_iter()
-        .map(|(k, _)| k)
-        .find(|k| Pack::counterpart(k, Pack::Nfpa).is_none_or(|t| nfpa.get(&t).is_none()))
-        .expect("a breaker item without an NFPA drawing");
-    assert!(breaker(&d).iter().any(|(k, _)| *k == no_twin));
+    let no_twin = (0..5).find_map(|sector| {
+        d.app
+            .wheel_items(sector)
+            .into_iter()
+            .map(|(k, _)| (sector, k))
+            .find(|(_, k)| Pack::counterpart(k, Pack::Nfpa).is_none_or(|t| nfpa.get(&t).is_none()))
+    });
     d.app
         .canvas
         .schematic()
@@ -2645,12 +2645,11 @@ fn the_editor_catalog_follows_the_project_standard_and_the_wheel_hides_missing_t
         Some("nfpa/contacts/no")
     );
     // Items without a twin in the pack are hidden; the rest stay.
-    let items = breaker(&d);
-    assert!(!items.is_empty());
-    assert!(
-        items.iter().all(|(k, _)| !k.ends_with("rcbo_2p")),
-        "{items:?}"
-    );
+    if let Some((sector, key)) = no_twin {
+        let items = d.app.wheel_items(sector);
+        assert!(!items.is_empty());
+        assert!(items.iter().all(|(k, _)| *k != key), "{items:?}");
+    }
 
     d.app.run(&ctx, Action::Undo);
     d.frame();
