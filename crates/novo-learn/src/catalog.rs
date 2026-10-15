@@ -14,33 +14,70 @@ use crate::lesson::{Lang, Lesson, LessonError, Status};
 /// `tracks.toml`, `glossary.toml`, `<id>/lesson.toml`, `<id>/project.json`.
 pub type Files = BTreeMap<String, String>;
 
+/// Largest `lesson.toml`, `tracks.toml` or `glossary.toml` read.
+pub const MAX_TEXT_FILE_BYTES: u64 = 64 * 1024;
+/// Largest sample project read.
+pub const MAX_PROJECT_BYTES: u64 = 2 * 1024 * 1024;
+/// Most files read from one folder.
+pub const MAX_FILES: usize = 2000;
+
 /// Reads a lessons folder into [`Files`]. Only `.toml` and `.json` files
-/// are read; a file that is not UTF-8 text is an error.
-pub fn read_dir(root: &Path) -> std::io::Result<Files> {
-    fn walk(root: &Path, dir: &Path, out: &mut Files) -> std::io::Result<()> {
+/// are read. A folder may be a person's own (`%APPDATA%\KoperCAD\lessons`)
+/// and so is untrusted: symbolic links are not followed, a file over its
+/// size limit or beyond [`MAX_FILES`] is skipped (and named in the returned
+/// notes), and nothing outside `root` is ever read.
+pub fn read_dir(root: &Path) -> std::io::Result<(Files, Vec<String>)> {
+    fn walk(
+        root: &Path,
+        dir: &Path,
+        out: &mut Files,
+        notes: &mut Vec<String>,
+    ) -> std::io::Result<()> {
         for entry in std::fs::read_dir(dir)? {
             let path = entry?.path();
-            if path.is_dir() {
-                walk(root, &path, out)?;
-            } else if matches!(
-                path.extension().and_then(|e| e.to_str()),
-                Some("toml" | "json")
-            ) {
-                let key = path
-                    .strip_prefix(root)
-                    .map_err(std::io::Error::other)?
-                    .components()
-                    .map(|c| c.as_os_str().to_string_lossy().into_owned())
-                    .collect::<Vec<_>>()
-                    .join("/");
-                out.insert(key, std::fs::read_to_string(&path)?);
+            let meta = std::fs::symlink_metadata(&path)?;
+            if meta.file_type().is_symlink() {
+                continue;
+            }
+            if meta.is_dir() {
+                walk(root, &path, out, notes)?;
+                continue;
+            }
+            let ext = path.extension().and_then(|e| e.to_str());
+            if !matches!(ext, Some("toml" | "json")) {
+                continue;
+            }
+            let key = path
+                .strip_prefix(root)
+                .map_err(std::io::Error::other)?
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join("/");
+            let limit = if ext == Some("json") {
+                MAX_PROJECT_BYTES
+            } else {
+                MAX_TEXT_FILE_BYTES
+            };
+            if meta.len() > limit {
+                notes.push(format!("{key}: skipped, larger than {limit} bytes"));
+            } else if out.len() >= MAX_FILES {
+                notes.push(format!("{key}: skipped, more than {MAX_FILES} files"));
+            } else {
+                match std::fs::read_to_string(&path) {
+                    Ok(text) => {
+                        out.insert(key, text);
+                    }
+                    Err(e) => notes.push(format!("{key}: skipped, {e}")),
+                }
             }
         }
         Ok(())
     }
     let mut files = Files::new();
-    walk(root, root, &mut files)?;
-    Ok(files)
+    let mut notes = Vec::new();
+    walk(root, root, &mut files, &mut notes)?;
+    Ok((files, notes))
 }
 
 /// A group of lessons in the Learn window.
@@ -103,6 +140,8 @@ pub struct Entry {
     pub dir: String,
     /// `None` when the lesson names a file that is not there.
     pub project: Option<ProjectRef>,
+    /// The finished drawing, when the lesson ships one and it is there.
+    pub finished: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -166,10 +205,19 @@ impl Catalog {
                         continue;
                     }
                     let project = resolve_project(files, dir, &lesson.project);
+                    let finished = lesson
+                        .finished
+                        .as_deref()
+                        .and_then(|f| resolve_project(files, dir, f))
+                        .and_then(|r| match r {
+                            ProjectRef::File(path) => Some(path),
+                            _ => None,
+                        });
                     catalog.entries.push(Entry {
                         lesson: Arc::new(lesson),
                         dir: dir.to_owned(),
                         project,
+                        finished,
                     });
                 }
                 Err(e) => catalog.rejected.push((path.clone(), e)),
@@ -329,17 +377,58 @@ mod tests {
     }
 
     #[test]
+    fn read_dir_is_careful_with_untrusted_folders() {
+        let dir = std::env::temp_dir().join(format!("novo-learn-{}-big", std::process::id()));
+        std::fs::create_dir_all(dir.join("a")).unwrap();
+        std::fs::write(dir.join("a/lesson.toml"), "x").unwrap();
+        let big = "x".repeat(usize::try_from(MAX_TEXT_FILE_BYTES).unwrap() + 1);
+        std::fs::write(dir.join("a/huge.toml"), big).unwrap();
+        #[cfg(unix)]
+        {
+            std::fs::write(dir.join("outside.toml"), "secret").unwrap();
+            std::os::unix::fs::symlink(dir.join("outside.toml"), dir.join("a/link.toml")).unwrap();
+            std::os::unix::fs::symlink(&dir, dir.join("a/loop")).unwrap();
+        }
+        let (files, notes) = read_dir(&dir.join("a")).unwrap();
+        assert_eq!(
+            files.keys().map(String::as_str).collect::<Vec<_>>(),
+            ["lesson.toml"]
+        );
+        assert_eq!(notes.len(), 1, "{notes:?}");
+        assert!(notes[0].contains("huge.toml"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_finished_drawing_resolves_like_the_project() {
+        let mut f = files();
+        f.insert(
+            "wiring/lesson.toml".into(),
+            lesson("wiring", "draw", 20, "project.json", "ready")
+                .replace("topics", "finished = \"finished.json\"\ntopics"),
+        );
+        f.insert("wiring/finished.json".into(), "{}".into());
+        let c = Catalog::from_files(&f);
+        assert_eq!(
+            c.get("wiring").unwrap().finished.as_deref(),
+            Some("wiring/finished.json")
+        );
+        assert_eq!(c.get("tour").unwrap().finished, None);
+    }
+
+    #[test]
     fn read_dir_reads_toml_and_json_only() {
         let dir = std::env::temp_dir().join(format!("novo-learn-{}-dir", std::process::id()));
         std::fs::create_dir_all(dir.join("a")).unwrap();
         std::fs::write(dir.join("a/lesson.toml"), "x").unwrap();
         std::fs::write(dir.join("a/project.json"), "{}").unwrap();
         std::fs::write(dir.join("a/notes.txt"), "no").unwrap();
-        let files = read_dir(&dir).unwrap();
+        let (files, notes) = read_dir(&dir).unwrap();
         assert_eq!(
             files.keys().map(String::as_str).collect::<Vec<_>>(),
             ["a/lesson.toml", "a/project.json"]
         );
+        assert!(notes.is_empty());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

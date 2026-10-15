@@ -35,6 +35,10 @@ pub enum LessonError {
     Syntax(String),
     #[error("lesson format {0} needs a newer KoperCAD")]
     NeedsNewer(u32),
+    /// A check or script operation this build does not know, from a newer
+    /// KoperCAD (or a typo; the lint says which).
+    #[error("needs a newer KoperCAD, or has a typo: {0}")]
+    UnknownKind(String),
     #[error("{place}: {why}")]
     Invalid { place: String, why: String },
 }
@@ -97,6 +101,10 @@ pub struct Lesson {
     /// `project.json`, a relative path, `@example` or `@blank`.
     #[serde(default = "default_project")]
     pub project: String,
+    /// The same drawing at the end of the lesson, for "Open finished
+    /// version to compare": a relative path like `project`.
+    #[serde(default)]
+    pub finished: Option<String>,
     /// Name or title of the page shown on open.
     #[serde(default)]
     pub page: Option<String>,
@@ -284,8 +292,14 @@ impl Lesson {
         if head.format != FORMAT {
             return Err(LessonError::NeedsNewer(head.format));
         }
-        let lesson: Lesson =
-            toml::from_str(text).map_err(|e| LessonError::Syntax(e.to_string()))?;
+        let lesson: Lesson = toml::from_str(text).map_err(|e| {
+            let message = e.to_string();
+            if message.contains("unknown variant") {
+                LessonError::UnknownKind(message)
+            } else {
+                LessonError::Syntax(message)
+            }
+        })?;
         lesson.validate()?;
         Ok(lesson)
     }
@@ -324,16 +338,28 @@ impl Lesson {
                 format!("needs 1 to {MAX_STEPS} steps"),
             ));
         }
-        if self.project != "@example"
-            && self.project != "@blank"
-            && (self.project.is_empty()
-                || self.project.starts_with('/')
-                || self.project.contains('\\')
-                || self.project.starts_with("@"))
-        {
+        // Paths stay inside the lessons folder: `catalog` resolves them
+        // against it and refuses a climb out, so only absolute and drive
+        // forms need rejecting here.
+        let plain_path = |path: &str| {
+            !(path.is_empty()
+                || path.starts_with('/')
+                || path.contains('\\')
+                || path.contains(':')
+                || path.starts_with('@'))
+        };
+        if self.project != "@example" && self.project != "@blank" && !plain_path(&self.project) {
             return Err(invalid(
                 format!("lesson `{}`", self.id),
                 "project is a relative path, @example or @blank",
+            ));
+        }
+        if let Some(finished) = &self.finished
+            && !plain_path(finished)
+        {
+            return Err(invalid(
+                format!("lesson `{}`", self.id),
+                "finished is a relative path",
             ));
         }
         let mut seen = BTreeSet::new();
@@ -514,7 +540,22 @@ text = "That is all of it."
             "expect = { tool = \"wire\" }",
             "expect = { tooll = \"wire\" }",
         );
-        assert!(matches!(Lesson::parse(&bad), Err(LessonError::Syntax(_))));
+        assert!(matches!(
+            Lesson::parse(&bad),
+            Err(LessonError::UnknownKind(_))
+        ));
+    }
+
+    #[test]
+    fn an_unknown_check_kind_is_listed_as_needing_a_newer_build() {
+        let bad = GOOD.replace(
+            "expect = { tool = \"wire\" }",
+            "expect = { hologram = \"on\" }",
+        );
+        assert!(matches!(
+            Lesson::parse(&bad),
+            Err(LessonError::UnknownKind(_))
+        ));
     }
 
     #[test]

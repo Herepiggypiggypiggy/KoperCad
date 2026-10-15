@@ -23,6 +23,8 @@ pub struct Registry {
     pub commands: BTreeSet<String>,
     /// Every anchor id the shell registers.
     pub anchors: BTreeSet<String>,
+    /// Every signal name the shell raises (`wheel_opened`, ...).
+    pub signals: BTreeSet<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -197,6 +199,19 @@ fn lint_lesson(
             }
         },
     };
+    if let Some(finished) = &lesson.finished {
+        match &entry.finished {
+            None => sink.error(
+                None,
+                format!("finished `{finished}` is not among the files"),
+            ),
+            Some(path) => {
+                if let Err(e) = Project::from_json(&files[path]) {
+                    sink.error(None, format!("{path} does not load: {e}"));
+                }
+            }
+        }
+    }
     let project = project.as_ref();
     if let (Some(page), Some(project)) = (&lesson.page, project)
         && !has_page(project, page)
@@ -251,6 +266,13 @@ fn lint_lesson(
             for id in commands {
                 if !registry.commands.contains(id) {
                     sink.ahead(Some(step), format!("command `{id}` is not in this build"));
+                }
+            }
+            let mut signals = Vec::new();
+            check.signals(&mut signals);
+            for id in signals {
+                if !registry.signals.contains(id) {
+                    sink.ahead(Some(step), format!("signal `{id}` is not in this build"));
                 }
             }
             let mut anchors = Vec::new();
@@ -465,6 +487,7 @@ mod tests {
                 .map(String::from)
                 .into(),
             anchors: ["dock.connect", "dock.wire_mode"].map(String::from).into(),
+            signals: ["wheel_opened", "proposal_next"].map(String::from).into(),
         }
     }
 
@@ -626,6 +649,30 @@ expect = { wire = { from = "-F1:2", to = "-K1:1" } }
             &example(),
         );
         assert!(messages(&report).iter().any(|s| s.contains("gone.json")));
+    }
+
+    #[test]
+    fn signals_and_finished_files_are_checked() {
+        let steps = r#"
+[[step]]
+id = "wheel"
+title = "Wheel"
+text = "Hold Q."
+expect = { signal = "wheel_opened" }
+[[step]]
+id = "tab"
+title = "Tab"
+text = "Press Tab."
+expect = { signal = "proposal_nxt" }
+"#;
+        let report = run(
+            &lesson_toml("finished = \"finished.json\"", steps),
+            &example(),
+        );
+        let m = messages(&report);
+        assert!(m.iter().any(|s| s.contains("proposal_nxt")), "{m:?}");
+        assert!(!m.iter().any(|s| s.contains("wheel_opened")), "{m:?}");
+        assert!(m.iter().any(|s| s.contains("finished.json")), "{m:?}");
     }
 
     #[test]

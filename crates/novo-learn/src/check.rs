@@ -21,6 +21,10 @@ pub enum Event {
     Clicked(String),
     /// A panel, drawer or menu with this anchor id became visible.
     Opened(String),
+    /// The application raised a named signal for something that does not
+    /// pass through a command: the place wheel opened, Tab or Enter took a
+    /// proposal. The names are in the registry the lint compares against.
+    Signal(String),
 }
 
 /// How things are now, supplied by the application on each update.
@@ -36,6 +40,14 @@ pub struct Facts {
     pub zoom: f64,
     /// Ids of design checks that currently report something.
     pub problems: BTreeSet<String>,
+    /// The wiring mode setting: `corners` or `lines`.
+    pub wiring_mode: String,
+    /// Whether the live view is on.
+    pub live: bool,
+    /// Tags of the devices whose coil is energized in the live view.
+    pub live_coils: BTreeSet<String>,
+    /// Pin designations (`-K1:A1`) that carry voltage in the live view.
+    pub live_pins: BTreeSet<String>,
 }
 
 /// A check, as written in a lesson file (`expect = { ... }`).
@@ -46,10 +58,16 @@ pub enum Check {
     Tool(String),
     Opened(String),
     Clicked(String),
+    Signal(String),
     Page(String),
     Selected(String),
     SelectedCount(usize),
     ZoomAtLeast(f64),
+    WiringMode(String),
+    Live(bool),
+    CoilOn(String),
+    Lit(String),
+    Potential(PotentialCheck),
     Wire(WireCheck),
     Device(DeviceCheck),
     Count(CountCheck),
@@ -59,6 +77,15 @@ pub enum Check {
     All(Vec<Check>),
     Any(Vec<Check>),
     Not(Box<Check>),
+}
+
+/// The pin `wire` (written `tag:pin`) is on a net that carries the named
+/// potential, such as `L1`.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PotentialCheck {
+    pub wire: String,
+    pub is: String,
 }
 
 /// Two pins, written `tag:pin` as the inspector shows them, are on one net.
@@ -141,6 +168,7 @@ impl Check {
             Check::Command(id) => cx.events.contains(&Event::Command(id.clone())),
             Check::Clicked(id) => cx.events.contains(&Event::Clicked(id.clone())),
             Check::Opened(id) => cx.events.contains(&Event::Opened(id.clone())),
+            Check::Signal(id) => cx.events.contains(&Event::Signal(id.clone())),
             Check::Tool(tool) => cx.facts.tool == *tool,
             Check::Page(name) => cx.facts.page.as_deref() == Some(name.as_str()),
             Check::Selected(tag) => {
@@ -148,6 +176,15 @@ impl Check {
             }
             Check::SelectedCount(n) => cx.facts.selection.len() == *n,
             Check::ZoomAtLeast(z) => cx.facts.zoom >= *z,
+            Check::WiringMode(mode) => cx.facts.wiring_mode == *mode,
+            Check::Live(on) => cx.facts.live == *on,
+            Check::CoilOn(tag) => cx
+                .facts
+                .live_coils
+                .iter()
+                .any(|have| tag_matches_text(have, tag)),
+            Check::Lit(pin) => cx.facts.live_pins.iter().any(|have| same_pin(have, pin)),
+            Check::Potential(p) => potential_holds(cx, p),
             Check::Wire(w) => wire_joined(cx, &w.from, &w.to),
             Check::Device(d) => device_present(cx.project, d),
             Check::Count(c) => count(cx.project, c) >= c.at_least,
@@ -166,7 +203,7 @@ impl Check {
     /// does (it reads latched events), so it is false when a step opens.
     pub fn reads_events(&self) -> bool {
         match self {
-            Check::Command(_) | Check::Clicked(_) | Check::Opened(_) => true,
+            Check::Command(_) | Check::Clicked(_) | Check::Opened(_) | Check::Signal(_) => true,
             Check::All(v) | Check::Any(v) => v.iter().any(Check::reads_events),
             Check::Not(c) => c.reads_events(),
             _ => false,
@@ -179,6 +216,16 @@ impl Check {
             Check::Command(id) => out.push(id),
             Check::All(v) | Check::Any(v) => v.iter().for_each(|c| c.commands(out)),
             Check::Not(c) => c.commands(out),
+            _ => {}
+        }
+    }
+
+    /// Every signal name the check names, for the lint.
+    pub fn signals<'a>(&'a self, out: &mut Vec<&'a str>) {
+        match self {
+            Check::Signal(id) => out.push(id),
+            Check::All(v) | Check::Any(v) => v.iter().for_each(|c| c.signals(out)),
+            Check::Not(c) => c.signals(out),
             _ => {}
         }
     }
@@ -236,6 +283,23 @@ pub fn pins_named(project: &Project, text: &str) -> Vec<PinRef> {
         }
     }
     found
+}
+
+/// Whether two `tag:pin` texts name the same pin.
+fn same_pin(have: &str, want: &str) -> bool {
+    match (have.rsplit_once(':'), want.rsplit_once(':')) {
+        (Some((ht, hp)), Some((wt, wp))) => hp == wp && tag_matches_text(ht, wt),
+        _ => false,
+    }
+}
+
+fn potential_holds(cx: &Context<'_>, check: &PotentialCheck) -> bool {
+    pins_named(cx.project, &check.wire).into_iter().any(|pin| {
+        cx.netlist
+            .potential_of(pin)
+            .and_then(|id| cx.project.potential(id))
+            .is_some_and(|p| p.name == check.is)
+    })
 }
 
 fn wire_joined(cx: &Context<'_>, from: &str, to: &str) -> bool {
@@ -309,4 +373,180 @@ fn field_holds(project: &Project, check: &FieldCheck) -> bool {
             .equals
             .as_ref()
             .is_none_or(|want| text.as_deref() == Some(want.as_str()))
+}
+
+#[cfg(test)]
+mod tests {
+    use novo_core::Document;
+
+    use super::*;
+
+    fn check(text: &str) -> Check {
+        #[derive(Deserialize)]
+        struct Holder {
+            expect: Check,
+        }
+        toml::from_str::<Holder>(&format!("expect = {text}"))
+            .unwrap()
+            .expect
+    }
+
+    fn starter() -> Document {
+        let mut doc = Document::new(novo_core::Project::new("T"));
+        novo_tests::motor_starter(&mut doc).unwrap();
+        doc
+    }
+
+    fn holds(check: &Check, doc: &Document, facts: &Facts, events: &[Event]) -> bool {
+        let netlist = doc.project().netlist();
+        let events: BTreeSet<Event> = events.iter().cloned().collect();
+        check.eval(&Context {
+            project: doc.project(),
+            netlist: &netlist,
+            facts,
+            events: &events,
+        })
+    }
+
+    #[test]
+    fn events_facts_and_signals() {
+        let doc = starter();
+        let facts = Facts {
+            tool: "wire".into(),
+            page: Some("Main circuit".into()),
+            selection: vec!["=A1+CAB-K1".into()],
+            zoom: 2.0,
+            wiring_mode: "lines".into(),
+            live: true,
+            live_coils: ["=A1+CAB-K1".to_owned()].into(),
+            live_pins: ["=A1+CAB-K1:A1".to_owned()].into(),
+            ..Facts::default()
+        };
+        let yes = |text: &str, events: &[Event]| holds(&check(text), &doc, &facts, events);
+        assert!(yes("{ tool = \"wire\" }", &[]));
+        assert!(!yes("{ tool = \"cable\" }", &[]));
+        assert!(yes("{ page = \"Main circuit\" }", &[]));
+        assert!(yes("{ selected = \"-K1\" }", &[]));
+        assert!(!yes("{ selected = \"-F1\" }", &[]));
+        assert!(yes("{ selected_count = 1 }", &[]));
+        assert!(yes("{ zoom_at_least = 1.5 }", &[]));
+        assert!(yes("{ wiring_mode = \"lines\" }", &[]));
+        assert!(yes("{ live = true }", &[]));
+        assert!(yes("{ coil_on = \"-K1\" }", &[]));
+        assert!(!yes("{ coil_on = \"-K2\" }", &[]));
+        assert!(yes("{ lit = \"-K1:A1\" }", &[]));
+        assert!(!yes("{ lit = \"-K1:A2\" }", &[]));
+        assert!(!yes("{ signal = \"wheel_opened\" }", &[]));
+        assert!(yes(
+            "{ signal = \"wheel_opened\" }",
+            &[Event::Signal("wheel_opened".into())]
+        ));
+        assert!(yes(
+            "{ any = [ { command = \"x\" }, { clicked = \"y\" } ] }",
+            &[Event::Clicked("y".into())]
+        ));
+        assert!(yes("{ not = { command = \"x\" } }", &[]));
+        assert!(check("{ signal = \"s\" }").reads_events());
+        assert!(!check("{ live = true }").reads_events());
+    }
+
+    #[test]
+    fn state_reads_the_document() {
+        let doc = starter();
+        let facts = Facts::default();
+        let yes = |text: &str| holds(&check(text), &doc, &facts, &[]);
+        assert!(yes("{ wire = { from = \"-F1:2\", to = \"-K1:1\" } }"));
+        assert!(!yes("{ wire = { from = \"-F1:1\", to = \"-K1:6\" } }"));
+        assert!(yes("{ device = { tag = \"-K1\" } }"));
+        assert!(yes("{ device = { tag = \"=A1+CAB-K1\" } }"));
+        assert!(!yes("{ device = { tag = \"=A2-K1\" } }"));
+        assert!(!yes("{ device = { tag = \"-K9\" } }"));
+        assert!(yes("{ count = { kind = \"page\", at_least = 2 } }"));
+        assert!(!yes("{ count = { kind = \"page\", at_least = 3 } }"));
+        assert!(yes(
+            "{ count = { kind = \"symbol\", page = \"Control circuit\", at_least = 5 } }"
+        ));
+        assert!(yes("{ cable = { name = \"-W1\", cores_at_least = 4 } }"));
+        assert!(!yes("{ cable = { name = \"-W2\" } }"));
+        assert!(yes(
+            "{ field = { device = \"-K1\", name = \"description\", is_set = true } }"
+        ));
+        assert!(!yes(
+            "{ field = { device = \"-K1\", name = \"nothing\", is_set = true } }"
+        ));
+        assert!(yes(
+            "{ field = { device = \"-K1\", name = \"nothing\", is_set = false } }"
+        ));
+        assert!(yes("{ problem_free = \"wire.overlap\" }"));
+        let mut facts = Facts::default();
+        facts.problems.insert("wire.overlap".into());
+        assert!(!holds(
+            &check("{ problem_free = \"wire.overlap\" }"),
+            &doc,
+            &facts,
+            &[]
+        ));
+    }
+
+    #[test]
+    fn a_potential_is_read_from_the_net() {
+        let doc = starter();
+        let net = doc.project().netlist();
+        let named: Vec<_> = doc
+            .project()
+            .potentials()
+            .filter(|p| p.name == "L1")
+            .map(|p| p.id)
+            .collect();
+        assert_eq!(named.len(), 1);
+        // Some pin of -F1 sits on a net that carries exactly L1.
+        let on_l1 = pins_named(doc.project(), "-F1:2")
+            .into_iter()
+            .chain(pins_named(doc.project(), "-F1:1"))
+            .any(|pin| net.potential_of(pin) == Some(named[0]));
+        let facts = Facts::default();
+        let by_check = ["-F1:1", "-F1:2"].iter().any(|pin| {
+            holds(
+                &check(&format!(
+                    "{{ potential = {{ wire = \"{pin}\", is = \"L1\" }} }}"
+                )),
+                &doc,
+                &facts,
+                &[],
+            )
+        });
+        assert_eq!(on_l1, by_check);
+        assert!(!holds(
+            &check("{ potential = { wire = \"-F1:1\", is = \"NOPE\" } }"),
+            &doc,
+            &facts,
+            &[]
+        ));
+    }
+
+    #[test]
+    fn typos_and_new_kinds_do_not_parse() {
+        #[derive(Deserialize)]
+        struct Holder {
+            #[allow(dead_code)]
+            expect: Check,
+        }
+        assert!(toml::from_str::<Holder>("expect = { comand = \"x\" }").is_err());
+        assert!(
+            toml::from_str::<Holder>(
+                "expect = { wire = { from = \"a:1\", to = \"b:1\", via = 3 } }"
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn tags_match_by_product_or_in_full() {
+        let full = DeviceTag::parse("=A1+CAB-K1").unwrap();
+        assert!(tag_matches(&full, "-K1"));
+        assert!(tag_matches(&full, "=A1+CAB-K1"));
+        assert!(!tag_matches(&full, "=A2-K1"));
+        assert!(!tag_matches(&full, "-K2"));
+        assert!(!tag_matches(&full, "not a tag"));
+    }
 }
