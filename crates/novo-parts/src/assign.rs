@@ -142,13 +142,19 @@ pub fn assign_part(
 ///
 /// A catalog pasted without a `connections` column says nothing either
 /// way; such a part is a terminal block unless its description or keywords
-/// name an accessory ("end cover", "end bracket", "marker", ...).
+/// name an accessory ("end cover", "end bracket", "marker", ...) before any
+/// "with" or "for", so "terminal block with marker groove" stays a block.
+/// `connections` of 0 in any form (`0`, `0,0`, text "0") is an accessory.
 pub fn is_terminal_block(part: &CatalogPart) -> bool {
     if !part.fits("X") {
         return false;
     }
     match part.data.get("connections") {
-        Some(v) => !matches!(v, Value::Int(0)),
+        Some(Value::Int(n)) => *n != 0,
+        Some(Value::Float(f)) => *f != 0.0,
+        Some(Value::Text(t)) if t.trim().is_empty() => !names_an_accessory(part),
+        Some(Value::Text(t)) => crate::sheet::parse_number(t) != Some(0.0),
+        Some(_) => true,
         None => !names_an_accessory(part),
     }
 }
@@ -159,29 +165,71 @@ const ACCESSORY_WORDS: &[&str] = &[
 ];
 
 fn names_an_accessory(part: &CatalogPart) -> bool {
-    let words = |text: &str| {
-        text.to_lowercase()
-            .split(|c: char| !c.is_alphanumeric())
+    let head_names_one = |text: &str| {
+        let text = text.to_lowercase();
+        words(&text)
+            .take_while(|w| !QUALIFIER_WORDS.contains(w))
             .any(|w| ACCESSORY_WORDS.contains(&w))
     };
-    words(&part.description) || part.keywords.iter().any(|k| words(k))
+    let head = part.description.split([',', ';', '(']).next().unwrap_or("");
+    head_names_one(head) || part.keywords.iter().any(|k| head_names_one(k))
 }
 
+/// Words after which a description lists features rather than naming the
+/// part: "terminal block with marker groove" is a block, "end cover for
+/// UT 2,5" a cover.
+const QUALIFIER_WORDS: &[&str] = &["with", "for", "mit", "für", "fur", "met", "voor"];
+
 /// The terminal kind a terminal block is for: a protective conductor block
-/// (`PE` in its keywords or type number, `UT 2,5-PE`) is for PE terminals,
-/// any other block for feed-through terminals.
+/// is for PE terminals, any other block for feed-through terminals.
+///
+/// A block is a PE block when its type number has `PE` as a word or a
+/// one-letter prefix to it (`UT 2,5-PE`, Weidmüller `WPE 2.5`), or its
+/// description or keywords say `PE`, protective or earth conductor, or
+/// green-yellow (WAGO `2002-1207`, "gn/ye").
 pub fn terminal_kind_of(part: &CatalogPart) -> TerminalKind {
-    let pe = part.keywords.iter().any(|k| k.eq_ignore_ascii_case("pe"))
-        || part
-            .type_number
-            .to_ascii_uppercase()
-            .split(|c: char| !c.is_ascii_alphanumeric())
-            .any(|w| w == "PE");
-    if pe {
+    let type_number = part.type_number.to_lowercase();
+    let pe_type = words(&type_number).any(|w| {
+        w == "pe" || (w.len() == 3 && w.ends_with("pe") && w.chars().all(char::is_alphabetic))
+    });
+    let says_pe = |text: &str| {
+        let text = text.to_lowercase();
+        words(&text).any(|w| PE_WORDS.contains(&w)) || PE_PHRASES.iter().any(|p| text.contains(p))
+    };
+    if pe_type || says_pe(&part.description) || part.keywords.iter().any(|k| says_pe(k)) {
         TerminalKind::ProtectiveEarth
     } else {
         TerminalKind::Feedthrough
     }
+}
+
+/// Words that name a protective conductor block (English, German, Dutch).
+const PE_WORDS: &[&str] = &[
+    "pe",
+    "protective",
+    "schutzleiter",
+    "schutzleiterklemme",
+    "aarde",
+];
+
+/// Phrases for green-yellow, the protective conductor colour.
+const PE_PHRASES: &[&str] = &[
+    "green-yellow",
+    "green/yellow",
+    "green yellow",
+    "gn/ye",
+    "gn-ye",
+    "gnye",
+    "grün-gelb",
+    "grün/gelb",
+    "groen-geel",
+    "groen/geel",
+    "earth conductor",
+];
+
+fn words(text: &str) -> impl Iterator<Item = &str> {
+    text.split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
 }
 
 /// Assigns a cable part to a cable as one command. The cable takes the

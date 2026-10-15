@@ -42,8 +42,8 @@ pub use csv::{
 };
 pub use search::{Matcher, normalize_code};
 pub use sheet::{
-    EditError, Group, PropertySheet, Row, RowKey, RowValue, display_value, parse_number,
-    parse_value, property_key, property_label, resolve_selection,
+    EditError, Group, INTERNAL_KEY_PREFIXES, PropertySheet, Row, RowKey, RowValue, display_value,
+    is_internal_key, parse_number, parse_value, property_key, property_label, resolve_selection,
 };
 pub use table::{
     BulkError, BulkOutcome, BulkRow, BulkTable, TableColumn, apply_table, fill, find_device,

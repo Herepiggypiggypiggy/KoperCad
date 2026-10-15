@@ -1212,8 +1212,32 @@ fn a_pe_terminal_is_offered_a_pe_block_first_and_accessories_stay_on_the_strip()
     pasted.description = "Feed-through terminal block UT 4".into();
     pasted.letter_codes = vec!["X".into()];
     assert!(novo_parts::is_terminal_block(&pasted));
-    pasted.data.insert("connections".into(), Value::Int(0));
-    assert!(!novo_parts::is_terminal_block(&pasted));
+    for zero in [Value::Int(0), Value::Float(0.0), Value::Text("0".into())] {
+        pasted.data.insert("connections".into(), zero);
+        assert!(!novo_parts::is_terminal_block(&pasted));
+    }
+    pasted
+        .data
+        .insert("connections".into(), Value::Text("2".into()));
+    assert!(novo_parts::is_terminal_block(&pasted));
+    // Accessory words after "with" or "for" describe a block's features.
+    pasted.data.clear();
+    for description in [
+        "Feed-through terminal block with marker groove",
+        "Terminal block for plug-in bridge, with end plate",
+        "Durchgangsreihenklemme mit Brückenschacht",
+    ] {
+        pasted.description = description.into();
+        assert!(novo_parts::is_terminal_block(&pasted), "{description}");
+    }
+    for description in [
+        "End cover for UT 2,5",
+        "Plug-in bridge, 2-pole",
+        "Zack marker strip",
+    ] {
+        pasted.description = description.into();
+        assert!(!novo_parts::is_terminal_block(&pasted), "{description}");
+    }
     let command = assign_part(p, &[gate.x1], &cover, AssignMode::Add);
     run(&mut doc, command);
     let p = doc.project();
@@ -1228,4 +1252,71 @@ fn a_pe_terminal_is_offered_a_pe_block_first_and_accessories_stay_on_the_strip()
             .order_number,
         "3044076"
     );
+}
+
+#[test]
+fn internal_properties_are_not_shown_in_the_sheet_or_the_bulk_table() {
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    set_property(
+        &mut doc,
+        gate.x1,
+        "terminal_part.feed_through",
+        Value::Int(1),
+    );
+    set_property(&mut doc, gate.x1, "terminal.suggest", Value::Bool(true));
+    set_property(&mut doc, gate.x1, "colour", Value::Text("grey".into()));
+    let sheet = PropertySheet::build(doc.project(), &[gate.x1.into()]);
+    let properties: Vec<&RowKey> = sheet
+        .rows()
+        .iter()
+        .filter(|r| r.group == Group::Properties)
+        .map(|r| &r.key)
+        .collect();
+    assert_eq!(properties, [&RowKey::Property("colour".into())]);
+
+    let tsv = BulkTable::devices(doc.project(), Some(&[gate.x1])).to_tsv();
+    let header = tsv.lines().next().unwrap();
+    assert!(header.contains("colour"), "{header}");
+    assert!(!header.contains("terminal"), "{header}");
+    // Pasting the table back leaves the hidden properties alone.
+    let catalog = Catalog::starter();
+    let outcome = apply_table(doc.project(), &catalog, &tsv).unwrap();
+    assert!(outcome.command.is_none());
+    let x1 = doc.project().device(gate.x1).unwrap();
+    assert_eq!(x1.properties["terminal_part.feed_through"], Value::Int(1));
+}
+
+#[test]
+fn pe_blocks_are_recognised_by_prefix_description_and_colour() {
+    use novo_core::TerminalKind;
+    let block = |type_number: &str, description: &str| {
+        let mut p = CatalogPart::new("Maker", type_number);
+        p.type_number = type_number.into();
+        p.description = description.into();
+        p.letter_codes = vec!["X".into()];
+        novo_parts::terminal_kind_of(&p)
+    };
+    let pe = TerminalKind::ProtectiveEarth;
+    let ft = TerminalKind::Feedthrough;
+    assert_eq!(
+        block("UT 2,5-PE", "Protective conductor terminal block"),
+        pe
+    );
+    assert_eq!(block("WPE 2.5", "PE terminal"), pe);
+    assert_eq!(block("WPE 2.5", ""), pe);
+    assert_eq!(
+        block(
+            "2002-1207",
+            "2-conductor ground terminal block, green-yellow"
+        ),
+        pe
+    );
+    assert_eq!(block("2002-1207", "Schutzleiterklemme gn/ye"), pe);
+    assert_eq!(block("UT 2,5", "Feed-through terminal block, grey"), ft);
+    assert_eq!(
+        block("WDU 2.5", "Feed-through terminal with marker groove"),
+        ft
+    );
+    assert_eq!(block("TYPE 4", "Open terminal"), ft);
 }
