@@ -20,6 +20,9 @@ mod inspector;
 mod link;
 mod live;
 mod live_anim;
+mod macro_actions;
+#[cfg(test)]
+mod macro_actions_tests;
 mod onboarding;
 mod pages;
 mod parts;
@@ -791,6 +794,8 @@ impl NovoApp {
         self.preferences_dialog(&ctx);
         self.parts_window(&ctx);
         self.project_settings_dialog(&ctx);
+        self.macro_save_dialog(&ctx);
+        self.macro_place_window(&ctx);
         self.issue_revision_dialog(&ctx);
         self.compare_window(&ctx);
         self.page_form_dialog(&ctx);
