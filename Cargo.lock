@@ -1981,6 +1981,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-learn"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-tests",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "toml",
+]
+
+[[package]]
 name = "novo-parts"
 version = "0.1.0"
 dependencies = [
