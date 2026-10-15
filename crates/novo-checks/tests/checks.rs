@@ -695,3 +695,28 @@ fn wires_sharing_a_stretch_are_flagged_but_touching_crossing_and_t_are_not() {
     assert_eq!(overlaps[0].severity, Severity::Warning);
     assert!(overlaps[0].message.contains("10.0 mm"));
 }
+
+#[test]
+fn open_wire_ends_are_flagged_one_per_end() {
+    let (project, _) = build(|tx| {
+        let page = tx.add_page("1")?;
+        let j = tx.add_junction(page, Point::new(0.0, 0.0))?;
+        let k = tx.add_junction(page, Point::new(20.0, 0.0))?;
+        tx.connect(Endpoint::junction(j), Endpoint::junction(k))?;
+        tx.connect(
+            Endpoint::junction(k),
+            Endpoint::free(Point::new(20.0, 30.0)),
+        )?;
+        tx.connect_on(
+            page,
+            Endpoint::free(Point::new(50.0, 0.0)),
+            Endpoint::free(Point::new(50.0, 40.0)),
+        )?;
+        Ok(())
+    });
+    let problems = check(&project);
+    let open = of_kind(&problems, ProblemKind::OpenWire);
+    assert_eq!(open.len(), 3, "{problems:#?}");
+    assert_eq!(open[0].severity, Severity::Warning);
+    assert!(open.iter().any(|p| p.message.contains("20.0, 30.0")));
+}
