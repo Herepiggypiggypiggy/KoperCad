@@ -577,6 +577,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd(
+        "sim.live",
+        "Show live potentials",
+        "View",
+        &["simulate", "contacts", "close", "energized", "try"],
+        Needs::Page,
+    ),
+    cmd(
         "view.override_marks",
         "Show override marks",
         "View",

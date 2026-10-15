@@ -18,7 +18,8 @@ use novo_canvas::model::{
 use novo_canvas::widget::{CanvasView, EscapeTarget};
 use novo_canvas::{Anchor, Color, Item, ItemId, Label, Primitive, SelectOp, Shape, Stroke, Vec2};
 use novo_core::{
-    AnyId, ChangeSet, Command, DeviceId, Document, PageId, Point, SymbolId, SymbolRole, WireId,
+    AnyId, ChangeSet, Command, DeviceId, Document, PageId, Point, SymbolId, SymbolRole,
+    TextContent, WireId,
 };
 
 use crate::art::LibraryArt;
@@ -26,7 +27,17 @@ use crate::catalog::Match;
 use crate::edit::device_of;
 use crate::potential::{PotentialMenu, PotentialSpec};
 use crate::potential_menu::{self, FeedMenu, PeMenu};
-use crate::tool::{Editor, EditorKey};
+use crate::tool::{Editor, EditorKey, LabelSource};
+
+/// A label dragged on its own, from the press to the release.
+struct LabelDrag {
+    source: LabelSource,
+    /// The label as drawn when it was picked up.
+    label: Label,
+    /// The press, and the pointer now (world, raw).
+    from: Point,
+    to: Point,
+}
 
 /// Rows shown in the insert search.
 const SEARCH_ROWS: usize = 14;
@@ -118,6 +129,8 @@ pub struct SchematicView {
     /// The move in progress was picked up by dragging a selected object (no
     /// M key); releasing drops it.
     drag_move: bool,
+    /// A label picked up on its own: only the text follows the pointer.
+    label_drag: Option<LabelDrag>,
     /// Where the canvas was drawn last frame, in screen points.
     rect: egui::Rect,
     /// Text the shell draws next to symbols (cross references).
@@ -148,6 +161,40 @@ impl EscapeTarget for Ladder<'_> {
     }
 }
 
+/// The label a press at `at` picked up, when it is text that can move on its
+/// own: a text record, or text the canvas draws for a tag or wire number.
+fn label_drag_at(
+    scene: &PageScene,
+    document: &Document,
+    hit: &novo_canvas::scene::Hit,
+    at: Point,
+) -> Option<LabelDrag> {
+    let project = document.project();
+    let found = scene.label_hit(project, hit)?;
+    if found.kind == LabelKind::Fixed {
+        return None;
+    }
+    let label = scene.scene().get(hit.id)?.labels.get(hit.label?)?.clone();
+    let source = match found.text {
+        Some(text) => LabelSource::Record(text),
+        None => LabelSource::Drawn {
+            owner: found.owner,
+            content: match found.owner {
+                AnyId::Wire(_) => TextContent::WireNumber,
+                _ => TextContent::DeviceTag,
+            },
+            at: point(label.pos),
+            anchor: model::text_anchor(label.anchor),
+        },
+    };
+    Some(LabelDrag {
+        source,
+        label,
+        from: at,
+        to: at,
+    })
+}
+
 fn point(v: Vec2) -> Point {
     Point::new(f64::from(v.x), f64::from(v.y))
 }
@@ -173,6 +220,7 @@ impl SchematicView {
             band_count: None,
             swallow: false,
             drag_move: false,
+            label_drag: None,
             rect: egui::Rect::NOTHING,
             notes: Vec::new(),
             notes_dirty: false,
@@ -421,6 +469,17 @@ impl SchematicView {
                 .collect();
             items.push(item);
         }
+        if let Some(drag) = &self.label_drag {
+            let d = self.editor.label_delta(drag.from, drag.to);
+            let mut label = drag.label.clone();
+            label.pos += Vec2::new(d.x as f32, d.y as f32);
+            label.color = ghost_color;
+            items.push(
+                Item::new(scene.layers().texts)
+                    .unselectable()
+                    .with_label(label),
+            );
+        }
         if preview.wire.len() >= 2 {
             let pts = preview.wire.iter().map(|p| model::vec(*p));
             items.push(
@@ -574,6 +633,7 @@ impl SchematicView {
             if let Some(hit) = scene.scene().pick(w, tol, self.canvas.viewport.zoom)
                 && scene.model_id(hit.id).is_some()
             {
+                let label_drag = label_drag_at(scene, document, &hit, point(w));
                 // Cancel the band the canvas may have begun, then select.
                 // A press on a selected object keeps the whole selection.
                 let keep: Vec<ItemId> = if self.canvas.selection.contains(hit.id) {
@@ -587,7 +647,10 @@ impl SchematicView {
                 let selection = self.selection();
                 // Only devices drag; a wire is selected and nothing else
                 // (a moved wire would have to keep the no-overlap rule).
-                if matches!(scene.model_id(hit.id), Some(AnyId::Symbol(_))) {
+                if label_drag.is_some() {
+                    // A press on text moves the text and nothing else.
+                    self.label_drag = label_drag;
+                } else if matches!(scene.model_id(hit.id), Some(AnyId::Symbol(_))) {
                     let carry = ui.input(|i| i.modifiers.shift);
                     self.drag_move = self.editor.begin_move_with(&selection, carry);
                 }
@@ -603,6 +666,17 @@ impl SchematicView {
             && let Some(w) = out.cursor_raw
         {
             self.editor.click(document, page, point(w), tolerance);
+        }
+        if let Some(drag) = &mut self.label_drag {
+            if let Some(w) = out.cursor_raw {
+                drag.to = point(w);
+            }
+            if response.drag_stopped_by(egui::PointerButton::Primary) {
+                let delta = self.editor.label_delta(drag.from, drag.to);
+                let source = drag.source.clone();
+                self.label_drag = None;
+                self.editor.move_label(document, page, &source, delta);
+            }
         }
         if self.drag_move
             && let Some(w) = out.cursor_raw
@@ -829,7 +903,10 @@ impl SchematicView {
             }
         }
         if pressed(Key::Escape) {
-            self.canvas.escape_with(Some(&mut Ladder(&mut self.editor)));
+            // The first Esc puts a dragged label back.
+            if self.label_drag.take().is_none() {
+                self.canvas.escape_with(Some(&mut Ladder(&mut self.editor)));
+            }
         }
         if pressed(Key::I) || pressed(Key::Q) {
             let anchor = ctx
@@ -1918,6 +1995,43 @@ mod tests {
         let after = at(&h);
         assert_eq!(after, Point::new(before.x + 40.0, before.y + 20.0));
         assert!(!h.view.editor.tool_active());
+    }
+
+    #[test]
+    fn dragging_a_tag_moves_the_text_and_not_the_device() {
+        let mut h = Harness::new();
+        h.view.editor.auto_connect = false;
+        h.view.editor.begin_place("iec/coils/relay", None);
+        h.click(60.0, 60.0, egui::PointerButton::Primary);
+        h.view.editor.leave_tool();
+        let sym = h.doc.project().symbols().next().unwrap().id;
+        let origin = h.doc.project().symbol(sym).unwrap().placement.origin;
+        let depth = h.doc.undo_depth();
+        let scene = h.view.scene.as_ref().unwrap().scene();
+        let id = item_id(AnyId::Symbol(sym));
+        let tag = scene.get(id).unwrap().labels[0].clone();
+        let grab = tag.bounds().center();
+        let grab = (f64::from(grab.x), f64::from(grab.y));
+        h.drag(grab, (grab.0 + 20.0, grab.1 + 10.0));
+        assert_eq!(
+            h.doc.project().symbol(sym).unwrap().placement.origin,
+            origin
+        );
+        assert_eq!(h.doc.undo_depth(), depth + 1);
+        let record = h.doc.project().texts_of(sym).into_iter().next().unwrap();
+        let at = h.doc.project().text_position(record).unwrap();
+        // The move snaps to the grid, so it is within one step of the drag.
+        let step = h.view.editor.grid;
+        assert!(
+            (at.x - (f64::from(tag.pos.x) + 20.0)).abs() <= step,
+            "{at:?}"
+        );
+        assert!(
+            (at.y - (f64::from(tag.pos.y) + 10.0)).abs() <= step,
+            "{at:?}"
+        );
+        assert!(at.x > f64::from(tag.pos.x) && at.y > f64::from(tag.pos.y));
+        assert!(h.view.label_drag.is_none());
     }
 
     /// A point the canvas picks as `sym` that no pin target covers.
