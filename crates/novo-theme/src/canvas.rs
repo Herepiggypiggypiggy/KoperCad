@@ -56,12 +56,12 @@ pub struct CanvasPalette {
     /// screen, so it stays a quiet grey rather than copper, which belongs
     /// to the selection.
     pub snap_marker: [u8; 4],
-    /// Filled dot where a wire meets a pin or another wire: the conductor
-    /// joint, the same copper dot as the logo. Smaller and darker than the
-    /// selection, so a selected net is still told apart.
+    /// Filled dot at a true junction (three or more conductors, DESIGN §2),
+    /// the same copper dot as the logo. Darker than the selection, which
+    /// also gets a halo and a thicker line, so a selected net is told apart.
     pub junction: [u8; 4],
-    /// Open ring on a wire end that was terminated unconnected. Hollow where
-    /// a junction is filled.
+    /// Open ring on a wire end that was terminated unconnected. Held back
+    /// until DESIGN §4 defines that case and the check it raises.
     pub wire_end: [u8; 4],
     /// The small flag beside an unconnected wire end.
     pub unconnected_flag: [u8; 4],
