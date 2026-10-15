@@ -164,11 +164,11 @@ right, so it does not cross the gate.
 Mock-up: `docs/design/workflow-looks.png`.
 
 - **Connected terminals.** Terminals joined into a group keep their circles
-  and leads and get a bridge: a heavy bar (about 0.5 mm) across the upper leads, 2.6 mm above the
-  circle centres (y 1.4 in terminal.toml), with a filled dot of about 0.4 mm
-  radius where it meets each lead. The
-  bar stays clear of the numbers on the left. Plain terminals have one
-  circle and one lead pair, as before.
+  and leads and get a bridge: a heavy bar (about 0.5 mm) across the upper
+  leads, 2.6 mm above the circle centres (y 1.4 in terminal.toml), with a
+  filled dot of about 0.4 mm radius where it meets each lead. The bar stays
+  clear of the numbers on the left. Plain terminals have one circle and one
+  lead pair, as before.
 - **Potential menu** (right-click a feed): a "Potential" caption, a 4 by 2
   grid of chips (L1, L2, L3, N, PE, +24 V, 0 V, New...) 55 by 28 px, the
   current one with a copper outline on BG_3; then "Number automatically",
