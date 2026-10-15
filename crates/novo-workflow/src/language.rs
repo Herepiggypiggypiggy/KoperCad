@@ -231,6 +231,16 @@ pub const DUTCH: &[Aliases] = &[
         &["live potentialen tonen", "contacten sluiten", "spanning"],
     ),
     nl(
+        "sim.faults",
+        &["storingen"],
+        &[
+            "kortsluiting",
+            "beveiliging",
+            "selectiviteit",
+            "uitschakeltijd",
+        ],
+    ),
+    nl(
         "view.toggle_marks",
         &[],
         &["markeringen tonen of verbergen"],

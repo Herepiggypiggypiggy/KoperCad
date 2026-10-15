@@ -64,6 +64,8 @@ pub(crate) struct Workbench {
     pub(super) issue: Option<super::revisions::IssueDraft>,
     /// The Compare revisions window, while it is open.
     pub(super) compare: Option<super::compare::CompareWindow>,
+    /// The Fault scenarios window, while it is open.
+    pub(super) faults: Option<super::faults::FaultsWindow>,
     /// The new pages, group and panel form, while open.
     pub(super) page_form: Option<super::pages::PageForm>,
     /// Which sheet of a generated page the canvas shows (0 for the first).
@@ -147,6 +149,7 @@ impl Default for Workbench {
             project_settings: false,
             issue: None,
             compare: None,
+            faults: None,
             page_form: None,
             sheet: 0,
             nav: Navigator::default(),
@@ -220,6 +223,7 @@ const APP_COMMANDS: &[&str] = &[
     "view.devices_drawer",
     "view.toggle_marks",
     "sim.live",
+    "sim.faults",
     "view.changes",
     "view.commissioning",
     "check.problems",
@@ -538,6 +542,7 @@ impl NovoApp {
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
             "view.toggle_marks" => self.wb.marks ^= true,
             "sim.live" => self.toggle_live(),
+            "sim.faults" => self.toggle_faults(),
             "view.changes" => self.toggle_changes(argument),
             "view.commissioning" => self.toggle_commissioning(),
             "check.problems" => self.show_issues(false),

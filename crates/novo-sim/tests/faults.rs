@@ -413,3 +413,27 @@ fn trip_models_are_object_safe() {
     assert!(m.clears(1000.0) <= 0.02);
     assert!(m.let_through_i2t(1000.0).is_none());
 }
+
+#[test]
+fn the_example_study_runs_all_its_scenarios_and_round_trips() {
+    let study = novo_sim::study::Study::example();
+    let again = novo_sim::study::Study::from_json(&study.to_json()).unwrap();
+    assert_eq!(again, study);
+    let sc = study.run(0).unwrap();
+    assert!(sc.faults[0].selective, "the pump breaker clears it alone");
+    let low = study.run(1).unwrap();
+    assert!(
+        low.faults[0].cleared_at.is_some(),
+        "magnetic trip is reached: {:?}",
+        low.events
+    );
+    let start = study.run(2).unwrap();
+    assert!(start.trip_time("F2").is_none() && start.trip_time("Q1").is_none());
+    let phase = study.run(3).unwrap();
+    assert!(
+        phase.trip_time("K3").is_some() && phase.trip_time("F2").is_none(),
+        "{:?}",
+        phase.events
+    );
+    assert!(study.run(9).is_err());
+}

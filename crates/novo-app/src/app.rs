@@ -16,6 +16,7 @@ mod drawers;
 mod duplicate;
 mod dxf;
 mod example;
+mod faults;
 mod inspector;
 mod link;
 mod live;
@@ -793,6 +794,7 @@ impl NovoApp {
         self.project_settings_dialog(&ctx);
         self.issue_revision_dialog(&ctx);
         self.compare_window(&ctx);
+        self.faults_window(&ctx);
         self.page_form_dialog(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {
             self.run_command(&ctx, id, None);

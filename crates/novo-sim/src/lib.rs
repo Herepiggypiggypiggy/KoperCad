@@ -22,6 +22,7 @@ pub mod network;
 mod plc;
 pub mod protection;
 pub mod scenario;
+pub mod study;
 pub mod timing;
 pub mod trace;
 

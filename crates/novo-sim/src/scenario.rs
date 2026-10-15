@@ -274,6 +274,13 @@ pub struct ScenarioResult {
 }
 
 impl ScenarioResult {
+    /// The timing diagram with every trace added as an analog row.
+    pub fn diagram(&self) -> TimingDiagram {
+        let mut d = self.timing.clone();
+        d.analog = self.traces.traces.clone();
+        d
+    }
+
     /// First trip time of a device in the run.
     pub fn trip_time(&self, device: &str) -> Option<f64> {
         self.events
