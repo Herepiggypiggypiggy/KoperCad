@@ -55,11 +55,18 @@ pub struct Label {
     /// Keeps its own colour while its item is hovered or selected (a
     /// warning should not disappear the moment the user looks at it).
     pub keep_color: bool,
+    /// Drawn bold (a table header). The screen fakes it with a second pass
+    /// shifted sideways; a print backend picks a bold face.
+    pub bold: bool,
 }
 
 /// Average glyph advance relative to the font size, used for the estimated
 /// text box.
 pub const ADVANCE: f32 = 0.6;
+
+/// How far the second pass of a bold label is shifted along its baseline,
+/// relative to the font size; the text box grows by as much.
+pub const BOLD_SHIFT: f32 = 0.04;
 
 impl Label {
     pub fn new(pos: impl Into<Vec2>, text: impl Into<String>, height: f32) -> Self {
@@ -71,12 +78,19 @@ impl Label {
             anchor: Anchor::BottomLeft,
             rotation: 0.0,
             keep_color: false,
+            bold: false,
         }
     }
 
     /// See [`Label::keep_color`].
     pub fn keeping_color(mut self) -> Self {
         self.keep_color = true;
+        self
+    }
+
+    /// See [`Label::bold`].
+    pub fn bolded(mut self, bold: bool) -> Self {
+        self.bold = bold;
         self
     }
 
@@ -105,7 +119,12 @@ impl Label {
             .max()
             .unwrap_or(0);
         Vec2::new(
-            cols as f32 * self.height * ADVANCE,
+            cols as f32 * self.height * ADVANCE
+                + if self.bold {
+                    BOLD_SHIFT * self.height
+                } else {
+                    0.0
+                },
             lines as f32 * self.height,
         )
     }

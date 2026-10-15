@@ -370,6 +370,8 @@ pub struct SheetText {
     /// Where in the box: `CenterLeft`, `Center` or `CenterRight` (the text
     /// is always centred vertically).
     pub align: Anchor,
+    /// A header cell, drawn bold.
+    pub bold: bool,
 }
 
 /// A rule of a sheet's table.
@@ -798,12 +800,20 @@ impl PageScene {
                     f if f > 0.75 => Anchor::CenterRight,
                     _ => Anchor::Center,
                 };
-                let text = fit_text(&t.text, t.size.x, t.height);
+                // A bold cell's second pass widens it: keep that inside too.
+                let width = t.size.x
+                    - if t.bold {
+                        crate::text::BOLD_SHIFT * t.height
+                    } else {
+                        0.0
+                    };
+                let text = fit_text(&t.text, width, t.height);
                 if !text.is_empty() {
                     item.labels.push(
                         Label::new(pos, text, t.height)
                             .anchored(anchor)
-                            .colored(self.style.tag_color),
+                            .colored(self.style.tag_color)
+                            .bolded(t.bold),
                     );
                 }
             }
@@ -2244,6 +2254,8 @@ mod tests {
             text: text.into(),
             height: 2.5,
             align,
+            // Header cells; the long one must still fit when bold.
+            bold: x != 45.0,
         };
         let sheet = SheetContent {
             name: "20b".into(),
@@ -2273,7 +2285,9 @@ mod tests {
             (k1.pos, k1.anchor),
             (Vec2::new(15.0, 22.5), Anchor::CenterLeft)
         );
+        assert!(k1.bold);
         let qty = label("12 pcs").expect("right cell");
+        assert!(!qty.bold);
         assert_eq!(
             (qty.pos, qty.anchor),
             (Vec2::new(75.0, 22.5), Anchor::CenterRight)
