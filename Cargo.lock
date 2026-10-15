@@ -1886,6 +1886,7 @@ dependencies = [
  "glam",
  "naga",
  "novo-core",
+ "novo-symbols",
  "pollster 1.0.1",
  "wgpu",
 ]
@@ -1965,13 +1966,17 @@ dependencies = [
 name = "novo-parts"
 version = "0.1.0"
 dependencies = [
+ "dirs",
  "novo-core",
  "novo-terminals",
  "novo-tests",
+ "quick-xml",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "thiserror 2.0.21",
+ "zip",
 ]
 
 [[package]]
@@ -2056,6 +2061,7 @@ name = "novo-sim"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+ "novo-symbols",
 ]
 
 [[package]]
