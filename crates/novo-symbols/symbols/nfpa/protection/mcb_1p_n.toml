@@ -1,0 +1,39 @@
+format = 1
+id = "nfpa/protection/mcb_1p_n"
+name = "Miniature circuit breaker, 1-pole + N"
+description = "1-pole + neutral miniature circuit breaker with a switched, unprotected neutral."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "protection"
+function = "protection.mcb"
+keywords = ["mcb", "circuit breaker", "1p+n", "neutral", "nfpa", "ansi"]
+aliases = ["mcb1n"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+  { id = "N", at = [8, 0], dir = "up", role = "n" },
+  { id = "N'", at = [8, 16], dir = "down", role = "n" },
+]
+
+anchors = [
+  { role = "tag", at = [-18.5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 6] },
+  { kind = "line", from = [0, 16], to = [0, 10] },
+  { kind = "line", from = [-3, 6], to = [3, 6] },
+  { kind = "line", from = [-3, 10], to = [3, 10] },
+  { kind = "arc", center = [0, 8], r = 4.6, start = 135, end = 225 },
+  { kind = "line", from = [8, 0], to = [8, 6] },
+  { kind = "line", from = [8, 16], to = [8, 10] },
+  { kind = "line", from = [5, 6], to = [11, 6] },
+  { kind = "line", from = [5, 10], to = [11, 10] },
+  { kind = "arc", center = [8, 8], r = 4.6, start = 135, end = 225 },
+  { kind = "line", from = [0, 8], to = [8, 8], stroke = "dashed" },
+]
+
+[behavior]
+kind = "breaker"
+trip = ["thermal", "magnetic"]
+poles = [["1", "2"], ["N", "N'"]]
