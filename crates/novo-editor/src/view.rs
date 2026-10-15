@@ -658,15 +658,15 @@ impl SchematicView {
             let start = match (label.kind, label.owner) {
                 (LabelKind::DeviceTag, owner) => device_of(document.project(), owner)
                     .and_then(|d| document.project().device(d))
-                    .map(|d| (RenameTarget::Device(d.id), d.tag.to_string()))
-                    .or_else(|| match owner {
-                        AnyId::Symbol(s) => document
-                            .project()
-                            .symbol(s)
-                            .and_then(|sym| model::symbol_text(document.project(), sym))
-                            .map(|text| (RenameTarget::Label(s), text)),
-                        _ => None,
-                    }),
+                    .map(|d| (RenameTarget::Device(d.id), d.tag.to_string())),
+                (
+                    LabelKind::TerminalName | LabelKind::InterruptionName | LabelKind::Potential,
+                    AnyId::Symbol(s),
+                ) => document
+                    .project()
+                    .symbol(s)
+                    .and_then(|sym| model::symbol_text(document.project(), sym))
+                    .map(|text| (RenameTarget::Label(s), text)),
                 (LabelKind::WireNumber, AnyId::Wire(w)) => document.project().wire(w).map(|w| {
                     (
                         RenameTarget::Wire(w.id),
@@ -1005,7 +1005,18 @@ impl SchematicView {
                             ui.colored_label(ui.visuals().error_fg_color, e);
                         }
                         None => {
-                            ui.weak("Enter renames · Esc cancels");
+                            let feed = matches!(
+                                rename.target,
+                                RenameTarget::Label(s) if matches!(
+                                    document.project().symbol(s).map(|s| &s.role),
+                                    Some(novo_core::SymbolRole::PotentialFeed { .. })
+                                )
+                            );
+                            ui.weak(if feed {
+                                "Enter sets the feed's potential · Esc cancels"
+                            } else {
+                                "Enter renames · Esc cancels"
+                            });
                         }
                     }
                 });

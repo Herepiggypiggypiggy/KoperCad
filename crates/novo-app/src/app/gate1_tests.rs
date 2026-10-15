@@ -1699,11 +1699,18 @@ fn double_clicking_a_terminal_a_feed_or_an_interruption_name_renames_it() {
                 SymbolRole::PotentialFeed { potential: l1 },
             )?;
             let _ = TerminalKind::Feedthrough;
-            Ok((terminal, feed))
+            let jump = tx.place_symbol(
+                page,
+                "iec/connectivity/interruption",
+                novo_core::Placement::at(Point::new(300.0, 100.0)),
+                vec![Pin::new("1", 0.0, 0.0)],
+                SymbolRole::Interruption { name: "5".into() },
+            )?;
+            Ok((terminal, feed, jump))
         })
         .unwrap();
     d.frame();
-    let (terminal, feed) = syms;
+    let (terminal, feed, jump) = syms;
 
     let double_click_label = |d: &mut Drive, sym, t0: f64| -> bool {
         let project = d.doc().project().clone();
@@ -1723,7 +1730,13 @@ fn double_clicking_a_terminal_a_feed_or_an_interruption_name_renames_it() {
                 );
                 if let Some(hit) = scene.scene().pick(w, tol, zoom)
                     && let Some(l) = scene.label_hit(&project, &hit)
-                    && l.kind == LabelKind::DeviceTag
+                    && matches!(
+                        l.kind,
+                        LabelKind::DeviceTag
+                            | LabelKind::TerminalName
+                            | LabelKind::InterruptionName
+                            | LabelKind::Potential
+                    )
                 {
                     found = Some(w);
                     break 'scan;
@@ -1747,7 +1760,7 @@ fn double_clicking_a_terminal_a_feed_or_an_interruption_name_renames_it() {
         true
     };
 
-    for (sym, t0, text) in [(terminal, 50.0, "7"), (feed, 60.0, "L3")] {
+    for (sym, t0, text) in [(terminal, 50.0, "7"), (feed, 60.0, "L3"), (jump, 70.0, "9")] {
         assert!(
             double_click_label(&mut d, sym, t0),
             "the label is on the canvas"
@@ -1768,4 +1781,8 @@ fn double_clicking_a_terminal_a_feed_or_an_interruption_name_renames_it() {
         panic!()
     };
     assert_eq!(project.potential(potential).unwrap().name, "L3");
+    let SymbolRole::Interruption { name } = &project.symbol(jump).unwrap().role else {
+        panic!()
+    };
+    assert_eq!(name, "9");
 }
