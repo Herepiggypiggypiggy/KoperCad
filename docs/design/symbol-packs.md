@@ -113,6 +113,23 @@ once a symbol is final.
 
 ## Risks
 
+- **Engines that match literal `iec/` keys.** Outside tests, 20 files match
+  `"iec/..."` keys instead of `function` or `behavior`, and would silently
+  ignore an `nfpa/...` symbol: novo-xref (`function.rs`, `lib.rs`,
+  `number.rs`), novo-checks (`contacts.rs`), novo-terminals (`style.rs`,
+  `geometry.rs`, `earth.rs`, `lib.rs`), novo-plc (`index.rs`), novo-sim
+  (`plc.rs`), novo-editor (`catalog.rs`, `row.rs`, `view.rs`, `art.rs`,
+  `potential.rs`), novo-canvas (`model.rs`), novo-workflow (`insert.rs`,
+  `renumber.rs`), novo-app (`wheel.rs`, `plc.rs`) and the load glow (#326).
+  The pack is not usable from the app until each is switched to `function`
+  or to a pack-independent key (the pack segment stripped), with one test per
+  engine that runs the same circuit on `nfpa` keys. That audit is the next
+  step after the artwork, owned by each engine's thread; the pack itself
+  does not change them.
+- **Standard switch needs a core command.** Rewriting symbol keys in a project
+  is a `novo-core` command, so it needs WS-02 or lead acceptance (as
+  `RenamePage` did). "No core API" holds only until that command.
+
 - **Counting**: tests elsewhere that count or iterate `builtin()` are
   unaffected because `builtin()` stays IEC. Anything that switches to
   `builtin_pack` must be reviewed by its owner.

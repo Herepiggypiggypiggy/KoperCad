@@ -231,6 +231,22 @@ add("sensors/temperature_nc", contact(True, lambda: letter_head("T")))
 add("sensors/proximity_no", contact(False, diamond_head))
 add("sensors/proximity_nc", contact(True, diamond_head))
 
+def foot_head():
+    return flat_head() + [L([-8, 11], [-11, 11])]
+
+
+def pull_head():
+    return stem(-8) + [PL([[-10, 6], [-8, 6], [-8, 10], [-10, 10]])]
+
+
+for kind, nc in (("no", False), ("nc", True)):
+    add(f"operators/pushbutton_mushroom_{kind}", contact(nc, mushroom_head))
+    add(f"operators/footswitch_{kind}", contact(nc, foot_head))
+    add(f"operators/pullcord_{kind}", contact(nc, pull_head))
+    add(f"sensors/flow_{kind}", contact(nc, lambda: letter_head("F")))
+
+add("coils/brake", coil("BR"))
+add("coils/solenoid", coil("S"))
 add("coils/relay", coil("CR"))
 add("coils/contactor", coil("M"))
 add("coils/solenoid_valve", coil("SOL", 2.2))
