@@ -1191,6 +1191,103 @@ fn shift_w_switches_the_wiring_mode_and_the_setting_keeps_it() {
     );
 }
 
+/// One frame at egui time `time` seconds, with `events`.
+fn frame_at(d: &mut Drive, time: f64, events: Vec<egui::Event>) {
+    let input = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(
+            egui::Pos2::ZERO,
+            egui::vec2(1600.0, 900.0),
+        )),
+        time: Some(time),
+        events,
+        ..Default::default()
+    };
+    let app = &mut d.app;
+    let mut output = d.ctx.run_ui(input, |ui| app.show(ui));
+    output.textures_delta.clear();
+}
+
+fn key_event(key: egui::Key, pressed: bool) -> egui::Event {
+    egui::Event::Key {
+        key,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    }
+}
+
+#[test]
+fn a_held_place_key_opens_the_wheel_and_keys_pick_from_it() {
+    use novo_editor::Tool;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert!(d.app.wb.keymap.shortcut_text("tool.place").is_some());
+    // A refusal sets the editor's notice; the dock draws it (Error tint and
+    // icon) without trouble, and the notice is what tells it apart.
+    let view = d.app.canvas.schematic().unwrap();
+    assert!(!view.editor.begin_place("no/such/symbol", None));
+    assert!(view.editor.notice().is_some());
+    d.frame();
+    let text = d.app.canvas.schematic().unwrap().status_text();
+    assert!(text.is_some_and(|t| t.contains("No symbol")));
+
+    let placing = |d: &mut Drive| {
+        matches!(
+            d.app.canvas.schematic().unwrap().editor.tool(),
+            Tool::Place(_)
+        )
+    };
+
+    // A tap is still the command surface, opened on the release.
+    let place = egui::Key::I;
+    frame_at(
+        &mut d,
+        10.0,
+        vec![egui::Event::PointerMoved(egui::pos2(800.0, 450.0))],
+    );
+    frame_at(&mut d, 10.1, vec![key_event(place, true)]);
+    assert!(d.app.wb.wheel.is_none() && !d.app.wb.field.is_open());
+    frame_at(&mut d, 10.15, vec![key_event(place, false)]);
+    assert!(d.app.wb.field.is_open(), "a tap opens the command surface");
+    d.app.wb.field.close();
+    frame_at(&mut d, 10.2, vec![]);
+
+    // A hold opens the wheel at the pointer; Esc closes it.
+    frame_at(&mut d, 20.0, vec![key_event(place, true)]);
+    frame_at(&mut d, 20.1, vec![]);
+    assert!(d.app.wb.wheel.is_none(), "not yet");
+    frame_at(&mut d, 20.3, vec![]);
+    assert!(d.app.wb.wheel.is_some(), "held past 250 ms");
+    frame_at(&mut d, 20.4, vec![key_event(place, false)]);
+    assert!(
+        d.app.wb.wheel.is_some(),
+        "letting go over no item leaves it up"
+    );
+    frame_at(&mut d, 20.5, vec![key_event(egui::Key::Escape, true)]);
+    assert!(d.app.wb.wheel.is_none());
+    assert!(!placing(&mut d));
+
+    // Keys 3 (Relay) then 1 (its first item) pick a coil, which follows
+    // the pointer as in the place mode.
+    d.app.run_command(&ctx, "tool.place_wheel", None);
+    frame_at(&mut d, 30.0, vec![]);
+    assert!(d.app.wb.wheel.is_some());
+    frame_at(&mut d, 30.1, vec![key_event(egui::Key::Num3, true)]);
+    frame_at(&mut d, 30.2, vec![key_event(egui::Key::Backspace, true)]);
+    frame_at(&mut d, 30.3, vec![key_event(egui::Key::Num3, true)]);
+    frame_at(&mut d, 30.4, vec![key_event(egui::Key::Num1, true)]);
+    assert!(d.app.wb.wheel.is_none(), "picking closes the wheel");
+    let tool = d.app.canvas.schematic().unwrap().editor.tool().clone();
+    match tool {
+        Tool::Place(p) => assert_eq!(p.symbol, "iec/coils/relay"),
+        other => panic!("expected the coil to be in hand, got {other:?}"),
+    }
+}
+
 #[test]
 fn a_refusal_in_the_dock_and_the_place_key_come_from_the_keymap() {
     let dir = tempfile::tempdir().unwrap();

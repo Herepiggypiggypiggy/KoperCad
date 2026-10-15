@@ -82,6 +82,8 @@ pub struct SchematicView {
     /// A page the view wants the shell to open (Page Up / Page Down, a new
     /// page).
     goto: Option<PageId>,
+    /// Commands the context menu asked the shell to run, by workflow id.
+    commands: Vec<&'static str>,
     /// The press that closed a popup, until its release.
     swallow: bool,
     /// The move in progress was picked up by dragging a selected object (no
@@ -138,6 +140,7 @@ impl SchematicView {
             menu: None,
             status: None,
             goto: None,
+            commands: Vec::new(),
             swallow: false,
             drag_move: false,
             rect: egui::Rect::NOTHING,
@@ -214,6 +217,12 @@ impl SchematicView {
     /// The shell opens it and passes it to the next [`show`](Self::show).
     pub fn take_page_request(&mut self) -> Option<PageId> {
         self.goto.take()
+    }
+
+    /// The commands the context menu chose that only the shell can run
+    /// (Place component, Go to partner, Zoom to fit), by workflow id.
+    pub fn take_commands(&mut self) -> Vec<&'static str> {
+        std::mem::take(&mut self.commands)
     }
 
     pub fn zoom_to_fit(&mut self) {
@@ -872,6 +881,15 @@ impl SchematicView {
                         {
                             chosen = Some(MenuChoice::Repeat);
                         }
+                        for (label, id) in [
+                            ("Place component  ▸", "tool.place_wheel"),
+                            ("Connect   W", "tool.connect"),
+                            ("Zoom to fit   Home", "view.fit"),
+                        ] {
+                            if ui.button(label).clicked() {
+                                chosen = Some(MenuChoice::Command(id));
+                            }
+                        }
                         if ui.button("New page after this").clicked() {
                             chosen = Some(MenuChoice::NewPage);
                         }
@@ -896,6 +914,9 @@ impl SchematicView {
                     }
                     if menu.device.is_some() && ui.button("Rename   F2").clicked() {
                         chosen = Some(MenuChoice::Rename);
+                    }
+                    if menu.device.is_some() && ui.button("Go to partner   G").clicked() {
+                        chosen = Some(MenuChoice::Command("nav.partner"));
                     }
                     for (label, choice) in [
                         ("Move   M", MenuChoice::Key(EditorKey::Move)),
@@ -951,6 +972,7 @@ impl SchematicView {
             Some(MenuChoice::Key(k)) => {
                 self.editor.key(document, k, &selection);
             }
+            Some(MenuChoice::Command(id)) => self.commands.push(id),
             Some(MenuChoice::NewPage) => {
                 if let Some(p) = self.editor.new_page(document, page) {
                     self.goto = Some(p);
@@ -968,6 +990,7 @@ enum MenuChoice {
     Rename,
     Key(EditorKey),
     NewPage,
+    Command(&'static str),
 }
 
 /// Consumes a press of `key` with no modifiers at all. egui's
