@@ -123,6 +123,19 @@ pub struct Palette {
     symbols: InsertSearch,
 }
 
+/// The prompts of the bare `link` verb (`xref.link`), in order.
+pub const LINK_PICK_CONTACT: &str = "Pick the contact";
+pub const LINK_PICK_COIL: &str = "Pick the coil";
+
+/// The two device tags of `link -K3 -K1`: the contact's device, then the
+/// coil's. `None` for a bare `link` (the app asks by picking) or anything
+/// that is not exactly two tags.
+pub fn link_tags(argument: &str) -> Option<(&str, &str)> {
+    let mut words = argument.split_whitespace();
+    let (first, second) = (words.next()?, words.next()?);
+    words.next().is_none().then_some((first, second))
+}
+
 /// How many rows a search returns at most.
 pub const MAX_ROWS: usize = 50;
 /// How many recent picks are remembered.

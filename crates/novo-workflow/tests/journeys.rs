@@ -805,3 +805,46 @@ fn wiring_mode_is_one_key_and_findable_by_its_names() {
         );
     }
 }
+
+#[test]
+fn link_is_a_verb_bare_or_with_two_tags() {
+    use novo_workflow::palette::link_tags;
+    let mut doc = Document::default();
+    motor_starter(&mut doc).unwrap();
+    let library = Library::builtin().unwrap();
+    let keymap = Keymap::workflow();
+    let palette = Palette::default();
+    let src = sources(doc.project(), &library, &keymap);
+
+    // Bare `link` and the Dutch `koppel` find the command.
+    for query in ["link", "koppel"] {
+        let rows = palette.search(query, &src);
+        assert!(
+            rows.iter()
+                .take(3)
+                .any(|r| r.target == Target::Command("xref.link")
+                    || matches!(
+                        &r.target,
+                        Target::Run {
+                            command: "xref.link",
+                            ..
+                        }
+                    )),
+            "{query}: {:?}",
+            rows.iter().take(3).map(|r| &r.label).collect::<Vec<_>>()
+        );
+    }
+    // With two tags it runs, and the tags come back in order.
+    assert_eq!(
+        palette.search("link -K3 -K1", &src)[0].target,
+        Target::Run {
+            command: "xref.link",
+            argument: "-K3 -K1".into()
+        }
+    );
+    assert_eq!(link_tags("-K3 -K1"), Some(("-K3", "-K1")));
+    assert_eq!(link_tags(" -K3  -K1 "), Some(("-K3", "-K1")));
+    assert_eq!(link_tags(""), None);
+    assert_eq!(link_tags("-K3"), None);
+    assert_eq!(link_tags("-K3 -K1 -K2"), None);
+}
