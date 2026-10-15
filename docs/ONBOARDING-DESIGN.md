@@ -83,3 +83,37 @@ the `gate1_tests` style, the card persists and dismisses, and the example opens 
    matters.
 4. The card sits at the bottom right and steps aside, collapsed to a pill ("3 of 6"), while the live
    view is on. The key on each step comes from the keymap. The Help menu item resets the progress.
+
+## 5. Amendments from the implementing thread (2026-10-15)
+
+Sections 1 to 4 stand. What changes, so the implementation and the owner's list of fast keys
+(wheel, W, Q and Tab, C, Ctrl+D, Shift+L) agree:
+
+1. **Seven steps, in the order a hand wants them.** Replaces the six-row table in section 2.
+
+   | Step | Tick when |
+   | --- | --- |
+   | Q: place (hold Q for the wheel; R and X turn it) | the wheel opens or the place surface opens |
+   | Tab: next proposal, Enter accepts | `proposal.next` or `proposal.accept` runs |
+   | W: draw a wire (or drag from a pin; Shift+W switches Corners and Lines) | `tool.connect` runs |
+   | C: cable over wires that belong together | `tool.cable` runs |
+   | Ctrl+D: duplicate with the next free tags | `edit.duplicate` runs |
+   | Shift+L: live view, click the coil badge | `sim.live` turns the view on |
+   | Ctrl+K: every command, `?` lists the keys | the command surface opens |
+
+   R drops out as a row (it is a half sentence on the Q row). Shift+L is on a practice project
+   that has no contacts, so its row says "try it on the example".
+2. **One funnel for detection.** Every key, command-field pick, wheel pick and palette pick already
+   reaches `run_command(id)`; a step ticks there, from the command id, and nowhere else. The hold
+   of Q reaches the wheel through `open_wheel`, which ticks the Q row too. A pointer drag from a
+   pin does not tick W (it is not the key); the card says so in its one line.
+3. **The example (section 1) is not left as an unsaved file.** After the builder runs, the app marks
+   the document saved, so closing the example untouched deletes its temporary file instead of
+   offering "Untitled" under Unsaved; the first real edit makes it dirty and the usual autosave and
+   Unsaved flow applies. The example also gets the project's generated pages (contents, terminal
+   and cable diagrams) so reports are visible, and a description that says the parts are
+   illustrative catalogue data.
+4. **Ownership.** The walk-through card, its step list and the example action are in
+   `crates/novo-app/src/app/onboarding.rs` and `example.rs`; tests are in new files
+   (`onboarding_tests.rs`, `example_tests.rs`), not in `gate1_tests.rs`. The Tester is asked to sign
+   off on the `novo-tests` dependency in the example PR.

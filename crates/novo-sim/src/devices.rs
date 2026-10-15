@@ -44,12 +44,14 @@ pub struct DeviceStates {
 
 /// Whether a symbol is an indicator lamp.
 pub fn is_lamp(symbol: &SymbolInstance) -> bool {
-    symbol.pins.len() >= 2 && symbol.symbol.0.starts_with("iec/signalling/lamp")
+    symbol.pins.len() >= 2
+        && novo_symbols::Pack::path_of(&symbol.symbol.0).starts_with("signalling/lamp")
 }
 
 /// Whether a symbol is a motor.
 pub fn is_motor(symbol: &SymbolInstance) -> bool {
-    symbol.pins.len() >= 2 && symbol.symbol.0.starts_with("iec/motors/motor_")
+    symbol.pins.len() >= 2
+        && novo_symbols::Pack::path_of(&symbol.symbol.0).starts_with("motors/motor_")
 }
 
 /// The colour name of a lamp: the `color` property of its device, if any.
