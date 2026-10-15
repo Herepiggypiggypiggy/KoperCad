@@ -232,6 +232,23 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["compare"],
     ),
     cmd("file.quit", "Quit", "Project", &["exit"], Needs::Nothing),
+    verb(
+        cmd(
+            "file.import_dxf_background",
+            "Import DXF as background",
+            "Project",
+            &["underlay", "drawing", "dwg", "reference"],
+            Needs::Page,
+        ),
+        &["import dxf"],
+    ),
+    cmd(
+        "file.remove_background",
+        "Remove the DXF background",
+        "Project",
+        &["underlay", "dxf", "reference drawing"],
+        Needs::Page,
+    ),
     // Draw
     cmd(
         "tool.repeat",
@@ -625,6 +642,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "cabinet.size-enclosure",
+        "Size the enclosure",
+        "View",
+        &["enclosure", "cabinet", "heat", "cooling", "plate"],
+        Needs::Project,
+    ),
+    cmd(
+        "cabinet.enclosures",
+        "Enclosures",
+        "View",
+        &["enclosure", "list", "sizes", "catalog"],
+        Needs::Project,
+    ),
+    cmd(
         "view.cabinet_table",
         "Cabinet as table",
         "View",
@@ -669,6 +700,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["keys", "help", "overlay"],
         Needs::Nothing,
     ),
+    cmd(
+        "view.background",
+        "Show or hide the DXF background",
+        "View",
+        &["underlay", "dxf", "reference drawing"],
+        Needs::Page,
+    ),
     // Check
     verb(
         cmd(
@@ -697,6 +735,23 @@ pub const COMMANDS: &[CommandInfo] = &[
     // Export
     verb(
         cmd(
+            "export.dxf_page",
+            "Export this page as DXF",
+            "Export",
+            &["cad", "autocad"],
+            Needs::Page,
+        ),
+        &["export dxf"],
+    ),
+    cmd(
+        "export.dxf_all",
+        "Export all pages as DXF",
+        "Export",
+        &["cad", "autocad"],
+        Needs::Project,
+    ),
+    verb(
+        cmd(
             "export.pdf",
             "Export PDF",
             "Export",
@@ -718,17 +773,17 @@ pub const COMMANDS: &[CommandInfo] = &[
     verb(
         cmd(
             "export.sheets",
-            "Export spreadsheet (.xlsx)",
+            "Export for bulk edit (.xlsx)",
             "Export",
-            &["excel", "xlsx", "bulk edit"],
+            &["excel", "xlsx", "spreadsheet", "round trip"],
             Needs::Project,
         ),
-        &["export spreadsheet", "export excel", "excel"],
+        &["export bulk edit", "export for editing"],
     ),
     verb(
         cmd(
             "export.sheets_csv",
-            "Export spreadsheet (CSV files)",
+            "Export for bulk edit (CSV files)",
             "Export",
             &["csv"],
             Needs::Project,

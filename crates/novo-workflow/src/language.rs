@@ -203,6 +203,16 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("view.full_screen", &[], &["volledig scherm"]),
     nl("view.cabinet_table", &[], &["kast als tabel", "tabel"]),
+    nl(
+        "cabinet.size-enclosure",
+        &[],
+        &["kast dimensioneren", "kastmaat", "koeling", "warmte"],
+    ),
+    nl(
+        "cabinet.enclosures",
+        &[],
+        &["kasten", "kastenlijst", "behuizingen"],
+    ),
     nl("view.changes", &["wijzigingen"], &["vergelijk", "verschil"]),
     nl(
         "sim.live",
@@ -224,6 +234,27 @@ pub const DUTCH: &[Aliases] = &[
     nl("check.problems", &["problemen", "fouten"], &["controles"]),
     nl("check.next_problem", &[], &["volgend probleem"]),
     nl("check.previous_problem", &[], &["vorig probleem"]),
+    nl(
+        "file.import_dxf_background",
+        &["importeer dxf"],
+        &["achtergrond", "onderlegger", "tekening"],
+    ),
+    nl(
+        "view.background",
+        &[],
+        &["achtergrond tonen", "achtergrond verbergen", "dxf"],
+    ),
+    nl(
+        "file.remove_background",
+        &[],
+        &["achtergrond verwijderen", "dxf"],
+    ),
+    nl(
+        "export.dxf_page",
+        &["exporteer dxf"],
+        &["cad", "autocad", "pagina"],
+    ),
+    nl("export.dxf_all", &[], &["alle paginas", "cad", "autocad"]),
     // Export
     nl(
         "export.pdf",
