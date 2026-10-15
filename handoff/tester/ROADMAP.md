@@ -16,12 +16,11 @@ integration lead (session_011PfTJ1QaP1JQJPwXcFnxBE).
 - Standard-user installer verified in #3's CI.
 
 ## Next, in order
-1. DONE as PR #42 (Gate 1 scenario + gap list). Drive #42 to merge; then un-ignore each gap test as its PR merges (#34, #38, #37, #29, #35, #30, #36, #28).
-2. Once #30 merges: set X1:PE to `TerminalKind::ProtectiveEarth` in the fixture (patch: `handoff/tester/pe-fix.patch`, apply with `git am`) and flip #30's test `gate1_checks_flag_the_pe_terminal_kind` to assert `check()` is empty.
-3. Once #34 and WS-01's follow-up merge: drive the scenario through `NovoApp::execute(Command)` (returns Option<Result<Outcome>>), `NovoApp::document()`, `current_page()`, built headless with `NovoApp::with_settings(.., Settings::default())` (avoids reopening the last project). Example test: `commands_run_through_the_window_reach_storage` in handoff/ws-01-app-shell/workbench.patch.
-4. After #28 merges: in e2e_motor_starter.rs assert hits[0] is -X1:2 (F2 verified fixed on 924be9b) and mark F2 fixed in TEST_REPORT.
-5. DONE: Gate 0 60 fps row filled in (#42).
-6. Keep re-testing main after every merge; new round in TEST_REPORT.
+1. Drive #87 to merge (main reviewer delta check after the #99 merge).
+2. When WS-03's F5 fix (after #103) merges: un-ignore `gap_pdf_names_the_terminal_strip` in a new PR from main.
+3. Gate 1 output test for generated pages in the PDF once #96 merges.
+4. Keep re-testing main after every merge; new round in TEST_REPORT.
+5. Windows run once GitHub Actions is back.
 
 ## Open questions
 - None blocking.

@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::geom::{Direction, Placement, Point, Rotation};
 use crate::id::{
-    AnyId, CableId, DeviceId, JunctionId, PageId, PartId, PotentialId, PotentialSystemId, SymbolId,
-    TerminalId, TextId, WireId,
+    AnyId, CableId, DeviceId, DismissalId, JunctionId, PageId, PartId, PotentialId,
+    PotentialSystemId, StructureId, SymbolId, TerminalId, TextId, WireId,
 };
 use crate::tag::DeviceTag;
 
@@ -783,6 +783,39 @@ pub struct PotentialSystem {
     /// The system's potentials in conductor order (L1, L2, L3, N, PE).
     #[serde(default)]
     pub members: Vec<PotentialId>,
+    #[serde(default)]
+    pub properties: Properties,
+}
+
+/// A node of the project structure: a plant section (`=A1`) or a location
+/// (`+CAB1`), with what it is. Devices and pages refer to it by tag, so a
+/// structure node is optional description, never required to use a tag.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Structure {
+    pub id: StructureId,
+    /// Function and location aspects only, e.g. `=A1` or `+CAB1`. Unique.
+    pub tag: DeviceTag,
+    #[serde(default)]
+    pub description: String,
+    /// The location is an enclosure (cabinet, junction box): the internal
+    /// side of a terminal strip faces it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub enclosure: bool,
+    #[serde(default)]
+    pub properties: Properties,
+}
+
+/// A proposal the user declined (a terminal suggestion, a connection
+/// between facing pins), so it is not proposed again. It goes away with
+/// any of its subjects.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Dismissal {
+    pub id: DismissalId,
+    /// Which kind of proposal, named by the engine that makes it, e.g.
+    /// `terminal.suggest`.
+    pub proposal: String,
+    /// The objects the proposal was about, sorted.
+    pub subjects: Vec<AnyId>,
     #[serde(default)]
     pub properties: Properties,
 }

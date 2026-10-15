@@ -4,15 +4,16 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::entity::{
-    Cable, Device, DeviceKind, Endpoint, Junction, Page, Part, PinRef, Potential, PotentialSystem,
-    ProjectInfo, SameName, SymbolInstance, SymbolRole, Terminal, Text, Wire,
+    Cable, Device, DeviceKind, Dismissal, Endpoint, Junction, Page, Part, PinRef, Potential,
+    PotentialSystem, ProjectInfo, SameName, Structure, SymbolInstance, SymbolRole, Terminal, Text,
+    Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::Point;
 use crate::graph::Netlist;
 use crate::id::{
-    AnyId, CableId, DeviceId, EntityKind, JunctionId, PageId, PartId, PotentialId,
-    PotentialSystemId, SymbolId, TerminalId, TextId, WireId,
+    AnyId, CableId, DeviceId, DismissalId, EntityKind, JunctionId, PageId, PartId, PotentialId,
+    PotentialSystemId, StructureId, SymbolId, TerminalId, TextId, WireId,
 };
 use crate::record::{Entity, Op, Record, Transaction, sealed::Token};
 use crate::tag::DeviceTag;
@@ -39,6 +40,8 @@ pub struct Project {
     pub(crate) junctions: BTreeMap<JunctionId, Junction>,
     pub(crate) texts: BTreeMap<TextId, Text>,
     pub(crate) potential_systems: BTreeMap<PotentialSystemId, PotentialSystem>,
+    pub(crate) structures: BTreeMap<StructureId, Structure>,
+    pub(crate) dismissals: BTreeMap<DismissalId, Dismissal>,
     pub(crate) wires: BTreeMap<WireId, Wire>,
     pub(crate) potentials: BTreeMap<PotentialId, Potential>,
     pub(crate) terminals: BTreeMap<TerminalId, Terminal>,
@@ -307,6 +310,8 @@ impl Project {
             Record::Junction(r) => put(self, r),
             Record::Text(r) => put(self, r),
             Record::PotentialSystem(r) => put(self, r),
+            Record::Structure(r) => put(self, r),
+            Record::Dismissal(r) => put(self, r),
             Record::Wire(r) => put(self, r),
             Record::Potential(r) => put(self, r),
             Record::Terminal(r) => put(self, r),
@@ -326,6 +331,8 @@ impl Project {
             AnyId::Junction(id) => take::<Junction>(self, id),
             AnyId::Text(id) => take::<Text>(self, id),
             AnyId::PotentialSystem(id) => take::<PotentialSystem>(self, id),
+            AnyId::Structure(id) => take::<Structure>(self, id),
+            AnyId::Dismissal(id) => take::<Dismissal>(self, id),
             AnyId::Wire(id) => take::<Wire>(self, id),
             AnyId::Potential(id) => take::<Potential>(self, id),
             AnyId::Terminal(id) => take::<Terminal>(self, id),
@@ -553,6 +560,33 @@ impl Project {
                     });
                 }
             }
+            Record::Structure(structure) => {
+                structure.tag.validate()?;
+                if !structure.tag.product.is_empty() || structure.tag.is_empty() {
+                    return Err(ModelError::InvalidValue {
+                        id: structure.id.into(),
+                        field: "tag",
+                    });
+                }
+                if self
+                    .structures
+                    .values()
+                    .any(|s| s.id != structure.id && s.tag == structure.tag)
+                {
+                    return Err(ModelError::DuplicateStructure(structure.tag.to_string()));
+                }
+            }
+            Record::Dismissal(dismissal) => {
+                if dismissal.proposal.is_empty()
+                    || dismissal.subjects.is_empty()
+                    || dismissal.subjects.windows(2).any(|w| w[0] >= w[1])
+                {
+                    return Err(ModelError::InvalidValue {
+                        id: dismissal.id.into(),
+                        field: "subjects",
+                    });
+                }
+            }
             Record::Potential(_) | Record::Part(_) => {}
         }
         // Texts attached to this object must stay on its page.
@@ -608,6 +642,8 @@ impl Project {
             AnyId::Junction(id) => self.junctions.contains_key(&id),
             AnyId::Text(id) => self.texts.contains_key(&id),
             AnyId::PotentialSystem(id) => self.potential_systems.contains_key(&id),
+            AnyId::Structure(id) => self.structures.contains_key(&id),
+            AnyId::Dismissal(id) => self.dismissals.contains_key(&id),
             AnyId::Wire(id) => self.wires.contains_key(&id),
             AnyId::Potential(id) => self.potentials.contains_key(&id),
             AnyId::Terminal(id) => self.terminals.contains_key(&id),
@@ -629,6 +665,8 @@ impl Project {
                 .get(&id)
                 .cloned()
                 .map(Record::PotentialSystem),
+            AnyId::Structure(id) => self.structures.get(&id).cloned().map(Record::Structure),
+            AnyId::Dismissal(id) => self.dismissals.get(&id).cloned().map(Record::Dismissal),
             AnyId::Wire(id) => self.wires.get(&id).cloned().map(Record::Wire),
             AnyId::Potential(id) => self.potentials.get(&id).cloned().map(Record::Potential),
             AnyId::Terminal(id) => self.terminals.get(&id).cloned().map(Record::Terminal),
@@ -657,7 +695,10 @@ impl Project {
             .values()
             .cloned()
             .map(Record::PotentialSystem);
+        let structures = self.structures.values().cloned().map(Record::Structure);
+        let dismissals = self.dismissals.values().cloned().map(Record::Dismissal);
         parts
+            .chain(structures)
             .chain(potentials)
             .chain(pages)
             .chain(devices)
@@ -668,6 +709,7 @@ impl Project {
             .chain(cables)
             .chain(texts)
             .chain(systems)
+            .chain(dismissals)
     }
 
     /// Rebuilds a project from stored records, in any order, checking every
@@ -764,6 +806,58 @@ impl Project {
     pub fn potential_systems(&self) -> impl Iterator<Item = &PotentialSystem> {
         self.potential_systems.values()
     }
+    pub fn structures(&self) -> impl Iterator<Item = &Structure> {
+        self.structures.values()
+    }
+
+    /// The structure node with exactly this tag.
+    pub fn structure_by_tag(&self, tag: &DeviceTag) -> Option<&Structure> {
+        self.structures.values().find(|s| s.tag == *tag)
+    }
+
+    /// The enclosure a tag's location is in: the structure node marked
+    /// [`Structure::enclosure`] for the tag's location or the nearest of its
+    /// parents (`+CAB1` for `+CAB1+DOOR`), preferring one under the same
+    /// function. `None` when the location is not a known enclosure (field).
+    pub fn enclosure_of(&self, tag: &DeviceTag) -> Option<&Structure> {
+        (1..=tag.location.len()).rev().find_map(|n| {
+            let location = &tag.location[..n];
+            let candidates = || {
+                self.structures
+                    .values()
+                    .filter(move |s| s.enclosure && s.tag.location == location)
+            };
+            candidates()
+                .find(|s| s.tag.function == tag.function)
+                .or_else(|| candidates().find(|s| s.tag.function.is_empty()))
+        })
+    }
+
+    pub fn dismissals(&self) -> impl Iterator<Item = &Dismissal> {
+        self.dismissals.values()
+    }
+
+    /// The record of a declined proposal about exactly these subjects
+    /// (in any order).
+    pub fn dismissal(&self, proposal: &str, subjects: &[AnyId]) -> Option<&Dismissal> {
+        let mut wanted = subjects.to_vec();
+        wanted.sort();
+        wanted.dedup();
+        let first = *wanted.first()?;
+        self.referrers(first).find_map(|id| match id {
+            AnyId::Dismissal(d) => self
+                .dismissals
+                .get(&d)
+                .filter(|d| d.proposal == proposal && d.subjects == wanted),
+            _ => None,
+        })
+    }
+
+    /// Whether the user declined this proposal about these subjects.
+    pub fn is_dismissed(&self, proposal: &str, subjects: &[AnyId]) -> bool {
+        self.dismissal(proposal, subjects).is_some()
+    }
+
     /// The supply system a potential belongs to, if any. Systems can share
     /// members (N and PE in a TN network); then this is the one with the
     /// lowest id, and [`Project::potential_systems`] lists them all.

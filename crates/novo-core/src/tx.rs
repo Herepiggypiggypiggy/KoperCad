@@ -3,15 +3,15 @@
 use std::collections::BTreeSet;
 
 use crate::entity::{
-    Cable, CableCore, Device, DeviceKind, Endpoint, Junction, Page, Part, Pin, PinFeed, Potential,
-    PotentialKind, PotentialSet, PotentialSpec, PotentialSystem, ProjectInfo, SymbolInstance,
-    SymbolKey, SymbolRole, Terminal, Text, TextContent, TextPlacement, Value, Wire,
+    Cable, CableCore, Device, DeviceKind, Dismissal, Endpoint, Junction, Page, Part, Pin, PinFeed,
+    Potential, PotentialKind, PotentialSet, PotentialSpec, PotentialSystem, ProjectInfo, Structure,
+    SymbolInstance, SymbolKey, SymbolRole, Terminal, Text, TextContent, TextPlacement, Value, Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::{Placement, Point};
 use crate::id::{
-    AnyId, CableId, DeviceId, JunctionId, PageId, PartId, PotentialId, PotentialSystemId, SymbolId,
-    TerminalId, TextId, WireId,
+    AnyId, CableId, DeviceId, DismissalId, JunctionId, PageId, PartId, PotentialId,
+    PotentialSystemId, StructureId, SymbolId, TerminalId, TextId, WireId,
 };
 use crate::project::Project;
 use crate::record::{Entity, Op, Record};
@@ -220,7 +220,7 @@ impl<'p> Tx<'p> {
     /// attached to any of them; `items` may also name free texts. A wire
     /// from a moved object to one that stays is refused
     /// ([`ModelError::WireLeavesSelection`]): move both ends or delete it.
-    /// Ids stay the same, so cables and cross references keep
+    /// Ids stay the same, so cables, cross references and dismissals keep
     /// pointing at the moved objects.
     pub fn move_to_page(&mut self, items: &[AnyId], page: PageId, offset: Point) -> Result<()> {
         if !self.project.contains(page.into()) {
@@ -272,7 +272,7 @@ impl<'p> Tx<'p> {
         }
 
         // Lift out what must change page together: texts, then wires (with
-        // the cable cores that name them), then put them
+        // the cable cores and dismissals that name them), then put them
         // back on the new page around the moved symbols and junctions.
         let text_records: Vec<Text> = texts
             .iter()
@@ -286,15 +286,30 @@ impl<'p> Tx<'p> {
             .filter_map(|&w| self.project.wire(w).cloned())
             .collect();
         let mut cables: Vec<Cable> = Vec::new();
+        let mut dismissals: Vec<Dismissal> = Vec::new();
         for &w in &wires {
             for referrer in self.project.referrers(w) {
-                if let AnyId::Cable(c) = referrer
-                    && let Some(cable) = self.project.cable(c)
-                    && !cables.iter().any(|k| k.id == c)
-                {
-                    cables.push(cable.clone());
+                match referrer {
+                    AnyId::Cable(c) => {
+                        if let Some(cable) = self.project.cable(c)
+                            && !cables.iter().any(|k| k.id == c)
+                        {
+                            cables.push(cable.clone());
+                        }
+                    }
+                    AnyId::Dismissal(d) => {
+                        if let Some(dismissal) = self.project.dismissals.get(&d)
+                            && !dismissals.iter().any(|k| k.id == d)
+                        {
+                            dismissals.push(dismissal.clone());
+                        }
+                    }
+                    _ => {}
                 }
             }
+        }
+        for dismissal in &dismissals {
+            self.remove_exact(dismissal.id.into())?;
         }
         for cable in &cables {
             self.update::<Cable>(cable.id, |c| {
@@ -330,6 +345,9 @@ impl<'p> Tx<'p> {
         }
         for cable in cables {
             self.replace(Record::Cable(cable))?;
+        }
+        for dismissal in dismissals {
+            self.insert_record(Record::Dismissal(dismissal))?;
         }
         for mut text in text_records {
             text.page = page;
@@ -713,6 +731,45 @@ impl<'p> Tx<'p> {
             self.set_pin_feed(symbol, pin, Some(potential))?;
         }
         Ok(())
+    }
+
+    /// Adds a structure node: a plant section (`=A1`) or location
+    /// (`+CAB1`), marked as an enclosure when it is a cabinet or box.
+    pub fn add_structure(
+        &mut self,
+        tag: DeviceTag,
+        description: impl Into<String>,
+        enclosure: bool,
+    ) -> Result<StructureId> {
+        let description = description.into();
+        self.insert(|id| Structure {
+            id,
+            tag,
+            description,
+            enclosure,
+            properties: Default::default(),
+        })
+    }
+
+    /// Records that the user declined a proposal about `subjects`, or
+    /// returns the existing record when it was already declined.
+    pub fn dismiss(
+        &mut self,
+        proposal: impl Into<String>,
+        mut subjects: Vec<AnyId>,
+    ) -> Result<DismissalId> {
+        let proposal = proposal.into();
+        subjects.sort();
+        subjects.dedup();
+        if let Some(existing) = self.project.dismissal(&proposal, &subjects) {
+            return Ok(existing.id);
+        }
+        self.insert(|id| Dismissal {
+            id,
+            proposal,
+            subjects,
+            properties: Default::default(),
+        })
     }
 
     /// Adds a cable with the given cores.

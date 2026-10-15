@@ -67,7 +67,7 @@ fn a_generated_page_prints_one_pdf_page_per_sheet() {
     let pdf = parse(&export_pdf(doc.project(), &PdfOptions::default()).unwrap());
     // Two schematic pages, three sheets of 20, the empty frame of 21.
     assert_eq!(pdf.get_pages().len(), 6);
-    assert_eq!(labels(&pdf), ["1", "2", "20.1", "20.2", "20.3", "21"]);
+    assert_eq!(labels(&pdf), ["1", "2", "20a", "20b", "20c", "21"]);
     let toc = pdf.get_toc().expect("outline");
     let titles: Vec<&str> = toc.toc.iter().map(|t| t.title.as_str()).collect();
     assert_eq!(
@@ -75,9 +75,9 @@ fn a_generated_page_prints_one_pdf_page_per_sheet() {
         [
             "1  Main circuit",
             "2  Control circuit",
-            "20.1  Devices",
-            "20.2  Devices",
-            "20.3  Devices",
+            "20a  Devices",
+            "20b  Devices",
+            "20c  Devices",
             "21",
         ]
     );
@@ -149,7 +149,7 @@ fn a_page_set_with_a_generated_page_keeps_all_its_sheets() {
         ..PdfOptions::default()
     };
     let pdf = parse(&export_pdf(doc.project(), &options).unwrap());
-    assert_eq!(labels(&pdf), ["20.1", "20.2", "20.3"]);
+    assert_eq!(labels(&pdf), ["20a", "20b", "20c"]);
 }
 
 #[test]

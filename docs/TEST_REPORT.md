@@ -24,6 +24,89 @@ How a PR is tested: its branch is merged onto the current `main` (a
 main `11363c1` passes fmt, clippy and all 232 workspace tests on Linux.
 **Every Gate 0 criterion is met.**
 
+## Round 10 (2026-10-14, main `7bb466d` to `c3c51a0`): main after the cloud merges; the starter's outputs; F4 closed
+
+GitHub Actions is down, so main was re-tested locally after the cloud
+session's merges (#53 Gate 1 in the app through #80):
+
+- main `7bb466d` alone: fmt and clippy clean; 625 passed, 0 failed, 3 ignored
+  (the two #38 gap tests this PR fills in and the `widget.rs` doc example).
+- Re-tested after 10 more merges (#81-#94, #89): main `067e56a` plus this PR
+  passes fmt and clippy; 646 passed, 0 failed, 4 ignored (the doc example,
+  the two F4 gap tests and F5's).
+- main `067e56a` plus this PR plus #99 (head `854f8cf`): fmt and clippy
+  clean; 647 passed, 0 failed, 4 ignored; F4 (a) passes when un-ignored.
+- #99 merged. main `c3c51a0` plus this PR, both F4 gap tests un-ignored:
+  fmt and clippy clean; **659 passed, 0 failed, 2 ignored** (F5's gap test
+  and the `widget.rs` doc example).
+
+New in `gate1_scenario.rs`:
+
+| Test | Checks | State |
+| --- | --- | --- |
+| `outputs_of_the_starter` | With every part assigned from the starter catalog: `novo_checks::check` reports nothing; each device's cross reference is its main function on page 1 and -X1's lists its four terminals in strip order; the BOM names every device and orders one terminal block per -X1 terminal (3 × UT 2,5, 1 × UT 2,5-PE); the PDF with `LibraryArt` is one page labelled `1`, has a bookmark tree, and carries the device tags and terminal names as text | Passes |
+| `gap_missing_parts_counts_a_strip_by_its_terminals` | F4 (a) below | Passes (fixed by #99) |
+| `gap_a_terminal_block_is_not_a_part_of_the_strip` | F4 (b) below | Passes (fixed by #99) |
+| `gap_pdf_names_the_terminal_strip` | F5 below | Ignored, fails |
+
+Findings:
+- **F4 (parts and BOM, medium):** the starter catalog's suggestion for -X1
+  is a feed-through terminal block (Phoenix UT 2,5), and `assign_part`
+  puts it on the strip device. On main the missing-parts check then counts
+  all four terminals as covered, but the bill of materials orders **one**
+  UT 2,5 for a strip of four, and the PE terminal gets no PE block.
+  Assigning the articles to the terminals instead (`assign_terminal_part`,
+  the catalog's first suggestion for the feed-through terminals and its
+  first `pe` one for PE) gives the right BOM on main: 3 × 3044076 for
+  `-X1:1`, `:2`, `:3` and 1 × 3044089 for `-X1:PE`
+  (`outputs_of_the_starter` checks this). Two gaps are left:
+  - (a) `gap_missing_parts_counts_a_strip_by_its_terminals`: with every
+    terminal given its article, `missing_parts()` still lists the strip
+    device -X1. **Fixed by #99** (WS-07's redo of #72); re-tested on main
+    `067e56a` plus this PR plus #99: passes.
+  - (b) `gap_a_terminal_block_is_not_a_part_of_the_strip`: `assign_part`
+    accepted a terminal block for the strip device, and the BOM ordered it
+    once against `-X1` while no terminal got it. **Fixed by #99** (00e3bef):
+    the block becomes the strip's part for its terminal kind.
+  - **F4 is closed.** The PE-article check (a PE terminal with a non-PE
+    block) is routed to the outputs thread (novo-checks).
+- **F5 (drawing and PDF, low):** terminals show only their own name (`1`,
+  `2`, `3`, `PE`; that is how #28 fixed F2), and nothing on the page names
+  the strip, so the printed page doesn't say which strip they belong to.
+  IEC 61082 drawings name the strip once beside a group of its terminals.
+  Sent to WS-03 (labels) and the outputs thread (PDF). WS-03 has a fix
+  queued after #103: the first terminal of each run of one strip shows the
+  strip tag.
+
+## Round 9 (2026-10-14, main `15c9992`): Gate 1 through the window, #38 gaps closed
+
+#53 (`NovoApp::execute`) and #38 (novo-editor) are on main, so the Gate 1
+scenario now also runs through the whole window, and the last two gap tests
+are filled in. `gate1_scenario.rs` has no ignored test left.
+
+| Test | Step | Closed by | State |
+| --- | --- | --- | --- |
+| `scenario_through_the_window` | Steps 1-7 headless through `NovoApp` with the real `EditorCanvas`: the file given on the command line opens on the first frame on its first page; every edit of the starter runs through `NovoApp::execute`; File > Save and File > Close leave nothing open and report no warning or error; a fresh window opens the same JSON and the same motor potentials | #53 | Passes |
+| `gap_place_by_search_with_auto_tags_and_self_wiring` | The I search finds `mcb3`, `main3`, `ol`, `m3`; one click each in a column plus Enter on the proposed wires gives `-F1`, `-K1`, `-F2`, `-M1` and exactly 9 straight main wires, Q1 to K1 to F1 to M1 connected per phase; save and reopen keep it | #38 | Passes |
+| `gap_draw_real_symbols` | Every placed symbol of the starter has `LibraryArt` artwork, drawn instead of the placeholder box, with its connection points where the placeholder had them | #38 | Passes |
+
+Notes:
+- The MCB is placed as `-F1`, not `-Q1`: novo-editor gives a miniature
+  circuit breaker letter F (protecting, IEC 81346-2) and a motor protection
+  breaker (`mpcb`) letter Q. The test pins this current behaviour; whether
+  breakers should be Q is still the open question O1 (Round 7). The
+  overload relay is then `-F2`.
+- The window test uses `StorageBackend::default()` and default settings, so
+  it writes only in its temp directory (no last-project or untitled files in
+  the user profile).
+- BOM terminal count equal to the strip's terminal count: #72 (open) adds
+  exactly this check (`bom_counts_every_terminal_the_strip_shows`), so it is
+  not duplicated here.
+
+main `15c9992` plus this round passes fmt, clippy and all workspace tests on
+Linux: 628 passed, 0 failed, 1 ignored (the `ignore` doc example in
+`novo-canvas`'s `widget.rs`).
+
 ## Round 8 (2026-10-14, main `7379d42`): Gate 1 gaps after #30, #36
 
 #30 (novo-terminals) and #36 (novo-parts) are on main, so their gap tests
