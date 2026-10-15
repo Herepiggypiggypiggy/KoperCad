@@ -80,3 +80,4 @@
 21:35 UTC #463 afb185d READY (registry menus, conflicts fixed)
 21:35 UTC #475 33ff374 READY (stacked on #467/#463)
 21:40 UTC #532 08f4461 READY (Learn UI: lesson card, pointer, Learn window)
+21:50 UTC #472 2c2274a READY; #463 c2edddd READY; #475 f022249 READY (wind-down: no new reviews)
