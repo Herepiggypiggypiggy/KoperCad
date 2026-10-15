@@ -2,7 +2,7 @@
 //! A saved project's PDF goes next to its file and takes its name
 //! (`Plant 2.novo` gives `Plant 2.pdf`), so projects with the same title
 //! never share a PDF; a project with no file yet exports to
-//! `<Documents>\NovoElectric\<name>.pdf` under a name not used yet.
+//! `<Documents>\KoperCAD\<name>.pdf` under a name not used yet.
 //!
 //! Only a PDF KoperCAD wrote (its `/Producer`) is ever replaced: a
 //! user's own `<stem>.pdf` stays, and the export takes `<stem> 2.pdf`.

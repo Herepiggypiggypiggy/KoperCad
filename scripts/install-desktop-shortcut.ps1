@@ -20,7 +20,8 @@ $Link.TargetPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\po
 $Link.Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$Launcher`""
 $Link.WorkingDirectory = $Root
 $Link.Description = 'Start the newest experimental KoperCAD build'
-$Exe = Join-Path $Root 'current\novoelectric.exe'
+$Exe = Join-Path $Root 'current\kopercad.exe'
+if (-not (Test-Path $Exe)) { $Exe = Join-Path $Root 'current\novoelectric.exe' }
 if (Test-Path $Exe) { $Link.IconLocation = "$Exe,0" }
 $Link.Save()
 
