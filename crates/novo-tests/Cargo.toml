@@ -25,6 +25,10 @@ novo-symbols.workspace = true
 novo-terminals = { path = "../novo-terminals" }
 novo-workflow.workspace = true
 serde_json.workspace = true
+toml.workspace = true
+novo-cables.workspace = true
+novo-plc.workspace = true
+novo-xref.workspace = true
 
 [lints]
 workspace = true

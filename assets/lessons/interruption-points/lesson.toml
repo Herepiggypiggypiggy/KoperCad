@@ -1,0 +1,266 @@
+format = 1
+id = "interruption-points"
+version = 1
+status = "draft"   # GAP: check kinds and anchors are missing, see NOTES.md
+title = "Signals across pages"
+title_nl = "Signalen over pagina's"
+summary = "Continue a signal from one page to the next with an interruption point, jump between the two ends, number them, and read the contact references under a coil."
+summary_nl = "Laat een signaal van de ene pagina op de andere doorlopen met een onderbrekingspunt, spring tussen de twee uiteinden, nummer ze en lees de contactverwijzingen onder een spoel."
+track = "terminals"
+order = 30
+level = "intermediate"
+minutes = 9
+topics = ["cross-references", "interruption-points"]
+needs = ["first-schematic", "connection-screens"]
+next = []
+project = "project.json"
+page = "Start signal"
+
+# Start project: terminals.rs `interruption_points_start`: page 1 "Start signal" (-F1, -S0, -S1,
+# the start button's lower pin is open), page 2 "Contactor coil" (coil -K1 with its N feed), page 3
+# "Indicator lamps" (a make contact -K1 13/14 to -H1 and a break contact -K1 21/22 to -H2).
+# Finished: `interruption_points_finished`.
+
+[[step]]
+id = "goal"
+title = "What you will have"
+title_nl = "Wat je straks hebt"
+text = """
+The start signal runs from page 1 to the coil on page 2 through two linked points, numbered **1**.
+You will also read where the coil's contacts are.
+"""
+text_nl = """
+Het startsignaal loopt van pagina 1 naar de spoel op pagina 2 via twee gekoppelde punten, genummerd **1**.
+Je leest ook waar de contacten van de spoel staan.
+"""
+pause = true
+point = { at = { device = "-S1", pin = "14" } }
+# -S1:14 is the open end of the signal (crates/novo-tests/tests/lessons/terminals.rs).
+
+[[step]]
+id = "first-point"
+title = "Place the first interruption point"
+title_nl = "Plaats het eerste onderbrekingspunt"
+text = """
+Press {key:tool.place}, type **ip** (an {tip:interruption-point}), press Enter, then click just below -S1:14.
+The wire is drawn for you. {key:edit.escape} ends placing.
+"""
+text_nl = """
+Druk op {key:tool.place}, typ **ip**, druk op Enter en klik net onder -S1:14.
+De draad wordt voor je getekend. {key:edit.escape} stopt het plaatsen.
+"""
+point = { at = { device = "-S1", pin = "14" } }
+note = [
+  { area = { page = "Start signal", x = 36, y = 112, w = 8, h = 14 }, text = "Click here, in line with the pin", text_nl = "Klik hier, in lijn met de pin" },
+]
+expect = { count = { kind = "symbol", page = "Start signal", at_least = 5 } }
+solve = [ { place = { symbol = "iec/connectivity/interruption_point", page = "Start signal", x = 40, y = 120 } } ]
+# GAP: no check kind for "an interruption point exists" ({ device = ... } needs a tag; an
+#   interruption point has none). `count` of symbols on the page is the closest (4 at the start).
+# verified: Q and I both open the place field (keymap.rs:344-345, `tool.place`); the alias "ip"
+#   and mnemonic ("ip", ...) are in crates/novo-editor/src/catalog.rs:116 and the symbol file
+#   crates/novo-symbols/symbols/iec/connectivity/interruption_point.toml (one pin "1" at 0,0,
+#   pointing up, the arrow hangs below it). The editor names a new point IP1, IP2, ... (edit.rs:
+#   159 `SymbolRole::Interruption`, name from edit.rs:292 `next_interruption_name`).
+# verified: dropping a symbol draws the wire to a facing free pin in line with it
+#   (ConnectMode::Draw is the default: novo-editor tool.rs:78; edit.rs:591 `facing_wires`,
+#   tool.rs:645 `draw_facing`). -S1:14 points down, the new point's pin points up, so they face.
+#   The place tool stays armed after a click (tests/editing.rs "ten contactors take ten clicks"),
+#   so Esc is told to the person (keymap.rs:338).
+
+[[step]]
+id = "next-page"
+title = "Go to the next page"
+title_nl = "Ga naar de volgende pagina"
+text = """
+{key:nav.next_page} shows page 2, where the signal arrives at the coil.
+"""
+text_nl = """
+{key:nav.next_page} toont pagina 2, waar het signaal bij de spoel aankomt.
+"""
+point = { at = { device = "-K1" } }
+expect = { page = "Contactor coil" }
+solve = [ { page = "Contactor coil" } ]
+# verified: PageDown = nav.next_page (keymap.rs:385); page order here is 0 contents, 1, 2, 3, then
+#   the lists, so the next page is 2 (editor pages.rs `neighbour`). The editor leaves the place
+#   tool when the page changes (novo-editor view.rs:1266).
+
+[[step]]
+id = "pick-second"
+title = "Pick the interruption point again"
+title_nl = "Kies het onderbrekingspunt opnieuw"
+text = """
+Press {key:tool.place}, type **ip** and press Enter. Do not click yet.
+"""
+text_nl = """
+Druk op {key:tool.place}, typ **ip** en druk op Enter. Klik nog niet.
+"""
+point = { ui = "palette.field" }
+expect = { command = "tool.place" }
+solve = [ { command = "tool.place", arg = "ip" } ]
+# verified: same as the first point; `tool.place` with an argument opens the field filled
+#   (workbench.rs:448).
+
+[[step]]
+id = "turn"
+title = "Turn it half a turn"
+title_nl = "Draai het een halve slag"
+text = """
+Press {key:edit.rotate} twice, so the arrow points up the page and the pin faces the coil.
+"""
+text_nl = """
+Druk twee keer op {key:edit.rotate}, zodat de pijl omhoog wijst en de pin naar de spoel kijkt.
+"""
+point = { at = { device = "-K1", pin = "A1" } }
+expect = { command = "edit.rotate" }
+solve = [ { command = "edit.rotate" }, { command = "edit.rotate" } ]
+# verified: R rotates the piece in hand by a quarter turn (novo-editor tool.rs:1925
+#   `Tool::Place` rotation.then(R90)). The check ticks on the first press; the text asks for two.
+# GAP: a check for "the piece in hand is turned 180 degrees" does not exist.
+
+[[step]]
+id = "second-point"
+title = "Drop it above the coil"
+title_nl = "Zet het boven de spoel neer"
+text = """
+Click above the coil, in line with -K1:A1. The wire to the coil is drawn.
+"""
+text_nl = """
+Klik boven de spoel, in lijn met -K1:A1. De draad naar de spoel wordt getekend.
+"""
+point = { at = { device = "-K1", pin = "A1" } }
+note = [
+  { area = { page = "Contactor coil", x = 36, y = 32, w = 8, h = 14 }, text = "Click here", text_nl = "Klik hier" },
+]
+expect = { count = { kind = "symbol", page = "Contactor coil", at_least = 3 } }
+solve = [ { place = { symbol = "iec/connectivity/interruption_point", page = "Contactor coil", x = 40, y = 40, turns = 2 } } ]
+# GAP: solve `place` has no rotation; `turns = 2` is a proposal. See the check GAP above.
+# verified: the point is named IP2 (the lowest free name, edit.rs:292), so it has no partner yet:
+#   the checker lists "Interruption point IP2 has no partner" (novo-checks checks.rs:298
+#   `lone_interruptions`, shown by the issue pill).
+
+[[step]]
+id = "same-name"
+title = "Give both points the same name"
+title_nl = "Geef beide punten dezelfde naam"
+text = """
+Double-click the name **IP2** beside the new point, type **IP1** and press Enter.
+Two points with one name are one connection, and each shows where the other is.
+"""
+text_nl = """
+Dubbelklik op de naam **IP2** naast het nieuwe punt, typ **IP1** en druk op Enter.
+Twee punten met dezelfde naam zijn één verbinding en elk toont waar het andere staat.
+"""
+point = { area = { page = "Contactor coil", x = 30, y = 28, w = 12, h = 10 } }
+expect = { problem_free = "lone_interruption" }
+solve = [ { rename = { interruption = "IP2", to = "IP1" } } ]
+# GAP: `problem_free` takes ids such as "wire.overlap"; there is no published id for the
+#   LoneInterruption problem (novo-checks lib.rs:92). Also no solve operation `rename`.
+#   The state check is false at the start of the step (two lone points) and true afterwards.
+# verified: double click on an interruption name renames it (novo-editor view.rs:966,
+#   `rename_label` edit.rs:365). F2 does NOT do it for an interruption point or a terminal (the F2
+#   handler at view.rs:1292 looks for a device); only the right-click row "Rename   F2" (view.rs:1734)
+#   and the double-click work.
+# verified: partners are the points with one name: crates/novo-core/src/xref.rs:118
+#   `interruption_partners`, and the netlist joins them (novo-core graph.rs:234). The reference
+#   next to each point reads page.column, e.g. 1.1 next to the point on page 2
+#   (novo-xref index.rs:429 `label`).
+# ODD: `xref.link` joins two interruption points (novo-xref link.rs:200 `link_interruptions`), but
+#   it works on the two selected symbols and a selection never spans two pages, so it cannot pair
+#   points on different pages; the lesson uses the name.
+
+[[step]]
+id = "jump"
+title = "Jump to the other end"
+title_nl = "Spring naar het andere uiteinde"
+text = """
+With the point selected press {key:nav.partner}. You land on the partner on page 1.
+"""
+text_nl = """
+Druk met het punt geselecteerd op {key:nav.partner}. Je komt bij het partnerpunt op pagina 1.
+"""
+point = { area = { page = "Contactor coil", x = 36, y = 32, w = 8, h = 14 } }
+expect = { command = "nav.partner" }
+solve = [ { select = "IP1" }, { command = "nav.partner" } ]
+# verified: G = nav.partner (keymap.rs:380) -> xref.rs:74 `go_partner`; needs a selected symbol
+#   (toast "Select a coil, contact or interruption point first"); novo-xref nav.rs `Navigator::go`
+#   shows the page and selects the partner. Alt+Left returns (history).
+
+[[step]]
+id = "renumber"
+title = "Number them automatically"
+title_nl = "Nummer ze automatisch"
+text = """
+Press {key:view.command_palette}, type **number interruption** and press Enter.
+The pair becomes **1**: points are numbered in reading order, a pair keeps one name.
+"""
+text_nl = """
+Druk op {key:view.command_palette}, typ **number interruption** en druk op Enter.
+Het paar wordt **1**: punten worden in leesvolgorde genummerd, een paar houdt één naam.
+"""
+point = { ui = "palette.field" }
+expect = { command = "interruption.renumber" }
+solve = [ { command = "interruption.renumber" } ]
+# verified: `interruption.renumber` has no key (commands.rs:496), the app runs it
+#   (workbench.rs:229, 511) -> potentials.rs:34 `renumber_interruptions` -> novo-xref number.rs:45
+#   `renumber_interruptions` (the selected points and their partners, or all points when nothing
+#   is selected); toast "Numbered 2 interruption points". Also in the right-click menu of a
+#   point: "Number automatically" (view.rs:1737).
+# ODD: the editor names new points IP1, IP2 (edit.rs:292) while this command and
+#   novo-xref `next_interruption_name` use plain numbers; renumbering turns IPn into n.
+
+[[step]]
+id = "back"
+title = "Jump back"
+title_nl = "Spring terug"
+text = """
+Press {key:nav.partner} again: the same key takes you back to page 2.
+"""
+text_nl = """
+Druk nogmaals op {key:nav.partner}: dezelfde toets brengt je terug naar pagina 2.
+"""
+point = { area = { page = "Start signal", x = 36, y = 112, w = 8, h = 14 } }
+expect = { page = "Contactor coil" }
+solve = [ { command = "nav.partner" } ]
+# verified: the point is still selected after the jump (workbench.rs:713 `after_canvas_frame`
+#   selects the target), so G works again; with one partner it just goes there.
+
+[[step]]
+id = "contact-image"
+title = "Read the contacts under the coil"
+title_nl = "Lees de contacten onder de spoel"
+text = """
+Click the coil **-K1**: under it stands its {tip:contact-image}, such as 13-14 3.1, meaning page 3, column 1.
+Press {key:nav.all_references} to list every place -K1 is drawn.
+"""
+text_nl = """
+Klik op de spoel **-K1**: eronder staan de contacten, zoals 13-14 3.1, dus pagina 3, kolom 1.
+Druk op {key:nav.all_references} voor een lijst van elke plek waar -K1 getekend staat.
+"""
+point = { at = { device = "-K1" } }
+note = [
+  { at = { device = "-K1" }, text = "13-14 3.1 · 21-22 3.2: contact pair, page 3, column 1 and 2", text_nl = "13-14 3.1 · 21-22 3.2: contactpaar, pagina 3, kolom 1 en 2" },
+]
+expect = { command = "nav.all_references" }
+solve = [ { select = "-K1" }, { command = "nav.all_references" } ]
+# verified: the contact image is drawn below a coil by novo-xref index.rs:429 `label` (lines
+#   "13-14 3.1" and "21-22 3.2" in this project); references read page.column (docs/DESIGN.md
+#   section 3: columns are the numbered grid of the page frame, ten on A3). Shift+G =
+#   nav.all_references (keymap.rs:381) -> xref.rs:101 `list_occurrences`; the popup is titled
+#   "EVERY OCCURRENCE" (xref.rs:150) and a click on a row jumps there.
+# The contacts belong to -K1 already; `xref.link` (commands.rs:430, verb "link") would move a
+# contact to another coil's device: not needed here.
+
+[[step]]
+id = "done"
+title = "Signals across pages"
+title_nl = "Signalen over pagina's"
+text = """
+Same name, one connection: the points find each other, {key:nav.partner} jumps, and the references are never typed.
+"""
+text_nl = """
+Zelfde naam, één verbinding: de punten vinden elkaar, G springt en de verwijzingen typ je nooit.
+"""
+pause = true
+# verified: there is no "update cross references" step: novo-xref rebuilds the index when the
+#   project changes (lib.rs `LiveXref`).

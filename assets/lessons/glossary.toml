@@ -29,3 +29,91 @@ text = "One conductor inside a cable, named by number or colour."
 
 [term.proposal]
 text = "A wire KoperCAD suggests between two facing pins. Tab jumps to the next one and Enter accepts it."
+
+[term.shield]
+text = "A braided or foil screen around the cores of a cable that keeps interference out of a signal. It is connected to PE, usually at one end, and is a core named SH."
+text_nl = "Een afscherming (gevlochten of folie) om de aders van een kabel die storing van een signaal weghoudt. Ze wordt aan PE aangesloten, meestal aan een kant, en is een ader met de naam SH."
+
+[term.location]
+text = "A place in the plant such as the cabinet (+CAB) or the field (+FLD). Wires that run from one location to another are proposed as cables."
+text_nl = "Een plaats in de installatie, zoals de kast (+CAB) of het veld (+FLD). Draden die van de ene locatie naar de andere lopen, worden als kabel voorgesteld."
+
+[term.wire-number]
+text = "The number printed on a wire so the wireman can find both ends. In KoperCAD you type it; it is separate from the potential the wire carries."
+text_nl = "Het nummer op een draad waarmee de monteur beide einden vindt. In KoperCAD typ je het zelf; het staat los van de potentiaal die de draad voert."
+
+[term.wire-list]
+text = "A generated page with one row for every connection from pin to pin: wire number, both ends, potential, colour, cross-section and cable core."
+text_nl = "Een gegenereerde pagina met een regel per verbinding van pen naar pen: draadnummer, beide einden, potentiaal, kleur, doorsnede en kabelader."
+
+[term.generated-page]
+text = "A page KoperCAD writes from the drawing, such as the contents, the bill of materials or the cable diagram. You do not draw it; it follows every change."
+text_nl = "Een pagina die KoperCAD uit de tekening schrijft, zoals de inhoudsopgave, de stuklijst of het kabelschema. Je tekent hem niet; hij volgt elke wijziging."
+
+[term.bom]
+text = "Bill of materials: every part the project uses, how many of each and where they are used."
+text_nl = "Stuklijst: elk onderdeel dat het project gebruikt, hoeveel van elk en waar ze gebruikt worden."
+
+[term.title-block]
+text = "The box at the bottom right of every page: project, page, sheet, structure, revision and drawn / checked by."
+text_nl = "Het vak rechtsonder op elke pagina: project, pagina, blad, structuur, revisie en getekend / gecontroleerd door."
+
+[term.bookmark]
+text = "An entry in the side list of a PDF reader. One click jumps to that page."
+text_nl = "Een regel in de zijlijst van een PDF-lezer. Eén klik springt naar die pagina."
+
+[term.revision]
+text = "A lettered issue of the drawing set (A, B, ...) with date, author and a note. Issuing one freezes the drawn pages and keeps a copy to compare with."
+text_nl = "Een uitgifte van de tekeningenset met een letter (A, B, ...), datum, auteur en notitie. Bij het uitgeven worden de getekende pagina's vastgezet en wordt een kopie bewaard om mee te vergelijken."
+
+[term.freeze]
+text = "A page issued with a revision keeps the page and column it was printed with, so a reference such as 2.1 never moves under a printed set."
+text_nl = "Een pagina die met een revisie is uitgegeven houdt de pagina en kolom van de afdruk, zodat een verwijzing als 2.1 nooit verschuift onder een afgedrukte set."
+
+[term.plc-card]
+text = "A module of the PLC rack, such as DI16 DQ8: 16 digital inputs and 8 digital outputs. It is a device with a tag; its channels are the symbols you draw."
+text_nl = "Een module van het PLC-rek, bijvoorbeeld DI16 DQ8: 16 digitale ingangen en 8 digitale uitgangen. Het is een apparaat met een tag; de kanalen zijn de symbolen die je tekent."
+
+[term.digital-input]
+text = "DI: a PLC channel that reads a signal that is on or off, such as a button or a sensor."
+text_nl = "DI: een PLC-kanaal dat een aan/uit-signaal leest, zoals van een knop of een sensor."
+
+[term.digital-output]
+text = "DQ: a PLC channel that switches something on or off, such as a lamp or a contactor coil."
+text_nl = "DQ: een PLC-kanaal dat iets in- of uitschakelt, zoals een lamp of een contactorspoel."
+
+[term.drawing-standard]
+text = "The set of symbols a project is drawn in: IEC 60617 (the default) or NFPA 79 / ANSI Y32.2. It is saved in the project file."
+text_nl = "De set symbolen waarin een project getekend is: IEC 60617 (standaard) of NFPA 79 / ANSI Y32.2. Het wordt in het projectbestand bewaard."
+
+[term.symbol-twin]
+text = "The same device drawn in the other standard: an IEC coil and an NFPA coil are twins. Twins have the same connection points, so wires stay where they are."
+text_nl = "Hetzelfde apparaat getekend in de andere norm: een IEC-spoel en een NFPA-spoel zijn tweelingen. Tweelingen hebben dezelfde aansluitpunten, dus draden blijven waar ze zijn."
+
+[term.terminal]
+text = "One connection point on a terminal strip. A wire from the cabinet lands on its inside, a wire to the field on its outside."
+text_nl = "Eén aansluitpunt op een klemmenstrook. Een draad uit de kast komt aan de binnenkant, een draad naar het veld aan de buitenkant."
+
+[term.jumper]
+text = "A bridge that joins neighbouring terminals so they carry the same signal. Terminals with the same jumper number are connected."
+text_nl = "Een brug die naast elkaar liggende klemmen verbindt zodat ze hetzelfde signaal voeren. Klemmen met hetzelfde brugnummer zijn verbonden."
+
+[term.pe-terminal]
+text = "A terminal for the protective earth wire. KoperCAD makes a terminal PE when its wire carries the PE potential; the pe command switches it by hand."
+text_nl = "Een klem voor de beschermingsleiding. KoperCAD maakt een klem PE als zijn draad het potentiaal PE draagt; met het commando pe schakel je dat met de hand om."
+
+[term.same-name-rule]
+text = "In a new project, terminals with the same name on one strip are one terminal drawn in several places. The editor refuses to rename a terminal to a name the strip already has."
+text_nl = "In een nieuw project zijn klemmen met dezelfde naam op één strook één klem die op meer plaatsen getekend is. De editor weigert een klem te hernoemen naar een naam die de strook al heeft."
+
+[term.interruption-point]
+text = "A symbol that ends a signal on one page and continues it on another. Points with the same name are one connection."
+text_nl = "Een symbool dat een signaal op de ene pagina beëindigt en op een andere voortzet. Punten met dezelfde naam zijn één verbinding."
+
+[term.contact-image]
+text = "The list of a coil's contacts printed under it, such as 13-14 3.1: contact numbers, then page and column."
+text_nl = "De lijst van de contacten van een spoel die eronder staat, zoals 13-14 3.1: contactnummers, dan pagina en kolom."
+
+[term.page-reference]
+text = "Page and column of a place, written 3.4: page 3, column 4 of its frame. A reference never needs to be typed."
+text_nl = "Pagina en kolom van een plek, geschreven als 3.4: pagina 3, kolom 4 van het kader. Een verwijzing hoef je nooit te typen."
