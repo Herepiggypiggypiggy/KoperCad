@@ -9,6 +9,7 @@ mod checks;
 mod dock;
 mod drawers;
 mod duplicate;
+mod example;
 mod inspector;
 mod link;
 mod live;
@@ -18,6 +19,7 @@ mod pdf;
 mod plc;
 mod potentials;
 mod preferences;
+mod project_settings;
 mod reports;
 mod revisions;
 mod terminals;
@@ -31,6 +33,8 @@ mod xref;
 mod cabinet_tests;
 #[cfg(test)]
 mod changes_tests;
+#[cfg(test)]
+mod example_tests;
 #[cfg(test)]
 mod gate1_tests;
 
@@ -105,6 +109,7 @@ enum Leaving {
     New,
     Open,
     OpenPath(PathBuf),
+    Example,
     Close,
     Quit,
 }
@@ -336,6 +341,7 @@ impl NovoApp {
         match action {
             Action::NewProject => self.leave_then(ctx, Leaving::New),
             Action::OpenProject => self.leave_then(ctx, Leaving::Open),
+            Action::OpenExample => self.leave_then(ctx, Leaving::Example),
             Action::SaveProject => {
                 self.save();
             }
@@ -404,6 +410,7 @@ impl NovoApp {
                 }
             }
             Leaving::OpenPath(path) => self.open_path(&path),
+            Leaving::Example => self.open_example(),
             Leaving::Close => self.close_project(),
             Leaving::Quit => {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -736,6 +743,7 @@ impl NovoApp {
         self.about_dialog(&ctx);
         self.renumber_dialog(&ctx);
         self.preferences_dialog(&ctx);
+        self.project_settings_dialog(&ctx);
         self.issue_revision_dialog(&ctx);
         self.page_form_dialog(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {
@@ -810,7 +818,7 @@ impl NovoApp {
 
     fn update_title(&mut self, ctx: &egui::Context) {
         let title = match self.project_name() {
-            Some(name) => format!("{name} - {APP_NAME}"),
+            Some(name) => format!("{name}{} - {APP_NAME}", self.standard_suffix()),
             None => APP_NAME.to_owned(),
         };
         if title != self.window_title {
@@ -904,7 +912,7 @@ impl NovoApp {
     /// The short project menu behind the mark. Everything in it is also in
     /// the command palette.
     fn project_menu(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
-        for a in [Action::NewProject, Action::OpenProject] {
+        for a in [Action::NewProject, Action::OpenProject, Action::OpenExample] {
             self.action_button(ui, a, picked);
         }
         ui.add_enabled_ui(!self.settings.recent_projects.is_empty(), |ui| {
@@ -1527,7 +1535,7 @@ impl NovoApp {
             ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
                 ui.weak("No project open");
                 ui.add_space(8.0);
-                for a in [Action::NewProject, Action::OpenProject] {
+                for a in [Action::NewProject, Action::OpenProject, Action::OpenExample] {
                     self.action_button(ui, a, picked);
                 }
                 let unsaved = self.backend.unsaved_projects();

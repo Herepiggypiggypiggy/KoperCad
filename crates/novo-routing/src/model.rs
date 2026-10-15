@@ -74,7 +74,8 @@ fn facing(direction: Option<Direction>) -> Facing {
 /// Where a pin is on the mounting plate, or `None` when its device is not
 /// placed on one. The model does not know where a terminal sits inside its
 /// device, so the anchor is the middle of the footprint edge the pin leaves
-/// through (the centre when the pin has no direction or the device is
+/// through, from the pin's direction in the symbol library, not its page
+/// direction (the centre when the pin has no direction or the device is
 /// turned): good to within the device size, which is what a cut length
 /// needs.
 fn anchor_of(
@@ -93,7 +94,15 @@ fn anchor_of(
     let facing = if placed.rotated {
         Facing::Any
     } else {
-        facing(project.symbol(pin.symbol)?.pin_direction(pin.pin))
+        // The library's own direction (before the symbol is turned on the
+        // page): a contactor drawn sideways is still mounted upright.
+        facing(
+            project
+                .symbol(pin.symbol)?
+                .pins
+                .get(usize::from(pin.pin))?
+                .direction,
+        )
     };
     let (cx, cy) = (placed.x + w / 2.0, placed.y + h / 2.0);
     let pos = match facing {
@@ -115,7 +124,8 @@ pub struct Routed {
     /// ids are connection ids.
     pub plans: Vec<(StructureId, Plan)>,
     /// Connections that could not be routed: a device is not placed on a
-    /// plate, or the two ends are on different plates.
+    /// plate, the two ends are on different plates, or the id is used by
+    /// more than one connection (ids must be unique; every use is listed).
     pub unrouted: Vec<u64>,
 }
 
@@ -128,7 +138,16 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
         .collect();
     let mut jobs: BTreeMap<StructureId, Vec<Job>> = BTreeMap::new();
     let mut out = Routed::default();
+    // A repeated id could not be told apart in the result: none of them is routed.
+    let mut count: HashMap<u64, usize> = HashMap::new();
     for c in connections {
+        *count.entry(c.id).or_default() += 1;
+    }
+    for c in connections {
+        if count[&c.id] > 1 {
+            out.unrouted.push(c.id);
+            continue;
+        }
         let ends =
             anchor_of(project, &placements, c.from).zip(anchor_of(project, &placements, c.to));
         match ends {

@@ -2410,7 +2410,11 @@ impl Editor {
         wires: &[WireId],
         suggestion: &Suggestion,
     ) -> bool {
-        let Some(feed) = self.catalog.get(FEED_SYMBOL).cloned() else {
+        let Some(feed) = self
+            .catalog
+            .get(&self.catalog.in_pack(FEED_SYMBOL))
+            .cloned()
+        else {
             self.notice = Some("The symbol library has no potential feed".into());
             return false;
         };

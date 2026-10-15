@@ -105,9 +105,9 @@ raw rail ids.
 optional wire diameter), puts each end on the mounting plate and routes them
 with one `plan` per enclosure. The model does not know where a terminal sits
 inside its device, so an end is the middle of the footprint edge the pin leaves
-through (from the pin's direction; the centre when it has none or the device
+through (from the pin's direction in the symbol library, not as the symbol is drawn on the page; the centre when it has none or the device
 is turned). A connection whose device is not placed, or whose ends are on
-different plates, is returned as **unrouted**: it gets no length rather than
+different plates, or whose id is shared with another connection, is returned as **unrouted**: it gets no length rather than
 a wrong one. Terminals of a strip sit on the strip device.
 
 ## 7. Out of scope here
