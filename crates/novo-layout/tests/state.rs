@@ -68,7 +68,7 @@ fn drawer_shrinks_as_devices_are_placed_and_rotate_remove_work() {
 fn place_all_preview_then_accept_places_the_rest() {
     let mut l = layout();
     let all: Vec<_> = (1..=6).map(|i| cand(i, 45.0, 90.0)).collect();
-    l.drop_device(1, all[0].size, 20.0, 300.0);
+    l.drop_device(1, all[0].size, 20.0, 20.0);
     let plan = l.preview(&all);
     assert_eq!(plan.placements.len(), 5);
     l.accept(&plan, &all);
