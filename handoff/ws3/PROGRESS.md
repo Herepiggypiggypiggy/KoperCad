@@ -64,3 +64,4 @@
 - 2026-10-15: live potentials colours are theme tokens (novo_theme::POTENTIALS_DARK, contrast-checked on the sheet); live.rs reads them.
 - 2026-10-15: live wires are drawn by the canvas (PageScene::set_wire_looks, WireLook, screen-width stroke) in the wire layer under symbols and text; the egui foreground layer is gone, hover text stays in live.rs.
 - 2026-10-15: perf: strip_heads grouped terminals pairwise (O(n^2)) on every terminal edit; now stops at the x gap. 3,000-terminal page: build 65 -> 20 ms, apply one moved symbol 43 -> 2.7 ms. New tests/model_perf.rs guards model-page timings.
+- 2026-10-15: perf at 10,000 symbols (release): build 70 ms, one symbol move 12 ms (strip_heads 6 ms: now a grid, no pairwise scan), 10k notes unchanged 2.8 ms, pick 0.003 ms, box select 0.05 ms, wire part 0.55 ms. All guarded in tests/model_perf.rs.

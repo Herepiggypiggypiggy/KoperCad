@@ -1685,6 +1685,9 @@ const BRIDGE_BAR_Y: f64 = 1.4;
 /// The symbol that carries the bridge dot.
 const BRIDGED_SYMBOL: &str = "iec/terminals/terminal_bridged";
 
+/// The one-ended variant: the same dot on its single lead.
+const END_BRIDGED_SYMBOL: &str = "iec/terminals/terminal_end_bridged";
+
 /// One heavy bar per run of connected terminals on a page, from the first
 /// lead to the last, never past them: the connected terminals of a jumper
 /// group on one strip that are chained by neighbours at most
@@ -1698,7 +1701,7 @@ fn bridge_bars(project: &Project, page: PageId) -> Vec<(Vec2, Vec2)> {
         let SymbolRole::Terminal { terminals } = &sym.role else {
             continue;
         };
-        if sym.symbol.0 != BRIDGED_SYMBOL {
+        if sym.symbol.0 != BRIDGED_SYMBOL && sym.symbol.0 != END_BRIDGED_SYMBOL {
             continue;
         }
         let [t] = terminals.as_slice() else {
@@ -1780,16 +1783,27 @@ fn strip_heads(project: &Project, page: PageId) -> HashMap<SymbolId, String> {
             }
             i
         }
+        // Neighbours come from a grid of STRIP_RUN_GAP cells, so a long
+        // column of terminals costs a few comparisons each, not all pairs.
+        let cell = |p: Point| {
+            (
+                (p.x / STRIP_RUN_GAP).floor() as i64,
+                (p.y / STRIP_RUN_GAP).floor() as i64,
+            )
+        };
+        let mut grid: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+        for (i, (p, _)) in syms.iter().enumerate() {
+            grid.entry(cell(*p)).or_default().push(i);
+        }
         for i in 0..syms.len() {
-            for j in i + 1..syms.len() {
-                // Sorted by x: nothing further right can be near either.
-                if syms[j].0.x - syms[i].0.x > STRIP_RUN_GAP {
-                    break;
-                }
-                if near(syms[i].0, syms[j].0) {
-                    let (a, b) = (root(&mut run, i), root(&mut run, j));
-                    // The earlier terminal stays the root, so it heads the run.
-                    run[a.max(b)] = a.min(b);
+            let (cx, cy) = cell(syms[i].0);
+            for (dx, dy) in (-1..=1).flat_map(|dx| (-1..=1).map(move |dy| (dx, dy))) {
+                for &j in grid.get(&(cx + dx, cy + dy)).into_iter().flatten() {
+                    if j > i && near(syms[i].0, syms[j].0) {
+                        let (a, b) = (root(&mut run, i), root(&mut run, j));
+                        // The earlier terminal stays the root, so it heads the run.
+                        run[a.max(b)] = a.min(b);
+                    }
                 }
             }
         }
@@ -2177,6 +2191,21 @@ mod tests {
             vec![(Vec2::new(100.0, 51.4), Vec2::new(116.0, 51.4))],
             "one bar across the run; lone terminals draw none"
         );
+        // A one-ended terminal joins the run like any other.
+        let (_, _) = doc
+            .transact("end", |tx| {
+                let id = tx
+                    .project()
+                    .symbols()
+                    .find(|s| s.placement.origin == Point::new(100.0, 50.0))
+                    .map(|s| s.id)
+                    .unwrap();
+                tx.update::<novo_core::SymbolInstance>(id, |s| {
+                    s.symbol = key(END_BRIDGED_SYMBOL);
+                })
+            })
+            .unwrap();
+        assert_eq!(bridge_bars(doc.project(), page).len(), 1);
         let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
         assert!(ps.scene().contains(BARS_ITEM));
         // Taking the far terminal's neighbour into the run extends the bar.

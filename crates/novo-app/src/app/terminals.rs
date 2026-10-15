@@ -179,13 +179,19 @@ impl NovoApp {
     }
 }
 
-/// The strip editor's rows as a table: terminal, internal targets, external
-/// targets, state. A drawn terminal's name selects it on the drawing (its
+/// The strip table's columns, in the order a row writes its cells.
+const STRIP_HEADS: [&str; 7] = [
+    "Terminal", "Kind", "Jumper", "Internal", "External", "Cable", "State",
+];
+
+/// The strip editor's rows as a table: terminal, kind, jumper, internal
+/// targets, external targets, cable, state. A drawn terminal's name selects it on the drawing (its
 /// first drawing, centred); returns that drawing when one was clicked.
 /// Rows drawn by a selected symbol show as selected.
 pub(super) fn strip_table(
     ui: &mut egui::Ui,
     view: &novo_terminals::StripView,
+    screen: &novo_terminals::Screen,
     selected: &[AnyId],
 ) -> Option<Occurrence> {
     let mut go = None;
@@ -196,14 +202,14 @@ pub(super) fn strip_table(
     egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
         egui::Grid::new("strip")
             .striped(true)
-            .num_columns(4)
+            .num_columns(STRIP_HEADS.len())
             .spacing([24.0, 4.0])
             .show(ui, |ui| {
-                for head in ["Terminal", "Internal", "External", "State"] {
+                for head in STRIP_HEADS {
                     ui.small(head);
                 }
                 ui.end_row();
-                for row in &view.rows {
+                for (i, row) in view.rows.iter().enumerate() {
                     let join = |targets: Vec<&novo_terminals::Target>| {
                         targets
                             .iter()
@@ -228,14 +234,33 @@ pub(super) fn strip_table(
                             ui.label(&row.name).on_hover_text("Spare: not drawn");
                         }
                     }
+                    ui.label(novo_terminals::kind_label(row.kind));
+                    ui.label(jumper_cell(row))
+                        .on_hover_text("Terminals with the same jumper are connected");
                     ui.label(join(row.internal_targets()));
                     ui.label(join(row.external_targets()));
+                    ui.label(cable_cell(screen, i));
                     ui.weak(row.state().label());
                     ui.end_row();
                 }
             });
     });
     go
+}
+
+/// The Jumper cell of a strip row: `J1` for a connected terminal, empty
+/// otherwise.
+fn jumper_cell(row: &novo_terminals::Row) -> String {
+    row.jumper.map_or_else(String::new, |j| format!("J{j}"))
+}
+
+/// The Cable cell of strip row `i`: the cables and cores of its external
+/// wires, as the connection screen prints them (`-W1 BK`).
+fn cable_cell(screen: &novo_terminals::Screen, i: usize) -> String {
+    screen
+        .rows
+        .get(i)
+        .map_or_else(String::new, |r| r.cables.join(", "))
 }
 
 /// The world area a proposed terminal would take, around its spot.
@@ -378,5 +403,67 @@ impl NovoApp {
             }
             Err(e) => self.message(Level::Error, format!("{label}: {e}")),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use novo_core::{JoinLink, TerminalKind};
+
+    fn row(jumper: Option<u32>) -> novo_terminals::Row {
+        novo_terminals::Row {
+            name: "1".into(),
+            level: 0,
+            terminals: Vec::new(),
+            kind: TerminalKind::Feedthrough,
+            jumper,
+            part: None,
+            occurrences: Vec::new(),
+            build: novo_terminals::Build {
+                clamps: 1,
+                links: 0,
+                link: JoinLink::Connector,
+            },
+        }
+    }
+
+    #[test]
+    fn the_cable_cell_lists_cables_by_row_and_survives_a_short_screen() {
+        let mut doc = novo_core::Document::default();
+        let (strip, _) = doc
+            .transact("strip", |tx| {
+                tx.add_terminal_strip(novo_core::DeviceTag::parse("-X1")?)
+            })
+            .unwrap();
+        let screen = novo_terminals::Screen {
+            strip,
+            tag: "-X1".into(),
+            rows: vec![novo_terminals::ScreenRow {
+                internal: Vec::new(),
+                terminal: "1".into(),
+                kind: "feed-through".into(),
+                external: Vec::new(),
+                cables: vec!["-W1 BK".into(), "-W2 BU".into()],
+                jumper: None,
+                pages: Vec::new(),
+                build: String::new(),
+                spare: false,
+            }],
+        };
+        assert_eq!(cable_cell(&screen, 0), "-W1 BK, -W2 BU");
+        assert_eq!(cable_cell(&screen, 1), "");
+    }
+
+    #[test]
+    fn the_cable_column_sits_between_external_and_state() {
+        assert_eq!(STRIP_HEADS.len(), 7);
+        assert_eq!(STRIP_HEADS[4..], ["External", "Cable", "State"]);
+    }
+
+    #[test]
+    fn the_jumper_cell_names_the_group_or_stays_empty() {
+        assert_eq!(jumper_cell(&row(Some(2))), "J2");
+        assert_eq!(jumper_cell(&row(None)), "");
     }
 }

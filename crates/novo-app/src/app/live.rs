@@ -18,7 +18,9 @@ use novo_core::{
     NetId, Netlist, PageId, Potential, PotentialId, PotentialKind, Project, SymbolId, SymbolRole,
     WireId,
 };
-use novo_sim::{Clock, Live, PoleState, Settled, Solution, is_coil, settle_timed};
+use novo_sim::{
+    Clock, Live, PoleState, Settled, Solution, is_coil, is_load, loads_on, settle_timed,
+};
 use novo_theme::{tokens, widgets};
 
 use super::{Level, NovoApp};
@@ -222,6 +224,32 @@ pub(super) fn coil_badges(
                 at: egui::vec2(((a.x + b.x) / 2.0) as f32, ((a.y + b.y) / 2.0) as f32),
                 on: energized.contains(&s.id),
             })
+        })
+        .collect()
+}
+
+/// Where the lit lamps, motors and horns of the page are, for a glow.
+pub(super) fn load_glows(
+    project: &Project,
+    page: PageId,
+    netlist: &Netlist,
+    solution: &Solution,
+) -> Vec<(SymbolId, egui::Vec2)> {
+    let on = loads_on(project, netlist, solution);
+    project
+        .symbols()
+        .filter(|s| s.page == page && is_load(s) && on.contains(&s.id))
+        .filter_map(|s| {
+            let points: Vec<_> = (0..s.pins.len())
+                .filter_map(|pin| s.pin_position(pin as u16))
+                .collect();
+            if points.is_empty() {
+                return None;
+            }
+            let n = points.len() as f64;
+            let x = points.iter().map(|p| p.x).sum::<f64>() / n;
+            let y = points.iter().map(|p| p.y).sum::<f64>() / n;
+            Some((s.id, egui::vec2(x as f32, y as f32)))
         })
         .collect()
 }
@@ -498,6 +526,35 @@ impl NovoApp {
                     if response.on_hover_text(tip).clicked() {
                         coil_clicked = Some(badge.symbol);
                     }
+                });
+        }
+
+        // Outputs that have current: a soft glow behind the lamp or motor.
+        let glows = load_glows(project, page, &solved.netlist, &solved.settled.solution);
+        for (symbol, at) in &glows {
+            let at = to_screen(*at);
+            if !canvas.expand(BADGE * 4.0).contains(at) {
+                continue;
+            }
+            egui::Area::new(egui::Id::new(("live_load", *symbol)))
+                .order(egui::Order::Background)
+                .pivot(egui::Align2::CENTER_CENTER)
+                .fixed_pos(at)
+                .interactable(false)
+                .show(ctx, |ui| {
+                    let (rect, _) = ui
+                        .allocate_exact_size(egui::Vec2::splat(BADGE * 5.0), egui::Sense::hover());
+                    let p = ui.painter();
+                    p.circle_filled(
+                        rect.center(),
+                        BADGE * 2.5,
+                        tokens::WARNING.gamma_multiply(0.18),
+                    );
+                    p.circle_filled(
+                        rect.center(),
+                        BADGE * 1.5,
+                        tokens::WARNING.gamma_multiply(0.35),
+                    );
                 });
         }
 
