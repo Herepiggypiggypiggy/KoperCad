@@ -2105,3 +2105,46 @@ fn a_pe_terminal_set_by_hand_carries_the_override_diamond() {
         "a by-hand PE terminal carries the override diamond"
     );
 }
+
+#[test]
+fn tab_and_q_steer_a_wire_in_progress_from_the_keyboard() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let a = d.place("mcb3", 80.0, 60.0);
+    let b = d.place("mcb3", 160.0, 60.0);
+    let wires = d.doc().project().wires().count();
+
+    // Start on a pin of A, then hold the pointer over the middle of B.
+    d.app.run_command(&ctx, "tool.connect", None);
+    let start = d.pin(a, true);
+    d.click(start);
+    let page = d.page();
+    let origin = d.doc().project().symbol(b).unwrap().placement.origin;
+    let body = Point::new(origin.x + 4.0, origin.y + 4.0);
+    {
+        let app = &mut d.app;
+        let view = app.canvas.schematic().expect("the editor canvas");
+        let doc = app.backend.document_mut().expect("a project");
+        view.editor.hover(doc, page, body, TOL);
+    }
+    assert!(d.app.canvas.schematic_ref().unwrap().editor.is_wiring());
+
+    // The keymap hands Q and Tab to the wire while it is in progress.
+    d.key(egui::Key::Tab, egui::Modifiers::NONE);
+    assert!(
+        matches!(
+            d.app.canvas.schematic_ref().unwrap().editor.target(),
+            Some(novo_editor::geometry::Target::Endpoint(
+                novo_core::Endpoint::Pin { symbol, .. },
+                _
+            )) if symbol == b
+        ),
+        "Tab aims at a pin of the part under the pointer"
+    );
+    d.key(egui::Key::Q, egui::Modifiers::NONE);
+    assert_eq!(d.doc().project().wires().count(), wires + 1);
+    assert!(!d.app.wb.field.is_open(), "Q did not open the part search");
+}

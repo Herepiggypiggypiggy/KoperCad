@@ -2528,3 +2528,53 @@ fn show_where_it_goes_finds_the_wires_and_terminals_on_the_potential() {
         "a motor is not a terminal"
     );
 }
+
+#[test]
+fn tab_cycles_the_pins_of_a_part_and_q_ends_the_wire_there() {
+    let (mut doc, page, mut editor) = setup();
+    editor.begin_place("iec/protection/mcb_3p", None);
+    editor.click(&mut doc, page, p(40.0, 100.0), TOL);
+    editor.click(&mut doc, page, p(120.0, 100.0), TOL);
+    editor.leave_tool();
+    let a = symbol_at(&doc, page, p(40.0, 100.0));
+    let b = symbol_at(&doc, page, p(120.0, 100.0));
+    let pins_b = doc.project().symbol(b).unwrap().pins.len();
+    assert!(pins_b >= 4, "a three pole breaker has several pins");
+
+    // Start a wire on a pin of A, then move over the middle of B.
+    editor.begin_wire();
+    assert_eq!(
+        click_pin(&mut editor, &mut doc, page, a, "1"),
+        Clicked::Step
+    );
+    let body = doc.project().symbol(b).unwrap().placement.origin;
+    editor.hover(&doc, page, p(body.x + 4.0, body.y + 4.0), TOL);
+
+    // Tab picks a pin, and each further Tab moves to a different one.
+    let mut seen = Vec::new();
+    for _ in 0..pins_b {
+        assert!(editor.key(&mut doc, EditorKey::NextPin, &[]));
+        let Some(novo_editor::geometry::Target::Endpoint(Endpoint::Pin { symbol, pin }, _)) =
+            editor.target()
+        else {
+            panic!("Tab aims at a pin");
+        };
+        assert_eq!(symbol, b);
+        seen.push(pin);
+    }
+    let mut unique = seen.clone();
+    unique.sort_unstable();
+    unique.dedup();
+    assert_eq!(unique.len(), pins_b, "a full round visits every pin once");
+
+    // Q ends the wire on the pin Tab last picked: one wire, one undo step.
+    let aimed = *seen.last().unwrap();
+    let depth = doc.undo_depth();
+    assert!(editor.key(&mut doc, EditorKey::EndOnPart, &[]));
+    assert_eq!(doc.undo_depth(), depth + 1);
+    assert!(connected(&doc, pin(&doc, a, "1"), Endpoint::pin(b, aimed)));
+
+    // With nothing in progress the keys do nothing.
+    assert!(!editor.key(&mut doc, EditorKey::EndOnPart, &[]));
+    assert!(!editor.key(&mut doc, EditorKey::NextPin, &[]));
+}
