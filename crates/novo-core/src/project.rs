@@ -4,17 +4,17 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::entity::{
-    BlockDefinition, BlockInstance, Cable, Device, DeviceKind, Dismissal, Endpoint, Junction, Page,
-    PageKind, Part, PinRef, Potential, PotentialSystem, ProjectInfo, Revision, SameName, Structure,
-    SymbolInstance, SymbolRole, Terminal, Text, Wire,
+    BlockDefinition, BlockInstance, CabinetPlacement, Cable, Device, DeviceKind, Dismissal,
+    Endpoint, Junction, Page, PageKind, Part, PinRef, Potential, PotentialSystem, ProjectInfo,
+    Rail, Revision, SameName, Structure, SymbolInstance, SymbolRole, Terminal, Text, Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::Point;
 use crate::graph::Netlist;
 use crate::id::{
-    AnyId, BlockDefinitionId, BlockInstanceId, CableId, DeviceId, DismissalId, EntityKind,
-    JunctionId, PageId, PartId, PotentialId, PotentialSystemId, RevisionId, StructureId, SymbolId,
-    TerminalId, TextId, WireId,
+    AnyId, BlockDefinitionId, BlockInstanceId, CabinetPlacementId, CableId, DeviceId, DismissalId,
+    EntityKind, JunctionId, PageId, PartId, PotentialId, PotentialSystemId, RailId, RevisionId,
+    StructureId, SymbolId, TerminalId, TextId, WireId,
 };
 use crate::record::{Entity, Op, Record, Transaction, sealed::Token};
 use crate::tag::DeviceTag;
@@ -46,6 +46,8 @@ pub struct Project {
     pub(crate) block_definitions: BTreeMap<BlockDefinitionId, BlockDefinition>,
     pub(crate) block_instances: BTreeMap<BlockInstanceId, BlockInstance>,
     pub(crate) revisions: BTreeMap<RevisionId, Revision>,
+    pub(crate) rails: BTreeMap<RailId, Rail>,
+    pub(crate) cabinet_placements: BTreeMap<CabinetPlacementId, CabinetPlacement>,
     pub(crate) wires: BTreeMap<WireId, Wire>,
     pub(crate) potentials: BTreeMap<PotentialId, Potential>,
     pub(crate) terminals: BTreeMap<TerminalId, Terminal>,
@@ -349,6 +351,8 @@ impl Project {
             Record::BlockDefinition(r) => put(self, r),
             Record::BlockInstance(r) => put(self, r),
             Record::Revision(r) => put(self, r),
+            Record::Rail(r) => put(self, r),
+            Record::CabinetPlacement(r) => put(self, r),
             Record::Wire(r) => put(self, r),
             Record::Potential(r) => put(self, r),
             Record::Terminal(r) => put(self, r),
@@ -373,6 +377,8 @@ impl Project {
             AnyId::BlockDefinition(id) => take::<BlockDefinition>(self, id),
             AnyId::BlockInstance(id) => take::<BlockInstance>(self, id),
             AnyId::Revision(id) => take::<Revision>(self, id),
+            AnyId::Rail(id) => take::<Rail>(self, id),
+            AnyId::CabinetPlacement(id) => take::<CabinetPlacement>(self, id),
             AnyId::Wire(id) => take::<Wire>(self, id),
             AnyId::Potential(id) => take::<Potential>(self, id),
             AnyId::Terminal(id) => take::<Terminal>(self, id),
@@ -625,6 +631,68 @@ impl Project {
                 {
                     return Err(ModelError::DuplicateStructure(structure.tag.to_string()));
                 }
+                if let Some(plate) = structure.plate
+                    && (plate.width <= 0.0
+                        || plate.height <= 0.0
+                        || plate.margin < 0.0
+                        || plate.margin * 2.0 >= plate.width.min(plate.height)
+                        || !structure.enclosure)
+                {
+                    return Err(ModelError::InvalidValue {
+                        id: structure.id.into(),
+                        field: "plate",
+                    });
+                }
+            }
+            Record::Rail(rail) => {
+                let bad = |field| ModelError::InvalidValue {
+                    id: rail.id.into(),
+                    field,
+                };
+                if rail.length <= 0.0 {
+                    return Err(bad("length"));
+                }
+                let on_plate = self
+                    .structures
+                    .get(&rail.structure)
+                    .ok_or(ModelError::NotFound(rail.structure.into()))?;
+                if on_plate.plate.is_none() {
+                    return Err(bad("structure"));
+                }
+            }
+            Record::CabinetPlacement(placement) => {
+                let bad = |field| ModelError::InvalidValue {
+                    id: placement.id.into(),
+                    field,
+                };
+                if !self.devices.contains_key(&placement.device) {
+                    return Err(ModelError::NotFound(placement.device.into()));
+                }
+                let on_plate = self
+                    .structures
+                    .get(&placement.structure)
+                    .ok_or(ModelError::NotFound(placement.structure.into()))?;
+                if on_plate.plate.is_none() {
+                    return Err(bad("structure"));
+                }
+                if self
+                    .cabinet_placements
+                    .values()
+                    .any(|p| p.id != placement.id && p.device == placement.device)
+                {
+                    return Err(bad("device"));
+                }
+                if let Some(rail) = placement.rail {
+                    let rail = self
+                        .rails
+                        .get(&rail)
+                        .ok_or(ModelError::NotFound(rail.into()))?;
+                    if rail.structure != placement.structure {
+                        return Err(bad("rail"));
+                    }
+                } else if placement.rail_offset.is_some() {
+                    return Err(bad("rail_offset"));
+                }
             }
             Record::Dismissal(dismissal) => {
                 if dismissal.proposal.is_empty()
@@ -741,6 +809,8 @@ impl Project {
             AnyId::BlockDefinition(id) => self.block_definitions.contains_key(&id),
             AnyId::BlockInstance(id) => self.block_instances.contains_key(&id),
             AnyId::Revision(id) => self.revisions.contains_key(&id),
+            AnyId::Rail(id) => self.rails.contains_key(&id),
+            AnyId::CabinetPlacement(id) => self.cabinet_placements.contains_key(&id),
             AnyId::Wire(id) => self.wires.contains_key(&id),
             AnyId::Potential(id) => self.potentials.contains_key(&id),
             AnyId::Terminal(id) => self.terminals.contains_key(&id),
@@ -775,6 +845,12 @@ impl Project {
                 .cloned()
                 .map(Record::BlockInstance),
             AnyId::Revision(id) => self.revisions.get(&id).cloned().map(Record::Revision),
+            AnyId::Rail(id) => self.rails.get(&id).cloned().map(Record::Rail),
+            AnyId::CabinetPlacement(id) => self
+                .cabinet_placements
+                .get(&id)
+                .cloned()
+                .map(Record::CabinetPlacement),
             AnyId::Wire(id) => self.wires.get(&id).cloned().map(Record::Wire),
             AnyId::Potential(id) => self.potentials.get(&id).cloned().map(Record::Potential),
             AnyId::Terminal(id) => self.terminals.get(&id).cloned().map(Record::Terminal),
@@ -816,6 +892,12 @@ impl Project {
             .cloned()
             .map(Record::BlockInstance);
         let revisions = self.revisions.values().cloned().map(Record::Revision);
+        let rails = self.rails.values().cloned().map(Record::Rail);
+        let cabinet_placements = self
+            .cabinet_placements
+            .values()
+            .cloned()
+            .map(Record::CabinetPlacement);
         parts
             .chain(structures)
             .chain(potentials)
@@ -832,6 +914,8 @@ impl Project {
             .chain(definitions)
             .chain(instances)
             .chain(revisions)
+            .chain(rails)
+            .chain(cabinet_placements)
     }
 
     /// Rebuilds a project from stored records, in any order, checking every
