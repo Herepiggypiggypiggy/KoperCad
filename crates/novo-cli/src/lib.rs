@@ -12,11 +12,12 @@ use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
 use novo_checks::{Problem, ProblemKind, Severity, Summary};
-use novo_core::{PageId, Project};
+use novo_core::{AnyId, PageId, Project};
 use novo_editor::art::LibraryArt;
 use novo_pdf::{NoteAnchor, PageSet, PdfOptions, SymbolNote};
 use novo_py::ReportFormat;
 use novo_reports::CsvOptions;
+use novo_revisions::{Comparison, FieldChange, Group, Side, group_of};
 use novo_storage::ProjectFile;
 use serde_json::{Value, json};
 
@@ -66,10 +67,36 @@ enum Cmd {
     /// Export a project.
     #[command(subcommand)]
     Export(Export),
+    /// Revisions: list them, or compare two states of the project.
+    #[command(subcommand)]
+    Revisions(Revisions),
     /// Run the design checks; exits with 1 when there are errors or
     /// warnings (infos such as missing parts do not count).
     Check {
         file: PathBuf,
+        /// Print JSON instead of text.
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum Revisions {
+    /// List the issued revisions: index, date, author, description.
+    List {
+        file: PathBuf,
+        /// Print JSON instead of text.
+        #[arg(long)]
+        json: bool,
+    },
+    /// What changed between two states: a revision index (`B`) or `now`.
+    /// Differences are not an error; the exit code is 0 either way.
+    Diff {
+        file: PathBuf,
+        /// The older state: a revision index, or `now`.
+        from: String,
+        /// The newer state: a revision index, or `now`.
+        to: String,
         /// Print JSON instead of text.
         #[arg(long)]
         json: bool,
@@ -95,8 +122,10 @@ enum Export {
     Bom(ReportArgs),
     /// Device list.
     Devices(ReportArgs),
-    /// Wire list.
+    /// Wire list, with the cut length of every wire.
     Wires(ReportArgs),
+    /// Cut list: the wires grouped by size and colour, with end allowances.
+    Cutlist(ReportArgs),
     /// Table of contents (the pages).
     Toc(ReportArgs),
     /// Every report in one workbook, one sheet each.
@@ -211,6 +240,7 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
         Cmd::Export(Export::Bom(args)) => export_reports(&args.file, &["bom"], &args, out),
         Cmd::Export(Export::Devices(args)) => export_reports(&args.file, &["devices"], &args, out),
         Cmd::Export(Export::Wires(args)) => export_reports(&args.file, &["wires"], &args, out),
+        Cmd::Export(Export::Cutlist(args)) => export_reports(&args.file, &["cutlist"], &args, out),
         Cmd::Export(Export::Toc(args)) => export_reports(&args.file, &["toc"], &args, out),
         Cmd::Export(Export::Reports { file, output }) => {
             let args = ReportArgs {
@@ -248,6 +278,81 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             export_dxf(&project, &file, &output, &pages)?;
             Ok(exit::OK)
         }
+        Cmd::Revisions(Revisions::List { file, json }) => {
+            let project = read(&file)?;
+            let file_ = ProjectFile::read_only(&file).map_err(|e| read_failure(&file, &e))?;
+            let kept = file_.snapshot_revisions().unwrap_or_default();
+            let rows: Vec<_> = project
+                .revisions()
+                .map(|r| (r, kept.contains(&r.id)))
+                .collect();
+            if json {
+                let list: Vec<Value> = rows
+                    .iter()
+                    .map(|(r, kept)| {
+                        json!({
+                            "index": r.index,
+                            "date": r.date,
+                            "author": r.author,
+                            "description": r.description,
+                            "snapshot": kept,
+                        })
+                    })
+                    .collect();
+                print(out, &format!("{:#}", Value::Array(list)))?;
+            } else if rows.is_empty() {
+                print(out, "No revisions issued yet")?;
+            } else {
+                for (r, kept) in rows {
+                    let note = if kept { "" } else { "  (no kept copy)" };
+                    print(
+                        out,
+                        &format!(
+                            "{}  {}  {}  {}{note}",
+                            r.index, r.date, r.author, r.description
+                        ),
+                    )?;
+                }
+            }
+            Ok(exit::OK)
+        }
+        Cmd::Revisions(Revisions::Diff {
+            file,
+            from,
+            to,
+            json,
+        }) => {
+            let file_ = ProjectFile::read_only(&file).map_err(|e| read_failure(&file, &e))?;
+            let project = file_.load().map_err(|e| read_failure(&file, &e))?;
+            let side = |name: &str| -> Result<Side, Failure> {
+                if name.eq_ignore_ascii_case("now") {
+                    return Ok(Side::Now);
+                }
+                project
+                    .revision_by_index(name)
+                    .map(|r| Side::Revision(r.id))
+                    .ok_or_else(|| {
+                        Failure::new(
+                            exit::USAGE,
+                            format!("no revision `{name}` (use an index from `revisions list`, or `now`)"),
+                        )
+                    })
+            };
+            let (a, b) = (side(&from)?, side(&to)?);
+            let comparison = novo_revisions::compare(&project, |id| file_.snapshot(id), a, b)
+                .map_err(|e| Failure::new(exit::READ, e.to_string()))?;
+            if json {
+                print(
+                    out,
+                    &format!("{:#}", comparison_json(&project, &from, &to, &comparison)),
+                )?;
+            } else {
+                for line in comparison_text(&project, &from, &to, &comparison) {
+                    print(out, &line)?;
+                }
+            }
+            Ok(exit::OK)
+        }
         Cmd::Check { file, json } => {
             let project = read(&file)?;
             let problems = novo_checks::check(&project);
@@ -271,8 +376,119 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
 }
 
 fn read(path: &Path) -> Result<Project, Failure> {
-    ProjectFile::read(path)
-        .map_err(|e| Failure::new(exit::READ, format!("cannot read {}: {e}", path.display())))
+    ProjectFile::read(path).map_err(|e| read_failure(path, &e))
+}
+
+fn read_failure(path: &Path, e: &novo_storage::StorageError) -> Failure {
+    Failure::new(exit::READ, format!("cannot read {}: {e}", path.display()))
+}
+
+fn group_name(group: Group) -> &'static str {
+    match group {
+        Group::Page => "page",
+        Group::Device => "device",
+        Group::Terminal => "terminal",
+        Group::Cable => "cable",
+        Group::Wire => "wire",
+        Group::Text => "text",
+        Group::Drawing => "drawing",
+        Group::Part => "part",
+        Group::Project => "project",
+    }
+}
+
+fn kind_name(kind: &novo_revisions::ChangeKind) -> &'static str {
+    match kind {
+        novo_revisions::ChangeKind::Added => "added",
+        novo_revisions::ChangeKind::Removed => "removed",
+        novo_revisions::ChangeKind::Changed { .. } => "changed",
+    }
+}
+
+fn row_page(project: &Project, id: Option<PageId>) -> Option<String> {
+    let id = id?;
+    Some(
+        project
+            .page(id)
+            .map_or_else(|| format!("{id}"), |p| p.name.clone()),
+    )
+}
+
+/// One field as `name: old -> new`, with the plain-words note after it.
+fn field_text(f: &FieldChange) -> String {
+    let show = |v: &Option<String>| v.clone().unwrap_or_else(|| "(none)".into());
+    let values = format!("{}: {} -> {}", f.name, show(&f.old), show(&f.new));
+    match &f.note {
+        Some(note) => format!("{values} ({note})"),
+        None => values,
+    }
+}
+
+fn comparison_text(project: &Project, from: &str, to: &str, c: &Comparison) -> Vec<String> {
+    if c.is_empty() {
+        return vec![format!("No differences between {from} and {to}")];
+    }
+    let mut lines = vec![format!("{from} -> {to}")];
+    let mut rows: Vec<_> = c.rows.iter().collect();
+    // Stable, so rows keep their page order within a group.
+    rows.sort_by_key(|r| group_of(r.id));
+    let mut group = None;
+    for r in rows {
+        let g = group_of(r.id);
+        if group != Some(g) {
+            lines.push(format!("{}:", group_name(g)));
+            group = Some(g);
+        }
+        let page = row_page(project, r.page).map_or_else(String::new, |p| format!(" (page {p})"));
+        lines.push(format!("  {} {}{page}", kind_name(&r.kind), r.label));
+        for f in &r.fields {
+            lines.push(format!("    {}", field_text(f)));
+        }
+    }
+    for f in &c.info {
+        lines.push(format!("project info {}", field_text(f)));
+    }
+    for s in &c.sheets {
+        lines.push(format!("sheet {} ({}): {:?}", s.name, s.report, s.kind));
+    }
+    lines
+}
+
+fn field_json(f: &FieldChange) -> Value {
+    json!({ "name": f.name, "old": f.old, "new": f.new, "note": f.note })
+}
+
+fn comparison_json(project: &Project, from: &str, to: &str, c: &Comparison) -> Value {
+    let rows: Vec<Value> = c
+        .rows
+        .iter()
+        .map(|r| {
+            json!({
+                "group": group_name(group_of(r.id)),
+                "kind": kind_name(&r.kind),
+                "label": r.label,
+                "page": row_page(project, r.page),
+                "id": id_text(r.id),
+                "fields": r.fields.iter().map(field_json).collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+    json!({
+        "from": from,
+        "to": to,
+        "rows": rows,
+        "info": c.info.iter().map(field_json).collect::<Vec<_>>(),
+        "sheets": c.sheets.iter().map(|s| json!({
+            "page": row_page(project, Some(s.page)),
+            "name": s.name,
+            "report": s.report,
+            "kind": format!("{:?}", s.kind).to_lowercase(),
+        })).collect::<Vec<_>>(),
+    })
+}
+
+fn id_text(id: AnyId) -> String {
+    id.to_string()
 }
 
 fn print(out: &mut dyn Write, text: &str) -> Result<(), Failure> {

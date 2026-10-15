@@ -284,6 +284,9 @@ impl NovoApp {
         let cands = structure
             .map(|s| candidates(project, s))
             .unwrap_or_default();
+        let sizing_devices = structure
+            .map(|s| novo_layout::sizing_model::sizing_devices(project, s))
+            .unwrap_or_default();
         let tag_of = |id: u64| {
             project
                 .get::<Device>(DeviceId::from(id))
@@ -388,6 +391,9 @@ impl NovoApp {
                     .clicked()
                 {
                     ask = Some(Ask::ToggleTable);
+                }
+                if ui.button("Size enclosure").clicked() {
+                    self.sizing.panel_open = !self.sizing.panel_open;
                 }
                 ui.weak(format!("{placed} placed, {unplaced} unplaced"));
                 let label = format!(
@@ -631,6 +637,9 @@ impl NovoApp {
                 });
             }
         }
+
+        super::sizing::show_window(ui.ctx(), &mut self.sizing, &sizing_devices);
+        super::sizing::show_editor(ui.ctx(), &mut self.sizing);
 
         if let Some(ask) = ask {
             self.cabinet_ask(ask, structure, layout, &cands);

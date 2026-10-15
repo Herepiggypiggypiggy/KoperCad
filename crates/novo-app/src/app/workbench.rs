@@ -62,6 +62,8 @@ pub(crate) struct Workbench {
     pub(super) project_settings: bool,
     /// The Issue revision window, while it is open.
     pub(super) issue: Option<super::revisions::IssueDraft>,
+    /// The Compare revisions window, while it is open.
+    pub(super) compare: Option<super::compare::CompareWindow>,
     /// The new pages, group and panel form, while open.
     pub(super) page_form: Option<super::pages::PageForm>,
     /// Which sheet of a generated page the canvas shows (0 for the first).
@@ -107,6 +109,9 @@ pub(crate) struct Workbench {
     pub(super) live: super::live::LiveView,
     /// Changes mode, while it is on.
     pub(super) changes: Option<super::changes::ChangesMode>,
+    /// The background drawing last handed to the canvas: page, project
+    /// revision and the key it has.
+    pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
 }
 
 impl Workbench {
@@ -136,6 +141,7 @@ impl Default for Workbench {
             parts: None,
             project_settings: false,
             issue: None,
+            compare: None,
             page_form: None,
             sheet: 0,
             nav: Navigator::default(),
@@ -158,6 +164,7 @@ impl Default for Workbench {
             last_export: None,
             live: Default::default(),
             changes: None,
+            underlay_seen: None,
         }
     }
 }
@@ -211,6 +218,11 @@ const APP_COMMANDS: &[&str] = &[
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "file.import_dxf_background",
+    "view.background",
+    "file.remove_background",
+    "export.dxf_page",
+    "export.dxf_all",
     "plc.add_card",
     "plc.to_plc",
     "plc.renumber_io",
@@ -219,6 +231,7 @@ const APP_COMMANDS: &[&str] = &[
     "parts.browser",
     "project.standard",
     "revision.issue",
+    "revision.compare",
     "terminal.toggle_pe",
     "terminal.reset_pe",
     "wire.mode",
@@ -318,7 +331,7 @@ impl NovoApp {
 
     /// Enter, Tab and Delete belong to the editor's wire proposals while it
     /// has any; otherwise to the terminal proposals shown on this page.
-    fn terminal_proposals_have_keys(&self) -> bool {
+    pub(super) fn terminal_proposals_have_keys(&self) -> bool {
         let wires = self
             .canvas
             .schematic_ref()
@@ -404,6 +417,7 @@ impl NovoApp {
     /// between (a held Space pans); every other key runs its command.
     pub(super) fn run_key_command(&mut self, ctx: &egui::Context, id: &str) {
         if id == "tool.place" {
+            self.tour_tick("place");
             self.arm_place_hold(ctx);
         } else if id == "view.command_field_here" {
             self.wb.space_down = ctx.pointer_latest_pos().or(Some(egui::Pos2::ZERO));
@@ -425,11 +439,15 @@ impl NovoApp {
         }
         if let Some(action) = Action::from_id(id) {
             if action == Action::CommandPalette {
+                self.tour_tick("commands");
                 self.wb.field.open(Mode::All, None);
             } else {
                 self.run(ctx, action);
             }
             return;
+        }
+        if id == "edit.duplicate" {
+            self.tour_tick("duplicate");
         }
         if self.cabinet_open && matches!(id, "edit.rotate" | "edit.delete") {
             self.cabinet.keys.push(id.to_owned());
@@ -537,6 +555,15 @@ impl NovoApp {
             "export.pdf" => {
                 self.export_pdf();
             }
+            "file.import_dxf_background" => self.import_dxf_background(),
+            "view.background" => self.toggle_background(),
+            "file.remove_background" => self.remove_background(),
+            "export.dxf_page" => {
+                self.export_dxf(super::dxf::DxfScope::CurrentPage);
+            }
+            "export.dxf_all" => {
+                self.export_dxf(super::dxf::DxfScope::AllPages);
+            }
             "plc.add_card" => self.plc_add_card(argument),
             "plc.to_plc" => self.plc_to_plc(),
             "plc.renumber_io" => self.plc_renumber_io(),
@@ -545,6 +572,7 @@ impl NovoApp {
             "parts.browser" => self.open_parts_browser(),
             "project.standard" => self.wb.project_settings = true,
             "revision.issue" => self.open_issue_revision(argument),
+            "revision.compare" => self.open_compare(argument),
             other => {
                 let label = novo_workflow::commands::get(other).map_or(other, |c| c.label);
                 self.message(Level::Info, format!("{label} is not in the app yet"));
