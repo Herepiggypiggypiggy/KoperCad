@@ -1850,6 +1850,30 @@ impl Editor {
         })
     }
 
+    /// Right-click wires, Override potential: each wire takes `spec` for
+    /// itself, or with `None` goes back to what its net carries. One step.
+    pub fn override_wire_potential(
+        &mut self,
+        doc: &mut Document,
+        wires: &[WireId],
+        spec: Option<&potential::PotentialSpec>,
+    ) -> bool {
+        let label = match spec {
+            Some(s) => format!("Override potential {}", s.name),
+            None => "Remove potential override".to_string(),
+        };
+        self.run(doc, &label, |tx| {
+            let id = match spec {
+                Some(s) => Some(edit::find_or_add_potential(tx, &s.name, s.kind, s.voltage)?),
+                None => None,
+            };
+            for &w in wires {
+                tx.set_wire_potential(w, id)?;
+            }
+            Ok(())
+        })
+    }
+
     /// Applies a potential suggestion to wires in page order, as one step.
     pub fn assign_potentials(
         &mut self,
