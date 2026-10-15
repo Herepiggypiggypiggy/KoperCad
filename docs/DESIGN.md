@@ -321,7 +321,7 @@ row of them, evenly spaced, as far as the pointer stretches.
 **Linking a contact to a coil.** Four routes make one action, one undo
 step, no confirmation: drag the contact onto the coil (a drag of a
 contact that ends with the pointer over a coil links instead of moving:
-the ghost reads "Link to -K1" while the pointer is over the coil, and Esc
+the hint reads "Link to -K1" while the pointer is over the coil, and Esc
 cancels; over anything else it moves as usual); right-click the
 contact and pick "Link to coil…"; `link` in the command surface (pick the
 contact, then the coil; or `link -K3 -K1`); and renaming the contact (F2
