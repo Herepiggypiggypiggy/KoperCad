@@ -1,6 +1,6 @@
 # Commissioning thread: handoff
 
-PRs merged: design #399, engine #431, storage #446, app #471. Open: #494 (`ws-commissioning-followup`, design READY, code READY on 4e052e3, merged main to e382fbd; waits for the merger). Crate `novo-commissioning`, storage schema v3 `sidecar` table are on main.
+PRs merged: design #399, engine #431, storage #446, app #471, follow-up #494 (edit lock, two-step Pass all open, Large buttons in Settings). Nothing of mine is open except this handoff. Crate `novo-commissioning`, storage schema v3 `sidecar` table are on main.
 
 ## How to reach it (entry points)
 - Built in app PR #471 (`ws-commissioning-app`): palette/command `Commissioning` (`view.commissioning`) and the outline's fourth tab "Commissioning" (Checks and Punch list).
