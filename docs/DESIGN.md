@@ -494,6 +494,19 @@ click adds no extra corner and no zero-length segment.
   with the text "Unconnected" on hover. It is listed in Issues as
   `wire.open`, a warning, not an error, so a half-drawn page can be saved
   and printed with the flags visible.
+- **A wire can also start in empty space.** With the Connect tool and no
+  wire in progress, a double click on empty canvas starts a wire at that
+  grid point (on a pin, a junction or a wire it starts connected, as a
+  click does). The two clicks land on one point, so there is no
+  zero-length segment. It then goes on like any wire: in Corners the
+  router elbows each leg to the pointer, in Lines each click commits one
+  axis-locked segment, and Shift+W, Backspace, Esc and a double click to
+  end work as above. The free start shows the same end cap and the
+  Unconnected flag as a free end, so a wire can be open at either or both
+  ends (`wire.open` once per open end). A wire that ends where it started
+  with no segment is discarded, never stored. A single click on empty
+  canvas with no wire in progress still does nothing, so a stray click
+  never starts a wire.
 - Pressing on the end cap and dragging pulls the end; releasing on a pin
   or a wire connects it and the flag disappears. W on the end cap resumes
   the wire. Backspace in a resumed wire takes back its last corner.
@@ -541,6 +554,11 @@ Acceptance:
     end cap and the Unconnected flag, one new corner at most, and a
     `wire.open` warning in Issues. Dragging the cap onto a pin connects it
     and clears the flag and the warning. Undo removes the whole wire.
+16. Connect tool, double click on empty canvas, click, double click: a
+    wire open at both ends, two caps and two flags, in both modes, drawn
+    in the mode's way. A double click on a pin starts connected. A single
+    click on empty canvas starts nothing. Dragging either cap onto a pin
+    connects it.
 15. Free pins show a ring and connected pins a filled dot at every zoom; a
     wire against its pins and the background meets 3:1.
 
