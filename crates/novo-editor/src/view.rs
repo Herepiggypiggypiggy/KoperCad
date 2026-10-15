@@ -17,7 +17,9 @@ use novo_canvas::model::{
 };
 use novo_canvas::widget::{CanvasView, EscapeTarget};
 use novo_canvas::{Anchor, Color, Item, ItemId, Label, Primitive, SelectOp, Shape, Stroke, Vec2};
-use novo_core::{AnyId, ChangeSet, Command, DeviceId, Document, PageId, Point, SymbolRole, WireId};
+use novo_core::{
+    AnyId, ChangeSet, Command, DeviceId, Document, PageId, Point, SymbolId, SymbolRole, WireId,
+};
 
 use crate::art::LibraryArt;
 use crate::catalog::Match;
@@ -57,6 +59,9 @@ enum RenameTarget {
     Device(DeviceId),
     /// A wire's number; empty text clears it.
     Wire(WireId),
+    /// A symbol's own label that is not a device tag: a terminal's name, a
+    /// feed's potential, an interruption point's name.
+    Label(SymbolId),
 }
 
 struct RenameBox {
@@ -246,6 +251,13 @@ impl SchematicView {
     /// select; `None` when no box is being dragged.
     pub fn band_count(&self) -> Option<usize> {
         self.band_count
+    }
+
+    /// Sets the text of the open rename box (for tests).
+    pub fn set_rename_text(&mut self, text: &str) {
+        if let Some(r) = &mut self.rename {
+            r.text = text.to_string();
+        }
     }
 
     /// Whether the in-place rename box is open.
@@ -647,6 +659,14 @@ impl SchematicView {
                 (LabelKind::DeviceTag, owner) => device_of(document.project(), owner)
                     .and_then(|d| document.project().device(d))
                     .map(|d| (RenameTarget::Device(d.id), d.tag.to_string())),
+                (
+                    LabelKind::TerminalName | LabelKind::InterruptionName | LabelKind::Potential,
+                    AnyId::Symbol(s),
+                ) => document
+                    .project()
+                    .symbol(s)
+                    .and_then(|sym| model::symbol_text(document.project(), sym))
+                    .map(|text| (RenameTarget::Label(s), text)),
                 (LabelKind::WireNumber, AnyId::Wire(w)) => document.project().wire(w).map(|w| {
                     (
                         RenameTarget::Wire(w.id),
@@ -985,7 +1005,18 @@ impl SchematicView {
                             ui.colored_label(ui.visuals().error_fg_color, e);
                         }
                         None => {
-                            ui.weak("Enter renames · Esc cancels");
+                            let feed = matches!(
+                                rename.target,
+                                RenameTarget::Label(s) if matches!(
+                                    document.project().symbol(s).map(|s| &s.role),
+                                    Some(novo_core::SymbolRole::PotentialFeed { .. })
+                                )
+                            );
+                            ui.weak(if feed {
+                                "Enter sets the feed's potential · Esc cancels"
+                            } else {
+                                "Enter renames · Esc cancels"
+                            });
                         }
                     }
                 });
@@ -993,6 +1024,12 @@ impl SchematicView {
         if enter {
             let done = match rename.target {
                 RenameTarget::Device(device) => self.editor.rename(document, device, &rename.text),
+                RenameTarget::Label(symbol) => document
+                    .transact("Rename", |tx| {
+                        Ok(crate::edit::rename_label(tx, symbol, &rename.text))
+                    })
+                    .map_err(|e| e.to_string())
+                    .and_then(|(r, _)| r),
                 RenameTarget::Wire(wire) => {
                     let number = rename.text.trim();
                     let number = (!number.is_empty()).then(|| number.to_string());
