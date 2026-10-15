@@ -37,3 +37,6 @@ Wound down at 80% usage by the owner's request. No code branch; this folder only
 ## How I worked
 `git fetch origin +pull/N/head:refs/review/pN`, read `git diff origin/main...`, render SVG mockups with
 `/opt/pw-browsers/chromium-1194/chrome-linux/chrome --headless --no-sandbox --screenshot`. No window runs (no build, ~30 GB disk).
+
+## Final state (2026-10-15, usage limit)
+Latest design verdicts: #527 heat READY f7f31b04 (needs engine correctness review, eyeball transparent canvas); #530 PLC link READY 4e95fc6d; #503 commissioning report READY a500ddb1; #515 workspaces docs READY b83ebb82; #467 status bar READY 096198d7. No reviews in progress.
