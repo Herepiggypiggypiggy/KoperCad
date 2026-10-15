@@ -163,6 +163,22 @@ Selecting a row in a table selects the device or wire in the model, so
 switching to Schematic jumps there. The reports are produced by `novo-reports`;
 this workspace only hosts them and has no report logic of its own.
 
+**This workspace is the one reports hub.** A second "hub" flag or window for
+reports (the UI-for-reports thread's #452) rebases onto it or drops its flag:
+the Reports chip, View › Workspace › Reports and the Reports menu all open
+this workspace and nothing else.
+
+**First pull request (step 8) and what it leaves for later.** Built: the
+report list with row counts, sortable and filterable tables, click selects
+the device (the status bar names it and Schematic opens on it), double-click
+and Enter jump, Up/Down/Ctrl+F/Esc, Excel and CSV of the **whole** report
+(the filter and sort are a view, so the tooltips say "whole report"). Not yet:
+the grouped list with state (on/off/stale), Scope and columns on the right,
+Export PDF, Add to the drawing set, Sheets…, and the Sheets kind of report
+(the generated page itself). They need report-model changes in
+`novo-reports` that its owner decides, and each lands as its own small pull
+request on this workspace.
+
 ### 3.5 Commissioning
 
 Follows `commissioning.md`; this page only fixes where things sit.
@@ -244,8 +260,11 @@ Settings { last_workspace: Workspace, workspaces: map Workspace -> WorkspaceLayo
 
 ### 5.1 The registry
 
-`CommandInfo` (in `novo-workflow`, `commands.rs`) gains one field,
-`menu: Menu`, which is a menu name plus an optional submenu. The groups
+Every command has a menu place, either as a `menu: Menu` field on
+`CommandInfo` (a menu name plus an optional submenu) or, as built in #459, a
+placement table in `novo-workflow/src/menus.rs` (`PLACEMENTS`, defaulting to
+the command's group, and `PALETTE_ONLY` with a reason). Either is acceptable
+as long as the five invariants below are tests. The groups
 (Project, Draw, Edit, Navigate, View, Check, Export) stay as the command
 surface's headings. Unit tests hold the invariants:
 
@@ -270,11 +289,11 @@ say why in the tooltip (`availability`, as in the command surface). A trailing
 
 | Menu | Entries |
 | --- | --- |
-| **File** | New project · Open… · Open example · Recent ▸ · Save · Save as… · Close project · **Import ▸** (DXF as background, EPLAN parts, Sheets…) · **Export ▸** (PDF, DXF, Excel, CSV) · Project settings… · Rules… · Standard ▸ · Preferences… · Quit |
+| **File** | New project · Open… · Open example · Recent ▸ · Save · Save as… · Close project · **Import ▸** (DXF as background, EPLAN parts, Sheets…) · **Export ▸** (PDF, DXF, Excel, CSV, plate drawing) · **Revisions ▸** (Issue revision…, Compare revisions…) · Project settings… · Rules… · Standard ▸ · Preferences… · Quit |
 | **Edit** | Undo · Redo · Cut · Copy · Paste · Paste keeping tags · Duplicate · Select all · Delete · Rename · Renumber ▸ (page, interruption points, I/O) |
 | **Draw** | Place… · Connect · Cable · Text · End on part · Next pin · Wiring mode ▸ (Corners, Lines) · Tidy · Accept proposal · Accept all · Link contact · **Terminals ▸** (connect, disconnect, toggle PE, strip order) · **PLC ▸** (add card, to PLC) · **Macros ▸** (insert, save selection as macro, library…) |
 | **View** | **Workspace ▸** (Schematic, Cabinet, 3D, Reports, Commissioning) · **Panels ▸** (Outline, Inspector, each drawer tab) · Zoom to fit · Marks · Override marks · Live potentials · Changes · Focus mode · Full screen · Reset layout · Reset all layouts · Shortcuts |
-| **Check** | Problems · Next problem · Previous problem · Issue revision… · Compare revisions… · Start commissioning |
+| **Check** | Problems · Next problem · Previous problem · Start commissioning |
 | **Reports** | Every report in §3.4 (opens the Reports workspace on it) · Export all as PDF |
 | **Tools** | Parts library… · Import parts · Macro library… · Sheets… · Simulation ▸ (live potentials, fault scenarios when they exist) · Python console (when WS-28 has one) |
 | **Help** | Walk-through · Shortcuts · About KoperCAD |
@@ -284,16 +303,45 @@ changes) sit in **View › Go to ▸**, because they are views of the same data.
 
 ### 5.3 Where the menus draw
 
-- Window 1500 px or wider (effective): the menu names sit in the top bar after
-  the mark, as words, left to right.
-- Narrower: the mark opens one menu with the same eight names as cascading
-  submenus. Nothing is missing, it is one click deeper.
-- F10 or Alt+(first letter) opens the bar from the keyboard, arrows move,
-  Esc closes. Menu items have no mnemonics of their own; a person who wants to
-  type uses Ctrl+K.
+- Window 1100 px or wider (effective): the menu names sit in the top bar after
+  the mark, as words, left to right. The rest of the bar gives way first, in
+  this order, so the words still fit at 1366 x 768: the search button loses
+  its text under 1700 px and shows only its key under 1250 px (the tooltip
+  says "Search or run (Ctrl+K)"), the project name in the breadcrumb is cut
+  to 14 characters under 1700 px (full name in the tooltip), and the
+  workspace chips use short names (Sch, Cab, 3D, Rep, Com; the full name is
+  the tooltip) under 1250 px. Workspace icons replace the short names when
+  the icon set has them. A test measures the free room between the left and
+  right groups at 1100, 1280, 1366, 1600 and 1920 px.
+- Narrower than 1100 px: the mark opens one menu with the same eight names
+  as cascading submenus. Nothing is missing, it is one click deeper. Wide, a
+  click on the mark shows About; Preferences and Quit are in File.
+- F10 moves the focus to the bar (the first menu, or the mark when folded);
+  arrows move, Enter opens, Esc closes. Alt+(first letter) is not built:
+  menu items have no mnemonics of their own, and a person who wants to type
+  uses Ctrl+K.
 - The first time a command runs from the menu while it has a key, the status
   bar says "Ctrl+Shift+F next time" once per command (remembered in settings).
   A teaching nudge in the place the person is looking, without a popup.
+
+### 5.3b Touch layout
+
+View has a **Touch layout** entry (off by default). It is reserved here and
+built by the Layout and branding thread: larger rows and hit targets (at least
+32 px) in menus, the switcher and the dock for a tablet or a touch screen. It
+is a setting in the user's file, like the status bar, and nothing in the menus
+or the registry changes with it.
+
+### 5.3c Stable anchors
+
+Everything a walk-through or a learning module might point at has a stable
+anchor id that does not change when a label is reworded: `menu.<name>`
+(`menu.file`), `menu.<name>.<command id>` for a row, `workspace.<id>` for a
+chip, `zone.<outline|inspector|drawer|status>` for a zone, `panel.<id>` for a
+panel or drawer tab, and `command.<id>` for anything that runs a command. The
+shell records the screen rectangle of each anchor it drew in the last frame;
+the learning-modules thread reads them from one function. Command ids are the
+registry's; the shell adds no anchor of its own for a command.
 
 ### 5.4 The mark
 
@@ -337,6 +385,10 @@ returns; Commissioning turns Live off because it recolours the drawing.
 | Modes | A chip per active mode (Live, Changes, Marks hidden, Read-only), each a button that turns it off | New |
 | Values | Cursor in mm, grid, snap, zoom, only in canvas workspaces; the camera distance in 3D | The floating HUD (`docs/DESIGN.md` §3), which goes away |
 | Saved | Saving, Saved, Not saved yet | The top bar's save text (still the only save signal) |
+
+Preferences has **Show the status bar** (on by default). With it off, the HUD,
+the top bar's saved text and the toasts come back as before, so a person who
+wants the bare canvas on a small screen has it.
 
 The issue pill stays in the top bar: each count lives in exactly one place
 (DESIGN.md §3). Status colours follow `ui-guidelines.md` and are never the
@@ -388,11 +440,11 @@ other threads are editing (`app.rs` is over 2400 lines).
 | 1 | This document, with the five line edits in DESIGN.md §4, §6, §8 and §9 | docs only |
 | 2 | **Workspace enum and state**: replaces `cabinet_open: bool`; the switcher in the top bar; Schematic and Cabinet; `Settings.workspaces` and the remembered layout; Reports, 3D and Commissioning chips disabled with their reason | `app/workspace.rs`, `settings.rs`, a few lines in `app.rs` |
 | 3 | **One registry**: `menu` on `CommandInfo`, `Action` folded into `COMMANDS`, the invariant tests | `novo-workflow`, `actions.rs` |
-| 4 | **Menu bar**, generated from the registry, collapsing into the mark | `app/menu_bar.rs` |
-| 5 | **Status bar**: message, selection, mode chips, values; the HUD and the top-bar save text move | `app/status_bar.rs`, `app/workbench.rs` |
+| 4 | **Menu bar**, generated from the registry, collapsing into the mark; F10 focus and the width tiers of §5.3 | `app/menu_bar.rs` |
+| 5 | **Status bar**: message, selection, mode chips, values; the HUD and the top-bar save text move; Preferences › Show the status bar | `app/status_bar.rs`, `app/workbench.rs` |
 | 6 | **Panel registry**: drawer tabs per workspace, Alt+1 to Alt+9 for the tabs, F6 to cycle panels, Reset layout | `app/panels.rs`, `drawers.rs` |
 | 7 | **Command surface**: menu path column, workspace and report words, Dutch aliases | `novo-workflow/palette.rs`, `command_field.rs` |
-| 8 | **Reports workspace** hosting `novo-reports` | `app/reports_view.rs` |
+| 8 | **Reports workspace** hosting `novo-reports`: list, sort, filter, selection, keys, Excel/CSV. Deferred, each its own small PR: grouped list with state, scope and columns, Export PDF, Add to the drawing set, Sheets… (§3.4) | `app/reports_view.rs` |
 | 9 | **3D workspace** hosting `novo-view3d` (when the renderer is on main) | `app/view3d.rs` |
 | 10 | **Commissioning workspace** hosting `novo-commissioning` (when it is on main) | `app/commissioning.rs` |
 | 11 | **Keys**: Ctrl+1 to Ctrl+5 for workspaces, drawer tabs move to Alt+digit (the Workflow thread agrees first, §11) | `keys.rs`, `actions.rs`, `RESERVED_SHORTCUTS` |
@@ -400,6 +452,10 @@ other threads are editing (`app.rs` is over 2400 lines).
 Steps 2 to 7 stand on their own: with only Schematic and Cabinet enabled they
 already give the window a menu bar, a status bar and remembered panels. Steps
 8 to 10 each switch on a chip that step 2 already placed.
+
+Built so far (pull requests, 2026-10-15): step 1 #438 (merged), step 2 #453,
+step 3 #459, step 4 #463, step 5 #467, step 8 #475; steps 6, 7, 9, 10 and 11
+are open.
 
 Handoff for this thread: `handoff/workspaces/`.
 
@@ -412,6 +468,8 @@ Handoff for this thread: `handoff/workspaces/`.
 | 3D as a workspace rather than a Cabinet face | 3D threads (WS-29 and the look thread) | Yes, §3 |
 | Right zone holds only Inspector and the Commissioning panel | Layout and branding | Yes |
 | Status bar styling, workspace icons, menu typography | Layout and branding | Uses existing tokens; asks for four icons (Reports, Commissioning, 3D, Cabinet if not yet there) |
+| Key hints on workspace chips | Workflow | None until step 11 binds Ctrl+1 to Ctrl+5; a hint for a key that does nothing is worse than none |
+| Revisions (Issue revision…, Compare revisions…) under File › Revisions ▸ rather than Check | Revisions threads, UI-data thread | Yes: a revision is a state of the project, not a check. The placement change is a small registry pull request after #459 merges |
 | `Action` folded into `COMMANDS` | WS-01 (app shell), WS-08 (keyboard) | One list in `novo-workflow`; `Action` becomes an id lookup |
 
 ## 12. Open questions
