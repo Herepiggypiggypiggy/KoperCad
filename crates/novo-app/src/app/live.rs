@@ -467,6 +467,10 @@ impl NovoApp {
                 });
             });
 
+        // Draws again only when something changed; egui repaints on input.
+        if leave || open_all || clicked.is_some() {
+            ctx.request_repaint();
+        }
         if leave {
             self.wb.live.on = false;
         }
@@ -490,7 +494,6 @@ impl NovoApp {
                 self.wb.live.flip(symbol, group);
             }
         }
-        ctx.request_repaint();
     }
 }
 

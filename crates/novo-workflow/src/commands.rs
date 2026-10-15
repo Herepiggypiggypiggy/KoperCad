@@ -437,6 +437,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["rename strip", "x number", "free strip"],
         Needs::Selection,
     ),
+    cmd(
+        "interruption.renumber",
+        "Number interruption points automatically",
+        "Edit",
+        &["jump", "renumber", "continuation", "off page"],
+        Needs::Project,
+    ),
     // Navigate
     cmd(
         "nav.partner",

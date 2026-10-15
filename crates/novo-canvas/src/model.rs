@@ -239,7 +239,7 @@ impl Default for ModelStyle {
             wire_end_color: Color::rgb(176, 104, 56),
             unconnected_color: Color::rgb(190, 120, 20),
             wires_pick_whole: true,
-            corner_half: 2.25,
+            corner_half: 2.5,
             corner_color: Color::rgb(30, 70, 200),
             focus_color: Color::rgb(255, 150, 30),
             wire_end_radius: 0.9,
