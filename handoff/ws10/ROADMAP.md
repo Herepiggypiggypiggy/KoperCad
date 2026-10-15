@@ -17,7 +17,7 @@ P3 too-many-contacts in the contact image).
   SetRole, PageFormat::columns). 19 integration tests + unit tests + doctest.
 - #31 merged: DESIGN.md format (=A2/3.4) and go_to_tag (Ctrl+K exact).
 - F## Next, in order
-1. #89 merged. Get the contact-image PR (compact rows, Label.anchor) READY.
+1. #89 and #102 merged. Freeze test PR open.
 2. Review notes still open from #31:
    - Renaming a named interruption point on link can split a node: make it
      a proposal or a warning.
@@ -31,7 +31,9 @@ P3 too-many-contacts in the contact image).
 4. Help WS-03 / WS-01 draw `labels_on_page` and the highlight in the scene.
 5. Primary link path: tag in place / drop a contact on a coil (WS-06).
 6. Contact limits from parts (WS-07) instead of `contacts.*` device props.
-7. Pinned-flow freeze (DESIGN.md §8) once WS-02 models it.
+7. Pinned-flow freeze (DESIGN.md §8): done by core #119 through
+   `location_of`; pinned by test `references_into_a_frozen_page_do_not_move`.
+   The "changed since rev" page mark is the editor's (WS-06).
 8. Incremental index only if the 10k build (~11 ms release) gets too slow.
 
 Decided: no "other direction" retry before DeviceHasMain. The only other

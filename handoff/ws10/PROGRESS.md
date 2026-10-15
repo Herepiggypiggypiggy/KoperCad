@@ -16,3 +16,4 @@
 2026-10-14 23:30 UTC Follow-up from main: references use core Page.structure and Location::qualified; dropped the page `function`/`location` props and page_structure(); EN 50005 ordinal clash check; negative contacts.* ignored.
 2026-10-14 21:55 UTC Design review on #93: contact image compact (kind dropped when EN 50005 numbers say it) and Label.anchor (Below for coils, Right for contacts). #89 merged at its READY head 8b5ddb2 before this landed, so it goes in a new PR. Kept 3.4 without slash per DESIGN §3.
 2026-10-14 21:49 UTC #89 merged (READY 8b5ddb2). Contact-image commit moved to a new PR from main.
+2026-10-15 03:15 UTC WS-02 #119 page freeze merged; xref follows it via location_of with no code change. Added a test; new PR from main.
