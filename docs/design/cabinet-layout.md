@@ -67,6 +67,48 @@ Ctrl+2 opens the canvas, Ctrl+T switches to its Table face, `place all`
 shows a preview and Enter accepts it as one undo step, and selection syncs
 both ways with the drawer rows.
 
+## 5b. Place rules (R7)
+
+`place all` can follow a rule set instead of first fit (`novo_layout::rules`,
+Pro Panel gap analysis R7). The rule set is a small text file the user edits,
+like `keymap.txt`; the app decides where it lives. Standard rules, which a
+user file replaces completely:
+
+```text
+gap 10
+row_gap 40
+rule Q F G zone=top rail=shared
+rule A K zone=middle rail=own
+rule T U zone=bottom rail=own
+rule X zone=bottom rail=own
+rule * zone=middle rail=shared
+```
+
+- A rule names letter codes (the longest code a device's code starts with
+  wins; `*` is the fallback), a **zone** (`top`, `middle`, `bottom`; `high` and
+  `low` are accepted), whether the kind has rails of its own or shares them
+  with the other shared kinds of its zone (left to right in the order the rule
+  lists the codes), and optional `gap`, `above`, `below` in mm.
+- `hot <watts> <zone>` sends any device whose effective power loss is at or
+  above the limit to that zone, whatever its kind. A device with no loss data
+  is never hot.
+- Spacing along a rail is the larger of the left device's right need and the
+  right device's left need; a side's need is the part's own clearance
+  (`clearance_*_mm`, R1), else the rule's `gap`, else the rule set's `gap`.
+  Between two rails the space is the larger of `row_gap` and the biggest
+  below-need above and above-need below.
+- Top rows flow from the top of the plate (or below devices already placed),
+  bottom rows sit against the bottom edge, middle rows fill between. On a
+  plate that is too small the bottom rows are kept before the middle rows;
+  what does not fit is returned as unplaced.
+- The result is the same `Plan` as the first-fit planner, so the preview,
+  `apply_plan` and the single undo step are unchanged.
+  `rules::model::specs` reads kind, part clearances and loss from a project.
+
+Not done here: the app uses the rules (a rules file and a small editor on the
+Cabinet canvas), rotating devices to fit, and vertical stacking of small
+devices.
+
 ## 6. Out of scope here
 
 Wire ducts routing and lengths (`novo-routing`), 3D, door cut-outs, thermal

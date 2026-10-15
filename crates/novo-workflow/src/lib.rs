@@ -15,7 +15,9 @@
 //! - [`insert`]: the Q search: mnemonics (`no`, `nc`, `coil`), favourites
 //!   1 to 9, recents, child symbols (`K1 no`) and the IEC 81346-2 letter
 //!   code for the next free tag (J2).
+//! - [`macro_place`]: place a macro from the user library, with a preview.
 //! - [`orientation`]: R and X on a symbol or text.
+//! - [`menus`]: where each command sits in the menu bar.
 //! - [`locate`]: where a device occurs, as page and column (`/3.4`), on top
 //!   of novo-core's cross references.
 //! - [`renumber`]: renumber devices with a preview, as one undo step (J4).
@@ -36,6 +38,8 @@ pub mod insert;
 pub mod keymap;
 pub mod language;
 pub mod locate;
+pub mod macro_place;
+pub mod menus;
 pub mod orientation;
 pub mod palette;
 pub mod renumber;

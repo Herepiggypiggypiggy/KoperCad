@@ -764,6 +764,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8b14ccef22fc6f5a8f4d7d768562a182c04ce9a3b3157b91390b52ddfdf1a76"
 
 [[package]]
+name = "earcutr"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "afc28d89ac6cb489f679fcf51aaa62b4667bb0fb73a30f1d4d23949069707c07"
+dependencies = [
+ "itertools 0.14.0",
+ "num-traits",
+]
+
+[[package]]
 name = "ecb"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -831,7 +841,7 @@ dependencies = [
  "bitflags 2.13.2",
  "emath",
  "epaint",
- "itertools",
+ "itertools 0.15.0",
  "log",
  "nohash-hasher",
  "profiling",
@@ -1457,6 +1467,15 @@ checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
 
 [[package]]
 name = "itertools"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b4baf93f58d4425749ca49a51c50ebab072c5df6994d08fed93541c331481dc"
@@ -1845,14 +1864,18 @@ dependencies = [
  "novo-cables",
  "novo-canvas",
  "novo-checks",
+ "novo-commissioning",
  "novo-core",
  "novo-editor",
+ "novo-heatview",
+ "novo-interop",
  "novo-layout",
  "novo-parts",
  "novo-pdf",
  "novo-plc",
  "novo-reports",
  "novo-revisions",
+ "novo-routing",
  "novo-sim",
  "novo-storage",
  "novo-symbols",
@@ -1901,6 +1924,7 @@ dependencies = [
  "novo-core",
  "novo-parts",
  "novo-plc",
+ "novo-routing",
  "novo-symbols",
  "novo-terminals",
  "novo-tests",
@@ -1917,12 +1941,26 @@ dependencies = [
  "novo-editor",
  "novo-interop",
  "novo-pdf",
+ "novo-plc",
  "novo-py",
  "novo-reports",
+ "novo-revisions",
  "novo-storage",
  "novo-xref",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "novo-commissioning"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-reports",
+ "novo-tests",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -1948,16 +1986,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-heatview"
+version = "0.1.0"
+
+[[package]]
 name = "novo-interop"
 version = "0.1.0"
 dependencies = [
  "calamine",
+ "dirs",
+ "earcutr",
  "novo-canvas",
  "novo-core",
  "novo-layout",
  "novo-parts",
  "novo-tests",
  "rust_xlsxwriter",
+ "tempfile",
  "thiserror 2.0.21",
 ]
 
@@ -1966,6 +2011,18 @@ name = "novo-layout"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+]
+
+[[package]]
+name = "novo-learn"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-tests",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "toml",
 ]
 
 [[package]]
@@ -2006,9 +2063,12 @@ dependencies = [
 name = "novo-plc"
 version = "0.1.0"
 dependencies = [
+ "calamine",
  "novo-core",
  "novo-editor",
  "novo-symbols",
+ "quick-xml",
+ "rust_xlsxwriter",
  "thiserror 2.0.21",
 ]
 
@@ -2019,6 +2079,7 @@ dependencies = [
  "calamine",
  "novo-core",
  "novo-reports",
+ "novo-revisions",
  "novo-storage",
  "novo-symbols",
  "pyo3",
@@ -2035,6 +2096,7 @@ dependencies = [
  "calamine",
  "novo-cables",
  "novo-core",
+ "novo-layout",
  "novo-plc",
  "novo-routing",
  "novo-terminals",
@@ -2132,6 +2194,23 @@ dependencies = [
  "eframe",
  "egui",
  "egui-phosphor",
+]
+
+[[package]]
+name = "novo-view3d"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "eframe",
+ "egui",
+ "egui-wgpu",
+ "flate2",
+ "glam",
+ "naga",
+ "novo-core",
+ "novo-layout",
+ "pollster 1.0.1",
+ "wgpu",
 ]
 
 [[package]]

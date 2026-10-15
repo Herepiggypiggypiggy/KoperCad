@@ -52,3 +52,23 @@ fn a_title_block_prints_the_page_and_set_revision() {
         "a page without an entry is unchanged"
     );
 }
+
+#[test]
+fn an_appendix_adds_pages_after_the_drawing() {
+    use novo_pdf::{Appendix, AppendixLine};
+    let project = novo_core::Project::new("x");
+    let lines = (0..120)
+        .map(|i| AppendixLine::plain(format!("Line {i}")))
+        .collect();
+    let options = PdfOptions {
+        appendix: Some(Appendix {
+            title: "Design checks".into(),
+            lines,
+        }),
+        ..Default::default()
+    };
+    let bytes = export_pdf(&project, &options).unwrap();
+    let pdf = Pdf::load_mem(&bytes).unwrap();
+    // 120 lines at 4.6 mm on A4 with 15 mm margins: 58 a page, three pages.
+    assert_eq!(pdf.get_pages().len(), 3);
+}
