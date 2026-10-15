@@ -30,6 +30,8 @@ pub(crate) enum Slot {
     TerminalLevel,
     TerminalOrder,
     TerminalJumper,
+    /// The other terminals of the strip in the same jumper group (orientation).
+    TerminalBridged,
     TerminalKind,
     WirePage,
     WireFrom,
@@ -192,6 +194,7 @@ pub(crate) fn fields(project: &Project, kind: TableKind) -> Vec<Field> {
             Field::new("Level", Slot::TerminalLevel),
             Field::new("Order", Slot::TerminalOrder),
             Field::new("Jumper", Slot::TerminalJumper),
+            Field::new("Bridged with", Slot::TerminalBridged),
             Field::new("Kind", Slot::TerminalKind),
         ]),
         TableKind::Wires => fields.extend([
@@ -349,6 +352,19 @@ pub(crate) fn read(project: &Project, id: AnyId, core: Option<usize>, field: &Fi
         (Record::Terminal(t), Slot::TerminalLevel) => Cell::Number(f64::from(t.level)),
         (Record::Terminal(t), Slot::TerminalOrder) => Cell::Number(t.order as f64),
         (Record::Terminal(t), Slot::TerminalJumper) => opt_number(t.jumper.map(f64::from)),
+        (Record::Terminal(t), Slot::TerminalBridged) => Cell::text(
+            t.jumper
+                .map(|group| {
+                    project
+                        .terminals_of_strip(t.strip)
+                        .into_iter()
+                        .filter(|o| o.id != t.id && o.jumper == Some(group))
+                        .map(|o| o.name.as_str())
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                })
+                .unwrap_or_default(),
+        ),
         (Record::Terminal(t), Slot::TerminalKind) => Cell::text(terminal_kind_text(t.kind)),
         (Record::Wire(w), Slot::WirePage) => Cell::text(
             project

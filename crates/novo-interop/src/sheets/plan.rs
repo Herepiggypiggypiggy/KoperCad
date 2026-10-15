@@ -463,6 +463,7 @@ pub fn plan_import(project: &Project, workbook: &Workbook) -> ImportPlan {
     }
     warn_duplicate_tags(project, &mut plan);
     warn_core_clashes(project, &mut plan);
+    warn_lone_jumpers(project, &mut plan);
     plan
 }
 
@@ -847,6 +848,46 @@ fn warn_core_clashes(project: &Project, plan: &mut ImportPlan) {
                 "{n} cores of {} were given wire {}; only the last one keeps it",
                 after.tag,
                 wire.raw()
+            ));
+        }
+    }
+}
+
+/// A jumper group of one terminal bridges nothing: after the import a group
+/// number that only one terminal of a strip carries is probably a slip.
+fn warn_lone_jumpers(project: &Project, plan: &mut ImportPlan) {
+    let mut jumpers: BTreeMap<TerminalId, Option<u32>> =
+        project.terminals().map(|t| (t.id, t.jumper)).collect();
+    let mut touched: BTreeSet<TerminalId> = BTreeSet::new();
+    for change in plan
+        .changes
+        .iter()
+        .filter(|c| c.selected && c.field.slot == Slot::TerminalJumper)
+    {
+        if let (AnyId::Terminal(t), Parsed::Number(n)) = (change.id, &change.parsed) {
+            jumpers.insert(t, n.map(|n| n as u32));
+            touched.insert(t);
+        }
+    }
+    let mut said: BTreeSet<(DeviceId, u32)> = BTreeSet::new();
+    for t in touched {
+        let (Some(terminal), Some(Some(group))) = (project.terminal(t), jumpers.get(&t)) else {
+            continue;
+        };
+        let strip = terminal.strip;
+        let members = project
+            .terminals_of_strip(strip)
+            .into_iter()
+            .filter(|o| jumpers.get(&o.id) == Some(&Some(*group)))
+            .count();
+        if members == 1 && said.insert((strip, *group)) {
+            let tag = project
+                .device(strip)
+                .map(|d| d.tag.to_string())
+                .unwrap_or_default();
+            plan.warnings.push(format!(
+                "jumper group {group} on {tag} would have only one terminal ({}): it bridges nothing",
+                terminal.name
             ));
         }
     }

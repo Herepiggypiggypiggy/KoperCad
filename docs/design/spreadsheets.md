@@ -26,6 +26,13 @@ Jumper, wire Number, Color and Cross-section, and every
 `properties.<key>` column. A `properties.<key>` column no row has yet
 adds that property. Internal property namespaces are not exported.
 
+### Jumpers
+
+Terminals of one strip with the same `Jumper` number are bridged. The
+greyed `Bridged with` column lists the others of the group, so a group is
+readable in the sheet. A group number only one terminal of a strip would
+carry after the import gets a warning (it bridges nothing).
+
 ### Cores
 
 One row per cable core. `Id` is the cable's id (repeated on each of its
