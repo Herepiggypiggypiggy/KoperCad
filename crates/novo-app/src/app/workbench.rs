@@ -268,6 +268,7 @@ const APP_COMMANDS: &[&str] = &[
     "view.devices_drawer",
     "view.toggle_marks",
     "sim.live",
+    "sim.plc_program",
     "sim.faults",
     "view.changes",
     "view.commissioning",
@@ -663,6 +664,7 @@ impl NovoApp {
                 self.export_all_reports();
             }
             "sim.live" => self.toggle_live(),
+            "sim.plc_program" => self.open_plc_program(),
             _ if super::reports_view::REPORT_COMMANDS
                 .iter()
                 .any(|(c, _)| *c == id) =>

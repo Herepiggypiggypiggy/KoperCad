@@ -22,6 +22,7 @@ pub mod feeder;
 mod loads;
 pub mod network;
 mod plc;
+pub mod program;
 pub mod protection;
 pub mod scenario;
 pub mod study;

@@ -937,6 +937,19 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd(
+        "sim.plc_program",
+        "PLC program",
+        "View",
+        &[
+            "plc",
+            "ladder",
+            "structured text",
+            "run program",
+            "simulate plc",
+        ],
+        Needs::Page,
+    ),
+    cmd(
         "sim.faults",
         "Fault scenarios",
         "View",
