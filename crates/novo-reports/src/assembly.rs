@@ -5,18 +5,16 @@
 //!
 //! 1. **Prepare**: the plate to check, and the rails and ducts to cut,
 //!    grouped by length so one length is cut once.
-//! 2. **Mount**: rails and ducts by position, then devices top to bottom and
+//! 2. **Drill**: the plate drawing's drill table: one line per drill to fit,
+//!    then every hole and cut-out with its position, smallest hole first.
+//! 3. **Mount**: rails and ducts by position, then devices top to bottom and
 //!    left to right, with part, rail, offset and position on the plate.
-//! 3. **Wire**: the wires of the wire list that have an end in this cabinet,
+//! 4. **Wire**: the wires of the wire list that have an end in this cabinet,
 //!    with colour, size and length, in the wire list's order.
-//! 4. **Label**: one label per placed device.
-//! 5. **Check**: what the model can say about the layout (devices not placed,
+//! 5. **Label**: one label per placed device.
+//! 6. **Check**: what the model can say about the layout (devices not placed,
 //!    overlaps, clearances, rails, sizes, guessed lengths) and the checks a
 //!    person does, with lines to sign.
-//!
-//! Drilling is step 2 of the work in the shop; it joins as its own table
-//! from the plate drawing's drill table once that is on main (see
-//! `docs/design/assembly-checklist.md`).
 //!
 //! It is a [`Report`] like the others, so it pages, exports to CSV and Excel
 //! and prints through the stand-alone report PDF. It is not proposed as a
@@ -30,7 +28,8 @@ use novo_core::{
     AnyId, CabinetPlacement, Device, DeviceId, DeviceTag, EntityKind, Part, Project, Rail,
     RailKind, Structure, natural_cmp,
 };
-use novo_layout::model::load;
+use novo_layout::drill::mm as drill_mm;
+use novo_layout::model::{load, plate_documents};
 
 use crate::WireList;
 use crate::report::{Dependencies, Report};
@@ -297,10 +296,88 @@ fn cabinet(project: &Project, enclosure: &Structure, wires: &ReportOutput) -> Ve
         );
     }
 
-    // 2. Mount: rails and ducts, then devices in reading order.
+    // 2. Drill: the holes and cut-outs of the plate drawing, one tool at a
+    // time (smallest hole first), then the cut-outs.
+    let drilling = plate_documents(project, enclosure.id).map(|(_, table)| table);
+    let mut drill = Section::new(
+        &key("drill"),
+        &title(2, "Drill"),
+        columns(&[
+            ("no", "No.", 8.0, false),
+            ("item", "Item", 34.0, false),
+            ("surface", "Surface", 14.0, false),
+            ("x_mm", "x mm", 9.0, true),
+            ("y_mm", "y mm", 9.0, true),
+            ("for", "For", 22.0, false),
+            ("done", "Done", 7.0, false),
+        ]),
+    );
+    let table = drilling.unwrap_or_default();
+    let mut n = 0;
+    for (surface, dia, count) in table.summary() {
+        n += 1;
+        drill.push(
+            vec![
+                Cell::text(format!("2.{n}")),
+                Cell::text(format!("Fit drill dia {}: {count} holes", drill_mm(dia))),
+                Cell::text(surface.name()),
+                Cell::Empty,
+                Cell::Empty,
+                Cell::Empty,
+                done(),
+            ],
+            vec![source],
+        );
+    }
+    for hole in &table.holes {
+        n += 1;
+        drill.push(
+            vec![
+                Cell::text(format!("2.{n}")),
+                Cell::text(format!("Hole dia {}", drill_mm(hole.dia))),
+                Cell::text(hole.surface.name()),
+                mm(hole.x),
+                mm(hole.y),
+                Cell::text(hole.source.clone()),
+                done(),
+            ],
+            vec![source],
+        );
+    }
+    for cut in &table.cutouts {
+        n += 1;
+        drill.push(
+            vec![
+                Cell::text(format!("2.{n}")),
+                Cell::text(format!("Cut-out {}", cut.shape.describe())),
+                Cell::text(cut.surface.name()),
+                mm(cut.x),
+                mm(cut.y),
+                Cell::text(cut.source.clone()),
+                done(),
+            ],
+            vec![source],
+        );
+    }
+    if n == 0 {
+        drill.push(
+            vec![
+                Cell::text("2.1"),
+                Cell::text("No holes or cut-outs to make"),
+                Cell::Empty,
+                Cell::Empty,
+                Cell::Empty,
+                Cell::Empty,
+                Cell::Empty,
+            ],
+            vec![source],
+        );
+    }
+
+    // 3. Mount: rails and ducts, then devices in reading order.
     let mut mount = Section::new(
         &key("mount"),
-        &title(2, "Mount"),
+        &title(3, "Mount"),
         columns(&[
             ("no", "No.", 8.0, false),
             ("item", "Item", 24.0, false),
@@ -317,7 +394,7 @@ fn cabinet(project: &Project, enclosure: &Structure, wires: &ReportOutput) -> Ve
         n += 1;
         mount.push(
             vec![
-                Cell::text(format!("2.{n}")),
+                Cell::text(format!("3.{n}")),
                 Cell::text(format!("{} {}", piece.mark, piece.name())),
                 Cell::text(format!(
                     "{} mm {}",
@@ -369,7 +446,7 @@ fn cabinet(project: &Project, enclosure: &Structure, wires: &ReportOutput) -> Ve
         };
         mount.push(
             vec![
-                Cell::text(format!("2.{n}")),
+                Cell::text(format!("3.{n}")),
                 Cell::text(device.tag.to_string()),
                 Cell::text(part_text(project, device)),
                 Cell::text(on),
@@ -382,10 +459,10 @@ fn cabinet(project: &Project, enclosure: &Structure, wires: &ReportOutput) -> Ve
         );
     }
 
-    // 3. Wire: the wire list's connections with an end in this cabinet.
+    // 4. Wire: the wire list's connections with an end in this cabinet.
     let mut wire = Section::new(
         &key("wire"),
-        &title(3, "Wire"),
+        &title(4, "Wire"),
         columns(&[
             ("no", "No.", 8.0, false),
             ("number", "Wire no.", 12.0, false),
@@ -423,7 +500,7 @@ fn cabinet(project: &Project, enclosure: &Structure, wires: &ReportOutput) -> Ve
             }
             wire.push(
                 vec![
-                    Cell::text(format!("3.{n}")),
+                    Cell::text(format!("4.{n}")),
                     at(row, "number"),
                     Cell::text(from),
                     Cell::text(to),
@@ -439,10 +516,10 @@ fn cabinet(project: &Project, enclosure: &Structure, wires: &ReportOutput) -> Ve
     }
     let wires_here = wire.rows.len();
 
-    // 4. Label: one per placed device.
+    // 5. Label: one per placed device.
     let mut label = Section::new(
         &key("label"),
-        &title(4, "Label"),
+        &title(5, "Label"),
         columns(&[
             ("no", "No.", 8.0, false),
             ("text", "Label text", 30.0, false),
@@ -457,7 +534,7 @@ fn cabinet(project: &Project, enclosure: &Structure, wires: &ReportOutput) -> Ve
             .map_or_else(String::new, |p| format!(" on {}", p.mark));
         label.push(
             vec![
-                Cell::text(format!("4.{}", i + 1)),
+                Cell::text(format!("5.{}", i + 1)),
                 Cell::text(device.tag.to_string()),
                 Cell::text(format!("{}{rail}", part_text(project, device))),
                 done(),
@@ -466,10 +543,10 @@ fn cabinet(project: &Project, enclosure: &Structure, wires: &ReportOutput) -> Ve
         );
     }
 
-    // 5. Check: what the model knows, then the checks a person does.
+    // 6. Check: what the model knows, then the checks a person does.
     let mut check = Section::new(
         &key("check"),
-        &title(5, "Check"),
+        &title(6, "Check"),
         columns(&[
             ("no", "No.", 8.0, false),
             ("check", "Check", 44.0, false),
@@ -536,6 +613,14 @@ fn cabinet(project: &Project, enclosure: &Structure, wires: &ReportOutput) -> Ve
         ));
     }
     rows.push((
+        "Every drill pattern could be read".into(),
+        if table.problems.is_empty() {
+            "yes".into()
+        } else {
+            format!("unreadable: {}", table.problems.join("; "))
+        },
+    ));
+    rows.push((
         "Wire lengths are measured, not estimated".into(),
         if wires_here == 0 {
             "no wires in this cabinet".into()
@@ -553,7 +638,7 @@ fn cabinet(project: &Project, enclosure: &Structure, wires: &ReportOutput) -> Ve
     for (i, (what, result)) in rows.into_iter().enumerate() {
         check.push(
             vec![
-                Cell::text(format!("5.{}", i + 1)),
+                Cell::text(format!("6.{}", i + 1)),
                 Cell::text(what),
                 Cell::text(result),
                 done(),
@@ -565,7 +650,7 @@ fn cabinet(project: &Project, enclosure: &Structure, wires: &ReportOutput) -> Ve
     for (i, what) in ["Built by (name)", "Date"].into_iter().enumerate() {
         check.push(
             vec![
-                Cell::text(format!("5.{}", at + i + 1)),
+                Cell::text(format!("6.{}", at + i + 1)),
                 Cell::text(what),
                 Cell::Empty,
                 Cell::Empty,
@@ -574,7 +659,7 @@ fn cabinet(project: &Project, enclosure: &Structure, wires: &ReportOutput) -> Ve
         );
     }
 
-    vec![prepare, mount, wire, label, check]
+    vec![prepare, drill, mount, wire, label, check]
 }
 
 /// Rails before ducts in the cutting group order.

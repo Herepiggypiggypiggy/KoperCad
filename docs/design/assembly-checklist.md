@@ -15,16 +15,17 @@ not a proposed default page; the user asks for it when a cabinet is ready to
 build. It reads only the model and the existing wire list, so it stays live
 through `LiveReports` and never recomputes wiring data itself.
 
-For every enclosure with a mounting plate it makes five sections, keyed
+For every enclosure with a mounting plate it makes six sections, keyed
 `"{tag}:{step}"` and titled `"{tag}  N Name"`:
 
 | Step | Key suffix | Content |
 | --- | --- | --- |
 | 1 Prepare | `prepare` | The plate (size, margin), then every rail and duct cut, grouped by kind and length with a quantity and the marks (R1, R2, D1) |
-| 2 Mount | `mount` | Rails and ducts by position on the plate, then devices in reading order: part, rail and offset or "plate", x, y, turn |
-| 3 Wire | `wire` | The wire list rows that have an end in this cabinet, with length and its basis (routed, free air, estimate) |
-| 4 Label | `label` | One line per placed device: the tag text to print |
-| 5 Check | `check` | Facts from the model, then the checks a person does, then Built by and Date |
+| 2 Drill | `drill` | One line per drill to fit (surface and diameter, smallest first), then every hole and cut-out from the plate drawing's drill table (`novo_layout::model::plate_documents`) with surface, x, y and what it is for (a device tag or `Rail n`) |
+| 3 Mount | `mount` | Rails and ducts by position on the plate, then devices in reading order: part, rail and offset or "plate", x, y, turn |
+| 4 Wire | `wire` | The wire list rows that have an end in this cabinet, with length and its basis (routed, free air, estimate) |
+| 5 Label | `label` | One line per placed device: the tag text to print |
+| 6 Check | `check` | Facts from the model, then the checks a person does, then Built by and Date |
 
 Every section ends in a Done column holding `[ ]` (`ASSEMBLY_BOX`), so the
 printed page can be ticked and the CSV opens as a work list.
@@ -43,19 +44,24 @@ printed page can be ticked and the CSV opens as a work list.
   that holds reads "yes"; one that does not names what is wrong.
 - With no plated enclosure the report is a single note saying so.
 
-## 3. Not in the first PR
+## 3. Entry point and what is still to come
 
-- **Drill table.** Waits on the plate drawing work (#397,
-  `model::plate_documents` and `DrillTable`). Added as a step between Prepare
-  and Mount once it merges.
-- **PDF.** Waits on the stand-alone report PDF (#404, `ReportPdfOptions`). The
-  sections already carry a Done column; the PDF adds `row_mm` for the sign-off
-  rows.
+- **Where it is now.** Engine only: `AssemblyChecklist` is a `Report` that a
+  caller registers with `LiveReports::register`. It is deliberately not in
+  `standard_reports()`: that list feeds the Excel workbook, the Python export
+  and several tests that count the built-in reports, and the checklist is a
+  workshop document, not a workbook sheet. The app has no menu for it yet.
+- **In-app entry (follow-up).** A palette command "Export assembly checklist"
+  (`export.assembly`), which writes the PDF beside the project like Export
+  PDF does. It needs the stand-alone report PDF (#404, `ReportPdfOptions`),
+  and adds `row_mm` for the sign-off rows.
 - **Machine files.** Skipped until a machine is named.
 
 ## 4. Tests
 
 `crates/novo-reports/tests/assembly.rs` runs against the Gate 1 motor starter:
-step order and titles, cut grouping, mount order, wire filtering against the
-wire list, labels, check text and sign lines, overlap, no plate, two cabinets,
-determinism, live update and CSV.
+step order and titles, cut grouping, the drill tools, holes and cut-outs with
+rail holes and a door cut-out, an empty drill step and unreadable patterns in
+the check, mount order, wire filtering against the wire list, labels, check text
+and sign lines, overlap, no plate, two cabinets, determinism, live update and
+CSV.
