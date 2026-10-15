@@ -1,0 +1,115 @@
+# Cabinet track, lesson 6. Sample: the finished cabinet of rails-and-ducts. Part losses in the
+# sample: -F1 6 W, -K1 3 W, -F2 4 W, -F3 1.5 W, -T1 20 W (34.5 W in all).
+#
+# NOT ON MAIN yet (keep status = "draft" until they are):
+#   - the Heat layer and its legend strip: #406
+#   - the enclosure heat balance and cooling size in the app (engine: novo_layout::sizing, #402,
+#     no UI yet) and the enclosure catalog; the last two steps are written ahead of it
+format = 1
+id = "heat-and-sizing"
+version = 1
+status = "draft"
+title = "Where it gets hot, and how big the cabinet must be"
+title_nl = "Waar het warm wordt en hoe groot de kast moet zijn"
+summary = "Turn on the heat layer, find the hot spot, move the transformer, and see what the heat means for the enclosure."
+summary_nl = "Zet de warmtelaag aan, vind de hotspot, verplaats de transformator en zie wat de warmte betekent voor de kast."
+track = "cabinet"
+order = 60
+level = "intermediate"
+minutes = 8
+topics = ["cabinet", "heat", "sizing"]
+needs = ["cabinet-layout"]
+next = ["panel-plate-drawing"]
+project = "../rails-and-ducts/finished.json"
+
+[[step]]
+id = "open-cabinet"
+title = "Open the cabinet"
+text = "Press {key:view.cabinet}. Every part in this project carries its {tip:power-loss} in watts."
+point = { ui = "switcher.cabinet" }
+expect = { command = "view.cabinet" }
+solve = [ { command = "view.cabinet" } ]
+
+[[step]]
+id = "heat-on"
+title = "Turn on the Heat layer"
+text = "Click **Heat**. A coloured {tip:heat-map} appears under the devices, with a legend along the bottom."
+point = { ui = "cabinet.heat" }
+expect = { clicked = "cabinet.heat" }
+
+[[step]]
+id = "read-legend"
+title = "Read the legend"
+text = """
+The legend gives the total known loss, the devices with no loss data and the biggest source.
+Here the biggest source is the transformer **-T1** with 20 W.
+"""
+point = { ui = "cabinet.heat" }
+note = [
+  { ui = "cabinet.heat", text = "Colour bands have fixed limits, so two plates compare fairly" },
+]
+
+[[step]]
+id = "unknown"
+title = "Unknown is not zero"
+text = """
+A device whose part has no loss value is listed as unknown and left out of the map.
+Totals that depend on it say "at least". Fill in the part to remove the warning.
+"""
+point = { ui = "cabinet.heat" }
+
+[[step]]
+id = "top-third"
+title = "Heat rises"
+text = """
+The strip also says how much of the heat sits in the upper third of the plate.
+Warm air rises, so a hot device is better low on the plate than next to the top.
+"""
+point = { ui = "cabinet.heat" }
+
+[[step]]
+id = "move-t1"
+title = "Move the transformer down"
+text = """
+Drag **-T1** to the lower part of the plate. The map and the top-third share change as you drop it.
+"""
+point = { ui = "cabinet.canvas" }
+expect = { signal = "cabinet_dropped" }
+
+[[step]]
+id = "planning-value"
+title = "It is a planning aid"
+text = """
+The map shows where heat collects, not a temperature. The legend says so: use the enclosure maker's sizing tool for the final word.
+"""
+point = { ui = "cabinet.heat" }
+
+[[step]]
+id = "balance"
+title = "What the heat means for the box"
+text = """
+Run {key:cabinet.size-enclosure} (**Size the enclosure**). With the cabinet's size and the room it stands in, KoperCAD works out the temperature rise of the whole cabinet.
+"""
+# NOT ON MAIN: the sizing UI (the command id comes from the Reports hub branch #452). Engine:
+# novo_layout::sizing::thermal (IEC 60890 effective surface).
+point = { ui = "cabinet.sizing" }
+expect = { command = "cabinet.size-enclosure" }
+solve = [ { command = "cabinet.size-enclosure" } ]
+
+[[step]]
+id = "cooling"
+title = "Does it need a fan?"
+text = """
+If the walls cannot lose the heat, the sizing says how much cooling is needed and what fan airflow that is.
+Try the next size up from your enclosure list.
+"""
+# NOT ON MAIN: as above, plus the enclosure catalog (a CSV list the user edits).
+point = { ui = "cabinet.sizing" }
+expect = { clicked = "cabinet.sizing.recommend" }
+
+[[step]]
+id = "done"
+title = "Heat is part of the layout"
+text = """
+You found the hot spot and moved it. Next: the drawing that gets the plate drilled.
+"""
