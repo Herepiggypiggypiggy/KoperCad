@@ -116,5 +116,8 @@ claude/data-model-amzaxu origin/main`, then new PR for new work.
   `height` (cross-section mm, 0 while unknown; file fields only when set). `MoveRail` moves
   the devices on the rail with it; also `SetRailSize { rail, length, width, height }` and
   `DeleteRail`.
+- Drawing standard: `ProjectRules.standard: String`, the symbol pack id (`iec`, `nfpa`; lowercase
+  letters, digits, `_`, `-`); empty means IEC; file field only when set. Set through
+  `SetProjectInfo` (undoable); `ProjectRules::is_standard_id` is the check.
 - PRs get squash-merged: rebase follow-ups with `git rebase --onto origin/main <old-head>`.
 - Commit trailers: Co-Authored-By Claude line + Claude-Session link (see git log).
