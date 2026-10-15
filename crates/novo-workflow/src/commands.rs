@@ -697,6 +697,27 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "heat.toggle",
+        "Show or hide heat",
+        "View",
+        &["heat", "temperature", "thermal", "map", "cabinet"],
+        Needs::Project,
+    ),
+    cmd(
+        "heat.airflow",
+        "Show or hide airflow",
+        "View",
+        &["heat", "air", "flow", "streamlines", "cabinet"],
+        Needs::Project,
+    ),
+    cmd(
+        "heat.contours",
+        "Show or hide heat contours",
+        "View",
+        &["heat", "contour", "lines", "isotherms", "cabinet"],
+        Needs::Project,
+    ),
+    cmd(
         "view.toggle_marks",
         "Show or hide marks",
         "View",
