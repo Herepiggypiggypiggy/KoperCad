@@ -46,6 +46,7 @@ mod plc_link;
 mod potentials;
 mod preferences;
 mod project_settings;
+mod protection;
 mod reports;
 mod revisions;
 mod sheets;
@@ -84,6 +85,8 @@ mod numbering_tests;
 mod onboarding_tests;
 #[cfg(test)]
 mod outline_tests;
+#[cfg(test)]
+mod protection_tests;
 #[cfg(test)]
 mod variants_tests;
 
@@ -198,6 +201,7 @@ pub struct NovoApp {
     cabinet: cabinet::CabinetState,
     /// The "Size the enclosure" panel and the Enclosures list.
     sizing: sizing::SizingState,
+    protection: protection::ProtectionState,
     /// The outline flyout is showing over the canvas.
     outline_open: bool,
     /// What the outline lists.
@@ -270,6 +274,7 @@ impl NovoApp {
             workspace: workspace::Workspace::Schematic,
             cabinet: cabinet::CabinetState::new(),
             sizing: sizing::SizingState::new(),
+            protection: protection::ProtectionState::new(),
             outline_open: false,
             outline_mode: OutlineMode::Pages,
             breadcrumb_link: None,
@@ -394,7 +399,8 @@ impl NovoApp {
             | Action::ZoomToFit
             | Action::SizeEnclosure
             | Action::EnclosureList
-            | Action::MotorStart => open,
+            | Action::Protection => open,
+            Action::MotorStart => open,
             Action::ShowCabinet => self
                 .workspace_unavailable(workspace::Workspace::Cabinet)
                 .is_none(),
@@ -443,6 +449,7 @@ impl NovoApp {
                 self.switch_workspace(workspace::Workspace::Cabinet);
                 self.sizing.editor_open = true;
             }
+            Action::Protection => self.protection.open = true,
             Action::MotorStart => self.open_motor_start(),
             Action::PinOutline => {
                 let pinned = !self.outline_pinned();
@@ -862,6 +869,7 @@ impl NovoApp {
         self.generate_window(&ctx);
         self.issue_revision_dialog(&ctx);
         self.compare_window(&ctx);
+        self.protection_window(&ctx);
         self.faults_window(&ctx);
         self.numbering_window(&ctx);
         self.page_form_dialog(&ctx);
