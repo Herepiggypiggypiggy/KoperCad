@@ -27,9 +27,12 @@ pub fn reset_pe_override(tx: &mut Tx<'_>, terminals: &[TerminalId]) -> Result<()
 }
 
 /// Whether a symbol key is an earth/ground symbol that earths its net.
-/// Chassis (`iec/earth/chassis`) is bonding, not protective earth.
+/// Chassis (`earth/chassis`) is bonding, not protective earth. Any pack.
 pub fn is_earth_symbol(key: &str) -> bool {
-    matches!(key, "iec/earth/earth" | "iec/earth/protective_earth")
+    matches!(
+        novo_symbols::Pack::path_of(key),
+        "earth/earth" | "earth/protective_earth"
+    )
 }
 
 /// Terminals that are plain feed-through but sit on an earthed net.
