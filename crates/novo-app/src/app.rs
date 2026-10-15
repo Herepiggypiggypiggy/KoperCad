@@ -8,6 +8,7 @@ mod dock;
 mod drawers;
 mod inspector;
 mod link;
+mod pages;
 mod pdf;
 mod plc;
 mod reports;
@@ -25,7 +26,8 @@ use std::time::{Duration, Instant, SystemTime};
 use eframe::egui;
 
 use crate::actions::Action;
-use novo_core::{Command, ModelError, Outcome, PageId, PageKind};
+use novo_core::{Command, DeviceTag, ModelError, Outcome, PageId, PageKind};
+use pages::{FormKind, PageForm, PageView};
 
 use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows};
 use crate::canvas::{CanvasView, OpenPage};
@@ -123,6 +125,8 @@ pub struct NovoApp {
     breadcrumb_link: Option<egui::Response>,
     /// Text in the outline's page filter.
     page_filter: String,
+    /// Whether the outline files pages by page group or by panel.
+    page_view: PageView,
     /// Pages visited this session, newest first.
     recent_pages: Vec<PageId>,
     /// Window width last frame, which decides whether the outline pins.
@@ -175,6 +179,7 @@ impl NovoApp {
             outline_mode: OutlineMode::Pages,
             breadcrumb_link: None,
             page_filter: String::new(),
+            page_view: PageView::Function,
             recent_pages: Vec::new(),
             window_width: 0.0,
         }
@@ -690,6 +695,7 @@ impl NovoApp {
         self.recovery_dialog(&ctx);
         self.about_dialog(&ctx);
         self.renumber_dialog(&ctx);
+        self.page_form_dialog(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {
             self.run_command(&ctx, id, None);
         }
@@ -723,6 +729,7 @@ impl NovoApp {
         self.show_about
             || self.wb.wheel.is_some()
             || self.wb.renumber.is_some()
+            || self.wb.page_form.is_some()
             || self.backend.recovery_offer().is_some()
     }
 
@@ -925,6 +932,29 @@ impl NovoApp {
             }
             return;
         }
+        ui.horizontal(|ui| {
+            ui.menu_button("New", |ui| {
+                for (label, kind) in [
+                    ("Pages…", FormKind::Pages),
+                    ("Page group…", FormKind::Group),
+                    ("Panel…", FormKind::Panel),
+                ] {
+                    if ui.button(label).clicked() {
+                        self.open_page_form(PageForm::new(kind, "", ""));
+                        ui.close();
+                    }
+                }
+            });
+            for view in [PageView::Function, PageView::Location] {
+                if ui
+                    .selectable_label(self.page_view == view, view.label())
+                    .on_hover_text(view.hover())
+                    .clicked()
+                {
+                    self.page_view = view;
+                }
+            }
+        });
         ui.add(
             egui::TextEdit::singleline(&mut self.page_filter)
                 .hint_text("Filter pages")
@@ -932,7 +962,24 @@ impl NovoApp {
         );
         ui.add_space(4.0);
 
-        let pages = self.page_rows();
+        let mut pages = self.page_rows();
+        if self.page_view == PageView::Location
+            && let Some(doc) = self.backend.document()
+        {
+            let project = doc.project();
+            let key = |r: &PageRow| {
+                project
+                    .page(r.page)
+                    .map(|p| p.structure.clone())
+                    .unwrap_or_default()
+            };
+            pages.sort_by(|a, b| {
+                let (a, b) = (key(a), key(b));
+                novo_core::natural_cmp(&a.location.join("+"), &b.location.join("+")).then_with(
+                    || novo_core::natural_cmp(&a.function.join("="), &b.function.join("=")),
+                )
+            });
+        }
         let filter = self.page_filter.to_lowercase();
         let mut chosen = None;
         egui::ScrollArea::vertical()
@@ -956,9 +1003,13 @@ impl NovoApp {
                 }
                 section_label(ui, "All pages");
                 let mut any = false;
+                let mut shown = DeviceTag::default();
                 for row in &pages {
                     if filter.is_empty() || row.label.to_lowercase().contains(&filter) {
                         any = true;
+                        if filter.is_empty() {
+                            self.structure_headers(ui, row.page, &mut shown);
+                        }
                         if self.page_row(ui, row) {
                             chosen = Some((row.page, row.sheet));
                         }
@@ -974,14 +1025,178 @@ impl NovoApp {
         }
     }
 
-    fn page_row(&self, ui: &mut egui::Ui, row: &PageRow) -> bool {
+    /// The two header levels of the outline where the page's structure
+    /// starts a new one: group then panel in the Function view, panel then
+    /// group in the Location view. A panel filed under several groups says
+    /// so: those pages are one cabinet layout. A page dropped on a header
+    /// moves into that group or panel.
+    fn structure_headers(&mut self, ui: &mut egui::Ui, page: PageId, shown: &mut DeviceTag) {
+        let Some(project) = self.backend.document().map(|d| d.project()) else {
+            return;
+        };
+        let Some(structure) = project.page(page).map(|p| p.structure.clone()) else {
+            return;
+        };
+        let group_of = |t: &DeviceTag| DeviceTag {
+            function: t.function.clone(),
+            ..Default::default()
+        };
+        let panel_of = |t: &DeviceTag| DeviceTag {
+            location: t.location.clone(),
+            ..Default::default()
+        };
+        let linked: Vec<DeviceTag> = project
+            .panels()
+            .into_iter()
+            .find(|p| p.location == panel_of(&structure))
+            .map(|p| p.groups)
+            .unwrap_or_default();
+        let location_first = self.page_view == PageView::Location;
+        let (group, panel) = (group_of(&structure), panel_of(&structure));
+        let (group_changed, panel_changed) = (
+            structure.function != shown.function,
+            structure.location != shown.location,
+        );
+        let drops =
+            std::cell::RefCell::new(Vec::<(PageId, Option<DeviceTag>, Option<DeviceTag>)>::new());
+        let forms = std::cell::RefCell::new(Vec::<PageForm>::new());
+        let group_header = |ui: &mut egui::Ui| {
+            if group.function.is_empty() {
+                return;
+            }
+            let r = ui.strong(group.to_string());
+            if let Some(dropped) = r.dnd_release_payload::<PageId>() {
+                drops
+                    .borrow_mut()
+                    .push((*dropped, Some(group.clone()), None));
+            }
+            r.context_menu(|ui| {
+                if ui.button("New panel in this group…").clicked() {
+                    forms
+                        .borrow_mut()
+                        .push(PageForm::new(FormKind::Panel, &group.to_string(), ""));
+                    ui.close();
+                }
+            });
+        };
+        let mut panel_text = format!("  {panel}");
+        let others = linked.iter().filter(|g| g.function != structure.function);
+        let others: Vec<String> = others.map(|g| g.to_string()).collect();
+        if !others.is_empty() {
+            panel_text.push_str(&format!("  ↔ same layout as {}", others.join(", ")));
+        }
+        let panel_header = |ui: &mut egui::Ui| {
+            if panel.location.is_empty() {
+                return;
+            }
+            let r = ui.label(egui::RichText::new(&panel_text).weak());
+            if let Some(dropped) = r.dnd_release_payload::<PageId>() {
+                drops
+                    .borrow_mut()
+                    .push((*dropped, None, Some(panel.clone())));
+            }
+            r.context_menu(|ui| {
+                if ui.button("New pages in this panel…").clicked() {
+                    forms.borrow_mut().push(PageForm::new(
+                        FormKind::Pages,
+                        &group.to_string(),
+                        &panel.to_string(),
+                    ));
+                    ui.close();
+                }
+            });
+        };
+        let (first_changed, second_changed) = if location_first {
+            (panel_changed, group_changed || panel_changed)
+        } else {
+            (group_changed, group_changed || panel_changed)
+        };
+        if first_changed {
+            ui.add_space(4.0);
+        }
+        if location_first {
+            if first_changed {
+                panel_header(ui);
+            }
+            if second_changed {
+                group_header(ui);
+            }
+        } else {
+            if first_changed {
+                group_header(ui);
+            }
+            if second_changed {
+                panel_header(ui);
+            }
+        }
+        *shown = structure;
+        for (page, g, p) in drops.into_inner() {
+            self.move_page(page, g, p);
+        }
+        if let Some(form) = forms.into_inner().pop() {
+            self.wb.page_form = Some(form);
+        }
+    }
+
+    /// Files `page` under another page group and/or panel, keeping the
+    /// level the drop does not name.
+    fn move_page(&mut self, page: PageId, group: Option<DeviceTag>, panel: Option<DeviceTag>) {
+        let Some(mut structure) = self
+            .backend
+            .document()
+            .and_then(|d| d.project().page(page).map(|p| p.structure.clone()))
+        else {
+            return;
+        };
+        if let Some(g) = group {
+            structure.function = g.function;
+        }
+        if let Some(p) = panel {
+            structure.location = p.location;
+        }
+        if let Some(Err(e)) = self.execute(Command::SetPageStructure { page, structure }) {
+            self.message(Level::Error, format!("Could not move the page: {e}"));
+        }
+    }
+
+    fn page_row(&mut self, ui: &mut egui::Ui, row: &PageRow) -> bool {
         let selected = self.current_page == Some(row.page) && self.wb.sheet == row.sheet;
         let label = row.label.as_str();
-        ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
-            ui.add(egui::Button::selectable(selected, label).min_size(egui::vec2(0.0, 22.0)))
-        })
-        .inner
-        .clicked()
+        let response = ui
+            .with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
+                ui.add(
+                    egui::Button::selectable(selected, label)
+                        .min_size(egui::vec2(0.0, 22.0))
+                        .sense(egui::Sense::click_and_drag()),
+                )
+            })
+            .inner;
+        response.dnd_set_drag_payload(row.page);
+        let structure = self
+            .backend
+            .document()
+            .and_then(|d| d.project().page(row.page).map(|p| p.structure.clone()));
+        response.context_menu(|ui| {
+            if let Some(s) = structure
+                && ui.button("Move to group or panel…").clicked()
+            {
+                let group = DeviceTag {
+                    function: s.function.clone(),
+                    ..Default::default()
+                };
+                let panel = DeviceTag {
+                    location: s.location.clone(),
+                    ..Default::default()
+                };
+                self.wb.page_form = Some(PageForm::new(
+                    FormKind::Move(row.page),
+                    &group.to_string(),
+                    &panel.to_string(),
+                ));
+                ui.close();
+            }
+        });
+        response.clicked()
     }
 
     /// Below the pinning width the outline floats over the canvas, opened
