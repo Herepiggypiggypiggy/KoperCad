@@ -16,8 +16,14 @@
 
 mod coupling;
 mod devices;
+pub mod fault;
 mod loads;
+pub mod network;
 mod plc;
+pub mod protection;
+pub mod scenario;
+pub mod timing;
+pub mod trace;
 
 pub use coupling::{
     Clock, DEFAULT_DELAY, Settled, delay_seconds, is_coil, is_timer_contact, settle, settle_timed,
