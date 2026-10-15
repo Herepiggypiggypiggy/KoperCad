@@ -597,6 +597,7 @@ pub fn place_all_rules(
             x: usable.x,
             y: *y,
             length: usable.w,
+            vertical: false,
         });
         for (i, at) in &row.items {
             plan.placements.push(Proposed {
