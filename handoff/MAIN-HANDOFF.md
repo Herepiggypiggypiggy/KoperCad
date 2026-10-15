@@ -3,6 +3,14 @@
 For a fresh cloud session that takes over as **integration lead**: the role that coordinates the threads and merges PRs.
 Last updated 2026-10-14 17:17 UTC (final from the first lead session) by the integration lead (session_011PfTJ1QaP1JQJPwXcFnxBE).
 
+## 0b. State at 2026-10-15 02:55 UTC (integration lead cse_01FiLvRBKEcNNHbQEGhYyL1S)
+- **Main 89971f4.** main + #87 + #111 + #117 + #115 tested together: fmt and clippy -D warnings clean, `cargo test --workspace` 679 passed, 0 failed, 2 ignored (Linux). Since 21:20 this lead merged 35 PRs (#80 through #117); see `handoff/integration-lead/PROGRESS.md`.
+- **CI still down** (Actions billing); CI fails within seconds on every push. Local checks remain the signal; Windows unverified.
+- **Decisions since §0a:** contactor K by default, project rule for Q; MCB F, MPCB Q, overload F (DESIGN §6, #92). Generated sheets are 20a, 20b … skipping i, l and o, never dotted (#108, #110, #115). Pending #116: page names never contain a dot, and inserted pages take letters (3a). The terminal article comes from `Terminal.part`, else strip `terminal_part.<kind>`, through one resolver (#99). Structure nodes and Dismissal records are in core (#117). WS-08 owns one shared `letter_code(function)` table in novo-symbols.
+- **Open PRs:** #105 WS-01 focus (needs A's delta READY on 2a83164), #112 WS-08 (A), #113 WS-06 (A + design), #116 DESIGN page names (design reviewer).
+- **Queued next:** WS-01 bundles (accept-all/Delete+Untitled, drawers, Issues outline, pan, dock+inspector); WS-03 perf then drawing and the F5 gap; WS-02 page freeze then blocks; WS-06 next_page_name letters after #116; WS-11 terminal suggestions onto Dismissal records and per-terminal `part` retired.
+- Threads that stopped around 22:30 (app shell, canvas, editor, keyboard workflow, design reviewer) were nudged at 02:50.
+
 ## 0a. Lead change (2026-10-14 21:20 UTC)
 - **Integration lead from 21:20 UTC:** the project thread "Catch up and resume the build" (cse_01FiLvRBKEcNNHbQEGhYyL1S, branch `claude/project-thread-6lmg5c`). The old lead thread (cse_011PfTJ1QaP1JQJPwXcFnxBE) handed over to it; the cloud coordinator (session_01DZ68tTULUv7Uhe8ecKbC47) is stopped. There is one lead. Send verdicts and merge requests to it.
 - **CI still down:** Actions jobs fail with "recent account payments have failed or your spending limit needs to be increased". Owner told. Local fmt + clippy + tests remain the CI signal.
