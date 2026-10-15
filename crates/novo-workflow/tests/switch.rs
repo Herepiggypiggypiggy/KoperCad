@@ -2,7 +2,7 @@
 //! step, symbols the target pack cannot draw are reported.
 
 use novo_core::{DeviceTag, Document, Pin, Placement, Point, SymbolId, SymbolRole};
-use novo_symbols::{Library, Pack};
+use novo_symbols::Pack;
 use novo_workflow::switch::{current, plan};
 
 fn put(doc: &mut Document, key: &str, device: Option<&str>, x: f64) -> SymbolId {
@@ -36,17 +36,10 @@ fn put(doc: &mut Document, key: &str, device: Option<&str>, x: f64) -> SymbolId 
     id
 }
 
-/// An IEC id that exists in IEC but not in NFPA.
+/// An IEC id the NFPA pack does not have (every shipped IEC symbol has a twin
+/// today, so this one is made up, like a symbol added to IEC first).
 fn iec_only() -> String {
-    let nfpa = Library::shared(Pack::Nfpa);
-    Library::shared(Pack::Iec)
-        .iter()
-        .map(|s| s.id.clone())
-        .find(|id| {
-            nfpa.get(&Pack::counterpart(id, Pack::Nfpa).unwrap())
-                .is_none()
-        })
-        .expect("some IEC symbol has no NFPA twin")
+    "iec/contacts/future_device".to_owned()
 }
 
 #[test]

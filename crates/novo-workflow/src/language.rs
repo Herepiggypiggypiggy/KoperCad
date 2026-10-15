@@ -63,6 +63,11 @@ pub const DUTCH: &[Aliases] = &[
         &["revisie"],
         &["uitgeven", "versie", "vrijgeven"],
     ),
+    nl(
+        "revision.compare",
+        &["vergelijk"],
+        &["verschil", "revisies vergelijken"],
+    ),
     nl("file.quit", &[], &["afsluiten", "stoppen"]),
     // Draw
     nl(
@@ -198,6 +203,16 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("view.full_screen", &[], &["volledig scherm"]),
     nl("view.cabinet_table", &[], &["kast als tabel", "tabel"]),
+    nl(
+        "cabinet.size-enclosure",
+        &[],
+        &["kast dimensioneren", "kastmaat", "koeling", "warmte"],
+    ),
+    nl(
+        "cabinet.enclosures",
+        &[],
+        &["kasten", "kastenlijst", "behuizingen"],
+    ),
     nl("view.changes", &["wijzigingen"], &["vergelijk", "verschil"]),
     nl(
         "sim.live",

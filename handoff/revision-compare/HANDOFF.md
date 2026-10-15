@@ -20,3 +20,10 @@ name the cache counter when the app caches, batch-move folding.
 Resume: `cargo test -p novo-revisions`; fmt and clippy as CLAUDE.md.
 Rules: PRs stay drafts, no builds, no push after READY, message the
 reviewer with the head SHA after each push.
+
+## App PR (claude/revision-compare-app)
+Compare window (`crates/novo-app/src/app/compare.rs`), command
+`revision.compare` ("Compare revisions", verb `compare`), and a "Compare…"
+button on the Changes card. Next: read-only revision view on the canvas,
+note field in the Issue window, `kind_name` match for sheet kinds in
+novo-py `comparison_json` (reviewer nit on #450).
