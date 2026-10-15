@@ -510,10 +510,8 @@ fn move_and_rotate_keep_wires_connected_and_orthogonal() {
     editor.hover(&doc, page, p(120.0, 120.0), TOL);
     let preview = editor.preview(&doc, page);
     assert_eq!(preview.symbols[0].placement.origin, p(120.0, 120.0));
-    assert_eq!(
-        editor.click(&mut doc, page, p(120.0, 120.0), TOL),
-        Clicked::Edited
-    );
+    let dropped = editor.click(&mut doc, page, p(120.0, 120.0), TOL);
+    assert_eq!(dropped, Clicked::Edited, "{:?}", editor.notice());
     assert_eq!(
         doc.project().symbol(b).unwrap().placement.origin,
         p(120.0, 120.0)
@@ -1668,4 +1666,108 @@ fn moving_one_end_reroutes_clear_or_is_refused_when_its_pin_lies_on_another_wire
     });
     assert!(result.is_err());
     assert_eq!(doc.undo_depth(), depth);
+}
+
+#[test]
+fn a_refused_final_click_keeps_the_wire_in_progress() {
+    let (mut doc, page, mut editor, [a, b, c]) = three_contacts();
+    editor.set_wire_mode(WiringMode::Lines);
+    editor.begin_wire();
+    click_pin(&mut editor, &mut doc, page, a, "14");
+    editor.click(&mut doc, page, p(40.0, 72.0), TOL);
+    editor.click(&mut doc, page, p(80.0, 72.0), TOL);
+    click_pin(&mut editor, &mut doc, page, b, "14");
+    assert_eq!(doc.project().wires().count(), 1);
+    // A second wire from the third contact: down the side, then onto the
+    // first wire's horizontal run, which it would then lie along.
+    let top = pin_pos(&doc, c, "13");
+    click_pin(&mut editor, &mut doc, page, c, "13");
+    editor.click(&mut doc, page, p(top.x, 72.0), TOL);
+    let depth = doc.undo_depth();
+    assert_eq!(
+        editor.click(&mut doc, page, p(60.0, 72.0), TOL),
+        Clicked::Refused
+    );
+    assert_eq!(editor.notice(), Some("Overlaps another wire"));
+    // Nothing was stored and the wire in hand still has its start and point.
+    assert_eq!(doc.undo_depth(), depth);
+    let Tool::Wire(w) = editor.tool() else {
+        panic!("still wiring")
+    };
+    assert!(w.start.is_some());
+    assert_eq!(w.corners, vec![p(top.x, 72.0)]);
+    // Back up one point and finish somewhere clear.
+    editor.key(&mut doc, EditorKey::Back, &[]);
+    assert_eq!(
+        editor.click(&mut doc, page, p(60.0, 90.0), TOL),
+        Clicked::Step
+    );
+}
+
+#[test]
+fn a_line_cannot_run_back_over_the_wire_being_drawn() {
+    let (mut doc, page, mut editor, [a, _, _]) = three_contacts();
+    editor.set_wire_mode(WiringMode::Lines);
+    editor.begin_wire();
+    click_pin(&mut editor, &mut doc, page, a, "14");
+    editor.click(&mut doc, page, p(40.0, 72.0), TOL);
+    editor.click(&mut doc, page, p(80.0, 72.0), TOL);
+    // Back along the leg just drawn.
+    assert_eq!(
+        editor.click(&mut doc, page, p(60.0, 72.0), TOL),
+        Clicked::Refused
+    );
+    assert_eq!(
+        editor.notice(),
+        Some("A line cannot run back over the wire")
+    );
+    let Tool::Wire(w) = editor.tool() else {
+        panic!("still wiring")
+    };
+    assert_eq!(w.corners.len(), 2);
+    // The preview marks it and keeps the wire up to the last legal point.
+    editor.hover(&doc, page, p(60.0, 72.0), TOL);
+    let preview = editor.preview(&doc, page);
+    assert!(!preview.blocked.is_empty());
+    assert_eq!(preview.wire.last(), Some(&p(80.0, 72.0)));
+}
+
+#[test]
+fn a_mode_switch_from_a_diagonal_corners_point_still_ends_orthogonal_on_a_pin() {
+    let (mut doc, page, mut editor, [a, b, _]) = three_contacts();
+    editor.begin_wire();
+    click_pin(&mut editor, &mut doc, page, a, "14");
+    // A free Corners point off both axes of the pin, then Lines.
+    editor.click(&mut doc, page, p(60.0, 80.0), TOL);
+    editor.key(&mut doc, EditorKey::WireMode, &[]);
+    assert_eq!(
+        click_pin(&mut editor, &mut doc, page, b, "14"),
+        Clicked::Edited
+    );
+    let wire = doc.project().wires().next().unwrap();
+    let mut points = vec![pin_pos(&doc, a, "14")];
+    points.extend(wire.route.iter().copied());
+    points.push(pin_pos(&doc, b, "14"));
+    assert!(
+        points
+            .windows(2)
+            .all(|s| { (s[0].x - s[1].x).abs() < 1e-9 || (s[0].y - s[1].y).abs() < 1e-9 })
+    );
+    assert!(points.contains(&p(60.0, 80.0)));
+}
+
+#[test]
+fn dropping_a_moved_selection_onto_another_wire_is_refused_in_the_editor() {
+    let (mut doc, page, moving) = two_columns();
+    let mut editor = Editor::default();
+    editor.hover(&doc, page, p(80.0, 40.0), TOL);
+    assert!(editor.begin_move(&moving));
+    let depth = doc.undo_depth();
+    assert_eq!(
+        editor.click(&mut doc, page, p(40.0, 40.0), TOL),
+        Clicked::Refused
+    );
+    assert!(editor.notice().is_some());
+    assert_eq!(doc.undo_depth(), depth);
+    assert!(page_has_no_overlaps(&doc, page));
 }

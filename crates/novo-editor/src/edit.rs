@@ -988,16 +988,24 @@ fn reroute_with(tx: &mut Tx<'_>, wire: WireId, refuse: bool) -> Result<()> {
         endpoint_direction(project, w.from),
         endpoint_direction(project, w.to),
     );
+    // The wire's own old bends no longer lead anywhere: clear them so they
+    // do not count as another wire's stretch.
+    let (from_wires, to_wires) = (
+        pin_wires(tx.project(), w.from, &[wire]),
+        pin_wires(tx.project(), w.to, &[wire]),
+    );
+    let page = w.page;
+    tx.update::<Wire>(wire, |w| w.route.clear())?;
     let planned = plan_route(
-        project,
-        w.page,
+        tx.project(),
+        page,
         a,
         from_dir,
         &[],
         b,
         to_dir,
-        &pin_wires(project, w.from, &[wire]),
-        &pin_wires(project, w.to, &[wire]),
+        &from_wires,
+        &to_wires,
     );
     let bends = match planned {
         Ok(bends) => bends,
