@@ -1855,6 +1855,7 @@ dependencies = [
  "novo-storage",
  "novo-symbols",
  "novo-terminals",
+ "novo-tests",
  "novo-theme",
  "novo-workflow",
  "novo-xref",

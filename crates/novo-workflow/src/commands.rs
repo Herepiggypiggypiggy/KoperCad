@@ -130,6 +130,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["load"],
         Needs::Nothing,
     ),
+    cmd(
+        "file.example",
+        "Open example",
+        "Project",
+        &["sample", "motor starter", "demo"],
+        Needs::Nothing,
+    ),
     cmd("file.save", "Save", "Project", &[], Needs::Project),
     cmd(
         "file.save_as",
