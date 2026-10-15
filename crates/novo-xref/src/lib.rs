@@ -66,6 +66,7 @@ mod function;
 mod index;
 mod link;
 mod nav;
+mod number;
 
 pub use actions::XrefAction;
 pub use function::{ContactKind, FromKey, Functions};
@@ -75,3 +76,4 @@ pub use index::{
 };
 pub use link::{LINK_LABEL, LinkError, can_link, link_command, link_to_device_command};
 pub use nav::{Go, JumpHistory, Navigator, Place};
+pub use number::{auto_name_interruption, auto_name_interruptions, next_interruption_name};

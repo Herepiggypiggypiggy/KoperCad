@@ -803,3 +803,40 @@ fn link_to_a_named_device_is_one_undo_step() {
     f.doc.undo().unwrap(); // the link
     assert_ne!(f.doc.project().symbol(lone).unwrap().device(), Some(f.k1));
 }
+
+#[test]
+fn interruption_points_are_numbered_automatically() {
+    use novo_xref::{auto_name_interruptions, next_interruption_name};
+    let mut doc = Document::default();
+    let ((a, b, c), _) = doc
+        .transact("Draw", |tx| {
+            let p = tx.add_page("1")?;
+            let arrow = |tx: &mut Tx<'_>, x, name: &str| {
+                tx.place_symbol(
+                    p,
+                    "iec/connectivity/interruption",
+                    Placement::at(Point::new(x, 10.0)),
+                    vec![Pin::new("1", 0.0, 0.0)],
+                    SymbolRole::Interruption { name: name.into() },
+                )
+            };
+            Ok((
+                arrow(tx, 10.0, "2")?,
+                arrow(tx, 50.0, "")?,
+                arrow(tx, 90.0, "")?,
+            ))
+        })
+        .unwrap();
+    assert_eq!(next_interruption_name(doc.project()), "1");
+    let (named, _) = doc.transact("Number", auto_name_interruptions).unwrap();
+    assert_eq!(named, vec![b, c]);
+    let name = |id| match &doc.project().symbol(id).unwrap().role {
+        SymbolRole::Interruption { name } => name.clone(),
+        _ => unreachable!(),
+    };
+    assert_eq!(
+        (name(a).as_str(), name(b).as_str(), name(c).as_str()),
+        ("2", "1", "3")
+    );
+    assert_eq!(next_interruption_name(doc.project()), "4");
+}
