@@ -37,3 +37,4 @@
 22:25 UTC #365 69bd421 READY (docs: wheel sentence + hands-on checklist)
 22:40 UTC #377 82a866d READY (contact blade animation, timer ring, reduce motion)
 18:15 UTC #383 2477ae5 CHANGES (design): DESIGN.md sentence for Project settings modal vs Rules document
+18:16 UTC #383 93d4dcb READY (project drawing standard window)
