@@ -1,0 +1,687 @@
+//! Import: what a workbook would change, before anything changes.
+//!
+//! [`plan_import`] compares every row of the sheets with the project and
+//! returns an [`ImportPlan`]: the cell changes (each with the value it
+//! replaces), the rows it refused and why, and the conflicts. Nothing
+//! touches the project until [`ImportPlan::apply`], which makes the
+//! selected changes one undo step.
+//!
+//! # Matching
+//!
+//! A row is matched by its **Id**, never by its tag or name, so renaming
+//! a device, terminal or cable in the sheet renames it in the project.
+//! A row without an Id (a CSV from somewhere else) falls back to the tag
+//! (devices, cables) or strip and name (terminals) when that is unique; wires have
+//! nothing unique to fall back to. A row whose Id is gone from the
+//! project (deleted since the export) is rejected, not recreated: this
+//! import edits what exists and never adds or deletes.
+//!
+//! # Conflicts
+//!
+//! An `.xlsx` export carries a hidden baseline: the values at export time.
+//! For each cell, with `sheet` the value in the file, `project` the value
+//! now and `base` the value at export:
+//!
+//! - `sheet == project`: nothing to do.
+//! - `sheet == base`: the sheet did not touch it; the project's own later
+//!   edit stays.
+//! - `project == base`: the sheet changed it alone: a plain change.
+//! - otherwise both changed it differently: a **conflict**, left out until
+//!   the user takes the sheet's value ([`ImportPlan::resolve`]).
+//!
+//! Without a baseline (CSV, or a rebuilt workbook) every difference is a
+//! plain change, and the plan says so.
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use novo_core::{
+    AnyId, CableId, Command, DeviceId, DeviceTag, Document, ModelError, Project, Record,
+    TerminalId, WireId,
+};
+use novo_parts::{display_value, parse_number};
+
+use super::fields::{Field, Parsed, Slot, apply, fields, parse, property_of_header, read};
+use super::grid::{Cell, Table, TableKind, Workbook};
+
+/// One cell the import would change.
+#[derive(Debug, Clone)]
+pub struct Change {
+    pub id: AnyId,
+    pub table: TableKind,
+    /// The row in the sheet (CSV: the line).
+    pub line: usize,
+    /// Which item the row is, as the project knows it now (`-K1`).
+    pub item: String,
+    pub header: String,
+    /// What the project holds now, as the preview shows it.
+    pub before: String,
+    /// What the sheet says.
+    pub after: String,
+    /// Set when the project changed this cell since the export too: the
+    /// value the export held. Conflicts start unselected.
+    pub conflict: Option<String>,
+    pub selected: bool,
+    field: Field,
+    parsed: Parsed,
+}
+
+/// A row the import did not use, and why.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Rejected {
+    pub table: TableKind,
+    pub line: usize,
+    /// The row as the sheet names it (its tag, or its Id), when it has one.
+    pub item: String,
+    pub reasons: Vec<String>,
+}
+
+/// Which side wins a conflict.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Resolution {
+    /// Take the value in the sheet.
+    Sheet,
+    /// Keep what the project has.
+    Project,
+}
+
+/// Why a plan could not be applied.
+#[derive(Debug, thiserror::Error)]
+pub enum ApplyError {
+    #[error("the project changed after this preview was made; preview the import again")]
+    Outdated,
+    #[error(transparent)]
+    Model(#[from] ModelError),
+}
+
+/// The preview of an import.
+#[derive(Debug, Clone)]
+pub struct ImportPlan {
+    pub changes: Vec<Change>,
+    pub rejected: Vec<Rejected>,
+    /// Things worth knowing that block nothing: ignored columns and
+    /// sheets, rows matched by tag, a missing baseline.
+    pub notes: Vec<String>,
+    /// Things that would be wrong after the import, such as two devices
+    /// ending up with one tag.
+    pub warnings: Vec<String>,
+    /// Rows read, blank rows excluded.
+    pub rows_read: usize,
+    /// Rows that matched and already agree with the project.
+    pub rows_unchanged: usize,
+    /// The project revision the workbook was exported from, if it says.
+    pub exported_revision: Option<u64>,
+    /// The revision this plan was made against.
+    pub revision: u64,
+    /// Whether the workbook carried a baseline (so conflicts are detected).
+    pub has_baseline: bool,
+}
+
+impl ImportPlan {
+    /// The changes that conflict with a later edit in the project.
+    pub fn conflicts(&self) -> impl Iterator<Item = &Change> {
+        self.changes.iter().filter(|c| c.conflict.is_some())
+    }
+
+    /// How many changes would be made.
+    pub fn selected(&self) -> usize {
+        self.changes.iter().filter(|c| c.selected).count()
+    }
+
+    /// Selects or deselects one change.
+    pub fn select(&mut self, index: usize, selected: bool) {
+        if let Some(change) = self.changes.get_mut(index) {
+            change.selected = selected;
+        }
+    }
+
+    /// Settles every conflict the same way.
+    pub fn resolve(&mut self, resolution: Resolution) {
+        for change in self.changes.iter_mut().filter(|c| c.conflict.is_some()) {
+            change.selected = resolution == Resolution::Sheet;
+        }
+    }
+
+    /// Whether applying would do anything.
+    pub fn is_empty(&self) -> bool {
+        self.selected() == 0
+    }
+
+    /// One line for the confirmation dialog.
+    pub fn summary(&self) -> String {
+        let items: BTreeSet<AnyId> = self
+            .changes
+            .iter()
+            .filter(|c| c.selected)
+            .map(|c| c.id)
+            .collect();
+        let conflicts = self.conflicts().count();
+        let mut s = format!(
+            "{} change{} in {} row{}",
+            self.selected(),
+            plural(self.selected()),
+            items.len(),
+            plural(items.len()),
+        );
+        if conflicts > 0 {
+            s.push_str(&format!(
+                ", {conflicts} conflict{} with later edits",
+                plural(conflicts)
+            ));
+        }
+        if !self.rejected.is_empty() {
+            s.push_str(&format!(
+                ", {} row{} rejected",
+                self.rejected.len(),
+                plural(self.rejected.len())
+            ));
+        }
+        s
+    }
+
+    /// The command the selected changes make: one record replacement per
+    /// changed object, in one batch, so a single undo takes it all back.
+    /// `Ok(None)` when nothing is selected. Fails when the project is not
+    /// the one this plan was made against.
+    pub fn command(&self, project: &Project) -> Result<Option<Command>, ApplyError> {
+        if project.revision() != self.revision {
+            return Err(ApplyError::Outdated);
+        }
+        let mut records: BTreeMap<AnyId, Record> = BTreeMap::new();
+        for change in self.changes.iter().filter(|c| c.selected) {
+            let record = match records.get_mut(&change.id) {
+                Some(r) => r,
+                None => {
+                    let Some(record) = project.record(change.id) else {
+                        return Err(ApplyError::Outdated);
+                    };
+                    records.entry(change.id).or_insert(record)
+                }
+            };
+            apply(record, &change.field, &change.parsed);
+        }
+        if records.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(Command::Batch {
+            label: "Import from spreadsheet".into(),
+            commands: records
+                .into_values()
+                .map(|record| Command::Replace { record })
+                .collect(),
+        }))
+    }
+
+    /// Applies the selected changes to the document as one undo step.
+    /// Returns how many objects changed.
+    pub fn apply(&self, doc: &mut Document) -> Result<usize, ApplyError> {
+        let Some(command) = self.command(doc.project())? else {
+            return Ok(0);
+        };
+        let count = match &command {
+            Command::Batch { commands, .. } => commands.len(),
+            _ => 1,
+        };
+        doc.execute(command)?;
+        Ok(count)
+    }
+
+    /// The rejected rows as readable text, one row per line.
+    pub fn rejected_report(&self) -> String {
+        let mut out = String::new();
+        for r in &self.rejected {
+            out.push_str(&format!(
+                "{} row {}{}: {}\n",
+                r.table.name(),
+                r.line,
+                if r.item.is_empty() {
+                    String::new()
+                } else {
+                    format!(" ({})", r.item)
+                },
+                r.reasons.join("; ")
+            ));
+        }
+        out
+    }
+
+    /// The rejected rows as a table to save next to the project: sheet,
+    /// row, item and reasons.
+    pub fn rejected_table(&self) -> Vec<Vec<String>> {
+        let mut rows = vec![vec![
+            "Sheet".to_owned(),
+            "Row".into(),
+            "Item".into(),
+            "Why it was rejected".into(),
+        ]];
+        for r in &self.rejected {
+            rows.push(vec![
+                r.table.name().to_owned(),
+                r.line.to_string(),
+                r.item.clone(),
+                r.reasons.join("; "),
+            ]);
+        }
+        rows
+    }
+}
+
+fn plural(n: usize) -> &'static str {
+    if n == 1 { "" } else { "s" }
+}
+
+fn any_id(kind: TableKind, raw: u64) -> AnyId {
+    match kind {
+        TableKind::Devices => DeviceId(raw).into(),
+        TableKind::Terminals => TerminalId(raw).into(),
+        TableKind::Wires => WireId(raw).into(),
+        TableKind::Cables => CableId(raw).into(),
+    }
+}
+
+/// The row's Id cell, if it holds a usable one.
+fn parse_id(cell: &Cell) -> Result<Option<u64>, String> {
+    let text = cell.as_text();
+    if text.is_empty() {
+        return Ok(None);
+    }
+    // `12`, `#12` or `Device#12`.
+    let text = text
+        .trim_start_matches(|c: char| c.is_alphabetic())
+        .trim_start_matches('#');
+    match parse_number(text) {
+        Some(n) if n >= 0.0 && n.fract() == 0.0 && n < 1e15 => Ok(Some(n as u64)),
+        _ => Err(format!("Id: '{text}' is not an id")),
+    }
+}
+
+/// What the project calls the item, for messages.
+fn item_name(project: &Project, id: AnyId) -> String {
+    match id {
+        AnyId::Device(d) => project.device(d).map(|d| d.tag.to_string()),
+        AnyId::Cable(c) => project.cable(c).map(|c| c.tag.to_string()),
+        AnyId::Terminal(t) => project.terminal_designation(t),
+        AnyId::Wire(w) => project.wire(w).map(|w| {
+            let page = project
+                .page(w.page)
+                .map(|p| p.name.clone())
+                .unwrap_or_default();
+            match &w.number {
+                Some(n) => format!("wire {n} on page {page}"),
+                None => format!("wire {} on page {page}", w.id.raw()),
+            }
+        }),
+        _ => None,
+    }
+    .unwrap_or_else(|| id.to_string())
+}
+
+/// Finds the row's item by its names when it has no Id.
+fn find_by_key(project: &Project, table: &Table, cells: &[Cell]) -> Result<AnyId, String> {
+    let cell = |header: &str| {
+        table
+            .column(header)
+            .and_then(|c| cells.get(c))
+            .map(Cell::as_text)
+            .unwrap_or_default()
+    };
+    let unique = |found: Vec<AnyId>, what: &str| match found.as_slice() {
+        [one] => Ok(*one),
+        [] => Err(format!("no Id, and nothing has {what}")),
+        many => Err(format!("no Id, and {} items have {what}", many.len())),
+    };
+    match table.kind {
+        TableKind::Devices | TableKind::Cables => {
+            let text = cell("Tag");
+            let text = text.strip_prefix('\'').unwrap_or(&text).trim().to_owned();
+            if text.is_empty() {
+                return Err("no Id and no Tag".into());
+            }
+            let tag =
+                DeviceTag::parse(&text).map_err(|_| format!("no Id, and '{text}' is not a tag"))?;
+            let found: Vec<AnyId> = if table.kind == TableKind::Devices {
+                project
+                    .devices_by_tag(&tag)
+                    .into_iter()
+                    .map(Into::into)
+                    .collect()
+            } else {
+                project
+                    .cables()
+                    .filter(|c| c.tag == tag)
+                    .map(|c| c.id.into())
+                    .collect()
+            };
+            unique(found, &format!("the tag {text}"))
+        }
+        TableKind::Terminals => {
+            let (strip, name) = (cell("Strip"), cell("Name"));
+            if strip.is_empty() || name.is_empty() {
+                return Err("no Id and no Strip and Name".into());
+            }
+            let strip = strip.strip_prefix('\'').unwrap_or(&strip).to_owned();
+            let found: Vec<AnyId> = project
+                .terminals()
+                .filter(|t| {
+                    t.name == name
+                        && project
+                            .device(t.strip)
+                            .is_some_and(|d| d.tag.to_string() == strip)
+                })
+                .map(|t| t.id.into())
+                .collect();
+            unique(found, &format!("the name {strip}:{name}"))
+        }
+        TableKind::Wires => Err("a wire row needs its Id".into()),
+    }
+}
+
+/// The value of `field` in the project now, in comparison form.
+fn project_canon(
+    project: &Project,
+    id: AnyId,
+    field: &Field,
+    like: Option<&novo_core::Value>,
+) -> String {
+    let cell = read(project, id, field);
+    parse(field, &cell, like)
+        .map(|p| p.canon())
+        .unwrap_or_else(|_| cell.as_text())
+}
+
+fn current_value(project: &Project, id: AnyId, key: &str) -> Option<novo_core::Value> {
+    let mut record = project.record(id)?;
+    record.properties_mut()?.get(key).cloned()
+}
+
+/// Header of a column, matched against the project's columns. A
+/// `properties.<key>` column nobody has yet is a new property.
+fn match_field(known: &[Field], header: &str) -> Option<Field> {
+    let mut h = header.trim();
+    // `Number` is what a terminal's name is called on a terminal diagram.
+    if h.eq_ignore_ascii_case("number") && known.iter().any(|f| f.slot == Slot::TerminalName) {
+        h = "Name";
+    }
+    if let Some(f) = known.iter().find(|f| f.header.eq_ignore_ascii_case(h)) {
+        return Some(f.clone());
+    }
+    property_of_header(h).map(|key| Field {
+        header: format!("{}{key}", super::fields::PROPERTY_PREFIX),
+        slot: Slot::Property(key),
+    })
+}
+
+/// Compares a workbook with the project. See the [module](self) for how
+/// rows are matched and conflicts found.
+pub fn plan_import(project: &Project, workbook: &Workbook) -> ImportPlan {
+    let mut plan = ImportPlan {
+        changes: Vec::new(),
+        rejected: Vec::new(),
+        notes: Vec::new(),
+        warnings: Vec::new(),
+        rows_read: 0,
+        rows_unchanged: 0,
+        exported_revision: workbook.meta.revision,
+        revision: project.revision(),
+        has_baseline: !workbook.baseline.is_empty(),
+    };
+    for name in &workbook.ignored {
+        plan.notes.push(format!(
+            "Sheet '{name}' is not a KoperCAD table and was left alone"
+        ));
+    }
+    if let Some(rev) = workbook.meta.revision
+        && rev != project.revision()
+    {
+        plan.notes.push(
+            "The project has changed since this file was exported; \
+             cells edited in both places are listed as conflicts"
+                .into(),
+        );
+    }
+    if workbook.baseline.is_empty() {
+        plan.notes.push(
+            "This file has no baseline (CSV, or the hidden sheets were removed): every \
+             difference is treated as an edit in the file and conflicts cannot be detected"
+                .into(),
+        );
+    }
+    for table in &workbook.tables {
+        plan_table(project, workbook, table, &mut plan);
+    }
+    warn_duplicate_tags(project, &mut plan);
+    plan
+}
+
+fn plan_table(project: &Project, workbook: &Workbook, table: &Table, plan: &mut ImportPlan) {
+    let kind = table.kind;
+    let known = fields(project, kind);
+    let mut columns: Vec<Option<Field>> = Vec::with_capacity(table.headers.len());
+    let mut seen: BTreeSet<String> = BTreeSet::new();
+    for header in &table.headers {
+        let field = match_field(&known, header);
+        let field = match field {
+            Some(f) if !seen.insert(f.header.to_lowercase()) => {
+                plan.notes.push(format!(
+                    "{}: column '{header}' appears twice; the first one is used",
+                    kind.name()
+                ));
+                None
+            }
+            Some(f) => Some(f),
+            None => {
+                if !header.trim().is_empty() {
+                    plan.notes.push(format!(
+                        "{}: column '{header}' is not one KoperCAD knows and was ignored",
+                        kind.name()
+                    ));
+                }
+                None
+            }
+        };
+        columns.push(field);
+    }
+    let id_col = columns
+        .iter()
+        .position(|f| f.as_ref().is_some_and(Field::is_id));
+    if id_col.is_none() {
+        plan.notes.push(format!(
+            "{}: no Id column; rows are matched by {}",
+            kind.name(),
+            match kind {
+                TableKind::Terminals => "strip and name",
+                TableKind::Wires => "nothing (wires need an Id)",
+                _ => "tag",
+            }
+        ));
+    }
+
+    // The baseline rows by Id, with their own column order.
+    let base_table = workbook.baseline_of(kind);
+    let mut base_rows: BTreeMap<u64, BTreeMap<String, &Cell>> = BTreeMap::new();
+    if let Some(base) = base_table
+        && let Some(base_id) = base.column("Id")
+    {
+        for row in &base.rows {
+            let Some(Ok(Some(id))) = row.cells.get(base_id).map(parse_id) else {
+                continue;
+            };
+            let by_header = base
+                .headers
+                .iter()
+                .zip(&row.cells)
+                .map(|(h, c)| (h.trim().to_lowercase(), c))
+                .collect();
+            base_rows.insert(id, by_header);
+        }
+    }
+
+    let mut first_line: BTreeMap<AnyId, usize> = BTreeMap::new();
+    let mut matched_by_key = 0usize;
+    for row in &table.rows {
+        if row.cells.iter().all(Cell::is_blank) {
+            continue;
+        }
+        plan.rows_read += 1;
+        let reject = |plan: &mut ImportPlan, item: String, reasons: Vec<String>| {
+            plan.rejected.push(Rejected {
+                table: kind,
+                line: row.line,
+                item,
+                reasons,
+            });
+        };
+        let cell_at = |c: usize| row.cells.get(c).cloned().unwrap_or_default();
+
+        // Which item is this row?
+        let by_id = match id_col.map(|c| parse_id(&cell_at(c))) {
+            Some(Err(e)) => {
+                reject(plan, String::new(), vec![e]);
+                continue;
+            }
+            Some(Ok(Some(raw))) => Some(raw),
+            _ => None,
+        };
+        let id = match by_id {
+            Some(raw) => {
+                let id = any_id(kind, raw);
+                if !project.contains(id) {
+                    reject(
+                        plan,
+                        format!("Id {raw}"),
+                        vec![format!(
+                            "the {} with Id {raw} no longer exists in the project (deleted after the export?)",
+                            kind.noun()
+                        )],
+                    );
+                    continue;
+                }
+                id
+            }
+            None => match find_by_key(project, table, &row.cells) {
+                Ok(id) => {
+                    matched_by_key += 1;
+                    id
+                }
+                Err(why) => {
+                    reject(plan, String::new(), vec![why]);
+                    continue;
+                }
+            },
+        };
+        let item = item_name(project, id);
+        if let Some(&first) = first_line.get(&id) {
+            reject(
+                plan,
+                item,
+                vec![format!(
+                    "this {} is already on row {first}; the first row counts",
+                    kind.noun()
+                )],
+            );
+            continue;
+        }
+        first_line.insert(id, row.line);
+
+        let base = by_id.and_then(|raw| base_rows.get(&raw));
+        let mut errors = Vec::new();
+        let mut changes = Vec::new();
+        for (c, field) in columns.iter().enumerate() {
+            let Some(field) = field else { continue };
+            if !field.editable() {
+                continue;
+            }
+            let cell = cell_at(c);
+            let like = match &field.slot {
+                Slot::Property(key) => current_value(project, id, key),
+                _ => None,
+            };
+            let parsed = match parse(field, &cell, like.as_ref()) {
+                Ok(p) => p,
+                Err(e) => {
+                    errors.push(e);
+                    continue;
+                }
+            };
+            let now = project_canon(project, id, field, like.as_ref());
+            let sheet = parsed.canon();
+            if sheet == now {
+                continue;
+            }
+            let base_canon = base
+                .and_then(|b| b.get(&field.header.to_lowercase()))
+                .and_then(|cell| parse(field, cell, like.as_ref()).ok())
+                .map(|p| p.canon());
+            let conflict = match base_canon {
+                Some(b) if b == sheet => continue, // the sheet did not touch it
+                Some(b) if b != now => Some(b),    // both changed it
+                _ => None,
+            };
+            let before = match (&field.slot, &like) {
+                (Slot::Property(_), Some(v)) => display_value(v),
+                _ => read(project, id, field).as_text(),
+            };
+            changes.push(Change {
+                id,
+                table: kind,
+                line: row.line,
+                item: item.clone(),
+                header: field.header.clone(),
+                before,
+                after: parsed.shown(),
+                selected: conflict.is_none(),
+                conflict,
+                field: field.clone(),
+                parsed,
+            });
+        }
+        if !errors.is_empty() {
+            reject(plan, item, errors);
+        } else if changes.is_empty() {
+            plan.rows_unchanged += 1;
+        } else {
+            plan.changes.extend(changes);
+        }
+    }
+    if matched_by_key > 0 {
+        plan.notes.push(format!(
+            "{}: {matched_by_key} row{} had no Id and {} matched by name",
+            kind.name(),
+            plural(matched_by_key),
+            if matched_by_key == 1 { "was" } else { "were" },
+        ));
+    }
+}
+
+/// A tag two devices would share after the import is worth a warning (the
+/// design checks flag it too, but not at the moment of choosing).
+fn warn_duplicate_tags(project: &Project, plan: &mut ImportPlan) {
+    for (kind, noun) in [(TableKind::Devices, "device"), (TableKind::Cables, "cable")] {
+        let mut tags: BTreeMap<AnyId, String> = if kind == TableKind::Devices {
+            project
+                .devices()
+                .map(|d| (d.id.into(), d.tag.to_string()))
+                .collect()
+        } else {
+            project
+                .cables()
+                .map(|c| (c.id.into(), c.tag.to_string()))
+                .collect()
+        };
+        let mut touched: BTreeSet<String> = BTreeSet::new();
+        for change in plan.changes.iter().filter(|c| {
+            c.selected
+                && c.table == kind
+                && matches!(c.field.slot, Slot::DeviceTag | Slot::CableTag)
+        }) {
+            tags.insert(change.id, change.after.clone());
+            touched.insert(change.after.clone());
+        }
+        for tag in touched {
+            let n = tags.values().filter(|t| **t == tag).count();
+            if n > 1 {
+                plan.warnings
+                    .push(format!("{n} {noun}s would have the tag {tag}"));
+            }
+        }
+    }
+}
