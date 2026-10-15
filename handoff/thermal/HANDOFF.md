@@ -15,3 +15,7 @@ Decisions: mean interior temperature only (no IEC 60890 curves); unknown loss is
 for `power_loss_w` and `load_factor` (load_factor read by name, default 1); cells floor 5 mm, cap 40k cells.
 Next: result strip join with sizing::thermal, vertical gradient. UI integration thread (session_01G52sVY5N34jPsrkqWukApR) folds the toggle into a Cabinet layers group.
 Reviewer B session_017hRHV6ik9P7Wcan8CARcGN; message head SHA after every push.
+
+## Parked (2026-10-15 20:10 UTC)
+
+#406 (head aea752e) is parked, not merged. Main's Heat view (#527: heat.rs, HeatState, commands heat.toggle/airflow/contours) replaced the cabinet UI this PR added. Plan for the next session: start from origin/main and keep only the engine: `crates/novo-layout/src/thermal.rs` (+ `lib.rs` line, `tests/thermal.rs`), `docs/design/thermal.md` and this handoff. Drop the app/canvas/command changes (bool `cabinet.heat`, `heat_strip`, `cabinet.layer.heat`, HeatView in novo-canvas). The physics thread (novo-thermal) can reuse `thermal::model::losses` and `hot_sources`.
