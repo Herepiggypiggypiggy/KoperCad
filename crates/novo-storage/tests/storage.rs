@@ -854,3 +854,32 @@ fn a_session_keeps_snapshots_through_save_as_and_drops_orphans_on_open() {
     assert_same(&opened.session.snapshot(a).unwrap().unwrap(), &issued_a);
     opened.session.close().unwrap();
 }
+
+#[test]
+fn sidecar_documents_survive_save_save_as_and_reopen() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = dir.path().join("a.novo");
+    let b = dir.path().join("b.novo");
+    let project = Project::default();
+    let mut session = Session::create(&a, &project).unwrap();
+    assert_eq!(session.sidecar("commissioning").unwrap(), None);
+    session
+        .put_sidecar("commissioning", "{\"checks\":[]}")
+        .unwrap();
+    session.save(&project).unwrap();
+    assert_eq!(
+        session.sidecar("commissioning").unwrap().as_deref(),
+        Some("{\"checks\":[]}")
+    );
+    session.save_as(&b, &project).unwrap();
+    session.close().unwrap();
+    let opened = Session::open(&b).unwrap();
+    assert_eq!(
+        opened.session.sidecar("commissioning").unwrap().as_deref(),
+        Some("{\"checks\":[]}")
+    );
+    // the original keeps its own copy
+    opened.session.close().unwrap();
+    let old = Session::open(&a).unwrap();
+    assert!(old.session.sidecar("commissioning").unwrap().is_some());
+}
