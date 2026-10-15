@@ -9,13 +9,12 @@
 name: Experimental build
 
 on:
-  push:
-    branches: [main]
-    paths-ignore: ["**/*.md", "docs/**"]
-  pull_request:
-    types: [opened, synchronize, reopened, closed]
-    # Docs-only PRs leave the binary unchanged.
-    paths-ignore: ["**/*.md", "docs/**"]
+  # Not per push: a Windows release build costs about 15 billed minutes, so
+  # this runs every two hours and builds only when main or an open PR has
+  # moved since the published build (see the plan job). workflow_dispatch
+  # always builds.
+  schedule:
+    - cron: "7 */2 * * *"
   workflow_dispatch:
 
 permissions:
@@ -36,10 +35,37 @@ env:
   CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
 
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      inputs: ${{ steps.plan.outputs.inputs }}
+    steps:
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          # What the build would contain: main plus every open same-repo PR head.
+          inputs=$( { gh api "repos/$REPO/commits/main" --jq '"main:" + .sha'
+            gh api "repos/$REPO/pulls?state=open&per_page=100" \
+              --jq '.[] | select(.head.repo.full_name == "'"$REPO"'") | "\(.number):\(.head.sha)"' | sort -n
+          } | sha256sum | cut -c1-16)
+          last=$(gh release download experimental --repo "$REPO" --pattern build-info.json --output - 2>/dev/null | jq -r '.inputs // ""' || true)
+          echo "inputs=$inputs" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = workflow_dispatch ] || [ "$inputs" != "$last" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "Nothing changed since the published build ($inputs)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   build:
-    # Forked PRs must not feed the published build.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
     runs-on: windows-latest
+    timeout-minutes: 45
     defaults:
       run:
         shell: bash
@@ -167,7 +193,7 @@ jobs:
             if [ -s "$state/skipped.txt" ]; then echo; echo "Skipped:"; cat "$state/skipped.txt"; fi
           } > dist/BUILD_INFO.txt
           cp dist/BUILD_INFO.txt out/
-          printf '{"built":"%s","run":"%s","tree":"%s"}\n' "$stamp" "${{ github.run_id }}" "$(git rev-parse HEAD)" > out/build-info.json
+          printf '{"built":"%s","run":"%s","tree":"%s","inputs":"%s"}\n' "$stamp" "${{ github.run_id }}" "$(git rev-parse HEAD)" "${{ needs.plan.outputs.inputs }}" > out/build-info.json
           (cd dist && 7z a -tzip ../out/novoelectric-experimental-windows.zip . > /dev/null)
 
       - uses: actions/upload-artifact@v4

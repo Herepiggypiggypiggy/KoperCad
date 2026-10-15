@@ -18,7 +18,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-CI runs fmt, clippy (warnings are errors) and tests on Linux and Windows.
+CI runs fmt, clippy (warnings are errors) and tests on Linux for every pull
+request, and on Windows for main and nightly.
 
 ## How parallel work is organised
 
@@ -85,9 +86,11 @@ Rules:
 
 ## Experimental builds
 
-Every push to main and every pull request update rebuilds the `experimental`
-pre-release: main plus all open pull requests merged in PR order (conflicting
-PRs are skipped; if the combined build fails it falls back to main). The
+Every two hours, when main or an open pull request has changed (and on manual
+dispatch), the `experimental` pre-release is rebuilt: main plus all open pull
+requests merged in PR order (conflicting or non-compiling PRs are skipped).
+It is not rebuilt per push, to stay inside the free Actions minutes. CI runs
+Linux on every PR and main push; Windows only on main pushes and nightly. The
 owner's desktop shortcut runs `scripts/run-latest.ps1`, which always starts
 the newest of these builds. Keep main and open PRs buildable on Windows.
 
