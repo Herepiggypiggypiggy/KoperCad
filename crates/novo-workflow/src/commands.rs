@@ -820,6 +820,21 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.protection",
+        "Protection: curves, selectivity, rating",
+        "View",
+        &[
+            "protection",
+            "trip",
+            "curve",
+            "selectivity",
+            "sccr",
+            "breaker",
+            "fuse",
+        ],
+        Needs::Project,
+    ),
+    cmd(
         "simulate.motor-start",
         "Simulate motor start",
         "View",

@@ -280,6 +280,15 @@ pub const DUTCH: &[Aliases] = &[
         &["kasten", "kastenlijst", "behuizingen"],
     ),
     nl(
+        "view.protection",
+        &["beveiliging"],
+        &[
+            "selectiviteit",
+            "uitschakelkarakteristiek",
+            "kortsluitvastheid",
+        ],
+    ),
+    nl(
         "simulate.motor-start",
         &[],
         &[
