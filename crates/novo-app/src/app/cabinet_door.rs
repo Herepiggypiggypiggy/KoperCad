@@ -8,6 +8,7 @@ use novo_layout::enclosure::{
     DEFAULT_DOOR_ANGLE_DEG, Door, DoorReport, Enclosure, Hinge, MIN_DOOR_GAP_MM,
 };
 use novo_layout::state::CabinetLayout;
+use novo_theme::tokens;
 
 use super::cabinet::Ask;
 use crate::theme;
@@ -349,7 +350,7 @@ fn top_view(ui: &mut egui::Ui, e: &Enclosure, layout: &CabinetLayout, report: &D
         at(0.0, 0.0) + vec2(4.0, 2.0),
         egui::Align2::LEFT_TOP,
         "back",
-        egui::FontId::proportional(10.0),
+        egui::FontId::proportional(tokens::FONT_SMALL),
         weak,
     );
 
@@ -377,7 +378,26 @@ fn top_view(ui: &mut egui::Ui, e: &Enclosure, layout: &CabinetLayout, report: &D
             Some(d) => {
                 let r = rect(left + f.x, e.plate_setback, f.w, d.min(usable + 40.0));
                 painter.rect_filled(r, 0.0, color.gamma_multiply(0.25));
-                painter.rect_stroke(r, 0.0, Stroke::new(1.0, color), egui::StrokeKind::Inside);
+                // Not by colour alone: too deep is a thick outline, tight a
+                // dashed one.
+                if report.too_deep.iter().any(|(id, _)| *id == p.id) {
+                    painter.rect_stroke(r, 0.0, Stroke::new(3.0, color), egui::StrokeKind::Inside);
+                } else if report.tight.iter().any(|(id, _)| *id == p.id) {
+                    painter.extend(Shape::dashed_line(
+                        &[
+                            r.left_top(),
+                            r.right_top(),
+                            r.right_bottom(),
+                            r.left_bottom(),
+                            r.left_top(),
+                        ],
+                        Stroke::new(1.5, color),
+                        4.0,
+                        3.0,
+                    ));
+                } else {
+                    painter.rect_stroke(r, 0.0, Stroke::new(1.0, color), egui::StrokeKind::Inside);
+                }
             }
             None => {
                 // No depth known: a stub, so the device is still seen.
@@ -429,7 +449,7 @@ fn top_view(ui: &mut egui::Ui, e: &Enclosure, layout: &CabinetLayout, report: &D
             at(x0, y) + vec2(2.0, -2.0),
             egui::Align2::LEFT_BOTTOM,
             format!("free {free:.0} mm"),
-            egui::FontId::proportional(10.0),
+            egui::FontId::proportional(tokens::FONT_SMALL),
             color,
         );
     }
