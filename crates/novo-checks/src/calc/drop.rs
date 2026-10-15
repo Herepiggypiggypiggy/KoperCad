@@ -109,16 +109,16 @@ impl Run {
     }
 }
 
-/// Default limit for a whole installation, percent of nominal voltage
-/// (IEC 60364-5-52 G.52.1: 4 % for other uses, 3 % for lighting). A single
-/// cable gets a share of it; the default applies the whole limit to one run
-/// so a cable that fails alone is certain to be a problem.
-pub const DEFAULT_LIMIT_PERCENT: f64 = 4.0;
+/// Default limit, percent of nominal voltage: IEC 60364-5-52 Annex G gives
+/// 3 % for lighting and 5 % for other uses on a public supply (as recalled;
+/// verify against the edition in force). A single cable gets the whole
+/// limit, so a cable that fails alone is certain to be a problem.
+pub const DEFAULT_LIMIT_PERCENT: f64 = 5.0;
 
-/// Limit for 24 V control circuits, percent: a coil or sensor on 24 V has
-/// little room (24 V -10 % is the usual lower bound, and the supply itself
-/// takes part of it), so the cable gets half.
-pub const DC_CONTROL_LIMIT_PERCENT: f64 = 5.0;
+/// Limit for 24 V DC control circuits, percent: a coil or sensor on 24 V has
+/// little room (24 V -10 % is the usual lower bound, and the power supply
+/// itself takes part of it), so a cable gets less than the default.
+pub const DC_CONTROL_LIMIT_PERCENT: f64 = 3.0;
 
 /// Checks a run against `limit_percent`. A drop above the limit is a
 /// warning; above twice the limit an error (the load will not start).

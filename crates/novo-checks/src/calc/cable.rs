@@ -194,7 +194,9 @@ pub fn ambient_factor(celsius: f64, insulation: Insulation) -> Option<f64> {
 }
 
 /// Grouping factor `k2` for `circuits` loaded circuits bunched together in
-/// method B1, B2 or C on a wall (IEC 60364-5-52 Table B.52.17, line 1).
+/// method B1, B2 or C on a wall (IEC 60364-5-52 Table B.52.17, line 1,
+/// bunched on a surface, the most conservative line; method C on a tray
+/// would derate less).
 /// Beyond 20 circuits the value for 20 applies. `circuits` below one count
 /// as one.
 pub fn grouping_factor(circuits: u32) -> f64 {

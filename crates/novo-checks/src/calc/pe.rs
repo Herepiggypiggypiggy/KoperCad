@@ -25,7 +25,10 @@ pub fn min_pe_section(phase_mm2: f64) -> Option<f64> {
 
 /// Smallest copper protective conductor by the adiabatic equation (IEC
 /// 60364-5-54 §543.1.2): `S = √(I²t) / k`, for the fault current and the
-/// time the device takes to clear it.
+/// time the device takes to clear it. `k` is taken from the insulation of
+/// the phase conductor (115 for PVC), which is safe: a protective conductor
+/// starts cold and its tables give a higher `k` (143 for PVC), so this
+/// oversizes.
 pub fn min_pe_adiabatic(fault_a: f64, clearing_s: f64, insulation: Insulation) -> Option<f64> {
     if !(fault_a.is_finite() && fault_a > 0.0 && clearing_s.is_finite() && clearing_s > 0.0) {
         return None;
