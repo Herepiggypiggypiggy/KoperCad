@@ -1820,3 +1820,54 @@ fn the_preferences_window_sets_the_auto_connection_mode() {
     frame_at(&mut d, 90.0, vec![key_event(egui::Key::Escape, true)]);
     assert!(!d.app.wb.preferences, "Esc closes it");
 }
+
+#[test]
+fn the_command_list_and_the_part_search_show_many_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let height = |d: &Drive, id: &str| {
+        d.ctx
+            .memory(|m| m.area_rect(egui::Id::new(id)))
+            .map_or(0.0, |r| r.height())
+    };
+
+    // Near the bottom of the window the lists still open with room.
+    let low = egui::pos2(400.0, 860.0);
+    d.app.wb.field.open(Mode::All, Some(low));
+    d.frame();
+    d.frame();
+    assert!(
+        height(&d, "command_field") > 250.0,
+        "the command list shows more than a couple of rows, got {}",
+        height(&d, "command_field")
+    );
+    d.app.wb.field.close();
+    d.frame();
+
+    d.app.wb.field.open(Mode::Place, Some(low));
+    d.frame();
+    d.frame();
+    assert!(height(&d, "command_field") > 250.0);
+}
+
+#[test]
+fn the_part_search_opens_with_room_near_the_bottom_of_the_window() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let low = egui::pos2(800.0, 880.0);
+    frame_at(&mut d, 10.0, vec![egui::Event::PointerMoved(low)]);
+    d.app.canvas.schematic().unwrap().open_insert_at(low);
+    frame_at(&mut d, 10.1, vec![]);
+    frame_at(&mut d, 10.2, vec![]);
+    let area = ctx
+        .memory(|m| m.area_rect(egui::Id::new("novo-editor-insert")))
+        .expect("the search is open");
+    assert!(area.height() > 250.0, "got {}", area.height());
+    assert!(area.bottom() <= ctx.content_rect().bottom());
+}
