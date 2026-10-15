@@ -8,6 +8,7 @@ use eframe::egui::{Key, KeyboardShortcut, Modifiers};
 pub enum Action {
     NewProject,
     OpenProject,
+    OpenExample,
     SaveProject,
     SaveProjectAs,
     CloseProject,
@@ -28,6 +29,7 @@ impl Action {
     pub const ALL: &[Action] = &[
         Action::NewProject,
         Action::OpenProject,
+        Action::OpenExample,
         Action::SaveProject,
         Action::SaveProjectAs,
         Action::CloseProject,
@@ -50,6 +52,7 @@ impl Action {
         match self {
             Action::NewProject => "file.new",
             Action::OpenProject => "file.open",
+            Action::OpenExample => "file.example",
             Action::SaveProject => "file.save",
             Action::SaveProjectAs => "file.save_as",
             Action::CloseProject => "file.close",
@@ -75,6 +78,7 @@ impl Action {
         match self {
             Action::NewProject => "New project",
             Action::OpenProject => "Open project…",
+            Action::OpenExample => "Open example",
             Action::SaveProject => "Save",
             Action::SaveProjectAs => "Save as…",
             Action::CloseProject => "Close project",
@@ -98,6 +102,7 @@ impl Action {
         match self {
             Action::NewProject
             | Action::OpenProject
+            | Action::OpenExample
             | Action::SaveProject
             | Action::SaveProjectAs
             | Action::CloseProject
@@ -132,7 +137,7 @@ impl Action {
             Action::FocusMode => (cmd_shift, Key::F),
             Action::FullScreen => (Modifiers::NONE, Key::F11),
             Action::CommandPalette => (cmd, Key::K),
-            Action::PinOutline | Action::About => return None,
+            Action::PinOutline | Action::About | Action::OpenExample => return None,
         };
         Some(KeyboardShortcut::new(modifiers, key))
     }
