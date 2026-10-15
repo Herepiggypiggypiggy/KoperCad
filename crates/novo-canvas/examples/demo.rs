@@ -4,7 +4,11 @@
 //! ```text
 //! cargo run -p novo-canvas --example demo
 //! cargo run --release -p novo-canvas --example demo -- --stress 10000 --seconds 10
+//! cargo run -p novo-canvas --example demo -- --panel
 //! ```
+//!
+//! `--panel` shows a mounting plate drawn with the drafting primitives
+//! (hatched ducts, rails with a snap pitch, dimensions) instead.
 //!
 //! Click or box-select objects; the status bar shows the model ids behind
 //! the selection.
@@ -33,12 +37,14 @@ const WINDOW: [f32; 2] = [1600.0, 900.0];
 
 struct Args {
     stress: Option<usize>,
+    panel: bool,
     seconds: f64,
 }
 
 fn parse_args() -> Result<Args, String> {
     let mut args = Args {
         stress: None,
+        panel: false,
         seconds: 10.0,
     };
     let mut it = std::env::args().skip(1);
@@ -49,6 +55,7 @@ fn parse_args() -> Result<Args, String> {
                 let v = value("--stress")?;
                 args.stress = Some(v.parse().map_err(|_| format!("bad object count {v:?}"))?);
             }
+            "--panel" => args.panel = true,
             "--seconds" => {
                 let v = value("--seconds")?;
                 args.seconds = v
@@ -67,7 +74,7 @@ fn main() {
     let args = match parse_args() {
         Ok(a) => a,
         Err(e) => {
-            eprintln!("{e}\nusage: demo [--stress OBJECTS] [--seconds SECONDS]");
+            eprintln!("{e}\nusage: demo [--panel] [--stress OBJECTS] [--seconds SECONDS]");
             std::process::exit(2);
         }
     };
@@ -96,6 +103,11 @@ fn main() {
             let gpu = format!("{} ({:?})", info.name, info.backend);
             Ok(match args.stress {
                 Some(n) => Box::new(Stress::new(n, args.seconds, gpu)) as Box<dyn eframe::App>,
+                None if args.panel => Box::new(Panel {
+                    scene: novo_canvas::demo::sample_panel(),
+                    view: CanvasView::new(),
+                    snapped: None,
+                }),
                 None => Box::new(Demo::new()),
             })
         }),
@@ -161,6 +173,29 @@ impl eframe::App for Demo {
             .frame(egui::Frame::NONE)
             .show(ui, |ui| {
                 self.view.show(ui, self.page.scene());
+            });
+    }
+}
+
+/// The `--panel` drawing; the status bar shows what the cursor snapped to.
+struct Panel {
+    scene: Scene,
+    view: CanvasView,
+    snapped: Option<novo_canvas::Snapped>,
+}
+
+impl eframe::App for Panel {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        egui::Panel::bottom("status").show(ui, |ui| {
+            ui.label(match self.snapped {
+                Some(s) => format!("{:?} at {:.1}, {:.1} mm", s.kind, s.point.x, s.point.y),
+                None => String::new(),
+            });
+        });
+        egui::CentralPanel::default()
+            .frame(egui::Frame::NONE)
+            .show(ui, |ui| {
+                self.snapped = self.view.show(ui, &self.scene).cursor;
             });
     }
 }

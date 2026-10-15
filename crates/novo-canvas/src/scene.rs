@@ -64,6 +64,48 @@ impl SnapPoint {
     }
 }
 
+/// A segment the cursor snaps onto anywhere along its length, such as a
+/// mounting rail or a cable duct in a layout drawing.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SnapLine {
+    pub a: Vec2,
+    pub b: Vec2,
+    /// When set, positions along the line are multiples of this many mm
+    /// from `a` (a rail's pitch).
+    pub step: Option<f32>,
+}
+
+impl SnapLine {
+    pub fn new(a: impl Into<Vec2>, b: impl Into<Vec2>) -> Self {
+        Self {
+            a: a.into(),
+            b: b.into(),
+            step: None,
+        }
+    }
+
+    pub fn stepped(mut self, step: f32) -> Self {
+        self.step = (step > 0.0 && step.is_finite()).then_some(step);
+        self
+    }
+
+    /// The point of the line nearest `p`, on its step when it has one
+    /// (never past either end).
+    pub fn nearest(&self, p: Vec2) -> Vec2 {
+        let d = self.b - self.a;
+        let len = d.length();
+        if len < 1e-6 {
+            return self.a;
+        }
+        let dir = d / len;
+        let mut t = (p - self.a).dot(dir).clamp(0.0, len);
+        if let Some(step) = self.step {
+            t = ((t / step).round() * step).min((len / step).floor() * step);
+        }
+        self.a + dir * t
+    }
+}
+
 /// One selectable thing on the canvas: a symbol, a wire, a frame.
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct Item {
@@ -71,6 +113,8 @@ pub struct Item {
     pub primitives: Vec<Primitive>,
     /// Extra snap targets beyond the geometric ones (connection points).
     pub snap_points: Vec<SnapPoint>,
+    /// Segments to snap onto anywhere along their length.
+    pub snap_lines: Vec<SnapLine>,
     /// Text drawn with the item (tags, pin numbers).
     pub labels: Vec<Label>,
     /// Non-selectable items (page frames, title blocks) are drawn and can be
@@ -84,6 +128,7 @@ impl Item {
             layer,
             primitives: Vec::new(),
             snap_points: Vec::new(),
+            snap_lines: Vec::new(),
             labels: Vec::new(),
             selectable: true,
         }
@@ -96,6 +141,11 @@ impl Item {
 
     pub fn with_snap(mut self, s: SnapPoint) -> Self {
         self.snap_points.push(s);
+        self
+    }
+
+    pub fn with_snap_line(mut self, l: SnapLine) -> Self {
+        self.snap_lines.push(l);
         self
     }
 
@@ -117,6 +167,10 @@ impl Item {
         }
         for s in &self.snap_points {
             b.include_point(s.pos);
+        }
+        for l in &self.snap_lines {
+            b.include_point(l.a);
+            b.include_point(l.b);
         }
         for l in &self.labels {
             b = b.union(&l.bounds());

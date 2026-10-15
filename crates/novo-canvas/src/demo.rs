@@ -1,7 +1,9 @@
 //! Generated demo content: schematic-like pages for the stress test, the
 //! app's placeholder page and benchmarks. Not real symbols; WS-05 owns those.
 
-use crate::scene::{Item, ItemId, Layer, LayerId, Scene, SnapPoint};
+use crate::drafting::{Dimension, DimensionStyle, hatched_rect};
+use crate::geom::Aabb;
+use crate::scene::{Item, ItemId, Layer, LayerId, Scene, SnapLine, SnapPoint};
 use crate::shape::{Placement, Primitive, Shape};
 use crate::style::{Color, Stroke};
 use crate::text::{Anchor, Label};
@@ -254,6 +256,80 @@ pub fn sample_page() -> Scene {
     scene
 }
 
+/// A mounting plate as a layout drawing would show it, built only from
+/// engine primitives (WS-15 owns the real Cabinet canvas): the plate, two
+/// 35 mm rails with a 9 mm snap pitch, hatched cable ducts, a few devices
+/// and the plate's dimensions.
+pub fn sample_panel() -> Scene {
+    let mut scene = Scene::new();
+    let plate_layer = scene.add_layer(Layer::new("Plate", -10));
+    let parts = scene.add_layer(Layer::new("Parts", 10));
+    let dims = scene.add_layer(Layer::new("Dimensions", 20));
+    let plate = Aabb::new(Vec2::ZERO, Vec2::new(600.0, 800.0));
+    let thin = Stroke::world(0.25, INK);
+    let mut id = 0u64;
+    let mut next = || {
+        id += 1;
+        ItemId(id)
+    };
+    let mut plate_item = Item::new(plate_layer).unselectable();
+    plate_item.primitives = hatched_rect(&plate, Some(Color::rgb(236, 236, 232)), None, thin);
+    scene.insert(next(), plate_item);
+    // Ducts: hatched, around and between the rails.
+    for duct in [
+        Aabb::new(Vec2::new(20.0, 20.0), Vec2::new(580.0, 80.0)),
+        Aabb::new(Vec2::new(20.0, 300.0), Vec2::new(580.0, 360.0)),
+        Aabb::new(Vec2::new(20.0, 580.0), Vec2::new(580.0, 640.0)),
+    ] {
+        let mut item = Item::new(parts).with_snap_line(SnapLine::new(
+            Vec2::new(duct.min.x, duct.center().y),
+            Vec2::new(duct.max.x, duct.center().y),
+        ));
+        item.primitives = hatched_rect(
+            &duct,
+            Some(Color::rgb(210, 214, 220)),
+            Some((6.0, -FRAC_PI_2 / 2.0, Stroke::world(0.13, FRAME))),
+            thin,
+        );
+        scene.insert(next(), item);
+    }
+    // Rails, with devices clipped onto the upper one.
+    for y in [190.0, 470.0] {
+        let rail = Aabb::new(Vec2::new(40.0, y - 17.5), Vec2::new(560.0, y + 17.5));
+        let mut item = Item::new(parts).with_snap_line(
+            SnapLine::new(Vec2::new(rail.min.x, y), Vec2::new(rail.max.x, y)).stepped(9.0),
+        );
+        item.primitives = hatched_rect(&rail, Some(Color::rgb(190, 192, 196)), None, thin);
+        scene.insert(next(), item);
+    }
+    for (x, modules) in [(76.0, 2.0), (112.0, 3.0), (157.0, 1.0), (175.0, 6.0)] {
+        let w = modules * 18.0;
+        let body = Aabb::new(Vec2::new(x, 145.0), Vec2::new(x + w, 235.0));
+        let mut item = Item::new(parts);
+        item.primitives = hatched_rect(
+            &body,
+            Some(Color::rgb(250, 250, 250)),
+            None,
+            Stroke::world(0.35, INK),
+        );
+        scene.insert(next(), item);
+    }
+    // Overall dimensions, outside the plate.
+    let style = DimensionStyle::default();
+    for d in [
+        Dimension::new(Vec2::new(0.0, 0.0), Vec2::new(600.0, 0.0), 15.0),
+        Dimension::new(Vec2::new(0.0, 800.0), Vec2::new(0.0, 0.0), 15.0),
+        Dimension::new(Vec2::new(40.0, 172.5), Vec2::new(40.0, 207.5), -12.0),
+    ] {
+        let (prims, label) = d.build(&style);
+        let mut item = Item::new(dims);
+        item.primitives = prims;
+        item.labels.extend(label);
+        scene.insert(next(), item);
+    }
+    scene
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -271,5 +347,27 @@ mod tests {
         let s = sample_page();
         let b = s.bounds();
         assert!(b.max.x <= 420.5 && b.max.y <= 297.5);
+    }
+
+    #[test]
+    fn sample_panel_snaps_along_its_rails() {
+        let scene = sample_panel();
+        assert!(scene.len() >= 10);
+        let view = crate::Viewport {
+            zoom: 2.0,
+            ..Default::default()
+        };
+        let s = crate::snap::snap(
+            &scene,
+            &view,
+            None,
+            &crate::SnapSettings::default(),
+            Vec2::new(250.0, 191.0),
+            &[],
+        );
+        assert_eq!(s.kind, crate::SnapKind::OnLine);
+        // On the 9 mm pitch from the rail's left end at x = 40.
+        assert_eq!(s.point.y, 190.0);
+        assert!(((s.point.x - 40.0) / 9.0).fract().abs() < 1e-4);
     }
 }
