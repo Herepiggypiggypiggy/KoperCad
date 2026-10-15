@@ -130,7 +130,9 @@ flow rate in the tooltip. Selecting one highlights the streamlines passing throu
 
 **Time slider (transient results).** A bar under the plate: play, the time as `t = 38 min`, a curve of the
 hottest device against time with the limit as a dashed line, and a scrub handle. Dragging scrubs; `Left`
-and `Right` step one frame, `Space` plays (opt in, runs until the end then stops, never loops). A steady
+and `Right` step one frame while the time bar has focus (click it, or `Heat: focus time bar` from the palette;
+`Esc` returns focus to the drawing). Playing is the play button or `Heat: play time` only, never `Space`
+(that is the command field); it is opt in, runs until the end then stops, never loops. A steady
 result hides the bar and shows `Steady state, converged (residual 1e-4)` in the header.
 
 **Compare.** `Keep this as A`, change something (move a device, add a fan, change a load), run again, and the
@@ -214,18 +216,6 @@ Built after the 2D face is merged, in this order:
 The renderer gets a small `HeatPlan` (layers, ramp, range, planes, iso levels); geometry for planes, shells
 and tubes is built by `novo-heatview` (marching cubes, slice resampling, 3D streamlines), not recomputed per
 face. The 2D plate view is the same pipeline with one slice plane locked to the plate side.
-
-1. Device surfaces take the ramp colour of `surface_c` (replacing the material colour while Heat is on, edges
-   unchanged).
-2. **Cut planes**: up to three draggable slices through the volume (plate-parallel, vertical, horizontal)
-   drawn as ramp-textured quads, with the contour lines of section 4 on them.
-3. **Isosurface shell** at the lowest device limit: a translucent surface that shows where the air is above
-   the limit, so a cramped corner glows.
-4. Airflow: streamlines as tubes (same seeding in 3D), the animate toggle as in section 6.
-5. Badges and callouts as 2D overlays anchored to device screen positions.
-
-The renderer gets a small `HeatPlan` (layers, ramp, range, plane positions); the pictures are built from
-the same `novo-heatview` data (section 11), not recomputed per face.
 
 ## 11. Where the code goes
 
