@@ -196,6 +196,7 @@ const APP_COMMANDS: &[&str] = &[
     "xref.link",
     "app.preferences",
     "terminal.toggle_pe",
+    "terminal.reset_pe",
     "wire.mode",
 ];
 
@@ -444,7 +445,6 @@ impl NovoApp {
             "terminal.connect"
             | "terminal.toggle_pe"
             | "terminal.disconnect"
-            | "terminal.toggle_pe"
             | "terminal.reset_pe"
             | "terminal.strip_up"
             | "terminal.strip_down"

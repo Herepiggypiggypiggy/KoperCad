@@ -409,16 +409,6 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["jumper", "bridge", "unbridge"],
         Needs::Selection,
     ),
-    verb(
-        cmd(
-            "terminal.toggle_pe",
-            "Toggle PE terminal",
-            "Edit",
-            &["protective earth", "earth terminal", "ground"],
-            Needs::Selection,
-        ),
-        &["pe"],
-    ),
     cmd(
         "terminal.reset_pe",
         "Reset PE override",

@@ -347,12 +347,6 @@ impl NovoApp {
                     novo_terminals::set_jumper(tx, &terminals, None).map(|_| None)
                 }),
             ),
-            "terminal.toggle_pe" => (
-                "Toggle PE terminal",
-                doc.transact("Toggle PE terminal", |tx| {
-                    novo_terminals::toggle_pe(tx, &terminals).map(|_| None)
-                }),
-            ),
             "terminal.reset_pe" => (
                 "Reset PE override",
                 doc.transact("Reset PE override", |tx| {
