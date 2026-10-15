@@ -118,7 +118,7 @@ impl NovoApp {
     /// skipped, and a project is open.
     pub(super) fn walkthrough_on(&self) -> bool {
         let o = &self.settings.onboarding;
-        o.started && !o.dismissed && self.is_open()
+        o.started && !o.dismissed && self.is_open() && !self.learn_active()
     }
 
     /// First run: nothing opened before and the walk-through not yet
