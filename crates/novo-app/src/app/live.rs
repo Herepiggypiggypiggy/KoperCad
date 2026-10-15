@@ -21,6 +21,7 @@ use novo_core::{
 use novo_sim::{Clock, Live, PoleState, Settled, Solution, is_coil, settle_timed};
 use novo_theme::{tokens, widgets};
 
+use super::live_anim::Anim;
 use super::{Level, NovoApp};
 
 /// Radius of a pole badge, in screen points.
@@ -41,6 +42,8 @@ pub(crate) struct LiveView {
     pub(super) forced: BTreeSet<SymbolId>,
     /// Seconds the bench has run, for timer contacts.
     clock: Clock,
+    /// Easing state of the device animation (lamps, motors, coils).
+    anim: Anim,
     solved: Option<Solved>,
 }
 
@@ -348,10 +351,27 @@ impl NovoApp {
             .potentials()
             .map(|p| (p.id, (p.name.clone(), potential_color(p))))
             .collect();
+        let states = novo_sim::device_states(project, &solved.netlist, &solved.settled);
         let names: BTreeMap<SymbolId, String> = badges
             .iter()
             .map(|b| (b.symbol, symbol_name(project, b.symbol)))
             .collect();
+
+        // Devices: lamps glow, motors turn, coils pull in.
+        let animating = self.wb.live.anim.paint(
+            ctx,
+            canvas,
+            viewport.zoom,
+            &to_screen,
+            project,
+            self.canvas
+                .schematic_ref()
+                .map(|v| v.editor.catalog.library()),
+            page,
+            &states,
+            &energized,
+            dt as f32,
+        );
 
         // Wires: lit in their colour, dimmed when nothing reaches them. The
         // canvas draws them in its wire layer, under the symbols and text.
@@ -566,7 +586,7 @@ impl NovoApp {
             });
 
         // Draws again only when something changed; egui repaints on input.
-        if leave || open_all || clicked.is_some() || timing.is_some() {
+        if leave || open_all || clicked.is_some() || timing.is_some() || animating {
             ctx.request_repaint();
         }
         if leave {
