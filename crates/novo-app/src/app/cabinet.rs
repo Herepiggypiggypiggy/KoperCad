@@ -28,7 +28,7 @@ const DEFAULT_PLATE: MountingPlate = MountingPlate {
 };
 
 pub(super) struct CabinetState {
-    view: CanvasView,
+    pub(super) view: CanvasView,
     scene: CabinetScene,
     /// The panel shown, by its location (`+K1B1G1`).
     pub(super) location: Option<DeviceTag>,
