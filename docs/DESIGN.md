@@ -260,7 +260,7 @@ never changes meaning in the middle of work.
 | Text (tag, wire number, label) | Rename in place, as F2 | Nothing |
 | A device | Properties open, cursor in the tag | Nothing |
 | A wire | Edit its number in place | Ends or starts a wire |
-| A pin | Select the device | Starts a connection |
+| A pin | Starts a wire | Starts a wire |
 | Empty canvas | Nothing | Starts a free wire, or ends the one in progress |
 | A page tab | Rename the page | Rename the page |
 
@@ -329,10 +329,12 @@ coil's device and cross reference, and a toast says "Linked to -K1". A tag
 that belongs to something a contact cannot link to is refused with the
 reason in the hint and nothing changes.
 
-**A click on a pin.** With the Connect tool, a click on a pin (anywhere in
-its grab zone) starts a wire there and the next click or drag continues
-it; in any other tool a click on a pin selects its device and a drag from
-it connects (§4, pin or body).
+**A click on a pin.** In every tool except Place, a click on a pin
+(anywhere in its grab zone) starts a wire there, so the Connect tool need
+not be chosen first, and the next click or drag continues it. A drag from
+a pin connects as before (§4, pin or body). The device is selected by
+clicking its body, never its pin. While a symbol is on the pointer (Place)
+a click places it, whatever is underneath.
 
 **Box selection.** Pressing on empty canvas and dragging more than 4 px
 draws a selection box. Dragging right encloses: only items wholly inside
@@ -642,9 +644,9 @@ click adds no extra corner and no zero-length segment.
   position when the 4 px threshold is crossed. The wire starts at the pin,
   not where the pointer was when it started to move, and the preview is
   visible from the first pixel past the threshold.
-- A press in the zone either starts a connection or is a click that
-  selects the device; it never does nothing and never moves the device. A
-  drag released on empty canvas cancels as before.
+- A press in the zone always starts a wire (a click starts it, a drag
+  connects); it never does nothing and never moves the device. A drag
+  released on empty canvas cancels as before.
 - Hovering the zone shows the ring and the connect cursor immediately (no
   delay), so the user sees the grab before pressing.
 
