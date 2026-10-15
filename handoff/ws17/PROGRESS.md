@@ -9,3 +9,11 @@
 2026-10-15 03:55 UTC #143 head b8e3961 fixes all three plus the optional notes; sent to both reviewers and the lead. Local engine rebased on main 96289b8: plc.channel = "DI 3", TypeMismatch issue, Rockwell reports no byte overlaps; patches refreshed.
 2026-10-15 03:47 UTC #143 merged (design READY from the design reviewer and the main reviewer on b8e3961).
 2026-10-15 03:55 UTC PR 2 (novo-plc skeleton) opened from main 6fa1492. Workspace on 96289b8 + skeleton + index: clippy -D warnings clean, 758 passed, 0 failed, 1 ignored (Linux).
+2026-10-15 03:58 UTC PR #152 opened (skeleton), head 8527c4a; sent to main reviewer and lead.
+2026-10-15 04:05 UTC Outputs agreed the io_rows shape (ROADMAP). PR 3 patch now also has Issue::message/at and READS.
+2026-10-15 04:15 UTC PR 4 (io_rows, IoRow) committed locally on ws17-io; patch 0003. Next: commands (add card, place channel, to plc, renumber io).
+2026-10-15 04:30 UTC PR 5 (commands: add_card, place_channel, to_plc, renumber_plan/apply_renumber) committed locally on ws17-commands; patch 0004.
+2026-10-15 04:00 UTC #152 CHANGES (CHANNEL doc said integer; Rockwell DQ/RO collide). Fixed in c7a9347: doc reads "DI 3", Rockwell digital uses the card's point (bit offset). Sent to main reviewer.
+2026-10-15 04:05 UTC Local stack (0002-0004) rebased onto #152 head c7a9347; workspace clippy clean, 766 passed / 0 failed / 1 ignored (before the rebase, base 96289b8). Patches now apply on top of #152.
+2026-10-15 04:10 UTC #152 READY (main reviewer) on c7a9347; waiting for the lead to merge. Frozen: no more pushes.
+2026-10-15 04:15 UTC #152 merged. PR 3 (channel index) opened from main f5e4980.
