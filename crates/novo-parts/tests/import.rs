@@ -1,0 +1,247 @@
+//! The one-click import: library, state machine, Downloads fallback.
+
+use std::fs;
+use std::time::{Duration, SystemTime};
+
+use novo_parts::*;
+
+const STEP: &str = "ISO-10303-21;\nDATA;\n#9=(LENGTH_UNIT()NAMED_UNIT(*)SI_UNIT(.MILLI.,.METRE.));\n#1=CARTESIAN_POINT('',(0.,0.,0.));\n#2=CARTESIAN_POINT('',(5.2,42.,36.));\nENDSEC;\nEND-ISO-10303-21;\n";
+
+fn key() -> PartKey {
+    PartKey::new("Example Maker", "9000-0001")
+}
+
+fn new_source(file_name: &str) -> NewSource<'_> {
+    NewSource {
+        manufacturer: "Example Maker",
+        order_number: "9000-0001",
+        file_name,
+        url: None,
+        flow: ImportFlow::Manual,
+        imported: "d",
+    }
+}
+
+fn sources(enabled: bool) -> SourceTable {
+    SourceTable::new(vec![MakerSource {
+        manufacturer: "Example Maker".into(),
+        fetch_enabled: enabled,
+        page_url: Some("https://example.invalid/p/{order}".into()),
+    }])
+}
+
+fn fetcher(result: ScriptedAnswer) -> ScriptedFetcher {
+    let mut f = ScriptedFetcher::default();
+    f.files.insert(key(), result);
+    f
+}
+
+fn step_file() -> (RemoteFile, Vec<u8>) {
+    (
+        RemoteFile {
+            kind: FileKind::Step,
+            url: "https://example.invalid/f/9000-0001.stp".into(),
+            file_name: "9000-0001.stp".into(),
+        },
+        STEP.as_bytes().to_vec(),
+    )
+}
+
+#[test]
+fn one_click_fetches_stores_and_reads_the_size() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = LocalLibrary::at(dir.path());
+    let src = sources(true);
+    let f = fetcher(Ok(vec![step_file()]));
+    let mut job = ImportJob::new(&lib, &src, &f, "Example Maker", "9000-0001", "2026-10-15");
+
+    // The first Import for a maker asks for the notice.
+    job.run();
+    assert_eq!(
+        job.state(),
+        &ImportState::NeedsNotice {
+            manufacturer: "Example Maker".into()
+        }
+    );
+    job.accept_notice().unwrap();
+    assert!(lib.notice_accepted("example maker"));
+    let ImportState::Done(out) = job.run().clone() else {
+        panic!("expected Done, got {:?}", job.state())
+    };
+
+    assert_eq!(out.records.len(), 1);
+    let r = &out.records[0];
+    assert_eq!(r.flow, ImportFlow::Fetched);
+    assert_eq!(
+        r.url.as_deref(),
+        Some("https://example.invalid/f/9000-0001.stp")
+    );
+    assert_eq!(r.sha256.len(), 64);
+    assert_eq!(fs::read(lib.path_of(r)).unwrap(), STEP.as_bytes());
+    let d = out.dimensions.unwrap();
+    assert_eq!((d.depth_mm, d.width_mm, d.height_mm), (5.2, 36.0, 42.0));
+    assert!(lib.has(&key()));
+
+    // The notice is asked once: a second part goes straight through.
+    let mut again = ImportJob::new(&lib, &src, &f, "Example Maker", "9000-0001", "2026-10-16");
+    assert!(matches!(again.run(), ImportState::Done(_)));
+    assert_eq!(
+        lib.records().unwrap().len(),
+        1,
+        "same file replaces the record"
+    );
+}
+
+#[test]
+fn falls_back_when_not_enabled_or_the_source_refuses() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = LocalLibrary::at(dir.path());
+    lib.accept_notice("Example Maker").unwrap();
+
+    let f = fetcher(Ok(vec![step_file()]));
+    let off = sources(false);
+    let mut job = ImportJob::new(&lib, &off, &f, "Example Maker", "9000-0001", "d");
+    assert_eq!(
+        job.run(),
+        &ImportState::Fallback {
+            reason: FallbackReason::NotEnabled,
+            page_url: Some("https://example.invalid/p/9000-0001".into())
+        }
+    );
+    assert!(!lib.has(&key()), "nothing was fetched");
+
+    let on = sources(true);
+    for (err, reason) in [
+        (FetchError::NeedsLogin, FallbackReason::NeedsLogin),
+        (FetchError::Blocked(403), FallbackReason::Blocked(403)),
+        (FetchError::NotAvailable, FallbackReason::NotAvailable),
+    ] {
+        let f = fetcher(Err(err));
+        let mut job = ImportJob::new(&lib, &on, &f, "Example Maker", "9000-0001", "d");
+        assert!(matches!(job.run(), ImportState::Fallback { reason: r, .. } if *r == reason));
+    }
+    let f = fetcher(Err(FetchError::Network("timeout".into())));
+    let mut job = ImportJob::new(&lib, &on, &f, "Example Maker", "9000-0001", "d");
+    assert_eq!(job.run(), &ImportState::Failed("timeout".into()));
+}
+
+#[test]
+fn unknown_maker_has_no_fetch_and_no_page() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = LocalLibrary::at(dir.path());
+    let f = ScriptedFetcher::default();
+    let none = SourceTable::default();
+    let mut job = ImportJob::new(&lib, &none, &f, "Nobody", "1", "d");
+    assert_eq!(
+        job.run(),
+        &ImportState::Fallback {
+            reason: FallbackReason::NotEnabled,
+            page_url: None
+        }
+    );
+}
+
+#[test]
+fn downloads_watcher_waits_for_a_finished_matching_file() {
+    let downloads = tempfile::tempdir().unwrap();
+    let before = SystemTime::now() - Duration::from_secs(5);
+    let mut w = DownloadsWatcher::new(downloads.path(), before, "9000-0001");
+
+    fs::write(downloads.path().join("holiday.jpg"), "x").unwrap();
+    fs::write(downloads.path().join("other-part.stp"), STEP).unwrap();
+    fs::write(downloads.path().join("9000-0001.stp.crdownload"), "half").unwrap();
+    assert!(w.poll().is_empty());
+
+    fs::write(downloads.path().join("WAGO_9000_0001.stp"), STEP).unwrap();
+    assert!(w.poll().is_empty(), "first sight: size not yet seen twice");
+    let ready = w.poll();
+    assert_eq!(ready.len(), 1);
+    assert!(ready[0].ends_with("WAGO_9000_0001.stp"));
+
+    // A file that is older than the click is ignored.
+    let late = SystemTime::now() + Duration::from_secs(3600);
+    let mut w = DownloadsWatcher::new(downloads.path(), late, "9000-0001");
+    w.poll();
+    assert!(w.poll().is_empty());
+}
+
+#[test]
+fn imports_the_downloaded_file_and_a_bmecat_catalog() {
+    let lib_dir = tempfile::tempdir().unwrap();
+    let downloads = tempfile::tempdir().unwrap();
+    let lib = LocalLibrary::at(lib_dir.path());
+    let f = ScriptedFetcher::default();
+    let src = SourceTable::default();
+
+    let xml = downloads.path().join("catalog.xml");
+    fs::write(
+        &xml,
+        "<BMECAT><T_NEW_CATALOG><PRODUCT><SUPPLIER_PID>9000-0001</SUPPLIER_PID><PRODUCT_DETAILS><DESCRIPTION_SHORT>Terminal</DESCRIPTION_SHORT></PRODUCT_DETAILS></PRODUCT></T_NEW_CATALOG></BMECAT>",
+    )
+    .unwrap();
+    let mut job = ImportJob::new(&lib, &src, &f, "Example Maker", "9000-0001", "2026-10-15");
+    let ImportState::Done(out) = job.import_file(&xml, ImportFlow::Downloads).clone() else {
+        panic!()
+    };
+    assert_eq!(out.parts.len(), 1);
+    assert_eq!(out.parts[0].manufacturer, "Example Maker");
+    assert_eq!(out.records[0].flow, ImportFlow::Downloads);
+
+    // A STEP file the reader cannot measure is still stored, with a note.
+    let bad = downloads.path().join("9000-0001.stp");
+    fs::write(&bad, "not step").unwrap();
+    let mut job = ImportJob::new(&lib, &src, &f, "Example Maker", "9000-0001", "d");
+    let ImportState::Done(out) = job.import_file(&bad, ImportFlow::Manual).clone() else {
+        panic!()
+    };
+    assert_eq!(out.records.len(), 1);
+    assert!(out.dimensions.is_none() && out.notes.len() == 1);
+
+    // Remove deletes files and records.
+    assert_eq!(lib.remove(&key()).unwrap(), 2);
+    assert!(!lib.has(&key()));
+    assert!(!lib.path_of(&out.records[0]).exists());
+}
+
+#[test]
+fn stored_names_cannot_escape_the_library() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = LocalLibrary::at(dir.path().join("lib"));
+    let r = lib
+        .store(&new_source("..\\..\\evil:name?.stp"), b"x")
+        .unwrap();
+    let p = lib.path_of(&r);
+    assert!(p.starts_with(dir.path().join("lib")));
+    assert!(!r.file_name.contains(['\\', '/', ':', '?']));
+}
+
+#[test]
+fn browser_rows_show_one_action_per_part() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = LocalLibrary::at(dir.path());
+    let mut cat = Catalog::default();
+    let mut a = CatalogPart::new("Example Maker", "9000-0001");
+    a.description = "Terminal".into();
+    let b = CatalogPart::new("Example Maker", "9000-0002");
+    let c = CatalogPart::new("Unlisted", "7");
+    for p in [a, b, c] {
+        cat.upsert(p);
+    }
+    lib.store(&new_source("a.stp"), b"x").unwrap();
+    let rows = browser_rows(&cat, &lib, &sources(true), "");
+    let acts: Vec<_> = rows.iter().map(|r| r.action.clone()).collect();
+    assert_eq!(
+        acts,
+        vec![
+            RowAction::InLibrary,
+            RowAction::Import,
+            RowAction::OpenPage(None)
+        ]
+    );
+    let rows = browser_rows(&cat, &lib, &sources(false), "9000-0002");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        rows[0].action,
+        RowAction::OpenPage(Some("https://example.invalid/p/9000-0002".into()))
+    );
+}
