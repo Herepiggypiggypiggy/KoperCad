@@ -9,7 +9,8 @@
 
 use novo_core::{
     AnyId, ChangeSet, DeviceId, DeviceTag, Document, Endpoint, PageId, Placement, Point, Project,
-    Rotation, SymbolId, SymbolInstance, SymbolKey, SymbolRole, WireId,
+    Rotation, SymbolId, SymbolInstance, SymbolKey, SymbolRole, TextAnchor, TextContent, TextId,
+    TextPlacement, WireId,
 };
 
 use crate::catalog::{Catalog, SymbolClass, classify, model_groups, model_pins};
@@ -86,6 +87,22 @@ pub struct MoveTool {
     /// Shift: the wires on the moved pins stretch along instead of staying
     /// behind as open ends.
     pub carry: bool,
+}
+
+/// A label that is dragged on its own, leaving what it names where it is.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LabelSource {
+    /// A text record: its offset changes.
+    Record(TextId),
+    /// Text the canvas draws by itself (a symbol's tag, a wire's number):
+    /// the first drag gives it a record at the place it is drawn.
+    Drawn {
+        owner: AnyId,
+        content: TextContent,
+        /// Where it is drawn now, and which point of its box sits there.
+        at: Point,
+        anchor: TextAnchor,
+    },
 }
 
 /// The active tool.
@@ -1461,6 +1478,68 @@ impl Editor {
                 edit::settle(tx, &edit::symbols_in(selection))?;
             }
             Ok(())
+        })
+    }
+
+    /// How far a label dragged from `from` to `to` moves: both ends snap to
+    /// the grid, as a moved symbol does.
+    pub fn label_delta(&self, from: Point, to: Point) -> Point {
+        snap(to, self.grid) - snap(from, self.grid)
+    }
+
+    /// Moves one label by `delta`, one undo step. The thing it names stays.
+    pub fn move_label(
+        &mut self,
+        doc: &mut Document,
+        page: PageId,
+        source: &LabelSource,
+        delta: Point,
+    ) -> bool {
+        if delta == Point::ZERO {
+            return false;
+        }
+        self.run(doc, "Move label", |tx| {
+            match source {
+                LabelSource::Record(id) => {
+                    let mut placement = tx
+                        .project()
+                        .text(*id)
+                        .map(|t| t.placement)
+                        .ok_or(novo_core::ModelError::NotFound(AnyId::Text(*id)))?;
+                    placement.offset = placement.offset + delta;
+                    tx.move_text(*id, placement)
+                }
+                LabelSource::Drawn {
+                    owner,
+                    content,
+                    at,
+                    anchor,
+                } => {
+                    let id = tx.add_text(
+                        page,
+                        content.clone(),
+                        TextPlacement {
+                            anchor: *anchor,
+                            ..Default::default()
+                        },
+                        Some(*owner),
+                    )?;
+                    // The offset is from the host's own origin, whatever
+                    // the host is: read it back instead of knowing it.
+                    let origin = tx
+                        .project()
+                        .text_position(id)
+                        .ok_or(novo_core::ModelError::NotFound(AnyId::Text(id)))?;
+                    tx.move_text(
+                        id,
+                        TextPlacement {
+                            offset: *at + delta - origin,
+                            anchor: *anchor,
+                            ..Default::default()
+                        },
+                    )
+                }
+            }
         })
     }
 
