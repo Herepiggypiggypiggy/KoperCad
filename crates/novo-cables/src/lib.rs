@@ -32,8 +32,8 @@ pub use edit::{
 };
 pub use kind::{CableType, default_types, type_label};
 pub use propose::{
-    CableProposal, CableSide, Conductor, accept_proposals, dismiss_proposal, propose_cables,
-    restore_proposal, summarize_proposals,
+    CableProposal, CableSide, Conductor, accept_proposals, dismiss_proposal, proposal_for_wires,
+    propose_cables, restore_proposal, summarize_proposals,
 };
 pub use screen::{
     CableScreen, CoreEnd, CoreRow, OverviewRow, cable_screen, cable_screens, overview,

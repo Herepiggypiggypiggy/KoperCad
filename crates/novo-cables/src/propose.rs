@@ -353,6 +353,66 @@ pub fn propose_cables(project: &Project) -> Vec<CableProposal> {
     out
 }
 
+/// A cable for wires the user picked (a line drawn over them), whatever
+/// their locations: the smallest usual type they fit, the next free `-W`
+/// tag in the function of the first device a wire lands on, and each wire
+/// on its core. `None` when no picked wire exists or none lands on a
+/// device.
+pub fn proposal_for_wires(project: &Project, wires: &[WireId]) -> Option<CableProposal> {
+    let netlist = project.netlist();
+    let mut items: Vec<(Conductor, &Wire)> = wires
+        .iter()
+        .filter_map(|&id| project.wire(id))
+        .map(|w| (conductor(project, &netlist, w), w))
+        .collect();
+    items.sort_by(|(ca, wa), (cb, wb)| ca.order(cb).then(wa.id.cmp(&wb.id)));
+    let conductors: Vec<Conductor> = items.iter().map(|(c, _)| c.clone()).collect();
+    let picked: Vec<&Wire> = items.iter().map(|(_, w)| *w).collect();
+    let owners: Vec<DeviceId> = picked
+        .iter()
+        .flat_map(|w| w.ends())
+        .filter_map(|end| ends::owner(project, end))
+        .collect();
+    let first = *owners.first()?;
+    let second = owners
+        .iter()
+        .copied()
+        .find(|&d| d != first)
+        .unwrap_or(first);
+    let (cable_type, cores) = choose_type(&conductors, cross_section(&picked, &conductors));
+    let structure = DeviceTag {
+        function: project
+            .device(first)
+            .map(|d| d.tag.function.clone())
+            .unwrap_or_default(),
+        ..DeviceTag::default()
+    };
+    let mut tag = structure.clone();
+    tag.product = vec![format!("W{}", project.next_tag_number(&structure, "W"))];
+    let side = |d: DeviceId| CableSide {
+        device: d,
+        location: owners
+            .iter()
+            .position(|&o| o == d)
+            .and_then(|_| {
+                picked
+                    .iter()
+                    .flat_map(|w| w.ends())
+                    .find(|&end| ends::owner(project, end) == Some(d))
+                    .and_then(|end| ends::location(project, end))
+            })
+            .unwrap_or_default(),
+    };
+    Some(CableProposal {
+        tag,
+        ends: [side(first), side(second)],
+        wires: picked.iter().map(|w| w.id).collect(),
+        conductors,
+        cable_type,
+        cores,
+    })
+}
+
 /// Accepts proposals: creates each cable with its wires on their cores and,
 /// when the catalog has a part of that type, the part. Run inside one
 /// transaction so accepting all is one undo step.

@@ -2148,3 +2148,62 @@ fn tab_and_q_steer_a_wire_in_progress_from_the_keyboard() {
     assert_eq!(d.doc().project().wires().count(), wires + 1);
     assert!(!d.app.wb.field.is_open(), "Q did not open the part search");
 }
+
+#[test]
+fn c_draws_a_line_and_the_wires_it_touches_become_one_cable() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let a = d.place("mcb3", 80.0, 60.0);
+    let b = d.place("mcb3", 200.0, 60.0);
+    let pins = |d: &Drive, s: SymbolId| {
+        let sym = d.doc().project().symbol(s).unwrap();
+        (0..sym.pins.len() as u16)
+            .map(|i| sym.pin_position(i).unwrap())
+            .collect::<Vec<_>>()
+    };
+    let (pa, pb) = (pins(&d, a), pins(&d, b));
+    // Bottom pins of A to top pins of B, three wires.
+    let mut lower: Vec<Point> = pa.iter().copied().filter(|p| p.y > 60.0).collect();
+    let mut upper: Vec<Point> = pb.iter().copied().filter(|p| p.y < 60.0 + 20.0).collect();
+    lower.sort_by(|p, q| p.x.total_cmp(&q.x));
+    upper.sort_by(|p, q| p.x.total_cmp(&q.x));
+    for (from, to) in lower.iter().zip(&upper) {
+        d.wire(*from, *to);
+    }
+    let wires: Vec<_> = d.doc().project().wires().map(|w| w.id).collect();
+    assert!(wires.len() >= 2, "wired: {}", wires.len());
+    assert_eq!(d.doc().project().cables().count(), 0);
+
+    // C, a line across the wires between the two parts, Enter.
+    d.app.run_command(&ctx, "tool.cable", None);
+    let (x, y0, y1) = (140.0, 40.0, 140.0);
+    d.click(Point::new(x, y0));
+    d.click(Point::new(x, y1));
+    {
+        let app = &mut d.app;
+        let view = app.canvas.schematic().expect("the editor canvas");
+        let doc = app.backend.document_mut().expect("a project");
+        assert!(view.editor.key(doc, novo_editor::EditorKey::Finish, &[]));
+    }
+    d.frame();
+
+    let project = d.doc().project();
+    assert_eq!(
+        project.cables().count(),
+        1,
+        "one cable for the touched wires"
+    );
+    let cable = project.cables().next().unwrap();
+    let on_cable = wires
+        .iter()
+        .filter(|&&w| project.cable_of_wire(w) == Some(cable.id))
+        .count();
+    assert_eq!(on_cable, wires.len());
+
+    // One undo step takes the cable away again.
+    d.app.backend.document_mut().unwrap().undo().unwrap();
+    assert_eq!(d.doc().project().cables().count(), 0);
+}

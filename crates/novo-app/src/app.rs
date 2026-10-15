@@ -723,6 +723,13 @@ impl NovoApp {
         }
         let asked = self.canvas.take_commands();
         self.wb.queued.extend(asked);
+        let cable = self
+            .canvas
+            .schematic()
+            .and_then(|v| v.editor.take_cable_request());
+        if let Some(wires) = cable {
+            self.make_cable(&wires);
+        }
     }
 
     /// A wire drawn to ground or a PE potential earths the terminals on
