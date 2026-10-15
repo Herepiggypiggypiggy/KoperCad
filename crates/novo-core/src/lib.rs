@@ -97,7 +97,8 @@ pub use id::{
 };
 pub use json::JSON_FORMAT_VERSION;
 pub use project::{
-    CONTENTS_GENERATOR, PAGE_ORDER, PageContents, Panel, Project, RATED_CURRENT_A, natural_cmp,
+    CONTENTS_GENERATOR, PAGE_ORDER, PageContents, Panel, Project, RATED_CURRENT_A, contents_scope,
+    is_contents_generator, natural_cmp, panel_contents_generator,
 };
 pub use record::{ChangeSet, Entity, Op, Record, Transaction};
 pub use search::{Match, SearchHit};

@@ -1911,6 +1911,7 @@ dependencies = [
  "novo-checks",
  "novo-core",
  "novo-editor",
+ "novo-interop",
  "novo-pdf",
  "novo-py",
  "novo-reports",
@@ -2045,6 +2046,9 @@ dependencies = [
 [[package]]
 name = "novo-routing"
 version = "0.1.0"
+dependencies = [
+ "novo-core",
+]
 
 [[package]]
 name = "novo-sim"
