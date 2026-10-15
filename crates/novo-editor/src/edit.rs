@@ -16,10 +16,11 @@ use novo_symbols::Symbol;
 
 use crate::catalog::{SymbolClass, classify, model_groups, model_pins};
 use crate::geometry::{
-    self, EPS, Target, arc_position, endpoint_direction, locate_on_polyline, route, route_through,
-    simplify, wire_points, wires_through,
+    self, EPS, Target, arc_position, endpoint_direction, locate_on_polyline, route, simplify,
+    wire_points, wires_through,
 };
 use crate::naming::{Numbering, child_pin_names, complete_tag, new_device_tag, page_structure};
+use crate::overlap::plan_route;
 
 /// What a placement attaches to, beyond the symbol itself.
 #[derive(Debug, Clone, Default)]
@@ -670,13 +671,28 @@ pub fn draw_wire(
     let b = project
         .endpoint_position(to)
         .ok_or(ModelError::NotFound(endpoint_id(to)))?;
-    let bends = route_through(
+    // Wires that leave the same pin may run together for their first stretch;
+    // that case becomes a derived junction later. Everything else is checked.
+    let mut exempt: Vec<WireId> = Vec::new();
+    for end in [from, to] {
+        if matches!(end, Endpoint::Pin { .. }) {
+            exempt.extend(project.wires_at(end));
+        }
+    }
+    let bends = plan_route(
+        project,
+        page,
         a,
         endpoint_direction(project, from),
         corners,
         b,
         endpoint_direction(project, to),
-    );
+        &exempt,
+    )
+    .map_err(|r| ModelError::InvalidValue {
+        id: r.other.into(),
+        field: "route overlaps this wire",
+    })?;
     let wire = tx.connect(from, to)?;
     if !bends.is_empty() {
         tx.update::<Wire>(wire, |w| w.route = bends)?;
