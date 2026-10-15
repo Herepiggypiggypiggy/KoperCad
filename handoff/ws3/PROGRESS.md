@@ -15,4 +15,16 @@
 2026-10-14 17:20 UTC #28: fixed tester F2 (terminal name only, ink beats text); head 924be9b; reviewer + tester notified. frame.patch rebased (4faa2b8).
 2026-10-14 17:35 UTC Marks (DESIGN §5) and DESIGN §3 title block done locally on canvas-marks; patches in next-pr/. Waiting for #28 review and #35.
 2026-10-14 17:16 UTC Gate 0 passed on Quadro P1000 (10k: 1135 fps avg / 222 1% low). 100k: 113 avg / 38.5 1% low, stutter queued.
-2026-10-14 18:20 UTC Integration lead fixed PR #28 locally (junction dot for 3+ wires, Text records, potential labels; merged main) at a3302fc; bundle and patch in lead-fixes/, not pushed.
+2026-10-14 21:30 UTC Resumed: #28 and #47 merged. New queue from integration lead cse_01FiLvRBKEcNNHbQEGhYyL1S (xref in scene, wgpu optional, sheets, Xvfb click).
+2026-10-14 21:45 UTC #93 opened (head afacdc4): xref labels in the page scene (PageScene::set_notes), PDF prints them. Local CI green (627 tests).
+2026-10-14 21:50 UTC Local branches ready, patches in next-pr/: canvas-wgpu-optional (gpu feature, novo-cli headless; click regression tests), canvas-sheets (set_sheet), canvas-perf (100k stutter: show() p99 20.9 -> 1.2 ms).
+2026-10-14 21:50 UTC Xvfb click: does not reproduce in code (canvas and full-window tests select). This container's Xvfb ignores XTEST/XWarpPointer, pointer frozen at screen centre.
+2026-10-14 21:59 UTC #93 merged. #103 opened (head c7f5b73): wgpu optional + click tests; reviewer B asked.
+2026-10-14 22:15 UTC canvas-drawing ready locally (105d8ff): junction Plain for <3 wires (DESIGN §2), NoteAnchor, keep_color for warnings, strip names per run (F5). Outputs thread asked to drop its SheetLabel; mine (canvas-sheets) owns set_sheet.
+2026-10-14 22:05 UTC #103 merged. drawing branch rebased; maps xref LabelAnchor (#102) to NoteAnchor.
+2026-10-14 22:15 UTC #109 opened (head a567762): SheetContent/set_sheet; schematic n of m counts schematic pages only (design ruling). Reviewer B + design reviewer + outputs told. Next: perf, then drawing.
+2026-10-14 22:15 UTC #109 head 3dfbc1f: sheets named 20a/20b (design reviewer CHANGES NEEDED item); both reviewers pinged.
+2026-10-15 03:10 UTC Resumed after restart. #109 merged. #120 opened (head 95279c2 on main 89971f4): canvas perf. Reviewer B + lead told.
+2026-10-15 03:20 UTC Drawing rebased on #120 (ffca612, local branch canvas-drawing-next, patch in next-pr/canvas-drawing/); un-ignores F5 gap_pdf_names_the_terminal_strip (passes). Local CI 683 passed. Opens as a PR once #120 merges.
+2026-10-15 03:40 UTC canvas-reveal ready (451904b on drawing; patch next-pr/canvas-reveal/): CanvasView::reveal for jumps, moves only when the target is off screen; app jump + terminal proposals use it. 686 passed.
+2026-10-15 03:10 UTC #120 READY (reviewer B) and merged as dca9a9a. Drawing PR rebased on main d7f70b8.

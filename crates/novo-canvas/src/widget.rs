@@ -943,7 +943,7 @@ impl CanvasView {
             // Quantise sizes (12 steps per octave) so continuous zooming
             // does not rasterise a new font size every frame.
             let size = 2f32.powf((size.log2() * 12.0).round() / 12.0);
-            let [r, g, b, a] = highlight.unwrap_or(l.color).0;
+            let [r, g, b, a] = highlight.filter(|_| !l.keep_color).unwrap_or(l.color).0;
             let color = egui::Color32::from_rgba_unmultiplied(r, g, b, a);
             let galley =
                 painter.layout_no_wrap(l.text.clone(), egui::FontId::proportional(size), color);

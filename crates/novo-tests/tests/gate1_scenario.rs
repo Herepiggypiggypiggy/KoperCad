@@ -1310,12 +1310,11 @@ fn outputs_of_the_starter() {
     }
 }
 
-/// F5: terminals show only their own name (`1`, `2`, `3`, `PE`; #28 fixed
-/// F2 that way), and nothing else on the page names their strip, so the
-/// printed page does not say which strip they are on. IEC 61082 drawings
-/// name the strip once beside a group of its terminals.
+/// F5, fixed by the canvas strip names: terminals show only their own name
+/// (`1`, `2`, `3`, `PE`; #28 fixed F2 that way), and the strip's tag is
+/// printed once beside the first terminal of each run, as IEC 61082
+/// drawings name the strip.
 #[test]
-#[ignore = "known gap F5: the printed page never names the terminal strip -X1 (TEST_REPORT Round 10)"]
 fn gap_pdf_names_the_terminal_strip() {
     let library = Library::builtin().unwrap();
     let dir = tempfile::tempdir().unwrap();

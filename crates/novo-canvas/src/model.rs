@@ -216,6 +216,9 @@ pub enum JunctionGlyph {
     /// A corner joining two sides; `quarter_turns` rotates the default
     /// (right and down) clockwise.
     Corner { quarter_turns: u8 },
+    /// Nothing drawn: fewer than three conductors join here (a straight
+    /// run, a loose end), so it is no connection point on paper.
+    Plain,
 }
 
 impl JunctionGlyph {
@@ -223,8 +226,9 @@ impl JunctionGlyph {
     /// (any length; they are snapped to the nearest of the four axes).
     /// Wires are counted, not sides: three or more wires are an electrical
     /// node and always get a dot (a T when they use exactly three sides).
-    /// Exactly two wires at a right angle make a corner; anything else (a
-    /// straight run, a loose end) is a dot.
+    /// Fewer get no dot (docs/DESIGN.md §2): two wires at a right angle
+    /// make a corner, anything else (a straight run, a loose end) is
+    /// [`Plain`](Self::Plain).
     pub fn from_directions(dirs: impl IntoIterator<Item = Vec2>) -> Self {
         let mut sides = [false; 4];
         let mut wires = 0usize;
@@ -244,10 +248,11 @@ impl JunctionGlyph {
             }
             (2, 2) => (0..4u8)
                 .find(|&q| sides[q as usize] && sides[((q + 3) % 4) as usize])
-                .map_or(JunctionGlyph::Dot, |q| JunctionGlyph::Corner {
+                .map_or(JunctionGlyph::Plain, |q| JunctionGlyph::Corner {
                     quarter_turns: q,
                 }),
-            _ => JunctionGlyph::Dot,
+            (3.., _) => JunctionGlyph::Dot,
+            _ => JunctionGlyph::Plain,
         }
     }
 }
@@ -293,7 +298,9 @@ pub fn junction_glyph(glyph: JunctionGlyph, pos: Vec2, style: &ModelStyle) -> Ve
     };
     match glyph {
         JunctionGlyph::Dot => vec![dot],
+        JunctionGlyph::Plain => Vec::new(),
         JunctionGlyph::Tee { stem } => {
+            let stem = stem % 4;
             // The stem and the through line across it.
             let mut out = stubs(&[
                 quarter_dir(stem),
@@ -304,6 +311,7 @@ pub fn junction_glyph(glyph: JunctionGlyph, pos: Vec2, style: &ModelStyle) -> Ve
             out
         }
         JunctionGlyph::Corner { quarter_turns } => {
+            let quarter_turns = quarter_turns % 4;
             stubs(&[quarter_dir(quarter_turns + 3), quarter_dir(quarter_turns)])
         }
     }
@@ -330,6 +338,8 @@ pub struct SymbolNote {
     pub lines: Vec<String>,
     /// Draw in [`ModelStyle::note_warning_color`].
     pub warning: bool,
+    /// Where the note sits relative to its symbol.
+    pub anchor: NoteAnchor,
 }
 
 /// One printed sheet of a generated page (a report): text boxes and rules
@@ -390,6 +400,20 @@ fn fit_text(text: &str, width: f32, height: f32) -> String {
     out
 }
 
+/// Where a [`SymbolNote`] sits relative to its symbol's ink.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum NoteAnchor {
+    /// Above the top right corner.
+    #[default]
+    TopRight,
+    /// Under the symbol, left-aligned with it: a coil's contact image
+    /// (IEC 61082).
+    Below,
+    /// Right of the symbol on its centre line, under the tag when it has
+    /// one: a contact's or interruption point's single reference.
+    Right,
+}
+
 /// The canvas scene of one model page, kept in sync with the project.
 pub struct PageScene {
     page: PageId,
@@ -406,6 +430,9 @@ pub struct PageScene {
     notes: HashMap<SymbolId, SymbolNote>,
     /// What a generated page shows; see [`Self::set_sheet`].
     sheet: Option<SheetContent>,
+    /// The first terminal symbol of each run of one strip on this page,
+    /// with the strip's tag it shows (see [`strip_heads`]).
+    strip_heads: HashMap<SymbolId, String>,
     pub style: ModelStyle,
 }
 
@@ -434,6 +461,7 @@ impl PageScene {
             text_hosts: HashMap::new(),
             notes: HashMap::new(),
             sheet: None,
+            strip_heads: HashMap::new(),
             style: ModelStyle::default(),
         };
         s.rebuild(project, art);
@@ -537,6 +565,7 @@ impl PageScene {
         self.wire_junctions.clear();
         self.text_hosts.clear();
         self.frame(project);
+        self.strip_heads = strip_heads(project, self.page);
         let contents = project.page_contents(self.page);
         for id in contents.symbols {
             self.sync_symbol(project, id, art);
@@ -636,6 +665,28 @@ impl PageScene {
                 AnyId::Page(_) => frame_dirty = true,
                 _ => {}
             }
+        }
+        // A strip's name sits at the first terminal of each run: any
+        // terminal edit can move it to another symbol.
+        let terminals_touched = dirty.iter().any(|id| match id {
+            AnyId::Device(_) | AnyId::Terminal(_) => true,
+            AnyId::Symbol(s) => {
+                self.strip_heads.contains_key(s)
+                    // A removed symbol may have split a run.
+                    || project
+                        .symbol(*s)
+                        .is_none_or(|s| matches!(s.role, SymbolRole::Terminal { .. }))
+            }
+            _ => false,
+        });
+        if terminals_touched {
+            let heads = strip_heads(project, self.page);
+            for (s, tag) in self.strip_heads.iter().chain(&heads) {
+                if self.strip_heads.get(s) != Some(tag) || heads.get(s) != Some(tag) {
+                    dirty.insert(AnyId::Symbol(*s));
+                }
+            }
+            self.strip_heads = heads;
         }
         // A junction's glyph follows the wires leaving it, before and after
         // the edit (a removed wire is gone from the project).
@@ -899,7 +950,9 @@ impl PageScene {
                 .text(t)
                 .is_some_and(|t| t.content == TextContent::DeviceTag)
         });
-        if let Some(text) = symbol_text(project, sym).filter(|_| !tag_text) {
+        let text = symbol_text(project, sym).filter(|_| !tag_text);
+        let mut tag = None;
+        if let Some(text) = text {
             // To the right of the placed symbol, vertically centred on its
             // pins, whatever its rotation or mirroring.
             let origin = vec(sym.placement.origin);
@@ -918,41 +971,80 @@ impl PageScene {
             };
             // The tag is the device's own text: always horizontal, and
             // always the item's first label.
-            item.labels.insert(
-                0,
-                Label::new(pos, text, self.style.tag_height)
-                    .anchored(anchor)
-                    .colored(self.style.tag_color),
+            let label = Label::new(pos, text, self.style.tag_height)
+                .anchored(anchor)
+                .colored(self.style.tag_color);
+            tag = Some(label.clone());
+            item.labels.insert(0, label);
+        }
+        if let Some(strip) = self.strip_heads.get(&id) {
+            // Left of the run's first terminal; the terminals' own names
+            // are on their right.
+            let b = item
+                .primitives
+                .iter()
+                .fold(crate::Aabb::EMPTY, |b, p| b.union(&p.shape.bounds()));
+            let at = if b.is_empty() {
+                vec(sym.placement.origin)
+            } else {
+                Vec2::new(b.min.x, b.center().y)
+            };
+            item.labels.push(
+                Label::new(
+                    at - Vec2::new(1.5, 0.0),
+                    strip.clone(),
+                    self.style.tag_height,
+                )
+                .anchored(Anchor::CenterRight)
+                .colored(self.style.tag_color),
             );
         }
         if let Some(note) = self.notes.get(&id) {
-            item.labels.push(self.note_label(&item, note));
+            let label = self.note_label(&item, tag.as_ref(), note);
+            item.labels.push(label);
         }
         self.put(id.into(), item);
     }
 
-    /// A note above the top right corner of the symbol's ink, clear of its
-    /// tag, in the tag's size so both read alike.
-    fn note_label(&self, item: &Item, note: &SymbolNote) -> Label {
+    /// A note next to the symbol's ink (see [`NoteAnchor`]), in the tag's
+    /// size so both read alike. A warning keeps its colour while the
+    /// symbol is selected.
+    fn note_label(&self, item: &Item, tag: Option<&Label>, note: &SymbolNote) -> Label {
         let ink = item
             .primitives
             .iter()
             .fold(crate::Aabb::EMPTY, |b, p| b.union(&p.shape.bounds()));
-        let pos = if ink.is_empty() {
-            item.snap_points
-                .first()
-                .map_or(Vec2::ZERO, |s| s.pos + Vec2::new(1.0, -1.0))
+        let ink = if ink.is_empty() {
+            let at = item.snap_points.first().map_or(Vec2::ZERO, |s| s.pos);
+            crate::Aabb::from_corners(at, at)
         } else {
-            Vec2::new(ink.max.x + 1.0, ink.min.y - 0.5)
+            ink
         };
-        let color = if note.warning {
-            self.style.note_warning_color
+        let h = self.style.tag_height;
+        let (pos, anchor) = match note.anchor {
+            NoteAnchor::TopRight => (
+                Vec2::new(ink.max.x + 1.0, ink.min.y - 0.5),
+                Anchor::BottomLeft,
+            ),
+            NoteAnchor::Below => (Vec2::new(ink.min.x, ink.max.y + 1.0), Anchor::TopLeft),
+            NoteAnchor::Right => match tag {
+                // One line under the tag, aligned with it.
+                Some(t) => {
+                    let b = t.bounds();
+                    (Vec2::new(b.min.x, b.max.y + 0.2 * h), Anchor::TopLeft)
+                }
+                None => (
+                    Vec2::new(ink.max.x + 1.0, ink.center().y),
+                    Anchor::CenterLeft,
+                ),
+            },
+        };
+        let label = Label::new(pos, note.lines.join("\n"), h).anchored(anchor);
+        if note.warning {
+            label.colored(self.style.note_warning_color).keeping_color()
         } else {
-            self.style.note_color
-        };
-        Label::new(pos, note.lines.join("\n"), self.style.tag_height)
-            .anchored(Anchor::BottomLeft)
-            .colored(color)
+            label.colored(self.style.note_color)
+        }
     }
 
     fn sync_junction(&mut self, project: &Project, id: JunctionId) {
@@ -1096,6 +1188,75 @@ pub fn symbol_text(project: &Project, sym: &SymbolInstance) -> Option<String> {
         }
         SymbolRole::Unassigned => None,
     }
+}
+
+/// Terminals of one strip further apart than this (mm, between symbol
+/// origins) start a new run, which names its strip again.
+const STRIP_RUN_GAP: f64 = 20.0;
+
+/// The symbols that name their strip on `page`: the first terminal (left
+/// most, then top most) of each run of adjacent terminals of one strip, as
+/// IEC 61082 drawings name `-X1` once beside a group of its terminals.
+/// Maps each to the strip's tag.
+fn strip_heads(project: &Project, page: PageId) -> HashMap<SymbolId, String> {
+    let mut by_strip: HashMap<novo_core::DeviceId, Vec<(Point, SymbolId)>> = HashMap::new();
+    for id in project.page_contents(page).symbols {
+        let Some(sym) = project.symbol(id) else {
+            continue;
+        };
+        let SymbolRole::Terminal { terminals } = &sym.role else {
+            continue;
+        };
+        if let Some(t) = terminals.first().and_then(|t| project.terminal(*t)) {
+            by_strip
+                .entry(t.strip)
+                .or_default()
+                .push((sym.placement.origin, id));
+        }
+    }
+    let mut heads = HashMap::new();
+    for (strip, mut syms) in by_strip {
+        let Some(tag) = project.device(strip).map(|d| d.tag.to_string()) else {
+            continue;
+        };
+        if tag.is_empty() {
+            continue;
+        }
+        syms.sort_by(|a, b| {
+            a.0.x
+                .total_cmp(&b.0.x)
+                .then(a.0.y.total_cmp(&b.0.y))
+                .then(a.1.cmp(&b.1))
+        });
+        // Runs are the groups of terminals chained by neighbours at most
+        // STRIP_RUN_GAP apart, whatever their order (two rows side by side
+        // stay two runs); each run is named at its first terminal in the
+        // sort order (leftmost, then topmost).
+        let near = |a: Point, b: Point| (a.x - b.x).hypot(a.y - b.y) <= STRIP_RUN_GAP;
+        let mut run: Vec<usize> = (0..syms.len()).collect();
+        fn root(run: &mut [usize], mut i: usize) -> usize {
+            while run[i] != i {
+                run[i] = run[run[i]];
+                i = run[i];
+            }
+            i
+        }
+        for i in 0..syms.len() {
+            for j in i + 1..syms.len() {
+                if near(syms[i].0, syms[j].0) {
+                    let (a, b) = (root(&mut run, i), root(&mut run, j));
+                    // The earlier terminal stays the root, so it heads the run.
+                    run[a.max(b)] = a.min(b);
+                }
+            }
+        }
+        for (i, (_, id)) in syms.iter().enumerate() {
+            if root(&mut run, i) == i {
+                heads.insert(*id, tag.clone());
+            }
+        }
+    }
+    heads
 }
 
 /// A direct-on-line motor starter on one A3 page: the Gate 1 circuit, drawn
@@ -1289,6 +1450,7 @@ mod tests {
             symbol: k1,
             lines: lines.iter().map(|l| l.to_string()).collect(),
             warning,
+            anchor: NoteAnchor::TopRight,
         };
         let labels =
             |ps: &PageScene| -> Vec<Label> { ps.scene().get(item_id(k1)).unwrap().labels.clone() };
@@ -1345,6 +1507,171 @@ mod tests {
         assert!(ps.set_notes(doc.project(), [note(&[" "], false)], &PlaceholderArt));
         assert_eq!(labels(&ps).len(), 1);
         assert_eq!(ps.scene().get(item_id(s1)).unwrap().labels.len(), 1);
+    }
+
+    #[test]
+    fn note_anchors_place_contact_images_below_and_references_under_the_tag() {
+        let (doc, page, k1, s1, _w) = doc();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let note = |symbol, anchor, warning| SymbolNote {
+            symbol,
+            lines: vec!["13-14 /1.2".into()],
+            warning,
+            anchor,
+        };
+        ps.set_notes(
+            doc.project(),
+            [
+                note(k1, NoteAnchor::Below, true),
+                note(s1, NoteAnchor::Right, false),
+            ],
+            &PlaceholderArt,
+        );
+        let item = |id| ps.scene().get(item_id(id)).unwrap().clone();
+        let ink = |it: &Item| {
+            it.primitives
+                .iter()
+                .fold(crate::Aabb::EMPTY, |b, p| b.union(&p.shape.bounds()))
+        };
+        // A coil's contact image: under the ink, left-aligned with it.
+        let coil = item(k1);
+        let below = coil.labels.last().unwrap();
+        assert_eq!(below.anchor, Anchor::TopLeft);
+        assert_eq!(below.pos.x, ink(&coil).min.x);
+        assert!(below.pos.y > ink(&coil).max.y);
+        // A warning keeps its colour under selection; plain notes do not.
+        assert!(below.keep_color);
+        // A contact's reference: one line under its tag, aligned with it.
+        let contact = item(s1);
+        let (tag, reference) = (&contact.labels[0], contact.labels.last().unwrap());
+        assert_eq!(reference.pos.x, tag.bounds().min.x);
+        assert!(reference.pos.y >= tag.bounds().max.y);
+        assert!(!reference.keep_color);
+    }
+
+    /// Two rows of one strip over the same x range (supply terminals at
+    /// the top of a page, motor outputs at the bottom) are two runs, one
+    /// name each, not one run per terminal.
+    #[test]
+    fn two_rows_of_a_strip_are_two_runs() {
+        let aligned: &[(f64, f64)] = &[
+            (100.0, 50.0),
+            (105.0, 50.0),
+            (110.0, 50.0),
+            (100.0, 150.0),
+            (105.0, 150.0),
+            (110.0, 150.0),
+        ];
+        let staggered: &[(f64, f64)] = &[
+            (100.0, 50.0),
+            (102.5, 120.0),
+            (110.0, 50.0),
+            (112.5, 120.0),
+            (120.0, 50.0),
+            (122.5, 120.0),
+        ];
+        for (at, expect) in [(aligned, vec![0, 3]), (staggered, vec![0, 1])] {
+            let mut doc = Document::default();
+            let ((page, syms), _) = doc
+                .transact("strip", |tx| {
+                    let page = tx.add_page("1")?;
+                    let x1 = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+                    let mut syms = Vec::new();
+                    for (i, &(x, y)) in at.iter().enumerate() {
+                        let t = tx.add_terminal(x1, (i + 1).to_string())?;
+                        syms.push(tx.place_symbol(
+                            page,
+                            "iec/terminal",
+                            MPlacement::at(Point::new(x, y)),
+                            vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                            SymbolRole::Terminal { terminals: vec![t] },
+                        )?);
+                    }
+                    Ok((page, syms))
+                })
+                .unwrap();
+            let heads = strip_heads(doc.project(), page);
+            let named: Vec<usize> = (0..syms.len())
+                .filter(|&i| heads.contains_key(&syms[i]))
+                .collect();
+            assert_eq!(named, expect, "{at:?}");
+        }
+    }
+
+    #[test]
+    fn each_run_of_terminals_names_its_strip_once() {
+        let mut doc = Document::default();
+        let ((page, syms), _) = doc
+            .transact("strip", |tx| {
+                let page = tx.add_page("1")?;
+                let x1 = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+                let mut syms = Vec::new();
+                // Two runs: 1..3 at x 100..110, then 4 at x 200.
+                for (i, x) in [100.0, 105.0, 110.0, 200.0].into_iter().enumerate() {
+                    let t = tx.add_terminal(x1, (i + 1).to_string())?;
+                    syms.push(tx.place_symbol(
+                        page,
+                        "iec/terminal",
+                        MPlacement::at(Point::new(x, 50.0)),
+                        vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                        SymbolRole::Terminal { terminals: vec![t] },
+                    )?);
+                }
+                Ok((page, syms))
+            })
+            .unwrap();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let named = |ps: &PageScene| -> Vec<usize> {
+            (0..syms.len())
+                .filter(|&i| {
+                    ps.scene()
+                        .get(item_id(syms[i]))
+                        .unwrap()
+                        .labels
+                        .iter()
+                        .any(|l| l.text == "-X1")
+                })
+                .collect()
+        };
+        assert_eq!(named(&ps), vec![0, 3]);
+        // The name sits left of the terminal, its own name stays first.
+        let first = ps.scene().get(item_id(syms[0])).unwrap();
+        assert_eq!(first.labels[0].text, "1");
+        let strip = first.labels.iter().find(|l| l.text == "-X1").unwrap();
+        assert_eq!(strip.anchor, Anchor::CenterRight);
+        assert!(strip.pos.x < 100.0);
+        // Moving the first terminal away hands the name to the next one.
+        let (_, changes) = doc
+            .transact("move", |tx| {
+                tx.move_symbol(syms[0], MPlacement::at(Point::new(300.0, 50.0)))
+            })
+            .unwrap();
+        ps.apply(doc.project(), &changes, &PlaceholderArt);
+        assert_eq!(named(&ps), vec![0, 1, 3]);
+        // Renaming the strip renames its runs.
+        let x1 = doc
+            .project()
+            .terminal(match &doc.project().symbol(syms[1]).unwrap().role {
+                SymbolRole::Terminal { terminals } => terminals[0],
+                _ => unreachable!(),
+            })
+            .unwrap()
+            .strip;
+        let (_, changes) = doc
+            .transact("retag", |tx| {
+                tx.update::<novo_core::Device>(x1, |d| d.tag = DeviceTag::parse("-X2").unwrap())
+            })
+            .unwrap();
+        ps.apply(doc.project(), &changes, &PlaceholderArt);
+        let texts: Vec<String> = ps
+            .scene()
+            .get(item_id(syms[1]))
+            .unwrap()
+            .labels
+            .iter()
+            .map(|l| l.text.clone())
+            .collect();
+        assert!(texts.contains(&"-X2".to_string()), "{texts:?}");
     }
 
     #[test]
@@ -1538,8 +1865,17 @@ mod tests {
             JunctionGlyph::from_directions([-x, -y]),
             Corner { quarter_turns: 2 }
         );
-        assert_eq!(JunctionGlyph::from_directions([x, -x]), Dot);
+        // Fewer than three conductors: no dot (DESIGN.md §2).
+        assert_eq!(JunctionGlyph::from_directions([x, -x]), Plain);
+        assert_eq!(JunctionGlyph::from_directions([x]), Plain);
+        assert_eq!(JunctionGlyph::from_directions([]), Plain);
+        assert!(junction_glyph(Plain, Vec2::ZERO, &ModelStyle::default()).is_empty());
         assert_eq!(JunctionGlyph::from_directions([x, -x, y, -y]), Dot);
+        // Out-of-range quarter turns wrap instead of overflowing.
+        assert_eq!(
+            junction_glyph(Tee { stem: 255 }, Vec2::ZERO, &ModelStyle::default()).len(),
+            4
+        );
 
         // Wires are counted, not sides: three or more wires always get a
         // dot, even when they leave on only two sides.
@@ -1570,7 +1906,7 @@ mod tests {
         assert!(!dotted(JunctionGlyph::from_directions([x, y])));
 
         // The demo's self-hold branch: both junctions are Ts, and removing
-        // the branch wire leaves a straight run, drawn as a plain dot.
+        // the branch wire leaves a straight run, drawn with no dot.
         let (mut doc, page) = demo_document().unwrap();
         let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
         let lines = |ps: &PageScene, j: JunctionId| {
@@ -1610,7 +1946,10 @@ mod tests {
             .expect("a horizontal branch");
         let (_, changes) = doc.transact("cut", |tx| tx.remove(branch)).unwrap();
         ps.apply(doc.project(), &changes, &PlaceholderArt);
-        assert_eq!(lines(&ps, j), 0, "a straight run is a dot");
+        assert!(
+            ps.scene().get(item_id(j)).unwrap().primitives.is_empty(),
+            "a straight run has no dot"
+        );
     }
 
     #[test]
