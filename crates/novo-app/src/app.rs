@@ -37,6 +37,7 @@ mod terminals;
 mod title_revisions;
 mod userkeymap;
 mod wheel;
+mod wire_production;
 mod workbench;
 mod xref;
 
@@ -54,6 +55,8 @@ mod example_tests;
 mod gate1_tests;
 #[cfg(test)]
 mod onboarding_tests;
+#[cfg(test)]
+mod route_all_tests;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -1026,6 +1029,26 @@ impl NovoApp {
                 }
                 if ui.add_enabled(has, egui::Button::new("Remove")).clicked() {
                     self.wb.queued.push("file.remove_background");
+                    ui.close();
+                }
+            });
+        });
+        ui.add_enabled_ui(self.is_open(), |ui| {
+            ui.menu_button("Export wire cut", |ui| {
+                if ui
+                    .button("Job file (CSV)")
+                    .on_hover_text("One row per wire for a wire-processing machine")
+                    .clicked()
+                {
+                    self.wb.queued.push("export.wirecut");
+                    ui.close();
+                }
+                if ui
+                    .button("Workbook (.xlsx)")
+                    .on_hover_text("Cut list, wire stock, ferrules and duct fill")
+                    .clicked()
+                {
+                    self.wb.queued.push("export.wirecut_xlsx");
                     ui.close();
                 }
             });

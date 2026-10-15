@@ -287,6 +287,24 @@ pub const DUTCH: &[Aliases] = &[
         &["excel"],
     ),
     nl("export.sheets_csv", &["exporteer csv"], &["csv"]),
+    nl(
+        "cabinet.routes",
+        &["bedraad alles", "routeer alle draden"],
+        &["draadlengte", "bedrading", "kanaalvulling"],
+    ),
+    nl(
+        "export.wirecut",
+        &[
+            "exporteer draadlijst voor machine",
+            "exporteer draadsnijlijst",
+        ],
+        &["draadsnijmachine", "adereindhulzen", "labels"],
+    ),
+    nl(
+        "export.wirecut_xlsx",
+        &["exporteer draadproductie"],
+        &["draadsnijden", "adereindhulzen", "kanaalvulling"],
+    ),
 ];
 
 /// Dutch command arguments and the English chip each one stands for.

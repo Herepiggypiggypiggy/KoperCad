@@ -228,6 +228,9 @@ const APP_COMMANDS: &[&str] = &[
     "export.pdf",
     "export.sheets",
     "export.sheets_csv",
+    "export.wirecut",
+    "export.wirecut_xlsx",
+    "cabinet.routes",
     "file.import_dxf_background",
     "view.background",
     "file.remove_background",
@@ -568,6 +571,13 @@ impl NovoApp {
             }
             "export.sheets" => {
                 self.export_spreadsheet();
+            }
+            "cabinet.routes" => self.toggle_cabinet_routes(),
+            "export.wirecut" => {
+                self.export_wire_cut();
+            }
+            "export.wirecut_xlsx" => {
+                self.export_wire_production();
             }
             "export.sheets_csv" => {
                 self.export_spreadsheet_csv();

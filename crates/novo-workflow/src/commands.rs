@@ -812,6 +812,42 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "cabinet.routes",
+            "Route all wires (Cabinet)",
+            "View",
+            &["route", "wire length", "duct fill", "cut length"],
+            Needs::Project,
+        ),
+        &["route all", "route wires"],
+    ),
+    verb(
+        cmd(
+            "export.wirecut",
+            "Export wire cut list (CSV)",
+            "Export",
+            &[
+                "wire cut",
+                "wire machine",
+                "ferrule",
+                "labels",
+                "production",
+            ],
+            Needs::Project,
+        ),
+        &["export wire cut", "wire cut"],
+    ),
+    verb(
+        cmd(
+            "export.wirecut_xlsx",
+            "Export wire production (.xlsx)",
+            "Export",
+            &["wire cut", "stock", "ferrules", "duct fill"],
+            Needs::Project,
+        ),
+        &["export wire production"],
+    ),
+    verb(
+        cmd(
             "export.sheets_csv",
             "Export for bulk edit (CSV files)",
             "Export",
