@@ -21,12 +21,14 @@ fn a_wire_that_turns_back_keeps_its_turning_point() {
             pos: Point::new(50.0, 60.0),
             facing: Facing::Down,
         },
+        diameter_mm: None,
     };
     let r = net.route(
         &j,
         &Rules {
             slack_mm: 0.0,
             max_stub_mm: 150.0,
+            fill_limit: 0.5,
         },
     );
     assert_eq!(r.length_mm, 80.0 + 40.0);
