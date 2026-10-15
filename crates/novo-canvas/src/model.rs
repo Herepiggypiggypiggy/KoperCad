@@ -69,6 +69,21 @@ pub fn anchor(a: TextAnchor) -> Anchor {
     }
 }
 
+/// A canvas anchor as a model text anchor (the inverse of [`anchor`]).
+pub fn text_anchor(a: Anchor) -> TextAnchor {
+    match a {
+        Anchor::TopLeft => TextAnchor::TopLeft,
+        Anchor::TopCenter => TextAnchor::TopCenter,
+        Anchor::TopRight => TextAnchor::TopRight,
+        Anchor::CenterLeft => TextAnchor::MiddleLeft,
+        Anchor::Center => TextAnchor::MiddleCenter,
+        Anchor::CenterRight => TextAnchor::MiddleRight,
+        Anchor::BottomLeft => TextAnchor::BottomLeft,
+        Anchor::BottomCenter => TextAnchor::BottomCenter,
+        Anchor::BottomRight => TextAnchor::BottomRight,
+    }
+}
+
 /// Artwork for a symbol in symbol coordinates (mm, y down, unplaced).
 pub trait SymbolArt {
     /// Primitives for the symbol, or `None` to fall back to the placeholder.

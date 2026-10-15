@@ -9,12 +9,13 @@
 
 use novo_core::{
     AnyId, ChangeSet, DeviceId, DeviceTag, Document, Endpoint, PageId, Placement, Point, Project,
-    Rotation, SymbolId, SymbolInstance, SymbolKey, SymbolRole, WireId,
+    Rotation, SymbolId, SymbolInstance, SymbolKey, SymbolRole, TextAnchor, TextContent, TextId,
+    TextPlacement, WireId,
 };
 
 use crate::catalog::{Catalog, SymbolClass, classify, model_groups, model_pins};
 use crate::edit::{self, PlaceOptions, Transform};
-use crate::geometry::{EPS, Target, endpoint_direction, route_through, snap, target_at};
+use crate::geometry::{self, EPS, Target, endpoint_direction, route_through, snap, target_at};
 use crate::lines::{self, elbow, exact_bends, lock_axis};
 use crate::naming::{self, Numbering, parse_tag_input, tag_conflict};
 use crate::overlap::Refusal;
@@ -83,6 +84,25 @@ pub struct MoveTool {
     /// Quarter turns and mirroring applied on drop.
     pub turns: u8,
     pub mirrored: bool,
+    /// Shift: the wires on the moved pins stretch along instead of staying
+    /// behind as open ends.
+    pub carry: bool,
+}
+
+/// A label that is dragged on its own, leaving what it names where it is.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LabelSource {
+    /// A text record: its offset changes.
+    Record(TextId),
+    /// Text the canvas draws by itself (a symbol's tag, a wire's number):
+    /// the first drag gives it a record at the place it is drawn.
+    Drawn {
+        owner: AnyId,
+        content: TextContent,
+        /// Where it is drawn now, and which point of its box sits there.
+        at: Point,
+        anchor: TextAnchor,
+    },
 }
 
 /// The active tool.
@@ -647,6 +667,11 @@ impl Editor {
 
     /// Picks up the selection to move it with the pointer.
     pub fn begin_move(&mut self, selection: &[AnyId]) -> bool {
+        self.begin_move_with(selection, false)
+    }
+
+    /// [`Self::begin_move`], with `carry` taking the wires along (Shift).
+    pub fn begin_move_with(&mut self, selection: &[AnyId], carry: bool) -> bool {
         self.link_hint = None;
         let ids: Vec<AnyId> = selection
             .iter()
@@ -665,6 +690,7 @@ impl Editor {
             from,
             turns: 0,
             mirrored: false,
+            carry,
         }));
         true
     }
@@ -729,6 +755,11 @@ impl Editor {
                 .filter(|t| matches!(t, Target::Endpoint(Endpoint::Pin { .. }, _))),
             _ => None,
         };
+        // A wire is joined on the grid, not wherever the pointer crosses it.
+        if let Some(Target::Wire(w, q)) = self.target {
+            let at = geometry::snap_along_wire(project, w, q, self.grid);
+            self.target = Some(Target::Wire(w, at));
+        }
         self.cursor = Some(match self.target {
             Some(t) => t.position(),
             None => snap(raw, self.grid),
@@ -857,7 +888,12 @@ impl Editor {
                 let grid = self.grid;
                 let result = doc.transact("Move", |tx| {
                     if delta != Point::ZERO {
-                        edit::transform_interactive(tx, &m.ids, Transform::Move(delta))?;
+                        let how = Transform::Move(delta);
+                        if m.carry {
+                            edit::transform_interactive(tx, &m.ids, how)?;
+                        } else {
+                            edit::transform_detached(tx, &m.ids, how)?;
+                        }
                     }
                     let pivot = edit::pivot(tx.project(), &m.ids, grid);
                     if let Some(c) = pivot {
@@ -1447,6 +1483,68 @@ impl Editor {
                 edit::settle(tx, &edit::symbols_in(selection))?;
             }
             Ok(())
+        })
+    }
+
+    /// How far a label dragged from `from` to `to` moves: both ends snap to
+    /// the grid, as a moved symbol does.
+    pub fn label_delta(&self, from: Point, to: Point) -> Point {
+        snap(to, self.grid) - snap(from, self.grid)
+    }
+
+    /// Moves one label by `delta`, one undo step. The thing it names stays.
+    pub fn move_label(
+        &mut self,
+        doc: &mut Document,
+        page: PageId,
+        source: &LabelSource,
+        delta: Point,
+    ) -> bool {
+        if delta == Point::ZERO {
+            return false;
+        }
+        self.run(doc, "Move label", |tx| {
+            match source {
+                LabelSource::Record(id) => {
+                    let mut placement = tx
+                        .project()
+                        .text(*id)
+                        .map(|t| t.placement)
+                        .ok_or(novo_core::ModelError::NotFound(AnyId::Text(*id)))?;
+                    placement.offset = placement.offset + delta;
+                    tx.move_text(*id, placement)
+                }
+                LabelSource::Drawn {
+                    owner,
+                    content,
+                    at,
+                    anchor,
+                } => {
+                    let id = tx.add_text(
+                        page,
+                        content.clone(),
+                        TextPlacement {
+                            anchor: *anchor,
+                            ..Default::default()
+                        },
+                        Some(*owner),
+                    )?;
+                    // The offset is from the host's own origin, whatever
+                    // the host is: read it back instead of knowing it.
+                    let origin = tx
+                        .project()
+                        .text_position(id)
+                        .ok_or(novo_core::ModelError::NotFound(AnyId::Text(id)))?;
+                    tx.move_text(
+                        id,
+                        TextPlacement {
+                            offset: *at + delta - origin,
+                            anchor: *anchor,
+                            ..Default::default()
+                        },
+                    )
+                }
+            }
         })
     }
 

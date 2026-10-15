@@ -52,3 +52,4 @@
 2026-10-15 13:05 UTC Branch canvas-label-kinds (waits for #246 to merge): label_hit kinds follow the symbol role (TerminalName, InterruptionName, Potential for a feed) so the shell can rename terminals, interruption points and potentials on double click.
 - 2026-10-15: labels win picks over ink under them; label_hit kinds follow the symbol role (PR open).
 - 2026-10-15: wire corners are screen-size handles (Item.handles, 2.25 pt half), same size at every zoom; pin dot and open end stay world-size so print keeps them.
+- 2026-10-15: text-only drag. Press and drag on a label moves only the text: Editor::move_label (LabelSource Record or Drawn; a drawn tag gets a text record at the place it is drawn), view ghost while dragging, Esc puts it back.

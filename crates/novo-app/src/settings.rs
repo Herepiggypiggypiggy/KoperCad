@@ -1,6 +1,6 @@
 //! Preferences remembered between sessions.
 
-use novo_editor::tool::WiringMode;
+use novo_editor::tool::{ConnectMode, WiringMode};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -22,6 +22,9 @@ pub struct Settings {
     /// How the wire tool takes clicks, `"corners"` or `"lines"`: the
     /// person's preference, not the project's (docs/design/wiring-modes.md).
     pub wiring_mode: String,
+    /// What a drop does about facing free pins, `"draw"`, `"ask"` or
+    /// `"never"` (docs/DESIGN.md §2): a per-user preference.
+    pub connect_mode: String,
 }
 
 impl Settings {
@@ -39,6 +42,24 @@ impl Settings {
         self.wiring_mode = match mode {
             WiringMode::Corners => "corners",
             WiringMode::Lines => "lines",
+        }
+        .to_owned();
+    }
+
+    /// The auto-connection mode; Draw unless the person chose otherwise.
+    pub fn connect_mode(&self) -> ConnectMode {
+        match self.connect_mode.as_str() {
+            "ask" => ConnectMode::Ask,
+            "never" => ConnectMode::Never,
+            _ => ConnectMode::Draw,
+        }
+    }
+
+    pub fn set_connect_mode(&mut self, mode: ConnectMode) {
+        self.connect_mode = match mode {
+            ConnectMode::Draw => "draw",
+            ConnectMode::Ask => "ask",
+            ConnectMode::Never => "never",
         }
         .to_owned();
     }

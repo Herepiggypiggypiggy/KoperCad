@@ -55,4 +55,4 @@ pub mod art;
 pub mod view;
 
 pub use catalog::Catalog;
-pub use tool::{Editor, EditorKey, Tool};
+pub use tool::{Editor, EditorKey, LabelSource, Tool};

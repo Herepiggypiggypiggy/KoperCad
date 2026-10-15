@@ -54,6 +54,8 @@ pub(crate) struct Workbench {
     pub(super) queued: Vec<&'static str>,
     /// The `renumber io` preview waiting for Enter or Esc, per station.
     pub(super) renumber: Option<Vec<novo_plc::commands::RenumberPlan>>,
+    /// The Preferences window is open.
+    pub(super) preferences: bool,
     /// The new pages, group and panel form, while open.
     pub(super) page_form: Option<super::pages::PageForm>,
     /// Which sheet of a generated page the canvas shows (0 for the first).
@@ -95,6 +97,8 @@ pub(crate) struct Workbench {
     pub(super) problem_at: Option<usize>,
     /// The last PDF written, for tests and the toast.
     pub(super) last_export: Option<PathBuf>,
+    /// The live potentials view (Shift+L).
+    pub(super) live: super::live::LiveView,
 }
 
 impl Workbench {
@@ -120,6 +124,7 @@ impl Default for Workbench {
             place_hold: None,
             queued: Vec::new(),
             renumber: None,
+            preferences: false,
             page_form: None,
             sheet: 0,
             nav: Navigator::default(),
@@ -140,6 +145,7 @@ impl Default for Workbench {
             issue_filter: [true; 3],
             problem_at: None,
             last_export: None,
+            live: Default::default(),
         }
     }
 }
@@ -183,6 +189,7 @@ const APP_COMMANDS: &[&str] = &[
     "view.cables_drawer",
     "view.devices_drawer",
     "view.toggle_marks",
+    "sim.live",
     "check.problems",
     "check.next_problem",
     "check.previous_problem",
@@ -191,6 +198,8 @@ const APP_COMMANDS: &[&str] = &[
     "plc.to_plc",
     "plc.renumber_io",
     "xref.link",
+    "app.preferences",
+    "terminal.toggle_pe",
     "wire.mode",
 ];
 
@@ -437,6 +446,7 @@ impl NovoApp {
             }
             "proposal.accept_all" => self.accept_all_proposals(),
             "terminal.connect"
+            | "terminal.toggle_pe"
             | "terminal.disconnect"
             | "terminal.strip_up"
             | "terminal.strip_down"
@@ -445,6 +455,7 @@ impl NovoApp {
             "view.cables_drawer" => self.toggle_drawer(Drawer::Cables),
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
             "view.toggle_marks" => self.wb.marks ^= true,
+            "sim.live" => self.toggle_live(),
             "check.problems" => self.show_issues(false),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),
@@ -475,6 +486,7 @@ impl NovoApp {
             "plc.to_plc" => self.plc_to_plc(),
             "plc.renumber_io" => self.plc_renumber_io(),
             "xref.link" => self.xref_link(argument),
+            "app.preferences" => self.wb.preferences = true,
             other => {
                 let label = novo_workflow::commands::get(other).map_or(other, |c| c.label);
                 self.message(Level::Info, format!("{label} is not in the app yet"));
