@@ -72,6 +72,21 @@ pub const DUTCH: &[Aliases] = &[
         &["artikelen", "onderdeel"],
     ),
     nl("project.standard", &["tekennorm"], &["norm", "standaard"]),
+    nl(
+        "project.options",
+        &["projectopties", "varianten"],
+        &["opties van het project", "uitvoeringen", "machineopties"],
+    ),
+    nl(
+        "project.variant",
+        &["variant"],
+        &["uitvoering", "configuratie"],
+    ),
+    nl(
+        "project.generate",
+        &["genereer"],
+        &["genereren", "specificatielijst", "uit excel"],
+    ),
     nl("terminal.toggle_pe", &["pe-klem"], &["aardklem", "aarde"]),
     nl(
         "revision.issue",
@@ -286,6 +301,16 @@ pub const DUTCH: &[Aliases] = &[
         &["live potentialen tonen", "contacten sluiten", "spanning"],
     ),
     nl(
+        "sim.faults",
+        &["storingen"],
+        &[
+            "kortsluiting",
+            "beveiliging",
+            "selectiviteit",
+            "uitschakeltijd",
+        ],
+    ),
+    nl(
         "view.toggle_marks",
         &[],
         &["markeringen tonen of verbergen"],
@@ -387,6 +412,16 @@ pub const DUTCH: &[Aliases] = &[
         &["werkplaats", "boren"],
     ),
     nl("export.sheets_csv", &["exporteer csv"], &["csv"]),
+    nl(
+        "export.variant_pdf",
+        &["exporteer variant"],
+        &["pdf van een variant", "uitvoering exporteren"],
+    ),
+    nl(
+        "export.spec",
+        &["exporteer specificatie"],
+        &["specificatielijst exporteren"],
+    ),
     nl(
         "plc.import_tags",
         &["importeer plc", "importeer tags"],
