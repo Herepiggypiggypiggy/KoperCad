@@ -12,11 +12,12 @@
 
 use egui::{Key, Modifiers};
 use novo_canvas::model::{
-    self, ModelStyle, PageScene, PlaceholderArt, SheetContent, SymbolArt, SymbolNote, item_id,
+    self, LabelKind, ModelStyle, PageScene, PlaceholderArt, SheetContent, SymbolArt, SymbolNote,
+    item_id,
 };
 use novo_canvas::widget::{CanvasView, EscapeTarget};
 use novo_canvas::{Anchor, Color, Item, ItemId, Label, Primitive, SelectOp, Shape, Stroke, Vec2};
-use novo_core::{AnyId, ChangeSet, DeviceId, Document, PageId, Point};
+use novo_core::{AnyId, ChangeSet, Command, DeviceId, Document, PageId, Point, WireId};
 
 use crate::art::LibraryArt;
 use crate::catalog::Match;
@@ -50,8 +51,16 @@ struct InsertSearch {
     focus: bool,
 }
 
+/// What the rename box edits.
+#[derive(Clone, Copy)]
+enum RenameTarget {
+    Device(DeviceId),
+    /// A wire's number; empty text clears it.
+    Wire(WireId),
+}
+
 struct RenameBox {
-    device: DeviceId,
+    target: RenameTarget,
     text: String,
     anchor: egui::Pos2,
     error: Option<String>,
@@ -235,6 +244,16 @@ impl SchematicView {
     /// select; `None` when no box is being dragged.
     pub fn band_count(&self) -> Option<usize> {
         self.band_count
+    }
+
+    /// Whether the in-place rename box is open.
+    pub fn renaming(&self) -> bool {
+        self.rename.is_some()
+    }
+
+    /// The scene being drawn, for queries on what is under a point.
+    pub fn scene(&self) -> Option<&PageScene> {
+        self.scene.as_ref()
     }
 
     pub fn zoom_to_fit(&mut self) {
@@ -613,6 +632,38 @@ impl SchematicView {
             self.handle_keys(&ctx, document, page, &out, rect);
         }
 
+        // Double click on text renames it: a device tag in place, a wire
+        // number in place. Other text and bare devices fall through.
+        if response.double_clicked_by(egui::PointerButton::Primary)
+            && !self.editor.tool_active()
+            && !self.popup_open()
+            && let (Some(hit), Some(scene)) = (&out.hit, &self.scene)
+            && let Some(label) = scene.label_hit(document.project(), hit)
+        {
+            let anchor = ctx.pointer_latest_pos().unwrap_or(rect.center());
+            let start = match (label.kind, label.owner) {
+                (LabelKind::DeviceTag, owner) => device_of(document.project(), owner)
+                    .and_then(|d| document.project().device(d))
+                    .map(|d| (RenameTarget::Device(d.id), d.tag.to_string())),
+                (LabelKind::WireNumber, AnyId::Wire(w)) => document.project().wire(w).map(|w| {
+                    (
+                        RenameTarget::Wire(w.id),
+                        w.number.clone().unwrap_or_default(),
+                    )
+                }),
+                _ => None,
+            };
+            if let Some((target, text)) = start {
+                self.rename = Some(RenameBox {
+                    target,
+                    text,
+                    anchor,
+                    error: None,
+                    focus: true,
+                });
+            }
+        }
+
         // Double click on a device with nothing in hand opens its
         // properties, the cursor in the tag (DESIGN.md §4); the first click
         // of the pair has selected it. The shell owns the properties.
@@ -733,7 +784,7 @@ impl SchematicView {
             {
                 let anchor = ctx.pointer_latest_pos().unwrap_or(rect.center());
                 self.rename = Some(RenameBox {
-                    device,
+                    target: RenameTarget::Device(device),
                     text: d.tag.to_string(),
                     anchor,
                     error: None,
@@ -908,10 +959,12 @@ impl SchematicView {
                         edit.request_focus();
                         rename.focus = false;
                     }
-                    if edit.changed() {
+                    if edit.changed()
+                        && let RenameTarget::Device(device) = rename.target
+                    {
                         rename.error = self
                             .editor
-                            .check_rename(document, rename.device, &rename.text)
+                            .check_rename(document, device, &rename.text)
                             .err();
                     }
                     match &rename.error {
@@ -925,7 +978,18 @@ impl SchematicView {
                 });
             });
         if enter {
-            match self.editor.rename(document, rename.device, &rename.text) {
+            let done = match rename.target {
+                RenameTarget::Device(device) => self.editor.rename(document, device, &rename.text),
+                RenameTarget::Wire(wire) => {
+                    let number = rename.text.trim();
+                    let number = (!number.is_empty()).then(|| number.to_string());
+                    document
+                        .execute(Command::SetWireNumber { wire, number })
+                        .map(|_| ())
+                        .map_err(|e| e.to_string())
+                }
+            };
+            match done {
                 Ok(()) => close = true,
                 Err(e) => rename.error = Some(e),
             }
@@ -1039,7 +1103,7 @@ impl SchematicView {
                     && let Some(d) = document.project().device(device)
                 {
                     self.rename = Some(RenameBox {
-                        device,
+                        target: RenameTarget::Device(device),
                         text: d.tag.to_string(),
                         anchor,
                         error: None,

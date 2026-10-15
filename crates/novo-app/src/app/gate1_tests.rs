@@ -1563,3 +1563,56 @@ fn link_joins_a_contact_to_a_coil_by_tags_or_by_selection() {
     assert!(!last(&d).is_empty() && last(&d) != "Linked", "{}", last(&d));
     assert_eq!(d.doc().undo_depth(), depth + 1);
 }
+
+#[test]
+fn double_clicking_a_tag_opens_a_rename_box() {
+    use novo_canvas::model::LabelKind;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let coil = d.place("coil", 200.0, 144.0);
+    d.editor_leave();
+    d.frame();
+
+    // Find the tag on screen: the point whose pick is a device-tag label.
+    let rect = d.app.wb.canvas_area.unwrap().1;
+    let project = d.doc().project().clone();
+    let view = d.app.canvas.schematic().unwrap();
+    let origin = project.symbol(coil).unwrap().placement.origin;
+    let scene = view.scene().unwrap();
+    let zoom = view.canvas.viewport.zoom;
+    let mut found = None;
+    'scan: for dy in -40..=40 {
+        for dx in -40..=40 {
+            let w =
+                novo_canvas::Vec2::new(origin.x as f32 + dx as f32, origin.y as f32 + dy as f32);
+            if let Some(hit) = scene.scene().pick(w, 2.0, zoom)
+                && let Some(l) = scene.label_hit(&project, &hit)
+                && l.kind == LabelKind::DeviceTag
+            {
+                found = Some(w);
+                break 'scan;
+            }
+        }
+    }
+    let w = found.expect("the coil shows a tag");
+    let at = view.canvas.viewport.world_to_screen(w);
+    let pos = rect.min + egui::vec2(at.x, at.y);
+    let button = |pressed| egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    frame_at(&mut d, 50.0, vec![egui::Event::PointerMoved(pos)]);
+    for (i, t) in [50.1, 50.15, 50.2, 50.25].into_iter().enumerate() {
+        frame_at(&mut d, t, vec![button(i % 2 == 0)]);
+    }
+    frame_at(&mut d, 50.3, vec![]);
+    assert!(
+        d.app.canvas.schematic().unwrap().renaming(),
+        "the rename box is open on the tag"
+    );
+}
