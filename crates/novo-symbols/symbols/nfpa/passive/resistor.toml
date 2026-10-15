@@ -1,0 +1,29 @@
+format = 1
+id = "nfpa/passive/resistor"
+name = "Resistor"
+description = "Resistor, general symbol."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "passive"
+function = "passive.resistor"
+keywords = ["resistor", "r", "resistance", "nfpa", "ansi"]
+aliases = ["r"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-4, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "polyline", points = [[0, 4], [-2, 5], [2, 7], [-2, 9], [2, 11], [0, 12]] },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+]
+
+[behavior]
+kind = "passive"
+type = "resistor"
+poles = [["1", "2"]]

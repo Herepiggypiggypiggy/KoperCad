@@ -1,0 +1,28 @@
+format = 1
+id = "nfpa/passive/heater"
+name = "Heating element"
+description = "Heating element or heater."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "passive"
+function = "load.heater"
+keywords = ["heater", "heating", "resistor", "element", "nfpa", "ansi"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-4.5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "polyline", points = [[0, 4], [-2, 5], [2, 7], [-2, 9], [2, 11], [0, 12]] },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+]
+
+[behavior]
+kind = "load"
+type = "resistive"
+poles = [["1", "2"]]
