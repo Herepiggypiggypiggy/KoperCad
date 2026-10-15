@@ -171,17 +171,20 @@ pub struct ModelStyle {
     pub symbol: Stroke,
     pub wire: Stroke,
     pub junction_radius: f32,
-    /// Accent colour of every place a wire meets a pin or another wire
-    /// (junction dots and the dot on a pin), so connections stand out from
-    /// wire and symbol lines.
+    /// Accent (copper) colour of junction dots: true junctions only, where
+    /// three or more conductors meet.
     pub joint_color: Color,
-    /// Radius of the dot drawn where a wire ends on a pin, in mm.
+    /// Colour of the small dot where a wire lands on a pin (the wire
+    /// colour, not the junction accent).
+    pub pin_joint_color: Color,
+    /// Radius of that dot, in mm (world size for now, not zoom-stable).
     pub pin_joint_radius: f32,
     /// Open ring on a wire ended unconnected ([`wire_end_glyph`]).
     pub wire_end_color: Color,
     /// Flag pole and pennant beside that ring.
     pub unconnected_color: Color,
-    /// Radius of the ring, in mm; the flag scales with it.
+    /// Radius of the ring, in mm; the flag scales with it (world size for
+    /// now, not zoom-stable).
     pub wire_end_radius: f32,
     pub tag_height: f32,
     pub tag_color: Color,
@@ -204,6 +207,7 @@ impl Default for ModelStyle {
             wire: Stroke::world(0.35, Color::rgb(30, 70, 200)),
             junction_radius: 0.7,
             joint_color: Color::rgb(176, 104, 56),
+            pin_joint_color: Color::rgb(30, 70, 200),
             pin_joint_radius: 0.6,
             wire_end_color: Color::rgb(176, 104, 56),
             unconnected_color: Color::rgb(190, 120, 20),
@@ -1191,7 +1195,7 @@ impl PageScene {
             if matches!(e, Endpoint::Pin { .. }) {
                 item = item.with(Primitive::filled(
                     Shape::circle(p, self.style.pin_joint_radius),
-                    self.style.joint_color,
+                    self.style.pin_joint_color,
                 ));
             }
         }
@@ -1932,6 +1936,9 @@ mod tests {
         assert_ne!(style.joint_color, style.wire.color);
         let dot = &junction_glyph(JunctionGlyph::Dot, Vec2::ZERO, &style)[0];
         assert_eq!(dot.fill, Some(style.joint_color));
+        // A wire landing on a pin is the wire colour, not the copper.
+        assert_eq!(style.pin_joint_color, style.wire.color);
+        assert_ne!(style.pin_joint_color, style.joint_color);
     }
 
     #[test]
