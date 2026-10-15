@@ -71,6 +71,11 @@ pub const DUTCH: &[Aliases] = &[
         &["onderdelen"],
         &["artikelen", "onderdeel"],
     ),
+    nl(
+        "parts.import_step",
+        &["importeer 3d-model"],
+        &["3d-model", "step", "stp"],
+    ),
     nl("project.standard", &["tekennorm"], &["norm", "standaard"]),
     nl(
         "project.options",
@@ -280,6 +285,15 @@ pub const DUTCH: &[Aliases] = &[
         &["kasten", "kastenlijst", "behuizingen"],
     ),
     nl(
+        "view.protection",
+        &["beveiliging"],
+        &[
+            "selectiviteit",
+            "uitschakelkarakteristiek",
+            "kortsluitvastheid",
+        ],
+    ),
+    nl(
         "simulate.motor-start",
         &[],
         &[
@@ -358,6 +372,11 @@ pub const DUTCH: &[Aliases] = &[
         &["afdrukken"],
     ),
     nl("export.bom", &["exporteer stuklijst"], &["onderdelenlijst"]),
+    nl(
+        "export.change_report",
+        &["wijzigingenrapport exporteren", "wijzigingsrapport"],
+        &["wijzigingen pdf", "revisierapport"],
+    ),
     nl(
         "export.commissioning",
         &["exporteer inbedrijfstelling", "inbedrijfstellingsrapport"],

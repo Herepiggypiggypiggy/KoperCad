@@ -64,6 +64,7 @@ mod calc_checks;
 mod checks;
 mod contacts;
 mod physical;
+pub mod protection;
 mod waiver;
 
 use std::cmp::Ordering;

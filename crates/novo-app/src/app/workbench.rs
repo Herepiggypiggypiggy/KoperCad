@@ -266,6 +266,7 @@ const APP_COMMANDS: &[&str] = &[
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "export.change_report",
     "export.commissioning",
     "export.plate",
     "export.assembly",
@@ -298,6 +299,7 @@ const APP_COMMANDS: &[&str] = &[
     "xref.link",
     "app.preferences",
     "parts.browser",
+    "parts.import_step",
     "project.standard",
     "project.options",
     "project.variant",
@@ -686,6 +688,9 @@ impl NovoApp {
             "export.pdf" => {
                 self.export_pdf();
             }
+            "export.change_report" => {
+                self.export_change_report();
+            }
             "export.commissioning" => self.export_commissioning_pdf(),
             "export.plate" => {
                 self.export_plate_pdf();
@@ -731,6 +736,7 @@ impl NovoApp {
             "xref.link" => self.xref_link(argument),
             "app.preferences" => self.wb.preferences = true,
             "parts.browser" => self.open_parts_browser(),
+            "parts.import_step" => self.import_part_model(),
             "project.standard" => self.wb.project_settings = true,
             "project.options" => self.open_options(),
             "project.variant" => self.switch_variant(argument),

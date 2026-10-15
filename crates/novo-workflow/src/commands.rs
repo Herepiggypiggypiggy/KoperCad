@@ -220,6 +220,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "parts.import_step",
+            "Import 3D model (STEP)",
+            "Project",
+            &["step", "stp", "3d model", "mesh", "cad model"],
+            Needs::Nothing,
+        ),
+        &["import 3d", "import step"],
+    ),
+    verb(
+        cmd(
             "project.options",
             "Project options and variants",
             "Project",
@@ -786,6 +796,21 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.protection",
+        "Protection: curves, selectivity, rating",
+        "View",
+        &[
+            "protection",
+            "trip",
+            "curve",
+            "selectivity",
+            "sccr",
+            "breaker",
+            "fuse",
+        ],
+        Needs::Project,
+    ),
+    cmd(
         "simulate.motor-start",
         "Simulate motor start",
         "View",
@@ -1077,6 +1102,13 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export pdf", "pdf"],
+    ),
+    cmd(
+        "export.change_report",
+        "Export change report",
+        "Export",
+        &["what changed", "revision report", "diff pdf"],
+        Needs::Project,
     ),
     verb(
         cmd(
