@@ -5,3 +5,4 @@
 2026-10-15 19:15 UTC entry points named in HANDOFF; settings proposal sent to UI integration thread; #454 to be rebased on #413 when it lands.
 2026-10-15 19:25 UTC reviewer B round 1 on #412 addressed: KT applied, ik1_min counts source once, drop limits 5 %/3 %, doc notes.
 2026-10-15 19:40 UTC #412 merged; #454 merged into the stale #412 branch 3 s later, so it never reached main. Re-landed from main in a new PR with the reviewer's nits (from_transformer_min, shared drop-limit constant).
+2026-10-15 19:50 UTC usage limit: wrapping up. #514 awaiting reviewer READY; handoff updated.

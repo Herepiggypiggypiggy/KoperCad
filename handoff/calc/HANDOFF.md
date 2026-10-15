@@ -4,17 +4,25 @@ Updated 2026-10-15 by thread "Design checks: electrical calculations"
 (session cse_011d2XMxLEdY3akxWeLHGAGn).
 
 ## State
-- Branch `claude/project-thread-bib2al`, draft PR "Checks: electrical
-  calculation library" (see PROGRESS.md for the number and head).
-- Only new files under `crates/novo-checks/src/calc/` plus one line
-  (`pub mod calc;`) in `novo-checks/src/lib.rs`. No model reading yet, no
-  ProblemKind changes.
-- `cargo test -p novo-checks`, clippy -D warnings and fmt pass.
+- #412 (pure library `novo_checks::calc`) is merged to main.
+- #454 (adapter) was merged into the stale #412 branch, not main. Re-landed
+  as #514 (branch `claude/project-thread-bib2al`, from main): adapter,
+  six ProblemKinds, `Source::from_transformer_min`, shared drop limit.
+  Needs reviewer READY on its current head, then merge.
+- Panel thread's #413 carries VoltageDrop/ShortCircuit as label-only kinds:
+  on conflict keep one copy of each variant and merge the CALC_KINDS skip
+  list in tests/motor_starter.rs with theirs.
+- UI integration thread builds "Project settings > Electrical" (supply.*,
+  check.voltage_drop_pct) after #514.
+- Not started: cable rating with installation method (replace the
+  single-column ampacity in checks::undersized_wires), short-circuit
+  current along cables, PE continuity over the netlist, "planning value,
+  verify" wording on table-based results, verifying the IEC tables.
 
 ## Resume
 ```
-git fetch origin claude/project-thread-bib2al main
-git checkout claude/project-thread-bib2al
+git fetch origin main
+git checkout -B claude/project-thread-bib2al origin/main
 cargo test -p novo-checks calc
 ```
 
