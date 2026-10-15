@@ -68,6 +68,7 @@ pub fn issue_revision_as(
         date: date.into(),
         author: author.into(),
         description: description.into(),
+        note: String::new(),
     })?;
     session.record(&outcome.changes);
     let changes = outcome.changes.clone();

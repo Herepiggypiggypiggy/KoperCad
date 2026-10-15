@@ -2231,6 +2231,7 @@ dependencies = [
  "naga",
  "novo-core",
  "novo-layout",
+ "novo-theme",
  "pollster 1.0.1",
  "wgpu",
 ]
@@ -2243,7 +2244,9 @@ dependencies = [
  "novo-numbering",
  "novo-symbols",
  "novo-tests",
+ "serde",
  "serde_json",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
