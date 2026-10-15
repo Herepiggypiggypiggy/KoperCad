@@ -21,8 +21,13 @@ const ROUNDS: usize = 32;
 /// How a switched symbol reacts to its device's coil.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Rest {
+    /// Normally open: closes when the coil is on.
     Open,
+    /// Normally closed: opens when the coil is on.
     Closed,
+    /// Changeover: pole 0 (the break side) is closed at rest, pole 1 (the
+    /// make side) when the coil is on, as `Symbol::pass_through` lists them.
+    Changeover,
 }
 
 fn name_of(symbol: &SymbolInstance) -> &str {
@@ -39,14 +44,15 @@ pub fn is_coil(symbol: &SymbolInstance) -> bool {
 }
 
 /// The rest state of a contact: normally closed ones are named `nc` or
-/// `..._nc`; changeover contacts are left to hand-setting.
+/// `..._nc`, changeover ones `co`, `..._co` or `changeover`.
 fn rest_state(symbol: &SymbolInstance) -> Option<Rest> {
     if symbol.pass_through.is_empty() || symbol.device().is_none() {
         return None;
     }
     let name = name_of(symbol);
-    if name == "co" || name.ends_with("_co") {
-        None
+    if name == "co" || name.ends_with("_co") || name.contains("changeover") {
+        // A changeover without its two paths cannot be driven.
+        (symbol.pass_through.len() == 2).then_some(Rest::Changeover)
     } else if name == "nc" || name.ends_with("_nc") {
         Some(Rest::Closed)
     } else {
@@ -136,13 +142,11 @@ fn poles_for(
         let on = coils
             .iter()
             .any(|c| c.device() == symbol.device() && energized.contains(&c.id));
-        let closed = match rest_state(symbol) {
-            Some(Rest::Open) => on,
-            Some(Rest::Closed) => !on,
-            None => continue,
-        };
-        if closed {
-            poles.set_all(project, symbol.id, true);
+        match rest_state(symbol) {
+            Some(Rest::Open) if on => poles.set_all(project, symbol.id, true),
+            Some(Rest::Closed) if !on => poles.set_all(project, symbol.id, true),
+            Some(Rest::Changeover) => poles.set(symbol.id, usize::from(on), true),
+            _ => {}
         }
     }
     poles
