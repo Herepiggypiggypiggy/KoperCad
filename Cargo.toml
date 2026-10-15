@@ -18,6 +18,7 @@ novo-cables = { path = "crates/novo-cables" }
 novo-canvas = { path = "crates/novo-canvas" }
 novo-checks = { path = "crates/novo-checks" }
 novo-cli = { path = "crates/novo-cli" }
+novo-commissioning = { path = "crates/novo-commissioning" }
 novo-core = { path = "crates/novo-core" }
 novo-editor = { path = "crates/novo-editor" }
 novo-interop = { path = "crates/novo-interop" }
@@ -35,6 +36,7 @@ novo-symbols = { path = "crates/novo-symbols" }
 novo-terminals = { path = "crates/novo-terminals" }
 novo-tests = { path = "crates/novo-tests" }
 novo-theme = { path = "crates/novo-theme" }
+novo-view3d = { path = "crates/novo-view3d" }
 novo-workflow = { path = "crates/novo-workflow" }
 novo-xref = { path = "crates/novo-xref" }
 
