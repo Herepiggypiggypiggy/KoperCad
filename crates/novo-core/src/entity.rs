@@ -98,6 +98,11 @@ pub struct ProjectRules {
     /// [`Tx::delete_page`]: crate::Tx::delete_page
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub generated_pages_off: BTreeSet<String>,
+    /// The drawing standard, as the id of the symbol pack it picks (`iec`,
+    /// `nfpa`); lowercase letters, digits, `_` and `-`. Empty, the default,
+    /// means IEC. The model does not interpret it.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub standard: String,
 }
 
 impl ProjectRules {
@@ -113,7 +118,15 @@ impl ProjectRules {
                 from_terminal_names: true,
             },
             generated_pages_off: BTreeSet::new(),
+            standard: String::new(),
         }
+    }
+
+    /// Whether `id` can name a drawing standard: empty (IEC) or lowercase
+    /// letters, digits, `_` and `-`.
+    pub fn is_standard_id(id: &str) -> bool {
+        id.chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
     }
 
     pub fn is_default(&self) -> bool {

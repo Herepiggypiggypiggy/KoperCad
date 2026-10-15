@@ -344,6 +344,12 @@ impl Project {
                 if !crate::record::properties_finite(&after.properties) {
                     return Err(ModelError::NonFiniteInfo);
                 }
+                if !crate::ProjectRules::is_standard_id(&after.rules.standard) {
+                    return Err(ModelError::Refused {
+                        what: "Drawing standard".into(),
+                        reason: format!("`{}` is not a standard id", after.rules.standard),
+                    });
+                }
                 if after.rules.terminals.same_name == SameName::Refuse
                     && let Some(group) = self.terminal_designation_groups().first()
                 {
