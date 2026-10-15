@@ -33,6 +33,7 @@
 //! | [`UnplacedDevice`](ProblemKind::UnplacedDevice) | info | A device not yet placed on a mounting plate |
 //! | [`WireWithoutDuct`](ProblemKind::WireWithoutDuct) | warning | A wire between placed devices that no duct serves |
 //! | [`OverfullDuct`](ProblemKind::OverfullDuct) | warning | A duct filled beyond its limit |
+//! | [`Standard`](ProblemKind::Standard) | per rule | A rule of a selected standard (IEC 60204-1, NFPA 79, UL 508A) is not met; see [`standards`] |
 //!
 //! A problem can be waived with a reason ([`waive`]); [`check_open`] leaves
 //! waived problems out and [`waived_problems`] lists them for the report.
@@ -57,6 +58,7 @@
 mod checks;
 mod contacts;
 mod physical;
+pub mod standards;
 mod waiver;
 
 use std::cmp::Ordering;
@@ -159,11 +161,16 @@ pub enum ProblemKind {
     WireWithoutDuct,
     /// A duct carrying more wires than its fill limit (novo-routing).
     OverfullDuct,
+    /// A rule of a selected standard is not met (IEC 60204-1, NFPA 79,
+    /// UL 508A; [`standards`]). Only produced for projects that selected a
+    /// standard. Each problem carries its rule id in [`Problem::rule`] and
+    /// its own severity, set by the rule.
+    Standard,
 }
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 22] = [
+    pub const ALL: [ProblemKind; 23] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -186,6 +193,7 @@ impl ProblemKind {
         ProblemKind::UnplacedDevice,
         ProblemKind::WireWithoutDuct,
         ProblemKind::OverfullDuct,
+        ProblemKind::Standard,
     ];
 
     pub fn severity(self) -> Severity {
@@ -209,6 +217,7 @@ impl ProblemKind {
             | ProblemKind::VoltageDrop
             | ProblemKind::WireWithoutDuct
             | ProblemKind::OverfullDuct
+            | ProblemKind::Standard
             | ProblemKind::Plc => Severity::Warning,
             ProblemKind::MissingPart | ProblemKind::UnplacedDevice => Severity::Info,
         }
@@ -239,6 +248,7 @@ impl ProblemKind {
             ProblemKind::UnplacedDevice => "Unplaced device",
             ProblemKind::WireWithoutDuct => "Wire without duct",
             ProblemKind::OverfullDuct => "Overfull duct",
+            ProblemKind::Standard => "Standards",
         }
     }
 
@@ -267,6 +277,7 @@ impl ProblemKind {
             ProblemKind::UnplacedDevice => "check.unplaced_device",
             ProblemKind::WireWithoutDuct => "check.wire_without_duct",
             ProblemKind::OverfullDuct => "check.overfull_duct",
+            ProblemKind::Standard => "check.standard",
         }
     }
 }
@@ -287,6 +298,10 @@ pub struct Problem {
     pub position: Option<Point>,
     /// One plain sentence, shown on hover and in the Issues list.
     pub message: String,
+    /// The id of the standards rule this problem comes from
+    /// (`iec60204.pe-colour`), for [`ProblemKind::Standard`]; `None` for
+    /// every other kind.
+    pub rule: Option<&'static str>,
 }
 
 impl Problem {
@@ -298,6 +313,17 @@ impl Problem {
             page: None,
             position: None,
             message,
+            rule: None,
+        }
+    }
+
+    /// The name a waiver of this problem is stored under: the kind's key, or
+    /// for a standards problem the key of its rule (`check.std.<rule id>`),
+    /// so a waiver covers one rule and not every standards problem.
+    pub fn waiver_key(&self) -> String {
+        match self.rule {
+            Some(rule) => standards::waiver_key(rule),
+            None => self.kind.key().to_owned(),
         }
     }
 }
@@ -377,6 +403,7 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     checks::open_wires(&cx, &mut problems);
     physical::unplaced_devices(&cx, &mut problems);
     physical::routing(&cx, &mut problems);
+    standards::problems(&cx, netlist, &mut problems);
     cx.sort(&mut problems);
     problems
 }
@@ -496,24 +523,28 @@ impl<'a> Context<'a> {
         }
     }
 
+    /// Fills in a problem's page and position from the first of its objects
+    /// in reading order and returns that spot.
+    fn locate(&self, problem: &mut Problem) -> Option<Spot> {
+        let spot = problem
+            .at
+            .iter()
+            .filter_map(|&id| self.spot(id))
+            .min_by(Spot::cmp);
+        if let Some(spot) = spot {
+            problem.page = Some(spot.page);
+            problem.position = Some(spot.at);
+        }
+        spot
+    }
+
     /// Fills in each problem's page and position and sorts them in reading
     /// order. Problems with nothing drawn come last; ties go by kind, then
     /// message, then the marked ids, so the order is the same every run.
     fn sort(&self, problems: &mut Vec<Problem>) {
         let mut keyed: Vec<(Option<Spot>, Problem)> = problems
             .drain(..)
-            .map(|mut problem| {
-                let spot = problem
-                    .at
-                    .iter()
-                    .filter_map(|&id| self.spot(id))
-                    .min_by(Spot::cmp);
-                if let Some(spot) = spot {
-                    problem.page = Some(spot.page);
-                    problem.position = Some(spot.at);
-                }
-                (spot, problem)
-            })
+            .map(|mut problem| (self.locate(&mut problem), problem))
             .collect();
         keyed.sort_unstable_by(|(a, p), (b, q)| {
             let place = match (a, b) {
