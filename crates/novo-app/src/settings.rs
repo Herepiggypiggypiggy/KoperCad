@@ -35,6 +35,8 @@ pub struct Settings {
     /// Whether the live view skips its animations: states switch at once
     /// and a running motor shows an arrow instead of spinning.
     pub reduce_motion: bool,
+    /// Whether the status bar is switched off (docs/design/workspaces.md §7).
+    pub hide_status_bar: bool,
     /// Commissioning's large touch buttons: a tablet user sets it once.
     pub large_buttons: bool,
     /// The workspace shown when the app last ran (`Workspace::id`),
@@ -46,6 +48,9 @@ pub struct Settings {
     pub workspaces: BTreeMap<String, WorkspaceLayout>,
     /// How far the fast-keys walk-through is (docs/ONBOARDING-DESIGN.md §2).
     pub onboarding: Onboarding,
+    /// The DWG converter program the person chose (`dwg2dxf` or the ODA File
+    /// Converter), tried before the ones KoperCAD finds itself.
+    pub dwg_converter: Option<PathBuf>,
     /// The start of the name a new page group gets (`G` makes `=G1`) in a
     /// project with no group to continue. Empty: the default.
     pub group_prefix: String,

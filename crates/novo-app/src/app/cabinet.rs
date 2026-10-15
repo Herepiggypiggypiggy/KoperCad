@@ -49,6 +49,8 @@ pub(super) struct CabinetState {
     pub(super) keys: Vec<String>,
     /// The door and depth panel: its form and the model value it follows.
     door: DoorState,
+    /// Text buffers of the inspector's panel-data section.
+    pub(super) panel_fields: super::cabinet_panel::PanelFields,
     /// The table face (Ctrl+T) is shown instead of the plate.
     pub(super) table: bool,
     /// The plate card of the inspector is shown with nothing selected.
@@ -85,6 +87,7 @@ impl CabinetState {
             ghost: None,
             keys: Vec::new(),
             door: DoorState::default(),
+            panel_fields: Default::default(),
             table: false,
             plate_card: false,
             rules: cabinet_rules::RulesState::new(),
@@ -112,6 +115,8 @@ pub(super) enum Ask {
     Rotate(Vec<u64>),
     Remove(Vec<u64>),
     SetEnclosure(novo_layout::enclosure::Enclosure),
+    /// Set a panel-building value (power loss, mounting, clearance) of a device.
+    SetPanelValue(super::cabinet_panel::PanelEdit),
     /// Cut rails to new lengths (rail id, length in mm), from the cut list.
     SetRailLengths(Vec<(u64, f64)>),
 }
@@ -169,7 +174,7 @@ pub(super) fn cabinet_view(layout: &CabinetLayout, tag_of: &impl Fn(u64) -> Stri
                     height: f.h as f32,
                     tag: tag_of(p.id),
                     guessed: p.size.guessed,
-                    clearance: p.clearance.unwrap_or(novo_layout::DEFAULT_CLEARANCE_MM) as f32,
+                    clearance: p.max_need() as f32,
                     state: state(p.id),
                 }
             })
@@ -694,9 +699,13 @@ impl NovoApp {
                         out.response.rect,
                         *left,
                         facts,
-                        &mut self.cabinet.door,
-                        &shown,
-                        &tag_of,
+                        project,
+                        &mut self.cabinet.panel_fields,
+                        cabinet_inspector::DoorView {
+                            state: &mut self.cabinet.door,
+                            layout: &shown,
+                            tag_of: &tag_of,
+                        },
                     )
                 {
                     ask = Some(a);
@@ -954,6 +963,20 @@ impl NovoApp {
                 self.cabinet_edit("Set inside and door", move |tx| {
                     set_enclosure(tx, structure, &enclosure)
                 });
+            }
+            Ask::SetPanelValue(edit) => {
+                let Some(doc) = self.backend.document() else {
+                    return;
+                };
+                match super::cabinet_panel::command(doc.project(), &edit) {
+                    Ok(Some(command)) => {
+                        self.cabinet_edit("Set panel data", move |tx| {
+                            tx.execute(command).map(|_| ())
+                        });
+                    }
+                    Ok(None) => {}
+                    Err(e) => self.message(Level::Warning, e.to_string()),
+                }
             }
             Ask::SetPlateSize(s, plate) => {
                 self.cabinet_edit("Set plate size", move |tx| set_plate(tx, s, plate));

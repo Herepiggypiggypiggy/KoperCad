@@ -75,3 +75,41 @@ fn compare_lists_what_changed_between_two_revisions_and_now() {
             .any(|m| m.text.contains("no revision Q") || m.text.contains("There is no revision Q"))
     );
 }
+
+#[test]
+fn compare_draws_a_side_read_only_with_the_changes_outlined() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let moved = d.place("mcb3", 80.0, 48.0);
+    d.frame();
+    let a = d
+        .app
+        .backend
+        .issue_revision(None, "2026-10-15", "TV", "First")
+        .unwrap();
+    d.app.changed_outside_canvas(&a.changes);
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Move", |tx| {
+            tx.update::<SymbolInstance>(moved, |s| s.placement.origin.x += 10.0)
+        })
+        .unwrap();
+    d.frame();
+
+    d.app.run_command(&ctx, "revision.compare", Some("A now"));
+    d.app.wb.compare.as_mut().unwrap().show_drawing();
+    d.frame();
+    d.frame();
+    let marks = d.app.wb.compare.as_ref().unwrap().drawing_marks().unwrap();
+    assert!(
+        marks.iter().any(|m| m.text.starts_with("changed")),
+        "the moved symbol is outlined on the drawing"
+    );
+    // Drawing is read only: the project is untouched by it.
+    assert!(d.app.backend.document().unwrap().project().revision() > 0);
+}

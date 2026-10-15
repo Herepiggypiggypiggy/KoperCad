@@ -5,7 +5,7 @@ use novo_layout::drill::{
 use novo_layout::model::{apply_plan, candidates, load, plate_documents, set_plate};
 use novo_layout::plate_drawing::{choose_scale, plate_drawing, scale_text, tables};
 use novo_layout::state::CabinetLayout;
-use novo_layout::{Placement, Plate, Rail, Size};
+use novo_layout::{Margins, Placement, Plate, Rail, Size};
 
 fn layout() -> CabinetLayout {
     let mut l = CabinetLayout::new(Plate {
@@ -27,6 +27,7 @@ fn layout() -> CabinetLayout {
         rotated: false,
         size: Size::from_part(Some(40.0), Some(80.0)),
         clearance: None,
+        margins: Margins::default(),
         rail: Some(1),
     });
     l

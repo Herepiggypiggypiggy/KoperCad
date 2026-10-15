@@ -515,6 +515,37 @@ fn revisions_list_and_diff() {
 }
 
 #[test]
+fn commissioning_report_writes_pdf_csv_and_xlsx() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = project(dir.path(), false);
+    let file = file.to_str().unwrap();
+
+    // Nothing ticked yet: every check is pending, and the report says so.
+    let csv = novo(&["commissioning-report", file]);
+    assert_eq!(csv.code, exit::OK, "{}", csv.err);
+    assert!(csv.out.contains("Progress per cabinet"), "{}", csv.out);
+    assert!(csv.out.contains("Pending"));
+    assert!(csv.out.contains("Customer"));
+
+    for name in ["report.pdf", "report.xlsx", "report.csv"] {
+        let target = dir.path().join(name);
+        let run = novo(&["commissioning-report", file, "-o", target.to_str().unwrap()]);
+        assert_eq!(run.code, exit::OK, "{name}: {}", run.err);
+        assert!(std::fs::metadata(&target).unwrap().len() > 0, "{name}");
+    }
+    let pdf = std::fs::read(dir.path().join("report.pdf")).unwrap();
+    assert!(pdf.starts_with(b"%PDF"));
+
+    let bad = novo(&[
+        "commissioning-report",
+        file,
+        "-o",
+        dir.path().join("report.txt").to_str().unwrap(),
+    ]);
+    assert_eq!(bad.code, exit::USAGE);
+}
+
+#[test]
 fn export_terminals_writes_the_strip_diagram_with_wire_and_bridge_columns() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("strip.novo");
@@ -573,6 +604,62 @@ fn export_plc_writes_the_address_plan_and_refuses_what_it_cannot() {
 }
 
 #[test]
+fn calc_judges_circuits_and_exits_one_on_failure() {
+    let dir = tempfile::tempdir().unwrap();
+    let sample =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/protection-sample.json");
+    let r = novo(&["calc", sample.to_str().unwrap()]);
+    assert_eq!(r.code, exit::PROBLEMS, "{}", r.err);
+    assert!(r.out.contains("Circuit Q1"));
+    assert!(r.out.contains("FAIL    Voltage drop"));
+    assert!(r.out.contains("UNKNOWN Short-circuit (maximum)"));
+    assert!(r.out.contains("not checked against the standard"));
+
+    // JSON output parses and carries the statuses.
+    let j = novo(&["calc", sample.to_str().unwrap(), "--json"]);
+    let v: serde_json::Value = serde_json::from_str(&j.out).unwrap();
+    assert_eq!(v.as_array().unwrap().len(), 3);
+    assert_eq!(v[2]["rows"][1]["status"], "fail");
+
+    // A licensed table is reported as such, and a bad file is a usage error.
+    let csv = dir.path().join("tables.csv");
+    std::fs::write(&csv, "ampacity,PVC,C,3,2.5,24\n").unwrap();
+    let l = novo(&[
+        "calc",
+        sample.to_str().unwrap(),
+        "--tables",
+        csv.to_str().unwrap(),
+    ]);
+    assert!(l.out.contains("licensed copy tables.csv"));
+    std::fs::write(&csv, "ampacity,PVC,C,3,2.5\n").unwrap();
+    let bad = novo(&[
+        "calc",
+        sample.to_str().unwrap(),
+        "--tables",
+        csv.to_str().unwrap(),
+    ]);
+    assert_eq!(bad.code, exit::USAGE);
+    assert!(bad.err.contains("line 1"));
+
+    // Maker back-up table turns the failed breaking capacity into a pass.
+    let pairs = dir.path().join("pairs.csv");
+    std::fs::write(&pairs, "backup,MCCB160,MCB16C10,25\n").unwrap();
+    let mut spec: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&sample).unwrap()).unwrap();
+    spec["circuits"][0]["device"]["id"] = "MCCB160".into();
+    spec["circuits"][1]["device"]["id"] = "MCB16C10".into();
+    let file = dir.path().join("plant.json");
+    std::fs::write(&file, spec.to_string()).unwrap();
+    let b = novo(&[
+        "calc",
+        file.to_str().unwrap(),
+        "--pairs",
+        pairs.to_str().unwrap(),
+    ]);
+    assert!(b.out.contains("backed up by Q1"), "{}", b.out);
+}
+
+#[test]
 fn export_plate_writes_the_plate_pdf_of_the_enclosure() {
     use novo_core::{DeviceTag, MountingPlate, Project};
 
@@ -610,4 +697,206 @@ fn export_plate_writes_the_plate_pdf_of_the_enclosure() {
     ]);
     assert_eq!(run.code, exit::USAGE);
     assert!(run.err.contains("no enclosure"), "{}", run.err);
+}
+
+/// A saved project with a cabinet: an enclosure with a plate and two devices.
+fn cabinet_project(dir: &Path) -> PathBuf {
+    use novo_core::{DeviceTag, MountingPlate, Project};
+    let path = dir.join("cab.novo");
+    let mut p = Project::new("Cab");
+    p.transact("setup", |tx| {
+        let cab = tx.add_structure(DeviceTag::parse("+CAB1").unwrap(), "Cabinet", true)?;
+        tx.set_plate(
+            cab,
+            Some(MountingPlate {
+                width: 600.0,
+                height: 800.0,
+                margin: 10.0,
+            }),
+        )?;
+        tx.add_device(DeviceTag::parse("=A1+CAB1-K1").unwrap(), "Contactor")?;
+        Ok(())
+    })
+    .unwrap();
+    novo_storage::ProjectFile::create(&path, &p)
+        .unwrap()
+        .close()
+        .unwrap();
+    path
+}
+
+#[test]
+fn export_step_writes_the_cabinet_and_says_what_it_left_out() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = cabinet_project(dir.path());
+    let out = dir.path().join("cab.stp");
+    let run = novo(&["export", "step", s(&path), "-o", s(&out)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    let text = std::fs::read_to_string(&out).unwrap();
+    assert!(text.starts_with("ISO-10303-21;"));
+    assert!(text.contains("'Mounting plate'"));
+    assert!(run.out.contains("solids"), "{}", run.out);
+
+    // A directory gets one file per enclosure.
+    let folder = dir.path().join("steps");
+    let run = novo(&["export", "step", s(&path), "-o", s(&folder)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert!(folder.join("+CAB1.stp").is_file());
+
+    // A tag that is not an enclosure is a usage error, not an empty file.
+    let run = novo(&[
+        "export",
+        "step",
+        s(&path),
+        "-o",
+        s(&out),
+        "--enclosure",
+        "+NOPE",
+    ]);
+    assert_eq!(run.code, exit::USAGE);
+}
+
+#[test]
+fn export_step_needs_a_mounting_plate() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+    let run = novo(&[
+        "export",
+        "step",
+        s(&path),
+        "-o",
+        s(&dir.path().join("x.stp")),
+    ]);
+    assert_eq!(run.code, exit::USAGE);
+    assert!(run.err.contains("mounting plate"), "{}", run.err);
+}
+
+#[test]
+fn export_aml_writes_caex_and_lists_what_the_format_cannot_carry() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+    let out = dir.path().join("demo.aml");
+    let run = novo(&["export", "aml", s(&path), "-o", s(&out)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    let text = std::fs::read_to_string(&out).unwrap();
+    assert!(text.contains("<CAEXFile"));
+    assert!(text.contains("Name=\"-K1\""));
+    assert!(run.out.contains("1 devices"), "{}", run.out);
+    assert!(run.out.contains("pages and drawings"), "{}", run.out);
+}
+
+/// An edited export of `project`: the first device's description set to
+/// `text`, saved as `edited.xlsx` next to it.
+fn edited_sheet(project: &Path, text: &str) -> PathBuf {
+    use novo_interop::sheets::{Cell, export_project, xlsx_bytes};
+    let loaded = novo_storage::ProjectFile::read(project).unwrap();
+    let mut book = export_project(&loaded);
+    let col = book.tables[0].column("Description").unwrap();
+    book.tables[0].rows[0].cells[col] = Cell::text(text);
+    let path = project.with_file_name("edited.xlsx");
+    std::fs::write(&path, xlsx_bytes(&book).unwrap()).unwrap();
+    path
+}
+
+#[test]
+fn import_sheet_previews_and_never_touches_the_project() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+    let sheet = edited_sheet(&path, "Main contactor");
+    let before = std::fs::read(&path).unwrap();
+    let r = novo(&["import", "sheet", s(&path), s(&sheet)]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    assert!(
+        r.out.contains("Description = Contactor -> Main contactor"),
+        "{}",
+        r.out
+    );
+    assert!(r.out.contains("preview only"));
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    let r = novo(&["import", "sheet", s(&path), s(&sheet), "--json"]);
+    let v: serde_json::Value = serde_json::from_str(&r.out).unwrap();
+    assert_eq!(v["changes"][0]["after"], "Main contactor");
+    assert_eq!(v["written"], false);
+}
+
+#[test]
+fn import_sheet_output_writes_a_new_project_and_never_replaces_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+    let sheet = edited_sheet(&path, "Main contactor");
+    let before = std::fs::read(&path).unwrap();
+    let out_path = dir.path().join("imported.novo");
+    let r = novo(&["import", "sheet", s(&path), s(&sheet), "-o", s(&out_path)]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    let imported = novo_storage::ProjectFile::read(&out_path).unwrap();
+    assert_eq!(
+        imported.devices().next().unwrap().description,
+        "Main contactor"
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    // Over the input, over an existing file, or to a non-project name.
+    for target in [path.clone(), out_path.clone(), dir.path().join("x.txt")] {
+        let r = novo(&["import", "sheet", s(&path), s(&sheet), "-o", s(&target)]);
+        assert_eq!(r.code, exit::WRITE, "{}", target.display());
+    }
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+}
+
+#[test]
+fn import_sheet_skip_and_rejected_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+    let sheet = edited_sheet(&path, "Main contactor");
+    let out_path = dir.path().join("skipped.novo");
+    let r = novo(&[
+        "import",
+        "sheet",
+        s(&path),
+        s(&sheet),
+        "-o",
+        s(&out_path),
+        "--skip",
+        "Devices:2",
+    ]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    assert!(r.out.contains("skipped:"), "{}", r.out);
+    assert!(r.out.contains("no file written"));
+    assert!(!out_path.exists());
+    let r = novo(&["import", "sheet", s(&path), s(&sheet), "--skip", "nonsense"]);
+    assert_eq!(r.code, exit::USAGE);
+
+    let csv = dir.path().join("gone.csv");
+    std::fs::write(&csv, "Id,Tag,Description\n999999,-K9,Ghost\n").unwrap();
+    let r = novo(&["import", "sheet", s(&path), s(&csv)]);
+    assert_eq!(r.code, exit::PROBLEMS, "{}{}", r.out, r.err);
+    assert!(r.out.contains("rejected: Devices row"), "{}", r.out);
+    let r = novo(&[
+        "import",
+        "sheet",
+        s(&path),
+        s(&dir.path().join("none.xlsx")),
+    ]);
+    assert_eq!(r.code, exit::READ);
+}
+
+#[test]
+fn import_sheet_lists_and_writes_new_devices() {
+    use novo_interop::sheets::{Cell, export_project, xlsx_bytes};
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+    let loaded = novo_storage::ProjectFile::read(&path).unwrap();
+    let mut book = export_project(&loaded);
+    let table = &mut book.tables[0];
+    let mut cells: Vec<Cell> = table.headers.iter().map(|_| Cell::text("")).collect();
+    cells[table.column("Tag").unwrap()] = Cell::text("-M1");
+    cells[table.column("Description").unwrap()] = Cell::text("Pump motor");
+    table.push(cells);
+    let sheet = dir.path().join("new.xlsx");
+    std::fs::write(&sheet, xlsx_bytes(&book).unwrap()).unwrap();
+    let out_path = dir.path().join("with-motor.novo");
+    let r = novo(&["import", "sheet", s(&path), s(&sheet), "-o", s(&out_path)]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    assert!(r.out.contains("new: Devices row"), "{}", r.out);
+    let imported = novo_storage::ProjectFile::read(&out_path).unwrap();
+    assert!(imported.devices().any(|d| d.description == "Pump motor"));
 }

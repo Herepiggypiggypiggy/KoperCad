@@ -7,7 +7,8 @@ use std::collections::BTreeMap;
 use crate::enclosure::{DoorReport, Enclosure, check};
 use crate::plan::{Candidate, Plan, ROW_GAP_MM, place_all_below};
 use crate::{
-    Placement, Plate, Rail, Size, clearance_violations, collisions, outside, rail_overflows,
+    Margins, Placement, Plate, Rail, Size, clearance_violations, collisions, outside,
+    rail_overflows,
 };
 
 /// Default snap grid for free placement (the Cabinet canvas grid).
@@ -98,6 +99,7 @@ impl CabinetLayout {
                 rotated: false,
                 size,
                 clearance: None,
+                margins: Margins::default(),
                 rail: None,
             });
         }
@@ -164,6 +166,7 @@ impl CabinetLayout {
                     rotated: false,
                     size: c.size,
                     clearance: None,
+                    margins: Margins::default(),
                     rail: Some(p.rail),
                 });
             }

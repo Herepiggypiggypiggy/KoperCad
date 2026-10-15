@@ -1326,3 +1326,99 @@ fn pe_blocks_are_recognised_by_prefix_description_and_colour() {
     assert_eq!(block("UT 4", "Terminal block for PE/N distribution"), ft);
     assert_eq!(block("UT 4", "Terminal block, for PE"), ft);
 }
+
+#[test]
+fn panel_data_is_editable_in_the_part_rows_and_checked() {
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let catalog = Catalog::starter();
+    let part = catalog.find("Siemens", "3RT2016-1BB41").unwrap();
+    let command = assign_part(doc.project(), &[gate.k1], part, AssignMode::Replace);
+    run(&mut doc, command);
+    let target = AnyId::from(gate.k1);
+
+    // The panel keys are listed under the part's data, empty until filled in.
+    let sheet = PropertySheet::build(doc.project(), &[target]);
+    let loss = sheet.row(&RowKey::PartData("power_loss_w".into())).unwrap();
+    assert_eq!(loss.value, RowValue::Same(String::new()));
+    assert_eq!(loss.unit, Some("W"));
+    assert!(loss.editable);
+    let mounting = sheet.row(&RowKey::PartData("mounting".into())).unwrap();
+    assert!(mounting.choices.contains(&"din_rail"));
+
+    // Typed values are stored on the device (an override of the part's)
+    // and read back through PanelData.
+    for (key, text) in [
+        ("power_loss_w", "4,5"),
+        ("mounting", "DIN rail"),
+        ("clearance_above_mm", "30"),
+    ] {
+        let sheet = PropertySheet::build(doc.project(), &[target]);
+        let command = sheet
+            .edit(doc.project(), &RowKey::PartData(key.into()), text)
+            .unwrap();
+        run(&mut doc, command);
+    }
+    let k1 = doc.project().device(gate.k1).unwrap();
+    assert_eq!(k1.properties["mounting"], Value::Text("din_rail".into()));
+    let data = novo_parts::PanelData::of_device(
+        &k1.properties,
+        doc.project().part(k1.parts[0]).map(|p| &p.properties),
+    );
+    assert_eq!(data.power_loss_w, Some(4.5));
+    assert_eq!(data.mounting, Some(novo_parts::Mounting::DinRail));
+    assert_eq!(data.clearances.above_mm, Some(30.0));
+    assert_eq!(data.clearances.below_mm, None);
+
+    // Nonsense is refused with a reason.
+    let sheet = PropertySheet::build(doc.project(), &[target]);
+    let err = |key: &str, text: &str| {
+        sheet
+            .edit(doc.project(), &RowKey::PartData(key.into()), text)
+            .unwrap_err()
+    };
+    assert!(matches!(
+        err("power_loss_w", "-3"),
+        EditError::Invalid { .. }
+    ));
+    assert!(matches!(
+        err("clearance_left_mm", "wide"),
+        EditError::NotANumber { .. }
+    ));
+    assert!(matches!(err("mounting", "glue"), EditError::Invalid { .. }));
+}
+
+#[test]
+fn a_format_1_catalog_is_migrated_on_load_and_saved_as_format_2() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("parts.json");
+    std::fs::write(
+        &path,
+        r#"{"format": 1, "parts": [{"manufacturer": "ABB", "order_number": "X1",
+            "data": {"power_dissipation_w": 12.5, "mounting_type": "Hutschiene"}}]}"#,
+    )
+    .unwrap();
+    let catalog = Catalog::load(&path).unwrap();
+    let part = catalog.find("ABB", "X1").unwrap();
+    assert_eq!(part.data["power_loss_w"], Value::Float(12.5));
+    assert_eq!(part.data["mounting"], Value::Text("din_rail".into()));
+    assert!(!part.data.contains_key("power_dissipation_w"));
+    catalog.save(&path).unwrap();
+    assert!(
+        std::fs::read_to_string(&path)
+            .unwrap()
+            .contains("\"format\": 2")
+    );
+}
+
+#[test]
+fn csv_import_maps_maker_headers_to_panel_keys() {
+    let report = import_catalog(
+        "Bestellnummer;Verlustleistung [W];Montage\nA1;3,2;Schraube\n",
+        "ABB",
+    )
+    .unwrap();
+    let data = novo_parts::PanelData::of_properties(&report.parts[0].data);
+    assert_eq!(data.power_loss_w, Some(3.2));
+    assert_eq!(data.mounting, Some(novo_parts::Mounting::Screw));
+}

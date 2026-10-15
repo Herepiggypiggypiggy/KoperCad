@@ -72,12 +72,20 @@ pub(crate) struct Workbench {
     pub(super) issue: Option<super::revisions::IssueDraft>,
     /// The Compare revisions window, while it is open.
     pub(super) compare: Option<super::compare::CompareWindow>,
+    /// The Fault scenarios window, while it is open.
+    pub(super) faults: Option<super::faults::FaultsWindow>,
     /// The Wire numbering window, while it is open.
     pub(super) numbering: Option<super::numbering::NumberingWindow>,
     /// The new pages, group and panel form, while open.
     pub(super) page_form: Option<super::pages::PageForm>,
+    /// The spreadsheet import preview, while it is open.
+    pub(super) sheet_import: Option<super::sheet_import::SheetImport>,
     /// Which sheet of a generated page the canvas shows (0 for the first).
     pub(super) sheet: usize,
+    /// The Project options and variants window, while open.
+    pub(super) options: Option<super::variants::OptionsWindow>,
+    /// The Generate pages from a spec sheet window, while open.
+    pub(super) generate: Option<super::variants::GenerateWindow>,
     pub(super) nav: Navigator,
     /// Where to select and centre once the canvas shows its page.
     pub(super) pending: Option<Place>,
@@ -133,7 +141,14 @@ pub(crate) struct Workbench {
     pub(super) commissioning: Option<super::commissioning::CommissioningMode>,
     /// The background drawing last handed to the canvas: page, project
     /// revision and the key it has.
+    /// The DXF background panel, while open; inside, the values being
+    /// edited before they are committed.
+    pub(super) background_panel: Option<Option<super::background_panel::Placement>>,
     pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
+    /// An AutomationML import waiting for the person to confirm.
+    pub(super) aml_import: Option<super::interop::AmlImport>,
+    /// A DWG being converted in the background.
+    pub(super) dwg_job: Option<super::interop::DwgJob>,
 }
 
 impl Workbench {
@@ -167,9 +182,13 @@ impl Default for Workbench {
             project_settings: false,
             issue: None,
             compare: None,
+            faults: None,
             numbering: None,
             page_form: None,
+            sheet_import: None,
             sheet: 0,
+            options: None,
+            generate: None,
             nav: Navigator::default(),
             pending: None,
             pending_item: None,
@@ -194,8 +213,11 @@ impl Default for Workbench {
             live: Default::default(),
             sim: super::simulate::SimState::new(),
             changes: None,
+            background_panel: None,
             commissioning: None,
             underlay_seen: None,
+            aml_import: None,
+            dwg_job: None,
         }
     }
 }
@@ -246,21 +268,40 @@ const APP_COMMANDS: &[&str] = &[
     "view.devices_drawer",
     "view.toggle_marks",
     "sim.live",
+    "sim.faults",
     "view.changes",
     "view.commissioning",
     "check.problems",
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "export.change_report",
+    "export.commissioning",
     "export.plate",
     "export.assembly",
     "export.sheets",
     "export.sheets_csv",
+    "export.bom",
+    "export.reports",
+    "view.reports",
+    "report.toc",
+    "report.bom",
+    "report.devices",
+    "report.wires",
+    "report.terminals",
+    "report.cables",
     "file.import_dxf_background",
     "view.background",
+    "view.background_place",
     "file.remove_background",
     "export.dxf_page",
     "export.dxf_all",
+    "import.spreadsheet",
+    "export.step",
+    "export.aml",
+    "file.import_aml",
+    "file.import_dwg",
+    "file.choose_dwg_converter",
     "plc.add_card",
     "plc.to_plc",
     "plc.renumber_io",
@@ -273,7 +314,13 @@ const APP_COMMANDS: &[&str] = &[
     "xref.link",
     "app.preferences",
     "parts.browser",
+    "parts.import_step",
     "project.standard",
+    "project.options",
+    "project.variant",
+    "project.generate",
+    "export.variant_pdf",
+    "export.spec",
     "revision.issue",
     "revision.compare",
     "terminal.toggle_pe",
@@ -357,7 +404,11 @@ impl NovoApp {
             focus
         } else if ctx.text_edit_focused() {
             Focus::TextField
-        } else if self.is_open() && !self.panel_has_focus(ctx) {
+        } else if self.is_open()
+            && self.workspace() != Workspace::Reports
+            && !self.panel_has_focus(ctx)
+        {
+            // The Reports table has the keyboard, not the hidden drawing.
             Focus::Canvas
         } else {
             Focus::Panel
@@ -467,6 +518,7 @@ impl NovoApp {
     /// between (a held Space pans); every other key runs its command.
     pub(super) fn run_key_command(&mut self, ctx: &egui::Context, id: &str) {
         if id == "tool.place" {
+            self.learn_command(id);
             self.tour_tick("place");
             self.arm_place_hold(ctx);
         } else if id == "view.command_field_here" {
@@ -479,6 +531,11 @@ impl NovoApp {
     /// Runs a command by its novo-workflow id, from a key or the command
     /// field. `argument` is what was typed after its verb.
     pub(super) fn run_command(&mut self, ctx: &egui::Context, id: &str, argument: Option<&str>) {
+        self.learn_command(id);
+        if id == "help.learn" || id.starts_with("learn.") {
+            self.learn_run_command(id, argument);
+            return;
+        }
         if let Some(slot) = FAVOURITE_COMMANDS.iter().position(|&c| c == id) {
             let digit = (slot + 1).to_string();
             let target = self.with_field(|field, sources| field.pick_shortcut(&digit, sources));
@@ -598,7 +655,26 @@ impl NovoApp {
             "view.cables_drawer" => self.toggle_drawer(Drawer::Cables),
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
             "view.toggle_marks" => self.wb.marks ^= true,
+            "view.reports" => self.switch_workspace(super::workspace::Workspace::Reports),
+            "export.bom" => {
+                self.export_report("bom", super::reports_view::ReportFormat::Excel);
+            }
+            "export.reports" => {
+                self.export_all_reports();
+            }
             "sim.live" => self.toggle_live(),
+            _ if super::reports_view::REPORT_COMMANDS
+                .iter()
+                .any(|(c, _)| *c == id) =>
+            {
+                if let Some((_, report)) = super::reports_view::REPORT_COMMANDS
+                    .iter()
+                    .find(|(c, _)| *c == id)
+                {
+                    self.show_report(report);
+                }
+            }
+            "sim.faults" => self.toggle_faults(),
             "view.changes" => self.toggle_changes(argument),
             "view.commissioning" => self.toggle_commissioning(),
             "check.problems" => self.show_issues(false),
@@ -627,6 +703,10 @@ impl NovoApp {
             "export.pdf" => {
                 self.export_pdf();
             }
+            "export.change_report" => {
+                self.export_change_report();
+            }
+            "export.commissioning" => self.export_commissioning_pdf(),
             "export.plate" => {
                 self.export_plate_pdf();
             }
@@ -641,6 +721,7 @@ impl NovoApp {
             }
             "file.import_dxf_background" => self.import_dxf_background(),
             "view.background" => self.toggle_background(),
+            "view.background_place" => self.open_background_panel(),
             "file.remove_background" => self.remove_background(),
             "export.dxf_page" => {
                 self.export_dxf(super::dxf::DxfScope::CurrentPage);
@@ -648,6 +729,16 @@ impl NovoApp {
             "export.dxf_all" => {
                 self.export_dxf(super::dxf::DxfScope::AllPages);
             }
+            "import.spreadsheet" => self.import_sheet(),
+            "export.step" => {
+                self.export_step();
+            }
+            "export.aml" => {
+                self.export_aml();
+            }
+            "file.import_aml" => self.import_aml(),
+            "file.import_dwg" => self.import_dwg(),
+            "file.choose_dwg_converter" => self.choose_dwg_converter(),
             "plc.add_card" => self.plc_add_card(argument),
             "plc.to_plc" => self.plc_to_plc(),
             "plc.renumber_io" => self.plc_renumber_io(),
@@ -670,7 +761,17 @@ impl NovoApp {
             "xref.link" => self.xref_link(argument),
             "app.preferences" => self.wb.preferences = true,
             "parts.browser" => self.open_parts_browser(),
+            "parts.import_step" => self.import_part_model(),
             "project.standard" => self.wb.project_settings = true,
+            "project.options" => self.open_options(),
+            "project.variant" => self.switch_variant(argument),
+            "project.generate" => self.open_generate(),
+            "export.variant_pdf" => {
+                self.export_variant_pdf(argument);
+            }
+            "export.spec" => {
+                self.export_spec();
+            }
             "revision.issue" => self.open_issue_revision(argument),
             "revision.compare" => self.open_compare(argument),
             other => {

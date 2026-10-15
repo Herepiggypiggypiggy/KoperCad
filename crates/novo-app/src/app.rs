@@ -4,12 +4,15 @@
 //! bar and no status bar.
 
 mod assembly;
+mod background_panel;
 mod cabinet;
 mod cabinet_door;
 mod cabinet_inspector;
+mod cabinet_panel;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
 mod cabinet_rules;
+mod change_report;
 mod changes;
 mod checks;
 mod commissioning;
@@ -19,14 +22,19 @@ mod drawers;
 mod duplicate;
 mod dxf;
 mod example;
+mod faults;
 mod heat;
 mod inspector;
+mod interop;
+mod learn;
+mod learn_ui;
 mod link;
 mod live;
 mod live_anim;
 mod macro_actions;
 #[cfg(test)]
 mod macro_actions_tests;
+mod menu_bar;
 mod numbering;
 mod onboarding;
 mod outline;
@@ -41,14 +49,19 @@ mod plc_link;
 mod potentials;
 mod preferences;
 mod project_settings;
+mod protection;
 mod reports;
+mod reports_view;
 mod revisions;
+mod sheet_import;
 mod sheets;
 mod simulate;
 mod sizing;
+mod status_bar;
 mod terminals;
 mod title_revisions;
 mod userkeymap;
+mod variants;
 mod wheel;
 mod workbench;
 mod workspace;
@@ -71,11 +84,17 @@ mod example_tests;
 #[cfg(test)]
 mod gate1_tests;
 #[cfg(test)]
+mod learn_tests;
+#[cfg(test)]
 mod numbering_tests;
 #[cfg(test)]
 mod onboarding_tests;
 #[cfg(test)]
 mod outline_tests;
+#[cfg(test)]
+mod protection_tests;
+#[cfg(test)]
+mod variants_tests;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -88,7 +107,6 @@ use crate::actions::Action;
 const ASSEMBLY_HINT: &str = "The workshop sheet of every cabinet: prepare, drill, mount, wire, label and check, with a box to tick at each line. Needs a cabinet with a mounting plate.";
 const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel. Export only: bringing the edited file back comes with the import dialog. The generated reports are under Export all reports to Excel.";
 use novo_core::{Aspect, Command, DeviceTag, ModelError, Outcome, PageId, PageKind};
-use novo_plc::link::LinkFormat;
 use pages::PageView;
 
 use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows};
@@ -187,8 +205,10 @@ pub struct NovoApp {
     /// is Ctrl+2.
     workspace: workspace::Workspace,
     cabinet: cabinet::CabinetState,
+    reports_view: reports_view::ReportsView,
     /// The "Size the enclosure" panel and the Enclosures list.
     sizing: sizing::SizingState,
+    protection: protection::ProtectionState,
     /// The outline flyout is showing over the canvas.
     outline_open: bool,
     /// What the outline lists.
@@ -204,6 +224,13 @@ pub struct NovoApp {
     ol: outline::OutlineState,
     /// Window width last frame, which decides whether the outline pins.
     window_width: f32,
+    /// Free room between the top bar's left and right groups last frame;
+    /// below zero they overlap. Read by the width test.
+    top_bar_gap: f32,
+    /// Width the menu names took last frame (`menu_bar`).
+    menu_bar_width: f32,
+    /// Lessons: the catalog, the running lesson and the person's progress.
+    learn: learn::LearnState,
 }
 
 /// Most messages remembered; older ones are forgotten.
@@ -226,6 +253,7 @@ impl NovoApp {
         novo_theme::apply(&cc.egui_ctx);
         let mut app = Self::with_settings(backend, canvas, settings);
         app.load_user_keymap();
+        app.learn_init_paths();
         app
     }
 
@@ -252,7 +280,9 @@ impl NovoApp {
             focus_mode: false,
             workspace: workspace::Workspace::Schematic,
             cabinet: cabinet::CabinetState::new(),
+            reports_view: Default::default(),
             sizing: sizing::SizingState::new(),
+            protection: protection::ProtectionState::new(),
             outline_open: false,
             outline_mode: OutlineMode::Pages,
             breadcrumb_link: None,
@@ -260,6 +290,9 @@ impl NovoApp {
             page_view: PageView::Function,
             ol: outline::OutlineState::new(),
             window_width: 0.0,
+            top_bar_gap: 0.0,
+            menu_bar_width: 380.0,
+            learn: learn::LearnState::new(),
         };
         app.restore_layout_at_start();
         app
@@ -374,7 +407,8 @@ impl NovoApp {
             | Action::ZoomToFit
             | Action::SizeEnclosure
             | Action::EnclosureList
-            | Action::MotorStart => open,
+            | Action::Protection => open,
+            Action::MotorStart => open,
             Action::ShowCabinet => self
                 .workspace_unavailable(workspace::Workspace::Cabinet)
                 .is_none(),
@@ -389,6 +423,7 @@ impl NovoApp {
         if !self.is_enabled(action) {
             return;
         }
+        self.learn_command(action.id());
         if action != Action::CommandPalette {
             self.settings.remember_action(action.id());
         } else {
@@ -400,6 +435,7 @@ impl NovoApp {
             Action::OpenExample => self.leave_then(ctx, Leaving::Example),
             Action::TryFastKeys => self.leave_then(ctx, Leaving::Practice),
             Action::ShowWalkthrough => self.show_walkthrough(),
+            Action::Learn => self.learn_run_command("help.learn", None),
             Action::SaveProject => {
                 self.save();
             }
@@ -421,6 +457,7 @@ impl NovoApp {
                 self.switch_workspace(workspace::Workspace::Cabinet);
                 self.sizing.editor_open = true;
             }
+            Action::Protection => self.protection.open = true,
             Action::MotorStart => self.open_motor_start(),
             Action::PinOutline => {
                 let pinned = !self.outline_pinned();
@@ -596,6 +633,7 @@ impl NovoApp {
     /// A different project was opened, created or closed: nothing cached
     /// for the old one carries over.
     fn document_replaced(&mut self) {
+        self.learn_project_changed();
         self.canvas.document_replaced();
         self.wb.reports = Default::default();
         self.wb.commissioning = None;
@@ -746,12 +784,13 @@ impl NovoApp {
         } else {
             self.key_commands(&ctx)
         };
-        if self.workspace() == workspace::Workspace::Cabinet {
+        if self.workspace() != workspace::Workspace::Schematic {
             // The schematic's keys must not edit the hidden page: rotate
             // and delete go to the Cabinet, the rest keep only the view,
             // file and undo actions.
+            let cabinet = self.workspace() == workspace::Workspace::Cabinet;
             for id in &commands {
-                if matches!(*id, "edit.rotate" | "edit.delete") {
+                if cabinet && matches!(*id, "edit.rotate" | "edit.delete") {
                     self.cabinet.keys.push((*id).to_owned());
                 }
             }
@@ -772,7 +811,14 @@ impl NovoApp {
         egui::Panel::top("top_bar")
             .exact_size(TOP_BAR)
             .show(ui, |ui| self.top_bar(ui, &mut picked));
-        if pinned && self.is_open() {
+        self.status_bar(ui);
+        let reports = self.workspace() == workspace::Workspace::Reports && self.is_open();
+        if reports {
+            egui::Panel::left("reports_list")
+                .exact_size(OUTLINE_WIDTH)
+                .resizable(false)
+                .show(ui, |ui| self.reports_list(ui));
+        } else if pinned && self.is_open() {
             egui::Panel::left("outline")
                 .exact_size(OUTLINE_WIDTH)
                 .resizable(false)
@@ -783,6 +829,8 @@ impl NovoApp {
             .show(ui, |ui| {
                 if self.is_open() && self.workspace() == workspace::Workspace::Cabinet {
                     self.cabinet_show(ui);
+                } else if reports {
+                    self.reports_central(ui);
                 } else if self.is_open() {
                     self.update_marks();
                     self.update_sheet();
@@ -801,7 +849,7 @@ impl NovoApp {
             .response
             .rect;
 
-        if !self.focus_mode && !pinned && self.is_open() {
+        if !self.focus_mode && !pinned && !reports && self.is_open() {
             self.outline_flyout(&ctx, canvas_rect, &mut picked);
         }
         if !self.focus_mode && self.workspace() == workspace::Workspace::Schematic {
@@ -816,24 +864,36 @@ impl NovoApp {
             self.walkthrough_card(&ctx, canvas_rect);
             self.changes_card(&ctx, canvas_rect);
         }
+        self.learn_watch(&ctx);
+        self.learn_step(&ctx);
+        self.learn_overlay(&ctx, canvas_rect);
         self.toasts(&ctx, canvas_rect);
 
         self.occurrences_popup(&ctx, canvas_rect);
         self.command_field(&ctx, canvas_rect);
         self.recovery_dialog(&ctx);
         self.about_dialog(&ctx);
+        self.learn_window(&ctx);
         self.motor_start_window(&ctx);
         self.renumber_dialog(&ctx);
         self.plc_import_dialog(&ctx);
         self.preferences_dialog(&ctx);
+        self.background_panel(&ctx);
         self.parts_window(&ctx);
         self.project_settings_dialog(&ctx);
         self.macro_save_dialog(&ctx);
         self.macro_place_window(&ctx);
+        self.options_window(&ctx);
+        self.generate_window(&ctx);
         self.issue_revision_dialog(&ctx);
         self.compare_window(&ctx);
+        self.aml_import_dialog(&ctx);
+        self.poll_dwg(&ctx);
+        self.protection_window(&ctx);
+        self.faults_window(&ctx);
         self.numbering_window(&ctx);
         self.page_form_dialog(&ctx);
+        self.sheet_import_dialog(&ctx);
         self.outline_dialogs(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {
             self.run_command(&ctx, id, None);
@@ -847,6 +907,7 @@ impl NovoApp {
         for command in commands {
             self.run_key_command(&ctx, command);
         }
+        self.learn_end_frame();
     }
 
     /// Follows up on what the canvas did this frame: its edits reach the
@@ -910,6 +971,7 @@ impl NovoApp {
             || self.wb.wheel.is_some()
             || self.wb.renumber.is_some()
             || self.wb.page_form.is_some()
+            || self.wb.sheet_import.is_some()
             || self.ol.dialog_open()
             || self.backend.recovery_offer().is_some()
     }
@@ -942,6 +1004,9 @@ impl NovoApp {
             self.wb.sheet = 0;
         }
         self.current_page = Some(page);
+        if self.wb.pending.is_some_and(|p| p.page != page) {
+            self.wb.pending = None;
+        }
         // A page is a schematic page: picking one leaves the Cabinet.
         self.switch_workspace(workspace::Workspace::Schematic);
     }
@@ -970,173 +1035,67 @@ impl NovoApp {
     /// Mark (project menu), Schematic | Cabinet, breadcrumb, then "Search
     /// or run" and the saved state on the right.
     fn top_bar(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
+        let fit = menu_bar::TopBarFit::at(self.window_width);
+        let focus = self.menu_key_pressed(ui.ctx());
         ui.horizontal_centered(|ui| {
-            ui.menu_button(egui::RichText::new(APP_NAME).strong(), |ui| {
-                self.project_menu(ui, picked)
-            });
-            ui.separator();
-            if let Some(workspace) = self.workspace_switcher(ui) {
-                picked.push(match workspace {
-                    workspace::Workspace::Cabinet => Action::ShowCabinet,
-                    _ => Action::ShowSchematic,
-                });
+            if self.menu_bar_wide() {
+                self.mark(ui, false);
+                self.menu_bar(ui, focus);
+            } else {
+                self.mark(ui, focus);
             }
             ui.separator();
-            self.breadcrumb(ui);
+            if let Some(workspace) = self.workspace_switcher(ui, fit.short_switcher) {
+                self.wb.queued.push(workspace.command());
+            }
+            ui.separator();
+            self.breadcrumb(ui, fit.name_chars);
+            let left_end = ui.min_rect().right();
 
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.weak(self.saved_state());
+            let right = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if !self.status_bar_shown() {
+                    ui.weak(self.saved_state());
+                }
                 self.issue_pill(ui);
                 let shortcut = Action::CommandPalette
                     .shortcut()
                     .map(|s| ui.ctx().format_shortcut(&s))
                     .unwrap_or_default();
-                let search = egui::Button::new("Search or run")
-                    .shortcut_text(shortcut)
-                    .min_size(egui::vec2(240.0, 0.0));
-                if ui.add(search).clicked() {
+                let label = if fit.search.is_empty() {
+                    shortcut.clone()
+                } else {
+                    fit.search.to_owned()
+                };
+                let mut search =
+                    egui::Button::new(label).min_size(egui::vec2(fit.search_width, 0.0));
+                if !fit.search.is_empty() && fit.search_width > 0.0 {
+                    search = search.shortcut_text(shortcut.clone());
+                }
+                let search = ui
+                    .add(search)
+                    .on_hover_text(format!("Search or run ({shortcut})"));
+                self.anchor_response("palette.button", &search, "Search or run");
+                if search.clicked() {
                     picked.push(Action::CommandPalette);
                 }
             });
+            self.top_bar_gap = right.response.rect.left() - left_end;
         });
-    }
-
-    /// The short project menu behind the mark. Everything in it is also in
-    /// the command palette.
-    fn project_menu(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
-        for a in [Action::NewProject, Action::OpenProject, Action::OpenExample] {
-            self.action_button(ui, a, picked);
-        }
-        ui.add_enabled_ui(!self.settings.recent_projects.is_empty(), |ui| {
-            ui.menu_button("Recent", |ui| {
-                for path in self.settings.recent_projects.clone() {
-                    if ui.button(path.display().to_string()).clicked() {
-                        let ctx = ui.ctx().clone();
-                        self.leave_then(&ctx, Leaving::OpenPath(path));
-                    }
-                }
-            });
-        });
-        ui.separator();
-        for a in [
-            Action::SaveProject,
-            Action::SaveProjectAs,
-            Action::CloseProject,
-        ] {
-            self.action_button(ui, a, picked);
-        }
-        ui.separator();
-        let export = egui::Button::new("Export PDF");
-        if ui.add_enabled(self.is_open(), export).clicked() {
-            self.export_pdf();
-            ui.close();
-        }
-        let assembly = egui::Button::new("Export assembly checklist (PDF)");
-        if ui
-            .add_enabled(self.is_open(), assembly)
-            .on_hover_text(ASSEMBLY_HINT)
-            .on_disabled_hover_text("Open a project first")
-            .clicked()
-        {
-            self.export_assembly();
-            ui.close();
-        }
-        let sheets = egui::Button::new("Export for bulk edit (.xlsx)");
-        if ui
-            .add_enabled(self.is_open(), sheets)
-            .on_hover_text(SHEETS_HINT)
-            .on_disabled_hover_text("Open a project first")
-            .clicked()
-        {
-            self.export_spreadsheet();
-            ui.close();
-        }
-        let csv = egui::Button::new("Export for bulk edit (CSV files)");
-        if ui
-            .add_enabled(self.is_open(), csv)
-            .on_hover_text(SHEETS_HINT)
-            .on_disabled_hover_text("Open a project first")
-            .clicked()
-        {
-            self.export_spreadsheet_csv();
-            ui.close();
-        }
-        // The same commands as Ctrl+K: one code path.
-        let has_page = self.current_page.is_some();
-        let has = self.has_background();
-        ui.add_enabled_ui(has_page, |ui| {
-            ui.menu_button("DXF background", |ui| {
-                if ui.button("Import DXF...").clicked() {
-                    self.wb.queued.push("file.import_dxf_background");
-                    ui.close();
-                }
-                let label = if self.background_shown() {
-                    "Hide"
-                } else {
-                    "Show"
-                };
-                if ui.add_enabled(has, egui::Button::new(label)).clicked() {
-                    self.wb.queued.push("view.background");
-                    ui.close();
-                }
-                if ui.add_enabled(has, egui::Button::new("Remove")).clicked() {
-                    self.wb.queued.push("file.remove_background");
-                    ui.close();
-                }
-            });
-        });
-        ui.add_enabled_ui(self.is_open(), |ui| {
-            ui.menu_button("Export DXF", |ui| {
-                if ui
-                    .add_enabled(has_page, egui::Button::new("This page"))
-                    .clicked()
-                {
-                    self.wb.queued.push("export.dxf_page");
-                    ui.close();
-                }
-                if ui.button("All pages").clicked() {
-                    self.wb.queued.push("export.dxf_all");
-                    ui.close();
-                }
-            });
-        });
-        ui.add_enabled_ui(self.is_open(), |ui| {
-            ui.menu_button("Export PLC", |ui| {
-                for (id, format) in [
-                    ("export.plc_csv", LinkFormat::Csv),
-                    ("export.plc_plcopen", LinkFormat::PlcOpen),
-                    ("export.plc_tia", LinkFormat::Tia),
-                    ("export.plc_studio5000", LinkFormat::Studio5000),
-                    ("export.plc_address_plan", LinkFormat::Hardware),
-                ] {
-                    if ui.button(format.label()).clicked() {
-                        self.wb.queued.push(id);
-                        ui.close();
-                    }
-                }
-            });
-            if ui
-                .button("Import PLC tags...")
-                .on_hover_text("Read the programmer's tag file back: comments and tag names update, addresses never change")
-                .clicked()
-            {
-                self.wb.queued.push("plc.import_tags");
-                ui.close();
-            }
-        });
-        ui.separator();
-        for a in [Action::About, Action::Quit] {
-            self.action_button(ui, a, picked);
-        }
     }
 
     /// project / page. A click on the page opens the outline.
-    fn breadcrumb(&mut self, ui: &mut egui::Ui) {
+    fn breadcrumb(&mut self, ui: &mut egui::Ui, name_chars: usize) {
         let Some(name) = self.project_name() else {
             ui.weak("No project open");
             return;
         };
-        ui.label(name);
+        let shown = if name.chars().count() > name_chars {
+            let cut: String = name.chars().take(name_chars.saturating_sub(1)).collect();
+            format!("{cut}…")
+        } else {
+            name.clone()
+        };
+        ui.label(shown).on_hover_text(name);
         let page = self.current_page.and_then(|id| {
             let sheet = self.wb.sheet;
             let rows = self.page_rows();
@@ -1379,6 +1338,7 @@ impl NovoApp {
                 if !self.first_run() {
                     self.action_button(ui, Action::TryFastKeys, picked);
                 }
+                self.learn_start_entry(ui);
                 let unsaved = self.backend.unsaved_projects();
                 if !unsaved.is_empty() {
                     ui.add_space(16.0);
@@ -1418,6 +1378,10 @@ impl NovoApp {
     /// Cursor position and friends, faint, at the canvas's top right. On
     /// the drawing, the step hint is in the tool dock instead.
     fn hud(&self, ctx: &egui::Context, canvas: egui::Rect) {
+        // The status bar carries these values when it is on.
+        if self.status_bar_shown() {
+            return;
+        }
         let text = match self.canvas.schematic_ref() {
             Some(view) => view
                 .editor
@@ -1453,6 +1417,10 @@ impl NovoApp {
                 }
                 if m.level != Level::Info {
                     return true;
+                }
+                // The status bar shows info messages when it is on.
+                if self.status_bar_shown() {
+                    return false;
                 }
                 let left = TOAST_INFO.saturating_sub(now - m.at);
                 if !left.is_zero() {
