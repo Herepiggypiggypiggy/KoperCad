@@ -83,6 +83,7 @@ mod export;
 mod io;
 mod order;
 mod page;
+mod plugs;
 mod report;
 mod sheets;
 mod table;
@@ -99,6 +100,7 @@ pub use export::{CsvOptions, ExportError, save_xlsx, to_csv, xlsx_bytes};
 pub use io::IoList;
 pub use order::{function_of, location_of, location_text, tag_cmp};
 pub use page::{Line, Margins, PageLayout, PageSetup, ReportPage, TextBox, layout_page, paginate};
+pub use plugs::PlugList;
 pub use report::{Dependencies, LiveReports, Report, Reports};
 pub use sheets::{GeneratedSheet, SheetFingerprint, fingerprint, sheet_name, sheet_names};
 pub use table::{Align, Cell, Column, ReportOutput, Row, Section};
@@ -116,6 +118,7 @@ pub fn standard_reports() -> Vec<Box<dyn Report>> {
         Box::new(WireList),
         Box::new(TerminalDiagram),
         Box::new(CableDiagram),
+        Box::new(PlugList),
         Box::new(IoList),
     ]
 }

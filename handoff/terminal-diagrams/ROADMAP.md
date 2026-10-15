@@ -5,7 +5,7 @@ Owner: thread "Terminal diagrams" (sibling: "Cable and terminal strip plans", ca
 Goal: per terminal strip a diagram (terminal number, jumpers and bridges, wires in and out, destinations, cross references) and per connector a contact list, as live reports on screen, PDF (novo-pdf) and CSV.
 
 Done:
-- PR 1: strip rows carry wire in/out, bridged-to and location (plug list now lives in #416 of the cable thread).
+- PR 1: strip rows carry wire in/out, bridged-to and location ; plug list report (`plugs`, adopted from the cable thread).
 
 Next:
 - Drawn strip diagram page (terminal blocks with jumper bars, wires left and right) for the PDF.
