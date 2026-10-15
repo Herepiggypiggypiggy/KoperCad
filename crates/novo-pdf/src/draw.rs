@@ -5,10 +5,8 @@
 //! every coordinate below is written in the drawing's own millimetres.
 
 use crate::font;
-use novo_canvas::Anchor;
 use novo_canvas::{Color, Label, Primitive, Shape, Stroke, Vec2, WidthUnit};
-use novo_reports::{Align, TextBox};
-use pdf_writer::types::{LineCapStyle, LineJoinStyle, TextRenderingMode};
+use pdf_writer::types::{LineCapStyle, LineJoinStyle};
 use pdf_writer::{Content, Name, Str};
 use std::f32::consts::{FRAC_PI_2, TAU};
 
@@ -170,42 +168,6 @@ impl PageWriter {
             c.show(Str(line));
         }
         c.end_text();
-    }
-}
-
-impl PageWriter {
-    /// Draws a report text box: one line, vertically centred, aligned in
-    /// the box and clipped to it, so a long cell never runs into the next.
-    /// Bold text is filled and outlined (Helvetica has no bold face here).
-    pub fn text_box(&mut self, t: &TextBox, color: Color) {
-        if t.text.trim().is_empty() || t.width <= 0.0 || t.height <= 0.0 {
-            return;
-        }
-        let (x, y, w, h) = (t.x as f32, t.y as f32, t.width as f32, t.height as f32);
-        let (anchor, ax) = match t.align {
-            Align::Left => (Anchor::CenterLeft, x),
-            Align::Center => (Anchor::Center, x + w * 0.5),
-            Align::Right => (Anchor::CenterRight, x + w),
-        };
-        // One line: a table cell never wraps.
-        let text = t.text.lines().next().unwrap_or_default();
-        let label = Label::new(Vec2::new(ax, y + h * 0.5), text, t.text_mm as f32)
-            .anchored(anchor)
-            .colored(color);
-        self.content.save_state();
-        self.content.rect(x, y, w, h);
-        self.content.clip_nonzero();
-        self.content.end_path();
-        if t.bold {
-            self.set_stroke(&Stroke::world(t.text_mm as f32 * 0.04, color));
-            self.content
-                .set_text_rendering_mode(TextRenderingMode::FillStroke);
-        }
-        self.label(&label);
-        self.content.restore_state();
-        // The restore undid whatever colours were set inside.
-        self.stroke = None;
-        self.fill = None;
     }
 }
 
