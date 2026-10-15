@@ -13,7 +13,7 @@
 //! IEC 60617 artwork; until then [`PlaceholderArt`] draws a box with pin
 //! stubs so every symbol is visible and connectable.
 
-use crate::scene::{Item, ItemId, Layer, LayerId, Scene, SnapPoint};
+use crate::scene::{Item, ItemId, Layer, LayerId, Scene, Sheet, SnapPoint};
 use crate::shape::{Placement, Primitive, Shape};
 use crate::style::{Color, Stroke};
 use crate::text::{Anchor, Label};
@@ -805,8 +805,9 @@ impl PageScene {
         let color = self.style.frame_color;
         let ink = Stroke::world(0.5, color);
         let thin = Stroke::world(0.25, color);
-        let mut sheet = Primitive::stroked(Shape::rect(Vec2::ZERO, size), thin);
-        sheet.fill = self.style.sheet_fill;
+        // The sheet's fill is painted by the view under the grid dots, not
+        // by this item, so the dots show inside the page.
+        let sheet = Primitive::stroked(Shape::rect(Vec2::ZERO, size), thin);
         let inner_min = Vec2::splat(FRAME_MARGIN);
         let inner_max = size - Vec2::splat(FRAME_MARGIN);
         let mut item = Item::new(self.layers.frame)
@@ -866,6 +867,15 @@ impl PageScene {
             }
         }
         self.title_block(project, page, inner_max, &mut item);
+        let mut lines = Vec::new();
+        for p in &item.primitives {
+            frame_segments(&p.shape, &mut lines);
+        }
+        self.scene.set_sheet(Some(Sheet {
+            rect: crate::Aabb::from_corners(Vec2::ZERO, size),
+            fill: self.style.sheet_fill,
+            lines,
+        }));
         self.scene.insert(item_id(self.page), item);
     }
 
@@ -1232,6 +1242,24 @@ fn junctions_of(w: &novo_core::Wire) -> [Option<JunctionId>; 2] {
         Endpoint::Junction { junction } => Some(junction),
         Endpoint::Pin { .. } | Endpoint::Free { .. } => None,
     })
+}
+
+/// The straight segments of a frame shape, for keeping grid dots clear.
+fn frame_segments(shape: &Shape, out: &mut Vec<(Vec2, Vec2)>) {
+    match shape {
+        Shape::Line { a, b } => out.push((*a, *b)),
+        Shape::Rect { min, max } => {
+            let c = [*min, Vec2::new(max.x, min.y), *max, Vec2::new(min.x, max.y)];
+            out.extend((0..4).map(|i| (c[i], c[(i + 1) % 4])));
+        }
+        Shape::Polyline { points, closed } => {
+            out.extend(points.windows(2).map(|w| (w[0], w[1])));
+            if let (true, Some(f), Some(l)) = (*closed, points.first(), points.last()) {
+                out.push((*l, *f));
+            }
+        }
+        _ => {}
+    }
 }
 
 /// The text shown next to a symbol: its device tag, terminal designation,
@@ -2297,6 +2325,25 @@ mod tests {
         // Text is pickable on its own.
         let hit = ps.scene().pick(Vec2::new(100.0, 101.0), 0.5, 2.0).unwrap();
         assert_eq!(hit.label, Some(1));
+    }
+
+    #[test]
+    fn page_scene_hands_the_sheet_to_the_view() {
+        let mut doc = Document::default();
+        let (page, _) = doc.transact("page", |tx| tx.add_page("1")).unwrap();
+        let style = ModelStyle {
+            sheet_fill: Some(Color::rgb(19, 19, 21)),
+            ..ModelStyle::default()
+        };
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        ps.set_style(style, doc.project(), &PlaceholderArt);
+        let sheet = ps.scene().sheet().expect("a page has a sheet");
+        assert_eq!(sheet.fill, Some(Color::rgb(19, 19, 21)));
+        assert!(!sheet.lines.is_empty(), "frame lines keep dots clear");
+        // The frame item no longer fills: the view paints the sheet under
+        // the grid dots.
+        let frame = ps.scene().get(item_id(page)).unwrap();
+        assert!(frame.primitives.iter().all(|p| p.fill.is_none()));
     }
 
     #[test]

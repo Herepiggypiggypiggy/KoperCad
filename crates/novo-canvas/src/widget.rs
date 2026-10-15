@@ -785,7 +785,7 @@ impl CanvasView {
 
         let mut under = Mesh::default();
         render::background(&mut under, &self.viewport, self.style.background);
-        self.grid_mesh(&mut under);
+        self.grid_mesh(&mut under, scene, pixels_per_point);
 
         let mut over = Mesh::default();
         if let Some(hit) = self.hovered_hit
@@ -1046,11 +1046,62 @@ impl CanvasView {
             .filter(|f| fonts.families.contains_key(f))
     }
 
-    fn grid_mesh(&self, mesh: &mut Mesh) {
+    fn grid_mesh(&self, mesh: &mut Mesh, scene: &Scene, pixels_per_point: f32) {
+        // A page is painted here, under everything: the sheet fill, then the
+        // grid dots inside it, so strokes and text of the scene cover them.
+        let sheet = scene.sheet();
+        if let Some(sh) = sheet
+            && let Some(fill) = sh.fill
+        {
+            let r = sh.rect;
+            tessellate::fill_polygon(
+                mesh,
+                &[
+                    r.min,
+                    Vec2::new(r.max.x, r.min.y),
+                    r.max,
+                    Vec2::new(r.min.x, r.max.y),
+                ],
+                fill,
+                true,
+            );
+        }
         let Some(g) = self.grid.visible_lines(&self.viewport) else {
             return;
         };
         let vis = self.viewport.visible_world();
+        if let Some(sh) = sheet
+            && self.grid.style == GridStyle::Dots
+        {
+            let zoom = self.viewport.zoom;
+            let major_step = (self.grid.spacing * self.grid.major_every.max(1) as f32).max(g.step);
+            // Quieter when zoomed out: minor dots need 6 px between them,
+            // major dots 12 px.
+            let (minor, major) = (g.step * zoom >= 6.0, major_step * zoom >= 12.0);
+            let boxes: Vec<Aabb> = scene
+                .query(&vis)
+                .into_iter()
+                .filter_map(|id| scene.get(id))
+                .flat_map(|item| item.labels.iter().map(crate::text::Label::bounds))
+                .collect();
+            let ppp = pixels_per_point.max(f32::EPSILON);
+            for d in g.dots(&sh.rect, &sh.lines, &boxes, minor, major) {
+                // One device pixel for a minor dot, two for a major one.
+                let w = if d.major { 2.0 } else { 1.0 } / ppp;
+                let half = self.viewport.screen_to_world_len(w * 0.5);
+                let c = if d.major {
+                    self.style.grid_major
+                } else {
+                    self.style.grid_minor
+                };
+                tessellate::stroke_run(
+                    mesh,
+                    &[d.pos - Vec2::new(half, 0.0), d.pos + Vec2::new(half, 0.0)],
+                    &Stroke::screen(w, c),
+                );
+            }
+            return;
+        }
         match self.grid.style {
             GridStyle::Lines => {
                 for &(x, major) in &g.xs {

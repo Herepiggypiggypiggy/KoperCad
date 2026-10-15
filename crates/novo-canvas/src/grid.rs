@@ -1,6 +1,7 @@
 //! Drawing grid: snapping to it and choosing which grid lines to show at the
 //! current zoom.
 
+use crate::geom::{self, Aabb};
 use crate::viewport::Viewport;
 use glam::Vec2;
 
@@ -47,6 +48,74 @@ pub struct VisibleGrid {
     pub xs: Vec<(f32, bool)>,
     /// y of each horizontal line, with whether it is major.
     pub ys: Vec<(f32, bool)>,
+}
+
+/// A grid dot to draw.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Dot {
+    pub pos: Vec2,
+    pub major: bool,
+}
+
+/// Dots keep this far (mm) from the frame and title-block lines.
+pub const LINE_CLEARANCE: f32 = 1.0;
+/// Text boxes are padded by this much (mm) before dots keep out of them.
+pub const TEXT_PADDING: f32 = 0.5;
+
+impl VisibleGrid {
+    /// The dots inside `within`, minus those within [`LINE_CLEARANCE`] of a
+    /// line or inside a (padded) text box. Minor dots are left out unless
+    /// `minor`, major ones unless `major`.
+    pub fn dots(
+        &self,
+        within: &Aabb,
+        lines: &[(Vec2, Vec2)],
+        boxes: &[Aabb],
+        minor: bool,
+        major: bool,
+    ) -> Vec<Dot> {
+        let (nx, ny) = (self.xs.len(), self.ys.len());
+        let mut hidden = vec![false; nx * ny];
+        let range = |v: &[(f32, bool)], lo: f32, hi: f32| {
+            v.partition_point(|&(x, _)| x < lo)..v.partition_point(|&(x, _)| x <= hi)
+        };
+        for b in boxes {
+            let b = b.expand(TEXT_PADDING);
+            for j in range(&self.ys, b.min.y, b.max.y) {
+                for i in range(&self.xs, b.min.x, b.max.x) {
+                    hidden[j * nx + i] = true;
+                }
+            }
+        }
+        for &(a, b) in lines {
+            let r = Aabb::from_points([a, b]).expand(LINE_CLEARANCE);
+            for j in range(&self.ys, r.min.y, r.max.y) {
+                for i in range(&self.xs, r.min.x, r.max.x) {
+                    let p = Vec2::new(self.xs[i].0, self.ys[j].0);
+                    if geom::dist_point_segment(p, a, b) <= LINE_CLEARANCE {
+                        hidden[j * nx + i] = true;
+                    }
+                }
+            }
+        }
+        let mut out = Vec::new();
+        for (j, &(y, my)) in self.ys.iter().enumerate() {
+            for (i, &(x, mx)) in self.xs.iter().enumerate() {
+                let is_major = mx && my;
+                if hidden[j * nx + i] || !(if is_major { major } else { minor }) {
+                    continue;
+                }
+                let pos = Vec2::new(x, y);
+                if within.contains_point(pos) {
+                    out.push(Dot {
+                        pos,
+                        major: is_major,
+                    });
+                }
+            }
+        }
+        out
+    }
 }
 
 impl Grid {
@@ -115,6 +184,48 @@ impl Grid {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn dots_view() -> VisibleGrid {
+        let g = Grid::default();
+        let v = Viewport {
+            zoom: 4.0,
+            ..Default::default()
+        };
+        g.visible_lines(&v).unwrap()
+    }
+
+    #[test]
+    fn no_dot_inside_a_text_box_or_on_a_frame_line() {
+        let vis = dots_view();
+        let within = Aabb::from_corners(Vec2::new(-50.0, -50.0), Vec2::new(150.0, 150.0));
+        let boxes = [Aabb::from_corners(
+            Vec2::new(20.0, 20.0),
+            Vec2::new(40.0, 28.0),
+        )];
+        let lines = [(Vec2::new(60.0, 0.0), Vec2::new(60.0, 100.0))];
+        let all = vis.dots(&within, &[], &[], true, true);
+        let dots = vis.dots(&within, &lines, &boxes, true, true);
+        assert!(!all.is_empty() && dots.len() < all.len());
+        for d in &dots {
+            let inside = boxes[0].expand(TEXT_PADDING).contains_point(d.pos);
+            assert!(!inside, "dot {:?} inside the text box", d.pos);
+            let near = geom::dist_point_segment(d.pos, lines[0].0, lines[0].1);
+            assert!(near > LINE_CLEARANCE, "dot {:?} on the line", d.pos);
+        }
+        // Dots farther from both are untouched.
+        assert!(dots.iter().any(|d| d.pos == Vec2::new(80.0, 40.0)));
+    }
+
+    #[test]
+    fn minor_and_major_dots_drop_out_separately() {
+        let vis = dots_view();
+        let within = Aabb::from_corners(Vec2::new(-50.0, -50.0), Vec2::new(150.0, 150.0));
+        let majors = vis.dots(&within, &[], &[], false, true);
+        assert!(!majors.is_empty() && majors.iter().all(|d| d.major));
+        let minors = vis.dots(&within, &[], &[], true, false);
+        assert!(!minors.is_empty() && minors.iter().all(|d| !d.major));
+        assert!(vis.dots(&within, &[], &[], false, false).is_empty());
+    }
 
     #[test]
     fn snaps_to_nearest_point() {
