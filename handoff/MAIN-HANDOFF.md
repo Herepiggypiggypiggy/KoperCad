@@ -3,6 +3,13 @@
 For a fresh cloud session that takes over as **integration lead**: the role that coordinates the threads and merges PRs.
 Last updated 2026-10-14 17:17 UTC (final from the first lead session) by the integration lead (session_011PfTJ1QaP1JQJPwXcFnxBE).
 
+## 0d. State at 2026-10-15 10:40 UTC (integration lead)
+- **Main 2d5fff7**, about 919 tests passing (design reviewer's merged run), no open PRs. Product is **KoperCAD** by **KoperVonk** (#201); repo is `Herepiggypiggypiggy/kopercad` (old slug redirects; old-name API calls fail). Code, crates and data folders keep `novo-*` / NovoElectric for now.
+- **Builds:** experimental build 2 published 10:07Z on main 424234a. Build 3 waits for double-click text / wire-number rename (WS-01, on the label_hit query from #232). Release dispatches builds by manual dispatch (5-14 min).
+- **Shipped today (Tadjiro's UI list):** drag-move without M, pin-click wire, double-click open end / free wire, drop contact on coil to link, row placement and strip pitch, right-click menu + place wheel (Q for Place), grid dots, box-select highlight and N selected, device properties inspector, contrast and joints palette, wire.open check, Endpoint::Free.
+- **Open:** text/wire-number rename (WS-01), end-cap drag/resume and 4 px cap (WS-03/WS-06), inspector pin/slide/override arrows, DESIGN nits (grab radius, junction dot radius, +/- spacing wording, Link-to hint wording), repo-slug PR (Release, scripts/installer/Cargo.toml/workflows/docs), README Windows line is stale, GitHub repo description and topics (only Tadjiro).
+- **Rules:** token-saving mode (no polling, short messages, one reviewer pass per head); main reviewer session_016C9nTT8cN7voW8t1NQUG4W and design reviewer session_0114emQ5fSFrzcALbR4S18TU; a head that moves after READY goes back to its reviewer; squash with the full SHA and an overriding commit message; one line per merge batch in `handoff/integration-lead/PROGRESS.md`.
+
 ## 0c. State at 2026-10-15 04:00 UTC (integration lead)
 - **Main d563971**, 713 tests passing locally (fmt, clippy -D warnings clean, Linux). Merged 02:50-03:55: #87, #111, #115-#125, #127-#132, #134, #135, #137 (#116 DESIGN page names; #119 page freeze; #124 shared IEC 81346-2:2019 letter_code table in novo-symbols; #125 blocks; #134 Inter subset for Unicode PDF text).
 - **Open:** #126 WS-03 drawing (main + B READY on 1bf0920, waits design), #133 WS-06 page-name letters (A + design), #136 WS-08 coil.contactor + DESIGN §6 (B READY, waits design), #138 WS-01 drawers (A + design), #139 WS-11 optional terminal pins (B).
