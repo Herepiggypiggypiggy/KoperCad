@@ -6,6 +6,7 @@
 mod checks;
 mod drawers;
 mod pdf;
+mod plc;
 mod reports;
 mod terminals;
 mod workbench;

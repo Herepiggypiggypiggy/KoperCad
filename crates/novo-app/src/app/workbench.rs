@@ -160,6 +160,9 @@ const APP_COMMANDS: &[&str] = &[
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "plc.add_card",
+    "plc.to_plc",
+    "plc.renumber_io",
 ];
 
 /// Whether the app can run a command now (not "comes later").
@@ -412,6 +415,9 @@ impl NovoApp {
             "export.pdf" => {
                 self.export_pdf();
             }
+            "plc.add_card" => self.plc_add_card(argument),
+            "plc.to_plc" => self.plc_to_plc(),
+            "plc.renumber_io" => self.plc_renumber_io(),
             other => {
                 let label = novo_workflow::commands::get(other).map_or(other, |c| c.label);
                 self.message(Level::Info, format!("{label} is not in the app yet"));

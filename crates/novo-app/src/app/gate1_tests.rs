@@ -984,3 +984,41 @@ fn opening_an_issued_project_adds_no_generated_pages() {
         d.app.messages()
     );
 }
+
+#[test]
+fn plc_commands_add_a_card_send_a_signal_and_renumber() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let last = |d: &Drive| d.app.messages().last().map(|m| m.text.clone()).unwrap();
+
+    // No card yet: to plc explains instead of failing.
+    let sensor = d.place("pbnc", 40.0, 40.0);
+    d.select(sensor);
+    d.app.run_command(&ctx, "plc.to_plc", None);
+    assert!(last(&d).contains("free DI channel"), "{}", last(&d));
+    let depth = d.doc().undo_depth();
+
+    // A bare `add card` says what it needs; a layout adds one card.
+    d.app.run_command(&ctx, "plc.add_card", None);
+    assert!(last(&d).contains("add card DI16"));
+    d.app.run_command(&ctx, "plc.add_card", Some("DI16 DQ8"));
+    assert!(last(&d).starts_with("Added card"), "{}", last(&d));
+    assert_eq!(d.doc().undo_depth(), depth + 1);
+    assert_eq!(novo_plc::cards(d.doc().project()).len(), 1);
+
+    // To PLC draws a channel and wires it, in one undo step.
+    let wires = d.doc().project().wires().count();
+    let depth = d.doc().undo_depth();
+    d.select(sensor);
+    d.app.run_command(&ctx, "plc.to_plc", None);
+    assert!(last(&d).starts_with("Sent to"), "{}", last(&d));
+    assert_eq!(d.doc().project().wires().count(), wires + 1);
+    assert_eq!(d.doc().undo_depth(), depth + 1);
+
+    // Renumber on an ordered project changes nothing worth a step.
+    d.app.run_command(&ctx, "plc.renumber_io", None);
+    assert!(last(&d).contains("Renumbered") || last(&d).contains("already"));
+}
