@@ -302,9 +302,6 @@ pub(crate) fn read(project: &Project, id: AnyId, field: &Field) -> Cell {
 }
 
 /// A cell understood for its column.
-// `Part` is rare and short-lived (one per edited cell), so boxing it would
-// only add a pointer chase everywhere the enum is matched.
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 #[allow(clippy::large_enum_variant)] // one short-lived value per cell; boxing would touch the sheet planner
 pub(crate) enum Parsed {
