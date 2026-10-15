@@ -136,7 +136,7 @@ impl NovoApp {
     }
 }
 
-fn hash(bytes: &[u8]) -> u64 {
+pub(super) fn hash(bytes: &[u8]) -> u64 {
     let mut h = DefaultHasher::new();
     bytes.hash(&mut h);
     h.finish()
@@ -144,7 +144,12 @@ fn hash(bytes: &[u8]) -> u64 {
 
 /// `<dir>/<base>.<ext>` when free or still exactly what we wrote, else the
 /// first such of `<base> 2.<ext>`, `<base> 3.<ext>`...
-fn ours_or_free(dir: &Path, base: &str, ext: &str, written: &BTreeMap<PathBuf, u64>) -> PathBuf {
+pub(super) fn ours_or_free(
+    dir: &Path,
+    base: &str,
+    ext: &str,
+    written: &BTreeMap<PathBuf, u64>,
+) -> PathBuf {
     let mut n = 1;
     loop {
         let name = if n == 1 {

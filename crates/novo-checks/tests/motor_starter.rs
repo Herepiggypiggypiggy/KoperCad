@@ -198,13 +198,17 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         by_kind.entry(p.kind).or_default().push(p);
     }
     // The starter has no lengths, supply rating or cabinet layout, so the
-    // checks that read those are tested in design_checks.rs.
+    // checks that read those are tested in design_checks.rs and calc_checks.rs.
     let needs_more = [
         ProblemKind::VoltageDrop,
         ProblemKind::ShortCircuit,
         ProblemKind::UnplacedDevice,
         ProblemKind::WireWithoutDuct,
         ProblemKind::OverfullDuct,
+        ProblemKind::DisconnectionTime,
+        ProblemKind::ThermalWithstand,
+        ProblemKind::MotorStarter,
+        ProblemKind::ProtectiveConductor,
     ];
     let kinds: Vec<ProblemKind> = ProblemKind::ALL
         .into_iter()

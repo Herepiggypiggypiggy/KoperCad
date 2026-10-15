@@ -138,6 +138,19 @@ fn role_of(node: &Node) -> String {
         .to_ascii_lowercase()
 }
 
+/// Upper bounds for sizes read from a file; anything above is treated as a typo.
+const MAX_PLATE_MM: f64 = 10_000.0;
+const MAX_CROSS_SECTION_MM2: f64 = 2_000.0;
+const MAX_LENGTH_M: f64 = 100_000.0;
+
+/// A size from a file: finite, above zero and no larger than `max`.
+fn dimension(text: &str, max: f64) -> Option<f64> {
+    text.trim()
+        .parse::<f64>()
+        .ok()
+        .filter(|v| v.is_finite() && *v > 0.0 && *v <= max)
+}
+
 fn value_of(text: &str, data_type: &str) -> Value {
     let t = data_type.to_ascii_lowercase();
     if t.ends_with("boolean") {
@@ -150,6 +163,7 @@ fn value_of(text: &str, data_type: &str) -> Value {
     }
     if (t.ends_with("double") || t.ends_with("float") || t.ends_with("decimal"))
         && let Ok(f) = text.parse::<f64>()
+        && f.is_finite()
     {
         return Value::Float(f);
     }
@@ -179,6 +193,7 @@ struct Reader {
     plant: Plant,
     ignored_elements: usize,
     duplicate_tags: usize,
+    bad_numbers: usize,
     links: usize,
     frames: usize,
     seen: std::collections::BTreeSet<String>,
@@ -212,6 +227,7 @@ pub fn read_aml(text: &str) -> Result<Plant, AmlError> {
         plant: Plant::default(),
         ignored_elements: 0,
         duplicate_tags: 0,
+        bad_numbers: 0,
         links: 0,
         frames: 0,
         seen: Default::default(),
@@ -244,6 +260,11 @@ pub fn read_aml(text: &str) -> Result<Plant, AmlError> {
         "repeated tags",
         r.duplicate_tags,
         "a tag already read from this file is used once",
+    );
+    report.lost(
+        "sizes that are not a finite positive number in range",
+        r.bad_numbers,
+        "plate sizes, cable lengths and cross sections outside the accepted range are dropped",
     );
     report.lost(
         "positions",
@@ -292,9 +313,21 @@ impl Reader {
                 if !tag.location.is_empty() {
                     inner.location = tag.location.clone();
                 }
-                let plate = first(&attrs, &["PlateWidth"])
-                    .zip(first(&attrs, &["PlateHeight"]))
-                    .and_then(|(w, h)| Some((w.parse::<f64>().ok()?, h.parse::<f64>().ok()?)));
+                if !self.seen.insert(tag.to_string()) {
+                    self.duplicate_tags += 1;
+                    return;
+                }
+                let plate = match (
+                    first(&attrs, &["PlateWidth"]),
+                    first(&attrs, &["PlateHeight"]),
+                ) {
+                    (Some(w), Some(h)) => {
+                        let plate = dimension(w, MAX_PLATE_MM).zip(dimension(h, MAX_PLATE_MM));
+                        self.bad_numbers += usize::from(plate.is_none());
+                        plate
+                    }
+                    _ => None,
+                };
                 self.plant.structures.push(PlantStructure {
                     tag: DeviceTag {
                         product: Vec::new(),
@@ -480,7 +513,11 @@ impl Reader {
                 let a = attributes(c);
                 PlantCore {
                     name: c.attr("Name").unwrap_or_default().to_string(),
-                    cross_section_mm2: first(&a, &["CrossSection"]).and_then(|v| v.parse().ok()),
+                    cross_section_mm2: first(&a, &["CrossSection"]).and_then(|v| {
+                        let n = dimension(v, MAX_CROSS_SECTION_MM2);
+                        self.bad_numbers += usize::from(n.is_none());
+                        n
+                    }),
                     shield: first(&a, &["Shield"]).is_some_and(|v| v == "true"),
                 }
             })
@@ -490,7 +527,11 @@ impl Reader {
             description: first(attrs, &["Description"])
                 .unwrap_or_default()
                 .to_string(),
-            length_m: first(attrs, &["Length"]).and_then(|v| v.parse().ok()),
+            length_m: first(attrs, &["Length"]).and_then(|v| {
+                let n = dimension(v, MAX_LENGTH_M);
+                self.bad_numbers += usize::from(n.is_none());
+                n
+            }),
             cores,
         });
     }

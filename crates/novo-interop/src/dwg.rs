@@ -278,6 +278,17 @@ impl Converter {
             cmd.creation_flags(0x0800_0000);
         }
         let mut child = cmd.spawn().map_err(|e| DwgError::Start(e.to_string()))?;
+        // Drained while the converter runs: a chatty one would otherwise fill
+        // the pipe and stall until the timeout. Only the first 4 KB is kept.
+        let drain = child.stderr.take().map(|mut s| {
+            std::thread::spawn(move || {
+                use std::io::Read;
+                let mut kept = Vec::new();
+                let _ = s.by_ref().take(4096).read_to_end(&mut kept);
+                let _ = std::io::copy(&mut s, &mut std::io::sink());
+                kept
+            })
+        });
         let start = Instant::now();
         let status = loop {
             match child.try_wait() {
@@ -291,13 +302,10 @@ impl Converter {
                 Err(e) => return Err(DwgError::Start(e.to_string())),
             }
         };
-        let mut err = String::new();
-        if let Some(mut s) = child.stderr.take() {
-            use std::io::Read;
-            let mut buf = Vec::new();
-            let _ = s.by_ref().take(4096).read_to_end(&mut buf);
-            err = String::from_utf8_lossy(&buf).trim().to_string();
-        }
+        let err = drain
+            .and_then(|h| h.join().ok())
+            .map(|buf| String::from_utf8_lossy(&buf).trim().to_string())
+            .unwrap_or_default();
         if !status.success() {
             return Err(DwgError::Failed(if err.is_empty() {
                 format!(

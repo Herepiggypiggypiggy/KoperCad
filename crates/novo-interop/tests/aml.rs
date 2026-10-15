@@ -255,3 +255,47 @@ fn other_files_are_refused_with_a_clear_message() {
     ));
     assert!(matches!(read_aml("<CAEXFile>"), Err(AmlError::Xml(_))));
 }
+
+#[test]
+fn hostile_sizes_and_repeated_structures_are_dropped_and_counted() {
+    let element = |id: &str, tag: &str, w: &str, h: &str| {
+        format!(
+            r#"<InternalElement ID="{id}" Name="{tag}">
+   <Attribute Name="Designation"><Value>{tag}</Value></Attribute>
+   <Attribute Name="PlateWidth"><Value>{w}</Value></Attribute>
+   <Attribute Name="PlateHeight"><Value>{h}</Value></Attribute>
+   <RoleRequirements RefBaseRoleClassPath="SomeLib/Location"/>
+  </InternalElement>"#
+        )
+    };
+    let aml = format!(
+        r#"<?xml version="1.0" encoding="utf-8"?>
+<CAEXFile SchemaVersion="2.15" FileName="x.aml">
+ <InstanceHierarchy Name="Plant">
+  {}
+  {}
+  {}
+  {}
+  {}
+ </InstanceHierarchy>
+</CAEXFile>"#,
+        element("a", "+CAB1", "NaN", "800"),
+        element("b", "+CAB2", "600", "-5"),
+        element("c", "+CAB3", "inf", "800"),
+        element("d", "+CAB4", "600", "800"),
+        element("e", "+CAB4", "600", "800"),
+    );
+    let plant = read_aml(&aml).unwrap();
+    let plate = |t: &str| {
+        plant
+            .structures
+            .iter()
+            .find(|s| s.tag.to_string() == t)
+            .map(|s| s.plate)
+    };
+    assert_eq!(plate("+CAB1"), Some(None));
+    assert_eq!(plate("+CAB2"), Some(None));
+    assert_eq!(plate("+CAB3"), Some(None));
+    assert_eq!(plate("+CAB4"), Some(Some((600.0, 800.0))));
+    assert_eq!(plant.structures.len(), 4, "the repeated tag is read once");
+}

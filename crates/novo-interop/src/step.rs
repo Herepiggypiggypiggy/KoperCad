@@ -266,6 +266,8 @@ fn real(v: f32) -> String {
 }
 
 fn real64(v: f64) -> String {
+    // A NaN or infinite size would write an invalid real; 0 is the safe stand-in.
+    let v = if v.is_finite() { v } else { 0.0 };
     let r = (v * 1e6).round() / 1e6;
     let r = if r == 0.0 { 0.0 } else { r };
     let s = format!("{r}");
