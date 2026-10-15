@@ -54,6 +54,11 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("tool.place", &[], &["plaatsen", "invoegen", "component"]),
     nl("tool.connect", &[], &["verbinden", "draad"]),
+    nl(
+        "wire.mode",
+        &["bedradingsmodus"],
+        &["modus", "hoeken", "lijnen", "tekenen"],
+    ),
     nl("edit.rotate", &[], &["draaien", "roteren"]),
     nl("edit.mirror", &[], &["spiegelen"]),
     nl(
@@ -149,6 +154,8 @@ pub const DUTCH: &[Aliases] = &[
 /// Dutch command arguments and the English chip each one stands for.
 pub const DUTCH_ARGUMENTS: &[(&str, &str)] = &[
     ("pagina", "page"),
+    ("hoeken", "corners"),
+    ("lijnen", "lines"),
     ("selectie", "selection"),
     ("project", "project"),
 ];
