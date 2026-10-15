@@ -55,7 +55,7 @@ coordinator in its own small PR first.
 | `novo-sim` | WS-19 | Simulation engine (Phase 4) |
 | `novo-ai` | WS-23 | AI assistant (Phase 5) |
 | `novo-interop` | WS-24 | Import and export: DXF, EPLAN parts, Excel round trip (Phase 5) |
-| `novo-cli` | WS-28 | `novo` command-line tool |
+| `novo-cli` | WS-28 | `kopercad-cli` command-line tool |
 | `novo-py` | WS-28 | Python bindings (PyO3) |
 | `novo-theme` | Layout and branding | Dark theme, design tokens, icons, logo (`assets/branding`) |
 | `novo-tests` | Tester | Cross-crate tests and the Gate 1 fixture |
