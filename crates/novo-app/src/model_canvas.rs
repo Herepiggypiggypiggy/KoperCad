@@ -43,6 +43,7 @@ impl ModelCanvas {
             scene.set_style(theme::model_style(), project, &PlaceholderArt);
             let mut view = View::new();
             view.style = theme::canvas_style();
+            view.bold_family = Some(novo_theme::fonts::strong_family());
             PageCanvas { scene, view }
         })
     }

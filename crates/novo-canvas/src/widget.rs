@@ -265,6 +265,10 @@ pub struct CanvasView {
     pub reveal_zoom: f32,
     /// Screen points a revealed target keeps from the canvas edges.
     pub reveal_margin: f32,
+    /// A font family with a bold face, for [`Label::bold`](crate::Label)
+    /// text. When it is `None` or not registered with egui, bold is faked
+    /// with a second pass shifted along the baseline.
+    pub bold_family: Option<egui::FontFamily>,
     /// At most this many labels are drawn per frame, the largest first;
     /// text costs CPU time per glyph, and a page dense enough to exceed it
     /// is too small to read anyway.
@@ -374,6 +378,7 @@ impl CanvasView {
             reveal_pending: None,
             reveal_zoom: 4.0,
             reveal_margin: 48.0,
+            bold_family: None,
             stats: FrameStats::default(),
         }
     }
@@ -973,6 +978,7 @@ impl CanvasView {
             return;
         }
         let painter = ui.painter_at(rect);
+        let bold_family = painter.fonts(|fonts| self.bold_face(fonts.definitions()));
         // Collect what is readable first, so a dense page draws its largest
         // text within the budget instead of whichever labels come first.
         let mut todo: Vec<(f32, ItemId, usize)> = Vec::new();
@@ -1007,15 +1013,19 @@ impl CanvasView {
             let size = 2f32.powf((size.log2() * 12.0).round() / 12.0);
             let [r, g, b, a] = highlight.filter(|_| !l.keep_color).unwrap_or(l.color).0;
             let color = egui::Color32::from_rgba_unmultiplied(r, g, b, a);
+            let family = match (&bold_family, l.bold) {
+                (Some(f), true) => f.clone(),
+                _ => egui::FontFamily::Proportional,
+            };
             let galley =
-                painter.layout_no_wrap(l.text.clone(), egui::FontId::proportional(size), color);
+                painter.layout_no_wrap(l.text.clone(), egui::FontId::new(size, family), color);
             let f = l.anchor.fractions();
             let offset = egui::vec2(f.x * galley.size().x, f.y * galley.size().y);
             let s = self.viewport.world_to_screen(l.pos);
             let anchor = rect.min + egui::vec2(s.x, s.y);
             let rot = egui::emath::Rot2::from_angle(l.rotation);
             let at = anchor - rot * offset;
-            if l.bold {
+            if l.bold && bold_family.is_none() {
                 // No bold face is loaded: a second pass shifted along the
                 // baseline thickens the strokes.
                 let shift = rot * egui::vec2((size * crate::text::BOLD_SHIFT).max(0.5), 0.0);
@@ -1026,6 +1036,14 @@ impl CanvasView {
             }
             painter.add(egui::epaint::TextShape::new(at, galley, color).with_angle(l.rotation));
         }
+    }
+
+    /// [`Self::bold_family`] when egui knows it (laying out text in an
+    /// unknown family panics).
+    fn bold_face(&self, fonts: &egui::FontDefinitions) -> Option<egui::FontFamily> {
+        self.bold_family
+            .clone()
+            .filter(|f| fonts.families.contains_key(f))
     }
 
     fn grid_mesh(&self, mesh: &mut Mesh) {
@@ -1403,5 +1421,22 @@ mod tests {
         view.viewport.center = Vec2::new(-700.0, 0.0);
         frame(&ctx, &mut view, &scene, vec![]);
         assert!(view.viewport.center.x < -600.0);
+    }
+
+    /// The bold family is used only when egui has it registered; any
+    /// other setting falls back to faux bold rather than panicking in
+    /// layout.
+    #[test]
+    fn bold_face_only_when_registered() {
+        let strong = egui::FontFamily::Name("strong".into());
+        let mut fonts = egui::FontDefinitions::default();
+        let regular = fonts.families[&egui::FontFamily::Proportional].clone();
+        fonts.families.insert(strong.clone(), regular);
+        let mut view = CanvasView::new();
+        assert_eq!(view.bold_face(&fonts), None);
+        view.bold_family = Some(egui::FontFamily::Name("missing".into()));
+        assert_eq!(view.bold_face(&fonts), None);
+        view.bold_family = Some(strong.clone());
+        assert_eq!(view.bold_face(&fonts), Some(strong));
     }
 }
