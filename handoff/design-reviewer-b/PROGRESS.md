@@ -28,3 +28,4 @@
 19:55 UTC #318 e731257 READY (C cable line; DESIGN text added)
 20:10 UTC #323 3632c97 READY (Outline Changes list); #325 220a9c5 READY (earthing on reconnected wire)
 20:40 UTC #327 8d0ef34 READY; #329 50b0d17 READY; #331 899689d READY; #333 1d3d86b READY
+21:00 UTC #335 0fc8ae7 READY (symbol packs DESIGN); #337 21f1da4 READY (inspector slide/pin/reset)
