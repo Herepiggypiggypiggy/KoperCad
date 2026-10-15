@@ -209,6 +209,7 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         ProblemKind::ThermalWithstand,
         ProblemKind::MotorStarter,
         ProblemKind::ProtectiveConductor,
+        ProblemKind::CableRating,
     ];
     let kinds: Vec<ProblemKind> = ProblemKind::ALL
         .into_iter()
