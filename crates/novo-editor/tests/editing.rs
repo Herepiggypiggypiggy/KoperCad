@@ -1888,3 +1888,25 @@ fn renaming_a_contact_to_its_coils_tag_links_it_and_two_coils_are_refused() {
     doc.undo().unwrap();
     assert_eq!(tags(&doc).len(), 3);
 }
+
+#[test]
+fn a_click_on_a_pin_starts_a_wire_with_no_tool_switch() {
+    let (mut doc, page, mut editor, [a, b, _]) = three_contacts();
+    assert!(!editor.tool_active());
+    let pa = pin_pos(&doc, a, "14");
+    let pb = pin_pos(&doc, b, "14");
+    assert_eq!(editor.click(&mut doc, page, pa, TOL), Clicked::Step);
+    let Tool::Wire(w) = editor.tool() else {
+        panic!("wiring")
+    };
+    assert!(w.start.is_some() && !w.drag);
+    // The next click on a pin finishes it.
+    assert_eq!(editor.click(&mut doc, page, pb, TOL), Clicked::Edited);
+    assert_eq!(doc.project().wires().count(), 1);
+    // A click on empty canvas starts nothing.
+    editor.leave_tool();
+    assert_eq!(
+        editor.click(&mut doc, page, p(300.0, 300.0), TOL),
+        Clicked::Unhandled
+    );
+}

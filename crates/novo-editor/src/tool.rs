@@ -164,7 +164,6 @@ fn pin_of(target: Target) -> Option<Endpoint> {
 /// The reason shown when a line would run back over the wire being drawn.
 const SELF_OVERLAP_NOTICE: &str = "A line cannot run back over the wire";
 
-/// The reason shown when a line would lie over another wire.
 /// What giving `device` the tag `tag` of another device would link: the
 /// symbols of `device` and the first symbol of the device that has the tag
 /// (its coil, when it has one). `None` when there is nothing to link.
@@ -183,6 +182,7 @@ fn link_plan(
     (!mine.is_empty()).then_some((mine, partner))
 }
 
+/// The reason shown when a line would lie over another wire.
 fn overlap_notice(_refusal: &Refusal) -> String {
     "Overlaps another wire".into()
 }
@@ -521,7 +521,21 @@ impl Editor {
         // Clicking elsewhere leaves proposals unaccepted.
         self.proposals.clear();
         match self.tool.clone() {
-            Tool::Select => Clicked::Unhandled,
+            // A click on a pin starts a wire there, with no tool switch; the
+            // next click continues it.
+            Tool::Select => match self.target {
+                Some(start @ Target::Endpoint(Endpoint::Pin { .. }, _)) => {
+                    self.tool = Tool::Wire(WireTool {
+                        start: Some(start),
+                        corners: Vec::new(),
+                        drag: false,
+                        flip: false,
+                    });
+                    self.notice = None;
+                    Clicked::Step
+                }
+                _ => Clicked::Unhandled,
+            },
             Tool::Place(p) => self.commit_place(doc, page, &p, at),
             Tool::Wire(mut w) => {
                 let target = self.target;
