@@ -2035,6 +2035,7 @@ dependencies = [
  "calamine",
  "novo-core",
  "novo-reports",
+ "novo-revisions",
  "novo-storage",
  "novo-symbols",
  "pyo3",
