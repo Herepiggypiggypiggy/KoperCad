@@ -355,6 +355,26 @@ const HIDDEN: &[&str] = &[
     "format",
 ];
 
+/// Namespaces of properties that crates keep for their own bookkeeping:
+/// declined suggestions (`terminal.suggest`, `cable.propose`), strip styles
+/// (`terminal_part.*`, `terminal_symbol.*`), cable cores and shields, legacy
+/// terminal rules. Each is edited through its own screen, so the property
+/// sheet and the bulk table leave them out instead of showing raw ids.
+pub const INTERNAL_KEY_PREFIXES: &[&str] = &[
+    "connect.",
+    "terminal.",
+    "terminals.",
+    "terminal_part.",
+    "terminal_symbol.",
+    "cable.",
+];
+
+/// Whether a property key belongs to an internal namespace
+/// ([`INTERNAL_KEY_PREFIXES`]) and is not shown to the user as a property.
+pub fn is_internal_key(key: &str) -> bool {
+    INTERNAL_KEY_PREFIXES.iter().any(|p| key.starts_with(p))
+}
+
 const PART_SYNONYMS: &[&str] = &[
     "article",
     "order number",
@@ -701,7 +721,7 @@ impl PropertySheet {
         // as empty, so it shows as mixed.
         let mut keys: BTreeMap<&str, ()> = BTreeMap::new();
         for record in &records {
-            for key in record.properties().keys() {
+            for key in record.properties().keys().filter(|k| !is_internal_key(k)) {
                 keys.insert(key, ());
             }
         }

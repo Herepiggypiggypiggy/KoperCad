@@ -1229,3 +1229,36 @@ fn a_pe_terminal_is_offered_a_pe_block_first_and_accessories_stay_on_the_strip()
         "3044076"
     );
 }
+
+#[test]
+fn internal_properties_are_not_shown_in_the_sheet_or_the_bulk_table() {
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    set_property(
+        &mut doc,
+        gate.x1,
+        "terminal_part.feed_through",
+        Value::Int(1),
+    );
+    set_property(&mut doc, gate.x1, "terminal.suggest", Value::Bool(true));
+    set_property(&mut doc, gate.x1, "colour", Value::Text("grey".into()));
+    let sheet = PropertySheet::build(doc.project(), &[gate.x1.into()]);
+    let properties: Vec<&RowKey> = sheet
+        .rows()
+        .iter()
+        .filter(|r| r.group == Group::Properties)
+        .map(|r| &r.key)
+        .collect();
+    assert_eq!(properties, [&RowKey::Property("colour".into())]);
+
+    let tsv = BulkTable::devices(doc.project(), Some(&[gate.x1])).to_tsv();
+    let header = tsv.lines().next().unwrap();
+    assert!(header.contains("colour"), "{header}");
+    assert!(!header.contains("terminal"), "{header}");
+    // Pasting the table back leaves the hidden properties alone.
+    let catalog = Catalog::starter();
+    let outcome = apply_table(doc.project(), &catalog, &tsv).unwrap();
+    assert!(outcome.command.is_none());
+    let x1 = doc.project().device(gate.x1).unwrap();
+    assert_eq!(x1.properties["terminal_part.feed_through"], Value::Int(1));
+}

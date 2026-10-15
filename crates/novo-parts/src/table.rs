@@ -126,6 +126,7 @@ impl BulkTable {
         let keys: BTreeSet<&str> = devices
             .iter()
             .flat_map(|d| d.properties.keys().map(String::as_str))
+            .filter(|k| !crate::sheet::is_internal_key(k))
             .collect();
         let mut columns = vec![
             TableColumn::Tag,
