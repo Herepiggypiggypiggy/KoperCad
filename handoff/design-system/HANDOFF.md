@@ -1,13 +1,17 @@
 # Design system and aesthetics: handoff
 
-Updated 2026-10-15 18:47 UTC.
+Updated 2026-10-15 19:20 UTC.
 
 ## State
 - Repo herepiggypiggypiggy/kopercad, branch `claude/project-thread-mr5n3b`
   (the only branch I push to; restart it from main after each merge).
-- PR 1 (spec, `docs/design/design-system.md`, `scripts/screenshot.sh`, this
-  folder): in review.
-- Before screenshots of the app and preview example taken at main 074138a.
+- #448 (spec) merged 19:13 UTC. PR 2 (this branch): tokens, light theme,
+  widgets, gallery, plus the review fixes that landed after the merge.
+- Next PRs, one at a time from main (local stack branch ds-appearance holds the
+  work): Preferences theme/density and canvas restyle, start screen, dock,
+  drawers, toasts, command field, top bar, outline, live view colours. Then
+  inspector, dialogs, empty states, icons, canvas polish (with the canvas
+  thread), learning widgets (novo-learn).
 
 ## Resume
 ```

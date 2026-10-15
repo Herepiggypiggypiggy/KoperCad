@@ -17,6 +17,7 @@ mod drawers;
 mod duplicate;
 mod dxf;
 mod example;
+mod heat;
 mod inspector;
 mod link;
 mod live;
@@ -31,6 +32,7 @@ mod parts;
 mod parts_import;
 mod pdf;
 mod plc;
+mod plc_link;
 mod potentials;
 mod preferences;
 mod project_settings;
@@ -377,8 +379,8 @@ impl NovoApp {
             Action::ShowCabinet => self
                 .workspace_unavailable(workspace::Workspace::Cabinet)
                 .is_none(),
-            Action::Undo => doc.is_some_and(|d| d.can_undo()),
-            Action::Redo => doc.is_some_and(|d| d.can_redo()),
+            Action::Undo => !self.commissioning_locks_edits() && doc.is_some_and(|d| d.can_undo()),
+            Action::Redo => !self.commissioning_locks_edits() && doc.is_some_and(|d| d.can_redo()),
             _ => true,
         }
     }
@@ -751,7 +753,11 @@ impl NovoApp {
                     self.cabinet.keys.push((*id).to_owned());
                 }
             }
-            commands.retain(|id| Action::from_id(id).is_some() || *id == "view.cabinet_table");
+            commands.retain(|id| {
+                Action::from_id(id).is_some()
+                    || *id == "view.cabinet_table"
+                    || id.starts_with("heat.")
+            });
         }
 
         self.window_width = ctx.content_rect().width();
@@ -824,6 +830,7 @@ impl NovoApp {
         self.recovery_dialog(&ctx);
         self.about_dialog(&ctx);
         self.renumber_dialog(&ctx);
+        self.plc_import_dialog(&ctx);
         self.preferences_dialog(&ctx);
         self.parts_window(&ctx);
         self.project_settings_dialog(&ctx);
@@ -850,7 +857,15 @@ impl NovoApp {
     /// other views, and a page it asked for is opened.
     fn after_canvas(&mut self) {
         let changes = self.canvas.take_changes();
-        if !changes.is_empty() {
+        if !changes.is_empty() && self.commissioning_locks_edits() {
+            // Commissioning mode checks the drawing against the machine; a
+            // stray touch must not move a wire. One undo takes it back.
+            self.undo_redo(false);
+            self.message(
+                Level::Info,
+                "Commissioning is read-only. Close it (Ctrl+K, Commissioning) to edit.",
+            );
+        } else if !changes.is_empty() {
             self.reports_heard(&changes);
             self.mark_earthed_terminals(&changes);
             self.fix_current_page();

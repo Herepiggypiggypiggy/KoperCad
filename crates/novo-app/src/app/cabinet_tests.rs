@@ -287,3 +287,47 @@ fn inspector_sets_the_plate_size_and_lists_a_device_s_problems() {
         Facts::Plate { placed: 2, .. }
     ));
 }
+
+#[test]
+fn a_problem_row_selects_its_device_on_the_plate() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    d.app.cabinet.table = true;
+    d.app.cabinet_ask(Ask::Select(7), None, None, &[]);
+    assert!(!d.app.cabinet.table);
+    assert_eq!(
+        d.app
+            .cabinet
+            .view
+            .selection
+            .ids()
+            .iter()
+            .filter_map(|i| novo_canvas::cabinet::box_of(*i))
+            .collect::<Vec<_>>(),
+        vec![7]
+    );
+}
+
+#[test]
+fn heat_commands_open_the_cabinet_and_toggle_the_layers() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert!(!d.app.cabinet.heat.on);
+    d.app.run_command(&ctx, "heat.toggle", None);
+    assert!(d.app.workspace() == Workspace::Cabinet && d.app.cabinet.heat.on);
+    d.frame();
+    d.app.run_command(&ctx, "heat.airflow", None);
+    assert!(d.app.cabinet.heat.airflow);
+    d.frame();
+    d.app.run_command(&ctx, "heat.toggle", None);
+    assert!(!d.app.cabinet.heat.on);
+}
