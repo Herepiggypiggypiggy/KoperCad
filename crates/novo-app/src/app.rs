@@ -4,6 +4,7 @@
 //! bar and no status bar.
 
 mod assembly;
+mod background_panel;
 mod cabinet;
 mod cabinet_inspector;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
@@ -825,6 +826,7 @@ impl NovoApp {
         self.renumber_dialog(&ctx);
         self.plc_import_dialog(&ctx);
         self.preferences_dialog(&ctx);
+        self.background_panel(&ctx);
         self.parts_window(&ctx);
         self.project_settings_dialog(&ctx);
         self.macro_save_dialog(&ctx);
@@ -1076,6 +1078,13 @@ impl NovoApp {
                 };
                 if ui.add_enabled(has, egui::Button::new(label)).clicked() {
                     self.wb.queued.push("view.background");
+                    ui.close();
+                }
+                if ui
+                    .add_enabled(has, egui::Button::new("Move and scale..."))
+                    .clicked()
+                {
+                    self.wb.queued.push("view.background_place");
                     ui.close();
                 }
                 if ui.add_enabled(has, egui::Button::new("Remove")).clicked() {

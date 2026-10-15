@@ -302,6 +302,11 @@ pub const DUTCH: &[Aliases] = &[
         &["achtergrond tonen", "achtergrond verbergen", "dxf"],
     ),
     nl(
+        "view.background_place",
+        &[],
+        &["achtergrond verplaatsen", "achtergrond schalen", "dxf"],
+    ),
+    nl(
         "file.remove_background",
         &[],
         &["achtergrond verwijderen", "dxf"],
