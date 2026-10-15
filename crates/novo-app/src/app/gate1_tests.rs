@@ -415,13 +415,15 @@ fn gate1_motor_starter_through_the_window() {
     let file = dir.path().join("Starter.novo");
     assert!(d.app.save_to(&file));
     d.frame();
-    // PDF export: two pages, written where asked.
+    // PDF export: two pages, written where asked, then the design checks
+    // report while problems remain.
     let pdf = dir.path().join("Starter.pdf");
     assert_eq!(d.app.export_pdf_to(&pdf), Some(pdf.clone()));
     let bytes = std::fs::read(&pdf).unwrap();
     assert!(bytes.starts_with(b"%PDF"));
     let pages = lopdf::Document::load_mem(&bytes).unwrap().get_pages().len();
-    assert_eq!(pages, 2, "one PDF page per project page");
+    let report = usize::from(novo_checks::report_lines(d.doc().project()).len() > 2);
+    assert_eq!(pages, 2 + report, "one PDF page per project page");
     // DXF export: every page into a folder beside the project, drawn with
     // geometry (the symbols are in it), reproducible on a second export.
     let files = d
@@ -2596,4 +2598,116 @@ fn the_parts_command_opens_and_closes_the_parts_window() {
     d.app.wb.parts = None;
     d.frame();
     assert!(d.app.wb.parts.is_none());
+}
+
+#[test]
+fn the_editor_catalog_follows_the_project_standard_and_the_wheel_hides_missing_twins() {
+    use novo_symbols::Pack;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let pack = |d: &mut Drive| {
+        d.app
+            .canvas
+            .schematic()
+            .unwrap()
+            .editor
+            .catalog
+            .library()
+            .pack()
+    };
+    assert_eq!(pack(&mut d), Some(Pack::Iec));
+    // A wheel item with no twin in the NFPA pack, if the packs still have one.
+    let nfpa = novo_symbols::Library::builtin_pack(Pack::Nfpa).unwrap();
+    let no_twin = (0..5).find_map(|sector| {
+        d.app
+            .wheel_items(sector)
+            .into_iter()
+            .map(|(k, _)| (sector, k))
+            .find(|(_, k)| Pack::counterpart(k, Pack::Nfpa).is_none_or(|t| nfpa.get(&t).is_none()))
+    });
+    d.app
+        .canvas
+        .schematic()
+        .unwrap()
+        .editor
+        .catalog
+        .used("iec/contacts/no");
+
+    // A reordered favourites row survives the switch and the undo.
+    let mut order: Vec<String> = d
+        .app
+        .canvas
+        .schematic()
+        .unwrap()
+        .editor
+        .catalog
+        .favourites()
+        .to_vec();
+    order.reverse();
+    d.app
+        .canvas
+        .schematic()
+        .unwrap()
+        .editor
+        .catalog
+        .set_favourites(order.clone());
+
+    d.app.set_standard(Pack::Nfpa);
+    d.frame();
+    assert_eq!(pack(&mut d), Some(Pack::Nfpa));
+    // The favourites keep their order in the new pack, and still place.
+    let favs = d
+        .app
+        .canvas
+        .schematic()
+        .unwrap()
+        .editor
+        .catalog
+        .favourites()
+        .to_vec();
+    assert!(
+        !favs.is_empty() && favs.iter().all(|f| f.starts_with("nfpa/")),
+        "{favs:?}"
+    );
+    let expected: Vec<String> = order
+        .iter()
+        .map(|f| Pack::counterpart(f, Pack::Nfpa).unwrap())
+        .filter(|f| nfpa.get(f).is_some())
+        .collect();
+    assert_eq!(favs, expected);
+    let view = d.app.canvas.schematic().unwrap();
+    assert!(
+        view.editor.begin_place(&favs[0], None),
+        "a favourite places"
+    );
+    view.editor.leave_tool();
+    // A recently used symbol follows to the new pack.
+    let catalog = &d.app.canvas.schematic().unwrap().editor.catalog;
+    assert_eq!(
+        catalog.recent().first().map(String::as_str),
+        Some("nfpa/contacts/no")
+    );
+    // Items without a twin in the pack are hidden; the rest stay.
+    if let Some((sector, key)) = no_twin {
+        let items = d.app.wheel_items(sector);
+        assert!(!items.is_empty());
+        assert!(items.iter().all(|(k, _)| *k != key), "{items:?}");
+    }
+
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(pack(&mut d), Some(Pack::Iec));
+    let back = d
+        .app
+        .canvas
+        .schematic()
+        .unwrap()
+        .editor
+        .catalog
+        .favourites()
+        .to_vec();
+    assert_eq!(back, order, "the reordered row comes back");
 }

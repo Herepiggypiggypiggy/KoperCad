@@ -5,9 +5,10 @@
 //! are only picked when nothing opaque is behind the pointer.
 
 use crate::camera::Camera;
-use crate::math::Ray;
-use crate::scene::{ItemId, Scene};
+use crate::math::{Aabb, Ray};
+use crate::scene::{ItemId, ItemKind, Scene};
 use crate::view_state::ViewState;
+use crate::wire;
 use glam::{Vec2, Vec3};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -16,6 +17,9 @@ pub struct Hit {
     /// Distance along the ray, mm.
     pub t: f32,
     pub point: Vec3,
+    /// The item is see-through (door, shell): picked only when nothing
+    /// opaque is behind the pointer.
+    pub translucent: bool,
 }
 
 /// Every item the ray crosses, nearest first, opaque items before translucent
@@ -36,8 +40,33 @@ pub fn pick_all(scene: &Scene, state: &ViewState, ray: &Ray) -> Vec<Hit> {
                     id: item.id,
                     t,
                     point: ray.at(t),
+                    translucent: item.translucent,
                 },
             ));
+        }
+    }
+    if state.is_visible(ItemKind::Wire) {
+        for wire in &scene.wires {
+            let r = wire.radius.max(wire::MIN_PICK_RADIUS);
+            let mut best: Option<f32> = None;
+            for seg in wire::segments(wire) {
+                let local = ray.to_local(&seg.frame());
+                let b = Aabb::new(Vec3::new(-r, -r, 0.0), Vec3::new(r, r, seg.length()));
+                if let Some((near, _)) = b.ray_interval(&local) {
+                    best = Some(best.map_or(near.max(0.0), |t| t.min(near.max(0.0))));
+                }
+            }
+            if let Some(t) = best {
+                hits.push((
+                    false,
+                    Hit {
+                        id: wire.id,
+                        t,
+                        point: ray.at(t),
+                        translucent: false,
+                    },
+                ));
+            }
         }
     }
     hits.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.t.total_cmp(&b.1.t)));
@@ -60,8 +89,7 @@ pub fn pick(scene: &Scene, state: &ViewState, ray: &Ray, skip: usize) -> Option<
 /// at the same spot). Translucent items count only when nothing opaque is hit.
 pub fn pick_from_back(scene: &Scene, state: &ViewState, ray: &Ray, k: usize) -> Option<Hit> {
     let hits = pick_all(scene, state, ray);
-    let opaque = |h: &Hit| scene.get(h.id).is_some_and(|i| !i.translucent);
-    let n_opaque = hits.iter().filter(|h| opaque(h)).count();
+    let n_opaque = hits.iter().filter(|h| !h.translucent).count();
     let list = if n_opaque > 0 {
         &hits[..n_opaque]
     } else {
@@ -76,8 +104,10 @@ pub fn pick_deepest(scene: &Scene, state: &ViewState, ray: &Ray) -> Option<Hit> 
 }
 
 /// Items whose projected box overlaps the screen rectangle given by two
-/// corners in normalised device coordinates. Items behind the camera are
-/// ignored.
+/// corners in normalised device coordinates. A box that straddles the eye
+/// plane is kept when the part in front of the camera overlaps (its projected
+/// extent there is unbounded, so the test is generous); a box wholly behind
+/// the camera is ignored.
 pub fn marquee(
     scene: &Scene,
     state: &ViewState,
@@ -89,27 +119,45 @@ pub fn marquee(
     let (lo, hi) = (a.min(b), a.max(b));
     let bounds = scene.bounds();
     let vp = camera.view_proj(aspect, &bounds);
+    let overlaps = |world: &Aabb| -> bool {
+        let mut min = Vec2::splat(f32::INFINITY);
+        let mut max = Vec2::splat(f32::NEG_INFINITY);
+        let mut front = 0;
+        let mut behind = false;
+        for c in world.corners() {
+            let clip = vp * c.extend(1.0);
+            if clip.w <= 0.0 {
+                behind = true;
+                continue;
+            }
+            front += 1;
+            let p = Vec2::new(clip.x / clip.w, clip.y / clip.w);
+            min = min.min(p);
+            max = max.max(p);
+        }
+        if front == 0 {
+            return false;
+        }
+        if behind {
+            // Straddling the eye plane: unbounded on the screen.
+            return true;
+        }
+        min.x <= hi.x && max.x >= lo.x && min.y <= hi.y && max.y >= lo.y
+    };
     let mut out = Vec::new();
     for item in &scene.items {
         if !state.is_visible(item.id.kind) || item.translucent {
             continue;
         }
-        let world = scene.world_bounds(item);
-        let mut min = Vec2::splat(f32::INFINITY);
-        let mut max = Vec2::splat(f32::NEG_INFINITY);
-        let mut all_front = true;
-        for c in world.corners() {
-            let clip = vp * c.extend(1.0);
-            if clip.w <= 0.0 {
-                all_front = false;
-                break;
-            }
-            let p = Vec2::new(clip.x / clip.w, clip.y / clip.w);
-            min = min.min(p);
-            max = max.max(p);
-        }
-        if all_front && min.x <= hi.x && max.x >= lo.x && min.y <= hi.y && max.y >= lo.y {
+        if overlaps(&scene.world_bounds(item)) {
             out.push(item.id);
+        }
+    }
+    if state.is_visible(ItemKind::Wire) {
+        for wire in &scene.wires {
+            if overlaps(&wire::world_bounds(wire)) {
+                out.push(wire.id);
+            }
         }
     }
     out
@@ -265,5 +313,69 @@ mod tests {
         );
         assert!(some.iter().any(|i| i.raw == 2));
         assert!(!some.iter().any(|i| i.raw == 3));
+    }
+
+    fn wire_scene() -> Scene {
+        let mut s = scene();
+        s.wires.push(crate::scene::Wire {
+            id: ItemId::new(ItemKind::Wire, 7),
+            points: vec![
+                Vec3::new(100.0, 200.0, 20.0),
+                Vec3::new(300.0, 200.0, 20.0),
+                Vec3::new(300.0, 300.0, 20.0),
+            ],
+            radius: 1.0,
+            tint: None,
+            mark: crate::scene::Mark::None,
+            label: None,
+        });
+        s
+    }
+
+    #[test]
+    fn a_wire_is_picked_on_either_leg_and_in_front_of_the_plate() {
+        let s = wire_scene();
+        let state = ViewState::default();
+        let on_first = pick(&s, &state, &front_ray(200.0, 200.5), 0).unwrap();
+        assert_eq!(on_first.id, ItemId::new(ItemKind::Wire, 7));
+        let on_second = pick(&s, &state, &front_ray(300.0, 260.0), 0).unwrap();
+        assert_eq!(on_second.id.kind, ItemKind::Wire);
+        // Off the wire the plate is hit instead.
+        let off = pick(&s, &state, &front_ray(200.0, 230.0), 0).unwrap();
+        assert_eq!(off.id.raw, 1);
+        // Alt+click from the back reaches the plate under the wire.
+        let back = pick_deepest(&s, &state, &front_ray(200.0, 200.0)).unwrap();
+        assert_eq!(back.id.raw, 1);
+        let mut hidden = ViewState::default();
+        hidden.hidden.insert(ItemKind::Wire);
+        assert_eq!(
+            pick(&s, &hidden, &front_ray(200.0, 200.0), 0)
+                .unwrap()
+                .id
+                .raw,
+            1
+        );
+    }
+
+    #[test]
+    fn marquee_takes_wires_and_big_boxes_across_the_eye_plane() {
+        let mut s = wire_scene();
+        let state = ViewState::default();
+        let mut cam = Camera::default();
+        cam.set_preset(crate::camera::ViewPreset::Front);
+        cam.fit(&s.bounds(), 1.0);
+        let all = marquee(&s, &state, &cam, 1.0, Vec2::splat(-1.0), Vec2::splat(1.0));
+        assert!(all.iter().any(|i| i.kind == ItemKind::Wire));
+        // A box that holds the eye: some corners are behind the camera, yet
+        // it stays selectable.
+        let (_, _, fwd) = cam.basis();
+        s.items.push(Item::new(
+            ItemId::new(ItemKind::Other, 99),
+            Shape::Box,
+            Pose::at(cam.eye() + fwd * 200.0 - Vec3::new(0.0, 0.0, 500.0)),
+            Vec3::new(1000.0, 1000.0, 1000.0),
+        ));
+        let again = marquee(&s, &state, &cam, 1.0, Vec2::splat(-0.1), Vec2::splat(0.1));
+        assert!(again.iter().any(|i| i.raw == 99));
     }
 }
