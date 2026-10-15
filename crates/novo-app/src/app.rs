@@ -807,7 +807,15 @@ impl NovoApp {
     /// other views, and a page it asked for is opened.
     fn after_canvas(&mut self) {
         let changes = self.canvas.take_changes();
-        if !changes.is_empty() {
+        if !changes.is_empty() && self.commissioning_locks_edits() {
+            // Commissioning mode checks the drawing against the machine; a
+            // stray touch must not move a wire. One undo takes it back.
+            self.undo_redo(false);
+            self.message(
+                Level::Info,
+                "Commissioning does not edit the drawing. Run Commissioning again to leave it.",
+            );
+        } else if !changes.is_empty() {
             self.reports_heard(&changes);
             self.mark_earthed_terminals(&changes);
             self.fix_current_page();

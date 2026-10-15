@@ -26,6 +26,8 @@ use super::{Level, NovoApp, OutlineMode};
 
 /// Minimum height of the buttons: comfortable for a finger on a tablet.
 const TOUCH: f32 = 44.0;
+/// The same with Large on: for a tablet in a cabinet, gloves or a stylus.
+const TOUCH_LARGE: f32 = 64.0;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Tab {
@@ -46,6 +48,8 @@ pub(crate) struct CommissioningMode {
     punch_title: String,
     punch_severity: Severity,
     show_closed: bool,
+    /// Bigger buttons and text for a tablet.
+    large: bool,
     /// The store changed and is not yet kept in the project file.
     dirty: bool,
 }
@@ -66,6 +70,7 @@ impl CommissioningMode {
             punch_title: String::new(),
             punch_severity: Severity::Minor,
             show_closed: false,
+            large: false,
             dirty: false,
         }
     }
@@ -127,8 +132,18 @@ fn target_glyph(store: &CommissioningStore, target: Target) -> &'static str {
     }
 }
 
-fn big_button(ui: &mut egui::Ui, text: impl Into<egui::WidgetText>) -> egui::Response {
-    ui.add(egui::Button::new(text).min_size(egui::vec2(TOUCH * 1.5, TOUCH)))
+/// The height of a touch target, for the Large switch.
+fn touch(large: bool) -> f32 {
+    if large { TOUCH_LARGE } else { TOUCH }
+}
+
+fn big_button(ui: &mut egui::Ui, large: bool, text: &str) -> egui::Response {
+    let text = if large {
+        egui::RichText::new(text).size(18.0)
+    } else {
+        egui::RichText::new(text)
+    };
+    ui.add(egui::Button::new(text).min_size(egui::vec2(touch(large) * 1.5, touch(large))))
 }
 
 fn progress_bar(ui: &mut egui::Ui, title: &str, p: Progress) {
@@ -157,6 +172,8 @@ fn place_of(project: &Project, info: &TargetInfo, current: Option<PageId>) -> Op
 
 impl NovoApp {
     /// The `view.commissioning` command: the mode on in the outline, or off.
+    /// Turning it off drops the in-memory store, which is safe because every
+    /// change is flushed to the project in the frame it is made.
     pub(super) fn toggle_commissioning(&mut self) {
         if self.wb.commissioning.is_some() && self.outline_mode == OutlineMode::Commissioning {
             self.wb.commissioning = None;
@@ -168,6 +185,12 @@ impl NovoApp {
         if !self.outline_pinned() {
             self.outline_open = true;
         }
+    }
+
+    /// Commissioning mode is showing, so the drawing is not edited: a change
+    /// the canvas makes is taken back (see `after_canvas`).
+    pub(super) fn commissioning_locks_edits(&self) -> bool {
+        self.wb.commissioning.is_some() && self.outline_mode == OutlineMode::Commissioning
     }
 
     /// Reads the project's commissioning data when the mode has none yet.
@@ -232,6 +255,7 @@ impl NovoApp {
             ui.horizontal_wrapped(|ui| {
                 ui.weak("By");
                 ui.add(egui::TextEdit::singleline(&mut mode.who).desired_width(80.0));
+                ui.checkbox(&mut mode.large, "Large");
                 for (tab, label) in [(Tab::Checks, "Checks"), (Tab::Punch, "Punch list")] {
                     if ui.selectable_label(mode.tab == tab, label).clicked() {
                         mode.tab = tab;
@@ -293,7 +317,7 @@ fn checks_tab(
         })
         .cloned();
     ui.horizontal(|ui| {
-        if big_button(ui, "Next open")
+        if big_button(ui, mode.large, "Next open")
             .on_hover_text("Select the next wire, terminal or device with an open check")
             .clicked()
         {
@@ -325,20 +349,33 @@ fn checks_tab(
                     .desired_width(f32::INFINITY),
             );
         });
+        if info
+            .target
+            .checks()
+            .iter()
+            .any(|&c| mode.store.state(info.target, c) == CheckState::Pending)
+            && big_button(ui, mode.large, "Pass all open").clicked()
+        {
+            for &check in info.target.checks() {
+                if mode.store.state(info.target, check) == CheckState::Pending {
+                    mode.decide(info.target, check, CheckState::Passed);
+                }
+            }
+        }
         for &check in info.target.checks() {
             let state = mode.store.state(info.target, check);
             ui.horizontal_wrapped(|ui| {
                 ui.label(format!("{} {}", state_glyph(state), check.label()));
-                if big_button(ui, "Pass").clicked() {
+                if big_button(ui, mode.large, "Pass").clicked() {
                     mode.decide(info.target, check, CheckState::Passed);
                 }
-                if big_button(ui, "Fail").clicked() {
+                if big_button(ui, mode.large, "Fail").clicked() {
                     mode.decide(info.target, check, CheckState::Failed);
                 }
-                if big_button(ui, "N/A").clicked() {
+                if big_button(ui, mode.large, "N/A").clicked() {
                     mode.decide(info.target, check, CheckState::NotApplicable);
                 }
-                if state != CheckState::Pending && big_button(ui, "Reset").clicked() {
+                if state != CheckState::Pending && big_button(ui, mode.large, "Reset").clicked() {
                     mode.store.clear_check(info.target, check);
                     mode.dirty = true;
                 }
@@ -364,7 +401,7 @@ fn checks_tab(
             for info in &on_page {
                 let text = format!("{} {}", target_glyph(&mode.store, info.target), info.label);
                 let row = egui::Button::selectable(mode.selected == Some(info.target), text)
-                    .min_size(egui::vec2(ui.available_width(), TOUCH * 0.7));
+                    .min_size(egui::vec2(ui.available_width(), touch(mode.large) * 0.7));
                 if ui.add(row).clicked() {
                     mode.selected = Some(info.target);
                     *go = place_of(project, info, current);
@@ -407,7 +444,8 @@ fn punch_tab(
         if ui
             .add_enabled(
                 can_add,
-                egui::Button::new("Add").min_size(egui::vec2(TOUCH * 1.5, TOUCH)),
+                egui::Button::new("Add")
+                    .min_size(egui::vec2(touch(mode.large) * 1.5, touch(mode.large))),
             )
             .clicked()
         {
@@ -468,7 +506,7 @@ fn punch_tab(
                         }
                     };
                     for &(label, state) in moves {
-                        if big_button(ui, label).clicked()
+                        if big_button(ui, mode.large, label).clicked()
                             && mode
                                 .store
                                 .set_punch_state(item.id, state, &mode.who, &now())
@@ -479,7 +517,7 @@ fn punch_tab(
                     }
                     if !item.state.is_closed()
                         && item.state != PunchState::Fixed
-                        && big_button(ui, "Won't fix").clicked()
+                        && big_button(ui, mode.large, "Won't fix").clicked()
                         && mode
                             .store
                             .set_punch_state(item.id, PunchState::WontFix, &mode.who, &now())

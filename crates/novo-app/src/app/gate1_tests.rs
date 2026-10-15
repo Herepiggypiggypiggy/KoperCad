@@ -104,7 +104,7 @@ impl Drive {
         placed
     }
 
-    fn click(&mut self, at: Point) {
+    pub(super) fn click(&mut self, at: Point) {
         let page = self.page();
         let app = &mut self.app;
         let view = app.canvas.schematic().expect("the editor canvas");
