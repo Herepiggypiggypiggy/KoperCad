@@ -386,3 +386,94 @@ fn plate_export_says_why_when_the_enclosure_has_no_plate() {
     assert!(last.text.contains("no mounting plate"), "{}", last.text);
     assert!(crate::app::app_runs("export.plate"));
 }
+
+#[test]
+fn panel_data_edits_are_one_undo_step_and_bad_input_changes_nothing() {
+    use super::cabinet_panel::PanelEdit;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    let device = novo_layout::model::candidates(project(&d), cab)[0].id;
+    let l = layout_of(&d, cab);
+    d.app
+        .cabinet_ask(Ask::Drop(device, 100.0, 120.0), Some(cab), l, &[]);
+
+    let set = |d: &mut Drive, key: &'static str, text: &str| {
+        let l = layout_of(d, cab);
+        d.app.cabinet_ask(
+            Ask::SetPanelValue(PanelEdit {
+                device,
+                key,
+                text: text.into(),
+            }),
+            Some(cab),
+            l,
+            &[],
+        );
+    };
+    let margins = |d: &Drive| {
+        let l = layout_of(d, cab).unwrap();
+        l.placements.first().map(|p| p.margins)
+    };
+    set(&mut d, "clearance_above_mm", "40");
+    assert_eq!(margins(&d).unwrap().above, Some(40.0));
+    // A negative number or an unknown mounting type is refused.
+    set(&mut d, "clearance_below_mm", "-3");
+    assert_eq!(margins(&d).unwrap().below, None);
+    set(&mut d, "mounting", "glue");
+    let device_id = novo_core::DeviceId::from(device);
+    assert!(
+        !project(&d)
+            .device(device_id)
+            .unwrap()
+            .properties
+            .contains_key("mounting")
+    );
+    set(&mut d, "mounting", "din_rail");
+    set(&mut d, "power_loss_w", "4,5");
+    let panel =
+        super::cabinet_panel::panel_data(project(&d), project(&d).device(device_id).unwrap());
+    assert_eq!(panel.power_loss_w, Some(4.5));
+    assert_eq!(panel.mounting, Some(novo_parts::Mounting::DinRail));
+    d.app.run(&ctx, Action::Undo);
+    let panel =
+        super::cabinet_panel::panel_data(project(&d), project(&d).device(device_id).unwrap());
+    assert_eq!(panel.power_loss_w, None);
+    assert_eq!(panel.mounting, Some(novo_parts::Mounting::DinRail));
+}
+
+#[test]
+fn the_panel_data_section_draws_and_reads_the_devices_values() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    let device = project(&d).all::<novo_core::Device>().next().unwrap().id;
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("loss", |tx| {
+            tx.set_property(device, "power_loss_w", Some(Value::Float(7.5)))
+        })
+        .unwrap();
+    let mut fields = super::cabinet_panel::PanelFields::default();
+    let egui_ctx = d.ctx.clone();
+    let mut edit = None;
+    for _ in 0..2 {
+        let mut out = egui_ctx.run_ui(Default::default(), |ui| {
+            edit = super::cabinet_panel::show(ui, &mut fields, project(&d), device.raw());
+        });
+        out.textures_delta.clear();
+    }
+    assert!(edit.is_none(), "drawing alone changes nothing");
+}

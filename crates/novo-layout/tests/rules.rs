@@ -3,7 +3,7 @@ use novo_layout::plan::{Candidate, Plan, ROW_GAP_MM};
 use novo_layout::rules::{
     Class, Gaps, HotRule, KindRule, RailUse, RuleSet, Spec, Zone, kind_of, place_all_rules,
 };
-use novo_layout::{Placement, Plate, Size, collisions, outside, rail_overflows};
+use novo_layout::{Margins, Placement, Plate, Size, collisions, outside, rail_overflows};
 
 fn spec(id: u64, kind: &str, w: f64, h: f64) -> Spec {
     Spec {
@@ -39,6 +39,7 @@ fn placements(plan: &Plan, specs: &[Spec]) -> Vec<Placement> {
             rotated: false,
             size: specs.iter().find(|s| s.id == p.id).unwrap().size,
             clearance: None,
+            margins: Margins::default(),
             rail: Some(p.rail),
         })
         .collect()
