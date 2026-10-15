@@ -91,3 +91,27 @@ fn empty_panels_and_next_page_names() {
     assert_eq!(project.next_page_name(&tag("=10D41+K1B1G1")), "3");
     assert_eq!(project.next_page_name(&tag("=11D21+K1B1G1")), "1");
 }
+
+#[test]
+fn a_page_renames_and_undoes_but_not_to_nothing() {
+    let mut doc = Document::default();
+    let page = add(&mut doc, "1", "=10D41+K1B1G1");
+    doc.execute(Command::RenamePage {
+        page,
+        name: " 4a ".into(),
+    })
+    .unwrap();
+    assert_eq!(doc.project().page(page).unwrap().name, "4a");
+    doc.undo().unwrap();
+    assert_eq!(doc.project().page(page).unwrap().name, "1");
+    let err = doc
+        .execute(Command::RenamePage {
+            page,
+            name: "  ".into(),
+        })
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        ModelError::InvalidValue { field: "name", .. }
+    ));
+}
