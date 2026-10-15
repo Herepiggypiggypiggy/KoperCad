@@ -319,6 +319,11 @@ pub const DUTCH: &[Aliases] = &[
         &["afdrukken"],
     ),
     nl(
+        "export.plate",
+        &["exporteer montageplaat", "montageplaat exporteren"],
+        &["boortabel", "boren"],
+    ),
+    nl(
         "export.bom",
         &["exporteer stuklijst", "stuklijst"],
         &["onderdelenlijst"],

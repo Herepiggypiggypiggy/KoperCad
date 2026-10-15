@@ -15,10 +15,14 @@ use crate::drill::{
     CUTOUT_KEY, DeviceFeatures, DrillTable, HOLE_PATTERN_KEY, MOUNTING_KEY, features_from_text,
 };
 use crate::enclosure::{DEFAULT_DOOR_ANGLE_DEG, Door, Enclosure, Hinge};
-use crate::plan::{Candidate, Plan};
+use crate::plan::{Candidate, Plan, PlannedDuct};
 use crate::plate_drawing::{PlateDocument, documents};
+use crate::rules::Class;
 use crate::state::CabinetLayout;
 use crate::{Placement, Plate, Rail, Size};
+
+/// Property of a duct: what its wiring carries (`power`, `signal`, `mixed`).
+pub const DUCT_CLASS_KEY: &str = "duct_class";
 
 /// Part property keys, the same as `novo_parts::keys`.
 const WIDTH_KEY: &str = "width_mm";
@@ -99,6 +103,27 @@ pub fn load(project: &Project, id: StructureId) -> Option<CabinetLayout> {
     Some(layout)
 }
 
+/// The wiring ducts of an enclosure's plate with the wiring they serve (the
+/// `duct_class` property; `mixed` when it is not set).
+pub fn ducts(project: &Project, id: StructureId) -> Vec<PlannedDuct> {
+    project
+        .all::<ModelRail>()
+        .filter(|r| r.structure == id && r.kind == RailKind::Duct)
+        .map(|r| PlannedDuct {
+            x: r.x,
+            y: r.y,
+            length: r.length,
+            vertical: r.vertical,
+            width: r.width,
+            height: r.height,
+            class: match r.properties.get(DUCT_CLASS_KEY) {
+                Some(Value::Text(t)) => Class::parse(t).unwrap_or_default(),
+                _ => Class::Mixed,
+            },
+        })
+        .collect()
+}
+
 /// The devices that belong in an enclosure: those whose tag has the same
 /// location as the enclosure, whatever their function (page group). Sorted
 /// by letter code, then device number.
@@ -130,7 +155,7 @@ pub fn set_plate(tx: &mut Tx<'_>, id: StructureId, plate: MountingPlate) -> Resu
 /// plan's rails, then places each device on its rail. Devices that are
 /// already placed are left where they are.
 pub fn apply_plan(tx: &mut Tx<'_>, id: StructureId, plan: &Plan) -> Result<()> {
-    let mut rails: HashMap<u64, (RailId, f64)> = HashMap::new();
+    let mut rails: HashMap<u64, (RailId, bool, f64, f64)> = HashMap::new();
     for rail in &plan.rails {
         let created = tx.execute(Command::AddRail {
             structure: id,
@@ -138,12 +163,31 @@ pub fn apply_plan(tx: &mut Tx<'_>, id: StructureId, plan: &Plan) -> Result<()> {
             y: rail.y,
             length: rail.length,
             kind: RailKind::DinRail,
-            vertical: false,
+            vertical: rail.vertical,
             width: 0.0,
             height: 0.0,
         })?;
         if let Some(novo_core::AnyId::Rail(model_id)) = created.first() {
-            rails.insert(rail.id, (*model_id, rail.x));
+            rails.insert(rail.id, (*model_id, rail.vertical, rail.x, rail.y));
+        }
+    }
+    for duct in &plan.ducts {
+        let created = tx.execute(Command::AddRail {
+            structure: id,
+            x: duct.x,
+            y: duct.y,
+            length: duct.length,
+            kind: RailKind::Duct,
+            vertical: duct.vertical,
+            width: duct.width,
+            height: duct.height,
+        })?;
+        if let Some(novo_core::AnyId::Rail(rail)) = created.first() {
+            tx.set_property(
+                *rail,
+                DUCT_CLASS_KEY,
+                Some(Value::Text(duct.class.as_str().to_owned())),
+            )?;
         }
     }
     for p in &plan.placements {
@@ -155,7 +199,9 @@ pub fn apply_plan(tx: &mut Tx<'_>, id: StructureId, plan: &Plan) -> Result<()> {
         {
             continue;
         }
-        let rail = rails.get(&p.rail).map(|(rail, x)| (*rail, p.x - x));
+        let rail = rails
+            .get(&p.rail)
+            .map(|(rail, vertical, x, y)| (*rail, if *vertical { p.y - y } else { p.x - x }));
         tx.execute(Command::PlaceDevice {
             device,
             structure: id,

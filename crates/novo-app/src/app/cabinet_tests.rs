@@ -407,6 +407,22 @@ fn heat_commands_open_the_cabinet_and_toggle_the_layers() {
 }
 
 #[test]
+fn plate_export_says_why_when_the_enclosure_has_no_plate() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    assert!(d.app.export_plate_pdf().is_none());
+    let last = d.app.messages().last().unwrap();
+    assert!(last.text.contains("no mounting plate"), "{}", last.text);
+    assert!(crate::app::app_runs("export.plate"));
+}
+
+#[test]
 fn the_enclosure_is_set_in_one_undo_step_and_drawn_with_its_checks() {
     use novo_layout::enclosure::{Door, Enclosure, Hinge};
     let dir = tempfile::tempdir().unwrap();
