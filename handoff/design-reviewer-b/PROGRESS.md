@@ -15,3 +15,4 @@
 2026-10-15 16:10 UTC #269 78d6367 READY (orthogonal drag fixed). #267 re-READY on b255817 (merge of main only). #271 3fdf358 READY earlier (merged).
 2026-10-15 16:30 UTC #269 3fffd93 READY (retargeted on main after #267). #275 b172a74 READY (New… potential, wire override menu; follow-ups on the PR).
 2026-10-15 16:45 UTC #279 df2c826 READY (Show where it goes; follow-ups: highlight not selection, scope note).
+2026-10-15 17:00 UTC #282 7eede6c READY (hover note on Show where it goes). #283 16f06d9 READY (no corner piece on pin drags; follow-up to #263).
