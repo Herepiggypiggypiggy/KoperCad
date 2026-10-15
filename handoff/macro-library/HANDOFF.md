@@ -1,6 +1,6 @@
 # Macro library: handoff
 
-Branch claude/project-thread-mrizk0, draft PR "Macros: library folder, search and sharing files" (see PROGRESS for SHA).
+Branch claude/project-thread-mrizk0 restarted from main after #405 merged; no open PR.
 Code: crates/novo-parts/src/macros.rs, tests in crates/novo-parts/tests/macros.rs. No novo-core change.
 Format: `<name>.kcmacro` JSON {format:"kopercad-macro", version, name, description, author, tags, revision, definition: BlockDefinition}; packs `.kcmacropack` hold several with folders.
 User folder: %APPDATA%\KoperCAD\Macros (user_macros_dir); BlockSource.library = "<label>/<relative path>", version = file revision.
