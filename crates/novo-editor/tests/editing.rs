@@ -1560,3 +1560,112 @@ fn enter_finishes_on_a_last_point_that_lies_on_a_pin() {
         Some("The last point is not on a pin or a wire")
     );
 }
+
+#[test]
+fn a_refusal_comes_back_as_data_naming_the_other_wire_and_the_stretch() {
+    let (mut doc, page, [a, b, c, d]) = two_rows();
+    let mid = (pin_pos(&doc, a, "14").y + pin_pos(&doc, c, "13").y) / 2.0;
+    let (w1, _) = doc
+        .transact("w1", |tx| {
+            edit::draw_wire(
+                tx,
+                page,
+                target(tx.project(), a, "14"),
+                &[],
+                target(tx.project(), c, "13"),
+            )
+        })
+        .unwrap();
+    let refusal = edit::check_draw(
+        doc.project(),
+        page,
+        target(doc.project(), b, "14"),
+        &[p(50.0, mid)],
+        target(doc.project(), d, "13"),
+    )
+    .unwrap_err();
+    assert_eq!(refusal.other, w1);
+    assert!((refusal.from.y - mid).abs() < 1e-6 && (refusal.to.y - mid).abs() < 1e-6);
+    assert!(refusal.from.distance(refusal.to) > 1.0);
+    // Without the clicked corner the router can clear it, so no refusal.
+    assert!(
+        edit::check_draw(
+            doc.project(),
+            page,
+            target(doc.project(), b, "14"),
+            &[],
+            target(doc.project(), d, "13"),
+        )
+        .is_ok()
+    );
+}
+
+/// Two straight vertical wires, one at x = 40 and one at x = 80 that a move
+/// of its two contacts by -40 would lay over the first.
+fn two_columns() -> (Document, PageId, Vec<AnyId>) {
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/contacts/no", None);
+    for at in [p(40.0, 40.0), p(40.0, 120.0), p(80.0, 40.0), p(80.0, 120.0)] {
+        editor.click(&mut doc, page, at, TOL);
+    }
+    let s = |x: f64, y: f64| symbol_at(&doc, page, p(x, y));
+    let (a, e, g, f) = (s(40.0, 40.0), s(40.0, 120.0), s(80.0, 40.0), s(80.0, 120.0));
+    for (top, low) in [(a, e), (g, f)] {
+        doc.transact("wire", |tx| {
+            edit::draw_wire(
+                tx,
+                page,
+                target(tx.project(), top, "14"),
+                &[],
+                target(tx.project(), low, "13"),
+            )
+        })
+        .unwrap();
+    }
+    (doc, page, vec![g.into(), f.into()])
+}
+
+#[test]
+fn an_interactive_move_onto_another_wire_is_refused_whole() {
+    let (mut doc, page, moving) = two_columns();
+    let depth = doc.undo_depth();
+    let result = doc.transact("Move", |tx| {
+        edit::transform_interactive(tx, &moving, edit::Transform::Move(p(-40.0, 0.0)))
+    });
+    assert!(result.is_err());
+    assert_eq!(doc.undo_depth(), depth);
+    assert!(page_has_no_overlaps(&doc, page));
+}
+
+#[test]
+fn a_move_that_cannot_ask_is_accepted_and_the_overlap_is_reportable() {
+    let (mut doc, page, moving) = two_columns();
+    doc.transact("Move", |tx| {
+        edit::transform(tx, &moving, edit::Transform::Move(p(-40.0, 0.0)))
+    })
+    .unwrap();
+    assert!(!page_has_no_overlaps(&doc, page));
+}
+
+#[test]
+fn moving_one_end_reroutes_clear_or_is_refused_when_its_pin_lies_on_another_wire() {
+    // The lower contact moves away: the re-routed wire is clear.
+    let (mut doc, page, moving) = two_columns();
+    let lower = vec![moving[1]];
+    doc.transact("Move", |tx| {
+        edit::transform_interactive(tx, &lower, edit::Transform::Move(p(40.0, 0.0)))
+    })
+    .unwrap();
+    assert!(page_has_no_overlaps(&doc, page));
+    // Moved onto the other wire's line, its last stretch runs along that wire
+    // whatever the cross-over does, so an interactive move is refused.
+    let (mut doc, _, moving) = two_columns();
+    let lower = vec![moving[1]];
+    let depth = doc.undo_depth();
+    let result = doc.transact("Move", |tx| {
+        edit::transform_interactive(tx, &lower, edit::Transform::Move(p(-40.0, 0.0)))
+    });
+    assert!(result.is_err());
+    assert_eq!(doc.undo_depth(), depth);
+}

@@ -6,7 +6,12 @@ name: CI
 # - Windows (the slow, double-priced one) only on main pushes, a nightly run
 #   and manual dispatch, never per pull request. The experimental build is
 #   the Windows build of open PRs.
-# - A newer push to the same pull request or branch cancels the older run.
+# - A newer push to the same pull request cancels the older run. Runs on main
+#   are never cancelled (a merge burst would cancel every Windows test run
+#   before it finished); GitHub keeps only the newest waiting run per group, so
+#   a burst of merges skips the middle commits and the head is still tested.
+# - The nightly Windows run is skipped when main has not moved since the last
+#   green CI run.
 on:
   push:
     branches: [main]
@@ -19,7 +24,7 @@ on:
 
 concurrency:
   group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Read-only token for every job: fork pull requests run this workflow too.
 permissions:
@@ -45,9 +50,35 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
 
+  # Decides whether the Windows job runs. Pull requests never get one.
+  gate:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run=true
+          if [ "${{ github.event_name }}" = schedule ]; then
+            last=$(gh api "repos/${{ github.repository }}/actions/workflows/ci.yml/runs?branch=main&status=success&per_page=1" \
+              --jq '.workflow_runs[0].head_sha // ""')
+            if [ "$last" = "${{ github.sha }}" ]; then
+              run=false
+              echo "main has not moved since the last green CI run (${last:0:7})." >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
   windows:
     name: windows-latest
-    if: github.event_name != 'pull_request'
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
     runs-on: windows-latest
     timeout-minutes: 40
     steps:

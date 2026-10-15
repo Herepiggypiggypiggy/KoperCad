@@ -319,6 +319,27 @@ mod tests {
     }
 
     #[test]
+    fn plc_channel_words_find_their_symbols() {
+        // docs/design/plc.md section 4: di, dq, ai, aq, ro, and the Dutch
+        // words ingang and uitgang.
+        let lib = library();
+        for (word, id) in [
+            ("di", "iec/plc/digital_input"),
+            ("dq", "iec/plc/digital_output"),
+            ("ai", "iec/plc/analog_input"),
+            ("aq", "iec/plc/analog_output"),
+            ("ro", "iec/plc/relay_output"),
+        ] {
+            assert_eq!(mnemonic(&lib, word).unwrap().id, id, "{word}");
+        }
+        let search = InsertSearch::default();
+        let top = |q: &str| search.search(&lib, q)[0].symbol.id.clone();
+        // Dutch words find the PLC channels (the inputs tie on rank).
+        assert!(top("ingang").ends_with("_input"));
+        assert!(top("uitgang").starts_with("iec/plc/"));
+    }
+
+    #[test]
     fn child_queries_read_both_orders() {
         let q = |parent, text| ChildQuery { parent, text };
         assert_eq!(child_queries("no K1"), [q("K1", "no")]);

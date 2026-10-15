@@ -47,10 +47,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
-          # What the build would contain: main plus every open same-repo PR head.
-          inputs=$( { gh api "repos/$REPO/commits/main" --jq '"main:" + .sha'
+          # What the build would contain: main plus every open same-repo PR head,
+          # reduced to the top-level entries the binary is built from. Handoff
+          # notes and docs, which nearly every push touches, do not change it.
+          tree() {
+            gh api "repos/$REPO/git/trees/$1" \
+              --jq '.tree[] | select(.path | IN("crates", "assets", ".cargo", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml")) | "\(.path):\(.sha)"'
+          }
+          inputs=$( {
+            echo "main"; tree "$(gh api "repos/$REPO/commits/main" --jq .sha)"
             gh api "repos/$REPO/pulls?state=open&per_page=100" \
-              --jq '.[] | select(.head.repo.full_name == "'"$REPO"'") | "\(.number):\(.head.sha)"' | sort -n
+              --jq '.[] | select(.head.repo.full_name == "'"$REPO"'") | "\(.number) \(.head.sha)"' | sort -n |
+            while read -r n sha; do echo "pr $n"; tree "$sha"; done
           } | sha256sum | cut -c1-16)
           last=$(gh release download experimental --repo "$REPO" --pattern build-info.json --output - 2>/dev/null | jq -r '.inputs // ""' || true)
           echo "inputs=$inputs" >> "$GITHUB_OUTPUT"

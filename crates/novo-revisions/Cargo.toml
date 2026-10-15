@@ -7,8 +7,12 @@ license.workspace = true
 
 [dependencies]
 novo-core.workspace = true
+novo-reports.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+novo-tests = { path = "../novo-tests" }
 
 [lints]
 workspace = true

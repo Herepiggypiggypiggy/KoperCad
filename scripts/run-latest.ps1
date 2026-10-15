@@ -5,6 +5,9 @@
 # the local copy, then starts it. Offline or on any download error it starts
 # the last copy it has. Needs the GitHub CLI (`gh`) signed in, because the
 # repository is private.
+#
+# A build made on this PC by build-local.ps1 carries a newer `built` time than
+# a stale release, so it is kept until the release catches up.
 
 $ErrorActionPreference = 'Stop'
 $Repo = 'Herepiggypiggypiggy/NovoElectric'
@@ -34,8 +37,12 @@ try {
 
     $remote = Get-Content -Raw (Join-Path $tmp 'build-info.json')
     $local = if (Test-Path $Stamp) { Get-Content -Raw $Stamp } else { '' }
+    # Only a release built after the local copy replaces it (ISO times compare as text).
+    $remoteBuilt = try { ($remote | ConvertFrom-Json).built } catch { '' }
+    $localBuilt = try { ($local | ConvertFrom-Json).built } catch { '' }
+    $newer = ($remote -ne $local) -and ((-not $localBuilt) -or ($remoteBuilt -gt $localBuilt))
 
-    if ($remote -ne $local -or -not (Test-Path $Exe)) {
+    if ($newer -or -not (Test-Path $Exe)) {
         gh release download experimental --repo $Repo --pattern 'novoelectric-experimental-windows.zip' --dir $tmp --clobber
         if ($LASTEXITCODE -ne 0) { throw 'download failed' }
         $next = Join-Path $Root 'next'

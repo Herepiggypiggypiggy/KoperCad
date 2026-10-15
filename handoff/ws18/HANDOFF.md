@@ -25,17 +25,15 @@ The crate is `novo-revisions`. It is already listed in
      table).
 
 ## State
-- 2026-10-15: DESIGN (#142), the Revision record (#157), the storage
-  snapshot table (#159) and the `novo-revisions` engine (#163) are merged.
-- Open: the core PR with generated page order, `generated_pages_off`,
-  `DeletePage`, `Document::amend_last`, and Remove refusing an issued
-  revision.
-- Next, in WS-18 (the lead assigned all three):
-  - diff `ProjectInfo` too (title and rule changes are not records);
-  - `IndexRule::next` skips indexes already taken;
-  - mark generated sheets whose content changed. Ask the Outputs thread
-    for a per-sheet fingerprint.
-- Later: an issue flow in the app that pairs `IssueRevision` with
-  `Session::put_snapshot`, writing snapshots in one transaction when
-  issues come in bulk; then Changes mode (WS-03 and WS-06 own the marks,
-  WS-09 the PDF).
+- 2026-10-15: merged: DESIGN (#142), Revision record (#157), snapshot
+  table (#159), engine (#163), project info diff and taken-index skip
+  (#179), core page order, DeletePage, amend_last (#167).
+- Open: #185 (`Wire.hand_drawn`, `ModelError::Refused`).
+- Ready locally, opens after #185: `changed_sheets(old, new)` marks
+  generated sheets whose content changed, from the report fingerprints
+  (#182), matched by page and position.
+- Next: an issue flow in the app that pairs `IssueRevision` with
+  `Session::put_snapshot` (one transaction when issues come in bulk); then
+  Changes mode (WS-03 and WS-06 own the marks, WS-09 the PDF). Rules
+  changes in `ChangeSet.info` may want a quieter line than name and
+  description.

@@ -17,9 +17,9 @@ integration lead (session_011PfTJ1QaP1JQJPwXcFnxBE).
 
 ## Next, in order
 1. Drive the Round 11-12 PR (Gate 2 assessment) to merge.
-2. Un-ignore G2-1 / G2-2 as their fixes merge; add a window test for G2-3 once the app holds `LiveReports` (e.g. a public way to read the sheet a page shows).
+2. Wiring modes: Corners and Lines journeys once engine PRs 1 and 2 merge; unignore the random-move guard; drop the same-net filter.
 3. Keep re-testing main after every merge; new round in TEST_REPORT.
-4. Windows run once GitHub Actions is back.
+4. Windows: check main CI, then the first real build and test with the release thread.
 
 ## Open questions
 - None blocking.

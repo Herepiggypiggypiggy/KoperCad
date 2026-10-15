@@ -5,7 +5,7 @@ description = "One analog input channel of a PLC card (for example 4-20 mA)."
 standard = "IEC 60617"
 category = "plc"
 function = "plc.input.analog"
-keywords = ["plc", "input", "ai", "analog", "4-20ma", "i/o"]
+keywords = ["plc", "input", "ai", "analog", "ingang", "4-20ma", "i/o"]
 aliases = ["ai"]
 
 connections = [
