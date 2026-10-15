@@ -274,6 +274,7 @@ impl ScriptProject {
                 title: title.into(),
                 kind: PageKind::default(),
                 format: PageFormat::default(),
+                structure: Default::default(),
             },
             |id| match id {
                 AnyId::Page(id) => Some(id),

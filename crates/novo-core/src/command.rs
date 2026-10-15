@@ -42,6 +42,14 @@ pub enum Command {
         kind: PageKind,
         #[serde(default)]
         format: PageFormat,
+        /// Page group (`=10D41`) and panel (`+K1B1G1`); see [`Page::structure`].
+        #[serde(default)]
+        structure: DeviceTag,
+    },
+    /// Moves a page into another page group and/or panel.
+    SetPageStructure {
+        page: PageId,
+        structure: DeviceTag,
     },
     AddDevice {
         tag: DeviceTag,
@@ -305,6 +313,7 @@ impl Command {
             Command::SetProjectInfo { .. } => "Edit project info".into(),
             Command::DeletePage { .. } => "Delete page".into(),
             Command::AddPage { .. } => "Add page".into(),
+            Command::SetPageStructure { .. } => "Move page to group or panel".into(),
             Command::AddDevice { .. } => "Add device".into(),
             Command::SetTag { .. } => "Rename device".into(),
             Command::PlaceSymbol { .. } => "Place symbol".into(),
@@ -368,14 +377,20 @@ impl Tx<'_> {
                 title,
                 kind,
                 format,
+                structure,
             } => {
                 let page = self.add_page(name)?;
                 self.update::<crate::Page>(page, |p| {
                     p.title = title;
                     p.kind = kind;
                     p.format = format;
+                    p.structure = structure;
                 })?;
                 page.into()
+            }
+            Command::SetPageStructure { page, structure } => {
+                self.update::<crate::Page>(page, |p| p.structure = structure)?;
+                return Ok(Vec::new());
             }
             Command::AddDevice {
                 tag,
