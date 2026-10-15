@@ -503,7 +503,14 @@ impl Editor {
             rotation: p.rotation,
             mirrored: p.mirrored,
         };
-        let pitch = row::pitch(symbol, &placement, r, self.grid);
+        // A row of terminals matches the strip it joins.
+        let strip_pitch = match (classify(symbol), self.strip) {
+            (SymbolClass::Terminal { .. }, Some(strip)) => {
+                row::strip_pitch(doc.project(), page, strip, r, self.grid)
+            }
+            _ => None,
+        };
+        let pitch = row::pitch(symbol, &placement, r, self.grid, strip_pitch);
         let (at, stopped) = row::positions(
             doc.project(),
             &self.catalog,
@@ -511,7 +518,7 @@ impl Editor {
             symbol,
             placement,
             r,
-            self.grid,
+            pitch,
         );
         Some((at, stopped, pitch))
     }

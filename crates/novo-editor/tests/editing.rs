@@ -2060,3 +2060,28 @@ fn a_row_stops_before_another_device_and_a_short_drag_places_one() {
     assert!(matches!(editor.tool(), Tool::Place(_)));
     assert_eq!(doc.project().symbols().count(), n + 1);
 }
+
+#[test]
+fn a_row_of_terminals_takes_the_pitch_of_the_strip_it_joins() {
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/terminals/terminal", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.click(&mut doc, page, p(100.0, 40.0), TOL);
+    // The strip is 60 mm apart; a row dragged out after it matches.
+    editor.hover(&doc, page, p(160.0, 40.0), TOL);
+    assert!(editor.begin_row());
+    editor.row_follow(p(400.0, 40.0), 8.0);
+    assert_eq!(editor.end_row(&mut doc, page), Clicked::Edited);
+    let mut xs: Vec<f64> = doc
+        .project()
+        .symbols()
+        .map(|s| s.placement.origin.x)
+        .collect();
+    xs.sort_by(f64::total_cmp);
+    assert_eq!(xs.len(), 2 + 5, "{xs:?}");
+    assert!(
+        xs.windows(2).all(|w| (w[1] - w[0] - 60.0).abs() < 1e-9),
+        "{xs:?}"
+    );
+}
