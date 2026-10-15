@@ -1,4 +1,10 @@
-# WS-01 App shell: handoff (updated 2026-10-14 17:11 UTC)
+# WS-01 App shell: handoff (updated 2026-10-15 17:15 UTC)
+
+## Current state (read this first; the sections below are older history)
+- All of the following are on main: #233, #234, #237, #244, #252, #261, #266, #291, #307. #325 (earthing on a reconnected wire) is READY and waits for the lead to merge.
+- Open ideas, none started: Ctrl+, shortcut for Preferences (keymap, WS-08); pick-flow preview for `link`; toast wording for `xref.link`; an Enter-path test for the New... potential.
+- Hands-on checks still owed by the owner: docs/HANDS-ON-WHEEL.md (points 14 and 16); Ctrl+K showing only two lines would need a screenshot.
+- Workflow: restart the branch from main after each merge (`git fetch origin main && git checkout -B <local> origin/main`), push with `git push --force-with-lease origin <local>:claude/app-shell-x8aamm`. Never push to a READY PR.
 
 ## State
 - Repo: github.com/Herepiggypiggypiggy/NovoElectric. Push only to branch `claude/app-shell-x8aamm`.

@@ -3,26 +3,40 @@
 //! toasts for messages, the dialogs and action dispatch. There is no menu
 //! bar and no status bar.
 
+mod cabinet;
 mod changes;
 mod checks;
 mod dock;
 mod drawers;
+mod duplicate;
+mod example;
 mod inspector;
 mod link;
 mod live;
+mod live_anim;
 mod pages;
+mod parts;
+mod parts_import;
 mod pdf;
 mod plc;
 mod potentials;
 mod preferences;
+mod project_settings;
 mod reports;
 mod revisions;
 mod terminals;
 mod title_revisions;
+mod userkeymap;
 mod wheel;
 mod workbench;
 mod xref;
 
+#[cfg(test)]
+mod cabinet_tests;
+#[cfg(test)]
+mod changes_tests;
+#[cfg(test)]
+mod example_tests;
 #[cfg(test)]
 mod gate1_tests;
 
@@ -32,7 +46,7 @@ use std::time::{Duration, Instant, SystemTime};
 use eframe::egui;
 
 use crate::actions::Action;
-use novo_core::{Command, DeviceTag, ModelError, Outcome, PageId, PageKind};
+use novo_core::{Aspect, Command, DeviceTag, ModelError, Outcome, PageId, PageKind};
 use pages::{FormKind, PageForm, PageView};
 
 use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows};
@@ -44,11 +58,12 @@ pub(crate) use revisions::index_rule;
 use workbench::Workbench;
 pub(crate) use workbench::app_runs;
 
-/// What the outline lists (docs/DESIGN.md §3). Changes comes later.
+/// What the outline lists (docs/DESIGN.md §3).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum OutlineMode {
     Pages,
     Issues,
+    Changes,
 }
 
 impl OutlineMode {
@@ -56,6 +71,7 @@ impl OutlineMode {
         match self {
             OutlineMode::Pages => "Pages",
             OutlineMode::Issues => "Issues",
+            OutlineMode::Changes => "Changes",
         }
     }
 }
@@ -95,6 +111,7 @@ enum Leaving {
     New,
     Open,
     OpenPath(PathBuf),
+    Example,
     Close,
     Quit,
 }
@@ -121,6 +138,9 @@ pub struct NovoApp {
     autosave_failing: bool,
     /// Focus mode (Ctrl+Shift+F) hides everything that is not pinned.
     focus_mode: bool,
+    /// The Cabinet canvas is shown instead of the schematic (Ctrl+2).
+    cabinet_open: bool,
+    cabinet: cabinet::CabinetState,
     /// The outline flyout is showing over the canvas.
     outline_open: bool,
     /// What the outline lists.
@@ -134,6 +154,9 @@ pub struct NovoApp {
     page_view: PageView,
     /// The page being renamed in the outline, with the text so far.
     renaming_page: Option<(PageId, String)>,
+    /// The group or panel header being renamed in the outline: its aspect,
+    /// its tag and the text so far.
+    renaming_level: Option<(Aspect, DeviceTag, String)>,
     /// Window width last frame, which decides whether the outline pins.
     window_width: f32,
 }
@@ -156,7 +179,9 @@ impl NovoApp {
             .and_then(|s| eframe::get_value(s, Settings::STORAGE_KEY))
             .unwrap_or_default();
         novo_theme::apply(&cc.egui_ctx);
-        Self::with_settings(backend, canvas, settings)
+        let mut app = Self::with_settings(backend, canvas, settings);
+        app.load_user_keymap();
+        app
     }
 
     pub fn with_settings(
@@ -180,12 +205,15 @@ impl NovoApp {
             next_tick: Instant::now(),
             autosave_failing: false,
             focus_mode: false,
+            cabinet_open: false,
+            cabinet: cabinet::CabinetState::new(),
             outline_open: false,
             outline_mode: OutlineMode::Pages,
             breadcrumb_link: None,
             page_filter: String::new(),
             page_view: PageView::Function,
             renaming_page: None,
+            renaming_level: None,
             window_width: 0.0,
         }
     }
@@ -296,8 +324,8 @@ impl NovoApp {
             Action::SaveProject
             | Action::SaveProjectAs
             | Action::CloseProject
-            | Action::ZoomToFit => open,
-            Action::ShowCabinet => false,
+            | Action::ZoomToFit
+            | Action::ShowCabinet => open,
             Action::Undo => doc.is_some_and(|d| d.can_undo()),
             Action::Redo => doc.is_some_and(|d| d.can_redo()),
             _ => true,
@@ -315,6 +343,7 @@ impl NovoApp {
         match action {
             Action::NewProject => self.leave_then(ctx, Leaving::New),
             Action::OpenProject => self.leave_then(ctx, Leaving::Open),
+            Action::OpenExample => self.leave_then(ctx, Leaving::Example),
             Action::SaveProject => {
                 self.save();
             }
@@ -326,8 +355,8 @@ impl NovoApp {
             Action::Undo => self.undo_redo(false),
             Action::Redo => self.undo_redo(true),
             Action::ZoomToFit => self.canvas.zoom_to_fit(),
-            // The only canvas so far; Cabinet stays disabled until it exists.
-            Action::ShowSchematic | Action::ShowCabinet => {}
+            Action::ShowSchematic => self.cabinet_open = false,
+            Action::ShowCabinet => self.cabinet_open = true,
             Action::PinOutline => {
                 let pinned = !self.outline_pinned();
                 self.settings.outline_pinned = Some(pinned);
@@ -383,6 +412,7 @@ impl NovoApp {
                 }
             }
             Leaving::OpenPath(path) => self.open_path(&path),
+            Leaving::Example => self.open_example(),
             Leaving::Close => self.close_project(),
             Leaving::Quit => {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -640,11 +670,22 @@ impl NovoApp {
         self.space_pan(&ctx);
         self.space_released(&ctx);
         self.track_pointer(&ctx);
-        let commands = if self.modal_open() {
+        let mut commands = if self.modal_open() {
             Vec::new()
         } else {
             self.key_commands(&ctx)
         };
+        if self.cabinet_open {
+            // The schematic's keys must not edit the hidden page: rotate
+            // and delete go to the Cabinet, the rest keep only the view,
+            // file and undo actions.
+            for id in &commands {
+                if matches!(*id, "edit.rotate" | "edit.delete") {
+                    self.cabinet.keys.push((*id).to_owned());
+                }
+            }
+            commands.retain(|id| Action::from_id(id).is_some() || *id == "view.cabinet_table");
+        }
 
         self.window_width = ctx.content_rect().width();
         let pinned = self.outline_pinned() && !self.focus_mode;
@@ -665,7 +706,9 @@ impl NovoApp {
         self.drawer(ui);
         let canvas_rect = egui::CentralPanel::no_frame()
             .show(ui, |ui| {
-                if self.is_open() {
+                if self.is_open() && self.cabinet_open {
+                    self.cabinet_show(ui);
+                } else if self.is_open() {
                     self.update_marks();
                     self.update_sheet();
                     let open = self
@@ -682,10 +725,10 @@ impl NovoApp {
             .response
             .rect;
 
-        if !self.focus_mode {
-            if !pinned && self.is_open() {
-                self.outline_flyout(&ctx, canvas_rect, &mut picked);
-            }
+        if !self.focus_mode && !pinned && self.is_open() {
+            self.outline_flyout(&ctx, canvas_rect, &mut picked);
+        }
+        if !self.focus_mode && !self.cabinet_open {
             self.hud(&ctx, canvas_rect);
             self.sync_wiring_mode();
             self.sync_connect_mode();
@@ -702,6 +745,8 @@ impl NovoApp {
         self.about_dialog(&ctx);
         self.renumber_dialog(&ctx);
         self.preferences_dialog(&ctx);
+        self.parts_window(&ctx);
+        self.project_settings_dialog(&ctx);
         self.issue_revision_dialog(&ctx);
         self.page_form_dialog(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {
@@ -743,12 +788,13 @@ impl NovoApp {
 
     /// A wire drawn to ground or a PE potential earths the terminals on
     /// its net (DESIGN.md §4, PE terminals). Runs only when a wire was
-    /// added, never on every edit, and joins the edit's undo step; a
-    /// terminal toggled by hand is left alone.
+    /// added or reconnected, never on every edit, and joins the edit's undo
+    /// step; a terminal toggled by hand is left alone.
     fn mark_earthed_terminals(&mut self, changes: &novo_core::ChangeSet) {
         if !changes
             .added
             .iter()
+            .chain(&changes.modified)
             .any(|id| matches!(id, novo_core::AnyId::Wire(_)))
         {
             return;
@@ -775,7 +821,7 @@ impl NovoApp {
 
     fn update_title(&mut self, ctx: &egui::Context) {
         let title = match self.project_name() {
-            Some(name) => format!("{name} - {APP_NAME}"),
+            Some(name) => format!("{name}{} - {APP_NAME}", self.standard_suffix()),
             None => APP_NAME.to_owned(),
         };
         if title != self.window_title {
@@ -801,6 +847,8 @@ impl NovoApp {
             self.wb.sheet = 0;
         }
         self.current_page = Some(page);
+        // A page is a schematic page: picking one leaves the Cabinet.
+        self.cabinet_open = false;
     }
 
     /// Shows sheet `sheet` of a generated page (0 for any other page).
@@ -836,15 +884,10 @@ impl NovoApp {
                 (Action::ShowSchematic, "Schematic"),
                 (Action::ShowCabinet, "Cabinet"),
             ] {
-                let selected = action == Action::ShowSchematic;
+                let selected = (action == Action::ShowCabinet) == self.cabinet_open;
                 let response = ui
                     .add_enabled_ui(self.is_enabled(action), |ui| segment(ui, label, selected))
                     .inner;
-                let response = if action == Action::ShowCabinet {
-                    response.on_disabled_hover_text("The cabinet canvas comes later")
-                } else {
-                    response
-                };
                 if response.clicked() {
                     picked.push(action);
                 }
@@ -872,7 +915,7 @@ impl NovoApp {
     /// The short project menu behind the mark. Everything in it is also in
     /// the command palette.
     fn project_menu(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
-        for a in [Action::NewProject, Action::OpenProject] {
+        for a in [Action::NewProject, Action::OpenProject, Action::OpenExample] {
             self.action_button(ui, a, picked);
         }
         ui.add_enabled_ui(!self.settings.recent_projects.is_empty(), |ui| {
@@ -937,7 +980,11 @@ impl NovoApp {
     fn outline(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
         ui.set_min_width(ui.available_width());
         ui.horizontal(|ui| {
-            for mode in [OutlineMode::Pages, OutlineMode::Issues] {
+            for mode in [
+                OutlineMode::Pages,
+                OutlineMode::Issues,
+                OutlineMode::Changes,
+            ] {
                 if ui
                     .selectable_label(self.outline_mode == mode, mode.label())
                     .clicked()
@@ -945,8 +992,6 @@ impl NovoApp {
                     self.outline_mode = mode;
                 }
             }
-            ui.add_enabled(false, egui::Button::selectable(false, "Changes"))
-                .on_disabled_hover_text("Comes later");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let pinned = self.outline_pinned();
                 let pin = egui::Button::selectable(pinned, "Pin");
@@ -965,6 +1010,12 @@ impl NovoApp {
         });
         if self.outline_mode == OutlineMode::Issues {
             if self.issues_list(ui) {
+                self.outline_open = false;
+            }
+            return;
+        }
+        if self.outline_mode == OutlineMode::Changes {
+            if self.changes_outline(ui) {
                 self.outline_open = false;
             }
             return;
@@ -1081,17 +1132,56 @@ impl NovoApp {
         let drops =
             std::cell::RefCell::new(Vec::<(PageId, Option<DeviceTag>, Option<DeviceTag>)>::new());
         let forms = std::cell::RefCell::new(Vec::<PageForm>::new());
+        let contents = std::cell::RefCell::new(None::<DeviceTag>);
+        let has_contents = pages::has_panel_contents(project, &panel_of(&structure));
+        // The header being renamed shows a text box; the rename starts from
+        // a double click or the context menu.
+        let editing = std::cell::RefCell::new(self.renaming_level.take());
+        let started = std::cell::RefCell::new(None::<(Aspect, DeviceTag, String)>);
+        let finished = std::cell::RefCell::new(None::<(Aspect, DeviceTag, String)>);
+        let header_edit = |ui: &mut egui::Ui, aspect: Aspect, tag: &DeviceTag| -> bool {
+            let mut editing = editing.borrow_mut();
+            let Some((a, t, text)) = editing.as_mut() else {
+                return false;
+            };
+            if *a != aspect || t != tag {
+                return false;
+            }
+            match pages::level_edit(ui, text) {
+                pages::LevelEdit::Editing => {}
+                pages::LevelEdit::Commit => {
+                    *finished.borrow_mut() = Some((*a, t.clone(), text.clone()));
+                    *editing = None;
+                }
+                pages::LevelEdit::Cancel => *editing = None,
+            }
+            true
+        };
+        let rename_text =
+            |tag: &DeviceTag| tag.to_string().trim_start_matches(['=', '+']).to_owned();
         let group_header = |ui: &mut egui::Ui| {
-            if group.function.is_empty() {
+            if group.function.is_empty() || header_edit(ui, Aspect::Function, &group) {
                 return;
             }
-            let r = ui.strong(group.to_string());
+            let r = ui.add(
+                egui::Label::new(egui::RichText::new(group.to_string()).strong())
+                    .sense(egui::Sense::click()),
+            );
+            if r.double_clicked() {
+                *started.borrow_mut() =
+                    Some((Aspect::Function, group.clone(), rename_text(&group)));
+            }
             if let Some(dropped) = r.dnd_release_payload::<PageId>() {
                 drops
                     .borrow_mut()
                     .push((*dropped, Some(group.clone()), None));
             }
             r.context_menu(|ui| {
+                if ui.button("Rename…").clicked() {
+                    *started.borrow_mut() =
+                        Some((Aspect::Function, group.clone(), rename_text(&group)));
+                    ui.close();
+                }
                 if ui.button("New panel in this group…").clicked() {
                     forms
                         .borrow_mut()
@@ -1107,16 +1197,36 @@ impl NovoApp {
             panel_text.push_str(&format!("  ↔ same layout as {}", others.join(", ")));
         }
         let panel_header = |ui: &mut egui::Ui| {
-            if panel.location.is_empty() {
+            if panel.location.is_empty() || header_edit(ui, Aspect::Location, &panel) {
                 return;
             }
-            let r = ui.label(egui::RichText::new(&panel_text).weak());
+            let r = ui.add(
+                egui::Label::new(egui::RichText::new(&panel_text).weak())
+                    .sense(egui::Sense::click()),
+            );
+            if r.double_clicked() {
+                *started.borrow_mut() =
+                    Some((Aspect::Location, panel.clone(), rename_text(&panel)));
+            }
             if let Some(dropped) = r.dnd_release_payload::<PageId>() {
                 drops
                     .borrow_mut()
                     .push((*dropped, None, Some(panel.clone())));
             }
             r.context_menu(|ui| {
+                if ui.button("Rename…").clicked() {
+                    *started.borrow_mut() =
+                        Some((Aspect::Location, panel.clone(), rename_text(&panel)));
+                    ui.close();
+                }
+                if ui
+                    .add_enabled(!has_contents, egui::Button::new("Add contents page"))
+                    .on_disabled_hover_text("This panel already has a contents page")
+                    .clicked()
+                {
+                    *contents.borrow_mut() = Some(panel.clone());
+                    ui.close();
+                }
                 if ui.button("New pages in this panel…").clicked() {
                     forms.borrow_mut().push(PageForm::new(
                         FormKind::Pages,
@@ -1151,11 +1261,68 @@ impl NovoApp {
             }
         }
         *shown = structure;
+        self.renaming_level = started.into_inner().or(editing.into_inner());
+        if let Some((aspect, from, text)) = finished.into_inner() {
+            self.rename_level(aspect, &from, &text);
+        }
         for (page, g, p) in drops.into_inner() {
             self.move_page(page, g, p);
         }
+        if let Some(panel) = contents.into_inner() {
+            self.add_panel_contents(&panel);
+        }
         if let Some(form) = forms.into_inner().pop() {
             self.wb.page_form = Some(form);
+        }
+    }
+
+    /// Adds the contents page of a panel, which lists the panel's pages and
+    /// follows it when it is renamed.
+    fn add_panel_contents(&mut self, panel: &DeviceTag) {
+        let Some(project) = self.backend.document().map(|d| d.project()) else {
+            return;
+        };
+        match pages::panel_contents_command(project, panel) {
+            Ok(command) => {
+                if let Some(Err(e)) = self.execute(command) {
+                    self.message(
+                        Level::Error,
+                        format!("Could not add the contents page: {e}"),
+                    );
+                }
+            }
+            Err(e) => self.message(Level::Warning, e),
+        }
+    }
+
+    /// Renames a page group or panel everywhere its name is used, as one
+    /// undo step, and says what it touched.
+    fn rename_level(&mut self, aspect: Aspect, from: &DeviceTag, text: &str) {
+        let command = match pages::rename_level_command(aspect, from, text) {
+            Ok(Some(command)) => command,
+            Ok(None) => return,
+            Err(e) => return self.message(Level::Warning, e),
+        };
+        let (used, merges) = self
+            .backend
+            .document()
+            .map(|d| {
+                let project = d.project();
+                (
+                    pages::level_users(project, aspect, from),
+                    pages::merges_with_existing(project, aspect, from, text),
+                )
+            })
+            .unwrap_or_default();
+        let merged = match (merges, aspect) {
+            (false, _) => "",
+            (true, Aspect::Function) => " (merges with the existing page group)",
+            (true, _) => " (merges with the existing panel)",
+        };
+        match self.execute(command) {
+            Some(Ok(_)) => self.message(Level::Info, format!("Renamed {from}{merged}: {used}")),
+            Some(Err(e)) => self.message(Level::Error, format!("Could not rename {from}: {e}")),
+            None => {}
         }
     }
 
@@ -1218,7 +1385,14 @@ impl NovoApp {
             return false;
         }
         let selected = self.current_page == Some(row.page) && self.wb.sheet == row.sheet;
-        let label = row.label.as_str();
+        // While Changes mode is on, a page with changes since the revision
+        // is marked in the list (docs/DESIGN.md §5).
+        let label = if self.page_has_changes(row.page) {
+            format!("● {}", row.label)
+        } else {
+            row.label.clone()
+        };
+        let label = label.as_str();
         let response = ui
             .with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
                 ui.add(
@@ -1229,6 +1403,35 @@ impl NovoApp {
             })
             .inner;
         response.dnd_set_drag_payload(row.page);
+        // A page dropped on another page of the same group and panel takes
+        // its place before or after it; names stay as they are.
+        let siblings = self
+            .backend
+            .document()
+            .map(|d| d.project().sibling_pages(row.page))
+            .unwrap_or_default();
+        let lower_half = |response: &egui::Response| {
+            ui.ctx()
+                .pointer_latest_pos()
+                .is_some_and(|p| p.y > response.rect.center().y)
+        };
+        if let Some(dragged) = response.dnd_hover_payload::<PageId>()
+            && pages::order_after_drop(&siblings, *dragged, row.page, lower_half(&response))
+                .is_some()
+        {
+            let y = if lower_half(&response) {
+                response.rect.bottom()
+            } else {
+                response.rect.top()
+            };
+            let stroke = ui.visuals().selection.stroke;
+            ui.painter().hline(response.rect.x_range(), y, stroke);
+        }
+        let mut reorder = response
+            .dnd_release_payload::<PageId>()
+            .and_then(|dragged| {
+                pages::order_after_drop(&siblings, *dragged, row.page, lower_half(&response))
+            });
         let drawn = self.backend.document().is_some_and(|d| {
             d.project()
                 .page(row.page)
@@ -1246,7 +1449,23 @@ impl NovoApp {
             .backend
             .document()
             .and_then(|d| d.project().page(row.page).map(|p| p.structure.clone()));
+        let up = pages::order_after_step(&siblings, row.page, false);
+        let down = pages::order_after_step(&siblings, row.page, true);
         response.context_menu(|ui| {
+            if ui
+                .add_enabled(up.is_some(), egui::Button::new("Move up"))
+                .clicked()
+            {
+                reorder = up.clone();
+                ui.close();
+            }
+            if ui
+                .add_enabled(down.is_some(), egui::Button::new("Move down"))
+                .clicked()
+            {
+                reorder = down.clone();
+                ui.close();
+            }
             if let Some(s) = structure
                 && ui.button("Move to group or panel…").clicked()
             {
@@ -1266,7 +1485,18 @@ impl NovoApp {
                 ui.close();
             }
         });
+        if let Some(pages) = reorder {
+            self.reorder_pages(pages);
+        }
         response.clicked()
+    }
+
+    /// Puts the pages of a group and panel in the given order, as one undo
+    /// step.
+    fn reorder_pages(&mut self, pages: Vec<PageId>) {
+        if let Some(Err(e)) = self.execute(Command::ReorderPages { pages }) {
+            self.message(Level::Error, format!("Could not reorder the pages: {e}"));
+        }
     }
 
     /// Below the pinning width the outline floats over the canvas, opened
@@ -1340,7 +1570,7 @@ impl NovoApp {
             ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
                 ui.weak("No project open");
                 ui.add_space(8.0);
-                for a in [Action::NewProject, Action::OpenProject] {
+                for a in [Action::NewProject, Action::OpenProject, Action::OpenExample] {
                     self.action_button(ui, a, picked);
                 }
                 let unsaved = self.backend.unsaved_projects();
@@ -2170,7 +2400,7 @@ mod tests {
     }
 
     #[test]
-    fn cabinet_waits_for_its_canvas() {
+    fn cabinet_needs_an_open_project() {
         let app = app_with(MemoryBackend::default());
         assert!(!app.is_enabled(Action::ShowCabinet));
         assert!(app.is_enabled(Action::ShowSchematic));

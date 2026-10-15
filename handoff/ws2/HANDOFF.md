@@ -104,5 +104,26 @@ claude/data-model-amzaxu origin/main`, then new PR for new work.
   when not Auto) and `Command::SetTerminalPe { terminals, mode }` (one undo step). The
   model stores the choice only; novo-terminals applies the PE rule to `Auto` terminals and
   changes `kind` and the symbol with a forced toggle.
+- Cabinet layout: `Structure.plate: Option<MountingPlate { width, height, margin }>` (enclosures
+  only; file field only when set), entities `Rail` (`structure`, `x`, `y`, `length`, `kind`
+  DinRail | Duct) and `CabinetPlacement` (`device`, `structure`, `x`, `y`, `rotated`, `rail`,
+  `rail_offset`; at most one per device). Commands `SetPlateSize`, `AddRail`, `PlaceDevice`
+  (places or moves; creates nothing when it moves), `RotatePlacement`, `RemovePlacement`;
+  `place all` = one `Command::Batch` of `PlaceDevice`. Deleting a device or enclosure deletes
+  its placements; deleting a rail leaves the devices on the plate, off the rail. A plate with
+  rails or devices on it cannot be removed. Clearances live in `novo-layout`, not the model.
+  Ducts are `Rail`s of kind `Duct`: `vertical` (runs down instead of right), `width` and
+  `height` (cross-section mm, 0 while unknown; file fields only when set). `MoveRail` moves
+  the devices on the rail with it; also `SetRailSize { rail, length, width, height }` and
+  `DeleteRail`.
+- Drawing standard: `ProjectRules.standard: String`, the symbol pack id (`iec`, `nfpa`; lowercase
+  letters, digits, `_`, `-`); empty means IEC; file field only when set. Set through
+  `SetProjectInfo` (undoable); `ProjectRules::is_standard_id` is the check.
+  `SwitchStandard { standard, symbols: [(SymbolId, SymbolKey)] }` sets it and re-keys the listed
+  symbols in one undo step; the caller computes the keys (`Pack::counterpart`), the model has no
+  symbol packs and pins stay as they are.
+- Macros: `Command::AdoptBlockDefinition { definition }` (`Tx::adopt_block_definition`) copies a
+  definition from a macro file in under a fresh id; same checks as a captured one, now also no
+  parts, feeds or potentials in members. Members keep their file-local ids.
 - PRs get squash-merged: rebase follow-ups with `git rebase --onto origin/main <old-head>`.
 - Commit trailers: Co-Authored-By Claude line + Claude-Session link (see git log).

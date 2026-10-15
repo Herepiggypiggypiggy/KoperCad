@@ -10,9 +10,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::geom::{Direction, Placement, Point, Rotation};
 use crate::id::{
-    AnyId, BlockDefinitionId, BlockInstanceId, CableId, DeviceId, DismissalId, JunctionId, PageId,
-    PartId, PotentialId, PotentialSystemId, RevisionId, StructureId, SymbolId, TerminalId, TextId,
-    WireId,
+    AnyId, BlockDefinitionId, BlockInstanceId, CabinetPlacementId, CableId, DeviceId, DismissalId,
+    JunctionId, PageId, PartId, PotentialId, PotentialSystemId, RailId, RevisionId, StructureId,
+    SymbolId, TerminalId, TextId, WireId,
 };
 use crate::tag::DeviceTag;
 
@@ -98,6 +98,11 @@ pub struct ProjectRules {
     /// [`Tx::delete_page`]: crate::Tx::delete_page
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub generated_pages_off: BTreeSet<String>,
+    /// The drawing standard, as the id of the symbol pack it picks (`iec`,
+    /// `nfpa`); lowercase letters, digits, `_` and `-`. Empty, the default,
+    /// means IEC. The model does not interpret it.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub standard: String,
 }
 
 impl ProjectRules {
@@ -113,7 +118,15 @@ impl ProjectRules {
                 from_terminal_names: true,
             },
             generated_pages_off: BTreeSet::new(),
+            standard: String::new(),
         }
+    }
+
+    /// Whether `id` can name a drawing standard: empty (IEC) or lowercase
+    /// letters, digits, `_` and `-`.
+    pub fn is_standard_id(id: &str) -> bool {
+        id.chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
     }
 
     pub fn is_default(&self) -> bool {
@@ -932,6 +945,84 @@ pub struct Structure {
     /// side of a terminal strip faces it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub enclosure: bool,
+    /// The mounting plate of an enclosure, which devices are placed on
+    /// (cabinet layout). `None` until its size is set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plate: Option<MountingPlate>,
+    #[serde(default)]
+    pub properties: Properties,
+}
+
+/// The mounting plate of an enclosure, in millimetres with the origin at its
+/// top left, x to the right and y down.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct MountingPlate {
+    pub width: f64,
+    pub height: f64,
+    /// The border where nothing is placed.
+    #[serde(default)]
+    pub margin: f64,
+}
+
+/// What a [`Rail`] is.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RailKind {
+    #[default]
+    DinRail,
+    Duct,
+}
+
+/// A DIN rail or wiring duct on the mounting plate of an enclosure. It runs
+/// from `(x, y)`, its start, for `length` millimetres: to the right, or down
+/// when `vertical`. A duct's `width` and `height` are its cross-section.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Rail {
+    pub id: RailId,
+    /// The enclosure whose plate it is on.
+    pub structure: StructureId,
+    pub x: f64,
+    pub y: f64,
+    pub length: f64,
+    #[serde(default)]
+    pub kind: RailKind,
+    /// Runs down from the start instead of to the right.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub vertical: bool,
+    /// Cross-section of a duct in millimetres; 0 while unknown.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub width: f64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub height: f64,
+    #[serde(default)]
+    pub properties: Properties,
+}
+
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
+}
+
+/// Where a device sits on the mounting plate of an enclosure. A device has
+/// at most one. Deleting the device, the enclosure or the rail deletes
+/// the placement, except that deleting the rail leaves the device on the
+/// plate, off any rail.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CabinetPlacement {
+    pub id: CabinetPlacementId,
+    pub device: DeviceId,
+    pub structure: StructureId,
+    /// The top left of the footprint on the plate.
+    pub x: f64,
+    pub y: f64,
+    /// Turned by 90 degrees, so the footprint swaps width and height.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub rotated: bool,
+    /// The rail the device is on, and its offset along it; the offset is
+    /// only set with a rail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rail: Option<RailId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rail_offset: Option<f64>,
     #[serde(default)]
     pub properties: Properties,
 }

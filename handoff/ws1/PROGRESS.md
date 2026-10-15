@@ -28,3 +28,7 @@
 2026-10-14 21:35 UTC Resumed after the pause; branch reset to main. PDF export only replaces PDFs NovoElectric wrote (/Producer), else takes '<stem> 2.pdf'; writes via a temp file and rename. Workspace fmt, clippy -D warnings, 627 tests green.
 2026-10-14 22:45 UTC #84 merged. Focus fix: keys go to a focused panel button (outline, drawer, top bar), not the canvas; canvas area recorded each frame. Workspace fmt, clippy -D warnings, 647 tests green.
 2026-10-15 03:13 UTC #105 merged. Bundle A (name fix, drop accept all, Delete declines with the pointer on the proposal, matching #113) from main f6bfe93; fmt, clippy -D warnings, 693 tests green.
+2026-10-15 15:42 UTC #291 merged: Preferences "Moving a symbol" default, Shift hint follows the key, Connections heading.
+2026-10-15 15:57 UTC #307 merged: wire potential override as chips like feeds.
+2026-10-15 17:10 UTC #325 READY (220a9c5): earthing also runs when a wire is reconnected. Earlier today: #233, #234, #237, #244 (wheel dwell, click-wedge-then-item), #252 (double-click rename of terminals, feeds, interruptions), #261 (connect mode setting), #266 (longer Ctrl+K and part search, grid double-click starts a wire, Toggle PE terminal and auto-PE).
+2026-10-15 UTC Docs PR: DESIGN §4 wheel sentence, docs/HANDS-ON-WHEEL.md checklist for points 14 and 16.

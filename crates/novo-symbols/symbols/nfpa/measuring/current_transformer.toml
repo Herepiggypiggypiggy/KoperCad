@@ -1,0 +1,32 @@
+format = 1
+id = "nfpa/measuring/current_transformer"
+name = "Current transformer"
+description = "Current transformer around a primary conductor, with secondary terminals S1 and S2."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "measuring"
+function = "transformer.current"
+keywords = ["current transformer", "ct", "measuring", "nfpa", "ansi"]
+
+connections = [
+  { id = "P1", at = [0, 0], dir = "up" },
+  { id = "P2", at = [0, 16], dir = "down" },
+  { id = "S1", at = [8, 0], dir = "up" },
+  { id = "S2", at = [16, 0], dir = "up" },
+]
+
+anchors = [
+  { role = "tag", at = [-5, 8], align = "right" },
+]
+
+bridges = [["P1", "P2"]]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 16] },
+  { kind = "circle", center = [0, 8], r = 3 },
+  { kind = "polyline", points = [[2.6, 6.5], [8, 6.5], [8, 0]] },
+  { kind = "polyline", points = [[2.6, 9.5], [16, 9.5], [16, 0]] },
+]
+
+[behavior]
+kind = "transformer"
+ports = [["P1", "P2"], ["S1", "S2"]]

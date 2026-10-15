@@ -9,5 +9,7 @@
 pub mod motor_starter;
 pub mod stress;
 
-pub use motor_starter::{MotorStarter, motor_starter, motor_starter_with_changes};
+pub use motor_starter::{
+    MotorStarter, motor_starter, motor_starter_in, motor_starter_with_changes,
+};
 pub use stress::stress_page;

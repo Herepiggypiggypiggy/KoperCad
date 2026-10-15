@@ -4,17 +4,17 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::entity::{
-    BlockDefinition, BlockInstance, Cable, Device, DeviceKind, Dismissal, Endpoint, Junction, Page,
-    PageKind, Part, PinRef, Potential, PotentialSystem, ProjectInfo, Revision, SameName, Structure,
-    SymbolInstance, SymbolRole, Terminal, Text, Wire,
+    BlockDefinition, BlockInstance, CabinetPlacement, Cable, Device, DeviceKind, Dismissal,
+    Endpoint, Junction, Page, PageKind, Part, PinRef, Potential, PotentialSystem, ProjectInfo,
+    Rail, Revision, SameName, Structure, SymbolInstance, SymbolRole, Terminal, Text, Value, Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::Point;
 use crate::graph::Netlist;
 use crate::id::{
-    AnyId, BlockDefinitionId, BlockInstanceId, CableId, DeviceId, DismissalId, EntityKind,
-    JunctionId, PageId, PartId, PotentialId, PotentialSystemId, RevisionId, StructureId, SymbolId,
-    TerminalId, TextId, WireId,
+    AnyId, BlockDefinitionId, BlockInstanceId, CabinetPlacementId, CableId, DeviceId, DismissalId,
+    EntityKind, JunctionId, PageId, PartId, PotentialId, PotentialSystemId, RailId, RevisionId,
+    StructureId, SymbolId, TerminalId, TextId, WireId,
 };
 use crate::record::{Entity, Op, Record, Transaction, sealed::Token};
 use crate::tag::DeviceTag;
@@ -46,6 +46,8 @@ pub struct Project {
     pub(crate) block_definitions: BTreeMap<BlockDefinitionId, BlockDefinition>,
     pub(crate) block_instances: BTreeMap<BlockInstanceId, BlockInstance>,
     pub(crate) revisions: BTreeMap<RevisionId, Revision>,
+    pub(crate) rails: BTreeMap<RailId, Rail>,
+    pub(crate) cabinet_placements: BTreeMap<CabinetPlacementId, CabinetPlacement>,
     pub(crate) wires: BTreeMap<WireId, Wire>,
     pub(crate) potentials: BTreeMap<PotentialId, Potential>,
     pub(crate) terminals: BTreeMap<TerminalId, Terminal>,
@@ -129,21 +131,68 @@ pub struct Panel {
 /// opens the set rather than following the drawing.
 pub const CONTENTS_GENERATOR: &str = "toc";
 
+/// The generator id of the contents list of one panel: `toc@+K1B1G1`. The
+/// part after the `@` is the panel's location levels, so the list follows
+/// the panel when it is renamed ([`Tx::rename_level`](crate::Tx::rename_level)).
+pub fn panel_contents_generator(location: &[String]) -> String {
+    let panel = DeviceTag {
+        location: location.to_vec(),
+        ..Default::default()
+    };
+    format!("{CONTENTS_GENERATOR}@{panel}")
+}
+
+/// The panel (location levels only) a generator id lists, for
+/// `toc@+K1B1G1`; `None` for the project's contents list and for any other
+/// generator.
+pub fn contents_scope(generator: &str) -> Option<DeviceTag> {
+    let scope = generator
+        .strip_prefix(CONTENTS_GENERATOR)?
+        .strip_prefix('@')?;
+    let tag = DeviceTag::parse(scope).ok()?;
+    (!tag.location.is_empty() && tag.function.is_empty() && tag.product.is_empty()).then_some(tag)
+}
+
+/// Whether a generator id is a contents list, of the project or of a panel.
+pub fn is_contents_generator(generator: &str) -> bool {
+    generator == CONTENTS_GENERATOR || contents_scope(generator).is_some()
+}
+
 /// Reading order of pages: the contents list, drawn pages, then the other
 /// generated pages; within each, structure, then name. See
 /// [`Project::pages_in_order`].
 pub(crate) fn page_cmp(a: &Page, b: &Page) -> Ordering {
-    let section = |p: &Page| match &p.kind {
-        PageKind::Generated { generator } if generator == CONTENTS_GENERATOR => 0,
-        PageKind::Generated { .. } => 2,
-        _ => 1,
-    };
-    section(a)
-        .cmp(&section(b))
+    page_section(a)
+        .cmp(&page_section(b))
         .then_with(|| levels_cmp(&a.structure.function, &b.structure.function))
         .then_with(|| levels_cmp(&a.structure.location, &b.structure.location))
+        .then_with(|| page_order(a).cmp(&page_order(b)))
         .then_with(|| natural_cmp(&a.name, &b.name))
         .then(a.id.cmp(&b.id))
+}
+
+/// Property key of a page's place among its siblings (an integer); see
+/// [`Project::sibling_pages`].
+pub const PAGE_ORDER: &str = "order";
+
+/// The explicit place of a page in its group and panel. A page with none
+/// (every page of an untouched project, and a page added later) sorts after
+/// the ones that have one, by name as before.
+fn page_order(page: &Page) -> i64 {
+    match page.properties.get(PAGE_ORDER) {
+        Some(Value::Int(n)) => *n,
+        _ => i64::MAX,
+    }
+}
+
+/// Where a page sits in the reading order before its structure counts: the
+/// contents list, drawn pages, then the other generated pages.
+fn page_section(page: &Page) -> u8 {
+    match &page.kind {
+        PageKind::Generated { generator } if is_contents_generator(generator) => 0,
+        PageKind::Generated { .. } => 2,
+        _ => 1,
+    }
 }
 
 /// Property key for a rated current in amperes, on a part or a device.
@@ -322,6 +371,12 @@ impl Project {
                 if !crate::record::properties_finite(&after.properties) {
                     return Err(ModelError::NonFiniteInfo);
                 }
+                if !crate::ProjectRules::is_standard_id(&after.rules.standard) {
+                    return Err(ModelError::Refused {
+                        what: "Drawing standard".into(),
+                        reason: format!("`{}` is not a standard id", after.rules.standard),
+                    });
+                }
                 if after.rules.terminals.same_name == SameName::Refuse
                     && let Some(group) = self.terminal_designation_groups().first()
                 {
@@ -349,6 +404,8 @@ impl Project {
             Record::BlockDefinition(r) => put(self, r),
             Record::BlockInstance(r) => put(self, r),
             Record::Revision(r) => put(self, r),
+            Record::Rail(r) => put(self, r),
+            Record::CabinetPlacement(r) => put(self, r),
             Record::Wire(r) => put(self, r),
             Record::Potential(r) => put(self, r),
             Record::Terminal(r) => put(self, r),
@@ -373,6 +430,8 @@ impl Project {
             AnyId::BlockDefinition(id) => take::<BlockDefinition>(self, id),
             AnyId::BlockInstance(id) => take::<BlockInstance>(self, id),
             AnyId::Revision(id) => take::<Revision>(self, id),
+            AnyId::Rail(id) => take::<Rail>(self, id),
+            AnyId::CabinetPlacement(id) => take::<CabinetPlacement>(self, id),
             AnyId::Wire(id) => take::<Wire>(self, id),
             AnyId::Potential(id) => take::<Potential>(self, id),
             AnyId::Terminal(id) => take::<Terminal>(self, id),
@@ -625,6 +684,71 @@ impl Project {
                 {
                     return Err(ModelError::DuplicateStructure(structure.tag.to_string()));
                 }
+                if let Some(plate) = structure.plate
+                    && (plate.width <= 0.0
+                        || plate.height <= 0.0
+                        || plate.margin < 0.0
+                        || plate.margin * 2.0 >= plate.width.min(plate.height)
+                        || !structure.enclosure)
+                {
+                    return Err(ModelError::InvalidValue {
+                        id: structure.id.into(),
+                        field: "plate",
+                    });
+                }
+            }
+            Record::Rail(rail) => {
+                let bad = |field| ModelError::InvalidValue {
+                    id: rail.id.into(),
+                    field,
+                };
+                if rail.length <= 0.0 {
+                    return Err(bad("length"));
+                }
+                if rail.width < 0.0 || rail.height < 0.0 {
+                    return Err(bad("cross_section"));
+                }
+                let on_plate = self
+                    .structures
+                    .get(&rail.structure)
+                    .ok_or(ModelError::NotFound(rail.structure.into()))?;
+                if on_plate.plate.is_none() {
+                    return Err(bad("structure"));
+                }
+            }
+            Record::CabinetPlacement(placement) => {
+                let bad = |field| ModelError::InvalidValue {
+                    id: placement.id.into(),
+                    field,
+                };
+                if !self.devices.contains_key(&placement.device) {
+                    return Err(ModelError::NotFound(placement.device.into()));
+                }
+                let on_plate = self
+                    .structures
+                    .get(&placement.structure)
+                    .ok_or(ModelError::NotFound(placement.structure.into()))?;
+                if on_plate.plate.is_none() {
+                    return Err(bad("structure"));
+                }
+                if self
+                    .cabinet_placements
+                    .values()
+                    .any(|p| p.id != placement.id && p.device == placement.device)
+                {
+                    return Err(bad("device"));
+                }
+                if let Some(rail) = placement.rail {
+                    let rail = self
+                        .rails
+                        .get(&rail)
+                        .ok_or(ModelError::NotFound(rail.into()))?;
+                    if rail.structure != placement.structure {
+                        return Err(bad("rail"));
+                    }
+                } else if placement.rail_offset.is_some() {
+                    return Err(bad("rail_offset"));
+                }
             }
             Record::Dismissal(dismissal) => {
                 if dismissal.proposal.is_empty()
@@ -741,6 +865,8 @@ impl Project {
             AnyId::BlockDefinition(id) => self.block_definitions.contains_key(&id),
             AnyId::BlockInstance(id) => self.block_instances.contains_key(&id),
             AnyId::Revision(id) => self.revisions.contains_key(&id),
+            AnyId::Rail(id) => self.rails.contains_key(&id),
+            AnyId::CabinetPlacement(id) => self.cabinet_placements.contains_key(&id),
             AnyId::Wire(id) => self.wires.contains_key(&id),
             AnyId::Potential(id) => self.potentials.contains_key(&id),
             AnyId::Terminal(id) => self.terminals.contains_key(&id),
@@ -775,6 +901,12 @@ impl Project {
                 .cloned()
                 .map(Record::BlockInstance),
             AnyId::Revision(id) => self.revisions.get(&id).cloned().map(Record::Revision),
+            AnyId::Rail(id) => self.rails.get(&id).cloned().map(Record::Rail),
+            AnyId::CabinetPlacement(id) => self
+                .cabinet_placements
+                .get(&id)
+                .cloned()
+                .map(Record::CabinetPlacement),
             AnyId::Wire(id) => self.wires.get(&id).cloned().map(Record::Wire),
             AnyId::Potential(id) => self.potentials.get(&id).cloned().map(Record::Potential),
             AnyId::Terminal(id) => self.terminals.get(&id).cloned().map(Record::Terminal),
@@ -816,6 +948,12 @@ impl Project {
             .cloned()
             .map(Record::BlockInstance);
         let revisions = self.revisions.values().cloned().map(Record::Revision);
+        let rails = self.rails.values().cloned().map(Record::Rail);
+        let cabinet_placements = self
+            .cabinet_placements
+            .values()
+            .cloned()
+            .map(Record::CabinetPlacement);
         parts
             .chain(structures)
             .chain(potentials)
@@ -832,6 +970,8 @@ impl Project {
             .chain(definitions)
             .chain(instances)
             .chain(revisions)
+            .chain(rails)
+            .chain(cabinet_placements)
     }
 
     /// Rebuilds a project from stored records, in any order, checking every
@@ -977,7 +1117,15 @@ impl Project {
                 .refs()
                 .into_iter()
                 .all(|r| matches!(r, AnyId::Page(_)) || ids.contains(&r));
-            if !allowed || !closed {
+            // Parts, feeds and potentials belong to the project, not to a
+            // template: a captured definition has none.
+            let project_wide = match member {
+                Record::Device(d) => !d.parts.is_empty(),
+                Record::Symbol(s) => !s.feeds.is_empty(),
+                Record::Wire(w) => w.potential.is_some(),
+                _ => false,
+            };
+            if !allowed || !closed || project_wide {
                 return Err(bad("members"));
             }
         }
@@ -1154,6 +1302,21 @@ impl Project {
         let mut pages: Vec<&Page> = self.pages.values().collect();
         pages.sort_by(|a, b| page_cmp(a, b));
         pages
+    }
+
+    /// The pages that share `page`'s group, panel and section (contents,
+    /// drawn or other generated), `page` included, in reading order. This
+    /// is the list a drag in the outline reorders; see
+    /// [`Command::ReorderPages`](crate::Command::ReorderPages).
+    pub fn sibling_pages(&self, page: PageId) -> Vec<PageId> {
+        let Some(this) = self.pages.get(&page) else {
+            return Vec::new();
+        };
+        self.pages_in_order()
+            .into_iter()
+            .filter(|p| p.structure == this.structure && page_section(p) == page_section(this))
+            .map(|p| p.id)
+            .collect()
     }
 
     /// The page groups (`=10D41`): the function levels of drawn pages and

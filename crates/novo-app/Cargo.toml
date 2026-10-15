@@ -15,12 +15,14 @@ eframe = { workspace = true, features = ["persistence"] }
 novo-core.workspace = true
 novo-storage.workspace = true
 novo-canvas.workspace = true
+novo-layout.workspace = true
 novo-cables.workspace = true
 novo-theme.workspace = true
 novo-symbols.workspace = true
 novo-editor.workspace = true
 novo-workflow.workspace = true
 novo-xref.workspace = true
+novo-parts.workspace = true
 novo-pdf.workspace = true
 novo-reports.workspace = true
 novo-checks.workspace = true
@@ -28,6 +30,7 @@ novo-terminals.workspace = true
 novo-plc.workspace = true
 novo-revisions.workspace = true
 novo-sim.workspace = true
+novo-tests.workspace = true
 log = "0.4"
 env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
 rfd = "0.17"

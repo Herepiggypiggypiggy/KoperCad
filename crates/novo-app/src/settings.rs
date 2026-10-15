@@ -31,6 +31,9 @@ pub struct Settings {
     /// Whether moving a symbol takes its wires along by default (Shift
     /// does the other one): a per-user preference.
     pub move_carries: bool,
+    /// Whether the live view skips its animations: states switch at once
+    /// and a running motor shows an arrow instead of spinning.
+    pub reduce_motion: bool,
 }
 
 impl Settings {

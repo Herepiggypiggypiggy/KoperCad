@@ -222,10 +222,31 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
     steps:
+      # Main only (trusted); no pull request code runs in this job.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
       - uses: actions/download-artifact@v4
         with:
           name: experimental
           path: out
+      - name: Publish to the latest-build branch
+        continue-on-error: true
+        run: |
+          # One orphan commit with the exe, run.cmd and README, force-pushed
+          # each build so the branch never grows and deleting it removes the
+          # build. For running kopercad.exe straight from a git clone.
+          mkdir stage && unzip -q out/novoelectric-experimental-windows.zip kopercad.exe BUILD_INFO.txt -d stage
+          cp scripts/latest-build/run.cmd scripts/latest-build/README.md stage/
+          size=$(stat -c %s stage/kopercad.exe)
+          if [ "$size" -gt 95000000 ]; then echo "kopercad.exe is $size bytes, over the git file limit; skipping the branch"; exit 0; fi
+          cd stage
+          git init -q -b latest-build
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Latest experimental build $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -q --force "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" latest-build
       - name: Publish to the experimental pre-release
         run: |
           main_sha=$(gh api "repos/$REPO/commits/main" --jq .sha)

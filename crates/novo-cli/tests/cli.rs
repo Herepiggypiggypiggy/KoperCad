@@ -188,6 +188,36 @@ fn export_pdf_draws_every_page_or_the_ones_asked() {
 }
 
 #[test]
+fn export_dxf_writes_one_file_or_one_per_page() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+
+    let folder = dir.path().join("dxf");
+    let run = novo(&["export", "dxf", s(&path), "-o", s(&folder)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    for name in ["1.dxf", "2.dxf"] {
+        let text = std::fs::read_to_string(folder.join(name)).unwrap();
+        assert!(text.contains("SECTION") && text.contains("EOF"), "{name}");
+    }
+
+    let one = dir.path().join("page1.dxf");
+    let run = novo(&["export", "dxf", s(&path), "-o", s(&one), "--page", "1"]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert_eq!(
+        std::fs::read(&one).unwrap(),
+        std::fs::read(folder.join("1.dxf")).unwrap()
+    );
+
+    // Two pages cannot share one .dxf file.
+    let run = novo(&["export", "dxf", s(&path), "-o", s(&one)]);
+    assert_eq!(run.code, exit::USAGE);
+    assert!(run.err.contains("--page"));
+    let run = novo(&["export", "dxf", s(&path), "-o", s(&one), "--page", "9"]);
+    assert_eq!(run.code, exit::USAGE);
+    assert!(run.err.contains("no page `9`"));
+}
+
+#[test]
 fn check_runs_the_design_checks() {
     let dir = tempfile::tempdir().unwrap();
     let clean = dir.path().join("clean.novo");
@@ -325,6 +355,7 @@ fn export_reports_as_excel_and_csv() {
             "Bill of materials",
             "Device list",
             "Wire list",
+            "Cut list",
             "Terminal diagram",
             "Cable diagram",
             "IO list"

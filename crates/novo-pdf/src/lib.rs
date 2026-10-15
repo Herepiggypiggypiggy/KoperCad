@@ -30,12 +30,14 @@
 mod draw;
 mod font;
 mod inter;
+pub mod plate;
+mod report;
 
 use novo_canvas::model::{
     ModelStyle, PageScene, PlaceholderArt, SheetContent, SheetLine, SheetText, SymbolArt,
     TitleRevisions,
 };
-use novo_canvas::{Anchor, Color, ItemId, Stroke, Vec2};
+use novo_canvas::{Anchor, Color, ItemId, Primitive, Shape, Stroke, Vec2};
 use novo_core::{AnyId, Page, PageId, PageKind, Project, SymbolId, SymbolRole, TextContent};
 use novo_reports::{Align, GeneratedSheet, LiveReports, PageLayout};
 use pdf_writer::types::{ActionType, AnnotationType, PageMode};
@@ -45,6 +47,7 @@ use std::path::Path;
 
 pub use draw::PT_PER_MM;
 pub use novo_canvas::model::{NoteAnchor, SymbolNote};
+pub use report::{ReportPdfOptions, export_report_pdf};
 
 /// Which pages to export.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -354,6 +357,14 @@ pub fn export_pdf_with_reports(
                 for p in &item.primitives {
                     writer.primitive(p);
                 }
+                // Open-end rings are screen-size handles on the canvas; on
+                // paper they print at the style's world radius.
+                for h in item.handles.iter().filter(|h| h.ring) {
+                    writer.primitive(&Primitive::stroked(
+                        Shape::circle(h.at, options.style.wire_end_radius),
+                        Stroke::world(0.3, h.color),
+                    ));
+                }
                 for l in &item.labels {
                     writer.label(l);
                 }
@@ -503,6 +514,9 @@ pub fn sheet_content(name: &str, number: (usize, usize), layout: &PageLayout) ->
     }
 }
 
+/// `20b  Terminal diagram · =A1+CAB-X1`: the sheet name, the page title,
+/// then what the sheet shows, so a reflowed sheet is found by name
+/// (docs/DESIGN.md, generated pages under pinned flow).
 /// The bookmark of a sheet: its title, with a dot in front when its page
 /// has changes since the latest revision.
 fn bookmark_text(sheet: &Sheet, options: &PdfOptions) -> String {
@@ -514,9 +528,6 @@ fn bookmark_text(sheet: &Sheet, options: &PdfOptions) -> String {
     }
 }
 
-/// `20b  Terminal diagram · =A1+CAB-X1`: the sheet name, the page title,
-/// then what the sheet shows, so a reflowed sheet is found by name
-/// (docs/DESIGN.md, generated pages under pinned flow).
 fn sheet_bookmark(sheet: &Sheet) -> String {
     let mut title = sheet.name.clone();
     let what: Vec<&str> = [sheet.page.title.as_str(), sheet.section.as_str()]

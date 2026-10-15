@@ -1,6 +1,7 @@
 //! The canvas in the app's colours: `novo-theme`'s dark canvas palette
 //! applied to `novo-canvas` and its model drawing.
 
+use novo_canvas::cabinet::CabinetStyle;
 use novo_canvas::model::ModelStyle;
 use novo_canvas::widget::CanvasStyle;
 use novo_canvas::{Color, Highlight, Stroke};
@@ -12,6 +13,22 @@ fn color(c: [u8; 4]) -> Color {
 
 pub fn canvas_style() -> CanvasStyle {
     canvas_style_from(&CANVAS_DARK)
+}
+
+/// The Cabinet canvas: the plate in the page-frame greys, devices in the wire
+/// blue (copper stays the selection's), problems in the mark colours.
+pub fn cabinet_style() -> CabinetStyle {
+    let p = &CANVAS_DARK;
+    CabinetStyle {
+        plate_edge: color(p.text),
+        usable_edge: color(p.sheet_frame),
+        rail: color(p.symbol),
+        device: color(p.wire),
+        clearance: color(p.grid_major),
+        error: color(p.error),
+        warning: color(p.warning),
+        ..CabinetStyle::default()
+    }
 }
 
 pub fn model_style() -> ModelStyle {

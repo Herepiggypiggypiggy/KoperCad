@@ -285,7 +285,7 @@ pub struct Binding {
 /// Ctrl+Shift+Z both redo); a chord runs at most one command per focus.
 #[derive(Debug, Clone)]
 pub struct Keymap {
-    bindings: Vec<Binding>,
+    pub(crate) bindings: Vec<Binding>,
 }
 
 impl Default for Keymap {
@@ -487,7 +487,7 @@ pub const FAVOURITE_COMMANDS: [&str; 9] = [
     "insert.favourite_9",
 ];
 
-fn scopes_overlap(a: Scope, b: Scope) -> bool {
+pub(crate) fn scopes_overlap(a: Scope, b: Scope) -> bool {
     Focus::ALL.iter().any(|f| f.allows(a) && f.allows(b))
 }
 

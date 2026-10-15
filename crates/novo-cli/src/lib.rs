@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
 use novo_checks::{Problem, ProblemKind, Severity, Summary};
-use novo_core::Project;
+use novo_core::{PageId, Project};
 use novo_editor::art::LibraryArt;
 use novo_pdf::{NoteAnchor, PageSet, PdfOptions, SymbolNote};
 use novo_py::ReportFormat;
@@ -125,6 +125,19 @@ enum Export {
         #[arg(long = "page", value_name = "NAME")]
         pages: Vec<String>,
     },
+    /// Schematic pages as DXF drawings (millimetres, y up), for CAD
+    /// programs and laser or plotter shops.
+    Dxf {
+        file: PathBuf,
+        /// Output: a `.dxf` file for one page, otherwise a directory that
+        /// gets one `<page>.dxf` per page.
+        #[arg(short, long)]
+        output: PathBuf,
+        /// Only this page (by name, e.g. `3`); repeat for several. All pages
+        /// when left out.
+        #[arg(long = "page", value_name = "NAME")]
+        pages: Vec<String>,
+    },
 }
 
 /// A failure with its exit code.
@@ -224,6 +237,15 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             let project = read(&file)?;
             let bytes = pdf(&project, &pages)?;
             write_output(&file, &output, &bytes)?;
+            Ok(exit::OK)
+        }
+        Cmd::Export(Export::Dxf {
+            file,
+            output,
+            pages,
+        }) => {
+            let project = read(&file)?;
+            export_dxf(&project, &file, &output, &pages)?;
             Ok(exit::OK)
         }
         Cmd::Check { file, json } => {
@@ -339,6 +361,93 @@ fn pdf(project: &Project, pages: &[String]) -> Result<Vec<u8>, Failure> {
         .collect();
     novo_pdf::export_pdf_with_art(project, &options, &art)
         .map_err(|e| Failure::new(exit::WRITE, e.to_string()))
+}
+
+/// The pages to export (all when `names` is empty), as (name, id).
+fn select_pages(project: &Project, names: &[String]) -> Result<Vec<(String, PageId)>, Failure> {
+    if names.is_empty() {
+        return Ok(project.pages().map(|p| (p.name.clone(), p.id)).collect());
+    }
+    names
+        .iter()
+        .map(|name| {
+            project
+                .pages()
+                .find(|p| &p.name == name)
+                .map(|p| (p.name.clone(), p.id))
+                .ok_or_else(|| Failure::new(exit::USAGE, format!("there is no page `{name}`")))
+        })
+        .collect()
+}
+
+/// A page name as a file name: path separators and other characters
+/// Windows refuses are replaced.
+fn file_stem(name: &str) -> String {
+    let stem: String = name
+        .chars()
+        .map(|c| {
+            if "\\/:*?\"<>|".contains(c) || c.is_control() {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+    if stem.trim().is_empty() {
+        "page".into()
+    } else {
+        stem
+    }
+}
+
+/// Writes the pages as DXF: one `.dxf` file when `output` ends in `.dxf`
+/// (exactly one page), otherwise one file per page in the directory.
+fn export_dxf(
+    project: &Project,
+    input: &Path,
+    output: &Path,
+    names: &[String],
+) -> Result<(), Failure> {
+    let pages = select_pages(project, names)?;
+    let library = novo_py::library().map_err(|e| Failure::new(exit::UNAVAILABLE, e.to_string()))?;
+    let style = novo_pdf::print_style();
+    let art = LibraryArt::new(library, style.symbol);
+    let render = |id: PageId| {
+        let drawing = novo_interop::bridge::page_drawing(project, id, &art, style)
+            .ok_or_else(|| Failure::new(exit::USAGE, "the page does not exist"))?;
+        Ok::<_, Failure>(novo_interop::dxf::write_dxf(&drawing))
+    };
+    let single = output
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("dxf"));
+    if single {
+        let [(_, id)] = pages.as_slice() else {
+            return Err(Failure::new(
+                exit::USAGE,
+                "a .dxf output holds one page: pick it with --page, or give a directory",
+            ));
+        };
+        return write_output(input, output, render(*id)?.as_bytes());
+    }
+    std::fs::create_dir_all(output).map_err(|e| {
+        Failure::new(
+            exit::WRITE,
+            format!("cannot create {}: {e}", output.display()),
+        )
+    })?;
+    let mut used = std::collections::HashSet::new();
+    for (name, id) in pages {
+        let mut stem = file_stem(&name);
+        while !used.insert(stem.to_lowercase()) {
+            stem.push('_');
+        }
+        write_output(
+            input,
+            &output.join(format!("{stem}.dxf")),
+            render(id)?.as_bytes(),
+        )?;
+    }
+    Ok(())
 }
 
 fn info_text(p: &Project, path: &Path) -> String {

@@ -864,6 +864,12 @@ impl CanvasView {
             let Some(item) = scene.get(id) else { continue };
             for h in &item.handles {
                 let r = self.viewport.screen_to_world_len(h.half);
+                if h.ring {
+                    let ring =
+                        Primitive::stroked(Shape::circle(h.at, r), Stroke::screen(1.2, h.color));
+                    self.tessellator.primitive(&mut over, &ring);
+                    continue;
+                }
                 let shape = if h.round {
                     Shape::circle(h.at, r)
                 } else {

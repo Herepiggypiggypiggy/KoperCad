@@ -1,0 +1,29 @@
+format = 1
+id = "nfpa/measuring/power_factor_meter"
+name = "Power factor meter"
+description = "Power factor (cos φ) measuring instrument."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "measuring"
+function = "meter.power_factor"
+keywords = ["power factor", "cos phi", "meter", "nfpa", "ansi"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-5.5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "circle", center = [0, 8], r = 4 },
+  { kind = "text", at = [0, 8], text = "cosφ", size = 2 },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+]
+
+[behavior]
+kind = "meter"
+quantity = "power_factor"
+poles = [["1", "2"]]

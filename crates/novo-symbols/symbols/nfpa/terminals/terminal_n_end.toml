@@ -1,0 +1,26 @@
+format = 1
+id = "nfpa/terminals/terminal_n_end"
+name = "Neutral terminal"
+description = "One-ended neutral (N) terminal of a terminal strip."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "terminals"
+function = "terminal.n"
+keywords = ["terminal", "n", "neutral", "blue", "one-ended", "nfpa", "ansi"]
+aliases = ["xn1"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up", role = "n" },
+]
+
+anchors = [
+  { role = "tag", at = [-3, 6], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 6.8] },
+  { kind = "circle", center = [0, 8], r = 1.2 },
+  { kind = "text", at = [2, 8], text = "N", size = 2, align = "left" },
+]
+
+[behavior]
+kind = "none"

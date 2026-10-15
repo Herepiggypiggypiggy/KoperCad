@@ -1847,6 +1847,8 @@ dependencies = [
  "novo-checks",
  "novo-core",
  "novo-editor",
+ "novo-layout",
+ "novo-parts",
  "novo-pdf",
  "novo-plc",
  "novo-reports",
@@ -1855,6 +1857,7 @@ dependencies = [
  "novo-storage",
  "novo-symbols",
  "novo-terminals",
+ "novo-tests",
  "novo-theme",
  "novo-workflow",
  "novo-xref",
@@ -1885,6 +1888,7 @@ dependencies = [
  "glam",
  "naga",
  "novo-core",
+ "novo-symbols",
  "pollster 1.0.1",
  "wgpu",
 ]
@@ -1897,6 +1901,7 @@ dependencies = [
  "novo-core",
  "novo-parts",
  "novo-plc",
+ "novo-symbols",
  "novo-terminals",
  "novo-tests",
 ]
@@ -1910,6 +1915,7 @@ dependencies = [
  "novo-checks",
  "novo-core",
  "novo-editor",
+ "novo-interop",
  "novo-pdf",
  "novo-py",
  "novo-reports",
@@ -1942,20 +1948,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-interop"
+version = "0.1.0"
+dependencies = [
+ "calamine",
+ "novo-canvas",
+ "novo-core",
+ "novo-layout",
+ "novo-parts",
+ "novo-tests",
+ "rust_xlsxwriter",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "novo-layout"
 version = "0.1.0"
+dependencies = [
+ "novo-core",
+]
 
 [[package]]
 name = "novo-parts"
 version = "0.1.0"
 dependencies = [
+ "dirs",
  "novo-core",
+ "novo-symbols",
  "novo-terminals",
  "novo-tests",
+ "quick-xml",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "thiserror 2.0.21",
+ "zip",
 ]
 
 [[package]]
@@ -1965,6 +1993,7 @@ dependencies = [
  "lopdf",
  "novo-canvas",
  "novo-core",
+ "novo-layout",
  "novo-reports",
  "novo-tests",
  "pdf-writer",
@@ -2007,6 +2036,7 @@ dependencies = [
  "novo-cables",
  "novo-core",
  "novo-plc",
+ "novo-routing",
  "novo-terminals",
  "novo-tests",
  "rust_xlsxwriter",
@@ -2028,10 +2058,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-routing"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-layout",
+]
+
+[[package]]
 name = "novo-sim"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+ "novo-symbols",
 ]
 
 [[package]]

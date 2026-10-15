@@ -79,24 +79,27 @@ mod xref;
 pub use command::Command;
 pub use document::{DEFAULT_HISTORY_LIMIT, Document, Outcome};
 pub use entity::{
-    BlockDefinition, BlockInstance, BlockMember, BlockOverride, BlockParameter, BlockSource, Cable,
-    CableCore, Device, DeviceKind, Dismissal, Endpoint, JoinLink, Junction, Page, PageFormat,
-    PageFreeze, PageKind, PaperSize, Part, PeOverride, Pin, PinFeed, PinRef, Potential,
-    PotentialKind, PotentialRules, PotentialSet, PotentialSpec, PotentialSystem, ProjectInfo,
-    ProjectRules, Properties, Revision, SameName, Structure, SymbolInstance, SymbolKey, SymbolRole,
-    Terminal, TerminalKind, TerminalRules, Text, TextAnchor, TextContent, TextPlacement, Value,
-    Wire,
+    BlockDefinition, BlockInstance, BlockMember, BlockOverride, BlockParameter, BlockSource,
+    CabinetPlacement, Cable, CableCore, Device, DeviceKind, Dismissal, Endpoint, JoinLink,
+    Junction, MountingPlate, Page, PageFormat, PageFreeze, PageKind, PaperSize, Part, PeOverride,
+    Pin, PinFeed, PinRef, Potential, PotentialKind, PotentialRules, PotentialSet, PotentialSpec,
+    PotentialSystem, ProjectInfo, ProjectRules, Properties, Rail, RailKind, Revision, SameName,
+    Structure, SymbolInstance, SymbolKey, SymbolRole, Terminal, TerminalKind, TerminalRules, Text,
+    TextAnchor, TextContent, TextPlacement, Value, Wire,
 };
 pub use error::{ModelError, Result};
 pub use geom::{Direction, Placement, Point, Rotation};
 pub use graph::{Net, NetId, Netlist, PotentialSource};
 pub use id::{
-    AnyId, BlockDefinitionId, BlockInstanceId, CableId, DeviceId, DismissalId, EntityKind,
-    JunctionId, PageId, PartId, PotentialId, PotentialSystemId, RevisionId, StructureId, SymbolId,
-    TerminalId, TextId, WireId,
+    AnyId, BlockDefinitionId, BlockInstanceId, CabinetPlacementId, CableId, DeviceId, DismissalId,
+    EntityKind, JunctionId, PageId, PartId, PotentialId, PotentialSystemId, RailId, RevisionId,
+    StructureId, SymbolId, TerminalId, TextId, WireId,
 };
 pub use json::JSON_FORMAT_VERSION;
-pub use project::{CONTENTS_GENERATOR, PageContents, Panel, Project, RATED_CURRENT_A, natural_cmp};
+pub use project::{
+    CONTENTS_GENERATOR, PAGE_ORDER, PageContents, Panel, Project, RATED_CURRENT_A, contents_scope,
+    is_contents_generator, natural_cmp, panel_contents_generator,
+};
 pub use record::{ChangeSet, Entity, Op, Record, Transaction};
 pub use search::{Match, SearchHit};
 pub use tag::{Aspect, DeviceTag, TagError, split_code};

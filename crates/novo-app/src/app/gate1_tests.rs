@@ -18,13 +18,13 @@ use crate::settings::Settings;
 /// Pick tolerance for clicks, in millimetres.
 const TOL: f64 = 1.0;
 
-struct Drive {
-    ctx: egui::Context,
-    app: NovoApp,
+pub(super) struct Drive {
+    pub(super) ctx: egui::Context,
+    pub(super) app: NovoApp,
 }
 
 impl Drive {
-    fn new(untitled: &Path) -> Drive {
+    pub(super) fn new(untitled: &Path) -> Drive {
         let ctx = egui::Context::default();
         novo_theme::apply(&ctx);
         let app = NovoApp::with_settings(
@@ -51,7 +51,7 @@ impl Drive {
         output.textures_delta.clear();
     }
 
-    fn frame(&mut self) {
+    pub(super) fn frame(&mut self) {
         self.frame_with(Vec::new());
     }
 
@@ -65,7 +65,7 @@ impl Drive {
         }]);
     }
 
-    fn doc(&self) -> &Document {
+    pub(super) fn doc(&self) -> &Document {
         self.app.document().expect("a project is open")
     }
 
@@ -75,7 +75,7 @@ impl Drive {
 
     /// I, the query, Enter, then a click on the page: one placement as the
     /// user does it. Returns the new symbol.
-    fn place(&mut self, query: &str, x: f64, y: f64) -> SymbolId {
+    pub(super) fn place(&mut self, query: &str, x: f64, y: f64) -> SymbolId {
         let before: Vec<SymbolId> = self.doc().project().symbols().map(|s| s.id).collect();
         assert!(
             self.app.type_command(&self.ctx.clone(), Mode::Place, query),
@@ -2408,4 +2408,148 @@ fn c_draws_a_line_and_the_wires_it_touches_become_one_cable() {
     // One undo step takes the cable away again.
     d.app.backend.document_mut().unwrap().undo().unwrap();
     assert_eq!(d.doc().project().cables().count(), 0);
+}
+
+#[test]
+fn reconnecting_a_wire_to_earth_marks_the_terminal_too() {
+    use novo_core::{AnyId, ChangeSet, Endpoint, Pin, Point, SymbolRole, TerminalKind};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let page = d.page();
+    let ((term, wire), _) = d
+        .app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("setup", |tx| {
+            let x1 = tx.add_terminal_strip(novo_core::DeviceTag::parse("-X1")?)?;
+            let t = tx.add_terminal(x1, "1")?;
+            let term = tx.place_symbol(
+                page,
+                "iec/terminals/end_bracket",
+                novo_core::Placement::at(Point::new(100.0, 100.0)),
+                vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                SymbolRole::Terminal { terminals: vec![t] },
+            )?;
+            let earth = tx.place_symbol(
+                page,
+                "iec/earth/earth",
+                novo_core::Placement::at(Point::new(100.0, 140.0)),
+                vec![Pin::new("1", 0.0, -2.5)],
+                SymbolRole::Unassigned,
+            )?;
+            let wire = tx.connect(Endpoint::pin(term, 1), Endpoint::pin(earth, 0))?;
+            Ok((term, wire))
+        })
+        .unwrap();
+    d.frame();
+    let kind = |d: &Drive| {
+        let p = d.doc().project();
+        let SymbolRole::Terminal { terminals } = &p.symbol(term).unwrap().role else {
+            panic!()
+        };
+        p.terminal(terminals[0]).unwrap().kind
+    };
+    assert_eq!(kind(&d), TerminalKind::Feedthrough);
+    // The wire was changed, not added (an end moved onto the earth pin).
+    let mut changes = ChangeSet::default();
+    changes.modified.insert(AnyId::Wire(wire));
+    d.app.mark_earthed_terminals(&changes);
+    assert_eq!(kind(&d), TerminalKind::ProtectiveEarth);
+}
+
+#[test]
+fn ctrl_d_copies_the_selection_with_the_next_tag_and_selects_the_copy() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let coil = d.place("coil", 80.0, 60.0);
+    let first = d.tag_of(coil);
+    d.select(coil);
+    let symbols = |d: &Drive| d.doc().project().symbols().count();
+    assert_eq!(symbols(&d), 1);
+
+    d.key(egui::Key::D, egui::Modifiers::COMMAND);
+    assert_eq!(symbols(&d), 2, "a copy");
+    let copy = match d.app.selection().as_slice() {
+        [AnyId::Symbol(s)] => *s,
+        other => panic!("the copy is selected, got {other:?}"),
+    };
+    assert_ne!(copy, coil);
+    let second = d.tag_of(copy);
+    assert_ne!(second, first, "next free tag");
+    let at = |d: &Drive, s: SymbolId| d.doc().project().symbol(s).unwrap().placement.origin;
+    assert!(
+        at(&d, copy).x > at(&d, coil).x,
+        "to the right of the original"
+    );
+
+    // Repeating copies the copy, one step further.
+    d.key(egui::Key::D, egui::Modifiers::COMMAND);
+    assert_eq!(symbols(&d), 3);
+    let third = match d.app.selection().as_slice() {
+        [AnyId::Symbol(s)] => *s,
+        other => panic!("{other:?}"),
+    };
+    assert!(at(&d, third).x > at(&d, copy).x);
+    assert_ne!(d.tag_of(third), second);
+
+    // One undo step per Ctrl+D.
+    d.app.backend.document_mut().unwrap().undo().unwrap();
+    assert_eq!(symbols(&d), 2);
+}
+
+#[test]
+fn the_project_standard_defaults_to_iec_and_shows_in_the_title() {
+    use novo_symbols::Pack;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert_eq!(d.app.standard(), Pack::Iec);
+    assert_eq!(d.app.standard_suffix(), "");
+    assert!(d.doc().project().info().rules.standard.is_empty());
+
+    // The command opens the Project settings window.
+    assert!(super::workbench::app_runs("project.standard"));
+    d.app.run_command(&ctx, "project.standard", None);
+    assert!(d.app.wb.project_settings);
+    d.frame();
+
+    // Choosing NFPA is saved in the project, shown beside the name, and
+    // one undo step takes it back.
+    d.app.set_standard(Pack::Nfpa);
+    d.frame();
+    assert_eq!(d.doc().project().info().rules.standard, "nfpa");
+    assert_eq!(d.app.standard(), Pack::Nfpa);
+    assert!(
+        d.app.window_title.contains("NFPA"),
+        "{}",
+        d.app.window_title
+    );
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(d.app.standard(), Pack::Iec);
+    assert!(!d.app.window_title.contains("NFPA"));
+}
+
+#[test]
+fn the_parts_command_opens_and_closes_the_parts_window() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    assert!(super::workbench::app_runs("parts.browser"));
+    d.app.run_command(&ctx, "parts.browser", None);
+    d.frame();
+    d.frame();
+    assert!(d.app.wb.parts.is_some(), "the window opens");
+    d.app.wb.parts = None;
+    d.frame();
+    assert!(d.app.wb.parts.is_none());
 }

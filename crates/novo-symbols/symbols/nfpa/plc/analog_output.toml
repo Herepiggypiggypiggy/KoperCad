@@ -1,0 +1,28 @@
+format = 1
+id = "nfpa/plc/analog_output"
+name = "PLC analog output"
+description = "One analog output channel of a PLC card (for example 0-10 V)."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "plc"
+function = "plc.output.analog"
+keywords = ["plc", "output", "ao", "aq", "analog", "uitgang", "0-10v", "i/o", "nfpa", "ansi"]
+aliases = ["ao", "aq"]
+
+connections = [
+  { id = "1", at = [0, 8], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 3], align = "right" },
+  { role = "address", at = [6, 3], align = "left" },
+]
+
+graphics = [
+  { kind = "rect", at = [-4, 0], size = [8, 6] },
+  { kind = "text", at = [0, 3], text = "AO", size = 2.2 },
+  { kind = "line", from = [0, 6], to = [0, 8] },
+]
+
+[behavior]
+kind = "plc_output"
+signal = "analog"

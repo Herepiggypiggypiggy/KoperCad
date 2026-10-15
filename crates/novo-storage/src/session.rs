@@ -22,9 +22,46 @@ pub const DEFAULT_AUTOSAVE_INTERVAL: Duration = Duration::from_secs(30);
 /// Suffix of the recovery file written next to a project file.
 pub const AUTOSAVE_SUFFIX: &str = ".autosave";
 
-/// The recovery file for the project file at `path`.
+/// The recovery file for the project file at `path`, next to it. This is
+/// where a session without a recovery folder keeps it, and where older
+/// versions did.
 pub fn autosave_path(path: impl AsRef<Path>) -> PathBuf {
     sibling(path.as_ref(), AUTOSAVE_SUFFIX)
+}
+
+/// The recovery file for the project file at `path` when recovery files are
+/// kept in `dir` (a per-user folder): `<name>-<hash of the full path>.autosave`.
+/// The hash keeps two projects of the same name in different folders apart.
+pub fn recovery_path_in(dir: impl AsRef<Path>, path: impl AsRef<Path>) -> PathBuf {
+    let path = path.as_ref();
+    let full = path.canonicalize().unwrap_or_else(|_| {
+        // The file may not exist yet; resolve its folder instead.
+        match (path.parent().map(Path::canonicalize), path.file_name()) {
+            (Some(Ok(parent)), Some(name)) => parent.join(name),
+            _ => path.to_owned(),
+        }
+    });
+    // FNV-1a, stable across runs and versions (std's hasher is not).
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in full.to_string_lossy().to_lowercase().bytes() {
+        hash = (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3);
+    }
+    let stem: String = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default()
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .take(40)
+        .collect();
+    dir.as_ref()
+        .join(format!("{stem}-{hash:016x}{AUTOSAVE_SUFFIX}"))
 }
 
 /// Changes not yet written to some file.
@@ -105,28 +142,54 @@ pub struct Session {
     recovery_pending: bool,
     last_autosave: Instant,
     autosave_interval: Duration,
+    /// The per-user folder for recovery files; `None` keeps them beside
+    /// the project file.
+    recovery_dir: Option<PathBuf>,
 }
 
 impl Session {
     /// Saves `project` as a new project file at `path` and opens it. A file
     /// open elsewhere is not replaced: [`StorageError::Locked`].
     pub fn create(path: impl AsRef<Path>, project: &Project) -> Result<Session> {
-        Ok(Session::with_file(ProjectFile::create(path, project)?))
+        Session::create_in(path, project, None)
+    }
+
+    /// Like [`Session::create`], keeping the recovery file in `recovery_dir`
+    /// (a per-user folder, see [`recovery_path_in`]) instead of beside the
+    /// project. If that folder cannot be created, the recovery file goes
+    /// beside the project as before.
+    pub fn create_in(
+        path: impl AsRef<Path>,
+        project: &Project,
+        recovery_dir: Option<&Path>,
+    ) -> Result<Session> {
+        Ok(Session::with_file(
+            ProjectFile::create(path, project)?,
+            recovery_dir,
+        ))
     }
 
     /// Opens the project file at `path`, and its recovery file if the last
     /// session did not close cleanly.
     pub fn open(path: impl AsRef<Path>) -> Result<Opened> {
-        let mut file = ProjectFile::open(path.as_ref())?;
+        Session::open_in(path, None)
+    }
+
+    /// Like [`Session::open`], with the recovery file in `recovery_dir`.
+    /// A recovery file beside the project, left by an older version, is
+    /// still offered.
+    pub fn open_in(path: impl AsRef<Path>, recovery_dir: Option<&Path>) -> Result<Opened> {
+        let file = ProjectFile::open(path.as_ref())?;
         let project = file.load()?;
-        let (recovered, set_aside) = read_recovery(&file)?;
+        let mut session = Session::with_file(file, recovery_dir);
+        let (recovered, set_aside) = session.read_recovery()?;
+        let file = &mut session.file;
         if recovered.is_none() {
             // Nothing can redo an undone revision any more; a recovered
             // project may still hold one, so then they wait for the next
             // open.
             file.drop_orphan_snapshots(&project)?;
         }
-        let mut session = Session::with_file(file);
         session.recovery_pending = recovered.is_some();
         Ok(Opened {
             session,
@@ -136,8 +199,13 @@ impl Session {
         })
     }
 
-    fn with_file(file: ProjectFile) -> Session {
+    fn with_file(file: ProjectFile, recovery_dir: Option<&Path>) -> Session {
+        // A folder that cannot be created falls back to beside the project.
+        let recovery_dir = recovery_dir
+            .filter(|dir| std::fs::create_dir_all(dir).is_ok())
+            .map(Path::to_owned);
         Session {
+            recovery_dir,
             file,
             unsaved: Pending::Nothing,
             autosave: None,
@@ -150,6 +218,26 @@ impl Session {
 
     pub fn path(&self) -> &Path {
         self.file.path()
+    }
+
+    /// Moves recovery files to `dir` (`None`: beside the project) from now
+    /// on, for a session that moved from a temporary file to a user's file
+    /// by [`Session::save_as`]. Any open recovery file is removed first;
+    /// the next autosave writes a fresh one. A folder that cannot be
+    /// created means beside the project.
+    pub fn set_recovery_dir(&mut self, dir: Option<&Path>) {
+        self.drop_autosave_quietly();
+        self.recovery_dir = dir
+            .filter(|dir| std::fs::create_dir_all(dir).is_ok())
+            .map(Path::to_owned);
+    }
+
+    /// Where this session's recovery file is (or will be) written.
+    pub fn recovery_path(&self) -> PathBuf {
+        match &self.recovery_dir {
+            Some(dir) => recovery_path_in(dir, self.file.path()),
+            None => autosave_path(self.file.path()),
+        }
     }
 
     pub fn autosave_interval(&self) -> Duration {
@@ -252,7 +340,7 @@ impl Session {
                 let base = self.file.save_seq()?.to_string();
                 let base_file = self.file.file_id()?.unwrap_or_default();
                 self.autosave = Some(ProjectFile::create_as(
-                    &autosave_path(self.file.path()),
+                    &self.recovery_path(),
                     project,
                     Role::Autosave,
                     |tx| {
@@ -300,6 +388,8 @@ impl Session {
         if let Some(file) = self.autosave.take() {
             file.close()?;
         }
+        remove_if_exists(&self.recovery_path())?;
+        // A leftover from an older version, beside the project.
         remove_if_exists(&autosave_path(self.file.path()))
     }
 
@@ -315,16 +405,39 @@ fn same_file(a: &Path, b: &Path) -> bool {
     }
 }
 
-/// Reads the recovery file next to `file`. One made against an older save
-/// of the project, or against a different file at the same path, is
+impl Session {
+    /// Reads the recovery file, and one beside the project left by an older
+    /// version. The first that is valid is offered.
+    fn read_recovery(&self) -> Result<(Option<Recovered>, Option<SetAside>)> {
+        let legacy = autosave_path(self.file.path());
+        let mut aside = None;
+        let mut paths = vec![self.recovery_path()];
+        if paths[0] != legacy {
+            paths.push(legacy);
+        }
+        for path in paths {
+            let (recovered, set_aside) = read_recovery_file(&self.file, &path)?;
+            aside = aside.or(set_aside);
+            if recovered.is_some() {
+                return Ok((recovered, aside));
+            }
+        }
+        Ok((None, aside))
+    }
+}
+
+/// Reads the recovery file at `path` for `file`. One made against an older
+/// save of the project, or against a different file at the same path, is
 /// deleted; one that cannot be read is renamed aside.
-fn read_recovery(file: &ProjectFile) -> Result<(Option<Recovered>, Option<SetAside>)> {
-    let path = autosave_path(file.path());
+fn read_recovery_file(
+    file: &ProjectFile,
+    path: &Path,
+) -> Result<(Option<Recovered>, Option<SetAside>)> {
     if !path.exists() {
         return Ok((None, None));
     }
     let read = (|| {
-        let autosave = ProjectFile::open_as(&path, Role::Autosave)?;
+        let autosave = ProjectFile::open_as(path, Role::Autosave)?;
         let base = autosave
             .meta("base_seq")?
             .and_then(|v| v.parse::<u64>().ok());
@@ -343,14 +456,14 @@ fn read_recovery(file: &ProjectFile) -> Result<(Option<Recovered>, Option<SetAsi
     match read {
         Ok(Some(recovered)) => Ok((Some(recovered), None)),
         Ok(None) => {
-            remove_if_exists(&path)?;
+            remove_if_exists(path)?;
             Ok((None, None))
         }
         Err(StorageError::Locked(p)) => Err(StorageError::Locked(p)),
         Err(reason) => {
-            let aside = sibling(&path, ".broken");
+            let aside = sibling(path, ".broken");
             remove_if_exists(&aside)?;
-            std::fs::rename(&path, &aside)?;
+            std::fs::rename(path, &aside)?;
             Ok((
                 None,
                 Some(SetAside {

@@ -20,7 +20,7 @@ use novo_core::{
     TerminalKind, Tx, Value,
 };
 
-use crate::geometry::{redraw, symbol_pins};
+use crate::geometry::{redraw, symbol_pins, with_pack_of};
 use crate::naming::kind_key;
 
 /// The built-in symbol for a terminal kind (novo-symbols keys).
@@ -84,8 +84,11 @@ pub fn strip_style(project: &Project, strip: DeviceId, kind: TerminalKind) -> St
 /// The symbol a connected (jumpered) terminal is drawn with, for the
 /// feed-through symbol; every other symbol has no such variant.
 fn connected(symbol: &SymbolKey) -> Option<SymbolKey> {
-    match symbol.0.as_str() {
-        "iec/terminals/terminal" => Some(SymbolKey("iec/terminals/terminal_bridged".into())),
+    match novo_symbols::Pack::path_of(&symbol.0) {
+        "terminals/terminal" => Some(SymbolKey(with_pack_of(
+            &symbol.0,
+            "terminals/terminal_bridged",
+        ))),
         _ => None,
     }
 }

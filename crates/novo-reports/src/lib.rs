@@ -33,7 +33,7 @@
 //!   [`Cell`] (`Text`, `Int`, `Number`, `Empty`; numbers stay numbers for
 //!   Excel). [`Column`] carries the header, alignment and a relative width.
 //! - **Reports**: [`TableOfContents`] (`toc`), [`BillOfMaterials`] (`bom`),
-//!   [`DeviceList`] (`devices`), [`WireList`] (`wires`), [`TerminalDiagram`]
+//!   [`DeviceList`] (`devices`), [`WireList`] (`wires`), [`CutList`] (`cutlist`), [`TerminalDiagram`]
 //!   (`terminals`, from novo-terminals) and [`CableDiagram`] (`cables`, from
 //!   novo-cables). Ids double as the `generator` of a
 //!   [`PageKind::Generated`](novo_core::PageKind) page.
@@ -76,11 +76,14 @@
 //! [`PageSetup::title_block_mm`] to match that frame.
 
 mod bom;
+pub mod commissioning;
+mod cutlist;
 mod defaults;
 mod devices;
 mod diagrams;
 mod export;
 mod io;
+mod lengths;
 mod order;
 mod page;
 mod report;
@@ -90,6 +93,7 @@ mod toc;
 mod wires;
 
 pub use bom::BillOfMaterials;
+pub use cutlist::CutList;
 pub use defaults::{
     GeneratedPageSpec, add_generated_pages, default_generated_pages, default_generated_pages_with,
 };
@@ -102,7 +106,7 @@ pub use page::{Line, Margins, PageLayout, PageSetup, ReportPage, TextBox, layout
 pub use report::{Dependencies, LiveReports, Report, Reports};
 pub use sheets::{GeneratedSheet, SheetFingerprint, fingerprint, sheet_name, sheet_names};
 pub use table::{Align, Cell, Column, ReportOutput, Row, Section};
-pub use toc::TableOfContents;
+pub use toc::{PanelContents, TableOfContents};
 pub use wires::WireList;
 
 use novo_core::Project;
@@ -114,6 +118,7 @@ pub fn standard_reports() -> Vec<Box<dyn Report>> {
         Box::new(BillOfMaterials),
         Box::new(DeviceList),
         Box::new(WireList),
+        Box::new(CutList::default()),
         Box::new(TerminalDiagram),
         Box::new(CableDiagram),
         Box::new(IoList),

@@ -1,0 +1,31 @@
+format = 1
+id = "iec/signalling/lamp_blue"
+name = "Indicator lamp, blue"
+description = "Indicator lamp with its colour (BU) written beside it."
+standard = "IEC 60617"
+category = "signalling"
+function = "signal.lamp.blue"
+keywords = ["lamp", "indicator", "blue", "bu"]
+aliases = ["lb"]
+
+connections = [
+  { id = "X1", at = [0, 0], dir = "up" },
+  { id = "X2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "circle", center = [0, 8], r = 4 },
+  { kind = "line", from = [-2.828, 5.172], to = [2.828, 10.828] },
+  { kind = "line", from = [-2.828, 10.828], to = [2.828, 5.172] },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+  { kind = "text", at = [5, 8], text = "BU", size = 2.2, align = "left" },
+]
+
+[behavior]
+kind = "lamp"
+poles = [["X1", "X2"]]

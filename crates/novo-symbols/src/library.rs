@@ -3,8 +3,10 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::{fs, io};
 
+use crate::pack::Pack;
 use crate::symbol::Symbol;
 use crate::validate::{Issue, validate};
 
@@ -68,12 +70,53 @@ pub struct Library {
 }
 
 impl Library {
-    /// The library compiled into this crate from `symbols/`.
+    /// The IEC pack compiled into this crate from `symbols/iec/`. This is the
+    /// default library; see [`Library::builtin_pack`] for other standards.
     pub fn builtin() -> Result<Library, LoadError> {
-        Library::from_sources(BUILTIN.iter().map(|(id, text)| (id.to_string(), *text)))
+        Library::builtin_pack(Pack::Iec)
     }
 
-    /// Loads every `*.toml` file below `dir`; ids are the paths relative to
+    /// One built-in pack. Aliases and favourites are unique within the pack,
+    /// not across packs, so packs are loaded one at a time.
+    pub fn builtin_pack(pack: Pack) -> Result<Library, LoadError> {
+        let sources = BUILTIN
+            .iter()
+            .filter(|(name, _)| *name == pack.id())
+            .flat_map(|(_, list)| list.iter())
+            .map(|(id, text)| (id.to_string(), *text));
+        Library::from_sources(sources)
+    }
+
+    /// The built-in library of `pack`, loaded once and shared, for engines
+    /// that look symbols up by key and have no library of their own.
+    pub fn shared(pack: Pack) -> &'static Library {
+        static IEC: OnceLock<Library> = OnceLock::new();
+        static NFPA: OnceLock<Library> = OnceLock::new();
+        let cell = match pack {
+            Pack::Iec => &IEC,
+            Pack::Nfpa => &NFPA,
+        };
+        cell.get_or_init(|| {
+            Library::builtin_pack(pack).expect("the built-in symbol library is valid")
+        })
+    }
+
+    /// Loads the files of one pack from `dir/<pack>/…`; ids stay relative to
+    /// `dir` (`nfpa/contacts/no`), as in the built-in set. For a user or
+    /// company folder laid out like `symbols/`.
+    pub fn load_dir_pack(dir: &Path, pack: Pack) -> Result<Library, LoadError> {
+        let prefix = format!("{}/", pack.id());
+        let sources = read_dir_sources(dir)?;
+        Library::from_sources(
+            sources
+                .iter()
+                .filter(|(id, _)| id.starts_with(&prefix))
+                .map(|(id, text)| (id.clone(), text.as_str())),
+        )
+    }
+
+    /// Loads every `*.toml` file below `dir` as one library (a folder of
+    /// symbols of a single pack, or a user folder); ids are the paths relative to
     /// `dir` without the extension, using `/` separators. Fails on the first
     /// problem in any file.
     pub fn load_dir(dir: &Path) -> Result<Library, LoadError> {
@@ -202,6 +245,14 @@ impl Library {
     /// Symbols marked `favorite`, ordered by id.
     pub fn favorites(&self) -> impl Iterator<Item = &Symbol> {
         self.iter().filter(|s| s.favorite)
+    }
+
+    /// The pack all symbols belong to; `None` when the library is empty or
+    /// mixes packs or has ids outside every pack.
+    pub fn pack(&self) -> Option<Pack> {
+        let mut packs = self.symbols.keys().map(|id| Pack::of(id));
+        let first = packs.next()??;
+        packs.all(|p| p == Some(first)).then_some(first)
     }
 
     /// Number of symbols.
