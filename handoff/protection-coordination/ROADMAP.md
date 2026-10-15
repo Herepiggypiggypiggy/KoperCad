@@ -11,10 +11,12 @@ Trip curves (shared model, owner: this thread), selectivity and back-up analysis
 - selectivity: curve overlay, energy discrimination, maker table override, Icw cap, non-selective ranges; back-up (table or let-through).
 - coordination: chain checks (breaking capacity, back-up, selectivity, disconnection time, conductor withstand), motor start.
 - sccr: component tree, defaults, combinations, current-limiting upgrade, transformers, marking text.
+- model: reads the project (protection symbols, properties, chains through contactors, supply Ik), builds chain report and SCCR panel.
+- app: Protection window (Curves plot, Selectivity table + findings, Panel rating), palette entry `view.protection`.
 
 ## Next
-1. Adapter: model device -> `Device`/`Node` (part properties; agree keys with lane lead after #454), and `Problem` kinds (ask panel/WS-14 owner)
-2. App: protection view (log-log curve plot, selectivity table, SCCR panel, maker table import)
+1. Problem kinds for protection findings (ask the WS-14 owner), so they reach the Issues list and canvas marks
+2. App: per-device fault current from the lane lead's Ik along the feeder (replace supply Ik everywhere), conductor and disconnection checks (needs cable data), maker table import dialog, SCCR combinations/terminals/busbars from the drawing, plot zoom and cable damage curve overlay
 3. Shared scenario runner with Simulation thread (per-device trip, clearing device, non-selective, backup flags)
 4. More curve families: UL 489 breakers, class RK/J/CC fuses, aM motor fuses, transformer inrush and damage curves, cable damage curve overlay
 5. Warm-start relays, ambient derating of breakers

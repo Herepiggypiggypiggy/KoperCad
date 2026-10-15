@@ -3,8 +3,8 @@
 Branch `claude/project-thread-jq4eq9`. Updated 2026-10-15.
 
 ## State
-- Engine in `crates/novo-checks/src/protection/` (curves, devices, selectivity, coordination, sccr); all pure data and functions, 53 unit tests plus doctests; clippy and fmt clean.
-- No model adapter and no UI yet (next PRs).
+- Engine in `crates/novo-checks/src/protection/` (curves, devices, selectivity, coordination, sccr); all pure data and functions, 60 unit tests, 3 integration tests on the Gate 1 starter, doctests; clippy and fmt clean.
+- Model reader `protection::model` and the Protection window (`crates/novo-app/src/app/protection.rs`, command `view.protection`, test `protection_tests.rs`) are in the same PR.
 - Lane lead (cse_01CQXymGH5kY1GfABR1JHePK) owns `calc/` (ampacity, Ik); there is no `calc::curves`.
 - Simulation thread (cse_01NQC5mMueppdFcRDgtrhhwd) consumes `TripCurve::trip_time_range` and offers a scenario runner.
 

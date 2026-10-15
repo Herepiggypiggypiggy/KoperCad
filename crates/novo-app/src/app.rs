@@ -29,6 +29,7 @@ mod plc;
 mod potentials;
 mod preferences;
 mod project_settings;
+mod protection;
 mod reports;
 mod revisions;
 mod sheets;
@@ -54,6 +55,8 @@ mod example_tests;
 mod gate1_tests;
 #[cfg(test)]
 mod onboarding_tests;
+#[cfg(test)]
+mod protection_tests;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -164,6 +167,7 @@ pub struct NovoApp {
     cabinet: cabinet::CabinetState,
     /// The "Size the enclosure" panel and the Enclosures list.
     sizing: sizing::SizingState,
+    protection: protection::ProtectionState,
     /// The outline flyout is showing over the canvas.
     outline_open: bool,
     /// What the outline lists.
@@ -231,6 +235,7 @@ impl NovoApp {
             cabinet_open: false,
             cabinet: cabinet::CabinetState::new(),
             sizing: sizing::SizingState::new(),
+            protection: protection::ProtectionState::new(),
             outline_open: false,
             outline_mode: OutlineMode::Pages,
             breadcrumb_link: None,
@@ -351,7 +356,8 @@ impl NovoApp {
             | Action::ZoomToFit
             | Action::ShowCabinet
             | Action::SizeEnclosure
-            | Action::EnclosureList => open,
+            | Action::EnclosureList
+            | Action::Protection => open,
             Action::Undo => doc.is_some_and(|d| d.can_undo()),
             Action::Redo => doc.is_some_and(|d| d.can_redo()),
             _ => true,
@@ -395,6 +401,7 @@ impl NovoApp {
                 self.cabinet_open = true;
                 self.sizing.editor_open = true;
             }
+            Action::Protection => self.protection.open = true,
             Action::PinOutline => {
                 let pinned = !self.outline_pinned();
                 self.settings.outline_pinned = Some(pinned);
@@ -793,6 +800,7 @@ impl NovoApp {
         self.project_settings_dialog(&ctx);
         self.issue_revision_dialog(&ctx);
         self.compare_window(&ctx);
+        self.protection_window(&ctx);
         self.page_form_dialog(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {
             self.run_command(&ctx, id, None);
