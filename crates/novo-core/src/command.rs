@@ -13,7 +13,7 @@ use crate::entity::{
     PotentialKind, PotentialSet, PotentialSpec, ProjectInfo, SymbolKey, SymbolRole, TextContent,
     TextPlacement, Value,
 };
-use crate::error::Result;
+use crate::error::{ModelError, Result};
 use crate::geom::{Placement, Point};
 use crate::id::{
     AnyId, BlockDefinitionId, BlockInstanceId, CableId, DeviceId, PageId, PartId, PotentialId,
@@ -585,6 +585,11 @@ impl Tx<'_> {
             }
             Command::Insert { record } => self.insert_record(record)?,
             Command::Remove { id } => {
+                // An issued set went out with this index, and pages are
+                // frozen with it; undoing the issue is the way back.
+                if let AnyId::Revision(revision) = id {
+                    return Err(ModelError::IssuedRevision(revision));
+                }
                 self.remove(id)?;
                 return Ok(Vec::new());
             }

@@ -93,3 +93,16 @@ fn what_a_revision_needs() {
     }
     assert_eq!(doc.project().revisions().count(), 1);
 }
+
+#[test]
+fn an_issued_revision_is_undone_not_deleted() {
+    let mut doc = Document::default();
+    let a = issue(&mut doc, "A", "2026-10-15").unwrap();
+    assert_eq!(
+        doc.execute(Command::Remove { id: a.into() }).unwrap_err(),
+        ModelError::IssuedRevision(a)
+    );
+    assert!(doc.project().issued_revision(a).is_some());
+    doc.undo().unwrap();
+    assert!(doc.project().issued_revision(a).is_none());
+}
