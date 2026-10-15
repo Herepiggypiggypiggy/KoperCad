@@ -9,8 +9,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use novo_core::{
     AnyId, Device, DeviceId, DeviceKind, DeviceTag, Endpoint, JunctionId, ModelError, PageId,
-    Placement, Point, PotentialId, PotentialKind, Project, Result, Rotation, SymbolId,
-    SymbolInstance, SymbolRole, Terminal, TerminalId, TerminalKind, Tx, Value, Wire, WireId,
+    PinRef, Placement, Point, PotentialId, PotentialKind, Project, Result, Rotation, SymbolId,
+    SymbolInstance, SymbolRole, Terminal, TerminalId, TerminalKind, Tx, Wire, WireId,
 };
 use novo_symbols::Symbol;
 
@@ -537,62 +537,45 @@ pub fn facing_wires(
     out
 }
 
-/// Symbol property that remembers declined facing-pin proposals, so a
-/// declined proposal does not return (DESIGN.md §2). Its text lists
-/// `pin>symbol:pin` entries separated by `;`, one per declined partner,
-/// on both symbols.
-pub const DECLINED_KEY: &str = "connect.declined";
+/// Kind of [`novo_core::Dismissal`] that remembers a declined facing-pin
+/// proposal, so it does not return (DESIGN.md §2). The pins follow the
+/// sorted subjects: `connect.facing:3-1` declines pin 3 of the first
+/// symbol to pin 1 of the second.
+pub const FACING_PROPOSAL: &str = "connect.facing";
 
-fn declined_entry(pin: u16, other: SymbolId, other_pin: u16) -> String {
-    format!("{pin}>{}:{other_pin}", other.raw())
-}
-
-fn declined_list(sym: &SymbolInstance) -> &str {
-    match sym.properties.get(DECLINED_KEY) {
-        Some(Value::Text(t)) => t,
-        _ => "",
-    }
+/// The dismissal kind and subjects for a facing proposal between two pins.
+fn facing_dismissal(a: PinRef, b: PinRef) -> (String, Vec<AnyId>) {
+    let (first, second) = if (a.symbol, a.pin) <= (b.symbol, b.pin) {
+        (a, b)
+    } else {
+        (b, a)
+    };
+    (
+        format!("{FACING_PROPOSAL}:{}-{}", first.pin, second.pin),
+        vec![first.symbol.into(), second.symbol.into()],
+    )
 }
 
 /// Whether the proposal from pin `pin` of `sym` to `to` was declined.
 fn is_declined(project: &Project, sym: &SymbolInstance, pin: u16, to: Endpoint) -> bool {
-    let Some(r) = to.as_pin() else {
-        return false;
-    };
-    let mine = declined_entry(pin, r.symbol, r.pin);
-    if declined_list(sym).split(';').any(|e| e == mine) {
-        return true;
-    }
-    let theirs = declined_entry(r.pin, sym.id, pin);
-    project
-        .symbol(r.symbol)
-        .is_some_and(|o| declined_list(o).split(';').any(|e| e == theirs))
+    to.as_pin().is_some_and(|r| {
+        let (proposal, subjects) = facing_dismissal(
+            PinRef {
+                symbol: sym.id,
+                pin,
+            },
+            r,
+        );
+        project.is_dismissed(&proposal, &subjects)
+    })
 }
 
 /// Declines a proposed facing wire for good (undoable): it is not proposed
-/// again for these two pins.
+/// again for these two pins, until either symbol is deleted.
 pub fn decline(tx: &mut Tx<'_>, proposal: &FacingWire) -> Result<()> {
-    let (Some(a), Some(b)) = (proposal.from.as_pin(), proposal.to.as_pin()) else {
-        return Ok(());
-    };
-    for (me, my_pin, other, other_pin) in [
-        (a.symbol, a.pin, b.symbol, b.pin),
-        (b.symbol, b.pin, a.symbol, a.pin),
-    ] {
-        let Some(sym) = tx.project().symbol(me) else {
-            continue;
-        };
-        let entry = declined_entry(my_pin, other, other_pin);
-        let list = declined_list(sym);
-        if list.split(';').any(|e| e == entry) {
-            continue;
-        }
-        let text = if list.is_empty() {
-            entry
-        } else {
-            format!("{list};{entry}")
-        };
-        tx.set_property(AnyId::from(me), DECLINED_KEY, Some(Value::Text(text)))?;
+    if let (Some(a), Some(b)) = (proposal.from.as_pin(), proposal.to.as_pin()) {
+        let (kind, subjects) = facing_dismissal(a, b);
+        tx.dismiss(kind, subjects)?;
     }
     Ok(())
 }
