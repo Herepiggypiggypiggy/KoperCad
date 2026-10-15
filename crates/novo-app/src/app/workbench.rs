@@ -16,6 +16,7 @@ use novo_checks::Problem;
 use novo_core::{AnyId, ChangeSet, DeviceId, Document, PageId, SymbolId};
 use novo_editor::EditorKey;
 use novo_editor::tool::WiringMode;
+use novo_plc::link::LinkFormat;
 use novo_symbols::Library;
 use novo_workflow::commands::Context;
 use novo_workflow::keymap::{FAVOURITE_COMMANDS, Focus, Keymap};
@@ -55,6 +56,8 @@ pub(crate) struct Workbench {
     pub(super) queued: Vec<&'static str>,
     /// The `renumber io` preview waiting for Enter or Esc, per station.
     pub(super) renumber: Option<Vec<novo_plc::commands::RenumberPlan>>,
+    /// The PLC tag import preview (file name and plan), waiting for Enter or Esc.
+    pub(super) plc_import: Option<(String, novo_plc::link::ImportPlan)>,
     /// The Preferences window is open.
     pub(super) preferences: bool,
     /// The Parts window (browser and one-click import), while open.
@@ -156,6 +159,7 @@ impl Default for Workbench {
             place_hold: None,
             queued: Vec::new(),
             renumber: None,
+            plc_import: None,
             preferences: false,
             parts: None,
             macro_save: None,
@@ -259,6 +263,12 @@ const APP_COMMANDS: &[&str] = &[
     "plc.add_card",
     "plc.to_plc",
     "plc.renumber_io",
+    "plc.import_tags",
+    "export.plc_csv",
+    "export.plc_plcopen",
+    "export.plc_tia",
+    "export.plc_studio5000",
+    "export.plc_address_plan",
     "xref.link",
     "app.preferences",
     "parts.browser",
@@ -498,6 +508,11 @@ impl NovoApp {
                 self.cabinet.table = !showing;
                 self.switch_workspace(Workspace::Cabinet);
             }
+            "heat.toggle" | "heat.airflow" | "heat.contours" if self.is_open() => {
+                self.switch_workspace(Workspace::Cabinet);
+                self.cabinet.table = false;
+                self.cabinet.heat.command(id);
+            }
             "tool.place" => match argument.filter(|a| !a.trim().is_empty()) {
                 Some(text) => self.wb.field.open_with(Mode::Place, text, pointer),
                 None => self.wb.field.open(Mode::Place, pointer),
@@ -618,6 +633,22 @@ impl NovoApp {
             "plc.add_card" => self.plc_add_card(argument),
             "plc.to_plc" => self.plc_to_plc(),
             "plc.renumber_io" => self.plc_renumber_io(),
+            "plc.import_tags" => self.plc_import_tags(),
+            "export.plc_csv" => {
+                self.export_plc(LinkFormat::Csv);
+            }
+            "export.plc_plcopen" => {
+                self.export_plc(LinkFormat::PlcOpen);
+            }
+            "export.plc_tia" => {
+                self.export_plc(LinkFormat::Tia);
+            }
+            "export.plc_studio5000" => {
+                self.export_plc(LinkFormat::Studio5000);
+            }
+            "export.plc_address_plan" => {
+                self.export_plc(LinkFormat::Hardware);
+            }
             "xref.link" => self.xref_link(argument),
             "app.preferences" => self.wb.preferences = true,
             "parts.browser" => self.open_parts_browser(),

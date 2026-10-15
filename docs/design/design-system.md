@@ -34,8 +34,9 @@ KoperCAD should feel like a precise instrument: **calm, dense, exact**.
    short and aligned, but each has room to breathe horizontally and every hit
    target is at least 20 pt tall.
 7. **Quiet motion.** 80 to 120 ms ease for hover, focus and panel changes.
-   Nothing bounces, nothing loops except live-simulation state. Reduce motion
-   turns all of it off.
+   Nothing bounces, nothing loops except live-simulation state and the lesson
+   pointer's pulse (section 10); the lesson card's check flash runs once.
+   Reduce motion turns all of it off, and the pointer then holds still.
 
 ## 2. Tokens
 
@@ -64,7 +65,7 @@ roles, so nothing breaks while screens migrate.)
 | `text.tertiary` | `#858380` | `#66645F` | Placeholders, coordinates, disabled |
 | `accent` | `#C88A5E` | `#9A5427` | Focus, active tool, selection, primary action, logo |
 | `accent.hover` | `#DBA27C` | `#82441D` | Accent text and hairlines under the pointer |
-| `accent.wash` | `#3A2E26` | `#F1DFD0` | Selected rows, selected text |
+| `accent.wash` | `#3A2E26` | `#F4E4D7` | Selected rows, selected text |
 | `on.accent` | `#14100D` | `#FFFFFF` | Text on an accent fill |
 | `info` | `#8FA8C8` | `#285488` | Links, cross references, hover on the canvas |
 | `success` | `#7FB086` | `#276B36` | OK |
@@ -79,8 +80,16 @@ Rules the unit tests hold:
 - `text.primary` at least 7:1 on every surface, `text.secondary` and
   `text.tertiary` at least 4.5:1, accent and status colours at least 4.5:1 on
   `sunken`, `panel` and `raised`, in both themes.
+- `accent` on `accent.wash` (selected rows and toggles carry an accent icon and
+  accent hover text) is at least 4.5:1 in both themes: 4.54:1 dark, 4.61:1
+  light.
 - Controls step away from the panel in both themes: hover is further from the panel's lightness than a resting control, which is further than the panel.
 - No mark colour on the canvas equals the selection colour.
+- The 3D view's room follows the theme through `Palette::room` (`Room3d`):
+  background gradient (the sunken pair in dark, `#ECEAE6` to `#DEDCD7` in light),
+  ground grid, label chip (fill at 85%, outline, text at 7:1), selection = accent,
+  hover = info, edge darkening 45% dark and 55% light. Physical materials stay
+  in `novo-view3d`; problems use the status colours with a glyph (docs/design/3d-look.md).
 
 ### 2.2 Type
 
@@ -338,8 +347,15 @@ For each panel and dialog, in both themes and all three densities:
    selection and hover, grid fade, page frame, title block, `CANVAS_LIGHT`.
 7. Lint: a test that fails on a raw colour, `FontId::new`, or a literal radius
    in `novo-app`.
-8. Guidance widgets (section 10) for the learning modules, once their engine
-   exists; until then the learning thread uses plain `novo_theme` tokens.
+8. Guidance widgets (section 10) for the learning modules (the consumer is
+   learning-modules.md §10), once their engine exists; until then the learning thread uses plain `novo_theme` tokens.
+
+### The gallery
+
+`cargo run -p novo-theme --example gallery` shows every token and widget in one
+window, with the theme and density switches in its top bar (`GALLERY_THEME` and
+`GALLERY_DENSITY` pick the start look). Pictures of both themes at Standard
+density: [dark](images/gallery-dark.png), [light](images/gallery-light.png).
 
 ## 10. Guidance: lesson cards, pointers, notes and tips
 
@@ -350,8 +366,8 @@ section: **guidance helps, it never gets in the way**. It never dims the
 screen, never blocks a click and never takes a key.
 
 **Lesson card.** A `raised` surface, `radius::SURFACE`, elevation 2, 320 pt
-wide, bottom right of the canvas with `space::XL` clear of the edges and
-above the dock's row. A 2 pt accent progress bar runs along its top edge.
+wide, bottom right of the canvas with `space::XL` clear of the edges, above the
+status bar and the dock's row (workspaces.md §7). A 2 pt accent progress bar runs along its top edge.
 Header: lesson title in `caption` `text.secondary`, "2 of 4" in `caption`
 `text.tertiary`, a close `icon_button`. Body: the step title in `body-strong`,
 the step text in `body` `text.secondary` (three lines at most), the check state
