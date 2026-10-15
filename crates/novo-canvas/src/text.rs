@@ -55,6 +55,9 @@ pub struct Label {
     /// Keeps its own colour while its item is hovered or selected (a
     /// warning should not disappear the moment the user looks at it).
     pub keep_color: bool,
+    /// Drawn bold (a table header). The screen fakes it with a second pass
+    /// shifted sideways; a print backend picks a bold face.
+    pub bold: bool,
 }
 
 /// Average glyph advance relative to the font size, used for the estimated
@@ -71,12 +74,19 @@ impl Label {
             anchor: Anchor::BottomLeft,
             rotation: 0.0,
             keep_color: false,
+            bold: false,
         }
     }
 
     /// See [`Label::keep_color`].
     pub fn keeping_color(mut self) -> Self {
         self.keep_color = true;
+        self
+    }
+
+    /// See [`Label::bold`].
+    pub fn bolded(mut self, bold: bool) -> Self {
+        self.bold = bold;
         self
     }
 

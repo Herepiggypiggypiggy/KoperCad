@@ -459,6 +459,7 @@ pub fn sheet_content(name: &str, number: (usize, usize), layout: &PageLayout) ->
                     Align::Center => Anchor::Center,
                     Align::Right => Anchor::CenterRight,
                 },
+                bold: false,
             })
             .collect(),
         lines: layout
