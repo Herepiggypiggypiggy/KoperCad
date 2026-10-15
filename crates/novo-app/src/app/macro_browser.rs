@@ -184,6 +184,7 @@ impl NovoApp {
                     ui.label("No profile folder is available for macros on this machine.");
                     return;
                 };
+                novo_theme::widgets::section_label(ui, "Macro library");
                 ui.horizontal(|ui| {
                     ui.label("Search");
                     ui.text_edit_singleline(&mut b.query);
@@ -207,7 +208,7 @@ impl NovoApp {
                                 } else {
                                     &folder
                                 };
-                                ui.strong(label);
+                                novo_theme::widgets::section_label(ui, label);
                             }
                             let selected = b.selected.as_deref() == Some(e.path.as_str());
                             if ui
@@ -226,6 +227,7 @@ impl NovoApp {
                     .find(|e| b.selected.as_deref() == Some(e.path.as_str()))
                     .cloned();
                 if let Some(e) = current {
+                    novo_theme::widgets::section_label(ui, "Selected");
                     ui.strong(&e.name);
                     if !e.description.is_empty() {
                         ui.label(&e.description);
@@ -284,6 +286,10 @@ impl NovoApp {
                                     .set_file_name(format!("{}.kcmacro", e.name))
                                     .save_file();
                             }
+                            // Placing is the Macros thread's `macro.place`; until it
+                            // exists the button says so instead of disappearing.
+                            ui.add_enabled(false, egui::Button::new("Place"))
+                                .on_disabled_hover_text("Placing a macro is coming next");
                             if ui.button("Delete").clicked() {
                                 b.trash_selected();
                             }
