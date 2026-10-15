@@ -9,6 +9,7 @@
 use crate::geom::Aabb;
 use crate::shape::Primitive;
 use crate::snap::SnapKind;
+use crate::style::Color;
 use crate::text::Label;
 use glam::Vec2;
 use std::collections::HashMap;
@@ -299,6 +300,18 @@ pub struct Scene {
     /// skip text entirely when even that would be too small to read.
     max_label_height: f32,
     revision: u64,
+    sheet: Option<Sheet>,
+}
+
+/// The sheet of paper a page scene is drawn on. The view paints the fill
+/// first, then the grid dots inside the sheet, then the scene on top, so a
+/// stroke or text always covers a dot.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Sheet {
+    pub rect: Aabb,
+    pub fill: Option<Color>,
+    /// The frame and title-block lines, which keep clear of grid dots.
+    pub lines: Vec<(Vec2, Vec2)>,
 }
 
 impl Default for Scene {
@@ -326,7 +339,17 @@ impl Scene {
             max_screen_half_width: 0.0,
             max_label_height: 0.0,
             revision: next_revision(),
+            sheet: None,
         }
+    }
+
+    /// The sheet the scene is drawn on, when it is a page.
+    pub fn sheet(&self) -> Option<&Sheet> {
+        self.sheet.as_ref()
+    }
+
+    pub fn set_sheet(&mut self, sheet: Option<Sheet>) {
+        self.sheet = sheet;
     }
 
     /// Changes whenever the geometry changes. Revisions are unique across all
