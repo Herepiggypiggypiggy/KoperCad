@@ -624,3 +624,44 @@ fn undersized_wires_are_found_past_terminals_on_the_load_side() {
     assert_eq!(thin[0].at, vec![AnyId::from(breaker), AnyId::from(far)]);
     assert!(!thin[0].at.contains(&AnyId::from(beyond)));
 }
+
+#[test]
+fn several_thin_wires_are_counted_and_an_overload_relay_is_rated_up_to() {
+    // -F1, an overload relay set up to 16 A, -> 1.0 mm² -> -X1:1 -> 1.0 mm².
+    let (project, _) = build(|tx| {
+        let page = tx.add_page("1")?;
+        let f1 = tx.add_device(tag("-F1"), "Overload relay")?;
+        tx.set_property(f1, RATED_CURRENT_A, Some(Value::Float(16.0)))?;
+        let relay = tx.place_symbol(
+            page,
+            "iec/protection/overload_relay_1p",
+            Placement::at(Point::new(0.0, 0.0)),
+            two_pin("1", "2"),
+            device_role(f1, true),
+        )?;
+        let x1 = tx.add_terminal_strip(tag("-X1"))?;
+        let t1 = tx.add_terminal(x1, "1")?;
+        let terminal = tx.place_symbol(
+            page,
+            "iec/terminals/terminal",
+            Placement::at(Point::new(0.0, 40.0)),
+            two_pin("1", "2"),
+            SymbolRole::Terminal {
+                terminals: vec![t1],
+            },
+        )?;
+        let n = tx.add_junction(page, Point::new(0.0, 80.0))?;
+        let near = tx.connect(Endpoint::pin(relay, 1), Endpoint::pin(terminal, 0))?;
+        let far = tx.connect(Endpoint::pin(terminal, 1), Endpoint::junction(n))?;
+        tx.update::<Wire>(near, |w| w.cross_section_mm2 = Some(1.0))?;
+        tx.update::<Wire>(far, |w| w.cross_section_mm2 = Some(1.0))?;
+        Ok(())
+    });
+    let problems = check(&project);
+    let thin = of_kind(&problems, ProblemKind::UndersizedWire);
+    assert_eq!(thin.len(), 1, "{problems:#?}");
+    assert_eq!(
+        thin[0].message,
+        "-F1 is rated up to 16 A, but 2 wires on it are too thin; the thinnest, 1 mm², carries about 9.6 A"
+    );
+}

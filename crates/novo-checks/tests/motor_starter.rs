@@ -233,7 +233,7 @@ fn every_deliberate_error_is_flagged_exactly_once() {
 
     assert_eq!(
         one(ProblemKind::WrongTerminalBlock).message,
-        "=A1+CAB-X1:PE is a PE terminal on a block that is not a PE block"
+        "=A1+CAB-X1:PE is a PE terminal, but its block is not marked PE in the catalog"
     );
 
     let spare = one(ProblemKind::CableCore);
@@ -366,7 +366,7 @@ fn a_pe_terminal_on_a_grey_block_is_flagged() {
     assert_eq!(p.severity, Severity::Warning);
     assert_eq!(
         p.message,
-        "=A1+CAB-X1:PE is a PE terminal on a block that is not a PE block"
+        "=A1+CAB-X1:PE is a PE terminal, but its block is not marked PE in the catalog"
     );
     assert!(
         matches!(p.at[..], [AnyId::Symbol(_)]),
@@ -397,7 +397,7 @@ fn plain_terminals_on_a_pe_block_are_flagged() {
     assert_eq!(problems.len(), 1, "{problems:#?}");
     assert_eq!(
         problems[0].message,
-        "=A1+CAB-X1:1, 2, 3 are built with a PE block but are not PE terminals"
+        "=A1+CAB-X1:1, 2, 3 are not PE terminals, but their block is marked PE in the catalog"
     );
     assert_eq!(problems[0].at.len(), 3);
 }
