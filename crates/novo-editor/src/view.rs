@@ -235,6 +235,17 @@ impl SchematicView {
     }
 
     /// The selection as model ids.
+    /// The model object the canvas picks under world point `w`.
+    fn model_at(&self, w: Vec2) -> Option<AnyId> {
+        let scene = self.scene.as_ref()?;
+        let tol = self
+            .canvas
+            .viewport
+            .screen_to_world_len(self.canvas.pick_tolerance);
+        let hit = scene.scene().pick(w, tol, self.canvas.viewport.zoom)?;
+        scene.model_id(hit.id)
+    }
+
     pub fn selection(&self) -> Vec<AnyId> {
         let Some(scene) = &self.scene else {
             return Vec::new();
@@ -486,6 +497,13 @@ impl SchematicView {
         {
             self.editor.click(document, page, point(w), tolerance);
         }
+        if self.drag_move
+            && let Some(w) = out.cursor_raw
+        {
+            let over = self.model_at(w);
+            let selection = self.selection();
+            self.editor.hint_link(document.project(), &selection, over);
+        }
         if self.drag_move && response.drag_stopped_by(egui::PointerButton::Primary) {
             self.drag_move = false;
             if matches!(self.editor.tool(), crate::tool::Tool::Move(_))
@@ -493,14 +511,7 @@ impl SchematicView {
             {
                 // A contact dropped on a coil links to it; anything else
                 // is an ordinary drop.
-                let tol = self
-                    .canvas
-                    .viewport
-                    .screen_to_world_len(self.canvas.pick_tolerance);
-                let target = self.scene.as_ref().and_then(|scene| {
-                    let hit = scene.scene().pick(w, tol, self.canvas.viewport.zoom)?;
-                    scene.model_id(hit.id)
-                });
+                let target = self.model_at(w);
                 let selection = self.selection();
                 let linked = target.is_some_and(|t| self.editor.drop_link(document, &selection, t));
                 if !linked {
