@@ -722,7 +722,7 @@ fn delete_declines_a_terminal_proposal_until_undone() {
     let ctx = d.ctx.clone();
     d.app.run(&ctx, Action::NewProject);
     d.frame();
-    let _k = d.place("km3", 80.0, 96.0);
+    let k = d.place("km3", 80.0, 96.0);
     let m = d.place("m3", 80.0, 172.0);
     {
         let device = novo_editor::edit::device_of(d.doc().project(), AnyId::Symbol(m)).unwrap();
@@ -748,7 +748,10 @@ fn delete_declines_a_terminal_proposal_until_undone() {
     d.key(egui::Key::Delete, egui::Modifiers::NONE);
     assert_eq!(d.app.page_proposals().len(), before, "pointer elsewhere");
 
-    // With the pointer on the highlighted proposal, it declines it.
+    // With the pointer on the highlighted proposal, it declines it, even
+    // with a symbol selected: the selection is left alone.
+    d.select(k);
+    d.frame();
     let at = d.app.page_proposals()[d.app.wb.proposal.min(before - 1)].at;
     let view = &d.app.canvas.schematic_ref().unwrap().canvas.viewport;
     let p = view.world_to_screen(novo_canvas::Vec2::new(at.x as f32, at.y as f32));
@@ -762,6 +765,8 @@ fn delete_declines_a_terminal_proposal_until_undone() {
         symbols,
         "nothing deleted"
     );
+    assert!(d.doc().project().symbol(k).is_some(), "the contactor stays");
+    assert_eq!(d.app.selection(), vec![AnyId::Symbol(k)], "still selected");
 
     d.app.run(&ctx, Action::Undo);
     d.frame();
