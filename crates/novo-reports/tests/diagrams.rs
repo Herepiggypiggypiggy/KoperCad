@@ -255,7 +255,7 @@ fn the_contents_list_names_what_each_sheet_shows() {
     let last = toc.sections[0].text_rows().pop().expect("rows");
     assert_eq!(last[0], "30");
     assert_eq!(last[1], "Terminals · =A1+CAB-X1");
-    assert_eq!(last[3], "Generated: terminals");
+    assert_eq!(last[4], "Generated: terminals");
 }
 
 #[test]
@@ -382,4 +382,33 @@ fn oversized_cells_are_cut_to_excels_limit() {
     };
     assert_eq!(text.chars().count(), 32_767);
     assert!(text.ends_with('…'));
+}
+
+#[test]
+fn the_contents_list_splits_group_and_panel_and_lists_panels() {
+    use novo_core::{Command, DeviceTag};
+    let mut doc = starter();
+    for (name, structure) in [("5", "=10D41+K1"), ("6", "=11D21+K1")] {
+        doc.execute(Command::AddPage {
+            name: name.into(),
+            title: String::new(),
+            kind: Default::default(),
+            format: Default::default(),
+            structure: DeviceTag::parse(structure).unwrap(),
+        })
+        .unwrap();
+    }
+    let toc = LiveReports::standard()
+        .get(doc.project(), "toc")
+        .expect("toc")
+        .clone();
+    let rows = toc.sections[0].text_rows();
+    let row = |name: &str| rows.iter().find(|r| r[0] == name).unwrap().clone();
+    assert_eq!(
+        (row("5")[2].as_str(), row("5")[3].as_str()),
+        ("=10D41", "+K1")
+    );
+    // One panel, two groups, two pages.
+    let panels = toc.sections[1].text_rows();
+    assert_eq!(panels, [["+K1", "=10D41, =11D21", "2"]]);
 }
