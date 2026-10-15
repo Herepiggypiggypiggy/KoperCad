@@ -62,6 +62,11 @@ pub const DUTCH: &[Aliases] = &[
         &["onderdelen"],
         &["artikelen", "onderdeel"],
     ),
+    nl(
+        "parts.import_step",
+        &["importeer 3d-model"],
+        &["3d-model", "step", "stp"],
+    ),
     nl("project.standard", &["tekennorm"], &["norm", "standaard"]),
     nl("terminal.toggle_pe", &["pe-klem"], &["aardklem", "aarde"]),
     nl(
