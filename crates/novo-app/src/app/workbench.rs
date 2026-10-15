@@ -97,6 +97,8 @@ pub(crate) struct Workbench {
     pub(super) problem_at: Option<usize>,
     /// The last PDF written, for tests and the toast.
     pub(super) last_export: Option<PathBuf>,
+    /// The live potentials view (Shift+L).
+    pub(super) live: super::live::LiveView,
 }
 
 impl Workbench {
@@ -143,6 +145,7 @@ impl Default for Workbench {
             issue_filter: [true; 3],
             problem_at: None,
             last_export: None,
+            live: Default::default(),
         }
     }
 }
@@ -186,6 +189,7 @@ const APP_COMMANDS: &[&str] = &[
     "view.cables_drawer",
     "view.devices_drawer",
     "view.toggle_marks",
+    "sim.live",
     "check.problems",
     "check.next_problem",
     "check.previous_problem",
@@ -451,6 +455,7 @@ impl NovoApp {
             "view.cables_drawer" => self.toggle_drawer(Drawer::Cables),
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
             "view.toggle_marks" => self.wb.marks ^= true,
+            "sim.live" => self.toggle_live(),
             "check.problems" => self.show_issues(false),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),
