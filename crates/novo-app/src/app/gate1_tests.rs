@@ -772,3 +772,61 @@ fn delete_declines_a_terminal_proposal_until_undone() {
     d.frame();
     assert_eq!(d.app.page_proposals().len(), before, "undo brings it back");
 }
+
+#[test]
+fn a_generated_page_shows_its_report_and_follows_each_edit() {
+    use novo_core::{DeviceTag, Page, PageKind};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let schematic = d.page();
+    let tag = DeviceTag::parse("-X1").unwrap();
+    let doc = d.app.backend.document_mut().unwrap();
+    let ((strip, page), changes) = doc
+        .transact("Strip and its page", |tx| {
+            let strip = tx.add_terminal_strip(tag)?;
+            tx.add_terminal(strip, "1")?;
+            let page = tx.add_page("20")?;
+            tx.update::<Page>(page, |p| {
+                p.kind = PageKind::Generated {
+                    generator: "terminals".into(),
+                }
+            })?;
+            Ok((strip, page))
+        })
+        .unwrap();
+    d.app.changed_outside_canvas(&changes);
+    d.app.show_page(page);
+    d.frame();
+    let texts = |d: &Drive| -> Vec<String> {
+        let view = d.app.canvas.schematic_ref().unwrap();
+        let sheet = view.sheet().expect("the generated page shows its sheet");
+        assert_eq!(sheet.name, "20");
+        sheet.texts.iter().map(|t| t.text.clone()).collect()
+    };
+    let before = texts(&d);
+    assert!(before.iter().any(|t| t.contains("X1")), "{before:?}");
+    assert!(!before.iter().any(|t| t == "77"), "{before:?}");
+
+    // An edit shows on the sheet in the next frame, with no regenerate step.
+    let doc = d.app.backend.document_mut().unwrap();
+    let (_, changes) = doc
+        .transact("Add 77", |tx| tx.add_terminal(strip, "77"))
+        .unwrap();
+    d.app.changed_outside_canvas(&changes);
+    d.frame();
+    let after = texts(&d);
+    assert!(after.iter().any(|t| t == "77"), "{after:?}");
+
+    // Undo takes it back.
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(texts(&d), before);
+
+    // A schematic page draws no sheet.
+    d.app.show_page(schematic);
+    d.frame();
+    assert!(d.app.canvas.schematic_ref().unwrap().sheet().is_none());
+}

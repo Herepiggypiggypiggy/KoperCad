@@ -12,7 +12,7 @@
 
 use egui::{Key, Modifiers};
 use novo_canvas::model::{
-    self, ModelStyle, PageScene, PlaceholderArt, SymbolArt, SymbolNote, item_id,
+    self, ModelStyle, PageScene, PlaceholderArt, SheetContent, SymbolArt, SymbolNote, item_id,
 };
 use novo_canvas::widget::{CanvasView, EscapeTarget};
 use novo_canvas::{Anchor, Color, Item, ItemId, Label, Primitive, SelectOp, Shape, Stroke, Vec2};
@@ -90,6 +90,10 @@ pub struct SchematicView {
     notes: Vec<SymbolNote>,
     /// `notes` changed since they were last handed to the scene.
     notes_dirty: bool,
+    /// What a generated page shows inside its frame (the shell sets it).
+    sheet: Option<SheetContent>,
+    /// `sheet` changed since it was last handed to the scene.
+    sheet_dirty: bool,
 }
 
 impl Default for SchematicView {
@@ -135,6 +139,8 @@ impl SchematicView {
             rect: egui::Rect::NOTHING,
             notes: Vec::new(),
             notes_dirty: false,
+            sheet: None,
+            sheet_dirty: false,
         }
     }
 
@@ -146,6 +152,21 @@ impl SchematicView {
             self.notes = notes;
             self.notes_dirty = true;
         }
+    }
+
+    /// The content of a generated page (a report sheet) drawn inside the
+    /// page frame, or `None` for a schematic page. Cheap to call every
+    /// frame; kept until changed, across page rebuilds.
+    pub fn set_sheet(&mut self, sheet: Option<SheetContent>) {
+        if sheet != self.sheet {
+            self.sheet = sheet;
+            self.sheet_dirty = true;
+        }
+    }
+
+    /// The sheet the page scene draws inside the frame, if any.
+    pub fn sheet(&self) -> Option<&SheetContent> {
+        self.scene.as_ref().and_then(PageScene::sheet)
     }
 
     /// The shell changed the document outside the view (undo, redo).
@@ -248,6 +269,13 @@ impl SchematicView {
             }
             self.revision = Some(project.revision());
             self.notes_dirty = true;
+            self.sheet_dirty = true;
+        }
+        if self.sheet_dirty
+            && let Some(scene) = &mut self.scene
+        {
+            scene.set_sheet(project, self.sheet.clone());
+            self.sheet_dirty = false;
         }
         if self.notes_dirty
             && let Some(scene) = &mut self.scene

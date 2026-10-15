@@ -6,6 +6,7 @@
 mod checks;
 mod drawers;
 mod pdf;
+mod reports;
 mod terminals;
 mod workbench;
 mod xref;
@@ -233,6 +234,7 @@ impl NovoApp {
             Ok(Some(changes)) => {
                 self.canvas.document_changed(doc, &changes);
                 self.backend.record(&changes);
+                self.reports_heard(&changes);
             }
             Ok(None) => {}
             Err(e) => {
@@ -349,7 +351,7 @@ impl NovoApp {
             Ok(()) => {
                 self.project_path = None;
                 self.current_page = None;
-                self.canvas.document_replaced();
+                self.document_replaced();
                 self.fix_current_page();
             }
             Err(e) => self.message(Level::Error, format!("Could not create a project: {e}")),
@@ -360,7 +362,7 @@ impl NovoApp {
         match self.backend.open(path) {
             Ok(report) => {
                 self.current_page = None;
-                self.canvas.document_replaced();
+                self.document_replaced();
                 self.fix_current_page();
                 if self.backend.is_untitled() {
                     self.project_path = None;
@@ -395,7 +397,7 @@ impl NovoApp {
             Ok(true) => {
                 self.project_path = None;
                 self.current_page = None;
-                self.canvas.document_replaced();
+                self.document_replaced();
                 self.fix_current_page();
                 true
             }
@@ -435,6 +437,7 @@ impl NovoApp {
         };
         self.canvas.document_changed(doc, &outcome.changes);
         self.backend.record(&outcome.changes);
+        self.reports_heard(&outcome.changes);
         self.fix_current_page();
         Some(Ok(outcome))
     }
@@ -449,6 +452,14 @@ impl NovoApp {
         self.current_page
     }
 
+    /// A different project was opened, created or closed: nothing cached
+    /// for the old one carries over.
+    fn document_replaced(&mut self) {
+        self.canvas.document_replaced();
+        self.wb.reports = Default::default();
+        self.wb.sheet = 0;
+    }
+
     fn close_project(&mut self) {
         if let Err(e) = self.backend.close() {
             self.message(
@@ -461,7 +472,7 @@ impl NovoApp {
         }
         self.project_path = None;
         self.current_page = None;
-        self.canvas.document_replaced();
+        self.document_replaced();
     }
 
     /// Gives the backend its chance to autosave, and wakes the app up in
@@ -610,6 +621,7 @@ impl NovoApp {
             .show(ui, |ui| {
                 if self.is_open() {
                     self.update_marks();
+                    self.update_sheet();
                     let open = self
                         .current_page
                         .and_then(|page| OpenPage::new(&mut *self.backend, page));
@@ -650,6 +662,7 @@ impl NovoApp {
     fn after_canvas(&mut self) {
         let changes = self.canvas.take_changes();
         if !changes.is_empty() {
+            self.reports_heard(&changes);
             self.fix_current_page();
         }
         if let Some(page) = self.canvas.take_page_request() {
@@ -685,6 +698,9 @@ impl NovoApp {
 
     /// Shows `page` on the canvas and puts it first under "Recent".
     fn show_page(&mut self, page: PageId) {
+        if self.current_page != Some(page) {
+            self.wb.sheet = 0;
+        }
         self.current_page = Some(page);
         self.recent_pages.retain(|&p| p != page);
         self.recent_pages.insert(0, page);
@@ -1136,7 +1152,7 @@ impl NovoApp {
     fn resolve_recovery(&mut self, restore: bool) {
         match self.backend.resolve_recovery(restore) {
             Ok(()) if restore => {
-                self.canvas.document_replaced();
+                self.document_replaced();
                 self.fix_current_page();
                 self.message(Level::Info, "Restored the unsaved work. Save to keep it.");
             }
@@ -1144,7 +1160,7 @@ impl NovoApp {
                 if !self.is_open() {
                     self.project_path = None;
                     self.current_page = None;
-                    self.canvas.document_replaced();
+                    self.document_replaced();
                 }
                 self.message(Level::Info, "Discarded the unsaved work");
             }
