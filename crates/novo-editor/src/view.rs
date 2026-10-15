@@ -1519,6 +1519,9 @@ mod tests {
     /// Places a fuse and a contactor facing it at `x`, which leaves
     /// proposals.
     fn with_proposals(h: &mut Harness, x: f64) {
+        h.view
+            .editor
+            .set_connect_mode(crate::tool::ConnectMode::Ask);
         h.view.editor.begin_place("iec/protection/fuse_3p", None);
         h.click(x, 40.0, egui::PointerButton::Primary);
         h.view.editor.begin_place("iec/contactors/main_3p", None);
