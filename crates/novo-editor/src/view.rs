@@ -13,7 +13,7 @@
 use egui::{Key, Modifiers};
 use novo_canvas::model::{
     self, LabelKind, ModelStyle, PageScene, PlaceholderArt, SheetContent, SymbolArt, SymbolNote,
-    WirePart, WirePartKind, item_id,
+    TitleRevisions, WirePart, WirePartKind, item_id,
 };
 use novo_canvas::widget::{CanvasView, EscapeTarget};
 use novo_canvas::{Anchor, Color, Item, ItemId, Label, Primitive, SelectOp, Shape, Stroke, Vec2};
@@ -164,6 +164,10 @@ pub struct SchematicView {
     sheet: Option<SheetContent>,
     /// `sheet` changed since it was last handed to the scene.
     sheet_dirty: bool,
+    /// The title block's revision fields, set by the shell.
+    revisions: Option<TitleRevisions>,
+    /// `revisions` changed since it was last handed to the scene.
+    revisions_dirty: bool,
 }
 
 impl Default for SchematicView {
@@ -270,6 +274,8 @@ impl SchematicView {
             notes_dirty: false,
             sheet: None,
             sheet_dirty: false,
+            revisions: None,
+            revisions_dirty: false,
         }
     }
 
@@ -290,6 +296,15 @@ impl SchematicView {
         if sheet != self.sheet {
             self.sheet = sheet;
             self.sheet_dirty = true;
+        }
+    }
+
+    /// The revision fields of the title block (DESIGN §7). Cheap to call
+    /// every frame; kept until changed, across page rebuilds.
+    pub fn set_revisions(&mut self, revisions: Option<TitleRevisions>) {
+        if revisions != self.revisions {
+            self.revisions = revisions;
+            self.revisions_dirty = true;
         }
     }
 
@@ -456,6 +471,13 @@ impl SchematicView {
             self.revision = Some(project.revision());
             self.notes_dirty = true;
             self.sheet_dirty = true;
+            self.revisions_dirty = true;
+        }
+        if self.revisions_dirty
+            && let Some(scene) = &mut self.scene
+        {
+            scene.set_revisions(project, self.revisions.clone());
+            self.revisions_dirty = false;
         }
         if self.sheet_dirty
             && let Some(scene) = &mut self.scene

@@ -111,6 +111,12 @@ pub trait ProjectBackend {
         None
     }
 
+    /// The project as it was when `revision` was issued, if the file still
+    /// keeps it (DESIGN §7).
+    fn revision_snapshot(&self, _revision: novo_core::RevisionId) -> Option<Project> {
+        None
+    }
+
     /// Restores (`true`) or throws away (`false`) the offered recovery.
     fn resolve_recovery(&mut self, _restore: bool) -> Result<(), BackendError> {
         Ok(())
@@ -349,6 +355,10 @@ impl ProjectBackend for StorageBackend {
 
     fn document_mut(&mut self) -> Option<&mut Document> {
         self.document.as_mut()
+    }
+
+    fn revision_snapshot(&self, revision: novo_core::RevisionId) -> Option<Project> {
+        self.session.as_ref()?.snapshot(revision).ok().flatten()
     }
 
     fn record(&mut self, changes: &ChangeSet) {
