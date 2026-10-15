@@ -4,7 +4,7 @@ version = 1
 status = "draft"
 title = "The live view"
 summary = "Switch on the live view, press the start button and read what lights up."
-track = "drawing"
+track = "basics"
 order = 60
 level = "intermediate"
 minutes = 6
@@ -48,7 +48,7 @@ text = """
 Contacts start open in the live view, and the stop button is a normally closed one. Click **-S1** to close it.
 """
 point = { at = { device = "-S1" } }
-pause = true
+expect = { pole_closed = "-S1" }
 
 [[step]]
 id = "start"
@@ -63,7 +63,7 @@ expect = { coil_on = "-K1" }
 id = "seal-in"
 title = "Let go"
 text = """
-Release the start button. The coil stays on: the holding contact keeps it in. That is a self-hold.
+Release the start button. The coil stays on: the holding contact keeps it in. That is a {tip:self-hold}.
 """
 point = { at = { device = "-K1", pin = "13" } }
 pause = true

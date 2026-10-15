@@ -4,7 +4,7 @@ version = 1
 status = "draft"
 title = "Potentials and feeds"
 summary = "Give a motor feeder its supply with a row of feeds and an earth."
-track = "drawing"
+track = "basics"
 order = 30
 level = "beginner"
 minutes = 6
@@ -63,7 +63,7 @@ Right-click the new feed and choose **PE** from the potential chips.
 The symbol changes to the protective earth.
 """
 point = { at = { page = "Motor feeder", x = 104, y = 92 } }
-expect = { potential = { wire = "-M1:PE", is = "PE" } }
+expect = { potential_kind = { kind = "protective_earth", page = "Motor feeder" } }
 
 [[step]]
 id = "where-it-goes"

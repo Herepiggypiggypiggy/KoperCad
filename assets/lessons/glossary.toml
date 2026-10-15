@@ -29,3 +29,12 @@ text = "One conductor inside a cable, named by number or colour."
 
 [term.proposal]
 text = "A wire KoperCAD suggests between two facing pins. Tab jumps to the next one and Enter accepts it."
+
+[term.feed]
+text = "A symbol that puts a potential, such as L1 or N, on the page so wires can connect to it."
+
+[term.self-hold]
+text = "A contact of a relay that keeps its own coil on after the start button is released."
+
+[term.contact-image]
+text = "The list under a coil showing its contacts, with the page and column of each."
