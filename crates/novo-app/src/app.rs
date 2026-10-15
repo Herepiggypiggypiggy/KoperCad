@@ -7,6 +7,7 @@ mod assembly;
 mod background_panel;
 mod cabinet;
 mod cabinet_inspector;
+mod cabinet_panel;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
 mod cabinet_rules;
@@ -31,6 +32,7 @@ mod live_anim;
 mod macro_actions;
 #[cfg(test)]
 mod macro_actions_tests;
+mod menu_bar;
 mod numbering;
 mod onboarding;
 mod outline;
@@ -97,7 +99,6 @@ use crate::actions::Action;
 const ASSEMBLY_HINT: &str = "The workshop sheet of every cabinet: prepare, drill, mount, wire, label and check, with a box to tick at each line. Needs a cabinet with a mounting plate.";
 const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel. Export only: bringing the edited file back comes with the import dialog. The generated reports are under Export all reports to Excel.";
 use novo_core::{Aspect, Command, DeviceTag, ModelError, Outcome, PageId, PageKind};
-use novo_plc::link::LinkFormat;
 use pages::PageView;
 
 use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows};
@@ -213,6 +214,11 @@ pub struct NovoApp {
     ol: outline::OutlineState,
     /// Window width last frame, which decides whether the outline pins.
     window_width: f32,
+    /// Free room between the top bar's left and right groups last frame;
+    /// below zero they overlap. Read by the width test.
+    top_bar_gap: f32,
+    /// Width the menu names took last frame (`menu_bar`).
+    menu_bar_width: f32,
     /// Lessons: the catalog, the running lesson and the person's progress.
     learn: learn::LearnState,
 }
@@ -272,6 +278,8 @@ impl NovoApp {
             page_view: PageView::Function,
             ol: outline::OutlineState::new(),
             window_width: 0.0,
+            top_bar_gap: 0.0,
+            menu_bar_width: 380.0,
             learn: learn::LearnState::new(),
         };
         app.restore_layout_at_start();
@@ -997,235 +1005,68 @@ impl NovoApp {
     /// Mark (project menu), Schematic | Cabinet, breadcrumb, then "Search
     /// or run" and the saved state on the right.
     fn top_bar(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
+        let fit = menu_bar::TopBarFit::at(self.window_width);
+        let focus = self.menu_key_pressed(ui.ctx());
         ui.horizontal_centered(|ui| {
-            let menu = ui.menu_button(egui::RichText::new(APP_NAME).strong(), |ui| {
-                self.project_menu(ui, picked)
-            });
-            self.anchor_response("menu.project", &menu.response, APP_NAME);
-            if menu.inner.is_some() {
-                self.learn_event(novo_learn::Event::Opened("menu.project".to_owned()));
+            if self.menu_bar_wide() {
+                self.mark(ui, false);
+                self.menu_bar(ui, focus);
+            } else {
+                self.mark(ui, focus);
             }
             ui.separator();
-            if let Some(workspace) = self.workspace_switcher(ui) {
+            if let Some(workspace) = self.workspace_switcher(ui, fit.short_switcher) {
                 picked.push(match workspace {
                     workspace::Workspace::Cabinet => Action::ShowCabinet,
                     _ => Action::ShowSchematic,
                 });
             }
             ui.separator();
-            self.breadcrumb(ui);
+            self.breadcrumb(ui, fit.name_chars);
+            let left_end = ui.min_rect().right();
 
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let right = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.weak(self.saved_state());
                 self.issue_pill(ui);
                 let shortcut = Action::CommandPalette
                     .shortcut()
                     .map(|s| ui.ctx().format_shortcut(&s))
                     .unwrap_or_default();
-                let search = egui::Button::new("Search or run")
-                    .shortcut_text(shortcut)
-                    .min_size(egui::vec2(240.0, 0.0));
-                let search = ui.add(search);
+                let label = if fit.search.is_empty() {
+                    shortcut.clone()
+                } else {
+                    fit.search.to_owned()
+                };
+                let mut search =
+                    egui::Button::new(label).min_size(egui::vec2(fit.search_width, 0.0));
+                if !fit.search.is_empty() && fit.search_width > 0.0 {
+                    search = search.shortcut_text(shortcut.clone());
+                }
+                let search = ui
+                    .add(search)
+                    .on_hover_text(format!("Search or run ({shortcut})"));
                 self.anchor_response("palette.button", &search, "Search or run");
                 if search.clicked() {
                     picked.push(Action::CommandPalette);
                 }
             });
+            self.top_bar_gap = right.response.rect.left() - left_end;
         });
-    }
-
-    /// The short project menu behind the mark. Everything in it is also in
-    /// the command palette.
-    fn project_menu(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
-        for a in [
-            Action::NewProject,
-            Action::OpenProject,
-            Action::OpenExample,
-            Action::Learn,
-        ] {
-            self.action_button(ui, a, picked);
-        }
-        ui.add_enabled_ui(!self.settings.recent_projects.is_empty(), |ui| {
-            ui.menu_button("Recent", |ui| {
-                for path in self.settings.recent_projects.clone() {
-                    if ui.button(path.display().to_string()).clicked() {
-                        let ctx = ui.ctx().clone();
-                        self.leave_then(&ctx, Leaving::OpenPath(path));
-                    }
-                }
-            });
-        });
-        ui.separator();
-        for a in [
-            Action::SaveProject,
-            Action::SaveProjectAs,
-            Action::CloseProject,
-        ] {
-            self.action_button(ui, a, picked);
-        }
-        ui.separator();
-        let export = egui::Button::new("Export PDF");
-        if ui.add_enabled(self.is_open(), export).clicked() {
-            self.export_pdf();
-            ui.close();
-        }
-        let assembly = egui::Button::new("Export assembly checklist (PDF)");
-        if ui
-            .add_enabled(self.is_open(), assembly)
-            .on_hover_text(ASSEMBLY_HINT)
-            .on_disabled_hover_text("Open a project first")
-            .clicked()
-        {
-            self.export_assembly();
-            ui.close();
-        }
-        let sheets = egui::Button::new("Export for bulk edit (.xlsx)");
-        if ui
-            .add_enabled(self.is_open(), sheets)
-            .on_hover_text(SHEETS_HINT)
-            .on_disabled_hover_text("Open a project first")
-            .clicked()
-        {
-            self.export_spreadsheet();
-            ui.close();
-        }
-        let csv = egui::Button::new("Export for bulk edit (CSV files)");
-        if ui
-            .add_enabled(self.is_open(), csv)
-            .on_hover_text(SHEETS_HINT)
-            .on_disabled_hover_text("Open a project first")
-            .clicked()
-        {
-            self.export_spreadsheet_csv();
-            ui.close();
-        }
-        // The same commands as Ctrl+K: one code path.
-        let has_page = self.current_page.is_some();
-        ui.menu_button("Import and export", |ui| {
-            let open = self.is_open();
-            for (id, label, hint, enabled) in [
-                (
-                    "export.step",
-                    "Cabinet as STEP...",
-                    "Every enclosure with a mounting plate, as a named assembly for mechanical CAD",
-                    open,
-                ),
-                (
-                    "export.aml",
-                    "Plant as AutomationML...",
-                    "Structure, devices, terminals, cables and nets (IEC 62714)",
-                    open,
-                ),
-                (
-                    "file.import_aml",
-                    "Import AutomationML...",
-                    "Add the plant from another tool's AutomationML file; you see what it would do first",
-                    open,
-                ),
-                (
-                    "file.import_dwg",
-                    "Import DWG as background...",
-                    "Converts with the free LibreDWG or ODA File Converter, then imports the DXF",
-                    has_page,
-                ),
-                (
-                    "file.choose_dwg_converter",
-                    "Choose DWG converter...",
-                    "Point KoperCAD at dwg2dxf or the ODA File Converter",
-                    true,
-                ),
-            ] {
-                if ui
-                    .add_enabled(enabled, egui::Button::new(label))
-                    .on_hover_text(hint)
-                    .clicked()
-                {
-                    self.wb.queued.push(id);
-                    ui.close();
-                }
-            }
-        });
-        let has = self.has_background();
-        ui.add_enabled_ui(has_page, |ui| {
-            ui.menu_button("DXF background", |ui| {
-                if ui.button("Import DXF...").clicked() {
-                    self.wb.queued.push("file.import_dxf_background");
-                    ui.close();
-                }
-                let label = if self.background_shown() {
-                    "Hide"
-                } else {
-                    "Show"
-                };
-                if ui.add_enabled(has, egui::Button::new(label)).clicked() {
-                    self.wb.queued.push("view.background");
-                    ui.close();
-                }
-                if ui
-                    .add_enabled(has, egui::Button::new("Move and scale..."))
-                    .clicked()
-                {
-                    self.wb.queued.push("view.background_place");
-                    ui.close();
-                }
-                if ui.add_enabled(has, egui::Button::new("Remove")).clicked() {
-                    self.wb.queued.push("file.remove_background");
-                    ui.close();
-                }
-            });
-        });
-        ui.add_enabled_ui(self.is_open(), |ui| {
-            ui.menu_button("Export DXF", |ui| {
-                if ui
-                    .add_enabled(has_page, egui::Button::new("This page"))
-                    .clicked()
-                {
-                    self.wb.queued.push("export.dxf_page");
-                    ui.close();
-                }
-                if ui.button("All pages").clicked() {
-                    self.wb.queued.push("export.dxf_all");
-                    ui.close();
-                }
-            });
-        });
-        ui.add_enabled_ui(self.is_open(), |ui| {
-            ui.menu_button("Export PLC", |ui| {
-                for (id, format) in [
-                    ("export.plc_csv", LinkFormat::Csv),
-                    ("export.plc_plcopen", LinkFormat::PlcOpen),
-                    ("export.plc_tia", LinkFormat::Tia),
-                    ("export.plc_studio5000", LinkFormat::Studio5000),
-                    ("export.plc_address_plan", LinkFormat::Hardware),
-                ] {
-                    if ui.button(format.label()).clicked() {
-                        self.wb.queued.push(id);
-                        ui.close();
-                    }
-                }
-            });
-            if ui
-                .button("Import PLC tags...")
-                .on_hover_text("Read the programmer's tag file back: comments and tag names update, addresses never change")
-                .clicked()
-            {
-                self.wb.queued.push("plc.import_tags");
-                ui.close();
-            }
-        });
-        ui.separator();
-        for a in [Action::About, Action::Quit] {
-            self.action_button(ui, a, picked);
-        }
     }
 
     /// project / page. A click on the page opens the outline.
-    fn breadcrumb(&mut self, ui: &mut egui::Ui) {
+    fn breadcrumb(&mut self, ui: &mut egui::Ui, name_chars: usize) {
         let Some(name) = self.project_name() else {
             ui.weak("No project open");
             return;
         };
-        ui.label(name);
+        let shown = if name.chars().count() > name_chars {
+            let cut: String = name.chars().take(name_chars.saturating_sub(1)).collect();
+            format!("{cut}…")
+        } else {
+            name.clone()
+        };
+        ui.label(shown).on_hover_text(name);
         let page = self.current_page.and_then(|id| {
             let sheet = self.wb.sheet;
             let rows = self.page_rows();

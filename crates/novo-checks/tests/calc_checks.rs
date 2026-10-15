@@ -29,6 +29,7 @@ fn no_numbers_no_calc_problems() {
         ProblemKind::ThermalWithstand,
         ProblemKind::MotorStarter,
         ProblemKind::ProtectiveConductor,
+        ProblemKind::CableRating,
     ] {
         assert!(of_kind(&doc, kind).is_empty(), "{kind:?}");
     }
@@ -199,4 +200,67 @@ fn long_run_cannot_trip_its_breaker_on_an_earth_fault() {
     })
     .unwrap();
     assert!(of_kind(&doc, ProblemKind::DisconnectionTime).is_empty());
+}
+
+#[test]
+fn cable_rating_follows_the_installation_method_and_stays_quiet_without_it() {
+    let (mut doc, ms) = starter();
+    let wire = doc
+        .project()
+        .wires_at(Endpoint::pin(ms.f1_sym, 1))
+        .next()
+        .expect("wire on the fuse's load side");
+    doc.transact("Numbers", |tx| {
+        for id in [ms.l1, ms.l2, ms.l3] {
+            tx.update::<Potential>(id, |p| p.voltage = Some(400.0))?;
+        }
+        tx.update::<Wire>(wire, |w| w.cross_section_mm2 = Some(1.5))?;
+        tx.set_property(ms.f1, "rated_current_a", Some(20.0.into()))
+    })
+    .unwrap();
+    // No installation method: nothing is said, a default would be a guess.
+    assert!(of_kind(&doc, ProblemKind::CableRating).is_empty());
+
+    doc.transact("Method C", |tx| {
+        tx.set_property(wire, "install_method", Some("C".into()))
+    })
+    .unwrap();
+    // 1.5 mm² PVC, method C, three loaded conductors: 17.5 A, below the 20 A fuse.
+    let found = of_kind(&doc, ProblemKind::CableRating);
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert_eq!(found[0].severity, Severity::Error);
+    assert!(found[0].message.contains("17.5 A"), "{}", found[0].message);
+    assert!(found[0].at.contains(&AnyId::Wire(wire)));
+
+    // A 16 A device is fine in the reference conditions, and fails again at
+    // 45 °C ambient (17.5 · 0.79 = 13.8 A).
+    doc.transact("16 A", |tx| {
+        tx.set_property(ms.f1, "rated_current_a", Some(16.0.into()))
+    })
+    .unwrap();
+    assert!(of_kind(&doc, ProblemKind::CableRating).is_empty());
+    doc.transact("Hot", |tx| {
+        tx.set_property(wire, "ambient_c", Some(45.0.into()))
+    })
+    .unwrap();
+    assert_eq!(of_kind(&doc, ProblemKind::CableRating).len(), 1);
+}
+
+#[test]
+fn a_transformer_supply_sets_the_breaking_capacity_to_check() {
+    let (mut doc, ms) = starter();
+    doc.transact("Numbers", |tx| {
+        tx.set_info(|info| {
+            info.properties
+                .insert("supply.transformer_kva".into(), 630.0.into());
+            info.properties
+                .insert("supply.uk_percent".into(), 4.0.into());
+        })?;
+        // 630 kVA, 4 %: about 24.5 kA at the terminals.
+        tx.set_property(ms.f1, "breaking_capacity_ka", Some(10.0.into()))
+    })
+    .unwrap();
+    let found = of_kind(&doc, ProblemKind::ShortCircuit);
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert!(found[0].message.contains("24."), "{}", found[0].message);
 }

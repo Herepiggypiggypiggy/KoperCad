@@ -106,6 +106,24 @@ enum Cmd {
         #[arg(long)]
         json: bool,
     },
+    /// Judge the circuits of a supply described in a JSON file: cable
+    /// rating, voltage drop, breaking capacity, short-circuit withstand,
+    /// disconnection and protective conductor, each Pass, Fail or Unknown.
+    /// Exits with 1 when a circuit fails (unknown does not fail).
+    Calc {
+        /// The supply and circuits as JSON (see the novo-checks `calc::spec`
+        /// documentation).
+        file: PathBuf,
+        /// Cable tables from your licensed copy of IEC 60364-5-52 (CSV).
+        #[arg(long)]
+        tables: Option<PathBuf>,
+        /// Maker selectivity and back-up tables (CSV).
+        #[arg(long)]
+        pairs: Option<PathBuf>,
+        /// Print JSON instead of text.
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -526,6 +544,12 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             }
             Ok(exit::OK)
         }
+        Cmd::Calc {
+            file,
+            tables,
+            pairs,
+            json,
+        } => calc(&file, tables.as_deref(), pairs.as_deref(), json, out),
         Cmd::Check { file, json } => {
             let project = read(&file)?;
             let problems = novo_checks::check(&project);
@@ -546,6 +570,88 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             })
         }
     }
+}
+
+/// `kopercad-cli calc`: reads the plant JSON, optionally the licensed
+/// tables, and prints one report per circuit.
+fn calc(
+    file: &Path,
+    tables: Option<&Path>,
+    pairs: Option<&Path>,
+    json: bool,
+    out: &mut dyn Write,
+) -> Result<i32, Failure> {
+    use novo_checks::calc::selectivity::PairTable;
+    use novo_checks::calc::spec;
+    use novo_checks::calc::tables::TableSet;
+
+    let usage = |m: String| Failure::new(exit::USAGE, m);
+    let text = std::fs::read_to_string(file)
+        .map_err(|e| Failure::new(exit::READ, format!("cannot read {}: {e}", file.display())))?;
+    let root: Value = serde_json::from_str(&text)
+        .map_err(|e| usage(format!("{} is not valid JSON: {e}", file.display())))?;
+    let plant = spec::parse(&root).map_err(|e| usage(format!("{}: {e}", file.display())))?;
+    let set = match tables {
+        None => TableSet::builtin(),
+        Some(path) => {
+            let csv = std::fs::read_to_string(path).map_err(|e| {
+                Failure::new(exit::READ, format!("cannot read {}: {e}", path.display()))
+            })?;
+            let name = path.file_name().map_or_else(
+                || "licensed tables".to_owned(),
+                |n| n.to_string_lossy().into_owned(),
+            );
+            TableSet::builtin()
+                .with_csv(&format!("licensed copy {name}"), &csv)
+                .map_err(|e| usage(format!("{}: {e}", path.display())))?
+        }
+    };
+    let pair_table = match pairs {
+        None => None,
+        Some(path) => {
+            let csv = std::fs::read_to_string(path).map_err(|e| {
+                Failure::new(exit::READ, format!("cannot read {}: {e}", path.display()))
+            })?;
+            let name = path
+                .file_name()
+                .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+            Some(
+                PairTable::from_csv(&name, &csv)
+                    .map_err(|e| usage(format!("{}: {e}", path.display())))?,
+            )
+        }
+    };
+    let reports = spec::evaluate_all(&plant, &set, pair_table.as_ref());
+    if json {
+        let list: Vec<Value> = reports
+            .iter()
+            .map(|r| {
+                json!({
+                    "circuit": r.name,
+                    "rows": r.rows.iter().map(|row| json!({
+                        "check": row.title,
+                        "status": format!("{:?}", row.status).to_lowercase(),
+                        "value": row.value,
+                        "limit": row.limit,
+                        "unit": row.unit,
+                        "text": row.text,
+                    })).collect::<Vec<_>>(),
+                    "assumptions": r.assumptions,
+                    "tables": r.tables,
+                })
+            })
+            .collect();
+        print(out, &format!("{:#}", Value::Array(list)))?;
+    } else {
+        for r in &reports {
+            print(out, r.to_text().trim_end())?;
+        }
+    }
+    Ok(if reports.iter().any(|r| r.has_failure()) {
+        exit::PROBLEMS
+    } else {
+        exit::OK
+    })
 }
 
 fn read(path: &Path) -> Result<Project, Failure> {
