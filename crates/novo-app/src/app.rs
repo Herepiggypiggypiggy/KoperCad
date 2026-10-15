@@ -3,6 +3,7 @@
 //! toasts for messages, the dialogs and action dispatch. There is no menu
 //! bar and no status bar.
 
+mod changes;
 mod checks;
 mod dock;
 mod drawers;
@@ -691,6 +692,7 @@ impl NovoApp {
             self.tool_dock(&ctx, canvas_rect);
             self.inspector(&ctx, canvas_rect);
             self.live_view(&ctx, canvas_rect);
+            self.changes_card(&ctx, canvas_rect);
         }
         self.toasts(&ctx, canvas_rect);
 

@@ -308,6 +308,24 @@ impl SchematicView {
         }
     }
 
+    /// Where objects were on `page` in another state of the project (an
+    /// older revision), by id: the ghosts Changes mode outlines for what
+    /// was removed. Ids the state does not draw on that page are left out.
+    pub fn bounds_in(
+        &self,
+        state: &novo_core::Project,
+        page: PageId,
+        ids: &[AnyId],
+    ) -> Vec<(AnyId, novo_canvas::Aabb)> {
+        let scene = PageScene::new(state, page, &self.art);
+        ids.iter()
+            .filter_map(|&id| {
+                let bounds = scene.scene().item_bounds(novo_canvas::model::item_id(id))?;
+                Some((id, bounds))
+            })
+            .collect()
+    }
+
     /// The revision fields of the title block (DESIGN §7). Cheap to call
     /// every frame; kept until changed, across page rebuilds.
     pub fn set_revisions(&mut self, revisions: Option<TitleRevisions>) {

@@ -1933,6 +1933,72 @@ fn the_title_block_prints_the_set_revision_after_an_issue() {
 }
 
 #[test]
+fn changes_mode_marks_added_changed_and_removed_objects_since_a_revision() {
+    use novo_canvas::marks::{MarkKind, MarkTarget};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    // Without a revision there is nothing to compare with.
+    d.app.run_command(&ctx, "view.changes", None);
+    assert!(d.app.wb.changes.is_none());
+    let kept = d.place("mcb3", 80.0, 48.0);
+    let gone = d.place("mcb3", 80.0, 120.0);
+    d.frame();
+    let issued = d
+        .app
+        .backend
+        .issue_revision(None, "2026-10-15", "TV", "First");
+    d.app.changed_outside_canvas(&issued.unwrap().changes);
+    let added = d.place("mcb3", 160.0, 48.0);
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Move", |tx| {
+            tx.update::<novo_core::SymbolInstance>(kept, |s| s.placement.origin.x += 10.0)
+        })
+        .unwrap();
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Delete", |tx| tx.remove(gone))
+        .unwrap();
+    d.frame();
+    d.app.run_command(&ctx, "view.changes", None);
+    d.frame();
+    d.frame();
+    assert!(d.app.wb.changes.is_some(), "the mode opens against A");
+    let marks = d
+        .app
+        .canvas
+        .schematic_ref()
+        .unwrap()
+        .canvas
+        .marks
+        .list
+        .clone();
+    let on = |kind, id: SymbolId| {
+        marks.iter().any(|m| {
+            m.kind == kind && m.target == MarkTarget::Item(novo_canvas::model::item_id(id))
+        })
+    };
+    assert!(on(MarkKind::Added, added), "{marks:?}");
+    assert!(on(MarkKind::Modified, kept));
+    assert!(
+        marks
+            .iter()
+            .any(|m| m.kind == MarkKind::Removed && matches!(m.target, MarkTarget::Area(_))),
+        "a dashed ghost where the removed symbol was"
+    );
+    d.app.run_command(&ctx, "view.changes", None);
+    d.frame();
+    assert!(d.app.wb.changes.is_none(), "the same command turns it off");
+}
+
+#[test]
 fn the_command_list_and_the_part_search_show_many_rows() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
