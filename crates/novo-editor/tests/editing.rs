@@ -1971,7 +1971,9 @@ fn a_double_click_on_empty_canvas_starts_a_wire_open_at_that_end() {
             wire.from
         );
     }
+}
 
+#[test]
 fn carrying_a_contact_over_a_coil_says_it_will_link() {
     let (mut doc, page, mut editor) = setup();
     editor.auto_connect = false;
