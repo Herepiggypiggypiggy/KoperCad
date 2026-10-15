@@ -1871,3 +1871,36 @@ fn the_part_search_opens_with_room_near_the_bottom_of_the_window() {
     assert!(area.height() > 250.0, "got {}", area.height());
     assert!(area.bottom() <= ctx.content_rect().bottom());
 }
+
+#[test]
+fn a_double_click_on_bare_grid_starts_a_wire_without_the_wire_tool() {
+    use novo_editor::Tool;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    d.editor_leave();
+    d.frame();
+    assert!(matches!(
+        d.app.canvas.schematic().unwrap().editor.tool(),
+        Tool::Select
+    ));
+    let rect = d.app.wb.canvas_area.unwrap().1;
+    let pos = rect.center() + egui::vec2(40.0, 30.0);
+    let button = |pressed| egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    frame_at(&mut d, 50.0, vec![egui::Event::PointerMoved(pos)]);
+    for (i, t) in [50.1, 50.15, 50.2, 50.25].into_iter().enumerate() {
+        frame_at(&mut d, t, vec![button(i % 2 == 0)]);
+    }
+    frame_at(&mut d, 50.3, vec![]);
+    match d.app.canvas.schematic().unwrap().editor.tool() {
+        Tool::Wire(w) => assert!(w.start.is_some(), "a wire is started"),
+        other => panic!("expected the wire tool, got {other:?}"),
+    }
+}

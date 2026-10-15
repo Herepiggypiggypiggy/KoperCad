@@ -639,6 +639,19 @@ impl SchematicView {
         {
             let selection = self.selection();
             self.editor.key(document, EditorKey::StartFree, &selection);
+        } else if !self.swallow
+            && !self.popup_open()
+            && matches!(self.editor.tool(), crate::tool::Tool::Select)
+            && out.hit.is_none()
+            && response.double_clicked_by(egui::PointerButton::Primary)
+        {
+            // A double click on bare grid starts a wire there, without the
+            // wire tool; text, devices and wires keep their own double click.
+            self.editor.begin_wire();
+            let selection = self.selection();
+            if !self.editor.key(document, EditorKey::StartFree, &selection) {
+                self.editor.leave_tool();
+            }
         } else if response.clicked_by(egui::PointerButton::Primary)
             && !self.swallow
             && let Some(w) = out.cursor_raw
