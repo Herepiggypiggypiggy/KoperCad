@@ -72,7 +72,11 @@ fn main() {
         dump(&sc, &r);
         return;
     }
-    println!("simulated in {:?} ({} iterations)", t.elapsed(), r.iterations);
+    println!(
+        "simulated in {:?} ({} iterations)",
+        t.elapsed(),
+        r.iterations
+    );
     let b = &r.balance;
     println!(
         "loss {:.0} W: walls {:.0} W, mean air {:.1} C (IEC estimate {:.1} C), hottest air {:.1} C",
@@ -96,7 +100,10 @@ fn main() {
         );
     }
     for h in &r.hot_spots {
-        println!("hot spot {:?} at ({:.0}, {:.0}): {:.0} C, {}", h.kind, h.x_mm, h.y_mm, h.temp_c, h.reason);
+        println!(
+            "hot spot {:?} at ({:.0}, {:.0}): {:.0} C, {}",
+            h.kind, h.x_mm, h.y_mm, h.temp_c, h.reason
+        );
     }
     for rec in &r.recommendations {
         println!("#{} {}", rec.rank, rec.text);
@@ -119,7 +126,11 @@ fn dump(sc: &Scenario, r: &ThermalResult) {
     );
     println!("\"air\":[{}],", nums(&r.air_temp.values));
     println!("\"plate\":[{}],", nums(&r.plate_temp.values));
-    println!("\"vx\":[{}],\"vy\":[{}],", nums(&r.velocity.vx), nums(&r.velocity.vy));
+    println!(
+        "\"vx\":[{}],\"vy\":[{}],",
+        nums(&r.velocity.vx),
+        nums(&r.velocity.vy)
+    );
     println!(
         "\"pfx\":[{}],\"pfy\":[{}],",
         nums(&r.plate_flux.vx),
