@@ -269,6 +269,8 @@ enum PartsAction {
     ChooseFile,
     ChooseFolder,
     StopImport,
+    ConfirmFile(PathBuf),
+    DeclineFile(PathBuf),
     AskRemove(PartKey),
     CancelRemove,
     Remove(PartKey),
@@ -302,12 +304,19 @@ impl NovoApp {
         let mut open = true;
         let mut actions = Vec::new();
         let dragging = ctx.input(|i| !i.raw.hovered_files.is_empty());
-        egui::Window::new("Parts")
+        let shown = egui::Window::new("Parts")
             .open(&mut open)
             .default_size([820.0, 520.0])
             .show(ctx, |ui| parts_ui(ui, win, dragging, &mut actions));
         // A file dropped on the window, or one the watch found.
+        let over = shown
+            .as_ref()
+            .zip(ctx.input(|i| i.pointer.latest_pos()))
+            .is_some_and(|(r, pos)| r.response.rect.contains(pos));
         let dropped: Vec<PathBuf> = ctx.input(|i| {
+            if !over {
+                return Vec::new();
+            }
             i.raw
                 .dropped_files
                 .iter()
@@ -319,8 +328,12 @@ impl NovoApp {
             win.import_file(path, ImportFlow::Manual);
         }
         let now = ctx.input(|i| i.time);
-        if let Some(path) = win.import.as_mut().and_then(|i| i.poll(now)) {
-            win.import_file(&path, ImportFlow::Downloads);
+        if let Some(found) = win.import.as_mut().and_then(|i| i.poll(now)) {
+            if found.names_the_part {
+                win.import_file(&found.path, ImportFlow::Downloads);
+            } else if let Some(i) = win.import.as_mut() {
+                i.phase = Phase::Confirm(found.path);
+            }
         }
         if win
             .import
@@ -363,6 +376,12 @@ impl NovoApp {
                     }
                 }
                 PartsAction::StopImport => win.import = None,
+                PartsAction::ConfirmFile(path) => win.import_file(&path, ImportFlow::Downloads),
+                PartsAction::DeclineFile(path) => {
+                    if let Some(i) = win.import.as_mut() {
+                        i.decline(path);
+                    }
+                }
                 PartsAction::AskRemove(key) => win.confirm_remove = Some(key),
                 PartsAction::CancelRemove => win.confirm_remove = None,
                 PartsAction::Remove(key) => {
@@ -541,6 +560,22 @@ on the maker's site and drop the file here.",
                 }
                 if ui.small_button("Stop").clicked() {
                     actions.push(PartsAction::StopImport);
+                }
+            });
+        }
+        Phase::Confirm(path) => {
+            ui.strong(format!("Importing {}", import.label));
+            ui.label(format!(
+                "{} arrived in Downloads, but its name does not mention this part. Import it?",
+                path.file_name()
+                    .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
+            ));
+            ui.horizontal(|ui| {
+                if ui.small_button("Import it").clicked() {
+                    actions.push(PartsAction::ConfirmFile(path.clone()));
+                }
+                if ui.small_button("Not this one").clicked() {
+                    actions.push(PartsAction::DeclineFile(path.clone()));
                 }
             });
         }

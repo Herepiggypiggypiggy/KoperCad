@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use novo_parts::{
-    Catalog, CatalogPart, DownloadsWatcher, FetchError, Fetcher, ImportFlow, ImportJob,
+    Arrival, Catalog, CatalogPart, DownloadsWatcher, FetchError, Fetcher, ImportFlow, ImportJob,
     ImportState, LocalLibrary, PartKey, RemoteFile, SourceTable,
 };
 
@@ -34,6 +34,9 @@ impl Fetcher for NoFetcher {
 pub(crate) enum Phase {
     /// The page is open; waiting for the user's download or a dropped file.
     Waiting,
+    /// A finished file arrived that does not name the part (catalog XML or
+    /// EDZ, matched by type alone): ask before importing it.
+    Confirm(PathBuf),
     Done(Summary),
     Failed(String),
 }
@@ -53,6 +56,8 @@ pub(crate) struct Import {
     pub page_verified: bool,
     pub phase: Phase,
     watcher: Option<DownloadsWatcher>,
+    /// Files the user said no to, so the watch does not ask again.
+    declined: Vec<PathBuf>,
     pub last_poll: f64,
 }
 
@@ -96,19 +101,31 @@ impl Import {
             page_url,
             page_verified,
             phase,
+            declined: Vec::new(),
             watcher: downloads
                 .map(|d| DownloadsWatcher::new(d, SystemTime::now(), &part.order_number)),
             last_poll: f64::NEG_INFINITY,
         }
     }
 
+    /// The user said no to this file.
+    pub(crate) fn decline(&mut self, path: PathBuf) {
+        self.declined.push(path);
+        self.phase = Phase::Waiting;
+    }
+
     /// The first finished file the watcher found since the last call.
-    pub(crate) fn poll(&mut self, now: f64) -> Option<PathBuf> {
+    pub(crate) fn poll(&mut self, now: f64) -> Option<Arrival> {
         if self.phase != Phase::Waiting || now - self.last_poll < POLL_SECONDS {
             return None;
         }
         self.last_poll = now;
-        self.watcher.as_mut()?.poll().into_iter().next()
+        let declined = &self.declined;
+        self.watcher
+            .as_mut()?
+            .poll()
+            .into_iter()
+            .find(|a| !declined.contains(&a.path))
     }
 
     pub(crate) fn watching(&self) -> bool {
@@ -307,6 +324,9 @@ mod tests {
         // The first sighting only records the size; the second, unchanged, releases it.
         assert_eq!(imp.poll(1.5), None);
         let got = imp.poll(3.0).expect("finished file");
-        assert!(got.ends_with("WAGO_20021201HI.zip"));
+        assert!(got.path.ends_with("WAGO_20021201HI.zip"));
+        assert!(got.names_the_part);
+        imp.decline(got.path);
+        assert_eq!(imp.poll(5.0), None, "a declined file is not offered again");
     }
 }
