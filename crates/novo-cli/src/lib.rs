@@ -95,8 +95,10 @@ enum Export {
     Bom(ReportArgs),
     /// Device list.
     Devices(ReportArgs),
-    /// Wire list.
+    /// Wire list, with the cut length of every wire.
     Wires(ReportArgs),
+    /// Cut list: the wires grouped by size and colour, with end allowances.
+    Cutlist(ReportArgs),
     /// Table of contents (the pages).
     Toc(ReportArgs),
     /// Every report in one workbook, one sheet each.
@@ -211,6 +213,7 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
         Cmd::Export(Export::Bom(args)) => export_reports(&args.file, &["bom"], &args, out),
         Cmd::Export(Export::Devices(args)) => export_reports(&args.file, &["devices"], &args, out),
         Cmd::Export(Export::Wires(args)) => export_reports(&args.file, &["wires"], &args, out),
+        Cmd::Export(Export::Cutlist(args)) => export_reports(&args.file, &["cutlist"], &args, out),
         Cmd::Export(Export::Toc(args)) => export_reports(&args.file, &["toc"], &args, out),
         Cmd::Export(Export::Reports { file, output }) => {
             let args = ReportArgs {

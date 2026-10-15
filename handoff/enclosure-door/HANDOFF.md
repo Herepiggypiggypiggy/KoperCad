@@ -4,9 +4,10 @@ Updated 2026-10-15.
 
 - Branch `claude/project-thread-tv09ns`, PR #409, based on main (the Cabinet
   canvas edit PRs have merged).
-- UI entry point: open a project, switch to the Cabinet canvas and use the
-  right panel "Inside and door" (form, Apply as one undo step, problem list,
-  top view with the door arc). Door problems count in the header strip.
+- UI entry point: open a project, switch to the Cabinet canvas, press the
+  Plate chip: the inspector's plate card has the collapsible section "Inside
+  and door" (form, Apply as one undo step, problem list, top view with the door
+  arc). Door problems count in the header strip.
 - Still missing in the UI: checks as `novo-checks` Problems (they show only in
   this panel and the header count), front-view boxes coloured for depth,
   door-mounted devices. Coordinate with "UI integration: cabinet, 3D,
@@ -15,8 +16,8 @@ Updated 2026-10-15.
   Storage: `novo_layout::model::{enclosure_of, set_enclosure, device_depth}`
   as Structure properties (keys in `model::keys`), no novo-core change.
   `CabinetLayout` has `enclosure`, `depths` and `door_report()`.
-- UI: `crates/novo-app/src/app/cabinet_door.rs`, right panel of the Cabinet
-  canvas; problems count in the header strip includes the door checks. Front
+- UI: `crates/novo-app/src/app/cabinet_door.rs` (`DoorState::show`, drawn by
+  `cabinet_inspector.rs` in the plate card); problems count in the header strip includes the door checks. Front
   view boxes are not coloured for depth (that needs a `BoxState` in novo-canvas).
 - Not hands-on tested in a running window (cloud session).
-- Design: docs/design/cabinet-layout.md section 5b.
+- Design: docs/design/cabinet-layout.md section 5c.

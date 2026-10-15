@@ -58,8 +58,10 @@ fn expected_json() -> String {
 /// Turns a current-format file into a version 1 file.
 fn downgrade_to_v1(path: &Path) {
     let conn = rusqlite::Connection::open(path).unwrap();
-    conn.execute_batch("DROP TABLE IF EXISTS snapshots; PRAGMA user_version = 1;")
-        .unwrap();
+    conn.execute_batch(
+        "DROP TABLE IF EXISTS snapshots; DROP TABLE IF EXISTS sidecar; PRAGMA user_version = 1;",
+    )
+    .unwrap();
 }
 
 fn version_of(path: &Path) -> u32 {
@@ -69,7 +71,7 @@ fn version_of(path: &Path) -> u32 {
 }
 
 #[test]
-fn the_committed_version_2_file_still_opens_unchanged() {
+fn the_committed_version_2_file_opens_and_upgrades_with_a_backup() {
     let (_dir, path) = copy_of_fixture();
     let before = std::fs::read(&path).unwrap();
     assert_eq!(ProjectFile::read(&path).unwrap().to_json(), expected_json());
@@ -79,10 +81,15 @@ fn the_committed_version_2_file_still_opens_unchanged() {
     assert_eq!(opened.project.to_json(), expected_json());
     assert!(opened.recovered.is_none() && opened.set_aside.is_none());
     opened.session.close().unwrap();
-    assert!(
-        !path.with_file_name("pump.novo.v2.bak").exists(),
-        "a current file needs no upgrade backup"
+    assert_eq!(version_of(&path), schema::SCHEMA_VERSION);
+    let backup = path.with_file_name("pump.novo.v2.bak");
+    assert_eq!(version_of(&backup), 2, "the backup keeps the old version");
+    assert_eq!(
+        ProjectFile::read(&backup).unwrap().to_json(),
+        expected_json()
     );
+    let file = ProjectFile::open(&path).unwrap();
+    assert_eq!(file.sidecar("commissioning").unwrap(), None);
 }
 
 #[test]

@@ -135,9 +135,7 @@ impl DoorState {
         let draft = self.draft.as_mut()?;
         let mut ask = None;
 
-        ui.add_space(6.0);
-        ui.strong("Inside and door");
-        ui.weak("Depth and door swing are checked against these.");
+        ui.weak("Depth and door swing are checked against these. The plate is taken as centred.");
         ui.add_space(4.0);
         egui::Grid::new("cabinet_door_form")
             .num_columns(2)

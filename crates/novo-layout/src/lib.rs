@@ -4,9 +4,14 @@
 //! Millimetres, origin top left, x right, y down. Nothing here mutates a
 //! project; the model storage and commands come later.
 
+pub mod drill;
 pub mod enclosure;
 pub mod model;
 pub mod plan;
+pub mod plate_drawing;
+pub mod rules;
+pub mod sizing;
+pub mod sizing_model;
 pub mod state;
 
 /// Footprint used for a device whose part has no dimensions (marked guessed).
@@ -186,6 +191,8 @@ pub struct Rail {
     pub x: f64,
     pub y: f64,
     pub length: f64,
+    /// Runs down from `(x, y)` instead of to the right.
+    pub vertical: bool,
 }
 
 /// Length used on a rail: the footprint widths of its devices plus the
@@ -307,6 +314,7 @@ mod tests {
     #[test]
     fn rail_overflow_counts_gaps() {
         let rail = Rail {
+            vertical: false,
             id: 7,
             x: 0.0,
             y: 0.0,

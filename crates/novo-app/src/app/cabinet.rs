@@ -18,6 +18,7 @@ use novo_layout::plan::Plan;
 use novo_layout::state::CabinetLayout;
 
 use super::cabinet_door::DoorState;
+use super::cabinet_inspector;
 use super::{Level, NovoApp};
 use crate::theme;
 
@@ -47,6 +48,10 @@ pub(super) struct CabinetState {
     pub(super) keys: Vec<String>,
     /// The door and depth panel: its form and the model value it follows.
     door: DoorState,
+    /// The table face (Ctrl+T) is shown instead of the plate.
+    pub(super) table: bool,
+    /// The plate card of the inspector is shown with nothing selected.
+    pub(super) plate_card: bool,
 }
 
 /// A placed device being dragged across the plate.
@@ -75,6 +80,8 @@ impl CabinetState {
             ghost: None,
             keys: Vec::new(),
             door: DoorState::default(),
+            table: false,
+            plate_card: false,
         }
     }
 }
@@ -84,9 +91,13 @@ pub(super) enum Ask {
     Panel(DeviceTag),
     CreateCabinet(DeviceTag),
     SetPlate(StructureId),
+    /// Set the plate to new dimensions from the inspector.
+    SetPlateSize(StructureId, MountingPlate),
     PlaceAll,
     Accept,
     Cancel,
+    ToggleTable,
+    TogglePlateCard,
     /// Place or move a device with its top left at `(x, y)` mm.
     Drop(u64, f64, f64),
     Rotate(Vec<u64>),
@@ -149,6 +160,97 @@ pub(super) fn cabinet_view(layout: &CabinetLayout, tag_of: &impl Fn(u64) -> Stri
     }
 }
 
+/// What is wrong with a placed device, in words: the hover text of its mark
+/// and the table's Problems column.
+pub(super) fn problem_lines(
+    layout: &CabinetLayout,
+    id: u64,
+    tag_of: &impl Fn(u64) -> String,
+) -> Vec<String> {
+    let report = layout.report();
+    let mut lines = Vec::new();
+    for &(a, b) in &report.collisions {
+        if a == id || b == id {
+            lines.push(format!("Overlaps {}", tag_of(if a == id { b } else { a })));
+        }
+    }
+    if report.outside.contains(&id) {
+        lines.push("Reaches past the usable plate".to_owned());
+    }
+    for &(a, b, gap) in &report.too_close {
+        if a == id || b == id {
+            lines.push(format!(
+                "Only {gap:.0} mm from {}",
+                tag_of(if a == id { b } else { a })
+            ));
+        }
+    }
+    if let Some(p) = layout.placements.iter().find(|p| p.id == id) {
+        for &(rail, over) in &report.rail_overflows {
+            if p.rail == Some(rail) {
+                lines.push(format!("Its rail is {over:.0} mm too short"));
+            }
+        }
+        if p.size.guessed {
+            lines.push("Size is a guess: the part has none".to_owned());
+        }
+    }
+    lines
+}
+
+/// The table face (Ctrl+T): every device of the panel with where it is and
+/// what is wrong.
+fn cabinet_table(
+    ui: &mut egui::Ui,
+    layout: &CabinetLayout,
+    cands: &[novo_layout::plan::Candidate],
+    tag_of: &impl Fn(u64) -> String,
+) {
+    egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
+        egui::Grid::new("cabinet_table")
+            .striped(true)
+            .num_columns(7)
+            .spacing([18.0, 4.0])
+            .show(ui, |ui| {
+                for head in [
+                    "Device",
+                    "Size (mm)",
+                    "X",
+                    "Y",
+                    "Turned",
+                    "Rail",
+                    "Problems",
+                ] {
+                    ui.strong(head);
+                }
+                ui.end_row();
+                for c in cands {
+                    ui.label(tag_of(c.id));
+                    let size = format!("{} x {}", c.size.width, c.size.height);
+                    match layout.placements.iter().find(|p| p.id == c.id) {
+                        Some(p) => {
+                            ui.label(size);
+                            ui.label(format!("{}", p.x));
+                            ui.label(format!("{}", p.y));
+                            ui.label(if p.rotated { "yes" } else { "" });
+                            ui.label(p.rail.map(|r| format!("#{r}")).unwrap_or_default());
+                            ui.label(problem_lines(layout, c.id, tag_of).join("; "));
+                        }
+                        None => {
+                            ui.label(size);
+                            ui.weak("");
+                            ui.weak("");
+                            ui.weak("");
+                            ui.weak("");
+                            ui.weak("Unplaced");
+                        }
+                    }
+                    ui.end_row();
+                }
+            });
+    });
+}
+
 impl NovoApp {
     /// The Cabinet canvas, in place of the schematic canvas.
     pub(super) fn cabinet_show(&mut self, ui: &mut egui::Ui) {
@@ -185,6 +287,9 @@ impl NovoApp {
         let layout = structure.and_then(|s| load(project, s));
         let cands = structure
             .map(|s| candidates(project, s))
+            .unwrap_or_default();
+        let sizing_devices = structure
+            .map(|s| novo_layout::sizing_model::sizing_devices(project, s))
             .unwrap_or_default();
         let tag_of = |id: u64| {
             project
@@ -277,6 +382,24 @@ impl NovoApp {
                         ask = Some(Ask::PlaceAll);
                     }
                 }
+                if !self.cabinet.table
+                    && ui
+                        .selectable_label(self.cabinet.plate_card, "Plate")
+                        .on_hover_text("Size and fill of the mounting plate")
+                        .clicked()
+                {
+                    ask = Some(Ask::TogglePlateCard);
+                }
+                if ui
+                    .selectable_label(self.cabinet.table, "Table")
+                    .on_hover_text("Devices as a table (Ctrl+T)")
+                    .clicked()
+                {
+                    ask = Some(Ask::ToggleTable);
+                }
+                if ui.button("Size enclosure").clicked() {
+                    self.sizing.panel_open = !self.sizing.panel_open;
+                }
                 ui.weak(format!(
                     "{placed} placed, {unplaced} unplaced, {problems} {}",
                     if problems == 1 { "problem" } else { "problems" }
@@ -286,6 +409,14 @@ impl NovoApp {
         ui.separator();
 
         match shown {
+            Some(shown) if self.cabinet.table => {
+                // Keys, drags and the landing box belong to the plate: none
+                // may wait there while the table is shown.
+                self.cabinet.keys.clear();
+                self.cabinet.drag = None;
+                self.cabinet.ghost = None;
+                cabinet_table(ui, &shown, &cands, &tag_of);
+            }
             Some(shown) => {
                 let unplaced_list: Vec<(u64, String, String)> = layout
                     .as_ref()
@@ -324,14 +455,33 @@ impl NovoApp {
                         }
                     });
 
-                egui::Panel::right("cabinet_door")
-                    .exact_size(280.0)
-                    .resizable(false)
-                    .show(ui, |ui| {
-                        if let Some(a) = self.cabinet.door.show(ui, &shown, &tag_of) {
-                            ask = Some(a);
-                        }
-                    });
+                let selected: Vec<u64> = self
+                    .cabinet
+                    .view
+                    .selection
+                    .ids()
+                    .iter()
+                    .filter_map(|i| novo_canvas::cabinet::box_of(*i))
+                    .collect();
+                // The inspector: with a selection, or the plate card when it
+                // is switched on; otherwise the plate gets the whole window.
+                let inspector = match (&layout, structure) {
+                    (Some(stored), Some(s)) if !selected.is_empty() || self.cabinet.plate_card => {
+                        let facts = cabinet_inspector::gather(
+                            project, s, stored, &shown, &selected, &tag_of,
+                        );
+                        // On the side away from the selection.
+                        let centre = shown
+                            .placements
+                            .iter()
+                            .filter(|p| selected.contains(&p.id))
+                            .map(|p| p.footprint().x + p.footprint().w / 2.0)
+                            .sum::<f64>()
+                            / selected.len().max(1) as f64;
+                        Some((facts, centre > shown.plate.width / 2.0))
+                    }
+                    _ => None,
+                };
 
                 let view = cabinet_view(&shown, &tag_of);
                 self.cabinet.scene.set(&view);
@@ -340,6 +490,31 @@ impl NovoApp {
                     self.cabinet.fitted = location.clone();
                 }
                 let out = self.cabinet.view.show(ui, self.cabinet.scene.scene());
+                if let Some((facts, left)) = &inspector
+                    && let Some(a) = cabinet_inspector::overlay(
+                        ui.ctx(),
+                        out.response.rect,
+                        *left,
+                        facts,
+                        &mut self.cabinet.door,
+                        &shown,
+                        &tag_of,
+                    )
+                {
+                    ask = Some(a);
+                }
+                if let Some(id) = out.hovered.and_then(novo_canvas::cabinet::box_of) {
+                    let lines = problem_lines(&shown, id, &tag_of);
+                    out.response.clone().on_hover_ui_at_pointer(|ui| {
+                        ui.strong(tag_of(id));
+                        if lines.is_empty() {
+                            ui.weak("No problems");
+                        }
+                        for line in &lines {
+                            ui.label(line);
+                        }
+                    });
+                }
                 // Enter and Escape belong to the palette or a text field when
                 // one is open.
                 let typing = self.wb.field.is_open()
@@ -454,6 +629,9 @@ impl NovoApp {
             }
         }
 
+        super::sizing::show_window(ui.ctx(), &mut self.sizing, &sizing_devices);
+        super::sizing::show_editor(ui.ctx(), &mut self.sizing);
+
         if let Some(ask) = ask {
             self.cabinet_ask(ask, structure, layout, &cands);
         }
@@ -472,6 +650,8 @@ impl NovoApp {
                 self.cabinet.preview = None;
             }
             Ask::Cancel => self.cabinet.preview = None,
+            Ask::ToggleTable => self.cabinet.table ^= true,
+            Ask::TogglePlateCard => self.cabinet.plate_card ^= true,
             Ask::PlaceAll => {
                 if let Some(layout) = layout {
                     let plan = layout.preview(cands);
@@ -523,6 +703,9 @@ impl NovoApp {
                 self.cabinet_edit("Set inside and door", move |tx| {
                     set_enclosure(tx, structure, &enclosure)
                 });
+            }
+            Ask::SetPlateSize(s, plate) => {
+                self.cabinet_edit("Set plate size", move |tx| set_plate(tx, s, plate));
             }
             Ask::SetPlate(s) => {
                 self.cabinet_edit("Set plate", move |tx| set_plate(tx, s, DEFAULT_PLATE));
