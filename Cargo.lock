@@ -1963,6 +1963,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-plc"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "novo-py"
 version = "0.1.0"
 dependencies = [

@@ -6,10 +6,10 @@ Crate: `novo-plc` (registered on main, not created yet). Design:
 `docs/design/plc.md`.
 
 ## Done
-- Design doc `docs/design/plc.md` (PR 1).
+- Design doc `docs/design/plc.md` (#143, merged).
 
 ## Next, in order
-1. Design PR reviewed (design and workflow reviewer + main reviewer).
+1. (done) Design PR #143 merged.
 2. `novo-plc` skeleton: card layout parser (`DI16 DQ8`), address spaces,
    next free start for a new card, address formatting (IEC, Siemens,
    Rockwell, Plain). Pure functions, unit tests.
