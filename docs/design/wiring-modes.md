@@ -23,8 +23,8 @@ they differ, DESIGN wins.
     The refusal is typed data (`Refusal { other: WireId, stretch }`) returned
     by the engine entry, so tests assert on it; the UI draws it live
     (`Clicked::Refused`).
-  - Same conductor: merge (survivor keeps number and text; two different
-    explicit numbers refuse). Same pin and direction: derived junction.
+  - No merging of wires (DESIGN #169): any overlapping wire is nudged in
+    Corners or refused in Lines. Same pin and direction: derived junction.
   - Move with no room: `settle_wire` takes one flag. Interactive (drag or
     keyboard nudge): refuse or accept as DESIGN decides (design reviewer
     proposes refuse). Non-interactive (scripts, AI edits, undo/redo, file
@@ -63,7 +63,8 @@ they differ, DESIGN wins.
 6. A route through another conductor's pin or junction is refused.
 7. Two wires leaving one pin: derived junction, potentials and cross
    references unchanged, one undo step.
-8. Same-conductor overlap merges; different explicit numbers refuse.
+8. Two wires of one conductor that would overlap are handled like any other
+   overlap (nudge in Corners, refuse in Lines); no merge.
 9. T-junction onto a different declared potential: refused with the reason.
 10. Crossing: no dot, no overlap report.
 11. Move a symbol: wires settled, preview equals commit, one undo restores.
