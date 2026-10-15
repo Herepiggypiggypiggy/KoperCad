@@ -313,3 +313,21 @@ fn a_problem_row_selects_its_device_on_the_plate() {
         vec![7]
     );
 }
+
+#[test]
+fn heat_commands_open_the_cabinet_and_toggle_the_layers() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert!(!d.app.cabinet.heat.on);
+    d.app.run_command(&ctx, "heat.toggle", None);
+    assert!(d.app.workspace() == Workspace::Cabinet && d.app.cabinet.heat.on);
+    d.frame();
+    d.app.run_command(&ctx, "heat.airflow", None);
+    assert!(d.app.cabinet.heat.airflow);
+    d.frame();
+    d.app.run_command(&ctx, "heat.toggle", None);
+    assert!(!d.app.cabinet.heat.on);
+}

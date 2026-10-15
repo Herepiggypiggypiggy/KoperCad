@@ -11,6 +11,7 @@ pub mod brand;
 pub mod canvas;
 mod density;
 pub mod fonts;
+pub mod heat;
 pub mod icons;
 mod metrics;
 mod palette;
