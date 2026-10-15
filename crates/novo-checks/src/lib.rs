@@ -33,6 +33,10 @@
 //! | [`UnplacedDevice`](ProblemKind::UnplacedDevice) | info | A device not yet placed on a mounting plate |
 //! | [`WireWithoutDuct`](ProblemKind::WireWithoutDuct) | warning | A wire between placed devices that no duct serves |
 //! | [`OverfullDuct`](ProblemKind::OverfullDuct) | warning | A duct filled beyond its limit |
+//! | [`DeviceCollision`](ProblemKind::DeviceCollision) | error | Two devices overlapping on a mounting plate |
+//! | [`DeviceOutsidePlate`](ProblemKind::DeviceOutsidePlate) | error | A device beyond the usable area of its plate |
+//! | [`DevicesTooClose`](ProblemKind::DevicesTooClose) | warning | Two devices closer than their clearance |
+//! | [`RailOverflow`](ProblemKind::RailOverflow) | warning | Devices needing more room than their DIN rail has |
 //!
 //! A problem can be waived with a reason ([`waive`]); [`check_open`] leaves
 //! waived problems out and [`waived_problems`] lists them for the report.
@@ -159,11 +163,20 @@ pub enum ProblemKind {
     WireWithoutDuct,
     /// A duct carrying more wires than its fill limit (novo-routing).
     OverfullDuct,
+    /// Two devices whose footprints overlap on a mounting plate
+    /// (novo-layout).
+    DeviceCollision,
+    /// A device that leaves the usable area of its mounting plate.
+    DeviceOutsidePlate,
+    /// Two devices closer than the clearance they need.
+    DevicesTooClose,
+    /// Devices on a DIN rail that need more room than the rail has.
+    RailOverflow,
 }
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 22] = [
+    pub const ALL: [ProblemKind; 26] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -186,6 +199,10 @@ impl ProblemKind {
         ProblemKind::UnplacedDevice,
         ProblemKind::WireWithoutDuct,
         ProblemKind::OverfullDuct,
+        ProblemKind::DeviceCollision,
+        ProblemKind::DeviceOutsidePlate,
+        ProblemKind::DevicesTooClose,
+        ProblemKind::RailOverflow,
     ];
 
     pub fn severity(self) -> Severity {
@@ -193,7 +210,9 @@ impl ProblemKind {
             ProblemKind::DuplicateTag
             | ProblemKind::TooManyContacts
             | ProblemKind::PotentialConflict
-            | ProblemKind::ShortCircuit => Severity::Error,
+            | ProblemKind::ShortCircuit
+            | ProblemKind::DeviceCollision
+            | ProblemKind::DeviceOutsidePlate => Severity::Error,
             ProblemKind::UnconnectedPin
             | ProblemKind::LoneInterruption
             | ProblemKind::NoMainFunction
@@ -209,6 +228,8 @@ impl ProblemKind {
             | ProblemKind::VoltageDrop
             | ProblemKind::WireWithoutDuct
             | ProblemKind::OverfullDuct
+            | ProblemKind::DevicesTooClose
+            | ProblemKind::RailOverflow
             | ProblemKind::Plc => Severity::Warning,
             ProblemKind::MissingPart | ProblemKind::UnplacedDevice => Severity::Info,
         }
@@ -239,6 +260,10 @@ impl ProblemKind {
             ProblemKind::UnplacedDevice => "Unplaced device",
             ProblemKind::WireWithoutDuct => "Wire without duct",
             ProblemKind::OverfullDuct => "Overfull duct",
+            ProblemKind::DeviceCollision => "Devices overlap",
+            ProblemKind::DeviceOutsidePlate => "Device off the plate",
+            ProblemKind::DevicesTooClose => "Devices too close",
+            ProblemKind::RailOverflow => "Rail overfull",
         }
     }
 
@@ -267,6 +292,10 @@ impl ProblemKind {
             ProblemKind::UnplacedDevice => "check.unplaced_device",
             ProblemKind::WireWithoutDuct => "check.wire_without_duct",
             ProblemKind::OverfullDuct => "check.overfull_duct",
+            ProblemKind::DeviceCollision => "check.device_collision",
+            ProblemKind::DeviceOutsidePlate => "check.device_outside_plate",
+            ProblemKind::DevicesTooClose => "check.devices_too_close",
+            ProblemKind::RailOverflow => "check.rail_overflow",
         }
     }
 }
@@ -377,6 +406,7 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     checks::open_wires(&cx, &mut problems);
     physical::unplaced_devices(&cx, &mut problems);
     physical::routing(&cx, &mut problems);
+    physical::layout(&cx, &mut problems);
     cx.sort(&mut problems);
     problems
 }

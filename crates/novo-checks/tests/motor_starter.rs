@@ -205,6 +205,10 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         ProblemKind::UnplacedDevice,
         ProblemKind::WireWithoutDuct,
         ProblemKind::OverfullDuct,
+        ProblemKind::DeviceCollision,
+        ProblemKind::DeviceOutsidePlate,
+        ProblemKind::DevicesTooClose,
+        ProblemKind::RailOverflow,
     ];
     let kinds: Vec<ProblemKind> = ProblemKind::ALL
         .into_iter()
