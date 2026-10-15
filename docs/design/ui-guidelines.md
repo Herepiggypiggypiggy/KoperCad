@@ -148,3 +148,13 @@ selection, hover, rubber band, snap marker) and `novo_canvas::model::ModelStyle`
   (`assets/branding/icon.svg`).
 - Tagline: "Electrical design, without the weight".
 - Window icon and installer icon come from `assets/branding`; see its README.
+
+## Label placement
+
+One rule for every symbol: the device tag, terminal number and potential
+feed name sit to the left of the symbol, right-aligned and about 3 mm clear,
+centred on the symbol (145 of 151 library symbols already do; terminals and
+potential feeds had disagreed). A terminal strip's own name sits left of the
+run, clear of the terminals' labels. Only the semiconductors with a control
+terminal on the left (thyristor, triac, transistors) keep their tag on the
+right, so it does not cross the gate.
