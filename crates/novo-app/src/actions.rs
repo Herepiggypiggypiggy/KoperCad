@@ -22,6 +22,7 @@ pub enum Action {
     ShowCabinet,
     SizeEnclosure,
     EnclosureList,
+    MotorStart,
     PinOutline,
     FocusMode,
     FullScreen,
@@ -47,6 +48,7 @@ impl Action {
         Action::ShowCabinet,
         Action::SizeEnclosure,
         Action::EnclosureList,
+        Action::MotorStart,
         Action::PinOutline,
         Action::FocusMode,
         Action::FullScreen,
@@ -74,6 +76,7 @@ impl Action {
             Action::ShowCabinet => "view.cabinet",
             Action::SizeEnclosure => "cabinet.size-enclosure",
             Action::EnclosureList => "cabinet.enclosures",
+            Action::MotorStart => "simulate.motor-start",
             Action::PinOutline => "view.pin_outline",
             Action::FocusMode => "view.focus",
             Action::FullScreen => "view.full_screen",
@@ -104,6 +107,7 @@ impl Action {
             Action::ShowCabinet => "Cabinet",
             Action::SizeEnclosure => "Size the enclosure…",
             Action::EnclosureList => "Enclosures…",
+            Action::MotorStart => "Simulate motor start…",
             Action::PinOutline => "Pin outline",
             Action::FocusMode => "Focus mode",
             Action::FullScreen => "Full screen",
@@ -131,6 +135,7 @@ impl Action {
             | Action::ShowCabinet
             | Action::SizeEnclosure
             | Action::EnclosureList
+            | Action::MotorStart
             | Action::PinOutline
             | Action::FocusMode
             | Action::FullScreen
@@ -163,7 +168,8 @@ impl Action {
             | Action::TryFastKeys
             | Action::ShowWalkthrough
             | Action::SizeEnclosure
-            | Action::EnclosureList => return None,
+            | Action::EnclosureList
+            | Action::MotorStart => return None,
         };
         Some(KeyboardShortcut::new(modifiers, key))
     }
@@ -286,6 +292,20 @@ mod tests {
     fn ids_round_trip() {
         for &a in Action::ALL {
             assert_eq!(Action::from_id(a.id()), Some(a));
+        }
+    }
+
+    #[test]
+    fn every_action_is_a_command_in_the_registry() {
+        // One list of commands (docs/design/workspaces.md §5.1): the menus
+        // and the command field read novo-workflow's registry, so an
+        // action missing there would have no menu row and no palette row.
+        for &a in Action::ALL {
+            assert!(
+                novo_workflow::commands::is_known(a.id()),
+                "{a:?} ({}) is not in the command registry",
+                a.id()
+            );
         }
     }
 
