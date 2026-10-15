@@ -4,6 +4,7 @@ use novo_core::{CabinetPlacement, DeviceTag, Project, Rail, Value};
 
 use super::cabinet::Ask;
 use super::gate1_tests::Drive;
+use super::workspace::Workspace;
 use crate::actions::Action;
 
 fn add_cabinet(d: &mut Drive) {
@@ -43,7 +44,7 @@ fn place_all_previews_then_accepts_as_one_undo_step() {
     add_cabinet(&mut d);
     d.app.run(&ctx, Action::ShowCabinet);
     d.frame();
-    assert!(d.app.cabinet_open);
+    assert_eq!(d.app.workspace(), Workspace::Cabinet);
     assert_eq!(
         d.app.cabinet.location.as_ref().unwrap().to_string(),
         "+CAB1"
@@ -80,7 +81,7 @@ fn place_all_previews_then_accepts_as_one_undo_step() {
     assert_eq!(project(&d).all::<Rail>().count(), 0);
 
     d.app.run(&ctx, Action::ShowSchematic);
-    assert!(!d.app.cabinet_open);
+    assert_eq!(d.app.workspace(), Workspace::Schematic);
 }
 
 #[test]
@@ -135,9 +136,9 @@ fn picking_a_page_leaves_the_cabinet() {
     let page = d.app.current_page.expect("a page is shown");
     d.app.run(&ctx, Action::ShowCabinet);
     d.frame();
-    assert!(d.app.cabinet_open);
+    assert_eq!(d.app.workspace(), Workspace::Cabinet);
     d.app.show_page(page);
-    assert!(!d.app.cabinet_open);
+    assert_eq!(d.app.workspace(), Workspace::Schematic);
 }
 
 #[test]
@@ -160,6 +161,175 @@ fn a_ghost_is_drawn_but_never_stored() {
     assert_eq!(project(&d).all::<CabinetPlacement>().count(), 0);
     // Without a hovering payload the ghost is cleared again.
     assert!(d.app.cabinet.ghost.is_none());
+}
+
+#[test]
+fn the_table_face_toggles_and_problems_are_in_words() {
+    use novo_layout::state::CabinetLayout;
+    use novo_layout::{Plate, Size};
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    d.app.run_command(&ctx, "view.cabinet_table", None);
+    assert!(d.app.workspace() == Workspace::Cabinet && d.app.cabinet.table);
+    d.frame();
+    d.app.run_command(&ctx, "view.cabinet_table", None);
+    assert!(d.app.workspace() == Workspace::Cabinet && !d.app.cabinet.table);
+    d.frame();
+
+    // Rotate and delete from the palette go to the Cabinet, not the page.
+    d.app.run_command(&ctx, "edit.delete", None);
+    assert_eq!(d.app.cabinet.keys, vec!["edit.delete".to_owned()]);
+
+    let mut l = CabinetLayout::new(Plate {
+        width: 200.0,
+        height: 200.0,
+        margin: 10.0,
+    });
+    let size = Size::from_part(Some(45.0), Some(90.0));
+    l.drop_device(1, size, 50.0, 50.0);
+    l.drop_device(2, size, 60.0, 50.0);
+    l.drop_device(3, Size::from_part(None, None), 0.0, 0.0);
+    let name = |id: u64| format!("-K{id}");
+    let a = super::cabinet::problem_lines(&l, 1, &name);
+    assert_eq!(a[0], "Overlaps -K2");
+    assert_eq!(a[1], "Only 5 mm from -K3");
+    let c = super::cabinet::problem_lines(&l, 3, &name);
+    assert!(c.iter().any(|t| t.contains("past the usable plate")));
+    assert!(c.iter().any(|t| t.contains("guess")));
+}
+
+#[test]
+fn keys_pressed_in_the_table_do_not_wait_for_the_plate() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    d.app.run_command(&ctx, "view.cabinet_table", None);
+    d.frame();
+    d.app.run_command(&ctx, "edit.delete", None);
+    assert_eq!(d.app.cabinet.keys.len(), 1);
+    d.frame();
+    assert!(d.app.cabinet.keys.is_empty(), "the table drops the key");
+    // Back on the plate, nothing is deleted by the stale key.
+    d.app.run_command(&ctx, "view.cabinet_table", None);
+    d.frame();
+    assert!(!d.app.cabinet.table);
+    assert!(d.app.cabinet.keys.is_empty());
+}
+
+#[test]
+fn inspector_sets_the_plate_size_and_lists_a_device_s_problems() {
+    use super::cabinet_inspector::{Facts, gather};
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+
+    // The plate card is off until asked for, so the plate gets the window.
+    assert!(!d.app.cabinet.plate_card);
+    d.app
+        .cabinet_ask(Ask::TogglePlateCard, Some(cab), None, &[]);
+    assert!(d.app.cabinet.plate_card);
+
+    // The plate size comes from the inspector, as one undo step.
+    let plate = novo_core::MountingPlate {
+        width: 500.0,
+        height: 700.0,
+        margin: 15.0,
+    };
+    d.app
+        .cabinet_ask(Ask::SetPlateSize(cab, plate), Some(cab), None, &[]);
+    let stored = layout_of(&d, cab).unwrap();
+    assert_eq!((stored.plate.width, stored.plate.height), (500.0, 700.0));
+    d.app.run(&ctx, Action::Undo);
+    assert_eq!(layout_of(&d, cab).unwrap().plate.width, 600.0);
+
+    // Two devices on top of each other: each names the other.
+    let ids: Vec<u64> = novo_layout::model::candidates(project(&d), cab)
+        .iter()
+        .map(|c| c.id)
+        .collect();
+    for id in &ids[..2] {
+        let l = layout_of(&d, cab);
+        d.app
+            .cabinet_ask(Ask::Drop(*id, 100.0, 100.0), Some(cab), l, &[]);
+    }
+    let stored = layout_of(&d, cab).unwrap();
+    let Facts::Devices(facts) = gather(project(&d), cab, &stored, &stored, &ids[..1], &|id| {
+        id.to_string()
+    }) else {
+        panic!("a device is selected");
+    };
+    assert_eq!(facts.len(), 1);
+    assert!(facts[0].problems.iter().any(|p| p.starts_with("Overlaps")));
+    assert!(facts[0].part.as_deref().unwrap().starts_with("ACME"));
+    assert!(matches!(
+        gather(project(&d), cab, &stored, &stored, &[], &|id| id
+            .to_string()),
+        Facts::Plate { placed: 2, .. }
+    ));
+}
+
+#[test]
+fn a_problem_row_selects_its_device_on_the_plate() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    d.app.cabinet.table = true;
+    d.app.cabinet_ask(Ask::Select(7), None, None, &[]);
+    assert!(!d.app.cabinet.table);
+    assert_eq!(
+        d.app
+            .cabinet
+            .view
+            .selection
+            .ids()
+            .iter()
+            .filter_map(|i| novo_canvas::cabinet::box_of(*i))
+            .collect::<Vec<_>>(),
+        vec![7]
+    );
+}
+
+#[test]
+fn heat_commands_open_the_cabinet_and_toggle_the_layers() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert!(!d.app.cabinet.heat.on);
+    d.app.run_command(&ctx, "heat.toggle", None);
+    assert!(d.app.workspace() == Workspace::Cabinet && d.app.cabinet.heat.on);
+    d.frame();
+    d.app.run_command(&ctx, "heat.airflow", None);
+    assert!(d.app.cabinet.heat.airflow);
+    d.frame();
+    d.app.run_command(&ctx, "heat.toggle", None);
+    assert!(!d.app.cabinet.heat.on);
 }
 
 #[test]

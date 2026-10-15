@@ -180,12 +180,22 @@ impl NovoApp {
 }
 
 /// The strip table's columns, in the order a row writes its cells.
-const STRIP_HEADS: [&str; 7] = [
-    "Terminal", "Kind", "Jumper", "Internal", "External", "Cable", "State",
+const STRIP_HEADS: [&str; 10] = [
+    "Terminal",
+    "Kind",
+    "Jumper",
+    "Bridged to",
+    "Internal",
+    "Wire in",
+    "External",
+    "Wire out",
+    "Cable",
+    "State",
 ];
 
-/// The strip editor's rows as a table: terminal, kind, jumper, internal
-/// targets, external targets, cable, state. A drawn terminal's name selects it on the drawing (its
+/// The strip editor's rows as a table: terminal, kind, jumper, the
+/// terminals it is bridged to, internal targets and the wire numbers there,
+/// external targets and their wire numbers, cable, state. A drawn terminal's name selects it on the drawing (its
 /// first drawing, centred); returns that drawing when one was clicked.
 /// Rows drawn by a selected symbol show as selected.
 pub(super) fn strip_table(
@@ -237,8 +247,11 @@ pub(super) fn strip_table(
                     ui.label(novo_terminals::kind_label(row.kind));
                     ui.label(jumper_cell(row))
                         .on_hover_text("Terminals with the same jumper are connected");
+                    ui.label(screen_cell(screen, i, |r| r.bridged_with.join(", ")));
                     ui.label(join(row.internal_targets()));
+                    ui.label(screen_cell(screen, i, |r| r.wires_internal.join(", ")));
                     ui.label(join(row.external_targets()));
+                    ui.label(screen_cell(screen, i, |r| r.wires_external.join(", ")));
                     ui.label(cable_cell(screen, i));
                     ui.weak(row.state().label());
                     ui.end_row();
@@ -252,6 +265,16 @@ pub(super) fn strip_table(
 /// otherwise.
 fn jumper_cell(row: &novo_terminals::Row) -> String {
     row.jumper.map_or_else(String::new, |j| format!("J{j}"))
+}
+
+/// A cell of strip row `i` read from the connection screen, empty when the
+/// screen is shorter than the table.
+fn screen_cell(
+    screen: &novo_terminals::Screen,
+    i: usize,
+    cell: impl Fn(&novo_terminals::ScreenRow) -> String,
+) -> String {
+    screen.rows.get(i).map_or_else(String::new, cell)
 }
 
 /// The Cable cell of strip row `i`: the cables and cores of its external
@@ -446,6 +469,9 @@ mod tests {
                 external: Vec::new(),
                 cables: vec!["-W1 BK".into(), "-W2 BU".into()],
                 jumper: None,
+                bridged_with: Vec::new(),
+                wires_internal: Vec::new(),
+                wires_external: Vec::new(),
                 pages: Vec::new(),
                 build: String::new(),
                 spare: false,
@@ -456,9 +482,54 @@ mod tests {
     }
 
     #[test]
-    fn the_cable_column_sits_between_external_and_state() {
-        assert_eq!(STRIP_HEADS.len(), 7);
-        assert_eq!(STRIP_HEADS[4..], ["External", "Cable", "State"]);
+    fn wire_and_bridge_cells_come_from_the_screen_row() {
+        let mut doc = novo_core::Document::default();
+        let (strip, _) = doc
+            .transact("strip", |tx| {
+                tx.add_terminal_strip(novo_core::DeviceTag::parse("-X1")?)
+            })
+            .unwrap();
+        let screen = novo_terminals::Screen {
+            strip,
+            tag: "-X1".into(),
+            rows: vec![novo_terminals::ScreenRow {
+                internal: Vec::new(),
+                terminal: "1".into(),
+                kind: "feed-through".into(),
+                external: Vec::new(),
+                cables: Vec::new(),
+                jumper: Some(1),
+                bridged_with: vec!["2".into(), "3".into()],
+                wires_internal: vec!["101".into()],
+                wires_external: vec!["201".into(), "202".into()],
+                pages: Vec::new(),
+                build: String::new(),
+                spare: false,
+            }],
+        };
+        assert_eq!(
+            screen_cell(&screen, 0, |r| r.bridged_with.join(", ")),
+            "2, 3"
+        );
+        assert_eq!(
+            screen_cell(&screen, 0, |r| r.wires_internal.join(", ")),
+            "101"
+        );
+        assert_eq!(
+            screen_cell(&screen, 0, |r| r.wires_external.join(", ")),
+            "201, 202"
+        );
+        assert_eq!(screen_cell(&screen, 5, |r| r.wires_internal.join(", ")), "");
+    }
+
+    #[test]
+    fn the_wire_and_cable_columns_sit_beside_their_targets() {
+        assert_eq!(STRIP_HEADS.len(), 10);
+        assert_eq!(STRIP_HEADS[3..5], ["Bridged to", "Internal"]);
+        assert_eq!(
+            STRIP_HEADS[5..],
+            ["Wire in", "External", "Wire out", "Cable", "State"]
+        );
     }
 
     #[test]
