@@ -1,8 +1,9 @@
-//! The Cabinet inspector: the panel-building data of the selected placed
+//! A section for the Cabinet inspector: the panel-building data of a placed
 //! device (power loss, mounting type and the four clearances), editable in
-//! place. A stand-in until the full property sheet lands; it edits through
-//! `novo_parts::PropertySheet`, so the checks and the one-undo-step command
-//! are the sheet's.
+//! place. The inspector (`cabinet_inspector.rs`) calls [`show`] inside its
+//! device block and passes the edit on as `Ask::SetPanelValue`; [`command`]
+//! turns it into the validated one-undo-step command, through
+//! `novo_parts::PropertySheet`.
 
 use eframe::egui;
 use novo_core::{AnyId, Device, DeviceId, Project};
@@ -45,14 +46,14 @@ pub(super) fn panel_data(project: &Project, device: &Device) -> PanelData {
     PanelData::of_device(&device.properties, part)
 }
 
-/// Draws the inspector for the selected device and returns the edit the
-/// user just committed (Enter or leaving the field), if any.
+/// Draws the section for a placed device and returns the edit the user just
+/// committed (Enter or leaving the field), if any.
+#[allow(dead_code)] // called by the Cabinet inspector once it is on main
 pub(super) fn show(
     ui: &mut egui::Ui,
     fields: &mut PanelFields,
     project: &Project,
     id: u64,
-    tag: &str,
 ) -> Option<PanelEdit> {
     let device = project.get::<Device>(DeviceId::from(id))?;
     let data = panel_data(project, device);
@@ -65,8 +66,8 @@ pub(super) fn show(
     ];
     let mut edit = None;
     ui.add_space(6.0);
-    ui.strong(tag);
-    ui.weak("Panel data. A value here overrides the part's.");
+    ui.strong("Panel data");
+    ui.weak("A value here overrides the part's.");
     ui.add_space(6.0);
     for (i, (key, label)) in NUMBERS.iter().enumerate() {
         ui.label(*label);

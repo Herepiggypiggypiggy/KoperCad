@@ -43,8 +43,9 @@ pub(super) struct CabinetState {
     /// Keys the shell left for the Cabinet this frame (`edit.rotate`,
     /// `edit.delete`).
     pub(super) keys: Vec<String>,
-    /// Text buffers of the inspector for the selected device.
-    panel_fields: super::cabinet_panel::PanelFields,
+    /// Text buffers of the inspector's panel-data section.
+    #[allow(dead_code)] // read by the Cabinet inspector once it is on main
+    pub(super) panel_fields: super::cabinet_panel::PanelFields,
 }
 
 /// A placed device being dragged across the plate.
@@ -90,6 +91,7 @@ pub(super) enum Ask {
     Rotate(Vec<u64>),
     Remove(Vec<u64>),
     /// Set a panel-building value (power loss, mounting, clearance) of a device.
+    #[allow(dead_code)] // sent by the Cabinet inspector once it is on main
     SetPanelValue(super::cabinet_panel::PanelEdit),
 }
 
@@ -321,33 +323,6 @@ impl NovoApp {
                             ui.weak("Every device is placed");
                         }
                     });
-
-                // The inspector: panel data of the one selected placed device.
-                let selected_one = match self.cabinet.view.selection.ids() {
-                    [one] => novo_canvas::cabinet::box_of(*one),
-                    _ => None,
-                }
-                .filter(|id| {
-                    layout
-                        .as_ref()
-                        .is_some_and(|l| l.placements.iter().any(|p| p.id == *id))
-                });
-                if let Some(id) = selected_one {
-                    egui::Panel::right("cabinet_inspector")
-                        .exact_size(200.0)
-                        .resizable(false)
-                        .show(ui, |ui| {
-                            if let Some(edit) = super::cabinet_panel::show(
-                                ui,
-                                &mut self.cabinet.panel_fields,
-                                project,
-                                id,
-                                &tag_of(id),
-                            ) {
-                                ask = Some(Ask::SetPanelValue(edit));
-                            }
-                        });
-                }
 
                 let view = cabinet_view(&shown, &tag_of);
                 self.cabinet.scene.set(&view);

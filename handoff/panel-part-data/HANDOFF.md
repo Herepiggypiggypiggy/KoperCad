@@ -11,4 +11,4 @@ Decisions
 
 Resume: `cargo test -p novo-parts -p novo-layout`.
 
-UI: the Cabinet view has a right-hand inspector (`app/cabinet_panel.rs`) for the single selected placed device: power loss, mounting, four clearances. Edits go through `PropertySheet::edit` (validation, one undo step) and set the device's own value. Not done: the full property sheet / Parts window (UI integration: parts), editing the part itself, showing per-side gaps on the canvas (still one outline, largest side).
+UI: `app/cabinet_panel.rs` is a section for the Cabinet inspector (power loss, mounting, four clearances): `show(ui, fields, project, id) -> Option<PanelEdit>`, sent as `Ask::SetPanelValue`; `command()` validates (via `PropertySheet::edit`) and gives the one-undo-step command. The right panel itself belongs to UI integration (cabinet), PR #443 (`cabinet_inspector.rs`); it calls the section inside its device block. Until #443 is on main the section has no host (dead-code allows mark it) and the values are not editable in the app. Not done: the full property sheet / Parts window (UI integration: parts), per-side gaps on the canvas (still one outline).
