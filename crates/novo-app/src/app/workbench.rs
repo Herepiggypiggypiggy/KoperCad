@@ -22,6 +22,7 @@ use novo_workflow::keymap::{FAVOURITE_COMMANDS, Focus, Keymap};
 use novo_workflow::palette::{Mode, Sources, Target};
 use novo_xref::{LiveXref, Navigator, Place, Reference};
 
+use super::workspace::Workspace;
 use super::{Level, NovoApp};
 use crate::actions::Action;
 use crate::command_field::CommandField;
@@ -110,6 +111,8 @@ pub(crate) struct Workbench {
     pub(super) issue_filter: [bool; 3],
     /// F8 position in the problem list.
     pub(super) problem_at: Option<usize>,
+    /// A problem being waived (its index in the list) and the reason typed.
+    pub(super) waiving: Option<(usize, String)>,
     /// The last PDF written, for tests and the toast.
     pub(super) last_export: Option<PathBuf>,
     /// Hash of each spreadsheet export this session wrote, by path: only a
@@ -176,6 +179,7 @@ impl Default for Workbench {
             pill_rect: egui::Rect::NOTHING,
             issue_filter: [true; 3],
             problem_at: None,
+            waiving: None,
             last_export: None,
             sheet_exports: Default::default(),
             live: Default::default(),
@@ -239,6 +243,7 @@ const APP_COMMANDS: &[&str] = &[
     "check.previous_problem",
     "export.pdf",
     "export.commissioning",
+    "export.assembly",
     "export.sheets",
     "export.sheets_csv",
     "file.import_dxf_background",
@@ -472,15 +477,16 @@ impl NovoApp {
         if id == "edit.duplicate" {
             self.tour_tick("duplicate");
         }
-        if self.cabinet_open && matches!(id, "edit.rotate" | "edit.delete") {
+        if self.workspace() == Workspace::Cabinet && matches!(id, "edit.rotate" | "edit.delete") {
             self.cabinet.keys.push(id.to_owned());
             return;
         }
         let pointer = ctx.pointer_latest_pos();
         match id {
             "view.cabinet_table" if self.is_open() => {
-                self.cabinet.table = !(self.cabinet_open && self.cabinet.table);
-                self.cabinet_open = true;
+                let showing = self.workspace() == Workspace::Cabinet && self.cabinet.table;
+                self.cabinet.table = !showing;
+                self.switch_workspace(Workspace::Cabinet);
             }
             "tool.place" => match argument.filter(|a| !a.trim().is_empty()) {
                 Some(text) => self.wb.field.open_with(Mode::Place, text, pointer),
@@ -582,6 +588,9 @@ impl NovoApp {
                 self.export_pdf();
             }
             "export.commissioning" => self.export_commissioning_pdf(),
+            "export.assembly" => {
+                self.export_assembly();
+            }
             "export.sheets" => {
                 self.export_spreadsheet();
             }

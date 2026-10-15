@@ -34,6 +34,20 @@ impl NovoApp {
         self.export_pdf_to(&path)
     }
 
+    /// The design checks as report pages after the drawing. A clean
+    /// project prints none, so its PDF is the drawing alone.
+    fn checks_appendix(&self) -> Option<novo_pdf::Appendix> {
+        let lines = novo_checks::report_lines(self.backend.document()?.project());
+        // Headline and summary only: nothing to report.
+        (lines.len() > 2).then(|| novo_pdf::Appendix {
+            title: "Design checks".into(),
+            lines: lines
+                .into_iter()
+                .map(|(bold, text)| novo_pdf::AppendixLine { text, bold })
+                .collect(),
+        })
+    }
+
     /// Exports every page to `path`.
     pub fn export_pdf_to(&mut self, path: &Path) -> Option<PathBuf> {
         let summary = Summary::of(self.problems());
@@ -42,6 +56,7 @@ impl NovoApp {
             notes: self.xref_notes_by_page(),
             title_revisions: self.all_title_revisions(),
             changed_pages: self.pages_changed_since_latest(),
+            appendix: self.checks_appendix(),
             ..Default::default()
         };
         let doc = self.backend.document()?;
