@@ -21,3 +21,5 @@
 2026-10-14 22:15 UTC Restacked Structure (0a94030) and freeze (7368339) on top of #107 head 105cef4; patches 0001-0002 now; 651 tests pass.
 2026-10-14 22:45 UTC Blocks (DESIGN §7, workflow answers) on local ws02-blocks 89282d6, stacked on freeze; patch 0003. define_block/place_block/set_block_values/set_block_override/detach_block + commands; deleting a member detaches. 655 tests pass. Not yet: definition updates (apply new version keeping overrides), auto-marking overrides from edits, instance.page after MoveToPage.
 2026-10-14 22:25 UTC #107 merged (READY at 105cef4). Opening Structure+Dismissal PR from main (670 tests pass). Freeze and blocks rebased onto main.
+2026-10-15 02:50 UTC #117 READY (CI no logs, Actions down; commented). ws02-followups committed locally (675 tests). Logged WS-08 detach-on-add gap for blocks.
+2026-10-15 02:58 UTC #117 merged. Page freeze rebased on main 27c2e17 (680 tests pass), opening PR.

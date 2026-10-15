@@ -3,11 +3,21 @@
 ## State (2026-10-14 22:25 UTC)
 - #35, #45, #82, #101, #107 merged. The repo copy of this handoff (handoff/ws2/)
   is refreshed with each PR; the shared-folder copy may be newer.
-- Open: Structure enclosure + Dismissal PR (branch `claude/data-model-amzaxu`).
+- Open: page freeze PR (branch `claude/data-model-amzaxu`, rebased on main).
 - Queued locally, rebased on main 70248a3: `ws02-freeze` 3890938 (page
   freeze), then `ws02-blocks` 498e9a6 (blocks). One PR each, in that order,
   each after the previous merges. After Structure merges tell WS-11; after
   freeze merges tell WS-10.
+- #117 merged 2026-10-15 02:50 UTC. WS-11 told about the second dismissal
+  mechanism (terminal.suggest wire property).
+- Queued third: `ws02-followups` (on blocks): `Project::wires_leaving`,
+  isolated systems keep the shared PE, prefix validation.
+- Workflow (WS-08) note for blocks: structural edits detach both ways.
+  Adding a connection between two members of one instance, or a device
+  wired only to members, should detach ("connection -K1:13 to -F2:1
+  added"). A wire from a member out to the circuit keeps the link. Built
+  for connections (on ws02-blocks); a new device wired only to members is
+  not detected yet, since its first wire looks like a wire out.
 - Blocks follow-ups: definition update keeping overrides, marking overrides
   automatically from edits, instance.page after a move.
 - #107 review notes (non-blocking): a `wires_leaving(items)` query so the
