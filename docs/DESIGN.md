@@ -259,9 +259,9 @@ never changes meaning in the middle of work.
 | --- | --- | --- |
 | Text (tag, wire number, label) | Rename in place, as F2 | Nothing |
 | A device | Properties open, cursor in the tag | Nothing |
-| A wire | Edit its number in place | Ends or starts a wire |
+| A wire | Selects the whole wire (F2 edits its number) | Ends or starts a wire |
 | A pin | Starts a wire | Starts a wire |
-| Empty canvas | Starts a free wire | Starts a free wire, or ends the one in progress |
+| Empty canvas | Starts a free wire (below) | Starts a free wire, or ends the one in progress |
 | A page tab | Rename the page | Rename the page |
 
 A double click in the Place mode places like a click and has no further
@@ -279,7 +279,10 @@ and every wire end that was on one of its pins stays behind as an open
 end (ring and Unconnected flag, `wire.open`, §4 open ends). Where the
 moved pins land on a wire or face another pin, the Auto connections
 setting decides whether they connect. Shift+drag takes the wires along,
-stretching them under the no-overlap rules. M
+stretching them under the no-overlap rules. Preferences, Moving, has the
+choice "Moving a symbol: leaves its wires / takes its wires along"; the
+choice only sets the default, and Shift always does the other one (the
+dock hint says "Shift: take wires" or "Shift: leave wires"). M
 keeps working as the keyboard move: it picks the selection up at the
 pointer and a click puts it down. Undo takes back one whole move. A
 press and drag on a wire moves the corner or segment under the pointer
@@ -742,13 +745,15 @@ click adds no extra corner and no zero-length segment.
   so a wire can be open at either or both ends (`wire.open` once per open
   end). A wire that ends where it started with no segment is discarded,
   never stored. A single click on empty canvas with no wire in progress
-  still does nothing, so a stray click never starts a wire.
+  still does nothing, so a stray click never starts a wire. From another
+  tool the wire is drawn in the Connect tool and the previous tool returns
+  when the wire ends (Esc or a double click), so no wire is left dangling.
 - Pressing on the end cap and dragging pulls the end; releasing on a pin
   or a wire connects it and the flag disappears. W on the end cap resumes
   the wire. Backspace in a resumed wire takes back its last corner.
-- In the Select tool a double click on a finished wire selects it and opens
-  its number for editing; in the Connect tool see the table under Double
-  click and drag.
+- In the Select tool a double click on a finished wire selects the whole
+  wire and F2 edits its number; in the Connect tool see the table under
+  Double click and drag.
 - The model needs a wire with a free end: WS-02 describes the flag
   (an endpoint that is a position, not a pin) in its pull request.
 
