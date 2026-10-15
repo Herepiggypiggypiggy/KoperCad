@@ -322,15 +322,14 @@ fn relay_band(class: RelayClass, ir_a: f64, i_a: f64) -> Option<TimeBand> {
     } else if x < 1.5 {
         loglog(&[(1.2, 7200.0), (1.5, class.max_at_1_5())], x)?
     } else {
-        let k = class.max_at_1_5() * 1.5 * 1.5;
-        let by_slope = k / (x * x);
-        // Never better than the class window at 7.2 Ir allows to claim:
-        // the guaranteed value there is tmax72, and the slope gives about
-        // the same.
-        if x >= 7.2 {
-            by_slope.min(tmax72 * (7.2 / x).powi(2))
+        // Between 1.5 and 7.2 Ir interpolate on log-log between the class
+        // time at 1.5 Ir and the class limit at 7.2 Ir (never faster than
+        // the pure I²t slope would claim); above 7.2 Ir fall off with I²t
+        // from the class limit.
+        if x <= 7.2 {
+            loglog(&[(1.5, class.max_at_1_5()), (7.2, tmax72)], x)?
         } else {
-            by_slope
+            tmax72 * (7.2 / x).powi(2)
         }
     };
     // Lower side: no trip within 2 h at 1.05 Ir, not before the class
@@ -432,6 +431,20 @@ fn electronic_band(e: &Electronic, i_a: f64) -> Option<TimeBand> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn relay_slowest_trip_at_7_2_ir_is_the_class_limit() {
+        // Class 10A: up to 10 s at 7.2 Ir, and never faster than the
+        // class time at 1.5 Ir interpolated toward it.
+        let c = Characteristic::Relay {
+            class: RelayClass::C10A,
+            ir_a: 10.0,
+        };
+        let b = c.band(72.0).unwrap();
+        near(b.t_max, 10.0, 1e-9);
+        let mid = c.band(30.0).unwrap();
+        assert!(mid.t_max > 10.0 && mid.t_max < 120.0, "{}", mid.t_max);
+    }
 
     fn near(a: f64, b: f64, rel: f64) {
         assert!((a - b).abs() <= rel * b.abs(), "{a} vs {b}");

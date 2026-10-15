@@ -418,7 +418,13 @@ fn protected_wires_checks(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Pro
         if let Some((ik, wire)) = worst
             && let Some(mut finding) = check_disconnection(ik, rated, trip)
         {
-            finding.message = format!("{tag}: {}", finding.message);
+            // Limit: the supply is taken to sit at this device's line side;
+            // feeder cable upstream of it is not walked, so the real
+            // earth-fault current can be lower than this figure.
+            finding.message = format!(
+                "{tag}: {} (feeder impedance upstream of the device is not included)",
+                finding.message
+            );
             let mut at = marks(cx, device);
             at.push(AnyId::Wire(wire));
             out.push(problem(ProblemKind::DisconnectionTime, finding, at));

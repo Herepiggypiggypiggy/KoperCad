@@ -196,6 +196,9 @@ fn unknown(rule: Rule, title: &'static str, text: &str) -> Row {
 /// multiple of its rating.
 fn i2_factor(device: &Device) -> f64 {
     match device.characteristic {
+        // IEC 60269-1 conventional fusing current by rating.
+        Some(Characteristic::FuseGg { in_a }) if in_a < 4.0 + 1e-9 => 2.1,
+        Some(Characteristic::FuseGg { in_a }) if in_a < 16.0 => 1.9,
         Some(Characteristic::FuseGg { .. }) => 1.6,
         _ => 1.45,
     }
@@ -610,6 +613,17 @@ pub fn smallest_passing_section(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn conventional_fusing_factor_follows_the_fuse_rating() {
+        let fuse = |in_a| Device {
+            characteristic: Some(Characteristic::FuseGg { in_a }),
+            ..Device::default()
+        };
+        assert_eq!(i2_factor(&fuse(2.0)), 2.1);
+        assert_eq!(i2_factor(&fuse(10.0)), 1.9);
+        assert_eq!(i2_factor(&fuse(20.0)), 1.6);
+    }
     use crate::calc::curves::McbCurve;
     use crate::calc::network::SourceModel;
 

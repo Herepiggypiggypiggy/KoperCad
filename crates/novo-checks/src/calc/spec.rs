@@ -81,6 +81,16 @@ fn req_number(obj: &Value, key: &str, path: &str) -> Result<f64, String> {
     opt_number(obj, key, path)?.ok_or_else(|| format!("{path}.{key}: missing"))
 }
 
+/// A required number that must be greater than zero (ratings and loads).
+fn req_positive(obj: &Value, key: &str, path: &str) -> Result<f64, String> {
+    let v = req_number(obj, key, path)?;
+    if v > 0.0 {
+        Ok(v)
+    } else {
+        Err(format!("{path}.{key}: must be greater than zero"))
+    }
+}
+
 fn opt_text<'a>(obj: &'a Value, key: &str, path: &str) -> Result<Option<&'a str>, String> {
     match obj.get(key) {
         None | Some(Value::Null) => Ok(None),
@@ -122,7 +132,7 @@ fn supply(v: &Value) -> Result<(f64, SourceModel), String> {
 }
 
 fn device(v: &Value, path: &str) -> Result<Device, String> {
-    let rated = req_number(v, "rated_a", path)?;
+    let rated = req_positive(v, "rated_a", path)?;
     let kind = opt_text(v, "type", path)?
         .unwrap_or("none")
         .to_ascii_lowercase();
@@ -153,7 +163,7 @@ fn device(v: &Value, path: &str) -> Result<Device, String> {
         "mccb" | "acb" => {
             d.characteristic = Some(Characteristic::Electronic(Electronic {
                 in_a: rated,
-                ir_a: req_number(v, "ir_a", path)?,
+                ir_a: req_positive(v, "ir_a", path)?,
                 tr_s: req_number(v, "tr_s", path)?,
                 isd_x: req_number(v, "isd_x", path)?,
                 tsd_s: req_number(v, "tsd_s", path)?,
@@ -283,7 +293,7 @@ pub fn parse(root: &Value) -> Result<Plant, String> {
         )?;
         let design = CircuitDesign {
             name: name.clone(),
-            load_current_a: req_number(c, "load_a", &path)?,
+            load_current_a: req_positive(c, "load_a", &path)?,
             power_factor,
             supply: supply_kind,
             voltage: opt_number(c, "voltage", &path)?.unwrap_or(match supply_kind {
@@ -411,6 +421,13 @@ pub fn evaluate_all(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn ratings_and_loads_must_be_positive() {
+        let mut v = sample();
+        v["circuits"][0]["load_a"] = json!(0);
+        assert!(parse(&v).unwrap_err().contains("greater than zero"));
+    }
 
     fn sample() -> Value {
         json!({

@@ -256,8 +256,8 @@ mod tests {
         assert_eq!(grouping_factor(0), 1.0);
         assert_eq!(grouping_factor(1), 1.0);
         assert_eq!(grouping_factor(3), 0.70);
-        // Between listed counts the lower count's factor is kept (safe side).
-        assert_eq!(grouping_factor(10), 0.50);
+        // Between listed counts the next higher count's factor applies (safe side).
+        assert_eq!(grouping_factor(10), 0.45);
         assert_eq!(grouping_factor(40), 0.38);
     }
 

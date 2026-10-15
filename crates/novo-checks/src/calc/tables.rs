@@ -290,14 +290,13 @@ impl TableSet {
     }
 
     /// Grouping factor `k2` for `circuits` bunched circuits; between listed
-    /// counts the lower count's factor is kept (safe side), beyond the last
+    /// counts the next higher count's factor applies (safe side), beyond the last
     /// listed count the last factor applies.
     pub fn grouping_factor(&self, circuits: u32) -> f64 {
         let n = circuits.max(1);
         self.grouping
             .iter()
-            .rev()
-            .find(|(listed, _)| *listed <= n)
+            .find(|(listed, _)| *listed >= n)
             .or(self.grouping.last())
             .map_or(1.0, |(_, k)| *k)
     }
@@ -341,7 +340,7 @@ impl TableSet {
                 .filter(|k| !self.licensed_ampacity.contains(k))
                 .count();
             format!(
-                "Tables: {} ({}). {} ampacity columns are planning values not checked against the standard; load your licensed copy (Project settings > Electrical > Tables) before quoting these numbers.",
+                "Tables: {} ({}). {} ampacity columns are planning values not checked against the standard; load your licensed copy (`kopercad-cli calc --tables`; a Project settings entry is planned) before quoting these numbers.",
                 self.name, self.edition, unverified
             )
         }
@@ -460,6 +459,13 @@ fn parse_insulation(text: &str) -> Option<Insulation> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn grouping_between_listed_counts_uses_the_next_higher_count() {
+        let t = TableSet::builtin();
+        assert!(t.grouping_factor(10) <= t.grouping_factor(9));
+        assert!(t.grouping_factor(7) <= t.grouping_factor(6));
+    }
 
     #[test]
     fn builtin_is_unverified_and_says_so() {
