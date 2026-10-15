@@ -8,3 +8,4 @@
 2026-10-15 14:30 UTC #263 bb94e15 READY (corner/T preview; follow-ups: stored handle, hide piece on Lines pin drag).
 2026-10-15 14:40 UTC #262 re-READY on 9530630 (merge of main only).
 2026-10-15 14:45 UTC #266 baff400 READY (PE toggle, part search, grid double-click wire; even PR, taken at WS-01's request).
+2026-10-15 15:10 UTC #265 52b64f7 READY (label-only drag). #267 b41e837 CHANGES: test fails on main (#266 grid double-click vs wires), Delete on a run must delete wire, add label_drag guard. #260/#264 left to the original reviewer.
