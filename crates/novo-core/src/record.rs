@@ -10,9 +10,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 
 use crate::entity::{
-    BlockDefinition, BlockInstance, Cable, Device, Dismissal, Junction, Page, Part, Potential,
-    PotentialSystem, ProjectInfo, Properties, Revision, Structure, SymbolInstance, SymbolRole,
-    Terminal, Text, Wire,
+    BlockDefinition, BlockInstance, CabinetPlacement, Cable, Device, Dismissal, Junction, Page,
+    Part, Potential, PotentialSystem, ProjectInfo, Properties, Rail, Revision, Structure,
+    SymbolInstance, SymbolRole, Terminal, Text, Wire,
 };
 use crate::geom::Point;
 use crate::id::{AnyId, EntityKind, PageId};
@@ -40,6 +40,8 @@ pub enum Record {
     BlockDefinition(BlockDefinition),
     BlockInstance(BlockInstance),
     Revision(Revision),
+    Rail(Rail),
+    CabinetPlacement(CabinetPlacement),
 }
 
 impl Record {
@@ -61,6 +63,8 @@ impl Record {
             Record::BlockDefinition(r) => r.id.into(),
             Record::BlockInstance(r) => r.id.into(),
             Record::Revision(r) => r.id.into(),
+            Record::Rail(r) => r.id.into(),
+            Record::CabinetPlacement(r) => r.id.into(),
         }
     }
 
@@ -133,6 +137,12 @@ impl Record {
                 out.push(r.page.into());
             }
             Record::Revision(_) => {}
+            Record::Rail(r) => out.push(r.structure.into()),
+            Record::CabinetPlacement(r) => {
+                out.push(r.device.into());
+                out.push(r.structure.into());
+                out.extend(r.rail.map(AnyId::from));
+            }
         }
         out.sort();
         out.dedup();
@@ -157,6 +167,8 @@ impl Record {
             Record::BlockDefinition(r) => &r.properties,
             Record::BlockInstance(r) => &r.properties,
             Record::Revision(r) => &r.properties,
+            Record::Rail(r) => &r.properties,
+            Record::CabinetPlacement(r) => &r.properties,
         }
     }
 
@@ -179,6 +191,8 @@ impl Record {
             Record::BlockDefinition(r) => &mut r.properties,
             Record::BlockInstance(r) => &mut r.properties,
             Record::Revision(r) => &mut r.properties,
+            Record::Rail(r) => &mut r.properties,
+            Record::CabinetPlacement(r) => &mut r.properties,
         })
     }
 
@@ -270,11 +284,32 @@ impl Record {
                     None
                 }
             }
+            Record::Rail(r) => {
+                if !(r.x.is_finite() && r.y.is_finite()) {
+                    Some("position")
+                } else if !r.length.is_finite() {
+                    Some("length")
+                } else {
+                    None
+                }
+            }
+            Record::CabinetPlacement(r) => {
+                if !(r.x.is_finite() && r.y.is_finite()) {
+                    Some("position")
+                } else if !opt(r.rail_offset) {
+                    Some("rail_offset")
+                } else {
+                    None
+                }
+            }
+            Record::Structure(r) => r.plate.and_then(|p| {
+                (!(p.width.is_finite() && p.height.is_finite() && p.margin.is_finite()))
+                    .then_some("plate")
+            }),
             Record::Page(_)
             | Record::Device(_)
             | Record::Terminal(_)
             | Record::Part(_)
-            | Record::Structure(_)
             | Record::Dismissal(_)
             | Record::Revision(_) => None,
         };
@@ -300,6 +335,8 @@ impl Record {
             EntityKind::BlockDefinition => 13,
             EntityKind::BlockInstance => 14,
             EntityKind::Revision => 15,
+            EntityKind::Rail => 16,
+            EntityKind::CabinetPlacement => 17,
         }
     }
 }
@@ -546,4 +583,6 @@ impl_entity! {
     BlockDefinition => BlockDefinition, crate::id::BlockDefinitionId, block_definitions;
     BlockInstance => BlockInstance, crate::id::BlockInstanceId, block_instances;
     Revision => Revision, crate::id::RevisionId, revisions;
+    Rail => Rail, crate::id::RailId, rails;
+    CabinetPlacement => CabinetPlacement, crate::id::CabinetPlacementId, cabinet_placements;
 }
