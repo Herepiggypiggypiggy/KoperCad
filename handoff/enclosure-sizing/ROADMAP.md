@@ -6,7 +6,7 @@ Scope: recommend plate and enclosure size from devices, gaps, duct allowance and
 - PR 1: engine, CSV catalog, tests.
 
 ## Next
-1. Bridge: build `SizingDevice` list from an enclosure's devices (`device_size` plus part keys `depth_mm`, `power_loss_w`, `load_factor`; keys come from the Parts library thread, R0).
+1. (done) Bridge in `sizing_model.rs`. Next: use `novo_layout::enclosure` (#409) interior/depth instead of flat `depth_reserve`.
 2. Per-part clearances once the layout rules thread (R1) lands; replace `SizingDevice.clearance`.
 3. Enclosure depth and door swing (R2 thread): use its interior and setback fields instead of `depth_reserve`.
 4. Problem in `novo-checks` ("needs about N W of cooling").
