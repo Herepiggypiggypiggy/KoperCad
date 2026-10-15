@@ -32,6 +32,7 @@
 
 pub mod commands;
 pub mod duplicate;
+pub mod expr;
 pub mod fuzzy;
 pub mod history;
 pub mod insert;
@@ -40,8 +41,10 @@ pub mod language;
 pub mod locate;
 pub mod macro_place;
 pub mod menus;
+pub mod options;
 pub mod orientation;
 pub mod palette;
+pub mod parametric;
 pub mod renumber;
 pub mod switch;
 pub mod userkeys;
