@@ -2156,7 +2156,9 @@ name = "novo-view3d"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "egui",
  "glam",
+ "novo-theme",
 ]
 
 [[package]]
