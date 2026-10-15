@@ -359,15 +359,16 @@ progress" is a single button:
 
 ## 10. Suggested first lessons and who writes them
 
-Four content threads, one track each. Tracks are in `tracks.toml`; names below are suggestions the
-coordinator can reassign. IDs are the folder names.
+Four content threads, one track each, listed in `assets/lessons/tracks.toml`. Track titles are the
+ones the threads were given; lesson ids below are suggestions (the folder name), and each thread
+owns its list.
 
-| Track | Lessons |
+| Track (`track =`) | Lessons |
 | --- | --- |
-| **Getting started** (first-run walk-through thread) | `tour` (screen tour: dock, outline, inspector, pill, Ctrl+K, `?`), `fast-keys` (the #428 steps as a lesson), `first-schematic` (build the control circuit of the motor starter from `@blank`), `save-and-share` (save, autosave, Unsaved, PDF export) |
-| **Drawing** (editor, workflow, workspaces threads) | `wiring-modes`, `proposals-and-tags`, `duplicate-and-numbering`, `pages-and-functions`, `cross-references`, `potentials`, `blocks-and-macros` |
-| **Terminals, cables and reports** (terminals, cables, outputs threads) | `terminal-strips`, `connection-screens`, `cables-and-shields`, `wire-list-and-bom`, `design-checks`, `generated-pages` |
-| **Cabinet and beyond** (layout, 3D, sim, PLC, commissioning, interop threads) | `cabinet-layout`, `enclosure-sizing`, `view-3d`, `live-view`, `plc-io`, `commissioning`, `revisions-and-compare`, `import-dxf-and-parts`, `parts-library` |
+| **Schematic basics and motor control** (`basics`) | `tour` (screen tour: dock, outline, inspector, pill, Ctrl+K, `?`), `fast-keys` (the #428 steps as a lesson), `first-schematic` (build the control circuit of the motor starter from `@blank`), `wiring-modes`, `proposals-and-tags`, `duplicate-and-numbering`, `pages-and-functions`, `cross-references`, `potentials`, `motor-starter`, `save-and-share` |
+| **Terminals, PLC and documentation** (`terminals`) | `terminal-strips`, `connection-screens`, `cables-and-shields`, `plc-io`, `generated-pages`, `wire-list-and-bom`, `pdf-export` |
+| **Cabinet layout and panel building** (`cabinet`) | `cabinet-layout`, `enclosure-sizing`, `wire-routing`, `view-3d`, `panel-plate-drawing`, `commissioning` |
+| **Productivity, checks and data** (`productivity`) | `design-checks`, `blocks-and-macros`, `spreadsheets`, `revisions-and-compare`, `live-view`, `import-dxf-and-parts`, `parts-library` |
 
 Each lesson starts as `draft` until the control it teaches has an anchor on main, then flips to
 `ready` in its own PR.
