@@ -1,0 +1,32 @@
+format = 1
+id = "iec/operators/pushbutton_mushroom_no"
+name = "Mushroom push button, make contact"
+description = "Push button with a mushroom head (palm button), not latching, not an emergency stop."
+standard = "IEC 60617"
+category = "operators"
+function = "contact.no.push"
+keywords = ["mushroom", "palm", "push button", "make", "pb"]
+aliases = ["pbm"]
+
+connections = [
+  { id = "13", at = [0, 0], dir = "up" },
+  { id = "14", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-11.5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 5] },
+  { kind = "line", from = [0, 16], to = [0, 11] },
+  { kind = "line", from = [0, 11], to = [-4, 4] },
+  { kind = "line", from = [-1.714, 8], to = [-8, 8], stroke = "dashed" },
+  { kind = "polyline", points = [[-6.5, 6], [-8, 6], [-8, 10], [-6.5, 10]] },
+  { kind = "arc", center = [-8, 8], r = 2, start = 90, end = 270 },
+]
+
+[behavior]
+kind = "contact"
+normally = "open"
+poles = [["13", "14"]]

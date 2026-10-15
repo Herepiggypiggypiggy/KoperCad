@@ -66,14 +66,27 @@ pub fn letter_code_with(function: &str, rules: LetterRules) -> Option<&'static s
     Some(match parts[0] {
         "connectivity" | "earth" | "accessory" => return None,
         "terminal" | "connector" => "X",
-        "coil" if has("valve") => "M",
+        "coil" if has("valve") || has("brake") || has("solenoid") => "M",
         "coil" if has("contactor") => contactor,
         "coil" => "K",
-        "contact" if ["push", "key", "turn", "estop"].iter().any(|p| has(p)) => "S",
         "contact"
-            if ["position", "proximity", "pressure", "float", "temperature"]
+            if ["push", "key", "turn", "estop", "foot", "pull"]
                 .iter()
                 .any(|p| has(p)) =>
+        {
+            "S"
+        }
+        "contact"
+            if [
+                "position",
+                "proximity",
+                "pressure",
+                "float",
+                "temperature",
+                "flow",
+            ]
+            .iter()
+            .any(|p| has(p)) =>
         {
             "B"
         }
@@ -120,8 +133,10 @@ mod tests {
         let expected: &[(&str, Option<&str>)] = &[
             ("accessory.terminal.end_bracket", None),
             ("accessory.terminal.end_plate", None),
+            ("coil.brake", Some("M")),
             ("coil.contactor", Some("K")),
             ("coil.relay", Some("K")),
+            ("coil.solenoid", Some("M")),
             ("coil.timer.off_delay", Some("K")),
             ("coil.timer.on_delay", Some("K")),
             ("coil.valve", Some("M")),
@@ -139,11 +154,14 @@ mod tests {
             ("contact.nc.delay_off", Some("K")),
             ("contact.nc.delay_on", Some("K")),
             ("contact.nc.estop", Some("S")),
+            ("contact.nc.flow", Some("B")),
             ("contact.nc.float", Some("B")),
+            ("contact.nc.foot", Some("S")),
             ("contact.nc.key", Some("S")),
             ("contact.nc.position", Some("B")),
             ("contact.nc.pressure", Some("B")),
             ("contact.nc.proximity", Some("B")),
+            ("contact.nc.pull", Some("S")),
             ("contact.nc.push", Some("S")),
             ("contact.nc.temperature", Some("B")),
             ("contact.nc.thermal", Some("F")),
@@ -151,11 +169,14 @@ mod tests {
             ("contact.no", Some("K")),
             ("contact.no.delay_off", Some("K")),
             ("contact.no.delay_on", Some("K")),
+            ("contact.no.flow", Some("B")),
             ("contact.no.float", Some("B")),
+            ("contact.no.foot", Some("S")),
             ("contact.no.key", Some("S")),
             ("contact.no.position", Some("B")),
             ("contact.no.pressure", Some("B")),
             ("contact.no.proximity", Some("B")),
+            ("contact.no.pull", Some("S")),
             ("contact.no.push", Some("S")),
             ("contact.no.temperature", Some("B")),
             ("contact.no.thermal", Some("F")),
@@ -170,11 +191,14 @@ mod tests {
             ("load.heater", Some("E")),
             ("meter.current", Some("P")),
             ("meter.energy", Some("P")),
+            ("meter.flow", Some("P")),
             ("meter.frequency", Some("P")),
             ("meter.hours", Some("P")),
             ("meter.power", Some("P")),
             ("meter.power_factor", Some("P")),
+            ("meter.pressure", Some("P")),
             ("meter.resistance", Some("P")),
+            ("meter.speed", Some("P")),
             ("meter.temperature", Some("P")),
             ("meter.voltage", Some("P")),
             ("motor.ac1", Some("M")),
@@ -223,6 +247,11 @@ mod tests {
             ("signal.buzzer", Some("P")),
             ("signal.horn", Some("P")),
             ("signal.lamp", Some("P")),
+            ("signal.lamp.amber", Some("P")),
+            ("signal.lamp.blue", Some("P")),
+            ("signal.lamp.green", Some("P")),
+            ("signal.lamp.red", Some("P")),
+            ("signal.lamp.white", Some("P")),
             ("source.ac", Some("G")),
             ("source.current", Some("G")),
             ("source.dc", Some("G")),
