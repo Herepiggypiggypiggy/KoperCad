@@ -21,3 +21,4 @@
 17:55 UTC #293 d26979c READY (feed names L1,L2,L3 per page; editing.rs test conflict keep both)
 18:10 UTC #295 285a31c READY; #297 8efb31a READY; #290 a88ec39 CHANGES (fmt gate1_tests.rs:1859; design OK)
 18:25 UTC #299 d57c2bf READY; #301 679e11d READY; #303 f5cf791 READY
+18:35 UTC #307 7f12126 CHANGES (Shift hint stale on keyboard moves)
