@@ -424,6 +424,50 @@ fn gate1_motor_starter_through_the_window() {
     let pages = lopdf::Document::load_mem(&bytes).unwrap().get_pages().len();
     let report = usize::from(novo_checks::report_lines(d.doc().project()).len() > 2);
     assert_eq!(pages, 2 + report, "one PDF page per project page");
+    // DXF export: every page into a folder beside the project, drawn with
+    // geometry (the symbols are in it), reproducible on a second export.
+    let files = d
+        .app
+        .export_dxf_to(super::dxf::DxfScope::AllPages, dir.path(), "Starter");
+    assert_eq!(files.len(), 2, "one DXF per project page");
+    for f in &files {
+        assert_eq!(f.parent(), Some(dir.path().join("Starter DXF").as_path()));
+        let dxf = std::fs::read(f).unwrap();
+        assert!(novo_interop::dxf::is_written_by_us(&dxf));
+        let drawing = novo_interop::dxf::read_dxf(&dxf).unwrap();
+        assert!(!drawing.drawing.entities.is_empty(), "{}", f.display());
+    }
+    assert_eq!(
+        d.app
+            .export_dxf_to(super::dxf::DxfScope::AllPages, dir.path(), "Starter"),
+        files,
+        "a second export replaces the first"
+    );
+    // A DXF as background: shown under the page, one undo step, never
+    // exported by the page exporters.
+    let background = d.app.import_dxf_background_from(&files[0]);
+    assert!(background, "{:?}", d.app.messages().last());
+    d.frame();
+    let underlay_items = |d: &Drive| {
+        let view = d.app.canvas.schematic_ref().unwrap();
+        let page = view.scene().unwrap();
+        let layer = page.layers().underlay;
+        Some(
+            page.scene()
+                .iter()
+                .filter(|(_, it)| it.layer == layer)
+                .count(),
+        )
+    };
+    assert_eq!(underlay_items(&d), Some(1), "the background is one item");
+    d.app.toggle_background();
+    d.frame();
+    assert_eq!(underlay_items(&d), Some(0), "hidden");
+    d.app.toggle_background();
+    d.app.remove_background();
+    d.frame();
+    assert_eq!(underlay_items(&d), Some(0));
+    assert!(!d.app.has_background());
     // NOVO_GATE1_OUT=<dir> keeps the project and the PDF, for screenshots.
     if let Some(out) = std::env::var_os("NOVO_GATE1_OUT") {
         let out = std::path::PathBuf::from(out);

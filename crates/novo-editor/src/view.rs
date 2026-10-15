@@ -172,6 +172,9 @@ pub struct SchematicView {
     revisions: Option<TitleRevisions>,
     /// `revisions` changed since it was last handed to the scene.
     revisions_dirty: bool,
+    /// The background drawing of the shown page and the key it was made for.
+    underlay: Option<(u64, novo_canvas::model::Underlay)>,
+    underlay_dirty: bool,
     /// What "Show where it goes" lit up, with the selection it was shown
     /// for; any change of selection puts it out.
     where_shown: Option<(Vec<ItemId>, Vec<ItemId>)>,
@@ -284,6 +287,8 @@ impl SchematicView {
             sheet_dirty: false,
             revisions: None,
             revisions_dirty: false,
+            underlay: None,
+            underlay_dirty: false,
             where_shown: None,
         }
     }
@@ -333,6 +338,22 @@ impl SchematicView {
             self.revisions = revisions;
             self.revisions_dirty = true;
         }
+    }
+
+    /// The background drawing (an imported DXF) under the shown page.
+    /// `key` identifies what `make` would build (`None`: no background); the
+    /// drawing is only built when the key changes, so this is cheap to call
+    /// every frame.
+    pub fn set_underlay(
+        &mut self,
+        key: Option<u64>,
+        make: impl FnOnce() -> Option<novo_canvas::model::Underlay>,
+    ) {
+        if key == self.underlay.as_ref().map(|(k, _)| *k) {
+            return;
+        }
+        self.underlay = key.zip(make());
+        self.underlay_dirty = true;
     }
 
     /// The sheet the page scene draws inside the frame, if any.
@@ -472,6 +493,18 @@ impl SchematicView {
         }
     }
 
+    /// Shows `lit` (what carries a feed's potential): selected when the
+    /// person asked for that, else only lit, so a Delete right after must
+    /// not remove every wire on the potential.
+    fn show_where(&mut self, lit: Vec<ItemId>, select: bool) {
+        if select {
+            self.where_shown = None;
+            self.canvas.selection.apply(lit, SelectOp::Replace);
+        } else {
+            self.where_shown = Some((lit, self.canvas.selection.ids().to_vec()));
+        }
+    }
+
     /// The selection as model ids.
     pub fn selection(&self) -> Vec<AnyId> {
         let Some(scene) = &self.scene else {
@@ -540,6 +573,13 @@ impl SchematicView {
             self.notes_dirty = true;
             self.sheet_dirty = true;
             self.revisions_dirty = true;
+            self.underlay_dirty = true;
+        }
+        if self.underlay_dirty
+            && let Some(scene) = &mut self.scene
+        {
+            scene.set_underlay(self.underlay.as_ref().map(|(_, u)| u.clone()));
+            self.underlay_dirty = false;
         }
         if self.revisions_dirty
             && let Some(scene) = &mut self.scene
@@ -1695,6 +1735,15 @@ impl SchematicView {
                         {
                             chosen = Some(MenuChoice::ShowWhere);
                         }
+                        if ui
+                            .button("Select where it goes")
+                            .on_hover_text(
+                                "Selects what carries it on this page, to act on together",
+                            )
+                            .clicked()
+                        {
+                            chosen = Some(MenuChoice::SelectWhere);
+                        }
                         ui.separator();
                     }
                     if let Some(w) = &menu.wire_override {
@@ -1813,16 +1862,14 @@ impl SchematicView {
                     self.editor.assign_potentials(document, &wires, &s);
                 }
             }
-            Some(MenuChoice::ShowWhere) => {
+            Some(choice @ (MenuChoice::ShowWhere | MenuChoice::SelectWhere)) => {
                 let found = menu_feed
                     .iter()
                     .flat_map(|f| f.feeds.iter())
                     .flat_map(|&feed| potential_menu::where_it_goes(document.project(), page, feed))
                     .collect::<Vec<_>>();
-                // Lit, not selected: a Delete right after must not remove
-                // every wire on the potential.
-                let lit = found.iter().map(|&id| item_id(id)).collect();
-                self.where_shown = Some((lit, self.canvas.selection.ids().to_vec()));
+                let lit: Vec<ItemId> = found.iter().map(|&id| item_id(id)).collect();
+                self.show_where(lit, matches!(choice, MenuChoice::SelectWhere));
             }
             Some(MenuChoice::WireOverride(i)) => {
                 if let Some(w) = &wire_override {
@@ -1891,8 +1938,10 @@ enum MenuChoice {
     Other(usize),
     /// The name typed under New…
     New,
-    /// Select everything on the feed's potential.
+    /// Light up everything on the feed's potential.
     ShowWhere,
+    /// Select everything on the feed's potential.
+    SelectWhere,
     /// A chip of Override potential (`usize::MAX`: remove the override).
     WireOverride(usize),
     Rename,
@@ -2295,6 +2344,17 @@ mod tests {
         h.click(x, 120.0, egui::PointerButton::Primary);
         assert_eq!(h.view.editor.proposals().len(), 3);
         assert_eq!(h.doc.project().wires().count(), 0);
+    }
+
+    #[test]
+    fn select_where_it_goes_selects_while_show_only_lights() {
+        let mut h = Harness::new();
+        h.view.show_where(vec![ItemId(7), ItemId(8)], false);
+        assert!(h.view.canvas.selection.is_empty());
+        assert_eq!(h.view.where_lit(), vec![ItemId(7), ItemId(8)]);
+        h.view.show_where(vec![ItemId(7), ItemId(8)], true);
+        assert_eq!(h.view.canvas.selection.ids(), [ItemId(7), ItemId(8)]);
+        assert!(h.view.where_lit().is_empty());
     }
 
     #[test]
