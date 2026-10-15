@@ -8,7 +8,8 @@
 use std::path::Path;
 
 use eframe::egui;
-use novo_interop::sheets::{ImportPlan, Resolution, TableKind, plan_import, read_file};
+use novo_interop::sheets::{ImportPlan, Resolution, TableKind, plan_import_with, read_file};
+use novo_parts::Catalog;
 
 use super::{Level, NovoApp};
 
@@ -19,6 +20,8 @@ pub(super) enum Filter {
     All,
     /// Rows with a change that can be taken as is.
     Changed,
+    /// Devices the sheet adds.
+    New,
     /// Rows with a change the project also made since the export.
     Conflicts,
     /// Rows that cannot be used.
@@ -26,9 +29,10 @@ pub(super) enum Filter {
 }
 
 impl Filter {
-    const ALL: [Filter; 4] = [
+    const ALL: [Filter; 5] = [
         Filter::All,
         Filter::Changed,
+        Filter::New,
         Filter::Conflicts,
         Filter::Rejected,
     ];
@@ -37,6 +41,7 @@ impl Filter {
         match self {
             Filter::All => "All",
             Filter::Changed => "Changed",
+            Filter::New => "New",
             Filter::Conflicts => "Conflicts",
             Filter::Rejected => "Rejected",
         }
@@ -128,16 +133,21 @@ impl SheetImport {
             Filter::All => true,
             Filter::Changed => self.has_plain(group),
             Filter::Conflicts => self.has_conflict(group),
-            Filter::Rejected => false,
+            Filter::New | Filter::Rejected => false,
         }
     }
 
-    fn counts(&self) -> [usize; 4] {
+    fn shows_new(&self) -> bool {
+        matches!(self.filter, Filter::All | Filter::New)
+    }
+
+    fn counts(&self) -> [usize; 5] {
         let changed = self.groups.iter().filter(|g| self.has_plain(g)).count();
         let conflicts = self.groups.iter().filter(|g| self.has_conflict(g)).count();
         [
-            self.groups.len(),
+            self.groups.len() + self.plan.new_devices.len(),
             changed,
+            self.plan.new_devices.len(),
             conflicts,
             self.plan.rejected.len(),
         ]
@@ -148,6 +158,11 @@ impl SheetImport {
         for g in 0..self.groups.len() {
             if self.shows(&self.groups[g]) {
                 self.tick(g, value);
+            }
+        }
+        if self.shows_new() {
+            for i in 0..self.plan.new_devices.len() {
+                self.plan.select_new(i, value);
             }
         }
     }
@@ -193,8 +208,9 @@ impl NovoApp {
                 return;
             }
         };
-        let plan = plan_import(doc.project(), &book);
-        if plan.changes.is_empty() && plan.rejected.is_empty() {
+        let catalog = Catalog::load_default().unwrap_or_default();
+        let plan = plan_import_with(doc.project(), &book, &catalog);
+        if plan.changes.is_empty() && plan.new_devices.is_empty() && plan.rejected.is_empty() {
             let text = format!(
                 "{name}: nothing to import, {} rows match",
                 plan.rows_unchanged
@@ -257,6 +273,11 @@ impl NovoApp {
                             row(ui, &mut import, g);
                         }
                     }
+                    if import.shows_new() {
+                        for i in 0..import.plan.new_devices.len() {
+                            new_row(ui, &mut import.plan, i);
+                        }
+                    }
                     if matches!(import.filter, Filter::All | Filter::Rejected) {
                         for r in &import.plan.rejected {
                             ui.horizontal_wrapped(|ui| {
@@ -271,13 +292,14 @@ impl NovoApp {
                             });
                         }
                     }
-                    for text in &import.plan.warnings {
-                        ui.colored_label(ui.visuals().warn_fg_color, text);
-                    }
                     for text in &import.plan.notes {
                         ui.weak(text);
                     }
                 });
+            // Warnings stay in view next to Apply: confirm with them read.
+            for text in &import.plan.warnings {
+                ui.colored_label(ui.visuals().warn_fg_color, format!("Warning: {text}"));
+            }
             ui.separator();
             let n = import.plan.selected();
             ui.horizontal(|ui| {
@@ -384,6 +406,45 @@ fn row(ui: &mut egui::Ui, import: &mut SheetImport, g: usize) {
     ui.add_space(2.0);
 }
 
+/// One device the sheet adds: its tick, line, tag and the values it sets.
+fn new_row(ui: &mut egui::Ui, plan: &mut ImportPlan, i: usize) {
+    let (line, tag, description, kind, order, properties, mut selected) = {
+        let n = &plan.new_devices[i];
+        (
+            n.line,
+            n.tag.to_string(),
+            n.description.clone(),
+            format!("{:?}", n.kind),
+            n.order_number().map(str::to_owned),
+            n.properties
+                .iter()
+                .map(|(k, v)| format!("{k}: {}", novo_parts::display_value(v)))
+                .collect::<Vec<_>>(),
+            n.selected,
+        )
+    };
+    ui.horizontal_wrapped(|ui| {
+        if ui.checkbox(&mut selected, "").changed() {
+            plan.select_new(i, selected);
+        }
+        ui.weak(format!("Devices line {line}"));
+        ui.strong(format!("new {tag}"));
+        ui.label(kind);
+    });
+    ui.indent(("sheet_new", i), |ui| {
+        if !description.is_empty() {
+            ui.label(format!("Description: {description}"));
+        }
+        if let Some(order) = order {
+            ui.label(format!("Order number: {order}"));
+        }
+        for p in properties {
+            ui.label(p);
+        }
+    });
+    ui.add_space(2.0);
+}
+
 #[cfg(test)]
 mod tests {
     use novo_core::{Command, DeviceTag};
@@ -436,7 +497,7 @@ mod tests {
         d.frame();
         let import = d.app.wb.sheet_import.as_ref().expect("the preview opens");
         assert_eq!(import.groups.len(), 1);
-        assert_eq!(import.counts(), [1, 1, 0, 0]);
+        assert_eq!(import.counts(), [1, 1, 0, 0, 0]);
         assert!(import.ticked(&import.groups[0]));
         assert!(d.app.modal_open());
         // Nothing changed before Apply.
@@ -487,8 +548,42 @@ mod tests {
             .unwrap();
         d.app.import_sheet_from(&path);
         let import = d.app.wb.sheet_import.as_ref().unwrap();
-        assert_eq!(import.counts(), [1, 0, 1, 0]);
+        assert_eq!(import.counts(), [1, 0, 0, 1, 0]);
         assert_eq!(import.plan.selected(), 0);
+    }
+
+    #[test]
+    fn a_row_without_an_id_is_a_new_device_with_its_own_tick() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut d, _) = drive_with_sheet(dir.path(), "x");
+        let mut book = export_project(d.app.document().unwrap().project());
+        let table = &mut book.tables[0];
+        let mut cells: Vec<Cell> = table.headers.iter().map(|_| Cell::text("")).collect();
+        cells[table.column("Tag").unwrap()] = Cell::text("-M1");
+        cells[table.column("Description").unwrap()] = Cell::text("Pump motor");
+        table.push(cells);
+        let path = dir.path().join("new.xlsx");
+        std::fs::write(&path, xlsx_bytes(&book).unwrap()).unwrap();
+        d.app.import_sheet_from(&path);
+        let import = d.app.wb.sheet_import.as_mut().expect("the preview opens");
+        assert_eq!(import.counts()[2], 1, "one new device");
+        assert!(import.plan.new_devices[0].selected);
+        import.filter = Filter::New;
+        import.set_listed(false);
+        assert!(import.plan.is_empty());
+        import.set_listed(true);
+        let import = d.app.wb.sheet_import.take().unwrap();
+        d.app.apply_sheet_import(&import.plan);
+        assert_eq!(description_of(&d, "-M1"), "Pump motor");
+        d.app.run(&d.ctx.clone(), Action::Undo);
+        assert!(
+            d.app
+                .document()
+                .unwrap()
+                .project()
+                .devices()
+                .all(|x| x.tag != tag("-M1"))
+        );
     }
 
     #[test]

@@ -587,3 +587,25 @@ fn import_sheet_skip_and_rejected_rows() {
     ]);
     assert_eq!(r.code, exit::READ);
 }
+
+#[test]
+fn import_sheet_lists_and_writes_new_devices() {
+    use novo_interop::sheets::{Cell, export_project, xlsx_bytes};
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+    let loaded = novo_storage::ProjectFile::read(&path).unwrap();
+    let mut book = export_project(&loaded);
+    let table = &mut book.tables[0];
+    let mut cells: Vec<Cell> = table.headers.iter().map(|_| Cell::text("")).collect();
+    cells[table.column("Tag").unwrap()] = Cell::text("-M1");
+    cells[table.column("Description").unwrap()] = Cell::text("Pump motor");
+    table.push(cells);
+    let sheet = dir.path().join("new.xlsx");
+    std::fs::write(&sheet, xlsx_bytes(&book).unwrap()).unwrap();
+    let out_path = dir.path().join("with-motor.novo");
+    let r = novo(&["import", "sheet", s(&path), s(&sheet), "-o", s(&out_path)]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    assert!(r.out.contains("new: Devices row"), "{}", r.out);
+    let imported = novo_storage::ProjectFile::read(&out_path).unwrap();
+    assert!(imported.devices().any(|d| d.description == "Pump motor"));
+}

@@ -439,7 +439,7 @@ fn import_sheet(
     skip: &[String],
     out: &mut dyn Write,
 ) -> Result<i32, Failure> {
-    use novo_interop::sheets::{Resolution, plan_import, read_file};
+    use novo_interop::sheets::{Resolution, plan_import_with, read_file};
 
     let project = read(file)?;
     let name = sheet
@@ -480,7 +480,8 @@ fn import_sheet(
             format!("cannot write {}: it {why}", path.display()),
         ));
     }
-    let mut plan = plan_import(&project, &book);
+    let catalog = novo_parts::Catalog::load_default().unwrap_or_default();
+    let mut plan = plan_import_with(&project, &book, &catalog);
     match resolve {
         Some(Side::Sheet) => plan.resolve(Resolution::Sheet),
         Some(Side::Project) => plan.resolve(Resolution::Project),
@@ -490,6 +491,14 @@ fn import_sheet(
         let change = &plan.changes[index];
         if skipped.contains(&(change.table, change.line)) {
             plan.select(index, false);
+        }
+    }
+    for index in 0..plan.new_devices.len() {
+        if skipped.contains(&(
+            novo_interop::sheets::TableKind::Devices,
+            plan.new_devices[index].line,
+        )) {
+            plan.select_new(index, false);
         }
     }
     let mut written = false;
@@ -523,6 +532,20 @@ fn import_sheet(
                 })
             })
             .collect();
+        let new_devices: Vec<Value> = plan
+            .new_devices
+            .iter()
+            .map(|n| {
+                json!({
+                    "row": n.line,
+                    "tag": n.tag.to_string(),
+                    "description": n.description,
+                    "kind": format!("{:?}", n.kind),
+                    "order_number": n.order_number(),
+                    "applied": n.selected,
+                })
+            })
+            .collect();
         let rejected: Vec<Value> = plan
             .rejected
             .iter()
@@ -538,6 +561,7 @@ fn import_sheet(
         let value = json!({
             "summary": plan.summary(),
             "changes": changes,
+            "new_devices": new_devices,
             "rejected": rejected,
             "warnings": plan.warnings,
             "notes": plan.notes,
@@ -569,6 +593,19 @@ fn import_sheet(
                     c.header,
                     shown(&c.before),
                     shown(&c.after)
+                ),
+            )?;
+        }
+        for n in &plan.new_devices {
+            let mark = if n.selected { "new" } else { "skipped" };
+            let order = n
+                .order_number()
+                .map_or(String::new(), |o| format!(", order number {o}"));
+            print(
+                out,
+                &format!(
+                    "{mark}: Devices row {} {}: {:?}{order}, {:?}",
+                    n.line, n.tag, n.description, n.kind
                 ),
             )?;
         }

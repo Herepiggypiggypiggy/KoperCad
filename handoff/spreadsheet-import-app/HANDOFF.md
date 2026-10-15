@@ -7,3 +7,8 @@ Branch claude/project-thread-bpubxq (kopercad), PR based on #414's branch (claud
 - Row tick = all non-conflict changes of one sheet row; conflict cells have their own tick (start unticked).
 - Traps: the engine's plan refuses to apply if the project revision moved; the dialog is modal so it cannot. `import.spreadsheet` also added to novo-workflow's command list.
 - Talk to: engine threads cse_01ToRihU88DzNsNUPssCav6H (#414), cse_011McCS481zaaDZqTGbrh5KN (#411).
+
+## How to reach it
+- App: project menu (the KoperCAD mark) > **Import spreadsheet…**, or the command palette: command id `import.spreadsheet` (verbs "import spreadsheet", "import sheet", "import excel"). Needs an open project. Export is the round-trip thread's menu command, not this one.
+- CLI: `kopercad-cli import sheet <project.novo> <file.xlsx|csv> [--json] [--output new.novo] [--resolve sheet|project] [--skip Devices:5]`.
+- Dialog shows: changed rows, new devices (`plan.new_devices`, own tick, "New" filter), conflicts, rejected rows with line and reason, warnings next to Apply, notes. Not yet: "Save rejected rows" (needs #430's `rejected_workbook`).
