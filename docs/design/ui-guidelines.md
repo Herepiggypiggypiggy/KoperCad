@@ -1,6 +1,6 @@
 # Interface guidelines
 
-How NovoElectric looks: the visual language. The look lives in
+How KoperCAD looks: the visual language. The look lives in
 the `novo-theme` crate; this page says how to use it. Owned by the layout and
 branding thread; how the work flows (shortcuts, steps, defaults) belongs to
 the workflow thread.
@@ -141,7 +141,9 @@ selection, hover, rubber band, snap marker) and `novo_canvas::model::ModelStyle`
 
 ## Branding
 
-- Name: NovoElectric, one word, capital N and E.
+- Name: KoperCAD, one word, capitals K C A D. Made by KoperVonk ("by KoperVonk"
+  in the About box and installer; `assets/branding/lockup.svg` is the lockup).
+  Formerly NovoElectric.
 - Mark: "Nova", a four-ray star meeting at a copper junction dot
   (`assets/branding/icon.svg`).
 - Tagline: "Electrical design, without the weight".

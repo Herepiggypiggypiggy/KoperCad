@@ -1,4 +1,4 @@
-# Starts the newest experimental NovoElectric build.
+# Starts the newest experimental KoperCAD build.
 #
 # Downloads the `experimental` pre-release (main plus every open pull
 # request, built by .github/workflows/experimental.yml) when it is newer than
@@ -24,7 +24,7 @@ if (Test-Path (Join-Path $PortableGh 'gh.exe')) { $env:Path += ";$PortableGh" }
 
 function Show-Error($text) {
     Add-Type -AssemblyName PresentationFramework
-    [System.Windows.MessageBox]::Show($text, 'NovoElectric') | Out-Null
+    [System.Windows.MessageBox]::Show($text, 'KoperCAD') | Out-Null
 }
 
 try {
@@ -50,7 +50,7 @@ try {
         Expand-Archive -Path (Join-Path $tmp 'novoelectric-experimental-windows.zip') -DestinationPath $next
         Remove-Item -Recurse -Force $Current -ErrorAction SilentlyContinue
         # A running novoelectric.exe cannot be deleted; keep it and retry next start.
-        if (Test-Path $Current) { throw 'NovoElectric is running; keeping the current build' }
+        if (Test-Path $Current) { throw 'KoperCAD is running; keeping the current build' }
         Move-Item $next $Current
         Set-Content -NoNewline -Path $Stamp -Value $remote
     }

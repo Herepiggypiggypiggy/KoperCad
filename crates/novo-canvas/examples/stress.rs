@@ -20,7 +20,7 @@ fn main() -> eframe::Result {
         .unwrap_or(10_000);
     let mut options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("NovoElectric canvas stress test")
+            .with_title("KoperCAD canvas stress test")
             .with_inner_size([1600.0, 900.0]),
         ..Default::default()
     };

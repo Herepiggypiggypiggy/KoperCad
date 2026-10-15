@@ -8,10 +8,11 @@ A lightweight, local-first electrical CAD program by **KoperVonk**: schematics, 
 connection screens, cross references, generated reports, PLC and I/O, revisions, and (later) cabinet
 layout and circuit simulation. Native Rust, no web technology, fully offline, scriptable from Python.
 
-> **Name.** The product is KoperCAD and the maker is KoperVonk (decided 2026-10-15). The code,
-> crates and repository are still called NovoElectric / `novo-*` while the rename lands in small
-> steps (display name, installer, launcher, docs). Crate names will stay `novo-*`.
-> The lockup in `assets/branding/` is a mock-up and not yet used by the app.
+> **Name.** The product is KoperCAD and the maker is KoperVonk (decided 2026-10-15); it was called
+> NovoElectric before. Names people never see keep the old name for now: the repository, the `novo-*`
+> crates, `novoelectric.exe`, the `novoelectric` Python module, the release asset name and the data
+> folders (`%LOCALAPPDATA%\NovoElectric`, `Documents\NovoElectric`, `%APPDATA%\NovoElectric`). Moving
+> the data folders needs a migration from the old location first.
 
 It is a design of its own, aimed at what EPLAN Electric P8 and AutoCAD Electrical do, not a copy of either.
 
@@ -121,7 +122,7 @@ The full roadmap with dependencies and done-criteria is the artifact linked from
 - **Import and export** (`novo-interop`): DXF, EPLAN parts, Excel round trip.
 - **Standards packs:** NFPA after IEC 60617.
 - **Python layer:** more of the app scriptable (Python is the integration layer, never the core).
-- The **rename** (display name, launcher, shortcuts, docs).
+- The rest of the **rename**: the repository, executable, Python module and data folders (with a migration).
 
 ## Build and run
 
@@ -138,7 +139,7 @@ main. A pre-release named `experimental` is rebuilt when main or an open pull re
 pull requests merged in order.
 
 On a Windows PC, paste `scripts/setup-new-pc.ps1` into PowerShell once (no admin rights needed); it
-puts a desktop shortcut that always starts the newest experimental build. See `docs/LOCAL-BUILDS.md`
+puts a "KoperCAD (latest)" desktop shortcut that always starts the newest experimental build. See `docs/LOCAL-BUILDS.md`
 for building on your own PC.
 
 **No admin rights, ever.** Everything installs, runs, updates and is scripted as a standard Windows

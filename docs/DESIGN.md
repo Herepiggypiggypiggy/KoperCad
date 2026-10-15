@@ -1,13 +1,13 @@
-# NovoElectric design
+# KoperCAD design
 
-How NovoElectric works for the person using it, and what its window looks
+How KoperCAD works for the person using it, and what its window looks
 like. This is the single design reference for UI pull requests. It merges
 the workflow thread's interaction model and the layout thread's screen
 architecture after two critique rounds with the main reviewer; the
 integration lead arbitrates changes. It replaces `docs/WORKFLOW.md` and
 `docs/design/interaction-model.md`.
 
-NovoElectric is not EPLAN with fewer clicks. Tadjiro's EPLAN complaints
+KoperCAD is not EPLAN with fewer clicks. Tadjiro's EPLAN complaints
 (appendix) are treated as symptoms of page-first CAD, not as a feature list.
 The visual language (colours, type, spacing, icons) is in
 `docs/design/ui-guidelines.md`.
@@ -739,7 +739,7 @@ declared by hand (3 actions, see supporting journeys).
 
 ### The first five minutes
 
-Someone who has never seen NovoElectric, with no manual, gets to a
+Someone who has never seen KoperCAD, with no manual, gets to a
 connected circuit and finds a command without a menu bar:
 
 | Step | What they see and do | Actions | Typed |

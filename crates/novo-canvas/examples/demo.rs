@@ -81,7 +81,7 @@ fn main() {
     let stress = args.stress.is_some();
     let mut options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("NovoElectric canvas demo")
+            .with_title("KoperCAD canvas demo")
             .with_inner_size(WINDOW)
             .with_resizable(!stress),
         ..Default::default()

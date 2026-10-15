@@ -1,6 +1,6 @@
 # PLC and I/O (WS-17)
 
-How NovoElectric handles PLC cards, their channels, I/O addresses, the I/O
+How KoperCAD handles PLC cards, their channels, I/O addresses, the I/O
 list and channel cross references. This extends `docs/DESIGN.md`; where the
 two disagree, DESIGN.md wins and this file is corrected. Engine code lives in
 `novo-plc`; the pieces other crates draw or print are listed in §8.

@@ -88,7 +88,7 @@ impl Action {
             Action::FocusMode => "Focus mode",
             Action::FullScreen => "Full screen",
             Action::CommandPalette => "Command palette…",
-            Action::About => "About NovoElectric",
+            Action::About => "About KoperCAD",
         }
     }
 

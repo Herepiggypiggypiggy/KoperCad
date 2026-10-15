@@ -1,4 +1,4 @@
-# Builds NovoElectric on this PC and refreshes the "NovoElectric (latest)"
+# Builds KoperCAD on this PC and refreshes the "KoperCAD (latest)"
 # shortcut's copy, so the newest build needs no GitHub Actions minutes.
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\build-local.ps1 [-Ref main] [-NoLaunch]
@@ -126,10 +126,10 @@ $next = Join-Path $Experimental 'next'
 Remove-Item -Recurse -Force $next -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $next | Out-Null
 Copy-Item $built (Join-Path $next 'novoelectric.exe')
-Set-Content -Path (Join-Path $next 'BUILD_INFO.txt') -Value "NovoElectric local build $stamp`nSource: $Ref at $commit`nBuilt on this PC with the GNU toolchain."
+Set-Content -Path (Join-Path $next 'BUILD_INFO.txt') -Value "KoperCAD local build $stamp`nSource: $Ref at $commit`nBuilt on this PC with the GNU toolchain."
 $current = Join-Path $Experimental 'current'
 Remove-Item -Recurse -Force $current -ErrorAction SilentlyContinue
-if (Test-Path $current) { throw 'NovoElectric is running; close it and run this again.' }
+if (Test-Path $current) { throw 'KoperCAD is running; close it and run this again.' }
 Move-Item $next $current
 $info = @{ built = $stamp; source = 'local'; ref = $Ref; commit = $commit } | ConvertTo-Json -Compress
 Set-Content -NoNewline -Path (Join-Path $Experimental 'build-info.json') -Value $info

@@ -9,7 +9,7 @@ use egui::{
 /// Text on hovered and pressed controls, a step above [`TEXT`].
 const TEXT_BRIGHT: Color32 = Color32::from_rgb(0xF4, 0xF2, 0xEE);
 
-/// The NovoElectric dark visuals.
+/// The KoperCAD dark visuals.
 pub fn visuals() -> Visuals {
     let control = CornerRadius::same(RADIUS_CONTROL);
     let window = CornerRadius::same(RADIUS_WINDOW);
@@ -70,7 +70,7 @@ pub fn visuals() -> Visuals {
     }
 }
 
-/// The full NovoElectric style: [`visuals`] plus text sizes and spacing.
+/// The full KoperCAD style: [`visuals`] plus text sizes and spacing.
 pub fn style() -> Style {
     let mut style = Style {
         visuals: visuals(),
@@ -118,9 +118,9 @@ pub fn style() -> Style {
     style
 }
 
-/// Installs the NovoElectric look on `ctx`.
+/// Installs the KoperCAD look on `ctx`.
 ///
-/// Sets the fonts, icons and dark style. NovoElectric is dark only for now,
+/// Sets the fonts, icons and dark style. KoperCAD is dark only for now,
 /// so this also pins the theme to dark: the operating system's light or dark
 /// setting no longer switches it.
 pub fn apply(ctx: &egui::Context) {

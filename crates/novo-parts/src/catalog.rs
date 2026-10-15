@@ -240,7 +240,7 @@ pub enum CatalogError {
         path: PathBuf,
         source: serde_json::Error,
     },
-    #[error("the parts catalog {path} was written by a newer NovoElectric (format {found})")]
+    #[error("the parts catalog {path} was written by a newer KoperCAD (format {found})")]
     TooNew { path: PathBuf, found: u32 },
 }
 

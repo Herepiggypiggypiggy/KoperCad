@@ -42,8 +42,8 @@ pub mod exit {
 #[command(
     name = "novo",
     version,
-    about = "NovoElectric command-line tool: inspect, check and export project files",
-    long_about = "NovoElectric command-line tool: inspect, check and export project files.\n\n\
+    about = "KoperCAD command-line tool: inspect, check and export project files",
+    long_about = "KoperCAD command-line tool: inspect, check and export project files.\n\n\
                   Project files are only read, never changed.\n\
                   Exit codes: 0 done, 1 check found problems, 2 bad command line, \
                   3 project not readable, 4 output not writable, 5 not available in this build.\n\

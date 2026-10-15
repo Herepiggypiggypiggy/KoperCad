@@ -26,7 +26,7 @@ case "${1:-}" in
     stage=$(mktemp -d)
     trap 'rm -rf "$stage"' EXIT
     x86_64-w64-mingw32-strip -o "$stage/novoelectric.exe" "${CARGO_TARGET_DIR:-target}/$target/release/novoelectric.exe"
-    printf 'NovoElectric %s, cross-built on Linux %s.\nNo install needed: unzip anywhere in your user folder and run novoelectric.exe.\nCompiled and linked only; not run on Windows by the build.\n' \
+    printf 'KoperCAD %s, cross-built on Linux %s.\nNo install needed: unzip anywhere in your user folder and run novoelectric.exe.\nCompiled and linked only; not run on Windows by the build.\n' \
       "$sha" "$(date -u +%Y-%m-%dT%H:%MZ)" > "$stage/BUILD_INFO.txt"
     mkdir -p "$out"
     out=$(cd "$out" && pwd)

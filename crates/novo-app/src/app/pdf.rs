@@ -4,7 +4,7 @@
 //! never share a PDF; a project with no file yet exports to
 //! `<Documents>\NovoElectric\<name>.pdf` under a name not used yet.
 //!
-//! Only a PDF NovoElectric wrote (its `/Producer`) is ever replaced: a
+//! Only a PDF KoperCAD wrote (its `/Producer`) is ever replaced: a
 //! user's own `<stem>.pdf` stays, and the export takes `<stem> 2.pdf`.
 //! The PDF is written to a temporary file first and renamed into place, so
 //! a failed export never leaves a half-written file.
@@ -76,8 +76,9 @@ impl NovoApp {
     }
 }
 
-/// Bytes NovoElectric puts in every PDF it writes.
-const OUR_PRODUCER: &[u8] = b"/Producer (NovoElectric)";
+/// Bytes KoperCAD puts in every PDF it writes, and the ones it wrote under
+/// its earlier name.
+const OUR_PRODUCERS: [&[u8]; 2] = [b"/Producer (KoperCAD)", b"/Producer (NovoElectric)"];
 
 /// Whether `path` is a PDF this app wrote and nobody changed since, so
 /// replacing it loses nothing the user made. A viewer that saves comments
@@ -91,7 +92,7 @@ fn is_ours(path: &Path) -> bool {
                 .filter(|w| *w == pattern)
                 .count()
         };
-        count(OUR_PRODUCER) == 1 && count(b"%%EOF") == 1
+        OUR_PRODUCERS.iter().map(|p| count(p)).sum::<usize>() == 1 && count(b"%%EOF") == 1
     })
 }
 
