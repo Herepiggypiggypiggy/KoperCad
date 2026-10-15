@@ -86,7 +86,7 @@ impl NovoApp {
         let active = match view.editor.tool() {
             Tool::Place(_) => DockTool::Place,
             Tool::Wire(_) => DockTool::Connect,
-            Tool::Select | Tool::Move(_) => DockTool::Select,
+            Tool::Select | Tool::Move(_) | Tool::Cable(_) => DockTool::Select,
         };
         let band = view.band_count();
         let hint = view
@@ -121,6 +121,7 @@ impl NovoApp {
             || match view.editor.tool() {
                 Tool::Wire(w) => w.start.is_some(),
                 Tool::Move(_) => true,
+                Tool::Cable(c) => !c.points.is_empty(),
                 Tool::Select | Tool::Place(_) => false,
             };
         let aside = busy

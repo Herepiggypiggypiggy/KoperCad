@@ -119,6 +119,15 @@ pub enum Tool {
     Place(PlaceTool),
     Wire(WireTool),
     Move(MoveTool),
+    Cable(CableTool),
+}
+
+/// Drawing a cable: a line over wires (DESIGN.md §4, C). Every wire the line
+/// touches joins the cable when the line is finished.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CableTool {
+    /// The points clicked so far, on the grid.
+    pub points: Vec<Point>,
 }
 
 impl Tool {
@@ -126,6 +135,7 @@ impl Tool {
     fn fresh(&self) -> Tool {
         match self {
             Tool::Wire(_) => Tool::Wire(WireTool::default()),
+            Tool::Cable(_) => Tool::Cable(CableTool::default()),
             Tool::Move(_) | Tool::Select => Tool::Select,
             Tool::Place(p) => Tool::Place(p.clone()),
         }
@@ -266,6 +276,22 @@ fn part_at(project: &Project, page: PageId, p: Point) -> Option<SymbolId> {
         .map(|(id, _)| id)
 }
 
+/// Whether the segments `a`-`b` and `c`-`d` cross or come within `tolerance`.
+fn segments_touch(a: Point, b: Point, c: Point, d: Point, tolerance: f64) -> bool {
+    let cross =
+        |o: Point, p: Point, q: Point| (p.x - o.x) * (q.y - o.y) - (p.y - o.y) * (q.x - o.x);
+    let (d1, d2) = (cross(a, b, c), cross(a, b, d));
+    let (d3, d4) = (cross(c, d, a), cross(c, d, b));
+    if d1 * d2 < 0.0 && d3 * d4 < 0.0 {
+        return true;
+    }
+    let near = |p: Point, a: Point, b: Point| {
+        let (q, _) = geometry::closest_on_segment(p, a, b);
+        (q.x - p.x).hypot(q.y - p.y) <= tolerance
+    };
+    near(a, c, d) || near(b, c, d) || near(c, a, b) || near(d, a, b)
+}
+
 /// The pin nearest `p`.
 fn nearest_pin(pins: &[(u16, Point)], p: Point) -> (u16, Point) {
     pins.iter()
@@ -403,6 +429,8 @@ pub struct Editor {
     /// The raw pointer position of the last hover, for the keys that act on
     /// the part under it (Q, Tab while wiring).
     hover_raw: Option<Point>,
+    /// The wires of a finished cable line, until the app takes them.
+    cable_request: Option<Vec<WireId>>,
     notice: Option<String>,
     link_hint: Option<String>,
     row: Option<RowDrag>,
@@ -437,6 +465,7 @@ impl Editor {
             connect: ConnectMode::default(),
             hovered: None,
             hover_raw: None,
+            cable_request: None,
             notice: None,
             link_hint: None,
             row: None,
@@ -466,6 +495,7 @@ impl Editor {
                     .map_or(p.symbol.as_str(), |s| s.name.as_str())
             )),
             Tool::Wire(_) => Some("Wire".into()),
+            Tool::Cable(_) => Some("Cable".into()),
             _ => None,
         }
     }
@@ -480,6 +510,7 @@ impl Editor {
     pub fn in_progress(&self) -> bool {
         match &self.tool {
             Tool::Wire(w) => w.start.is_some(),
+            Tool::Cable(c) => !c.points.is_empty(),
             Tool::Move(_) => true,
             _ => false,
         }
@@ -650,6 +681,18 @@ impl Editor {
     /// Starts the wire tool.
     pub fn begin_wire(&mut self) {
         self.set_tool(Tool::Wire(WireTool::default()));
+    }
+
+    /// C: draw a cable. Click points for a line over the wires that belong
+    /// to it; click the last point again or press Enter to finish.
+    pub fn begin_cable(&mut self) {
+        self.set_tool(Tool::Cable(CableTool::default()));
+    }
+
+    /// The wires a finished cable line touched, once: the app makes the
+    /// cable out of them.
+    pub fn take_cable_request(&mut self) -> Option<Vec<WireId>> {
+        self.cable_request.take()
     }
 
     /// A press with a symbol on the pointer: a drag from here places a row
@@ -850,6 +893,10 @@ impl Editor {
                 *w = WireTool::default();
                 true
             }
+            Tool::Cable(c) if !c.points.is_empty() => {
+                c.points.clear();
+                true
+            }
             Tool::Move(_) => {
                 self.tool = Tool::Select;
                 true
@@ -1039,6 +1086,21 @@ impl Editor {
                         self.commit_wire(doc, page, w, start, end)
                     }
                 }
+            }
+            Tool::Cable(mut c) => {
+                // Clicking the last point again finishes the line.
+                if c.points.last().is_some_and(|&last| last == at) {
+                    self.tool = Tool::Cable(c);
+                    return if self.finish_cable(doc, page, tolerance) {
+                        Clicked::Step
+                    } else {
+                        Clicked::Refused
+                    };
+                }
+                c.points.push(at);
+                self.tool = Tool::Cable(c);
+                self.notice = None;
+                Clicked::Step
             }
             Tool::Move(m) => {
                 let delta = at - m.from;
@@ -1504,6 +1566,42 @@ impl Editor {
         true
     }
 
+    /// Finishes the cable line: every wire on the page that is on no cable
+    /// yet and that the line touches goes into [`Editor::take_cable_request`].
+    fn finish_cable(&mut self, doc: &Document, page: PageId, tolerance: f64) -> bool {
+        let Tool::Cable(c) = &mut self.tool else {
+            return false;
+        };
+        let points = std::mem::take(&mut c.points);
+        if points.len() < 2 {
+            self.notice = Some("Click two or more points over the wires, then Enter".into());
+            return false;
+        }
+        let project = doc.project();
+        let wires: Vec<WireId> = project
+            .page_contents(page)
+            .wires
+            .into_iter()
+            .filter(|&w| project.cable_of_wire(w).is_none())
+            .filter(|&w| {
+                geometry::wire_points(project, w).is_some_and(|route| {
+                    points.windows(2).any(|line| {
+                        route
+                            .windows(2)
+                            .any(|seg| segments_touch(line[0], line[1], seg[0], seg[1], tolerance))
+                    })
+                })
+            })
+            .collect();
+        if wires.is_empty() {
+            self.notice = Some("The line touches no wire that is free for a cable".into());
+            return false;
+        }
+        self.notice = None;
+        self.cable_request = Some(wires);
+        true
+    }
+
     /// The part under the pointer and its pins a wire in progress could
     /// end on (not the pin it started from), in pin order.
     fn aim_candidates(&self, doc: &Document) -> Option<(SymbolId, Vec<(u16, Point)>)> {
@@ -1643,6 +1741,10 @@ impl Editor {
                     true
                 }
                 _ => false,
+            },
+            EditorKey::Finish if matches!(self.tool, Tool::Cable(_)) => match self.hovered {
+                Some((page, tolerance)) => self.finish_cable(doc, page, tolerance),
+                None => false,
             },
             EditorKey::Finish => self.finish_wire_here(doc, false),
             EditorKey::FinishOpen => self.finish_wire_here(doc, true),
@@ -2245,6 +2347,13 @@ impl Editor {
                 "Corners: click a pin or wire to finish, empty space for a corner · R flips the bend · Backspace undo · Esc cancels · Shift+W lines"
                     .into()
             }
+            Tool::Cable(c) if c.points.is_empty() => {
+                "Cable: click along the wires that belong to it · Esc to stop".into()
+            }
+            Tool::Cable(_) => {
+                "Click the next point · Enter or click the last point again to finish · Esc cancels"
+                    .into()
+            }
             Tool::Move(m) => self.link_hint.clone().unwrap_or_else(|| {
                 let wires = if m.carry {
                     String::new()
@@ -2329,6 +2438,12 @@ impl Editor {
                             properties: Default::default(),
                         });
                     }
+                }
+            }
+            Tool::Cable(c) => {
+                if !c.points.is_empty() {
+                    preview.wire.extend(c.points.iter().copied());
+                    preview.wire.push(cursor);
                 }
             }
             Tool::Wire(w) => {
