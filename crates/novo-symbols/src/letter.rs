@@ -6,10 +6,10 @@
 //! can change them ([`LetterRules`]); a typed tag always wins over both.
 
 /// How contactors are coded: K (the default most panel builders use) or Q
-/// (IEC 81346-2:2019, a power contactor switches energy). Only main-circuit
-/// contacts (`contact.main`) are a contactor by function; coils and
-/// auxiliary contacts stay K, as 81346-2 codes auxiliary relays, so a
-/// device takes Q from its main contacts rather than from its coil.
+/// (IEC 81346-2:2019, a power contactor switches energy). Q applies to
+/// contactor coils (`coil.contactor`) and main contacts (`contact.main`)
+/// only; relay coils and auxiliary contacts stay K, as 81346-2 codes
+/// auxiliary relays.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ContactorCode {
     #[default]
@@ -67,6 +67,7 @@ pub fn letter_code_with(function: &str, rules: LetterRules) -> Option<&'static s
         "connectivity" | "earth" | "accessory" => return None,
         "terminal" | "connector" => "X",
         "coil" if has("valve") => "M",
+        "coil" if has("contactor") => contactor,
         "coil" => "K",
         "contact" if ["push", "key", "turn", "estop"].iter().any(|p| has(p)) => "S",
         "contact"
@@ -92,7 +93,8 @@ pub fn letter_code_with(function: &str, rules: LetterRules) -> Option<&'static s
         "meter" | "signal" => "P",
         "sensor" => "B",
         "load" => "E",
-        "plc" => "A",
+        // 81346-2 class K: a PLC processes signals.
+        "plc" => "K",
         "passive" => match parts.get(1).copied() {
             Some("capacitor") => "C",
             // A transistor switches signals, a thyristor or triac switches
@@ -118,6 +120,7 @@ mod tests {
         let expected: &[(&str, Option<&str>)] = &[
             ("accessory.terminal.end_bracket", None),
             ("accessory.terminal.end_plate", None),
+            ("coil.contactor", Some("K")),
             ("coil.relay", Some("K")),
             ("coil.timer.off_delay", Some("K")),
             ("coil.timer.on_delay", Some("K")),
@@ -199,12 +202,12 @@ mod tests {
             ("passive.transistor.npn", Some("K")),
             ("passive.transistor.pnp", Some("K")),
             ("passive.triac", Some("Q")),
-            ("plc.input.analog", Some("A")),
-            ("plc.input.digital", Some("A")),
-            ("plc.output.analog", Some("A")),
-            ("plc.output.digital", Some("A")),
-            ("plc.output.relay", Some("A")),
-            ("plc.supply", Some("A")),
+            ("plc.input.analog", Some("K")),
+            ("plc.input.digital", Some("K")),
+            ("plc.output.analog", Some("K")),
+            ("plc.output.digital", Some("K")),
+            ("plc.output.relay", Some("K")),
+            ("plc.supply", Some("K")),
             ("protection.fuse", Some("F")),
             ("protection.fuse_switch", Some("F")),
             ("protection.mcb", Some("F")),
@@ -276,6 +279,7 @@ mod tests {
             contactors: ContactorCode::Q,
             ..LetterRules::default()
         };
+        assert_eq!(letter_code_with("coil.contactor", q), Some("Q"));
         assert_eq!(letter_code_with("coil.relay", q), Some("K"));
         assert_eq!(letter_code_with("contact.main", q), Some("Q"));
         assert_eq!(letter_code_with("contact.no", q), Some("K"));

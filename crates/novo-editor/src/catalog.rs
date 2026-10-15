@@ -81,7 +81,7 @@ pub const MNEMONICS: &[(&str, &str)] = &[
     ("co", "iec/contacts/changeover"),
     ("coil", "iec/coils/relay"),
     ("k", "iec/coils/relay"),
-    ("contactor", "iec/coils/relay"),
+    ("contactor", "iec/coils/contactor"),
     ("relay", "iec/coils/relay"),
     ("timer", "iec/coils/timer_on_delay"),
     ("main", "iec/contactors/main_3p"),
@@ -418,7 +418,7 @@ mod tests {
             ("coil", "iec/coils/relay"),
             ("m3", "iec/motors/motor_3ph"),
             ("mpcb", "iec/protection/motor_protection_breaker"),
-            ("con", "iec/coils/relay"),
+            ("con", "iec/coils/contactor"),
             ("main", "iec/contactors/main_3p"),
         ] {
             let first = &catalog.search(query)[0];
