@@ -11,6 +11,7 @@ mod duplicate;
 mod inspector;
 mod link;
 mod live;
+mod live_anim;
 mod pages;
 mod pdf;
 mod plc;

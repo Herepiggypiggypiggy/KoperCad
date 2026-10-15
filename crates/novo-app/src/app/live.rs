@@ -19,11 +19,12 @@ use novo_core::{
     WireId,
 };
 use novo_sim::{
-    Clock, Live, PoleState, Settled, Solution, inputs_seen, is_coil, is_load, is_plc_input,
-    is_plc_output, loads_on, settle_timed,
+    Clock, Live, PoleState, Settled, Solution, inputs_seen, is_coil, is_lamp, is_load, is_motor,
+    is_plc_input, is_plc_output, loads_on, settle_timed,
 };
 use novo_theme::{tokens, widgets};
 
+use super::live_anim::Anim;
 use super::{Level, NovoApp};
 
 /// Radius of a pole badge, in screen points.
@@ -44,6 +45,8 @@ pub(crate) struct LiveView {
     pub(super) forced: BTreeSet<SymbolId>,
     /// Seconds the bench has run, for timer contacts.
     clock: Clock,
+    /// Easing state of the device animation (lamps, motors, coils).
+    anim: Anim,
     solved: Option<Solved>,
 }
 
@@ -264,7 +267,7 @@ pub(super) fn input_marks(
         .collect()
 }
 
-/// Where the lit lamps, motors and horns of the page are, for a glow.
+/// Where the lit horns, buzzers and valves of the page are, for a glow.
 pub(super) fn load_glows(
     project: &Project,
     page: PageId,
@@ -275,6 +278,8 @@ pub(super) fn load_glows(
     project
         .symbols()
         .filter(|s| s.page == page && is_load(s) && on.contains(&s.id))
+        // Lamps and motors are animated by live_anim; the rest still glow.
+        .filter(|s| !is_lamp(s) && !is_motor(s))
         .filter_map(|s| {
             let points: Vec<_> = (0..s.pins.len())
                 .filter_map(|pin| s.pin_position(pin as u16))
@@ -414,10 +419,28 @@ impl NovoApp {
             .potentials()
             .map(|p| (p.id, (p.name.clone(), potential_color(p))))
             .collect();
+        let states = novo_sim::device_states(project, &solved.netlist, &solved.settled);
+        let glows = load_glows(project, page, &solved.netlist, &solved.settled.solution);
         let names: BTreeMap<SymbolId, String> = badges
             .iter()
             .map(|b| (b.symbol, symbol_name(project, b.symbol)))
             .collect();
+
+        // Devices: lamps glow, motors turn, coils pull in.
+        let animating = self.wb.live.anim.paint(
+            ctx,
+            canvas,
+            viewport.zoom,
+            &to_screen,
+            project,
+            self.canvas
+                .schematic_ref()
+                .map(|v| v.editor.catalog.library()),
+            page,
+            &states,
+            &energized,
+            dt as f32,
+        );
 
         // Wires: lit in their colour, dimmed when nothing reaches them. The
         // canvas draws them in its wire layer, under the symbols and text.
@@ -596,7 +619,6 @@ impl NovoApp {
         }
 
         // Outputs that have current: a soft glow behind the lamp or motor.
-        let glows = load_glows(project, page, &solved.netlist, &solved.settled.solution);
         for (symbol, at) in &glows {
             let at = to_screen(*at);
             if !canvas.expand(BADGE * 4.0).contains(at) {
@@ -689,7 +711,7 @@ impl NovoApp {
             });
 
         // Draws again only when something changed; egui repaints on input.
-        if leave || open_all || clicked.is_some() || timing.is_some() {
+        if leave || open_all || clicked.is_some() || timing.is_some() || animating {
             ctx.request_repaint();
         }
         if leave {
