@@ -67,6 +67,33 @@ impl NovoApp {
         }
     }
 
+    /// Keeps the editor's symbol catalog on the project's drawing standard.
+    /// The recently used symbols follow to the new pack.
+    pub(super) fn sync_catalog(&mut self) {
+        let pack = self.standard();
+        let Some(view) = self.canvas.schematic() else {
+            return;
+        };
+        // A company library has no single pack and is left alone.
+        if view
+            .editor
+            .catalog
+            .library()
+            .pack()
+            .is_none_or(|p| p == pack)
+        {
+            return;
+        }
+        let mut catalog = novo_editor::Catalog::builtin_pack(pack);
+        for id in view.editor.catalog.recent().iter().rev() {
+            let id = catalog.in_pack(id);
+            if catalog.get(&id).is_some() {
+                catalog.used(&id);
+            }
+        }
+        view.editor.catalog = catalog;
+    }
+
     pub(super) fn tool_dock(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
         // With nothing in hand, a selected coil or contact names where the
         // rest of its device is drawn.

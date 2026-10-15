@@ -2553,3 +2553,54 @@ fn the_parts_command_opens_and_closes_the_parts_window() {
     d.frame();
     assert!(d.app.wb.parts.is_none());
 }
+
+#[test]
+fn the_editor_catalog_follows_the_project_standard_and_the_wheel_hides_missing_twins() {
+    use novo_symbols::Pack;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let pack = |d: &mut Drive| {
+        d.app
+            .canvas
+            .schematic()
+            .unwrap()
+            .editor
+            .catalog
+            .library()
+            .pack()
+    };
+    assert_eq!(pack(&mut d), Some(Pack::Iec));
+    let breaker = |d: &Drive| d.app.wheel_items(3);
+    assert!(breaker(&d).iter().any(|(k, _)| k.ends_with("rcbo_2p")));
+    d.app
+        .canvas
+        .schematic()
+        .unwrap()
+        .editor
+        .catalog
+        .used("iec/contacts/no");
+
+    d.app.set_standard(Pack::Nfpa);
+    d.frame();
+    assert_eq!(pack(&mut d), Some(Pack::Nfpa));
+    // A recently used symbol follows to the new pack.
+    let catalog = &d.app.canvas.schematic().unwrap().editor.catalog;
+    assert_eq!(
+        catalog.recent().first().map(String::as_str),
+        Some("nfpa/contacts/no")
+    );
+    // Items without a twin in the pack are hidden; the rest stay.
+    let items = breaker(&d);
+    assert!(!items.is_empty());
+    assert!(
+        items.iter().all(|(k, _)| !k.ends_with("rcbo_2p")),
+        "{items:?}"
+    );
+
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(pack(&mut d), Some(Pack::Iec));
+}

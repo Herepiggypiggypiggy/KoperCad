@@ -9,7 +9,6 @@
 use std::f32::consts::TAU;
 
 use eframe::egui::{self, Key, Modifiers, Pos2, Vec2};
-use novo_symbols::Pack;
 use novo_workflow::palette::Mode;
 
 use super::NovoApp;
@@ -236,7 +235,9 @@ impl NovoApp {
         let Some(view) = self.canvas.schematic_ref() else {
             return Vec::new();
         };
+        // The items name IEC keys; the catalog's pack says which twin is drawn.
         let used = |key: &str| {
+            let key = view.editor.catalog.in_pack(key);
             self.backend.document().map_or(0, |d| {
                 d.project().symbols().filter(|s| s.symbol.0 == key).count()
             })
@@ -245,7 +246,12 @@ impl NovoApp {
             .1
             .iter()
             .copied()
-            .filter(|(key, _)| view.editor.catalog.get(key).is_some())
+            .filter(|(key, _)| {
+                view.editor
+                    .catalog
+                    .get(&view.editor.catalog.in_pack(key))
+                    .is_some()
+            })
             .collect();
         items.sort_by_key(|(key, _)| std::cmp::Reverse(used(key)));
         items
@@ -353,13 +359,10 @@ impl NovoApp {
             && let Some(&(key, _)) = items.get(j)
         {
             self.wb.wheel = None;
-            let pack = self.standard();
             if let Some(view) = self.canvas.schematic() {
-                // The project's drawing standard picks the pack when the
-                // library has the same device there; else the IEC one.
-                let id = Pack::counterpart(key, pack)
-                    .filter(|id| view.editor.catalog.get(id).is_some())
-                    .unwrap_or_else(|| key.to_owned());
+                // The catalog's pack (the project's drawing standard) says
+                // which twin of the item is placed.
+                let id = view.editor.catalog.in_pack(key);
                 view.editor.begin_place(&id, None);
             }
         }

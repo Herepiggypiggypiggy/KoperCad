@@ -732,6 +732,7 @@ impl NovoApp {
             self.hud(&ctx, canvas_rect);
             self.sync_wiring_mode();
             self.sync_connect_mode();
+            self.sync_catalog();
             self.tool_dock(&ctx, canvas_rect);
             self.inspector(&ctx, canvas_rect);
             self.live_view(&ctx, canvas_rect);
