@@ -283,7 +283,10 @@ pub fn save_variant(tx: &mut Tx<'_>, name: &str, description: &str) -> Result<()
         description: description.into(),
         values,
     };
-    match all.iter_mut().find(|x| x.name.eq_ignore_ascii_case(&v.name)) {
+    match all
+        .iter_mut()
+        .find(|x| x.name.eq_ignore_ascii_case(&v.name))
+    {
         Some(slot) => *slot = v,
         None => all.push(v),
     }
@@ -545,12 +548,14 @@ pub fn configuration(project: &Project, assignment: &Assignment) -> Configuratio
     unassigned.sort();
     let bom = counts
         .into_iter()
-        .map(|((manufacturer, order_number), (description, quantity))| BomLine {
-            manufacturer,
-            order_number,
-            description,
-            quantity,
-        })
+        .map(
+            |((manufacturer, order_number), (description, quantity))| BomLine {
+                manufacturer,
+                order_number,
+                description,
+                quantity,
+            },
+        )
         .collect();
     Configuration {
         assignment: assignment.clone(),
@@ -597,9 +602,11 @@ pub fn diff(project: &Project, before: &Assignment, after: &Assignment) -> Diffe
     for (k, v) in after {
         match before.get(k) {
             Some(old) if old == v => {}
-            old => d
-                .options_changed
-                .push((k.clone(), old.cloned().unwrap_or(Value::Bool(false)), v.clone())),
+            old => d.options_changed.push((
+                k.clone(),
+                old.cloned().unwrap_or(Value::Bool(false)),
+                v.clone(),
+            )),
         }
     }
     let label = |p: &PageRow| {
@@ -694,7 +701,11 @@ pub fn lint(project: &Project) -> Vec<Finding> {
         };
         match Expr::parse(cond) {
             Ok(e) => {
-                used.extend(e.names().into_iter().filter_map(|n| n.strip_prefix("opt.").map(String::from)));
+                used.extend(
+                    e.names()
+                        .into_iter()
+                        .filter_map(|n| n.strip_prefix("opt.").map(String::from)),
+                );
                 if let Err(error) = e.eval(&known).and_then(|v| v.as_bool()) {
                     findings.push(Finding::BadCondition {
                         object: record.id(),

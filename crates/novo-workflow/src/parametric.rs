@@ -350,8 +350,10 @@ pub fn resolve(
             Err(e) => problems.push(e),
         }
     }
-    // Calculated ones, in definition order; a later one may read an earlier one.
-    for p in all.iter().filter(|p| p.is_derived()) {
+    // Calculated ones, in definition order; a later one may read an earlier
+    // one. Not while an input is wrong: the answer would only be noise.
+    let inputs_ok = problems.is_empty();
+    for p in all.iter().filter(|p| p.is_derived() && inputs_ok) {
         let src = p.spec.derive.as_deref().unwrap_or_default();
         let result = Expr::parse(src).and_then(|e| e.eval(&vars_of(&values, options)));
         match result {

@@ -91,15 +91,23 @@ fn defaults_and_current_values() {
 #[test]
 fn values_are_checked() {
     let mut doc = machine();
-    assert!(doc
-        .transact("Set", |tx| set_option(tx, "supply", Value::Text("230V".into())))
-        .is_err());
-    assert!(doc
-        .transact("Set", |tx| set_option(tx, "speed", Value::Int(1)))
-        .is_err());
+    assert!(
+        doc.transact("Set", |tx| set_option(
+            tx,
+            "supply",
+            Value::Text("230V".into())
+        ))
+        .is_err()
+    );
+    assert!(
+        doc.transact("Set", |tx| set_option(tx, "speed", Value::Int(1)))
+            .is_err()
+    );
     // Case does not matter for a choice, and the stored value is the listed one.
-    doc.transact("Set", |tx| set_option(tx, "supply", Value::Text("480v".into())))
-        .unwrap();
+    doc.transact("Set", |tx| {
+        set_option(tx, "supply", Value::Text("480v".into()))
+    })
+    .unwrap();
     assert_eq!(current(doc.project())["supply"], Value::Text("480V".into()));
 }
 
@@ -116,7 +124,10 @@ fn conveyor_option_adds_a_page_devices_and_bom() {
     let d = diff(doc.project(), &off, &on);
     assert_eq!(d.pages_added, vec!["2 Conveyor".to_string()]);
     assert!(d.pages_removed.is_empty());
-    assert_eq!(d.devices_added, vec!["=A1-K2".to_string(), "=A1-M1".to_string()]);
+    assert_eq!(
+        d.devices_added,
+        vec!["=A1-K2".to_string(), "=A1-M1".to_string()]
+    );
     // The conveyor adds one motor and one contactor: BOM lines, not guesses.
     let changes: Vec<(String, u32, u32)> = d
         .bom_changes
@@ -141,11 +152,18 @@ fn a_choice_option_switches_a_single_device() {
 #[test]
 fn variant_project_drops_what_is_off_and_leaves_the_original() {
     let doc = machine();
-    let (pages, devices) = (doc.project().pages().count(), doc.project().devices().count());
+    let (pages, devices) = (
+        doc.project().pages().count(),
+        doc.project().devices().count(),
+    );
     let v = variant_project(doc.project(), &assign(&doc, &[])).unwrap();
     assert_eq!(v.pages().count(), 1);
     assert_eq!(v.devices().count(), 1);
-    assert_eq!(v.wires().count(), 0, "the conveyor's wire went with its page");
+    assert_eq!(
+        v.wires().count(),
+        0,
+        "the conveyor's wire went with its page"
+    );
     assert_eq!(doc.project().pages().count(), pages);
     assert_eq!(doc.project().devices().count(), devices);
     let full = variant_project(
@@ -178,10 +196,12 @@ fn named_variants_save_and_apply() {
     doc.transact("Apply", |tx| apply_variant(tx, "with CONVEYOR"))
         .unwrap();
     assert_eq!(current(doc.project())["conveyor"], Value::Bool(true));
-    assert!(doc
-        .transact("Apply", |tx| apply_variant(tx, "nope"))
-        .is_err());
-    doc.transact("Delete", |tx| delete_variant(tx, "Bare")).unwrap();
+    assert!(
+        doc.transact("Apply", |tx| apply_variant(tx, "nope"))
+            .is_err()
+    );
+    doc.transact("Delete", |tx| delete_variant(tx, "Bare"))
+        .unwrap();
     assert_eq!(variants(doc.project()).len(), 1);
 }
 
@@ -189,7 +209,8 @@ fn named_variants_save_and_apply() {
 fn removing_an_option_cleans_variants() {
     let mut doc = machine();
     doc.transact("v", |tx| save_variant(tx, "A", "")).unwrap();
-    doc.transact("rm", |tx| remove_option(tx, "supply")).unwrap();
+    doc.transact("rm", |tx| remove_option(tx, "supply"))
+        .unwrap();
     assert!(!variants(doc.project())[0].values.contains_key("supply"));
     assert!(!current(doc.project()).contains_key("supply"));
 }
@@ -206,7 +227,10 @@ fn lint_finds_typos_and_unused_options() {
     })
     .unwrap();
     let f = lint(doc.project());
-    assert!(f.iter().any(|x| matches!(x, Finding::UnusedOption(o) if o == "spare")));
+    assert!(
+        f.iter()
+            .any(|x| matches!(x, Finding::UnusedOption(o) if o == "spare"))
+    );
     assert!(f.iter().any(|x| matches!(x, Finding::BadCondition { .. })));
 }
 
@@ -214,9 +238,10 @@ fn lint_finds_typos_and_unused_options() {
 fn bad_condition_syntax_is_refused_when_set() {
     let mut doc = machine();
     let page = doc.project().pages().next().unwrap().id;
-    assert!(doc
-        .transact("Cond", |tx| set_condition(tx, page, Some("opt.a &&")))
-        .is_err());
+    assert!(
+        doc.transact("Cond", |tx| set_condition(tx, page, Some("opt.a &&")))
+            .is_err()
+    );
 }
 
 #[test]

@@ -34,6 +34,7 @@ pub mod commands;
 pub mod duplicate;
 pub mod expr;
 pub mod fuzzy;
+pub mod generate;
 pub mod history;
 pub mod insert;
 pub mod keymap;
