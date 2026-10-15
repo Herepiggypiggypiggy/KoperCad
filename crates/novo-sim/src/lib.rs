@@ -16,7 +16,9 @@
 
 mod coupling;
 
-pub use coupling::{Clock, DEFAULT_DELAY, Settled, is_coil, settle, settle_timed};
+pub use coupling::{
+    Clock, DEFAULT_DELAY, Settled, delay_seconds, is_coil, is_timer_contact, settle, settle_timed,
+};
 
 use std::collections::{HashSet, VecDeque};
 
