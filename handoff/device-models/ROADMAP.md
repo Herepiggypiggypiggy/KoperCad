@@ -8,6 +8,9 @@ Done
 - `novo_sim::device_states`: lamp lit, motor Stopped/Running(direction, speed)/PhaseLoss/Fault.
 - Animation: lamp glow, motor spokes with spin-up and spin-down, coil pull-in ring.
 
+Done (2nd PR)
+- Contact blade animation, timer ring (`novo_sim::timer_progress`, `Clock::coil_age`), reduce-motion setting.
+
 Next
 1. Hands-on test by Tadjiro; tune sizes and speeds.
 2. Contact blade drawn moving between open and closed (needs symbol artwork per contact).

@@ -16,7 +16,7 @@ use crate::id::{
     PotentialId, PotentialSystemId, RailId, RevisionId, StructureId, SymbolId, TerminalId, TextId,
     WireId,
 };
-use crate::project::{PAGE_ORDER, Project};
+use crate::project::{PAGE_ORDER, Project, contents_scope, panel_contents_generator};
 use crate::record::{Entity, Op, Record};
 use crate::tag::{Aspect, DeviceTag};
 
@@ -537,6 +537,30 @@ impl<'p> Tx<'p> {
     pub fn set_terminal_pe(&mut self, terminals: &[TerminalId], mode: PeOverride) -> Result<()> {
         for &terminal in terminals {
             self.update::<Terminal>(terminal, |t| t.pe_override = mode)?;
+        }
+        Ok(())
+    }
+
+    /// Switches the project's drawing standard and gives the listed symbols
+    /// the keys of that standard's pack, as one step. The caller works out
+    /// the keys (the model does not know the packs) and reports symbols
+    /// that have no counterpart; those are simply not listed. Pins stay as
+    /// they are. Refused as a whole for an unknown symbol, an empty key or
+    /// a bad standard id.
+    pub fn switch_standard(
+        &mut self,
+        standard: &str,
+        symbols: &[(SymbolId, SymbolKey)],
+    ) -> Result<()> {
+        if let Some((id, _)) = symbols.iter().find(|(_, key)| key.0.is_empty()) {
+            return Err(ModelError::InvalidValue {
+                id: (*id).into(),
+                field: "symbol",
+            });
+        }
+        self.set_info(|i| i.rules.standard = standard.to_owned())?;
+        for (id, key) in symbols {
+            self.update::<SymbolInstance>(*id, |s| s.symbol = key.clone())?;
         }
         Ok(())
     }
@@ -1277,6 +1301,17 @@ impl<'p> Tx<'p> {
             .pages()
             .filter_map(|p| rewrite(&p.structure).map(|n| (p.id, n)))
             .collect();
+        // The contents list of a panel names the panel in its generator id.
+        let generators: Vec<(PageId, String)> = self
+            .project
+            .pages()
+            .filter_map(|p| match &p.kind {
+                PageKind::Generated { generator } => contents_scope(generator)
+                    .and_then(|scope| rewrite(&scope))
+                    .map(|n| (p.id, panel_contents_generator(&n.location))),
+                _ => None,
+            })
+            .collect();
 
         for (i, new) in device_changes {
             self.update::<Device>(devices[i].0, |d| d.tag = new)?;
@@ -1289,6 +1324,9 @@ impl<'p> Tx<'p> {
         }
         for (id, new) in pages {
             self.update::<Page>(id, |p| p.structure = new)?;
+        }
+        for (id, generator) in generators {
+            self.update::<Page>(id, |p| p.kind = PageKind::Generated { generator })?;
         }
         Ok(())
     }

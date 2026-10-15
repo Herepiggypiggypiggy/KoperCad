@@ -50,16 +50,24 @@ A shorted net (`Live::Shorted`) on any winding pin is `Fault`.
 - Contact: the moving blade is drawn on the pole between its pins, easing
   between open and closed in about 120 ms; a coil gets a ring that fills
   when it operates.
-- Reduced motion (setting): states switch without easing and the motor shows
-  a static direction arrow instead of spinning.
+- Contact blade: the drawn blade is wiped and redrawn swinging between its
+  drawn rest position and its operated one (a make contact onto the pole
+  axis, a break contact to the other side), following the pole state, so
+  hand-set push buttons move too. Single-pole NO and NC contacts only.
+- Timer: a ring round the coil fills (on-delay) or drains (off-delay) with
+  the seconds left, from `novo_sim::timer_progress`.
+- Reduced motion (Preferences, Simulation, `Settings.reduce_motion`): states
+  switch without easing and a running motor shows a direction chevron
+  instead of spinning; the humming shake is off too.
 
 ## PR plan
 
 1. `novo-sim/src/devices.rs` + `tests/devices.rs`: the models.
 2. `novo-app/src/app/live_anim.rs`: lamp, motor and contact animation, one
    hook in `live.rs`.
-3. Polish: reduced motion, per-timer progress ring if `Settled` grows a
-   per-device remaining time (Potentials thread).
+3. Polish (done): contact blades, timer ring, reduced motion. The only
+   change outside this work is `Clock::coil_age` in `coupling.rs`, a
+   read-only accessor.
 
 ## Out of scope
 

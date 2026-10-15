@@ -6,6 +6,7 @@
 //! project; routes are derived and never stored.
 
 mod graph;
+pub mod model;
 mod plan;
 
 pub use graph::Network;

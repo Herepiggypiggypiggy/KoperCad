@@ -2503,3 +2503,38 @@ fn ctrl_d_copies_the_selection_with_the_next_tag_and_selects_the_copy() {
     d.app.backend.document_mut().unwrap().undo().unwrap();
     assert_eq!(symbols(&d), 2);
 }
+
+#[test]
+fn the_project_standard_defaults_to_iec_and_shows_in_the_title() {
+    use novo_symbols::Pack;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert_eq!(d.app.standard(), Pack::Iec);
+    assert_eq!(d.app.standard_suffix(), "");
+    assert!(d.doc().project().info().rules.standard.is_empty());
+
+    // The command opens the Project settings window.
+    assert!(super::workbench::app_runs("project.standard"));
+    d.app.run_command(&ctx, "project.standard", None);
+    assert!(d.app.wb.project_settings);
+    d.frame();
+
+    // Choosing NFPA is saved in the project, shown beside the name, and
+    // one undo step takes it back.
+    d.app.set_standard(Pack::Nfpa);
+    d.frame();
+    assert_eq!(d.doc().project().info().rules.standard, "nfpa");
+    assert_eq!(d.app.standard(), Pack::Nfpa);
+    assert!(
+        d.app.window_title.contains("NFPA"),
+        "{}",
+        d.app.window_title
+    );
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(d.app.standard(), Pack::Iec);
+    assert!(!d.app.window_title.contains("NFPA"));
+}

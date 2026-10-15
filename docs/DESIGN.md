@@ -170,7 +170,10 @@ breadcrumb and the outline filter, not as a separate place.
 
 **Rules document.** `rules` (or Project settings) replaces the canvas with
 the project's rules as sentences with inline choices: "Devices are numbered
-[per letter code ▾]". Esc returns.
+[per letter code ▾]". Esc returns. The drawing standard is one of these
+rules ("Symbols follow [IEC 60617 ▾]", default IEC, or NFPA 79); until the
+Rules document is built, `standard` opens a small Project settings window
+with the same choice.
 
 **Page frame.** Every page is drawn and printed in a frame, chosen by a rule
 ("Pages use [A3 landscape, company frame ▾]"), never per page by hand. The

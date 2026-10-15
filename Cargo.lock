@@ -1847,6 +1847,7 @@ dependencies = [
  "novo-checks",
  "novo-core",
  "novo-editor",
+ "novo-layout",
  "novo-pdf",
  "novo-plc",
  "novo-reports",
@@ -1885,6 +1886,7 @@ dependencies = [
  "glam",
  "naga",
  "novo-core",
+ "novo-symbols",
  "pollster 1.0.1",
  "wgpu",
 ]
@@ -1910,6 +1912,7 @@ dependencies = [
  "novo-checks",
  "novo-core",
  "novo-editor",
+ "novo-interop",
  "novo-pdf",
  "novo-py",
  "novo-reports",
@@ -2048,12 +2051,17 @@ dependencies = [
 [[package]]
 name = "novo-routing"
 version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-layout",
+]
 
 [[package]]
 name = "novo-sim"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+ "novo-symbols",
 ]
 
 [[package]]

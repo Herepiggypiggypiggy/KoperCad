@@ -1,0 +1,73 @@
+{
+  "format": 1,
+  "info": {
+    "name": "",
+    "description": "",
+    "rules": {
+      "terminals": {
+        "same_name": "join",
+        "join_link": "connector"
+      },
+      "potentials": {
+        "from_terminal_names": true
+      }
+    },
+    "properties": {}
+  },
+  "next_id": 5,
+  "parts": [],
+  "potentials": [],
+  "pages": [
+    {
+      "id": 1,
+      "name": "1",
+      "title": "",
+      "kind": {
+        "type": "schematic"
+      },
+      "format": {
+        "size": "A3",
+        "landscape": true,
+        "columns": 10
+      },
+      "properties": {}
+    },
+    {
+      "id": 2,
+      "name": "2",
+      "title": "",
+      "kind": {
+        "type": "schematic"
+      },
+      "format": {
+        "size": "A3",
+        "landscape": true,
+        "columns": 10
+      },
+      "properties": {}
+    }
+  ],
+  "devices": [
+    {
+      "id": 3,
+      "tag": "-K1",
+      "description": "Pump contactor",
+      "kind": "general",
+      "parts": [],
+      "properties": {}
+    },
+    {
+      "id": 4,
+      "tag": "-M1",
+      "description": "Pump motor",
+      "kind": "general",
+      "parts": [],
+      "properties": {}
+    }
+  ],
+  "terminals": [],
+  "symbols": [],
+  "junctions": [],
+  "wires": [],
+  "cables": []
+}
