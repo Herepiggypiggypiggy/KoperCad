@@ -47,6 +47,7 @@
 //! # Ok::<(), novo_core::ModelError>(())
 //! ```
 
+mod bridge;
 mod check;
 mod earth;
 mod geometry;
@@ -60,6 +61,7 @@ mod strip;
 mod style;
 mod suggest;
 
+pub use bridge::{BRIDGE_PITCH, bridged_symbol, connect, disconnect};
 pub use check::{Issue, IssueKind, Severity, check};
 pub use earth::{earthed_terminals, is_earth_symbol, mark_earthed, toggle_pe};
 pub use geometry::{redraw, symbol_length, symbol_pins};

@@ -44,15 +44,29 @@ pub fn symbol_pins(symbol: &SymbolKey) -> Result<Vec<Pin>> {
         .ok_or_else(|| ModelError::Format(strings::not_a_terminal_symbol(symbol)))
 }
 
-fn terminal_pins(definition: &Symbol) -> Option<Vec<Pin>> {
-    let pins: Vec<Pin> = definition
+/// All connection points of a library symbol, in library order.
+fn all_pins(definition: &Symbol) -> Vec<Pin> {
+    definition
         .connections
         .iter()
         .map(|c| {
             let pin = Pin::new(c.id.clone(), c.at[0], c.at[1]).with_direction(direction(c.dir));
             if c.optional { pin.optional() } else { pin }
         })
-        .collect();
+        .collect()
+}
+
+/// Connection points of any library symbol, for symbols that draw several
+/// terminals (the bridged ones); refused when the library lacks it.
+pub(crate) fn library_pins(symbol: &SymbolKey) -> Result<Vec<Pin>> {
+    library()
+        .and_then(|l| l.get(&symbol.0))
+        .map(all_pins)
+        .ok_or_else(|| ModelError::Format(strings::not_a_terminal_symbol(symbol)))
+}
+
+fn terminal_pins(definition: &Symbol) -> Option<Vec<Pin>> {
+    let pins = all_pins(definition);
     match pins.as_slice() {
         [one, two]
             if one.offset == Point::new(0.0, 0.0) && two.offset.x == 0.0 && two.offset.y > 0.0 =>

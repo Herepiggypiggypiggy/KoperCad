@@ -188,6 +188,8 @@ const APP_COMMANDS: &[&str] = &[
     "plc.to_plc",
     "plc.renumber_io",
     "xref.link",
+    "terminals.connect",
+    "terminals.disconnect",
     "wire.mode",
 ];
 
@@ -467,6 +469,8 @@ impl NovoApp {
             "plc.to_plc" => self.plc_to_plc(),
             "plc.renumber_io" => self.plc_renumber_io(),
             "xref.link" => self.xref_link(argument),
+            "terminals.connect" => self.connect_terminals(),
+            "terminals.disconnect" => self.disconnect_terminals(),
             other => {
                 let label = novo_workflow::commands::get(other).map_or(other, |c| c.label);
                 self.message(Level::Info, format!("{label} is not in the app yet"));

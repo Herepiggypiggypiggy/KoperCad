@@ -241,6 +241,11 @@ pub fn no_room_to_refit(symbol: &SymbolKey) -> String {
     )
 }
 
+/// Why terminals cannot be drawn as connected terminals.
+pub fn cannot_connect(reason: &str) -> String {
+    format!("these terminals cannot be connected: {reason}")
+}
+
 pub fn not_on_one_strip() -> String {
     "a jumper can only bridge terminals of one strip".to_owned()
 }

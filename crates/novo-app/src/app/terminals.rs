@@ -5,7 +5,7 @@
 
 use eframe::egui;
 use novo_canvas::{Aabb, Mark, MarkKind, MarkTarget, Vec2};
-use novo_core::{AnyId, DeviceId, SymbolRole};
+use novo_core::{AnyId, DeviceId, SymbolRole, TerminalId};
 use novo_terminals::{Occurrence, Suggestion};
 
 use super::workbench::Drawer;
@@ -152,6 +152,68 @@ impl NovoApp {
         } else {
             Some(tab)
         };
+    }
+
+    /// Connect terminals: the selected terminals become one bridged symbol
+    /// with a jumper (2 or 3, side by side).
+    pub(super) fn connect_terminals(&mut self) {
+        let selection = self.selection();
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let terminals: Vec<TerminalId> = selection
+            .iter()
+            .filter_map(|id| match id {
+                AnyId::Symbol(s) => match &doc.project().symbol(*s)?.role {
+                    SymbolRole::Terminal { terminals } if terminals.len() == 1 => {
+                        Some(terminals[0])
+                    }
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect();
+        match doc.transact("Connect terminals", |tx| {
+            novo_terminals::connect(tx, &terminals)
+        }) {
+            Ok((_, changes)) => {
+                self.changed_outside_canvas(&changes);
+                self.message(Level::Info, "Terminals connected");
+            }
+            Err(e) => self.message(Level::Error, format!("{e}")),
+        }
+    }
+
+    /// Disconnect terminals: selected bridged symbols go back to single
+    /// terminals without a jumper.
+    pub(super) fn disconnect_terminals(&mut self) {
+        let selection = self.selection();
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let symbols: Vec<_> = selection
+            .iter()
+            .filter_map(|id| match id {
+                AnyId::Symbol(s) => Some(*s),
+                _ => None,
+            })
+            .collect();
+        match doc.transact("Disconnect terminals", |tx| {
+            let mut split = 0;
+            for &s in &symbols {
+                if novo_terminals::disconnect(tx, s)? {
+                    split += 1;
+                }
+            }
+            Ok(split)
+        }) {
+            Ok((0, _)) => self.message(Level::Info, "Select connected terminals first"),
+            Ok((_, changes)) => {
+                self.changed_outside_canvas(&changes);
+                self.message(Level::Info, "Terminals disconnected");
+            }
+            Err(e) => self.message(Level::Error, format!("{e}")),
+        }
     }
 
     /// The strip the Terminals drawer shows: the selection's strip, else

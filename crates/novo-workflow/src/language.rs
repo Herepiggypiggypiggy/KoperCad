@@ -135,6 +135,12 @@ pub const DUTCH: &[Aliases] = &[
     nl("view.terminals_drawer", &[], &["klemmen", "klemmenstroken"]),
     nl("view.cables_drawer", &[], &["kabels", "aders"]),
     nl("view.devices_drawer", &[], &["apparaten", "onderdelen"]),
+    nl("terminals.connect", &[], &["klemmen verbinden", "brug"]),
+    nl(
+        "terminals.disconnect",
+        &[],
+        &["klemmen losmaken", "brug weghalen"],
+    ),
     nl("view.focus", &[], &["focusmodus"]),
     nl(
         "view.pin_outline",

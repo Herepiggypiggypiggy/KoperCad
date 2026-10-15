@@ -302,6 +302,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Selection,
     ),
     cmd(
+        "terminals.connect",
+        "Connect terminals",
+        "Edit",
+        &["bridge", "jumper", "join terminals"],
+        Needs::Selection,
+    ),
+    cmd(
+        "terminals.disconnect",
+        "Disconnect terminals",
+        "Edit",
+        &["unbridge", "remove jumper", "split terminals"],
+        Needs::Selection,
+    ),
+    cmd(
         "edit.rename",
         "Rename",
         "Edit",
