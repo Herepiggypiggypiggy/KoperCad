@@ -345,6 +345,38 @@ fn export_wires_and_cut_list_carry_cut_lengths() {
 }
 
 #[test]
+fn export_labels_in_two_layouts() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+
+    let run = novo(&["export", "labels", s(&path), "--kind", "devices"]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert!(run.out.starts_with("Line 1,Line 2,Line 3"), "{}", run.out);
+    assert!(run.out.contains("Contactor"), "{}", run.out);
+
+    let run = novo(&[
+        "export",
+        "labels",
+        s(&path),
+        "--kind",
+        "devices",
+        "--layout",
+        "brother",
+    ]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert!(
+        run.out.starts_with("'-K1\tContactor\t") || run.out.starts_with("-K1\tContactor\t"),
+        "{}",
+        run.out
+    );
+
+    let run = novo(&["export", "labels", s(&path), "--layout", "zebra"]);
+    assert_eq!(run.code, exit::USAGE);
+    let run = novo(&["export", "labels", s(&path), "--kind", "pens"]);
+    assert_eq!(run.code, exit::USAGE);
+}
+
+#[test]
 fn export_reports_as_excel_and_csv() {
     use calamine::{Reader, Xlsx, open_workbook};
 
@@ -377,7 +409,10 @@ fn export_reports_as_excel_and_csv() {
             "Cut list",
             "Terminal diagram",
             "Cable diagram",
-            "IO list"
+            "IO list",
+            "Cable schedule",
+            "Plug connection list",
+            "Labels"
         ]
     );
 
@@ -498,6 +533,83 @@ fn export_terminals_writes_the_strip_diagram_with_wire_and_bridge_columns() {
         "{}",
         run.out
     );
+}
+
+#[test]
+fn export_plc_writes_the_address_plan_and_refuses_what_it_cannot() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+    let out = dir.path().join("plc");
+
+    let run = novo(&["export", "plc", s(&path), "-o", s(&out)]);
+    assert_eq!(run.code, exit::USAGE, "{}", run.err);
+    assert!(run.err.contains("no PLC cards"), "{}", run.err);
+
+    let mut p = ScriptProject::open(&path).unwrap();
+    p.add_device("-K9", "CPU", "plc").unwrap();
+    p.save().unwrap();
+    p.close().unwrap();
+
+    let run = novo(&[
+        "export",
+        "plc",
+        s(&path),
+        "--format",
+        "hardware",
+        "-o",
+        s(&out),
+    ]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    let text = std::fs::read_to_string(out.join("demo PLC address plan.csv")).unwrap();
+    assert!(text.contains("Station;Slot;Card;Channels"), "{text}");
+    assert!(text.contains("-K9"), "{text}");
+
+    let run = novo(&["export", "plc", s(&path), "--format", "tia", "-o", s(&out)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+
+    let run = novo(&["export", "plc", s(&path), "--format", "s7", "-o", s(&out)]);
+    assert_eq!(run.code, exit::USAGE);
+    assert!(run.err.contains("unknown format"), "{}", run.err);
+}
+
+#[test]
+fn export_plate_writes_the_plate_pdf_of_the_enclosure() {
+    use novo_core::{DeviceTag, MountingPlate, Project};
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("cab.novo");
+    let mut p = Project::new("Cab");
+    p.transact("setup", |tx| {
+        let cab = tx.add_structure(DeviceTag::parse("+CAB1").unwrap(), "Cabinet", true)?;
+        novo_layout::model::set_plate(
+            tx,
+            cab,
+            MountingPlate {
+                width: 400.0,
+                height: 400.0,
+                margin: 10.0,
+            },
+        )
+    })
+    .unwrap();
+    novo_storage::ProjectFile::create(&path, &p).unwrap();
+
+    let out = dir.path().join("plate.pdf");
+    let run = novo(&["export", "plate", s(&path), "-o", s(&out)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert!(std::fs::read(&out).unwrap().starts_with(b"%PDF"));
+
+    let run = novo(&[
+        "export",
+        "plate",
+        s(&path),
+        "-o",
+        s(&out),
+        "--enclosure",
+        "+NOPE",
+    ]);
+    assert_eq!(run.code, exit::USAGE);
+    assert!(run.err.contains("no enclosure"), "{}", run.err);
 }
 
 /// An edited export of `project`: the first device's description set to

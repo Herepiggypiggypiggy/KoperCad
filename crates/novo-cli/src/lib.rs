@@ -120,8 +120,28 @@ struct ReportArgs {
     delimiter: char,
 }
 
+/// Which labels, and in which layout.
+#[derive(Debug, clap::Args)]
+struct LabelArgs {
+    file: PathBuf,
+    /// Output file (.csv); standard output when left out.
+    #[arg(short, long)]
+    output: Option<PathBuf>,
+    /// Which labels: wires, terminals, devices or cables. Repeat for
+    /// several; all when left out.
+    #[arg(short, long = "kind")]
+    kinds: Vec<String>,
+    /// CSV layout: `generic` (header row, for any software) or `brother`
+    /// (P-touch Editor database: no header, tab separated). Use one kind
+    /// per file with `brother`.
+    #[arg(long, default_value = "generic")]
+    layout: String,
+}
+
 #[derive(Debug, Subcommand)]
 enum Export {
+    /// Labels for a label printer: wire, terminal, device and cable labels.
+    Labels(LabelArgs),
     /// Bill of materials: every part with its quantity, plus devices
     /// without a part.
     Bom(ReportArgs),
@@ -136,6 +156,10 @@ enum Export {
     Terminals(ReportArgs),
     /// Table of contents (the pages).
     Toc(ReportArgs),
+    /// Cable schedule: one row per cable core with its two ends.
+    Cables(ReportArgs),
+    /// Plug connection lists: every pin of every plug with its wire.
+    Plugs(ReportArgs),
     /// Every report in one workbook, one sheet each.
     Reports {
         file: PathBuf,
@@ -161,6 +185,34 @@ enum Export {
         /// when left out.
         #[arg(long = "page", value_name = "NAME")]
         pages: Vec<String>,
+    },
+    /// The mounting plate drawing of an enclosure as a PDF: plate, door
+    /// sheet when devices need one, and the drill table.
+    Plate {
+        file: PathBuf,
+        /// Output file (.pdf).
+        #[arg(short, long)]
+        output: PathBuf,
+        /// The enclosure by tag (e.g. `+CAB1`); not needed when the project
+        /// has exactly one enclosure with a plate.
+        #[arg(long, value_name = "TAG")]
+        enclosure: Option<String>,
+    },
+    /// The PLC I/O as the file a PLC programming tool imports: one file per
+    /// station for `plcopen`, `tia` and `studio5000`, one table for `csv`.
+    Plc {
+        file: PathBuf,
+        /// `csv`, `plcopen` (CODESYS and compatible), `tia` (TIA Portal
+        /// tag table, .xlsx), `studio5000` (tag CSV) or `hardware` (the
+        /// address plan).
+        #[arg(long, default_value = "csv")]
+        format: String,
+        /// Directory to write into; it is created when missing.
+        #[arg(short, long)]
+        output: PathBuf,
+        /// Also write a tag for every spare channel.
+        #[arg(long)]
+        spares: bool,
     },
     /// Schematic pages as DXF drawings (millimetres, y up), for CAD
     /// programs and laser or plotter shops.
@@ -283,6 +335,7 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             }
             Ok(exit::OK)
         }
+        Cmd::Export(Export::Labels(args)) => export_labels(&args, out),
         Cmd::Export(Export::Bom(args)) => export_reports(&args.file, &["bom"], &args, out),
         Cmd::Export(Export::Devices(args)) => export_reports(&args.file, &["devices"], &args, out),
         Cmd::Export(Export::Wires(args)) => export_reports(&args.file, &["wires"], &args, out),
@@ -291,6 +344,10 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             export_reports(&args.file, &["terminals"], &args, out)
         }
         Cmd::Export(Export::Toc(args)) => export_reports(&args.file, &["toc"], &args, out),
+        Cmd::Export(Export::Cables(args)) => {
+            export_reports(&args.file, &["cableschedule"], &args, out)
+        }
+        Cmd::Export(Export::Plugs(args)) => export_reports(&args.file, &["plugs"], &args, out),
         Cmd::Export(Export::Reports { file, output }) => {
             let args = ReportArgs {
                 file,
@@ -316,6 +373,26 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             let project = read(&file)?;
             let bytes = pdf(&project, &pages)?;
             write_output(&file, &output, &bytes)?;
+            Ok(exit::OK)
+        }
+        Cmd::Export(Export::Plate {
+            file,
+            output,
+            enclosure,
+        }) => {
+            let project = read(&file)?;
+            let bytes = plate_pdf(&project, enclosure.as_deref())?;
+            write_output(&file, &output, &bytes)?;
+            Ok(exit::OK)
+        }
+        Cmd::Export(Export::Plc {
+            file,
+            format,
+            output,
+            spares,
+        }) => {
+            let project = read(&file)?;
+            export_plc(&project, &file, &format, &output, spares, out)?;
             Ok(exit::OK)
         }
         Cmd::Export(Export::Dxf {
@@ -743,6 +820,45 @@ fn export_reports(
     Ok(exit::OK)
 }
 
+fn export_labels(args: &LabelArgs, out: &mut dyn Write) -> Result<i32, Failure> {
+    let usage = |m: String| Failure::new(exit::USAGE, m);
+    let layout = novo_reports::LabelLayout::parse(&args.layout).ok_or_else(|| {
+        usage(format!(
+            "unknown label layout `{}` (generic or brother)",
+            args.layout
+        ))
+    })?;
+    for kind in &args.kinds {
+        if !novo_reports::Labels::KINDS.contains(&kind.as_str()) {
+            return Err(usage(format!(
+                "unknown label kind `{kind}` ({})",
+                novo_reports::Labels::KINDS.join(", ")
+            )));
+        }
+    }
+    let project = read(&args.file)?;
+    let labels = novo_reports::Report::generate(&novo_reports::Labels, &project);
+    let kinds: Vec<&str> = args.kinds.iter().map(String::as_str).collect();
+    let mut text = novo_reports::labels_csv(&labels, &kinds, layout);
+    match &args.output {
+        Some(path) => {
+            if novo_py::is_project_path(path) {
+                return write_output(&args.file, path, &[]).map(|()| exit::OK);
+            }
+            write_output(&args.file, path, text.as_bytes())?;
+        }
+        None => {
+            // A byte order mark is only noise on a terminal or in a pipe.
+            if let Some(stripped) = text.strip_prefix('\u{feff}') {
+                text = stripped.to_owned();
+            }
+            out.write_all(text.as_bytes())
+                .map_err(|e| Failure::new(exit::WRITE, format!("cannot write output: {e}")))?;
+        }
+    }
+    Ok(exit::OK)
+}
+
 /// The PDF of the given pages (all when empty), drawn with the symbol
 /// library's artwork.
 fn pdf(project: &Project, pages: &[String]) -> Result<Vec<u8>, Failure> {
@@ -818,8 +934,93 @@ fn file_stem(name: &str) -> String {
     }
 }
 
+/// The plate PDF of one enclosure: the one named by `tag`, or the only
+/// enclosure that has a plate.
+fn plate_pdf(project: &Project, tag: Option<&str>) -> Result<Vec<u8>, Failure> {
+    let usage = |text: String| Failure::new(exit::USAGE, text);
+    let with_plate: Vec<_> = project
+        .structures()
+        .filter(|s| s.enclosure && s.plate.is_some())
+        .collect();
+    let chosen = match tag {
+        Some(tag) => {
+            let wanted = tag.trim().to_lowercase();
+            let all = project.structures().filter(|s| s.enclosure);
+            let found = all
+                .into_iter()
+                .find(|s| s.tag.to_string().to_lowercase() == wanted);
+            found.ok_or_else(|| usage(format!("there is no enclosure `{tag}`")))?
+        }
+        None => match with_plate.as_slice() {
+            [one] => one,
+            [] => return Err(usage("no enclosure has a mounting plate".into())),
+            _ => {
+                let tags: Vec<String> = with_plate.iter().map(|s| s.tag.to_string()).collect();
+                return Err(usage(format!(
+                    "several enclosures have a plate, pick one with --enclosure: {}",
+                    tags.join(", ")
+                )));
+            }
+        },
+    };
+    let (docs, _table) = novo_layout::model::plate_documents(project, chosen.id)
+        .ok_or_else(|| usage(format!("{} has no mounting plate", chosen.tag)))?;
+    Ok(novo_pdf::plate::export_plate_pdf(
+        &docs,
+        &project.info().name,
+    ))
+}
+
 /// Writes the pages as DXF: one `.dxf` file when `output` ends in `.dxf`
 /// (exactly one page), otherwise one file per page in the directory.
+fn export_plc(
+    project: &Project,
+    input: &Path,
+    format: &str,
+    output: &Path,
+    spares: bool,
+    out: &mut dyn Write,
+) -> Result<(), Failure> {
+    let format = novo_plc::link::LinkFormat::from_key(format).ok_or_else(|| {
+        Failure::new(
+            exit::USAGE,
+            format!("unknown format {format:?}: use csv, plcopen, tia, studio5000 or hardware"),
+        )
+    })?;
+    let library = novo_py::library().map_err(|e| Failure::new(exit::UNAVAILABLE, e.to_string()))?;
+    let index = novo_plc::PlcIndex::build(project, library);
+    if index.cards().is_empty() {
+        return Err(Failure::new(exit::USAGE, "the project has no PLC cards"));
+    }
+    let options = novo_plc::link::ExportOptions {
+        include_spares: spares,
+        stamp: String::new(),
+        project: project.info().name.clone(),
+    };
+    let exported = novo_plc::link::export(project, &index, format, &options);
+    std::fs::create_dir_all(output).map_err(|e| {
+        Failure::new(
+            exit::WRITE,
+            format!("cannot create {}: {e}", output.display()),
+        )
+    })?;
+    let stem = file_stem(&input.file_stem().unwrap_or_default().to_string_lossy());
+    for file in &exported.files {
+        let name = if file.suffix.is_empty() {
+            format!("{stem} PLC.{}", file.extension)
+        } else {
+            format!("{stem} PLC {}.{}", file_stem(&file.suffix), file.extension)
+        };
+        let path = output.join(name);
+        write_output(input, &path, &file.bytes)?;
+        print(out, &format!("{} ({} tags)", path.display(), file.tags))?;
+    }
+    for warning in &exported.warnings {
+        print(out, &format!("note: {warning}"))?;
+    }
+    Ok(())
+}
+
 fn export_dxf(
     project: &Project,
     input: &Path,
