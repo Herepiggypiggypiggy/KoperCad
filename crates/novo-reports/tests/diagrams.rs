@@ -428,3 +428,76 @@ fn the_contents_list_splits_group_and_panel_and_lists_panels() {
     let panels = toc.sections[1].text_rows();
     assert_eq!(panels, [["+K1", "=10D41, =11D21", "2"]]);
 }
+
+#[test]
+fn strip_diagram_draws_blocks_jumper_bars_and_end_plates() {
+    use novo_reports::{PageSetup, strip_diagram};
+
+    let mut doc = Document::default();
+    let s = motor_starter(&mut doc).expect("fixture builds");
+    let terminals: Vec<_> = doc
+        .project()
+        .terminals_of_strip(s.x1)
+        .iter()
+        .map(|t| t.id)
+        .collect();
+    doc.transact("Bridge", |tx| {
+        novo_terminals::connect_terminals(tx, &terminals[..2])
+    })
+    .expect("bridge");
+    let sheets = strip_diagram(doc.project(), s.x1, &PageSetup::default());
+    assert_eq!(sheets.len(), 1);
+    let sheet = &sheets[0];
+    let text = |t: &str| {
+        sheet
+            .texts
+            .iter()
+            .filter(|b| b.text == t && b.bold && b.align == novo_reports::Align::Center)
+            .count()
+    };
+    assert_eq!(text("1"), 1);
+    assert_eq!(text("PE"), 1);
+    assert!(sheet.texts.iter().any(|b| b.text.contains("-X1")));
+    // Two end plates (4 rules each), 4 rules per block, a bar plus two
+    // ticks for the bridge of two terminals, and the header rule.
+    let blocks = terminals.len();
+    assert_eq!(sheet.lines.len(), 8 + 4 * blocks + 3 + 1);
+    // The bar is left of the blocks and spans exactly the two bridged rows.
+    let bar = sheet
+        .lines
+        .iter()
+        .filter(|l| l.from.0 == l.to.0 && l.heavy)
+        .min_by(|a, b| a.from.0.total_cmp(&b.from.0))
+        .map(|l| (l.to.1 - l.from.1).abs());
+    assert!(bar.is_some_and(|len| (len - 6.0).abs() < 1e-9), "{bar:?}");
+}
+
+#[test]
+fn generated_terminal_pages_print_the_drawn_strip() {
+    let mut doc = Document::default();
+    let s = motor_starter(&mut doc).expect("fixture builds");
+    doc.transact("Page", |tx| {
+        let page = tx.add_page("20")?;
+        tx.update::<Page>(page, |p| {
+            p.kind = PageKind::Generated {
+                generator: "terminals".into(),
+            };
+        })
+    })
+    .expect("page");
+    let mut reports = LiveReports::standard();
+    let sheets = reports.generated_sheets(doc.project());
+    let layout = reports
+        .layout_sheet(doc.project(), &sheets[0])
+        .expect("layout");
+    // Drawn, not tabulated: the strip heading and block outlines, and the
+    // block-per-terminal text for -X1.
+    assert!(
+        layout
+            .texts
+            .iter()
+            .any(|t| t.text.starts_with("Terminal strip"))
+    );
+    let tag = doc.project().device(s.x1).expect("strip").tag.to_string();
+    assert!(layout.texts.iter().any(|t| t.text.ends_with(&tag)));
+}

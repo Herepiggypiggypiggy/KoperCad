@@ -7,6 +7,8 @@ Goal: per terminal strip a diagram (terminal number, jumpers and bridges, wires 
 Done:
 - PR 1: strip rows carry wire in/out, bridged-to and location (plug list now lives in #416 of the cable thread).
 
+Done: drawn strip diagram (strip_diagram.rs).
+
 Next:
 - Drawn strip diagram page (terminal blocks with jumper bars, wires left and right) for the PDF.
 - PDF and CSV for terminal diagrams; drawer view for plugs in novo-app.

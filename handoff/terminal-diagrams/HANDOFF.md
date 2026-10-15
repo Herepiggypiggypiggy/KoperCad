@@ -1,6 +1,10 @@
 # Terminal diagrams: handoff
 
-Split (Supervisor, 2026-10-15): this thread owns the graphical strip diagram (bridges/jumpers, end plates) and its PDF/CSV/drawer; "Cable and terminal strip plans" (session_01RZjDVCS7GLdP7YT6jnyYoF) owns cable schedule, tabular strip plan and the plug list (`plugs`, PR #416).
-Data: novo-terminals `screen` (ScreenRow: wires_internal, wires_external, bridged_with). Report: novo-reports diagrams.rs `TerminalDiagram` columns incl. Wire in, Bridged to, Wire out, Location.
-Next: strip_diagram.rs module with a drawn strip (blocks, jumper bars, end plates), then PDF.
+Split (Supervisor/coordinator, final 2026-10-15): this thread owns the terminal strip rows and the drawn strip diagram (bridges/jumpers, end plates) with its PDF/CSV; "Cable and terminal strip plans" (session_01RZjDVCS7GLdP7YT6jnyYoF, PR #416) owns the cable schedule, the tabular strip plan and the plug list (`plugs`, `export plugs`). Do not touch plugs.
+
+Data: novo-terminals `screen` (ScreenRow: wires_internal, wires_external, bridged_with). Report: novo-reports diagrams.rs `TerminalDiagram` columns incl. Wire in, Bridged to, Wire out, Location (Excel/CSV keep the table).
+Drawn diagram: novo-reports strip_diagram.rs (`strip_diagram`, `strip_sheet`): blocks per terminal, jumper bars, end plates, as a PageLayout; `LiveReports::layout_sheet` uses it for the `terminals` generated page, so canvas and PDF print it.
+
+How to reach it: add the generated page "Terminal diagram" (default generated pages, or Page > generated) ; each strip prints as a drawn sheet. Terminals drawer shows the same rows.
+Next: CSV verb for the strip rows, Terminals drawer columns for wire in/out and bridged-to (UI thread "UI integration: reports and checks", session_01TaTTPuTqhk8bHd277oJRFR), end-plate options (part-driven).
 Check: cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
