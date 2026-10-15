@@ -83,11 +83,16 @@ impl IndexRule {
     }
 
     /// The index to propose for the next revision of `project`.
+    /// Skips indexes already taken (one typed by hand ahead of the rule).
     pub fn next(self, project: &Project) -> Option<String> {
-        match project.latest_revision() {
-            None => Some(self.first()),
-            Some(latest) => self.after(&latest.index),
+        let mut index = match project.latest_revision() {
+            None => self.first(),
+            Some(latest) => self.after(&latest.index)?,
+        };
+        while project.revision_by_index(&index).is_some() {
+            index = self.after(&index)?;
         }
+        Some(index)
     }
 }
 
@@ -115,11 +120,15 @@ pub struct Change {
 pub struct ChangeSet {
     pub pages: BTreeMap<PageId, Vec<Change>>,
     pub project: Vec<Change>,
+    /// The project information fields that differ (`name`,
+    /// `description`, `rules`, `properties`). The name and description
+    /// print in every title block.
+    pub info: Vec<String>,
 }
 
 impl ChangeSet {
     pub fn is_empty(&self) -> bool {
-        self.pages.is_empty() && self.project.is_empty()
+        self.pages.is_empty() && self.project.is_empty() && self.info.is_empty()
     }
 
     /// The pages with at least one change, in id order.
@@ -139,13 +148,16 @@ pub fn diff(old: &Project, new: &Project) -> ChangeSet {
     let before: BTreeMap<AnyId, Record> = old.records().map(|r| (r.id(), r)).collect();
     let after: BTreeMap<AnyId, Record> = new.records().map(|r| (r.id(), r)).collect();
     let ids: BTreeSet<AnyId> = before.keys().chain(after.keys()).copied().collect();
-    let mut set = ChangeSet::default();
+    let mut set = ChangeSet {
+        info: json_fields_that_differ(old.info(), new.info()),
+        ..ChangeSet::default()
+    };
     for id in ids {
         let kind = match (before.get(&id), after.get(&id)) {
             (None, Some(_)) => ChangeKind::Added,
             (Some(_), None) => ChangeKind::Removed,
             (Some(a), Some(b)) if a != b => {
-                let mut fields = changed_fields(a, b);
+                let mut fields = json_fields_that_differ(a, b);
                 // Issuing re-takes every page's freeze; that is bookkeeping
                 // of the issue, not a change to the drawing.
                 if matches!(id, AnyId::Page(_)) {
@@ -172,8 +184,8 @@ pub fn diff(old: &Project, new: &Project) -> ChangeSet {
     set
 }
 
-/// The top-level fields of two versions of a record that differ.
-fn changed_fields(a: &Record, b: &Record) -> Vec<String> {
+/// The top-level JSON fields of two values that differ.
+fn json_fields_that_differ<T: serde::Serialize>(a: &T, b: &T) -> Vec<String> {
     let (Ok(serde_json::Value::Object(a)), Ok(serde_json::Value::Object(b))) =
         (serde_json::to_value(a), serde_json::to_value(b))
     else {
