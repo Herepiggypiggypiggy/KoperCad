@@ -53,6 +53,7 @@ mod protection;
 mod reports;
 mod reports_view;
 mod revisions;
+mod sheet_import;
 mod sheets;
 mod simulate;
 mod sizing;
@@ -893,6 +894,7 @@ impl NovoApp {
         self.faults_window(&ctx);
         self.numbering_window(&ctx);
         self.page_form_dialog(&ctx);
+        self.sheet_import_dialog(&ctx);
         self.outline_dialogs(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {
             self.run_command(&ctx, id, None);
@@ -970,6 +972,7 @@ impl NovoApp {
             || self.wb.wheel.is_some()
             || self.wb.renumber.is_some()
             || self.wb.page_form.is_some()
+            || self.wb.sheet_import.is_some()
             || self.ol.dialog_open()
             || self.backend.recovery_offer().is_some()
     }

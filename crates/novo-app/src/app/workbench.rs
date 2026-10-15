@@ -78,6 +78,8 @@ pub(crate) struct Workbench {
     pub(super) numbering: Option<super::numbering::NumberingWindow>,
     /// The new pages, group and panel form, while open.
     pub(super) page_form: Option<super::pages::PageForm>,
+    /// The spreadsheet import preview, while it is open.
+    pub(super) sheet_import: Option<super::sheet_import::SheetImport>,
     /// Which sheet of a generated page the canvas shows (0 for the first).
     pub(super) sheet: usize,
     /// The Project options and variants window, while open.
@@ -183,6 +185,7 @@ impl Default for Workbench {
             faults: None,
             numbering: None,
             page_form: None,
+            sheet_import: None,
             sheet: 0,
             options: None,
             generate: None,
@@ -294,6 +297,7 @@ const APP_COMMANDS: &[&str] = &[
     "file.remove_background",
     "export.dxf_page",
     "export.dxf_all",
+    "import.spreadsheet",
     "export.step",
     "export.aml",
     "file.import_aml",
@@ -727,6 +731,7 @@ impl NovoApp {
             "export.dxf_all" => {
                 self.export_dxf(super::dxf::DxfScope::AllPages);
             }
+            "import.spreadsheet" => self.import_sheet(),
             "export.step" => {
                 self.export_step();
             }
