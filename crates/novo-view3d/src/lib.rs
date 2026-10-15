@@ -6,11 +6,16 @@
 //! requests.
 
 pub mod camera;
+pub mod cube;
 pub mod cull;
 pub mod demo;
+pub mod feel;
+pub mod governor;
+pub mod labels;
 pub mod look;
 pub mod math;
 pub mod mesh;
+pub mod palette;
 pub mod pick;
 pub mod scene;
 pub mod view_state;

@@ -61,42 +61,60 @@ pub struct Look {
     pub contact_shade: f32,
 }
 
-fn dark_surface(kind: ItemKind) -> SurfaceStyle {
-    let s = |color: Rgb, edge: Rgb, alpha: f32| SurfaceStyle { color, edge, alpha };
+fn rgb3(c: crate::palette::Rgba) -> Rgb {
+    [c[0], c[1], c[2]]
+}
+
+/// Surface of a kind from the spec materials (3d-look.md section 3); the edge
+/// is the base colour times the theme's edge factor, never pure black.
+fn surface(kind: ItemKind, edge_factor: f32) -> SurfaceStyle {
+    use crate::palette::*;
+    let s = |m: Material, alpha: f32| SurfaceStyle {
+        color: rgb3(m.color),
+        edge: rgb3(edge_color(m.color, edge_factor)),
+        alpha,
+    };
     match kind {
-        ItemKind::Plate => s([0x8f, 0x8a, 0x82], [0x5f, 0x5b, 0x55], 1.0),
-        ItemKind::Rail => s([0xb8, 0xbd, 0xc5], [0x6d, 0x72, 0x7a], 1.0),
-        ItemKind::Duct => s([0xcf, 0xd2, 0xd6], [0x7b, 0x7f, 0x85], 1.0),
-        ItemKind::Device => s([0xe1, 0xe4, 0xe9], [0x4a, 0x4f, 0x57], 1.0),
-        ItemKind::Door => s([0x7f, 0x95, 0xad], [0xa9, 0xbb, 0xcf], 0.22),
-        ItemKind::Enclosure => s([0x6b, 0x79, 0x8a], [0x93, 0xa3, 0xb6], 0.16),
-        ItemKind::Wire => s([0xc1, 0x7a, 0x3a], [0x8c, 0x56, 0x26], 1.0),
-        _ => s([0xc4, 0xc7, 0xcc], [0x6d, 0x72, 0x7a], 1.0),
+        ItemKind::Plate => s(PLATE_GALVANISED, 1.0),
+        ItemKind::Rail => s(DIN_RAIL, 1.0),
+        ItemKind::Duct => s(DUCT_RAL7030, 1.0),
+        ItemKind::Device => s(DEVICE_LIGHT, 1.0),
+        ItemKind::Door => s(ENCLOSURE_RAL7035, GHOST_DOOR_PCT as f32 / 100.0),
+        ItemKind::Enclosure => s(ENCLOSURE_RAL7035, GHOST_WALL_PCT as f32 / 100.0),
+        ItemKind::Wire => SurfaceStyle {
+            color: rgb3(wire_rgba(WireColor::Unknown).0),
+            edge: rgb3(edge_color(wire_rgba(WireColor::Unknown).0, edge_factor)),
+            alpha: 1.0,
+        },
+        _ => s(DEVICE_LIGHT, 1.0),
     }
 }
 
-fn dark_mark(mark: Mark) -> MarkStyle {
-    let m = |glyph: Glyph, tint: Rgb, amount: f32, edge: Rgb| MarkStyle {
+/// Marks always draw a glyph as well as a colour (3d-look.md section 5).
+fn mark_style(mark: Mark) -> MarkStyle {
+    let status = |glyph: Glyph, c: Rgb, amount: f32| MarkStyle {
         glyph,
-        tint: Some(tint),
+        tint: Some(c),
         tint_amount: amount,
-        edge: Some(edge),
+        edge: Some(c),
     };
+    const ERROR: Rgb = [0xE0, 0x76, 0x6C];
+    const WARNING: Rgb = [0xD6, 0xA5, 0x5C];
     match mark {
-        Mark::Collision => m(Glyph::Cross, [0xe5, 0x48, 0x4d], 0.55, [0xff, 0x6b, 0x6b]),
-        Mark::TooClose => m(Glyph::Bang, [0xf0, 0xa2, 0x2e], 0.40, [0xff, 0xb7, 0x4a]),
-        Mark::Outside => m(Glyph::Bang, [0xe5, 0x48, 0x4d], 0.30, [0xff, 0x6b, 0x6b]),
+        Mark::Collision => status(Glyph::Cross, ERROR, 0.40),
+        Mark::TooClose => status(Glyph::Bang, WARNING, 0.30),
+        Mark::Outside => status(Glyph::Bang, ERROR, 0.25),
         Mark::GuessedSize => MarkStyle {
             glyph: Glyph::DashedEdge,
             tint: None,
             tint_amount: 0.0,
-            edge: Some([0x8c, 0xb4, 0xff]),
+            edge: Some([0x98, 0x96, 0x91]),
         },
         Mark::GeometryMismatch => MarkStyle {
             glyph: Glyph::Bang,
             tint: None,
             tint_amount: 0.0,
-            edge: Some([0xf0, 0xa2, 0x2e]),
+            edge: Some(WARNING),
         },
         _ => MarkStyle {
             glyph: Glyph::None,
@@ -136,31 +154,48 @@ impl Look {
         self.marks[mark.index()]
     }
 
-    /// Calm technical illustration on the dark app theme.
-    pub fn dark() -> Self {
+    /// The look for a theme (3d-look.md section 7). Materials are the same in
+    /// both; the room, edges and light level change.
+    pub fn for_theme(theme: crate::palette::View3dTheme) -> Self {
+        let c = theme.colors();
+        let key = c.light;
+        let (az, el) = (
+            key.key_azimuth_deg.to_radians(),
+            key.key_elevation_deg.to_radians(),
+        );
         Self {
-            background: [[0x2d, 0x30, 0x35], [0x1b, 0x1d, 0x20]],
-            surfaces: KINDS.map(dark_surface),
-            marks: MARKS.map(dark_mark),
+            background: [rgb3(c.background_top), rgb3(c.background_bottom)],
+            surfaces: KINDS.map(|k| surface(k, c.edge_factor)),
+            marks: MARKS.map(mark_style),
             selection: Highlight {
-                tint: [0xd9, 0x8b, 0x4b],
-                tint_amount: 0.35,
-                edge: [0xff, 0xa8, 0x5c],
+                tint: rgb3(c.selection),
+                tint_amount: 0.12,
+                edge: rgb3(c.selection),
             },
             hover: Highlight {
-                tint: [0xff, 0xff, 0xff],
-                tint_amount: 0.18,
-                edge: [0xff, 0xd5, 0xa8],
+                tint: rgb3(c.hover),
+                tint_amount: 0.0,
+                edge: rgb3(c.hover),
             },
             related: Highlight {
-                tint: [0x8c, 0xb4, 0xff],
-                tint_amount: 0.25,
-                edge: [0x8c, 0xb4, 0xff],
+                tint: rgb3(c.hover),
+                tint_amount: 0.15,
+                edge: rgb3(c.hover),
             },
-            light: [-0.45, 0.75, 0.5],
-            ambient: 0.55,
-            contact_shade: 0.22,
+            // Towards the light: front left above, +Y up, +Z out of the plate.
+            light: [az.sin() * el.cos(), el.sin(), az.cos() * el.cos()],
+            ambient: key.ambient,
+            contact_shade: key.contact_max,
         }
+    }
+
+    /// Calm technical illustration on the dark app theme.
+    pub fn dark() -> Self {
+        Self::for_theme(crate::palette::View3dTheme::Dark)
+    }
+
+    pub fn light() -> Self {
+        Self::for_theme(crate::palette::View3dTheme::Light)
     }
 }
 
@@ -175,4 +210,60 @@ pub fn mix(a: Rgb, b: Rgb, t: f32) -> Rgb {
     let t = t.clamp(0.0, 1.0);
     let f = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t).round() as u8;
     [f(a[0], b[0]), f(a[1], b[1]), f(a[2], b[2])]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_problem_mark_draws_a_glyph() {
+        let look = Look::dark();
+        for m in [
+            Mark::Collision,
+            Mark::TooClose,
+            Mark::Outside,
+            Mark::GuessedSize,
+            Mark::GeometryMismatch,
+        ] {
+            assert_ne!(look.mark(m).glyph, Glyph::None, "{m:?}");
+        }
+    }
+
+    #[test]
+    fn the_light_vector_is_a_unit_vector_from_front_left_above() {
+        let l = Look::dark().light;
+        let n = (l[0] * l[0] + l[1] * l[1] + l[2] * l[2]).sqrt();
+        assert!((n - 1.0).abs() < 1e-5);
+        assert!(l[0] < 0.0 && l[1] > 0.0 && l[2] > 0.0);
+    }
+
+    #[test]
+    fn materials_match_in_both_themes_but_edges_and_room_differ() {
+        let (d, l) = (Look::dark(), Look::light());
+        assert_eq!(
+            d.surface(ItemKind::Plate).color,
+            l.surface(ItemKind::Plate).color
+        );
+        assert_ne!(
+            d.surface(ItemKind::Plate).edge,
+            l.surface(ItemKind::Plate).edge
+        );
+        assert_ne!(d.background, l.background);
+    }
+
+    #[test]
+    fn selection_is_copper_and_hover_is_not_tinted() {
+        let look = Look::dark();
+        assert_eq!(look.selection.edge, [0xC8, 0x8A, 0x5E]);
+        assert_eq!(look.hover.tint_amount, 0.0);
+        assert_ne!(look.hover.edge, look.selection.edge);
+    }
+
+    #[test]
+    fn the_shell_is_ghosted() {
+        let look = Look::dark();
+        assert!(look.surface(ItemKind::Enclosure).alpha < 0.2);
+        assert!(look.surface(ItemKind::Door).alpha < look.surface(ItemKind::Enclosure).alpha);
+    }
 }
