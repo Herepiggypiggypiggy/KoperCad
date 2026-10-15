@@ -214,6 +214,8 @@ pub const DUTCH: &[Aliases] = &[
         &["kasten", "kastenlijst", "behuizingen"],
     ),
     nl("view.changes", &["wijzigingen"], &["vergelijk", "verschil"]),
+    nl("view.next_change", &[], &["volgende wijziging"]),
+    nl("view.previous_change", &[], &["vorige wijziging"]),
     nl(
         "sim.live",
         &[],

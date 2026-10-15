@@ -93,3 +93,41 @@ fn clicking_a_change_row_opens_its_page_and_selects_the_object() {
     d.frame();
     assert_eq!(d.app.selection(), vec![novo_core::AnyId::Symbol(moved)]);
 }
+
+#[test]
+fn next_and_previous_change_walk_the_list_and_turn_the_mode_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let first = d.place("mcb3", 80.0, 48.0);
+    d.frame();
+    let issued = d
+        .app
+        .backend
+        .issue_revision(None, "2026-10-15", "TV", "First")
+        .unwrap();
+    d.app.changed_outside_canvas(&issued.changes);
+    let second = d.place("mcb3", 120.0, 48.0);
+    d.frame();
+    assert!(super::workbench::app_runs("view.next_change"));
+    assert!(super::workbench::app_runs("view.previous_change"));
+    assert!(d.app.wb.changes.is_none());
+    d.app.run_command(&ctx, "view.next_change", None);
+    d.frame();
+    d.frame();
+    assert!(d.app.wb.changes.is_some(), "stepping turns the mode on");
+    let selected = d.app.selection();
+    assert_eq!(selected.len(), 1);
+    // One more step moves on or wraps, never leaves the selection empty.
+    d.app.run_command(&ctx, "view.next_change", None);
+    d.frame();
+    d.frame();
+    assert_eq!(d.app.selection().len(), 1);
+    d.app.run_command(&ctx, "view.previous_change", None);
+    d.frame();
+    d.frame();
+    assert_eq!(d.app.selection(), selected);
+    let _ = (first, second);
+}

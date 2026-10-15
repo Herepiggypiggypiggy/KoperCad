@@ -663,6 +663,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["changes"],
     ),
     cmd(
+        "view.next_change",
+        "Next change",
+        "View",
+        &["next difference"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.previous_change",
+        "Previous change",
+        "View",
+        &["previous difference"],
+        Needs::Project,
+    ),
+    cmd(
         "sim.live",
         "Show live potentials",
         "View",
