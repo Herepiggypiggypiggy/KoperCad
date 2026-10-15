@@ -1129,6 +1129,23 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["problems"],
     ),
     cmd(
+        "check.standards",
+        "Standards check",
+        "Check",
+        &[
+            "standards",
+            "iec",
+            "60204",
+            "nfpa",
+            "79",
+            "ul",
+            "508a",
+            "sccr",
+            "compliance",
+        ],
+        Needs::Project,
+    ),
+    cmd(
         "check.next_problem",
         "Next problem",
         "Check",

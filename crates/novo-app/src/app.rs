@@ -58,6 +58,7 @@ mod sheet_import;
 mod sheets;
 mod simulate;
 mod sizing;
+mod standards;
 mod status_bar;
 mod terminals;
 mod title_revisions;
@@ -194,6 +195,7 @@ pub struct NovoApp {
     wb: Workbench,
     messages: Vec<Message>,
     show_about: bool,
+    standards_open: bool,
     window_title: String,
     /// Opened on the first frame, so errors show in the window.
     open_on_start: Option<PathBuf>,
@@ -276,6 +278,7 @@ impl NovoApp {
             wb,
             messages: Vec::new(),
             show_about: false,
+            standards_open: false,
             window_title: String::new(),
             open_on_start: None,
             started: false,
@@ -410,6 +413,7 @@ impl NovoApp {
             | Action::CloseProject
             | Action::ZoomToFit
             | Action::SizeEnclosure
+            | Action::StandardsCheck
             | Action::EnclosureList
             | Action::Protection => open,
             Action::MotorStart => open,
@@ -461,6 +465,7 @@ impl NovoApp {
                 self.switch_workspace(workspace::Workspace::Cabinet);
                 self.sizing.editor_open = true;
             }
+            Action::StandardsCheck => self.standards_open = true,
             Action::Protection => self.protection.open = true,
             Action::MotorStart => self.open_motor_start(),
             Action::PinOutline => {
@@ -878,6 +883,7 @@ impl NovoApp {
         self.command_field(&ctx, canvas_rect);
         self.recovery_dialog(&ctx);
         self.about_dialog(&ctx);
+        self.standards_window(&ctx);
         self.learn_window(&ctx);
         self.motor_start_window(&ctx);
         self.renumber_dialog(&ctx);

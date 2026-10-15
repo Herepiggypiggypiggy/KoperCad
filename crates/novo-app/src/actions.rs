@@ -23,6 +23,7 @@ pub enum Action {
     ShowCabinet,
     SizeEnclosure,
     EnclosureList,
+    StandardsCheck,
     Protection,
     MotorStart,
     PinOutline,
@@ -51,6 +52,7 @@ impl Action {
         Action::ShowCabinet,
         Action::SizeEnclosure,
         Action::EnclosureList,
+        Action::StandardsCheck,
         Action::Protection,
         Action::MotorStart,
         Action::PinOutline,
@@ -81,6 +83,7 @@ impl Action {
             Action::ShowCabinet => "view.cabinet",
             Action::SizeEnclosure => "cabinet.size-enclosure",
             Action::EnclosureList => "cabinet.enclosures",
+            Action::StandardsCheck => "check.standards",
             Action::Protection => "view.protection",
             Action::MotorStart => "simulate.motor-start",
             Action::PinOutline => "view.pin_outline",
@@ -114,6 +117,7 @@ impl Action {
             Action::ShowCabinet => "Cabinet",
             Action::SizeEnclosure => "Size the enclosure…",
             Action::EnclosureList => "Enclosures…",
+            Action::StandardsCheck => "Standards check…",
             Action::Protection => "Protection: curves, selectivity, rating…",
             Action::MotorStart => "Simulate motor start…",
             Action::PinOutline => "Pin outline",
@@ -143,6 +147,7 @@ impl Action {
             | Action::ShowCabinet
             | Action::SizeEnclosure
             | Action::EnclosureList
+            | Action::StandardsCheck
             | Action::Protection
             | Action::MotorStart
             | Action::PinOutline
@@ -179,6 +184,7 @@ impl Action {
             | Action::ShowWalkthrough
             | Action::Learn
             | Action::SizeEnclosure
+            | Action::StandardsCheck
             | Action::EnclosureList
             | Action::Protection
             | Action::MotorStart => return None,
