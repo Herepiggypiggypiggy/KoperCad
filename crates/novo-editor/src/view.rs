@@ -488,6 +488,23 @@ impl SchematicView {
                     .with(Primitive::stroked(Shape::polyline(pts, false), ghost)),
             );
         }
+        if let Some(piece) = &preview.piece {
+            // The corner or T the next click places: its arms as short
+            // stubs and a handle dot, so the pointer shows what R flips.
+            let at = model::vec(piece.at);
+            for d in &piece.arms {
+                let v = d.vector();
+                let end = model::vec(Point::new(piece.at.x + v.x * 3.0, piece.at.y + v.y * 3.0));
+                items.push(Item::new(layer).unselectable().with(Primitive::stroked(
+                    Shape::polyline([at, end], false),
+                    Stroke::screen(3.0, self.canvas.style.hover.color),
+                )));
+            }
+            items.push(Item::new(layer).unselectable().with(Primitive::stroked(
+                Shape::circle(at, 0.8),
+                Stroke::screen(2.0, self.canvas.style.hover.color),
+            )));
+        }
         if !preview.proposals.is_empty() {
             let zoom = self.canvas.viewport.zoom;
             items.push(proposal_item(

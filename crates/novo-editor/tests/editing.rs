@@ -2378,3 +2378,36 @@ fn the_pe_menu_shows_the_state_and_the_override() {
     let menu = potential_menu::pe_menu(doc.project(), &sel).unwrap();
     assert!(menu.all_pe && menu.overridden);
 }
+
+#[test]
+fn corners_preview_shows_the_corner_and_t_piece_with_their_arms() {
+    use novo_core::Direction;
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/contacts/no", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.click(&mut doc, page, p(40.0, 120.0), TOL);
+    let a = symbol_at(&doc, page, p(40.0, 40.0));
+    let b = symbol_at(&doc, page, p(40.0, 120.0));
+    editor.begin_wire();
+    click_pin(&mut editor, &mut doc, page, a, "14");
+    click_pin(&mut editor, &mut doc, page, b, "13");
+    editor.leave_tool();
+    let (top, bottom) = (pin_pos(&doc, a, "14"), pin_pos(&doc, b, "13"));
+
+    // A second wire from the lower pin of the first device, pointer off to
+    // one side: the elbow is a corner with an arm back and an arm onwards.
+    editor.begin_wire();
+    click_pin(&mut editor, &mut doc, page, a, "13");
+    editor.hover(&doc, page, p(top.x + 40.0, top.y - 20.0), TOL);
+    let piece = editor.preview(&doc, page).piece.expect("a corner piece");
+    assert_eq!(piece.arms.len(), 2);
+    assert_ne!(piece.arms[0].vector(), -piece.arms[1].vector());
+
+    // On the first wire it is a T: the branch back, the wire's two ways on.
+    let mid = (top.y + bottom.y) / 2.0;
+    editor.hover(&doc, page, p(top.x, mid), TOL);
+    let t = editor.preview(&doc, page).piece.expect("a T piece");
+    assert_eq!(t.arms.len(), 3);
+    assert!(t.arms.contains(&Direction::Up) && t.arms.contains(&Direction::Down));
+}
