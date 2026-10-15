@@ -1054,7 +1054,7 @@ pub fn pivot(project: &Project, ids: &[AnyId], grid: f64) -> Option<Point> {
 /// re-routed. Nothing new connects here: callers finish with [`settle`]
 /// once every step of the gesture is done.
 pub fn transform(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform) -> Result<()> {
-    transform_with(tx, ids, how, false)
+    transform_with(tx, ids, how, false, false)
 }
 
 /// [`transform`] for a person's drag or key press: where no adjustment keeps
@@ -1062,10 +1062,25 @@ pub fn transform(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform) -> Result<()> {
 /// nothing (the transaction rolls back). Scripts, AI edits, undo and redo
 /// use [`transform`], which accepts the overlap for `wire.overlap` to report.
 pub fn transform_interactive(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform) -> Result<()> {
-    transform_with(tx, ids, how, true)
+    transform_with(tx, ids, how, true, false)
 }
 
-fn transform_with(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform, refuse: bool) -> Result<()> {
+/// [`transform_interactive`] for dragging devices away: the wires on the
+/// moved pins stay where they are and end in the air there (open ends,
+/// DESIGN.md §2), instead of stretching along. Wires between two moved
+/// symbols and wires that are selected too move with them. Dropping the
+/// device on a wire or on facing pins reconnects it ([`settle`]).
+pub fn transform_detached(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform) -> Result<()> {
+    transform_with(tx, ids, how, true, true)
+}
+
+fn transform_with(
+    tx: &mut Tx<'_>,
+    ids: &[AnyId],
+    how: Transform,
+    refuse: bool,
+    detach: bool,
+) -> Result<()> {
     let mut symbols: BTreeSet<SymbolId> = BTreeSet::new();
     let mut junctions: BTreeSet<JunctionId> = BTreeSet::new();
     for id in ids {
@@ -1088,6 +1103,9 @@ fn transform_with(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform, refuse: bool) 
             }
             _ => {}
         }
+    }
+    if detach {
+        detach_pins(tx, ids, &symbols)?;
     }
     let moved = |e: &Endpoint| match *e {
         Endpoint::Pin { symbol, .. } => symbols.contains(&symbol),
@@ -1135,6 +1153,39 @@ fn transform_with(tx: &mut Tx<'_>, ids: &[AnyId], how: Transform, refuse: bool) 
         for &wire in &rigid {
             check_kept(tx.project(), wire, &rigid)?;
         }
+    }
+    Ok(())
+}
+
+/// Frees the ends of wires on the pins of `symbols` where they are, unless
+/// the wire moves with them (its other end moves too, or it is selected).
+fn detach_pins(tx: &mut Tx<'_>, ids: &[AnyId], symbols: &BTreeSet<SymbolId>) -> Result<()> {
+    let on_moved =
+        |e: &Endpoint| matches!(e, Endpoint::Pin { symbol, .. } if symbols.contains(symbol));
+    let mut todo: Vec<(WireId, Endpoint, Endpoint)> = Vec::new();
+    for w in tx.project().wires() {
+        let carried = ids.contains(&AnyId::Wire(w.id));
+        let [a, b] = w.ends();
+        let both_on = on_moved(&a) && on_moved(&b);
+        if carried || both_on || !(on_moved(&a) || on_moved(&b)) {
+            continue;
+        }
+        let free = |e: Endpoint| {
+            if on_moved(&e) {
+                tx.project()
+                    .endpoint_position(e)
+                    .map_or(e, |at| Endpoint::Free { at })
+            } else {
+                e
+            }
+        };
+        todo.push((w.id, free(a), free(b)));
+    }
+    for (wire, from, to) in todo {
+        tx.update::<Wire>(wire, |w| {
+            w.from = from;
+            w.to = to;
+        })?;
     }
     Ok(())
 }
