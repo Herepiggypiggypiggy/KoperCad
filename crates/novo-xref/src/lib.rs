@@ -15,7 +15,9 @@
 //!   jump history.
 //! - [`XrefIndex::highlight`]: what selecting a coil lights up on its page,
 //!   and the dock hint line for the rest.
-//! - [`link_command`]: "Link cross reference", then click the partner.
+//! - [`link_command`]: "Link cross reference", then click the partner;
+//!   [`link_to_device_command`] when a device is named instead (renaming a
+//!   contact to a coil's tag).
 //!   Returns a model [`Command`](novo_core::Command) (`SetRole`), so it is
 //!   one undo step and scripts can do the same.
 //! - [`XrefAction::for_symbol`]: the actions a selection offers, one list
@@ -71,5 +73,5 @@ pub use index::{
     Highlight, Issue, Label, LabelAnchor, LiveXref, Owner, Reference, TagJump, XrefIndex,
     contact_limit_property,
 };
-pub use link::{LINK_LABEL, LinkError, can_link, link_command};
+pub use link::{LINK_LABEL, LinkError, can_link, link_command, link_to_device_command};
 pub use nav::{Go, JumpHistory, Navigator, Place};

@@ -121,7 +121,41 @@ pub fn link_command(
         (false, false) => (b, dev_a),
     };
     let target = target.ok_or(LinkError::NoDevice)?;
+    join_device(project, functions, aux, target)
+}
 
+/// The edit that gives `symbol` (a contact, or a coil for a device that has
+/// none) to `device`, as one undoable command. This is what renaming a
+/// contact to the tag of an existing device does: the device is named, not
+/// a symbol on it, so it also works for a device with nothing drawn yet.
+/// The same rules apply as for [`link_command`].
+pub fn link_to_device_command(
+    project: &Project,
+    functions: &dyn Functions,
+    symbol: SymbolId,
+    device: DeviceId,
+) -> Result<Command, LinkError> {
+    let s = project.symbol(symbol).ok_or(LinkError::NotFound(symbol))?;
+    if !can_link(project, symbol) || matches!(s.role, SymbolRole::Interruption { .. }) {
+        return Err(LinkError::NotLinkable(symbol));
+    }
+    if project.device(device).is_none() {
+        return Err(LinkError::NoDevice);
+    }
+    if matches!(s.role, SymbolRole::Device { device: d, .. } if d == device) {
+        return Err(LinkError::AlreadyLinked);
+    }
+    join_device(project, functions, s, device)
+}
+
+/// Moves `aux` onto `target`: its role, its contact numbers if they clash,
+/// and the removal of the throwaway device it leaves behind.
+fn join_device(
+    project: &Project,
+    functions: &dyn Functions,
+    aux: &SymbolInstance,
+    target: DeviceId,
+) -> Result<Command, LinkError> {
     // A coil (anything that is not a contact) that joins a device becomes
     // its main function; a device has only one. Linking the other way
     // round would move a contact off a device that has its coil, so the
