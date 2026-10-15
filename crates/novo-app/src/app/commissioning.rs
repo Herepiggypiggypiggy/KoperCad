@@ -205,8 +205,8 @@ impl NovoApp {
         let mut marks = Vec::new();
         for info in targets(project).iter().filter(|i| i.pages.contains(&page)) {
             let (kind, what) = match target_glyph(&mode.store, info.target) {
-                "✖" => (MarkKind::Error, "Failed"),
-                "✔" => (MarkKind::Added, "Passed"),
+                "✖" => (MarkKind::Error, "✖ Failed"),
+                "✔" => (MarkKind::Added, "✔ Passed"),
                 _ => continue,
             };
             for id in shown_on(project, info.target.any_id(), page) {
@@ -229,7 +229,7 @@ impl NovoApp {
                 return false;
             };
             let project = doc.project();
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 ui.weak("By");
                 ui.add(egui::TextEdit::singleline(&mut mode.who).desired_width(80.0));
                 for (tab, label) in [(Tab::Checks, "Checks"), (Tab::Punch, "Punch list")] {

@@ -641,7 +641,7 @@ pub const COMMANDS: &[CommandInfo] = &[
     verb(
         cmd(
             "view.commissioning",
-            "Commissioning: tick off wires, terminals and devices, punch list",
+            "Commissioning",
             "View",
             &[
                 "commission",
