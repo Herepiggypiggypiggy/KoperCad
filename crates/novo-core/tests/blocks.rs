@@ -532,3 +532,121 @@ fn what_a_block_cannot_hold() {
     assert_eq!(doc.project().block_definitions().count(), 0);
     let _ = d.p1;
 }
+
+/// The definition of the starter, as a macro file would carry it.
+fn macro_file(doc: &mut Document) -> BlockDefinition {
+    let d = drawing(doc);
+    let out = doc
+        .execute(Command::DefineBlock {
+            name: "dol".into(),
+            items: vec![d.q1.into(), d.m1.into(), d.note.into()],
+            origin: Point::default(),
+            parameters: power(4.0),
+        })
+        .unwrap();
+    let AnyId::BlockDefinition(id) = out.created[0] else {
+        panic!("{out:?}")
+    };
+    doc.project().block_definition(id).unwrap().clone()
+}
+
+#[test]
+fn a_definition_from_a_macro_file_is_adopted_and_placed() {
+    let mut source = Document::default();
+    let definition = macro_file(&mut source);
+
+    let mut doc = Document::default();
+    let page = doc
+        .transact("Page", |tx| {
+            let p = tx.add_page("1")?;
+            tx.update::<Page>(p, |p| p.structure = tag("=B1"))?;
+            Ok(p)
+        })
+        .unwrap()
+        .0;
+    let out = doc
+        .execute(Command::AdoptBlockDefinition {
+            definition: definition.clone(),
+        })
+        .unwrap();
+    let AnyId::BlockDefinition(id) = out.created[0] else {
+        panic!("{out:?}")
+    };
+    let adopted = doc.project().block_definition(id).unwrap();
+    assert_ne!(adopted.id, definition.id);
+    assert_eq!(adopted.name, "dol");
+    assert_eq!(adopted.members, definition.members);
+    assert_eq!(adopted.parameters, definition.parameters);
+
+    // It places like any other, with devices numbered in the new project.
+    doc.execute(Command::PlaceBlock {
+        definition: id,
+        page,
+        origin: Point::default(),
+        values: Vec::new(),
+    })
+    .unwrap();
+    assert_eq!(doc.project().devices().count(), 2);
+
+    // The same name again is refused; undo takes the first one back.
+    let again = Command::AdoptBlockDefinition { definition };
+    assert!(matches!(
+        doc.execute(again),
+        Err(ModelError::DuplicateBlock(_))
+    ));
+    doc.undo().unwrap();
+    doc.undo().unwrap();
+    assert_eq!(doc.project().block_definitions().count(), 0);
+}
+
+#[test]
+fn a_definition_that_does_not_hold_together_is_refused() {
+    let mut source = Document::default();
+    let definition = macro_file(&mut source);
+    let adopt = |definition: BlockDefinition| {
+        let mut doc = Document::default();
+        let result = doc.execute(Command::AdoptBlockDefinition { definition });
+        assert_eq!(doc.project().block_definitions().count(), 0);
+        result
+    };
+    let invalid = |r: Result<Outcome>| {
+        matches!(
+            r,
+            Err(ModelError::InvalidValue {
+                field: "members",
+                ..
+            })
+        )
+    };
+
+    let mut with_part = definition.clone();
+    for m in &mut with_part.members {
+        if let Record::Device(d) = m {
+            d.parts.push(PartId(77));
+        }
+    }
+    assert!(invalid(adopt(with_part)));
+
+    let mut with_feed = definition.clone();
+    for m in &mut with_feed.members {
+        if let Record::Symbol(s) = m {
+            s.feeds.push(PinFeed {
+                pin: 0,
+                potential: PotentialId(5),
+            });
+        }
+    }
+    assert!(invalid(adopt(with_feed)));
+
+    // A member that refers to something outside the definition.
+    let mut open = definition.clone();
+    open.members.retain(|m| !matches!(m, Record::Device(_)));
+    assert!(invalid(adopt(open)));
+
+    let mut unnamed = definition;
+    unnamed.name = " ".into();
+    assert!(matches!(
+        adopt(unnamed),
+        Err(ModelError::InvalidValue { field: "name", .. })
+    ));
+}
