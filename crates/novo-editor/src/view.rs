@@ -1556,7 +1556,11 @@ impl SchematicView {
                                 }
                             });
                         }
-                        if ui.button("Show where it goes").clicked() {
+                        if ui
+                            .button("Show where it goes")
+                            .on_hover_text("Selects what carries it on this page")
+                            .clicked()
+                        {
                             chosen = Some(MenuChoice::ShowWhere);
                         }
                         ui.separator();

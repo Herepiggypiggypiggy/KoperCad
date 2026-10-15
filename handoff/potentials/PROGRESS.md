@@ -13,3 +13,4 @@
 2026-10-15 16:20 UTC Live potential in wire hover text (PR 'Live potentials: hover a wire').
 2026-10-15 16:10 UTC Show where it goes on feeds (PR 'Editor: Show where it goes').
 2026-10-15 15:50 UTC Timers (on-delay and off-delay contacts) in the live view (PR 'Live potentials: timers'). Next: Show where it goes, live potential in wire hover.
+2026-10-15 15:31 UTC 'Show where it goes' says on hover that it covers this page only. Open: highlight instead of selection.
