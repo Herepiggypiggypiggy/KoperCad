@@ -2409,3 +2409,46 @@ fn c_draws_a_line_and_the_wires_it_touches_become_one_cable() {
     d.app.backend.document_mut().unwrap().undo().unwrap();
     assert_eq!(d.doc().project().cables().count(), 0);
 }
+
+#[test]
+fn ctrl_d_copies_the_selection_with_the_next_tag_and_selects_the_copy() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let coil = d.place("coil", 80.0, 60.0);
+    let first = d.tag_of(coil);
+    d.select(coil);
+    let symbols = |d: &Drive| d.doc().project().symbols().count();
+    assert_eq!(symbols(&d), 1);
+
+    d.key(egui::Key::D, egui::Modifiers::COMMAND);
+    assert_eq!(symbols(&d), 2, "a copy");
+    let copy = match d.app.selection().as_slice() {
+        [AnyId::Symbol(s)] => *s,
+        other => panic!("the copy is selected, got {other:?}"),
+    };
+    assert_ne!(copy, coil);
+    let second = d.tag_of(copy);
+    assert_ne!(second, first, "next free tag");
+    let at = |d: &Drive, s: SymbolId| d.doc().project().symbol(s).unwrap().placement.origin;
+    assert!(
+        at(&d, copy).x > at(&d, coil).x,
+        "to the right of the original"
+    );
+
+    // Repeating copies the copy, one step further.
+    d.key(egui::Key::D, egui::Modifiers::COMMAND);
+    assert_eq!(symbols(&d), 3);
+    let third = match d.app.selection().as_slice() {
+        [AnyId::Symbol(s)] => *s,
+        other => panic!("{other:?}"),
+    };
+    assert!(at(&d, third).x > at(&d, copy).x);
+    assert_ne!(d.tag_of(third), second);
+
+    // One undo step per Ctrl+D.
+    d.app.backend.document_mut().unwrap().undo().unwrap();
+    assert_eq!(symbols(&d), 2);
+}

@@ -7,6 +7,7 @@ mod changes;
 mod checks;
 mod dock;
 mod drawers;
+mod duplicate;
 mod inspector;
 mod link;
 mod live;

@@ -182,6 +182,7 @@ const APP_COMMANDS: &[&str] = &[
     "edit.rotate",
     "edit.mirror",
     "edit.delete",
+    "edit.duplicate",
     "edit.rename",
     "edit.escape",
     "nav.next_page",
@@ -453,6 +454,7 @@ impl NovoApp {
             }
             "edit.rotate" => self.editor_key(EditorKey::Rotate),
             "edit.mirror" => self.editor_key(EditorKey::Mirror),
+            "edit.duplicate" => self.duplicate_selection(),
             "edit.delete" if self.declines_proposal() => self.dismiss_proposal(),
             "edit.delete" => self.editor_key(EditorKey::Delete),
             "nav.next_page" | "nav.previous_page" => {
