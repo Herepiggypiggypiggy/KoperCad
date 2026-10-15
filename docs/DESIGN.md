@@ -423,12 +423,20 @@ declared one; a simulation may show a different live state for a moment
 - A new feed takes the next free name of its system in order: L1, then L2,
   then L3, then N, then PE; a row of three feeds placed by dragging reads
   L1, L2, L3.
-- **Right-click a feed** gives: Set potential ▸ (the project's potentials,
-  most used first, and "New…"), Rename, Properties, Delete. Choosing a
-  potential is one click and one undo step, and with several feeds
-  selected it sets all of them.
-- Feed names sit on the same side as terminal numbers (the reader's
-  left of the symbol, mirrored with the symbol), so the two never differ.
+- **Right-click a feed** gives: a Potential caption over a grid of chips
+  (L1 L2 L3 N PE +24 V 0 V and Other…, which lists the project's other
+  potentials and "New…"), then Number automatically, Rename (F2), Show
+  where it goes (lights every wire and terminal on that potential) and
+  Delete. Clicking a chip is one click and one undo step, and with
+  several feeds selected it sets all of them. Number automatically
+  restores the L1, L2, L3 order of the selected feeds.
+- Tags, terminal numbers and feed names all sit to the left of every
+  symbol, mirrored with it, so they never differ. The exception is a
+  semiconductor with a control terminal on the left, which keeps its
+  text on the right. Layout's mock is docs/design/workflow-looks.png.
+- A hand toggle of a PE terminal needs a stored override flag on the
+  terminal (WS-02 describes it; the Potentials thread uses it), so that
+  the automatic PE rule never undoes a choice made by hand.
 
 **PE terminals.** Select one terminal or several and right-click:
 "Toggle PE terminal" (also `pe` in the command surface). A terminal
@@ -460,6 +468,9 @@ it is drawn for.
   of one panel: the Cabinet canvas and the cabinet layout are per panel,
   so they appear on the same layout though the groups differ. The panel
   row in the Location view lists all four.
+- A link icon marks a panel name that appears under more than one group
+  (it means one shared layout). Layout's mock is
+  docs/design/workflow-looks.png.
 - Dragging a page onto another group or panel row moves it (its prefix
   changes, references follow, one undo step). Page names and numbers keep
   the rules of §3 and §8.

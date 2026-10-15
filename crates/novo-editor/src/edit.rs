@@ -449,6 +449,9 @@ fn is_free(project: &Project, end: Endpoint) -> bool {
     project.wires_at(end).next().is_none()
 }
 
+/// The drawn lines of a symbol on its page.
+pub type Outline = Vec<(Point, Point)>;
+
 /// A straight wire that placing or moving would draw between a free pin of
 /// the symbol in hand and the free pin it faces.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -464,12 +467,13 @@ pub struct FacingWire {
 /// `ghosts` are symbol instances as they would be (a placement preview, or
 /// moved symbols at their new place, keeping their ids); other ghosts are
 /// ignored as partners. A pin that already has a wire, or that lands inside
-/// a wire, gets none, and a line that would cross a wire or another symbol's
-/// body (`body` gives a symbol's drawn extent on the page) is not proposed.
+/// a wire, gets none, and a line that would cross a wire or touch the drawn lines of another
+/// symbol (`outline` gives a symbol's drawn segments on the page; empty
+/// space inside its bounding box does not block) is not proposed.
 pub fn facing_wires(
     project: &Project,
     ghosts: &[SymbolInstance],
-    body: &dyn Fn(&SymbolInstance) -> Option<(Point, Point)>,
+    outline: &dyn Fn(&SymbolInstance) -> Option<Outline>,
 ) -> Vec<FacingWire> {
     let ignore: BTreeSet<SymbolId> = ghosts.iter().map(|g| g.id).collect();
     let mut out = Vec::new();
@@ -531,8 +535,8 @@ pub fn facing_wires(
                 Some(s) != partner
                     && project
                         .symbol(s)
-                        .and_then(body)
-                        .is_some_and(|(min, max)| segment_in_box(p, q, min, max))
+                        .and_then(outline)
+                        .is_some_and(|lines| lines.iter().any(|&(c, d)| segments_touch(p, q, c, d)))
             };
             if facing
                 && is_free(project, to)
@@ -595,15 +599,31 @@ pub fn decline(tx: &mut Tx<'_>, proposal: &FacingWire) -> Result<()> {
     Ok(())
 }
 
-/// Whether an axis-aligned segment passes through the inside of a box.
-fn segment_in_box(a: Point, b: Point, min: Point, max: Point) -> bool {
-    let inside = |t: f64, lo: f64, hi: f64| t > lo + EPS && t < hi - EPS;
-    let overlaps = |s: f64, e: f64, lo: f64, hi: f64| s.min(e) < hi - EPS && s.max(e) > lo + EPS;
-    if (a.x - b.x).abs() < EPS {
-        inside(a.x, min.x, max.x) && overlaps(a.y, b.y, min.y, max.y)
-    } else {
-        inside(a.y, min.y, max.y) && overlaps(a.x, b.x, min.x, max.x)
+/// Whether segment `ab` meets segment `cd`, touching included.
+fn segments_touch(a: Point, b: Point, c: Point, d: Point) -> bool {
+    let cross =
+        |o: Point, p: Point, q: Point| (p.x - o.x) * (q.y - o.y) - (p.y - o.y) * (q.x - o.x);
+    let on = |p: Point, q: Point, r: Point| {
+        r.x >= p.x.min(q.x) - EPS
+            && r.x <= p.x.max(q.x) + EPS
+            && r.y >= p.y.min(q.y) - EPS
+            && r.y <= p.y.max(q.y) + EPS
+    };
+    let (d1, d2, d3, d4) = (
+        cross(c, d, a),
+        cross(c, d, b),
+        cross(a, b, c),
+        cross(a, b, d),
+    );
+    if ((d1 > EPS && d2 < -EPS) || (d1 < -EPS && d2 > EPS))
+        && ((d3 > EPS && d4 < -EPS) || (d3 < -EPS && d4 > EPS))
+    {
+        return true;
     }
+    (d1.abs() <= EPS && on(c, d, a))
+        || (d2.abs() <= EPS && on(c, d, b))
+        || (d3.abs() <= EPS && on(a, b, c))
+        || (d4.abs() <= EPS && on(a, b, d))
 }
 
 /// Whether a straight line from `p` along `v` for `len` would cross or run
@@ -1371,5 +1391,43 @@ pub fn device_of(project: &Project, id: AnyId) -> Option<DeviceId> {
         AnyId::Device(d) => project.device(d).map(|d: &Device| d.id),
         AnyId::Symbol(s) => project.symbol(s)?.device(),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn p(x: f64, y: f64) -> Point {
+        Point::new(x, y)
+    }
+
+    #[test]
+    fn a_line_blocks_only_where_a_drawn_segment_meets_it() {
+        let wire = (p(10.0, 0.0), p(10.0, 100.0));
+        // Crossing, touching and running along block.
+        assert!(segments_touch(wire.0, wire.1, p(0.0, 50.0), p(20.0, 50.0)));
+        assert!(segments_touch(wire.0, wire.1, p(10.0, 50.0), p(30.0, 50.0)));
+        assert!(segments_touch(wire.0, wire.1, p(10.0, 20.0), p(10.0, 60.0)));
+        // A line beside it, or short of it, or past its end does not (the
+        // empty corner of a bounding box).
+        assert!(!segments_touch(
+            wire.0,
+            wire.1,
+            p(12.0, 0.0),
+            p(12.0, 100.0)
+        ));
+        assert!(!segments_touch(
+            wire.0,
+            wire.1,
+            p(12.0, 50.0),
+            p(30.0, 50.0)
+        ));
+        assert!(!segments_touch(
+            wire.0,
+            wire.1,
+            p(0.0, 120.0),
+            p(20.0, 120.0)
+        ));
     }
 }
