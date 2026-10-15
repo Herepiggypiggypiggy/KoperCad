@@ -7,7 +7,7 @@ Done: engine (novo-layout drill, plate_drawing, model::plate_documents), PDF
 writer, DXF writer, tests, docs/PLATE-DRAWING.md.
 
 Next, in order:
-1. App entry: an "Export plate drawing" command on the Cabinet view (PDF and DXF), and a CLI `export plate` verb.
+1. Entry points (requested from the UI integration threads cse/session_01G52sVY5N34jPsrkqWukApR and session_01WAQSEGkMbyreCPG18tsSPc): Cabinet header action Plate drawing (PDF, DXF), File > Export items, palette commands, `kopercad-cli export plate`. Engine calls are in docs/PLATE-DRAWING.md.
 2. Duct cut-outs and duct mounting holes; side view (R2 adds enclosure depth and door).
 3. Real door size from novo_layout::model::enclosure_of (#409: door = enclosure width x height, plate centred), fallback plate-sized; follow-up PR after #409 merges, not pushed to #397.
 4. Machine formats, only when the workshop names its machine.
