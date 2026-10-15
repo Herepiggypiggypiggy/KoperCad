@@ -166,6 +166,16 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["rules"],
     ),
+    verb(
+        cmd(
+            "app.preferences",
+            "Preferences",
+            "Project",
+            &["settings", "options", "auto connections", "autoconnect"],
+            Needs::Nothing,
+        ),
+        &["preferences", "prefs"],
+    ),
     cmd("file.quit", "Quit", "Project", &["exit"], Needs::Nothing),
     // Draw
     cmd(
@@ -377,6 +387,21 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["jumper", "bridge", "cross connect"],
         Needs::Selection,
     ),
+    verb(
+        cmd(
+            "terminal.toggle_pe",
+            "Toggle PE terminal",
+            "Edit",
+            &[
+                "pe",
+                "protective earth",
+                "earth terminal",
+                "ground terminal",
+            ],
+            Needs::Selection,
+        ),
+        &["pe"],
+    ),
     cmd(
         "terminal.disconnect",
         "Disconnect terminals",
@@ -542,6 +567,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Show or hide marks",
         "View",
         &["problems", "proposals"],
+        Needs::Page,
+    ),
+    cmd(
+        "sim.live",
+        "Show live potentials",
+        "View",
+        &["simulate", "contacts", "close", "energized", "try"],
         Needs::Page,
     ),
     cmd(

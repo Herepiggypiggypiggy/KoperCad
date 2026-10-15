@@ -55,6 +55,16 @@ impl NovoApp {
         }
     }
 
+    /// Keeps the editor on the person's auto-connection mode.
+    pub(super) fn sync_connect_mode(&mut self) {
+        let mode = self.settings.connect_mode();
+        if let Some(view) = self.canvas.schematic()
+            && view.editor.connect_mode() != mode
+        {
+            view.editor.set_connect_mode(mode);
+        }
+    }
+
     pub(super) fn tool_dock(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
         // With nothing in hand, a selected coil or contact names where the
         // rest of its device is drawn.

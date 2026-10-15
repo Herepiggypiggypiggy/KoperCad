@@ -244,6 +244,36 @@ pub fn target_at(project: &Project, page: PageId, p: Point, tolerance: f64) -> O
     best.map(|(_, t)| t)
 }
 
+/// `q`, a point inside `wire`, moved along its segment to the nearest grid
+/// line, so a junction made there sits on the grid and the pointer does not
+/// glide along the wire. A point whose snapped position would be a wire end
+/// (or off a slanted segment) stays where it is.
+pub fn snap_along_wire(project: &Project, wire: WireId, q: Point, grid: f64) -> Point {
+    let Some(pts) = wire_points(project, wire) else {
+        return q;
+    };
+    let Some((seg, _, _)) = locate_on_polyline(&pts, q) else {
+        return q;
+    };
+    let (a, b) = (pts[seg], pts[seg + 1]);
+    let g = if a.y == b.y {
+        Point::new(snap(q, grid).x, a.y)
+    } else if a.x == b.x {
+        Point::new(a.x, snap(q, grid).y)
+    } else {
+        return q;
+    };
+    let end = |e: Point| g.approx_eq(e, EPS);
+    match locate_on_polyline(&pts, g) {
+        Some((_, at, d))
+            if d < EPS && at.approx_eq(g, EPS) && !end(pts[0]) && !end(pts[pts.len() - 1]) =>
+        {
+            g
+        }
+        _ => q,
+    }
+}
+
 /// Wires of a page with a point inside them (not at an end), with the
 /// segment index.
 pub fn wires_through(project: &Project, page: PageId, p: Point) -> Vec<(WireId, usize)> {
