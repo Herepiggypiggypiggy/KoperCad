@@ -17,7 +17,7 @@
       "revision": 3
     }
   },
-  "next_id": 34,
+  "next_id": 35,
   "parts": [
     {
       "id": 3,
@@ -135,7 +135,7 @@
       "properties": {}
     },
     {
-      "id": 30,
+      "id": 31,
       "tag": "=A2+CAB1-K1",
       "description": "Main contactor",
       "kind": "general",
@@ -392,7 +392,7 @@
       "properties": {}
     },
     {
-      "id": 31,
+      "id": 32,
       "page": 2,
       "symbol": "iec/contacts/changeover",
       "placement": {
@@ -405,7 +405,7 @@
       },
       "role": {
         "type": "device",
-        "device": 30,
+        "device": 31,
         "main": false
       },
       "pins": [
@@ -610,11 +610,11 @@
       "properties": {}
     },
     {
-      "id": 32,
+      "id": 33,
       "page": 2,
       "attached_to": {
         "kind": "symbol",
-        "id": 31
+        "id": 32
       },
       "content": {
         "type": "device_tag"
@@ -654,7 +654,7 @@
   ],
   "dismissals": [
     {
-      "id": 28,
+      "id": 29,
       "proposal": "terminal.suggest",
       "subjects": [
         {
@@ -667,7 +667,7 @@
   ],
   "block_definitions": [
     {
-      "id": 29,
+      "id": 30,
       "name": "contact",
       "description": "Changeover contact",
       "parameters": [
@@ -779,8 +779,8 @@
   ],
   "block_instances": [
     {
-      "id": 33,
-      "definition": 29,
+      "id": 34,
+      "definition": 30,
       "page": 2,
       "origin": {
         "x": 150.0,
@@ -800,7 +800,7 @@
           },
           "actual": {
             "kind": "device",
-            "id": 30
+            "id": 31
           },
           "overrides": [
             "position"
@@ -813,7 +813,7 @@
           },
           "actual": {
             "kind": "symbol",
-            "id": 31
+            "id": 32
           }
         },
         {
@@ -823,10 +823,20 @@
           },
           "actual": {
             "kind": "text",
-            "id": 32
+            "id": 33
           }
         }
       ],
+      "properties": {}
+    }
+  ],
+  "revisions": [
+    {
+      "id": 28,
+      "index": "A",
+      "date": "2026-10-15",
+      "author": "TV",
+      "description": "First issue",
       "properties": {}
     }
   ]

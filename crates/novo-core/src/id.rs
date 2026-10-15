@@ -114,4 +114,6 @@ define_ids! {
     BlockDefinitionId => BlockDefinition, "BlockDefinition";
     /// One placement of a block definition.
     BlockInstanceId => BlockInstance, "BlockInstance";
+    /// An issued revision of the drawing set.
+    RevisionId => Revision, "Revision";
 }

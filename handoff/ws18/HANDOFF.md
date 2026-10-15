@@ -13,7 +13,8 @@ The crate is `novo-revisions`. It is already listed in
    design reviewer.
 2. novo-core (WS-02): a `Revision` record (index, date, author,
    description) and a command to make one.
-3. novo-storage (WS-04, to ask): a snapshot table keyed by revision id.
+3. novo-storage (this thread, since WS-04 retired): a snapshot table
+   keyed by revision id. Reviewer B.
 4. novo-revisions:
    - the index rule and the next index;
    - issuing a revision, which writes the record and freezes every
@@ -24,4 +25,14 @@ The crate is `novo-revisions`. It is already listed in
      table).
 
 ## State
-- 2026-10-15: DESIGN PR opened.
+- 2026-10-15: DESIGN merged (#142).
+- Revision record and `IssueRevision` PR open from `claude/data-model-amzaxu`.
+- Ready locally, opened one at a time after it:
+  - the `novo-revisions` engine: `IndexRule`, `diff` into a `ChangeSet`
+    by page;
+  - the novo-storage snapshot table: schema v2, zlib project JSON per
+    revision id, `Session::put_snapshot`, save as copies snapshots, and
+    orphans are dropped on open when no recovery is offered.
+- Next: title block fields (project revision, page revision from change
+  sets, revision table), then an issue flow that pairs the command with
+  `put_snapshot`.

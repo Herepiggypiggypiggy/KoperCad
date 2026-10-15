@@ -11,7 +11,8 @@ use serde::{Deserialize, Serialize};
 use crate::geom::{Direction, Placement, Point, Rotation};
 use crate::id::{
     AnyId, BlockDefinitionId, BlockInstanceId, CableId, DeviceId, DismissalId, JunctionId, PageId,
-    PartId, PotentialId, PotentialSystemId, StructureId, SymbolId, TerminalId, TextId, WireId,
+    PartId, PotentialId, PotentialSystemId, RevisionId, StructureId, SymbolId, TerminalId, TextId,
+    WireId,
 };
 use crate::tag::DeviceTag;
 
@@ -927,6 +928,27 @@ pub struct BlockInstance {
     /// structural edit (a member deleted); `None` while it does.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detached: Option<String>,
+    #[serde(default)]
+    pub properties: Properties,
+}
+
+/// An issued revision of the drawing set (DESIGN §7, Revisions): the
+/// index printed in title blocks, its date, who issued it and why. Issuing
+/// one freezes the schematic pages ([`Tx::issue_revision`](crate::Tx::issue_revision)).
+/// The snapshot of the project at that point is kept by storage.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Revision {
+    pub id: RevisionId,
+    /// Unique, e.g. `A`, `B` or `01`.
+    pub index: String,
+    /// ISO date, `2026-10-15`.
+    pub date: String,
+    /// Initials or name of whoever issued it.
+    #[serde(default)]
+    pub author: String,
+    /// One line, e.g. "Motor M3 added".
+    #[serde(default)]
+    pub description: String,
     #[serde(default)]
     pub properties: Properties,
 }

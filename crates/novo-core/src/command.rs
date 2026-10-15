@@ -81,6 +81,16 @@ pub enum Command {
         #[serde(default)]
         offset: Point,
     },
+    /// Issues a revision and freezes the drawn pages; see
+    /// [`Tx::issue_revision`].
+    IssueRevision {
+        index: String,
+        date: String,
+        #[serde(default)]
+        author: String,
+        #[serde(default)]
+        description: String,
+    },
     /// Freezes a page as issued; see [`Tx::freeze_page`].
     FreezePage {
         page: PageId,
@@ -316,6 +326,7 @@ impl Command {
             Command::SetBlockValues { .. } => "Set block parameters".into(),
             Command::SetBlockOverride { .. } => "Mark block edit".into(),
             Command::DetachBlock { .. } => "Detach block".into(),
+            Command::IssueRevision { index, .. } => format!("Issue revision {index}"),
             Command::FreezePage { .. } => "Freeze page".into(),
             Command::UnfreezePage { .. } => "Unfreeze page".into(),
             Command::Dismiss { .. } => "Dismiss proposal".into(),
@@ -496,6 +507,14 @@ impl Tx<'_> {
                 self.move_to_page(&items, page, offset)?;
                 return Ok(Vec::new());
             }
+            Command::IssueRevision {
+                index,
+                date,
+                author,
+                description,
+            } => self
+                .issue_revision(index, date, author, description)?
+                .into(),
             Command::FreezePage { page, revision } => {
                 self.freeze_page(page, revision)?;
                 return Ok(Vec::new());

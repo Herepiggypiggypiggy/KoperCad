@@ -47,6 +47,8 @@ pub enum ModelError {
         "{0} connects the moved objects to something that stays; move both ends or delete it first"
     )]
     WireLeavesSelection(WireId),
+    #[error("a revision `{0}` already exists")]
+    DuplicateRevision(String),
     #[error("a structure node `{0}` already exists")]
     DuplicateStructure(String),
     #[error("`{0}` cannot prefix potential names: it starts or ends with a space")]
