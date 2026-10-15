@@ -15,3 +15,9 @@ Method: planar faces with inner loops of 0.8 to 14 mm (aspect up to 3.5) are ope
 
 Traps: no real maker file has been tried (maker sites are blocked from cloud). Screw heads or vents with the wrong size can pose as openings; the count rule flags them as Partial/Estimated. `Side` has no Back.
 Do not edit catalog.rs or schema.rs until the lane lead says so.
+
+Follow-ups for a fresh session (not started, usage limit):
+1. Parts window 3D model block (branch claude/project-thread-5cps74-3d, `crates/novo-app/src/app/parts.rs`): button "Detect connection points" calling `scan_step` -> `map_terminals` -> `apply_to_part(.., false)`, list per terminal with Measured/Partial/Estimated, save catalog.
+2. `CatalogPart::to_model` in `crates/novo-parts/src/catalog.rs` (lane lead's file): add `crate::pins::write_properties(self, &mut properties);` (public as `novo_parts::write_terminal_positions`).
+3. `crates/novo-routing/src/model.rs` `anchor_of`: when the device's part has `novo_parts::terminal_position(&part.properties, marking)`, use it (plate x/y from placement plus the part x/y; mind rotation) instead of the footprint edge middle.
+PR #526 base is #512's branch; retarget to main after #512 merges.
