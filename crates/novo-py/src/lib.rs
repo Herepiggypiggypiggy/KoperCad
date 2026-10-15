@@ -45,10 +45,12 @@ use thiserror::Error;
 mod export;
 #[cfg(feature = "python")]
 mod python;
+mod revisions;
 
 pub use export::{
     ReportFormat, generate, is_project_path, report_bytes, report_ids, report_json, write_export,
 };
+pub use revisions::{comparison_json, group_name, kind_name, page_label, revisions_json};
 
 /// Why a script call was refused. A refused edit changes nothing.
 #[derive(Debug, Error)]
@@ -93,6 +95,10 @@ pub enum ScriptError {
     Export(String),
     #[error("the symbol library did not load: {0}")]
     Library(String),
+    #[error("no revision `{0}` (use an index from `revisions()`, or `now`)")]
+    UnknownRevision(String),
+    #[error(transparent)]
+    Compare(#[from] novo_revisions::CompareError),
 }
 
 pub type Result<T, E = ScriptError> = std::result::Result<T, E>;
@@ -638,6 +644,51 @@ impl ScriptProject {
         }
         let bytes = report_bytes(self.project(), ids, ReportFormat::from_path(path)?)?;
         write_export(path, &bytes, self.path())
+    }
+
+    /// The issued revisions as data: index, date, author, description and
+    /// whether a kept copy exists to compare with.
+    pub fn revisions(&self) -> Value {
+        let kept = self
+            .session
+            .as_ref()
+            .map(|s| {
+                self.project()
+                    .revisions()
+                    .filter(|r| matches!(s.snapshot(r.id), Ok(Some(_))))
+                    .map(|r| r.id)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        revisions_json(self.project(), &kept)
+    }
+
+    /// What changed between two states, as data: each of `from` and `to`
+    /// is a revision index or `"now"`. Only reads; the project is not
+    /// changed. A project that was never saved has no kept copies, so only
+    /// `now` against `now` compares.
+    pub fn compare(&self, from: &str, to: &str) -> Result<Value> {
+        let side = |name: &str| -> Result<novo_revisions::Side> {
+            if name.eq_ignore_ascii_case("now") {
+                return Ok(novo_revisions::Side::Now);
+            }
+            self.project()
+                .revision_by_index(name)
+                .map(|r| novo_revisions::Side::Revision(r.id))
+                .ok_or_else(|| ScriptError::UnknownRevision(name.into()))
+        };
+        let (a, b) = (side(from)?, side(to)?);
+        let session = self.session.as_ref();
+        let comparison = novo_revisions::compare(
+            self.project(),
+            |id| match session {
+                Some(s) => s.snapshot(id),
+                None => Ok(None),
+            },
+            a,
+            b,
+        )?;
+        Ok(comparison_json(self.project(), from, to, &comparison))
     }
 
     /// The whole project in its diffable JSON form.

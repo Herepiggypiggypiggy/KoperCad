@@ -35,3 +35,8 @@ the CLI/app threads own their crates, so keep those PRs thin and message them.
 - Imported DXF as page background needs a WS-02 underlay record; not started.
 - `ModelStyle` colours do not reach the DXF (layers carry colour by name).
 - Reviewer: main reviewer cse_016C9nTT8cN7voW8t1NQUG4W; lead cse_01FiLvRBKEcNNHbQEGhYyL1S.
+
+## DXF background (#385)
+- Stored in page properties `underlay.*` (`novo_interop::underlay`); up to 2 MB lands in every revision snapshot and JSON diff. Exit if that shows up in practice: option C (asset table) in `docs/design/dxf-background.md`.
+- App menu rows are hand-wired in `app.rs`; give them command ids (`export.dxf`, `export.dxf_all`, `file.dxf_background`) so the command field and menu registry list them.
+- Move and scale panel is being built by another thread as a follow-up from main.
