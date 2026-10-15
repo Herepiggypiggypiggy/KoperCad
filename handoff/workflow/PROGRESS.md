@@ -55,3 +55,7 @@
 2026-10-15 03:20 UTC Checked WS-06 #133 (page letters, re-letter/frozen, dotted rename refused): matches DESIGN §3; flagged 'Cover a' → 'Cover a a' (should be 'Cover b')
 2026-10-15 03:21 UTC WS-06 fixed 'Cover a' → 'Cover b' in #133 (c689e70)
 2026-10-15 03:47 UTC Design reviewer asked to record jump/reveal behaviour from WS-03 #144; opening docs PR
+2026-10-15 03:50 UTC Opened #148 (jump/reveal behaviour, head ae95b7e); sent to design reviewer and lead
+2026-10-15 03:46 UTC #148 READY (ae95b7e); lead merges
+2026-10-15 03:47 UTC #148 merged. No open PR of mine.
+2026-10-15 07:35 UTC Tadjiro asked for both wiring styles (EPLAN corners, AutoCAD lines), never overlapping, with a toggle + shortcut. Decided Auto + Draw (Draw = corners and lines as one gesture), W again toggles, dock switch, no-overlap rule; DESIGN PR opened, Layout to critique

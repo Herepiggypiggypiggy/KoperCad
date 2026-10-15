@@ -266,7 +266,7 @@ clear the selection.
 | Ctrl+Shift+F / F11 | Focus mode / full screen |
 | I | Place (command surface in place mode at the pointer) |
 | 1 to 9 | Favourite symbols, only while the place query is empty |
-| W | Connect, for chains (one connection is a drag from a pin) |
+| W | Connect, for chains (one connection is a drag from a pin); pressed again while Connect is active, switches Auto / Draw |
 | R / X | Rotate / mirror while placing or on the selection |
 | F2 | Edit the selected tag or text |
 | Enter | Accept the highlighted proposal |
@@ -299,6 +299,69 @@ There are no keys for corners, T-pieces, terminals, cables or potentials,
 because the user does not place those. "Repeat last tool" is the first item
 of the context menu on empty canvas and the first row of an empty command
 surface; it has no key, so Enter always means accept.
+
+**Wiring modes.** The Connect tool has two modes, and both make the same
+thing: a connection with a stored route (no corner symbols, §8).
+
+- **Auto** (the default): drag from a pin to another pin and the router
+  picks the route. This is the 1-interaction connection the budgets in §6
+  count.
+- **Draw**: you steer. Click a pin (or press on it), then place the route
+  yourself in either of two ways, freely mixed in one wire:
+  - *Corners* (the EPLAN way): click where the wire should turn. The lines
+    between your clicks appear by themselves, always horizontal or vertical,
+    and the last line finds the pin you click.
+  - *Lines* (the AutoCAD way): press where a line should start and drag to
+    where it should end; the line is exactly what you drew. A click is a
+    line of zero length, which is a corner, so the two are one gesture
+    seen from either side.
+
+  Backspace takes back the last corner; Esc runs the Escape ladder. A wire
+  that ends on another wire of the same potential makes a T-junction; on a
+  wire of a different declared potential it is refused with the reason.
+
+**The toggle.** The Connect button in the tool dock carries a two-state
+switch, `Auto | Draw`, always visible and never behind a hover. W selects
+Connect in the mode it was last used; W pressed again while Connect is
+active switches mode, and the dock hint names the mode ("Draw: click a pin ·
+click corners · click a pin · Backspace undo · W switch"). Mid-wire the
+switch is locked and says "finish or Esc to switch". The command surface
+lists `Wire: Auto` and `Wire: Draw` under Draw with W shown. The mode is a
+Preference of the user, not of the project, so two people on one project
+each keep their own.
+
+**Lines never overlap.** The rule holds for every way a wire is made, moved
+or re-routed, not just for Draw:
+
+- two segments of different conductors never share any length; they may
+  cross at a point (a crossing without a connection, no dot, §2) or meet at
+  a pin or a junction;
+- two segments of one conductor that would run over each other merge into
+  one;
+- the router keeps parallel runs one grid step apart;
+- in Draw, a corner or line that would lie over another conductor is
+  refused before it is placed: the cursor shows not-allowed, the clashing
+  segment is tinted with the Error colour and the dock hint says why
+  ("overlaps -W3 L1"). Nothing is placed and nothing opens a dialog.
+
+A hand-drawn route is kept by `tidy`; selecting it and choosing `tidy`
+re-routes it on purpose. Moving a symbol stretches Auto routes as before,
+and stretches hand-drawn ones by moving only their end segments, so every
+corner the user placed stays where it was put.
+
+Acceptance, for testers and reviewers (both modes, every time):
+
+1. W, drag pin to pin: a routed wire, no overlap (Auto).
+2. W again: the dock switch reads `Draw`; W again: `Auto`.
+3. In Draw, click pin, click two corners, click pin: a wire through those
+   corners, all segments horizontal or vertical.
+4. In Draw, press-drag a line from a pin, release, click the second pin:
+   the same wire as a click-built one.
+5. In Draw, a corner placed over another conductor's segment is refused
+   with the reason in the hint, and nothing changes.
+6. Two wires of one conductor drawn over each other become one segment.
+7. Undo removes one whole wire in either mode, Backspace one corner.
+8. Quit and reopen: the mode is still the one last used.
 
 Keys match the logical character, not the physical position, so `?`,
 Ctrl+Z and Ctrl+Y work on Dutch, German (QWERTZ) and US layouts alike.
@@ -569,6 +632,7 @@ Changes mode, WS-09 the PDF.
 | Insert centre, symbol trees, ribbon | EPLAN, AutoCAD Electrical | Spatial hunting; the command surface finds by name |
 | Frozen macros | Most CAD | Go stale on placement; blocks stay linked |
 | Corner and T-piece symbols | EPLAN | Drawing artefacts of connectivity, not intent |
+| Wiring modes | Auto only; Corners (EPLAN); Lines (AutoCAD); Auto plus Draw | **Auto plus Draw.** Corners and Lines are two views of one gesture (a click is a line of zero length), so Draw does both and the toggle stays two-state. Auto stays the default because it is the cheapest connection |
 | Linking cross references by hand | EPLAN | References follow ownership |
 | Assigning potentials wire by wire | EPLAN | The source declares it once |
 | Save prompts and "save before closing?" | Most desktop software | Work is never lost and never asked about |
