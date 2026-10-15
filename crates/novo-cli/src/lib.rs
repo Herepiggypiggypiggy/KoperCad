@@ -1,4 +1,4 @@
-//! The `novo` command-line tool (owned by WS-28).
+//! The `kopercad-cli` command-line tool (owned by WS-28).
 //!
 //! Every subcommand opens the project read-only ([`ProjectFile::read`]): it
 //! never writes to the project file, takes no lock that outlives the run,
@@ -24,7 +24,7 @@ use serde_json::{Value, json};
 pub mod exit {
     /// Done.
     pub const OK: i32 = 0;
-    /// `novo check` found problems.
+    /// `kopercad-cli check` found problems.
     pub const PROBLEMS: i32 = 1;
     /// The command line was not understood.
     pub const USAGE: i32 = 2;
@@ -40,7 +40,7 @@ pub mod exit {
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "novo",
+    name = "kopercad-cli",
     version,
     about = "KoperCAD command-line tool: inspect, check and export project files",
     long_about = "KoperCAD command-line tool: inspect, check and export project files.\n\n\
@@ -211,7 +211,7 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             ) {
                 return Err(Failure::new(
                     exit::USAGE,
-                    "`novo export reports` writes one workbook: give an .xlsx output",
+                    "`kopercad-cli export reports` writes one workbook: give an .xlsx output",
                 ));
             }
             export_reports(&args.file, &[], &args, out)

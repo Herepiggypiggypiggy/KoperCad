@@ -34,6 +34,11 @@ pub enum Command {
     DeletePage {
         page: PageId,
     },
+    /// Renames a page (its name is what references print).
+    RenamePage {
+        page: PageId,
+        name: String,
+    },
     AddPage {
         name: String,
         #[serde(default)]
@@ -318,6 +323,7 @@ impl Command {
         match self {
             Command::SetProjectInfo { .. } => "Edit project info".into(),
             Command::DeletePage { .. } => "Delete page".into(),
+            Command::RenamePage { .. } => "Rename page".into(),
             Command::AddPage { .. } => "Add page".into(),
             Command::SetPageStructure { .. } => "Move page to group or panel".into(),
             Command::AddDevice { .. } => "Add device".into(),
@@ -373,6 +379,17 @@ impl Tx<'_> {
         let created: AnyId = match command {
             Command::SetProjectInfo { info } => {
                 self.set_info(|i| *i = info)?;
+                return Ok(Vec::new());
+            }
+            Command::RenamePage { page, name } => {
+                let name = name.trim().to_owned();
+                if name.is_empty() {
+                    return Err(ModelError::InvalidValue {
+                        id: page.into(),
+                        field: "name",
+                    });
+                }
+                self.update::<crate::Page>(page, |p| p.name = name)?;
                 return Ok(Vec::new());
             }
             Command::DeletePage { page } => {
