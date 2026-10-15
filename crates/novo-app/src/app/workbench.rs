@@ -109,6 +109,11 @@ pub(crate) struct Workbench {
     pub(super) live: super::live::LiveView,
     /// Changes mode, while it is on.
     pub(super) changes: Option<super::changes::ChangesMode>,
+    /// Commissioning mode's data and panel state, once opened.
+    pub(super) commissioning: Option<super::commissioning::CommissioningMode>,
+    /// The background drawing last handed to the canvas: page, project
+    /// revision and the key it has.
+    pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
 }
 
 impl Workbench {
@@ -161,6 +166,8 @@ impl Default for Workbench {
             last_export: None,
             live: Default::default(),
             changes: None,
+            commissioning: None,
+            underlay_seen: None,
         }
     }
 }
@@ -210,10 +217,16 @@ const APP_COMMANDS: &[&str] = &[
     "view.toggle_marks",
     "sim.live",
     "view.changes",
+    "view.commissioning",
     "check.problems",
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "file.import_dxf_background",
+    "view.background",
+    "file.remove_background",
+    "export.dxf_page",
+    "export.dxf_all",
     "plc.add_card",
     "plc.to_plc",
     "plc.renumber_io",
@@ -322,7 +335,7 @@ impl NovoApp {
 
     /// Enter, Tab and Delete belong to the editor's wire proposals while it
     /// has any; otherwise to the terminal proposals shown on this page.
-    fn terminal_proposals_have_keys(&self) -> bool {
+    pub(super) fn terminal_proposals_have_keys(&self) -> bool {
         let wires = self
             .canvas
             .schematic_ref()
@@ -408,6 +421,7 @@ impl NovoApp {
     /// between (a held Space pans); every other key runs its command.
     pub(super) fn run_key_command(&mut self, ctx: &egui::Context, id: &str) {
         if id == "tool.place" {
+            self.tour_tick("place");
             self.arm_place_hold(ctx);
         } else if id == "view.command_field_here" {
             self.wb.space_down = ctx.pointer_latest_pos().or(Some(egui::Pos2::ZERO));
@@ -429,11 +443,15 @@ impl NovoApp {
         }
         if let Some(action) = Action::from_id(id) {
             if action == Action::CommandPalette {
+                self.tour_tick("commands");
                 self.wb.field.open(Mode::All, None);
             } else {
                 self.run(ctx, action);
             }
             return;
+        }
+        if id == "edit.duplicate" {
+            self.tour_tick("duplicate");
         }
         if self.cabinet_open && matches!(id, "edit.rotate" | "edit.delete") {
             self.cabinet.keys.push(id.to_owned());
@@ -515,6 +533,7 @@ impl NovoApp {
             "view.toggle_marks" => self.wb.marks ^= true,
             "sim.live" => self.toggle_live(),
             "view.changes" => self.toggle_changes(argument),
+            "view.commissioning" => self.toggle_commissioning(),
             "check.problems" => self.show_issues(false),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),
@@ -540,6 +559,15 @@ impl NovoApp {
             }
             "export.pdf" => {
                 self.export_pdf();
+            }
+            "file.import_dxf_background" => self.import_dxf_background(),
+            "view.background" => self.toggle_background(),
+            "file.remove_background" => self.remove_background(),
+            "export.dxf_page" => {
+                self.export_dxf(super::dxf::DxfScope::CurrentPage);
+            }
+            "export.dxf_all" => {
+                self.export_dxf(super::dxf::DxfScope::AllPages);
             }
             "plc.add_card" => self.plc_add_card(argument),
             "plc.to_plc" => self.plc_to_plc(),
@@ -735,6 +763,7 @@ impl NovoApp {
         list.extend(self.problem_marks(page));
         list.extend(self.pe_override_marks(page));
         list.extend(self.changes_marks(page));
+        list.extend(self.commissioning_marks(page));
         let hidden = !self.wb.marks;
         // Cross references are printed drawing content: they go into the
         // page scene, like the tags, so the PDF shows them the same way.

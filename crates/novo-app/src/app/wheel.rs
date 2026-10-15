@@ -211,6 +211,7 @@ impl NovoApp {
         if self.canvas.schematic_ref().is_none() || !self.is_open() {
             return;
         }
+        self.tour_tick("place");
         let screen = ctx.content_rect();
         let at = ctx.pointer_latest_pos().unwrap_or(screen.center());
         let room = screen.shrink(REACH + 8.0);
