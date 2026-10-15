@@ -13,7 +13,7 @@
 use egui::{Key, Modifiers};
 use novo_canvas::model::{
     self, LabelKind, ModelStyle, PageScene, PlaceholderArt, SheetContent, SymbolArt, SymbolNote,
-    item_id,
+    WirePart, WirePartKind, item_id,
 };
 use novo_canvas::widget::{CanvasView, EscapeTarget};
 use novo_canvas::{Anchor, Color, Item, ItemId, Label, Primitive, SelectOp, Shape, Stroke, Vec2};
@@ -129,6 +129,11 @@ pub struct SchematicView {
     /// The move in progress was picked up by dragging a selected object (no
     /// M key); releasing drops it.
     drag_move: bool,
+    /// The corner or run of a wire a click selected; a double click selects
+    /// the whole wire instead.
+    wire_part: Option<WirePart>,
+    /// The wire part the scene shows emphasised now.
+    wire_focus: Option<WirePart>,
     /// A label picked up on its own: only the text follows the pointer.
     label_drag: Option<LabelDrag>,
     /// Where the canvas was drawn last frame, in screen points.
@@ -159,6 +164,14 @@ impl EscapeTarget for Ladder<'_> {
     fn leave_tool(&mut self) -> bool {
         self.0.leave_tool()
     }
+}
+
+/// Whether the wire still has the corner or run `part` names.
+fn part_exists(project: &novo_core::Project, part: WirePart) -> bool {
+    project.wire(part.wire).is_some_and(|w| match part.kind {
+        WirePartKind::Corner(i) => i < w.route.len(),
+        WirePartKind::Segment(k) => k <= w.route.len(),
+    })
 }
 
 /// The label a press at `at` picked up, when it is text that can move on its
@@ -201,7 +214,10 @@ fn point(v: Vec2) -> Point {
 
 impl SchematicView {
     pub fn new(editor: Editor) -> Self {
-        let style = ModelStyle::default();
+        let style = ModelStyle {
+            wires_pick_whole: false,
+            ..ModelStyle::default()
+        };
         let art = LibraryArt::new(editor.catalog.library(), style.symbol);
         SchematicView {
             editor,
@@ -220,6 +236,8 @@ impl SchematicView {
             band_count: None,
             swallow: false,
             drag_move: false,
+            wire_part: None,
+            wire_focus: None,
             label_drag: None,
             rect: egui::Rect::NOTHING,
             notes: Vec::new(),
@@ -286,7 +304,12 @@ impl SchematicView {
     /// default look; the scene is rebuilt on the next frame.
     pub fn set_style(&mut self, style: ModelStyle) {
         self.art = LibraryArt::new(self.editor.catalog.library(), style.symbol);
-        self.style = style;
+        // A click picks a corner or a run of a wire, never the whole wire.
+        self.style = ModelStyle {
+            wires_pick_whole: false,
+            ..style
+        };
+        self.wire_focus = None;
         self.scene = None;
         self.revision = None;
     }
@@ -392,6 +415,7 @@ impl SchematicView {
                     let mut scene = PageScene::new(project, page, &self.art);
                     scene.set_style(self.style, project, &self.art);
                     self.scene = Some(scene);
+                    self.wire_focus = None;
                 }
             }
             self.previews.clear();
@@ -739,6 +763,7 @@ impl SchematicView {
             && !self.popup_open()
             && matches!(self.editor.tool(), crate::tool::Tool::Select)
             && out.hit.is_none()
+            && !self.wire_under(document, out.cursor_raw)
             && response.double_clicked_by(egui::PointerButton::Primary)
         {
             // A double click on bare grid starts a wire there, without the
@@ -758,6 +783,12 @@ impl SchematicView {
         if !self.editor.tool_active() && self.editor.pin_hovered() && response.hovered() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
         }
+
+        let wire_tol = self
+            .canvas
+            .viewport
+            .screen_to_world_len(self.canvas.pick_tolerance);
+        self.wire_parts(document, &out, &response);
 
         // Keys, only while the drawing has the keyboard.
         let ctx = ui.ctx().clone();
@@ -830,6 +861,17 @@ impl SchematicView {
                 && scene.model_id(hovered).is_some()
             {
                 self.canvas.selection.apply([hovered], SelectOp::Replace);
+            } else if out.hovered.is_none()
+                && let (Some(w), Some(scene)) = (out.cursor_raw, &self.scene)
+                && let Some(part) = scene.wire_part_at(document.project(), w, wire_tol)
+                && !self.canvas.selection.contains(item_id(part.wire))
+            {
+                // A wire is not picked by its line; the menu still acts on
+                // the whole wire under the pointer.
+                self.canvas
+                    .selection
+                    .apply([item_id(part.wire)], SelectOp::Replace);
+                self.wire_part = None;
             }
             let selection = self.selection();
             let potentials = self.editor.potential_menu(document, &selection);
@@ -870,6 +912,73 @@ impl SchematicView {
         let changes = self.apply_changes(document);
         self.status = Some(self.editor.status(document, page));
         changes
+    }
+
+    /// Whether a wire's line is under the pointer. Wires are not canvas
+    /// hits, so "bare grid" has to ask.
+    fn wire_under(&self, document: &Document, at: Option<Vec2>) -> bool {
+        let tol = self
+            .canvas
+            .viewport
+            .screen_to_world_len(self.canvas.pick_tolerance);
+        at.zip(self.scene.as_ref())
+            .is_some_and(|(w, scene)| scene.wire_part_at(document.project(), w, tol).is_some())
+    }
+
+    /// Wires are picked by part: a click selects the corner or the run
+    /// under the pointer, a double click all of the wire, Esc drops the
+    /// part. The part under the pointer is emphasised while nothing else
+    /// is going on.
+    fn wire_parts(
+        &mut self,
+        document: &Document,
+        out: &novo_canvas::widget::CanvasOutput,
+        response: &egui::Response,
+    ) {
+        let project = document.project();
+        let idle = !self.editor.tool_active()
+            && !self.editor.dragging()
+            && !self.drag_move
+            && self.label_drag.is_none()
+            && !self.popup_open()
+            && !self.swallow;
+        let tol = self
+            .canvas
+            .viewport
+            .screen_to_world_len(self.canvas.pick_tolerance);
+        let Some(scene) = &mut self.scene else {
+            return;
+        };
+        if self.wire_part.is_some_and(|p| !part_exists(project, p)) {
+            self.wire_part = None;
+        }
+        let under = out
+            .cursor_raw
+            .filter(|_| idle && out.hit.is_none())
+            .and_then(|w| scene.wire_part_at(project, w, tol));
+        if idle && response.double_clicked_by(egui::PointerButton::Primary) {
+            if let Some(part) = under {
+                self.canvas
+                    .selection
+                    .apply([item_id(part.wire)], SelectOp::Replace);
+                self.wire_part = None;
+            }
+        } else if idle && response.clicked_by(egui::PointerButton::Primary) {
+            self.wire_part = if out.clicked_hit.is_none() {
+                under
+            } else {
+                None
+            };
+        }
+        // Anything selected on its own takes over from a wire part.
+        if !self.canvas.selection.is_empty() {
+            self.wire_part = None;
+        }
+        let want = self.wire_part.or(under);
+        if want != self.wire_focus {
+            scene.set_wire_focus(project, want);
+            self.wire_focus = want;
+        }
     }
 
     fn handle_keys(
@@ -920,8 +1029,9 @@ impl SchematicView {
             }
         }
         if pressed(Key::Escape) {
-            // The first Esc puts a dragged label back.
-            if self.label_drag.take().is_none() {
+            // The first Esc puts a dragged label back, the next drops a
+            // selected wire part.
+            if self.label_drag.take().is_none() && self.wire_part.take().is_none() {
                 self.canvas.escape_with(Some(&mut Ladder(&mut self.editor)));
             }
         }
@@ -963,6 +1073,23 @@ impl SchematicView {
         ] {
             if pressed(key) {
                 if key == Key::M && out.cursor_raw.is_none() {
+                    continue;
+                }
+                // Delete on a selected corner takes that bend out; on a run
+                // it deletes the wire (DESIGN.md §4).
+                if key == Key::Delete
+                    && selection.is_empty()
+                    && let Some(part) = self.wire_part
+                {
+                    match part.kind {
+                        WirePartKind::Corner(i) => {
+                            self.editor.remove_corner(document, part.wire, i);
+                        }
+                        WirePartKind::Segment(_) => {
+                            self.editor.delete(document, &[AnyId::Wire(part.wire)]);
+                        }
+                    }
+                    self.wire_part = None;
                     continue;
                 }
                 self.editor.key(document, action, &selection);
@@ -1935,6 +2062,136 @@ mod tests {
             .find(|s| s.placement.origin == origin)
             .unwrap();
         s.pin_position(s.pin_index(name).unwrap()).unwrap()
+    }
+
+    /// A coil with one wire leaving its first pin up, along a bend, to an
+    /// open end; returns the wire and the bend.
+    fn wire_with_a_corner(h: &mut Harness) -> (novo_core::WireId, Point) {
+        h.view.editor.auto_connect = false;
+        h.view.editor.begin_place("iec/coils/relay", None);
+        h.click(60.0, 60.0, egui::PointerButton::Primary);
+        h.view.editor.leave_tool();
+        let sym = h.doc.project().symbols().next().unwrap().id;
+        let origin = h.doc.project().symbol(sym).unwrap().placement.origin;
+        let a1 = pin_at(&h.doc, origin, "A1");
+        let corner = Point::new(a1.x, a1.y - 30.0);
+        let page = h.page;
+        let (wire, _) = h
+            .doc
+            .transact("Wire", |tx| {
+                let wire = tx.connect_on(
+                    page,
+                    novo_core::Endpoint::pin(sym, 0),
+                    novo_core::Endpoint::Free {
+                        at: Point::new(a1.x + 40.0, a1.y - 30.0),
+                    },
+                )?;
+                tx.update::<novo_core::Wire>(wire, |w| w.route = vec![corner])?;
+                Ok(wire)
+            })
+            .unwrap();
+        h.frame(Vec::new());
+        h.frame(Vec::new());
+        (wire, corner)
+    }
+
+    #[test]
+    fn a_click_selects_a_corner_or_a_run_and_a_double_click_the_wire() {
+        let mut h = Harness::new();
+        let (wire, corner) = wire_with_a_corner(&mut h);
+        // On the run beyond the bend: that run, not the wire.
+        h.click(corner.x + 20.0, corner.y, egui::PointerButton::Primary);
+        assert_eq!(
+            h.view.wire_part,
+            Some(WirePart {
+                wire,
+                kind: WirePartKind::Segment(1)
+            })
+        );
+        assert!(h.view.canvas.selection.is_empty());
+        // On the bend itself: the corner.
+        h.click(corner.x, corner.y, egui::PointerButton::Primary);
+        assert_eq!(
+            h.view.wire_part,
+            Some(WirePart {
+                wire,
+                kind: WirePartKind::Corner(0)
+            })
+        );
+        // Esc drops the part before anything else.
+        h.key(Key::Escape);
+        assert_eq!(h.view.wire_part, None);
+        // A double click selects the whole wire. Let the earlier clicks age
+        // out, or egui counts these as a triple.
+        for _ in 0..60 {
+            h.frame(Vec::new());
+        }
+        let pos = h.screen(corner.x + 20.0, corner.y);
+        h.frame(vec![egui::Event::PointerMoved(pos)]);
+        for pressed in [true, false, true, false] {
+            h.frame(vec![egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Modifiers::NONE,
+            }]);
+        }
+        h.frame(Vec::new());
+        assert_eq!(h.view.canvas.selection.ids(), [item_id(wire)]);
+        assert_eq!(h.view.wire_part, None);
+    }
+
+    #[test]
+    fn right_click_on_a_wire_selects_the_whole_wire() {
+        let mut h = Harness::new();
+        let (wire, corner) = wire_with_a_corner(&mut h);
+        h.click(corner.x + 20.0, corner.y, egui::PointerButton::Secondary);
+        assert_eq!(h.view.canvas.selection.ids(), [item_id(wire)]);
+        assert!(h.view.menu.is_some());
+    }
+
+    #[test]
+    fn delete_on_a_selected_run_deletes_the_wire() {
+        let mut h = Harness::new();
+        let (wire, corner) = wire_with_a_corner(&mut h);
+        h.click(corner.x + 20.0, corner.y, egui::PointerButton::Primary);
+        h.key(Key::Delete);
+        assert!(h.doc.project().wire(wire).is_none());
+        assert_eq!(h.view.wire_part, None);
+    }
+
+    #[test]
+    fn a_double_click_on_a_wire_does_not_start_a_new_one() {
+        let mut h = Harness::new();
+        let (_, corner) = wire_with_a_corner(&mut h);
+        for _ in 0..60 {
+            h.frame(Vec::new());
+        }
+        let pos = h.screen(corner.x + 20.0, corner.y);
+        h.frame(vec![egui::Event::PointerMoved(pos)]);
+        for pressed in [true, false, true, false] {
+            h.frame(vec![egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Modifiers::NONE,
+            }]);
+        }
+        h.frame(Vec::new());
+        assert!(!h.view.editor.tool_active());
+        assert_eq!(h.doc.project().wires().count(), 1);
+    }
+
+    #[test]
+    fn delete_on_a_selected_corner_takes_the_bend_out() {
+        let mut h = Harness::new();
+        let (wire, corner) = wire_with_a_corner(&mut h);
+        let depth = h.doc.undo_depth();
+        h.click(corner.x, corner.y, egui::PointerButton::Primary);
+        h.key(Key::Delete);
+        assert!(h.doc.project().wire(wire).unwrap().route.is_empty());
+        assert_eq!(h.doc.undo_depth(), depth + 1);
+        assert_eq!(h.view.wire_part, None);
     }
 
     #[test]
