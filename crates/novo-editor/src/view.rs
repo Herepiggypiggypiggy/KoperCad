@@ -36,7 +36,7 @@ const HINT_PX: f32 = 11.0;
 /// in screen points (DESIGN.md §5).
 const HOLD_PX: f32 = 24.0;
 /// A pin wins over the symbol body within this many screen points.
-const PIN_RADIUS: f32 = 9.0;
+const PIN_RADIUS: f32 = 10.0;
 /// First preview item id; previews count down from here.
 const PREVIEW_BASE: u64 = u64::MAX - 16;
 
@@ -84,6 +84,9 @@ pub struct SchematicView {
     goto: Option<PageId>,
     /// The press that closed a popup, until its release.
     swallow: bool,
+    /// The move in progress was picked up by dragging a selected object (no
+    /// M key); releasing drops it.
+    drag_move: bool,
     /// Where the canvas was drawn last frame, in screen points.
     rect: egui::Rect,
     /// Text the shell draws next to symbols (cross references).
@@ -136,6 +139,7 @@ impl SchematicView {
             status: None,
             goto: None,
             swallow: false,
+            drag_move: false,
             rect: egui::Rect::NOTHING,
             notes: Vec::new(),
             notes_dirty: false,
@@ -423,6 +427,41 @@ impl SchematicView {
                 self.canvas.escape();
             }
         }
+        // Press on an object, drag: it is selected and moves with the
+        // pointer, no M needed (DESIGN.md §4); Esc cancels, release drops.
+        if response.drag_started_by(egui::PointerButton::Primary)
+            && !self.swallow
+            && !self.editor.tool_active()
+            && !self.editor.dragging()
+            && let Some(o) = ui.input(|i| i.pointer.press_origin())
+            && let Some(scene) = &self.scene
+        {
+            let local = o - rect.min;
+            let w = self
+                .canvas
+                .viewport
+                .screen_to_world(Vec2::new(local.x, local.y));
+            let tol = self
+                .canvas
+                .viewport
+                .screen_to_world_len(self.canvas.pick_tolerance);
+            if let Some(hit) = scene.scene().pick(w, tol, self.canvas.viewport.zoom)
+                && scene.model_id(hit.id).is_some()
+            {
+                // Cancel the band the canvas may have begun, then select.
+                // A press on a selected object keeps the whole selection.
+                let keep: Vec<ItemId> = if self.canvas.selection.contains(hit.id) {
+                    self.canvas.selection.ids().to_vec()
+                } else {
+                    vec![hit.id]
+                };
+                self.canvas.escape();
+                self.canvas.selection.apply(keep, SelectOp::Replace);
+                self.editor.hover(document, page, point(w), tolerance);
+                let selection = self.selection();
+                self.drag_move = self.editor.begin_move(&selection);
+            }
+        }
         if let Some(w) = out.cursor_raw {
             self.editor.hover(document, page, point(w), tolerance);
             self.editor
@@ -433,6 +472,14 @@ impl SchematicView {
             && let Some(w) = out.cursor_raw
         {
             self.editor.click(document, page, point(w), tolerance);
+        }
+        if self.drag_move && response.drag_stopped_by(egui::PointerButton::Primary) {
+            self.drag_move = false;
+            if matches!(self.editor.tool(), crate::tool::Tool::Move(_))
+                && let Some(w) = out.cursor_raw
+            {
+                self.editor.click(document, page, point(w), tolerance);
+            }
         }
         // Clicks drive the active tool; with none, the canvas selects (and
         // the editor drops unaccepted proposals).
@@ -1446,6 +1493,48 @@ mod tests {
         h.drag((a.x - off, a.y), (b.x, b.y));
         assert_eq!(h.doc.project().wires().count(), 1);
         assert!(h.view.canvas.selection.is_empty());
+    }
+
+    #[test]
+    fn dragging_an_object_moves_it_without_m() {
+        let mut h = Harness::new();
+        h.view.editor.auto_connect = false;
+        h.view.editor.begin_place("iec/coils/relay", None);
+        h.click(60.0, 60.0, egui::PointerButton::Primary);
+        h.view.editor.leave_tool();
+        let at = |h: &Harness| h.doc.project().symbols().next().unwrap().placement.origin;
+        let before = at(&h);
+        // Press on the body between the pins, drag 40 mm right, 20 down.
+        let (a1, a2) = (pin_at(&h.doc, before, "A1"), pin_at(&h.doc, before, "A2"));
+        // A point on the symbol's body that the canvas picks and no pin
+        // target covers.
+        let tol = h
+            .view
+            .canvas
+            .viewport
+            .screen_to_world_len(h.view.canvas.pick_tolerance);
+        let zoom = h.view.canvas.viewport.zoom;
+        let scene = h.view.scene.as_ref().unwrap().scene();
+        let mid = (0..200)
+            .map(|i| {
+                (
+                    a1.x - 20.0 + f64::from(i % 20) * 2.0,
+                    a1.y + f64::from(i / 20) * 1.6,
+                )
+            })
+            .find(|&(x, y)| {
+                let far = |p: Point| (p.x - x).hypot(p.y - y) * f64::from(zoom) > 12.0;
+                far(a1)
+                    && far(a2)
+                    && scene
+                        .pick(Vec2::new(x as f32, y as f32), tol, zoom)
+                        .is_some()
+            })
+            .expect("a pickable body point");
+        h.drag(mid, (mid.0 + 40.0, mid.1 + 20.0));
+        let after = at(&h);
+        assert_eq!(after, Point::new(before.x + 40.0, before.y + 20.0));
+        assert!(!h.view.editor.tool_active());
     }
 
     #[test]
