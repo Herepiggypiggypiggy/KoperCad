@@ -94,6 +94,15 @@ to force a wire through chosen ducts. A pin is the only stored routing data.
 `route all` shows a preview like `place all`; lengths flow to the wire list
 (`novo-reports`) and the checks (`novo-checks`) through the query, never copies.
 
+## 6a. Reading the model
+
+Ducts are stored as rails of kind Duct on an enclosure's plate (WS-02 `Rail`:
+`x, y, length, vertical, width, height`; width and height 0 while unknown).
+`novo_routing::model::ducts` and `network` read them; engine duct ids are the
+raw rail ids. Wire jobs are not read yet: they need the position of each
+terminal on its device (not in the part data) and the wire list from the
+netlist (WS-13). Until then jobs are built by the caller.
+
 ## 7. Out of scope here
 
 3D routing, bend radius, wire bundles with twisted pairs, cable (as opposed to
