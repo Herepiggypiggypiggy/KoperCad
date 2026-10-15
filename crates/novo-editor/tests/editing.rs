@@ -2411,3 +2411,34 @@ fn corners_preview_shows_the_corner_and_t_piece_with_their_arms() {
     assert_eq!(t.arms.len(), 3);
     assert!(t.arms.contains(&Direction::Up) && t.arms.contains(&Direction::Down));
 }
+
+#[test]
+fn a_wire_override_is_one_step_and_removable() {
+    use novo_editor::potential_menu;
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/terminals/terminal", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.begin_place("iec/motors/motor_3ph", None);
+    editor.click(&mut doc, page, p(60.0, 100.0), TOL);
+    let x = symbol_at(&doc, page, p(40.0, 40.0));
+    let m = symbol_at(&doc, page, p(60.0, 100.0));
+    editor.begin_wire();
+    click_pin(&mut editor, &mut doc, page, x, "2");
+    click_pin(&mut editor, &mut doc, page, m, "U1");
+    let wire = doc.project().wires().next().unwrap().id;
+    let sel = [AnyId::Wire(wire)];
+    let menu = potential_menu::wire_override_menu(doc.project(), &sel).unwrap();
+    assert!(!menu.overridden);
+    let depth = doc.undo_depth();
+    assert!(editor.override_wire_potential(&mut doc, &menu.wires, Some(&menu.chips[1])));
+    assert_eq!(doc.undo_depth(), depth + 1);
+    let menu = potential_menu::wire_override_menu(doc.project(), &sel).unwrap();
+    assert!(menu.overridden);
+    assert!(editor.override_wire_potential(&mut doc, &menu.wires, None));
+    assert!(
+        !potential_menu::wire_override_menu(doc.project(), &sel)
+            .unwrap()
+            .overridden
+    );
+}
