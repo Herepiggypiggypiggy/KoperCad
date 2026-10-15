@@ -32,8 +32,10 @@ pub enum Event {
 pub struct Facts {
     /// The tool in hand: `select`, `place`, `wire`, `cable` or `text`.
     pub tool: String,
-    /// Name or title of the page shown.
+    /// Name of the page shown.
     pub page: Option<String>,
+    /// Title of the page shown; a `page` check matches the name or the title.
+    pub page_title: Option<String>,
     /// Tags of the selected devices.
     pub selection: Vec<String>,
     /// View zoom, 1.0 at fit.
@@ -196,7 +198,10 @@ impl Check {
             Check::Opened(id) => cx.events.contains(&Event::Opened(id.clone())),
             Check::Signal(id) => cx.events.contains(&Event::Signal(id.clone())),
             Check::Tool(tool) => cx.facts.tool == *tool,
-            Check::Page(name) => cx.facts.page.as_deref() == Some(name.as_str()),
+            Check::Page(name) => {
+                cx.facts.page.as_deref() == Some(name.as_str())
+                    || cx.facts.page_title.as_deref() == Some(name.as_str())
+            }
             Check::Selected(tag) => {
                 cx.facts.selection.len() == 1 && tag_matches_text(&cx.facts.selection[0], tag)
             }

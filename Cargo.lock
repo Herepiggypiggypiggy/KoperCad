@@ -1869,6 +1869,7 @@ dependencies = [
  "novo-editor",
  "novo-interop",
  "novo-layout",
+ "novo-learn",
  "novo-parts",
  "novo-pdf",
  "novo-plc",

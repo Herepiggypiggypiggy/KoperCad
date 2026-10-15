@@ -17,6 +17,8 @@ mod duplicate;
 mod dxf;
 mod example;
 mod inspector;
+mod learn;
+mod learn_ui;
 mod link;
 mod live;
 mod live_anim;
@@ -55,6 +57,8 @@ mod compare_tests;
 mod example_tests;
 #[cfg(test)]
 mod gate1_tests;
+#[cfg(test)]
+mod learn_tests;
 #[cfg(test)]
 mod onboarding_tests;
 
@@ -185,6 +189,8 @@ pub struct NovoApp {
     renaming_level: Option<(Aspect, DeviceTag, String)>,
     /// Window width last frame, which decides whether the outline pins.
     window_width: f32,
+    /// Lessons: the catalog, the running lesson and the person's progress.
+    learn: learn::LearnState,
 }
 
 /// Most messages remembered; older ones are forgotten.
@@ -207,6 +213,7 @@ impl NovoApp {
         novo_theme::apply(&cc.egui_ctx);
         let mut app = Self::with_settings(backend, canvas, settings);
         app.load_user_keymap();
+        app.learn_init_paths();
         app
     }
 
@@ -242,6 +249,7 @@ impl NovoApp {
             renaming_page: None,
             renaming_level: None,
             window_width: 0.0,
+            learn: learn::LearnState::new(),
         }
     }
 
@@ -366,6 +374,7 @@ impl NovoApp {
         if !self.is_enabled(action) {
             return;
         }
+        self.learn_command(action.id());
         if action != Action::CommandPalette {
             self.settings.remember_action(action.id());
         } else {
@@ -377,6 +386,7 @@ impl NovoApp {
             Action::OpenExample => self.leave_then(ctx, Leaving::Example),
             Action::TryFastKeys => self.leave_then(ctx, Leaving::Practice),
             Action::ShowWalkthrough => self.show_walkthrough(),
+            Action::Learn => self.learn_run_command("help.learn", None),
             Action::SaveProject => {
                 self.save();
             }
@@ -571,6 +581,7 @@ impl NovoApp {
     /// A different project was opened, created or closed: nothing cached
     /// for the old one carries over.
     fn document_replaced(&mut self) {
+        self.learn_project_changed();
         self.canvas.document_replaced();
         self.wb.reports = Default::default();
         self.wb.commissioning = None;
@@ -784,12 +795,16 @@ impl NovoApp {
             self.walkthrough_card(&ctx, canvas_rect);
             self.changes_card(&ctx, canvas_rect);
         }
+        self.learn_watch(&ctx);
+        self.learn_step(&ctx);
+        self.learn_overlay(&ctx, canvas_rect);
         self.toasts(&ctx, canvas_rect);
 
         self.occurrences_popup(&ctx, canvas_rect);
         self.command_field(&ctx, canvas_rect);
         self.recovery_dialog(&ctx);
         self.about_dialog(&ctx);
+        self.learn_window(&ctx);
         self.renumber_dialog(&ctx);
         self.preferences_dialog(&ctx);
         self.parts_window(&ctx);
@@ -811,6 +826,7 @@ impl NovoApp {
         for command in commands {
             self.run_key_command(&ctx, command);
         }
+        self.learn_end_frame();
     }
 
     /// Follows up on what the canvas did this frame: its edits reach the
@@ -926,9 +942,13 @@ impl NovoApp {
     /// or run" and the saved state on the right.
     fn top_bar(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
         ui.horizontal_centered(|ui| {
-            ui.menu_button(egui::RichText::new(APP_NAME).strong(), |ui| {
+            let menu = ui.menu_button(egui::RichText::new(APP_NAME).strong(), |ui| {
                 self.project_menu(ui, picked)
             });
+            self.anchor_response("menu.project", &menu.response, APP_NAME);
+            if menu.inner.is_some() {
+                self.learn_event(novo_learn::Event::Opened("menu.project".to_owned()));
+            }
             ui.separator();
             for (action, label) in [
                 (Action::ShowSchematic, "Schematic"),
@@ -955,7 +975,9 @@ impl NovoApp {
                 let search = egui::Button::new("Search or run")
                     .shortcut_text(shortcut)
                     .min_size(egui::vec2(240.0, 0.0));
-                if ui.add(search).clicked() {
+                let search = ui.add(search);
+                self.anchor_response("palette.button", &search, "Search or run");
+                if search.clicked() {
                     picked.push(Action::CommandPalette);
                 }
             });
@@ -965,7 +987,12 @@ impl NovoApp {
     /// The short project menu behind the mark. Everything in it is also in
     /// the command palette.
     fn project_menu(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
-        for a in [Action::NewProject, Action::OpenProject, Action::OpenExample] {
+        for a in [
+            Action::NewProject,
+            Action::OpenProject,
+            Action::OpenExample,
+            Action::Learn,
+        ] {
             self.action_button(ui, a, picked);
         }
         ui.add_enabled_ui(!self.settings.recent_projects.is_empty(), |ui| {
@@ -1722,6 +1749,7 @@ impl NovoApp {
                 if !self.first_run() {
                     self.action_button(ui, Action::TryFastKeys, picked);
                 }
+                self.learn_start_entry(ui);
                 let unsaved = self.backend.unsaved_projects();
                 if !unsaved.is_empty() {
                     ui.add_space(16.0);
