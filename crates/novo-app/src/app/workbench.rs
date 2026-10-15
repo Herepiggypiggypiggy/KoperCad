@@ -272,6 +272,15 @@ const APP_COMMANDS: &[&str] = &[
     "export.assembly",
     "export.sheets",
     "export.sheets_csv",
+    "export.bom",
+    "export.reports",
+    "view.reports",
+    "report.toc",
+    "report.bom",
+    "report.devices",
+    "report.wires",
+    "report.terminals",
+    "report.cables",
     "file.import_dxf_background",
     "view.background",
     "view.background_place",
@@ -380,7 +389,11 @@ impl NovoApp {
             focus
         } else if ctx.text_edit_focused() {
             Focus::TextField
-        } else if self.is_open() && !self.panel_has_focus(ctx) {
+        } else if self.is_open()
+            && self.workspace() != Workspace::Reports
+            && !self.panel_has_focus(ctx)
+        {
+            // The Reports table has the keyboard, not the hidden drawing.
             Focus::Canvas
         } else {
             Focus::Panel
@@ -627,7 +640,25 @@ impl NovoApp {
             "view.cables_drawer" => self.toggle_drawer(Drawer::Cables),
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
             "view.toggle_marks" => self.wb.marks ^= true,
+            "view.reports" => self.switch_workspace(super::workspace::Workspace::Reports),
+            "export.bom" => {
+                self.export_report("bom", super::reports_view::ReportFormat::Excel);
+            }
+            "export.reports" => {
+                self.export_all_reports();
+            }
             "sim.live" => self.toggle_live(),
+            _ if super::reports_view::REPORT_COMMANDS
+                .iter()
+                .any(|(c, _)| *c == id) =>
+            {
+                if let Some((_, report)) = super::reports_view::REPORT_COMMANDS
+                    .iter()
+                    .find(|(c, _)| *c == id)
+                {
+                    self.show_report(report);
+                }
+            }
             "sim.faults" => self.toggle_faults(),
             "view.changes" => self.toggle_changes(argument),
             "view.commissioning" => self.toggle_commissioning(),

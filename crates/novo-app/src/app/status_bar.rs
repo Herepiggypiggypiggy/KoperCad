@@ -167,6 +167,9 @@ impl NovoApp {
 
     /// "-K1" for one device, "3 selected" for several, `None` for none.
     fn selection_summary(&self) -> Option<String> {
+        if self.workspace() == Workspace::Reports {
+            return self.reports_picked();
+        }
         if self.workspace() != Workspace::Schematic {
             return None;
         }
