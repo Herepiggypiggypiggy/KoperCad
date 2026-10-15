@@ -476,10 +476,10 @@ in place mode. The wheel has two rings and no hidden level.
   hover: the favourites used in this project first, then the defaults of
   that category. Relays, for example: coil, normally open, normally
   closed, changeover, timer coil.
-- Pick by clicking, by press-drag-release (a flick), or by keys 1 to 5
-  then 1 to 8 (1 to 5 on the inner ring); Backspace goes back a ring and Esc closes. Picking an
-  item attaches the symbol to the pointer exactly as the place mode does,
-  so R, X and the auto tag work the same.
+- Pick by clicking, by press-drag-release (a flick), or by keys 1 to 5 then
+  1 to 8 (1 to 5 on the inner ring); Backspace goes back a ring and Esc
+  closes. Picking an item attaches the symbol to the pointer exactly as the
+  place mode does, so R, X and the auto tag work the same.
 - Wedges are large (at least 56 px wide at the outer edge) and the wheel
   never opens partly off-screen; it shifts to fit. The categories are
   fixed in v1 so muscle memory forms; the items inside follow use.
@@ -490,10 +490,10 @@ a pin or wire it connects, as a click does; on nothing it leaves an open
 end). The first click of the double click is the last corner; a double
 click adds no extra corner and no zero-length segment.
 
-- An open end carries an end cap (an open copper ring, hollow where a joint is
-  filled, 4 px radius on screen at every zoom; Layout sets the colours) and the Warning flag of §5
-  with the text "Unconnected" on hover, counted in the Issues total as
-  "Unconnected wire end". It is listed in Issues as
+- An open end carries an end cap (an open copper ring, hollow where a joint
+  is filled, 4 px radius on screen at every zoom; Layout sets the colours)
+  and the Warning flag of §5 with the text "Unconnected" on hover, counted
+  in the Issues total as "Unconnected wire end". It is listed in Issues as
   `wire.open`, a warning, not an error, so a half-drawn page can be saved
   and printed with the flags visible.
 - **A wire can also start in empty space.** With the Connect tool and no
@@ -534,12 +534,15 @@ click adds no extra corner and no zero-length segment.
 - Hovering the zone shows the ring and the connect cursor immediately (no
   delay), so the user sees the grab before pressing.
 
-**Seeing the connection points.** A pin with a wire shows a filled accent
-dot where the wire attaches; a free pin shows a hollow ring of the same
-size, so every place a wire can start or end is visible without hovering.
-Wires keep a stroke of at least 1.5 px on screen at every zoom and differ
-from pins and from the background by at least a 3:1 contrast ratio; the
-exact colours are Layout's, checked against this ratio.
+**Seeing the connection points.** A pin with a wire shows a small filled
+dot in the wire colour where the wire attaches; a free pin shows a hollow
+ring of the same size, so every place a wire can start or end is visible
+without hovering. The copper dot stays for junctions only (§2: three or
+more conductors join: a T, or the derived junction where two wires leave
+one pin), so a pin end and a junction never look alike. Wires keep a
+stroke of at least 1.5 px on screen at every zoom and differ from pins and
+from the background by at least a 3:1 contrast ratio; the exact colours are
+Layout's, checked against this ratio.
 
 Acceptance:
 
@@ -556,7 +559,8 @@ Acceptance:
     end cap and the Unconnected flag, one new corner at most, and a
     `wire.open` warning in Issues. Dragging the cap onto a pin connects it
     and clears the flag and the warning. Undo removes the whole wire.
-15. Free pins show a ring and connected pins a filled dot at every zoom; a
+15. Free pins show a ring and connected pins a wire-coloured dot, and only
+    junctions a copper dot, at every zoom; a
     wire against its pins and the background meets 3:1.
 16. Connect tool, double click on empty canvas, click, double click: a
     wire open at both ends, two caps and two flags, in both modes, drawn
@@ -586,10 +590,10 @@ between fields as usual.
 - Marks keep their screen size at every zoom and cluster into a count per
   area when zoomed out. Shift+P hides them; counters remain.
 - Copper is never a mark (a proposal, problem, override or change), so
-  selection is always unambiguous. Copper also draws conductor joints
-  (filled dots of a fixed size: 3 px radius, 3.5 px for a T), which are
+  selection is always unambiguous. Copper also draws junction dots
+  (filled, of a fixed size: 3 px radius, 3.5 px for a T), which are
   not marks; selection never relies on colour alone, because it is
-  thicker and haloed, and a joint never changes size.
+  thicker and haloed, and a junction dot never changes size.
 - Proposal, problem and override differ in colour, line style and
   position at once, so they stay apart for colour-blind users.
 - Change marks appear only in Changes mode, so they never compete with
