@@ -273,8 +273,13 @@ selects it first; nothing is lost if the second click is slow.
 moves, selected or not: the press selects it (as a click would) and the
 drag moves the whole selection if the device was already part of it. Pins
 still win within their grab zone, so a drag from a pin connects (§4, pin
-or body). The move snaps to the grid, shows the wires stretching, follows
-the no-overlap rules, and Esc during the drag puts everything back. M
+or body). The move snaps to the grid and Esc during the drag puts everything
+back. A plain drag moves the symbol alone: its wires stay where they are,
+and every wire end that was on one of its pins stays behind as an open
+end (ring and Unconnected flag, `wire.open`, §4 open ends). Where the
+moved pins land on a wire or face another pin, the Auto connections
+setting decides whether they connect. Shift+drag takes the wires along,
+stretching them under the no-overlap rules. M
 keeps working as the keyboard move: it picks the selection up at the
 pointer and a click puts it down. Undo takes back one whole move. A
 press and drag on a wire moves the corner or segment under the pointer
@@ -433,6 +438,43 @@ between them; "Separate terminals" reverses it, both as one undo step.
 Terminals that are not neighbours on the same strip are refused with the
 reason in the hint, and nothing changes.
 
+### Pages navigator, and strip naming
+
+**Pages navigator.** Pages are reached through the outline (§3), which is
+the navigator: there is no second one. Its filter has two views of the
+same pages, **Function** (the page groups, `=10D41`) and **Location** (the
+panels, `+K1B1G1`). Each page has both: the group it sits in and the panel
+it is drawn for.
+
+- Right-click in the outline: New page here (it takes the group and panel
+  of the row), New group, New panel. New group asks for its name and,
+  optionally, its panels as chips; a panel is named once in the project
+  however many groups use it.
+- Two pages in `=10D41 +K1B1G1` and two in `=11D21 +K1B1G1` are four pages
+  of one panel: the Cabinet canvas and the cabinet layout are per panel,
+  so they appear on the same layout though the groups differ. The panel
+  row in the Location view lists all four.
+- Dragging a page onto another group or panel row moves it (its prefix
+  changes, references follow, one undo step). Page names and numbers keep
+  the rules of §3 and §8.
+
+**Strip naming.** Terminal strips are numbered by position, not by habit.
+
+- A terminal placed next to an existing strip (within one pitch of its
+  end, in line with it) joins it and takes its name; placed directly on
+  the left or above the first terminal it joins too, becomes number 1 and
+  the numbers after it move up by one. The status line says what moved
+  ("renumbered -X1:1..6") and it is one undo step.
+- A terminal placed anywhere else starts a new strip with the next free
+  strip number (-X2 if -X1 exists), never a second -X1.
+- If a terminal joined a strip you did not want, select it (or several)
+  and press Up to move their strip name up by one number (-X1 becomes
+  -X2), Down to move it down, or Ctrl+Up to give them the lowest free
+  number. With only terminals selected these arrow keys do this; the
+  hint says so.
+- A terminal placed by a row drag follows the same rule once for the
+  whole row.
+
 **Escape ladder.** Cancel the step in progress, then leave the tool, then
 clear the selection.
 
@@ -499,6 +541,13 @@ other.
   and R flips it (R is already rotate while placing, so no new key; in
   Lines R does nothing, and it never rotates the wire in progress). Click
   a pin, a junction or a wire to finish.
+  *Corner and T pieces (a default Tadjiro can overrule after trying
+  it).* In Corners a click places a corner piece with an orientation, as
+  in EPLAN: the preview shows which two arms it has and R flips it. The
+  piece is drawn as a visible handle on the stored route, so the route
+  model is unchanged (no tag, no list entry, §9). Clicking on a wire while
+  wiring drops a T piece there, with its branch pointing the way the
+  pointer is; a T is a junction like any other (a dot per §2).
 - **Lines** (AutoCAD style): you draw the lines. Each click commits one
   straight segment from the previous point, locked to the axis the pointer
   is nearer to (a diagonal pointer snaps to the nearer axis), and nothing is
@@ -584,11 +633,12 @@ the screen:
   at stake.
 
 A hand-drawn route (Lines, or Corners with clicked corners) is kept by
-`tidy`; selecting it and choosing `tidy` re-routes it on purpose. Moving a
-symbol stretches routed wires as before and stretches hand-drawn ones by
-moving only their end segments, so every corner the user placed stays
-where it was put. If the pin leaves the axis of its end segment, a bend is
-added at the first corner; the stretch is never diagonal.
+`tidy`; selecting it and choosing `tidy` re-routes it on purpose. Dragging a
+symbol moves the symbol alone (below). Shift+drag takes its wires along:
+routed wires stretch as before and hand-drawn ones stretch by moving only
+their end segments, so every corner the user placed stays where it was
+put. If the pin leaves the axis of its end segment, a bend is added at
+the corner next to the moved pin; the stretch is never diagonal.
 
 Acceptance, for testers and reviewers, run in both modes unless marked:
 
@@ -614,7 +664,7 @@ Acceptance, for testers and reviewers, run in both modes unless marked:
    different declared potential is refused with the reason.
 8. Esc mid-wire cancels the whole wire; Backspace removes one corner or
    segment; undo removes one whole wire.
-9. Dragging a symbol so that a wire would lie over another wire nudges
+9. Shift+dragging a symbol so that a wire would lie over another wire nudges
    that wire, or, where no nudge clears it, is refused live with the
    reason. A script, an AI edit or an undo that would overlap goes through
    and shows in Issues, marking both segments. A file with existing
@@ -759,8 +809,9 @@ Acceptance:
     opens its properties with the cursor in the tag; on a wire edits its
     number; on a page tab renames the page. The same gestures in the Connect
     tool do the wire meanings in the table and nothing else.
-18. Click a device, then drag it: it moves without M, with wires stretching
-    live and a refused position shown as in check 9; Esc mid-drag restores
+18. Click a device, then drag it: it moves alone without M, its wires stay
+    and show open ends; Shift+drag stretches them live, a refused position
+    shown as in check 9; Esc mid-drag restores
     it; undo takes back one move. Dragging an unselected device selects and
     moves it in one gesture. M still picks up and drops.
 19. A slow second click of a double click never loses the selection or
@@ -795,6 +846,16 @@ Acceptance:
     Select two terminals, right-click: Toggle PE terminal turns both on.
     Select two neighbours on a strip: Connect terminals changes their
     symbol; two non-neighbours are refused with the reason.
+28. Corners mode: a click places an oriented corner piece shown in the
+    preview, R flips it, clicking a wire drops a T. The stored route is
+    unchanged. A plain drag of a device leaves its wires as open ends;
+    Shift+drag stretches them.
+29. Outline, Location view: right-click, New panel, then add pages to it
+    from two different groups; both groups' pages show under the panel and
+    the Cabinet canvas of that panel shows them together.
+30. Place a terminal next to -X1: it is -X1:n+1. Place one far away: -X2.
+    Place one left of -X1:1: it is -X1:1 and the rest move up. Select the
+    terminal, Up: its strip number goes up by one; Ctrl+Up: lowest free.
 
 Keys match the logical character, not the physical position, so `?`,
 Ctrl+Z and Ctrl+Y work on Dutch, German (QWERTZ) and US layouts alike.
@@ -1046,7 +1107,7 @@ Changes mode, WS-09 the PDF.
 | --- | --- | --- |
 | Pages | Hand-made; flowing; pinned flow | **Pinned flow:** automatic pagination, user page breaks never move, and pages freeze when a revision is issued so `page.column` references never move under a printed set |
 | Generated pages under pinned flow | Freeze them too; append new sheets at the end; reflow | **Reflow.** Generated pages (BOM, terminal and cable diagrams, lists) sit in their own numbered sections after the schematic pages, so their growth never renumbers a schematic page. In page order the contents list opens the set and every other generated page comes after every drawn (schematic or overview) page, whatever its structure; generated pages sort among themselves by structure, then name. A project wants every kind of generated page until the user deletes one: deleting a generated page turns its whole kind off in the project rules, so it does not come back on open. Deleting one terminal diagram (strip -X3) therefore drops the diagrams for every strip, so the status line says what happened ("Terminal diagrams turned off · Rules to turn back on"); the delete is one undo step, and undo turns the kind back on; and Rules lists the turned-off kinds, each with a rule sentence that turns it back on. No reference points into them, so they reflow freely inside their section; the PDF bookmarks and the contents list name each sheet by what it shows (strip -X1, cable -W3), and a revision marks the generated sheets whose content changed; anything that ever links into a generated sheet points at it by name, never by `page.column`. A generated sheet's "n of m" counts within its own section, and a schematic title block's "n of m" counts schematic pages only, so a growing section never changes a frozen title block. A generated sheet is named by its section number plus a letter (`20a`, `20b`, ... `20z`, `20aa`, skipping `i`, `l` and `o` so `20l` never reads as `201`), never with a dot, so a sheet name can never be read as a `page.column` reference. Inserted schematic pages use the same letters (§3); generated sections are numbered after the schematic pages (the contents list alone opens the set as section `0`; it reflows like any other section and is not counted among schematic pages), and if a name ever clashes the schematic page keeps it and the sheet takes a `'` mark (`20b'`) |
-| Routing | Manual; always automatic; route once and keep | **Route once and keep:** moving a symbol stretches its connections; `tidy` re-routes on request |
+| Routing | Manual; always automatic; route once and keep | **Route once and keep:** a plain drag moves the symbol alone and leaves its wire ends open where its pins were; Shift+drag stretches the connections; `tidy` re-routes on request |
 | Where a project starts | Page-first; structure-first; intent-first | **Structure-first**, with the empty page offering "type what you are building" |
 | Window | A Workbench; B Focus; C Split | **A**, with B as Focus mode and C as the drawer docked right |
 | Top-level places | Five lenses; two canvases plus drawers | **Two canvases (Schematic, Cabinet) and one drawer (Terminals, Cables, Devices)**; reports are commands |
