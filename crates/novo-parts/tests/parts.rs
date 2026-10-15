@@ -1262,3 +1262,37 @@ fn internal_properties_are_not_shown_in_the_sheet_or_the_bulk_table() {
     let x1 = doc.project().device(gate.x1).unwrap();
     assert_eq!(x1.properties["terminal_part.feed_through"], Value::Int(1));
 }
+
+#[test]
+fn pe_blocks_are_recognised_by_prefix_description_and_colour() {
+    use novo_core::TerminalKind;
+    let block = |type_number: &str, description: &str| {
+        let mut p = CatalogPart::new("Maker", type_number);
+        p.type_number = type_number.into();
+        p.description = description.into();
+        p.letter_codes = vec!["X".into()];
+        novo_parts::terminal_kind_of(&p)
+    };
+    let pe = TerminalKind::ProtectiveEarth;
+    let ft = TerminalKind::Feedthrough;
+    assert_eq!(
+        block("UT 2,5-PE", "Protective conductor terminal block"),
+        pe
+    );
+    assert_eq!(block("WPE 2.5", "PE terminal"), pe);
+    assert_eq!(block("WPE 2.5", ""), pe);
+    assert_eq!(
+        block(
+            "2002-1207",
+            "2-conductor ground terminal block, green-yellow"
+        ),
+        pe
+    );
+    assert_eq!(block("2002-1207", "Schutzleiterklemme gn/ye"), pe);
+    assert_eq!(block("UT 2,5", "Feed-through terminal block, grey"), ft);
+    assert_eq!(
+        block("WDU 2.5", "Feed-through terminal with marker groove"),
+        ft
+    );
+    assert_eq!(block("TYPE 4", "Open terminal"), ft);
+}
