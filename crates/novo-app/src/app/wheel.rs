@@ -19,6 +19,10 @@ const RING: f32 = 110.0;
 const REACH: f32 = 200.0;
 /// How long a held key has to stay down before it opens the wheel.
 pub(super) const HOLD: f64 = 0.25;
+/// How long the pointer must stay on another wedge before the outer ring
+/// follows it, so a path from one wedge's items that clips a neighbouring
+/// wedge does not change the choice.
+const DWELL: f64 = 0.18;
 
 /// What a wedge puts down: the library key and the short name drawn.
 type Item = (&'static str, &'static str);
@@ -113,11 +117,41 @@ fn region(offset: Vec2, items: usize) -> Region {
     }
 }
 
+/// The wedge whose items are shown, given the wedge under the pointer
+/// (`under`, `None` when it is not on a wedge) and the wedge it has been
+/// resting on since `pending.1`. The first wedge is taken at once; a
+/// different one only after [`DWELL`].
+fn settle(
+    shown: Option<usize>,
+    pending: Option<(usize, f64)>,
+    under: Option<usize>,
+    now: f64,
+) -> (Option<usize>, Option<(usize, f64)>) {
+    let Some(under) = under else {
+        return (shown, None);
+    };
+    if shown.is_none() || shown == Some(under) {
+        return (Some(under), None);
+    }
+    match pending {
+        Some((w, since)) if w == under => {
+            if now - since >= DWELL {
+                (Some(under), None)
+            } else {
+                (shown, pending)
+            }
+        }
+        _ => (shown, Some((under, now))),
+    }
+}
+
 /// The open wheel.
 pub(crate) struct Wheel {
     centre: Pos2,
     /// The wedge hovered last, whose items the outer ring shows.
     hot: Option<usize>,
+    /// A different wedge the pointer is resting on, and since when.
+    pending: Option<(usize, f64)>,
     /// The wedge chosen with a click or a key: its items stay up.
     locked: Option<usize>,
     /// A press happened on the wheel, so a release means something.
@@ -176,6 +210,7 @@ impl NovoApp {
         self.wb.wheel = Some(Wheel {
             centre,
             hot: None,
+            pending: None,
             locked: None,
             armed: false,
             held,
@@ -212,14 +247,19 @@ impl NovoApp {
         let (centre, locked, held) = (wheel.centre, wheel.locked, wheel.held.clone());
         let pointer = ctx.pointer_latest_pos();
         let offset = pointer.map(|p| p - centre).unwrap_or(Vec2::splat(1e6));
-        let shown_before = wheel.hot;
+        let (shown_before, pending_before) = (wheel.hot, wheel.pending);
 
-        // What the outer ring shows is the sector hovered, until one is
+        // What the outer ring shows is the sector rested on, until one is
         // chosen with a click or a key.
-        let hover = match region(offset, 1) {
+        let now = ctx.input(|i| i.time);
+        let under = match region(offset, 1) {
             Region::Wedge(i) => Some(i),
-            _ => shown_before,
+            _ => None,
         };
+        let (hover, pending) = settle(shown_before, pending_before, under, now);
+        if pending.is_some() {
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64(DWELL));
+        }
         let shown = locked.or(hover).filter(|&i| i != MORE);
         let items = shown.map_or_else(Vec::new, |i| self.wheel_items(i));
         let at = region(offset, items.len());
@@ -243,7 +283,11 @@ impl NovoApp {
                 Region::Hub => sector = Some(MORE),
                 Region::Outside => close = true,
             }
-        } else if key_released && let Region::Item(j) = at {
+        } else if key_released
+            && locked.is_none()
+            && let Region::Item(j) = at
+        {
+            // A wedge chosen with a click waits for a click on its item.
             pick = Some(j);
         }
         ctx.input_mut(|i| {
@@ -276,6 +320,7 @@ impl NovoApp {
 
         if let Some(w) = &mut self.wb.wheel {
             w.hot = hover;
+            w.pending = pending;
             w.armed = armed && !released;
             w.items = items.clone();
             if back {
@@ -419,6 +464,24 @@ mod tests {
     fn at(angle_deg: f32, radius: f32) -> Vec2 {
         let a = angle_deg.to_radians();
         Vec2::new(a.sin(), -a.cos()) * radius
+    }
+
+    #[test]
+    fn the_outer_ring_follows_a_new_wedge_only_after_a_dwell() {
+        // The first wedge is taken at once.
+        assert_eq!(settle(None, None, Some(1), 0.0), (Some(1), None));
+        // Clipping another wedge does not switch…
+        let (shown, pending) = settle(Some(1), None, Some(0), 1.0);
+        assert_eq!((shown, pending), (Some(1), Some((0, 1.0))));
+        // …leaving it resets, and a short rest is not enough…
+        assert_eq!(settle(shown, pending, None, 1.05), (Some(1), None));
+        let (shown, pending) = settle(Some(1), Some((0, 1.0)), Some(0), 1.1);
+        assert_eq!((shown, pending), (Some(1), Some((0, 1.0))));
+        // …but resting there does.
+        assert_eq!(
+            settle(shown, pending, Some(0), 1.0 + DWELL + 0.01),
+            (Some(0), None)
+        );
     }
 
     #[test]
