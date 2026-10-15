@@ -1,0 +1,64 @@
+{
+  "notes": [],
+  "parts": [
+    {
+      "data": {
+        "conductor_cross_section": "1.5 mm²",
+        "conductor_resistance": "13.3 Ω/km",
+        "core_count": 3,
+        "core_cross_section_mm2": 1.5,
+        "max_operating_temperature": "+80 °C",
+        "max_temp_c": 80.0,
+        "number_of_cores": 3,
+        "outer_diameter": "8.6 mm",
+        "outer_diameter_mm": 8.6,
+        "r20_ohm_per_km": 13.3,
+        "section_mm2": 1.5,
+        "temperature_range": "-15 ... +80 °C"
+      },
+      "description": "Control cable, 3 cores, 1.5 mm2, PVC, flexible",
+      "function": "cable",
+      "keywords": [
+        "cable",
+        "control cable"
+      ],
+      "letter_codes": [
+        "W"
+      ],
+      "manufacturer": "Lapp",
+      "order_number": "1119303",
+      "provenance": {
+        "file": "sample.xml",
+        "imported": "2026-10-15",
+        "licence_note": "user-supplied from Lapp; not redistributable",
+        "source": "import:bmecat"
+      },
+      "sources": {
+        "core_count": "maker_datasheet",
+        "core_cross_section_mm2": "maker_datasheet",
+        "max_temp_c": "maker_datasheet",
+        "outer_diameter_mm": "maker_datasheet",
+        "r20_ohm_per_km": "maker_datasheet",
+        "section_mm2": "maker_datasheet"
+      },
+      "type_number": "ÖLFLEX CLASSIC 110 3G1,5"
+    }
+  ],
+  "report": {
+    "mapped": [
+      "1119303: conductor_cross_section -> section_mm2 = 1.5",
+      "1119303: conductor_resistance -> r20_ohm_per_km = 13.3",
+      "1119303: max_operating_temperature -> max_temp_c = 80",
+      "1119303: number_of_cores -> core_count = 3",
+      "1119303: outer_diameter -> outer_diameter_mm = 8.6",
+      "1119303: temperature_range -> max_temp_c = 80"
+    ],
+    "parts": 1,
+    "skipped": [],
+    "summary": [
+      "Read 6 value(s) into structured part data for 1 part(s), marked as from the maker's data."
+    ],
+    "unmapped": {},
+    "warnings": []
+  }
+}

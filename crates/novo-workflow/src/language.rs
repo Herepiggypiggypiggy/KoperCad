@@ -187,6 +187,28 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["onderbrekingspunten nummeren"],
     ),
+    nl("wires.number", &[], &["draden nummeren", "draadnummers"]),
+    nl(
+        "wires.numbering",
+        &["draadnummering"],
+        &["draadnummers instellen", "nummerschema"],
+    ),
+    nl(
+        "wires.renumber",
+        &["hernummer draden"],
+        &["draden opnieuw nummeren"],
+    ),
+    nl(
+        "wires.check_numbers",
+        &[],
+        &["draadnummers controleren", "dubbele draadnummers"],
+    ),
+    nl(
+        "wires.set_number",
+        &["nummer draad"],
+        &["draadnummer typen", "draadnummer vastzetten"],
+    ),
+    nl("wires.unlock_number", &[], &["draadnummer ontgrendelen"]),
     nl("terminal.reset_pe", &["herstel"], &["aarde", "klemmen"]),
     nl("terminal.connect", &["verbind"], &["klemmen", "brug"]),
     nl("terminal.disconnect", &["ontkoppel"], &["klemmen", "brug"]),
@@ -233,6 +255,16 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["kasten", "kastenlijst", "behuizingen"],
     ),
+    nl(
+        "simulate.motor-start",
+        &[],
+        &[
+            "motor starten",
+            "ster-driehoek",
+            "aanloopstroom",
+            "zachtstarter",
+        ],
+    ),
     nl("view.changes", &["wijzigingen"], &["vergelijk", "verschil"]),
     nl(
         "view.commissioning",
@@ -275,6 +307,11 @@ pub const DUTCH: &[Aliases] = &[
         &["achtergrond tonen", "achtergrond verbergen", "dxf"],
     ),
     nl(
+        "view.background_place",
+        &[],
+        &["achtergrond verplaatsen", "achtergrond schalen", "dxf"],
+    ),
+    nl(
         "file.remove_background",
         &[],
         &["achtergrond verwijderen", "dxf"],
@@ -290,6 +327,16 @@ pub const DUTCH: &[Aliases] = &[
         "export.pdf",
         &["exporteer pdf", "pdf exporteren"],
         &["afdrukken"],
+    ),
+    nl(
+        "export.commissioning",
+        &["exporteer inbedrijfstelling", "inbedrijfstellingsrapport"],
+        &["restpuntenlijst", "oplevering"],
+    ),
+    nl(
+        "export.plate",
+        &["exporteer montageplaat", "montageplaat exporteren"],
+        &["boortabel", "boren"],
     ),
     nl(
         "export.bom",

@@ -72,6 +72,8 @@ pub(crate) struct Workbench {
     pub(super) issue: Option<super::revisions::IssueDraft>,
     /// The Compare revisions window, while it is open.
     pub(super) compare: Option<super::compare::CompareWindow>,
+    /// The Wire numbering window, while it is open.
+    pub(super) numbering: Option<super::numbering::NumberingWindow>,
     /// The new pages, group and panel form, while open.
     pub(super) page_form: Option<super::pages::PageForm>,
     /// Which sheet of a generated page the canvas shows (0 for the first).
@@ -123,12 +125,17 @@ pub(crate) struct Workbench {
     pub(super) sheet_exports: std::collections::BTreeMap<PathBuf, u64>,
     /// The live potentials view (Shift+L).
     pub(super) live: super::live::LiveView,
+    /// Electrical values for the live view and the motor start window.
+    pub(super) sim: super::simulate::SimState,
     /// Changes mode, while it is on.
     pub(super) changes: Option<super::changes::ChangesMode>,
     /// Commissioning mode's data and panel state, once opened.
     pub(super) commissioning: Option<super::commissioning::CommissioningMode>,
     /// The background drawing last handed to the canvas: page, project
     /// revision and the key it has.
+    /// The DXF background panel, while open; inside, the values being
+    /// edited before they are committed.
+    pub(super) background_panel: Option<Option<super::background_panel::Placement>>,
     pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
 }
 
@@ -163,6 +170,7 @@ impl Default for Workbench {
             project_settings: false,
             issue: None,
             compare: None,
+            numbering: None,
             page_form: None,
             sheet: 0,
             nav: Navigator::default(),
@@ -187,7 +195,9 @@ impl Default for Workbench {
             last_export: None,
             sheet_exports: Default::default(),
             live: Default::default(),
+            sim: super::simulate::SimState::new(),
             changes: None,
+            background_panel: None,
             commissioning: None,
             underlay_seen: None,
         }
@@ -247,11 +257,14 @@ const APP_COMMANDS: &[&str] = &[
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "export.commissioning",
+    "export.plate",
     "export.assembly",
     "export.sheets",
     "export.sheets_csv",
     "file.import_dxf_background",
     "view.background",
+    "view.background_place",
     "file.remove_background",
     "export.dxf_page",
     "export.dxf_all",
@@ -274,6 +287,12 @@ const APP_COMMANDS: &[&str] = &[
     "terminal.reset_pe",
     "wire.mode",
     "interruption.renumber",
+    "wires.number",
+    "wires.numbering",
+    "wires.renumber",
+    "wires.check_numbers",
+    "wires.set_number",
+    "wires.unlock_number",
 ];
 
 /// Whether the app can run a command now (not "comes later").
@@ -569,6 +588,19 @@ impl NovoApp {
             | "terminal.strip_down"
             | "terminal.strip_lowest" => self.terminal_command(id),
             "interruption.renumber" => self.renumber_interruptions(),
+            "wires.number" => self.number_wires(),
+            "wires.numbering" => {
+                self.open_numbering(novo_numbering::Mode::Fill, super::numbering::Tab::Preview)
+            }
+            "wires.renumber" => self.open_numbering(
+                novo_numbering::Mode::Renumber,
+                super::numbering::Tab::Preview,
+            ),
+            "wires.check_numbers" => {
+                self.open_numbering(novo_numbering::Mode::Fill, super::numbering::Tab::Conflicts)
+            }
+            "wires.set_number" => self.set_wire_number(argument),
+            "wires.unlock_number" => self.unlock_wire_number(),
             "view.terminals_drawer" => self.toggle_drawer(Drawer::Terminals),
             "view.cables_drawer" => self.toggle_drawer(Drawer::Cables),
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
@@ -603,6 +635,10 @@ impl NovoApp {
             "export.pdf" => {
                 self.export_pdf();
             }
+            "export.commissioning" => self.export_commissioning_pdf(),
+            "export.plate" => {
+                self.export_plate_pdf();
+            }
             "export.assembly" => {
                 self.export_assembly();
             }
@@ -614,6 +650,7 @@ impl NovoApp {
             }
             "file.import_dxf_background" => self.import_dxf_background(),
             "view.background" => self.toggle_background(),
+            "view.background_place" => self.open_background_panel(),
             "file.remove_background" => self.remove_background(),
             "export.dxf_page" => {
                 self.export_dxf(super::dxf::DxfScope::CurrentPage);
