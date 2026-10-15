@@ -345,8 +345,8 @@ so tool and mode change in one action. The selected segment is the usual
 lift, not copper, which stays on the active tool's underline. The Connect
 icon itself carries the mode (an L for Corners, a straight segment for
 Lines). The tooltip reads "Connect · W · Shift+W switches". The mode is
-also named in the dock hint ("Lines: click a pin · click each corner · click a pin ·
-Backspace undo · Shift+W corners"). Compact dock keeps the mode word in
+also named in the dock hint ("Lines: click a pin · click each corner ·
+click a pin · Backspace undo · Shift+W corners"). Compact dock keeps the mode word in
 the hint. A held Shift+W does not flip back and forth: key repeat is
 ignored. The command surface lists `Wiring mode: corners` and `Wiring
 mode: lines` under Draw (command `wire.mode`, typed "mode" or "lines").
@@ -371,8 +371,8 @@ the screen:
 - in Lines, a segment that would lie over another wire is refused before
   it is placed, never nudged, because the line is exactly what the user
   drew. In Corners a clicked corner that lies on another wire is refused
-  the same way, and the user's placed corners are never moved. The refusal is live while the pointer moves, not
-  only on click, so there is never a dead click, and never colour alone
+  the same way, and the user's placed corners are never moved. The
+  refusal is live while the pointer moves, not only on click, so there is never a dead click, and never colour alone
   (the transient mark in §5): not-allowed cursor, the clashing segment
   tinted with the Error colour, a dashed outline of the refused corner or
   line with a cross, the preview kept up to the last legal point, and the
