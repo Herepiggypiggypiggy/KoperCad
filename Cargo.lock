@@ -1870,6 +1870,7 @@ dependencies = [
  "novo-heatview",
  "novo-interop",
  "novo-layout",
+ "novo-learn",
  "novo-numbering",
  "novo-parts",
  "novo-pdf",

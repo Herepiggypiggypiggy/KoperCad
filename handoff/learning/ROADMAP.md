@@ -3,7 +3,7 @@
 Scope: lessons that run inside the program (Learn section, steps, pointers, checks, sample project per lesson, progress). Design: `docs/design/learning-modules.md`. Requested by Tadjiro via the coordinator (2026-10-15): "sample projects that showcase different functionality, with pointers and tooltips, like a learning module". No build, small draft PRs.
 
 ## Done
-- Design doc (this PR).
+- Design doc (#456), tracks (#474), engine (#479, in review), app shell (written, waits for #479).
 
 ## Next, in order
 1. Design merged so four content threads can write lessons against it.
