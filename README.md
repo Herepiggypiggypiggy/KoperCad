@@ -10,7 +10,9 @@ layout and circuit simulation. Native Rust, no web technology, fully offline, sc
 
 > **Name.** The product is KoperCAD and the maker is KoperVonk (decided 2026-10-15); it was called
 > NovoElectric before. The repository is now `kopercad`. Names people never see keep the old name for now: the `novo-*`
-> crates, the `novoelectric` Python module and the release asset name. The program is `kopercad.exe`
+> crates and the release asset name. The program is `kopercad.exe`, the Python module `kopercad`
+> (`crates/novo-py/compat` is a shim that keeps `import novoelectric` working) and the command-line tool
+> `kopercad-cli`
 > (the experimental zip also carries a `novoelectric.exe` copy for launchers installed before the
 > rename). Settings and the parts catalog moved to `%APPDATA%\KoperCAD`; projects stay in
 > `Documents\NovoElectric` for anyone who already has one; `%LOCALAPPDATA%\NovoElectric` still holds
@@ -78,7 +80,7 @@ Engines and data (all in the workspace, tested):
 - **Revisions** (`novo-revisions`): revision index rules, issuing a revision with page freezing,
   snapshots in the project file, change sets per page, page revisions for the title block, marking
   generated sheets whose content changed, and one `issue_revision` call.
-- **CLI and Python** (`novo-cli`, `novo-py`): a first `novo` command-line tool and Python bindings.
+- **CLI and Python** (`novo-cli`, `novo-py`): a first `kopercad-cli` command-line tool and Python bindings.
 
 Application (`novo-app`):
 
