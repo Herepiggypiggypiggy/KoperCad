@@ -171,6 +171,18 @@ pub struct ModelStyle {
     pub symbol: Stroke,
     pub wire: Stroke,
     pub junction_radius: f32,
+    /// Accent colour of every place a wire meets a pin or another wire
+    /// (junction dots and the dot on a pin), so connections stand out from
+    /// wire and symbol lines.
+    pub joint_color: Color,
+    /// Radius of the dot drawn where a wire ends on a pin, in mm.
+    pub pin_joint_radius: f32,
+    /// Open ring on a wire ended unconnected ([`wire_end_glyph`]).
+    pub wire_end_color: Color,
+    /// Flag pole and pennant beside that ring.
+    pub unconnected_color: Color,
+    /// Radius of the ring, in mm; the flag scales with it.
+    pub wire_end_radius: f32,
     pub tag_height: f32,
     pub tag_color: Color,
     pub wire_number_height: f32,
@@ -191,6 +203,11 @@ impl Default for ModelStyle {
             symbol: Stroke::world(0.35, Color::rgb(20, 24, 32)),
             wire: Stroke::world(0.35, Color::rgb(30, 70, 200)),
             junction_radius: 0.7,
+            joint_color: Color::rgb(176, 104, 56),
+            pin_joint_radius: 0.6,
+            wire_end_color: Color::rgb(176, 104, 56),
+            unconnected_color: Color::rgb(190, 120, 20),
+            wire_end_radius: 0.9,
             tag_height: 2.5,
             tag_color: Color::rgb(20, 24, 32),
             wire_number_height: 2.0,
@@ -290,7 +307,7 @@ fn quarter_dir(q: u8) -> Vec2 {
 
 /// The primitives of a junction glyph at `pos`.
 pub fn junction_glyph(glyph: JunctionGlyph, pos: Vec2, style: &ModelStyle) -> Vec<Primitive> {
-    let dot = Primitive::filled(Shape::circle(pos, style.junction_radius), style.wire.color);
+    let dot = Primitive::filled(Shape::circle(pos, style.junction_radius), style.joint_color);
     let stubs = |dirs: &[Vec2]| {
         dirs.iter()
             .map(|d| Primitive::stroked(Shape::line(pos, pos + *d * JUNCTION_STUB), style.wire))
@@ -315,6 +332,39 @@ pub fn junction_glyph(glyph: JunctionGlyph, pos: Vec2, style: &ModelStyle) -> Ve
             stubs(&[quarter_dir(quarter_turns + 3), quarter_dir(quarter_turns)])
         }
     }
+}
+
+/// The mark on a wire ended unconnected (a double click in open space): an
+/// open ring on the end and a flag, so a loose end is never mistaken for a
+/// connection. `away` points from the wire out past its end; the flag leans
+/// to the side that keeps it clear of the wire.
+pub fn wire_end_glyph(end: Vec2, away: Vec2, style: &ModelStyle) -> Vec<Primitive> {
+    let r = style.wire_end_radius;
+    let out = if away.length_squared() > 0.0 {
+        away.normalize()
+    } else {
+        Vec2::X
+    };
+    let side = Vec2::new(-out.y, out.x);
+    let foot = end + out * r;
+    let top = foot + side * (r * 4.0);
+    let pennant = [
+        top,
+        top + out * (r * 2.8) + side * (r * 0.9),
+        top + side * (r * 1.8),
+    ];
+    let flag = Stroke::world(0.25, style.unconnected_color);
+    vec![
+        Primitive::stroked(
+            Shape::circle(end, r),
+            Stroke::world(0.3, style.wire_end_color),
+        ),
+        Primitive::stroked(Shape::line(foot, top), flag),
+        Primitive::filled(
+            Shape::polyline(pennant.to_vec(), true),
+            style.unconnected_color,
+        ),
+    ]
 }
 
 /// Layers a page scene uses.
@@ -1136,6 +1186,15 @@ impl PageScene {
             ))
             .with_snap(SnapPoint::connection(pts[0]))
             .with_snap(SnapPoint::connection(pts[pts.len() - 1]));
+        // A dot where the wire lands on a pin marks the connection.
+        for (e, p) in w.ends().into_iter().zip([pts[0], pts[pts.len() - 1]]) {
+            if matches!(e, Endpoint::Pin { .. }) {
+                item = item.with(Primitive::filled(
+                    Shape::circle(p, self.style.pin_joint_radius),
+                    self.style.joint_color,
+                ));
+            }
+        }
         if let Some(n) = w.number.as_deref().filter(|n| !n.is_empty()) {
             // Along the longest segment, just above (or left of) the wire.
             let (s0, s1) = pts
@@ -1849,6 +1908,30 @@ mod tests {
         assert_eq!(corner.len(), 2);
         assert!(corner.iter().any(|e| e.distance(Vec2::X) < 1e-6));
         assert!(corner.iter().any(|e| e.distance(Vec2::Y) < 1e-6));
+    }
+
+    #[test]
+    fn wire_end_glyph_flag_clears_the_wire() {
+        let style = ModelStyle::default();
+        let prims = wire_end_glyph(Vec2::ZERO, Vec2::X, &style);
+        assert_eq!(prims.len(), 3, "ring, pole and pennant");
+        // The flag stands to the side of the line the wire ran along (the
+        // x axis) and starts past the ring, never on the wire.
+        let flag = prims[1].shape.bounds();
+        assert!(flag.min.x >= style.wire_end_radius - 1e-4);
+        assert!(
+            flag.max.y.abs() > style.wire_end_radius || flag.min.y.abs() > style.wire_end_radius
+        );
+        // A zero direction still draws something sensible.
+        assert_eq!(wire_end_glyph(Vec2::ZERO, Vec2::ZERO, &style).len(), 3);
+    }
+
+    #[test]
+    fn junction_dots_use_the_accent() {
+        let style = ModelStyle::default();
+        assert_ne!(style.joint_color, style.wire.color);
+        let dot = &junction_glyph(JunctionGlyph::Dot, Vec2::ZERO, &style)[0];
+        assert_eq!(dot.fill, Some(style.joint_color));
     }
 
     #[test]
