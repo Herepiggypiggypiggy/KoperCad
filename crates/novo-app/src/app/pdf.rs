@@ -40,6 +40,8 @@ impl NovoApp {
         let replaced = path.exists();
         let options = novo_pdf::PdfOptions {
             notes: self.xref_notes_by_page(),
+            title_revisions: self.all_title_revisions(),
+            changed_pages: self.pages_changed_since_latest(),
             ..Default::default()
         };
         let doc = self.backend.document()?;
