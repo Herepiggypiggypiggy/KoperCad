@@ -65,6 +65,7 @@ mod calc_checks;
 mod checks;
 mod contacts;
 mod physical;
+pub mod protection;
 pub mod standards;
 mod waiver;
 

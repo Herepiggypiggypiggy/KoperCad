@@ -766,7 +766,14 @@ pub(crate) fn load_macros(
 ) -> (BTreeMap<String, novo_core::BlockDefinition>, Vec<String>) {
     use novo_parts::{MacroLibrary, starter_macros};
     let mut found: BTreeMap<String, novo_core::BlockDefinition> = BTreeMap::new();
-    if let Some(lib) = MacroLibrary::user() {
+    // Unit tests read only the shipped starters, so a macro in the developer's
+    // own library cannot change what they expect.
+    let user = if cfg!(test) {
+        None
+    } else {
+        MacroLibrary::user()
+    };
+    if let Some(lib) = user {
         let (entries, _) = lib.list();
         for entry in entries {
             let key = entry.name.to_lowercase();

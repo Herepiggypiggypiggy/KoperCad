@@ -24,6 +24,7 @@ pub enum Action {
     SizeEnclosure,
     EnclosureList,
     StandardsCheck,
+    Protection,
     MotorStart,
     PinOutline,
     FocusMode,
@@ -52,6 +53,7 @@ impl Action {
         Action::SizeEnclosure,
         Action::EnclosureList,
         Action::StandardsCheck,
+        Action::Protection,
         Action::MotorStart,
         Action::PinOutline,
         Action::FocusMode,
@@ -82,6 +84,7 @@ impl Action {
             Action::SizeEnclosure => "cabinet.size-enclosure",
             Action::EnclosureList => "cabinet.enclosures",
             Action::StandardsCheck => "check.standards",
+            Action::Protection => "view.protection",
             Action::MotorStart => "simulate.motor-start",
             Action::PinOutline => "view.pin_outline",
             Action::FocusMode => "view.focus",
@@ -115,6 +118,7 @@ impl Action {
             Action::SizeEnclosure => "Size the enclosure…",
             Action::EnclosureList => "Enclosures…",
             Action::StandardsCheck => "Standards check…",
+            Action::Protection => "Protection: curves, selectivity, rating…",
             Action::MotorStart => "Simulate motor start…",
             Action::PinOutline => "Pin outline",
             Action::FocusMode => "Focus mode",
@@ -144,6 +148,7 @@ impl Action {
             | Action::SizeEnclosure
             | Action::EnclosureList
             | Action::StandardsCheck
+            | Action::Protection
             | Action::MotorStart
             | Action::PinOutline
             | Action::FocusMode
@@ -181,6 +186,7 @@ impl Action {
             | Action::SizeEnclosure
             | Action::StandardsCheck
             | Action::EnclosureList
+            | Action::Protection
             | Action::MotorStart => return None,
         };
         Some(KeyboardShortcut::new(modifiers, key))

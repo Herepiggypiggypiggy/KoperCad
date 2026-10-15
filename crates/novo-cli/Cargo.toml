@@ -13,6 +13,7 @@ path = "src/main.rs"
 novo-commissioning.workspace = true
 novo-core.workspace = true
 novo-interop.workspace = true
+novo-parts.workspace = true
 novo-storage.workspace = true
 novo-py.workspace = true
 novo-checks.workspace = true

@@ -1930,6 +1930,7 @@ dependencies = [
  "novo-symbols",
  "novo-terminals",
  "novo-tests",
+ "serde",
  "serde_json",
 ]
 
@@ -1945,6 +1946,7 @@ dependencies = [
  "novo-editor",
  "novo-interop",
  "novo-layout",
+ "novo-parts",
  "novo-pdf",
  "novo-plc",
  "novo-py",
@@ -2001,11 +2003,13 @@ dependencies = [
  "calamine",
  "dirs",
  "earcutr",
+ "glam",
  "novo-canvas",
  "novo-core",
  "novo-layout",
  "novo-parts",
  "novo-tests",
+ "novo-view3d",
  "rust_xlsxwriter",
  "tempfile",
  "thiserror 2.0.21",
@@ -2124,6 +2128,7 @@ name = "novo-revisions"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+ "novo-pdf",
  "novo-reports",
  "novo-storage",
  "novo-tests",

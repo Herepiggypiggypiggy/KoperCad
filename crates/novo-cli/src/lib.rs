@@ -1,7 +1,8 @@
 //! The `kopercad-cli` command-line tool (owned by WS-28).
 //!
 //! Every subcommand opens the project read-only ([`ProjectFile::read`]): it
-//! never writes to the project file, takes no lock that outlives the run,
+//! never writes to the project file (`import sheet` writes a new project
+//! file only when given `--output`, never over an existing one), takes no lock that outlives the run,
 //! and writes nothing but the output path it was given. Edits belong to the
 //! app and to Python scripts, which go through the command API.
 //!
@@ -46,7 +47,7 @@ pub mod exit {
     version,
     about = "KoperCAD command-line tool: inspect, check and export project files",
     long_about = "KoperCAD command-line tool: inspect, check and export project files.\n\n\
-                  Project files are only read, never changed.\n\
+                  Project files are only read, never changed (`import sheet --output` writes a new one).\n\
                   Exit codes: 0 done, 1 check found problems, 2 bad command line, \
                   3 project not readable, 4 output not writable, 5 not available in this build.\n\
                   An export is never written over a project file."
@@ -71,6 +72,22 @@ enum Cmd {
     /// Revisions: list them, or compare two states of the project.
     #[command(subcommand)]
     Revisions(Revisions),
+    /// Bring edited data back into a project.
+    #[command(subcommand)]
+    Import(Import),
+    /// Convert a DWG to DXF with the free converter on this computer
+    /// (LibreDWG's dwg2dxf or the ODA File Converter), ready for the DXF
+    /// import. KoperCAD never bundles either one.
+    ConvertDwg {
+        /// The DWG file.
+        file: PathBuf,
+        /// Output `.dxf` file.
+        #[arg(short, long)]
+        output: PathBuf,
+        /// The converter program, when it is not found by itself.
+        #[arg(long, value_name = "PROGRAM")]
+        converter: Option<PathBuf>,
+    },
     /// The commissioning report: progress per cabinet and page, every
     /// check, the punch list and a sign-off block. `.pdf`, `.csv` or
     /// `.xlsx` by the output's extension; CSV on standard output when left
@@ -214,6 +231,28 @@ enum Export {
         #[arg(long = "page", value_name = "NAME")]
         pages: Vec<String>,
     },
+    /// The cabinet as a STEP assembly (AP214, millimetres) for mechanical
+    /// CAD: housing, mounting plate, rails, ducts, devices and door, each a
+    /// named, coloured solid.
+    Step {
+        file: PathBuf,
+        /// Output: a `.stp` file for one enclosure, otherwise a directory
+        /// that gets one `<tag>.stp` per enclosure.
+        #[arg(short, long)]
+        output: PathBuf,
+        /// Only this enclosure (its tag, e.g. `+CAB1`); all with a mounting
+        /// plate when left out.
+        #[arg(long, value_name = "TAG")]
+        enclosure: Option<String>,
+    },
+    /// The plant (structure, devices, terminals, cables, nets) as
+    /// AutomationML (IEC 62714, CAEX 2.15).
+    Aml {
+        file: PathBuf,
+        /// Output file (`.aml`).
+        #[arg(short, long)]
+        output: PathBuf,
+    },
     /// The mounting plate drawing of an enclosure as a PDF: plate, door
     /// sheet when devices need one, and the drill table.
     Plate {
@@ -255,6 +294,44 @@ enum Export {
         #[arg(long = "page", value_name = "NAME")]
         pages: Vec<String>,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum Import {
+    /// Preview an edited spreadsheet (`.xlsx` or CSV from the spreadsheet
+    /// export) against a project: every cell that would change, conflicts
+    /// with later edits and rows that cannot be used, with line and reason.
+    /// Nothing is written unless `--output` names a new project file; the
+    /// project given is never changed. Exits with 1 when rows were rejected.
+    Sheet {
+        /// The project the sheet was exported from.
+        project: PathBuf,
+        /// The edited `.xlsx` or CSV file.
+        sheet: PathBuf,
+        /// Print JSON instead of text.
+        #[arg(long)]
+        json: bool,
+        /// Write the project with the import applied (one undo step) to
+        /// this new `.novo` file. It must not exist yet.
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Settle conflicts (cells the project changed since the export):
+        /// take the sheet's value or keep the project's. Left unsettled,
+        /// conflicts are not applied.
+        #[arg(long, value_enum)]
+        resolve: Option<ResolveSide>,
+        /// Leave out one row, as `Devices:5` (sheet name, row); repeat for
+        /// several.
+        #[arg(long = "skip", value_name = "SHEET:ROW")]
+        skip: Vec<String>,
+    },
+}
+
+/// Which side wins a conflict.
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+enum ResolveSide {
+    Sheet,
+    Project,
 }
 
 /// A failure with its exit code.
@@ -399,6 +476,53 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             export_dxf(&project, &file, &output, &pages)?;
             Ok(exit::OK)
         }
+        Cmd::Export(Export::Step {
+            file,
+            output,
+            enclosure,
+        }) => {
+            let project = read(&file)?;
+            export_step(&project, &file, &output, enclosure.as_deref(), out)?;
+            Ok(exit::OK)
+        }
+        Cmd::Export(Export::Aml { file, output }) => {
+            let project = read(&file)?;
+            let export = novo_interop::aml::export_project(
+                &project,
+                &novo_interop::aml::AmlOptions {
+                    created: novo_interop::step::iso_utc(now_secs()),
+                    ..Default::default()
+                },
+            );
+            write_output(&file, &output, export.text.as_bytes())?;
+            print(out, &export.report.text())?;
+            Ok(exit::OK)
+        }
+        Cmd::ConvertDwg {
+            file,
+            output,
+            converter,
+        } => {
+            let Some(conv) = novo_interop::dwg::find_installed(converter.as_deref()) else {
+                return Err(Failure::new(
+                    exit::UNAVAILABLE,
+                    format!("no DWG converter found; {}", novo_interop::dwg::guidance()),
+                ));
+            };
+            let work = std::env::temp_dir().join(format!("kopercad-dwg-{}", std::process::id()));
+            let result = conv
+                .convert(&file, &work, std::time::Duration::from_secs(180))
+                .map_err(|e| Failure::new(exit::READ, e.to_string()))
+                .and_then(|dxf| {
+                    let bytes = std::fs::read(&dxf)
+                        .map_err(|e| Failure::new(exit::READ, format!("{}: {e}", dxf.display())))?;
+                    write_output(&file, &output, &bytes)
+                });
+            let _ = std::fs::remove_dir_all(&work);
+            result?;
+            print(out, &format!("Converted with {}", conv.kind.label()))?;
+            Ok(exit::OK)
+        }
         Cmd::Revisions(Revisions::List { file, json }) => {
             let project = read(&file)?;
             let file_ = ProjectFile::read_only(&file).map_err(|e| read_failure(&file, &e))?;
@@ -462,6 +586,22 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             }
             Ok(exit::OK)
         }
+        Cmd::Import(Import::Sheet {
+            project,
+            sheet,
+            json,
+            output,
+            resolve,
+            skip,
+        }) => import_sheet(
+            &project,
+            &sheet,
+            json,
+            output.as_deref(),
+            resolve,
+            &skip,
+            out,
+        ),
         Cmd::Calc {
             file,
             tables,
@@ -488,6 +628,223 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             })
         }
     }
+}
+
+/// `kopercad-cli import sheet`: previews the sheet, and with `output`
+/// writes the imported project to a new file.
+fn import_sheet(
+    file: &Path,
+    sheet: &Path,
+    json: bool,
+    output: Option<&Path>,
+    resolve: Option<ResolveSide>,
+    skip: &[String],
+    out: &mut dyn Write,
+) -> Result<i32, Failure> {
+    use novo_interop::sheets::{Resolution, plan_import_with, read_file};
+
+    let project = read(file)?;
+    let name = sheet
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let bytes = std::fs::read(sheet)
+        .map_err(|e| Failure::new(exit::READ, format!("cannot read {}: {e}", sheet.display())))?;
+    let book = read_file(&name, &bytes)
+        .map_err(|e| Failure::new(exit::READ, format!("cannot import {name}: {e}")))?;
+    let mut skipped = Vec::new();
+    for spec in skip {
+        let parsed = spec.split_once(':').and_then(|(table, line)| {
+            let kind = novo_interop::sheets::TableKind::from_name(table)?;
+            Some((kind, line.trim().parse::<usize>().ok()?))
+        });
+        match parsed {
+            Some(row) => skipped.push(row),
+            None => {
+                return Err(Failure::new(
+                    exit::USAGE,
+                    format!("--skip wants SHEET:ROW such as Devices:5, not {spec:?}"),
+                ));
+            }
+        }
+    }
+    // Check the output before any work is shown as done.
+    if let Some(path) = output
+        && (!novo_py::is_project_path(path) || path.exists())
+    {
+        let why = if path.exists() {
+            "already exists; import never replaces a project file"
+        } else {
+            "is not a .novo project file name"
+        };
+        return Err(Failure::new(
+            exit::WRITE,
+            format!("cannot write {}: it {why}", path.display()),
+        ));
+    }
+    let catalog = novo_parts::Catalog::load_default().unwrap_or_default();
+    let mut plan = plan_import_with(&project, &book, &catalog);
+    match resolve {
+        Some(ResolveSide::Sheet) => plan.resolve(Resolution::Sheet),
+        Some(ResolveSide::Project) => plan.resolve(Resolution::Project),
+        None => {}
+    }
+    for index in 0..plan.changes.len() {
+        let change = &plan.changes[index];
+        if skipped.contains(&(change.table, change.line)) {
+            plan.select(index, false);
+        }
+    }
+    for index in 0..plan.new_devices.len() {
+        if skipped.contains(&(
+            novo_interop::sheets::TableKind::Devices,
+            plan.new_devices[index].line,
+        )) {
+            plan.select_new(index, false);
+        }
+    }
+    let mut written = false;
+    if let Some(path) = output
+        && let Some(command) = plan
+            .command(&project)
+            .map_err(|e| Failure::new(exit::USAGE, e.to_string()))?
+    {
+        let mut doc = novo_core::Document::new(project.clone());
+        doc.execute(command)
+            .map_err(|e| Failure::new(exit::USAGE, e.to_string()))?;
+        ProjectFile::create(path, doc.project()).map_err(|e| {
+            Failure::new(exit::WRITE, format!("cannot write {}: {e}", path.display()))
+        })?;
+        written = true;
+    }
+    if json {
+        let changes: Vec<Value> = plan
+            .changes
+            .iter()
+            .map(|c| {
+                json!({
+                    "sheet": c.table.name(),
+                    "row": c.line,
+                    "item": c.item,
+                    "column": c.header,
+                    "before": c.before,
+                    "after": c.after,
+                    "conflict": c.conflict.is_some(),
+                    "applied": c.selected,
+                })
+            })
+            .collect();
+        let new_devices: Vec<Value> = plan
+            .new_devices
+            .iter()
+            .map(|n| {
+                json!({
+                    "row": n.line,
+                    "tag": n.tag.to_string(),
+                    "description": n.description,
+                    "kind": format!("{:?}", n.kind),
+                    "order_number": n.order_number(),
+                    "applied": n.selected,
+                })
+            })
+            .collect();
+        let rejected: Vec<Value> = plan
+            .rejected
+            .iter()
+            .map(|r| {
+                json!({
+                    "sheet": r.table.name(),
+                    "row": r.line,
+                    "item": r.item,
+                    "reasons": r.reasons,
+                })
+            })
+            .collect();
+        let value = json!({
+            "summary": plan.summary(),
+            "changes": changes,
+            "new_devices": new_devices,
+            "rejected": rejected,
+            "warnings": plan.warnings,
+            "notes": plan.notes,
+            "rows_unchanged": plan.rows_unchanged,
+            "written": written,
+        });
+        print(out, &format!("{value:#}"))?;
+    } else {
+        for c in &plan.changes {
+            let mark = match (&c.conflict, c.selected) {
+                (Some(_), _) => "conflict",
+                (None, true) => "change",
+                (None, false) => "skipped",
+            };
+            let shown = |v: &str| {
+                if v.is_empty() {
+                    "(empty)".to_owned()
+                } else {
+                    v.to_owned()
+                }
+            };
+            print(
+                out,
+                &format!(
+                    "{mark}: {} row {} {}: {} = {} -> {}",
+                    c.table.name(),
+                    c.line,
+                    c.item,
+                    c.header,
+                    shown(&c.before),
+                    shown(&c.after)
+                ),
+            )?;
+        }
+        for n in &plan.new_devices {
+            let mark = if n.selected { "new" } else { "skipped" };
+            let order = n
+                .order_number()
+                .map_or(String::new(), |o| format!(", order number {o}"));
+            print(
+                out,
+                &format!(
+                    "{mark}: Devices row {} {}: {:?}{order}, {:?}",
+                    n.line, n.tag, n.description, n.kind
+                ),
+            )?;
+        }
+        for r in &plan.rejected {
+            let item = if r.item.is_empty() {
+                String::new()
+            } else {
+                format!(" ({})", r.item)
+            };
+            print(
+                out,
+                &format!(
+                    "rejected: {} row {}{item}: {}",
+                    r.table.name(),
+                    r.line,
+                    r.reasons.join("; ")
+                ),
+            )?;
+        }
+        for text in &plan.warnings {
+            print(out, &format!("warning: {text}"))?;
+        }
+        for text in &plan.notes {
+            print(out, &format!("note: {text}"))?;
+        }
+        print(out, &plan.summary())?;
+        match (output, written) {
+            (Some(path), true) => print(out, &format!("wrote {}", path.display()))?,
+            (Some(_), false) => print(out, "nothing to apply, no file written")?,
+            (None, _) => print(out, "preview only: give --output <new.novo> to apply")?,
+        }
+    }
+    Ok(if plan.rejected.is_empty() {
+        exit::OK
+    } else {
+        exit::PROBLEMS
+    })
 }
 
 /// `kopercad-cli calc`: reads the plant JSON, optionally the licensed
@@ -618,6 +975,66 @@ fn comparison_text(project: &Project, from: &str, to: &str, c: &Comparison) -> V
         lines.push(format!("sheet {} ({}): {:?}", s.name, s.report, s.kind));
     }
     lines
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
+
+/// STEP files of the project's enclosures: one `.stp` file, or a directory
+/// with one file per enclosure.
+fn export_step(
+    project: &Project,
+    input: &Path,
+    output: &Path,
+    only: Option<&str>,
+    out: &mut dyn Write,
+) -> Result<(), Failure> {
+    let options = novo_interop::step::StepOptions {
+        created: novo_interop::step::iso_utc(now_secs()),
+        ..Default::default()
+    };
+    let mut files = novo_interop::step::export_all(project, &options);
+    if let Some(tag) = only {
+        let wanted = novo_core::DeviceTag::parse(tag)
+            .map_err(|e| Failure::new(exit::USAGE, format!("--enclosure {tag}: {e}")))?
+            .to_string();
+        files.retain(|f| f.tag == wanted);
+    }
+    if files.is_empty() {
+        return Err(Failure::new(
+            exit::USAGE,
+            "no enclosure with a mounting plate to export (set its plate size first)",
+        ));
+    }
+    let is_file = output
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("stp") || e.eq_ignore_ascii_case("step"));
+    if is_file {
+        let [one] = files.as_slice() else {
+            return Err(Failure::new(
+                exit::USAGE,
+                "several enclosures: give a directory as output, or pick one with --enclosure",
+            ));
+        };
+        write_output(input, output, one.export.text.as_bytes())?;
+        print(out, &one.export.report.text())?;
+    } else {
+        std::fs::create_dir_all(output).map_err(|e| {
+            Failure::new(
+                exit::WRITE,
+                format!("cannot create {}: {e}", output.display()),
+            )
+        })?;
+        for f in &files {
+            let name = format!("{}.stp", file_stem(&f.tag));
+            write_output(input, &output.join(name), f.export.text.as_bytes())?;
+        }
+        print(out, &format!("{} STEP files written", files.len()))?;
+    }
+    Ok(())
 }
 
 fn print(out: &mut dyn Write, text: &str) -> Result<(), Failure> {

@@ -9,5 +9,6 @@ mod read;
 mod write;
 
 pub use model::{Drawing, Entity, EntityKind, HAlign, Layer, Point, TextAlign, VAlign};
+pub(crate) use read::cp1252;
 pub use read::{DxfError, DxfRead, read_dxf};
 pub use write::{PRODUCER_COMMENT, is_written_by_us, write_dxf};

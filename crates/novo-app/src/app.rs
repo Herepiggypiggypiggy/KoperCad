@@ -11,6 +11,7 @@ mod cabinet_panel;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
 mod cabinet_rules;
+mod change_report;
 mod changes;
 mod checks;
 mod commissioning;
@@ -23,6 +24,7 @@ mod example;
 mod faults;
 mod heat;
 mod inspector;
+mod interop;
 mod learn;
 mod learn_ui;
 mod link;
@@ -46,12 +48,16 @@ mod plc_link;
 mod potentials;
 mod preferences;
 mod project_settings;
+mod protection;
 mod reports;
+mod reports_view;
 mod revisions;
+mod sheet_import;
 mod sheets;
 mod simulate;
 mod sizing;
 mod standards;
+mod status_bar;
 mod terminals;
 mod title_revisions;
 mod userkeymap;
@@ -85,6 +91,8 @@ mod numbering_tests;
 mod onboarding_tests;
 #[cfg(test)]
 mod outline_tests;
+#[cfg(test)]
+mod protection_tests;
 #[cfg(test)]
 mod variants_tests;
 
@@ -198,8 +206,10 @@ pub struct NovoApp {
     /// is Ctrl+2.
     workspace: workspace::Workspace,
     cabinet: cabinet::CabinetState,
+    reports_view: reports_view::ReportsView,
     /// The "Size the enclosure" panel and the Enclosures list.
     sizing: sizing::SizingState,
+    protection: protection::ProtectionState,
     /// The outline flyout is showing over the canvas.
     outline_open: bool,
     /// What the outline lists.
@@ -272,7 +282,9 @@ impl NovoApp {
             focus_mode: false,
             workspace: workspace::Workspace::Schematic,
             cabinet: cabinet::CabinetState::new(),
+            reports_view: Default::default(),
             sizing: sizing::SizingState::new(),
+            protection: protection::ProtectionState::new(),
             outline_open: false,
             outline_mode: OutlineMode::Pages,
             breadcrumb_link: None,
@@ -398,7 +410,8 @@ impl NovoApp {
             | Action::SizeEnclosure
             | Action::StandardsCheck
             | Action::EnclosureList
-            | Action::MotorStart => open,
+            | Action::Protection => open,
+            Action::MotorStart => open,
             Action::ShowCabinet => self
                 .workspace_unavailable(workspace::Workspace::Cabinet)
                 .is_none(),
@@ -448,6 +461,7 @@ impl NovoApp {
                 self.sizing.editor_open = true;
             }
             Action::StandardsCheck => self.standards_open = true,
+            Action::Protection => self.protection.open = true,
             Action::MotorStart => self.open_motor_start(),
             Action::PinOutline => {
                 let pinned = !self.outline_pinned();
@@ -774,12 +788,13 @@ impl NovoApp {
         } else {
             self.key_commands(&ctx)
         };
-        if self.workspace() == workspace::Workspace::Cabinet {
+        if self.workspace() != workspace::Workspace::Schematic {
             // The schematic's keys must not edit the hidden page: rotate
             // and delete go to the Cabinet, the rest keep only the view,
             // file and undo actions.
+            let cabinet = self.workspace() == workspace::Workspace::Cabinet;
             for id in &commands {
-                if matches!(*id, "edit.rotate" | "edit.delete") {
+                if cabinet && matches!(*id, "edit.rotate" | "edit.delete") {
                     self.cabinet.keys.push((*id).to_owned());
                 }
             }
@@ -800,7 +815,14 @@ impl NovoApp {
         egui::Panel::top("top_bar")
             .exact_size(TOP_BAR)
             .show(ui, |ui| self.top_bar(ui, &mut picked));
-        if pinned && self.is_open() {
+        self.status_bar(ui);
+        let reports = self.workspace() == workspace::Workspace::Reports && self.is_open();
+        if reports {
+            egui::Panel::left("reports_list")
+                .exact_size(OUTLINE_WIDTH)
+                .resizable(false)
+                .show(ui, |ui| self.reports_list(ui));
+        } else if pinned && self.is_open() {
             egui::Panel::left("outline")
                 .exact_size(OUTLINE_WIDTH)
                 .resizable(false)
@@ -811,6 +833,8 @@ impl NovoApp {
             .show(ui, |ui| {
                 if self.is_open() && self.workspace() == workspace::Workspace::Cabinet {
                     self.cabinet_show(ui);
+                } else if reports {
+                    self.reports_central(ui);
                 } else if self.is_open() {
                     self.update_marks();
                     self.update_sheet();
@@ -829,7 +853,7 @@ impl NovoApp {
             .response
             .rect;
 
-        if !self.focus_mode && !pinned && self.is_open() {
+        if !self.focus_mode && !pinned && !reports && self.is_open() {
             self.outline_flyout(&ctx, canvas_rect, &mut picked);
         }
         if !self.focus_mode && self.workspace() == workspace::Workspace::Schematic {
@@ -868,9 +892,13 @@ impl NovoApp {
         self.generate_window(&ctx);
         self.issue_revision_dialog(&ctx);
         self.compare_window(&ctx);
+        self.aml_import_dialog(&ctx);
+        self.poll_dwg(&ctx);
+        self.protection_window(&ctx);
         self.faults_window(&ctx);
         self.numbering_window(&ctx);
         self.page_form_dialog(&ctx);
+        self.sheet_import_dialog(&ctx);
         self.outline_dialogs(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {
             self.run_command(&ctx, id, None);
@@ -948,6 +976,7 @@ impl NovoApp {
             || self.wb.wheel.is_some()
             || self.wb.renumber.is_some()
             || self.wb.page_form.is_some()
+            || self.wb.sheet_import.is_some()
             || self.ol.dialog_open()
             || self.backend.recovery_offer().is_some()
     }
@@ -980,6 +1009,9 @@ impl NovoApp {
             self.wb.sheet = 0;
         }
         self.current_page = Some(page);
+        if self.wb.pending.is_some_and(|p| p.page != page) {
+            self.wb.pending = None;
+        }
         // A page is a schematic page: picking one leaves the Cabinet.
         self.switch_workspace(workspace::Workspace::Schematic);
     }
@@ -1019,17 +1051,16 @@ impl NovoApp {
             }
             ui.separator();
             if let Some(workspace) = self.workspace_switcher(ui, fit.short_switcher) {
-                picked.push(match workspace {
-                    workspace::Workspace::Cabinet => Action::ShowCabinet,
-                    _ => Action::ShowSchematic,
-                });
+                self.wb.queued.push(workspace.command());
             }
             ui.separator();
             self.breadcrumb(ui, fit.name_chars);
             let left_end = ui.min_rect().right();
 
             let right = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.weak(self.saved_state());
+                if !self.status_bar_shown() {
+                    ui.weak(self.saved_state());
+                }
                 self.issue_pill(ui);
                 let shortcut = Action::CommandPalette
                     .shortcut()
@@ -1352,6 +1383,10 @@ impl NovoApp {
     /// Cursor position and friends, faint, at the canvas's top right. On
     /// the drawing, the step hint is in the tool dock instead.
     fn hud(&self, ctx: &egui::Context, canvas: egui::Rect) {
+        // The status bar carries these values when it is on.
+        if self.status_bar_shown() {
+            return;
+        }
         let text = match self.canvas.schematic_ref() {
             Some(view) => view
                 .editor
@@ -1387,6 +1422,10 @@ impl NovoApp {
                 }
                 if m.level != Level::Info {
                     return true;
+                }
+                // The status bar shows info messages when it is on.
+                if self.status_bar_shown() {
+                    return false;
                 }
                 let left = TOAST_INFO.saturating_sub(now - m.at);
                 if !left.is_zero() {
