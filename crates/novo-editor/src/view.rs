@@ -482,7 +482,21 @@ impl SchematicView {
             if matches!(self.editor.tool(), crate::tool::Tool::Move(_))
                 && let Some(w) = out.cursor_raw
             {
-                self.editor.click(document, page, point(w), tolerance);
+                // A contact dropped on a coil links to it; anything else
+                // is an ordinary drop.
+                let tol = self
+                    .canvas
+                    .viewport
+                    .screen_to_world_len(self.canvas.pick_tolerance);
+                let target = self.scene.as_ref().and_then(|scene| {
+                    let hit = scene.scene().pick(w, tol, self.canvas.viewport.zoom)?;
+                    scene.model_id(hit.id)
+                });
+                let selection = self.selection();
+                let linked = target.is_some_and(|t| self.editor.drop_link(document, &selection, t));
+                if !linked {
+                    self.editor.click(document, page, point(w), tolerance);
+                }
             }
         }
         // Clicks drive the active tool; with none, the canvas selects (and
@@ -1539,6 +1553,71 @@ mod tests {
         let after = at(&h);
         assert_eq!(after, Point::new(before.x + 40.0, before.y + 20.0));
         assert!(!h.view.editor.tool_active());
+    }
+
+    /// A point the canvas picks as `sym` that no pin target covers.
+    fn body_point(h: &Harness, sym: novo_core::SymbolId) -> (f64, f64) {
+        let tol = h
+            .view
+            .canvas
+            .viewport
+            .screen_to_world_len(h.view.canvas.pick_tolerance);
+        let zoom = h.view.canvas.viewport.zoom;
+        let scene = h.view.scene.as_ref().unwrap();
+        let s = h.doc.project().symbol(sym).unwrap();
+        let pins: Vec<Point> = (0..s.pins.len() as u16)
+            .filter_map(|i| s.pin_position(i))
+            .collect();
+        let o = s.placement.origin;
+        (0..1600)
+            .map(|i| {
+                (
+                    o.x - 20.0 + f64::from(i % 40),
+                    o.y - 20.0 + f64::from(i / 40),
+                )
+            })
+            .find(|&(x, y)| {
+                let far = |p: &Point| (p.x - x).hypot(p.y - y) * f64::from(zoom) > 12.0;
+                pins.iter().all(far)
+                    && scene
+                        .scene()
+                        .pick(Vec2::new(x as f32, y as f32), tol, zoom)
+                        .and_then(|hit| scene.model_id(hit.id))
+                        == Some(AnyId::Symbol(sym))
+            })
+            .expect("a pickable body point")
+    }
+
+    #[test]
+    fn dragging_a_contact_onto_a_coil_links_it_in_one_step() {
+        let mut h = Harness::new();
+        h.view.editor.auto_connect = false;
+        h.view.editor.begin_place("iec/coils/relay", None);
+        h.click(60.0, 60.0, egui::PointerButton::Primary);
+        h.view.editor.begin_place("iec/contacts/no", None);
+        h.click(160.0, 60.0, egui::PointerButton::Primary);
+        h.view.editor.leave_tool();
+        let mut syms: Vec<_> = h
+            .doc
+            .project()
+            .symbols()
+            .map(|s| (s.id, s.placement.origin))
+            .collect();
+        syms.sort_by(|a, b| a.1.x.total_cmp(&b.1.x));
+        let (coil, contact) = (syms[0].0, syms[1].0);
+        let before = h.doc.project().devices().count();
+        let depth = h.doc.undo_depth();
+        h.drag(body_point(&h, contact), body_point(&h, coil));
+        let device = h.doc.project().symbol(coil).unwrap().device();
+        assert_eq!(h.doc.project().symbol(contact).unwrap().device(), device);
+        assert_eq!(h.doc.project().devices().count(), before - 1);
+        assert_eq!(h.doc.undo_depth(), depth + 1);
+        assert!(
+            h.view
+                .editor
+                .notice()
+                .is_some_and(|n| n.starts_with("Linked to"))
+        );
     }
 
     #[test]
