@@ -753,6 +753,24 @@ fn one_style_per_kind_changes_every_terminal() {
     assert_eq!(issues[0].severity, Severity::Info);
     doc.transact("Clear", |tx| clear_override(tx, one)).unwrap();
     assert!(overrides(doc.project(), strip).is_empty());
+    // A terminal's own article is the core `Terminal.part`: it overrides
+    // the strip's part, is listed as an override and is cleared with it.
+    let other = view.rows[2].terminals[0];
+    let (own, _) = doc
+        .transact("Own part", |tx| {
+            let own = tx.add_part("Weidmüller", "1020000000")?;
+            tx.update::<novo_core::Terminal>(other, |t| t.part = Some(own))?;
+            Ok(own)
+        })
+        .unwrap();
+    assert_eq!(style_of(doc.project(), other).unwrap().part, Some(own));
+    assert_eq!(terminal_part(doc.project(), other), Some(own));
+    assert_eq!(overrides(doc.project(), strip), [other]);
+    doc.transact("Clear", |tx| clear_override(tx, other))
+        .unwrap();
+    assert_eq!(doc.project().terminal(other).unwrap().part, None);
+    assert_eq!(terminal_part(doc.project(), other), Some(part));
+    assert!(overrides(doc.project(), strip).is_empty());
 }
 
 #[test]
@@ -925,7 +943,7 @@ fn wires_through_junctions_get_one_terminal_where_they_leave() {
     // One cabinet contact feeds two field motors through a junction: the
     // terminal goes on the wire from the contact to the junction, once.
     let mut doc = Document::default();
-    let (feed, k1, m1, back, k2, through, k5, m3) = doc
+    let (feed, k1, m1, back, k2, through, out, k5, m3) = doc
         .transact("Draw", |tx| {
             let page = tx.add_page("1")?;
             let k1 = tx.add_device(tag("=A1+CAB-K1"), "")?;
@@ -963,8 +981,8 @@ fn wires_through_junctions_get_one_terminal_where_they_leave() {
             let m3s = row_of_pins(tx, page, m3, &["U1"], 240.0, 100.0)?;
             let j4 = tx.add_junction(page, Point::new(240.0, 60.0))?;
             let through = tx.connect(Endpoint::pin(k5s, 0), Endpoint::junction(j4))?;
-            tx.connect(Endpoint::junction(j4), Endpoint::pin(m3s, 0))?;
-            Ok((feed, k1, m1, back, k2, through, k5, m3))
+            let out = tx.connect(Endpoint::junction(j4), Endpoint::pin(m3s, 0))?;
+            Ok((feed, k1, m1, back, k2, through, out, k5, m3))
         })
         .unwrap()
         .0;
@@ -996,7 +1014,24 @@ fn wires_through_junctions_get_one_terminal_where_they_leave() {
             .iter()
             .all(|s| s.internal != k5)
     );
+    assert!(
+        doc.project()
+            .is_dismissed(DISMISS_KEY, &[novo_core::AnyId::from(through)])
+    );
     doc.undo().unwrap();
+    // A decline on any wire of the connection counts, so one recorded on
+    // the field-side wire (an edit may change which wire is chosen) holds.
+    doc.transact("Decline", |tx| dismiss_suggestion(tx, out))
+        .unwrap();
+    assert!(
+        suggest_terminals(doc.project())
+            .iter()
+            .all(|s| s.internal != k5)
+    );
+    doc.transact("Restore", |tx| restore_suggestion(tx, out))
+        .unwrap();
+    assert_eq!(suggest_terminals(doc.project()), suggestions);
+    assert_eq!(doc.project().dismissals().count(), 0);
     doc.transact("Accept", |tx| accept_suggestions(tx, &suggestions))
         .unwrap();
     assert!(suggest_terminals(doc.project()).is_empty());
@@ -1130,6 +1165,16 @@ fn the_side_with_a_strip_is_the_cabinet_and_dismissals_stick() {
     assert_eq!(left.len(), 1);
     assert_eq!(left[0].wire, wires[1]);
     doc.undo().unwrap();
+    assert_eq!(suggest_terminals(doc.project()).len(), 2);
+    // A decline from an older file (a wire property) still counts, and
+    // restoring clears it.
+    doc.transact("Old decline", |tx| {
+        tx.set_property(wires[0], DISMISS_KEY, Some(Value::Bool(false)))
+    })
+    .unwrap();
+    assert_eq!(suggest_terminals(doc.project()).len(), 1);
+    doc.transact("Restore", |tx| restore_suggestion(tx, wires[0]))
+        .unwrap();
     assert_eq!(suggest_terminals(doc.project()).len(), 2);
 }
 

@@ -6,8 +6,9 @@
 //!
 //! The cabinet side is the location that already holds a terminal strip;
 //! when both or neither do, the location with more devices. A declined
-//! suggestion is remembered on the wire (`terminal.suggest = false`, see
-//! [`dismiss_suggestion`]) so it does not come back after every edit.
+//! suggestion is remembered as a core `Dismissal` record about its wire
+//! (proposal `terminal.suggest`, see [`dismiss_suggestion`]) so it does not
+//! come back after every edit.
 //!
 //! Wires are followed through junctions. The terminal goes on the one
 //! wire where the connection leaves its location: a wire with a device pin
@@ -22,8 +23,15 @@ use novo_core::{
     WireId,
 };
 
-/// Wire property that records a declined terminal suggestion.
+/// The proposal name of a declined terminal suggestion in a core
+/// `Dismissal` record. Older files kept it as a wire property of the same
+/// name set to `false`, which still counts.
 pub const DISMISS_KEY: &str = "terminal.suggest";
+
+fn is_dismissed(project: &Project, wire: &novo_core::Wire) -> bool {
+    project.is_dismissed(DISMISS_KEY, &[wire.id.into()])
+        || matches!(wire.properties.get(DISMISS_KEY), Some(Value::Bool(false)))
+}
 
 use crate::place::{Drop, Placed, place_terminals};
 use crate::strings;
@@ -247,7 +255,7 @@ pub fn suggest_terminals(project: &Project) -> Vec<Suggestion> {
         if da.tag.location == db.tag.location {
             continue;
         }
-        let dismissed = matches!(w.properties.get(DISMISS_KEY), Some(Value::Bool(false)));
+        let dismissed = is_dismissed(project, w);
         let (internal, external, internal_end) = if rank(&db.tag.location) > rank(&da.tag.location)
         {
             (db, da, w.to)
@@ -270,6 +278,13 @@ pub fn suggest_terminals(project: &Project) -> Vec<Suggestion> {
             },
         ));
     }
+    // A decline on any of a connection's wires declines the connection, so
+    // it holds when an edit changes which wire is chosen.
+    let declined: BTreeSet<&[Endpoint]> = found
+        .iter()
+        .filter(|(_, _, dismissed, _)| *dismissed)
+        .map(|(connection, ..)| connection.as_slice())
+        .collect();
     let mut best: BTreeMap<&[Endpoint], (bool, usize)> = BTreeMap::new();
     for (i, (connection, rank, ..)) in found.iter().enumerate() {
         let entry = best.entry(connection).or_insert((*rank, i));
@@ -277,11 +292,15 @@ pub fn suggest_terminals(project: &Project) -> Vec<Suggestion> {
             *entry = (*rank, i);
         }
     }
-    let keep: BTreeSet<usize> = best.into_values().map(|(_, i)| i).collect();
+    let keep: BTreeSet<usize> = best
+        .into_iter()
+        .filter(|(connection, _)| !declined.contains(connection))
+        .map(|(_, (_, i))| i)
+        .collect();
     found
         .iter()
         .enumerate()
-        .filter(|(i, (_, _, dismissed, _))| keep.contains(i) && !dismissed)
+        .filter(|(i, _)| keep.contains(i))
         .map(|(_, (.., s))| s.clone())
         .collect()
 }
@@ -383,12 +402,22 @@ pub fn accept_suggestions(tx: &mut Tx<'_>, suggestions: &[Suggestion]) -> Result
 /// Declines the suggestion on a wire for good (undoable); clearing it with
 /// [`restore_suggestion`] brings the suggestion back.
 pub fn dismiss_suggestion(tx: &mut Tx<'_>, wire: WireId) -> Result<()> {
-    tx.set_property(wire, DISMISS_KEY, Some(Value::Bool(false)))
+    tx.dismiss(DISMISS_KEY, vec![wire.into()]).map(|_| ())
 }
 
 /// Forgets a declined suggestion on a wire.
 pub fn restore_suggestion(tx: &mut Tx<'_>, wire: WireId) -> Result<()> {
-    tx.set_property(wire, DISMISS_KEY, None)
+    if let Some(record) = tx.project().dismissal(DISMISS_KEY, &[wire.into()]) {
+        tx.remove(record.id)?;
+    }
+    let legacy = tx
+        .project()
+        .wire(wire)
+        .is_some_and(|w| w.properties.contains_key(DISMISS_KEY));
+    if legacy {
+        tx.set_property(wire, DISMISS_KEY, None)?;
+    }
+    Ok(())
 }
 
 /// One line for the "accept all" summary: how many terminals go on which
