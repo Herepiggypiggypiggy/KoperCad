@@ -99,6 +99,10 @@ pub fn print_style() -> ModelStyle {
         frame_color: ink,
         note_color: ink,
         note_warning_color: ink,
+        joint_color: ink,
+        pin_joint_color: ink,
+        wire_end_color: ink,
+        unconnected_color: ink,
         ..ModelStyle::default()
     }
 }
