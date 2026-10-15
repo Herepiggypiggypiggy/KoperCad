@@ -193,13 +193,17 @@ pub struct Rail {
     pub vertical: bool,
 }
 
-/// Length used on a rail: the footprint widths of its devices plus the
+/// Length used on a rail: the footprint extents of its devices along the
+/// rail (widths on a horizontal rail, heights on a vertical one) plus the
 /// default gap between neighbours.
 pub fn rail_used(rail: &Rail, placements: &[Placement]) -> f64 {
     let on: Vec<f64> = placements
         .iter()
         .filter(|p| p.rail == Some(rail.id))
-        .map(|p| p.footprint().w)
+        .map(|p| {
+            let f = p.footprint();
+            if rail.vertical { f.h } else { f.w }
+        })
         .collect();
     let gaps = on.len().saturating_sub(1) as f64 * DEFAULT_CLEARANCE_MM;
     on.iter().sum::<f64>() + gaps
@@ -325,6 +329,25 @@ mod tests {
         assert_eq!(rail_used(&rail, &[a.clone(), b.clone()]), 100.0);
         assert!(rail_overflows(std::slice::from_ref(&rail), &[a.clone(), b.clone()]).is_empty());
         let mut c = p(3, 110.0, 0.0, 20.0, 90.0);
+        c.rail = Some(7);
+        assert_eq!(rail_overflows(&[rail], &[a, b, c]), vec![(7, 30.0)]);
+    }
+
+    #[test]
+    fn vertical_rail_counts_heights() {
+        let rail = Rail {
+            id: 7,
+            x: 0.0,
+            y: 0.0,
+            length: 100.0,
+            vertical: true,
+        };
+        let mut a = p(1, 0.0, 0.0, 20.0, 40.0);
+        let mut b = p(2, 0.0, 50.0, 60.0, 40.0);
+        a.rail = Some(7);
+        b.rail = Some(7);
+        assert_eq!(rail_used(&rail, &[a.clone(), b.clone()]), 90.0);
+        let mut c = p(3, 0.0, 90.0, 10.0, 30.0);
         c.rail = Some(7);
         assert_eq!(rail_overflows(&[rail], &[a, b, c]), vec![(7, 30.0)]);
     }
