@@ -8,6 +8,7 @@ draws the NFPA counterparts. The files it writes are the source of truth once
 committed and may be edited by hand.
 """
 import copy
+import math
 import os
 import sys
 import tomllib
@@ -22,10 +23,13 @@ def load(path):
         return tomllib.load(f)
 
 
-def make(path, base, name, description, function, keywords, aliases, graphics=None, behavior=None):
+def make(path, base, name, description, function, keywords, aliases, graphics=None, behavior=None,
+         connections=None):
     src = load(base)
     sym = copy.deepcopy(src)
     sym.pop("favorite", None)
+    if connections is not None:
+        sym["connections"] = connections
     sym.update(id="iec/" + path, name=name, description=description, function=function,
                keywords=keywords, aliases=aliases)
     if graphics is not None:
@@ -97,3 +101,61 @@ for colour, code, alias in (("red", "RD", "lr"), ("green", "GN", "lg"), ("amber"
     make(f"signalling/lamp_{colour}", "signalling/lamp", f"Indicator lamp, {colour}",
          f"Indicator lamp with its colour ({code}) written beside it.", "signal.lamp." + colour,
          ["lamp", "indicator", colour, code.lower()], [alias], g)
+
+
+# ---- growth 2: three-wire sensors, beacon, encoder, fans
+
+SENSOR_GLYPHS = {
+    "inductive": lambda: [PL([[2, 5.5], [5, 8], [2, 10.5], [-1, 8]], True)],
+    "capacitive": lambda: [L([0.5, 5.5], [0.5, 10.5]), L([3.5, 5.5], [3.5, 10.5])],
+    "photoelectric": lambda: [L([-1.5, 10], [3, 5.5]), L([0.5, 10.5], [4.5, 6.5]),
+                              PL([[3, 5.5], [1.3, 5.9], [2.6, 7.2]], True, True),
+                              PL([[4.5, 6.5], [2.8, 6.9], [4.1, 8.2]], True, True)],
+}
+SENSOR_ALIASES = {("inductive", "pnp"): "ind", ("inductive", "npn"): "indn",
+                  ("capacitive", "pnp"): "cap", ("capacitive", "npn"): "capn",
+                  ("photoelectric", "pnp"): "photo", ("photoelectric", "npn"): "photon"}
+wires = [{"id": "1", "at": [0, 0], "dir": "up"}, {"id": "3", "at": [16, 0], "dir": "up"},
+         {"id": "4", "at": [8, 16], "dir": "down"}]
+for kind, glyph in SENSOR_GLYPHS.items():
+    for out in ("pnp", "npn"):
+        make(f"sensors/{kind}_{out}", "sensors/transmitter",
+             f"{kind.capitalize()} sensor, 3-wire {out.upper()}",
+             f"Three-wire {kind} sensor with a {out.upper()} switching output: 1 brown (+), 3 blue (-), "
+             "4 black (signal).", "sensor." + kind,
+             [kind, "sensor", "3-wire", out, "proximity"], [SENSOR_ALIASES[(kind, out)]],
+             [L([0, 0], [0, 4]), L([16, 0], [16, 4]), L([8, 12], [8, 16]),
+              {"kind": "rect", "at": [-4, 4], "size": [24, 8]}] + glyph()
+             + [T([13, 8], out.upper(), 2.4)],
+             {"type": "sensor", "poles": [["1", "3"]]}, wires)
+
+rays = [L([3.68, 4.32], [4.95, 3.05]), L([-3.68, 4.32], [-4.95, 3.05]),
+        L([3.68, 11.68], [4.95, 12.95]), L([-3.68, 11.68], [-4.95, 12.95])]
+make("signalling/beacon", "signalling/lamp", "Beacon",
+     "Signal beacon or flashing light; set the colour as a device property.", "signal.beacon",
+     ["beacon", "flashing light", "signal", "strobe"], ["beacon"],
+     load("signalling/lamp")["graphics"] + rays)
+
+make("sensors/encoder", "sensors/transmitter", "Encoder",
+     "Incremental encoder with supply (+, 0V) and channels A, B and zero pulse Z.",
+     "sensor.encoder", ["encoder", "incremental", "rotary", "sensor", "speed"], ["enc"],
+     [L([x, 0], [x, 4]) for x in (0, 8, 16, 24, 32)]
+     + [{"kind": "rect", "at": [-4, 4], "size": [40, 10]}, T([16, 9], "ENC", 3)],
+     {"type": "encoder", "poles": [["+", "0V"]]},
+     [{"id": i, "at": [x, 0], "dir": "up"} for i, x in
+      (("+", 0), ("0V", 8), ("A", 16), ("B", 24), ("Z", 32))])
+
+
+def fan(base, path, name, function, alias, text_drop):
+    src = load(base)
+    circle = next(g for g in src["graphics"] if g["kind"] == "circle")
+    cx, cy = circle["center"]
+    g = [x for x in src["graphics"] if x["kind"] != "text"]
+    g += [L([cx, cy], [cx + 3.2 * math.cos(math.radians(a)), cy - 3.2 * math.sin(math.radians(a))])
+          for a in (90, 210, 330)] + [C([cx, cy], 0.8)]
+    make(path, base, name, name + ".", function, ["fan", "blower", "ventilator", "cooling", "motor"],
+         [alias], g)
+
+
+fan("motors/motor_1ph", "motors/fan_1ph", "Fan, single-phase", "motor.ac1.fan", "fan", True)
+fan("motors/motor_dc", "motors/fan_dc", "Fan, DC", "motor.dc.fan", "fandc", True)

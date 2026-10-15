@@ -141,3 +141,34 @@ fn a_report_without_a_page_can_be_added_as_one() {
     d.app.undo_redo(false);
     assert_eq!(d.doc().project().pages().count(), before);
 }
+
+#[test]
+fn an_export_never_replaces_a_project_file() {
+    let (dir, mut d) = example();
+    // The open project's own file, by name and by content.
+    let project = dir.path().join("plant.novo");
+    assert!(d.app.save_to(&project));
+    let before = std::fs::read(&project).unwrap();
+    assert!(before.starts_with(b"SQLite format 3"));
+    assert!(
+        d.app
+            .export_reports_to(None, Format::Xlsx, &project)
+            .is_none()
+    );
+    assert!(
+        d.app
+            .export_reports_to(Some("bom"), Format::Csv, &project)
+            .is_none()
+    );
+    assert_eq!(std::fs::read(&project).unwrap(), before);
+
+    // A database under another name is refused by its content.
+    let other = dir.path().join("copy.bin");
+    std::fs::write(&other, &before).unwrap();
+    assert!(
+        d.app
+            .export_reports_to(None, Format::Xlsx, &other)
+            .is_none()
+    );
+    assert_eq!(std::fs::read(&other).unwrap(), before);
+}

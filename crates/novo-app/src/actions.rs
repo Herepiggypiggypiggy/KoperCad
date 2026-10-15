@@ -19,6 +19,8 @@ pub enum Action {
     ShowSchematic,
     ShowCabinet,
     ShowReports,
+    SizeEnclosure,
+    EnclosureList,
     PinOutline,
     FocusMode,
     FullScreen,
@@ -41,6 +43,8 @@ impl Action {
         Action::ShowSchematic,
         Action::ShowCabinet,
         Action::ShowReports,
+        Action::SizeEnclosure,
+        Action::EnclosureList,
         Action::PinOutline,
         Action::FocusMode,
         Action::FullScreen,
@@ -65,6 +69,8 @@ impl Action {
             Action::ShowSchematic => "view.schematic",
             Action::ShowCabinet => "view.cabinet",
             Action::ShowReports => "view.reports",
+            Action::SizeEnclosure => "cabinet.size-enclosure",
+            Action::EnclosureList => "cabinet.enclosures",
             Action::PinOutline => "view.pin_outline",
             Action::FocusMode => "view.focus",
             Action::FullScreen => "view.full_screen",
@@ -92,6 +98,8 @@ impl Action {
             Action::ShowSchematic => "Schematic",
             Action::ShowCabinet => "Cabinet",
             Action::ShowReports => "Reports",
+            Action::SizeEnclosure => "Size the enclosure…",
+            Action::EnclosureList => "Enclosures…",
             Action::PinOutline => "Pin outline",
             Action::FocusMode => "Focus mode",
             Action::FullScreen => "Full screen",
@@ -117,6 +125,8 @@ impl Action {
             | Action::ShowSchematic
             | Action::ShowCabinet
             | Action::ShowReports
+            | Action::SizeEnclosure
+            | Action::EnclosureList
             | Action::PinOutline
             | Action::FocusMode
             | Action::FullScreen
@@ -142,9 +152,12 @@ impl Action {
             Action::FocusMode => (cmd_shift, Key::F),
             Action::FullScreen => (Modifiers::NONE, Key::F11),
             Action::CommandPalette => (cmd, Key::K),
-            Action::PinOutline | Action::About | Action::OpenExample | Action::ShowReports => {
-                return None;
-            }
+            Action::PinOutline
+            | Action::About
+            | Action::OpenExample
+            | Action::ShowReports
+            | Action::SizeEnclosure
+            | Action::EnclosureList => return None,
         };
         Some(KeyboardShortcut::new(modifiers, key))
     }

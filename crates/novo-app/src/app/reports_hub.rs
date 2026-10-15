@@ -191,6 +191,7 @@ impl NovoApp {
             );
             return;
         }
+        // Letters are ignored on purpose: `20a` counts as section 20.
         let highest = project
             .pages()
             .filter_map(|p| {
@@ -284,8 +285,13 @@ impl NovoApp {
                 Err("CSV holds one report; pick a report, or export Excel".to_owned())
             }
         };
-        let written = bytes
-            .and_then(|bytes| super::pdf::write_replacing(path, &bytes).map_err(|e| e.to_string()));
+        let open_file = self.backend.file();
+        let written = bytes.and_then(|bytes| {
+            if is_project_target(path, open_file.as_deref()) {
+                return Err("an export is never written over a project file".to_owned());
+            }
+            super::pdf::write_replacing(path, &bytes).map_err(|e| e.to_string())
+        });
         match written {
             Ok(()) => {
                 self.message(Level::Info, format!("Exported {}", path.display()));
@@ -331,6 +337,26 @@ fn target_of(project: &Project, sources: &[AnyId]) -> Option<AnyId> {
         .iter()
         .copied()
         .find(|id| matches!(id, AnyId::Device(_)) || place_of(project, *id).is_some())
+}
+
+/// Whether `path` is the open project's file, a project or recovery file by
+/// name, or an existing SQLite database (every project file is one). An
+/// export must never replace any of them.
+fn is_project_target(path: &Path, open: Option<&Path>) -> bool {
+    use std::io::Read;
+    let same = open.is_some_and(
+        |open| matches!((open.canonicalize(), path.canonicalize()), (Ok(a), Ok(b)) if a == b),
+    );
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    let by_name = name.ends_with(".novo") || name.ends_with(".novo.autosave");
+    let mut head = [0u8; 16];
+    let by_content = std::fs::File::open(path)
+        .and_then(|mut f| f.read_exact(&mut head))
+        .is_ok_and(|()| &head == b"SQLite format 3\0");
+    same || by_name || by_content
 }
 
 /// File names Windows accepts.

@@ -4,8 +4,12 @@
 //! bar and no status bar.
 
 mod cabinet;
+mod cabinet_inspector;
+#[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
+mod cabinet_routes;
 mod changes;
 mod checks;
+mod compare;
 mod dock;
 mod drawers;
 mod duplicate;
@@ -15,6 +19,8 @@ mod link;
 mod live;
 mod live_anim;
 mod pages;
+mod parts;
+mod parts_import;
 mod pdf;
 mod plc;
 mod potentials;
@@ -23,6 +29,7 @@ mod project_settings;
 mod reports;
 mod reports_hub;
 mod revisions;
+mod sizing;
 mod terminals;
 mod title_revisions;
 mod userkeymap;
@@ -34,6 +41,8 @@ mod xref;
 mod cabinet_tests;
 #[cfg(test)]
 mod changes_tests;
+#[cfg(test)]
+mod compare_tests;
 #[cfg(test)]
 mod example_tests;
 #[cfg(test)]
@@ -144,6 +153,8 @@ pub struct NovoApp {
     cabinet: cabinet::CabinetState,
     /// The Reports hub: every report as a live table, with exports.
     hub: reports_hub::Hub,
+    /// The "Size the enclosure" panel and the Enclosures list.
+    sizing: sizing::SizingState,
     /// The outline flyout is showing over the canvas.
     outline_open: bool,
     /// What the outline lists.
@@ -211,6 +222,7 @@ impl NovoApp {
             cabinet_open: false,
             cabinet: cabinet::CabinetState::new(),
             hub: Default::default(),
+            sizing: sizing::SizingState::new(),
             outline_open: false,
             outline_mode: OutlineMode::Pages,
             breadcrumb_link: None,
@@ -330,7 +342,9 @@ impl NovoApp {
             | Action::CloseProject
             | Action::ZoomToFit
             | Action::ShowCabinet
-            | Action::ShowReports => open,
+            | Action::ShowReports
+            | Action::SizeEnclosure
+            | Action::EnclosureList => open,
             Action::Undo => doc.is_some_and(|d| d.can_undo()),
             Action::Redo => doc.is_some_and(|d| d.can_redo()),
             _ => true,
@@ -371,6 +385,16 @@ impl NovoApp {
             Action::ShowReports => {
                 self.cabinet_open = false;
                 self.hub.open = true;
+            }
+            Action::SizeEnclosure => {
+                self.cabinet_open = true;
+                self.hub.open = false;
+                self.sizing.panel_open = true;
+            }
+            Action::EnclosureList => {
+                self.cabinet_open = true;
+                self.hub.open = false;
+                self.sizing.editor_open = true;
             }
             Action::PinOutline => {
                 let pinned = !self.outline_pinned();
@@ -699,7 +723,7 @@ impl NovoApp {
                     self.cabinet.keys.push((*id).to_owned());
                 }
             }
-            commands.retain(|id| Action::from_id(id).is_some());
+            commands.retain(|id| Action::from_id(id).is_some() || *id == "view.cabinet_table");
         }
 
         self.window_width = ctx.content_rect().width();
@@ -762,8 +786,10 @@ impl NovoApp {
         self.about_dialog(&ctx);
         self.renumber_dialog(&ctx);
         self.preferences_dialog(&ctx);
+        self.parts_window(&ctx);
         self.project_settings_dialog(&ctx);
         self.issue_revision_dialog(&ctx);
+        self.compare_window(&ctx);
         self.page_form_dialog(&ctx);
         for id in std::mem::take(&mut self.wb.queued) {
             self.run_command(&ctx, id, None);
@@ -1155,6 +1181,8 @@ impl NovoApp {
         let drops =
             std::cell::RefCell::new(Vec::<(PageId, Option<DeviceTag>, Option<DeviceTag>)>::new());
         let forms = std::cell::RefCell::new(Vec::<PageForm>::new());
+        let contents = std::cell::RefCell::new(None::<DeviceTag>);
+        let has_contents = pages::has_panel_contents(project, &panel_of(&structure));
         // The header being renamed shows a text box; the rename starts from
         // a double click or the context menu.
         let editing = std::cell::RefCell::new(self.renaming_level.take());
@@ -1240,6 +1268,14 @@ impl NovoApp {
                         Some((Aspect::Location, panel.clone(), rename_text(&panel)));
                     ui.close();
                 }
+                if ui
+                    .add_enabled(!has_contents, egui::Button::new("Add contents page"))
+                    .on_disabled_hover_text("This panel already has a contents page")
+                    .clicked()
+                {
+                    *contents.borrow_mut() = Some(panel.clone());
+                    ui.close();
+                }
                 if ui.button("New pages in this panel…").clicked() {
                     forms.borrow_mut().push(PageForm::new(
                         FormKind::Pages,
@@ -1281,8 +1317,30 @@ impl NovoApp {
         for (page, g, p) in drops.into_inner() {
             self.move_page(page, g, p);
         }
+        if let Some(panel) = contents.into_inner() {
+            self.add_panel_contents(&panel);
+        }
         if let Some(form) = forms.into_inner().pop() {
             self.wb.page_form = Some(form);
+        }
+    }
+
+    /// Adds the contents page of a panel, which lists the panel's pages and
+    /// follows it when it is renamed.
+    fn add_panel_contents(&mut self, panel: &DeviceTag) {
+        let Some(project) = self.backend.document().map(|d| d.project()) else {
+            return;
+        };
+        match pages::panel_contents_command(project, panel) {
+            Ok(command) => {
+                if let Some(Err(e)) = self.execute(command) {
+                    self.message(
+                        Level::Error,
+                        format!("Could not add the contents page: {e}"),
+                    );
+                }
+            }
+            Err(e) => self.message(Level::Warning, e),
         }
     }
 

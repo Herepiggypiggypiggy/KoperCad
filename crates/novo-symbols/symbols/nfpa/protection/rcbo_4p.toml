@@ -1,0 +1,62 @@
+format = 1
+id = "nfpa/protection/rcbo_4p"
+name = "RCBO, 3-pole + N"
+description = "Residual current breaker with overcurrent protection (RCBO), 3-pole + neutral."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "protection"
+function = "protection.rcbo"
+keywords = ["rcbo", "residual current", "breaker", "3p+n", "nfpa", "ansi"]
+aliases = ["rcbo4"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 24], dir = "down" },
+  { id = "3", at = [8, 0], dir = "up" },
+  { id = "4", at = [8, 24], dir = "down" },
+  { id = "5", at = [16, 0], dir = "up" },
+  { id = "6", at = [16, 24], dir = "down" },
+  { id = "N", at = [24, 0], dir = "up", role = "n" },
+  { id = "N'", at = [24, 24], dir = "down", role = "n" },
+]
+
+anchors = [
+  { role = "tag", at = [-9.5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [-1.714, 8], to = [22.286, 8], stroke = "dashed" },
+  { kind = "ellipse", center = [12, 20], rx = 15, ry = 1.6 },
+  { kind = "polyline", points = [[-3, 20], [-8, 20], [-8, 8], [-1.714, 8]], stroke = "dashed" },
+  { kind = "text", at = [-9, 20], text = "GFI", size = 2.2, align = "right" },
+  { kind = "polyline", points = [[-8, 12], [-8, 10], [-10, 10], [-10, 14], [-12, 14], [-12, 12]] },
+  { kind = "text", at = [-14, 12], text = "I>", size = 2.2, align = "right" },
+  { kind = "line", from = [0, 0], to = [0, 6] },
+  { kind = "line", from = [0, 16], to = [0, 10] },
+  { kind = "line", from = [-3, 6], to = [3, 6] },
+  { kind = "line", from = [-3, 10], to = [3, 10] },
+  { kind = "arc", center = [0, 8], r = 4.6, start = 135, end = 225 },
+  { kind = "line", from = [0, 16], to = [0, 24] },
+  { kind = "line", from = [8, 0], to = [8, 6] },
+  { kind = "line", from = [8, 16], to = [8, 10] },
+  { kind = "line", from = [5, 6], to = [11, 6] },
+  { kind = "line", from = [5, 10], to = [11, 10] },
+  { kind = "arc", center = [8, 8], r = 4.6, start = 135, end = 225 },
+  { kind = "line", from = [8, 16], to = [8, 24] },
+  { kind = "line", from = [16, 0], to = [16, 6] },
+  { kind = "line", from = [16, 16], to = [16, 10] },
+  { kind = "line", from = [13, 6], to = [19, 6] },
+  { kind = "line", from = [13, 10], to = [19, 10] },
+  { kind = "arc", center = [16, 8], r = 4.6, start = 135, end = 225 },
+  { kind = "line", from = [16, 16], to = [16, 24] },
+  { kind = "line", from = [24, 0], to = [24, 6] },
+  { kind = "line", from = [24, 16], to = [24, 10] },
+  { kind = "line", from = [21, 6], to = [27, 6] },
+  { kind = "line", from = [21, 10], to = [27, 10] },
+  { kind = "arc", center = [24, 8], r = 4.6, start = 135, end = 225 },
+  { kind = "line", from = [24, 16], to = [24, 24] },
+]
+
+[behavior]
+kind = "breaker"
+trip = ["residual", "thermal", "magnetic"]
+poles = [["1", "2"], ["3", "4"], ["5", "6"], ["N", "N'"]]
