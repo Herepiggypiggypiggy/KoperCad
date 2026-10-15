@@ -171,6 +171,30 @@ fn pin_of(target: Target) -> Option<Endpoint> {
 /// The reason shown when a line would run back over the wire being drawn.
 const SELF_OVERLAP_NOTICE: &str = "A line cannot run back over the wire";
 
+/// What dropping the single selected contact on `target` would link: the
+/// contact, the coil it joins and the coil's tag. `None` for any other drop.
+fn link_target(
+    project: &Project,
+    selection: &[AnyId],
+    target: AnyId,
+) -> Option<(SymbolId, SymbolId, DeviceTag)> {
+    let ([AnyId::Symbol(mine)], AnyId::Symbol(coil)) = (selection, target) else {
+        return None;
+    };
+    let (a, b) = (project.symbol(*mine)?, project.symbol(coil)?);
+    let (
+        SymbolRole::Device { main: false, .. } | SymbolRole::Unassigned,
+        SymbolRole::Device { device, main: true },
+    ) = (&a.role, &b.role)
+    else {
+        return None;
+    };
+    if a.id == b.id || a.device() == Some(*device) {
+        return None;
+    }
+    Some((*mine, coil, project.device(*device)?.tag.clone()))
+}
+
 /// What giving `device` the tag `tag` of another device would link: the
 /// symbols of `device` and the first symbol of the device that has the tag
 /// (its coil, when it has one). `None` when there is nothing to link.
@@ -228,6 +252,7 @@ pub struct Editor {
     /// at the end of the wire in progress.
     hovered: Option<(PageId, f64)>,
     notice: Option<String>,
+    link_hint: Option<String>,
     changes: ChangeSet,
     select: Option<Vec<AnyId>>,
 }
@@ -258,6 +283,7 @@ impl Editor {
             wire_mode: WiringMode::default(),
             hovered: None,
             notice: None,
+            link_hint: None,
             changes: ChangeSet::default(),
             select: None,
         }
@@ -1281,33 +1307,25 @@ impl Editor {
     /// when it is an ordinary drop. Esc has already cancelled nothing here:
     /// the caller ends the move.
     pub fn drop_link(&mut self, doc: &mut Document, selection: &[AnyId], target: AnyId) -> bool {
-        let ([AnyId::Symbol(mine)], AnyId::Symbol(coil)) = (selection, target) else {
+        let Some((mine, coil, tag)) = link_target(doc.project(), selection, target) else {
             return false;
         };
-        let project = doc.project();
-        let (Some(a), Some(b)) = (project.symbol(*mine), project.symbol(coil)) else {
-            return false;
-        };
-        let (
-            SymbolRole::Device { main: false, .. } | SymbolRole::Unassigned,
-            SymbolRole::Device { device, main: true },
-        ) = (&a.role, &b.role)
-        else {
-            return false;
-        };
-        if a.id == b.id || a.device() == Some(*device) {
-            return false;
-        }
-        let Some(tag) = project.device(*device).map(|d| d.tag.clone()) else {
-            return false;
-        };
-        if let Err(reason) = self.link_contacts(doc, &[*mine], coil, &tag) {
+        if let Err(reason) = self.link_contacts(doc, &[mine], coil, &tag) {
             self.notice = Some(reason);
         }
         if matches!(self.tool, Tool::Move(_)) {
             self.tool = Tool::Select;
         }
+        self.link_hint = None;
         true
+    }
+
+    /// While a contact is carried over a coil, the hint that dropping links
+    /// it ("Link to -K1"); `None` clears it.
+    pub fn hint_link(&mut self, project: &Project, selection: &[AnyId], over: Option<AnyId>) {
+        self.link_hint = over
+            .and_then(|t| link_target(project, selection, t))
+            .map(|(_, _, tag)| format!("Link to {tag} · Esc cancels"));
     }
 
     /// Whether `mine` can be linked to `partner`, as the reason if not.
@@ -1476,7 +1494,9 @@ impl Editor {
                 "Corners: click a pin or wire to finish, empty space for a corner · R flips the bend · Backspace undo · Esc cancels · Shift+W lines"
                     .into()
             }
-            Tool::Move(_) => "Click to drop · R rotate · X mirror · Esc cancels the move".into(),
+            Tool::Move(_) => self.link_hint.clone().unwrap_or_else(|| {
+                "Click to drop · R rotate · X mirror · Esc cancels the move".into()
+            }),
         };
         let text = if self.proposals.is_empty() {
             text

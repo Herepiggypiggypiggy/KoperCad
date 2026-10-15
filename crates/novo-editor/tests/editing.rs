@@ -1971,4 +1971,25 @@ fn a_double_click_on_empty_canvas_starts_a_wire_open_at_that_end() {
             wire.from
         );
     }
+
+fn carrying_a_contact_over_a_coil_says_it_will_link() {
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/coils/relay", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.begin_place("iec/contacts/no", None);
+    editor.click(&mut doc, page, p(120.0, 40.0), TOL);
+    editor.leave_tool();
+    let coil = symbol_at(&doc, page, p(40.0, 40.0));
+    let contact = symbol_at(&doc, page, p(120.0, 40.0));
+    editor.hover(&doc, page, p(120.0, 40.0), TOL);
+    assert!(editor.begin_move(&[contact.into()]));
+    let before = editor.status(&doc, page);
+    editor.hint_link(doc.project(), &[contact.into()], Some(coil.into()));
+    let status = editor.status(&doc, page);
+    assert!(status.starts_with("Link to "), "{status}");
+    assert_ne!(status, before);
+    // Over anything else the ordinary hint returns.
+    editor.hint_link(doc.project(), &[contact.into()], Some(contact.into()));
+    assert_eq!(editor.status(&doc, page), before);
 }
