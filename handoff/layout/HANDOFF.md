@@ -61,3 +61,20 @@ shell.
 - Commit messages end with the Co-Authored-By and Claude-Session lines.
   No model id in git. GitHub comments end with the Claude Code footer.
 - No admin rights, ever (see CLAUDE.md).
+
+## Cabinet layout (WS-15, Phase 3), state at 2026-10-15 19:55 UTC
+Design: docs/design/cabinet-layout.md (objects, geometry rules, queries, commands, section 5a canvas controls).
+Engine `crates/novo-layout`: `lib.rs` (Rect, Size, Placement, Plate, Rail, Duct, collision/outside/clearance/rail queries), `plan.rs` (place_all, place_all_below), `state.rs` (`CabinetLayout`: drop/move/rotate/remove, preview, accept, report), `model.rs` (load from the project, candidates, apply_plan, place/rotate/unplace commands). Tests in `crates/novo-layout/tests/`.
+App: `crates/novo-app/src/app/cabinet.rs` (+ `cabinet_tests.rs`); canvas scene in `crates/novo-canvas/src/cabinet.rs`; colours in `crates/novo-app/src/theme.rs::cabinet_style`.
+
+UI entry points (an engine without a UI entry is not done):
+- Ctrl+2 / View > Cabinet opens the Cabinet canvas of a panel (location tag); panel chooser and Create cabinet in the header.
+- Unplaced drawer on the left: drag a device onto the plate (landing-box ghost); drag a placed device to move it; R rotates and Delete removes the selection.
+- Place all button: preview, Enter accepts as one undo step, Esc cancels.
+- Ctrl+T or the header Table button: table face (Device, Size, X, Y, Turned, Rail, Problems); a row click selects the device on the plate.
+- Hover on a device names the problem in words. Right-hand inspector and plate size: UI-integration thread (#443, cabinet_inspector.rs).
+- Ducts (rails of kind Duct) are drawn as strips centred on their line.
+
+PRs: merged #284, #287, #289, #372, #378, #403. READY at hand-off: #461 (ducts, 4ce992b), #472 (table polish, 2c2274a). Open: #444 (theme icons Reports/Commissioning/3D, ac046e5).
+Not done: nobody has tried the cabinet drag by hand in the running app; ducts are not in collision/clearance checks; duct add/size/move tools and the routes overlay belong to the wire routing thread (new files, hook after #461); rules-based Place all (R7) is the Pro Panel thread (crates/novo-layout/src/rules.rs, then app wiring in cabinet.rs); the app recomputes load/candidates/report every frame (cache if it shows); local clippy flags novo-interop `Parsed` (not ours).
+File ownership: I own app/cabinet.rs and cabinet_tests.rs; the UI-integration thread asks first before editing them beyond small hooks; I own Cabinet look and branding.
