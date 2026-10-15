@@ -955,7 +955,53 @@ impl<'p> Tx<'p> {
             y,
             length,
             kind,
+            vertical: false,
+            width: 0.0,
+            height: 0.0,
             properties: Default::default(),
+        })
+    }
+
+    /// Moves a rail or duct, and the devices placed on it with it.
+    pub fn move_rail(&mut self, rail: RailId, x: f64, y: f64) -> Result<()> {
+        let old = self
+            .project
+            .rails
+            .get(&rail)
+            .ok_or(ModelError::NotFound(rail.into()))?;
+        let (dx, dy) = (x - old.x, y - old.y);
+        let on_it: Vec<CabinetPlacementId> = self
+            .project
+            .cabinet_placements
+            .values()
+            .filter(|p| p.rail == Some(rail))
+            .map(|p| p.id)
+            .collect();
+        self.update::<Rail>(rail, |r| {
+            r.x = x;
+            r.y = y;
+        })?;
+        for id in on_it {
+            self.update::<CabinetPlacement>(id, |p| {
+                p.x += dx;
+                p.y += dy;
+            })?;
+        }
+        Ok(())
+    }
+
+    /// Sets the length and the cross-section of a rail or duct.
+    pub fn set_rail_size(
+        &mut self,
+        rail: RailId,
+        length: f64,
+        width: f64,
+        height: f64,
+    ) -> Result<()> {
+        self.update::<Rail>(rail, |r| {
+            r.length = length;
+            r.width = width;
+            r.height = height;
         })
     }
 

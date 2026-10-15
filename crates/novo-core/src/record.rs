@@ -289,6 +289,8 @@ impl Record {
                     Some("position")
                 } else if !r.length.is_finite() {
                     Some("length")
+                } else if !(r.width.is_finite() && r.height.is_finite()) {
+                    Some("cross_section")
                 } else {
                     None
                 }

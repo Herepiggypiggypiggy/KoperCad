@@ -285,6 +285,33 @@ pub enum Command {
         length: f64,
         #[serde(default)]
         kind: RailKind,
+        /// Runs down from `(x, y)` instead of to the right.
+        #[serde(default)]
+        vertical: bool,
+        /// Cross-section of a duct in mm; 0 while unknown.
+        #[serde(default)]
+        width: f64,
+        #[serde(default)]
+        height: f64,
+    },
+    /// Moves a rail or duct; the devices on it move with it.
+    MoveRail {
+        rail: RailId,
+        x: f64,
+        y: f64,
+    },
+    /// Sets the length and cross-section of a rail or duct.
+    SetRailSize {
+        rail: RailId,
+        length: f64,
+        #[serde(default)]
+        width: f64,
+        #[serde(default)]
+        height: f64,
+    },
+    /// Deletes a rail or duct; devices on it stay on the plate, off the rail.
+    DeleteRail {
+        rail: RailId,
     },
     /// Places a device on the plate, or moves it if it is already placed.
     /// Several together go in a [`Command::Batch`].
@@ -415,6 +442,9 @@ impl Command {
             Command::UnfreezePage { .. } => "Unfreeze page".into(),
             Command::SetPlateSize { .. } => "Set plate size".into(),
             Command::AddRail { .. } => "Add rail".into(),
+            Command::MoveRail { .. } => "Move rail".into(),
+            Command::SetRailSize { .. } => "Resize rail".into(),
+            Command::DeleteRail { .. } => "Delete rail".into(),
             Command::PlaceDevice { .. } => "Place device".into(),
             Command::RotatePlacement { .. } => "Rotate device".into(),
             Command::RemovePlacement { .. } => "Remove from plate".into(),
@@ -697,7 +727,37 @@ impl Tx<'_> {
                 y,
                 length,
                 kind,
-            } => self.add_rail(structure, x, y, length, kind)?.into(),
+                vertical,
+                width,
+                height,
+            } => {
+                let rail = self.add_rail(structure, x, y, length, kind)?;
+                if vertical || width != 0.0 || height != 0.0 {
+                    self.update::<crate::Rail>(rail, |r| {
+                        r.vertical = vertical;
+                        r.width = width;
+                        r.height = height;
+                    })?;
+                }
+                rail.into()
+            }
+            Command::MoveRail { rail, x, y } => {
+                self.move_rail(rail, x, y)?;
+                return Ok(Vec::new());
+            }
+            Command::SetRailSize {
+                rail,
+                length,
+                width,
+                height,
+            } => {
+                self.set_rail_size(rail, length, width, height)?;
+                return Ok(Vec::new());
+            }
+            Command::DeleteRail { rail } => {
+                self.remove(rail)?;
+                return Ok(Vec::new());
+            }
             Command::PlaceDevice {
                 device,
                 structure,
