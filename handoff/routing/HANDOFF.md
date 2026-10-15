@@ -2,7 +2,7 @@
 
 ## State
 - Repo herepiggypiggypiggy/kopercad, my branch `claude/project-thread-euksez` (restart from main after each merge).
-- #334 (design + engine) MERGED. Follow-up PR from main on this branch: guards, merged points, reach rule. Next: duct fill, fill penalty, job order, problems.
+- Fill PR (plan, DuctFill, Problem) on this branch; earlier PRs merged. Next: storage request to WS-02, then wire list lengths.
 
 ## Resume
 ```

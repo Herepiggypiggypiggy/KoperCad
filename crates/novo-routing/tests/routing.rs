@@ -20,12 +20,18 @@ fn anchor(x: f64, y: f64, facing: Facing) -> Anchor {
 }
 
 fn job(id: u64, from: Anchor, to: Anchor) -> Job {
-    Job { id, from, to }
+    Job {
+        id,
+        from,
+        to,
+        diameter_mm: None,
+    }
 }
 
 const NO_SLACK: Rules = Rules {
     slack_mm: 0.0,
     max_stub_mm: 150.0,
+    fill_limit: 0.5,
 };
 
 #[test]
