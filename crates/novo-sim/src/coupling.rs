@@ -101,6 +101,18 @@ fn delay_of(project: &Project, device: Option<DeviceId>) -> f64 {
     seconds.max(0.0)
 }
 
+/// Whether a symbol is an on-delay or off-delay contact, which waits for the
+/// `delay` of its device.
+pub fn is_timer_contact(symbol: &SymbolInstance) -> bool {
+    contact_of(symbol).is_some_and(|(_, delay)| !matches!(delay, Delay::None))
+}
+
+/// The time a timer device is set to, in seconds (its `delay` property, or
+/// [`DEFAULT_DELAY`] when it has none).
+pub fn delay_seconds(project: &Project, device: DeviceId) -> f64 {
+    delay_of(project, Some(device))
+}
+
 fn name_of(symbol: &SymbolInstance) -> &str {
     symbol.symbol.0.rsplit('/').next().unwrap_or("")
 }

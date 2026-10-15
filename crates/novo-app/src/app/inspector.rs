@@ -32,6 +32,8 @@ pub(super) struct DeviceInfo {
     /// reading order.
     pub relations: Vec<Relation>,
     pub properties: Vec<(String, String)>,
+    /// The set time in seconds, for a device with a coil or a timer contact.
+    pub delay: Option<f64>,
 }
 
 /// One place the device is drawn: `NO 13-14 2.6`.
@@ -49,6 +51,7 @@ pub(super) struct InspectorState {
     device: Option<DeviceId>,
     tag: String,
     description: String,
+    delay: String,
     pub(super) filter: String,
 }
 
@@ -57,6 +60,7 @@ enum InspectorAction {
     Go(Place),
     Rename(String),
     Describe(String),
+    SetDelay(f64),
 }
 
 /// The one device the selection draws, if it draws exactly one.
@@ -106,6 +110,11 @@ pub(super) fn device_info(
         .iter()
         .map(|(k, v)| (k.clone(), value_text(v)))
         .collect();
+    let timed = project
+        .symbols()
+        .filter(|s| s.device() == Some(device))
+        .any(|s| novo_sim::is_coil(s) || novo_sim::is_timer_contact(s));
+    let delay = timed.then(|| novo_sim::delay_seconds(project, device));
     Some(DeviceInfo {
         device,
         tag: d.tag.to_string(),
@@ -113,6 +122,7 @@ pub(super) fn device_info(
         part,
         relations,
         properties,
+        delay,
     })
 }
 
@@ -176,6 +186,9 @@ impl NovoApp {
         if focused != Some(description_id) {
             state.description.clone_from(&info.description);
         }
+        if focused != Some(egui::Id::new("inspector_delay")) {
+            state.delay = info.delay.map(|d| d.to_string()).unwrap_or_default();
+        }
 
         let (pivot, at) = if left {
             (
@@ -215,6 +228,7 @@ impl NovoApp {
                     }
                 }
                 InspectorAction::Describe(text) => self.describe(device, text),
+                InspectorAction::SetDelay(seconds) => self.set_delay(device, seconds),
             }
         }
     }
@@ -241,6 +255,22 @@ impl NovoApp {
         }
         if description != old.1 {
             self.describe(device, description);
+        }
+    }
+
+    /// Sets the time of a coil or timer device, as one undo step.
+    pub(super) fn set_delay(&mut self, device: DeviceId, seconds: f64) {
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let Some(old) = doc.project().device(device) else {
+            return;
+        };
+        let label = format!("Set the time of {}", old.tag);
+        let value = Value::Text(format!("{seconds} s"));
+        match doc.transact(label, |tx| tx.set_property(device, "delay", Some(value))) {
+            Ok(((), changes)) => self.changed_outside_canvas(&changes),
+            Err(e) => self.message(Level::Error, format!("Could not change it: {e}")),
         }
     }
 
@@ -340,6 +370,24 @@ fn inspector_body(
         }
     }
 
+    if info.delay.is_some() {
+        ui.add_space(6.0);
+        widgets::section_label(ui, "Time (s)");
+        let delay = ui.add(
+            egui::TextEdit::singleline(&mut state.delay)
+                .id(egui::Id::new("inspector_delay"))
+                .hint_text("Seconds")
+                .desired_width(f32::INFINITY),
+        );
+        if committed(ui, &delay)
+            && let Ok(seconds) = state.delay.trim().parse::<f64>()
+            && seconds >= 0.0
+            && Some(seconds) != info.delay
+        {
+            actions.push(InspectorAction::SetDelay(seconds));
+        }
+    }
+
     ui.add_space(6.0);
     widgets::section_label(ui, "Part");
     if info.part.is_empty() {
@@ -405,5 +453,6 @@ mod tests {
         assert_eq!(info.tag, "-K1");
         assert_eq!(info.description, "Pump");
         assert!(info.part.is_empty() && info.relations.is_empty());
+        assert_eq!(info.delay, None, "no coil, no time field");
     }
 }
