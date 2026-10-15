@@ -1594,11 +1594,11 @@ impl SchematicView {
                         ui.separator();
                     }
                     if let Some(w) = &menu.wire_override {
-                        ui.menu_button("Override potential  ▸", |ui| {
+                        ui.add_enabled(false, egui::Button::new("Override potential"));
+                        ui.horizontal_wrapped(|ui| {
                             for (i, chip) in w.chips.iter().enumerate() {
                                 if ui.button(&chip.name).clicked() {
                                     chosen = Some(MenuChoice::WireOverride(i));
-                                    ui.close();
                                 }
                             }
                         });
