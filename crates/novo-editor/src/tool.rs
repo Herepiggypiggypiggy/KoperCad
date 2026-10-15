@@ -122,7 +122,8 @@ pub enum Tool {
     Cable(CableTool),
 }
 
-/// Drawing a cable: a line over wires (DESIGN.md §4, C). Every wire the line
+/// Drawing a cable: a line over wires (DESIGN.md, C in the keys table and
+/// the Cables drawer). Every wire the line
 /// touches joins the cable when the line is finished.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct CableTool {

@@ -134,7 +134,14 @@ pin makes it a real panel; pinned with nothing selected it shows the page.
 **Drawer (bottom, linked).** Three tabs, all tables of the same model with
 the drawing still in view:
 - **Terminals:** strips, levels, jumpers, spares.
-- **Cables:** cables, cores and shields.
+- **Cables:** cables, cores and shields. Besides the proposals at location
+  boundaries, C draws a cable by hand: the line takes every wire on the
+  current page that is on no cable yet and lies within a few millimetres of
+  it, whatever its locations. The cable gets the smallest usual type those
+  wires fit (L1, L2, L3, N and PE give 5G1.5; signals give a numbered
+  cable), the next free `-W` tag in the function of the first device a wire
+  lands on, and each wire on its core. It is one undo step, and a line that
+  touches no free wire says so in the status line.
 - **Devices:** every device with its part and location; on the Cabinet
   canvas, unplaced devices come first and the drawer opens there by
   default.
@@ -508,7 +515,8 @@ clear the selection.
 | Ctrl+Shift+F / F11 | Focus mode / full screen |
 | Q | Place (command surface in place mode at the pointer); held, the place wheel |
 | 1 to 9 | Favourite symbols, only while the place query is empty |
-| W | Connect, for chains (one connection is a drag from a pin); Shift+W switches Corners / Lines, also in the middle of a wire |
+| W | Connect, for chains (one connection is a drag from a pin); Shift+W switches Corners / Lines, also in the middle of a wire; in the middle of a wire Q ends it on the part under the pointer and Tab cycles that part's connection points (the highlighted pin is the one Q takes) |
+| C | Cable: click a line over the wires that belong together, Enter (or a click on the last point) finishes; the wires it touches go on one cable (see Cables, below) |
 | R / X | Rotate / mirror while placing or on the selection |
 | + / - | While dragging a row: wider / narrower pitch |
 | M | Move the selection with the pointer (a drag does the same, no key needed) |
@@ -540,8 +548,9 @@ the view, nothing moves. Otherwise the view centres on the target and zooms
 in to readable size (a closer zoom the user already had is kept), unless
 the target is too big to fit, when it zooms out just enough.
 
-There are no keys for T-pieces, terminals, cables or potentials, because
-the user does not place those. Corners are clicks in a wire being made,
+There are no keys for T-pieces, terminals or potentials, because the user
+does not place those. C draws a cable over wires that already exist; it
+places nothing itself. Corners are clicks in a wire being made,
 never symbols. "Repeat last tool" is the first item
 of the context menu on empty canvas and the first row of an empty command
 surface; it has no key, so Enter always means accept.
