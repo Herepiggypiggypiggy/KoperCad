@@ -338,9 +338,10 @@ impl Keymap {
         bind(Chord::plain(Escape), OutsideText, "edit.escape");
 
         // Draw.
-        // E (element) sits with W and R under the left hand; I stays as the
-        // older alias. The first chord is the one the `?` table shows.
-        bind(Chord::plain(l('e')), Canvas, "tool.place");
+        // Q sits at the left edge of the left hand (DESIGN: held Q opens the
+        // place wheel); I stays as the older alias. The first chord is the
+        // one the `?` table shows. E stays free.
+        bind(Chord::plain(l('q')), Canvas, "tool.place");
         bind(Chord::plain(l('i')), Canvas, "tool.place");
         bind(Chord::plain(l('w')), Canvas, "tool.connect");
         // Corners / Lines (DESIGN §4): works mid-wire. The app shell ignores
@@ -538,18 +539,20 @@ mod tests {
     }
 
     #[test]
-    fn place_is_on_e_for_the_left_hand_and_i_still_works() {
+    fn place_is_on_q_for_the_left_hand_and_i_still_works() {
         let map = Keymap::workflow();
         let place = |c| map.resolve(Chord::plain(Key::letter(c)), Focus::Canvas);
-        assert_eq!(place('e'), Some("tool.place"));
+        assert_eq!(place('q'), Some("tool.place"));
         assert_eq!(place('i'), Some("tool.place"));
-        // The `?` table shows E first, and E types into a field.
-        assert_eq!(map.shortcut_text("tool.place").as_deref(), Some("E"));
+        // E stays free.
+        assert_eq!(place('e'), None);
+        // The `?` table shows Q first, and Q types into a field.
+        assert_eq!(map.shortcut_text("tool.place").as_deref(), Some("Q"));
         assert_eq!(
-            map.resolve(Chord::plain(Key::letter('e')), Focus::TextField),
+            map.resolve(Chord::plain(Key::letter('q')), Focus::TextField),
             None
         );
-        // W wire, E place, R rotate: the drawing keys sit side by side.
+        // Q place, W wire, R rotate: the drawing keys sit under the left hand.
         assert_eq!(place('w'), Some("tool.connect"));
         assert_eq!(place('r'), Some("edit.rotate"));
         assert!(map.conflicts().is_empty());

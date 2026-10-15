@@ -10,7 +10,7 @@
 //!   the empty command field lists them by group (it is the menu).
 //! - [`language`]: Dutch words for every command; English and Dutch both
 //!   always match.
-//! - [`palette`]: the command field's search and grammar (Ctrl+K, E, Space) over commands, pages, devices and
+//! - [`palette`]: the command field's search and grammar (Ctrl+K, Q, Space) over commands, pages, devices and
 //!   symbols; an exact tag lists every location first (J6, J8).
 //! - [`insert`]: the I search: mnemonics (`no`, `nc`, `coil`), favourites
 //!   1 to 9, recents, child symbols (`K1 no`) and the IEC 81346-2 letter
