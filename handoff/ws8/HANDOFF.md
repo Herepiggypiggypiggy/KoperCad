@@ -29,7 +29,7 @@ Check that the PR is still open before pushing. After every push, message the re
 
 ## Decisions already made (do not re-open)
 - No manual corners or T-pieces, and no J key. Tab = next proposal, Enter = accept, R/X orient.
-- One command field: Ctrl+K at the top, I (place mode) and a tapped Space at the pointer. No menu bar. The empty field is the grouped menu.
+- One command field: Ctrl+K at the top, Q (place mode, I is an alias) and a tapped Space at the pointer. No menu bar. The empty field is the grouped menu.
 - Favourites 1-9 act only while the place field is empty.
 - Search builds on novo-core Project::search; aliases come from novo-symbols by_alias. Don't duplicate either.
 - The canvas owns Escape (escape_with) and Space tap-vs-hold; the editor owns preview before Enter.
