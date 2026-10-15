@@ -133,7 +133,7 @@ fn big_button(ui: &mut egui::Ui, text: impl Into<egui::WidgetText>) -> egui::Res
 
 fn progress_bar(ui: &mut egui::Ui, title: &str, p: Progress) {
     let fraction = (p.percent() / 100.0) as f32;
-    let mut text = format!("{title}: {}/{} passed", p.passed, p.total);
+    let mut text = format!("{title}: {}/{} done", p.done(), p.total);
     if p.failed > 0 {
         text.push_str(&format!(" · {} failed", p.failed));
     }
