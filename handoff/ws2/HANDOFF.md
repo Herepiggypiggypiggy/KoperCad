@@ -1,14 +1,19 @@
 # WS-02 Data model: handoff
 
-## State (2026-10-14 22:05 UTC)
-- #35, #45, #82, #101 merged. The repo copy of this handoff (handoff/ws2/)
+## State (2026-10-14 22:25 UTC)
+- #35, #45, #82, #101, #107 merged. The repo copy of this handoff (handoff/ws2/)
   is refreshed with each PR; the shared-folder copy may be newer.
-- Lead's order, one small PR each, each from main after the previous merges:
-  MoveToPage (open now, branch `claude/data-model-amzaxu`) -> Structure
-  enclosure + Dismissal -> page freeze. Local stack: `ws02-structure` 533afaf,
-  `ws02-freeze` 354f2d9 (patches 0006, 0007; built before #101, so expect a
-  small conflict in tests/format.rs: the extra `""` prefix argument).
-  After Structure merges tell WS-11; after freeze merges tell WS-10.
+- Open: Structure enclosure + Dismissal PR (branch `claude/data-model-amzaxu`).
+- Queued locally, rebased on main 70248a3: `ws02-freeze` 3890938 (page
+  freeze), then `ws02-blocks` 498e9a6 (blocks). One PR each, in that order,
+  each after the previous merges. After Structure merges tell WS-11; after
+  freeze merges tell WS-10.
+- Blocks follow-ups: definition update keeping overrides, marking overrides
+  automatically from edits, instance.page after a move.
+- #107 review notes (non-blocking): a `wires_leaving(items)` query so the
+  editor can show every wire a move would cut; no page-extent check on the
+  offset (WS-14); a text attached to a Device stays on the old page when the
+  move takes the device's last symbol off it (ask WS-06/WS-14).
 - CI (Actions) is down: reviewers' local checks are the signal.
 - #101 review notes (non-blocking, open): an isolated system's prefix also
   renames PE, though a control-transformer secondary usually shares the

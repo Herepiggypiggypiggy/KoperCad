@@ -1,5 +1,6 @@
 {"record":"part","id":3,"manufacturer":"Siemens","order_number":"3RT2015-1BB41","type_number":"3RT2015","description":"Contactor 3 kW 24 V DC","properties":{"width_mm":45.0}}
 {"record":"part","id":8,"manufacturer":"Phoenix Contact","order_number":"3031212","type_number":"","description":"","properties":{}}
+{"record":"structure","id":27,"tag":"+CAB1","description":"Main cabinet","enclosure":true,"properties":{}}
 {"record":"potential","id":9,"name":"L1","kind":"line","voltage":400.0,"properties":{}}
 {"record":"potential","id":24,"name":"L+","kind":"dc_positive","voltage":24.0,"properties":{}}
 {"record":"potential","id":25,"name":"L-","kind":"dc_negative","voltage":null,"properties":{}}
@@ -24,6 +25,7 @@
 {"record":"text","id":22,"page":1,"attached_to":{"kind":"symbol","id":11},"content":{"type":"device_tag"},"placement":{"offset":{"x":6.0,"y":-2.0},"rotation":"90","anchor":"middle_left"},"height_mm":3.5,"properties":{}}
 {"record":"text","id":23,"page":2,"content":{"type":"literal","text":"Control circuit"},"placement":{"offset":{"x":0.0,"y":0.0},"rotation":"0","anchor":"bottom_left"},"height_mm":2.5,"properties":{}}
 {"record":"potential_system","id":26,"name":"24 V DC","voltage":24.0,"members":[24,25],"properties":{}}
+{"record":"dismissal","id":28,"proposal":"terminal.suggest","subjects":[{"kind":"symbol","id":10}],"properties":{}}
 {"op":"insert","record":{"record":"page","id":1,"name":"1","title":"","kind":{"type":"schematic"},"format":{"size":"A3","landscape":true,"columns":10},"properties":{}}}
 {"op":"remove","record":{"record":"page","id":1,"name":"1","title":"","kind":{"type":"schematic"},"format":{"size":"A3","landscape":true,"columns":10},"properties":{}}}
 {"op":"update","before":{"record":"page","id":1,"name":"1","title":"","kind":{"type":"schematic"},"format":{"size":"A3","landscape":true,"columns":10},"properties":{}},"after":{"record":"page","id":1,"name":"1a","title":"","kind":{"type":"schematic"},"format":{"size":"A3","landscape":true,"columns":10},"properties":{}}}

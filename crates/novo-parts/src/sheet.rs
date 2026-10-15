@@ -531,6 +531,8 @@ fn noun(kind: EntityKind) -> &'static str {
         EntityKind::Part => "part",
         EntityKind::Text => "text",
         EntityKind::PotentialSystem => "supply system",
+        EntityKind::Structure => "structure",
+        EntityKind::Dismissal => "dismissal",
     }
 }
 
@@ -807,6 +809,8 @@ impl PropertySheet {
                     _ => "Text".into(),
                 },
                 Record::PotentialSystem(s) => format!("Supply system {}", s.name),
+                Record::Structure(s) => format!("Structure {}", s.tag),
+                Record::Dismissal(d) => format!("Dismissed {}", d.proposal),
             };
         }
         let kind = records[0].kind();

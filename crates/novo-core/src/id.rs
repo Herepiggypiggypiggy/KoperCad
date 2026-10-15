@@ -106,4 +106,8 @@ define_ids! {
     TextId => Text, "Text";
     /// A supply system grouping potentials (`400 V 3/N/PE AC`).
     PotentialSystemId => PotentialSystem, "PotentialSystem";
+    /// A node of the plant and location structure (`=A1`, `+CAB1`).
+    StructureId => Structure, "Structure";
+    /// A proposal the user declined, so it does not come back.
+    DismissalId => Dismissal, "Dismissal";
 }
