@@ -87,6 +87,9 @@ pub struct MoveTool {
     /// Shift: the wires on the moved pins stretch along instead of staying
     /// behind as open ends.
     pub carry: bool,
+    /// Shift+M chose to carry the wires: the choice stays after Shift is
+    /// released, so the per-frame default and Shift sync leaves it alone.
+    pub pinned: bool,
 }
 
 /// A label that is dragged on its own, leaving what it names where it is.
@@ -737,7 +740,9 @@ impl Editor {
     /// Whether the move in hand takes the wires along; the view sets it
     /// from the default and the Shift key while the move runs.
     pub fn set_move_carry(&mut self, carry: bool) {
-        if let Tool::Move(m) = &mut self.tool {
+        if let Tool::Move(m) = &mut self.tool
+            && !m.pinned
+        {
             m.carry = carry;
         }
     }
@@ -763,6 +768,7 @@ impl Editor {
             turns: 0,
             mirrored: false,
             carry,
+            pinned: false,
         }));
         true
     }
@@ -1490,7 +1496,13 @@ impl Editor {
                 true
             }
             EditorKey::Move => self.begin_move(selection),
-            EditorKey::MoveWithWires => self.begin_move_with(selection, true),
+            EditorKey::MoveWithWires => {
+                let began = self.begin_move_with(selection, true);
+                if let Tool::Move(m) = &mut self.tool {
+                    m.pinned = true;
+                }
+                began
+            }
             EditorKey::Delete => {
                 if selection.is_empty() {
                     return false;

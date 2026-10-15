@@ -2603,3 +2603,24 @@ fn a_wire_past_only_the_bounding_box_of_a_device_is_made() {
     // Far from the column the lamp is out of the way entirely: all three.
     assert_eq!(wires_past_a_lamp_at(400.0), 3);
 }
+
+#[test]
+fn shift_m_keeps_carrying_when_the_per_frame_sync_says_otherwise() {
+    use novo_editor::tool::Tool;
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/contacts/no", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    let a = symbol_at(&doc, page, p(40.0, 40.0));
+    editor.leave_tool();
+    editor.hover(&doc, page, p(40.0, 40.0), TOL);
+    assert!(editor.key(&mut doc, EditorKey::MoveWithWires, &[AnyId::Symbol(a)]));
+    // Shift released: the view would sync carry from the default (off).
+    editor.set_move_carry(false);
+    assert!(matches!(editor.tool(), Tool::Move(m) if m.carry && m.pinned));
+    // A plain M is not pinned and follows the sync.
+    editor.leave_tool();
+    assert!(editor.key(&mut doc, EditorKey::Move, &[AnyId::Symbol(a)]));
+    editor.set_move_carry(true);
+    assert!(matches!(editor.tool(), Tool::Move(m) if m.carry && !m.pinned));
+}
