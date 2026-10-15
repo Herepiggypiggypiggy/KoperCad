@@ -23,6 +23,7 @@ novo-symbols.workspace = true
 novo-editor.workspace = true
 novo-workflow.workspace = true
 novo-xref.workspace = true
+novo-parts.workspace = true
 novo-pdf.workspace = true
 novo-reports.workspace = true
 novo-checks.workspace = true

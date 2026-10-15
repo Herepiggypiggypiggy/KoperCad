@@ -76,6 +76,7 @@
 //! [`PageSetup::title_block_mm`] to match that frame.
 
 mod bom;
+pub mod commissioning;
 mod cutlist;
 mod defaults;
 mod devices;
