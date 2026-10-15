@@ -290,6 +290,10 @@ row of them, evenly spaced, as far as the pointer stretches.
   clearance, rounded up to the grid; a terminal takes its strip's pitch).
   `[` and `]` shrink or grow it by one grid step while dragging, and the
   hint shows the pitch. Every symbol sits on the grid.
+  Per kind: a terminal takes its strip's pitch (so a row of terminals
+  matches the strip it joins); fuses, breakers and contacts take their
+  width plus one grid step; anything else its bounding box plus one grid
+  step.
 - **Count.** The number of symbols is the pointer's distance divided by
   the pitch, rounded down, plus the first, at most 50. A ghost of every
   symbol is shown live with the count beside the pointer ("×6"). Moving
@@ -298,11 +302,16 @@ row of them, evenly spaced, as far as the pointer stretches.
   overlap another device and shows that position with the refusal mark of
   §5; it never places over something. Wires are not created between the
   symbols of a row.
+- **With the wheel and Q.** A symbol picked from the wheel or the place
+  surface is on the pointer like any other, so the row drag works the same.
+  A flick through the wheel only picks the symbol; the row is a second
+  press and drag.
 - **Release** places the whole row as one undo step. R and X during the
   drag turn or mirror all of them. Esc cancels the drag and keeps the
   symbol on the pointer.
 - **Tags and proposals.** Auto tags run in order from the press point
-  outward (-F1, -F2, ... or terminals 1, 2, ...), as if placed one by one.
+  outward (-F1, -F2, ...), as if placed one by one; terminals continue
+  the strip's numbering (-X1:1, -X1:2, ...).
   Each symbol raises its usual proposals; Tab and Enter work through them
   in row order, so the row is wired by accepting, not by hand.
 
