@@ -220,6 +220,18 @@ impl Session {
         self.file.path()
     }
 
+    /// Moves recovery files to `dir` (`None`: beside the project) from now
+    /// on, for a session that moved from a temporary file to a user's file
+    /// by [`Session::save_as`]. Any open recovery file is removed first;
+    /// the next autosave writes a fresh one. A folder that cannot be
+    /// created means beside the project.
+    pub fn set_recovery_dir(&mut self, dir: Option<&Path>) {
+        self.drop_autosave_quietly();
+        self.recovery_dir = dir
+            .filter(|dir| std::fs::create_dir_all(dir).is_ok())
+            .map(Path::to_owned);
+    }
+
     /// Where this session's recovery file is (or will be) written.
     pub fn recovery_path(&self) -> PathBuf {
         match &self.recovery_dir {
