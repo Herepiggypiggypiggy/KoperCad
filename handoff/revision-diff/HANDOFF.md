@@ -11,3 +11,10 @@ shows per-page counts only, so step 1 of ROADMAP.md replaces that with rows.
 Snapshot interface: `Backend::revision_snapshot(RevisionId) -> Option<Project>`
 already exists; no new interface needed for the diff. Not yet agreed with the
 sibling revisions thread whether a "compare two revisions" needs anything more.
+
+## How to reach it (project rule: an engine without a UI entry is not done)
+- Outline > Changes: named change rows, click reveals the item (palette `changes`). Done in the click-to-reveal PR.
+- Changes mode overlay: green added, amber changed, red ghost removed, legend, next/previous jump. Partly on main (#305, #323), polish next.
+- "Export change report (PDF)" command: change list per page between two revisions. Not built.
+- From/To pickers: owned by the Revision tracking thread (session_01SRPgw1A9Q7haevj9AyydQD); `compare` engine too, after #401 merges.
+- UI threads told: "UI integration: reports and checks", "Workspaces, menus and navigation".
