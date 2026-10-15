@@ -66,16 +66,7 @@ impl NovoApp {
             return;
         }
         let summary = Summary::of(self.problems());
-        let color = if summary.errors > 0 {
-            ui.visuals().error_fg_color
-        } else if summary.warnings > 0 {
-            ui.visuals().warn_fg_color
-        } else {
-            ui.visuals().weak_text_color()
-        };
-        let pill = egui::Button::new(egui::RichText::new(summary.pill_text()).color(color))
-            .corner_radius(10.0);
-        let response = ui.add(pill);
+        let response = novo_theme::widgets::issue_pill(ui, summary.errors, summary.warnings);
         self.wb.pill_rect = response.rect;
         if response.clicked() {
             self.show_issues(true);
