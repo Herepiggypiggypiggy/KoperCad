@@ -9,6 +9,7 @@ license.workspace = true
 novo-core.workspace = true
 novo-numbering.workspace = true
 novo-symbols.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

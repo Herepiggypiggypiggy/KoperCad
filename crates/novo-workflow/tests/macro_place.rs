@@ -2,7 +2,8 @@
 
 use novo_core::*;
 use novo_workflow::macro_place::{
-    PlaceOptions, WireNumbers, capture, free_origin, place_macro, preview, selection_origin,
+    PlaceOptions, WireNumbers, capture, captured_parts, free_origin, parts_from_json,
+    parts_to_json, place_macro, preview, selection_origin,
 };
 
 fn tag(text: &str) -> DeviceTag {
@@ -281,4 +282,73 @@ fn free_origin_clears_the_pins_of_a_wide_symbol() {
         free_origin(doc.project(), page, 20.0),
         Point::new(80.0, 4.0)
     );
+}
+
+#[test]
+fn parts_travel_with_the_macro_and_are_added_once() {
+    let (mut doc, page) = target();
+    let (items, _) = doc
+        .transact("Part", |tx| {
+            let q = tx.project().devices().next().unwrap().id;
+            let part = tx.add_part("ABB", "2CDS253001R0164")?;
+            tx.update::<Part>(part, |p| p.description = "MCB 1P 16A".into())?;
+            tx.assign_part(q, part)?;
+            Ok(tx
+                .project()
+                .symbols()
+                .map(|s| AnyId::from(s.id))
+                .collect::<Vec<_>>())
+        })
+        .unwrap();
+    let def = capture(doc.project(), "pair", "", &items).unwrap();
+    let parts = captured_parts(doc.project(), &def);
+    assert_eq!(parts.len(), 1);
+    assert_eq!(parts[0].order_number, "2CDS253001R0164");
+
+    // Through the file's JSON and into a project that has no such part.
+    let parts = parts_from_json(&parts_to_json(&parts));
+    assert_eq!(parts.len(), 1);
+    assert!(parts_from_json(&serde_json::json!([{"device": "x"}, 3])).is_empty());
+    let mut empty = Document::default();
+    let (p, _) = empty.transact("Page", |tx| tx.add_page("1")).unwrap();
+    let options = PlaceOptions {
+        parts,
+        ..PlaceOptions::default()
+    };
+    let place_here = |doc: &mut Document| {
+        let def = def.clone();
+        let options = options.clone();
+        doc.transact("Place", move |tx| {
+            place_macro(tx, def, p, Point::default(), &options)
+        })
+        .unwrap()
+        .0
+    };
+    let first = place_here(&mut empty);
+    assert_eq!(first.report.parts_assigned, 1);
+    place_here(&mut empty);
+    assert_eq!(empty.project().parts().count(), 1, "the part is added once");
+    let part = empty.project().parts().next().unwrap();
+    assert_eq!(part.description, "MCB 1P 16A");
+    let assigned = empty
+        .project()
+        .devices()
+        .filter(|d| d.parts == vec![part.id])
+        .count();
+    assert_eq!(assigned, 2);
+
+    // Without parts in the options none is assigned.
+    let plain = doc
+        .transact("Place", |tx| {
+            place_macro(
+                tx,
+                def.clone(),
+                page,
+                Point::new(100.0, 0.0),
+                &PlaceOptions::default(),
+            )
+        })
+        .unwrap()
+        .0;
+    assert_eq!(plain.report.parts_assigned, 0);
 }

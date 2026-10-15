@@ -2231,6 +2231,7 @@ dependencies = [
  "novo-numbering",
  "novo-symbols",
  "novo-tests",
+ "serde_json",
 ]
 
 [[package]]
