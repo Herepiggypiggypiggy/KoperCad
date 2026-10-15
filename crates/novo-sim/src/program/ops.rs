@@ -32,7 +32,10 @@ pub fn binary(op: BinOp, a: Value, b: Value) -> OpResult {
                 Or => x || y,
                 _ => x ^ y,
             }),
-            (Value::Real(_), _) | (_, Value::Real(_)) | (Value::Time(_), _) | (_, Value::Time(_)) => {
+            (Value::Real(_), _)
+            | (_, Value::Real(_))
+            | (Value::Time(_), _)
+            | (_, Value::Time(_)) => {
                 return Err("AND, OR and XOR need BOOL or integers".into());
             }
             (x, y) => {
@@ -140,7 +143,11 @@ pub fn call(func: &Func, args: &[Value]) -> OpResult {
             }
             real_fn(
                 args,
-                if *func == Func::Ln { f64::ln } else { f64::log10 },
+                if *func == Func::Ln {
+                    f64::ln
+                } else {
+                    f64::log10
+                },
             )
         }
         Func::Exp => real_fn(args, f64::exp),
@@ -164,8 +171,16 @@ pub fn call(func: &Func, args: &[Value]) -> OpResult {
         }
         Func::Limit => {
             let (mn, x, mx) = (args[0], args[1], args[2]);
-            let low = if binary(BinOp::Lt, x, mn)?.as_bool() { mn } else { x };
-            Ok(if binary(BinOp::Gt, low, mx)?.as_bool() { mx } else { low })
+            let low = if binary(BinOp::Lt, x, mn)?.as_bool() {
+                mn
+            } else {
+                x
+            };
+            Ok(if binary(BinOp::Gt, low, mx)?.as_bool() {
+                mx
+            } else {
+                low
+            })
         }
         Func::Sel => Ok(if args[0].as_bool() { args[2] } else { args[1] }),
         Func::Mux => {

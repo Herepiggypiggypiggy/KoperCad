@@ -88,9 +88,10 @@ impl Func {
             "ROR" => (Func::Ror, 2, 2),
             _ => {
                 // X_TO_Y, or TO_Y
-                let target = upper.rsplit_once("_TO_").map(|(_, y)| y).or_else(|| {
-                    upper.strip_prefix("TO_")
-                })?;
+                let target = upper
+                    .rsplit_once("_TO_")
+                    .map(|(_, y)| y)
+                    .or_else(|| upper.strip_prefix("TO_"))?;
                 (Func::To(DataType::parse(target)?), 1, 1)
             }
         })

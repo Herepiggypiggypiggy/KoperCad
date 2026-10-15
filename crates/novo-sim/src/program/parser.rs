@@ -151,8 +151,7 @@ impl Parser<'_> {
     }
 
     fn at_block_end(&self) -> bool {
-        matches!(self.tok(), Tok::Eof)
-            || BLOCK_END.iter().any(|kw| self.is_kw(kw))
+        matches!(self.tok(), Tok::Eof) || BLOCK_END.iter().any(|kw| self.is_kw(kw))
     }
 
     /// The source text of tokens `from..to` (exclusive of `to`).
@@ -229,7 +228,11 @@ impl Parser<'_> {
 
     fn declaration(&mut self, class: VarClass, constant: bool) -> Res<()> {
         let line = self.line();
-        let mut names = vec![(self.line(), self.toks[self.pos].col, self.ident("a variable name")?)];
+        let mut names = vec![(
+            self.line(),
+            self.toks[self.pos].col,
+            self.ident("a variable name")?,
+        )];
         while self.accept(&Tok::Comma) {
             names.push((
                 self.line(),
@@ -243,7 +246,10 @@ impl Parser<'_> {
                 return self.err("AT can only follow a single variable name");
             }
             let Tok::Addr(a) = self.tok().clone() else {
-                return self.err(format!("expected an address after AT, found {}", self.tok()));
+                return self.err(format!(
+                    "expected an address after AT, found {}",
+                    self.tok()
+                ));
             };
             self.advance();
             self.addresses.insert(a);
@@ -291,7 +297,10 @@ impl Parser<'_> {
                     while *self.tok() != Tok::RParen {
                         let pname = self.ident("a parameter name")?;
                         let Some(Field::In(i)) = kind.field(&pname) else {
-                            return self.err(format!("{kind:?} has no input `{pname}`", kind = kind.name()));
+                            return self.err(format!(
+                                "{kind:?} has no input `{pname}`",
+                                kind = kind.name()
+                            ));
                         };
                         self.expect(&Tok::Assign)?;
                         let e = self.expr()?;
@@ -311,7 +320,8 @@ impl Parser<'_> {
             if self.names.contains_key(&name.to_ascii_lowercase()) {
                 return Err(ParseError::new(l, c, format!("`{name}` is declared twice")));
             }
-            self.names.insert(name.to_ascii_lowercase(), self.vars.len());
+            self.names
+                .insert(name.to_ascii_lowercase(), self.vars.len());
             self.vars.push(VarDecl {
                 name,
                 ty: ty.clone(),
@@ -572,7 +582,9 @@ impl Parser<'_> {
                         ));
                     }
                     if matches!(self.vars[slot].address, Some(a) if a.space == Space::Input) {
-                        return self.err(format!("`{name}` is bound to an input and cannot be written"));
+                        return self.err(format!(
+                            "`{name}` is bound to an input and cannot be written"
+                        ));
                     }
                     Ok(Target::Var(slot))
                 }
@@ -1008,7 +1020,11 @@ impl Parser<'_> {
                 ));
             }
             Some(m) => {
-                let kind = if m == 'P' { FbKind::RTrig } else { FbKind::FTrig };
+                let kind = if m == 'P' {
+                    FbKind::RTrig
+                } else {
+                    FbKind::FTrig
+                };
                 let slot = self.hidden(VarType::Block(kind));
                 out.push(self.stmt(
                     line,

@@ -214,10 +214,7 @@ mod tests {
             Some(Value::Int(-32768))
         );
         assert_eq!(DataType::Byte.coerce(Value::Int(257)), Some(Value::Int(1)));
-        assert_eq!(
-            DataType::Int.coerce(Value::Real(2.5)),
-            Some(Value::Int(3))
-        );
+        assert_eq!(DataType::Int.coerce(Value::Real(2.5)), Some(Value::Int(3)));
         assert_eq!(DataType::Bool.coerce(Value::Time(3)), None);
     }
 

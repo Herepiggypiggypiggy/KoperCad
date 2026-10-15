@@ -88,10 +88,8 @@ impl FbKind {
     }
 
     pub fn field(self, name: &str) -> Option<Field> {
-        let find = |list: &[(&str, DataType)]| {
-            list.iter()
-                .position(|(n, _)| n.eq_ignore_ascii_case(name))
-        };
+        let find =
+            |list: &[(&str, DataType)]| list.iter().position(|(n, _)| n.eq_ignore_ascii_case(name));
         find(self.inputs())
             .map(Field::In)
             .or_else(|| find(self.outputs()).map(Field::Out))

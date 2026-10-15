@@ -13,14 +13,14 @@ pub enum Tok {
     /// A time literal in microseconds.
     Time(i64),
     Addr(Address),
-    Assign,    // :=
-    Arrow,     // =>
-    LParen,    // (
-    RParen,    // )
-    LBracket,  // [
-    RBracket,  // ]
-    LBrace,    // {
-    RBrace,    // }
+    Assign,   // :=
+    Arrow,    // =>
+    LParen,   // (
+    RParen,   // )
+    LBracket, // [
+    RBracket, // ]
+    LBrace,   // {
+    RBrace,   // }
     Comma,
     Semi,
     Colon,
@@ -111,7 +111,11 @@ pub struct ParseError {
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "line {}, column {}: {}", self.line, self.col, self.message)
+        write!(
+            f,
+            "line {}, column {}: {}",
+            self.line, self.col, self.message
+        )
     }
 }
 
@@ -263,7 +267,9 @@ impl Lexer<'_> {
             text.push_str(&self.digits(10));
         }
         if real {
-            text.parse().map(Tok::Real).or_else(|_| self.err("bad number"))
+            text.parse()
+                .map(Tok::Real)
+                .or_else(|_| self.err("bad number"))
         } else {
             text.parse()
                 .map(Tok::Int)
@@ -338,7 +344,9 @@ impl Lexer<'_> {
             Some(a) => Ok(Tok::Addr(a)),
             None => {
                 self.pos = start;
-                self.err(format!("`{text}` is not an address (use %IX0.0, %QW2, %MX1.0)"))
+                self.err(format!(
+                    "`{text}` is not an address (use %IX0.0, %QW2, %MX1.0)"
+                ))
             }
         }
     }

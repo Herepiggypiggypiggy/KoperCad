@@ -231,6 +231,11 @@ pub const DUTCH: &[Aliases] = &[
         &["live potentialen tonen", "contacten sluiten", "spanning"],
     ),
     nl(
+        "sim.plc_program",
+        &["plc programma"],
+        &["ladder", "programma draaien", "plc simuleren"],
+    ),
+    nl(
         "view.toggle_marks",
         &[],
         &["markeringen tonen of verbergen"],

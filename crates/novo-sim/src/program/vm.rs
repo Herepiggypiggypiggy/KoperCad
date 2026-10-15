@@ -44,6 +44,15 @@ enum Flow {
     Return,
 }
 
+/// One row of a watch table.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Watch {
+    pub name: String,
+    pub ty: String,
+    pub value: String,
+    pub address: Option<Address>,
+}
+
 /// A program with its state: variables, block instances, the I/O image and
 /// the clock.
 #[derive(Debug, Clone)]
@@ -203,6 +212,40 @@ impl Runtime {
             },
             Cell::Block(_) => false,
         }
+    }
+
+    /// Every variable the author declared, for a watch table: its name, its
+    /// type and its value as text (a block shows all its parameters).
+    pub fn watch(&self) -> Vec<Watch> {
+        self.program
+            .vars
+            .iter()
+            .zip(&self.cells)
+            .filter(|(d, _)| !d.hidden)
+            .map(|(d, cell)| {
+                let (ty, value) = match cell {
+                    Cell::Val(t, v) => (t.name().to_owned(), v.to_string()),
+                    Cell::Block(b) => (
+                        b.kind.name().to_owned(),
+                        b.kind
+                            .inputs()
+                            .iter()
+                            .map(|(n, _)| *n)
+                            .zip(&b.inputs)
+                            .chain(b.kind.outputs().iter().map(|(n, _)| *n).zip(&b.outputs))
+                            .map(|(n, v)| format!("{n}={v}"))
+                            .collect::<Vec<_>>()
+                            .join(" "),
+                    ),
+                };
+                Watch {
+                    name: d.name.clone(),
+                    ty,
+                    value,
+                    address: d.address,
+                }
+            })
+            .collect()
     }
 
     /// A parameter of a block instance: `block_value("t1", "ET")`.

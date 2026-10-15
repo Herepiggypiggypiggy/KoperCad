@@ -26,6 +26,7 @@ mod parts;
 mod parts_import;
 mod pdf;
 mod plc;
+mod plc_run;
 mod potentials;
 mod preferences;
 mod project_settings;
@@ -776,6 +777,7 @@ impl NovoApp {
             self.tool_dock(&ctx, canvas_rect);
             self.inspector(&ctx, canvas_rect);
             self.live_view(&ctx, canvas_rect);
+            self.plc_window(&ctx);
             self.tour_watch(&ctx);
             self.walkthrough_card(&ctx, canvas_rect);
             self.changes_card(&ctx, canvas_rect);

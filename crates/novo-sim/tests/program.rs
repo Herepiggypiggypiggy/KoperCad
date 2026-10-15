@@ -59,7 +59,10 @@ fn seal_in_holds_after_the_button_is_released() {
     assert!(!r.output_bool(a("%QX0.0")), "overload trips it");
     r.set_input_bool(a("%IX0.2"), false);
     r.scan(10_000).unwrap();
-    assert!(!r.output_bool(a("%QX0.0")), "and it does not restart by itself");
+    assert!(
+        !r.output_bool(a("%QX0.0")),
+        "and it does not restart by itself"
+    );
 }
 
 #[test]
@@ -566,14 +569,30 @@ fn runaway_loops_are_stopped() {
 #[test]
 fn mistakes_are_reported_with_their_place() {
     let cases = [
-        ("VAR x : BOOL; END_VAR\ny := TRUE;", "line 2", "`y` is not declared"),
+        (
+            "VAR x : BOOL; END_VAR\ny := TRUE;",
+            "line 2",
+            "`y` is not declared",
+        ),
         ("VAR x : INT; END_VAR\nRUNG [x] -- (x);", "line 2", "BOOL"),
-        ("VAR x : BOOL; END_VAR\nx := ;", "line 2", "expected a value"),
+        (
+            "VAR x : BOOL; END_VAR\nx := ;",
+            "line 2",
+            "expected a value",
+        ),
         ("VAR x : FLOAT; END_VAR", "line 1", "unknown type"),
-        ("VAR i AT %IX0.0 : BOOL; END_VAR\ni := TRUE;", "line 2", "input"),
+        (
+            "VAR i AT %IX0.0 : BOOL; END_VAR\ni := TRUE;",
+            "line 2",
+            "input",
+        ),
         ("VAR x : BOOL; x : BOOL; END_VAR", "line 1", "twice"),
         ("VAR t : TON; END_VAR\nt(Q := TRUE);", "line 2", "no input"),
-        ("VAR x : INT; END_VAR\nx := ABS(1, 2);", "line 2", "argument"),
+        (
+            "VAR x : INT; END_VAR\nx := ABS(1, 2);",
+            "line 2",
+            "argument",
+        ),
         ("VAR x : BOOL; END_VAR\nIF x THEN x := TRUE;", "", "END_IF"),
     ];
     for (src, place, what) in cases {

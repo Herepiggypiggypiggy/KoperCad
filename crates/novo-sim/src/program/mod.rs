@@ -11,6 +11,7 @@
 
 mod address;
 mod ast;
+mod bench;
 mod blocks;
 mod lexer;
 mod model;
@@ -21,8 +22,9 @@ mod vm;
 
 pub use address::{Address, Size, Space};
 pub use ast::{VarClass, VarDecl, VarType};
+pub use bench::{Bench, ClosedLoop, IoMap, Unbound};
 pub use blocks::FbKind;
 pub use lexer::ParseError;
 pub use model::{Element, ElementKind, Program, Rung};
 pub use value::{DataType, Value, format_time};
-pub use vm::{Runtime, RuntimeError};
+pub use vm::{Runtime, RuntimeError, Watch};
