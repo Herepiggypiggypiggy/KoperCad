@@ -4,6 +4,7 @@ use novo_core::{CabinetPlacement, DeviceTag, Project, Rail, Value};
 
 use super::cabinet::Ask;
 use super::gate1_tests::Drive;
+use super::workspace::Workspace;
 use crate::actions::Action;
 
 fn add_cabinet(d: &mut Drive) {
@@ -43,7 +44,7 @@ fn place_all_previews_then_accepts_as_one_undo_step() {
     add_cabinet(&mut d);
     d.app.run(&ctx, Action::ShowCabinet);
     d.frame();
-    assert!(d.app.cabinet_open);
+    assert_eq!(d.app.workspace(), Workspace::Cabinet);
     assert_eq!(
         d.app.cabinet.location.as_ref().unwrap().to_string(),
         "+CAB1"
@@ -80,7 +81,7 @@ fn place_all_previews_then_accepts_as_one_undo_step() {
     assert_eq!(project(&d).all::<Rail>().count(), 0);
 
     d.app.run(&ctx, Action::ShowSchematic);
-    assert!(!d.app.cabinet_open);
+    assert_eq!(d.app.workspace(), Workspace::Schematic);
 }
 
 #[test]
@@ -135,9 +136,9 @@ fn picking_a_page_leaves_the_cabinet() {
     let page = d.app.current_page.expect("a page is shown");
     d.app.run(&ctx, Action::ShowCabinet);
     d.frame();
-    assert!(d.app.cabinet_open);
+    assert_eq!(d.app.workspace(), Workspace::Cabinet);
     d.app.show_page(page);
-    assert!(!d.app.cabinet_open);
+    assert_eq!(d.app.workspace(), Workspace::Schematic);
 }
 
 #[test]
@@ -173,10 +174,10 @@ fn the_table_face_toggles_and_problems_are_in_words() {
     d.app.run(&ctx, Action::NewProject);
     d.frame();
     d.app.run_command(&ctx, "view.cabinet_table", None);
-    assert!(d.app.cabinet_open && d.app.cabinet.table);
+    assert!(d.app.workspace() == Workspace::Cabinet && d.app.cabinet.table);
     d.frame();
     d.app.run_command(&ctx, "view.cabinet_table", None);
-    assert!(d.app.cabinet_open && !d.app.cabinet.table);
+    assert!(d.app.workspace() == Workspace::Cabinet && !d.app.cabinet.table);
     d.frame();
 
     // Rotate and delete from the palette go to the Cabinet, not the page.
@@ -324,4 +325,30 @@ fn table_rows_sort_numbers_by_value() {
     let mut tags = ["-K10", "-K2", "-Q1", "-K1"];
     tags.sort_by_key(|t| super::cabinet::natural_key(t));
     assert_eq!(tags, ["-K1", "-K2", "-K10", "-Q1"]);
+}
+
+#[test]
+fn a_problem_row_selects_its_device_on_the_plate() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    d.app.cabinet.table = true;
+    d.app.cabinet_ask(Ask::Select(7), None, None, &[]);
+    assert!(!d.app.cabinet.table);
+    assert_eq!(
+        d.app
+            .cabinet
+            .view
+            .selection
+            .ids()
+            .iter()
+            .filter_map(|i| novo_canvas::cabinet::box_of(*i))
+            .collect::<Vec<_>>(),
+        vec![7]
+    );
 }
