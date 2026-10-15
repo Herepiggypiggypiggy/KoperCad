@@ -1291,8 +1291,9 @@ impl SchematicView {
             self.editor
                 .key(document, EditorKey::MoveWithWires, &selection);
         }
-        // Arrow keys nudge the selection one grid step; Shift (or the Moving
-        // preference) takes the wires along, as when dragging.
+        // Shift+arrows nudge the selection one grid step (DESIGN.md §4: plain
+        // arrows stay with the terminal strip keys). The wires follow the
+        // "Moving a symbol" preference; Ctrl+Shift+arrow does the other.
         if !selection.is_empty() && !matches!(self.editor.tool(), crate::tool::Tool::Move(_)) {
             let step = self.editor.grid;
             for (key, delta) in [
@@ -1301,14 +1302,14 @@ impl SchematicView {
                 (Key::ArrowUp, Point::new(0.0, -step)),
                 (Key::ArrowDown, Point::new(0.0, step)),
             ] {
-                let (plain, shifted) = ctx.input_mut(|i| {
+                let (plain, flipped) = ctx.input_mut(|i| {
                     (
-                        i.consume_key(egui::Modifiers::NONE, key),
                         i.consume_key(egui::Modifiers::SHIFT, key),
+                        i.consume_key(egui::Modifiers::SHIFT | egui::Modifiers::COMMAND, key),
                     )
                 });
-                if plain || shifted {
-                    let carry = shifted != self.move_carries;
+                if plain || flipped {
+                    let carry = flipped != self.move_carries;
                     self.editor
                         .nudge_selection(document, &selection, delta, carry);
                 }
