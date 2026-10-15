@@ -3,3 +3,4 @@
 2026-10-15 18:55 UTC added UI entry section; renderer thread asks to hold the importer until owner decision (s12).
 2026-10-15 18:58 UTC owner decision: maker meshes wanted; #449 normal review.
 2026-10-15 19:40 UTC #449 merged. Follow-up: Fallback::message()/can_retry() for the UI threads.
+2026-10-15 19:50 UTC reviewer C found parse.rs defects (recursion depth, id overflow); fixed in #506.
