@@ -1,0 +1,173 @@
+//! Placing a row by press and drag (docs/DESIGN.md §4, "Placing a row").
+//!
+//! With a symbol on the pointer, a press and drag places evenly spaced
+//! copies as far as the pointer stretches. These are the pure pieces: the
+//! drag state, the pitch, the count and the stop before a collision.
+
+use novo_core::{PageId, Placement, Point, Project};
+use novo_symbols::Symbol;
+
+use crate::catalog::Catalog;
+
+/// The most symbols one drag places.
+pub const MAX_COUNT: usize = 50;
+
+/// Two positions this close along an axis do not overlap (touching is fine).
+const TOUCH: f64 = 1e-6;
+
+/// A row drag in progress.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RowDrag {
+    /// Where the button went down, on the grid: the first symbol.
+    pub press: Point,
+    /// The axis the row runs along; switches only past the hysteresis.
+    pub horizontal: bool,
+    /// Grid steps added to (or taken from) the default pitch.
+    pub extra_steps: i32,
+    /// Where the pointer is now.
+    pub to: Point,
+}
+
+impl RowDrag {
+    pub fn new(press: Point) -> Self {
+        RowDrag {
+            press,
+            horizontal: true,
+            extra_steps: 0,
+            to: press,
+        }
+    }
+
+    /// Follows the pointer; the axis flips only when the other distance
+    /// leads by more than `hysteresis`.
+    pub fn follow(&mut self, pointer: Point, hysteresis: f64) {
+        self.to = pointer;
+        let (dx, dy) = (
+            (pointer.x - self.press.x).abs(),
+            (pointer.y - self.press.y).abs(),
+        );
+        if self.horizontal && dy > dx + hysteresis {
+            self.horizontal = false;
+        } else if !self.horizontal && dx > dy + hysteresis {
+            self.horizontal = true;
+        }
+    }
+
+    /// Signed distance of the pointer from the press along the row's axis.
+    fn along(&self) -> f64 {
+        if self.horizontal {
+            self.to.x - self.press.x
+        } else {
+            self.to.y - self.press.y
+        }
+    }
+}
+
+/// The page-space box `(min, max)` of `symbol` placed as `placement`.
+pub fn bounds_on_page(symbol: &Symbol, placement: &Placement) -> (Point, Point) {
+    let (lo, hi) = symbol.bounds();
+    let corners = [
+        placement.apply(Point::new(lo[0], lo[1])),
+        placement.apply(Point::new(hi[0], lo[1])),
+        placement.apply(Point::new(lo[0], hi[1])),
+        placement.apply(Point::new(hi[0], hi[1])),
+    ];
+    let min = |f: fn(&Point) -> f64| corners.iter().map(f).fold(f64::INFINITY, f64::min);
+    let max = |f: fn(&Point) -> f64| corners.iter().map(f).fold(f64::NEG_INFINITY, f64::max);
+    (
+        Point::new(min(|p| p.x), min(|p| p.y)),
+        Point::new(max(|p| p.x), max(|p| p.y)),
+    )
+}
+
+/// The distance between neighbours: the symbol's extent along the axis plus
+/// one grid step (plus the user's `extra_steps`), rounded up to the grid.
+pub fn pitch(symbol: &Symbol, placement: &Placement, row: &RowDrag, grid: f64) -> f64 {
+    let (lo, hi) = bounds_on_page(symbol, placement);
+    let extent = if row.horizontal {
+        hi.x - lo.x
+    } else {
+        hi.y - lo.y
+    };
+    let steps = ((extent / grid).ceil() as i32 + 1 + row.extra_steps).max(1);
+    f64::from(steps) * grid
+}
+
+fn overlaps(a: (Point, Point), b: (Point, Point)) -> bool {
+    a.0.x < b.1.x - TOUCH && b.0.x < a.1.x - TOUCH && a.0.y < b.1.y - TOUCH && b.0.y < a.1.y - TOUCH
+}
+
+/// Where the symbols of the row go, and the first position that was left
+/// out because it would overlap another device (if the row stopped short).
+pub fn positions(
+    project: &Project,
+    catalog: &Catalog,
+    page: PageId,
+    symbol: &Symbol,
+    placement: Placement,
+    row: &RowDrag,
+    grid: f64,
+) -> (Vec<Point>, Option<Point>) {
+    let pitch = pitch(symbol, &placement, row, grid);
+    let along = row.along();
+    let sign = if along < 0.0 { -1.0 } else { 1.0 };
+    let wanted = ((along.abs() / pitch).floor() as usize + 1).min(MAX_COUNT);
+    let others: Vec<(Point, Point)> = project
+        .page_contents(page)
+        .symbols
+        .iter()
+        .filter_map(|id| project.symbol(*id))
+        .filter_map(|s| {
+            catalog
+                .get(&s.symbol.0)
+                .map(|def| bounds_on_page(def, &s.placement))
+        })
+        .collect();
+    let mut out = Vec::new();
+    for k in 0..wanted {
+        let step = k as f64 * pitch * sign;
+        let origin = if row.horizontal {
+            Point::new(row.press.x + step, row.press.y)
+        } else {
+            Point::new(row.press.x, row.press.y + step)
+        };
+        let here = bounds_on_page(
+            symbol,
+            &Placement {
+                origin,
+                ..placement
+            },
+        );
+        if others.iter().any(|o| overlaps(here, *o)) {
+            return (out, Some(origin));
+        }
+        out.push(origin);
+    }
+    (out, None)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn p(x: f64, y: f64) -> Point {
+        Point::new(x, y)
+    }
+
+    #[test]
+    fn the_axis_flips_only_past_the_hysteresis() {
+        let mut row = RowDrag::new(p(0.0, 0.0));
+        row.follow(p(20.0, 5.0), 8.0);
+        assert!(row.horizontal);
+        // The vertical distance leads by 6: still horizontal.
+        row.follow(p(10.0, 16.0), 8.0);
+        assert!(row.horizontal);
+        // By 14: it switches, and back only past 8 again.
+        row.follow(p(10.0, 24.0), 8.0);
+        assert!(!row.horizontal);
+        row.follow(p(30.0, 24.0), 8.0);
+        assert!(!row.horizontal);
+        row.follow(p(40.0, 24.0), 8.0);
+        assert!(row.horizontal);
+    }
+}

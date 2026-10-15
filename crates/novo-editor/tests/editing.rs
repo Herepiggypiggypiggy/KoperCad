@@ -1997,24 +1997,66 @@ fn carrying_a_contact_over_a_coil_says_it_will_link() {
 }
 
 #[test]
-fn carrying_a_contact_over_a_coil_says_it_will_link() {
+fn a_row_drag_places_evenly_spaced_symbols_as_one_undo_step() {
     let (mut doc, page, mut editor) = setup();
     editor.auto_connect = false;
-    editor.begin_place("iec/coils/relay", None);
-    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.begin_place("iec/contacts/no", None);
+    editor.hover(&doc, page, p(40.0, 40.0), TOL);
+    assert!(editor.begin_row());
+    editor.row_follow(p(200.0, 44.0), 8.0);
+    let depth = doc.undo_depth();
+    assert_eq!(editor.end_row(&mut doc, page), Clicked::Edited);
+    assert_eq!(doc.undo_depth(), depth + 1);
+    let mut xs: Vec<f64> = doc
+        .project()
+        .symbols()
+        .map(|s| s.placement.origin.x)
+        .collect();
+    xs.sort_by(f64::total_cmp);
+    assert!(xs.len() >= 3, "{xs:?}");
+    assert_eq!(xs[0], 40.0);
+    let pitch = xs[1] - xs[0];
+    assert!(pitch > 0.0 && xs.windows(2).all(|w| (w[1] - w[0] - pitch).abs() < 1e-9));
+    assert!(*xs.last().unwrap() <= 200.0);
+    // Auto tags in order, as if placed one by one.
+    assert_eq!(tags(&doc).len(), xs.len());
+    doc.undo().unwrap();
+    assert_eq!(doc.project().symbols().count(), 0);
+    // The symbol is still on the pointer.
+    assert!(matches!(editor.tool(), Tool::Place(_)));
+}
+
+#[test]
+fn a_row_stops_before_another_device_and_a_short_drag_places_one() {
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
     editor.begin_place("iec/contacts/no", None);
     editor.click(&mut doc, page, p(120.0, 40.0), TOL);
     editor.leave_tool();
-    let coil = symbol_at(&doc, page, p(40.0, 40.0));
-    let contact = symbol_at(&doc, page, p(120.0, 40.0));
-    editor.hover(&doc, page, p(120.0, 40.0), TOL);
-    assert!(editor.begin_move(&[contact.into()]));
-    let before = editor.status(&doc, page);
-    editor.hint_link(doc.project(), &[contact.into()], Some(coil.into()));
-    let status = editor.status(&doc, page);
-    assert!(status.starts_with("Link to "), "{status}");
-    assert_ne!(status, before);
-    // Over anything else the ordinary hint returns.
-    editor.hint_link(doc.project(), &[contact.into()], Some(contact.into()));
-    assert_eq!(editor.status(&doc, page), before);
+    editor.begin_place("iec/contacts/no", None);
+    editor.hover(&doc, page, p(40.0, 40.0), TOL);
+    editor.begin_row();
+    editor.row_follow(p(300.0, 40.0), 8.0);
+    editor.end_row(&mut doc, page);
+    let mut xs: Vec<f64> = doc
+        .project()
+        .symbols()
+        .map(|s| s.placement.origin.x)
+        .collect();
+    xs.sort_by(f64::total_cmp);
+    assert!(xs.iter().filter(|&&x| x >= 120.0).count() == 1, "{xs:?}");
+    // A drag that never passes one pitch is the single symbol.
+    let n = doc.project().symbols().count();
+    editor.hover(&doc, page, p(40.0, 100.0), TOL);
+    editor.begin_row();
+    editor.row_follow(p(42.0, 100.0), 8.0);
+    editor.end_row(&mut doc, page);
+    assert_eq!(doc.project().symbols().count(), n + 1);
+    // Esc cancels the drag and keeps the symbol in hand.
+    editor.hover(&doc, page, p(40.0, 160.0), TOL);
+    editor.begin_row();
+    editor.row_follow(p(200.0, 160.0), 8.0);
+    assert!(editor.cancel_step());
+    assert!(matches!(editor.tool(), Tool::Place(_)));
+    assert_eq!(doc.project().symbols().count(), n + 1);
 }

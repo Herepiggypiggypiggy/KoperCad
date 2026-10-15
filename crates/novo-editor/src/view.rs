@@ -37,6 +37,9 @@ const HINT_PX: f32 = 11.0;
 const HOLD_PX: f32 = 24.0;
 /// A pin wins over the symbol body within this many screen points.
 const PIN_RADIUS: f32 = 10.0;
+/// A row drag switches axis only when the other distance leads by this
+/// many screen points (DESIGN.md §4).
+const ROW_HYSTERESIS_PX: f32 = 8.0;
 /// First preview item id; previews count down from here.
 const PREVIEW_BASE: u64 = u64::MAX - 16;
 
@@ -446,6 +449,47 @@ impl SchematicView {
                 // wire drag must not also box-select on release.
                 self.canvas.escape();
             }
+        }
+        // A press and drag with a symbol on the pointer places a row
+        // (DESIGN.md §4): the first symbol at the press, the rest as far as
+        // the pointer stretches.
+        if response.drag_started_by(egui::PointerButton::Primary)
+            && !self.swallow
+            && !self.popup_open()
+            && let Some(o) = ui.input(|i| i.pointer.press_origin())
+        {
+            let local = o - rect.min;
+            let w = self
+                .canvas
+                .viewport
+                .screen_to_world(Vec2::new(local.x, local.y));
+            self.editor.hover(document, page, point(w), tolerance);
+            if self.editor.begin_row() {
+                self.canvas.escape();
+            }
+        }
+        if self.editor.row_active()
+            && let Some(w) = out.cursor_raw
+        {
+            self.editor.row_follow(
+                point(w),
+                f64::from(ROW_HYSTERESIS_PX / self.canvas.viewport.zoom),
+            );
+            let (more, less) = ui.input(|i| {
+                (
+                    i.key_pressed(Key::Plus) || i.key_pressed(Key::Equals),
+                    i.key_pressed(Key::Minus),
+                )
+            });
+            if more {
+                self.editor.row_step(1);
+            }
+            if less {
+                self.editor.row_step(-1);
+            }
+        }
+        if self.editor.row_active() && response.drag_stopped_by(egui::PointerButton::Primary) {
+            self.editor.end_row(document, page);
         }
         // Press on an object, drag: it is selected and moves with the
         // pointer, no M needed (DESIGN.md §4); Esc cancels, release drops.
@@ -1668,6 +1712,21 @@ mod tests {
                 .notice()
                 .is_some_and(|n| n.starts_with("Linked to"))
         );
+    }
+
+    #[test]
+    fn dragging_with_a_symbol_on_the_pointer_places_a_row() {
+        let mut h = Harness::new();
+        h.view.editor.auto_connect = false;
+        h.view.editor.begin_place("iec/contacts/no", None);
+        let depth = h.doc.undo_depth();
+        h.drag((60.0, 60.0), (220.0, 62.0));
+        let n = h.doc.project().symbols().count();
+        assert!(n >= 3, "{n} symbols");
+        assert_eq!(h.doc.undo_depth(), depth + 1);
+        assert!(h.view.canvas.selection.is_empty());
+        // The symbol stays on the pointer for the next one.
+        assert!(matches!(h.view.editor.tool(), Tool::Place(_)));
     }
 
     #[test]
