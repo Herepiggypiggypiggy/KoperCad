@@ -85,7 +85,7 @@ fn dark_mark(mark: Mark) -> MarkStyle {
     match mark {
         Mark::Collision => m(Glyph::Cross, [0xe5, 0x48, 0x4d], 0.55, [0xff, 0x6b, 0x6b]),
         Mark::TooClose => m(Glyph::Bang, [0xf0, 0xa2, 0x2e], 0.40, [0xff, 0xb7, 0x4a]),
-        Mark::Outside => m(Glyph::Bang, [0xe5, 0x48, 0x4d], 0.30, [0xff, 0x6b, 0x6b]),
+        Mark::Outside => m(Glyph::Cross, [0xe5, 0x48, 0x4d], 0.30, [0xff, 0x6b, 0x6b]),
         Mark::GuessedSize => MarkStyle {
             glyph: Glyph::DashedEdge,
             tint: None,

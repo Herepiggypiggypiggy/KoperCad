@@ -237,8 +237,8 @@ pub struct Look {
 
 **Marks never rely on colour alone** (the same colour-blind rule as the 2D
 marks). Every `Mark` other than `None` also draws a glyph at the item, a cross
-for a collision, a bang for too close, outside and mismatch, a dashed edge for a
-guessed size, drawn by the overlay from `MarkStyle::glyph`, so a red and an
+for a collision or a device outside the plate (as in the 2D Cabinet), a bang for
+too close and mismatch, a dashed edge for a guessed size, drawn by the overlay from `MarkStyle::glyph`, so a red and an
 amber tint are never the only difference.
 
 ### Decisions after the first reviews (2026-10-15)
