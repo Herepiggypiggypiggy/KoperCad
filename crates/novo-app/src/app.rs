@@ -40,6 +40,7 @@ mod cabinet_tests;
 mod changes_tests;
 #[cfg(test)]
 mod commissioning_tests;
+#[cfg(test)]
 mod compare_tests;
 #[cfg(test)]
 mod example_tests;
