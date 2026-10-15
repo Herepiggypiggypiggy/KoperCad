@@ -84,6 +84,7 @@ pub const DUTCH: &[Aliases] = &[
         &["verschil", "revisies vergelijken"],
     ),
     nl("file.quit", &[], &["afsluiten", "stoppen"]),
+    nl("help.about", &[], &["over", "versie"]),
     // Draw
     nl(
         "tool.repeat",
@@ -300,6 +301,11 @@ pub const DUTCH: &[Aliases] = &[
             "excel exporteren",
         ],
         &["excel"],
+    ),
+    nl(
+        "export.assembly",
+        &["exporteer montagelijst", "montagelijst"],
+        &["werkplaats", "boren"],
     ),
     nl("export.sheets_csv", &["exporteer csv"], &["csv"]),
 ];

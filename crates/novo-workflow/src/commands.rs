@@ -239,6 +239,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["compare"],
     ),
     cmd("file.quit", "Quit", "Project", &["exit"], Needs::Nothing),
+    cmd(
+        "help.about",
+        "About",
+        "Project",
+        &["version", "credits", "kopervonk"],
+        Needs::Nothing,
+    ),
     verb(
         cmd(
             "file.import_dxf_background",
@@ -867,6 +874,16 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export bulk edit", "export for editing"],
+    ),
+    verb(
+        cmd(
+            "export.assembly",
+            "Export assembly checklist (PDF)",
+            "Export",
+            &["workshop", "build sheet", "mounting", "drill", "cabinet"],
+            Needs::Project,
+        ),
+        &["export assembly", "assembly checklist"],
     ),
     verb(
         cmd(
