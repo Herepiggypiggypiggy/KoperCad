@@ -11,6 +11,7 @@ mod link;
 mod pages;
 mod pdf;
 mod plc;
+mod potentials;
 mod preferences;
 mod reports;
 mod terminals;
@@ -713,6 +714,7 @@ impl NovoApp {
         if !changes.is_empty() {
             self.reports_heard(&changes);
             self.fix_current_page();
+            self.auto_pe(&changes);
         }
         if let Some(page) = self.canvas.take_page_request() {
             self.show_page(page);

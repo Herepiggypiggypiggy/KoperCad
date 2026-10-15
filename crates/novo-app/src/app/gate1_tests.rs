@@ -1820,3 +1820,166 @@ fn the_preferences_window_sets_the_auto_connection_mode() {
     frame_at(&mut d, 90.0, vec![key_event(egui::Key::Escape, true)]);
     assert!(!d.app.wb.preferences, "Esc closes it");
 }
+
+/// A page with two terminals, one of them next to an earth symbol (not yet
+/// wired), and three interruption points out of order.
+fn potentials_page(d: &mut Drive) -> (SymbolId, SymbolId, SymbolId, Vec<SymbolId>) {
+    use novo_core::{Endpoint, Pin, PotentialKind, SymbolRole};
+    let page = d.page();
+    let ((t1, t2, earth, jumps), _) = d
+        .app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("setup", |tx| {
+            let x1 = tx.add_terminal_strip(novo_core::DeviceTag::parse("-X1")?)?;
+            tx.add_potential("PE", PotentialKind::ProtectiveEarth)?;
+            let mut terminal = |name: &str, x: f64| {
+                let t = tx.add_terminal(x1, name)?;
+                tx.place_symbol(
+                    page,
+                    "iec/terminals/terminal",
+                    novo_core::Placement::at(Point::new(x, 100.0)),
+                    vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                    SymbolRole::Terminal { terminals: vec![t] },
+                )
+            };
+            let t1 = terminal("1", 100.0)?;
+            let t2 = terminal("2", 120.0)?;
+            let earth = tx.place_symbol(
+                page,
+                "iec/earth/protective_earth",
+                novo_core::Placement::at(Point::new(100.0, 160.0)),
+                vec![Pin::new("PE", 0.0, 0.0)],
+                SymbolRole::Unassigned,
+            )?;
+            let mut jumps = Vec::new();
+            for (x, name) in [(300.0, "7"), (260.0, "7"), (220.0, "3")] {
+                jumps.push(tx.place_symbol(
+                    page,
+                    "iec/connectivity/interruption",
+                    novo_core::Placement::at(Point::new(x, 40.0)),
+                    vec![Pin::new("1", 0.0, 0.0)],
+                    SymbolRole::Interruption { name: name.into() },
+                )?);
+            }
+            let _ = Endpoint::pin(t1, 0);
+            Ok((t1, t2, earth, jumps))
+        })
+        .unwrap();
+    (t1, t2, earth, jumps)
+}
+
+fn interruption_names(d: &Drive, ids: &[SymbolId]) -> Vec<String> {
+    ids.iter()
+        .map(|&i| match &d.doc().project().symbol(i).unwrap().role {
+            novo_core::SymbolRole::Interruption { name } => name.clone(),
+            _ => unreachable!(),
+        })
+        .collect()
+}
+
+#[test]
+fn number_automatically_renumbers_interruption_points_in_one_undo_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let (_, _, _, jumps) = potentials_page(&mut d);
+    d.frame();
+    assert!(super::workbench::app_runs("interruption.renumber"));
+    // Nothing selected: every point, reading order, the pair stays a pair.
+    d.app.run_command(&ctx, "interruption.renumber", None);
+    d.frame();
+    assert_eq!(interruption_names(&d, &jumps), ["2", "2", "1"]);
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(interruption_names(&d, &jumps), ["7", "7", "3"]);
+}
+
+#[test]
+fn toggle_pe_is_an_override_with_a_diamond_and_back_to_automatic_hands_it_back() {
+    use novo_canvas::MarkKind;
+    use novo_core::{PeOverride, SymbolRole, TerminalKind};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let (t1, _, _, _) = potentials_page(&mut d);
+    d.select(t1);
+    let terminal = |d: &Drive| {
+        let SymbolRole::Terminal { terminals } = &d.doc().project().symbol(t1).unwrap().role else {
+            panic!()
+        };
+        d.doc().project().terminal(terminals[0]).unwrap().clone()
+    };
+    assert!(super::workbench::app_runs("terminal.toggle_pe"));
+    d.app.run_command(&ctx, "terminal.toggle_pe", None);
+    d.frame();
+    let t = terminal(&d);
+    assert_eq!(t.kind, TerminalKind::ProtectiveEarth);
+    assert_eq!(t.pe_override, PeOverride::ForcedPe);
+    let marks = &d.app.canvas.schematic_ref().unwrap().canvas.marks.list;
+    assert!(
+        marks.iter().any(|m| m.kind == MarkKind::Override),
+        "a by-hand PE terminal carries the override diamond"
+    );
+    d.app.run_command(&ctx, "terminal.pe_auto", None);
+    d.frame();
+    let t = terminal(&d);
+    assert_eq!(t.pe_override, PeOverride::Auto);
+    assert!(
+        d.app
+            .canvas
+            .schematic_ref()
+            .unwrap()
+            .canvas
+            .marks
+            .list
+            .iter()
+            .all(|m| m.kind != MarkKind::Override)
+    );
+}
+
+#[test]
+fn wiring_a_terminal_to_earth_marks_it_pe_inside_the_wiring_undo_step() {
+    use novo_core::{Endpoint, SymbolRole, TerminalKind};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let (t1, t2, earth, _) = potentials_page(&mut d);
+    let kind = |d: &Drive, s| {
+        let SymbolRole::Terminal { terminals } = &d.doc().project().symbol(s).unwrap().role else {
+            panic!()
+        };
+        d.doc().project().terminal(terminals[0]).unwrap().kind
+    };
+    let (_, changes) = d
+        .app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Wire", |tx| {
+            tx.connect(Endpoint::pin(t1, 1), Endpoint::pin(earth, 0))
+                .map(|_| ())
+        })
+        .unwrap();
+    d.app.auto_pe(&changes);
+    assert_eq!(kind(&d, t1), TerminalKind::ProtectiveEarth);
+    assert_eq!(
+        kind(&d, t2),
+        TerminalKind::Feedthrough,
+        "not on the earthed net"
+    );
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(
+        kind(&d, t1),
+        TerminalKind::Feedthrough,
+        "one undo takes back the wire and the PE mark"
+    );
+}

@@ -275,7 +275,7 @@ pub(super) fn proposal_marks(proposals: &[Suggestion], current: usize) -> Vec<Ma
 
 impl NovoApp {
     /// The terminals drawn by the selected symbols, each once.
-    fn selected_terminals(&self) -> Vec<novo_core::TerminalId> {
+    pub(super) fn selected_terminals(&self) -> Vec<novo_core::TerminalId> {
         let Some(doc) = self.backend.document() else {
             return Vec::new();
         };

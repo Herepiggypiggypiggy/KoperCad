@@ -80,8 +80,23 @@ struct ContextMenu {
     device: Option<DeviceId>,
     /// Drawn terminals in the selection (terminal actions show for these).
     terminals: usize,
+    /// How the selected terminals stand as protective earth.
+    pe: PeMenu,
+    /// Interruption points in the selection.
+    interruptions: usize,
+    /// The first of them, for Rename.
+    interruption: Option<novo_core::SymbolId>,
     page: PageId,
     opened: bool,
+}
+
+/// The PE rows of the context menu for the selected terminals.
+#[derive(Default, Clone, Copy)]
+struct PeMenu {
+    /// Every selected terminal is a PE terminal now.
+    all_pe: bool,
+    /// Some selected terminal carries a PE choice made by hand.
+    overridden: bool,
 }
 
 /// One page of the schematic on screen, with the editor's tools.
@@ -723,6 +738,47 @@ impl SchematicView {
                     _ => false,
                 })
                 .count();
+            let drawn_terminals: Vec<_> = selection
+                .iter()
+                .filter_map(|&id| match id {
+                    AnyId::Symbol(s) => document.project().symbol(s),
+                    _ => None,
+                })
+                .filter_map(|s| match &s.role {
+                    SymbolRole::Terminal { terminals } => Some(terminals),
+                    _ => None,
+                })
+                .flatten()
+                .filter_map(|&t| document.project().terminal(t))
+                .collect();
+            let pe = PeMenu {
+                all_pe: !drawn_terminals.is_empty()
+                    && drawn_terminals
+                        .iter()
+                        .all(|t| t.kind == novo_core::TerminalKind::ProtectiveEarth),
+                overridden: drawn_terminals.iter().any(|t| !t.pe_override.is_auto()),
+            };
+            let interruptions = selection
+                .iter()
+                .filter(|&&id| match id {
+                    AnyId::Symbol(s) => document
+                        .project()
+                        .symbol(s)
+                        .is_some_and(|s| matches!(s.role, SymbolRole::Interruption { .. })),
+                    _ => false,
+                })
+                .count();
+            let interruption = selection.iter().find_map(|&id| match id {
+                AnyId::Symbol(s)
+                    if document
+                        .project()
+                        .symbol(s)
+                        .is_some_and(|s| matches!(s.role, SymbolRole::Interruption { .. })) =>
+                {
+                    Some(s)
+                }
+                _ => None,
+            });
             let anchor = ctx.pointer_latest_pos().unwrap_or(rect.center());
             self.menu = Some(ContextMenu {
                 anchor,
@@ -730,6 +786,9 @@ impl SchematicView {
                 potentials,
                 device,
                 terminals,
+                pe,
+                interruptions,
+                interruption,
                 page,
                 opened: true,
             });
@@ -1111,7 +1170,29 @@ impl SchematicView {
                     if menu.device.is_some() && ui.button("Go to partner   G").clicked() {
                         chosen = Some(MenuChoice::Command("nav.partner"));
                     }
+                    if menu.interruptions > 0 {
+                        if ui.button("Rename   F2").clicked() {
+                            chosen = Some(MenuChoice::RenameLabel);
+                        }
+                        if ui.button("Number automatically").clicked() {
+                            chosen = Some(MenuChoice::Command("interruption.renumber"));
+                        }
+                        ui.separator();
+                    }
                     if menu.terminals > 0 {
+                        // DESIGN.md §4: the row shows the state it will
+                        // change; a choice by hand sticks until reset.
+                        let pe_label = if menu.pe.all_pe {
+                            "PE terminal  ✓   (click to turn off)"
+                        } else {
+                            "Toggle PE terminal   pe"
+                        };
+                        if ui.button(pe_label).clicked() {
+                            chosen = Some(MenuChoice::Command("terminal.toggle_pe"));
+                        }
+                        if menu.pe.overridden && ui.button("PE: back to automatic").clicked() {
+                            chosen = Some(MenuChoice::Command("terminal.pe_auto"));
+                        }
                         if menu.terminals > 1 {
                             if ui.button("Connect terminals").clicked() {
                                 chosen = Some(MenuChoice::Command("terminal.connect"));
@@ -1150,6 +1231,7 @@ impl SchematicView {
         let anchor = menu.anchor;
         let wires = menu.potentials.wires.clone();
         let device = menu.device;
+        let interruption = menu.interruption;
         let page = menu.page;
         let suggestion = |i: usize| menu.potentials.declare.get(i).cloned();
         let choice_suggestion = match chosen {
@@ -1182,6 +1264,22 @@ impl SchematicView {
                     });
                 }
             }
+            Some(MenuChoice::RenameLabel) => {
+                if let Some(symbol) = interruption
+                    && let Some(text) = document
+                        .project()
+                        .symbol(symbol)
+                        .and_then(|s| model::symbol_text(document.project(), s))
+                {
+                    self.rename = Some(RenameBox {
+                        target: RenameTarget::Label(symbol),
+                        text,
+                        anchor,
+                        error: None,
+                        focus: true,
+                    });
+                }
+            }
             Some(MenuChoice::Key(k)) => {
                 self.editor.key(document, k, &selection);
             }
@@ -1201,6 +1299,7 @@ enum MenuChoice {
     Repeat,
     Potential(usize),
     Rename,
+    RenameLabel,
     Key(EditorKey),
     NewPage,
     Command(&'static str),

@@ -415,6 +415,30 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["rename strip", "x number", "free strip"],
         Needs::Selection,
     ),
+    verb(
+        cmd(
+            "terminal.toggle_pe",
+            "Toggle PE terminal",
+            "Edit",
+            &["protective earth", "ground", "earth terminal"],
+            Needs::Selection,
+        ),
+        &["pe"],
+    ),
+    cmd(
+        "terminal.pe_auto",
+        "PE terminal: back to automatic",
+        "Edit",
+        &["protective earth", "reset pe", "earth terminal"],
+        Needs::Selection,
+    ),
+    cmd(
+        "interruption.renumber",
+        "Number interruption points automatically",
+        "Edit",
+        &["jump", "renumber", "continuation", "off page"],
+        Needs::Project,
+    ),
     // Navigate
     cmd(
         "nav.partner",

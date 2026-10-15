@@ -196,6 +196,9 @@ const APP_COMMANDS: &[&str] = &[
     "xref.link",
     "app.preferences",
     "wire.mode",
+    "terminal.toggle_pe",
+    "terminal.pe_auto",
+    "interruption.renumber",
 ];
 
 /// Whether the app can run a command now (not "comes later").
@@ -445,6 +448,8 @@ impl NovoApp {
             | "terminal.strip_up"
             | "terminal.strip_down"
             | "terminal.strip_lowest" => self.terminal_command(id),
+            "terminal.toggle_pe" | "terminal.pe_auto" => self.pe_command(id),
+            "interruption.renumber" => self.renumber_interruptions(),
             "view.terminals_drawer" => self.toggle_drawer(Drawer::Terminals),
             "view.cables_drawer" => self.toggle_drawer(Drawer::Cables),
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
@@ -663,6 +668,7 @@ impl NovoApp {
         };
         let mut list = super::terminals::proposal_marks(&self.page_proposals(), self.wb.proposal);
         list.extend(self.problem_marks(page));
+        list.extend(self.pe_override_marks(page));
         let hidden = !self.wb.marks;
         // Cross references are printed drawing content: they go into the
         // page scene, like the tags, so the PDF shows them the same way.
