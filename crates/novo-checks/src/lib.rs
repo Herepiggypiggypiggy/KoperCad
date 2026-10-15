@@ -32,6 +32,7 @@
 //! | [`ShortCircuit`](ProblemKind::ShortCircuit) | error | A device that cannot break the supply's short-circuit current |
 //! | [`DisconnectionTime`](ProblemKind::DisconnectionTime) | error | A wire so long that an earth fault cannot trip its protective device in time |
 //! | [`ThermalWithstand`](ProblemKind::ThermalWithstand) | error | A wire that cannot take the let-through energy of its protective device |
+//! | [`CableRating`](ProblemKind::CableRating) | error | A wire whose cable carries less than its protective device allows, or the load draws more than the device is rated for |
 //! | [`MotorStarter`](ProblemKind::MotorStarter) | warning, error where it cannot work | A motor starter whose relay, contactor or fuse does not suit the motor |
 //! | [`ProtectiveConductor`](ProblemKind::ProtectiveConductor) | warning | A protective conductor thinner than its phase conductors need |
 //! | [`UnplacedDevice`](ProblemKind::UnplacedDevice) | info | A device not yet placed on a mounting plate |
@@ -178,11 +179,16 @@ pub enum ProblemKind {
     WireWithoutDuct,
     /// A duct carrying more wires than its fill limit (novo-routing).
     OverfullDuct,
+    /// A wire whose cable cannot carry what its protective device allows
+    /// (`Ib ≤ In ≤ Iz`, with the installation method, ambient temperature
+    /// and grouping of IEC 60364-5-52), read from the planning tables
+    /// unless the user loaded a licensed copy (`calc::tables`).
+    CableRating,
 }
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 26] = [
+    pub const ALL: [ProblemKind; 27] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -209,6 +215,7 @@ impl ProblemKind {
         ProblemKind::UnplacedDevice,
         ProblemKind::WireWithoutDuct,
         ProblemKind::OverfullDuct,
+        ProblemKind::CableRating,
     ];
 
     pub fn severity(self) -> Severity {
@@ -218,7 +225,8 @@ impl ProblemKind {
             | ProblemKind::PotentialConflict
             | ProblemKind::ShortCircuit
             | ProblemKind::DisconnectionTime
-            | ProblemKind::ThermalWithstand => Severity::Error,
+            | ProblemKind::ThermalWithstand
+            | ProblemKind::CableRating => Severity::Error,
             ProblemKind::UnconnectedPin
             | ProblemKind::LoneInterruption
             | ProblemKind::NoMainFunction
@@ -270,6 +278,7 @@ impl ProblemKind {
             ProblemKind::UnplacedDevice => "Unplaced device",
             ProblemKind::WireWithoutDuct => "Wire without duct",
             ProblemKind::OverfullDuct => "Overfull duct",
+            ProblemKind::CableRating => "Cable rating",
         }
     }
 
@@ -299,6 +308,7 @@ impl ProblemKind {
             ProblemKind::ThermalWithstand => "check.thermal_withstand",
             ProblemKind::MotorStarter => "check.motor_starter",
             ProblemKind::ProtectiveConductor => "check.protective_conductor",
+            ProblemKind::CableRating => "check.cable_rating",
             ProblemKind::UnplacedDevice => "check.unplaced_device",
             ProblemKind::WireWithoutDuct => "check.wire_without_duct",
             ProblemKind::OverfullDuct => "check.overfull_duct",

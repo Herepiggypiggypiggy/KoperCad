@@ -2148,6 +2148,8 @@ version = "0.1.0"
 dependencies = [
  "novo-core",
  "novo-symbols",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
