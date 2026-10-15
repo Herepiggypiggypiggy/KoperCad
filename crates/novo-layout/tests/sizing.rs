@@ -52,10 +52,10 @@ fn csv_round_trips_and_upsert_replaces() {
 
 #[test]
 fn surface_of_a_free_standing_box() {
-    // 0.6 x 0.8 x 0.3: top 0.18*1.4, bottom 0.18*0.5, front/rear 0.48*0.9 each,
+    // 0.6 x 0.8 x 0.3 on the floor: top 0.18*1.4, no bottom, front/rear 0.48*0.9 each,
     // sides 0.24*0.9 each.
     let a = effective_surface(600.0, 800.0, 300.0, Installation::FreeStanding);
-    let want = 0.18 * 1.4 + 0.18 * 0.5 + 2.0 * 0.48 * 0.9 + 2.0 * 0.24 * 0.9;
+    let want = 0.18 * 1.4 + 2.0 * 0.48 * 0.9 + 2.0 * 0.24 * 0.9;
     assert!((a - want).abs() < 1e-9);
     assert!(effective_surface(600.0, 800.0, 300.0, Installation::WallInRow) < a);
 }
@@ -152,4 +152,11 @@ fn load_factor_scales_the_loss() {
     let mut d = dev(10.0, 10.0, 100.0);
     d.load_factor = 0.5;
     assert_eq!(total_loss(&[d]), 50.0);
+}
+
+#[test]
+fn free_standing_matches_the_handbook_closed_form() {
+    let a = effective_surface(600.0, 800.0, 300.0, Installation::FreeStanding);
+    let closed = 1.8 * 0.8 * (0.6 + 0.3) + 1.4 * 0.6 * 0.3;
+    assert!((a - closed).abs() < 1e-9);
 }

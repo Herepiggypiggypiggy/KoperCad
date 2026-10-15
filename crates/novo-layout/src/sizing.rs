@@ -323,18 +323,24 @@ pub struct Installation {
     pub left_covered: bool,
     pub right_covered: bool,
     pub top_covered: bool,
+    /// Standing on the floor: the bottom gives off no heat (IEC 60890).
+    pub on_floor: bool,
 }
 
 #[allow(non_upper_case_globals)]
 impl Installation {
+    /// Floor standing, free on all other sides.
     pub const FreeStanding: Installation = Installation {
         rear_covered: false,
         left_covered: false,
         right_covered: false,
         top_covered: false,
+        on_floor: true,
     };
+    /// Wall mounted, bottom open to the air.
     pub const Wall: Installation = Installation {
         rear_covered: true,
+        on_floor: false,
         ..Installation::FreeStanding
     };
     /// Wall mounted with a neighbour on both sides.
@@ -343,18 +349,19 @@ impl Installation {
         left_covered: true,
         right_covered: true,
         top_covered: false,
+        on_floor: false,
     };
 }
 
 /// Effective cooling surface in m2, the IEC 60890 sum of face area times
 /// the surface factor b: top 1.4 (0.7 covered), sides, front and rear 0.9
-/// (0.5 covered), bottom 0.5. Dimensions are the outside size in mm.
+/// (0.5 covered), bottom 0.5 (0 when standing on the floor, so a free standing box is 1.8 H (W + D) + 1.4 W D). Dimensions are the outside size in mm.
 pub fn effective_surface(width: f64, height: f64, depth: f64, install: Installation) -> f64 {
     let (w, h, d) = (width / 1000.0, height / 1000.0, depth / 1000.0);
     let face =
         |area: f64, covered: bool, free: f64, cov: f64| area * if covered { cov } else { free };
     let top = face(w * d, install.top_covered, 1.4, 0.7);
-    let bottom = w * d * 0.5;
+    let bottom = if install.on_floor { 0.0 } else { w * d * 0.5 };
     let front = w * h * 0.9;
     let rear = face(w * h, install.rear_covered, 0.9, 0.5);
     let left = face(d * h, install.left_covered, 0.9, 0.5);
