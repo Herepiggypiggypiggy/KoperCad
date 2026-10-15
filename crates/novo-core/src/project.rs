@@ -1237,6 +1237,29 @@ impl Project {
             .map_or(1, |n| n + 1)
     }
 
+    /// The wires with one end on the given symbols and junctions and the
+    /// other end elsewhere: what a move or a block capture of `items`
+    /// would cut. Sorted by id.
+    pub fn wires_leaving(&self, items: &[AnyId]) -> Vec<WireId> {
+        let inside: BTreeSet<AnyId> = items.iter().copied().collect();
+        let mut out: Vec<WireId> = inside
+            .iter()
+            .flat_map(|&id| self.referrers(id))
+            .filter_map(|r| match r {
+                AnyId::Wire(w) => self.wires.get(&w),
+                _ => None,
+            })
+            .filter(|w| {
+                let [a, b] = w.ends().map(crate::record::endpoint_owner);
+                inside.contains(&a) != inside.contains(&b)
+            })
+            .map(|w| w.id)
+            .collect();
+        out.sort();
+        out.dedup();
+        out
+    }
+
     /// The cable whose core carries a wire, if any.
     pub fn cable_of_wire(&self, wire: WireId) -> Option<CableId> {
         self.referrers(wire).find_map(|id| match id {
