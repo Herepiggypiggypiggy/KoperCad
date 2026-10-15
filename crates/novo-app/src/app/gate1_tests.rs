@@ -1821,6 +1821,165 @@ fn the_preferences_window_sets_the_auto_connection_mode() {
     assert!(!d.app.wb.preferences, "Esc closes it");
 }
 
+#[test]
+fn the_command_list_and_the_part_search_show_many_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let height = |d: &Drive, id: &str| {
+        d.ctx
+            .memory(|m| m.area_rect(egui::Id::new(id)))
+            .map_or(0.0, |r| r.height())
+    };
+
+    // Near the bottom of the window the lists still open with room.
+    let low = egui::pos2(400.0, 860.0);
+    d.app.wb.field.open(Mode::All, Some(low));
+    d.frame();
+    d.frame();
+    assert!(
+        height(&d, "command_field") > 250.0,
+        "the command list shows more than a couple of rows, got {}",
+        height(&d, "command_field")
+    );
+    d.app.wb.field.close();
+    d.frame();
+
+    d.app.wb.field.open(Mode::Place, Some(low));
+    d.frame();
+    d.frame();
+    assert!(height(&d, "command_field") > 250.0);
+}
+
+#[test]
+fn the_part_search_opens_with_room_near_the_bottom_of_the_window() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let low = egui::pos2(800.0, 880.0);
+    frame_at(&mut d, 10.0, vec![egui::Event::PointerMoved(low)]);
+    d.app.canvas.schematic().unwrap().open_insert_at(low);
+    frame_at(&mut d, 10.1, vec![]);
+    frame_at(&mut d, 10.2, vec![]);
+    let area = ctx
+        .memory(|m| m.area_rect(egui::Id::new("novo-editor-insert")))
+        .expect("the search is open");
+    assert!(area.height() > 250.0, "got {}", area.height());
+    assert!(area.bottom() <= ctx.content_rect().bottom());
+}
+
+#[test]
+fn a_double_click_on_bare_grid_starts_a_wire_without_the_wire_tool() {
+    use novo_editor::Tool;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    d.editor_leave();
+    d.frame();
+    assert!(matches!(
+        d.app.canvas.schematic().unwrap().editor.tool(),
+        Tool::Select
+    ));
+    let rect = d.app.wb.canvas_area.unwrap().1;
+    let pos = rect.center() + egui::vec2(40.0, 30.0);
+    let button = |pressed| egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    frame_at(&mut d, 50.0, vec![egui::Event::PointerMoved(pos)]);
+    for (i, t) in [50.1, 50.15, 50.2, 50.25].into_iter().enumerate() {
+        frame_at(&mut d, t, vec![button(i % 2 == 0)]);
+    }
+    frame_at(&mut d, 50.3, vec![]);
+    match d.app.canvas.schematic().unwrap().editor.tool() {
+        Tool::Wire(w) => assert!(w.start.is_some(), "a wire is started"),
+        other => panic!("expected the wire tool, got {other:?}"),
+    }
+}
+
+#[test]
+fn toggle_pe_is_a_command_and_an_earthing_wire_marks_terminals() {
+    use novo_core::{Endpoint, Pin, Point, Rotation, SymbolRole, TerminalKind};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let page = d.doc().project().pages().next().unwrap().id;
+    let ((term, earth), _) = d
+        .app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("setup", |tx| {
+            let x1 = tx.add_terminal_strip(novo_core::DeviceTag::parse("-X1")?)?;
+            let t = tx.add_terminal(x1, "1")?;
+            let pins = || vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)];
+            let term = tx.place_symbol(
+                page,
+                "iec/terminals/end_bracket",
+                novo_core::Placement::at(Point::new(100.0, 100.0)),
+                pins(),
+                SymbolRole::Terminal { terminals: vec![t] },
+            )?;
+            let earth = tx.place_symbol(
+                page,
+                "iec/earth/earth",
+                novo_core::Placement::at(Point::new(100.0, 140.0)),
+                vec![Pin::new("1", 0.0, -2.5)],
+                SymbolRole::Unassigned,
+            )?;
+            let _ = Rotation::R0;
+            Ok((term, earth))
+        })
+        .unwrap();
+    d.frame();
+    let kind = |d: &Drive| {
+        let p = d.doc().project();
+        let SymbolRole::Terminal { terminals } = &p.symbol(term).unwrap().role else {
+            panic!()
+        };
+        p.terminal(terminals[0]).unwrap().kind
+    };
+    assert_eq!(kind(&d), TerminalKind::Feedthrough);
+
+    // The toggle works on the selected terminal and undoes in one step.
+    d.select(term);
+    d.frame();
+    assert!(super::workbench::app_runs("terminal.toggle_pe"));
+    d.app.run_command(&ctx, "terminal.toggle_pe", None);
+    d.frame();
+    assert_eq!(kind(&d), TerminalKind::ProtectiveEarth);
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(kind(&d), TerminalKind::Feedthrough);
+
+    // A wire drawn to the earth symbol earths the terminal on its own, in
+    // the same undo step as the wire.
+    let (_, changes) = d
+        .app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("wire", |tx| {
+            tx.connect(Endpoint::pin(term, 1), Endpoint::pin(earth, 0))
+        })
+        .unwrap();
+    d.app.mark_earthed_terminals(&changes);
+    assert_eq!(kind(&d), TerminalKind::ProtectiveEarth);
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(kind(&d), TerminalKind::Feedthrough, "one undo takes both");
+}
+
 /// A page with two terminals, one of them next to an earth symbol (not yet
 /// wired), and three interruption points out of order.
 fn potentials_page(d: &mut Drive) -> (SymbolId, SymbolId, SymbolId, Vec<SymbolId>) {
@@ -1940,46 +2099,5 @@ fn toggle_pe_is_an_override_with_a_diamond_and_back_to_automatic_hands_it_back()
             .list
             .iter()
             .all(|m| m.kind != MarkKind::Override)
-    );
-}
-
-#[test]
-fn wiring_a_terminal_to_earth_marks_it_pe_inside_the_wiring_undo_step() {
-    use novo_core::{Endpoint, SymbolRole, TerminalKind};
-    let dir = tempfile::tempdir().unwrap();
-    let mut d = Drive::new(&dir.path().join("untitled"));
-    let ctx = d.ctx.clone();
-    d.app.run(&ctx, Action::NewProject);
-    d.frame();
-    let (t1, t2, earth, _) = potentials_page(&mut d);
-    let kind = |d: &Drive, s| {
-        let SymbolRole::Terminal { terminals } = &d.doc().project().symbol(s).unwrap().role else {
-            panic!()
-        };
-        d.doc().project().terminal(terminals[0]).unwrap().kind
-    };
-    let (_, changes) = d
-        .app
-        .backend
-        .document_mut()
-        .unwrap()
-        .transact("Wire", |tx| {
-            tx.connect(Endpoint::pin(t1, 1), Endpoint::pin(earth, 0))
-                .map(|_| ())
-        })
-        .unwrap();
-    d.app.auto_pe(&changes);
-    assert_eq!(kind(&d, t1), TerminalKind::ProtectiveEarth);
-    assert_eq!(
-        kind(&d, t2),
-        TerminalKind::Feedthrough,
-        "not on the earthed net"
-    );
-    d.app.run(&ctx, Action::Undo);
-    d.frame();
-    assert_eq!(
-        kind(&d, t1),
-        TerminalKind::Feedthrough,
-        "one undo takes back the wire and the PE mark"
     );
 }

@@ -28,7 +28,10 @@ use crate::potential::PotentialMenu;
 use crate::tool::{Editor, EditorKey};
 
 /// Rows shown in the insert search.
-const SEARCH_ROWS: usize = 8;
+const SEARCH_ROWS: usize = 14;
+/// Room the part search keeps below its field, so it opens upward from
+/// the bottom of the window instead of showing two rows.
+const SEARCH_HEIGHT: f32 = 340.0;
 /// Opacity of things that follow the pointer, in the hover colour.
 const GHOST_ALPHA: u8 = 200;
 /// The hint on the highlighted proposal (DESIGN.md §5).
@@ -93,8 +96,6 @@ struct ContextMenu {
 /// The PE rows of the context menu for the selected terminals.
 #[derive(Default, Clone, Copy)]
 struct PeMenu {
-    /// Every selected terminal is a PE terminal now.
-    all_pe: bool,
     /// Some selected terminal carries a PE choice made by hand.
     overridden: bool,
 }
@@ -273,6 +274,17 @@ impl SchematicView {
         if let Some(r) = &mut self.rename {
             r.text = text.to_string();
         }
+    }
+
+    /// Opens the part search at `anchor` (the I key does this at the
+    /// pointer).
+    pub fn open_insert_at(&mut self, anchor: egui::Pos2) {
+        self.insert = Some(InsertSearch {
+            query: String::new(),
+            anchor,
+            selected: 0,
+            focus: true,
+        });
     }
 
     /// Whether the in-place rename box is open.
@@ -640,6 +652,19 @@ impl SchematicView {
         {
             let selection = self.selection();
             self.editor.key(document, EditorKey::StartFree, &selection);
+        } else if !self.swallow
+            && !self.popup_open()
+            && matches!(self.editor.tool(), crate::tool::Tool::Select)
+            && out.hit.is_none()
+            && response.double_clicked_by(egui::PointerButton::Primary)
+        {
+            // A double click on bare grid starts a wire there, without the
+            // wire tool; text, devices and wires keep their own double click.
+            self.editor.begin_wire();
+            let selection = self.selection();
+            if !self.editor.key(document, EditorKey::StartFree, &selection) {
+                self.editor.leave_tool();
+            }
         } else if response.clicked_by(egui::PointerButton::Primary)
             && !self.swallow
             && let Some(w) = out.cursor_raw
@@ -752,10 +777,6 @@ impl SchematicView {
                 .filter_map(|&t| document.project().terminal(t))
                 .collect();
             let pe = PeMenu {
-                all_pe: !drawn_terminals.is_empty()
-                    && drawn_terminals
-                        .iter()
-                        .all(|t| t.kind == novo_core::TerminalKind::ProtectiveEarth),
                 overridden: drawn_terminals.iter().any(|t| !t.pe_override.is_auto()),
             };
             let interruptions = selection
@@ -980,7 +1001,14 @@ impl SchematicView {
             .collect();
         egui::Area::new(egui::Id::new("novo-editor-insert"))
             .order(egui::Order::Foreground)
-            .fixed_pos(search.anchor)
+            .fixed_pos(egui::pos2(
+                search.anchor.x,
+                search
+                    .anchor
+                    .y
+                    .min(ctx.content_rect().bottom() - SEARCH_HEIGHT - 60.0)
+                    .max(ctx.content_rect().top() + 8.0),
+            ))
             .show(ctx, |ui| {
                 egui::Frame::popup(ui.style()).show(ui, |ui| {
                     ui.set_width(320.0);
@@ -1004,16 +1032,25 @@ impl SchematicView {
                         });
                     }
                     ui.separator();
-                    for (i, hit) in hits.iter().enumerate() {
-                        let text = match (&hit.parent, hit.hint.is_empty()) {
-                            (Some(p), _) => format!("{}  ·  of {p}", hit.name),
-                            (None, false) => format!("{}  ·  {}", hit.name, hit.hint),
-                            (None, true) => hit.name.clone(),
-                        };
-                        if ui.selectable_label(i == search.selected, text).clicked() {
-                            pick = Some(hit.clone());
-                        }
-                    }
+                    egui::ScrollArea::vertical()
+                        .max_height(SEARCH_HEIGHT)
+                        .min_scrolled_height(SEARCH_HEIGHT.min(hits.len() as f32 * 24.0))
+                        .show(ui, |ui| {
+                            for (i, hit) in hits.iter().enumerate() {
+                                let text = match (&hit.parent, hit.hint.is_empty()) {
+                                    (Some(p), _) => format!("{}  ·  of {p}", hit.name),
+                                    (None, false) => format!("{}  ·  {}", hit.name, hit.hint),
+                                    (None, true) => hit.name.clone(),
+                                };
+                                let r = ui.selectable_label(i == search.selected, text);
+                                if i == search.selected && (up || down) {
+                                    r.scroll_to_me(None);
+                                }
+                                if r.clicked() {
+                                    pick = Some(hit.clone());
+                                }
+                            }
+                        });
                     if hits.is_empty() {
                         ui.weak("No symbol matches");
                     }
@@ -1180,16 +1217,7 @@ impl SchematicView {
                         ui.separator();
                     }
                     if menu.terminals > 0 {
-                        // DESIGN.md §4: the row shows the state it will
-                        // change; a choice by hand sticks until reset.
-                        let pe_label = if menu.pe.all_pe {
-                            "PE terminal  ✓   (click to turn off)"
-                        } else {
-                            "Toggle PE terminal   pe"
-                        };
-                        if ui.button(pe_label).clicked() {
-                            chosen = Some(MenuChoice::Command("terminal.toggle_pe"));
-                        }
+                        // A choice by hand sticks until it is reset.
                         if menu.pe.overridden && ui.button("PE: back to automatic").clicked() {
                             chosen = Some(MenuChoice::Command("terminal.pe_auto"));
                         }
@@ -1200,6 +1228,9 @@ impl SchematicView {
                             if ui.button("Disconnect terminals").clicked() {
                                 chosen = Some(MenuChoice::Command("terminal.disconnect"));
                             }
+                        }
+                        if ui.button("Toggle PE terminal").clicked() {
+                            chosen = Some(MenuChoice::Command("terminal.toggle_pe"));
                         }
                         if ui.button("Strip number up   Up").clicked() {
                             chosen = Some(MenuChoice::Command("terminal.strip_up"));

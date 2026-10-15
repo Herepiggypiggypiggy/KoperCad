@@ -335,6 +335,12 @@ impl NovoApp {
                     novo_terminals::connect_terminals(tx, &terminals).map(|_| None)
                 }),
             ),
+            "terminal.toggle_pe" => (
+                "Toggle PE terminal",
+                doc.transact("Toggle PE terminal", |tx| {
+                    novo_terminals::toggle_pe(tx, &terminals).map(|_| None)
+                }),
+            ),
             "terminal.disconnect" => (
                 "Disconnect terminals",
                 doc.transact("Disconnect terminals", |tx| {

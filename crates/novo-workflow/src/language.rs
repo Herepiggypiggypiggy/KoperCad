@@ -50,6 +50,7 @@ pub const DUTCH: &[Aliases] = &[
         &["voorkeuren"],
         &["instellingen", "opties"],
     ),
+    nl("terminal.toggle_pe", &["pe-klem"], &["aardklem", "aarde"]),
     nl("file.quit", &[], &["afsluiten", "stoppen"]),
     // Draw
     nl(
@@ -151,11 +152,6 @@ pub const DUTCH: &[Aliases] = &[
     nl("view.fit", &[], &["passend zoomen", "alles tonen"]),
     nl("view.schematic", &[], &["schema"]),
     nl("view.cabinet", &[], &["kast", "kastindeling"]),
-    nl(
-        "terminal.toggle_pe",
-        &["aarden"],
-        &["aardklem", "beschermingsaarde"],
-    ),
     nl("terminal.pe_auto", &[], &["aardklem automatisch"]),
     nl(
         "interruption.renumber",

@@ -12,5 +12,5 @@ Next: point 22 follow-ups, see ROADMAP design note. Resume: `cargo test -p novo-
 
 UI (branch `claude/project-thread-5fvoay`, PR "after build", not for the next build)
 - Interruption numbers already draw (LabelKind::InterruptionName, double-click renames). New: `novo_xref::renumber_interruptions` (reading order, pairs stay together, selection or whole project), command `interruption.renumber`, context-menu rows "Number automatically" and Rename on an interruption point.
-- PE: context-menu "Toggle PE terminal" (row shows the state) and "PE: back to automatic" when a hand choice exists; commands `terminal.toggle_pe` (typed `pe`) and `terminal.pe_auto`; override diamond (Shift+O) on hand-set PE terminals; `auto_pe` in `app/potentials.rs` runs `mark_earthed` after wiring edits inside the edit's own undo step (`amend_last`).
+- PE: toggle and auto-PE after wiring came from main; this PR adds "PE: back to automatic" (`terminal.pe_auto`, shown when a hand choice exists) and the override diamond (Shift+O) on hand-set PE terminals.
 - Not done: outline/inspector entries (DESIGN lists none for these), Dutch aliases beyond the three in language.rs, PE chip on the inspector.

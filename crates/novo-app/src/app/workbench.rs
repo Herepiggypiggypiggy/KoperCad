@@ -195,8 +195,8 @@ const APP_COMMANDS: &[&str] = &[
     "plc.renumber_io",
     "xref.link",
     "app.preferences",
-    "wire.mode",
     "terminal.toggle_pe",
+    "wire.mode",
     "terminal.pe_auto",
     "interruption.renumber",
 ];
@@ -444,11 +444,12 @@ impl NovoApp {
             }
             "proposal.accept_all" => self.accept_all_proposals(),
             "terminal.connect"
+            | "terminal.toggle_pe"
             | "terminal.disconnect"
             | "terminal.strip_up"
             | "terminal.strip_down"
             | "terminal.strip_lowest" => self.terminal_command(id),
-            "terminal.toggle_pe" | "terminal.pe_auto" => self.pe_command(id),
+            "terminal.pe_auto" => self.pe_back_to_automatic(),
             "interruption.renumber" => self.renumber_interruptions(),
             "view.terminals_drawer" => self.toggle_drawer(Drawer::Terminals),
             "view.cables_drawer" => self.toggle_drawer(Drawer::Cables),
