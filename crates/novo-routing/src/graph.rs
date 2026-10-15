@@ -41,7 +41,7 @@ pub struct Network {
     runs: Vec<Run>,
     /// Per run, the positions along it where it is joined to another duct.
     splits: Vec<Vec<f64>>,
-    /// Ids of ducts that were not horizontal, vertical or had no length.
+    /// Ids of ducts that were not horizontal, vertical, finite or had no length.
     pub ignored: Vec<u64>,
 }
 
@@ -64,7 +64,8 @@ impl Network {
         let mut runs = Vec::new();
         for d in ducts {
             let (dx, dy) = ((d.a.x - d.b.x).abs(), (d.a.y - d.b.y).abs());
-            if dx < EPS && dy < EPS {
+            let finite = [d.a.x, d.a.y, d.b.x, d.b.y].iter().all(|v| v.is_finite());
+            if !finite || (dx < EPS && dy < EPS) {
                 ignored.push(d.id);
             } else if dy < EPS {
                 runs.push(Run {
@@ -121,7 +122,7 @@ impl Network {
     }
 
     /// Nearest entry points of an anchor, best first.
-    fn entries(&self, a: &Anchor) -> Vec<Entry> {
+    fn entries(&self, a: &Anchor, rules: &Rules) -> Vec<Entry> {
         let mut out: Vec<Entry> = self
             .runs
             .iter()
@@ -160,6 +161,10 @@ impl Network {
             .filter(|e| !self.stub_crosses(&stub(a, self.runs[e.run].at(e.t)), e.run))
             .collect();
         let mut pick = if clear.is_empty() { out } else { clear };
+        // Prefer ducts within reach; keep the rest only when none is.
+        if pick.iter().any(|e| e.stub <= rules.max_stub_mm) {
+            pick.retain(|e| e.stub <= rules.max_stub_mm);
+        }
         pick.truncate(CANDIDATES);
         pick
     }
@@ -201,8 +206,8 @@ impl Network {
     /// connected set of ducts, otherwise in free air.
     pub fn route(&self, job: &Job, rules: &Rules) -> Route {
         let mut best: Option<(f64, Entry, Entry, Path)> = None;
-        for ea in self.entries(&job.from) {
-            for eb in self.entries(&job.to) {
+        for ea in self.entries(&job.from, rules) {
+            for eb in self.entries(&job.to, rules) {
                 let Some((cost, path)) = self.shortest(&ea, &eb) else {
                     continue;
                 };
@@ -228,6 +233,7 @@ impl Network {
         ducts.push(self.runs[eb.run].id);
         ducts.dedup();
         points.dedup_by(|a, b| a.manhattan(b) < EPS);
+        merge_collinear(&mut points);
 
         let detour = ea.detour + eb.detour;
         finish(job, Kind::Ducted, points, ducts, detour, rules)
@@ -338,6 +344,26 @@ fn stub(a: &Anchor, entry: Point) -> Vec<Point> {
         _ => Point::new(entry.x, a.pos.y),
     };
     vec![a.pos, corner, entry]
+}
+
+/// Drops points that lie on a straight run between their neighbours, so
+/// the polyline keeps only its bends and ends.
+fn merge_collinear(points: &mut Vec<Point>) {
+    let mut out: Vec<Point> = Vec::with_capacity(points.len());
+    for &p in points.iter() {
+        while out.len() >= 2 {
+            let (a, b) = (out[out.len() - 2], out[out.len() - 1]);
+            let same_x = (a.x - b.x).abs() < EPS && (b.x - p.x).abs() < EPS;
+            let same_y = (a.y - b.y).abs() < EPS && (b.y - p.y).abs() < EPS;
+            if same_x || same_y {
+                out.pop();
+            } else {
+                break;
+            }
+        }
+        out.push(p);
+    }
+    *points = out;
 }
 
 fn free_air(job: &Job, rules: &Rules) -> Route {

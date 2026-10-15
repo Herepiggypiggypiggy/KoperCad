@@ -66,11 +66,18 @@ pub struct Job {
 pub struct Rules {
     /// Service loop added at each end of a wire.
     pub slack_mm: f64,
+    /// Longest wire from a terminal to its duct that is preferred. Longer
+    /// entries are used only when no duct is within this reach, so a wire
+    /// does not cross the plate in free air to save length in a duct.
+    pub max_stub_mm: f64,
 }
 
 impl Default for Rules {
     fn default() -> Rules {
-        Rules { slack_mm: 50.0 }
+        Rules {
+            slack_mm: 50.0,
+            max_stub_mm: 150.0,
+        }
     }
 }
 

@@ -52,10 +52,12 @@ overrides the designer makes (see §6) are stored.
    upwards). A duct behind the terminal is still reachable: the wire leaves,
    turns and comes back, which costs twice the backwards distance as a
    **detour** (shown separately from the path). A stub that would run across
-   another duct is not used while a clear one exists. The three nearest ducts
-   are tried per end and the cheapest total wins; ties break on the lower duct
+   another duct is not used while a clear one exists. Ducts farther
+   than a **reach** (default 150 mm) are used only when none is within reach,
+   so a wire never crosses the plate in free air to save duct length. The
+   three nearest ducts are tried per end and the cheapest total wins; ties break on the lower duct
    id, so results are stable.
-3. **Shortest path.** Dijkstra over the duct graph between the two stub entry
+3. **Shortest path (fill penalty planned).** Dijkstra over the duct graph between the two stub entry
    points, edge cost = length plus a **fill penalty** that rises as the duct
    passes 80% of its capacity, so wires spread to a second duct before the
    first overflows. Equal costs break on lower node id.
@@ -68,9 +70,9 @@ overrides the designer makes (see §6) are stored.
    flagged "free air", and a problem entry says so. It never fails silently
    and never returns length zero.
 
-## 5. Order and fill
+## 5. Order and fill (planned, not in the engine yet)
 
-Jobs are routed in a fixed order (longest direct distance first, then job id)
+Today `route_all` routes in input order. The plan is that jobs are routed in a fixed order (longest direct distance first, then job id)
 so the result is deterministic and the big wires get the short paths. Fill is
 accumulated as jobs are routed. After routing, `fill(duct)` is the used area
 over capacity; a duct above 1.0 is an **overfull duct** problem naming the duct
