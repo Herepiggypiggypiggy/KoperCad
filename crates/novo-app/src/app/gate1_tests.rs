@@ -415,13 +415,15 @@ fn gate1_motor_starter_through_the_window() {
     let file = dir.path().join("Starter.novo");
     assert!(d.app.save_to(&file));
     d.frame();
-    // PDF export: two pages, written where asked.
+    // PDF export: two pages, written where asked, then the design checks
+    // report while problems remain.
     let pdf = dir.path().join("Starter.pdf");
     assert_eq!(d.app.export_pdf_to(&pdf), Some(pdf.clone()));
     let bytes = std::fs::read(&pdf).unwrap();
     assert!(bytes.starts_with(b"%PDF"));
     let pages = lopdf::Document::load_mem(&bytes).unwrap().get_pages().len();
-    assert_eq!(pages, 2, "one PDF page per project page");
+    let report = usize::from(novo_checks::report_lines(d.doc().project()).len() > 2);
+    assert_eq!(pages, 2 + report, "one PDF page per project page");
     // DXF export: every page into a folder beside the project, drawn with
     // geometry (the symbols are in it), reproducible on a second export.
     let files = d

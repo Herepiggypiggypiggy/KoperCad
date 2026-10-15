@@ -111,7 +111,9 @@ pub fn place_macro(
 }
 
 /// What [`place_macro`] would do, computed on a copy of the project; the
-/// project is not changed.
+/// project is not changed. It clones the project, and the report does not
+/// depend on `origin`: compute it once when a ghost starts and again only
+/// when the options or parameter values change, not on every pointer move.
 pub fn preview(
     project: &Project,
     definition: &BlockDefinition,
@@ -214,4 +216,84 @@ fn settle_wire_numbers(
         number_placed(tx, &own, report)?;
     }
     Ok(())
+}
+
+/// The temporary name a capture is made under, so it can never clash with a
+/// definition already in the project.
+const CAPTURE_NAME: &str = "\u{1}capture";
+
+/// Captures `items` (symbols, junctions and free texts; anything else in
+/// the selection is skipped, wires between captured objects come with them)
+/// as a block definition named `name`, relative to their top-left corner.
+/// The project is not changed: the capture runs on a copy.
+pub fn capture(
+    project: &Project,
+    name: &str,
+    description: &str,
+    items: &[AnyId],
+) -> Result<BlockDefinition> {
+    let items: Vec<AnyId> = items
+        .iter()
+        .copied()
+        .filter(|i| matches!(i, AnyId::Symbol(_) | AnyId::Junction(_) | AnyId::Text(_)))
+        .collect();
+    let origin = selection_origin(project, &items);
+    let mut copy = project.clone();
+    let (mut definition, _) = copy.transact("Capture macro", |tx| {
+        let id = tx.define_block(CAPTURE_NAME, &items, origin, Vec::new())?;
+        tx.project()
+            .block_definition(id)
+            .cloned()
+            .ok_or(ModelError::NotFound(id.into()))
+    })?;
+    definition.name = name.to_owned();
+    definition.description = description.to_owned();
+    Ok(definition)
+}
+
+/// The top-left corner of the drawn objects among `items`.
+pub fn selection_origin(project: &Project, items: &[AnyId]) -> Point {
+    let points = items.iter().filter_map(|&item| match item {
+        AnyId::Symbol(s) => project.symbol(s).map(|s| s.placement.origin),
+        AnyId::Junction(j) => project.junction(j).map(|j| j.position),
+        _ => None,
+    });
+    corner(points)
+}
+
+/// Where a macro goes by default: right of what is on `page` (including the
+/// reach of each symbol's pins), top aligned, one `gap` away. An empty page gets the origin.
+pub fn free_origin(project: &Project, page: PageId, gap: f64) -> Point {
+    let symbols = project.symbols().filter(|s| s.page == page);
+    let mut right = f64::NEG_INFINITY;
+    let mut points = Vec::new();
+    for s in symbols {
+        // Pins reach past the origin of a wide symbol.
+        for pin in &s.pins {
+            right = right.max(s.placement.apply(pin.offset).x);
+        }
+        right = right.max(s.placement.origin.x);
+        points.push(s.placement.origin);
+    }
+    for j in project.junctions().filter(|j| j.page == page) {
+        right = right.max(j.position.x);
+        points.push(j.position);
+    }
+    if points.is_empty() {
+        return Point::new(0.0, 0.0);
+    }
+    Point::new(right + gap, corner(points.into_iter()).y)
+}
+
+fn corner(points: impl Iterator<Item = Point>) -> Point {
+    let (mut x, mut y) = (f64::INFINITY, f64::INFINITY);
+    for p in points {
+        x = x.min(p.x);
+        y = y.min(p.y);
+    }
+    if x.is_finite() && y.is_finite() {
+        Point::new(x, y)
+    } else {
+        Point::new(0.0, 0.0)
+    }
 }
