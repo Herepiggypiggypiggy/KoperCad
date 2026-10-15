@@ -673,3 +673,32 @@ fn draw_cells<'a>(
         x += width;
     }
 }
+
+#[cfg(test)]
+mod target_tests {
+    use super::is_project_target;
+
+    #[test]
+    fn project_files_are_never_export_targets() {
+        let dir = tempfile::tempdir().unwrap();
+        let open = dir.path().join("plant.dat");
+        std::fs::write(&open, b"x").unwrap();
+        // The open file, whatever its name.
+        assert!(is_project_target(&open, Some(&open)));
+        // A project extension, even if the file does not exist yet.
+        assert!(is_project_target(&dir.path().join("A.NOVO"), None));
+        assert!(is_project_target(&dir.path().join("a.novo.autosave"), None));
+        // An existing SQLite database under another name.
+        let db = dir.path().join("renamed.xlsx");
+        std::fs::write(&db, b"SQLite format 3\0rest").unwrap();
+        assert!(is_project_target(&db, None));
+        // A fresh report file and an ordinary existing one are fine.
+        assert!(!is_project_target(
+            &dir.path().join("out.xlsx"),
+            Some(&open)
+        ));
+        let plain = dir.path().join("plain.csv");
+        std::fs::write(&plain, b"a;b").unwrap();
+        assert!(!is_project_target(&plain, Some(&open)));
+    }
+}

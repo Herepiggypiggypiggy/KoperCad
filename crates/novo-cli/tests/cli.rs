@@ -377,7 +377,9 @@ fn export_reports_as_excel_and_csv() {
             "Cut list",
             "Terminal diagram",
             "Cable diagram",
-            "IO list"
+            "IO list",
+            "Cable schedule",
+            "Plug connection list"
         ]
     );
 
@@ -394,4 +396,108 @@ fn export_reports_as_excel_and_csv() {
     let run = novo(&["export", "wires", s(&path), "-o", s(&path)]);
     assert_eq!(run.code, exit::WRITE);
     assert!(run.err.contains("it is a project file"));
+}
+
+/// A project with revisions A and B (a device description changed in
+/// between) and a rename after B, saved in `dir`.
+fn revised(dir: &Path) -> PathBuf {
+    use novo_core::{Device, DeviceTag, Document};
+    use novo_revisions::{IndexRule, issue_revision};
+    use novo_storage::Session;
+
+    let path = dir.join("revised.novo");
+    let mut doc = Document::default();
+    let (k1, _) = doc
+        .transact("Draw", |tx| {
+            tx.add_page("1")?;
+            tx.add_device(DeviceTag::parse("-K1").unwrap(), "Relay")
+        })
+        .unwrap();
+    let mut session = Session::create(&path, doc.project()).unwrap();
+    let rule = IndexRule::Letters;
+    issue_revision(&mut doc, &mut session, rule, "2026-10-15", "TV", "First").unwrap();
+    let (_, changes) = doc
+        .transact("Edit", |tx| {
+            tx.update::<Device>(k1, |d| d.description = "Pump relay".into())
+        })
+        .unwrap();
+    session.record(&changes);
+    issue_revision(&mut doc, &mut session, rule, "2026-10-16", "TV", "Second").unwrap();
+    let (_, changes) = doc
+        .transact("Rename", |tx| {
+            tx.update::<Device>(k1, |d| d.description = "Pump relay 2".into())
+        })
+        .unwrap();
+    session.record(&changes);
+    session.save(doc.project()).unwrap();
+    session.close().unwrap();
+    path
+}
+
+#[test]
+fn revisions_list_and_diff() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = revised(dir.path());
+    let file = file.to_str().unwrap();
+    let before = std::fs::read(file).unwrap();
+
+    let list = novo(&["revisions", "list", file]);
+    assert_eq!(list.code, exit::OK, "{}", list.err);
+    assert!(
+        list.out.contains("A  2026-10-15  TV  First"),
+        "{}",
+        list.out
+    );
+    assert!(
+        list.out.contains("B  2026-10-16  TV  Second"),
+        "{}",
+        list.out
+    );
+
+    let diff = novo(&["revisions", "diff", file, "A", "B"]);
+    assert_eq!(diff.code, exit::OK, "{}", diff.err);
+    assert!(diff.out.contains("changed Device -K1"), "{}", diff.out);
+    assert!(
+        diff.out.contains("description: Relay -> Pump relay"),
+        "{}",
+        diff.out
+    );
+
+    let now = novo(&["revisions", "diff", file, "B", "now", "--json"]);
+    assert_eq!(now.code, exit::OK, "{}", now.err);
+    let json: serde_json::Value = serde_json::from_str(&now.out).unwrap();
+    assert_eq!(json["rows"][0]["label"], "Device -K1");
+    assert_eq!(json["rows"][0]["fields"][0]["new"], "Pump relay 2");
+
+    let same = novo(&["revisions", "diff", file, "B", "B"]);
+    assert_eq!(same.code, exit::OK);
+    assert!(same.out.contains("No differences"), "{}", same.out);
+
+    let unknown = novo(&["revisions", "diff", file, "Q", "now"]);
+    assert_eq!(unknown.code, exit::USAGE);
+    assert!(unknown.err.contains("no revision `Q`"), "{}", unknown.err);
+
+    // Read only: the file is unchanged.
+    assert_eq!(std::fs::read(file).unwrap(), before);
+}
+
+#[test]
+fn export_terminals_writes_the_strip_diagram_with_wire_and_bridge_columns() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("strip.novo");
+    let mut p = ScriptProject::create(&path, "Strip", false).unwrap();
+    p.add_page("1", "Main").unwrap();
+    let x1 = p.add_device("-X1", "Strip", "terminal_strip").unwrap();
+    p.add_terminal(x1, "1").unwrap();
+    p.save().unwrap();
+    p.close().unwrap();
+
+    let run = novo(&["export", "terminals", s(&path)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert!(
+        run.out
+            .contains("Internal,Wire in,Terminal,Kind,Bridged to,Wire out,External"),
+        "{}",
+        run.out
+    );
 }
