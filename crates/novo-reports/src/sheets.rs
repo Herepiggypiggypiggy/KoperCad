@@ -136,6 +136,73 @@ impl LiveReports {
     }
 }
 
+/// What a sheet shows, boiled down for revisions: which sheet of which
+/// page, and a hash of its content.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SheetFingerprint {
+    pub page: PageId,
+    /// The sheet's printed name (`20b`).
+    pub name: String,
+    /// The report that fills it.
+    pub report: String,
+    /// A hash of the report title, the section title, the column headers
+    /// and the sheet's rows (every cell as printed). It leaves out the
+    /// sheet name, "page n / m" and "continued", so renaming or
+    /// renumbering a sheet does not change it, while any change to what it
+    /// lists does. Stable across runs and platforms (FNV-1a over UTF-8),
+    /// so it can be stored in a revision and compared later.
+    pub hash: u64,
+}
+
+impl LiveReports {
+    /// A fingerprint for every sheet of every generated page, in page
+    /// order. Compare two states of a project sheet by sheet (by page and
+    /// position, or by `name`) to find the generated sheets whose content
+    /// changed (DESIGN.md §8).
+    pub fn sheet_fingerprints(&mut self, project: &Project) -> Vec<SheetFingerprint> {
+        let sheets = self.generated_sheets(project);
+        sheets
+            .into_iter()
+            .filter_map(|sheet| {
+                let output = self.get(project, &sheet.report)?;
+                Some(SheetFingerprint {
+                    page: sheet.page,
+                    name: sheet.name,
+                    report: sheet.report,
+                    hash: fingerprint(output, &sheet.sheet),
+                })
+            })
+            .collect()
+    }
+}
+
+/// The hash of what `page` of `output` shows; see [`SheetFingerprint::hash`].
+pub fn fingerprint(output: &ReportOutput, page: &ReportPage) -> u64 {
+    // FNV-1a, with a 0xFF byte between fields so "ab","c" differs from
+    // "a","bc" (0xFF never occurs in UTF-8).
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut put = |text: &str| {
+        for byte in text.bytes().chain(std::iter::once(0xFF)) {
+            hash ^= u64::from(byte);
+            hash = hash.wrapping_mul(0x0100_0000_01b3);
+        }
+    };
+    put(&output.title);
+    if let Some(section) = output.sections.get(page.section) {
+        put(&section.title);
+        for column in &section.columns {
+            put(&column.header);
+        }
+        for row in section.rows.get(page.rows.clone()).unwrap_or_default() {
+            for cell in &row.cells {
+                put(&cell.to_string());
+            }
+            put("");
+        }
+    }
+    hash
+}
+
 /// The sheets `output` fills on generated `page`, named by [`sheet_names`]
 /// with every other page's name taken.
 pub(crate) fn sheets_for(
