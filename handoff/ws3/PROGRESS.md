@@ -37,3 +37,7 @@
 2026-10-15 04:00 UTC #144 head 4f842a6 (bold 4%, fits cells). Delta re-checks requested. Outputs thread has the novo-pdf Helvetica-Bold side staged for after merge.
 2026-10-15 04:10 UTC #144 merged. #154 opened (head bdc9043 on main 6fa1492): CanvasView::bold_family, app uses novo-theme strong family (Inter SemiBold).
 2026-10-15 04:15 UTC #154 merged (bold face). Nothing open.
+2026-10-15 04:25 UTC #164 opened (head f3ced71): bold advance. Starting cabinet engine primitives (hatch, dimensions, rail/duct snap) locally.
+2026-10-15 04:25 UTC #164 merged (bold advance 0.66, B + design READY).
+2026-10-15 07:40 UTC #176 opened (head 05a09e9): drafting::{hatch, hatched_rect, Dimension}, SnapLine + SnapKind::OnLine, demo --panel. B and design READY on 05a09e9; waiting for the lead to merge. B's 3 notes (hatch line cap, rail capture by perpendicular distance, dead fallback) are fixed in local commit ce5c595 on branch canvas-drafting-followup; push as a small PR from main once #176 merges, with the handoff refresh.
+2026-10-15 07:55 UTC Lead: parked after #176 merges. Open asks for a later task: wiring-mode live preview and refusal look (DESIGN section 4, #169; needs typed Refusal data from the wiring-modes thread, session_011TpANb8LDXUp93s9E33xqv); PLC address labels come from PlcIndex::address_label (docs/design/plc.md section 4, #165).
