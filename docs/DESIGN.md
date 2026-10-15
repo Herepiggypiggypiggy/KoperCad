@@ -295,8 +295,9 @@ the view, nothing moves. Otherwise the view centres on the target and zooms
 in to readable size (a closer zoom the user already had is kept), unless
 the target is too big to fit, when it zooms out just enough.
 
-There are no keys for corners, T-pieces, terminals, cables or potentials,
-because the user does not place those. "Repeat last tool" is the first item
+There are no keys for T-pieces, terminals, cables or potentials, because
+the user does not place those. Corners are clicks in a wire being made,
+never symbols. "Repeat last tool" is the first item
 of the context menu on empty canvas and the first row of an empty command
 surface; it has no key, so Enter always means accept.
 
@@ -308,30 +309,46 @@ other.
 
 - **Corners** (the default, EPLAN style): click where the wire should turn
   and the lines between your clicks connect by themselves, with at most two
-  bends per leg. Click a pin, a junction or a wire to finish. A drag from
-  one pin to another is the quick form of the same thing: the router picks
-  the whole route.
+  bends per leg. Each leg's elbow runs first along the axis the pointer has
+  moved furthest from the last point; the preview shows it before the click
+  and R flips it (R is already rotate while placing, so no new key). Click
+  a pin, a junction or a wire to finish.
 - **Lines** (AutoCAD style): you draw the lines. Each click commits one
   straight segment from the previous point, locked to the axis the pointer
-  is nearer to, and nothing is routed for you. Click a pin, a junction or a
-  wire to finish; Enter or a double click finishes on the last point when it
-  is on a pin or a wire. A drag from pin to pin still routes itself, because
-  a drag has no points in between to draw.
+  is nearer to (a diagonal pointer snaps to the nearer axis), and nothing is
+  routed for you. Click a pin, a junction or a wire to finish; Enter or a
+  double click finishes on the last point when it is on a pin or a wire.
 
-In both, Backspace takes back the last corner or segment and Esc runs the
-Escape ladder. A wire that ends on another wire of the same potential makes
-a T-junction; on a wire of a different declared potential it is refused
-with the reason. Lines are orthogonal only (see §12 for diagonals).
+**A drag from a pin is not a mode.** In any tool and either mode, pressing
+on a pin and moving more than 4 px (the same threshold as pan) is the quick
+connection: release on a pin or a wire and the router picks the whole
+route; release on nothing and it cancels, as Esc does. A press that moves
+less than 4 px is a click, so a shaky click never becomes a line. The
+connection budget of 1 in §6 is the drag; a wire with N corners costs N + 2
+clicks in either mode.
+
+In both modes, Backspace takes back the last corner or segment and Esc
+cancels the whole wire in progress (then the rest of the Escape ladder). A
+wire that ends on another wire of the same potential makes a T-junction; on
+a wire of a different declared potential it is refused with the reason. A
+route never passes through another conductor's pin or junction. Lines are
+orthogonal only (§12 for diagonals).
 
 **The toggle.** Shift+W switches mode, from anywhere on the drawing and
 also in the middle of a wire (the points already placed stay and the next
 click follows the new mode). W is the wire, Shift+W is how wires are
-drawn, the same pairing as G and Shift+G. The tool dock's Connect button
-carries a two-state switch, `Corners | Lines`, always visible with the dock
-and never behind a hover; its tooltip shows the key, and the mode is named
-in the dock hint ("Lines: click a pin · click each corner · click a pin ·
+drawn, the same pairing as G and Shift+G. A small two-segment chip
+`Corners | Lines` sits right of the Connect icon in the tool dock, always
+visible and never behind a hover. It is quiet (faint text) while another
+tool is active, and clicking either segment selects Connect in that mode,
+so tool and mode change in one action. The selected segment is the usual
+lift, not copper, which stays on the active tool's underline. The Connect
+icon itself carries the mode (an L for Corners, a straight segment for
+Lines). The tooltip reads "Connect · W · Shift+W switches". The mode is
+also named in the dock hint ("Lines: click a pin · click each corner · click a pin ·
 Backspace undo · Shift+W corners"). Compact dock keeps the mode word in
-the hint. The command surface lists `Wiring mode: corners` and `Wiring
+the hint. A held Shift+W does not flip back and forth: key repeat is
+ignored. The command surface lists `Wiring mode: corners` and `Wiring
 mode: lines` under Draw (command `wire.mode`, typed "mode" or "lines").
 The mode is a Preference of the user, not of the project, so two people
 on one project each keep their own. Switching never changes a wire that
@@ -351,17 +368,26 @@ the screen:
   their pins; if that cannot clear it, the gesture is refused;
 - in Lines, a segment that would lie over another conductor is refused
   before it is placed, never nudged, because the line is exactly what the
-  user drew: the cursor shows not-allowed, the clashing wire is tinted with
-  the Error colour and the dock hint says why ("overlaps -W3 L1"). Nothing
-  opens a dialog;
+  user drew. In Corners a clicked corner that lies on another conductor is
+  refused the same way. The refusal is live while the pointer moves, not
+  only on click, so there is never a dead click, and never colour alone
+  (the transient mark in §5): not-allowed cursor, the clashing segment
+  tinted with the Error colour, a dashed outline of the refused corner or
+  line with a cross, the preview kept up to the last legal point, and the
+  dock hint in Error text ("Overlaps -W3 L1"). Nothing opens a dialog;
 - the reason is returned as data (the other conductor and the stretch), not
   only drawn as text, so the dock, the tester and scripts read the same
   answer;
-- moving a symbol re-runs the check on its wires as part of the same undo
-  step;
-- a file that arrives with overlaps (imported, older) is not rewritten on
-  load; novo-checks reports each as a warning at the stretch, with the
-  nudge as its fix.
+- moving a symbol is never refused: the check re-runs on its wires as part
+  of the same undo step, a wire that would overlap is nudged where it can
+  be, and otherwise the overlap is accepted and shows in Issues;
+- a file that arrives with overlaps (imported, older, or from that move) is
+  not rewritten on load; novo-checks reports each as a warning (`wire.overlap`)
+  that marks both segments, with the nudge as its fix. It is a warning, not
+  an error: connectivity lives in the model, not in where the lines are;
+- merging two wires of one conductor is one undo step. The surviving wire
+  keeps its number and text and the other's is released; if both carry
+  different explicit numbers the merge is refused with the reason.
 
 A hand-drawn route (Lines, or Corners with clicked corners) is kept by
 `tidy`; selecting it and choosing `tidy` re-routes it on purpose. Moving a
@@ -372,22 +398,31 @@ where it was put.
 Acceptance, for testers and reviewers, run in both modes unless marked:
 
 1. W, drag pin to pin: a routed wire, no overlap (identical in both modes).
-2. Shift+W: the dock switch and the hint change mode; Shift+W again: back.
-3. Corners: click pin, click two corners, click pin: a wire through those
-   corners, every segment horizontal or vertical.
-4. Lines: click pin, click two corners, click pin: the same wire, with no
-   segment the user did not click.
-5. Lines: a segment over another conductor is refused with the reason in
-   the hint, and nothing changes. Corners: the same route is nudged clear
-   or refused.
+   Releasing a drag on nothing cancels. A press under 4 px is a click.
+2. Shift+W: the chip and the hint change mode; Shift+W again: back. Holding
+   Shift+W does not flip repeatedly. Shift+W in the middle of a wire keeps
+   the points placed and the next click follows the new mode.
+3. Corners, EPLAN style: click pin, click two corners, click pin: a wire
+   through those corners, every segment horizontal or vertical; R flips an
+   elbow, shown in the preview before the click.
+4. Lines, AutoCAD style: click pin, click two corners, click pin: the same
+   wire, with no segment the user did not click.
+5. Lines: a segment over another conductor is refused live, with the
+   cursor, tint, outline and reason in the hint, and nothing changes.
+   Corners: a clicked corner over another conductor is refused the same
+   way; a router leg is nudged clear or refused.
 6. Two wires of one conductor from a shared pin store the shared stretch
-   once, with a junction where they diverge.
-7. Undo removes one whole wire in either mode, Backspace one corner or
-   segment.
-8. Shift+W in the middle of a wire keeps the points placed and the next
-   click follows the new mode.
-9. Quit and reopen: the mode is the one last used, read from the user's
-   Preferences and not from the project file.
+   once, with a junction where they diverge; merging keeps the surviving
+   number and text and refuses on two different explicit numbers.
+7. Ending on a wire of the same potential makes a T-junction; ending on a
+   different declared potential is refused with the reason.
+8. Esc mid-wire cancels the whole wire; Backspace removes one corner or
+   segment; undo removes one whole wire.
+9. Moving a symbol never fails; an overlap it cannot avoid shows in Issues
+   and marks both segments. A file with existing overlaps opens unchanged
+   and shows them in Issues.
+10. Quit and reopen: the mode is the one last used, read from the user's
+    Preferences and not from the project file.
 
 Keys match the logical character, not the physical position, so `?`,
 Ctrl+Z and Ctrl+Y work on Dutch, German (QWERTZ) and US layouts alike.
@@ -404,6 +439,7 @@ between fields as usual.
 | Proposal (terminals, cable, part) | Dashed steel blue at 55%, 1 px; the highlighted one dashed at full strength, 2 px. Proposals are never solid, so none can be mistaken for a drawn wire | "↵ accept · Tab next" on the highlighted one only |
 | Warning | Small amber triangle, top right of the object, screen sized | on hover |
 | Error | Small red octagon, same place | on hover |
+| Refused wire (transient, never stored) | The clashing segment tinted Error, a dashed Error outline of the refused corner or line with a cross, the Error icon in the dock hint | "Overlaps -W3 L1" in the dock hint; the not-allowed cursor |
 | Override | Hollow grey diamond, top left, while Shift+O is held | the inspector shows "override" and a reset arrow |
 | Change (Changes mode only) | Added green, modified amber, removed faint red dashed ghost | listed in the outline |
 
@@ -657,7 +693,7 @@ Changes mode, WS-09 the PDF.
 | Separate editors for terminals and cables | EPLAN | They hide the schematic when you need it; the drawer keeps them beside it |
 | Insert centre, symbol trees, ribbon | EPLAN, AutoCAD Electrical | Spatial hunting; the command surface finds by name |
 | Frozen macros | Most CAD | Go stale on placement; blocks stay linked |
-| Corner and T-piece symbols | EPLAN | Drawing artefacts of connectivity, not intent |
+| Corner and T-piece symbols | EPLAN | Drawing artefacts of connectivity, not intent. The corners of a wire are bend points of its route, not objects |
 | Wiring modes | One way; Auto plus a merged Draw; Corners and Lines as two modes | **Two modes, Corners (default) and Lines.** They match the two ways Tadjiro knows from EPLAN and AutoCAD, and they differ in a real way: Corners lets the router join the points, Lines routes nothing and refuses an overlap instead of nudging it. A drag from pin to pin stays the cheapest connection in both |
 | Linking cross references by hand | EPLAN | References follow ownership |
 | Assigning potentials wire by wire | EPLAN | The source declares it once |
