@@ -142,13 +142,19 @@ pub fn assign_part(
 ///
 /// A catalog pasted without a `connections` column says nothing either
 /// way; such a part is a terminal block unless its description or keywords
-/// name an accessory ("end cover", "end bracket", "marker", ...).
+/// name an accessory ("end cover", "end bracket", "marker", ...) before any
+/// "with" or "for", so "terminal block with marker groove" stays a block.
+/// `connections` of 0 in any form (`0`, `0,0`, text "0") is an accessory.
 pub fn is_terminal_block(part: &CatalogPart) -> bool {
     if !part.fits("X") {
         return false;
     }
     match part.data.get("connections") {
-        Some(v) => !matches!(v, Value::Int(0)),
+        Some(Value::Int(n)) => *n != 0,
+        Some(Value::Float(f)) => *f != 0.0,
+        Some(Value::Text(t)) if t.trim().is_empty() => !names_an_accessory(part),
+        Some(Value::Text(t)) => crate::sheet::parse_number(t) != Some(0.0),
+        Some(_) => true,
         None => !names_an_accessory(part),
     }
 }
@@ -159,13 +165,20 @@ const ACCESSORY_WORDS: &[&str] = &[
 ];
 
 fn names_an_accessory(part: &CatalogPart) -> bool {
-    let words = |text: &str| {
-        text.to_lowercase()
-            .split(|c: char| !c.is_alphanumeric())
+    let head_names_one = |text: &str| {
+        let text = text.to_lowercase();
+        words(&text)
+            .take_while(|w| !QUALIFIER_WORDS.contains(w))
             .any(|w| ACCESSORY_WORDS.contains(&w))
     };
-    words(&part.description) || part.keywords.iter().any(|k| words(k))
+    let head = part.description.split([',', ';', '(']).next().unwrap_or("");
+    head_names_one(head) || part.keywords.iter().any(|k| head_names_one(k))
 }
+
+/// Words after which a description lists features rather than naming the
+/// part: "terminal block with marker groove" is a block, "end cover for
+/// UT 2,5" a cover.
+const QUALIFIER_WORDS: &[&str] = &["with", "for", "mit", "für", "fur", "met", "voor"];
 
 /// The terminal kind a terminal block is for: a protective conductor block
 /// is for PE terminals, any other block for feed-through terminals.

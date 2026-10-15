@@ -1212,8 +1212,32 @@ fn a_pe_terminal_is_offered_a_pe_block_first_and_accessories_stay_on_the_strip()
     pasted.description = "Feed-through terminal block UT 4".into();
     pasted.letter_codes = vec!["X".into()];
     assert!(novo_parts::is_terminal_block(&pasted));
-    pasted.data.insert("connections".into(), Value::Int(0));
-    assert!(!novo_parts::is_terminal_block(&pasted));
+    for zero in [Value::Int(0), Value::Float(0.0), Value::Text("0".into())] {
+        pasted.data.insert("connections".into(), zero);
+        assert!(!novo_parts::is_terminal_block(&pasted));
+    }
+    pasted
+        .data
+        .insert("connections".into(), Value::Text("2".into()));
+    assert!(novo_parts::is_terminal_block(&pasted));
+    // Accessory words after "with" or "for" describe a block's features.
+    pasted.data.clear();
+    for description in [
+        "Feed-through terminal block with marker groove",
+        "Terminal block for plug-in bridge, with end plate",
+        "Durchgangsreihenklemme mit Brückenschacht",
+    ] {
+        pasted.description = description.into();
+        assert!(novo_parts::is_terminal_block(&pasted), "{description}");
+    }
+    for description in [
+        "End cover for UT 2,5",
+        "Plug-in bridge, 2-pole",
+        "Zack marker strip",
+    ] {
+        pasted.description = description.into();
+        assert!(!novo_parts::is_terminal_block(&pasted), "{description}");
+    }
     let command = assign_part(p, &[gate.x1], &cover, AssignMode::Add);
     run(&mut doc, command);
     let p = doc.project();
