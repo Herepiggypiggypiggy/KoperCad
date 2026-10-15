@@ -9,3 +9,9 @@ State at 2026-10-15 17:30Z (all reviews posted):
 - #327 CHANGES NEEDED 0f62230 (Tx::remove of the old wire clears its cable core; update the wire in place)
 - #323 CHANGES NEEDED 3632c97 (Changes tab re-enables Changes mode every frame, so it cannot be left)
 Next: re-review #327 and #323 when the lead sends new heads; review newly opened odd PRs.
+
+## Update 2026-10-15 18:50Z
+- Routing from the lead: from #396 on, PR number mod 3 = 1 is mine (mod 0 reviewer A, mod 2 reviewer C). Older odd PRs stay with me.
+- Trap: several worktrees of the same crate in ONE CARGO_TARGET_DIR reuse stale artifacts (cargo hashes the workspace-relative path), giving false "unresolved import" errors. Use one target dir per PR, delete after.
+- Verdicts: #400 READY 9b03bf8; #403 READY 48524d4; #406 READY 051d6a0; #409 READY 7bc13ac (draft); #415 READY 654b92a; #395 READY 8972e56 (asked, mod 2); #412 CHANGES NEEDED 43d1e6f (KT comment, source counted twice in ik1_min, drop limit citation).
+- Open for re-review: #327, #323, #412.
