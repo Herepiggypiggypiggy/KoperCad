@@ -7,6 +7,7 @@ mod checks;
 mod dock;
 mod drawers;
 mod inspector;
+mod link;
 mod pdf;
 mod plc;
 mod reports;
