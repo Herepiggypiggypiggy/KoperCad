@@ -31,6 +31,8 @@ Check that the PR is still open before pushing. After every push, message the re
 - No manual corners or T-pieces, and no J key. Tab = next proposal, Enter = accept, R/X orient.
 - One command field: Ctrl+K at the top, Q (place mode, I is an alias) and a tapped Space at the pointer. No menu bar. The empty field is the grouped menu.
 - Favourites 1-9 act only while the place field is empty.
+- Left-hand keys: Q place, W wire, R rotate, C cable, X mirror, M move; E, T, P, J stay free. While a wire is in progress the app asks `Keymap::resolve_while_wiring`: Q ends the wire on the part under the pointer (`wire.end_on_part`), Tab cycles that part's pins (`wire.next_pin`). `link` is the verb for `xref.link`; `palette::link_tags` splits `link -K3 -K1`.
+- New potential feeds are named by `edit::next_feed_name` (L1, L2, L3 per page); `insert::next_feed_name` is the same rule for scripts.
 - Search builds on novo-core Project::search; aliases come from novo-symbols by_alias. Don't duplicate either.
 - The canvas owns Escape (escape_with) and Space tap-vs-hold; the editor owns preview before Enter.
 - Theme commands are not in the list (the app is dark only).
