@@ -118,13 +118,19 @@ Links and wire ends (`docs/design/canvas-feedback.png`): wires are a mid
 saturated blue `#6F9BDB` and symbols near white `#ECEAE5`, at least 2:1
 apart, so a wire never merges into a terminal outline. A filled copper
 joint dot (`junction`, radius 3 px at 100% zoom, 3.5 px on a tee) marks
-every place a wire meets a pin or another wire. A wire ended by double
+every place a wire meets a pin or another wire; a free pin is a hollow ring
+(open-connection green) and a connected pin a filled dot. Joints are not
+marks (marks are proposals, problems, overrides and changes), and the
+selection never relies on colour alone: it is also 2.5 px thicker with a
+halo, and joints are fixed-size dots, so a selected net stays unmistakable
+without colour vision. A wire ended by double
 click gets an open copper ring (`wire_end`, radius 4 px, 1.6 px line) and
 a small amber flag (`unconnected_flag`, 16 px pole, 10 px pennant) with
 the tooltip "Unconnected". Hollow means open, filled means joined. The
 selection stays the brighter copper with a halo, so a selected net is still
-told apart from its joints. The radial place picker (four wedges,
-inner radius 38, outer 110, hovered wedge copper outline) and the
+told apart from its joints. The radial place picker (five wedges: Terminal,
+Switch, Relay, Breaker, More...; inner radius 38, outer 110, hovered wedge
+copper outline, its items as pills on an outer ring) and the
 right-click menu (26 px rows, 236 px wide, shortcut right-aligned) are in
 the same mock-up; behaviour is Workflow's spec.
 
