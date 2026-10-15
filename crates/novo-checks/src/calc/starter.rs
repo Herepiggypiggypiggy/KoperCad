@@ -383,9 +383,7 @@ pub fn size_starter(input: &SizingInput<'_>) -> Result<Proposal, NoProposal> {
 
     // The short-circuit device and (if separate) the relay.
     let contactor_choice;
-    let chosen_parts: Picked;
-
-    match input.scheme {
+    let chosen_parts: Picked = match input.scheme {
         Scheme::FuseContactorRelay => {
             let factor = fuse_factor(start);
             // Relay: narrowest range containing Ie, class at least required.
@@ -508,7 +506,7 @@ pub fn size_starter(input: &SizingInput<'_>) -> Result<Proposal, NoProposal> {
                     why: "no maker relay in the catalog: this is the requirement".into(),
                 },
             };
-            chosen_parts = Picked {
+            Picked {
                 scpd,
                 relay: relay_choice,
                 characteristic: f.characteristic.clone(),
@@ -516,7 +514,7 @@ pub fn size_starter(input: &SizingInput<'_>) -> Result<Proposal, NoProposal> {
                 let_through_i2t: f.let_through_i2t,
                 id: f.id.clone(),
                 rated_a: f.rated_a,
-            };
+            }
         }
         Scheme::MotorBreakerContactor => {
             let mut breakers: Vec<&MotorBreakerOption> = Vec::new();
@@ -612,7 +610,7 @@ pub fn size_starter(input: &SizingInput<'_>) -> Result<Proposal, NoProposal> {
                 id: format!("{} (thermal release)", b.id),
                 why: format!("set to {:.1} A", ie),
             };
-            chosen_parts = Picked {
+            Picked {
                 scpd,
                 relay: relay_choice,
                 characteristic: Some(Characteristic::ThermalMagnetic {
@@ -624,9 +622,9 @@ pub fn size_starter(input: &SizingInput<'_>) -> Result<Proposal, NoProposal> {
                 let_through_i2t: None,
                 id: b.id.clone(),
                 rated_a: b.max_a,
-            };
+            }
         }
-    }
+    };
 
     let cos = m.cos_phi.unwrap_or_else(|| typical_cos_phi(m.power_kw));
     let design = CircuitDesign {
