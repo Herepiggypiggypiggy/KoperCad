@@ -319,7 +319,7 @@ impl NovoApp {
         let live = &mut self.wb.live;
         let dt = f64::from(ctx.input(|i| i.stable_dt));
         let solved = live.solved(project, dt);
-        let timing = solved.settled.timing;
+        let timing = solved.settled.timing.then_some(solved.settled.remaining);
         let wires = lit_wires(project, page, &solved.netlist, &solved.settled.solution);
         let legend = legend(
             &wires,
@@ -537,8 +537,8 @@ impl NovoApp {
                             ),
                         );
                     }
-                    if timing {
-                        ui.weak("A timer is running");
+                    if let Some(left) = timing {
+                        ui.weak(format!("A timer is running, {left:.1} s left"));
                     }
                     if legend.carried.is_empty() && legend.shorted == 0 {
                         ui.weak("Nothing is energized");
@@ -547,7 +547,7 @@ impl NovoApp {
             });
 
         // Draws again only when something changed; egui repaints on input.
-        if leave || open_all || clicked.is_some() || timing {
+        if leave || open_all || clicked.is_some() || timing.is_some() {
             ctx.request_repaint();
         }
         if leave {

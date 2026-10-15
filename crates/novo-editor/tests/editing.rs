@@ -2038,6 +2038,36 @@ fn dragging_a_label_moves_only_the_text_in_one_undo_step() {
 }
 
 #[test]
+fn dragging_a_corner_of_a_slanted_wire_squares_it_in_corners_mode_only() {
+    use novo_editor::edit::PartKind;
+    for lines in [false, true] {
+        let (mut doc, _page, mut editor, [a, b, _]) = three_contacts();
+        if lines {
+            editor.toggle_wire_mode();
+        }
+        let from = doc.project().symbol(a).unwrap().pin_position(0).unwrap();
+        let to = doc.project().symbol(b).unwrap().pin_position(0).unwrap();
+        let (wire, _) = doc
+            .transact("Wire", |tx| {
+                let wire = tx.connect(Endpoint::pin(a, 0), Endpoint::pin(b, 0))?;
+                tx.update::<novo_core::Wire>(wire, |w| w.route = vec![p(from.x + 7.0, 13.0)])?;
+                Ok(wire)
+            })
+            .unwrap();
+        let delta = p(5.0, -5.0);
+        assert!(editor.move_wire_part(&mut doc, wire, PartKind::Corner(0), delta));
+        let w = doc.project().wire(wire).unwrap();
+        let mut pts = vec![from];
+        pts.extend(w.route.iter().copied());
+        pts.push(to);
+        let square = pts
+            .windows(2)
+            .all(|s| (s[0].x - s[1].x).abs() < 1e-6 || (s[0].y - s[1].y).abs() < 1e-6);
+        assert_eq!(square, !lines, "{pts:?}");
+    }
+}
+
+#[test]
 fn a_double_click_on_empty_canvas_starts_a_wire_open_at_that_end() {
     for lines in [false, true] {
         let (mut doc, page, mut editor, [a, _, _]) = three_contacts();
@@ -2527,4 +2557,21 @@ fn show_where_it_goes_finds_the_wires_and_terminals_on_the_potential() {
         !found.contains(&AnyId::Symbol(m)),
         "a motor is not a terminal"
     );
+}
+
+#[test]
+fn a_pin_drag_shows_no_corner_piece() {
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/contacts/no", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    let a = symbol_at(&doc, page, p(40.0, 40.0));
+    let from = pin_pos(&doc, a, "14");
+    editor.hover(&doc, page, from, TOL);
+    editor.leave_tool();
+    editor.hover(&doc, page, from, TOL);
+    assert!(editor.begin_drag());
+    editor.hover(&doc, page, p(from.x + 40.0, from.y - 20.0), TOL);
+    assert!(editor.preview(&doc, page).wire.len() >= 3);
+    assert!(editor.preview(&doc, page).piece.is_none());
 }
