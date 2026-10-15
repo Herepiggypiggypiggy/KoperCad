@@ -23,7 +23,8 @@ pub use coupling::{
     Clock, DEFAULT_DELAY, Settled, delay_seconds, is_coil, is_timer_contact, settle, settle_timed,
 };
 pub use devices::{
-    DeviceStates, Direction, MotorRun, device_states, is_lamp, is_motor, lamp_color,
+    DeviceStates, Direction, MotorRun, TimerKind, TimerProgress, device_states, is_lamp, is_motor,
+    lamp_color, timer_progress,
 };
 pub use plc::{inputs_seen, is_plc_input, is_plc_output, output_drives};
 

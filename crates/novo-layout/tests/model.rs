@@ -1,5 +1,8 @@
 use novo_core::{DeviceTag, MountingPlate, Project, StructureId, Value};
-use novo_layout::model::{apply_plan, candidates, device_size, load, set_plate};
+use novo_layout::model::{
+    apply_plan, candidates, device_size, load, place_device, rotate_device, set_plate,
+    unplace_device,
+};
 
 fn project() -> (Project, StructureId) {
     let mut p = Project::new("t");
@@ -141,4 +144,37 @@ fn part_clearances_reach_the_clearance_check_and_a_device_can_override_them() {
     })
     .unwrap();
     assert!(load(&p, cab).unwrap().report().too_close.is_empty());
+}
+
+#[test]
+fn place_rotate_move_and_remove_a_device() {
+    let (mut p, cab) = project();
+    let cands = candidates(&p, cab);
+    let id = cands[0].id;
+    p.transact("drop", |tx| place_device(tx, cab, id, 50.0, 60.0, false))
+        .unwrap();
+    let l = load(&p, cab).unwrap();
+    assert_eq!(
+        (
+            l.placements[0].x,
+            l.placements[0].y,
+            l.placements[0].rotated
+        ),
+        (50.0, 60.0, false)
+    );
+    p.transact("turn", |tx| rotate_device(tx, id)).unwrap();
+    assert!(load(&p, cab).unwrap().placements[0].rotated);
+    p.transact("move", |tx| place_device(tx, cab, id, 100.0, 120.0, true))
+        .unwrap();
+    let l = load(&p, cab).unwrap();
+    assert_eq!(l.placements.len(), 1);
+    assert_eq!((l.placements[0].x, l.placements[0].y), (100.0, 120.0));
+    p.transact("remove", |tx| unplace_device(tx, id)).unwrap();
+    assert!(load(&p, cab).unwrap().placements.is_empty());
+    // Turning or removing a device that is not placed does nothing.
+    p.transact("noop", |tx| {
+        rotate_device(tx, id)?;
+        unplace_device(tx, id)
+    })
+    .unwrap();
 }

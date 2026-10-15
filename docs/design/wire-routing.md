@@ -99,9 +99,16 @@ to force a wire through chosen ducts. A pin is the only stored routing data.
 Ducts are stored as rails of kind Duct on an enclosure's plate (WS-02 `Rail`:
 `x, y, length, vertical, width, height`; width and height 0 while unknown).
 `novo_routing::model::ducts` and `network` read them; engine duct ids are the
-raw rail ids. Wire jobs are not read yet: they need the position of each
-terminal on its device (not in the part data) and the wire list from the
-netlist (WS-13). Until then jobs are built by the caller.
+raw rail ids.
+
+`route_connections` takes the wire list's connections (from pin, to pin,
+optional wire diameter), puts each end on the mounting plate and routes them
+with one `plan` per enclosure. The model does not know where a terminal sits
+inside its device, so an end is the middle of the footprint edge the pin leaves
+through (from the pin's direction in the symbol library, not as the symbol is drawn on the page; the centre when it has none or the device
+is turned). A connection whose device is not placed, or whose ends are on
+different plates, or whose id is shared with another connection, is returned as **unrouted**: it gets no length rather than
+a wrong one. Terminals of a strip sit on the strip device.
 
 ## 7. Out of scope here
 

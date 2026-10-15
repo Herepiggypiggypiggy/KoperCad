@@ -24,7 +24,7 @@ use novo_sim::{
 };
 use novo_theme::{tokens, widgets};
 
-use super::live_anim::Anim;
+use super::live_anim::{Anim, Frame};
 use super::{Level, NovoApp};
 
 /// Radius of a pole badge, in screen points.
@@ -420,27 +420,33 @@ impl NovoApp {
             .map(|p| (p.id, (p.name.clone(), potential_color(p))))
             .collect();
         let states = novo_sim::device_states(project, &solved.netlist, &solved.settled);
+        let poles = solved.settled.poles.clone();
         let glows = load_glows(project, page, &solved.netlist, &solved.settled.solution);
+        let timers = novo_sim::timer_progress(project, &live.clock);
         let names: BTreeMap<SymbolId, String> = badges
             .iter()
             .map(|b| (b.symbol, symbol_name(project, b.symbol)))
             .collect();
 
         // Devices: lamps glow, motors turn, coils pull in.
-        let animating = self.wb.live.anim.paint(
+        let animating = self.wb.live.anim.paint(&Frame {
             ctx,
             canvas,
-            viewport.zoom,
-            &to_screen,
+            zoom: viewport.zoom,
+            to_screen: &to_screen,
             project,
-            self.canvas
+            library: self
+                .canvas
                 .schematic_ref()
                 .map(|v| v.editor.catalog.library()),
             page,
-            &states,
-            &energized,
-            dt as f32,
-        );
+            states: &states,
+            energized: &energized,
+            poles: &poles,
+            timers: &timers,
+            reduced: self.settings.reduce_motion,
+            dt: dt as f32,
+        });
 
         // Wires: lit in their colour, dimmed when nothing reaches them. The
         // canvas draws them in its wire layer, under the symbols and text.

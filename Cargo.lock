@@ -1856,6 +1856,7 @@ dependencies = [
  "novo-storage",
  "novo-symbols",
  "novo-terminals",
+ "novo-tests",
  "novo-theme",
  "novo-workflow",
  "novo-xref",
@@ -1886,6 +1887,7 @@ dependencies = [
  "glam",
  "naga",
  "novo-core",
+ "novo-symbols",
  "pollster 1.0.1",
  "wgpu",
 ]
@@ -1947,10 +1949,12 @@ dependencies = [
 name = "novo-interop"
 version = "0.1.0"
 dependencies = [
+ "calamine",
  "novo-canvas",
  "novo-core",
  "novo-parts",
  "novo-tests",
+ "rust_xlsxwriter",
  "thiserror 2.0.21",
 ]
 
@@ -1965,13 +1969,18 @@ dependencies = [
 name = "novo-parts"
 version = "0.1.0"
 dependencies = [
+ "dirs",
  "novo-core",
+ "novo-symbols",
  "novo-terminals",
  "novo-tests",
+ "quick-xml",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "thiserror 2.0.21",
+ "zip",
 ]
 
 [[package]]
@@ -2023,6 +2032,7 @@ dependencies = [
  "novo-cables",
  "novo-core",
  "novo-plc",
+ "novo-routing",
  "novo-terminals",
  "novo-tests",
  "rust_xlsxwriter",
@@ -2048,6 +2058,7 @@ name = "novo-routing"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+ "novo-layout",
 ]
 
 [[package]]
@@ -2055,6 +2066,7 @@ name = "novo-sim"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+ "novo-symbols",
 ]
 
 [[package]]

@@ -9,18 +9,17 @@
 //! slides along the terminal's axis, and the wire on it gets shorter or
 //! longer. When that would fold or bend the wire, the change is refused.
 
-use std::sync::OnceLock;
-
 use novo_core::{
     Direction, Endpoint, ModelError, Pin, Point, Result, SymbolId, SymbolInstance, SymbolKey, Tx,
 };
-use novo_symbols::{Library, Symbol};
+use novo_symbols::{Library, Pack, Symbol};
 
 use crate::strings;
 
-fn library() -> Option<&'static Library> {
-    static LIBRARY: OnceLock<Option<Library>> = OnceLock::new();
-    LIBRARY.get_or_init(|| Library::builtin().ok()).as_ref()
+/// The built-in library of the pack the symbol key belongs to (IEC for a
+/// key outside every pack).
+fn library(key: &SymbolKey) -> &'static Library {
+    Library::shared(Pack::of(&key.0).unwrap_or(Pack::Iec))
 }
 
 fn direction(d: novo_symbols::Direction) -> Direction {
@@ -38,8 +37,8 @@ fn direction(d: novo_symbols::Direction) -> Direction {
 /// the library does not know, is refused, because a terminal could not be
 /// put into a wire with it.
 pub fn symbol_pins(symbol: &SymbolKey) -> Result<Vec<Pin>> {
-    library()
-        .and_then(|l| l.get(&symbol.0))
+    library(symbol)
+        .get(&symbol.0)
         .and_then(terminal_pins)
         .ok_or_else(|| ModelError::Format(strings::not_a_terminal_symbol(symbol)))
 }
@@ -63,25 +62,31 @@ fn terminal_pins(definition: &Symbol) -> Option<Vec<Pin>> {
     }
 }
 
+/// `path` below the pack root of `key`: the variant of a symbol in the same
+/// pack (a key outside every pack keeps the IEC pack).
+pub(crate) fn with_pack_of(key: &str, path: &str) -> String {
+    format!("{}/{path}", Pack::of(key).unwrap_or(Pack::Iec).id())
+}
+
 /// The one-ended drawing of a terminal symbol: the same terminal with one
 /// connection point, a wire ending in the clamp. `None` for a symbol that
 /// has no such drawing (fused and disconnect terminals).
 pub fn one_ended(symbol: &SymbolKey) -> Option<SymbolKey> {
-    let id = match symbol.0.as_str() {
-        "iec/terminals/terminal" => "iec/terminals/terminal_end",
-        "iec/terminals/terminal_pe" => "iec/terminals/terminal_pe_end",
-        "iec/terminals/terminal_n" => "iec/terminals/terminal_n_end",
-        "iec/terminals/terminal_bridged" => "iec/terminals/terminal_end_bridged",
+    let path = match Pack::path_of(&symbol.0) {
+        "terminals/terminal" => "terminals/terminal_end",
+        "terminals/terminal_pe" => "terminals/terminal_pe_end",
+        "terminals/terminal_n" => "terminals/terminal_n_end",
+        "terminals/terminal_bridged" => "terminals/terminal_end_bridged",
         _ => return None,
     };
-    Some(SymbolKey(id.into()))
+    Some(SymbolKey(with_pack_of(&symbol.0, path)))
 }
 
 /// Connection point of a one-ended terminal symbol from the library: `1` at
 /// the origin. Anything else is refused.
 fn end_pins(symbol: &SymbolKey) -> Result<Vec<Pin>> {
-    let pins = library()
-        .and_then(|l| l.get(&symbol.0))
+    let pins = library(symbol)
+        .get(&symbol.0)
         .map(|d| {
             d.connections
                 .iter()
