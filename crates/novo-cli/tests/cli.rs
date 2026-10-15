@@ -345,6 +345,38 @@ fn export_wires_and_cut_list_carry_cut_lengths() {
 }
 
 #[test]
+fn export_labels_in_two_layouts() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+
+    let run = novo(&["export", "labels", s(&path), "--kind", "devices"]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert!(run.out.starts_with("Line 1,Line 2,Line 3"), "{}", run.out);
+    assert!(run.out.contains("Contactor"), "{}", run.out);
+
+    let run = novo(&[
+        "export",
+        "labels",
+        s(&path),
+        "--kind",
+        "devices",
+        "--layout",
+        "brother",
+    ]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert!(
+        run.out.starts_with("'-K1\tContactor\t") || run.out.starts_with("-K1\tContactor\t"),
+        "{}",
+        run.out
+    );
+
+    let run = novo(&["export", "labels", s(&path), "--layout", "zebra"]);
+    assert_eq!(run.code, exit::USAGE);
+    let run = novo(&["export", "labels", s(&path), "--kind", "pens"]);
+    assert_eq!(run.code, exit::USAGE);
+}
+
+#[test]
 fn export_reports_as_excel_and_csv() {
     use calamine::{Reader, Xlsx, open_workbook};
 
@@ -379,7 +411,8 @@ fn export_reports_as_excel_and_csv() {
             "Cable diagram",
             "IO list",
             "Cable schedule",
-            "Plug connection list"
+            "Plug connection list",
+            "Labels"
         ]
     );
 

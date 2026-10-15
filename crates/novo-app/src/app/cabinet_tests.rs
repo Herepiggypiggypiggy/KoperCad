@@ -229,6 +229,38 @@ fn keys_pressed_in_the_table_do_not_wait_for_the_plate() {
 }
 
 #[test]
+fn the_table_lists_every_device_and_reports_no_click_when_none_is_made() {
+    use eframe::egui;
+    use novo_layout::plan::Candidate;
+    use novo_layout::state::CabinetLayout;
+    use novo_layout::{Plate, Size};
+
+    let mut l = CabinetLayout::new(Plate {
+        width: 200.0,
+        height: 200.0,
+        margin: 10.0,
+    });
+    let size = Size::from_part(Some(45.0), Some(90.0));
+    l.drop_device(1, size, 50.0, 50.0);
+    let cands: Vec<Candidate> = (1..=2)
+        .map(|id| Candidate {
+            id,
+            size,
+            sort_key: String::new(),
+        })
+        .collect();
+    let name = |id: u64| format!("-K{id}");
+    let ctx = egui::Context::default();
+    let mut clicked = Some(0);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        clicked = super::cabinet::cabinet_table(ui, &l, &cands, &name, &[1]);
+    });
+    out.textures_delta.clear();
+    assert_eq!(clicked, None);
+}
+
+#[test]
+
 fn inspector_sets_the_plate_size_and_lists_a_device_s_problems() {
     use super::cabinet_inspector::{Facts, gather};
 
@@ -286,6 +318,13 @@ fn inspector_sets_the_plate_size_and_lists_a_device_s_problems() {
             .to_string()),
         Facts::Plate { placed: 2, .. }
     ));
+}
+
+#[test]
+fn table_rows_sort_numbers_by_value() {
+    let mut tags = ["-K10", "-K2", "-Q1", "-K1"];
+    tags.sort_by_key(|t| super::cabinet::natural_key(t));
+    assert_eq!(tags, ["-K1", "-K2", "-K10", "-Q1"]);
 }
 
 #[test]
