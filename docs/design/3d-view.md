@@ -240,7 +240,7 @@ pub struct Camera {
 ```
 
 - `fit(bounds, aspect)` frames the whole panel (key **F**), `fit_selection` frames the selected items.
-- Presets from a view cube drawn by the overlay: Front (looks at the plate), Back, Left, Right, Top, Bottom, Iso. Clicking one eases the camera there. A view cube click, **Home** (Iso) and **F** are the only keys 3D needs; no numpad dependency (laptops).
+- Presets from a view cube drawn by the overlay: Front (looks at the plate), Back, Left, Right, Top, Bottom, Iso. Clicking one eases the camera there. The view cube, **F** and **Home** are all the keys 3D needs; there is no numpad dependency (laptops). Iso is a corner of the view cube and a command in the command surface; a key for it is the Workflow thread's to assign.
 - Near and far planes are computed each frame from the scene bounds and the camera, with **reversed-Z** and a `Depth32Float` buffer, so a 2.4 m cabinet seen from 30 cm has no z-fighting between a rail and the plate.
 - Pitch is clamped to +-89 degrees. Distance is clamped so the camera cannot enter the model by accident.
 
@@ -248,14 +248,20 @@ Input, matching the 2D canvas (`DESIGN.md` Keys: middle drag pans, Space held an
 
 | Input | Action |
 | --- | --- |
-| Right drag, or Alt + left drag | Orbit around the target |
+| Right drag beyond 4 px, or Alt + left drag | Orbit around the target. A short right press (under 4 px) still opens the context menu, exactly as on the 2D canvas |
 | Middle drag, or Space held and left drag | Pan |
 | Wheel | Zoom towards the point under the pointer (the ray hit, else the plate plane, else the target) |
 | Left click | Select the nearest item under the pointer; Shift adds, Ctrl toggles; clicking empty space clears |
 | Left drag on empty space | Marquee select |
-| Alt + click again at the same spot | Cycle to the next item behind (stacked items) |
+| Alt + click | Select the deepest item under the pointer (the plate, or the rail under a device), ignoring everything in front of it |
 | Double click on an item | Fit it |
-| F / Home | Fit selection or panel / Iso view |
+| F / Home | Fit the selection (or the panel when nothing is selected) / fit the whole panel |
+| Esc | The Escape ladder, below |
+
+**Escape ladder** (the same ladder as the 2D canvas, `DESIGN.md` Keys): cancel the
+gesture in progress (a drag, a marquee), then close the context menu or
+popup, then clear the selection. Esc never leaves the 3D face; switching face
+is the Plate / Cabinet switch or its command.
 
 Keys are routed by `novo-app` exactly like the 2D Cabinet canvas (ignored while
 the palette or a text field has the keyboard). Zoom and pan scale with the
@@ -368,7 +374,7 @@ the pull request description and added to section 5 by this thread.
 - **Where it lives in the window.** Proposal: a third face of the Cabinet
   canvas next to Plate and Table (a segmented switch, like Table), with a
   command `cabinet.view3d` in the command surface. A key is for the Workflow
-  thread to assign, since Ctrl+1 to Ctrl+5 are taken.
+  thread to assign, since Ctrl+1 to Ctrl+5 and Ctrl+T are taken.
 - **Are maker meshes wanted?** Box plus generated shapes is a day-one look
   that is accurate to the footprint. Real meshes cost an importer, a cache and
   a larger file budget. The geometry thread's first deliverable settles it
