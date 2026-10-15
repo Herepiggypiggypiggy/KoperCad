@@ -523,14 +523,30 @@ pub enum DoubleClickTarget {
 /// Which kind of text a label is, for rename and edit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LabelKind {
+    /// The tag of a device's symbol.
     DeviceTag,
+    /// The name of a terminal on a strip (`1`, `PE`).
+    TerminalName,
+    /// The name of an interruption point.
+    InterruptionName,
     WireNumber,
+    /// The name of a potential, on its feed or its wire.
     Potential,
     Literal,
     Property,
     /// Text the canvas adds itself (a symbol's art text, the strip name, a
     /// cross-reference note): shown, not edited by double click.
     Fixed,
+}
+
+/// The kind of the name a symbol of this role shows.
+fn role_label_kind(role: &SymbolRole) -> LabelKind {
+    match role {
+        SymbolRole::Terminal { .. } => LabelKind::TerminalName,
+        SymbolRole::Interruption { .. } => LabelKind::InterruptionName,
+        SymbolRole::PotentialFeed { .. } => LabelKind::Potential,
+        SymbolRole::Device { .. } | SymbolRole::Unassigned => LabelKind::DeviceTag,
+    }
 }
 
 /// The label under a pick ([`PageScene::label_hit`]).
@@ -698,7 +714,13 @@ impl PageScene {
             AnyId::Text(t) => {
                 let text = project.text(t)?;
                 let kind = match text.content {
-                    TextContent::DeviceTag => LabelKind::DeviceTag,
+                    TextContent::DeviceTag => text
+                        .attached_to
+                        .and_then(|h| match h {
+                            AnyId::Symbol(s) => project.symbol(s),
+                            _ => None,
+                        })
+                        .map_or(LabelKind::DeviceTag, |s| role_label_kind(&s.role)),
                     TextContent::WireNumber => LabelKind::WireNumber,
                     TextContent::Potential => LabelKind::Potential,
                     TextContent::Literal { .. } => LabelKind::Literal,
@@ -724,7 +746,7 @@ impl PageScene {
                     owner: id,
                     text: None,
                     kind: if tag {
-                        LabelKind::DeviceTag
+                        role_label_kind(&sym.role)
                     } else {
                         LabelKind::Fixed
                     },
@@ -2695,7 +2717,7 @@ mod tests {
         let tag = label(item_id(sym), Some(0)).unwrap();
         assert_eq!(
             (tag.owner, tag.kind),
-            (AnyId::Symbol(sym), LabelKind::DeviceTag)
+            (AnyId::Symbol(sym), LabelKind::TerminalName)
         );
         // Any later label of a symbol is the canvas's own text.
         assert_eq!(label(item_id(sym), Some(1)).unwrap().kind, LabelKind::Fixed);
@@ -2815,6 +2837,46 @@ mod tests {
         assert_eq!(lit(&ps), 1);
         ps.set_wire_focus(doc.project(), None);
         assert_eq!(count(&ps), plain);
+    }
+
+    #[test]
+    fn label_kinds_follow_the_symbol_role() {
+        let mut doc = Document::default();
+        let ((page, feed, int), _) = doc
+            .transact("roles", |tx| {
+                let page = tx.add_page("1")?;
+                let l1 = tx.add_potential("L1", novo_core::PotentialKind::Line)?;
+                let feed = tx.place_symbol(
+                    page,
+                    "iec/potential",
+                    MPlacement::at(Point::new(50.0, 50.0)),
+                    vec![Pin::new("1", 0.0, 2.5)],
+                    SymbolRole::PotentialFeed { potential: l1 },
+                )?;
+                let int = tx.place_symbol(
+                    page,
+                    "iec/interruption",
+                    MPlacement::at(Point::new(80.0, 50.0)),
+                    vec![Pin::new("1", 0.0, 2.5)],
+                    SymbolRole::Interruption { name: "A1".into() },
+                )?;
+                Ok((page, feed, int))
+            })
+            .unwrap();
+        let ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let kind = |s: SymbolId| {
+            ps.label_hit(
+                doc.project(),
+                &Hit {
+                    id: item_id(s),
+                    distance: 0.0,
+                    label: Some(0),
+                },
+            )
+            .map(|l| l.kind)
+        };
+        assert_eq!(kind(feed), Some(LabelKind::Potential));
+        assert_eq!(kind(int), Some(LabelKind::InterruptionName));
     }
 
     #[test]
