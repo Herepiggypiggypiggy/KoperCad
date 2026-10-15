@@ -25,7 +25,8 @@ use novo_core::{
 use crate::art::LibraryArt;
 use crate::catalog::Match;
 use crate::edit::device_of;
-use crate::potential::PotentialMenu;
+use crate::potential::{PotentialMenu, PotentialSpec};
+use crate::potential_menu::{self, FeedMenu, PeMenu};
 use crate::tool::{Editor, EditorKey, LabelSource};
 
 /// A label dragged on its own, from the press to the release.
@@ -91,6 +92,10 @@ struct ContextMenu {
     /// Nothing was selected: the menu is for the canvas itself.
     empty: bool,
     potentials: PotentialMenu,
+    /// Selected potential feeds: the Set potential chips.
+    feed: Option<FeedMenu>,
+    /// Selected terminals: the PE rows.
+    pe: Option<PeMenu>,
     device: Option<DeviceId>,
     /// Drawn terminals in the selection (terminal actions show for these).
     terminals: usize,
@@ -846,6 +851,8 @@ impl SchematicView {
                 anchor,
                 empty: selection.is_empty(),
                 potentials,
+                feed: potential_menu::feed_menu(document.project(), &selection),
+                pe: potential_menu::pe_menu(document.project(), &selection),
                 device,
                 terminals,
                 page,
@@ -1242,6 +1249,47 @@ impl SchematicView {
                     if p.carried.is_some() || !p.declare.is_empty() {
                         ui.separator();
                     }
+                    if let Some(feed) = &menu.feed {
+                        ui.add_enabled(
+                            false,
+                            egui::Button::new(match &feed.current {
+                                Some(name) => format!("Potential: {name}"),
+                                None => "Potential: mixed".to_string(),
+                            }),
+                        );
+                        ui.horizontal_wrapped(|ui| {
+                            for (i, chip) in feed.chips.iter().enumerate() {
+                                let on = feed.current.as_deref() == Some(chip.name.as_str());
+                                if ui.add(egui::Button::selectable(on, &chip.name)).clicked() {
+                                    chosen = Some(MenuChoice::Chip(i));
+                                }
+                            }
+                        });
+                        if !feed.others.is_empty() {
+                            ui.menu_button("Other…  ▸", |ui| {
+                                for (i, spec) in feed.others.iter().enumerate() {
+                                    if ui.button(&spec.name).clicked() {
+                                        chosen = Some(MenuChoice::Other(i));
+                                        ui.close();
+                                    }
+                                }
+                            });
+                        }
+                        ui.separator();
+                    }
+                    if let Some(pe) = &menu.pe {
+                        let mark = if pe.all_pe { "✓ " } else { "" };
+                        if ui
+                            .button(format!("{mark}Toggle PE terminal   pe"))
+                            .clicked()
+                        {
+                            chosen = Some(MenuChoice::Command("terminal.toggle_pe"));
+                        }
+                        if pe.overridden && ui.button("Reset PE override").clicked() {
+                            chosen = Some(MenuChoice::Command("terminal.reset_pe"));
+                        }
+                        ui.separator();
+                    }
                     if menu.device.is_some() && ui.button("Rename   F2").clicked() {
                         chosen = Some(MenuChoice::Rename);
                     }
@@ -1256,9 +1304,6 @@ impl SchematicView {
                             if ui.button("Disconnect terminals").clicked() {
                                 chosen = Some(MenuChoice::Command("terminal.disconnect"));
                             }
-                        }
-                        if ui.button("Toggle PE terminal").clicked() {
-                            chosen = Some(MenuChoice::Command("terminal.toggle_pe"));
                         }
                         if ui.button("Strip number up   Up").clicked() {
                             chosen = Some(MenuChoice::Command("terminal.strip_up"));
@@ -1292,6 +1337,16 @@ impl SchematicView {
         let device = menu.device;
         let page = menu.page;
         let suggestion = |i: usize| menu.potentials.declare.get(i).cloned();
+        let feed_pick: Option<(Vec<novo_core::SymbolId>, PotentialSpec)> =
+            match (chosen, &menu.feed) {
+                (Some(MenuChoice::Chip(i)), Some(f)) => {
+                    f.chips.get(i).map(|c| (f.feeds.clone(), c.clone()))
+                }
+                (Some(MenuChoice::Other(i)), Some(f)) => {
+                    f.others.get(i).map(|c| (f.feeds.clone(), c.clone()))
+                }
+                _ => None,
+            };
         let choice_suggestion = match chosen {
             Some(MenuChoice::Potential(i)) => suggestion(i),
             _ => None,
@@ -1307,6 +1362,11 @@ impl SchematicView {
             Some(MenuChoice::Potential(_)) => {
                 if let Some(s) = choice_suggestion {
                     self.editor.assign_potentials(document, &wires, &s);
+                }
+            }
+            Some(MenuChoice::Chip(_) | MenuChoice::Other(_)) => {
+                if let Some((feeds, spec)) = feed_pick {
+                    self.editor.set_feed_potential(document, &feeds, &spec);
                 }
             }
             Some(MenuChoice::Rename) => {
@@ -1340,6 +1400,10 @@ impl SchematicView {
 enum MenuChoice {
     Repeat,
     Potential(usize),
+    /// A chip of the Set potential grid.
+    Chip(usize),
+    /// A project potential under Other…
+    Other(usize),
     Rename,
     Key(EditorKey),
     NewPage,

@@ -1802,6 +1802,19 @@ impl Editor {
         potential::menu(doc.project(), &wires, self.supply_names)
     }
 
+    /// Right-click a feed, Set potential: one undo step for all `feeds`.
+    pub fn set_feed_potential(
+        &mut self,
+        doc: &mut Document,
+        feeds: &[novo_core::SymbolId],
+        spec: &potential::PotentialSpec,
+    ) -> bool {
+        let label = format!("Set potential {}", spec.name);
+        self.run(doc, &label, |tx| {
+            potential::set_feed_potential(tx, feeds, spec).map(|_| ())
+        })
+    }
+
     /// Applies a potential suggestion to wires in page order, as one step.
     pub fn assign_potentials(
         &mut self,

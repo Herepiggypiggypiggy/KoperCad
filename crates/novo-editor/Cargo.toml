@@ -29,6 +29,7 @@ egui = { workspace = true, optional = true }
 workspace = true
 
 [dev-dependencies]
+novo-terminals.workspace = true
 eframe.workspace = true
 
 [[example]]
