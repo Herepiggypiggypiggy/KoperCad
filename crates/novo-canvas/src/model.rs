@@ -1056,7 +1056,7 @@ impl PageScene {
                 }
             }
             item.labels.push(
-                Label::new(Vec2::new(x - 1.5, y), strip.clone(), h)
+                Label::new(Vec2::new(x - 2.0, y), strip.clone(), h)
                     .anchored(Anchor::CenterRight)
                     .colored(self.style.tag_color),
             );
@@ -1681,31 +1681,40 @@ mod tests {
                 Some((Vec2::new(-5.0, 0.0), Anchor::CenterRight))
             }
         }
-        let mut doc = Document::default();
-        let ((page, sym), _) = doc
-            .transact("strip", |tx| {
-                let page = tx.add_page("1")?;
-                let x1 = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
-                let t = tx.add_terminal(x1, "1")?;
-                let sym = tx.place_symbol(
-                    page,
-                    "iec/terminal",
-                    MPlacement::at(Point::new(100.0, 50.0)),
-                    vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
-                    SymbolRole::Terminal { terminals: vec![t] },
-                )?;
-                Ok((page, sym))
-            })
-            .unwrap();
-        let ps = PageScene::new(doc.project(), page, &LeftName);
-        let item = ps.scene().get(item_id(sym)).unwrap();
-        let name = item.labels.iter().find(|l| l.text == "1").unwrap();
-        let strip = item.labels.iter().find(|l| l.text == "-X1").unwrap();
-        let (a, b) = (name.bounds(), strip.bounds());
-        assert!(
-            a.min.x >= b.max.x || b.min.x >= a.max.x || a.min.y >= b.max.y || b.min.y >= a.max.y,
-            "strip label {b:?} overlaps the terminal name {a:?}"
-        );
+        for rotation in [novo_core::Rotation::R0, novo_core::Rotation::R90] {
+            let mut doc = Document::default();
+            let ((page, sym), _) = doc
+                .transact("strip", |tx| {
+                    let page = tx.add_page("1")?;
+                    let x1 = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+                    let t = tx.add_terminal(x1, "1")?;
+                    let sym = tx.place_symbol(
+                        page,
+                        "iec/terminal",
+                        MPlacement {
+                            origin: Point::new(100.0, 50.0),
+                            rotation,
+                            mirrored: false,
+                        },
+                        vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                        SymbolRole::Terminal { terminals: vec![t] },
+                    )?;
+                    Ok((page, sym))
+                })
+                .unwrap();
+            let ps = PageScene::new(doc.project(), page, &LeftName);
+            let item = ps.scene().get(item_id(sym)).unwrap();
+            let name = item.labels.iter().find(|l| l.text == "1").unwrap();
+            let strip = item.labels.iter().find(|l| l.text == "-X1").unwrap();
+            let (a, b) = (name.bounds(), strip.bounds());
+            assert!(
+                a.min.x >= b.max.x
+                    || b.min.x >= a.max.x
+                    || a.min.y >= b.max.y
+                    || b.min.y >= a.max.y,
+                "{rotation:?}: strip label {b:?} overlaps the terminal name {a:?}"
+            );
+        }
     }
 
     #[test]
