@@ -6,9 +6,10 @@ name: CI
 # - Windows (the slow, double-priced one) only on main pushes, a nightly run
 #   and manual dispatch, never per pull request. The experimental build is
 #   the Windows build of open PRs.
-# - A newer push to the same pull request or branch cancels the older run.
-#   That includes main: in a burst of merges the Windows check may skip the
-#   middle commits. The last push and the nightly run still cover the head.
+# - A newer push to the same pull request cancels the older run. Runs on main
+#   are never cancelled (a merge burst would cancel every Windows test run
+#   before it finished); GitHub keeps only the newest waiting run per group, so
+#   a burst of merges skips the middle commits and the head is still tested.
 # - The nightly Windows run is skipped when main has not moved since the last
 #   green CI run.
 on:
@@ -23,7 +24,7 @@ on:
 
 concurrency:
   group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Read-only token for every job: fork pull requests run this workflow too.
 permissions:
