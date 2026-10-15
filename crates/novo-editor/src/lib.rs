@@ -46,6 +46,7 @@ pub mod naming;
 pub mod overlap;
 pub mod pages;
 pub mod potential;
+pub mod potential_menu;
 pub mod row;
 pub mod tool;
 

@@ -1610,6 +1610,13 @@ impl Editor {
         })
     }
 
+    /// Removes one corner of a wire's route, one undo step.
+    pub fn remove_corner(&mut self, doc: &mut Document, wire: WireId, index: usize) -> bool {
+        self.run(doc, "Delete corner", |tx| {
+            edit::remove_corner(tx, wire, index)
+        })
+    }
+
     /// Moves the selection by a distance in one step (arrow keys, scripts).
     pub fn move_selection(
         &mut self,
@@ -1800,6 +1807,19 @@ impl Editor {
             })
             .collect();
         potential::menu(doc.project(), &wires, self.supply_names)
+    }
+
+    /// Right-click a feed, Set potential: one undo step for all `feeds`.
+    pub fn set_feed_potential(
+        &mut self,
+        doc: &mut Document,
+        feeds: &[novo_core::SymbolId],
+        spec: &potential::PotentialSpec,
+    ) -> bool {
+        let label = format!("Set potential {}", spec.name);
+        self.run(doc, &label, |tx| {
+            potential::set_feed_potential(tx, feeds, spec).map(|_| ())
+        })
     }
 
     /// Applies a potential suggestion to wires in page order, as one step.
