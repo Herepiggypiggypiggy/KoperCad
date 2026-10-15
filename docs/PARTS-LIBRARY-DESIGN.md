@@ -155,8 +155,8 @@ row turns to **In library**. No admin rights, no service.
 
 | Maker | Terms found | Flow now | Flow A when |
 | --- | --- | --- | --- |
-| WAGO | Silent on automated access; says its CAE data is free; no API or login mentioned | B | WAGO confirms in writing, or documents an API |
-| Phoenix Contact | Website terms not found; names EPLAN Data Portal and other portals as channels | B | Terms read and a documented feed or written OK |
+| WAGO | Silent on automated access. Captured: CAD comes from CADENAS PARTcommunity behind a WAGO login (section 3c) | B, permanently | Only a CADENAS/WAGO API agreement |
+| Phoenix Contact | Website terms not found; names EPLAN Data Portal and other portals as channels. Captured: the Eplan portal needs an Eplan ID (section 3c) | B, permanently for the Eplan portal | Terms read and a documented feed or written OK |
 | Siemens | Clause text not read; the CAx tool is an interactive Java download manager | B | Terms read and a documented feed or written OK |
 | Schneider | Strictest: copying only for personal, non-commercial use; page-level terms may apply; automated access not addressed | B (opens the page, user downloads) | Written OK only |
 
@@ -227,6 +227,141 @@ In-app fetch on the user's click is the closest equivalent to the user clicking
 the download button themselves, but it is not confirmed by any maker.
 Switching a maker off is a data change, and the section 2a questions still
 should be sent.
+
+## 3c. Capture results (owner, 2026-10-15)
+
+**WAGO 2002-1201, captured by the owner in a browser.** The CAD button on the
+product page leads to CADENAS PARTcommunity
+(`wago.partcommunity.com/3d-cad-models/?catalog=wago&part=2002-1201`).
+- A WAGO account login is required.
+- The user picks a format (STEP AP214), the server builds the file through a
+  JSF session (POST `index.xhtml`, then polling `.../comet?cwid=...`), and the
+  download is `partserver/preview/<job id>/WAGO_20021201HI.zip` with a
+  per-request job id. There is no static URL, and the site sits behind Cloudflare.
+- The ZIP (about 50 KB) holds `2002-1201_HI.stp` (STEP AP214, about 278 KB)
+  and a readme that links `https://www.cadenas.de/terms-of-use-3d-cad-models`.
+  No terms are shown to accept.
+
+**Consequences.**
+1. **WAGO is flow B only.** In-app fetch is not feasible: it needs the user's
+   login and a server-side build, and driving that session from the app would
+   be exactly the automated access we ruled out. "Import" opens the PARTcommunity
+   page; the Downloads watch imports the ZIP. WAGO stays `fetch_enabled: false`.
+2. **The importer takes the ZIP as served.** It reads the STEP file inside
+   (size) and the readme (terms link), stores the ZIP unchanged and records the
+   terms link in the source record (`terms_url`). The watcher recognises the
+   file by the digits of the order number in `WAGO_20021201HI.zip`.
+3. **The terms that apply are CADENAS's**, not only WAGO's. Not read yet; the
+   section 2a questions to WAGO should also ask about the PARTcommunity route.
+4. **Later option, not now:** a CADENAS PARTcommunity API or the Eplan Data
+   Portal. Either needs its own agreement or account terms. The Eplan Data Portal
+   is EPLAN's platform, so it is a source only if its terms permit use outside
+   EPLAN; do not assume so.
+5. **Phoenix Contact** stays on flow B: its product page returned a server
+   error on 2026-10-15, so there is no capture yet. Retry later.
+
+**Phoenix Contact UT 2,5 (3044076), captured by the owner 2026-10-15.**
+- The Phoenix product page returned an error page in his browser (en-us,
+  en-nl, en-gb), so there is no capture from Phoenix's own site.
+- Route tried: the Eplan Data Portal (`dataportal.eplan.com/part-details/PXC.3044076`,
+  which redirects to `.../PXC/PXC.3044076/id-416856`). The part page loads
+  without login (last updated 02/09/2026). The Download button redirects to
+  `login.eplan.com` (Eplan ID); signing in means accepting the Eplan Cloud
+  terms. No file request was seen.
+- Untried Phoenix routes: the EPLAN P8 file generator
+  (`phoenixcontact.com/en-gb/products/eplan-p8-file-generator`: item numbers
+  in, EDZ ZIP out), and the WSCAD, Zuken and AmpereSoft portals.
+
+**Consequences for Phoenix.**
+1. Flow B only, same as WAGO. We build **no automated access to the Eplan
+   portal**: it is EPLAN's platform behind an Eplan ID and Eplan Cloud terms.
+   Phoenix stays `fetch_enabled: false`.
+2. **The importer accepts an EDZ.** A `.edz` (or a `.zip`) is stored unchanged.
+   Its XML members are handed out as `ImportOutcome.xml_members` for the app to
+   pass to the EPLAN parts reader in `novo-interop` (#347). `novo-parts` cannot
+   call that reader itself: `novo-interop` depends on `novo-parts`. The inner
+   XML of an EDZ may not be the "parts management" export that reader was
+   written for. That is unverified, and the reader reports what it cannot read.
+3. The source record's `terms_url` comes from the file's readme when it has
+   one, otherwise from the maker's entry in the source table (data, filled in
+   by whoever verified the terms; nothing is guessed).
+4. The Downloads watch accepts an EDZ by type, since generator output is
+   probably not named after the article. Other ZIPs are still matched by the
+   order number in the file name.
+5. Untested, for a later capture: whether the P8 file generator needs a
+   login, and what is inside its EDZ. A real EDZ (any maker) in the project
+   files would let us test against it.
+
+**Phoenix UT 2,5, second capture (DXF route, owner, 2026-10-15).** On the
+Eplan Data Portal part page the Detail view menu offers "Download DXF data",
+"Add to my download list" (EDZ / EPLAN macro), "Download commercial data" and
+"Data sheet". The DXF download is `POST https://dataportal.eplan.com/api/download/dxf_data/part`
+(status 200, sent by the page's JavaScript, response about 16.6 KB, a DXF or a
+ZIP of one). It needs a free Eplan ID, and signing in accepts the Eplan Cloud
+terms. The request body has not been captured.
+
+**Decision unchanged: no automated access to the Eplan portal.** It is a
+logged-in service under terms we have not cleared, even though a single POST
+would be easy to script. What we use from it instead:
+1. **A user-downloaded DXF is a good 2D source.** The importer stores a DXF, or
+   a ZIP or EDZ holding one, and hands its text out as `ImportOutcome.dxf_members`.
+   The app passes it to the DXF reader in `novo-interop` to make the part's 2D
+   outline or symbol candidate (`novo-parts` cannot call it: `novo-interop`
+   depends on `novo-parts`). Turning the DXF into an outline is that reader's
+   work and is not done here; what a real portal DXF contains is unknown.
+2. **EDZ** from the portal's download list or the Phoenix generator goes
+   through the EDZ path above.
+3. **The Downloads watch matches a DXF by the order number in its file name.**
+   The portal's file name is unknown; if it carries no article number, the user
+   drops the file on the window instead. We do not import unrelated DXFs from
+   Downloads.
+4. Source record: kept as for any file; `terms_url` from the maker entry in the
+   source table.
+
+## 3d. Source table per maker (survey relayed by the coordinator, 2026-10-15)
+
+This table was compiled by the coordinator thread from fetched pages and
+relayed to this one. I have not re-fetched the pages. "Verified" means the
+survey read it on the maker's or portal's page; "third party" means only an
+outside article says so. **No maker's own CAD terms have been read by anyone;
+CADENAS terms are unread; TraceParts terms require written consent for
+commercial use.** Every row is hand-off (flow B); `fetch_enabled` stays false.
+
+| Maker | Where the user gets CAD | Login | Formats | Terms status |
+| --- | --- | --- | --- | --- |
+| Schneider Electric | CAD button on each product page on se.com (free), TraceParts links. Page: `se.com/au/en/work/support/cad-files-drawings/automation-cad-files` | Not stated (the FAQ and page describe no login) | DXF, DWG, STEP AP203/214/242, IGES (verified) | se.com website terms read (personal, non-commercial copying, section 2a); CAD-specific terms unread |
+| WAGO | CADENAS PARTcommunity `wago.partcommunity.com` (verified, owner capture, section 3c) | Yes, free WAGO login | STEP AP214 in a ZIP with readme (captured); other formats per portal | CADENAS terms (`cadenas.de/terms-of-use-3d-cad-models`) unread; WAGO website terms silent |
+| Siemens | CAxOnline / Industry Online Support CAx tab | Free Siemens account (third party) | DWG, DXF, STEP, IGES (third party); EDZ for EPLAN | Unread. Siemens parts are also on TraceParts |
+| Phoenix Contact | Its own page lists only CAE systems; a 2010 article (third party) says CAD is on TraceParts. Owner capture: the Eplan Data Portal gives DXF and EDZ behind an Eplan ID (section 3c) | Yes for the Eplan portal | DXF (captured), EDZ | Unread; Eplan Cloud terms apply to the portal |
+| TraceParts (aggregator) | Several makers' CAD | Free account | Many | Written consent required for commercial use. Not a source for KoperCAD to ship from or script |
+
+**First Import target: Schneider's product-page CAD button.** It is the one
+maker route found with a free, per-product CAD download and a named format
+list, and no login mentioned. Import opens the product page and the Downloads
+watch imports the DXF, DWG or STEP the user saves. Notes:
+- **Page address (best found, unverified).** Search results for LC1D09BD show
+  the pattern `https://www.se.com/<country>/<language>/product/<reference>/<slug>/`
+  (for example `/us/en/`, `/ie/en/`, `/fr/fr/`), where the slug is a localised
+  description. The built-in source table uses
+  `https://www.se.com/ww/en/product/{order}/`. Whether the `ww` site exists
+  and whether the address works without the slug is **unverified: confirm with
+  one real download**. The page is marked `page_verified: false`, and
+  the app says so. I could not read a product page myself: se.com's robots.txt
+  disallows my fetch tool, which is another reason to leave fetching off.
+- **File naming:** not found in the CAD page text or anywhere else. The
+  Downloads watch matches by the order number in the file name; if
+  Schneider's names do not contain it, the user drops the file instead.
+- **Built-in table** (`SourceTable::builtin()`): Schneider as above (unverified);
+  WAGO `wago.partcommunity.com/3d-cad-models/?catalog=wago&part={order}`
+  (confirmed by the owner's capture for 2002-1201); Phoenix Contact
+  `dataportal.eplan.com/part-details/PXC.{order}` (confirmed for 3044076, the
+  download there needs an Eplan ID); Siemens no address yet. All four have
+  `fetch_enabled: false`.
+- DWG is stored but not read: the importer reads STEP size and hands out DXF,
+  and there is no DWG reader.
+- Because the se.com website terms limit copying to personal, non-commercial
+  use, the first-use notice stays in place and the question list (section 2a)
+  asks Schneider about CAD use in commercial projects.
 
 ## 4. Offline and no admin rights
 
