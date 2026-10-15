@@ -39,6 +39,14 @@ struct LabelDrag {
     to: Point,
 }
 
+/// A wire part dragged from the press to the release.
+struct PartDrag {
+    part: WirePart,
+    /// The press, and the pointer now (world, raw).
+    from: Point,
+    to: Point,
+}
+
 /// Rows shown in the insert search.
 const SEARCH_ROWS: usize = 14;
 /// Room the part search keeps below its field, so it opens upward from
@@ -136,6 +144,8 @@ pub struct SchematicView {
     /// The corner or run of a wire a click selected; a double click selects
     /// the whole wire instead.
     wire_part: Option<WirePart>,
+    /// A wire part being dragged: the corner, or the run with its two corners.
+    part_drag: Option<PartDrag>,
     /// The wire part the scene shows emphasised now.
     wire_focus: Option<WirePart>,
     /// A label picked up on its own: only the text follows the pointer.
@@ -167,6 +177,13 @@ impl EscapeTarget for Ladder<'_> {
     }
     fn leave_tool(&mut self) -> bool {
         self.0.leave_tool()
+    }
+}
+
+fn part_kind(kind: WirePartKind) -> crate::edit::PartKind {
+    match kind {
+        WirePartKind::Corner(i) => crate::edit::PartKind::Corner(i),
+        WirePartKind::Segment(k) => crate::edit::PartKind::Segment(k),
     }
 }
 
@@ -241,6 +258,7 @@ impl SchematicView {
             swallow: false,
             drag_move: false,
             wire_part: None,
+            part_drag: None,
             wire_focus: None,
             label_drag: None,
             rect: egui::Rect::NOTHING,
@@ -496,6 +514,25 @@ impl SchematicView {
                 })
                 .collect();
             items.push(item);
+        }
+        if let Some(drag) = &self.part_drag
+            && let Some(w) = document.project().wire(drag.part.wire)
+            && let (Some(a), Some(b)) = (
+                document.project().endpoint_position(w.from),
+                document.project().endpoint_position(w.to),
+            )
+        {
+            let kind = part_kind(drag.part.kind);
+            let delta = self
+                .editor
+                .part_delta(document, drag.part.wire, kind, drag.from, drag.to);
+            let mut pts = vec![a];
+            pts.extend(crate::edit::moved_route(a, &w.route, b, kind, delta));
+            pts.push(b);
+            items.push(Item::new(layer).unselectable().with(Primitive::stroked(
+                Shape::polyline(pts.iter().map(|p| model::vec(*p)), false),
+                ghost,
+            )));
         }
         if let Some(drag) = &self.label_drag {
             let d = self.editor.label_delta(drag.from, drag.to);
@@ -788,6 +825,7 @@ impl SchematicView {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
         }
 
+        self.part_drag_step(document, &out, &response, ui);
         let wire_tol = self
             .canvas
             .viewport
@@ -941,6 +979,71 @@ impl SchematicView {
         changes
     }
 
+    /// Press on a wire and drag: a corner moves alone, a run moves its two
+    /// corners, snapped to the grid; release drops, Esc puts it back.
+    fn part_drag_step(
+        &mut self,
+        document: &mut Document,
+        out: &novo_canvas::widget::CanvasOutput,
+        response: &egui::Response,
+        ui: &egui::Ui,
+    ) {
+        let idle = !self.swallow
+            && !self.popup_open()
+            && !self.editor.tool_active()
+            && !self.editor.dragging()
+            && !self.drag_move
+            && self.label_drag.is_none();
+        if idle
+            && self.part_drag.is_none()
+            && response.drag_started_by(egui::PointerButton::Primary)
+            && let Some(o) = ui.input(|i| i.pointer.press_origin())
+            && let Some(scene) = &self.scene
+        {
+            let local = o - self.rect.min;
+            let w = self
+                .canvas
+                .viewport
+                .screen_to_world(Vec2::new(local.x, local.y));
+            let tol = self
+                .canvas
+                .viewport
+                .screen_to_world_len(self.canvas.pick_tolerance);
+            if scene
+                .scene()
+                .pick(w, tol, self.canvas.viewport.zoom)
+                .is_none()
+                && let Some(part) = scene.wire_part_at(document.project(), w, tol)
+            {
+                // The canvas began a band on the same press.
+                self.canvas.escape();
+                self.canvas.selection.clear();
+                self.wire_part = Some(part);
+                self.part_drag = Some(PartDrag {
+                    part,
+                    from: point(w),
+                    to: point(w),
+                });
+            }
+        }
+        let Some(drag) = &mut self.part_drag else {
+            return;
+        };
+        if let Some(w) = out.cursor_raw {
+            drag.to = point(w);
+        }
+        if response.drag_stopped_by(egui::PointerButton::Primary) {
+            let (part, kind) = (drag.part, part_kind(drag.part.kind));
+            let delta = self
+                .editor
+                .part_delta(document, part.wire, kind, drag.from, drag.to);
+            self.part_drag = None;
+            // Bends may be added, so the index no longer names the part.
+            self.wire_part = None;
+            self.editor.move_wire_part(document, part.wire, kind, delta);
+        }
+    }
+
     /// Whether a wire's line is under the pointer. Wires are not canvas
     /// hits, so "bare grid" has to ask.
     fn wire_under(&self, document: &Document, at: Option<Vec2>) -> bool {
@@ -966,6 +1069,7 @@ impl SchematicView {
         let idle = !self.editor.tool_active()
             && !self.editor.dragging()
             && !self.drag_move
+            && self.part_drag.is_none()
             && self.label_drag.is_none()
             && !self.popup_open()
             && !self.swallow;
@@ -1056,9 +1160,12 @@ impl SchematicView {
             }
         }
         if pressed(Key::Escape) {
-            // The first Esc puts a dragged label back, the next drops a
-            // selected wire part.
-            if self.label_drag.take().is_none() && self.wire_part.take().is_none() {
+            // The first Esc puts a dragged label or wire part back, the next
+            // drops a selected wire part.
+            if self.label_drag.take().is_none()
+                && self.part_drag.take().is_none()
+                && self.wire_part.take().is_none()
+            {
                 self.canvas.escape_with(Some(&mut Ladder(&mut self.editor)));
             }
         }
@@ -2193,6 +2300,70 @@ mod tests {
         h.frame(Vec::new());
         assert_eq!(h.view.canvas.selection.ids(), [item_id(wire)]);
         assert_eq!(h.view.wire_part, None);
+    }
+
+    #[test]
+    fn dragging_a_corner_moves_it_and_dragging_an_end_run_slides_its_corner() {
+        let mut h = Harness::new();
+        let (wire, corner) = wire_with_a_corner(&mut h);
+        let route = |h: &Harness| h.doc.project().wire(wire).unwrap().route.clone();
+        // Every stretch of the wire runs horizontally or vertically.
+        let orthogonal = |h: &Harness| {
+            let p = h.doc.project();
+            let w = p.wire(wire).unwrap();
+            let mut pts = vec![p.endpoint_position(w.from).unwrap()];
+            pts.extend(w.route.iter().copied());
+            pts.push(p.endpoint_position(w.to).unwrap());
+            pts.windows(2)
+                .all(|s| (s[0].x - s[1].x).abs() < 1e-6 || (s[0].y - s[1].y).abs() < 1e-6)
+        };
+        let near = |h: &Harness, at: Point, tol: f64| {
+            route(h)
+                .iter()
+                .find(|c| (c.x - at.x).abs() <= tol && (c.y - at.y).abs() <= tol)
+                .copied()
+        };
+        assert!(orthogonal(&h));
+        let depth = h.doc.undo_depth();
+        let step = h.view.editor.grid;
+        // The run reaching the open end slides its corner along itself, and
+        // the run to the pin stays vertical.
+        h.drag(
+            (corner.x + 20.0, corner.y),
+            (corner.x + 30.0, corner.y + 10.0),
+        );
+        assert!(orthogonal(&h));
+        let slid = near(&h, Point::new(corner.x + 10.0, corner.y), step).expect("the slid corner");
+        assert!((slid.y - corner.y).abs() < 1e-6, "{slid:?}");
+        assert_eq!(h.doc.undo_depth(), depth + 1);
+        // The corner itself follows the pointer, in one undo step, and the
+        // stretches at it stay straight.
+        h.drag((slid.x, slid.y), (slid.x - 10.0, slid.y - 10.0));
+        assert!(orthogonal(&h));
+        let first = near(&h, Point::new(slid.x - 10.0, slid.y - 10.0), step).expect("the corner");
+        assert_eq!(h.doc.undo_depth(), depth + 2);
+        let after = first;
+        // Esc mid-drag puts it back.
+        let before = route(&h);
+        let a = h.screen(after.x, after.y);
+        let b = h.screen(after.x + 10.0, after.y + 10.0);
+        let button = |pos, pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Modifiers::NONE,
+        };
+        h.frame(vec![egui::Event::PointerMoved(a)]);
+        h.frame(vec![button(a, true)]);
+        for i in 1..=4 {
+            h.frame(vec![egui::Event::PointerMoved(
+                a + (b - a) * (i as f32 / 4.0),
+            )]);
+        }
+        assert!(h.view.part_drag.is_some());
+        h.key(Key::Escape);
+        h.frame(vec![button(b, false)]);
+        assert_eq!(route(&h), before);
     }
 
     #[test]
