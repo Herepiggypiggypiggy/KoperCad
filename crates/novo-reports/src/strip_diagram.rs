@@ -306,8 +306,10 @@ mod tests {
             tag: "-X1".into(),
             rows: rows.clone(),
         };
-        let mut format = novo_core::PageFormat::default();
-        format.size = novo_core::PaperSize::A4;
+        let format = novo_core::PageFormat {
+            size: novo_core::PaperSize::A4,
+            ..Default::default()
+        };
         let setup = PageSetup::for_format(format);
         let layout = sheet(&screen, &rows[..20], (0, 1), &setup);
         let (x0, _, w, _) = setup.table_area();
