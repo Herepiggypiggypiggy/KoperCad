@@ -2603,3 +2603,55 @@ fn a_wire_past_only_the_bounding_box_of_a_device_is_made() {
     // Far from the column the lamp is out of the way entirely: all three.
     assert_eq!(wires_past_a_lamp_at(400.0), 3);
 }
+
+#[test]
+fn new_potential_feeds_count_up_from_l1_on_the_page() {
+    let (mut doc, page, _) = setup();
+    let lib = novo_symbols::Library::builtin().unwrap();
+    let sym = lib.get(potential::FEED_SYMBOL).unwrap().clone();
+    let mut names = Vec::new();
+    for i in 0..4 {
+        let (id, _) = doc
+            .transact("feed", |tx| {
+                edit::place(
+                    tx,
+                    page,
+                    &sym,
+                    novo_core::Placement::at(p(40.0 * i as f64, 0.0)),
+                    &PlaceOptions::new(),
+                )
+            })
+            .unwrap();
+        let SymbolRole::PotentialFeed { potential } = doc.project().symbol(id).unwrap().role else {
+            panic!("a feed")
+        };
+        names.push(doc.project().potential(potential).unwrap().name.clone());
+    }
+    assert_eq!(names, ["L1", "L2", "L3", "L4"]);
+    // An explicit potential is kept as given.
+    let l2 = doc
+        .project()
+        .potentials()
+        .find(|p| p.name == "L2")
+        .unwrap()
+        .id;
+    let (id, _) = doc
+        .transact("feed", |tx| {
+            let options = PlaceOptions {
+                potential: Some(l2),
+                ..PlaceOptions::new()
+            };
+            edit::place(
+                tx,
+                page,
+                &sym,
+                novo_core::Placement::at(p(400.0, 0.0)),
+                &options,
+            )
+        })
+        .unwrap();
+    assert!(matches!(
+        doc.project().symbol(id).unwrap().role,
+        SymbolRole::PotentialFeed { potential } if potential == l2
+    ));
+}
