@@ -267,6 +267,17 @@ impl Session {
         self.file.snapshot(revision)
     }
 
+    /// Keeps a document beside the model in the project file, at once (see
+    /// [`ProjectFile::put_sidecar`]).
+    pub fn put_sidecar(&mut self, key: &str, data: &str) -> Result<()> {
+        self.file.put_sidecar(key, data)
+    }
+
+    /// The document kept under `key`, if any.
+    pub fn sidecar(&self, key: &str) -> Result<Option<String>> {
+        self.file.sidecar(key)
+    }
+
     /// Whether anything changed since the last save.
     pub fn has_unsaved_changes(&self) -> bool {
         self.unsaved != Pending::Nothing
@@ -291,6 +302,7 @@ impl Session {
         let mut file = ProjectFile::create(path, project)?;
         // Snapshots of issued revisions travel with the project.
         self.file.copy_snapshots_to(&mut file)?;
+        self.file.copy_sidecars_to(&mut file)?;
         self.drop_autosave_quietly();
         let old = std::mem::replace(&mut self.file, file);
         let _ = old.close();

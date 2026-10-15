@@ -69,6 +69,17 @@ impl Workspace {
         }
     }
 
+    /// The chip text on a narrow window.
+    pub(crate) fn short_label(self) -> &'static str {
+        match self {
+            Workspace::Schematic => "Sch",
+            Workspace::Cabinet => "Cab",
+            Workspace::View3d => "3D",
+            Workspace::Reports => "Rep",
+            Workspace::Commissioning => "Com",
+        }
+    }
+
     /// Whether the workspace has any content yet.
     fn is_built(self) -> bool {
         matches!(
@@ -160,6 +171,15 @@ impl NovoApp {
         self.settings.last_workspace = workspace.id().to_owned();
         let layout = self.layout_of(workspace);
         self.apply_layout(&layout);
+        // The selection travels (§6): a row picked in Reports opens the
+        // drawing on its page with the device selected.
+        if workspace == Workspace::Schematic
+            && let Some(place) = self.wb.pending
+            && Some(place.page) != self.current_page
+        {
+            self.show_page(place.page);
+            self.wb.pending = Some(place);
+        }
     }
 
     /// The layout `workspace` has stored, or its default.
@@ -205,13 +225,22 @@ impl NovoApp {
 
     /// The switcher in the top bar: one chip per workspace. A chip that
     /// cannot open yet stays visible and says why on hover.
-    pub(super) fn workspace_switcher(&mut self, ui: &mut egui::Ui) -> Option<Workspace> {
+    pub(super) fn workspace_switcher(
+        &mut self,
+        ui: &mut egui::Ui,
+        short: bool,
+    ) -> Option<Workspace> {
         let mut picked = None;
         for workspace in Workspace::ALL {
             let reason = self.workspace_unavailable(workspace);
             let response = ui
                 .add_enabled_ui(reason.is_none(), |ui| {
-                    novo_theme::widgets::segment(ui, workspace.label(), workspace == self.workspace)
+                    let label = if short {
+                        workspace.short_label()
+                    } else {
+                        workspace.label()
+                    };
+                    novo_theme::widgets::segment(ui, label, workspace == self.workspace)
                 })
                 .inner;
             if response.clicked() {
@@ -219,6 +248,8 @@ impl NovoApp {
             }
             if let Some(reason) = reason {
                 response.on_disabled_hover_text(reason);
+            } else if short {
+                response.on_hover_text(workspace.label());
             }
         }
         picked

@@ -12,8 +12,40 @@ use super::{Leaving, NovoApp};
 use crate::actions::Action;
 
 /// Windows at least this wide (effective points) show the menu names in
-/// the top bar.
-pub(super) const MENU_BAR_FROM: f32 = 1500.0;
+/// the top bar; the rest of the bar gives way first (see [`TopBarFit`]).
+pub(super) const MENU_BAR_FROM: f32 = 1100.0;
+
+/// How much the rest of the top bar gives up at a window width, so the menu
+/// words still fit at 1366 (§5.3): the search button shrinks, the project
+/// name is cut, and the switcher falls back to short names.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct TopBarFit {
+    /// The search button's text and minimum width.
+    pub(super) search: &'static str,
+    pub(super) search_width: f32,
+    /// Longest project name shown in the breadcrumb, in characters.
+    pub(super) name_chars: usize,
+    /// Workspace chips use their short names.
+    pub(super) short_switcher: bool,
+}
+
+impl TopBarFit {
+    pub(super) fn at(width: f32) -> TopBarFit {
+        let (search, search_width) = if width >= 1700.0 {
+            ("Search or run", 240.0)
+        } else if width >= 1250.0 {
+            ("Search", 0.0)
+        } else {
+            ("", 0.0)
+        };
+        TopBarFit {
+            search,
+            search_width,
+            name_chars: if width >= 1700.0 { 32 } else { 14 },
+            short_switcher: width < 1250.0,
+        }
+    }
+}
 
 impl NovoApp {
     /// Whether the menus are words in the top bar this frame.
@@ -21,37 +53,75 @@ impl NovoApp {
         self.window_width >= MENU_BAR_FROM
     }
 
-    /// The menu names, left to right, in the top bar.
-    pub(super) fn menu_bar(&mut self, ui: &mut egui::Ui) {
-        egui::MenuBar::new().ui(ui, |ui| {
-            for menu in MENUS {
-                self.menu(ui, menu);
-            }
-        });
+    /// F10 moves the focus to the menu bar (the first menu when the bar
+    /// is words, else the mark); arrows then walk it and Enter opens one.
+    /// Returns whether the key was pressed this frame.
+    pub(super) fn menu_key_pressed(&self, ctx: &egui::Context) -> bool {
+        ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F10))
     }
 
-    /// The mark's menu: About only on a wide window, where the bar holds
-    /// the rest; otherwise every menu as a submenu.
-    pub(super) fn mark_menu(&mut self, ui: &mut egui::Ui) {
+    /// The menu names, left to right, in the top bar.
+    ///
+    /// egui's menu bar takes all the width it is given, which would push
+    /// the switcher and search off the bar, so it gets the width its menus
+    /// measured last frame (a first guess on the first).
+    pub(super) fn menu_bar(&mut self, ui: &mut egui::Ui, focus: bool) {
+        let rect = egui::Rect::from_min_size(
+            ui.cursor().min,
+            egui::vec2(self.menu_bar_width, ui.available_height()),
+        );
+        let (mut left, mut right) = (f32::MAX, f32::MIN);
+        ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
+                for (n, menu) in MENUS.iter().enumerate() {
+                    if let Some(button) = self.menu(ui, menu, focus && n == 0) {
+                        left = left.min(button.left());
+                        right = right.max(button.right());
+                    }
+                }
+            });
+        });
+        if right > left {
+            let measured = right - left + ui.spacing().item_spacing.x;
+            if (measured - self.menu_bar_width).abs() > 0.5 {
+                self.menu_bar_width = measured;
+                ui.ctx().request_repaint();
+            }
+        }
+    }
+
+    /// The mark. Wide, a click shows About (the bar holds every menu);
+    /// otherwise it opens the menus as submenus.
+    pub(super) fn mark(&mut self, ui: &mut egui::Ui, focus: bool) {
+        let text = egui::RichText::new(super::APP_NAME).strong();
         if self.menu_bar_wide() {
-            if let Some(about) = commands::get("help.about") {
-                self.command_row(ui, about);
+            let button = ui.add(egui::Button::new(text).frame(false));
+            if focus {
+                button.request_focus();
+            }
+            if button.on_hover_text("About").clicked() {
+                self.wb.queued.push("help.about");
             }
             return;
         }
-        for menu in MENUS {
-            self.menu(ui, menu);
+        let response = ui.menu_button(text, |ui| {
+            for menu in MENUS {
+                let _ = self.menu(ui, menu, false);
+            }
+        });
+        if focus {
+            response.response.request_focus();
         }
     }
 
     /// One menu as a button (in the bar) or a submenu (in the mark's menu).
     /// A menu with no commands is left out.
-    fn menu(&mut self, ui: &mut egui::Ui, menu: &'static str) {
+    fn menu(&mut self, ui: &mut egui::Ui, menu: &'static str, focus: bool) -> Option<egui::Rect> {
         let items = menus::layout(menu);
         if items.is_empty() {
-            return;
+            return None;
         }
-        ui.menu_button(menu, |ui| {
+        let response = ui.menu_button(menu, |ui| {
             for item in &items {
                 match item {
                     MenuItem::Separator => {
@@ -73,6 +143,10 @@ impl NovoApp {
                 }
             }
         });
+        if focus {
+            response.response.request_focus();
+        }
+        Some(response.response.rect)
     }
 
     /// File › Recent: the projects opened lately, newest first.
@@ -158,5 +232,78 @@ mod tests {
         assert_eq!(d.app.command_unavailable(save), Some("No project is open"));
         let new = commands::get("file.new").unwrap();
         assert_eq!(d.app.command_unavailable(new), None);
+    }
+}
+
+#[cfg(test)]
+mod width_tests {
+    use super::*;
+    use crate::app::gate1_tests::Drive;
+
+    /// One frame of the app in a window `width` points wide.
+    fn frame_at(d: &mut Drive, width: f32) {
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(width, 768.0),
+            )),
+            ..Default::default()
+        };
+        let app = &mut d.app;
+        let mut out = d.ctx.run_ui(input, |ui| app.show(ui));
+        out.textures_delta.clear();
+    }
+
+    #[test]
+    fn the_top_bar_fits_from_1100_and_shows_words_at_1366() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::NewProject);
+        for width in [1920.0, 1600.0, 1366.0, 1280.0, 1100.0] {
+            // Two frames: the first lays out, the second has the sizes.
+            frame_at(&mut d, width);
+            frame_at(&mut d, width);
+            assert!(d.app.menu_bar_wide(), "menus are words at {width}");
+            assert!(
+                d.app.top_bar_gap >= 0.0,
+                "the top bar overlaps by {} at {width}",
+                -d.app.top_bar_gap
+            );
+        }
+    }
+
+    #[test]
+    fn below_1100_the_menus_fold_into_the_mark() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        frame_at(&mut d, 1000.0);
+        frame_at(&mut d, 1000.0);
+        assert!(!d.app.menu_bar_wide());
+        assert!(d.app.top_bar_gap >= 0.0);
+    }
+
+    #[test]
+    fn f10_focuses_the_first_menu() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        frame_at(&mut d, 1366.0);
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1366.0, 768.0),
+            )),
+            events: vec![egui::Event::Key {
+                key: egui::Key::F10,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            ..Default::default()
+        };
+        let app = &mut d.app;
+        let _ = d.ctx.run_ui(input, |ui| app.show(ui));
+        assert!(d.ctx.memory(|m| m.focused()).is_some(), "a menu has focus");
     }
 }

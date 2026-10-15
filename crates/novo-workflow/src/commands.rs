@@ -195,6 +195,24 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "parts.browser",
+            "Parts",
+            "Project",
+            &[
+                "part library",
+                "catalog",
+                "import part",
+                "wago",
+                "phoenix",
+                "schneider",
+                "siemens",
+            ],
+            Needs::Nothing,
+        ),
+        &["parts", "part library"],
+    ),
+    verb(
+        cmd(
             "revision.issue",
             "Issue revision",
             "Project",
@@ -202,6 +220,16 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["issue", "revision"],
+    ),
+    verb(
+        cmd(
+            "revision.compare",
+            "Compare revisions",
+            "Project",
+            &["diff", "what changed", "between revisions", "revision list"],
+            Needs::Project,
+        ),
+        &["compare"],
     ),
     cmd("file.quit", "Quit", "Project", &["exit"], Needs::Nothing),
     cmd(
@@ -649,58 +677,6 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     // Check
-    verb(
-        cmd(
-            "check.problems",
-            "Problems",
-            "Check",
-            &["errors", "checks"],
-            Needs::Project,
-        ),
-        &["problems"],
-    ),
-    cmd(
-        "check.next_problem",
-        "Next problem",
-        "Check",
-        &[],
-        Needs::Project,
-    ),
-    cmd(
-        "check.previous_problem",
-        "Previous problem",
-        "Check",
-        &[],
-        Needs::Project,
-    ),
-    // Export
-    verb(
-        cmd(
-            "export.pdf",
-            "Export PDF",
-            "Export",
-            &["print"],
-            Needs::Project,
-        ),
-        &["export pdf", "pdf"],
-    ),
-    verb(
-        cmd(
-            "export.bom",
-            "Export bill of materials",
-            "Export",
-            &["parts list"],
-            Needs::Project,
-        ),
-        &["export bom"],
-    ),
-    cmd(
-        "export.reports",
-        "Export all reports to Excel",
-        "Export",
-        &["excel", "xlsx", "spreadsheet", "all reports"],
-        Needs::Project,
-    ),
     // Reports workspace (docs/design/workspaces.md section 3.4).
     cmd(
         "view.reports",
@@ -768,6 +744,58 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["cable diagram"],
+    ),
+    verb(
+        cmd(
+            "check.problems",
+            "Problems",
+            "Check",
+            &["errors", "checks"],
+            Needs::Project,
+        ),
+        &["problems"],
+    ),
+    cmd(
+        "check.next_problem",
+        "Next problem",
+        "Check",
+        &[],
+        Needs::Project,
+    ),
+    cmd(
+        "check.previous_problem",
+        "Previous problem",
+        "Check",
+        &[],
+        Needs::Project,
+    ),
+    // Export
+    verb(
+        cmd(
+            "export.pdf",
+            "Export PDF",
+            "Export",
+            &["print"],
+            Needs::Project,
+        ),
+        &["export pdf", "pdf"],
+    ),
+    verb(
+        cmd(
+            "export.bom",
+            "Export bill of materials",
+            "Export",
+            &["parts list"],
+            Needs::Project,
+        ),
+        &["export bom"],
+    ),
+    cmd(
+        "export.reports",
+        "Export all reports to Excel",
+        "Export",
+        &["excel", "xlsx", "spreadsheet", "all reports"],
+        Needs::Project,
     ),
 ];
 

@@ -51,12 +51,22 @@ pub const DUTCH: &[Aliases] = &[
         &["voorkeuren"],
         &["instellingen", "opties"],
     ),
+    nl(
+        "parts.browser",
+        &["onderdelen"],
+        &["artikelen", "onderdeel"],
+    ),
     nl("project.standard", &["tekennorm"], &["norm", "standaard"]),
     nl("terminal.toggle_pe", &["pe-klem"], &["aardklem", "aarde"]),
     nl(
         "revision.issue",
         &["revisie"],
         &["uitgeven", "versie", "vrijgeven"],
+    ),
+    nl(
+        "revision.compare",
+        &["vergelijk"],
+        &["verschil", "revisies vergelijken"],
     ),
     nl("file.quit", &[], &["afsluiten", "stoppen"]),
     nl("help.about", &[], &["over", "versie"]),

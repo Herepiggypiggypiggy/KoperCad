@@ -5,9 +5,12 @@
 //! spreadsheet exports write.
 //!
 //! Left: the list of reports with their row counts. Centre: the selected
-//! report's tables, sortable and filterable; a double-click on a row jumps
-//! to the device it describes. Exports go next to the project file and
-//! never overwrite an earlier one.
+//! report's tables, sortable and filterable. A click on a row selects the
+//! device it describes (the selection travels: Schematic then opens on it,
+//! and rows of what the drawing has selected are lit); a double-click or
+//! Enter jumps to it. Up and Down walk the rows, Ctrl+F focuses the filter
+//! and Escape clears it. Exports write the whole report, not the filtered
+//! view, next to the project file and never overwrite an earlier one.
 
 use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
@@ -37,6 +40,12 @@ pub(crate) struct ReportsView {
     sort: Option<(String, usize, bool)>,
     /// The shown report's output, kept while the project is unchanged.
     cache: Option<(String, u64, ReportOutput)>,
+    /// The row the keys act on: its section key and index in the section.
+    cursor: Option<(String, usize)>,
+    /// Put the cursor row in view on the next frame.
+    reveal: bool,
+    /// The object the clicked row describes, for the status bar.
+    picked: Option<AnyId>,
 }
 
 /// A file format a report can be written in.
@@ -156,6 +165,9 @@ impl NovoApp {
             ui.weak("This report is not available");
             return;
         };
+        let orders: Vec<Vec<usize>> = output.sections.iter().map(|s| self.row_order(s)).collect();
+        let filter_id = egui::Id::new("reports_filter");
+        let mut jump = self.report_keys(ui, &output, &orders, filter_id);
         let mut export = None;
         ui.horizontal(|ui| {
             ui.heading(&output.title);
@@ -163,32 +175,37 @@ impl NovoApp {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
                     .button("CSV")
-                    .on_hover_text("Write this report as CSV")
+                    .on_hover_text("Write the whole report as CSV (ignores the filter and sort)")
                     .clicked()
                 {
                     export = Some(ReportFormat::Csv);
                 }
                 if ui
                     .button("Excel")
-                    .on_hover_text("Write this report as an Excel file next to the project")
+                    .on_hover_text(
+                        "Write the whole report as an Excel file next to the project \
+                         (ignores the filter and sort)",
+                    )
                     .clicked()
                 {
                     export = Some(ReportFormat::Excel);
                 }
                 ui.add(
                     egui::TextEdit::singleline(&mut self.reports_view.filter)
-                        .hint_text("Filter rows")
+                        .id(filter_id)
+                        .hint_text("Filter rows (Ctrl+F)")
                         .desired_width(200.0),
                 );
             });
         });
         ui.separator();
-        let jump = egui::ScrollArea::both()
+        let lit = self.lit_sources();
+        let clicked = egui::ScrollArea::both()
             .auto_shrink(false)
             .show(ui, |ui| {
                 let mut jump = None;
-                for section in &output.sections {
-                    if let Some(source) = self.section_table(ui, section) {
+                for (section, order) in output.sections.iter().zip(&orders) {
+                    if let Some(source) = self.section_table(ui, section, order, &lit) {
                         jump = Some(source);
                     }
                     ui.add_space(12.0);
@@ -199,6 +216,8 @@ impl NovoApp {
                 jump
             })
             .inner;
+        self.reports_view.reveal = false;
+        jump = jump.or(clicked);
         if let Some(format) = export {
             self.export_report(&id, format);
         }
@@ -207,13 +226,136 @@ impl NovoApp {
         }
     }
 
+    /// The devices the drawing has selected, as a row's sources name them.
+    fn lit_sources(&self) -> Vec<AnyId> {
+        let Some(doc) = self.backend.document() else {
+            return Vec::new();
+        };
+        let project = doc.project();
+        let mut lit: Vec<AnyId> = self.selection();
+        let devices: Vec<AnyId> = lit
+            .iter()
+            .filter_map(|id| novo_editor::edit::device_of(project, *id))
+            .map(AnyId::Device)
+            .collect();
+        lit.extend(devices);
+        lit.extend(self.reports_view.picked);
+        lit
+    }
+
+    /// Up and Down walk the rows, Enter jumps to the cursor row, Ctrl+F
+    /// focuses the filter, Escape clears it (then the cursor). Returns the
+    /// object to jump to. Keys typed into the filter stay there, except
+    /// Down and Enter, which hand over to the table.
+    fn report_keys(
+        &mut self,
+        ui: &mut egui::Ui,
+        output: &ReportOutput,
+        orders: &[Vec<usize>],
+        filter_id: egui::Id,
+    ) -> Option<AnyId> {
+        use egui::{Key, Modifiers};
+        let typing = ui.memory(|m| m.has_focus(filter_id));
+        if !typing && (ui.ctx().text_edit_focused() || self.modal_open()) {
+            return None;
+        }
+        let (find, up, down, enter, escape) = ui.input_mut(|i| {
+            (
+                i.consume_key(Modifiers::COMMAND, Key::F),
+                !typing && i.consume_key(Modifiers::NONE, Key::ArrowUp),
+                i.consume_key(Modifiers::NONE, Key::ArrowDown),
+                i.consume_key(Modifiers::NONE, Key::Enter),
+                i.consume_key(Modifiers::NONE, Key::Escape),
+            )
+        });
+        if find {
+            ui.memory_mut(|m| m.request_focus(filter_id));
+            return None;
+        }
+        if escape {
+            if typing || !self.reports_view.filter.is_empty() {
+                self.reports_view.filter.clear();
+                ui.memory_mut(|m| m.surrender_focus(filter_id));
+            } else {
+                self.reports_view.cursor = None;
+                self.reports_view.picked = None;
+            }
+            return None;
+        }
+        if typing && (down || enter) {
+            ui.memory_mut(|m| m.surrender_focus(filter_id));
+        } else if typing {
+            return None;
+        }
+        // Every visible row, in the order they are drawn.
+        let flat: Vec<(usize, usize)> = orders
+            .iter()
+            .enumerate()
+            .flat_map(|(s, order)| order.iter().map(move |&row| (s, row)))
+            .collect();
+        let at = self.reports_view.cursor.as_ref().and_then(|(key, row)| {
+            flat.iter()
+                .position(|&(s, r)| output.sections[s].key == *key && r == *row)
+        });
+        if enter && !typing {
+            let (s, r) = flat.get(at?)?;
+            return output.sections[*s].rows[*r].sources.first().copied();
+        }
+        let next = match (at, up, down) {
+            (Some(i), true, _) => i.saturating_sub(1),
+            (Some(i), _, true) => (i + 1).min(flat.len().saturating_sub(1)),
+            (None, _, true) => 0,
+            (None, true, _) => flat.len().saturating_sub(1),
+            _ => return None,
+        };
+        let &(s, r) = flat.get(next)?;
+        let section = &output.sections[s];
+        self.reports_view.cursor = Some((section.key.clone(), r));
+        self.reports_view.reveal = true;
+        self.pick_source(section.rows[r].sources.first().copied());
+        None
+    }
+
+    /// The tag of the device the clicked row describes, for the status bar.
+    pub(super) fn reports_picked(&self) -> Option<String> {
+        let project = self.backend.document()?.project();
+        let device = novo_editor::edit::device_of(project, self.reports_view.picked?)?;
+        Some(project.device(device)?.tag.to_string())
+    }
+
+    /// Selects what a row describes: the next time the drawing shows, its
+    /// page is open and the symbol selected.
+    fn pick_source(&mut self, source: Option<AnyId>) {
+        self.reports_view.picked = source;
+        let place = match source {
+            Some(AnyId::Device(device)) => self.device_main(device),
+            Some(AnyId::Symbol(symbol)) => self
+                .backend
+                .document()
+                .and_then(|d| d.project().symbol(symbol))
+                .map(|s| Place {
+                    page: s.page,
+                    symbol: Some(symbol),
+                }),
+            _ => None,
+        };
+        if place.is_some() {
+            self.wb.pending = place;
+        }
+    }
+
     /// One section as a table. Returns the first model object of a row the
     /// person double-clicked.
-    fn section_table(&mut self, ui: &mut egui::Ui, section: &Section) -> Option<AnyId> {
+    fn section_table(
+        &mut self,
+        ui: &mut egui::Ui,
+        section: &Section,
+        order: &[usize],
+        lit: &[AnyId],
+    ) -> Option<AnyId> {
         if !section.title.is_empty() {
             section_label(ui, &section.title);
         }
-        let order = self.row_order(section);
         let total: f64 = section.columns.iter().map(|c| c.width.max(0.1)).sum();
         let room = (ui.available_width() - 8.0 * section.columns.len() as f32).max(240.0);
         let widths: Vec<f32> = section
@@ -248,54 +390,77 @@ impl NovoApp {
         });
 
         let mut jump = None;
-        egui::ScrollArea::vertical()
+        let mut area = egui::ScrollArea::vertical()
             .id_salt(("report_rows", &section.key))
             .auto_shrink([false, true])
-            .max_height(ui.available_height().max(240.0))
-            .show_rows(ui, ROW_HEIGHT, order.len(), |ui, range| {
-                for &index in &order[range] {
-                    let row = &section.rows[index];
-                    let line = ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 8.0;
-                        for (i, cell) in row.cells.iter().enumerate() {
-                            let align = match section.columns[i].align {
-                                Align::Right => egui::Align::Max,
-                                Align::Center => egui::Align::Center,
-                                Align::Left => egui::Align::Min,
-                            };
-                            ui.allocate_ui_with_layout(
-                                egui::vec2(widths[i], ROW_HEIGHT),
-                                egui::Layout::top_down(align),
-                                |ui| {
-                                    ui.add(egui::Label::new(cell.to_string()).truncate());
-                                },
-                            );
-                        }
-                    });
-                    let response = ui.interact(
-                        line.response.rect,
-                        ui.id().with(("report_row", &section.key, index)),
-                        egui::Sense::click(),
-                    );
-                    if response.hovered() {
-                        ui.painter().rect_filled(
-                            line.response.rect,
-                            0.0,
-                            novo_theme::tokens::BG_4.gamma_multiply(0.35),
+            .max_height(ui.available_height().max(240.0));
+        if self.reports_view.reveal
+            && let Some((key, row)) = &self.reports_view.cursor
+            && *key == section.key
+            && let Some(pos) = order.iter().position(|r| r == row)
+        {
+            let step = ROW_HEIGHT + ui.spacing().item_spacing.y;
+            area = area.vertical_scroll_offset((pos as f32 - 4.0).max(0.0) * step);
+        }
+        area.show_rows(ui, ROW_HEIGHT, order.len(), |ui, range| {
+            for &index in &order[range] {
+                let row = &section.rows[index];
+                let line = ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 8.0;
+                    for (i, cell) in row.cells.iter().enumerate() {
+                        let align = match section.columns[i].align {
+                            Align::Right => egui::Align::Max,
+                            Align::Center => egui::Align::Center,
+                            Align::Left => egui::Align::Min,
+                        };
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(widths[i], ROW_HEIGHT),
+                            egui::Layout::top_down(align),
+                            |ui| {
+                                ui.add(egui::Label::new(cell.to_string()).truncate());
+                            },
                         );
                     }
-                    if response.double_clicked()
-                        && let Some(source) = row.sources.first()
-                    {
-                        jump = Some(*source);
-                    }
+                });
+                let response = ui.interact(
+                    line.response.rect,
+                    ui.id().with(("report_row", &section.key, index)),
+                    egui::Sense::click(),
+                );
+                let at_cursor = self
+                    .reports_view
+                    .cursor
+                    .as_ref()
+                    .is_some_and(|(key, r)| *key == section.key && *r == index);
+                if at_cursor || row.sources.iter().any(|s| lit.contains(s)) {
+                    ui.painter().rect_filled(
+                        line.response.rect,
+                        0.0,
+                        novo_theme::tokens::ACCENT_SELECTION,
+                    );
+                } else if response.hovered() {
+                    ui.painter().rect_filled(
+                        line.response.rect,
+                        0.0,
+                        novo_theme::tokens::BG_4.gamma_multiply(0.35),
+                    );
                 }
-            });
+                if response.clicked() {
+                    self.reports_view.cursor = Some((section.key.clone(), index));
+                    self.pick_source(row.sources.first().copied());
+                }
+                if response.double_clicked()
+                    && let Some(source) = row.sources.first()
+                {
+                    jump = Some(*source);
+                }
+            }
+        });
         jump
     }
 
     /// The rows of a section that pass the filter, in the chosen order.
-    fn row_order(&self, section: &Section) -> Vec<usize> {
+    pub(super) fn row_order(&self, section: &Section) -> Vec<usize> {
         let filter = self.reports_view.filter.trim().to_lowercase();
         let mut order: Vec<usize> = (0..section.rows.len())
             .filter(|&i| {
@@ -505,6 +670,76 @@ mod tests {
         }
         let output = d.app.report_output("devices").unwrap();
         assert!(output.row_count() > 0, "the example lists devices");
+    }
+
+    /// One frame with `key` pressed in the Reports workspace.
+    fn press(d: &mut Drive, key: egui::Key, modifiers: egui::Modifiers) {
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1600.0, 900.0),
+            )),
+            events: vec![egui::Event::Key {
+                key,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers,
+            }],
+            ..Default::default()
+        };
+        let app = &mut d.app;
+        let mut out = d.ctx.run_ui(input, |ui| app.show(ui));
+        out.textures_delta.clear();
+    }
+
+    #[test]
+    fn keys_walk_the_rows_and_a_row_selects_its_device() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::OpenExample);
+        d.frame();
+        d.app.show_report("devices");
+        d.frame();
+        d.frame();
+        let none = egui::Modifiers::NONE;
+        press(&mut d, egui::Key::ArrowDown, none);
+        let first = d.app.reports_view.cursor.clone().expect("a cursor");
+        press(&mut d, egui::Key::ArrowDown, none);
+        let second = d.app.reports_view.cursor.clone().unwrap();
+        assert_ne!(first, second, "Down moves");
+        press(&mut d, egui::Key::ArrowUp, none);
+        assert_eq!(d.app.reports_view.cursor, Some(first));
+        assert!(d.app.reports_view.picked.is_some(), "the row is picked");
+        assert!(d.app.reports_picked().is_some(), "the status bar names it");
+        // Opening the drawing lands on the picked device's page.
+        let place = d.app.wb.pending.expect("a pending selection");
+        d.app.switch_workspace(Workspace::Schematic);
+        assert_eq!(d.app.current_page, Some(place.page));
+        d.frame();
+        d.frame();
+        assert_eq!(d.app.selected_symbol(), place.symbol);
+    }
+
+    #[test]
+    fn escape_clears_the_filter_then_the_cursor() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::OpenExample);
+        d.frame();
+        d.app.show_report("devices");
+        d.frame();
+        d.app.reports_view.filter = "k".into();
+        let none = egui::Modifiers::NONE;
+        press(&mut d, egui::Key::ArrowDown, none);
+        assert!(d.app.reports_view.cursor.is_some());
+        press(&mut d, egui::Key::Escape, none);
+        assert!(d.app.reports_view.filter.is_empty());
+        assert!(d.app.reports_view.cursor.is_some(), "first Escape: filter");
+        press(&mut d, egui::Key::Escape, none);
+        assert!(d.app.reports_view.cursor.is_none());
     }
 
     #[test]
