@@ -12,7 +12,7 @@ use crate::table::{Cell, Column, ReportOutput, Section};
 /// Everything but free texts: the connectivity, structure, part and cable
 /// records the WS-11 and WS-12 screens are built from, plus the project
 /// rules (terminal joins, potentials from terminal names).
-fn model_dependencies() -> Dependencies {
+pub(crate) fn model_dependencies() -> Dependencies {
     use EntityKind::*;
     Dependencies::on(&[
         Page, Device, Symbol, Junction, Wire, Potential, Terminal, Cable, Part,

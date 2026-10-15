@@ -362,6 +362,7 @@ impl NovoApp {
     pub(super) fn toggle_live(&mut self) {
         self.wb.live.on ^= true;
         if self.wb.live.on {
+            self.tour_tick("live");
             self.message(
                 Level::Info,
                 "Live potentials: contacts start open. Click a pole badge to close it",

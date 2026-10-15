@@ -34,3 +34,13 @@ removed on From, changed on both). How to reach it: command palette
 
 Next: note field in the Issue window, `kind_name` match for sheet kinds in
 novo-py `comparison_json` (reviewer nit on #450).
+
+## How to reach it (user-visible entry points)
+
+- Terminal: `kopercad-cli revisions list <file>` and
+  `kopercad-cli revisions diff <file> <from> <to> [--json]` (#445).
+- Python: `Project.revisions()`, `Project.compare("A", "now")` (#450).
+- App (#468, merged): command `revision.compare` (Ctrl+K "compare
+  revisions", or `compare A B`) opens the Compare window; the Changes card
+  has a "Compare…" button. The clickable change list and PDF report are the
+  Revision diff thread's.
