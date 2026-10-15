@@ -1941,6 +1941,7 @@ dependencies = [
  "novo-core",
  "novo-editor",
  "novo-interop",
+ "novo-layout",
  "novo-pdf",
  "novo-plc",
  "novo-py",

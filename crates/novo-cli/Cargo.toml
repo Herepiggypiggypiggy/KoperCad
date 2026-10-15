@@ -16,6 +16,7 @@ novo-storage.workspace = true
 novo-py.workspace = true
 novo-checks.workspace = true
 novo-pdf.workspace = true
+novo-layout.workspace = true
 novo-plc.workspace = true
 novo-reports.workspace = true
 novo-revisions.workspace = true

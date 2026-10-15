@@ -120,7 +120,7 @@ pub fn set_plate(tx: &mut Tx<'_>, id: StructureId, plate: MountingPlate) -> Resu
 /// plan's rails, then places each device on its rail. Devices that are
 /// already placed are left where they are.
 pub fn apply_plan(tx: &mut Tx<'_>, id: StructureId, plan: &Plan) -> Result<()> {
-    let mut rails: HashMap<u64, (RailId, f64)> = HashMap::new();
+    let mut rails: HashMap<u64, (RailId, bool, f64, f64)> = HashMap::new();
     for rail in &plan.rails {
         let created = tx.execute(Command::AddRail {
             structure: id,
@@ -128,12 +128,12 @@ pub fn apply_plan(tx: &mut Tx<'_>, id: StructureId, plan: &Plan) -> Result<()> {
             y: rail.y,
             length: rail.length,
             kind: RailKind::DinRail,
-            vertical: false,
+            vertical: rail.vertical,
             width: 0.0,
             height: 0.0,
         })?;
         if let Some(novo_core::AnyId::Rail(model_id)) = created.first() {
-            rails.insert(rail.id, (*model_id, rail.x));
+            rails.insert(rail.id, (*model_id, rail.vertical, rail.x, rail.y));
         }
     }
     for p in &plan.placements {
@@ -145,7 +145,9 @@ pub fn apply_plan(tx: &mut Tx<'_>, id: StructureId, plan: &Plan) -> Result<()> {
         {
             continue;
         }
-        let rail = rails.get(&p.rail).map(|(rail, x)| (*rail, p.x - x));
+        let rail = rails
+            .get(&p.rail)
+            .map(|(rail, vertical, x, y)| (*rail, if *vertical { p.y - y } else { p.x - x }));
         tx.execute(Command::PlaceDevice {
             device,
             structure: id,

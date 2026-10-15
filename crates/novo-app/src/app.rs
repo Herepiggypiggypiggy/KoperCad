@@ -33,6 +33,7 @@ mod pages;
 mod parts;
 mod parts_import;
 mod pdf;
+mod plate_export;
 mod plc;
 mod plc_link;
 mod potentials;
