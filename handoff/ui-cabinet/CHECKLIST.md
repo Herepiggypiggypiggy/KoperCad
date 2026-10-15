@@ -22,6 +22,9 @@ Status key: UI = reachable in the app today, ENGINE = engine only (on main or in
 | Plate drawing and drill table (R5) | #397 open | ENGINE | Export plate drawing, from the Cabinet header and Ctrl+K |
 | 3D scene from cabinet data | #391 open | ENGINE | 3D face |
 | 3D look and camera | #420 open | ENGINE | 3D face |
+| 3D view cube, view.* commands, 3D toolbar, Settings > 3D view (spec docs/design/3d-look.md section 8, engine in #420) | #388 #420 open | ENGINE | View cube top right of the 3D face; toolbar for toggles; commands in the single list; Settings page |
+| Part power loss, mounting, clearances fields | #419 open, `cabinet_panel::show` ready | ENGINE | Section inside the inspector (wire after #443 and #419 merge) |
+| Inside and door section | #409 open, `DoorState::show` ready | UI pending merge | Collapsible section in the inspector, replacing its own panel |
 | 3D renderer (novo-view3d) | spike after #395 | ENGINE | 3D face |
 
 ## Order of work (small draft PRs, no build)
