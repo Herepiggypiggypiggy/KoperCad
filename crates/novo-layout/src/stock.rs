@@ -565,6 +565,7 @@ mod tests {
             rotated: false,
             size: crate::Size::from_part(Some(w), Some(90.0)),
             clearance: None,
+            margins: crate::Margins::default(),
             rail: Some(1),
         };
         let pieces = rail_pieces(
