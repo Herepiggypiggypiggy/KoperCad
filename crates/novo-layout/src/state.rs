@@ -49,6 +49,11 @@ impl CabinetLayout {
         }
     }
 
+    /// A position snapped to the grid, for dropping and dragging.
+    pub fn snapped(&self, x: f64, y: f64) -> (f64, f64) {
+        (self.snap(x), self.snap(y))
+    }
+
     fn snap(&self, v: f64) -> f64 {
         if self.grid > 0.0 {
             (v / self.grid).round() * self.grid
