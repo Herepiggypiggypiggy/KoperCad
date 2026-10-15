@@ -63,3 +63,7 @@
 20:05 UTC #430 3ff277c READY (labels, conflict fixed; second of #430/#440 drops hand-written File buttons)
 20:10 UTC #463 2109571 CHANGES (app.rs conflict; sync workspaces.md §5.3 to 1100/1250/1700)
 20:10 UTC #475 7735eb8 CHANGES (conflict only, stacked on #463; design items done)
+20:25 UTC #406 d542c81 READY (conflicts fixed)
+20:25 UTC #442 eb95861 READY (clickable Changes rows)
+20:25 UTC #499 13eac40 READY (3D look nits)
+20:25 UTC #413 2254a15 CHANGES (conflict in gate1_tests.rs only; design fine)
