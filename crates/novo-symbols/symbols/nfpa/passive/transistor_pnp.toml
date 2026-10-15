@@ -1,0 +1,33 @@
+format = 1
+id = "nfpa/passive/transistor_pnp"
+name = "PNP transistor"
+description = "Bipolar PNP transistor."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "passive"
+function = "passive.transistor.pnp"
+keywords = ["transistor", "pnp", "bipolar", "nfpa", "ansi"]
+
+connections = [
+  { id = "C", at = [0, 0], dir = "up" },
+  { id = "E", at = [0, 16], dir = "down" },
+  { id = "B", at = [-8, 8], dir = "left" },
+]
+
+anchors = [
+  { role = "tag", at = [4.5, 8], align = "left" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "line", from = [-2, 6.5], to = [0, 4] },
+  { kind = "line", from = [-2, 9.5], to = [0, 12] },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+  { kind = "line", from = [-2, 5], to = [-2, 11] },
+  { kind = "line", from = [-8, 8], to = [-2, 8] },
+  { kind = "circle", center = [-1, 8], r = 5 },
+  { kind = "polyline", points = [[-1.8, 9.7], [0.165, 10.86], [-1.365, 11.94]], closed = true, fill = true },
+]
+
+[behavior]
+kind = "passive"
+type = "transistor"

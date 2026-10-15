@@ -1,0 +1,29 @@
+format = 1
+id = "nfpa/coils/brake"
+name = "Brake coil"
+description = "Brake coil."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "coils"
+function = "coil.brake"
+keywords = ["brake", "holding brake", "coil", "a1", "a2", "nfpa", "ansi"]
+aliases = ["brake"]
+
+connections = [
+  { id = "A1", at = [0, 0], dir = "up" },
+  { id = "A2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "circle", center = [0, 8], r = 4 },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+  { kind = "text", at = [0, 8], text = "BR" },
+]
+
+[behavior]
+kind = "coil"
+poles = [["A1", "A2"]]

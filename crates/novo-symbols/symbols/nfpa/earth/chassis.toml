@@ -1,0 +1,27 @@
+format = 1
+id = "nfpa/earth/chassis"
+name = "Chassis (frame) connection"
+description = "Connection to the frame or chassis."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "earth"
+function = "earth.chassis"
+keywords = ["chassis", "frame", "mass", "functional earth", "nfpa", "ansi"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 5], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "line", from = [-3, 4], to = [3, 4] },
+  { kind = "line", from = [-3, 4], to = [-4.5, 6] },
+  { kind = "line", from = [0, 4], to = [-1.5, 6] },
+  { kind = "line", from = [3, 4], to = [1.5, 6] },
+]
+
+[behavior]
+kind = "none"

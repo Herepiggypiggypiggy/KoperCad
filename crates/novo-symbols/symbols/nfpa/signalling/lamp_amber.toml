@@ -1,0 +1,29 @@
+format = 1
+id = "nfpa/signalling/lamp_amber"
+name = "Pilot light, amber"
+description = "NFPA pilot light, amber; the letter in the circle names the colour."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "signalling"
+function = "signal.lamp.amber"
+keywords = ["lamp", "pilot light", "indicator", "amber", "nfpa", "ansi"]
+aliases = ["la"]
+
+connections = [
+  { id = "X1", at = [0, 0], dir = "up" },
+  { id = "X2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "circle", center = [0, 8], r = 4 },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+  { kind = "text", at = [0, 8], text = "A", size = 3 },
+]
+
+[behavior]
+kind = "lamp"
+poles = [["X1", "X2"]]

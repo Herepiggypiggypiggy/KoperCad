@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use novo_core::{DeviceId, Endpoint, Netlist, Project, SymbolId, SymbolInstance, Value};
 
-use crate::{PoleState, Solution, solve};
+use crate::{PoleState, Solution, output_drives, solve_driven};
 
 /// Most rounds before a circuit that never settles (a buzzer) is given up
 /// on; the last round stands.
@@ -217,10 +217,12 @@ pub fn settle_timed(
         .copied()
         .filter(|c| coils.iter().any(|k| k.id == *c))
         .collect();
+    // Outputs switched on by hand put their supply on their pin.
+    let drives = output_drives(project, forced);
     let mut last = None;
     for _ in 0..ROUNDS {
         let (poles, _) = poles_for(project, manual, &driven, &coils, &energized, clock);
-        let solution = solve(project, netlist, &poles);
+        let solution = solve_driven(project, netlist, &poles, &drives);
         let next: BTreeSet<SymbolId> = coils
             .iter()
             .filter(|c| forced.contains(&c.id) || fed(c, netlist, &solution))

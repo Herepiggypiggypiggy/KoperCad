@@ -1,0 +1,33 @@
+format = 1
+id = "nfpa/operators/footswitch_no"
+name = "Foot switch, make contact"
+description = "Foot-operated switch (pedal)."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "operators"
+function = "contact.no.foot"
+keywords = ["foot", "pedal", "switch", "make", "nfpa", "ansi"]
+aliases = ["fs"]
+
+connections = [
+  { id = "13", at = [0, 0], dir = "up" },
+  { id = "14", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-12.5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 6] },
+  { kind = "line", from = [0, 16], to = [0, 10] },
+  { kind = "line", from = [-3, 6], to = [3, 6] },
+  { kind = "line", from = [-3, 10], to = [3, 10] },
+  { kind = "line", from = [-1, 8], to = [-8, 8] },
+  { kind = "line", from = [-8, 5], to = [-8, 11] },
+  { kind = "line", from = [-8, 11], to = [-11, 11] },
+]
+
+[behavior]
+kind = "contact"
+normally = "open"
+poles = [["13", "14"]]

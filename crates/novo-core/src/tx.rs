@@ -3,20 +3,22 @@
 use std::collections::BTreeSet;
 
 use crate::entity::{
-    Cable, CableCore, Device, DeviceKind, Dismissal, Endpoint, Junction, Page, PageFreeze,
-    PageKind, Part, PeOverride, Pin, PinFeed, Potential, PotentialKind, PotentialSet,
-    PotentialSpec, PotentialSystem, ProjectInfo, Revision, Structure, SymbolInstance, SymbolKey,
-    SymbolRole, Terminal, Text, TextContent, TextPlacement, Value, Wire,
+    CabinetPlacement, Cable, CableCore, Device, DeviceKind, Dismissal, Endpoint, Junction,
+    MountingPlate, Page, PageFreeze, PageKind, Part, PeOverride, Pin, PinFeed, Potential,
+    PotentialKind, PotentialSet, PotentialSpec, PotentialSystem, ProjectInfo, Rail, RailKind,
+    Revision, Structure, SymbolInstance, SymbolKey, SymbolRole, Terminal, Text, TextContent,
+    TextPlacement, Value, Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::{Placement, Point};
 use crate::id::{
-    AnyId, CableId, DeviceId, DismissalId, JunctionId, PageId, PartId, PotentialId,
-    PotentialSystemId, RevisionId, StructureId, SymbolId, TerminalId, TextId, WireId,
+    AnyId, CabinetPlacementId, CableId, DeviceId, DismissalId, JunctionId, PageId, PartId,
+    PotentialId, PotentialSystemId, RailId, RevisionId, StructureId, SymbolId, TerminalId, TextId,
+    WireId,
 };
-use crate::project::Project;
+use crate::project::{PAGE_ORDER, Project};
 use crate::record::{Entity, Op, Record};
-use crate::tag::DeviceTag;
+use crate::tag::{Aspect, DeviceTag};
 
 /// An open edit on a project, handed out by [`Project::transact`] and
 /// [`Document::transact`](crate::Document::transact).
@@ -198,6 +200,13 @@ impl<'p> Tx<'p> {
                 {
                     self.update::<SymbolInstance>(symbol, |s| {
                         s.feeds.retain(|f| f.potential != potential)
+                    })?;
+                }
+                // The device stays where it is on the plate, off the rail.
+                (AnyId::CabinetPlacement(placement), AnyId::Rail(_)) => {
+                    self.update::<CabinetPlacement>(placement, |p| {
+                        p.rail = None;
+                        p.rail_offset = None;
                     })?;
                 }
                 (AnyId::Cable(cable), AnyId::Wire(wire)) => {
@@ -904,8 +913,141 @@ impl<'p> Tx<'p> {
             tag,
             description,
             enclosure,
+            plate: None,
             properties: Default::default(),
         })
+    }
+
+    /// Sets the mounting plate of an enclosure, or removes it with `None`
+    /// (refused while rails or placed devices are on it).
+    pub fn set_plate(
+        &mut self,
+        structure: StructureId,
+        plate: Option<MountingPlate>,
+    ) -> Result<()> {
+        if plate.is_none()
+            && self
+                .project
+                .referrers(structure)
+                .any(|r| matches!(r, AnyId::Rail(_) | AnyId::CabinetPlacement(_)))
+        {
+            return Err(ModelError::Refused {
+                what: "Remove mounting plate".into(),
+                reason: "rails or devices are still placed on it".into(),
+            });
+        }
+        self.update::<Structure>(structure, |s| s.plate = plate)
+    }
+
+    /// Adds a rail or duct to the plate of an enclosure.
+    pub fn add_rail(
+        &mut self,
+        structure: StructureId,
+        x: f64,
+        y: f64,
+        length: f64,
+        kind: RailKind,
+    ) -> Result<RailId> {
+        self.insert(|id| Rail {
+            id,
+            structure,
+            x,
+            y,
+            length,
+            kind,
+            vertical: false,
+            width: 0.0,
+            height: 0.0,
+            properties: Default::default(),
+        })
+    }
+
+    /// Moves a rail or duct, and the devices placed on it with it.
+    pub fn move_rail(&mut self, rail: RailId, x: f64, y: f64) -> Result<()> {
+        let old = self
+            .project
+            .rails
+            .get(&rail)
+            .ok_or(ModelError::NotFound(rail.into()))?;
+        let (dx, dy) = (x - old.x, y - old.y);
+        let on_it: Vec<CabinetPlacementId> = self
+            .project
+            .cabinet_placements
+            .values()
+            .filter(|p| p.rail == Some(rail))
+            .map(|p| p.id)
+            .collect();
+        self.update::<Rail>(rail, |r| {
+            r.x = x;
+            r.y = y;
+        })?;
+        for id in on_it {
+            self.update::<CabinetPlacement>(id, |p| {
+                p.x += dx;
+                p.y += dy;
+            })?;
+        }
+        Ok(())
+    }
+
+    /// Sets the length and the cross-section of a rail or duct.
+    pub fn set_rail_size(
+        &mut self,
+        rail: RailId,
+        length: f64,
+        width: f64,
+        height: f64,
+    ) -> Result<()> {
+        self.update::<Rail>(rail, |r| {
+            r.length = length;
+            r.width = width;
+            r.height = height;
+        })
+    }
+
+    /// Places a device on the plate of an enclosure, or moves it when it
+    /// already has a placement. Returns the placement and whether it is new.
+    pub fn place_device(
+        &mut self,
+        device: DeviceId,
+        structure: StructureId,
+        at: Point,
+        rotated: bool,
+        rail: Option<(RailId, f64)>,
+    ) -> Result<(CabinetPlacementId, bool)> {
+        let existing = self
+            .project
+            .cabinet_placements
+            .values()
+            .find(|p| p.device == device)
+            .map(|p| p.id);
+        let (rail, rail_offset) = match rail {
+            Some((rail, offset)) => (Some(rail), Some(offset)),
+            None => (None, None),
+        };
+        if let Some(id) = existing {
+            self.update::<CabinetPlacement>(id, |p| {
+                p.structure = structure;
+                p.x = at.x;
+                p.y = at.y;
+                p.rotated = rotated;
+                p.rail = rail;
+                p.rail_offset = rail_offset;
+            })?;
+            return Ok((id, false));
+        }
+        let id = self.insert(|id| CabinetPlacement {
+            id,
+            device,
+            structure,
+            x: at.x,
+            y: at.y,
+            rotated,
+            rail,
+            rail_offset,
+            properties: Default::default(),
+        })?;
+        Ok((id, true))
     }
 
     /// Records that the user declined a proposal about `subjects`, or
@@ -984,6 +1126,171 @@ impl<'p> Tx<'p> {
                 d.parts.push(part);
             }
         })
+    }
+
+    /// Puts the pages of one group and panel in the given reading order by
+    /// numbering them 10, 20, 30, ... in the `order` property. `pages` must
+    /// list every page that shares the first page's group, panel and
+    /// section ([`Project::sibling_pages`]), each once. Page names, and so
+    /// the references that print them, do not change.
+    pub fn reorder_pages(&mut self, pages: &[PageId]) -> Result<()> {
+        let refuse = |reason: &str| ModelError::Refused {
+            what: "Reorder".into(),
+            reason: reason.into(),
+        };
+        let Some(&first) = pages.first() else {
+            return Err(refuse("there are no pages to order"));
+        };
+        if !self.project.contains(first.into()) {
+            return Err(ModelError::NotFound(first.into()));
+        }
+        let siblings = self.project.sibling_pages(first);
+        let listed: BTreeSet<PageId> = pages.iter().copied().collect();
+        if listed.len() != pages.len() {
+            return Err(refuse("a page is listed twice"));
+        }
+        if let Some(page) = pages.iter().find(|p| !siblings.contains(p)) {
+            if !self.project.contains((*page).into()) {
+                return Err(ModelError::NotFound((*page).into()));
+            }
+            return Err(refuse("the pages are not all in one group and panel"));
+        }
+        if siblings.len() != pages.len() {
+            return Err(refuse("list every page of the group and panel"));
+        }
+        for (n, &page) in pages.iter().enumerate() {
+            let order = Value::Int(10 * (n as i64 + 1));
+            let unchanged = self
+                .project
+                .page(page)
+                .is_some_and(|p| p.properties.get(PAGE_ORDER) == Some(&order));
+            if !unchanged {
+                self.update::<crate::Page>(page, |p| {
+                    p.properties.insert(PAGE_ORDER.into(), order);
+                })?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Renames a group (function aspect) or panel (location aspect): every
+    /// page, device, cable and structure node whose levels for `aspect`
+    /// start with `from` gets `to` in their place, so children follow
+    /// (`+CAB1` also renames `+CAB1+DOOR`) and enclosure lookups give the
+    /// same answer before and after. Frozen pages keep what was printed.
+    ///
+    /// Renaming onto an existing name merges the two, unless that would give
+    /// two devices, two cables or two structure nodes the same full tag.
+    pub fn rename_level(&mut self, aspect: Aspect, from: &[String], to: &[String]) -> Result<()> {
+        let refuse = |reason: &str| ModelError::Refused {
+            what: "Rename".into(),
+            reason: reason.into(),
+        };
+        if aspect == Aspect::Product {
+            return Err(refuse("only groups and panels can be renamed here"));
+        }
+        if from.is_empty() || to.is_empty() {
+            return Err(refuse("the name is empty"));
+        }
+        if from == to {
+            return Ok(());
+        }
+        if to.len() > from.len() && to.starts_with(from) {
+            return Err(refuse("a name cannot be renamed into its own sub-level"));
+        }
+        let mut probe = DeviceTag::default();
+        *probe.levels_mut(aspect) = to.to_vec();
+        probe.validate()?;
+
+        let rewrite = |tag: &DeviceTag| -> Option<DeviceTag> {
+            let levels = tag.levels(aspect);
+            if !levels.starts_with(from) {
+                return None;
+            }
+            let mut new = tag.clone();
+            *new.levels_mut(aspect) = to.iter().chain(&levels[from.len()..]).cloned().collect();
+            Some(new)
+        };
+        // A rewritten tag may not land on a tag that stays, or on the
+        // rewrite of a different tag.
+        fn clash(all: &[DeviceTag], changes: &[(usize, DeviceTag)], noun: &str) -> Result<()> {
+            let moved: BTreeSet<usize> = changes.iter().map(|(i, _)| *i).collect();
+            for (n, (i, new)) in changes.iter().enumerate() {
+                let stays = all
+                    .iter()
+                    .enumerate()
+                    .any(|(j, t)| !moved.contains(&j) && t == new);
+                let twin = changes[..n]
+                    .iter()
+                    .any(|(j, other)| other == new && all[*j] != all[*i]);
+                if stays || twin {
+                    return Err(ModelError::Refused {
+                        what: "Rename".into(),
+                        reason: format!("two {noun} would both be called {new}"),
+                    });
+                }
+            }
+            Ok(())
+        }
+
+        let devices: Vec<(DeviceId, DeviceTag)> = self
+            .project
+            .devices()
+            .map(|d| (d.id, d.tag.clone()))
+            .collect();
+        let device_tags: Vec<DeviceTag> = devices.iter().map(|(_, t)| t.clone()).collect();
+        let device_changes: Vec<(usize, DeviceTag)> = device_tags
+            .iter()
+            .enumerate()
+            .filter_map(|(i, t)| rewrite(t).map(|n| (i, n)))
+            .collect();
+        clash(&device_tags, &device_changes, "devices")?;
+
+        let cables: Vec<(CableId, DeviceTag)> = self
+            .project
+            .cables()
+            .map(|c| (c.id, c.tag.clone()))
+            .collect();
+        let cable_tags: Vec<DeviceTag> = cables.iter().map(|(_, t)| t.clone()).collect();
+        let cable_changes: Vec<(usize, DeviceTag)> = cable_tags
+            .iter()
+            .enumerate()
+            .filter_map(|(i, t)| rewrite(t).map(|n| (i, n)))
+            .collect();
+        clash(&cable_tags, &cable_changes, "cables")?;
+
+        let structures: Vec<(StructureId, DeviceTag)> = self
+            .project
+            .structures()
+            .map(|s| (s.id, s.tag.clone()))
+            .collect();
+        let structure_tags: Vec<DeviceTag> = structures.iter().map(|(_, t)| t.clone()).collect();
+        let structure_changes: Vec<(usize, DeviceTag)> = structure_tags
+            .iter()
+            .enumerate()
+            .filter_map(|(i, t)| rewrite(t).map(|n| (i, n)))
+            .collect();
+        clash(&structure_tags, &structure_changes, "structure nodes")?;
+
+        let pages: Vec<(PageId, DeviceTag)> = self
+            .project
+            .pages()
+            .filter_map(|p| rewrite(&p.structure).map(|n| (p.id, n)))
+            .collect();
+
+        for (i, new) in device_changes {
+            self.update::<Device>(devices[i].0, |d| d.tag = new)?;
+        }
+        for (i, new) in cable_changes {
+            self.update::<Cable>(cables[i].0, |c| c.tag = new)?;
+        }
+        for (i, new) in structure_changes {
+            self.update::<Structure>(structures[i].0, |s| s.tag = new)?;
+        }
+        for (id, new) in pages {
+            self.update::<Page>(id, |p| p.structure = new)?;
+        }
+        Ok(())
     }
 
     /// Renames a device.

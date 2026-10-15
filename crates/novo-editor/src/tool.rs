@@ -49,6 +49,13 @@ pub struct WireTool {
     /// The pin Q will end the wire on: set by Tab on the part under the
     /// pointer, dropped when the pointer leaves that part.
     pub aim: Option<(SymbolId, u16)>,
+    /// An existing wire this one replaces on commit (pulling or resuming
+    /// an open end, DESIGN.md §4): it keeps its number, colour and
+    /// potential, and nothing changes if the new one is refused.
+    pub replacing: Option<WireId>,
+    /// Pulling an open end: a release on nothing leaves the end open
+    /// where the pointer is, instead of cancelling.
+    pub pull: bool,
 }
 
 /// How the wire tool turns clicks into a route (DESIGN.md §4, "Wiring
@@ -995,6 +1002,8 @@ impl Editor {
                         drag: false,
                         flip: false,
                         aim: None,
+                        replacing: None,
+                        pull: false,
                     });
                     self.notice = None;
                     Clicked::Step
@@ -1014,6 +1023,15 @@ impl Editor {
                     (None, None) => {
                         self.notice = Some("Start a wire on a pin, junction or wire".into());
                         Clicked::Refused
+                    }
+                    (Some(start), None) if w.drag && w.pull => {
+                        // A pulled end released on nothing stays open there.
+                        let end = Target::Endpoint(Endpoint::Free { at }, at);
+                        if end.position().approx_eq(start.position(), EPS) {
+                            self.tool = Tool::Select;
+                            return Clicked::Step;
+                        }
+                        self.commit_wire(doc, page, w, start, end)
                     }
                     (Some(_), None) if w.drag => {
                         // A drag released on nothing connects nothing.
@@ -1422,6 +1440,101 @@ impl Editor {
             drag: true,
             flip: false,
             aim: None,
+            replacing: None,
+            pull: false,
+        });
+        self.notice = None;
+        true
+    }
+
+    /// The open end of a wire under `raw` (within `tolerance`), if any: the
+    /// wire, whether it is the wire's `from` end, and where the cap is.
+    pub fn open_end_at(
+        &self,
+        doc: &Document,
+        page: PageId,
+        raw: Point,
+        tolerance: f64,
+    ) -> Option<(WireId, bool, Point)> {
+        let project = doc.project();
+        project
+            .page_contents(page)
+            .wires
+            .into_iter()
+            .filter_map(|id| {
+                let w = project.wire(id)?;
+                let mut ends = Vec::new();
+                if let Endpoint::Free { at } = w.from {
+                    ends.push((id, true, at));
+                }
+                if let Endpoint::Free { at } = w.to {
+                    ends.push((id, false, at));
+                }
+                Some(ends)
+            })
+            .flatten()
+            .map(|e| (e.2.distance(raw), e))
+            .filter(|(d, _)| *d <= tolerance)
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, e)| e)
+    }
+
+    /// Whether `open_end_at` finds a cap under the hovered point.
+    pub fn open_end_hovered(&self, doc: &Document) -> bool {
+        let (Some((page, tolerance)), Some(at)) = (self.hovered, self.cursor) else {
+            return false;
+        };
+        self.open_end_at(doc, page, at, tolerance).is_some()
+    }
+
+    /// Takes hold of the open end under `raw`: with `pull` the end follows
+    /// the pointer (a drag, released on a pin or wire it connects, else it
+    /// stays open where it is dropped); without it the wire is resumed from
+    /// that end and goes on with clicks. The wire is replaced when the new
+    /// one is committed (DESIGN.md §4, "Open ends").
+    pub fn begin_open_end(
+        &mut self,
+        doc: &Document,
+        page: PageId,
+        raw: Point,
+        tolerance: f64,
+        pull: bool,
+    ) -> bool {
+        if !matches!(self.tool, Tool::Select | Tool::Wire(_)) {
+            return false;
+        }
+        if matches!(&self.tool, Tool::Wire(w) if w.start.is_some()) {
+            return false;
+        }
+        let Some((id, is_from, at)) = self.open_end_at(doc, page, raw, tolerance) else {
+            return false;
+        };
+        let project = doc.project();
+        let (Some(w), Some(route)) = (project.wire(id), crate::geometry::wire_points(project, id))
+        else {
+            return false;
+        };
+        let other = if is_from { w.to } else { w.from };
+        let Some(other_at) = project.endpoint_position(other) else {
+            return false;
+        };
+        // The route from the other end to the cap, without both ends.
+        let mut corners: Vec<Point> = route[1..route.len() - 1].to_vec();
+        if is_from {
+            corners.reverse();
+        }
+        if !pull {
+            corners.push(at);
+        }
+        self.proposals.clear();
+        self.tool = Tool::Wire(WireTool {
+            start: Some(Target::Endpoint(other, other_at)),
+            corners,
+            drag: pull,
+            flip: false,
+            aim: None,
+            replacing: Some(id),
+            pull,
         });
         self.notice = None;
         true
@@ -1455,6 +1568,27 @@ impl Editor {
         } else {
             self.wire_mode
         };
+        let replacing = w.replacing;
+        // The wire being replaced goes first and its numbering and colour
+        // come back on the new one, all in this one undo step.
+        let old = replacing.and_then(|id| doc.project().wire(id).cloned());
+        // The cable core the old wire is on: removing the wire frees it.
+        let core = replacing.and_then(|id| doc.project().core_of_wire(id));
+        let swap = |tx: &mut novo_core::Tx<'_>, new: WireId| -> novo_core::Result<()> {
+            if let Some((cable, index)) = core {
+                tx.assign_core(cable, index, Some(new))?;
+            }
+            if let Some(old) = &old {
+                tx.update::<novo_core::Wire>(new, |n| {
+                    n.number = old.number.clone();
+                    n.color = old.color.clone();
+                    n.cross_section_mm2 = old.cross_section_mm2;
+                    n.potential = old.potential;
+                    n.properties = old.properties.clone();
+                })?;
+            }
+            Ok(())
+        };
         let result = match mode {
             WiringMode::Corners => {
                 if w.flip {
@@ -1463,13 +1597,37 @@ impl Editor {
                         corners.push(e);
                     }
                 }
-                doc.transact("Draw wire", |tx| {
-                    edit::draw_wire(tx, page, start, &corners, end)
-                })
+                doc.transact(
+                    if old.is_some() {
+                        "Move wire end"
+                    } else {
+                        "Draw wire"
+                    },
+                    |tx| {
+                        if let Some(id) = replacing {
+                            tx.remove(AnyId::Wire(id))?;
+                        }
+                        let new = edit::draw_wire(tx, page, start, &corners, end)?;
+                        swap(tx, new)?;
+                        Ok(new)
+                    },
+                )
             }
-            WiringMode::Lines => doc.transact("Draw wire", |tx| {
-                lines::draw_wire_exact(tx, page, start, &corners, end)
-            }),
+            WiringMode::Lines => doc.transact(
+                if old.is_some() {
+                    "Move wire end"
+                } else {
+                    "Draw wire"
+                },
+                |tx| {
+                    if let Some(id) = replacing {
+                        tx.remove(AnyId::Wire(id))?;
+                    }
+                    let new = lines::draw_wire_exact(tx, page, start, &corners, end)?;
+                    swap(tx, new)?;
+                    Ok(new)
+                },
+            ),
         };
         // A wire that could not be stored leaves the one in progress as it
         // was (a drag, which has nothing to go back to, ends).
@@ -1791,6 +1949,12 @@ impl Editor {
                 }
             }
             EditorKey::Wire => {
+                // W on an open end's cap resumes that wire (DESIGN.md §4).
+                if let (Some((page, tolerance)), Some(at)) = (self.hovered, self.cursor)
+                    && self.begin_open_end(doc, page, at, tolerance, false)
+                {
+                    return true;
+                }
                 self.begin_wire();
                 true
             }
@@ -1996,6 +2160,31 @@ impl Editor {
         self.run(doc, "Move", |tx| {
             edit::transform_interactive(tx, selection, Transform::Move(delta))?;
             // No preview here, so only pins dropped inside wires connect.
+            if settle {
+                edit::settle(tx, &edit::symbols_in(selection))?;
+            }
+            Ok(())
+        })
+    }
+
+    /// [`Self::move_selection`] for a person's arrow key: `carry` takes the
+    /// wires on the moved pins along, otherwise they stay behind as open
+    /// ends, as when dragging (DESIGN.md §4).
+    pub fn nudge_selection(
+        &mut self,
+        doc: &mut Document,
+        selection: &[AnyId],
+        delta: Point,
+        carry: bool,
+    ) -> bool {
+        let settle = self.auto_connect;
+        self.run(doc, "Move", |tx| {
+            let how = Transform::Move(delta);
+            if carry {
+                edit::transform_interactive(tx, selection, how)?;
+            } else {
+                edit::transform_detached(tx, selection, how)?;
+            }
             if settle {
                 edit::settle(tx, &edit::symbols_in(selection))?;
             }

@@ -1,0 +1,34 @@
+format = 1
+id = "nfpa/motors/motor_1ph"
+name = "Single-phase motor"
+description = "Single-phase AC motor with protective earth."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "motors"
+function = "motor.ac1"
+keywords = ["motor", "single phase", "1 phase", "m", "nfpa", "ansi"]
+aliases = ["motor1", "m1"]
+
+connections = [
+  { id = "U1", at = [0, 0], dir = "up" },
+  { id = "U2", at = [8, 0], dir = "up" },
+  { id = "PE", at = [16, 0], dir = "up", role = "pe" },
+]
+
+anchors = [
+  { role = "tag", at = [-5, 16], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "line", from = [0, 4], to = [0.8, 9.774] },
+  { kind = "line", from = [8, 0], to = [8, 4] },
+  { kind = "line", from = [8, 4], to = [7.2, 9.774] },
+  { kind = "circle", center = [4, 16], r = 7 },
+  { kind = "text", at = [4, 14.5], text = "M", size = 4 },
+  { kind = "polyline", points = [[16, 0], [16, 16], [11, 16]] },
+]
+
+[behavior]
+kind = "motor"
+phases = 1
+ports = [["U1", "U2"]]

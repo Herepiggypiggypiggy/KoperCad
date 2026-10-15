@@ -1,0 +1,30 @@
+format = 1
+id = "nfpa/measuring/energy_meter"
+name = "Energy meter"
+description = "Electrical energy meter (kWh)."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "measuring"
+function = "meter.energy"
+keywords = ["energy meter", "kwh", "power meter", "metering", "nfpa", "ansi"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6.5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "rect", at = [-5, 4], size = [10, 8] },
+  { kind = "line", from = [-5, 6.5], to = [5, 6.5] },
+  { kind = "text", at = [0, 9.3], text = "Wh" },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+]
+
+[behavior]
+kind = "meter"
+quantity = "energy"
+poles = [["1", "2"]]

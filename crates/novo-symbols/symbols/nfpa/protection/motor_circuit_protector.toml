@@ -1,0 +1,46 @@
+format = 1
+id = "nfpa/protection/motor_circuit_protector"
+name = "Motor circuit protector, 3-pole"
+description = "3-pole circuit breaker with magnetic (short-circuit) trip only, used with a separate overload relay."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "protection"
+function = "protection.mcp"
+keywords = ["mcp", "magnetic only", "motor circuit protector", "short circuit", "nfpa", "ansi"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+  { id = "3", at = [8, 0], dir = "up" },
+  { id = "4", at = [8, 16], dir = "down" },
+  { id = "5", at = [16, 0], dir = "up" },
+  { id = "6", at = [16, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-13, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 6] },
+  { kind = "line", from = [0, 16], to = [0, 10] },
+  { kind = "line", from = [-3, 6], to = [3, 6] },
+  { kind = "line", from = [-3, 10], to = [3, 10] },
+  { kind = "arc", center = [0, 8], r = 4.6, start = 135, end = 225 },
+  { kind = "line", from = [8, 0], to = [8, 6] },
+  { kind = "line", from = [8, 16], to = [8, 10] },
+  { kind = "line", from = [5, 6], to = [11, 6] },
+  { kind = "line", from = [5, 10], to = [11, 10] },
+  { kind = "arc", center = [8, 8], r = 4.6, start = 135, end = 225 },
+  { kind = "line", from = [16, 0], to = [16, 6] },
+  { kind = "line", from = [16, 16], to = [16, 10] },
+  { kind = "line", from = [13, 6], to = [19, 6] },
+  { kind = "line", from = [13, 10], to = [19, 10] },
+  { kind = "arc", center = [16, 8], r = 4.6, start = 135, end = 225 },
+  { kind = "line", from = [0, 8], to = [16, 8], stroke = "dashed" },
+  { kind = "text", at = [-8, 8], text = "I>", size = 2.2, align = "right" },
+]
+
+[behavior]
+kind = "breaker"
+trip = ["magnetic"]
+poles = [["1", "2"], ["3", "4"], ["5", "6"]]

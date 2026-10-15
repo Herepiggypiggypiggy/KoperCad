@@ -9,15 +9,16 @@
 use serde::{Deserialize, Serialize};
 
 use crate::entity::{
-    BlockOverride, BlockParameter, CableCore, DeviceKind, Endpoint, PageFormat, PageKind,
-    PeOverride, Pin, PotentialKind, PotentialSet, PotentialSpec, ProjectInfo, SymbolKey,
-    SymbolRole, TextContent, TextPlacement, Value,
+    BlockOverride, BlockParameter, CableCore, DeviceKind, Endpoint, MountingPlate, PageFormat,
+    PageKind, PeOverride, Pin, PotentialKind, PotentialSet, PotentialSpec, ProjectInfo, RailKind,
+    SymbolKey, SymbolRole, TextContent, TextPlacement, Value,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::{Placement, Point};
 use crate::id::{
-    AnyId, BlockDefinitionId, BlockInstanceId, CableId, DeviceId, PageId, PartId, PotentialId,
-    PotentialSystemId, SymbolId, TerminalId, TextId, WireId,
+    AnyId, BlockDefinitionId, BlockInstanceId, CabinetPlacementId, CableId, DeviceId, PageId,
+    PartId, PotentialId, PotentialSystemId, RailId, StructureId, SymbolId, TerminalId, TextId,
+    WireId,
 };
 use crate::record::Record;
 use crate::tag::DeviceTag;
@@ -38,6 +39,18 @@ pub enum Command {
     RenamePage {
         page: PageId,
         name: String,
+    },
+    /// Renames a group (`=10D41`) or panel (`+K1B1G1`) everywhere its name
+    /// is copied; see [`Tx::rename_level`].
+    RenameLevel {
+        aspect: crate::tag::Aspect,
+        from: Vec<String>,
+        to: Vec<String>,
+    },
+    /// Puts the pages of one group and panel in the given reading order;
+    /// see [`Tx::reorder_pages`]. Names are not touched.
+    ReorderPages {
+        pages: Vec<PageId>,
     },
     AddPage {
         name: String,
@@ -259,6 +272,67 @@ pub enum Command {
         #[serde(default)]
         enclosure: bool,
     },
+    /// Sets the mounting plate of an enclosure; `None` removes it.
+    SetPlateSize {
+        structure: StructureId,
+        plate: Option<MountingPlate>,
+    },
+    /// Adds a rail or duct to the plate of an enclosure.
+    AddRail {
+        structure: StructureId,
+        x: f64,
+        y: f64,
+        length: f64,
+        #[serde(default)]
+        kind: RailKind,
+        /// Runs down from `(x, y)` instead of to the right.
+        #[serde(default)]
+        vertical: bool,
+        /// Cross-section of a duct in mm; 0 while unknown.
+        #[serde(default)]
+        width: f64,
+        #[serde(default)]
+        height: f64,
+    },
+    /// Moves a rail or duct; the devices on it move with it.
+    MoveRail {
+        rail: RailId,
+        x: f64,
+        y: f64,
+    },
+    /// Sets the length and cross-section of a rail or duct.
+    SetRailSize {
+        rail: RailId,
+        length: f64,
+        #[serde(default)]
+        width: f64,
+        #[serde(default)]
+        height: f64,
+    },
+    /// Deletes a rail or duct; devices on it stay on the plate, off the rail.
+    DeleteRail {
+        rail: RailId,
+    },
+    /// Places a device on the plate, or moves it if it is already placed.
+    /// Several together go in a [`Command::Batch`].
+    PlaceDevice {
+        device: DeviceId,
+        structure: StructureId,
+        x: f64,
+        y: f64,
+        #[serde(default)]
+        rotated: bool,
+        /// The rail and the offset along it.
+        #[serde(default)]
+        rail: Option<(RailId, f64)>,
+    },
+    RotatePlacement {
+        placement: CabinetPlacementId,
+        rotated: bool,
+    },
+    RemovePlacement {
+        placement: CabinetPlacementId,
+    },
     /// Records a declined proposal; see [`Tx::dismiss`]. Remove the
     /// dismissal to bring the proposal back.
     Dismiss {
@@ -324,6 +398,11 @@ impl Command {
             Command::SetProjectInfo { .. } => "Edit project info".into(),
             Command::DeletePage { .. } => "Delete page".into(),
             Command::RenamePage { .. } => "Rename page".into(),
+            Command::RenameLevel { aspect, .. } => match aspect {
+                crate::tag::Aspect::Function => "Rename group".into(),
+                _ => "Rename panel".into(),
+            },
+            Command::ReorderPages { .. } => "Reorder pages".into(),
             Command::AddPage { .. } => "Add page".into(),
             Command::SetPageStructure { .. } => "Move page to group or panel".into(),
             Command::AddDevice { .. } => "Add device".into(),
@@ -361,6 +440,14 @@ impl Command {
             Command::IssueRevision { index, .. } => format!("Issue revision {index}"),
             Command::FreezePage { .. } => "Freeze page".into(),
             Command::UnfreezePage { .. } => "Unfreeze page".into(),
+            Command::SetPlateSize { .. } => "Set plate size".into(),
+            Command::AddRail { .. } => "Add rail".into(),
+            Command::MoveRail { .. } => "Move rail".into(),
+            Command::SetRailSize { .. } => "Resize rail".into(),
+            Command::DeleteRail { .. } => "Delete rail".into(),
+            Command::PlaceDevice { .. } => "Place device".into(),
+            Command::RotatePlacement { .. } => "Rotate device".into(),
+            Command::RemovePlacement { .. } => "Remove from plate".into(),
             Command::Dismiss { .. } => "Dismiss proposal".into(),
             Command::AssignPart { .. } => "Assign part".into(),
             Command::SetProperty { .. } => "Set property".into(),
@@ -390,6 +477,14 @@ impl Tx<'_> {
                     });
                 }
                 self.update::<crate::Page>(page, |p| p.name = name)?;
+                return Ok(Vec::new());
+            }
+            Command::RenameLevel { aspect, from, to } => {
+                self.rename_level(aspect, &from, &to)?;
+                return Ok(Vec::new());
+            }
+            Command::ReorderPages { pages } => {
+                self.reorder_pages(&pages)?;
                 return Ok(Vec::new());
             }
             Command::DeletePage { page } => {
@@ -622,6 +717,70 @@ impl Tx<'_> {
                 description,
                 enclosure,
             } => self.add_structure(tag, description, enclosure)?.into(),
+            Command::SetPlateSize { structure, plate } => {
+                self.set_plate(structure, plate)?;
+                return Ok(Vec::new());
+            }
+            Command::AddRail {
+                structure,
+                x,
+                y,
+                length,
+                kind,
+                vertical,
+                width,
+                height,
+            } => {
+                let rail = self.add_rail(structure, x, y, length, kind)?;
+                if vertical || width != 0.0 || height != 0.0 {
+                    self.update::<crate::Rail>(rail, |r| {
+                        r.vertical = vertical;
+                        r.width = width;
+                        r.height = height;
+                    })?;
+                }
+                rail.into()
+            }
+            Command::MoveRail { rail, x, y } => {
+                self.move_rail(rail, x, y)?;
+                return Ok(Vec::new());
+            }
+            Command::SetRailSize {
+                rail,
+                length,
+                width,
+                height,
+            } => {
+                self.set_rail_size(rail, length, width, height)?;
+                return Ok(Vec::new());
+            }
+            Command::DeleteRail { rail } => {
+                self.remove(rail)?;
+                return Ok(Vec::new());
+            }
+            Command::PlaceDevice {
+                device,
+                structure,
+                x,
+                y,
+                rotated,
+                rail,
+            } => {
+                let (placement, new) =
+                    self.place_device(device, structure, Point::new(x, y), rotated, rail)?;
+                if !new {
+                    return Ok(Vec::new());
+                }
+                placement.into()
+            }
+            Command::RotatePlacement { placement, rotated } => {
+                self.update::<crate::CabinetPlacement>(placement, |p| p.rotated = rotated)?;
+                return Ok(Vec::new());
+            }
+            Command::RemovePlacement { placement } => {
+                self.remove(placement)?;
+                return Ok(Vec::new());
+            }
             Command::Dismiss { proposal, subjects } => self.dismiss(proposal, subjects)?.into(),
             Command::AddPart {
                 manufacturer,

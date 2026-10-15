@@ -1,0 +1,36 @@
+format = 1
+id = "nfpa/contacts/changeover"
+name = "Changeover contact"
+description = "Changeover (CO) contact with common 11, break side 12 and make side 14."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "contacts"
+function = "contact.co"
+keywords = ["co", "changeover", "spdt", "auxiliary", "nfpa", "ansi"]
+aliases = ["co"]
+
+connections = [
+  { id = "11", at = [0, 16], dir = "down" },
+  { id = "12", at = [4, 0], dir = "up" },
+  { id = "14", at = [-4, 0], dir = "up" },
+]
+
+anchors = [
+  { role = "tag", at = [-8, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [-4, 0], to = [-4, 6] },
+  { kind = "line", from = [4, 0], to = [4, 6] },
+  { kind = "line", from = [-5.5, 6], to = [-2.5, 6] },
+  { kind = "line", from = [-5.5, 10], to = [-2.5, 10] },
+  { kind = "line", from = [2.5, 6], to = [5.5, 6] },
+  { kind = "line", from = [2.5, 10], to = [5.5, 10] },
+  { kind = "line", from = [2.5, 12], to = [5.5, 4] },
+  { kind = "polyline", points = [[-4, 10], [-4, 13], [4, 13], [4, 10]] },
+  { kind = "line", from = [0, 13], to = [0, 16] },
+]
+
+[behavior]
+kind = "contact"
+normally = "changeover"
+poles = [["11", "12", "14"]]

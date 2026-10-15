@@ -213,6 +213,9 @@ pub struct ModelStyle {
     /// Radius of the ring, in mm; the flag scales with it (world size for
     /// now, not zoom-stable).
     pub wire_end_radius: f32,
+    /// Radius of that ring on screen, in points: it keeps its size at every
+    /// zoom ([`Handle::ring`]).
+    pub wire_end_cap_px: f32,
     pub tag_height: f32,
     pub tag_color: Color,
     pub wire_number_height: f32,
@@ -243,6 +246,7 @@ impl Default for ModelStyle {
             corner_color: Color::rgb(30, 70, 200),
             focus_color: Color::rgb(255, 150, 30),
             wire_end_radius: 0.9,
+            wire_end_cap_px: 4.0,
             tag_height: 2.5,
             tag_color: Color::rgb(20, 24, 32),
             wire_number_height: 2.0,
@@ -370,7 +374,8 @@ pub fn junction_glyph(glyph: JunctionGlyph, pos: Vec2, style: &ModelStyle) -> Ve
 }
 
 /// The mark on a wire ended unconnected (a double click in open space): an
-/// open ring on the end and a flag, so a loose end is never mistaken for a
+/// open ring on the end (a screen-size [`Handle::ring`], added by the caller)
+/// and a flag, so a loose end is never mistaken for a
 /// connection. `away` points from the wire out past its end; the flag leans
 /// to the side that keeps it clear of the wire.
 pub fn wire_end_glyph(end: Vec2, away: Vec2, style: &ModelStyle) -> Vec<Primitive> {
@@ -390,10 +395,6 @@ pub fn wire_end_glyph(end: Vec2, away: Vec2, style: &ModelStyle) -> Vec<Primitiv
     ];
     let flag = Stroke::world(0.25, style.unconnected_color);
     vec![
-        Primitive::stroked(
-            Shape::circle(end, r),
-            Stroke::world(0.3, style.wire_end_color),
-        ),
         Primitive::stroked(Shape::line(foot, top), flag),
         Primitive::filled(
             Shape::polyline(pennant.to_vec(), true),
@@ -1593,6 +1594,11 @@ impl PageScene {
             if matches!(e, Endpoint::Free { .. }) {
                 item.primitives
                     .extend(wire_end_glyph(end, end - inner, &self.style));
+                item.handles.push(Handle::ring(
+                    end,
+                    self.style.wire_end_cap_px,
+                    self.style.wire_end_color,
+                ));
             }
         }
         if let Some(n) = w.number.as_deref().filter(|n| !n.is_empty()) {
@@ -2535,16 +2541,16 @@ mod tests {
     fn wire_end_glyph_flag_clears_the_wire() {
         let style = ModelStyle::default();
         let prims = wire_end_glyph(Vec2::ZERO, Vec2::X, &style);
-        assert_eq!(prims.len(), 3, "ring, pole and pennant");
+        assert_eq!(prims.len(), 2, "pole and pennant");
         // The flag stands to the side of the line the wire ran along (the
         // x axis) and starts past the ring, never on the wire.
-        let flag = prims[1].shape.bounds();
+        let flag = prims[0].shape.bounds();
         assert!(flag.min.x >= style.wire_end_radius - 1e-4);
         assert!(
             flag.max.y.abs() > style.wire_end_radius || flag.min.y.abs() > style.wire_end_radius
         );
         // A zero direction still draws something sensible.
-        assert_eq!(wire_end_glyph(Vec2::ZERO, Vec2::ZERO, &style).len(), 3);
+        assert_eq!(wire_end_glyph(Vec2::ZERO, Vec2::ZERO, &style).len(), 2);
     }
 
     #[test]
@@ -2893,14 +2899,30 @@ mod tests {
             .unwrap();
         let ps = PageScene::new(doc.project(), page, &PlaceholderArt);
         let count = |w| ps.scene().get(item_id(w)).unwrap().primitives.len();
-        // The open wire has the closed wire's line and dot plus ring, pole
-        // and pennant.
-        assert_eq!(count(open), 1 + 1 + 3);
+        // The open wire has the closed wire's line and dot plus pole and
+        // pennant; the ring is a screen-size handle on the open end.
+        assert_eq!(count(open), 1 + 1 + 2);
         assert_eq!(count(closed), 1 + 2);
-        // The ring sits on the open end.
-        let ring = &ps.scene().get(item_id(open)).unwrap().primitives[2];
-        let b = ring.shape.bounds();
-        assert!((b.center() - Vec2::new(100.0, 20.0)).length() < 1e-3);
+        let rings: Vec<_> = ps
+            .scene()
+            .get(item_id(open))
+            .unwrap()
+            .handles
+            .iter()
+            .filter(|h| h.ring)
+            .copied()
+            .collect();
+        assert_eq!(rings.len(), 1);
+        assert!((rings[0].at - Vec2::new(100.0, 20.0)).length() < 1e-3);
+        assert_eq!(rings[0].half, ps.style.wire_end_cap_px);
+        assert!(
+            ps.scene()
+                .get(item_id(closed))
+                .unwrap()
+                .handles
+                .iter()
+                .all(|h| !h.ring)
+        );
     }
 
     #[test]
@@ -3103,12 +3125,16 @@ mod tests {
     fn corners_are_drawn_and_a_focused_run_lights_its_corners() {
         let (doc, page, wire) = bent_wire();
         let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
-        let handles = |ps: &PageScene| ps.scene().get(item_id(wire)).unwrap().handles.clone();
+        let handles = |ps: &PageScene| {
+            let mut h = ps.scene().get(item_id(wire)).unwrap().handles.clone();
+            h.retain(|h| !h.ring);
+            h
+        };
         let prims = |ps: &PageScene| ps.scene().get(item_id(wire)).unwrap().primitives.len();
         // Corners are screen-size handles; the line, the pin dot and the
-        // open end (ring, pole, pennant) stay primitives.
+        // open end's pole and pennant stay primitives (its ring is a handle).
         let plain = prims(&ps);
-        assert_eq!(plain, 1 + 1 + 3);
+        assert_eq!(plain, 1 + 1 + 2);
         let base = handles(&ps);
         assert_eq!(base.len(), 2);
         assert!(base.iter().all(|h| h.half == ps.style.corner_half));

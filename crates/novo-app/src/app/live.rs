@@ -18,9 +18,13 @@ use novo_core::{
     NetId, Netlist, PageId, Potential, PotentialId, PotentialKind, Project, SymbolId, SymbolRole,
     WireId,
 };
-use novo_sim::{Clock, Live, PoleState, Settled, Solution, is_coil, settle_timed};
+use novo_sim::{
+    Clock, Live, PoleState, Settled, Solution, inputs_seen, is_coil, is_lamp, is_load, is_motor,
+    is_plc_input, is_plc_output, loads_on, settle_timed,
+};
 use novo_theme::{tokens, widgets};
 
+use super::live_anim::Anim;
 use super::{Level, NovoApp};
 
 /// Radius of a pole badge, in screen points.
@@ -41,6 +45,8 @@ pub(crate) struct LiveView {
     pub(super) forced: BTreeSet<SymbolId>,
     /// Seconds the bench has run, for timer contacts.
     clock: Clock,
+    /// Easing state of the device animation (lamps, motors, coils).
+    anim: Anim,
     solved: Option<Solved>,
 }
 
@@ -204,24 +210,87 @@ pub(super) struct CoilBadge {
     pub symbol: SymbolId,
     pub at: egui::Vec2,
     pub on: bool,
+    /// A PLC digital output rather than a coil.
+    pub output: bool,
 }
 
+/// The coils of the page and the PLC outputs, which are switched by hand
+/// just the same.
 pub(super) fn coil_badges(
     project: &Project,
     page: PageId,
     energized: &BTreeSet<SymbolId>,
+    forced: &BTreeSet<SymbolId>,
 ) -> Vec<CoilBadge> {
     project
         .symbols()
-        .filter(|s| s.page == page && is_coil(s))
+        .filter(|s| s.page == page)
+        .filter_map(|s| {
+            if is_coil(s) {
+                let a = s.pin_position(0)?;
+                let b = s.pin_position(1)?;
+                Some(CoilBadge {
+                    symbol: s.id,
+                    at: egui::vec2(((a.x + b.x) / 2.0) as f32, ((a.y + b.y) / 2.0) as f32),
+                    on: energized.contains(&s.id),
+                    output: false,
+                })
+            } else if is_plc_output(s) {
+                let a = s.pin_position(0)?;
+                Some(CoilBadge {
+                    symbol: s.id,
+                    at: egui::vec2(a.x as f32, (a.y - 5.0) as f32),
+                    on: forced.contains(&s.id),
+                    output: true,
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// The PLC inputs of the page with their pin positions, and whether the pin
+/// carries a potential.
+pub(super) fn input_marks(
+    project: &Project,
+    page: PageId,
+    seen: &BTreeSet<SymbolId>,
+) -> Vec<(egui::Vec2, bool)> {
+    project
+        .symbols()
+        .filter(|s| s.page == page && is_plc_input(s))
         .filter_map(|s| {
             let a = s.pin_position(0)?;
-            let b = s.pin_position(1)?;
-            Some(CoilBadge {
-                symbol: s.id,
-                at: egui::vec2(((a.x + b.x) / 2.0) as f32, ((a.y + b.y) / 2.0) as f32),
-                on: energized.contains(&s.id),
-            })
+            Some((egui::vec2(a.x as f32, a.y as f32), seen.contains(&s.id)))
+        })
+        .collect()
+}
+
+/// Where the lit horns, buzzers and valves of the page are, for a glow.
+pub(super) fn load_glows(
+    project: &Project,
+    page: PageId,
+    netlist: &Netlist,
+    solution: &Solution,
+) -> Vec<(SymbolId, egui::Vec2)> {
+    let on = loads_on(project, netlist, solution);
+    project
+        .symbols()
+        .filter(|s| s.page == page && is_load(s) && on.contains(&s.id))
+        // Lamps and motors are animated by live_anim; the rest still glow.
+        .filter(|s| !is_lamp(s) && !is_motor(s))
+        .filter_map(|s| {
+            let points: Vec<_> = (0..s.pins.len())
+                .filter_map(|pin| s.pin_position(pin as u16))
+                .collect();
+            if points.is_empty() {
+                return None;
+            }
+            let n = points.len() as f64;
+            let x = points.iter().map(|p| p.x).sum::<f64>() / n;
+            let y = points.iter().map(|p| p.y).sum::<f64>() / n;
+            Some((s.id, egui::vec2(x as f32, y as f32)))
         })
         .collect()
 }
@@ -343,15 +412,35 @@ impl NovoApp {
         let badges = pole_badges(project, page, &solved.settled.poles);
         let driven = solved.settled.driven.clone();
         let energized = solved.settled.energized.clone();
-        let coils = coil_badges(project, page, &energized);
+        let coils = coil_badges(project, page, &energized, &solved.forced);
+        let seen = inputs_seen(project, &solved.netlist, &solved.settled.solution);
+        let inputs = input_marks(project, page, &seen);
         let colors: BTreeMap<PotentialId, (String, egui::Color32)> = project
             .potentials()
             .map(|p| (p.id, (p.name.clone(), potential_color(p))))
             .collect();
+        let states = novo_sim::device_states(project, &solved.netlist, &solved.settled);
+        let glows = load_glows(project, page, &solved.netlist, &solved.settled.solution);
         let names: BTreeMap<SymbolId, String> = badges
             .iter()
             .map(|b| (b.symbol, symbol_name(project, b.symbol)))
             .collect();
+
+        // Devices: lamps glow, motors turn, coils pull in.
+        let animating = self.wb.live.anim.paint(
+            ctx,
+            canvas,
+            viewport.zoom,
+            &to_screen,
+            project,
+            self.canvas
+                .schematic_ref()
+                .map(|v| v.editor.catalog.library()),
+            page,
+            &states,
+            &energized,
+            dt as f32,
+        );
 
         // Wires: lit in their colour, dimmed when nothing reaches them. The
         // canvas draws them in its wire layer, under the symbols and text.
@@ -491,13 +580,69 @@ impl NovoApp {
                     }
                     let name = symbol_name(project, badge.symbol);
                     let tip = format!(
-                        "{name} · coil {} · click to switch it {}",
+                        "{name} · {} {} · click to switch it {}",
+                        if badge.output { "output" } else { "coil" },
                         if badge.on { "on" } else { "off" },
                         if badge.on { "off" } else { "on" },
                     );
                     if response.on_hover_text(tip).clicked() {
                         coil_clicked = Some(badge.symbol);
                     }
+                });
+        }
+
+        // PLC inputs: a dot that fills when the pin carries a potential.
+        for (n, (at, high)) in inputs.iter().enumerate() {
+            let at = to_screen(*at);
+            if !canvas.expand(BADGE).contains(at) {
+                continue;
+            }
+            egui::Area::new(egui::Id::new(("live_input", n)))
+                .order(egui::Order::Middle)
+                .pivot(egui::Align2::CENTER_CENTER)
+                .fixed_pos(at)
+                .interactable(false)
+                .show(ctx, |ui| {
+                    let (rect, _) = ui
+                        .allocate_exact_size(egui::Vec2::splat(BADGE * 1.6), egui::Sense::hover());
+                    let p = ui.painter();
+                    if *high {
+                        p.circle_filled(rect.center(), BADGE * 0.7, tokens::SUCCESS);
+                    } else {
+                        p.circle_stroke(
+                            rect.center(),
+                            BADGE * 0.7,
+                            egui::Stroke::new(1.5, tokens::TEXT_MUTED),
+                        );
+                    }
+                });
+        }
+
+        // Outputs that have current: a soft glow behind the lamp or motor.
+        for (symbol, at) in &glows {
+            let at = to_screen(*at);
+            if !canvas.expand(BADGE * 4.0).contains(at) {
+                continue;
+            }
+            egui::Area::new(egui::Id::new(("live_load", *symbol)))
+                .order(egui::Order::Background)
+                .pivot(egui::Align2::CENTER_CENTER)
+                .fixed_pos(at)
+                .interactable(false)
+                .show(ctx, |ui| {
+                    let (rect, _) = ui
+                        .allocate_exact_size(egui::Vec2::splat(BADGE * 5.0), egui::Sense::hover());
+                    let p = ui.painter();
+                    p.circle_filled(
+                        rect.center(),
+                        BADGE * 2.5,
+                        tokens::WARNING.gamma_multiply(0.18),
+                    );
+                    p.circle_filled(
+                        rect.center(),
+                        BADGE * 1.5,
+                        tokens::WARNING.gamma_multiply(0.35),
+                    );
                 });
         }
 
@@ -566,7 +711,7 @@ impl NovoApp {
             });
 
         // Draws again only when something changed; egui repaints on input.
-        if leave || open_all || clicked.is_some() || timing.is_some() {
+        if leave || open_all || clicked.is_some() || timing.is_some() || animating {
             ctx.request_repaint();
         }
         if leave {

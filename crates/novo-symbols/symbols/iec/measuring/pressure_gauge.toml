@@ -1,0 +1,30 @@
+format = 1
+id = "iec/measuring/pressure_gauge"
+name = "Pressure gauge"
+description = "Pressure gauge (measures pressure)."
+standard = "IEC 60617"
+category = "measuring"
+function = "meter.pressure"
+keywords = ["pressure", "meter", "measurement"]
+aliases = ["pg"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-5.5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "circle", center = [0, 8], r = 4 },
+  { kind = "text", at = [0, 8], text = "p", size = 3.5 },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+]
+
+[behavior]
+kind = "meter"
+quantity = "pressure"
+poles = [["1", "2"]]

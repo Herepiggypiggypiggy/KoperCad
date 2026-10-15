@@ -32,6 +32,9 @@ pub(super) struct DeviceInfo {
     /// reading order.
     pub relations: Vec<Relation>,
     pub properties: Vec<(String, String)>,
+    /// For a property the device sets differently from its part: the
+    /// part's own value, which the reset arrow goes back to.
+    pub part_values: Vec<(String, String)>,
     /// The set time in seconds, for a device with a timer contact.
     pub delay: Option<f64>,
 }
@@ -53,6 +56,11 @@ pub(super) struct InspectorState {
     description: String,
     delay: String,
     pub(super) filter: String,
+    /// The pin: a pinned inspector stays where it is with nothing selected
+    /// and shows the page (DESIGN.md §3).
+    pub(super) pinned: bool,
+    /// What was shown last, drawn while the panel slides away.
+    leaving: Option<(DeviceInfo, bool)>,
 }
 
 /// What an inspector click or edit asks for.
@@ -61,6 +69,9 @@ enum InspectorAction {
     Rename(String),
     Describe(String),
     SetDelay(f64),
+    /// The reset arrow of an overridden property: back to the part's value.
+    ResetProperty(String),
+    Pin(bool),
 }
 
 /// The one device the selection draws, if it draws exactly one.
@@ -110,6 +121,20 @@ pub(super) fn device_info(
         .iter()
         .map(|(k, v)| (k.clone(), value_text(v)))
         .collect();
+    let part_values = d
+        .parts
+        .first()
+        .and_then(|&p| project.part(p))
+        .map(|p| {
+            d.properties
+                .iter()
+                .filter_map(|(k, v)| {
+                    let own = p.properties.get(k)?;
+                    (own != v).then(|| (k.clone(), value_text(own)))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     let timed = project
         .symbols()
         .filter(|s| s.device() == Some(device))
@@ -122,6 +147,7 @@ pub(super) fn device_info(
         part,
         relations,
         properties,
+        part_values,
         delay,
     })
 }
@@ -153,8 +179,29 @@ impl NovoApp {
         {
             self.commit_inspector_edit(editing);
         }
+        let slide = ctx.animate_bool_with_time(
+            egui::Id::new("inspector_slide"),
+            device.is_some() || self.wb.inspector.pinned,
+            0.15,
+        );
         let Some(device) = device else {
-            self.wb.inspector = InspectorState::default();
+            let pinned = self.wb.inspector.pinned;
+            let leaving = self.wb.inspector.leaving.take();
+            self.wb.inspector = InspectorState {
+                pinned,
+                ..InspectorState::default()
+            };
+            if pinned {
+                self.page_inspector(ctx, canvas);
+            } else if slide > 0.0
+                && let Some((info, left)) = leaving
+            {
+                // The panel slides away with what it last showed.
+                let mut state = InspectorState::default();
+                let mut actions = Vec::new();
+                self.inspector_area(ctx, canvas, left, slide, &info, &mut state, &mut actions);
+                self.wb.inspector.leaving = Some((info, left));
+            }
             return;
         };
         let info = {
@@ -176,6 +223,7 @@ impl NovoApp {
         if state.device != Some(device) {
             *state = InspectorState {
                 device: Some(device),
+                pinned: state.pinned,
                 ..InspectorState::default()
             };
         }
@@ -190,33 +238,12 @@ impl NovoApp {
             state.delay = info.delay.map(|d| d.to_string()).unwrap_or_default();
         }
 
-        let (pivot, at) = if left {
-            (
-                egui::Align2::LEFT_TOP,
-                canvas.left_top() + egui::vec2(MARGIN, TOP),
-            )
-        } else {
-            (
-                egui::Align2::RIGHT_TOP,
-                canvas.right_top() + egui::vec2(-MARGIN, TOP),
-            )
-        };
-        let max_height = (canvas.height() - TOP - 72.0).max(120.0);
         let mut actions = Vec::new();
-        egui::Area::new(egui::Id::new("inspector"))
-            .order(egui::Order::Middle)
-            .pivot(pivot)
-            .fixed_pos(at)
-            .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.set_width(INSPECTOR_WIDTH);
-                    egui::ScrollArea::vertical()
-                        .max_height(max_height)
-                        .show(ui, |ui| {
-                            inspector_body(ui, &info, state, tag_id, description_id, &mut actions)
-                        });
-                });
-            });
+        let state = &mut self.wb.inspector;
+        state.leaving = Some((info.clone(), left));
+        let mut shown = std::mem::take(state);
+        self.inspector_area(ctx, canvas, left, slide, &info, &mut shown, &mut actions);
+        self.wb.inspector = shown;
 
         for action in actions {
             match action {
@@ -229,7 +256,110 @@ impl NovoApp {
                 }
                 InspectorAction::Describe(text) => self.describe(device, text),
                 InspectorAction::SetDelay(seconds) => self.set_delay(device, seconds),
+                InspectorAction::ResetProperty(key) => self.reset_property(device, &key),
+                InspectorAction::Pin(on) => self.wb.inspector.pinned = on,
             }
+        }
+    }
+
+    /// Draws the inspector panel `slide` of the way in (1 is fully in, a
+    /// pinned panel never slides), on the side away from the selection.
+    #[allow(clippy::too_many_arguments)]
+    fn inspector_area(
+        &self,
+        ctx: &egui::Context,
+        canvas: egui::Rect,
+        left: bool,
+        slide: f32,
+        info: &DeviceInfo,
+        state: &mut InspectorState,
+        actions: &mut Vec<InspectorAction>,
+    ) {
+        let (pivot, at) = if left {
+            (
+                egui::Align2::LEFT_TOP,
+                canvas.left_top() + egui::vec2(MARGIN, TOP),
+            )
+        } else {
+            (
+                egui::Align2::RIGHT_TOP,
+                canvas.right_top() + egui::vec2(-MARGIN, TOP),
+            )
+        };
+        let away = if state.pinned {
+            0.0
+        } else {
+            (1.0 - slide) * (INSPECTOR_WIDTH + MARGIN)
+        };
+        let at = at + egui::vec2(if left { -away } else { away }, 0.0);
+        let max_height = (canvas.height() - TOP - 72.0).max(120.0);
+        let tag_id = egui::Id::new("inspector_tag");
+        let description_id = egui::Id::new("inspector_description");
+        egui::Area::new(egui::Id::new("inspector"))
+            .order(egui::Order::Middle)
+            .pivot(pivot)
+            .fixed_pos(at)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.set_width(INSPECTOR_WIDTH);
+                    egui::ScrollArea::vertical()
+                        .max_height(max_height)
+                        .show(ui, |ui| {
+                            inspector_body(ui, info, state, tag_id, description_id, actions)
+                        });
+                });
+            });
+    }
+
+    /// The pinned inspector with nothing selected: it shows the page.
+    fn page_inspector(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
+        let page = self.current_page().and_then(|id| {
+            let project = self.backend.document()?.project();
+            let page = project.page(id)?;
+            Some((page.name.clone(), page.title.clone()))
+        });
+        let mut unpin = false;
+        egui::Area::new(egui::Id::new("inspector"))
+            .order(egui::Order::Middle)
+            .pivot(egui::Align2::RIGHT_TOP)
+            .fixed_pos(canvas.right_top() + egui::vec2(-MARGIN, TOP))
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.set_width(INSPECTOR_WIDTH);
+                    pin_row(ui, true, &mut unpin);
+                    match &page {
+                        Some((name, title)) => {
+                            ui.heading(format!("Page {name}"));
+                            if !title.is_empty() {
+                                ui.label(title);
+                            }
+                        }
+                        None => {
+                            ui.weak("No page open");
+                        }
+                    }
+                    ui.add_space(6.0);
+                    ui.weak("Nothing selected");
+                });
+            });
+        if unpin {
+            self.wb.inspector.pinned = false;
+        }
+    }
+
+    /// The reset arrow of an overridden property: the device goes back to
+    /// its part's value, as one undo step.
+    fn reset_property(&mut self, device: DeviceId, key: &str) {
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let Some(old) = doc.project().device(device) else {
+            return;
+        };
+        let label = format!("Reset {key} of {}", old.tag);
+        match doc.transact(label, |tx| tx.set_property(device, key, None)) {
+            Ok(((), changes)) => self.changed_outside_canvas(&changes),
+            Err(e) => self.message(Level::Error, format!("Could not change it: {e}")),
         }
     }
 
@@ -329,6 +459,11 @@ fn inspector_body(
     description_id: egui::Id,
     actions: &mut Vec<InspectorAction>,
 ) {
+    let mut toggle = false;
+    pin_row(ui, state.pinned, &mut toggle);
+    if toggle {
+        actions.push(InspectorAction::Pin(!state.pinned));
+    }
     let tag = ui.add(
         egui::TextEdit::singleline(&mut state.tag)
             .id(tag_id)
@@ -413,9 +548,41 @@ fn inspector_body(
             || key.to_lowercase().contains(&filter)
             || value.to_lowercase().contains(&filter)
         {
-            widgets::field(ui, key, value);
+            let part_value = info
+                .part_values
+                .iter()
+                .find(|(k, _)| k == key)
+                .map(|(_, v)| v);
+            ui.horizontal(|ui| {
+                widgets::field(ui, key, value);
+                if let Some(part_value) = part_value
+                    && ui
+                        .small_button("\u{21A9}")
+                        .on_hover_text(format!("Back to the part's value: {part_value}"))
+                        .clicked()
+                {
+                    actions.push(InspectorAction::ResetProperty(key.clone()));
+                }
+            });
         }
     }
+}
+
+/// The pin toggle at the top of the inspector; `toggle` is set when clicked.
+fn pin_row(ui: &mut egui::Ui, pinned: bool, toggle: &mut bool) {
+    ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+        if ui
+            .selectable_label(pinned, "Pin")
+            .on_hover_text(if pinned {
+                "Unpin: the inspector slides away with the selection"
+            } else {
+                "Pin: keep the inspector open, showing the page when nothing is selected"
+            })
+            .clicked()
+        {
+            *toggle = true;
+        }
+    });
 }
 
 /// Enter, or leaving the field after a change, commits it.
@@ -454,5 +621,37 @@ mod tests {
         assert_eq!(info.description, "Pump");
         assert!(info.part.is_empty() && info.relations.is_empty());
         assert_eq!(info.delay, None, "no coil, no time field");
+    }
+
+    #[test]
+    fn a_property_set_differently_from_its_part_offers_the_parts_value() {
+        let mut project = Project::new("Plant");
+        let ((k1, part), _) = project
+            .transact("Add", |tx| {
+                let k1 = tx.add_device(DeviceTag::parse("-Q1").unwrap(), "")?;
+                let part = tx.add_part("ABB", "S201")?;
+                tx.assign_part(k1, part)?;
+                tx.set_property(part, "rated_current", Some(Value::Text("16 A".into())))?;
+                tx.set_property(part, "poles", Some(Value::Text("1".into())))?;
+                tx.set_property(k1, "rated_current", Some(Value::Text("10 A".into())))?;
+                tx.set_property(k1, "poles", Some(Value::Text("1".into())))?;
+                tx.set_property(k1, "note", Some(Value::Text("by hand".into())))?;
+                Ok((k1, part))
+            })
+            .unwrap();
+        let info = device_info(&project, None, k1).unwrap();
+        // Only the property that differs is an override; one that equals the
+        // part's, or that the part does not have, is not.
+        assert_eq!(
+            info.part_values,
+            vec![("rated_current".to_owned(), "16 A".to_owned())]
+        );
+        // The reset arrow removes the device's own value.
+        project
+            .transact("Reset", |tx| tx.set_property(k1, "rated_current", None))
+            .unwrap();
+        let info = device_info(&project, None, k1).unwrap();
+        assert!(info.part_values.is_empty());
+        assert!(project.part(part).is_some());
     }
 }

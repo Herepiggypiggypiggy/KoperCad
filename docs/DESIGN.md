@@ -536,12 +536,23 @@ clear the selection.
 | Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z) | Undo / redo |
 | Ctrl+C / Ctrl+X / Ctrl+V | Copy, cut, paste with the next free tags |
 | Ctrl+Shift+V | Paste with the original tags |
-| Ctrl+D | Duplicate with the next free tags |
+| Ctrl+D | Duplicate with the next free tags: the copy lands two grid steps to the right of the selection and is selected, so Ctrl+D again repeats it (one undo step each) |
 | Ctrl+S / Ctrl+N / Ctrl+O | Name an untitled project (otherwise confirms Saved), new, open |
 | Ctrl+Shift+S / Ctrl+W / Ctrl+Q | Save a copy, close project, quit |
 | Delete | Delete the selection and its dangling connections |
 | Esc | The Escape ladder |
 | ? | Shortcut overlay |
+
+**Your own keys.** A text file `keymap.txt` in the KoperCAD folder under
+`%APPDATA%` overrides the keys above, one line per binding:
+`tool.cable = Ctrl+Shift+C`, `edit.duplicate = Alt+D` (a second line adds a
+second chord), `tool.repeat = none` (no key). A scope can be given
+(`canvas:`, `anywhere:`, `panel:`); by default a command keeps the scope it
+has, else Ctrl, Alt and F keys work anywhere and plain keys on the canvas
+only. It is read at start. A line that names no command, has a chord that
+does not parse or takes a chord another command uses is skipped, and one
+warning at start names the first of them. The palette and the shortcut
+overlay show the user's keys.
 
 A jump (G, an exact tag, F8, Alt+Left/Right, a drawer row, Tab to an
 off-screen proposal) moves the view only when it has to. If the target is
@@ -743,7 +754,9 @@ in place mode. The wheel has two rings and no hidden level.
   The first sector's items show at once; moving onto a different sector
   switches the outer ring only after the pointer has rested there for
   180 ms, so a sweep across the sectors toward an item never flickers or
-  swaps the items under the pointer.
+  swaps the items under the pointer. Clicking a wedge keeps its items up
+  until an item is clicked, and only a click on an outer-ring item places;
+  a click on a wedge alone never does.
 - Pick by clicking, by press-drag-release (a flick), or by keys 1 to 5 then
   1 to 8 (1 to 5 on the inner ring); Backspace goes back a ring and Esc
   closes. Picking an item attaches the symbol to the pointer exactly as the

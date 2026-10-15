@@ -1,0 +1,19 @@
+[package]
+name = "novo-interop"
+description = "Import and export: DXF, EPLAN parts (WS-24)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+novo-core.workspace = true
+# Only the model adapter, as novo-pdf: no egui widget.
+novo-canvas = { path = "../novo-canvas", default-features = false, features = ["model"] }
+novo-parts.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+novo-tests = { path = "../novo-tests" }
+
+[lints]
+workspace = true

@@ -1,0 +1,39 @@
+format = 1
+id = "nfpa/drives/soft_starter"
+name = "Soft starter"
+description = "Soft starter that ramps the voltage of a three-phase motor during start and stop."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "drives"
+function = "converter.soft_starter"
+keywords = ["soft starter", "softstarter", "ramp", "nfpa", "ansi"]
+aliases = ["softstart"]
+
+connections = [
+  { id = "1L1", at = [0, 0], dir = "up" },
+  { id = "3L2", at = [8, 0], dir = "up" },
+  { id = "5L3", at = [16, 0], dir = "up" },
+  { id = "2T1", at = [0, 24], dir = "down" },
+  { id = "4T2", at = [8, 24], dir = "down" },
+  { id = "6T3", at = [16, 24], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 12], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "line", from = [8, 0], to = [8, 4] },
+  { kind = "line", from = [16, 0], to = [16, 4] },
+  { kind = "line", from = [0, 20], to = [0, 24] },
+  { kind = "line", from = [8, 20], to = [8, 24] },
+  { kind = "line", from = [16, 20], to = [16, 24] },
+  { kind = "rect", at = [-4, 4], size = [24, 16] },
+  { kind = "text", at = [8, 12], text = "U ↗", size = 3 },
+]
+
+[behavior]
+kind = "converter"
+input = "ac"
+output = "ac"
+ports = [["1L1", "3L2", "5L3"], ["2T1", "4T2", "6T3"]]
