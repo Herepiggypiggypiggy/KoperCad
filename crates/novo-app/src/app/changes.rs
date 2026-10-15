@@ -8,7 +8,7 @@ use novo_canvas::marks::{Mark, MarkKind, MarkTarget};
 use novo_canvas::model::item_id;
 use novo_core::{AnyId, PageId, Project, RevisionId};
 use novo_revisions::{Change, ChangeKind, ChangeSet, diff};
-use novo_theme::widgets;
+use novo_theme::widgets::{self, section_label};
 
 use super::{Level, NovoApp};
 
@@ -86,6 +86,51 @@ fn describe(change: &Change, since: &str) -> String {
             format!("Changed since {since}: {}", fields.join(", "))
         }
     }
+}
+
+/// "Since [revision ▾]": the revisions to compare with, newest first.
+/// Returns the one picked, if it is not the current base.
+fn base_picker(
+    ui: &mut egui::Ui,
+    revisions: &[(RevisionId, String)],
+    base: RevisionId,
+) -> Option<RevisionId> {
+    let mut pick = None;
+    ui.horizontal(|ui| {
+        ui.weak("Since");
+        let shown = revisions
+            .iter()
+            .find(|(id, _)| *id == base)
+            .map_or(String::new(), |(_, t)| t.clone());
+        egui::ComboBox::from_id_salt("changes_base")
+            .selected_text(shown)
+            .show_ui(ui, |ui| {
+                for (id, text) in revisions.iter().rev() {
+                    if ui.selectable_label(*id == base, text).clicked() {
+                        pick = Some(*id);
+                    }
+                }
+            });
+    });
+    pick
+}
+
+/// "2 added · 1 changed · 1 removed", leaving out what is zero.
+fn counts_text(changes: &[Change]) -> String {
+    let count = |f: fn(&ChangeKind) -> bool| changes.iter().filter(|c| f(&c.kind)).count();
+    [
+        (count(|k| matches!(k, ChangeKind::Added)), "added"),
+        (
+            count(|k| matches!(k, ChangeKind::Changed { .. })),
+            "changed",
+        ),
+        (count(|k| matches!(k, ChangeKind::Removed)), "removed"),
+    ]
+    .into_iter()
+    .filter(|(n, _)| *n > 0)
+    .map(|(n, what)| format!("{n} {what}"))
+    .collect::<Vec<_>>()
+    .join(" · ")
 }
 
 impl NovoApp {
@@ -224,22 +269,7 @@ impl NovoApp {
                             leave = true;
                         }
                     });
-                    ui.horizontal(|ui| {
-                        ui.weak("Since");
-                        let shown = revisions
-                            .iter()
-                            .find(|(id, _)| *id == mode.base)
-                            .map_or(String::new(), |(_, t)| t.clone());
-                        egui::ComboBox::from_id_salt("changes_base")
-                            .selected_text(shown)
-                            .show_ui(ui, |ui| {
-                                for (id, text) in revisions.iter().rev() {
-                                    if ui.selectable_label(*id == mode.base, text).clicked() {
-                                        pick = Some(*id);
-                                    }
-                                }
-                            });
-                    });
+                    pick = base_picker(ui, &revisions, mode.base);
                     if nothing_here {
                         ui.weak("Nothing changed on this page");
                     } else {
@@ -268,5 +298,131 @@ impl NovoApp {
         if leave {
             self.wb.changes = None;
         }
+    }
+
+    /// Whether Changes mode is on and `page` has changes since its
+    /// revision: the outline marks such pages.
+    pub(super) fn page_has_changes(&mut self, page: PageId) -> bool {
+        let (Some(mode), Some(doc)) = (self.wb.changes.as_mut(), self.backend.document()) else {
+            return false;
+        };
+        !mode.changes(doc.project()).on_page(page).is_empty()
+    }
+
+    /// The outline's Changes list (DESIGN §3): the pages that changed since
+    /// a revision, each with its counts, and the changes that belong to no
+    /// page. Opening it turns Changes mode on against the latest revision.
+    /// Returns whether a page was picked.
+    pub(super) fn changes_outline(&mut self, ui: &mut egui::Ui) -> bool {
+        let Some(project) = self.backend.document().map(|d| d.project()) else {
+            return false;
+        };
+        let Some(latest) = project.latest_revision().map(|r| r.id) else {
+            ui.weak("No revision yet. Issue one (Ctrl+K, issue), then Changes compares with it.");
+            return false;
+        };
+        if self.wb.changes.is_none() {
+            if self.backend.revision_snapshot(latest).is_none() {
+                ui.weak("The latest revision has no kept copy to compare with.");
+                return false;
+            }
+            self.toggle_changes(None);
+        }
+        let (Some(mode), Some(doc)) = (self.wb.changes.as_mut(), self.backend.document()) else {
+            return false;
+        };
+        let project = doc.project();
+        let revisions: Vec<(RevisionId, String)> = project
+            .revisions()
+            .map(|r| (r.id, format!("{} · {}", r.index, r.date)))
+            .collect();
+        let base = mode.base;
+        mode.changes(project);
+        let mode = &*mode;
+        let set = &mode.changes.as_ref().expect("computed above").1;
+        let name = |id: PageId| match project.page(id) {
+            Some(p) => Some(page_title(&p.name, &p.title)),
+            None => mode
+                .snapshot
+                .page(id)
+                .map(|p| format!("{} (removed)", page_title(&p.name, &p.title))),
+        };
+        // Pages in page order, then the removed ones.
+        let mut ordered: Vec<PageId> = project
+            .pages_in_order()
+            .into_iter()
+            .map(|p| p.id)
+            .filter(|id| set.pages.contains_key(id))
+            .collect();
+        let gone: Vec<PageId> = set
+            .pages
+            .keys()
+            .filter(|id| !ordered.contains(id))
+            .copied()
+            .collect();
+        ordered.extend(gone);
+        let rows: Vec<(PageId, String, String)> = ordered
+            .into_iter()
+            .filter_map(|id| Some((id, name(id)?, counts_text(set.on_page(id)))))
+            .collect();
+        let elsewhere = set.project.len();
+        let info = set.info.join(", ");
+        let pick = base_picker(ui, &revisions, base);
+        let mut chosen = None;
+        egui::ScrollArea::vertical()
+            .auto_shrink(false)
+            .show(ui, |ui| {
+                if rows.is_empty() && elsewhere == 0 && info.is_empty() {
+                    ui.weak("Nothing changed since then");
+                }
+                for (id, label, counts) in &rows {
+                    let selected = self.current_page == Some(*id);
+                    let response = ui
+                        .with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
+                            ui.add(
+                                egui::Button::selectable(selected, label)
+                                    .min_size(egui::vec2(0.0, 22.0)),
+                            )
+                        })
+                        .inner;
+                    ui.weak(format!("    {counts}"));
+                    if response.clicked() && project.page(*id).is_some() {
+                        chosen = Some(*id);
+                    }
+                }
+                if elsewhere > 0 || !info.is_empty() {
+                    section_label(ui, "Project");
+                    if elsewhere > 0 {
+                        ui.label(format!(
+                            "{elsewhere} change{} to parts, potentials, rules or structure",
+                            if elsewhere == 1 { "" } else { "s" }
+                        ));
+                    }
+                    if !info.is_empty() {
+                        ui.label(format!("Project information: {info}"));
+                    }
+                }
+            });
+        if let Some(id) = pick
+            && id != base
+            && let Some(index) = project.issued_revision(id).map(|r| r.index.clone())
+        {
+            self.wb.changes = None;
+            self.toggle_changes(Some(&index));
+        }
+        if let Some(page) = chosen {
+            self.show_page(page);
+            return true;
+        }
+        false
+    }
+}
+
+/// A page's name and title as the outline lists it.
+fn page_title(name: &str, title: &str) -> String {
+    if title.is_empty() {
+        name.to_owned()
+    } else {
+        format!("{name}  {title}")
     }
 }
