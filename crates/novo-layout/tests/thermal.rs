@@ -158,3 +158,26 @@ fn bands_for_the_overlay() {
     assert_eq!(b[11 + 6 * m.cols], 4);
     assert_eq!(b[0], 0);
 }
+
+#[test]
+fn fine_cells_are_coarsened_and_negative_loss_is_zero() {
+    let big = Plate {
+        width: 4000.0,
+        height: 3000.0,
+        margin: 0.0,
+    };
+    let m = heat_map(&big, &[], 1.0, 40.0);
+    assert!(m.cols * m.rows <= thermal::MAX_CELLS);
+    assert!(m.cell_mm >= thermal::MIN_CELL_MM);
+    let p = novo_layout::Placement {
+        id: 1,
+        x: 0.0,
+        y: 0.0,
+        rotated: false,
+        size: novo_layout::Size::from_part(Some(40.0), Some(40.0)),
+        clearance: None,
+        rail: None,
+    };
+    let s = thermal::sources(&[p], |_| Some(-5.0));
+    assert_eq!(s[0].loss_w, 0.0);
+}

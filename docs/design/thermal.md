@@ -57,7 +57,7 @@ sea level (`3600 / (rho * cp)` with `rho = 1.146 kg/m3`). The bottom-face
 factor and `k` are planning values to check against IEC 60890 and a maker
 handbook before the UI shows numbers.
 
-### 4.3 Hot-spot map
+### 4.2 Hot-spot map
 
 Aim: show where heat concentrates on the mounting plate, not a temperature.
 
@@ -69,6 +69,8 @@ Aim: show where heat concentrates on the mounting plate, not a temperature.
 3. A box blur of radius 40 mm (default) spreads each cell's heat to its
    neighbours, conserving the total, so two hot devices next to each other
    read hotter than the same two far apart.
+   Cells are at least 5 mm and the grid is coarsened to at most 40 000 cells.
+   Heat of a device that reaches past the plate is not mapped.
 4. Cells fall into five bands with fixed limits in W/dm2: below 0.5, up to 2,
    up to 5, up to 10, above 10 (defaults, adjustable). The legend lists the
    limits. Fixed limits mean two plates are comparable and an empty plate

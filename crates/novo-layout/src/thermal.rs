@@ -12,9 +12,14 @@ use crate::{Placement, Plate, Rect};
 /// Note shown next to every heat result.
 pub const NOTE: &str = "Planning value. Check with the enclosure or cooling unit maker.";
 
+/// Default heat map cell size, mm.
 pub const DEFAULT_CELL_MM: f64 = 10.0;
-/// Default heat map cell size and blur radius, mm.
+/// Default blur radius, mm.
 pub const DEFAULT_SPREAD_MM: f64 = 40.0;
+/// Smallest cell size and most cells [`heat_map`] will use: a finer request
+/// is coarsened so the blur stays fast on a large plate.
+pub const MIN_CELL_MM: f64 = 5.0;
+pub const MAX_CELLS: usize = 40_000;
 /// Upper limits of the first four heat bands, W/dm2; the fifth is above.
 pub const DEFAULT_BAND_LIMITS: [f64; 4] = [0.5, 2.0, 5.0, 10.0];
 
@@ -36,7 +41,8 @@ impl HeatSource {
 }
 
 /// Sources for the placed devices whose loss is known: `loss` gives a
-/// device's effective loss by id, `None` when unknown.
+/// device's effective loss by id, `None` when unknown. A negative loss is
+/// treated as 0.
 pub fn sources(placements: &[Placement], loss: impl Fn(u64) -> Option<f64>) -> Vec<HeatSource> {
     placements
         .iter()
@@ -44,7 +50,7 @@ pub fn sources(placements: &[Placement], loss: impl Fn(u64) -> Option<f64>) -> V
             Some(HeatSource {
                 id: p.id,
                 footprint: p.footprint(),
-                loss_w: loss(p.id)?,
+                loss_w: loss(p.id)?.max(0.0),
             })
         })
         .collect()
@@ -85,9 +91,15 @@ impl HeatMap {
 }
 
 /// Builds the heat map: each source spreads its loss over its footprint, then
-/// a box blur of `spread_mm` radius shares it with the neighbourhood.
+/// a box blur of `spread_mm` radius shares it with the neighbourhood. The
+/// cell is at least [`MIN_CELL_MM`] and grows until there are at most
+/// [`MAX_CELLS`] cells. Heat of a footprint that reaches past the plate is
+/// not mapped, so the sum is conserved only for devices inside the plate.
 pub fn heat_map(plate: &Plate, sources: &[HeatSource], cell_mm: f64, spread_mm: f64) -> HeatMap {
-    let cell = cell_mm.max(1.0);
+    let mut cell = cell_mm.max(MIN_CELL_MM);
+    while (plate.width / cell).ceil() * (plate.height / cell).ceil() > MAX_CELLS as f64 {
+        cell *= 1.5;
+    }
     let cols = ((plate.width / cell).ceil() as usize).max(1);
     let rows = ((plate.height / cell).ceil() as usize).max(1);
     let mut raw = vec![0.0; cols * rows];
