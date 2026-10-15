@@ -96,8 +96,8 @@ on edit. The renderer exposes a frame time readout in the debug HUD so this is m
 | Selected | copper (`ACCENT`) outline 2 px and a 12% copper tint on the faces; the rest of the scene stays at full strength |
 | Selected, focus mode (toggle, off by default) | everything else dims to 70% |
 | Multi selection | each item outlined; one bounding box hint in copper at 40% |
-| Problem on a device | small `ERROR` or `WARNING` dot with the status icon at the top corner of its label, never a tinted body |
-| Proposal (not yet placed) | the 2D proposal look: steel blue at 55%, dashed edges |
+| Problem on a device | status icon at the top corner of its label: a cross glyph in `ERROR` for an error, a bang (!) glyph in `WARNING` for a warning; never a tinted body and never colour alone |
+| Proposal (not yet placed) | the 2D proposal look: steel blue at 55%, dashed edges, plus the proposal mark glyph on its label so it reads without colour |
 
 Outlines use the object id buffer, so they cost one fullscreen pass whatever the object count.
 
@@ -110,13 +110,13 @@ floor (TEXT on BG_2 is above 7:1). Labels never block picking: they are not pick
 
 ## 6. Camera
 
-Z is up and units are millimetres; the architecture contract fixes how the plate and the cabinet axes map onto it. The default view looks at the plate from the front, the way the door opens.
+Z is up and units are millimetres; the architecture contract fixes how the plate and the cabinet axes map onto it. A new view opens fitted from the front, the way the door opens.
 
 - **Turntable orbit**, no roll: yaw free, pitch clamped to -89 to 89 degrees.
 - **Projection**: perspective, 30 degree vertical field of view (low distortion, reads as CAD). Orthographic
   is a toggle and is chosen automatically when a standard view (front, top, left) is entered by view cube
   or key, and left again on the first orbit.
-- **Mouse**: middle drag or right drag orbits; Shift plus that drags pans; Space plus left drag pans
+- **Mouse**: middle drag or right drag orbits (right drag keeps the 2D 4 point threshold: under it, release is a plain right click and opens the context menu); Shift plus that drags pans; Space plus left drag pans
   (same as the schematic); wheel zooms **to the cursor** (the world point under the pointer stays fixed;
   the point comes from the last frame's depth, falling back to the plate plane); Alt plus left drag
   orbits for trackpads; two finger drag pans and pinch zooms where the platform reports it. Left click
@@ -133,11 +133,12 @@ Z is up and units are millimetres; the architecture contract fixes how the plate
 - **View cube** (top right, 88 px square, margin 12 px): six labelled faces, edges and corners clickable;
   click animates to that view, dragging the cube orbits, hover lights the face in steel blue. Drawn in
   token colours (BG_2 faces, BORDER_STRONG lines), always in front of the scene.
-- **Standard views**: Front (home, fitted to the plate), Back, Left, Right, Top, Bottom, Isometric.
-  Fit all and fit selection use the bounding sphere plus 8% margin.
+- **Standard views**: Front, Back, Left, Right, Top, Bottom, Isometric. Home is `view.fit` exactly as in the 2D
+  canvases (fit all, keeping the current direction); it is not a view of its own. Isometric lives on the view cube
+  and a `view.iso` command. Fit all and fit selection use the bounding sphere plus 8% margin.
 - **Saved views**: a named camera (eye, target, projection, cutaway on or off). Stored in the project
   next to the cabinet it belongs to, listed in the view menu, up to nine bound to recall keys. Keys are
-  assigned through the workflow keymap (proposal: Home fit all, F fit selection, `1` to `9` recall,
+  assigned through the workflow keymap (proposal: Home `view.fit` fit all, F fit selection, `view.iso`, `1` to `9` recall,
   Ctrl+`1` to `9` save, Numpad for standard views); this thread does not add keys outside it.
 - **Cutaway**: one toggle hides the enclosure walls and door so the plate and parts are seen
   from any side; saved with the view.
