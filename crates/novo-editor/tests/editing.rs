@@ -2089,6 +2089,48 @@ fn a_row_of_terminals_takes_the_pitch_of_the_strip_it_joins() {
 }
 
 #[test]
+fn set_potential_on_selected_feeds_is_one_undo_step() {
+    use novo_core::{Pin, Placement};
+    let (mut doc, page, _) = setup();
+    let (feeds, _) = doc
+        .transact("Feeds", |tx| {
+            let l1 = tx.add_potential("L1", PotentialKind::Line)?;
+            let l2 = tx.add_potential("L2", PotentialKind::Line)?;
+            let mut ids = Vec::new();
+            for (i, pot) in [l1, l2].into_iter().enumerate() {
+                ids.push(tx.place_symbol(
+                    page,
+                    potential::FEED_SYMBOL,
+                    Placement::at(p(10.0 * i as f64, 0.0)),
+                    vec![Pin::new("1", 0.0, 8.0)],
+                    SymbolRole::PotentialFeed { potential: pot },
+                )?);
+            }
+            Ok(ids)
+        })
+        .unwrap();
+    let spec = potential::PotentialSpec::new("N", PotentialKind::Neutral, Some(0.0));
+    let (changed, _) = doc
+        .transact("Set potential", |tx| {
+            potential::set_feed_potential(tx, &feeds, &spec)
+        })
+        .unwrap();
+    assert_eq!(changed, feeds);
+    for f in &feeds {
+        let SymbolRole::PotentialFeed { potential } = doc.project().symbol(*f).unwrap().role else {
+            panic!("still a feed")
+        };
+        assert_eq!(doc.project().potential(potential).unwrap().name, "N");
+    }
+    doc.undo().unwrap();
+    let SymbolRole::PotentialFeed { potential } = doc.project().symbol(feeds[0]).unwrap().role
+    else {
+        panic!()
+    };
+    assert_eq!(doc.project().potential(potential).unwrap().name, "L1");
+}
+
+#[test]
 fn facing_pins_are_wired_with_the_drop_by_default() {
     let (mut doc, page, mut editor) = setup();
     editor.set_connect_mode(novo_editor::tool::ConnectMode::Draw);
