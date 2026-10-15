@@ -72,7 +72,7 @@ pub enum ScriptError {
     #[error("unknown {what} `{value}`")]
     UnknownValue { what: &'static str, value: String },
     #[error(
-        "{} has unsaved work from an app session that did not close cleanly; open it in NovoElectric to recover or discard that work first",
+        "{} has unsaved work from an app session that did not close cleanly; open it in KoperCAD to recover or discard that work first",
         .0.display()
     )]
     RecoveryPending(PathBuf),

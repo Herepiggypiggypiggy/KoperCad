@@ -589,7 +589,7 @@ impl CanvasView {
                 rect.center(),
                 egui::Align2::CENTER_CENTER,
                 "The drawing cannot be shown: no graphics adapter was found.\n\
-                 NovoElectric needs Direct3D 12, Vulkan or Metal \
+                 KoperCAD needs Direct3D 12, Vulkan or Metal \
                  (on Linux, install the Mesa Vulkan drivers).",
                 egui::FontId::proportional(15.0),
                 ui.visuals().error_fg_color,

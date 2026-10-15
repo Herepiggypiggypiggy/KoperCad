@@ -1,6 +1,6 @@
 # novoelectric (Python API)
 
-Open, edit and save NovoElectric project files from Python, headless. Every
+Open, edit and save KoperCAD project files from Python, headless. Every
 call is one command and one undo step, the same commands the app runs.
 
 ## Build and install (no admin rights)

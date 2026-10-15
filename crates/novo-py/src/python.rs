@@ -17,7 +17,7 @@ pyo3::create_exception!(
     novoelectric,
     NovoError,
     PyException,
-    "A NovoElectric call was refused; the project is unchanged."
+    "A KoperCAD call was refused; the project is unchanged."
 );
 
 fn err(e: ScriptError) -> PyErr {
@@ -33,7 +33,7 @@ fn to_py<'py>(py: Python<'py>, value: &Value) -> PyResult<Bound<'py, PyAny>> {
         .call_method1("loads", (value.to_string(),))
 }
 
-/// An open NovoElectric project. Every edit is one command and one undo
+/// An open KoperCAD project. Every edit is one command and one undo
 /// step, exactly as in the app.
 ///
 /// ``Project(name)`` starts a new unsaved project; ``Project.create(path)``

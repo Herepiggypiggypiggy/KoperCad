@@ -586,7 +586,7 @@ fn finish_save(tx: &Transaction<'_>) -> Result<()> {
     set_meta(
         tx,
         "writer",
-        concat!("NovoElectric ", env!("CARGO_PKG_VERSION")),
+        concat!("KoperCAD ", env!("CARGO_PKG_VERSION")),
     )?;
     Ok(())
 }

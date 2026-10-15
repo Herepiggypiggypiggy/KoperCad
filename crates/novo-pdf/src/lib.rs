@@ -292,7 +292,7 @@ pub fn export_pdf_with_reports(
     if !title.is_empty() {
         info.title(TextStr(&title));
     }
-    info.producer(TextStr("NovoElectric"));
+    info.producer(TextStr("KoperCAD"));
     info.finish();
 
     // Embedded only when some line needs it (see `inter`).

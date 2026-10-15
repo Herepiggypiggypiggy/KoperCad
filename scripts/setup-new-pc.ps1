@@ -1,4 +1,4 @@
-# One-time setup of the "NovoElectric (latest)" desktop shortcut on a new PC.
+# One-time setup of the "KoperCAD (latest)" desktop shortcut on a new PC.
 # Paste the whole file into a PowerShell window (no admin needed). Everything
 # goes under %LOCALAPPDATA% and the user's own PATH.
 #
@@ -65,5 +65,5 @@
     if ($LASTEXITCODE -ne 0) { throw 'Creating the shortcut failed.' }
     # The installer copied the launcher into place; the downloads are no longer needed.
     Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
-    Write-Host 'Done. Double-click "NovoElectric (latest)" on the desktop.'
+    Write-Host 'Done. Double-click "KoperCAD (latest)" on the desktop.'
 }

@@ -1,6 +1,6 @@
 [package]
 name = "novo-app"
-description = "NovoElectric desktop application"
+description = "KoperCAD desktop application"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -40,8 +40,8 @@ lopdf.workspace = true
 winresource = "0.1"
 
 [package.metadata.winresource]
-ProductName = "NovoElectric"
-FileDescription = "NovoElectric electrical CAD"
+ProductName = "KoperCAD"
+FileDescription = "KoperCAD electrical CAD"
 
 [lints]
 workspace = true

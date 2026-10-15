@@ -25,7 +25,7 @@ use novo_core::{Command, ModelError, Outcome, PageId, PageKind};
 use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows};
 use crate::canvas::{CanvasView, OpenPage};
 use crate::settings::Settings;
-use crate::{APP_NAME, PROJECT_EXTENSION};
+use crate::{APP_MAKER, APP_NAME, DATA_DIR_NAME, PROJECT_EXTENSION};
 use novo_theme::widgets::{primary_button, section_label, segment};
 use workbench::Workbench;
 pub(crate) use workbench::app_runs;
@@ -361,7 +361,7 @@ impl NovoApp {
             Leaving::Open => {
                 let mut dialog = rfd::FileDialog::new()
                     .set_title("Open project")
-                    .add_filter("NovoElectric project", &[PROJECT_EXTENSION]);
+                    .add_filter("KoperCAD project", &[PROJECT_EXTENSION]);
                 if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
                     dialog = dialog.set_directory(dir);
                 }
@@ -555,7 +555,7 @@ impl NovoApp {
         let name = self.project_name().unwrap_or_else(|| "Untitled".into());
         let mut dialog = rfd::FileDialog::new()
             .set_title("Save project")
-            .add_filter("NovoElectric project", &[PROJECT_EXTENSION])
+            .add_filter("KoperCAD project", &[PROJECT_EXTENSION])
             .set_file_name(project_file_name(&name));
         // A project's first save goes to Documents\NovoElectric (DESIGN.md §3,
         // §6); later "Save as" starts next to the current file.
@@ -1176,7 +1176,7 @@ impl NovoApp {
             ui.set_width(380.0);
             ui.heading("Restore unsaved work?");
             ui.label(format!(
-                "NovoElectric did not close cleanly last time. \"{name}\" has unsaved work{when}."
+                "KoperCAD did not close cleanly last time. \"{name}\" has unsaved work{when}."
             ));
             ui.add_space(8.0);
             ui.horizontal(|ui| {
@@ -1224,6 +1224,7 @@ impl NovoApp {
         let modal = egui::Modal::new(egui::Id::new("about")).show(ctx, |ui| {
             ui.set_width(320.0);
             ui.heading(APP_NAME);
+            ui.label(format!("by {}", APP_MAKER));
             ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
             ui.label(format!("Model API v{}", novo_core::MODEL_VERSION));
             ui.add_space(8.0);
@@ -1297,7 +1298,7 @@ fn ago(t: SystemTime) -> String {
 /// from the known-folder lookup, because company PCs often redirect it to
 /// OneDrive; it is always inside the user's profile.
 fn projects_dir() -> Option<PathBuf> {
-    dirs::document_dir().map(|docs| docs.join(APP_NAME))
+    dirs::document_dir().map(|docs| docs.join(DATA_DIR_NAME))
 }
 
 /// `<name>.novo`, with the characters Windows forbids in file names replaced.
@@ -1452,7 +1453,7 @@ mod tests {
     #[test]
     fn new_projects_are_saved_under_documents() {
         if let Some(dir) = projects_dir() {
-            assert!(dir.ends_with(APP_NAME));
+            assert!(dir.ends_with(DATA_DIR_NAME));
             assert!(dir.parent().is_some_and(|p| p.is_absolute()));
         }
     }
@@ -1516,10 +1517,7 @@ mod tests {
         assert!(app.save_to(Path::new("plant.novo")));
         assert!(!app.is_dirty());
         frame(&ctx, &mut app, Default::default());
-        assert_eq!(
-            app.window_title, "plant - NovoElectric",
-            "named after its file"
-        );
+        assert_eq!(app.window_title, "plant - KoperCAD", "named after its file");
     }
 
     /// Which commands a single key press would run.
@@ -1625,7 +1623,7 @@ mod tests {
         assert_eq!(page_count(&app), 3);
         assert!(app.is_dirty(), "restored work still needs a save");
         frame(&ctx, &mut app, Default::default());
-        assert_eq!(app.window_title, "Plant - NovoElectric");
+        assert_eq!(app.window_title, "Plant - KoperCAD");
     }
 
     #[test]

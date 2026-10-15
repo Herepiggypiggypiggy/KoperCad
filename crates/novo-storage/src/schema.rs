@@ -20,7 +20,7 @@ use rusqlite::{Connection, Transaction};
 
 use crate::error::{Result, StorageError};
 
-/// Marks a SQLite file as a NovoElectric project ("NVOE").
+/// Marks a SQLite file as a KoperCAD project ("NVOE").
 pub const APPLICATION_ID: i32 = 0x4E56_4F45;
 
 /// The schema version this build writes, and the newest it can read.

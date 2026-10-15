@@ -1,4 +1,4 @@
-//! NovoElectric data model (owned by WS-02).
+//! KoperCAD data model (owned by WS-02).
 //!
 //! Every view in the program (schematic pages, terminal and cable screens,
 //! cabinet layout, reports, simulation) is a projection of the model defined
