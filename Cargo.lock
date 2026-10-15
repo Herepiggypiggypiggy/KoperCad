@@ -1848,6 +1848,7 @@ dependencies = [
  "novo-core",
  "novo-editor",
  "novo-layout",
+ "novo-parts",
  "novo-pdf",
  "novo-plc",
  "novo-reports",
@@ -1922,6 +1923,18 @@ dependencies = [
  "novo-xref",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "novo-commissioning"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-reports",
+ "novo-tests",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -2131,6 +2144,14 @@ dependencies = [
  "eframe",
  "egui",
  "egui-phosphor",
+]
+
+[[package]]
+name = "novo-view3d"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "glam",
 ]
 
 [[package]]

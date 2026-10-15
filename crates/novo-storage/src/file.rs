@@ -372,6 +372,49 @@ impl ProjectFile {
         Ok(dropped)
     }
 
+    /// Keeps `data` (JSON text) under `key`, replacing what was there. It is
+    /// written at once, like a snapshot, not with the next save.
+    pub fn put_sidecar(&mut self, key: &str, data: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO sidecar (key, data) VALUES (?1, ?2)",
+            params![key, data],
+        )?;
+        Ok(())
+    }
+
+    /// The document kept under `key`, if any.
+    pub fn sidecar(&self, key: &str) -> Result<Option<String>> {
+        Ok(self
+            .conn
+            .query_row("SELECT data FROM sidecar WHERE key = ?1", [key], |r| {
+                r.get(0)
+            })
+            .optional()?)
+    }
+
+    /// Drops the document kept under `key`.
+    pub fn remove_sidecar(&mut self, key: &str) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM sidecar WHERE key = ?1", [key])?;
+        Ok(())
+    }
+
+    /// Copies every sidecar document into `other` (save as).
+    pub(crate) fn copy_sidecars_to(&self, other: &mut ProjectFile) -> Result<()> {
+        let mut stmt = self.conn.prepare("SELECT key, data FROM sidecar")?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+        let tx = other.conn.transaction()?;
+        for row in rows {
+            let (key, data) = row?;
+            tx.execute(
+                "INSERT OR REPLACE INTO sidecar (key, data) VALUES (?1, ?2)",
+                params![key, data],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     /// Copies every kept snapshot into `other` as stored (save as).
     pub(crate) fn copy_snapshots_to(&self, other: &mut ProjectFile) -> Result<()> {
         let mut stmt = self
@@ -733,7 +776,7 @@ mod tests {
         // A version 1 file is a current one without the snapshot table.
         let file = ProjectFile::create(&path, &project).unwrap();
         file.conn
-            .execute_batch("DROP TABLE snapshots; PRAGMA user_version = 1;")
+            .execute_batch("DROP TABLE snapshots; DROP TABLE sidecar; PRAGMA user_version = 1;")
             .unwrap();
         file.close().unwrap();
 
@@ -742,9 +785,13 @@ mod tests {
             project.to_json()
         );
         let file = ProjectFile::open(&path).unwrap();
-        assert_eq!(schema::user_version(&file.conn).unwrap(), 2);
+        assert_eq!(
+            schema::user_version(&file.conn).unwrap(),
+            schema::SCHEMA_VERSION
+        );
         assert_eq!(file.load().unwrap().to_json(), project.to_json());
         assert!(file.snapshot_revisions().unwrap().is_empty());
+        assert_eq!(file.sidecar("commissioning").unwrap(), None);
     }
 
     #[test]

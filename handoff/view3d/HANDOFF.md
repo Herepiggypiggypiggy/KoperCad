@@ -1,11 +1,11 @@
 # 3D view (WS-29): handoff
 
-Updated 2026-10-15 18:30 UTC.
+Updated 2026-10-15 18:50 UTC.
 
 ## State
 - Repo herepiggypiggypiggy/kopercad. Branch `claude/project-thread-8laqbm` (the only branch this thread may push to; restart it from main after each merge).
-- PR 1: `docs/design/3d-view.md` plus this folder. Docs only.
-- The spike (crate `novo-view3d`) is developed locally and pushed as a draft PR after the doc merges.
+- #395 (design doc) merged. PR 2 (draft): crate skeleton, headless only: scene contract, camera, picking, culling, demo cabinet.
+- Next PR: renderer, egui widget, examples (`orbit`, `window`), GPU tests, measured numbers in the doc. Developed on local branch view3d-spike (not pushed).
 - Decisions already made (details in the doc): own small wgpu renderer drawing offscreen with its own depth, flat scene with instanced boxes, CPU picking and culling, render on demand, interactive and settled quality tiers, labels and view cube drawn by egui over the image.
 
 ## Resume
