@@ -743,12 +743,13 @@ impl NovoApp {
 
     /// A wire drawn to ground or a PE potential earths the terminals on
     /// its net (DESIGN.md §4, PE terminals). Runs only when a wire was
-    /// added, never on every edit, and joins the edit's undo step; a
-    /// terminal toggled by hand is left alone.
+    /// added or reconnected, never on every edit, and joins the edit's undo
+    /// step; a terminal toggled by hand is left alone.
     fn mark_earthed_terminals(&mut self, changes: &novo_core::ChangeSet) {
         if !changes
             .added
             .iter()
+            .chain(&changes.modified)
             .any(|id| matches!(id, novo_core::AnyId::Wire(_)))
         {
             return;
