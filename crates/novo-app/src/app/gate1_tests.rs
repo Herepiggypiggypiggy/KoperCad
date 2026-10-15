@@ -37,7 +37,7 @@ impl Drive {
         drive
     }
 
-    fn frame_with(&mut self, events: Vec<egui::Event>) {
+    pub(super) fn frame_with(&mut self, events: Vec<egui::Event>) {
         let input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,

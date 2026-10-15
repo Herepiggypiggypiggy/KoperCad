@@ -22,6 +22,9 @@ pub(crate) fn build_example(doc: &mut Document) -> ModelResult<novo_core::Change
             tx.delete_page(page)?;
         }
         novo_tests::motor_starter_in(tx)?;
+        // The pages are filed by their devices' tags (=A1, +CAB), so the
+        // outline shows the example as a tree.
+        super::outline_tree::auto_file(tx)?;
         tx.set_info(|info| {
             info.name = EXAMPLE_NAME.into();
             info.description = EXAMPLE_DESCRIPTION.into();

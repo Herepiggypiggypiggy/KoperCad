@@ -1870,6 +1870,7 @@ dependencies = [
  "novo-heatview",
  "novo-interop",
  "novo-layout",
+ "novo-numbering",
  "novo-parts",
  "novo-pdf",
  "novo-plc",
@@ -2023,6 +2024,15 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "toml",
+]
+
+[[package]]
+name = "novo-numbering"
+version = "0.1.0"
+dependencies = [
+ "novo-cables",
+ "novo-core",
+ "novo-reports",
 ]
 
 [[package]]
@@ -2218,6 +2228,7 @@ name = "novo-workflow"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+ "novo-numbering",
  "novo-symbols",
  "novo-tests",
  "serde_json",

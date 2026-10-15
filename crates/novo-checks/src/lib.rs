@@ -28,8 +28,12 @@
 //! | [`WireOverlap`](ProblemKind::WireOverlap) | warning | Two wires on a page sharing a stretch of line |
 //! | [`OpenWire`](ProblemKind::OpenWire) | warning | A wire with an open end that is connected to nothing |
 //! | [`MissingPart`](ProblemKind::MissingPart) | info | A device or cable without a part |
-//! | [`VoltageDrop`](ProblemKind::VoltageDrop) | warning | Filled by novo-checks::calc, not yet |
-//! | [`ShortCircuit`](ProblemKind::ShortCircuit) | error | Filled by novo-checks::calc, not yet |
+//! | [`VoltageDrop`](ProblemKind::VoltageDrop) | warning, error above twice the limit | A wire whose voltage drop exceeds the limit (calc::drop) |
+//! | [`ShortCircuit`](ProblemKind::ShortCircuit) | error | A device that cannot break the supply's short-circuit current |
+//! | [`DisconnectionTime`](ProblemKind::DisconnectionTime) | error | A wire so long that an earth fault cannot trip its protective device in time |
+//! | [`ThermalWithstand`](ProblemKind::ThermalWithstand) | error | A wire that cannot take the let-through energy of its protective device |
+//! | [`MotorStarter`](ProblemKind::MotorStarter) | warning, error where it cannot work | A motor starter whose relay, contactor or fuse does not suit the motor |
+//! | [`ProtectiveConductor`](ProblemKind::ProtectiveConductor) | warning | A protective conductor thinner than its phase conductors need |
 //! | [`UnplacedDevice`](ProblemKind::UnplacedDevice) | info | A device not yet placed on a mounting plate |
 //! | [`WireWithoutDuct`](ProblemKind::WireWithoutDuct) | warning | A wire between placed devices that no duct serves |
 //! | [`OverfullDuct`](ProblemKind::OverfullDuct) | warning | A duct filled beyond its limit |
@@ -56,6 +60,7 @@
 //! ```
 
 pub mod calc;
+mod calc_checks;
 mod checks;
 mod contacts;
 mod physical;
@@ -155,6 +160,18 @@ pub enum ProblemKind {
     /// or part property `breaking_capacity_ka` and the project property
     /// `supply.short_circuit_ka`.
     ShortCircuit,
+    /// A wire whose smallest earth-fault current is too low for its
+    /// protective device to trip at once (`calc::short_circuit`).
+    DisconnectionTime,
+    /// A wire thinner than its protective device's let-through energy
+    /// allows (`k²S²`).
+    ThermalWithstand,
+    /// A motor starter whose overload relay, contactor or short-circuit
+    /// device does not suit the motor or each other (`calc::motor`).
+    MotorStarter,
+    /// A protective conductor thinner than the rule for its phase
+    /// conductors (`calc::pe`).
+    ProtectiveConductor,
     /// A device drawn in the schematic but not placed on any mounting plate,
     /// in a project where the cabinet layout has been started.
     UnplacedDevice,
@@ -171,7 +188,7 @@ pub enum ProblemKind {
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 23] = [
+    pub const ALL: [ProblemKind; 27] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -191,6 +208,10 @@ impl ProblemKind {
         ProblemKind::OpenWire,
         ProblemKind::VoltageDrop,
         ProblemKind::ShortCircuit,
+        ProblemKind::DisconnectionTime,
+        ProblemKind::ThermalWithstand,
+        ProblemKind::MotorStarter,
+        ProblemKind::ProtectiveConductor,
         ProblemKind::UnplacedDevice,
         ProblemKind::WireWithoutDuct,
         ProblemKind::OverfullDuct,
@@ -202,7 +223,9 @@ impl ProblemKind {
             ProblemKind::DuplicateTag
             | ProblemKind::TooManyContacts
             | ProblemKind::PotentialConflict
-            | ProblemKind::ShortCircuit => Severity::Error,
+            | ProblemKind::ShortCircuit
+            | ProblemKind::DisconnectionTime
+            | ProblemKind::ThermalWithstand => Severity::Error,
             ProblemKind::UnconnectedPin
             | ProblemKind::LoneInterruption
             | ProblemKind::NoMainFunction
@@ -216,6 +239,8 @@ impl ProblemKind {
             | ProblemKind::WireOverlap
             | ProblemKind::OpenWire
             | ProblemKind::VoltageDrop
+            | ProblemKind::MotorStarter
+            | ProblemKind::ProtectiveConductor
             | ProblemKind::WireWithoutDuct
             | ProblemKind::OverfullDuct
             | ProblemKind::Standard
@@ -246,6 +271,10 @@ impl ProblemKind {
             ProblemKind::OpenWire => "Open wire end",
             ProblemKind::VoltageDrop => "Voltage drop",
             ProblemKind::ShortCircuit => "Short-circuit rating",
+            ProblemKind::DisconnectionTime => "Disconnection time",
+            ProblemKind::ThermalWithstand => "Thermal withstand",
+            ProblemKind::MotorStarter => "Motor starter",
+            ProblemKind::ProtectiveConductor => "Protective conductor",
             ProblemKind::UnplacedDevice => "Unplaced device",
             ProblemKind::WireWithoutDuct => "Wire without duct",
             ProblemKind::OverfullDuct => "Overfull duct",
@@ -275,6 +304,10 @@ impl ProblemKind {
             ProblemKind::OpenWire => "check.open_wire",
             ProblemKind::VoltageDrop => "check.voltage_drop",
             ProblemKind::ShortCircuit => "check.short_circuit",
+            ProblemKind::DisconnectionTime => "check.disconnection_time",
+            ProblemKind::ThermalWithstand => "check.thermal_withstand",
+            ProblemKind::MotorStarter => "check.motor_starter",
+            ProblemKind::ProtectiveConductor => "check.protective_conductor",
             ProblemKind::UnplacedDevice => "check.unplaced_device",
             ProblemKind::WireWithoutDuct => "check.wire_without_duct",
             ProblemKind::OverfullDuct => "check.overfull_duct",
@@ -402,6 +435,7 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     checks::plc(&cx, &mut problems);
     checks::wire_overlaps(&cx, &mut problems);
     checks::open_wires(&cx, &mut problems);
+    calc_checks::run(&cx, netlist, &mut problems);
     physical::unplaced_devices(&cx, &mut problems);
     physical::routing(&cx, &mut problems);
     standards::problems(&cx, netlist, &mut problems);
