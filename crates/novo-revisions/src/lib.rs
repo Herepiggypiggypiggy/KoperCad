@@ -5,9 +5,13 @@
 //! Issuing itself is a model command ([`novo_core::Command::IssueRevision`]);
 //! this crate decides what to propose and compares states.
 
+mod sheets;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use novo_core::{AnyId, PageId, Project, Record, Revision, RevisionId};
+
+pub use sheets::{SheetChange, SheetChangeKind, changed_sheet_fingerprints, changed_sheets};
 
 /// How revisions are indexed, a project rule ("Revisions are indexed
 /// [A, B, C, ... ▾]").
