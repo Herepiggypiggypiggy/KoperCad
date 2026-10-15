@@ -490,7 +490,7 @@ a pin or wire it connects, as a click does; on nothing it leaves an open
 end). The first click of the double click is the last corner; a double
 click adds no extra corner and no zero-length segment.
 
-- An open end carries an end cap (an open ring, hollow where a joint is
+- An open end carries an end cap (an open copper ring, hollow where a joint is
   filled, 4 px radius on screen at every zoom; Layout sets the colours) and the Warning flag of §5
   with the text "Unconnected" on hover, counted in the Issues total as
   "Unconnected wire end". It is listed in Issues as
@@ -574,7 +574,7 @@ between fields as usual.
 
 | Mark | Look | Text |
 | --- | --- | --- |
-| Selection | Copper, 2 px | none |
+| Selection | Copper, 2.5 px thicker than the object with a halo | none |
 | Hover | Steel blue | none |
 | Proposal (terminals, cable, part) | Dashed steel blue at 55%, 1 px; the highlighted one dashed at full strength, 2 px. Proposals are never solid, so none can be mistaken for a drawn wire | "↵ accept · Tab next" on the highlighted one only |
 | Warning | Small amber triangle, top right of the object, screen sized | on hover |
@@ -585,7 +585,11 @@ between fields as usual.
 
 - Marks keep their screen size at every zoom and cluster into a count per
   area when zoomed out. Shift+P hides them; counters remain.
-- Copper is never a mark, so selection is always unambiguous.
+- Copper is never a mark (a proposal, problem, override or change), so
+  selection is always unambiguous. Copper also draws conductor joints
+  (filled dots of a fixed size: 3 px radius, 3.5 px for a T), which are
+  not marks; selection never relies on colour alone, because it is
+  thicker and haloed, and a joint never changes size.
 - Proposal, problem and override differ in colour, line style and
   position at once, so they stay apart for colour-blind users.
 - Change marks appear only in Changes mode, so they never compete with
