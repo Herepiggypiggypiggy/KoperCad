@@ -54,7 +54,7 @@ text = """
 Press {key:wire.mode}. The dock now says **Lines**. Here every bend is a click you choose yourself.
 """
 point = { ui = "dock.wire_mode" }
-expect = { command = "wire.mode" }
+expect = { wiring_mode = "lines" }
 
 [[step]]
 id = "lines-wire"

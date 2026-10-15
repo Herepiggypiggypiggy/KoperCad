@@ -12,4 +12,4 @@ Next
 3. More Drawing lessons: proposals-and-tags, duplicate-and-numbering, pages-and-functions, blocks-and-macros.
 
 Open questions (asked of the framework thread)
-- `finished` key, a `parent` field and `tee` / `feed_row` / `via` ops in `solve`, check kinds `wheel`, `potential_kind`, `live_pole`, a `symbol`-only `device` check.
+- `finished` key, a `parent` field and `tee` / `feed_row` / `via` ops in `solve`, check kinds as in #479 (`signal`, `wiring_mode`, `potential`, `live`, `coil_on`), a `symbol`-only `device` check.

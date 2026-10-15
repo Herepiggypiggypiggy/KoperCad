@@ -52,8 +52,7 @@ Hold {key:tool.place} down. The wheel opens around the pointer with the groups o
 Release the key over a group to choose it.
 """
 point = { ui = "wheel" }
-expect = { wheel = "open" }
-pause = true
+expect = { signal = "wheel_opened" }
 
 [[step]]
 id = "wheel-pushbutton"

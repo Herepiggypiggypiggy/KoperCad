@@ -63,7 +63,7 @@ Right-click the new feed and choose **PE** from the potential chips.
 The symbol changes to the protective earth.
 """
 point = { at = { page = "Motor feeder", x = 104, y = 92 } }
-expect = { potential_kind = { kind = "protective_earth" } }
+expect = { potential = { wire = "-M1:PE", is = "PE" } }
 
 [[step]]
 id = "where-it-goes"

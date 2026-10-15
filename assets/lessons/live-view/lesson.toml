@@ -20,7 +20,7 @@ text = """
 Press {key:sim.live}. The drawing turns live: potentials that carry power light up, and a card lists them.
 """
 point = { ui = "dock.live" }
-expect = { command = "sim.live" }
+expect = { live = true }
 solve = [ { command = "sim.live" } ]
 
 [[step]]
@@ -48,7 +48,7 @@ text = """
 Contacts start open in the live view, and the stop button is a normally closed one. Click **-S1** to close it.
 """
 point = { at = { device = "-S1" } }
-expect = { live_pole = { device = "-S1", state = "closed" } }
+pause = true
 
 [[step]]
 id = "start"
@@ -57,7 +57,7 @@ text = """
 Click **-S2** and hold. The coil **-K1** lights, its contacts follow, and the lamp **-P1** and the motor light up.
 """
 point = { at = { device = "-S2" } }
-expect = { live_pole = { device = "-K1", state = "energised" } }
+expect = { coil_on = "-K1" }
 
 [[step]]
 id = "seal-in"
@@ -75,7 +75,7 @@ text = """
 Click **-S1** to open it. The coil drops out and everything goes dark.
 """
 point = { at = { device = "-S1" } }
-expect = { live_pole = { device = "-K1", state = "released" } }
+expect = { not = { coil_on = "-K1" } }
 
 [[step]]
 id = "leave"
