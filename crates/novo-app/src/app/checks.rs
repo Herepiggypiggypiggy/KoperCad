@@ -1,5 +1,5 @@
-//! Design checks in the app (novo-checks, WS-14): the issue pill, its
-//! problem list and F8 / Shift+F8.
+//! Design checks in the app (novo-checks, WS-14): the issue pill, the
+//! outline's Issues mode and F8 / Shift+F8.
 
 use eframe::egui;
 use novo_canvas::model::item_id;
@@ -60,80 +60,80 @@ impl NovoApp {
         self.wb.problems.as_ref().map_or(&[], |(_, p)| p.as_slice())
     }
 
-    /// The issue pill: the count; a click lists the problems.
+    /// The issue pill: the counts; a click opens the outline's Issues mode.
     pub(super) fn issue_pill(&mut self, ui: &mut egui::Ui) {
         if !self.is_open() {
             return;
         }
         let summary = Summary::of(self.problems());
-        let color = if summary.errors > 0 {
-            ui.visuals().error_fg_color
-        } else if summary.warnings > 0 {
-            ui.visuals().warn_fg_color
-        } else {
-            ui.visuals().weak_text_color()
-        };
-        let pill = egui::Button::new(egui::RichText::new(summary.pill_text()).color(color))
-            .corner_radius(10.0);
-        let response = ui.add(pill);
+        let response = novo_theme::widgets::issue_pill(ui, summary.errors, summary.warnings);
         self.wb.pill_rect = response.rect;
         if response.clicked() {
-            self.wb.issues_open ^= true;
+            self.show_issues(true);
         }
     }
 
-    /// The problem list under the pill. A click goes to the problem.
-    pub(super) fn issues_popup(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
-        if !self.wb.issues_open || !self.is_open() {
-            return;
-        }
-        // Errors first, then warnings, then infos, each in check order.
-        let mut problems: Vec<(usize, Problem)> =
-            self.problems().iter().cloned().enumerate().collect();
-        problems.sort_by_key(|(_, p)| match p.severity {
-            Severity::Error => 0,
-            Severity::Warning => 1,
-            Severity::Info => 2,
+    /// The outline's Issues mode (DESIGN.md §3): filter chips with each
+    /// severity's count, then the problems, errors first. A click goes to
+    /// the problem; returns whether one was clicked.
+    pub(super) fn issues_list(&mut self, ui: &mut egui::Ui) -> bool {
+        let summary = Summary::of(self.problems());
+        let counts = [summary.errors, summary.warnings, summary.infos];
+        ui.horizontal_wrapped(|ui| {
+            for (i, name) in ["errors", "warnings", "infos"].into_iter().enumerate() {
+                let chip = format!("{} {name}", counts[i]);
+                if ui.selectable_label(self.wb.issue_filter[i], chip).clicked() {
+                    self.wb.issue_filter[i] ^= true;
+                }
+            }
         });
+        let filter = self.wb.issue_filter;
+        // Errors first, then warnings, then infos, each in check order.
+        let mut problems: Vec<(usize, Problem)> = self
+            .problems()
+            .iter()
+            .cloned()
+            .enumerate()
+            .filter(|(_, p)| filter[severity_rank(p.severity)])
+            .collect();
+        problems.sort_by_key(|(_, p)| severity_rank(p.severity));
         let mut go = None;
-        let area = egui::Area::new(egui::Id::new("issues"))
-            .order(egui::Order::Foreground)
-            .pivot(egui::Align2::RIGHT_TOP)
-            .fixed_pos(canvas.right_top() + egui::vec2(-8.0, 8.0))
-            .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.set_width(380.0);
-                    ui.small("ISSUES · F8 next");
-                    if problems.is_empty() {
-                        ui.weak("No issues");
-                    }
-                    egui::ScrollArea::vertical()
-                        .max_height(320.0)
-                        .show(ui, |ui| {
-                            for (i, p) in &problems {
-                                let mark = match p.severity {
-                                    Severity::Error => "⛔",
-                                    Severity::Warning => "⚠",
-                                    Severity::Info => "ℹ",
-                                };
-                                let text = format!("{mark} {}", p.message);
-                                if ui.selectable_label(false, text).clicked() {
-                                    go = Some(*i);
-                                }
-                            }
-                        });
-                });
+        if problems.is_empty() {
+            ui.weak(if summary.errors + summary.warnings + summary.infos == 0 {
+                "No issues"
+            } else {
+                "None shown. Turn a filter on."
             });
+        }
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                for (i, p) in &problems {
+                    let mark = match p.severity {
+                        Severity::Error => "⛔",
+                        Severity::Warning => "⚠",
+                        Severity::Info => "ℹ",
+                    };
+                    let text = format!("{mark} {}", p.message);
+                    if ui.selectable_label(false, text).clicked() {
+                        go = Some(*i);
+                    }
+                }
+            });
+        ui.weak("F8 next · Shift+F8 previous");
         if let Some(i) = go {
             self.go_problem(i);
         }
-        let escape = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
-        // The click on the pill that opened the list is not "elsewhere".
-        let on_pill = ctx
-            .pointer_interact_pos()
-            .is_some_and(|p| self.wb.pill_rect.contains(p));
-        if escape || (area.response.clicked_elsewhere() && go.is_none() && !on_pill) {
-            self.wb.issues_open = false;
+        go.is_some()
+    }
+
+    /// Shows the outline in Issues mode. With `toggle`, a second request
+    /// while the unpinned flyout already shows the issues closes it.
+    pub(super) fn show_issues(&mut self, toggle: bool) {
+        let showing = self.outline_mode == super::OutlineMode::Issues;
+        self.outline_mode = super::OutlineMode::Issues;
+        if !self.outline_pinned() {
+            self.outline_open = !(toggle && showing && self.outline_open);
         }
     }
 
@@ -175,5 +175,14 @@ impl NovoApp {
             _ => None,
         });
         self.jump(Place { page, symbol }, true);
+    }
+}
+
+/// The filter slot and sort order of a severity.
+fn severity_rank(severity: Severity) -> usize {
+    match severity {
+        Severity::Error => 0,
+        Severity::Warning => 1,
+        Severity::Info => 2,
     }
 }
