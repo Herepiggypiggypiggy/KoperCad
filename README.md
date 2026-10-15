@@ -36,10 +36,10 @@ What is verified and what is not:
 
 - **Verified on Linux:** `cargo fmt`, `cargo clippy -D warnings` and all workspace tests passed on
   every merge (about 920 tests at the last full count, 0 failing, a few ignored).
-- **Windows:** the repository is public, so GitHub Actions runs again and the Windows runner builds
-  main. Experimental Windows builds 1 to 4 have been published (build 4 is main `f6be257`) and have
-  been run by hand on the owner's PC. Everything merged after build 4 (see below) is not in any build
-  yet; no new build is cut until the owner asks for one.
+- **Windows:** the repository is public, so GitHub Actions runs again. The Windows CI job on main
+  builds and tests the workspace and passes on every recent main push. Experimental Windows builds
+  1 to 4 have been published (build 4 is main `f6be257`). Everything merged after build 4 is not in
+  any build yet; no new build is cut until the owner asks for one.
 - **Not yet done:** the in-app dialogs for several finished engines (see below), the full set of
   app-side revision features, and the cabinet, routing and full simulation phases.
 

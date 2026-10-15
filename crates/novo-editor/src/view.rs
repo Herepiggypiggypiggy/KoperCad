@@ -140,6 +140,9 @@ pub struct SchematicView {
     commands: Vec<&'static str>,
     /// Items a release would select while a selection box is dragged.
     band_count: Option<usize>,
+    /// The Preferences default for moving a symbol: its wires go along
+    /// (Shift then leaves them) or stay (Shift then takes them).
+    pub move_carries: bool,
     /// The press that closed a popup, until its release.
     swallow: bool,
     /// The move in progress was picked up by dragging a selected object (no
@@ -259,6 +262,7 @@ impl SchematicView {
             goto: None,
             commands: Vec::new(),
             band_count: None,
+            move_carries: false,
             swallow: false,
             drag_move: false,
             wire_part: None,
@@ -531,7 +535,11 @@ impl SchematicView {
                 .editor
                 .part_delta(document, drag.part.wire, kind, drag.from, drag.to);
             let mut pts = vec![a];
-            pts.extend(crate::edit::moved_route(a, &w.route, b, kind, delta));
+            pts.extend(
+                self.editor
+                    .moved_route(document, drag.part.wire, kind, delta)
+                    .unwrap_or_default(),
+            );
             pts.push(b);
             items.push(Item::new(layer).unselectable().with(Primitive::stroked(
                 Shape::polyline(pts.iter().map(|p| model::vec(*p)), false),
@@ -737,10 +745,14 @@ impl SchematicView {
                     // A press on text moves the text and nothing else.
                     self.label_drag = label_drag;
                 } else if matches!(scene.model_id(hit.id), Some(AnyId::Symbol(_))) {
-                    let carry = ui.input(|i| i.modifiers.shift);
+                    let carry = ui.input(|i| i.modifiers.shift) != self.move_carries;
                     self.drag_move = self.editor.begin_move_with(&selection, carry);
                 }
             }
+        }
+        if matches!(self.editor.tool(), crate::tool::Tool::Move(_)) {
+            let carry = ui.input(|i| i.modifiers.shift) != self.move_carries;
+            self.editor.set_move_carry(carry);
         }
         if let Some(w) = out.cursor_raw {
             self.editor.hover(document, page, point(w), tolerance);
@@ -1562,7 +1574,11 @@ impl SchematicView {
                                 }
                             });
                         }
-                        if ui.button("Show where it goes").clicked() {
+                        if ui
+                            .button("Show where it goes")
+                            .on_hover_text("Selects what carries it on this page")
+                            .clicked()
+                        {
                             chosen = Some(MenuChoice::ShowWhere);
                         }
                         ui.separator();
