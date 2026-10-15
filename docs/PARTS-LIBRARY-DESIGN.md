@@ -123,7 +123,7 @@ Direction: the user downloads the models themselves, the data is saved on
 their device, and importing a part is one click, like the Eplan Data
 Portal. Nothing goes through our servers and nothing is bundled.
 
-**The part browser.** A drawer lists parts from the local catalog (the
+**The part browser.** A window (opened by the `parts` command) lists parts from the local catalog (the
 authored core set plus everything already imported) and from a small
 bundled **index of article numbers and maker page links** (links only,
 no maker content; to be confirmed with the makers in section 2a). Each row

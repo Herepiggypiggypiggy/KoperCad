@@ -275,6 +275,103 @@ for p in ("motors/motor_1ph", "motors/motor_3ph", "motors/motor_3ph_6t", "motors
     add(p, motor)
 add("transformers/transformer_1ph", transformer_1ph)
 
+
+# ---- breadth: passives, signalling, protection with N or earth leakage, transformers
+
+
+def zig(x, y0=4, y1=12):
+    """The zigzag NFPA draws for a resistance or heating element."""
+    h = y1 - y0
+    return PL([[x, y0], [x - 2, y0 + h / 8], [x + 2, y0 + 3 * h / 8], [x - 2, y0 + 5 * h / 8],
+               [x + 2, y0 + 7 * h / 8], [x, y1]])
+
+
+def resistive(src, drop_inner=False):
+    """The IEC graphics with every resistor rectangle replaced by a zigzag."""
+    g = []
+    for item in src["graphics"]:
+        if item["kind"] == "rect":
+            g.append(zig(item["at"][0] + item["size"][0] / 2, item["at"][1],
+                         item["at"][1] + item["size"][1]))
+        elif drop_inner and item["kind"] == "line" and item["from"][1] == 4 and item["to"][1] == 12:
+            continue
+        else:
+            g.append(item)
+    return g
+
+
+def potentiometer(src):
+    return [
+        L([0, 0], [0, 4]), zig(0), L([0, 12], [0, 16]),
+        L([8, 0], [8, 8]), L([8, 8], [1, 8]), PL([[1, 8], [2.6, 7.2], [2.6, 8.8]], True, True),
+    ]
+
+
+def round_alarm(text, size):
+    def build(src):
+        return [L([0, 0], [0, 4]), C([0, 8], 4), T([0, 8], text, size), L([0, 12], [0, 16])]
+    return build
+
+
+def surge(src):
+    return [
+        L([0, 0], [0, 6]), PL([[-1.8, 6], [1.8, 6], [0, 7.7]], True, True),
+        PL([[-1.8, 10], [1.8, 10], [0, 8.3]], True, True), L([0, 10], [0, 16]),
+    ]
+
+
+def inductor_core(src):
+    return [g for g in src["graphics"] if not (g["kind"] == "line" and g["from"][0] == 2.5)] + [
+        L([2.5, 4.5], [2.5, 11.5]), L([3.3, 4.5], [3.3, 11.5])]
+
+
+def leakage(src):
+    """Breaker poles with the IEC sensing ring, link and text; solid pole drawing replaced."""
+    g = [i for i in src["graphics"] if not (i["kind"] == "line" and i.get("stroke") != "dashed")]
+    for i in g:
+        if i["kind"] == "text" and i["text"] == "IΔ":
+            i["text"] = "GFI"
+    for x in xs_of(src):
+        g += breaker_pole(x) + [L([x, 16], [x, 24])]
+    return g
+
+
+def emc(src):
+    return [i for i in src["graphics"] if i["kind"] != "text"] + [T([12, 12], "FILTER", 2.2)]
+
+
+def transformer_3ph(src):
+    g = []
+    for x in (0, 8, 16):
+        g += [L([x, 0], [x, 6]), L([x, 34], [x, 40])]
+        for y in (7, 9, 11, 13):
+            g.append(A([x, y], 1, -90, 90))
+        for y in (27, 29, 31, 33):
+            g.append(A([x, y], 1, -90, 90))
+    g += [L([-2, 19], [18, 19]), L([-2, 21], [18, 21])]
+    return g
+
+
+for path in ("passive/resistor", "passive/thermistor_ntc", "passive/thermistor_ptc",
+             "passive/photoresistor", "passive/resistor_variable", "passive/varistor",
+             "passive/heater_3ph"):
+    add(path, resistive)
+add("passive/heater", lambda src: resistive(src, True))
+add("passive/potentiometer", potentiometer)
+add("passive/inductor_core", inductor_core)
+add("signalling/horn", round_alarm("HORN", 1.8))
+add("signalling/bell", round_alarm("BELL", 1.8))
+add("signalling/buzzer", round_alarm("BZ", 2.5))
+add("protection/surge_arrester", surge)
+add("protection/mcb_1p_n", multi(breaker_pole))
+add("protection/mcb_3p_n", multi(breaker_pole))
+for kind in ("rcd", "rcbo"):
+    for n in ("2p", "4p"):
+        add(f"protection/{kind}_{n}", leakage)
+add("motors/motor_3ph_dahlander", motor)
+add("transformers/emc_filter", emc)
+add("transformers/transformer_3ph", transformer_3ph)
+
 # Same artwork in both standards: copied unchanged.
 SAME = [
     "connectivity/*", "earth/*", "terminals/*", "measuring/*", "sources/*", "supplies/*",
@@ -282,7 +379,8 @@ SAME = [
     "passive/bridge_rectifier", "passive/capacitor", "passive/capacitor_polarized",
     "passive/capacitor_variable", "passive/diode", "passive/led", "passive/photodiode",
     "passive/zener_diode", "passive/thyristor", "passive/triac", "passive/transistor_npn",
-    "passive/transistor_pnp",
+    "passive/transistor_pnp", "passive/inductor", "transformers/reactor_3ph",
+    "switches/changeover_switch_3p",
 ]
 
 # New NFPA symbols: pilot lights carry the colour letter in the circle.
