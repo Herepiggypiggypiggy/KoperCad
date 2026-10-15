@@ -65,7 +65,7 @@ impl ChangesMode {
 
 /// The objects a change shows as on `page` in `project`: the object itself,
 /// or the symbols and wires that draw a device, terminal or cable.
-fn shown_on(project: &Project, id: AnyId, page: PageId) -> Vec<AnyId> {
+pub(super) fn shown_on(project: &Project, id: AnyId, page: PageId) -> Vec<AnyId> {
     match id {
         AnyId::Symbol(_) | AnyId::Wire(_) | AnyId::Text(_) | AnyId::Junction(_) => project
             .record(id)
@@ -482,6 +482,21 @@ impl NovoApp {
                     if response.clicked() && project.page(*id).is_some() {
                         chosen = Some(*id);
                     }
+                    response.context_menu(|ui| {
+                        let exists = project.page(*id).is_some();
+                        if ui
+                            .add_enabled(exists, egui::Button::new("Open page"))
+                            .on_disabled_hover_text("The page was removed since the revision")
+                            .clicked()
+                        {
+                            chosen = Some(*id);
+                            ui.close();
+                        }
+                        if ui.button("Copy summary").clicked() {
+                            ui.ctx().copy_text(format!("{label}  {counts}"));
+                            ui.close();
+                        }
+                    });
                     for row in all_rows.iter().filter(|r| r.page == Some(*id)) {
                         let text = format!("{} {}", kind_mark(&row.kind), row.label);
                         if ui.selectable_label(false, text).clicked() {

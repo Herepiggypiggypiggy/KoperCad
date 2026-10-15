@@ -1,7 +1,10 @@
 //! Placing a macro: tags, wire numbers, preview and undo.
 
 use novo_core::*;
-use novo_workflow::macro_place::{PlaceOptions, WireNumbers, place_macro, preview};
+use novo_workflow::macro_place::{
+    PlaceOptions, WireNumbers, capture, captured_parts, free_origin, parts_from_json,
+    parts_to_json, place_macro, preview, selection_origin,
+};
 
 fn tag(text: &str) -> DeviceTag {
     DeviceTag::parse(text).unwrap()
@@ -96,13 +99,48 @@ fn place(
 }
 
 #[test]
-fn tags_continue_and_wire_numbers_are_cleared() {
+fn tags_continue_and_placed_wires_are_numbered_by_the_scheme() {
     let (mut doc, page) = target();
     let placed = place(&mut doc, page, &PlaceOptions::default());
     assert_eq!(placed.report.tags, vec![tag("=A1-M1"), tag("=A1-Q2")]);
     assert_eq!(placed.report.cleared_wires, 1);
     assert!(placed.report.kept_wire_numbers.is_empty());
     assert!(!placed.report.reused_definition);
+    assert_eq!(placed.report.numbered_wires, vec!["1".to_string()]);
+    let mut numbers: Vec<_> = doc
+        .project()
+        .wires()
+        .filter_map(|w| w.number.clone())
+        .collect();
+    numbers.sort();
+    assert_eq!(numbers, ["1", "W1"], "the target's own number is untouched");
+}
+
+#[test]
+fn the_project_scheme_decides_the_placed_numbers() {
+    let (mut doc, page) = target();
+    doc.transact("Scheme", |tx| {
+        let mut scheme = novo_numbering::Scheme::new(novo_numbering::SchemeKind::ByPage);
+        scheme.prefix = "C".into();
+        scheme.store(tx)
+    })
+    .unwrap();
+    let placed = place(&mut doc, page, &PlaceOptions::default());
+    assert_eq!(placed.report.numbered_wires, vec!["C1.1".to_string()]);
+    // A second placement continues the series.
+    let again = place(&mut doc, page, &PlaceOptions::default());
+    assert_eq!(again.report.numbered_wires, vec!["C1.2".to_string()]);
+}
+
+#[test]
+fn clear_leaves_the_placed_wires_unnumbered() {
+    let (mut doc, page) = target();
+    let options = PlaceOptions {
+        wire_numbers: WireNumbers::Clear,
+        ..PlaceOptions::default()
+    };
+    let placed = place(&mut doc, page, &options);
+    assert!(placed.report.numbered_wires.is_empty());
     let numbered = doc.project().wires().filter(|w| w.number.is_some()).count();
     assert_eq!(numbered, 1, "only the target's own wire is numbered");
 }
@@ -117,6 +155,7 @@ fn keep_drops_a_clashing_number_and_says_so() {
     let placed = place(&mut doc, page, &options);
     assert_eq!(placed.report.clashes, vec!["W1".to_string()]);
     assert!(placed.report.kept_wire_numbers.is_empty());
+    assert_eq!(placed.report.numbered_wires, vec!["1".to_string()]);
 
     // In an empty project the number survives.
     let mut empty = Document::default();
@@ -170,4 +209,146 @@ fn a_different_definition_under_the_same_name_is_refused() {
         place_macro(tx, other, page, Point::default(), &PlaceOptions::default())
     });
     assert!(matches!(result, Err(ModelError::DuplicateBlock(_))));
+}
+
+#[test]
+fn capture_leaves_the_project_alone_and_places_elsewhere() {
+    let (mut doc, page) = target();
+    let items: Vec<AnyId> = doc.project().symbols().map(|s| s.id.into()).collect();
+    let before = doc.project().to_json();
+    let def = capture(doc.project(), "pair", "Two symbols", &items).unwrap();
+    assert_eq!(doc.project().to_json(), before);
+    assert_eq!(def.name, "pair");
+    assert_eq!(def.description, "Two symbols");
+    assert_eq!(
+        selection_origin(doc.project(), &items),
+        Point::new(0.0, 0.0)
+    );
+
+    let origin = free_origin(doc.project(), page, 20.0);
+    assert_eq!(origin, Point::new(20.0, 0.0));
+    let (placed, _) = doc
+        .transact("Place macro", |tx| {
+            place_macro(tx, def, page, origin, &PlaceOptions::default())
+        })
+        .unwrap();
+    assert_eq!(placed.report.tags, vec![tag("=A1-Q2")]);
+}
+
+#[test]
+fn capture_refuses_terminals_and_an_empty_page_has_the_origin() {
+    let mut doc = Document::default();
+    let (_page, _) = doc
+        .transact("Draw", |tx| {
+            let page = tx.add_page("1")?;
+            let strip = tx.add_terminal_strip(tag("=A1-X1"))?;
+            let t = tx.add_terminal(strip, "1")?;
+            tx.place_symbol(
+                page,
+                "terminal",
+                Placement::at(Point::new(5.0, 5.0)),
+                pins(),
+                SymbolRole::Terminal { terminals: vec![t] },
+            )?;
+            Ok(page)
+        })
+        .unwrap();
+    let items: Vec<AnyId> = doc.project().symbols().map(|s| s.id.into()).collect();
+    assert!(capture(doc.project(), "x", "", &items).is_err());
+    let (empty, _) = doc.transact("Page", |tx| tx.add_page("2")).unwrap();
+    assert_eq!(
+        free_origin(doc.project(), empty, 20.0),
+        Point::new(0.0, 0.0)
+    );
+}
+
+#[test]
+fn free_origin_clears_the_pins_of_a_wide_symbol() {
+    let mut doc = Document::default();
+    let (page, _) = doc
+        .transact("Draw", |tx| {
+            let page = tx.add_page("1")?;
+            tx.place_symbol(
+                page,
+                "x",
+                Placement::at(Point::new(10.0, 4.0)),
+                vec![Pin::new("1", 0.0, 0.0), Pin::new("2", 50.0, 0.0)],
+                SymbolRole::Unassigned,
+            )?;
+            Ok(page)
+        })
+        .unwrap();
+    assert_eq!(
+        free_origin(doc.project(), page, 20.0),
+        Point::new(80.0, 4.0)
+    );
+}
+
+#[test]
+fn parts_travel_with_the_macro_and_are_added_once() {
+    let (mut doc, page) = target();
+    let (items, _) = doc
+        .transact("Part", |tx| {
+            let q = tx.project().devices().next().unwrap().id;
+            let part = tx.add_part("ABB", "2CDS253001R0164")?;
+            tx.update::<Part>(part, |p| p.description = "MCB 1P 16A".into())?;
+            tx.assign_part(q, part)?;
+            Ok(tx
+                .project()
+                .symbols()
+                .map(|s| AnyId::from(s.id))
+                .collect::<Vec<_>>())
+        })
+        .unwrap();
+    let def = capture(doc.project(), "pair", "", &items).unwrap();
+    let parts = captured_parts(doc.project(), &def);
+    assert_eq!(parts.len(), 1);
+    assert_eq!(parts[0].order_number, "2CDS253001R0164");
+
+    // Through the file's JSON and into a project that has no such part.
+    let parts = parts_from_json(&parts_to_json(&parts));
+    assert_eq!(parts.len(), 1);
+    assert!(parts_from_json(&serde_json::json!([{"device": "x"}, 3])).is_empty());
+    let mut empty = Document::default();
+    let (p, _) = empty.transact("Page", |tx| tx.add_page("1")).unwrap();
+    let options = PlaceOptions {
+        parts,
+        ..PlaceOptions::default()
+    };
+    let place_here = |doc: &mut Document| {
+        let def = def.clone();
+        let options = options.clone();
+        doc.transact("Place", move |tx| {
+            place_macro(tx, def, p, Point::default(), &options)
+        })
+        .unwrap()
+        .0
+    };
+    let first = place_here(&mut empty);
+    assert_eq!(first.report.parts_assigned, 1);
+    place_here(&mut empty);
+    assert_eq!(empty.project().parts().count(), 1, "the part is added once");
+    let part = empty.project().parts().next().unwrap();
+    assert_eq!(part.description, "MCB 1P 16A");
+    let assigned = empty
+        .project()
+        .devices()
+        .filter(|d| d.parts == vec![part.id])
+        .count();
+    assert_eq!(assigned, 2);
+
+    // Without parts in the options none is assigned.
+    let plain = doc
+        .transact("Place", |tx| {
+            place_macro(
+                tx,
+                def.clone(),
+                page,
+                Point::new(100.0, 0.0),
+                &PlaceOptions::default(),
+            )
+        })
+        .unwrap()
+        .0;
+    assert_eq!(plain.report.parts_assigned, 0);
 }
