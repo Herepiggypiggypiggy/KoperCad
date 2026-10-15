@@ -2775,3 +2775,46 @@ fn plc_tags_leave_as_files_and_the_programmers_edits_come_back() {
             .contains("ESTOP_OK;BOOL;Emergency stop healthy")
     );
 }
+
+#[test]
+fn switching_placed_symbols_follows_the_plan_in_one_undo_step() {
+    use novo_core::{Pin, Point, SymbolRole};
+    use novo_symbols::Pack;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let page = d.page();
+    let (coil, _) = d
+        .app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("setup", |tx| {
+            tx.place_symbol(
+                page,
+                "iec/contacts/no",
+                novo_core::Placement::at(Point::new(40.0, 50.0)),
+                vec![Pin::new("1", 0.0, 0.0), Pin::new("2", 0.0, 8.0)],
+                SymbolRole::Unassigned,
+            )
+        })
+        .unwrap();
+    let key = |d: &Drive| d.doc().project().symbol(coil).unwrap().symbol.0.clone();
+
+    // Choosing NFPA alone leaves placed symbols as drawn; the plan lists them.
+    d.app.set_standard(Pack::Nfpa);
+    d.frame();
+    assert_eq!(key(&d), "iec/contacts/no");
+    let plan = novo_workflow::switch::plan(d.doc().project(), Pack::Nfpa);
+    assert_eq!(plan.rekey.len(), 1);
+
+    d.app.switch_placed_symbols();
+    d.frame();
+    assert_eq!(key(&d), "nfpa/contacts/no");
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(key(&d), "iec/contacts/no");
+    assert_eq!(d.app.standard(), Pack::Nfpa, "undo takes the keys only");
+}
