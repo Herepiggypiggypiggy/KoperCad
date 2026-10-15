@@ -19,3 +19,10 @@ Next: export command (menu, CLI), then the large-target tablet layout in novo-ap
 - CLI: `kopercad-cli commissioning-report <project> [-o out.pdf|.csv|.xlsx]` (CSV on stdout without -o).
 - Still open: File/Export menu item (UI integration thread, PR #452 export_menu), xlsx button, and the "Touch layout" toggle for the tablet layout (Workspaces thread).
 Code: novo_reports::commissioning, novo_pdf::{export_report_pdf, report_bytes}, novo-app app/commissioning.rs, novo-cli lib.rs.
+
+## Paused (usage limit, 2026-10-15 19:50 UTC): what is left
+- PR #503 (entry points) is in review with Main reviewer C; if it is READY, do not push to it, follow-ups go in a new PR from main.
+- File/Export menu item: add "Commissioning report..." to the Export submenu (export_menu in app/reports_hub.rs, #452) calling `export.commissioning`.
+- Tablet layout: not started. Workspaces thread reserved View > Touch layout (docs/design/workspaces.md 5.3b): register `view.touch_layout` in novo-workflow COMMANDS with a Dutch word, a placement in menus.rs, setting in Settings, off by default, 32 px minimum rows. The Commissioning tab already uses 44 px buttons (TOUCH in app/commissioning.rs); the toggle should scale the whole tab and dock.
+- Workspaces thread asked that the report also appear in the Reports workspace (#475) as a report id. It reads the sidecar store, not the Project, so it cannot be a plain `Report`; needs the hub to pass the store, or a Report built over a snapshot.
+- xlsx button in the panel (engine supports it).
