@@ -76,6 +76,9 @@ impl Aabb {
     /// `None` when the ray misses. `t_near` may be negative when the origin
     /// is inside.
     pub fn ray_interval(&self, ray: &Ray) -> Option<(f32, f32)> {
+        // A zero direction component gives an infinite `inv`; an origin exactly
+        // on that slab's boundary makes `0 * inf = NaN`, which `Vec3::min` and
+        // `max` ignore, so the slab then simply does not constrain the ray.
         let inv = ray.dir.recip();
         let t1 = (self.min - ray.origin) * inv;
         let t2 = (self.max - ray.origin) * inv;

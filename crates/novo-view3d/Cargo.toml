@@ -5,13 +5,44 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = ["model", "egui"]
+# Scene builder from the project (the only code that reads novo-core / novo-layout).
+model = ["dep:novo-core", "dep:novo-layout"]
+# The wgpu renderer (`render`). Headless users (novo-cli, novo-py) turn default
+# features off and never link wgpu.
+gpu = ["dep:wgpu"]
+# egui widget and paint callback for embedding the view in eframe.
+egui = ["gpu", "dep:egui", "dep:egui-wgpu"]
+
 [dependencies]
+novo-core = { workspace = true, optional = true }
+novo-layout = { workspace = true, optional = true }
 bytemuck = { workspace = true }
+egui = { workspace = true, optional = true }
+egui-wgpu = { workspace = true, optional = true }
 glam = { workspace = true }
+wgpu = { workspace = true, optional = true }
 
 [dev-dependencies]
+eframe = { workspace = true }
+flate2 = { workspace = true }
+naga = { version = "30", features = ["wgsl-in"] }
+pollster = "1"
 egui = { workspace = true }
 novo-theme = { workspace = true }
+
+[[example]]
+name = "orbit"
+required-features = ["gpu"]
+
+[[example]]
+name = "window"
+required-features = ["egui"]
+
+[[test]]
+name = "gpu"
+required-features = ["gpu"]
 
 [lints]
 workspace = true
