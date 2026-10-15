@@ -1901,6 +1901,7 @@ dependencies = [
  "novo-core",
  "novo-parts",
  "novo-plc",
+ "novo-symbols",
  "novo-terminals",
  "novo-tests",
 ]
@@ -1950,10 +1951,12 @@ dependencies = [
 name = "novo-interop"
 version = "0.1.0"
 dependencies = [
+ "calamine",
  "novo-canvas",
  "novo-core",
  "novo-parts",
  "novo-tests",
+ "rust_xlsxwriter",
  "thiserror 2.0.21",
 ]
 
@@ -1970,6 +1973,7 @@ version = "0.1.0"
 dependencies = [
  "dirs",
  "novo-core",
+ "novo-symbols",
  "novo-terminals",
  "novo-tests",
  "quick-xml",
@@ -2030,6 +2034,7 @@ dependencies = [
  "novo-cables",
  "novo-core",
  "novo-plc",
+ "novo-routing",
  "novo-terminals",
  "novo-tests",
  "rust_xlsxwriter",
