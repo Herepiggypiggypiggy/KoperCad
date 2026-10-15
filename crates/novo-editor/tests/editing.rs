@@ -1945,7 +1945,7 @@ fn a_double_click_on_nothing_ends_the_wire_as_an_open_end_in_both_modes() {
 #[test]
 fn dragging_an_inner_run_slides_both_its_corners_across_it() {
     use novo_editor::edit::PartKind;
-    let (mut doc, page, mut editor, [a, b, _]) = three_contacts();
+    let (mut doc, _page, mut editor, [a, b, _]) = three_contacts();
     let from = doc.project().symbol(a).unwrap().pin_position(0).unwrap();
     let to = doc.project().symbol(b).unwrap().pin_position(0).unwrap();
     // Up, across, down: the middle run is vertical-free, horizontal here.
