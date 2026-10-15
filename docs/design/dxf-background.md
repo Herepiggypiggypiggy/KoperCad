@@ -1,8 +1,8 @@
 # DXF as a page background: data-model options (WS-24)
 
-Status: decision proposal, written so the entry points could ship first.
+Status: option B accepted (coordinator, 2026-10-15) and built: `novo_interop::underlay`,
+`PageScene::set_underlay`, File > DXF background (Import, Hide/Show, Remove).
 Export (File > Export DXF, `kopercad-cli export dxf`) needs none of this.
-Import is blocked only on where an imported drawing lives.
 
 ## What the designer wants
 
@@ -46,7 +46,14 @@ small enough that autosave and snapshots stay quick, and undo like any edit.
 - Per-layer visibility of the imported drawing (proposal: after the first
   version, as a list in the inspector).
 
-## Next steps once B is accepted
+## Built
+
+Import (cap 2 MB, hidden layers dropped, millimetres, moved to the page's inner
+corner), draw on an `Underlay` canvas layer, hide/show and remove as one undo
+step each. Not built yet: move and scale controls (the properties exist),
+per-layer visibility, printing the background.
+
+## Original plan
 
 1. `novo-interop`: `underlay_from_dxf(bytes) -> Underlay { text, report }`
    (clean, scale to mm, cap).

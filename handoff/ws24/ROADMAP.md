@@ -14,7 +14,7 @@ engines first; everything offline, no admin rights. Design: `docs/design/interop
 
 ## Next, in order
 1. Entry points: CLI `export dxf` and File > Export DXF are in the entry-points PR; Python binding (`novo-py`) still open.
-2. DXF as page background: `docs/design/dxf-background.md` proposes page properties (option B); needs the lead's nod, then reader-to-underlay, canvas layer, File > Import DXF.
+2. DXF as page background: option B accepted and built (interop `underlay`, canvas `Underlay` layer, File > DXF background). Left: move/scale controls, per-layer visibility, print option, `kopercad-cli` inspect.
 3. Excel round trip for the parts list and the I/O list (after the PLC tag table export).
 
 ## Open questions

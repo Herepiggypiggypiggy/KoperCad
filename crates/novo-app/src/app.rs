@@ -682,6 +682,7 @@ impl NovoApp {
                 if self.is_open() {
                     self.update_marks();
                     self.update_sheet();
+                    self.update_underlay();
                     let open = self
                         .current_page
                         .and_then(|page| OpenPage::new(&mut *self.backend, page));
@@ -914,6 +915,28 @@ impl NovoApp {
             self.export_pdf();
             ui.close();
         }
+        ui.add_enabled_ui(self.current_page.is_some(), |ui| {
+            ui.menu_button("DXF background", |ui| {
+                if ui.button("Import DXF...").clicked() {
+                    self.import_dxf_background();
+                    ui.close();
+                }
+                let has = self.has_background();
+                let label = if self.background_shown() {
+                    "Hide"
+                } else {
+                    "Show"
+                };
+                if ui.add_enabled(has, egui::Button::new(label)).clicked() {
+                    self.toggle_background();
+                    ui.close();
+                }
+                if ui.add_enabled(has, egui::Button::new("Remove")).clicked() {
+                    self.remove_background();
+                    ui.close();
+                }
+            });
+        });
         ui.add_enabled_ui(self.is_open(), |ui| {
             ui.menu_button("Export DXF", |ui| {
                 if ui

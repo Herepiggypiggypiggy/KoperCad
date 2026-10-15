@@ -103,6 +103,9 @@ pub(crate) struct Workbench {
     pub(super) live: super::live::LiveView,
     /// Changes mode, while it is on.
     pub(super) changes: Option<super::changes::ChangesMode>,
+    /// The background drawing last handed to the canvas: page, project
+    /// revision and the key it has.
+    pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
 }
 
 impl Workbench {
@@ -152,6 +155,7 @@ impl Default for Workbench {
             last_export: None,
             live: Default::default(),
             changes: None,
+            underlay_seen: None,
         }
     }
 }

@@ -9,7 +9,8 @@
 
 use std::path::{Path, PathBuf};
 
-use novo_core::PageId;
+use novo_core::{Command, PageId, Value};
+use novo_interop::underlay as bg;
 
 use super::{Level, NovoApp, projects_dir};
 
@@ -121,6 +122,145 @@ impl NovoApp {
             self.wb.last_export = Some(last.clone());
         }
         written
+    }
+}
+
+impl NovoApp {
+    /// Asks for a DXF and shows it under the current page.
+    pub(super) fn import_dxf_background(&mut self) {
+        let mut dialog = rfd::FileDialog::new()
+            .set_title("Import DXF as background")
+            .add_filter("DXF drawing", &["dxf"]);
+        if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
+            dialog = dialog.set_directory(dir);
+        }
+        if let Some(path) = dialog.pick_file() {
+            self.import_dxf_background_from(&path);
+        }
+    }
+
+    /// Stores the DXF at `path` in the current page's properties (one undo
+    /// step). It is reference geometry: no devices or wires come from it.
+    pub fn import_dxf_background_from(&mut self, path: &Path) -> bool {
+        let Some(page) = self.current_page else {
+            self.message(Level::Info, "Open a page first");
+            return false;
+        };
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let import = std::fs::read(path)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| bg::import_underlay(&bytes, &name).map_err(|e| e.to_string()));
+        let import = match import {
+            Ok(import) => import,
+            Err(e) => {
+                self.message(Level::Error, format!("Could not import {name}: {e}"));
+                return false;
+            }
+        };
+        let summary = import.summary(&name);
+        let commands = import
+            .properties
+            .into_iter()
+            .map(|(key, value)| Command::SetProperty {
+                target: page.into(),
+                key: key.to_string(),
+                value: Some(value),
+            })
+            .collect();
+        self.run_background(Command::Batch {
+            label: "Import DXF background".into(),
+            commands,
+        });
+        self.message(Level::Info, summary);
+        true
+    }
+
+    fn page_properties(&self) -> Option<&novo_core::Properties> {
+        let page = self.current_page?;
+        Some(&self.backend.document()?.project().page(page)?.properties)
+    }
+
+    pub(super) fn has_background(&self) -> bool {
+        self.page_properties()
+            .is_some_and(|p| bg::stored_text(p).is_some())
+    }
+
+    pub(super) fn background_shown(&self) -> bool {
+        self.page_properties().is_some_and(bg::is_visible)
+    }
+
+    pub(super) fn toggle_background(&mut self) {
+        let Some(page) = self.current_page else {
+            return;
+        };
+        let show = !self.background_shown();
+        self.run_background(Command::SetProperty {
+            target: page.into(),
+            key: bg::KEY_VISIBLE.into(),
+            value: Some(Value::Bool(show)),
+        });
+    }
+
+    pub(super) fn remove_background(&mut self) {
+        let Some(page) = self.current_page else {
+            return;
+        };
+        let keys = [
+            bg::KEY_DXF,
+            bg::KEY_HEIGHT,
+            bg::KEY_NAME,
+            bg::KEY_DX,
+            bg::KEY_DY,
+            bg::KEY_SCALE,
+            bg::KEY_VISIBLE,
+        ];
+        self.run_background(Command::Batch {
+            label: "Remove DXF background".into(),
+            commands: keys
+                .into_iter()
+                .map(|key| Command::SetProperty {
+                    target: page.into(),
+                    key: key.into(),
+                    value: None,
+                })
+                .collect(),
+        });
+    }
+
+    fn run_background(&mut self, command: Command) {
+        if let Some(Err(e)) = self.execute(command) {
+            self.message(
+                Level::Error,
+                format!("Could not change the background: {e}"),
+            );
+        }
+    }
+
+    /// Hands the shown page's background to the canvas before it draws.
+    /// The drawing is parsed only when the page or the project changed.
+    pub(super) fn update_underlay(&mut self) {
+        let Some(page) = self.current_page else {
+            return;
+        };
+        let Some(project) = self.backend.document().map(|d| d.project()) else {
+            return;
+        };
+        let revision = project.revision();
+        let seen = self.wb.underlay_seen;
+        let key = match seen {
+            Some((p, r, key)) if p == page && r == revision => key,
+            _ => project
+                .page(page)
+                .and_then(|p| bg::cache_key(&p.properties)),
+        };
+        self.wb.underlay_seen = Some((page, revision, key));
+        let props = project.page(page).map(|p| &p.properties);
+        if let Some(view) = self.canvas.schematic() {
+            view.set_underlay(key, || props.and_then(bg::underlay_of));
+        }
     }
 }
 

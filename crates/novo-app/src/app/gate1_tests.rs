@@ -441,6 +441,31 @@ fn gate1_motor_starter_through_the_window() {
         files,
         "a second export replaces the first"
     );
+    // A DXF as background: shown under the page, one undo step, never
+    // exported by the page exporters.
+    let background = d.app.import_dxf_background_from(&files[0]);
+    assert!(background, "{:?}", d.app.messages().last());
+    d.frame();
+    let underlay_items = |d: &Drive| {
+        let view = d.app.canvas.schematic_ref().unwrap();
+        let page = view.scene().unwrap();
+        let layer = page.layers().underlay;
+        Some(
+            page.scene()
+                .iter()
+                .filter(|(_, it)| it.layer == layer)
+                .count(),
+        )
+    };
+    assert_eq!(underlay_items(&d), Some(1), "the background is one item");
+    d.app.toggle_background();
+    d.frame();
+    assert_eq!(underlay_items(&d), Some(0), "hidden");
+    d.app.toggle_background();
+    d.app.remove_background();
+    d.frame();
+    assert_eq!(underlay_items(&d), Some(0));
+    assert!(!d.app.has_background());
     // NOVO_GATE1_OUT=<dir> keeps the project and the PDF, for screenshots.
     if let Some(out) = std::env::var_os("NOVO_GATE1_OUT") {
         let out = std::path::PathBuf::from(out);
