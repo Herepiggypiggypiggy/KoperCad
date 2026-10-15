@@ -19,6 +19,7 @@ use crate::lines::{self, elbow, exact_bends, lock_axis};
 use crate::naming::{self, Numbering, parse_tag_input, tag_conflict};
 use crate::overlap::Refusal;
 use crate::potential::{self, FEED_SYMBOL, PotentialMenu, Suggestion};
+use crate::row::{self, RowDrag};
 
 /// Placing one symbol, over and over.
 #[derive(Debug, Clone, PartialEq)]
@@ -253,6 +254,7 @@ pub struct Editor {
     hovered: Option<(PageId, f64)>,
     notice: Option<String>,
     link_hint: Option<String>,
+    row: Option<RowDrag>,
     changes: ChangeSet,
     select: Option<Vec<AnyId>>,
 }
@@ -284,6 +286,7 @@ impl Editor {
             hovered: None,
             notice: None,
             link_hint: None,
+            row: None,
             changes: ChangeSet::default(),
             select: None,
         }
@@ -454,8 +457,117 @@ impl Editor {
         self.set_tool(Tool::Wire(WireTool::default()));
     }
 
+    /// A press with a symbol on the pointer: a drag from here places a row
+    /// (DESIGN.md §4, "Placing a row"). `false` when there is nothing to
+    /// place in a row (no symbol, or a child symbol of a given device).
+    pub fn begin_row(&mut self) -> bool {
+        let (Tool::Place(p), Some(at)) = (&self.tool, self.cursor) else {
+            return false;
+        };
+        if p.parent.is_some() {
+            return false;
+        }
+        self.proposals.clear();
+        self.row = Some(RowDrag::new(at));
+        true
+    }
+
+    /// Whether a row is being dragged out.
+    pub fn row_active(&self) -> bool {
+        self.row.is_some() && matches!(self.tool, Tool::Place(_))
+    }
+
+    /// The pointer moved during a row drag.
+    pub fn row_follow(&mut self, pointer: Point, hysteresis: f64) {
+        if let Some(r) = &mut self.row {
+            r.follow(pointer, hysteresis);
+        }
+    }
+
+    /// `+` or `-` (or the wheel) during a row drag: one grid step wider or
+    /// narrower.
+    pub fn row_step(&mut self, delta: i32) {
+        if let Some(r) = &mut self.row {
+            r.extra_steps += delta;
+        }
+    }
+
+    /// Where the row's symbols go now and the position it stopped before.
+    fn row_plan(&self, doc: &Document, page: PageId) -> Option<(Vec<Point>, Option<Point>, f64)> {
+        let (Tool::Place(p), Some(r)) = (&self.tool, &self.row) else {
+            return None;
+        };
+        let symbol = self.catalog.get(&p.symbol)?;
+        let placement = Placement {
+            origin: r.press,
+            rotation: p.rotation,
+            mirrored: p.mirrored,
+        };
+        let pitch = row::pitch(symbol, &placement, r, self.grid);
+        let (at, stopped) = row::positions(
+            doc.project(),
+            &self.catalog,
+            page,
+            symbol,
+            placement,
+            r,
+            self.grid,
+        );
+        Some((at, stopped, pitch))
+    }
+
+    /// Release: places the whole row as one undo step (a drag that never
+    /// got past one pitch places the single symbol).
+    pub fn end_row(&mut self, doc: &mut Document, page: PageId) -> Clicked {
+        let Some((at, _, _)) = self.row_plan(doc, page) else {
+            self.row = None;
+            return Clicked::Unhandled;
+        };
+        let Tool::Place(p) = self.tool.clone() else {
+            self.row = None;
+            return Clicked::Unhandled;
+        };
+        let press = self.row.take().map_or(Point::ZERO, |r| r.press);
+        if at.len() <= 1 {
+            return self.commit_place(doc, page, &p, at.first().copied().unwrap_or(press));
+        }
+        let Some(symbol) = self.catalog.get(&p.symbol).cloned() else {
+            return Clicked::Refused;
+        };
+        let options = PlaceOptions {
+            parent: None,
+            strip: self.strip,
+            auto_connect: self.auto_connect,
+            numbering: self.numbering,
+            ..PlaceOptions::default()
+        };
+        let label = format!("Place {} x{}", symbol.name, at.len());
+        let result = doc.transact(label, |tx| {
+            let mut ids = Vec::new();
+            for &origin in &at {
+                let placement = Placement {
+                    origin,
+                    rotation: p.rotation,
+                    mirrored: p.mirrored,
+                };
+                ids.push(edit::place(tx, page, &symbol, placement, &options)?);
+            }
+            Ok(ids)
+        });
+        let ids = result.as_ref().ok().map(|(ids, _)| ids.clone());
+        if result.is_ok() {
+            self.catalog.used(&p.symbol);
+        }
+        let r = self.finish(result.map(|(_, c)| c), None);
+        if let Some(ids) = ids {
+            self.propose(doc, &ids);
+        }
+        r
+    }
+
     /// Picks up the selection to move it with the pointer.
     pub fn begin_move(&mut self, selection: &[AnyId]) -> bool {
+        self.link_hint = None;
         let ids: Vec<AnyId> = selection
             .iter()
             .copied()
@@ -479,6 +591,10 @@ impl Editor {
 
     /// Escape, first rung: cancels the step in progress.
     pub fn cancel_step(&mut self) -> bool {
+        // Esc cancels a row drag and keeps the symbol on the pointer.
+        if self.row.take().is_some() {
+            return true;
+        }
         if !self.proposals.is_empty() {
             self.proposals.clear();
             return true;
@@ -1457,6 +1573,20 @@ impl Editor {
             // Quiet until something is in hand (DESIGN.md §3).
             Tool::Select if self.pin_hovered() => "Drag from the pin to connect".into(),
             Tool::Select => String::new(),
+            Tool::Place(_) if self.row.is_some() => {
+                match self.row_plan(doc, page) {
+                    Some((at, stopped, pitch)) => format!(
+                        "Row ×{} · pitch {pitch} mm{} · +/- spacing · R/X turn · Esc cancels",
+                        at.len(),
+                        if stopped.is_some() {
+                            " · stops before another device"
+                        } else {
+                            ""
+                        }
+                    ),
+                    None => String::new(),
+                }
+            }
             Tool::Place(p) => {
                 let name = self
                     .catalog
@@ -1541,22 +1671,28 @@ impl Editor {
             Tool::Place(p) => {
                 if let Some(symbol) = self.catalog.get(&p.symbol) {
                     let (bridges, pass_through) = model_groups(symbol);
-                    preview.symbols.push(SymbolInstance {
-                        id: SymbolId::from(PREVIEW_ID),
-                        page,
-                        symbol: SymbolKey(symbol.id.clone()),
-                        placement: Placement {
-                            origin: cursor,
-                            rotation: p.rotation,
-                            mirrored: p.mirrored,
-                        },
-                        role: SymbolRole::Unassigned,
-                        pins: model_pins(symbol),
-                        bridges,
-                        pass_through,
-                        feeds: Vec::new(),
-                        properties: Default::default(),
-                    });
+                    let origins = match self.row_plan(doc, page) {
+                        Some((at, _, _)) if !at.is_empty() => at,
+                        _ => vec![cursor],
+                    };
+                    for origin in origins {
+                        preview.symbols.push(SymbolInstance {
+                            id: SymbolId::from(PREVIEW_ID),
+                            page,
+                            symbol: SymbolKey(symbol.id.clone()),
+                            placement: Placement {
+                                origin,
+                                rotation: p.rotation,
+                                mirrored: p.mirrored,
+                            },
+                            role: SymbolRole::Unassigned,
+                            pins: model_pins(symbol),
+                            bridges: bridges.clone(),
+                            pass_through: pass_through.clone(),
+                            feeds: Vec::new(),
+                            properties: Default::default(),
+                        });
+                    }
                 }
             }
             Tool::Wire(w) => {
