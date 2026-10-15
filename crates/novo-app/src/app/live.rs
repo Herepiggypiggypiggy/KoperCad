@@ -2,7 +2,7 @@
 //! drawing into a bench where every switched pole can be closed or opened
 //! and the wires show what they carry under that state, as solved by
 //! novo-sim. Nothing here touches the model: the states live in the
-//! workbench and the colours are painted over the canvas.
+//! workbench and the wires are lit in the canvas's own wire layer.
 //!
 //! Poles start open (a plant at rest). A badge sits on every switched pole of
 //! the page: click it to close or open that pole, Shift+click to switch every
@@ -10,11 +10,13 @@
 //! potential's colour, wires nothing reaches are dimmed, and a net where two
 //! potentials meet is drawn red.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use eframe::egui;
+use novo_canvas::model::WireLook;
 use novo_core::{
     NetId, Netlist, PageId, Potential, PotentialId, PotentialKind, Project, SymbolId, SymbolRole,
+    WireId,
 };
 use novo_sim::{Clock, Live, PoleState, Settled, Solution, is_coil, settle_timed};
 use novo_theme::{tokens, widgets};
@@ -118,6 +120,7 @@ impl LiveView {
 
 /// One wire of the page and what it carries.
 pub(super) struct LitWire {
+    pub id: WireId,
     pub points: Vec<egui::Vec2>,
     pub live: Live,
 }
@@ -141,7 +144,11 @@ pub(super) fn lit_wires(
             let live = netlist
                 .net_of_wire(w)
                 .map_or(Live::Dead, |n| solution.net(n).clone());
-            Some(LitWire { points, live })
+            Some(LitWire {
+                id: w.id,
+                points,
+                live,
+            })
         })
         .collect()
 }
@@ -299,9 +306,20 @@ impl NovoApp {
         }
     }
 
+    /// Hands the canvas the wire looks of the live view (none when it is off).
+    fn light_wires(&mut self, looks: HashMap<WireId, WireLook>) {
+        let Some(doc) = self.backend.document() else {
+            return;
+        };
+        if let Some(view) = self.canvas.schematic() {
+            view.set_wire_looks(doc.project(), looks);
+        }
+    }
+
     /// Paints the live view over the canvas and shows its card and badges.
     pub(super) fn live_view(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
         if !self.wb.live.on {
+            self.light_wires(HashMap::new());
             return;
         }
         let (Some(page), Some(doc)) = (self.current_page, self.backend.document()) else {
@@ -341,24 +359,31 @@ impl NovoApp {
             .map(|b| (b.symbol, symbol_name(project, b.symbol)))
             .collect();
 
-        // Wires: lit in their colour, dimmed when nothing reaches them.
-        let painter = ctx
-            .layer_painter(egui::LayerId::new(
-                egui::Order::Foreground,
-                egui::Id::new("live_wires"),
-            ))
-            .with_clip_rect(canvas);
-        for wire in &wires {
-            let points: Vec<egui::Pos2> = wire.points.iter().map(|&p| to_screen(p)).collect();
-            let stroke = match &wire.live {
-                Live::Dead => egui::Stroke::new(2.5, tokens::BG_0.gamma_multiply(0.6)),
-                Live::Carries(p) => {
-                    let color = colors.get(p).map_or(tokens::ACCENT, |c| c.1);
-                    egui::Stroke::new(LIT_WIDTH, color.gamma_multiply(0.9))
-                }
-                Live::Shorted(_) => egui::Stroke::new(LIT_WIDTH + 1.0, tokens::ERROR),
-            };
-            painter.add(egui::Shape::line(points, stroke));
+        // Wires: lit in their colour, dimmed when nothing reaches them. The
+        // canvas draws them in its wire layer, under the symbols and text.
+        let looks = wires
+            .iter()
+            .map(|wire| {
+                let (color, width) = match &wire.live {
+                    Live::Dead => (tokens::BG_0.gamma_multiply(0.6), 2.5),
+                    Live::Carries(p) => {
+                        let color = colors.get(p).map_or(tokens::ACCENT, |c| c.1);
+                        (color.gamma_multiply(0.9), LIT_WIDTH)
+                    }
+                    Live::Shorted(_) => (tokens::ERROR, LIT_WIDTH + 1.0),
+                };
+                let [r, g, b, a] = color.to_srgba_unmultiplied();
+                (
+                    wire.id,
+                    WireLook {
+                        color: novo_canvas::Color::rgba(r, g, b, a),
+                        width,
+                    },
+                )
+            })
+            .collect();
+        if let Some(view) = self.canvas.schematic() {
+            view.set_wire_looks(project, looks);
         }
 
         // Hovering a wire says what it carries right now.
