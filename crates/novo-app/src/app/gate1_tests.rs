@@ -1442,3 +1442,39 @@ fn an_inspector_edit_is_kept_when_the_selection_clears() {
         "the edit survives the selection clearing"
     );
 }
+
+#[test]
+fn dragging_a_selection_box_reports_how_many_it_would_take() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    d.place("coil", 200.0, 144.0);
+    let band = |d: &mut Drive| d.app.canvas.schematic().unwrap().band_count();
+    assert_eq!(band(&mut d), None);
+
+    // Press on empty canvas and drag across the coil.
+    let (_, canvas) = d.app.wb.canvas_area.unwrap();
+    let from = canvas.center() - egui::vec2(300.0, 200.0);
+    let to = canvas.center() + egui::vec2(300.0, 200.0);
+    let button = |pressed| egui::Event::PointerButton {
+        pos: from,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    d.frame_with(vec![egui::Event::PointerMoved(from)]);
+    d.frame_with(vec![button(true)]);
+    d.frame_with(vec![egui::Event::PointerMoved(to)]);
+    d.frame_with(vec![egui::Event::PointerMoved(to)]);
+    assert!(band(&mut d).is_some(), "a box is being dragged");
+    d.frame_with(vec![egui::Event::PointerButton {
+        pos: to,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    }]);
+    d.frame();
+    assert_eq!(band(&mut d), None, "gone when released");
+}

@@ -87,6 +87,8 @@ pub struct SchematicView {
     goto: Option<PageId>,
     /// Commands the context menu asked the shell to run, by workflow id.
     commands: Vec<&'static str>,
+    /// Items a release would select while a selection box is dragged.
+    band_count: Option<usize>,
     /// The press that closed a popup, until its release.
     swallow: bool,
     /// The move in progress was picked up by dragging a selected object (no
@@ -144,6 +146,7 @@ impl SchematicView {
             status: None,
             goto: None,
             commands: Vec::new(),
+            band_count: None,
             swallow: false,
             drag_move: false,
             rect: egui::Rect::NOTHING,
@@ -226,6 +229,12 @@ impl SchematicView {
     /// (Place component, Go to partner, Zoom to fit), by workflow id.
     pub fn take_commands(&mut self) -> Vec<&'static str> {
         std::mem::take(&mut self.commands)
+    }
+
+    /// How many items releasing the selection box being dragged would
+    /// select; `None` when no box is being dragged.
+    pub fn band_count(&self) -> Option<usize> {
+        self.band_count
     }
 
     pub fn zoom_to_fit(&mut self) {
@@ -422,6 +431,7 @@ impl SchematicView {
             return ChangeSet::default();
         };
         let out = self.canvas.show(ui, scene.scene());
+        self.band_count = out.band_count;
         let response = out.response.clone();
         let rect = response.rect;
         self.rect = rect;
