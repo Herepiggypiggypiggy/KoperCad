@@ -64,7 +64,7 @@ fn route_all_shows_the_cabinet_with_its_routes_and_toggles_off() {
     wired_cabinet(&mut d);
     d.app.run_command(&ctx, "cabinet.routes", None);
     d.frame();
-    assert!(d.app.cabinet_open && d.app.cabinet.routes);
+    assert!(d.app.workspace() == super::workspace::Workspace::Cabinet && d.app.cabinet.routes);
     d.app.run_command(&ctx, "cabinet.routes", None);
     d.frame();
     assert!(!d.app.cabinet.routes);

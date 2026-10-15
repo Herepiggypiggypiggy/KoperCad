@@ -29,7 +29,7 @@ const DEFAULT_PLATE: MountingPlate = MountingPlate {
 };
 
 pub(super) struct CabinetState {
-    view: CanvasView,
+    pub(super) view: CanvasView,
     scene: CabinetScene,
     /// The panel shown, by its location (`+K1B1G1`).
     pub(super) location: Option<DeviceTag>,
@@ -53,6 +53,8 @@ pub(super) struct CabinetState {
     /// beside it (Route all).
     pub(super) routes: bool,
     routes_cache: cabinet_routes::OverlayCache,
+    /// The Heat view over the plate.
+    pub(super) heat: super::heat::HeatState,
 }
 
 /// A placed device being dragged across the plate.
@@ -84,6 +86,7 @@ impl CabinetState {
             plate_card: false,
             routes: false,
             routes_cache: Default::default(),
+            heat: super::heat::HeatState::new(),
         }
     }
 }
@@ -104,6 +107,8 @@ pub(super) enum Ask {
     ExportWireCut,
     ExportWireProduction,
     ExportWiringDxf(StructureId),
+    /// Select a placed device (from the problems list), on the plate.
+    Select(u64),
     /// Place or move a device with its top left at `(x, y)` mm.
     Drop(u64, f64, f64),
     Rotate(Vec<u64>),
@@ -404,6 +409,9 @@ impl NovoApp {
                 {
                     ask = Some(Ask::ToggleRoutes);
                 }
+                if !self.cabinet.table {
+                    super::heat::chips(ui, &mut self.cabinet.heat);
+                }
                 if ui
                     .selectable_label(self.cabinet.table, "Table")
                     .on_hover_text("Devices as a table (Ctrl+T)")
@@ -414,10 +422,31 @@ impl NovoApp {
                 if ui.button("Size enclosure").clicked() {
                     self.sizing.panel_open = !self.sizing.panel_open;
                 }
-                ui.weak(format!(
-                    "{placed} placed, {unplaced} unplaced, {problems} {}",
+                ui.weak(format!("{placed} placed, {unplaced} unplaced"));
+                let label = format!(
+                    "{problems} {}",
                     if problems == 1 { "problem" } else { "problems" }
-                ));
+                );
+                if problems == 0 {
+                    ui.weak(label);
+                } else if let Some(shown) = &shown {
+                    // The count opens the list; a row selects its device.
+                    ui.menu_button(label, |ui| {
+                        for p in &shown.placements {
+                            let lines = problem_lines(shown, p.id, &tag_of);
+                            if lines.is_empty() {
+                                continue;
+                            }
+                            if ui
+                                .button(format!("{}: {}", tag_of(p.id), lines.join("; ")))
+                                .clicked()
+                            {
+                                ask = Some(Ask::Select(p.id));
+                                ui.close();
+                            }
+                        }
+                    });
+                }
             }
         });
         ui.separator();
@@ -512,6 +541,59 @@ impl NovoApp {
                     self.cabinet.view.viewport.fit(&view_bounds(&view), 24.0);
                     self.cabinet.fitted = location.clone();
                 }
+                let heat_input = self.cabinet.heat.on.then(|| {
+                    let items = shown
+                        .placements
+                        .iter()
+                        .map(|p| {
+                            let f = p.footprint();
+                            let loss =
+                                project
+                                    .get::<Device>(DeviceId::from(p.id))
+                                    .map_or(0.0, |d| {
+                                        let s =
+                                            novo_layout::sizing_model::sizing_device(project, d);
+                                        s.power_loss * s.load_factor
+                                    });
+                            super::heat::Item {
+                                id: p.id,
+                                tag: tag_of(p.id),
+                                x: f.x,
+                                y: f.y,
+                                w: f.w,
+                                h: f.h,
+                                loss_w: loss,
+                            }
+                        })
+                        .collect();
+                    super::heat::Input {
+                        plate: (shown.plate.width, shown.plate.height),
+                        ambient: self.sizing.request().ambient_max,
+                        items,
+                    }
+                });
+                let dragging = self.cabinet.drag.is_some();
+                // The map goes under the canvas: it paints no background of
+                // its own while the map is on.
+                let backdrop = theme::canvas_style().background;
+                self.cabinet.view.style.background = if self.cabinet.heat.under_canvas() {
+                    novo_canvas::Color([0, 0, 0, 0])
+                } else {
+                    backdrop
+                };
+                let canvas_rect = ui.available_rect_before_wrap();
+                if let Some(input) = &heat_input {
+                    let [r, g, b, a] = backdrop.0;
+                    super::heat::paint_under(
+                        ui,
+                        canvas_rect,
+                        &self.cabinet.view.viewport,
+                        &mut self.cabinet.heat,
+                        input,
+                        dragging,
+                        egui::Color32::from_rgba_unmultiplied(r, g, b, a),
+                    );
+                }
                 let out = self.cabinet.view.show(ui, self.cabinet.scene.scene());
                 if self.cabinet.routes
                     && let Some(s) = structure
@@ -523,6 +605,16 @@ impl NovoApp {
                         rect,
                         &self.cabinet.view.viewport,
                         overlay,
+                    );
+                }
+                if let Some(input) = &heat_input {
+                    super::heat::paint_over(
+                        ui,
+                        out.response.rect,
+                        &self.cabinet.view.viewport,
+                        &mut self.cabinet.heat,
+                        input,
+                        dragging,
                     );
                 }
                 if let Some((facts, left)) = &inspector
@@ -690,6 +782,13 @@ impl NovoApp {
             Ask::ExportWiringDxf(s) => {
                 self.export_wiring_dxf(s);
             }
+            Ask::Select(device) => {
+                self.cabinet.table = false;
+                self.cabinet.view.selection.apply(
+                    [novo_canvas::cabinet::box_item(device)],
+                    novo_canvas::selection::SelectOp::Replace,
+                );
+            }
             Ask::PlaceAll => {
                 if let Some(layout) = layout {
                     let plan = layout.preview(cands);
@@ -756,11 +855,11 @@ impl NovoApp {
         if self.backend.document().is_none() {
             return;
         }
-        if self.cabinet_open && self.cabinet.routes {
+        if self.workspace() == super::workspace::Workspace::Cabinet && self.cabinet.routes {
             self.cabinet.routes = false;
             return;
         }
-        self.cabinet_open = true;
+        self.switch_workspace(super::workspace::Workspace::Cabinet);
         self.cabinet.table = false;
         self.cabinet.routes = true;
     }

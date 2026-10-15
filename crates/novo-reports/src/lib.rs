@@ -75,6 +75,7 @@
 //! title block, clipping text to its box. Set [`PageSetup::margins`] and
 //! [`PageSetup::title_block_mm`] to match that frame.
 
+mod assembly;
 mod bom;
 pub mod commissioning;
 mod cutlist;
@@ -86,7 +87,9 @@ mod io;
 mod lengths;
 mod order;
 mod page;
+mod plugs;
 mod report;
+mod schedule;
 mod sheets;
 mod strip_diagram;
 mod table;
@@ -94,6 +97,7 @@ mod toc;
 mod wirecut;
 mod wires;
 
+pub use assembly::{AssemblyChecklist, BOX as ASSEMBLY_BOX};
 pub use bom::BillOfMaterials;
 pub use cutlist::CutList;
 pub use defaults::{
@@ -106,7 +110,9 @@ pub use export::{CsvOptions, ExportError, save_xlsx, to_csv, xlsx_bytes};
 pub use io::IoList;
 pub use order::{function_of, location_of, location_text, tag_cmp};
 pub use page::{Line, Margins, PageLayout, PageSetup, ReportPage, TextBox, layout_page, paginate};
+pub use plugs::PlugList;
 pub use report::{Dependencies, LiveReports, Report, Reports};
+pub use schedule::CableSchedule;
 pub use sheets::{GeneratedSheet, SheetFingerprint, fingerprint, sheet_name, sheet_names};
 pub use strip_diagram::{
     sheet_count as strip_sheet_count, strip_diagram, strip_sheet, terminals_per_sheet,
@@ -133,6 +139,8 @@ pub fn standard_reports() -> Vec<Box<dyn Report>> {
         Box::new(TerminalDiagram),
         Box::new(CableDiagram),
         Box::new(IoList),
+        Box::new(CableSchedule),
+        Box::new(PlugList),
     ]
 }
 

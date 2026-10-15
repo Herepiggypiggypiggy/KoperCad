@@ -28,6 +28,14 @@
 //! | [`WireOverlap`](ProblemKind::WireOverlap) | warning | Two wires on a page sharing a stretch of line |
 //! | [`OpenWire`](ProblemKind::OpenWire) | warning | A wire with an open end that is connected to nothing |
 //! | [`MissingPart`](ProblemKind::MissingPart) | info | A device or cable without a part |
+//! | [`VoltageDrop`](ProblemKind::VoltageDrop) | warning | Filled by novo-checks::calc, not yet |
+//! | [`ShortCircuit`](ProblemKind::ShortCircuit) | error | Filled by novo-checks::calc, not yet |
+//! | [`UnplacedDevice`](ProblemKind::UnplacedDevice) | info | A device not yet placed on a mounting plate |
+//! | [`WireWithoutDuct`](ProblemKind::WireWithoutDuct) | warning | A wire between placed devices that no duct serves |
+//! | [`OverfullDuct`](ProblemKind::OverfullDuct) | warning | A duct filled beyond its limit |
+//!
+//! A problem can be waived with a reason ([`waive`]); [`check_open`] leaves
+//! waived problems out and [`waived_problems`] lists them for the report.
 //!
 //! Not checked here:
 //! - Wires beyond the next device on a protective device's load side (past
@@ -46,8 +54,11 @@
 //! assert_eq!(Summary::of(&problems).pill_text(), "No issues");
 //! ```
 
+pub mod calc;
 mod checks;
 mod contacts;
+mod physical;
+mod waiver;
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -58,6 +69,7 @@ use novo_core::{
 };
 
 pub use contacts::{ContactKind, contact_limit_property};
+pub use waiver::{Waived, check_open, report_lines, waive, waived_problems, waiver_of};
 
 /// How bad a problem is. Orders from most to least severe.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -131,11 +143,28 @@ pub enum ProblemKind {
     /// A wire with an open end (`wire.open`, DESIGN.md §4): an end connected
     /// to nothing. Open ends are allowed while sketching; they join no net.
     OpenWire,
+    /// A wire that drops too much of the supply voltage. Filled by the
+    /// electrical calculations (novo-checks::calc), which read the wire
+    /// property `length_m` (or a cable's length), `load_current_a` and the
+    /// project property `check.voltage_drop_pct`.
+    VoltageDrop,
+    /// A protective device that cannot break the prospective short-circuit
+    /// current. Filled by the electrical calculations, which read the device
+    /// or part property `breaking_capacity_ka` and the project property
+    /// `supply.short_circuit_ka`.
+    ShortCircuit,
+    /// A device drawn in the schematic but not placed on any mounting plate,
+    /// in a project where the cabinet layout has been started.
+    UnplacedDevice,
+    /// A wire between two placed devices that no duct path serves (novo-routing).
+    WireWithoutDuct,
+    /// A duct carrying more wires than its fill limit (novo-routing).
+    OverfullDuct,
 }
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 17] = [
+    pub const ALL: [ProblemKind; 22] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -153,13 +182,19 @@ impl ProblemKind {
         ProblemKind::MissingPart,
         ProblemKind::WireOverlap,
         ProblemKind::OpenWire,
+        ProblemKind::VoltageDrop,
+        ProblemKind::ShortCircuit,
+        ProblemKind::UnplacedDevice,
+        ProblemKind::WireWithoutDuct,
+        ProblemKind::OverfullDuct,
     ];
 
     pub fn severity(self) -> Severity {
         match self {
             ProblemKind::DuplicateTag
             | ProblemKind::TooManyContacts
-            | ProblemKind::PotentialConflict => Severity::Error,
+            | ProblemKind::PotentialConflict
+            | ProblemKind::ShortCircuit => Severity::Error,
             ProblemKind::UnconnectedPin
             | ProblemKind::LoneInterruption
             | ProblemKind::NoMainFunction
@@ -172,8 +207,11 @@ impl ProblemKind {
             | ProblemKind::TerminalUse
             | ProblemKind::WireOverlap
             | ProblemKind::OpenWire
+            | ProblemKind::VoltageDrop
+            | ProblemKind::WireWithoutDuct
+            | ProblemKind::OverfullDuct
             | ProblemKind::Plc => Severity::Warning,
-            ProblemKind::MissingPart => Severity::Info,
+            ProblemKind::MissingPart | ProblemKind::UnplacedDevice => Severity::Info,
         }
     }
 
@@ -197,6 +235,39 @@ impl ProblemKind {
             ProblemKind::Plc => "PLC",
             ProblemKind::WireOverlap => "Wires overlap",
             ProblemKind::OpenWire => "Open wire end",
+            ProblemKind::VoltageDrop => "Voltage drop",
+            ProblemKind::ShortCircuit => "Short-circuit rating",
+            ProblemKind::UnplacedDevice => "Unplaced device",
+            ProblemKind::WireWithoutDuct => "Wire without duct",
+            ProblemKind::OverfullDuct => "Overfull duct",
+        }
+    }
+
+    /// A stable name for storing a waiver (`check.voltage_drop`).
+    pub fn key(self) -> &'static str {
+        match self {
+            ProblemKind::UnconnectedPin => "check.unconnected_pin",
+            ProblemKind::DuplicateTag => "check.duplicate_tag",
+            ProblemKind::DuplicateTerminal => "check.duplicate_terminal",
+            ProblemKind::NoMainFunction => "check.no_main_function",
+            ProblemKind::SeveralMainFunctions => "check.several_main_functions",
+            ProblemKind::TooManyContacts => "check.too_many_contacts",
+            ProblemKind::LoneInterruption => "check.lone_interruption",
+            ProblemKind::PotentialConflict => "check.potential_conflict",
+            ProblemKind::ZeroLengthWire => "check.zero_length_wire",
+            ProblemKind::MissingPart => "check.missing_part",
+            ProblemKind::UndersizedWire => "check.undersized_wire",
+            ProblemKind::WrongTerminalBlock => "check.wrong_terminal_block",
+            ProblemKind::CableCore => "check.cable_core",
+            ProblemKind::TerminalUse => "check.terminal_use",
+            ProblemKind::Plc => "check.plc",
+            ProblemKind::WireOverlap => "check.wire_overlap",
+            ProblemKind::OpenWire => "check.open_wire",
+            ProblemKind::VoltageDrop => "check.voltage_drop",
+            ProblemKind::ShortCircuit => "check.short_circuit",
+            ProblemKind::UnplacedDevice => "check.unplaced_device",
+            ProblemKind::WireWithoutDuct => "check.wire_without_duct",
+            ProblemKind::OverfullDuct => "check.overfull_duct",
         }
     }
 }
@@ -305,6 +376,8 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     checks::plc(&cx, &mut problems);
     checks::wire_overlaps(&cx, &mut problems);
     checks::open_wires(&cx, &mut problems);
+    physical::unplaced_devices(&cx, &mut problems);
+    physical::routing(&cx, &mut problems);
     cx.sort(&mut problems);
     problems
 }

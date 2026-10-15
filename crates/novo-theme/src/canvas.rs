@@ -130,129 +130,200 @@ pub const CANVAS_DARK: CanvasPalette = CanvasPalette {
     unconnected_flag: [0xD6, 0xA5, 0x5C, 0xFF],
 };
 
+/// The light canvas palette: black ink on a white sheet that matches print,
+/// on a warm grey desk.
+pub const CANVAS_LIGHT: CanvasPalette = CanvasPalette {
+    background: [0xD9, 0xD7, 0xD2, 0xFF],
+    sheet: [0xFF, 0xFF, 0xFF, 0xFF],
+    sheet_frame: [0x6F, 0x6C, 0x66, 0xFF],
+    grid_minor: [0xD2, 0xCF, 0xC9, 0xFF],
+    grid_major: [0xB4, 0xB0, 0xA8, 0xFF],
+    symbol: [0x1E, 0x1D, 0x1B, 0xFF],
+    wire: [0x25, 0x63, 0xC4, 0xFF],
+    text: [0x3A, 0x38, 0x35, 0xFF],
+    cross_reference: [0x28, 0x54, 0x88, 0xFF],
+    connection_point: [0x27, 0x6B, 0x36, 0xFF],
+    selection: [0xB3, 0x5A, 0x18, 0xFF],
+    hover: [0x28, 0x54, 0x88, 0xFF],
+    rubber_band: [0x28, 0x54, 0x88, 0xFF],
+    error: [0xA8, 0x2F, 0x25, 0xFF],
+    warning: [0x7F, 0x54, 0x08, 0xFF],
+    proposal: [0x28, 0x54, 0x88, 0x8C],
+    override_mark: [0x66, 0x64, 0x5F, 0xFF],
+    added: [0x27, 0x6B, 0x36, 0x80],
+    modified: [0x7F, 0x54, 0x08, 0x80],
+    removed: [0xA8, 0x2F, 0x25, 0x80],
+    mark_text: [0x3A, 0x38, 0x35, 0xFF],
+    snap_marker: [0x8A, 0x87, 0x82, 0xFF],
+    junction: [0x9A, 0x54, 0x27, 0xFF],
+    wire_end: [0x9A, 0x54, 0x27, 0xFF],
+    unconnected_flag: [0x7F, 0x54, 0x08, 0xFF],
+};
+
+/// The light potential palette.
+pub const POTENTIALS_LIGHT: PotentialPalette = PotentialPalette {
+    protective_earth: [0x2F, 0x7A, 0x3F, 0xFF],
+    pen: [0x5F, 0x74, 0x10, 0xFF],
+    neutral: [0x2E, 0x5F, 0xB5, 0xFF],
+    dc_positive: [0xB3, 0x36, 0x2B, 0xFF],
+    dc_negative: [0x4A, 0x4F, 0xB0, 0xFF],
+    line: [
+        [0xA8, 0x5F, 0x00, 0xFF],
+        [0x8E, 0x3F, 0xA0, 0xFF],
+        [0x0F, 0x7B, 0x8A, 0xFF],
+        [0x6B, 0x6B, 0x10, 0xFF],
+    ],
+};
+
+/// The canvas palette for dark or light.
+pub const fn canvas_palette(dark: bool) -> &'static CanvasPalette {
+    if dark { &CANVAS_DARK } else { &CANVAS_LIGHT }
+}
+
+/// The potential palette for dark or light.
+pub const fn potential_palette(dark: bool) -> &'static PotentialPalette {
+    if dark {
+        &POTENTIALS_DARK
+    } else {
+        &POTENTIALS_LIGHT
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn drawing_colours_stand_out_from_the_sheet() {
-        let p = CANVAS_DARK;
-        let grey = |c: [u8; 4]| (c[0] as u32 + c[1] as u32 + c[2] as u32) / 3;
-        for c in [p.symbol, p.wire, p.text] {
-            assert!(grey(c) > grey(p.sheet) + 120, "{c:?}");
+        for p in [CANVAS_DARK, CANVAS_LIGHT] {
+            let grey = |c: [u8; 4]| (c[0] as u32 + c[1] as u32 + c[2] as u32) / 3;
+            // How far a colour sits from the sheet, light or dark.
+            let away = |c: [u8; 4]| grey(c).abs_diff(grey(p.sheet));
+            for c in [p.symbol, p.wire, p.text] {
+                assert!(away(c) > 120, "{c:?}");
+            }
+            // The grid stays quieter than anything drawn on it.
+            assert!(away(p.grid_major) < away(p.sheet_frame));
+            assert!(away(p.grid_minor) < away(p.grid_major));
         }
-        // The grid stays quieter than anything drawn on it.
-        assert!(grey(p.grid_major) < grey(p.sheet_frame));
-        assert!(grey(p.grid_minor) < grey(p.grid_major));
     }
 
     #[test]
     fn drawing_colours_meet_wcag_aa_on_the_sheet() {
-        let p = CANVAS_DARK;
-        let sheet = to_color32(p.sheet);
-        for c in [
-            p.symbol,
-            p.wire,
-            p.text,
-            p.cross_reference,
-            p.connection_point,
-            p.selection,
-            p.error,
-            p.warning,
-            p.junction,
-            p.wire_end,
-            p.unconnected_flag,
-        ] {
-            let ratio = crate::tokens::tests::contrast(to_color32(c), sheet);
-            assert!(ratio >= 4.5, "{c:?}: {ratio}");
+        for p in [CANVAS_DARK, CANVAS_LIGHT] {
+            let sheet = to_color32(p.sheet);
+            for c in [
+                p.symbol,
+                p.wire,
+                p.text,
+                p.cross_reference,
+                p.connection_point,
+                p.selection,
+                p.error,
+                p.warning,
+                p.junction,
+                p.wire_end,
+                p.unconnected_flag,
+            ] {
+                let ratio = crate::tokens::tests::contrast(to_color32(c), sheet);
+                assert!(ratio >= 4.5, "{c:?}: {ratio}");
+            }
         }
     }
 
     #[test]
     fn grid_dots_show_on_the_sheet_without_competing_with_the_drawing() {
-        let p = CANVAS_DARK;
-        let sheet = to_color32(p.sheet);
-        let minor = crate::tokens::tests::contrast(to_color32(p.grid_minor), sheet);
-        let major = crate::tokens::tests::contrast(to_color32(p.grid_major), sheet);
-        assert!(minor >= 1.3, "minor grid dots: {minor}");
-        assert!(major >= minor + 0.3, "major grid dots: {major}");
-        let frame = crate::tokens::tests::contrast(to_color32(p.sheet_frame), sheet);
-        assert!(major < frame, "grid stays quieter than the page frame");
+        for p in [CANVAS_DARK, CANVAS_LIGHT] {
+            let sheet = to_color32(p.sheet);
+            let minor = crate::tokens::tests::contrast(to_color32(p.grid_minor), sheet);
+            let major = crate::tokens::tests::contrast(to_color32(p.grid_major), sheet);
+            assert!(minor >= 1.3, "minor grid dots: {minor}");
+            assert!(major >= minor + 0.3, "major grid dots: {major}");
+            let frame = crate::tokens::tests::contrast(to_color32(p.sheet_frame), sheet);
+            assert!(major < frame, "grid stays quieter than the page frame");
+        }
     }
 
     #[test]
     fn wires_are_told_apart_from_symbols_and_junctions_are_not_the_selection() {
-        let p = CANVAS_DARK;
-        let ratio = crate::tokens::tests::contrast(to_color32(p.symbol), to_color32(p.wire));
-        assert!(ratio >= 2.0, "symbol against wire: {ratio}");
-        let rgb = |c: [u8; 4]| [c[0], c[1], c[2]];
-        for c in [p.junction, p.wire_end] {
-            assert_ne!(rgb(c), rgb(p.selection));
+        for p in [CANVAS_DARK, CANVAS_LIGHT] {
+            let ratio = crate::tokens::tests::contrast(to_color32(p.symbol), to_color32(p.wire));
+            assert!(ratio >= 2.0, "symbol against wire: {ratio}");
+            let rgb = |c: [u8; 4]| [c[0], c[1], c[2]];
+            for c in [p.junction, p.wire_end] {
+                assert_ne!(rgb(c), rgb(p.selection));
+            }
+            assert_eq!(rgb(p.unconnected_flag), rgb(p.warning));
         }
-        assert_eq!(rgb(p.unconnected_flag), rgb(p.warning));
     }
 
     #[test]
     fn marks_follow_the_design_rules() {
-        let p = CANVAS_DARK;
-        let marks = [
-            p.proposal,
-            p.override_mark,
-            p.added,
-            p.modified,
-            p.removed,
-            p.warning,
-            p.error,
-        ];
-        let rgb = |c: [u8; 4]| [c[0], c[1], c[2]];
-        // Copper belongs to the selection; no mark, and not the always
-        // visible snap marker, uses it.
-        for m in marks.into_iter().chain([p.snap_marker]) {
-            assert_ne!(rgb(m), rgb(p.selection), "{m:?}");
+        for p in [CANVAS_DARK, CANVAS_LIGHT] {
+            let marks = [
+                p.proposal,
+                p.override_mark,
+                p.added,
+                p.modified,
+                p.removed,
+                p.warning,
+                p.error,
+            ];
+            let rgb = |c: [u8; 4]| [c[0], c[1], c[2]];
+            // Copper belongs to the selection; no mark, and not the always
+            // visible snap marker, uses it.
+            for m in marks.into_iter().chain([p.snap_marker]) {
+                assert_ne!(rgb(m), rgb(p.selection), "{m:?}");
+            }
+            // A proposal is a fainter form of the hover hue, never as strong.
+            assert_eq!(rgb(p.proposal), rgb(p.hover));
+            assert!(p.proposal[3] < p.hover[3]);
+            // Change marks stay translucent so the drawing shows through.
+            for c in [p.added, p.modified, p.removed] {
+                assert!(c[3] < 0xFF, "{c:?}");
+            }
+            let ratio =
+                crate::tokens::tests::contrast(to_color32(p.mark_text), to_color32(p.sheet));
+            assert!(ratio >= 4.5);
         }
-        // A proposal is a fainter form of the hover hue, never as strong.
-        assert_eq!(rgb(p.proposal), rgb(p.hover));
-        assert!(p.proposal[3] < p.hover[3]);
-        // Change marks stay translucent so the drawing shows through.
-        for c in [p.added, p.modified, p.removed] {
-            assert!(c[3] < 0xFF, "{c:?}");
-        }
-        let ratio = crate::tokens::tests::contrast(to_color32(p.mark_text), to_color32(p.sheet));
-        assert!(ratio >= 4.5);
     }
 
     #[test]
     fn potential_colours_are_readable_on_the_sheet_and_tell_the_conductors_apart() {
-        let p = POTENTIALS_DARK;
-        let sheet = to_color32(CANVAS_DARK.sheet);
-        let all: Vec<[u8; 4]> = [
-            p.protective_earth,
-            p.pen,
-            p.neutral,
-            p.dc_positive,
-            p.dc_negative,
-        ]
-        .into_iter()
-        .chain(p.line)
-        .collect();
-        for c in &all {
-            let ratio = crate::tokens::tests::contrast(to_color32(*c), sheet);
-            assert!(ratio >= 4.5, "{c:?}: {ratio}");
-        }
-        for (i, a) in all.iter().enumerate() {
-            for b in &all[i + 1..] {
-                assert_ne!(a, b);
+        for (p, canvas) in [
+            (POTENTIALS_DARK, CANVAS_DARK),
+            (POTENTIALS_LIGHT, CANVAS_LIGHT),
+        ] {
+            let sheet = to_color32(canvas.sheet);
+            let all: Vec<[u8; 4]> = [
+                p.protective_earth,
+                p.pen,
+                p.neutral,
+                p.dc_positive,
+                p.dc_negative,
+            ]
+            .into_iter()
+            .chain(p.line)
+            .collect();
+            for c in &all {
+                let ratio = crate::tokens::tests::contrast(to_color32(*c), sheet);
+                assert!(ratio >= 4.5, "{c:?}: {ratio}");
             }
-        }
-        // The three line conductors differ clearly in hue, not just a shade.
-        let spread = |a: [u8; 4], b: [u8; 4]| {
-            (0..3)
-                .map(|i| (i32::from(a[i]) - i32::from(b[i])).unsigned_abs())
-                .sum::<u32>()
-        };
-        for (i, a) in p.line[..3].iter().enumerate() {
-            for b in &p.line[i + 1..3] {
-                assert!(spread(*a, *b) >= 120, "{a:?} {b:?}");
+            for (i, a) in all.iter().enumerate() {
+                for b in &all[i + 1..] {
+                    assert_ne!(a, b);
+                }
+            }
+            // The three line conductors differ clearly in hue, not just a shade.
+            let spread = |a: [u8; 4], b: [u8; 4]| {
+                (0..3)
+                    .map(|i| (i32::from(a[i]) - i32::from(b[i])).unsigned_abs())
+                    .sum::<u32>()
+            };
+            for (i, a) in p.line[..3].iter().enumerate() {
+                for b in &p.line[i + 1..3] {
+                    assert!(spread(*a, *b) >= 120, "{a:?} {b:?}");
+                }
             }
         }
     }
