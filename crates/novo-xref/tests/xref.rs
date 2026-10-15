@@ -727,3 +727,41 @@ fn link_renumbers_when_the_ordinal_is_taken() {
         .collect();
     assert_eq!(names, ["43", "44"]);
 }
+
+#[test]
+fn references_into_a_frozen_page_do_not_move() {
+    // DESIGN.md §8: an issued page keeps the references printed on it and
+    // pointing at it, until it is unfrozen.
+    let mut f = fixture();
+    let page3 = f.pages[2];
+    let moved = f.k1_contacts[2];
+    f.doc
+        .execute(Command::FreezePage {
+            page: page3,
+            revision: "A".into(),
+        })
+        .unwrap();
+    f.doc
+        .transact("Move", |tx| {
+            tx.move_symbol(moved, Placement::at(Point::new(400.0, 10.0)))
+        })
+        .unwrap();
+    let x = XrefIndex::build(f.doc.project(), &FromKey);
+    assert!(
+        x.label(f.k1_coil)
+            .unwrap()
+            .lines
+            .contains(&"33-34 3.4".to_owned())
+    );
+
+    f.doc
+        .execute(Command::UnfreezePage { page: page3 })
+        .unwrap();
+    let x = XrefIndex::build(f.doc.project(), &FromKey);
+    assert!(
+        x.label(f.k1_coil)
+            .unwrap()
+            .lines
+            .contains(&"33-34 3.10".to_owned())
+    );
+}
