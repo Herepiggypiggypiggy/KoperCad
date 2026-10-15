@@ -13,7 +13,7 @@
 //! [`letter_code`] gives the IEC 81346-2 letter for the next free tag
 //! (`-K1`, `-K2`, ...) of a placed symbol.
 
-use novo_symbols::{Library, Symbol};
+use novo_symbols::{Library, Pack, Symbol};
 
 use crate::fuzzy;
 
@@ -30,6 +30,16 @@ pub const DEFAULT_FAVOURITES: [&str; 9] = [
     "iec/operators/pushbutton_no",
     "iec/terminals/terminal_end",
 ];
+
+/// The symbol `id` names in `library`: the symbol itself, else the same
+/// device in the library's pack, so favourites and recents saved with IEC
+/// ids still work in an NFPA project and the other way round.
+fn resolve<'l>(library: &'l Library, id: &str) -> Option<&'l Symbol> {
+    library.get(id).or_else(|| {
+        let pack = library.pack()?;
+        library.get(&Pack::counterpart(id, pack)?)
+    })
+}
 
 /// A child placement read from a query: a symbol search plus the device
 /// it belongs to.
@@ -142,7 +152,7 @@ impl InsertSearch {
     /// The favourite in `slot` (1 to 9), if it is in the library.
     pub fn favourite<'l>(&self, library: &'l Library, slot: usize) -> Option<&'l Symbol> {
         let id = self.favourites.get(slot.checked_sub(1)?)?;
-        library.get(id)
+        resolve(library, id)
     }
 
     /// Symbols matching `text`, best first. An empty text lists recents and
@@ -153,16 +163,17 @@ impl InsertSearch {
             let mut out: Vec<SymbolHit<'l>> = Vec::new();
             let ids = self.recent.iter().chain(self.favourites.iter());
             for (rank, id) in ids.enumerate() {
-                if out.iter().any(|h| h.symbol.id == *id) {
+                let Some(symbol) = resolve(library, id) else {
+                    continue;
+                };
+                if out.iter().any(|h| h.symbol.id == symbol.id) {
                     continue;
                 }
-                if let Some(symbol) = library.get(id) {
-                    out.push(SymbolHit {
-                        symbol,
-                        score: -i32::try_from(rank).unwrap_or(i32::MAX),
-                        mnemonic: None,
-                    });
-                }
+                out.push(SymbolHit {
+                    symbol,
+                    score: -i32::try_from(rank).unwrap_or(i32::MAX),
+                    mnemonic: None,
+                });
             }
             return out;
         }
@@ -189,7 +200,11 @@ impl InsertSearch {
                     score = Some(10_000);
                 }
                 let mut score = score?;
-                if let Some(rank) = self.recent.iter().position(|r| *r == symbol.id) {
+                if let Some(rank) = self
+                    .recent
+                    .iter()
+                    .position(|r| Pack::same_device(r, &symbol.id))
+                {
                     score += 200 - i32::try_from(rank * 10).unwrap_or(200);
                 }
                 Some(SymbolHit {

@@ -19,6 +19,7 @@ thiserror.workspace = true
 [dev-dependencies]
 novo-tests = { path = "../novo-tests" }
 tempfile.workspace = true
+novo-symbols.workspace = true
 
 [lints]
 workspace = true
