@@ -20,3 +20,4 @@
 2026-10-15 17:10 UTC Outputs: lamps, motors, horns, buzzers and valves with two different potentials on their pins get a glow in the live view (novo-sim loads_on). mark_earthed already skips non-Auto PE terminals and seal-in latching settles (tests exist). Next: PLC I/O under simulation.
 2026-10-15 16:45 UTC The Time (s) field shows only for a device with a timer contact (a plain relay coil has nothing to time).
 2026-10-15 17:15 UTC PLC channels under simulation: a DQ badge switches the output by hand and puts the DC positive potential on its pin; a DI dot fills when its pin carries a potential (docs/design/plc.md 7a). Next: analog channels, a logic model.
+2026-10-15 UTC (live-view thread) Context menu on a feed gets "Select where it goes" next to "Show where it goes": same set, but it becomes the real selection (Delete, move and the property sheet act on it).

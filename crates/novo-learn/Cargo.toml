@@ -1,0 +1,19 @@
+[package]
+name = "novo-learn"
+description = "Learning modules: lesson format, checks, step runner and progress (docs/design/learning-modules.md)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+novo-core.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+novo-tests.workspace = true
+
+[lints]
+workspace = true

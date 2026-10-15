@@ -24,22 +24,30 @@ pub enum Scope<'a> {
     Cabinet(&'a str),
 }
 
-/// Check counts over a scope. Checks marked not applicable are left out of
-/// `total`, so a fully decided scope reads 100 %.
+/// Check counts over a scope. Not-applicable checks count in `total` and as
+/// done, like the printed report (`novo_reports::commissioning::Progress`),
+/// so the app and the report show the same percentage.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Progress {
     pub total: usize,
     pub passed: usize,
     pub failed: usize,
+    pub not_applicable: usize,
     pub pending: usize,
 }
 
 impl Progress {
+    /// Passed or not applicable.
+    pub fn done(&self) -> usize {
+        self.passed + self.not_applicable
+    }
+
+    /// Done over total; 0 for a scope with no checks (nothing is proven yet).
     pub fn percent(&self) -> f64 {
         if self.total == 0 {
-            100.0
+            0.0
         } else {
-            100.0 * self.passed as f64 / self.total as f64
+            100.0 * self.done() as f64 / self.total as f64
         }
     }
 }
@@ -105,7 +113,10 @@ pub fn targets(project: &Project) -> Vec<TargetInfo> {
 fn add(progress: &mut Progress, info: &TargetInfo, store: &CommissioningStore) {
     for &check in info.target.checks() {
         match store.state(info.target, check) {
-            CheckState::NotApplicable => {}
+            CheckState::NotApplicable => {
+                progress.total += 1;
+                progress.not_applicable += 1;
+            }
             CheckState::Passed => {
                 progress.total += 1;
                 progress.passed += 1;

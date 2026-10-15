@@ -121,7 +121,7 @@ fn replaceable_path(path: &Path) -> PathBuf {
 
 /// Writes `bytes` to a temporary file beside `path`, then renames it over
 /// `path`. The temporary file is removed when anything fails.
-fn write_replacing(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+pub(super) fn write_replacing(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
