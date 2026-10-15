@@ -34,7 +34,7 @@ mod inter;
 use novo_canvas::model::{
     ModelStyle, PageScene, PlaceholderArt, SheetContent, SheetLine, SheetText, SymbolArt,
 };
-use novo_canvas::{Anchor, Color, ItemId, Stroke, Vec2};
+use novo_canvas::{Anchor, Color, ItemId, Primitive, Shape, Stroke, Vec2};
 use novo_core::{AnyId, Page, PageId, PageKind, Project, SymbolId, SymbolRole, TextContent};
 use novo_reports::{Align, GeneratedSheet, LiveReports, PageLayout};
 use pdf_writer::types::{ActionType, AnnotationType, PageMode};
@@ -340,6 +340,14 @@ pub fn export_pdf_with_reports(
             for (_, item) in &items {
                 for p in &item.primitives {
                     writer.primitive(p);
+                }
+                // Open-end rings are screen-size handles on the canvas; on
+                // paper they print at the style's world radius.
+                for h in item.handles.iter().filter(|h| h.ring) {
+                    writer.primitive(&Primitive::stroked(
+                        Shape::circle(h.at, options.style.wire_end_radius),
+                        Stroke::world(0.3, h.color),
+                    ));
                 }
                 for l in &item.labels {
                     writer.label(l);

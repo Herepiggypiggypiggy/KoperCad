@@ -65,3 +65,4 @@
 - 2026-10-15: live wires are drawn by the canvas (PageScene::set_wire_looks, WireLook, screen-width stroke) in the wire layer under symbols and text; the egui foreground layer is gone, hover text stays in live.rs.
 - 2026-10-15: perf: strip_heads grouped terminals pairwise (O(n^2)) on every terminal edit; now stops at the x gap. 3,000-terminal page: build 65 -> 20 ms, apply one moved symbol 43 -> 2.7 ms. New tests/model_perf.rs guards model-page timings.
 - 2026-10-15: open-end ring is a screen-size Handle::ring (ModelStyle::wire_end_cap_px = 4 points), drawn by the view as a thin ring; the flag stays in world units.
+- 2026-10-15: PDF prints the open-end ring from Handle::ring at the style's world radius (tests/open_end.rs).
