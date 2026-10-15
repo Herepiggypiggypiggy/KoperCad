@@ -2575,3 +2575,31 @@ fn a_pin_drag_shows_no_corner_piece() {
     assert!(editor.preview(&doc, page).wire.len() >= 3);
     assert!(editor.preview(&doc, page).piece.is_none());
 }
+
+/// A drop in Draw mode with a lamp between a fuse and the contactor, the
+/// lamp's centre at `x`: how many of the three wires are drawn.
+fn wires_past_a_lamp_at(x: f64) -> usize {
+    let (mut doc, page, mut editor) = setup();
+    editor.set_connect_mode(novo_editor::tool::ConnectMode::Draw);
+    editor.begin_place("iec/protection/fuse_3p", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.begin_place("iec/signalling/lamp", None);
+    editor.click(&mut doc, page, p(x, 88.0), TOL);
+    let before = doc.project().wires().count();
+    editor.begin_place("iec/contactors/main_3p", None);
+    editor.click(&mut doc, page, p(40.0, 140.0), TOL);
+    doc.project().wires().count() - before
+}
+
+#[test]
+fn a_wire_through_the_drawn_lines_of_another_device_is_not_made() {
+    // A lamp between the poles at x = 40 and 48 has its drawn lines across
+    // those two columns: only the third pole is wired.
+    assert_eq!(wires_past_a_lamp_at(44.0), 1);
+}
+
+#[test]
+fn a_wire_past_only_the_bounding_box_of_a_device_is_made() {
+    // Far from the column the lamp is out of the way entirely: all three.
+    assert_eq!(wires_past_a_lamp_at(400.0), 3);
+}
