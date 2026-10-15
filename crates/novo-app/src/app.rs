@@ -963,24 +963,26 @@ impl NovoApp {
             self.export_pdf();
             ui.close();
         }
-        ui.add_enabled_ui(self.current_page.is_some(), |ui| {
+        // The same commands as Ctrl+K: one code path.
+        let has_page = self.current_page.is_some();
+        let has = self.has_background();
+        ui.add_enabled_ui(has_page, |ui| {
             ui.menu_button("DXF background", |ui| {
                 if ui.button("Import DXF...").clicked() {
-                    self.import_dxf_background();
+                    self.wb.queued.push("file.import_dxf_background");
                     ui.close();
                 }
-                let has = self.has_background();
                 let label = if self.background_shown() {
                     "Hide"
                 } else {
                     "Show"
                 };
                 if ui.add_enabled(has, egui::Button::new(label)).clicked() {
-                    self.toggle_background();
+                    self.wb.queued.push("view.background");
                     ui.close();
                 }
                 if ui.add_enabled(has, egui::Button::new("Remove")).clicked() {
-                    self.remove_background();
+                    self.wb.queued.push("file.remove_background");
                     ui.close();
                 }
             });
@@ -988,14 +990,14 @@ impl NovoApp {
         ui.add_enabled_ui(self.is_open(), |ui| {
             ui.menu_button("Export DXF", |ui| {
                 if ui
-                    .add_enabled(self.current_page.is_some(), egui::Button::new("This page"))
+                    .add_enabled(has_page, egui::Button::new("This page"))
                     .clicked()
                 {
-                    self.export_dxf(dxf::DxfScope::CurrentPage);
+                    self.wb.queued.push("export.dxf_page");
                     ui.close();
                 }
                 if ui.button("All pages").clicked() {
-                    self.export_dxf(dxf::DxfScope::AllPages);
+                    self.wb.queued.push("export.dxf_all");
                     ui.close();
                 }
             });
@@ -1030,6 +1032,31 @@ impl NovoApp {
                 self.outline_open ^= true;
             }
             self.breadcrumb_link = Some(link);
+        }
+        // A background that hides the wiring must show it exists.
+        let background = self
+            .page_properties()
+            .and_then(novo_interop::underlay::stored_name)
+            .map(str::to_owned);
+        if let Some(file) = background {
+            let shown = self.background_shown();
+            let text = if shown {
+                format!("DXF background: {file}")
+            } else {
+                format!("DXF background hidden: {file}")
+            };
+            let tip = if shown {
+                "Click to hide"
+            } else {
+                "Click to show"
+            };
+            if ui
+                .add(egui::Button::new(egui::RichText::new(text).weak()).frame(false))
+                .on_hover_text(tip)
+                .clicked()
+            {
+                self.toggle_background();
+            }
         }
     }
 

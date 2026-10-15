@@ -218,6 +218,11 @@ const APP_COMMANDS: &[&str] = &[
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "file.import_dxf_background",
+    "view.background",
+    "file.remove_background",
+    "export.dxf_page",
+    "export.dxf_all",
     "plc.add_card",
     "plc.to_plc",
     "plc.renumber_io",
@@ -544,6 +549,15 @@ impl NovoApp {
             }
             "export.pdf" => {
                 self.export_pdf();
+            }
+            "file.import_dxf_background" => self.import_dxf_background(),
+            "view.background" => self.toggle_background(),
+            "file.remove_background" => self.remove_background(),
+            "export.dxf_page" => {
+                self.export_dxf(super::dxf::DxfScope::CurrentPage);
+            }
+            "export.dxf_all" => {
+                self.export_dxf(super::dxf::DxfScope::AllPages);
             }
             "plc.add_card" => self.plc_add_card(argument),
             "plc.to_plc" => self.plc_to_plc(),

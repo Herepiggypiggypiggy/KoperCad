@@ -160,7 +160,10 @@ impl NovoApp {
                 return false;
             }
         };
-        let summary = import.summary(&name);
+        let summary = format!(
+            "{}. Placed at the page corner; move and scale come later",
+            import.summary(&name)
+        );
         let commands = import
             .properties
             .into_iter()
@@ -178,7 +181,7 @@ impl NovoApp {
         true
     }
 
-    fn page_properties(&self) -> Option<&novo_core::Properties> {
+    pub(super) fn page_properties(&self) -> Option<&novo_core::Properties> {
         let page = self.current_page?;
         Some(&self.backend.document()?.project().page(page)?.properties)
     }

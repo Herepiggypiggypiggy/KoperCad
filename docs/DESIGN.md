@@ -474,6 +474,12 @@ same pages, **Function** (the page groups, `=10D41`) and **Location** (the
 panels, `+K1B1G1`). Each page has both: the group it sits in and the panel
 it is drawn for.
 
+**DXF background.** A page can carry one imported DXF as a reference
+underlay (File › Import, command `file.import_dxf_background`): grey, under the
+wiring, never selected, snapped to or printed, and it creates no devices or
+wires. The breadcrumb names it and a click hides it (`view.background`); it
+is placed at the page corner, and move and scale come later.
+
 - Right-click in the outline: New page here (it takes the group and panel
   of the row), New group, New panel. New group asks for its name and,
   optionally, its panels as chips; a panel is named once in the project
