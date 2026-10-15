@@ -1919,6 +1919,7 @@ dependencies = [
  "novo-pdf",
  "novo-py",
  "novo-reports",
+ "novo-revisions",
  "novo-storage",
  "novo-xref",
  "serde_json",
