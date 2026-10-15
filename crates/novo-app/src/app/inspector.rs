@@ -136,6 +136,13 @@ impl NovoApp {
             .backend
             .document()
             .and_then(|doc| selected_device(doc.project(), &selection));
+        // An edit not yet committed (the field still has the cursor) is kept
+        // when the selection moves off the device, or clears.
+        if let Some(editing) = self.wb.inspector.device
+            && device != Some(editing)
+        {
+            self.commit_inspector_edit(editing);
+        }
         let Some(device) = device else {
             self.wb.inspector = InspectorState::default();
             return;
@@ -209,6 +216,31 @@ impl NovoApp {
                 }
                 InspectorAction::Describe(text) => self.describe(device, text),
             }
+        }
+    }
+
+    /// Commits the tag and description being edited for `device`, if they
+    /// differ from the model: the fields only differ while they are edited.
+    fn commit_inspector_edit(&mut self, device: DeviceId) {
+        let InspectorState {
+            tag, description, ..
+        } = std::mem::take(&mut self.wb.inspector);
+        let Some(old) = self
+            .backend
+            .document()
+            .and_then(|d| d.project().device(device))
+            .map(|d| (d.tag.to_string(), d.description.clone()))
+        else {
+            return;
+        };
+        if tag != old.0 && !tag.is_empty() {
+            let result = self.with_editor(|editor, doc| editor.rename(doc, device, &tag));
+            if let Some(Err(reason)) = result {
+                self.message(Level::Warning, reason);
+            }
+        }
+        if description != old.1 {
+            self.describe(device, description);
         }
     }
 

@@ -1405,3 +1405,40 @@ fn a_double_click_on_a_device_puts_the_cursor_in_its_tag() {
         "the tag field has the cursor"
     );
 }
+
+#[test]
+fn an_inspector_edit_is_kept_when_the_selection_clears() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let k = d.place("km3", 80.0, 96.0);
+    d.editor_leave();
+    d.select(k);
+    d.frame();
+    let device = novo_editor::edit::device_of(d.doc().project(), AnyId::Symbol(k)).unwrap();
+
+    // Type into the description, then click away on empty canvas without
+    // pressing Enter.
+    ctx.memory_mut(|m| m.request_focus(egui::Id::new("inspector_description")));
+    d.frame();
+    d.frame_with(vec![
+        egui::Event::Key {
+            key: egui::Key::A,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::COMMAND,
+        },
+        egui::Event::Text("Pump contactor".into()),
+    ]);
+    d.app.canvas.schematic().unwrap().canvas.selection.clear();
+    d.frame();
+    d.frame();
+    assert_eq!(
+        d.doc().project().device(device).unwrap().description,
+        "Pump contactor",
+        "the edit survives the selection clearing"
+    );
+}
