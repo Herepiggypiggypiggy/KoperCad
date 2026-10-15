@@ -10,13 +10,13 @@
 //! potential's colour, wires nothing reaches are dimmed, and a net where two
 //! potentials meet is drawn red.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use eframe::egui;
 use novo_core::{
     NetId, Netlist, PageId, Potential, PotentialId, PotentialKind, Project, SymbolId, SymbolRole,
 };
-use novo_sim::{Live, PoleState, Solution, solve};
+use novo_sim::{Live, PoleState, Settled, Solution, is_coil, settle};
 use novo_theme::{tokens, widgets};
 
 use super::{Level, NovoApp};
@@ -30,7 +30,11 @@ const LIT_WIDTH: f32 = 4.5;
 #[derive(Default)]
 pub(crate) struct LiveView {
     pub(super) on: bool,
+    /// Poles closed by hand. A contact whose device draws a coil follows the
+    /// coil instead; a hand-set state only adds to it.
     pub(super) poles: PoleState,
+    /// Coils switched on by hand, whatever feeds them.
+    pub(super) forced: BTreeSet<SymbolId>,
     solved: Option<Solved>,
 }
 
@@ -38,8 +42,9 @@ pub(crate) struct LiveView {
 struct Solved {
     revision: u64,
     poles: PoleState,
+    forced: BTreeSet<SymbolId>,
     netlist: Netlist,
-    solution: Solution,
+    settled: Settled,
 }
 
 impl LiveView {
@@ -49,16 +54,25 @@ impl LiveView {
         let stale = self.solved.as_ref().is_none_or(|s| {
             s.revision != project.revision()
                 || s.poles != self.poles
+                || s.forced != self.forced
                 || !s.netlist.is_current(project)
         });
         if stale {
             let netlist = project.netlist();
-            let solution = solve(project, &netlist, &self.poles);
+            // The coils that were on stay on while their own contacts feed
+            // them, so a seal-in circuit holds after the button is released.
+            let held = self
+                .solved
+                .as_ref()
+                .map(|s| s.settled.energized.clone())
+                .unwrap_or_default();
+            let settled = settle(project, &netlist, &self.poles, &self.forced, &held);
             self.solved = Some(Solved {
                 revision: project.revision(),
                 poles: self.poles.clone(),
+                forced: self.forced.clone(),
                 netlist,
-                solution,
+                settled,
             });
         }
         self.solved.as_ref().expect("solved above")
@@ -139,6 +153,33 @@ pub(super) fn pole_badges(project: &Project, page: PageId, poles: &PoleState) ->
         }
     }
     badges
+}
+
+/// A coil of the page, for its badge.
+pub(super) struct CoilBadge {
+    pub symbol: SymbolId,
+    pub at: egui::Vec2,
+    pub on: bool,
+}
+
+pub(super) fn coil_badges(
+    project: &Project,
+    page: PageId,
+    energized: &BTreeSet<SymbolId>,
+) -> Vec<CoilBadge> {
+    project
+        .symbols()
+        .filter(|s| s.page == page && is_coil(s))
+        .filter_map(|s| {
+            let a = s.pin_position(0)?;
+            let b = s.pin_position(1)?;
+            Some(CoilBadge {
+                symbol: s.id,
+                at: egui::vec2(((a.x + b.x) / 2.0) as f32, ((a.y + b.y) / 2.0) as f32),
+                on: energized.contains(&s.id),
+            })
+        })
+        .collect()
 }
 
 /// How a potential is drawn: its kind first, then its name for the line
@@ -240,9 +281,18 @@ impl NovoApp {
         let project = doc.project();
         let live = &mut self.wb.live;
         let solved = live.solved(project);
-        let wires = lit_wires(project, page, &solved.netlist, &solved.solution);
-        let legend = legend(&wires, project, page, &solved.netlist, &solved.solution);
-        let badges = pole_badges(project, page, &live.poles);
+        let wires = lit_wires(project, page, &solved.netlist, &solved.settled.solution);
+        let legend = legend(
+            &wires,
+            project,
+            page,
+            &solved.netlist,
+            &solved.settled.solution,
+        );
+        let badges = pole_badges(project, page, &solved.settled.poles);
+        let driven = solved.settled.driven.clone();
+        let energized = solved.settled.energized.clone();
+        let coils = coil_badges(project, page, &energized);
         let colors: BTreeMap<PotentialId, (String, egui::Color32)> = project
             .potentials()
             .map(|p| (p.id, (p.name.clone(), potential_color(p))))
@@ -298,15 +348,60 @@ impl NovoApp {
                             egui::Stroke::new(1.5, tokens::TEXT_MUTED),
                         );
                     }
-                    let tip = format!(
-                        "{} · {} · click to {}, Shift+click for every pole",
-                        names.get(&badge.symbol).map_or("", String::as_str),
-                        if badge.closed { "closed" } else { "open" },
-                        if badge.closed { "open" } else { "close" },
-                    );
+                    let name = names.get(&badge.symbol).map_or("", String::as_str);
+                    let state = if badge.closed { "closed" } else { "open" };
+                    let tip = if driven.contains(&badge.symbol) {
+                        format!("{name} · {state}, follows its coil")
+                    } else {
+                        format!(
+                            "{name} · {state} · click to {}, Shift+click for every pole",
+                            if badge.closed { "open" } else { "close" },
+                        )
+                    };
                     if response.on_hover_text(tip).clicked() {
                         let shift = ui.input(|i| i.modifiers.shift);
                         clicked = Some((badge.symbol, badge.group, shift));
+                    }
+                });
+        }
+
+        // Coil badges: a click switches the coil on or off by hand.
+        let mut coil_clicked: Option<SymbolId> = None;
+        for badge in &coils {
+            let at = to_screen(badge.at);
+            if !canvas.expand(BADGE).contains(at) {
+                continue;
+            }
+            let id = egui::Id::new(("live_coil", badge.symbol));
+            egui::Area::new(id)
+                .order(egui::Order::Middle)
+                .pivot(egui::Align2::CENTER_CENTER)
+                .fixed_pos(at)
+                .show(ctx, |ui| {
+                    let (rect, response) = ui
+                        .allocate_exact_size(egui::Vec2::splat(BADGE * 2.4), egui::Sense::click());
+                    let square =
+                        egui::Rect::from_center_size(rect.center(), egui::Vec2::splat(BADGE * 2.0));
+                    let p = ui.painter();
+                    if badge.on {
+                        p.rect_filled(square, 2.0, tokens::SUCCESS);
+                    } else {
+                        p.rect_filled(square, 2.0, tokens::BG_1);
+                        p.rect_stroke(
+                            square,
+                            2.0,
+                            egui::Stroke::new(1.5, tokens::TEXT_MUTED),
+                            egui::StrokeKind::Inside,
+                        );
+                    }
+                    let name = symbol_name(project, badge.symbol);
+                    let tip = format!(
+                        "{name} · coil {} · click to switch it {}",
+                        if badge.on { "on" } else { "off" },
+                        if badge.on { "off" } else { "on" },
+                    );
+                    if response.on_hover_text(tip).clicked() {
+                        coil_clicked = Some(badge.symbol);
                     }
                 });
         }
@@ -377,8 +472,16 @@ impl NovoApp {
         }
         if open_all {
             self.wb.live.poles = PoleState::all_open();
+            self.wb.live.forced.clear();
         }
-        if let Some((symbol, group, all)) = clicked {
+        if let Some(coil) = coil_clicked
+            && !self.wb.live.forced.remove(&coil)
+        {
+            self.wb.live.forced.insert(coil);
+        }
+        if let Some((symbol, group, all)) = clicked
+            && !driven.contains(&symbol)
+        {
             if all {
                 if let Some(doc) = self.backend.document() {
                     self.wb.live.flip_all(doc.project(), symbol);
@@ -447,10 +550,15 @@ mod tests {
         let mut live = LiveView::default();
         let carrying = |live: &mut LiveView| {
             let solved = live.solved(doc.project());
-            lit_wires(doc.project(), page, &solved.netlist, &solved.solution)
-                .iter()
-                .filter(|w| matches!(w.live, Live::Carries(_)))
-                .count()
+            lit_wires(
+                doc.project(),
+                page,
+                &solved.netlist,
+                &solved.settled.solution,
+            )
+            .iter()
+            .filter(|w| matches!(w.live, Live::Carries(_)))
+            .count()
         };
         // The wire from the feed to the contact is lit at rest; the one
         // behind the contact is not.
@@ -470,13 +578,18 @@ mod tests {
         let mut live = LiveView::default();
         live.flip(contact, 0);
         let solved = live.solved(doc.project());
-        let wires = lit_wires(doc.project(), page, &solved.netlist, &solved.solution);
+        let wires = lit_wires(
+            doc.project(),
+            page,
+            &solved.netlist,
+            &solved.settled.solution,
+        );
         let l = legend(
             &wires,
             doc.project(),
             page,
             &solved.netlist,
-            &solved.solution,
+            &solved.settled.solution,
         );
         assert_eq!(l.carried.len(), 1);
         assert_eq!(*l.carried.values().next().unwrap(), 2);
