@@ -593,6 +593,59 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["jump", "renumber", "continuation", "off page"],
         Needs::Project,
     ),
+    // Wire numbering (novo-numbering). `wires.number` fills what has no
+    // number; the window shows the scheme, a preview and the conflicts.
+    cmd(
+        "wires.number",
+        "Number wires",
+        "Edit",
+        &["wire number", "numbering", "potential", "automatic", "fill"],
+        Needs::Project,
+    ),
+    verb(
+        cmd(
+            "wires.numbering",
+            "Wire numbering",
+            "Edit",
+            &["scheme", "wire number", "numbering", "preview"],
+            Needs::Project,
+        ),
+        &["wire numbering"],
+    ),
+    verb(
+        cmd(
+            "wires.renumber",
+            "Renumber wires",
+            "Edit",
+            &["wire number", "numbering", "start over"],
+            Needs::Project,
+        ),
+        &["renumber wires"],
+    ),
+    cmd(
+        "wires.check_numbers",
+        "Check wire numbers",
+        "Edit",
+        &["duplicate", "conflict", "wire number", "numbering"],
+        Needs::Project,
+    ),
+    verb(
+        cmd(
+            "wires.set_number",
+            "Set wire number",
+            "Edit",
+            &["type", "manual", "lock", "wire number"],
+            Needs::Selection,
+        ),
+        &["number wire"],
+    ),
+    cmd(
+        "wires.unlock_number",
+        "Unlock wire number",
+        "Edit",
+        &["manual", "lock", "wire number"],
+        Needs::Selection,
+    ),
     // Navigate
     cmd(
         "nav.partner",
@@ -730,6 +783,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Enclosures",
         "View",
         &["enclosure", "list", "sizes", "catalog"],
+        Needs::Project,
+    ),
+    cmd(
+        "simulate.motor-start",
+        "Simulate motor start",
+        "View",
+        &[
+            "simulate",
+            "motor",
+            "start",
+            "star-delta",
+            "soft starter",
+            "inrush",
+        ],
         Needs::Project,
     ),
     cmd(
@@ -880,6 +947,16 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export pdf", "pdf"],
+    ),
+    verb(
+        cmd(
+            "export.plate",
+            "Export plate drawing",
+            "Export",
+            &["mounting plate", "drill table", "drilling"],
+            Needs::Project,
+        ),
+        &["export plate"],
     ),
     verb(
         cmd(

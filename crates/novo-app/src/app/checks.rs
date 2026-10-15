@@ -99,6 +99,7 @@ impl NovoApp {
         problems.sort_by_key(|(_, p)| severity_rank(p.severity));
         let mut go = None;
         self.waive_form(ui);
+        let mut toggle = None;
         if problems.is_empty() {
             ui.weak(if summary.errors + summary.warnings + summary.infos == 0 {
                 "No issues"
@@ -121,15 +122,52 @@ impl NovoApp {
                         go = Some(*i);
                     }
                     row.context_menu(|ui| {
+                        if ui.button("Go to").clicked() {
+                            go = Some(*i);
+                            ui.close();
+                        }
                         if ui.button("Waive with a reason…").clicked() {
                             self.wb.waiving = Some((*i, String::new()));
                             ui.close();
                         }
+                        if ui.button("Copy message").clicked() {
+                            ui.ctx().copy_text(p.message.clone());
+                            ui.close();
+                        }
                     });
                 }
+                // The empty space under the list has its own menu: the
+                // filters and all messages at once.
+                let rest = ui.available_height().max(32.0);
+                let (_, space) = ui.allocate_exact_size(
+                    egui::vec2(ui.available_width(), rest),
+                    egui::Sense::click(),
+                );
+                space.context_menu(|ui| {
+                    for (i, name) in ["errors", "warnings", "infos"].into_iter().enumerate() {
+                        let shown = filter[i];
+                        if ui.selectable_label(shown, format!("Show {name}")).clicked() {
+                            toggle = Some(i);
+                            ui.close();
+                        }
+                    }
+                    ui.separator();
+                    if ui
+                        .add_enabled(!problems.is_empty(), egui::Button::new("Copy all shown"))
+                        .clicked()
+                    {
+                        let all: Vec<&str> =
+                            problems.iter().map(|(_, p)| p.message.as_str()).collect();
+                        ui.ctx().copy_text(all.join("\n"));
+                        ui.close();
+                    }
+                });
             });
+        if let Some(i) = toggle {
+            self.wb.issue_filter[i] ^= true;
+        }
         self.waived_list(ui);
-        ui.weak("F8 next · Shift+F8 previous · right-click to waive");
+        ui.weak("F8 next · Shift+F8 previous · right-click for more");
         if let Some(i) = go {
             self.go_problem(i);
         }

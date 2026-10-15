@@ -202,6 +202,28 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["onderbrekingspunten nummeren"],
     ),
+    nl("wires.number", &[], &["draden nummeren", "draadnummers"]),
+    nl(
+        "wires.numbering",
+        &["draadnummering"],
+        &["draadnummers instellen", "nummerschema"],
+    ),
+    nl(
+        "wires.renumber",
+        &["hernummer draden"],
+        &["draden opnieuw nummeren"],
+    ),
+    nl(
+        "wires.check_numbers",
+        &[],
+        &["draadnummers controleren", "dubbele draadnummers"],
+    ),
+    nl(
+        "wires.set_number",
+        &["nummer draad"],
+        &["draadnummer typen", "draadnummer vastzetten"],
+    ),
+    nl("wires.unlock_number", &[], &["draadnummer ontgrendelen"]),
     nl("terminal.reset_pe", &["herstel"], &["aarde", "klemmen"]),
     nl("terminal.connect", &["verbind"], &["klemmen", "brug"]),
     nl("terminal.disconnect", &["ontkoppel"], &["klemmen", "brug"]),
@@ -247,6 +269,16 @@ pub const DUTCH: &[Aliases] = &[
         "cabinet.enclosures",
         &[],
         &["kasten", "kastenlijst", "behuizingen"],
+    ),
+    nl(
+        "simulate.motor-start",
+        &[],
+        &[
+            "motor starten",
+            "ster-driehoek",
+            "aanloopstroom",
+            "zachtstarter",
+        ],
     ),
     nl("view.changes", &["wijzigingen"], &["vergelijk", "verschil"]),
     nl(
@@ -300,6 +332,11 @@ pub const DUTCH: &[Aliases] = &[
         "export.pdf",
         &["exporteer pdf", "pdf exporteren"],
         &["afdrukken"],
+    ),
+    nl(
+        "export.plate",
+        &["exporteer montageplaat", "montageplaat exporteren"],
+        &["boortabel", "boren"],
     ),
     nl(
         "export.bom",

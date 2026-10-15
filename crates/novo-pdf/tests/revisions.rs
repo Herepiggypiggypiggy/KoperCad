@@ -36,6 +36,7 @@ fn a_title_block_prints_the_page_and_set_revision() {
     let revisions = TitleRevisions {
         page: Some(("B".into(), "2026-10-15".into())),
         project: Some("D".into()),
+        ..TitleRevisions::default()
     };
     let options = PdfOptions {
         title_revisions: BTreeMap::from([(first, revisions)]),

@@ -286,3 +286,14 @@ fn the_sheet_comes_back_from_the_project_and_regenerates_it() {
     tags.sort();
     assert_eq!(tags.iter().filter(|t| t.contains("-M")).count(), 3);
 }
+
+#[test]
+fn a_sheet_cannot_ask_for_an_unbounded_number_of_placements() {
+    let mut csv = String::from("Macro,power\n");
+    for _ in 0..(MAX_PLACEMENTS + 1) {
+        csv.push_str("starter,1\n");
+    }
+    let sheet = SpecSheet::from_csv(&csv);
+    let err = preview(empty().project(), &sheet, &lookup, &assignment(), Mode::Add).unwrap_err();
+    assert!(err[0].message.contains("limit"));
+}

@@ -50,6 +50,10 @@ use crate::parametric::{
 /// Property on a generated page: the key of the group it was made for.
 pub const GENERATED_KEY: &str = "kc.generated";
 
+/// The most placements one generation makes (rows times repeats), so a
+/// sheet cannot ask for a million devices.
+pub const MAX_PLACEMENTS: usize = 2000;
+
 const MARGIN_LEFT: f64 = 30.0;
 const MARGIN_TOP: f64 = 40.0;
 const MARGIN_BOTTOM: f64 = 40.0;
@@ -206,6 +210,7 @@ struct Row {
     values: Vec<(String, Value)>,
     definition: BlockDefinition,
     extent: (f64, f64),
+    copies: usize,
 }
 
 /// The rows ready to place, the lines left out by `When`, and header warnings.
@@ -333,12 +338,22 @@ fn prepare(
                 if p.is_empty() { "Generated".into() } else { p }
             },
             structure,
+            copies: inst.count,
             values: given,
             extent: (
                 w + inst.pitch.x.abs() * (inst.count as f64 - 1.0),
                 h + inst.pitch.y.abs() * (inst.count as f64 - 1.0),
             ),
             definition,
+        });
+    }
+    let total: usize = rows.iter().map(|r| r.copies).sum();
+    if total > MAX_PLACEMENTS {
+        problems.push(SheetProblem {
+            line: 1,
+            message: format!(
+                "the sheet asks for {total} placements, more than the limit of {MAX_PLACEMENTS}"
+            ),
         });
     }
     if !problems.is_empty() {

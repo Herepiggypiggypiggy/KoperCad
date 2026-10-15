@@ -40,10 +40,54 @@ pub struct Scalar {
     pub values: Vec<f32>,
 }
 
+/// Why a field could not be built.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FieldError {
+    /// No columns or no rows.
+    Empty,
+    /// The number of values is not columns times rows.
+    Length { expected: usize, found: usize },
+}
+
+impl std::fmt::Display for FieldError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FieldError::Empty => write!(f, "the field has no cells"),
+            FieldError::Length { expected, found } => {
+                write!(f, "the field has {found} values, expected {expected}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for FieldError {}
+
+fn check(grid: &Grid, lens: &[usize]) -> Result<(), FieldError> {
+    if grid.cols == 0 || grid.rows == 0 {
+        return Err(FieldError::Empty);
+    }
+    let expected = grid.cols * grid.rows;
+    match lens.iter().find(|n| **n != expected) {
+        Some(found) => Err(FieldError::Length {
+            expected,
+            found: *found,
+        }),
+        None => Ok(()),
+    }
+}
+
 impl Scalar {
+    /// A field from solver output: an error, not a panic, for a bad shape.
+    pub fn try_new(grid: Grid, values: Vec<f32>) -> Result<Scalar, FieldError> {
+        check(&grid, &[values.len()])?;
+        Ok(Scalar { grid, values })
+    }
+
+    /// A field from data known to be well formed (tests, the synthetic
+    /// scene). Panics on a bad shape; use [`Scalar::try_new`] for anything
+    /// that comes from outside.
     pub fn new(grid: Grid, values: Vec<f32>) -> Scalar {
-        assert_eq!(values.len(), grid.cols * grid.rows, "one value per cell");
-        Scalar { grid, values }
+        Scalar::try_new(grid, values).expect("a well formed field")
     }
 
     pub fn at(&self, col: usize, row: usize) -> f32 {
@@ -157,10 +201,15 @@ pub struct Vector {
 }
 
 impl Vector {
+    /// A field from solver output: an error, not a panic, for a bad shape.
+    pub fn try_new(grid: Grid, vx: Vec<f32>, vy: Vec<f32>) -> Result<Vector, FieldError> {
+        check(&grid, &[vx.len(), vy.len()])?;
+        Ok(Vector { grid, vx, vy })
+    }
+
+    /// A field from data known to be well formed; see [`Scalar::new`].
     pub fn new(grid: Grid, vx: Vec<f32>, vy: Vec<f32>) -> Vector {
-        assert_eq!(vx.len(), grid.cols * grid.rows);
-        assert_eq!(vy.len(), grid.cols * grid.rows);
-        Vector { grid, vx, vy }
+        Vector::try_new(grid, vx, vy).expect("a well formed field")
     }
 
     pub fn max_speed(&self) -> f32 {
@@ -242,6 +291,27 @@ mod tests {
         let (lo, hi) = r.extent().unwrap();
         assert!(lo >= 0.0 && hi <= 30.0 && hi > 25.0);
         assert!((r.grid.width() - 20.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn bad_shapes_are_errors_not_panics() {
+        assert_eq!(
+            Scalar::try_new(grid(2, 2), vec![0.0; 3]),
+            Err(FieldError::Length {
+                expected: 4,
+                found: 3
+            })
+        );
+        assert_eq!(Scalar::try_new(grid(0, 2), vec![]), Err(FieldError::Empty));
+        assert_eq!(
+            Vector::try_new(grid(2, 1), vec![0.0; 2], vec![0.0; 5]),
+            Err(FieldError::Length {
+                expected: 2,
+                found: 5
+            })
+        );
+        assert!(Scalar::try_new(grid(2, 2), vec![0.0; 4]).is_ok());
+        assert!(FieldError::Empty.to_string().contains("no cells"));
     }
 
     #[test]

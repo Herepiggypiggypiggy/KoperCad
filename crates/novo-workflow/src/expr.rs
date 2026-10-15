@@ -193,9 +193,16 @@ enum Node {
     Call(String, Vec<Node>),
 }
 
+/// Deepest nesting of parentheses, calls and prefix operators.
+pub const MAX_DEPTH: usize = 64;
+/// Longest expression accepted, in characters. A long chain of `+` would
+/// otherwise build a tree as deep as it is long.
+pub const MAX_LEN: usize = 2000;
+
 struct Parser {
     toks: Vec<Tok>,
     at: usize,
+    depth: usize,
 }
 
 impl Parser {
@@ -247,14 +254,27 @@ impl Parser {
         Ok(left)
     }
 
+    fn deeper(&mut self) -> Result<(), ExprError> {
+        self.depth += 1;
+        if self.depth > MAX_DEPTH {
+            return Err(ExprError::Syntax(format!(
+                "nested more than {MAX_DEPTH} levels deep"
+            )));
+        }
+        Ok(())
+    }
+
     fn unary(&mut self) -> Result<Node, ExprError> {
-        if self.op(&["!"]).is_some() {
-            return Ok(Node::Not(Box::new(self.unary()?)));
-        }
-        if self.op(&["-"]).is_some() {
-            return Ok(Node::Neg(Box::new(self.unary()?)));
-        }
-        self.power()
+        self.deeper()?;
+        let node = if self.op(&["!"]).is_some() {
+            Node::Not(Box::new(self.unary()?))
+        } else if self.op(&["-"]).is_some() {
+            Node::Neg(Box::new(self.unary()?))
+        } else {
+            self.power()?
+        };
+        self.depth -= 1;
+        Ok(node)
     }
 
     fn power(&mut self) -> Result<Node, ExprError> {
@@ -267,6 +287,13 @@ impl Parser {
     }
 
     fn primary(&mut self) -> Result<Node, ExprError> {
+        self.deeper()?;
+        let node = self.primary_inner();
+        self.depth -= 1;
+        node
+    }
+
+    fn primary_inner(&mut self) -> Result<Node, ExprError> {
         match self.next() {
             Some(Tok::Num(n)) => Ok(Node::Lit(Val::Num(n))),
             Some(Tok::Str(s)) => Ok(Node::Lit(Val::Text(s))),
@@ -324,9 +351,15 @@ impl Expr {
         if src.trim().is_empty() {
             return Err(ExprError::Syntax("the expression is empty".into()));
         }
+        if src.chars().count() > MAX_LEN {
+            return Err(ExprError::Syntax(format!(
+                "longer than {MAX_LEN} characters"
+            )));
+        }
         let mut p = Parser {
             toks: lex(src)?,
             at: 0,
+            depth: 0,
         };
         let root = p.level(0)?;
         if p.at < p.toks.len() {
@@ -508,6 +541,9 @@ fn call(name: &str, a: &[Val]) -> Result<Val, ExprError> {
             }
             let x = a[0].as_num()?;
             let digits = a.get(1).map(|d| d.as_num()).transpose()?.unwrap_or(0.0);
+            if !(0.0..=12.0).contains(&digits) {
+                return Err(ExprError::Math("round() digits must be 0 to 12".into()));
+            }
             let f = 10f64.powi(digits as i32);
             Ok(Val::Num((x * f).round() / f))
         }
@@ -660,6 +696,24 @@ mod tests {
         ));
         assert!(matches!(eval_str("(1", &v), Err(ExprError::Syntax(_))));
         assert!(Expr::parse("  ").is_err());
+    }
+
+    #[test]
+    fn hostile_nesting_is_an_error_not_a_crash() {
+        let v = Vars::new();
+        for src in [
+            format!("{}1{}", "(".repeat(10_000), ")".repeat(10_000)),
+            format!("{}1", "-".repeat(10_000)),
+            format!("{}x", "!".repeat(10_000)),
+            format!("f({}", "f(".repeat(10_000)),
+            "1+".repeat(50_000) + "1",
+        ] {
+            assert!(matches!(eval_str(&src, &v), Err(ExprError::Syntax(_))));
+        }
+        // Reasonable nesting still works.
+        let ok = format!("{}1{}", "(".repeat(20), ")".repeat(20));
+        assert_eq!(eval_str(&ok, &v).unwrap(), Val::Num(1.0));
+        assert!(eval_str("round(1.5, 400)", &v).is_err());
     }
 
     #[test]
