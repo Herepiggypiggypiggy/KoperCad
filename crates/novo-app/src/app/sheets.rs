@@ -9,9 +9,11 @@
 //! that starts with the `Id` column); anything else takes the next free
 //! name, so the user's own files are never overwritten.
 
+use std::collections::BTreeMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
 
-use novo_interop::sheets::{CsvOptions, export_project, read_xlsx, to_csv, xlsx_bytes};
+use novo_interop::sheets::{CsvOptions, export_project, to_csv, xlsx_bytes};
 
 use super::pdf::write_replacing;
 use super::{Level, NovoApp, projects_dir};
@@ -46,7 +48,12 @@ impl NovoApp {
     /// Exports the devices, terminals, wires and cables to one `.xlsx`.
     pub(super) fn export_spreadsheet(&mut self) -> Option<PathBuf> {
         let (dir, stem) = self.export_base()?;
-        let path = ours_or_free(&dir, &format!("{stem} sheets"), "xlsx", is_our_xlsx);
+        let path = ours_or_free(
+            &dir,
+            &format!("{stem} sheets"),
+            "xlsx",
+            &self.wb.sheet_exports,
+        );
         self.export_spreadsheet_to(&path)
     }
 
@@ -56,9 +63,13 @@ impl NovoApp {
         let book = export_project(self.backend.document()?.project());
         let result = xlsx_bytes(&book)
             .map_err(|e| e.to_string())
-            .and_then(|bytes| write_replacing(path, &bytes).map_err(|e| e.to_string()));
+            .and_then(|bytes| {
+                write_replacing(path, &bytes).map_err(|e| e.to_string())?;
+                Ok(hash(&bytes))
+            });
         match result {
-            Ok(()) => {
+            Ok(h) => {
+                self.wb.sheet_exports.insert(path.to_owned(), h);
                 let verb = if replaced { "Replaced" } else { "Exported" };
                 self.message(Level::Info, format!("{verb} {}", path.display()));
                 self.wb.last_export = Some(path.to_owned());
@@ -92,10 +103,15 @@ impl NovoApp {
         let mut written = Vec::new();
         for table in &book.tables {
             let name = format!("{stem} {}", table.kind.name());
-            let path = ours_or_free(&dir, &name, "csv", is_our_csv);
+            let path = ours_or_free(&dir, &name, "csv", &self.wb.sheet_exports);
             let text = to_csv(table, &options);
             match write_replacing(&path, text.as_bytes()) {
-                Ok(()) => written.push(path),
+                Ok(()) => {
+                    self.wb
+                        .sheet_exports
+                        .insert(path.clone(), hash(text.as_bytes()));
+                    written.push(path);
+                }
                 Err(e) => {
                     self.message(
                         Level::Error,
@@ -120,22 +136,15 @@ impl NovoApp {
     }
 }
 
-/// An `.xlsx` that reads back as one of our exports.
-fn is_our_xlsx(path: &Path) -> bool {
-    std::fs::read(path).is_ok_and(|bytes| read_xlsx(&bytes).is_ok())
+fn hash(bytes: &[u8]) -> u64 {
+    let mut h = DefaultHasher::new();
+    bytes.hash(&mut h);
+    h.finish()
 }
 
-/// A CSV that starts (after the byte order mark) with the `Id` column.
-fn is_our_csv(path: &Path) -> bool {
-    std::fs::read(path).is_ok_and(|bytes| {
-        let text = bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&bytes);
-        text.starts_with(b"Id;") || text.starts_with(b"Id,") || text.starts_with(b"Id\t")
-    })
-}
-
-/// `<dir>/<base>.<ext>` when free or ours to replace, else the first free
-/// or ours of `<base> 2.<ext>`, `<base> 3.<ext>`...
-fn ours_or_free(dir: &Path, base: &str, ext: &str, ours: fn(&Path) -> bool) -> PathBuf {
+/// `<dir>/<base>.<ext>` when free or still exactly what we wrote, else the
+/// first such of `<base> 2.<ext>`, `<base> 3.<ext>`...
+fn ours_or_free(dir: &Path, base: &str, ext: &str, written: &BTreeMap<PathBuf, u64>) -> PathBuf {
     let mut n = 1;
     loop {
         let name = if n == 1 {
@@ -144,7 +153,10 @@ fn ours_or_free(dir: &Path, base: &str, ext: &str, ours: fn(&Path) -> bool) -> P
             format!("{base} {n}.{ext}")
         };
         let path = dir.join(name);
-        if !path.exists() || ours(&path) {
+        let untouched = written
+            .get(&path)
+            .is_some_and(|h| std::fs::read(&path).is_ok_and(|b| hash(&b) == *h));
+        if !path.exists() || untouched {
             return path;
         }
         n += 1;
@@ -156,36 +168,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_our_own_exports_are_replaced() {
+    fn an_edited_export_is_never_replaced() {
         let dir = tempfile::tempdir().unwrap();
-        let theirs = dir.path().join("Plant sheets.xlsx");
-        std::fs::write(&theirs, b"not an export").unwrap();
-        let next = ours_or_free(dir.path(), "Plant sheets", "xlsx", is_our_xlsx);
+        let mut written = BTreeMap::new();
+        let first = dir.path().join("Plant sheets.xlsx");
+        // Not ours (or from an earlier session): keep it, take the next name.
+        std::fs::write(&first, b"someone's file").unwrap();
+        let next = ours_or_free(dir.path(), "Plant sheets", "xlsx", &written);
         assert_eq!(next, dir.path().join("Plant sheets 2.xlsx"));
-
-        let book = novo_interop::sheets::Workbook {
-            tables: vec![novo_interop::sheets::Table::new(
-                novo_interop::sheets::TableKind::Devices,
-                vec!["Id".into(), "Tag".into()],
-            )],
-            ..Default::default()
-        };
-        std::fs::write(&next, xlsx_bytes(&book).unwrap()).unwrap();
+        // Ours and untouched: replaced.
+        std::fs::write(&next, b"export").unwrap();
+        written.insert(next.clone(), hash(b"export"));
         assert_eq!(
-            ours_or_free(dir.path(), "Plant sheets", "xlsx", is_our_xlsx),
+            ours_or_free(dir.path(), "Plant sheets", "xlsx", &written),
             next
         );
-
-        let csv = dir.path().join("Plant Devices.csv");
-        std::fs::write(&csv, "\u{feff}Id;Tag\r\n").unwrap();
+        // The user edits and saves it: the next export goes beside it.
+        std::fs::write(&next, b"export, edited").unwrap();
         assert_eq!(
-            ours_or_free(dir.path(), "Plant Devices", "csv", is_our_csv),
-            csv
-        );
-        std::fs::write(&csv, "Name;Qty\r\n").unwrap();
-        assert_eq!(
-            ours_or_free(dir.path(), "Plant Devices", "csv", is_our_csv),
-            dir.path().join("Plant Devices 2.csv")
+            ours_or_free(dir.path(), "Plant sheets", "xlsx", &written),
+            dir.path().join("Plant sheets 3.xlsx")
         );
     }
 }
