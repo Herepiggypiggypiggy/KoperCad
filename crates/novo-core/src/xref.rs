@@ -60,10 +60,21 @@ pub struct CrossReference {
 }
 
 impl Project {
-    /// Where a symbol is drawn.
+    /// Where a symbol is drawn, or where it was printed when its page is
+    /// [frozen](crate::Page::frozen) and the symbol was on it then.
     pub fn location_of(&self, symbol: SymbolId) -> Option<Location> {
         let symbol = self.symbol(symbol)?;
         let page = self.page(symbol.page)?;
+        if let Some(freeze) = &page.frozen
+            && let Some(column) = freeze.column_of(symbol.id)
+        {
+            return Some(Location {
+                page: page.id,
+                page_name: freeze.name.clone(),
+                structure: freeze.structure.clone(),
+                column,
+            });
+        }
         Some(Location {
             page: page.id,
             page_name: page.name.clone(),

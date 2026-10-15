@@ -3,9 +3,10 @@
 use std::collections::BTreeSet;
 
 use crate::entity::{
-    Cable, CableCore, Device, DeviceKind, Dismissal, Endpoint, Junction, Page, Part, Pin, PinFeed,
-    Potential, PotentialKind, PotentialSet, PotentialSpec, PotentialSystem, ProjectInfo, Structure,
-    SymbolInstance, SymbolKey, SymbolRole, Terminal, Text, TextContent, TextPlacement, Value, Wire,
+    Cable, CableCore, Device, DeviceKind, Dismissal, Endpoint, Junction, Page, PageFreeze, Part,
+    Pin, PinFeed, Potential, PotentialKind, PotentialSet, PotentialSpec, PotentialSystem,
+    ProjectInfo, Structure, SymbolInstance, SymbolKey, SymbolRole, Terminal, Text, TextContent,
+    TextPlacement, Value, Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::{Placement, Point};
@@ -211,6 +212,7 @@ impl<'p> Tx<'p> {
             kind: Default::default(),
             format: Default::default(),
             structure: Default::default(),
+            frozen: None,
             properties: Default::default(),
         })
     }
@@ -362,6 +364,38 @@ impl<'p> Tx<'p> {
     fn remove_exact(&mut self, id: AnyId) -> Result<()> {
         let record = self.project.record(id).ok_or(ModelError::NotFound(id))?;
         self.apply(Op::Remove { record })
+    }
+
+    /// Freezes a page as issued with `revision`: its name, structure and
+    /// every symbol's column are kept for references until
+    /// [`Tx::unfreeze_page`]. Freezing again re-takes the snapshot.
+    pub fn freeze_page(&mut self, page: PageId, revision: impl Into<String>) -> Result<()> {
+        let revision = revision.into();
+        let p = self
+            .project
+            .page(page)
+            .ok_or(ModelError::NotFound(page.into()))?;
+        let mut columns: Vec<(SymbolId, u16)> = self
+            .project
+            .page_contents(page)
+            .symbols
+            .iter()
+            .filter_map(|&s| Some((s, self.project.symbol(s)?)))
+            .map(|(id, s)| (id, p.format.column_at(s.placement.origin.x)))
+            .collect();
+        columns.sort();
+        let freeze = PageFreeze {
+            revision,
+            name: p.name.clone(),
+            structure: p.structure.clone(),
+            columns,
+        };
+        self.update::<Page>(page, |p| p.frozen = Some(freeze))
+    }
+
+    /// Lets references to a page follow its drawing again.
+    pub fn unfreeze_page(&mut self, page: PageId) -> Result<()> {
+        self.update::<Page>(page, |p| p.frozen = None)
     }
 
     /// Adds a device.

@@ -362,3 +362,73 @@ fn pages_without_structure_read_plainly() {
     assert_eq!(at.qualified(&DeviceTag::default()), "7.2");
     assert_eq!(at.qualified(&structure("=A2")), "7.2");
 }
+
+#[test]
+fn frozen_pages_keep_their_printed_references() {
+    let mut doc = Document::default();
+    let ((page, k1, coil), _) = doc
+        .transact("K1", |tx| {
+            let page = tx.add_page("3")?;
+            let k1 = tx.add_device(DeviceTag::parse("-K1")?, "")?;
+            let coil = symbol(
+                tx,
+                page,
+                50.0,
+                SymbolRole::Device {
+                    device: k1,
+                    main: true,
+                },
+            )?;
+            Ok((page, k1, coil))
+        })
+        .unwrap();
+    let labels = |doc: &Document| -> Vec<String> {
+        doc.project()
+            .cross_references(k1)
+            .iter()
+            .map(|r| r.location.to_string())
+            .collect()
+    };
+    assert_eq!(labels(&doc), ["3.2"]);
+    doc.execute(Command::FreezePage {
+        page,
+        revision: "A".into(),
+    })
+    .unwrap();
+    // Renaming the page and moving the coil do not move its printed reference.
+    doc.transact("Rework", |tx| {
+        tx.update::<Page>(page, |p| p.name = "4".into())?;
+        tx.move_symbol(coil, Placement::at(Point::new(300.0, 50.0)))
+    })
+    .unwrap();
+    assert_eq!(labels(&doc), ["3.2"]);
+    // A symbol added after the freeze is referenced where it is; the list
+    // stays in drawing order (the contact is left of the moved coil).
+    doc.transact("Contact", |tx| {
+        symbol(
+            tx,
+            page,
+            100.0,
+            SymbolRole::Device {
+                device: k1,
+                main: false,
+            },
+        )
+    })
+    .unwrap();
+    assert_eq!(labels(&doc), ["4.3", "3.2"]);
+    let loaded = Project::from_json(&doc.project().to_json()).unwrap();
+    assert_eq!(
+        loaded.page(page).unwrap().frozen.as_ref().unwrap().revision,
+        "A"
+    );
+    // The next revision re-issues the page as it is now.
+    doc.execute(Command::FreezePage {
+        page,
+        revision: "B".into(),
+    })
+    .unwrap();
+    assert_eq!(labels(&doc), ["4.3", "4.8"]);
+    doc.execute(Command::UnfreezePage { page }).unwrap();
+    assert_eq!(labels(&doc), ["4.3", "4.8"]);
+}

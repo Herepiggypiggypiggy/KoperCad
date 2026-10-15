@@ -261,8 +261,39 @@ pub struct Page {
     /// any structure.
     #[serde(default, skip_serializing_if = "DeviceTag::is_empty")]
     pub structure: DeviceTag,
+    /// Set when the page was issued (a revision or an export): references
+    /// to it keep the page and column printed then, so a printed set never
+    /// changes under its readers (pinned flow, DESIGN.md section 8).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frozen: Option<PageFreeze>,
     #[serde(default)]
     pub properties: Properties,
+}
+
+/// What a page looked like when it was issued.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PageFreeze {
+    /// The revision or export it was issued with, e.g. `B` or `2026-10-14`.
+    pub revision: String,
+    /// The page's name and structure at that point.
+    pub name: String,
+    #[serde(default, skip_serializing_if = "DeviceTag::is_empty")]
+    pub structure: DeviceTag,
+    /// The grid column of each symbol on the page at that point, sorted by
+    /// symbol (`[symbol, column]` pairs in JSON). Symbols added later are
+    /// referenced where they are.
+    #[serde(default)]
+    pub columns: Vec<(SymbolId, u16)>,
+}
+
+impl PageFreeze {
+    /// The column a symbol was printed in, if it was on the page then.
+    pub fn column_of(&self, symbol: SymbolId) -> Option<u16> {
+        self.columns
+            .binary_search_by_key(&symbol, |&(s, _)| s)
+            .ok()
+            .map(|i| self.columns[i].1)
+    }
 }
 
 /// What kind of thing a device is.
