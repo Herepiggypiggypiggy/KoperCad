@@ -1035,25 +1035,30 @@ impl PageScene {
             item.labels.insert(0, label);
         }
         if let Some(strip) = self.strip_heads.get(&id) {
-            // Left of the run's first terminal; the terminals' own names
-            // are on their right.
+            // Left of the run's first terminal and of every label already
+            // on its row (the terminal's own name, a pin number), so the
+            // two never overlap at any zoom: label boxes are in mm.
             let b = item
                 .primitives
                 .iter()
                 .fold(crate::Aabb::EMPTY, |b, p| b.union(&p.shape.bounds()));
-            let at = if b.is_empty() {
-                vec(sym.placement.origin)
+            let (mut x, y) = if b.is_empty() {
+                let o = vec(sym.placement.origin);
+                (o.x, o.y)
             } else {
-                Vec2::new(b.min.x, b.center().y)
+                (b.min.x, b.center().y)
             };
+            let h = self.style.tag_height;
+            for l in &item.labels {
+                let lb = l.bounds();
+                if lb.min.y < y + h * 0.5 && lb.max.y > y - h * 0.5 {
+                    x = x.min(lb.min.x);
+                }
+            }
             item.labels.push(
-                Label::new(
-                    at - Vec2::new(1.5, 0.0),
-                    strip.clone(),
-                    self.style.tag_height,
-                )
-                .anchored(Anchor::CenterRight)
-                .colored(self.style.tag_color),
+                Label::new(Vec2::new(x - 1.5, y), strip.clone(), h)
+                    .anchored(Anchor::CenterRight)
+                    .colored(self.style.tag_color),
             );
         }
         if let Some(note) = self.notes.get(&id) {
@@ -1662,6 +1667,45 @@ mod tests {
                 .collect();
             assert_eq!(named, expect, "{at:?}");
         }
+    }
+
+    #[test]
+    fn strip_label_clears_the_terminal_name_on_the_left() {
+        // A library terminal that puts its own name left of the pins.
+        struct LeftName;
+        impl SymbolArt for LeftName {
+            fn artwork(&self, _: &SymbolInstance) -> Option<Vec<Primitive>> {
+                None
+            }
+            fn tag_anchor(&self, _: &SymbolInstance) -> Option<(Vec2, Anchor)> {
+                Some((Vec2::new(-5.0, 0.0), Anchor::CenterRight))
+            }
+        }
+        let mut doc = Document::default();
+        let ((page, sym), _) = doc
+            .transact("strip", |tx| {
+                let page = tx.add_page("1")?;
+                let x1 = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+                let t = tx.add_terminal(x1, "1")?;
+                let sym = tx.place_symbol(
+                    page,
+                    "iec/terminal",
+                    MPlacement::at(Point::new(100.0, 50.0)),
+                    vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                    SymbolRole::Terminal { terminals: vec![t] },
+                )?;
+                Ok((page, sym))
+            })
+            .unwrap();
+        let ps = PageScene::new(doc.project(), page, &LeftName);
+        let item = ps.scene().get(item_id(sym)).unwrap();
+        let name = item.labels.iter().find(|l| l.text == "1").unwrap();
+        let strip = item.labels.iter().find(|l| l.text == "-X1").unwrap();
+        let (a, b) = (name.bounds(), strip.bounds());
+        assert!(
+            a.min.x >= b.max.x || b.min.x >= a.max.x || a.min.y >= b.max.y || b.min.y >= a.max.y,
+            "strip label {b:?} overlaps the terminal name {a:?}"
+        );
     }
 
     #[test]
