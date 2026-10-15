@@ -687,6 +687,26 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["export bom", "bom"],
     ),
+    verb(
+        cmd(
+            "export.sheets",
+            "Export spreadsheet (.xlsx)",
+            "Export",
+            &["excel", "xlsx", "bulk edit"],
+            Needs::Project,
+        ),
+        &["export spreadsheet", "export excel", "excel"],
+    ),
+    verb(
+        cmd(
+            "export.sheets_csv",
+            "Export spreadsheet (CSV files)",
+            "Export",
+            &["csv"],
+            Needs::Project,
+        ),
+        &["export csv", "csv"],
+    ),
 ];
 
 /// The command with this id.

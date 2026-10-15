@@ -225,6 +225,16 @@ pub const DUTCH: &[Aliases] = &[
         &["exporteer stuklijst", "stuklijst"],
         &["onderdelenlijst"],
     ),
+    nl(
+        "export.sheets",
+        &[
+            "exporteer spreadsheet",
+            "exporteer excel",
+            "excel exporteren",
+        ],
+        &["excel"],
+    ),
+    nl("export.sheets_csv", &["exporteer csv"], &["csv"]),
 ];
 
 /// Dutch command arguments and the English chip each one stands for.

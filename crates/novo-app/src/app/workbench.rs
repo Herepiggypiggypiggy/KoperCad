@@ -208,6 +208,8 @@ const APP_COMMANDS: &[&str] = &[
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "export.sheets",
+    "export.sheets_csv",
     "plc.add_card",
     "plc.to_plc",
     "plc.renumber_io",
@@ -524,6 +526,12 @@ impl NovoApp {
             }
             "export.pdf" => {
                 self.export_pdf();
+            }
+            "export.sheets" => {
+                self.export_spreadsheet();
+            }
+            "export.sheets_csv" => {
+                self.export_spreadsheet_csv();
             }
             "plc.add_card" => self.plc_add_card(argument),
             "plc.to_plc" => self.plc_to_plc(),

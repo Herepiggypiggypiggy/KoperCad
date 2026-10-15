@@ -22,6 +22,7 @@ mod preferences;
 mod project_settings;
 mod reports;
 mod revisions;
+mod sheets;
 mod terminals;
 mod title_revisions;
 mod userkeymap;
@@ -937,6 +938,16 @@ impl NovoApp {
         let export = egui::Button::new("Export PDF");
         if ui.add_enabled(self.is_open(), export).clicked() {
             self.export_pdf();
+            ui.close();
+        }
+        let sheets = egui::Button::new("Export spreadsheet (.xlsx)");
+        if ui.add_enabled(self.is_open(), sheets).clicked() {
+            self.export_spreadsheet();
+            ui.close();
+        }
+        let csv = egui::Button::new("Export spreadsheet (CSV files)");
+        if ui.add_enabled(self.is_open(), csv).clicked() {
+            self.export_spreadsheet_csv();
             ui.close();
         }
         ui.separator();
