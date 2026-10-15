@@ -45,11 +45,20 @@ pub struct DuctView {
 }
 
 impl DuctView {
-    fn size(&self) -> Vec2 {
+    /// Corners of the strip. `(x, y)` is the start of the centre line, as
+    /// for a rail; the strip is centred across the run.
+    fn corners(&self) -> (Vec2, Vec2) {
+        let half = self.width / 2.0;
         if self.vertical {
-            Vec2::new(self.width, self.length)
+            (
+                Vec2::new(self.x - half, self.y),
+                Vec2::new(self.x + half, self.y + self.length),
+            )
         } else {
-            Vec2::new(self.length, self.width)
+            (
+                Vec2::new(self.x, self.y - half),
+                Vec2::new(self.x + self.length, self.y + half),
+            )
         }
     }
 }
@@ -241,10 +250,10 @@ impl CabinetScene {
             out.push((rail_item(r.id), item));
         }
         for d in &view.ducts {
-            let a = Vec2::new(d.x, d.y);
+            let (min, max) = d.corners();
             let item = Item::new(l.rails)
                 .with(Primitive::stroked(
-                    Shape::rect(a, a + d.size()),
+                    Shape::rect(min, max),
                     Stroke::world(0.4, s.rail),
                 ))
                 .unselectable();
@@ -382,8 +391,8 @@ pub fn view_bounds(view: &CabinetView) -> Aabb {
         ));
     }
     for d in &view.ducts {
-        let a = Vec2::new(d.x, d.y);
-        b = b.union(&Aabb::new(a, a + d.size()));
+        let (min, max) = d.corners();
+        b = b.union(&Aabb::new(min, max));
     }
     for d in &view.boxes {
         b = b.union(&Aabb::new(
@@ -545,11 +554,16 @@ mod tests {
         c.set(&v);
         let duct = c.scene().get(rail_item(9)).unwrap();
         assert!(!duct.selectable);
+        // Centred on its line: the horizontal one at y 300 spans 285..315.
+        assert_eq!(v.ducts[0].corners().0.y, 285.0);
         // A vertical duct swaps its sides and may stick out of the plate.
         v.ducts[0].vertical = true;
         v.ducts[0].length = 900.0;
         let b = view_bounds(&v);
         assert_eq!(b.max.y, 1200.0);
-        assert_eq!(v.ducts[0].size(), Vec2::new(30.0, 900.0));
+        assert_eq!(
+            v.ducts[0].corners(),
+            (Vec2::new(25.0, 300.0), Vec2::new(55.0, 1200.0))
+        );
     }
 }

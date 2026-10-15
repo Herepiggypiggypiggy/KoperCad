@@ -40,7 +40,10 @@ fn ducts_are_loaded_apart_from_din_rails_with_a_default_cross_section() {
     assert_eq!(layout.ducts.len(), 2);
     let flat = layout.ducts.iter().find(|d| !d.vertical).unwrap();
     assert_eq!(flat.width, 30.0);
-    assert_eq!((flat.footprint().w, flat.footprint().h), (200.0, 30.0));
+    let f = flat.footprint();
+    // The start is on the centre line, like a rail's: 15 mm each side.
+    assert_eq!((f.x, f.y, f.w, f.h), (20.0, 35.0, 200.0, 30.0));
     let tall = layout.ducts.iter().find(|d| d.vertical).unwrap();
-    assert_eq!((tall.footprint().w, tall.footprint().h), (60.0, 200.0));
+    let t = tall.footprint();
+    assert_eq!((t.x, t.y, t.w, t.h), (-10.0, 50.0, 60.0, 200.0));
 }
