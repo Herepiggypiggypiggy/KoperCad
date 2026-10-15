@@ -16,7 +16,7 @@
 //!
 //! With an empty query the field is the menu: "Repeat last tool" first,
 //! then recent picks, then every command by group, each with its key and,
-//! when it can't run now, the reason. In place mode (I) the field searches
+//! when it can't run now, the reason. In place mode (Q) the field searches
 //! symbols only and an empty query shows the favourites (1 to 9 first).
 
 use novo_core::{AnyId, DeviceId, Match, PageId, Project, SymbolId};
@@ -103,7 +103,7 @@ pub enum Mode {
     /// Everything (Ctrl+K, Space).
     #[default]
     All,
-    /// Symbols to place (I).
+    /// Symbols to place (Q).
     Place,
 }
 

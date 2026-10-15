@@ -12,7 +12,7 @@
 //!   always match.
 //! - [`palette`]: the command field's search and grammar (Ctrl+K, Q, Space) over commands, pages, devices and
 //!   symbols; an exact tag lists every location first (J6, J8).
-//! - [`insert`]: the I search: mnemonics (`no`, `nc`, `coil`), favourites
+//! - [`insert`]: the Q search: mnemonics (`no`, `nc`, `coil`), favourites
 //!   1 to 9, recents, child symbols (`K1 no`) and the IEC 81346-2 letter
 //!   code for the next free tag (J2).
 //! - [`orientation`]: R and X on a symbol or text.

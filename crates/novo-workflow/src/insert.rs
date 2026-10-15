@@ -1,4 +1,4 @@
-//! Symbol search for placing (I opens the command field in place mode):
+//! Symbol search for placing (Q opens the command field in place mode):
 //! find a symbol in a few letters, with no insert centre to browse.
 //!
 //! - The library's aliases (`no`, `nc`, `coil`, `mcb3`, `mpcb`, `ol`, `m3`,

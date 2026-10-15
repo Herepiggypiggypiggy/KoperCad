@@ -183,7 +183,7 @@ are filled in. `gate1_scenario.rs` has no ignored test left.
 | Test | Step | Closed by | State |
 | --- | --- | --- | --- |
 | `scenario_through_the_window` | Steps 1-7 headless through `NovoApp` with the real `EditorCanvas`: the file given on the command line opens on the first frame on its first page; every edit of the starter runs through `NovoApp::execute`; File > Save and File > Close leave nothing open and report no warning or error; a fresh window opens the same JSON and the same motor potentials | #53 | Passes |
-| `gap_place_by_search_with_auto_tags_and_self_wiring` | The I search finds `mcb3`, `main3`, `ol`, `m3`; one click each in a column plus Enter on the proposed wires gives `-F1`, `-K1`, `-F2`, `-M1` and exactly 9 straight main wires, Q1 to K1 to F1 to M1 connected per phase; save and reopen keep it | #38 | Passes |
+| `gap_place_by_search_with_auto_tags_and_self_wiring` | The Q search finds `mcb3`, `main3`, `ol`, `m3`; one click each in a column plus Enter on the proposed wires gives `-F1`, `-K1`, `-F2`, `-M1` and exactly 9 straight main wires, Q1 to K1 to F1 to M1 connected per phase; save and reopen keep it | #38 | Passes |
 | `gap_draw_real_symbols` | Every placed symbol of the starter has `LibraryArt` artwork, drawn instead of the placeholder box, with its connection points where the placeholder had them | #38 | Passes |
 
 Notes:
@@ -248,7 +248,7 @@ open gaps as failures.
 | Gap test | Step | Closed by | State |
 | --- | --- | --- | --- |
 | `gap_create_open_and_save_through_the_app` | Create, save, open through `StorageBackend`: the new project is on disk before the first save, the first save moves it to the chosen file, reopening shows the same project and potentials | #34 | Passes |
-| `gap_insert_search_ignores_case` | `MCB3`, ` M3 ` etc. find the same symbol through `by_alias`, `mnemonic` and the I search (exact short name first); `next_tag` gives -K2, -M2, -F2 and starts a new location at 1 | #37, #29 | Passes |
+| `gap_insert_search_ignores_case` | `MCB3`, ` M3 ` etc. find the same symbol through `by_alias`, `mnemonic` and the Q search (exact short name first); `next_tag` gives -K2, -M2, -F2 and starts a new location at 1 | #37, #29 | Passes |
 | `gap_assign_potentials_to_selected_wires` | `AssignPotentials` on the three `-Q1`/`-K1` wires with a 400 V three-phase set: L1, L2, L3 at the motor, extras ignored, reruns create nothing, too many wires refused; `-X1:PE` defines PE by the terminal-name rule; undo removes it all | #35 | Passes |
 | `gap_place_by_search_with_auto_tags_and_self_wiring` | Place by search with the next free tag; a column wires itself | #38 | Open, panics |
 | `gap_place_terminals_on_wires_and_show_the_strip` | Terminals on the motor wires in one call; strip screen and checks | #30 | Open, panics |
