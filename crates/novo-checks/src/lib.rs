@@ -25,6 +25,7 @@
 //! | [`CableCore`](ProblemKind::CableCore) | warning, error for green-yellow misuse | A cable core used against its marking or the cable's limits (novo-cables' checks) |
 //! | [`TerminalUse`](ProblemKind::TerminalUse) | warning, error for a wrong potential or a one-sided fuse terminal | A terminal used against its kind (novo-terminals' checks) |
 //! | [`Plc`](ProblemKind::Plc) | warning, error where the I/O list would be wrong | A PLC card or channel that cannot be addressed or wired as drawn (novo-plc's checks) |
+//! | [`WireOverlap`](ProblemKind::WireOverlap) | warning | Two wires on a page sharing a stretch of line |
 //! | [`MissingPart`](ProblemKind::MissingPart) | info | A device or cable without a part |
 //!
 //! Not checked here:
@@ -121,11 +122,16 @@ pub enum ProblemKind {
     /// the wrong type, a card without a layout or start address, or two
     /// cards in one slot. Errors where the I/O list would be wrong.
     Plc,
+    /// Two wires on a page sharing a stretch of line (DESIGN.md §4: wires
+    /// never overlap). The editor cannot create one; this finds those that
+    /// come from imports, scripts and undo or redo. Wires leaving one pin
+    /// together may share the stretch from that pin.
+    WireOverlap,
 }
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 15] = [
+    pub const ALL: [ProblemKind; 16] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -141,6 +147,7 @@ impl ProblemKind {
         ProblemKind::WrongTerminalBlock,
         ProblemKind::UndersizedWire,
         ProblemKind::MissingPart,
+        ProblemKind::WireOverlap,
     ];
 
     pub fn severity(self) -> Severity {
@@ -158,6 +165,7 @@ impl ProblemKind {
             | ProblemKind::WrongTerminalBlock
             | ProblemKind::CableCore
             | ProblemKind::TerminalUse
+            | ProblemKind::WireOverlap
             | ProblemKind::Plc => Severity::Warning,
             ProblemKind::MissingPart => Severity::Info,
         }
@@ -181,6 +189,7 @@ impl ProblemKind {
             ProblemKind::CableCore => "Cable core",
             ProblemKind::TerminalUse => "Terminal use",
             ProblemKind::Plc => "PLC",
+            ProblemKind::WireOverlap => "Wires overlap",
         }
     }
 }
@@ -287,6 +296,7 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     checks::cable_cores(&cx, netlist, &mut problems);
     checks::terminal_use(&cx, netlist, &mut problems);
     checks::plc(&cx, &mut problems);
+    checks::wire_overlaps(&cx, &mut problems);
     cx.sort(&mut problems);
     problems
 }

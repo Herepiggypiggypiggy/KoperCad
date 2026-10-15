@@ -24,16 +24,24 @@ The crate is `novo-revisions`. It is already listed in
    - the title block fields (project revision, page revision, revision
      table).
 
-## State
-- 2026-10-15: merged: DESIGN (#142), Revision record (#157), snapshot
-  table (#159), engine (#163), project info diff and taken-index skip
-  (#179), core page order, DeletePage, amend_last (#167).
-- Open: #185 (`Wire.hand_drawn`, `ModelError::Refused`).
-- Ready locally, opens after #185: `changed_sheets(old, new)` marks
-  generated sheets whose content changed, from the report fingerprints
-  (#182), matched by page and position.
-- Next: an issue flow in the app that pairs `IssueRevision` with
-  `Session::put_snapshot` (one transaction when issues come in bulk); then
-  Changes mode (WS-03 and WS-06 own the marks, WS-09 the PDF). Rules
-  changes in `ChangeSet.info` may want a quieter line than name and
-  description.
+## State (finished 2026-10-15)
+The `novo-revisions` engine and its model and storage parts are on main:
+DESIGN §7 (#142), `Revision` and `IssueRevision` (#157), snapshot table
+(#159), index rule, `diff`, `PageRevisions` (#163), project info diff and
+taken-index skip (#179), changed generated sheets (#190), plus the core
+items asked on the way (#167 page order, `DeletePage`, `amend_last`;
+#185 `Wire.hand_drawn`, `ModelError::Refused`).
+
+Left, owned by others:
+- the Issue revision dialog and command line: call `IssueRevision`, then
+  `Session::put_snapshot(revision, project)`; use `IndexRule::next` for the
+  proposal; batch snapshot writes in one transaction if issues ever come
+  in bulk (WS-01);
+- Changes mode and marks from `diff` and `changed_sheets`; show
+  `ChangeSet.info.rules` more quietly than name and description (WS-03,
+  WS-06); call `changed_sheets` when an issue is made, not per frame;
+- title block fields from `PageRevisions` and `Project::latest_revision`
+  (canvas and WS-09 PDF);
+- the app confirms before deleting a frozen drawn page, and passes
+  `rules.wants_generated` into `default_generated_pages_with` on open
+  (WS-01).
