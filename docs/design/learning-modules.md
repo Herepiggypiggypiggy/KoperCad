@@ -103,7 +103,7 @@ note = [
   { at = { device = "-K1", pin = "1" }, text = "Finish here" },
 ]
 expect = { wire = { from = "-F1:2", to = "-K1:1" } }
-solve = [ { wire = ["-F1:2", "-K1:1"] } ]        # used by "Show me how" and by CI (section 7)
+solve = [ { wire = ["-F1:2", "-K1:1"] } ]        # used by CI today (section 7); a later "Do it for me" reuses it
 
 [[step]]
 id = "toggle"
@@ -244,9 +244,9 @@ takes a key and never blocks input.
    [ Back ]  [ Show me how ]  [ Skip step ]        ⟲ Restart lesson
 ```
 
-- **Show me how** flashes the pointer again; after the person has been on a step for a while it
-  also offers **Do it for me**, which runs the step's `solve` as one undo step labelled "Lesson: ...".
-  It is not offered when the step has no `solve`.
+- **Show me how** flashes the pointer again. A **Do it for me** button that runs the step's `solve`
+  as one undo step is not in the first version; the format keeps `solve` so it can be added
+  without changing any lesson.
 - **Back** returns the card to the previous step (it does not undo the drawing). **Skip step**
   moves on without the tick and records "skipped". **Restart lesson** reopens a fresh copy of the
   sample project and clears this lesson's progress after a confirm. ✕ closes the card and keeps
@@ -309,6 +309,16 @@ Authoring loop for a thread with no window: write `lesson.toml` and `project.jso
 `cargo test -p novo-learn -p novo-app learn`, read the report. For someone with the app:
 `kopercad --lessons <folder>` loads lessons from a folder on top of the built-in ones, and the Learn
 window has a **Reload** button, so edits show without a rebuild.
+
+## Language
+
+English first, but nothing a person reads is typed in Rust. Every lesson string is in the lesson
+files: any text field (`title`, `summary`, `text`, a note's `text`, a glossary entry) takes a `_nl`
+twin, and the loader picks the app language and falls back to English. The card's own words (Back,
+Skip step, Restart lesson, Continue, Coming soon, ...) live in one file, `assets/lessons/ui.toml`,
+with the same `_nl` twins, so the Dutch work edits data only. A lint test fails when a `_nl` twin
+exists for a field that is missing in English, and reports lessons that lack a Dutch twin as a
+count, not an error.
 
 ## 8. Progress
 
@@ -396,11 +406,8 @@ Each lesson starts as `draft` until the control it teaches has an anchor on main
 - **Tester**: owns `novo-tests`; the lint and replay tests live in `novo-learn` and `novo-app` and
   add no dependency there.
 
-## Open questions
+## Decisions
 
-1. TOML for lessons, JSON for projects: fine for reviewers, or should lessons also be RON like
-   settings? (Recommendation: TOML. It is the easiest to write and review in a diff.)
-2. Should **Do it for me** exist at all? Recommendation yes, after 20 seconds on a step and never on
-   lessons marked `exam = true` (a later option for self-check lessons).
-3. Dutch: ship `_nl` twins with the language work, or at the same time as the English? The format
-   allows both; the Learn window would follow the app language when it exists.
+Settled with the coordinator: TOML for lessons and JSON for projects; no **Do it for me** in the
+first version (the `solve` hook stays); English first with every string translatable (section
+"Language").
