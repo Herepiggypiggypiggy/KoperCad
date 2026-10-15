@@ -116,6 +116,13 @@ pub enum EditorKey {
     /// Enter or a double click while a wire is in progress: finishes on the
     /// last point when it is on a pin or a wire.
     Finish,
+    /// A double click while a wire is in progress: the click before it was
+    /// the last corner; the wire ends there, on a pin or wire if one is
+    /// there and as an open end if not (DESIGN.md §4, "Open ends").
+    FinishOpen,
+    /// A double click with the Connect tool and no wire in progress: on
+    /// empty canvas it starts a wire there, open at that end.
+    StartFree,
 }
 
 /// What a click did.
@@ -965,7 +972,19 @@ impl Editor {
 
     /// Enter or a double click: finishes on the last point of the wire in
     /// progress when that point is on a pin or a wire.
-    fn finish_wire_here(&mut self, doc: &mut Document) -> bool {
+    fn start_free(&mut self) -> bool {
+        let (Tool::Wire(w), Some(at)) = (&mut self.tool, self.cursor) else {
+            return false;
+        };
+        if w.start.is_some() || self.target.is_some() {
+            return false;
+        }
+        w.start = Some(Target::Endpoint(Endpoint::Free { at }, at));
+        self.notice = None;
+        true
+    }
+
+    fn finish_wire_here(&mut self, doc: &mut Document, open_ok: bool) -> bool {
         let Tool::Wire(w) = self.tool.clone() else {
             return false;
         };
@@ -976,9 +995,14 @@ impl Editor {
             self.notice = Some("Click a pin or wire to finish".into());
             return true;
         };
-        let Some(end) = target_at(doc.project(), page, last, tolerance) else {
-            self.notice = Some("The last point is not on a pin or a wire".into());
-            return true;
+        let end = match target_at(doc.project(), page, last, tolerance) {
+            Some(end) => end,
+            // A double click on nothing leaves an open end.
+            None if open_ok => Target::Endpoint(Endpoint::Free { at: last }, last),
+            None => {
+                self.notice = Some("The last point is not on a pin or a wire".into());
+                return true;
+            }
         };
         let mut rest = w;
         rest.corners.pop();
@@ -1025,7 +1049,9 @@ impl Editor {
                 }
                 _ => false,
             },
-            EditorKey::Finish => self.finish_wire_here(doc),
+            EditorKey::Finish => self.finish_wire_here(doc, false),
+            EditorKey::FinishOpen => self.finish_wire_here(doc, true),
+            EditorKey::StartFree => self.start_free(),
             EditorKey::Rotate | EditorKey::Mirror => {
                 let rotate = key == EditorKey::Rotate;
                 let corners = self.wire_mode == WiringMode::Corners;

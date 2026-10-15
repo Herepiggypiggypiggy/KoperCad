@@ -501,7 +501,23 @@ impl SchematicView {
         }
         // Clicks drive the active tool; with none, the canvas selects (and
         // the editor drops unaccepted proposals).
-        if response.clicked_by(egui::PointerButton::Primary)
+        // A double click while a wire is in progress ends it where the
+        // first click put the last corner, instead of clicking again.
+        let wiring = matches!(
+            self.editor.tool(),
+            crate::tool::Tool::Wire(w) if w.start.is_some()
+        );
+        if wiring && !self.swallow && response.double_clicked_by(egui::PointerButton::Primary) {
+            let selection = self.selection();
+            self.editor.key(document, EditorKey::FinishOpen, &selection);
+        } else if !wiring
+            && !self.swallow
+            && matches!(self.editor.tool(), crate::tool::Tool::Wire(_))
+            && response.double_clicked_by(egui::PointerButton::Primary)
+        {
+            let selection = self.selection();
+            self.editor.key(document, EditorKey::StartFree, &selection);
+        } else if response.clicked_by(egui::PointerButton::Primary)
             && !self.swallow
             && let Some(w) = out.cursor_raw
         {

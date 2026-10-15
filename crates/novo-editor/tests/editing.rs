@@ -5,6 +5,7 @@
 
 use novo_core::{AnyId, Document, Endpoint, PageId, Point, PotentialKind, SymbolRole};
 use novo_editor::edit::{self, PlaceOptions};
+use novo_editor::geometry::Target;
 use novo_editor::potential;
 use novo_editor::tool::{Clicked, Tool, WiringMode};
 use novo_editor::{Editor, EditorKey};
@@ -1909,4 +1910,65 @@ fn a_click_on_a_pin_starts_a_wire_with_no_tool_switch() {
         editor.click(&mut doc, page, p(300.0, 300.0), TOL),
         Clicked::Unhandled
     );
+}
+
+#[test]
+fn a_double_click_on_nothing_ends_the_wire_as_an_open_end_in_both_modes() {
+    for lines in [false, true] {
+        let (mut doc, page, mut editor, [a, _, _]) = three_contacts();
+        if lines {
+            editor.toggle_wire_mode();
+        }
+        editor.begin_wire();
+        let pa = pin_pos(&doc, a, "14");
+        click_pin(&mut editor, &mut doc, page, a, "14");
+        // The first click of the double click is the last corner.
+        let end = p(pa.x, pa.y + 40.0);
+        editor.click(&mut doc, page, end, TOL);
+        assert!(editor.key(&mut doc, EditorKey::FinishOpen, &[]));
+        let wire = doc.project().wires().next().expect("a wire is stored");
+        assert!(
+            matches!(wire.to, Endpoint::Free { at } if at == end),
+            "{:?}",
+            wire.to
+        );
+        assert!(wire.route.is_empty(), "no extra corner: {:?}", wire.route);
+        assert!(
+            !editor.tool_active() || matches!(editor.tool(), Tool::Wire(w) if w.start.is_none())
+        );
+    }
+}
+
+#[test]
+fn a_double_click_on_empty_canvas_starts_a_wire_open_at_that_end() {
+    for lines in [false, true] {
+        let (mut doc, page, mut editor, [a, _, _]) = three_contacts();
+        if lines {
+            editor.toggle_wire_mode();
+        }
+        editor.begin_wire();
+        let at = p(200.0, 200.0);
+        // The first click of the double click starts nothing.
+        editor.click(&mut doc, page, at, TOL);
+        assert!(matches!(editor.tool(), Tool::Wire(w) if w.start.is_none()));
+        assert!(editor.key(&mut doc, EditorKey::StartFree, &[]));
+        let Tool::Wire(w) = editor.tool() else {
+            panic!("wiring")
+        };
+        assert!(matches!(
+            w.start,
+            Some(Target::Endpoint(Endpoint::Free { .. }, _))
+        ));
+        // It goes on like any wire and ends on a pin.
+        assert_eq!(
+            click_pin(&mut editor, &mut doc, page, a, "14"),
+            Clicked::Edited
+        );
+        let wire = doc.project().wires().next().expect("a wire is stored");
+        assert!(
+            matches!(wire.from, Endpoint::Free { at: f } if f == at),
+            "{:?}",
+            wire.from
+        );
+    }
 }
