@@ -13,7 +13,7 @@ use eframe::egui;
 use novo_canvas::SelectOp;
 use novo_canvas::model::item_id;
 use novo_checks::Problem;
-use novo_core::{AnyId, ChangeSet, DeviceId, Document, SymbolId};
+use novo_core::{AnyId, ChangeSet, DeviceId, Document, PageId, SymbolId};
 use novo_editor::EditorKey;
 use novo_editor::tool::WiringMode;
 use novo_symbols::Library;
@@ -71,6 +71,9 @@ pub(crate) struct Workbench {
     pub(super) nav: Navigator,
     /// Where to select and centre once the canvas shows its page.
     pub(super) pending: Option<Place>,
+    /// An item to select and centre once its page is shown (a row of the
+    /// Changes list).
+    pub(super) pending_item: Option<(PageId, AnyId)>,
     /// The drawing's layer and rect last frame: a focused widget there is
     /// the canvas, anywhere else a panel.
     pub(super) canvas_area: Option<(egui::LayerId, egui::Rect)>,
@@ -151,6 +154,7 @@ impl Default for Workbench {
             sheet: 0,
             nav: Navigator::default(),
             pending: None,
+            pending_item: None,
             canvas_area: None,
             occurrences: None,
             drawer: None,
@@ -757,6 +761,17 @@ impl NovoApp {
             self.wb.pending = None;
             if let (Some(symbol), Some(view)) = (place.symbol, self.canvas.schematic()) {
                 let item = item_id(AnyId::Symbol(symbol));
+                view.canvas.selection.clear();
+                view.canvas.selection.apply([item], SelectOp::Replace);
+                view.canvas.reveal([item]);
+            }
+        }
+        if let Some((page, id)) = self.wb.pending_item
+            && Some(page) == self.current_page
+        {
+            self.wb.pending_item = None;
+            if let Some(view) = self.canvas.schematic() {
+                let item = item_id(id);
                 view.canvas.selection.clear();
                 view.canvas.selection.apply([item], SelectOp::Replace);
                 view.canvas.reveal([item]);
