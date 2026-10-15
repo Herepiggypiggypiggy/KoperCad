@@ -416,6 +416,27 @@ impl<'p> Tx<'p> {
         Ok(revision)
     }
 
+    /// Deletes a page the user chose to delete, with everything drawn on
+    /// it. A generated page's kind is turned off in the project rules
+    /// ([`ProjectRules::generated_pages_off`]), so the default generated
+    /// pages do not bring it back on open. Use [`Tx::remove`] for pages a
+    /// tool removes on its own (a report that shrank).
+    ///
+    /// [`ProjectRules::generated_pages_off`]: crate::ProjectRules::generated_pages_off
+    pub fn delete_page(&mut self, page: PageId) -> Result<()> {
+        let p = self
+            .project
+            .page(page)
+            .ok_or(ModelError::NotFound(page.into()))?;
+        if let PageKind::Generated { generator } = &p.kind {
+            let generator = generator.clone();
+            self.set_info(|i| {
+                i.rules.generated_pages_off.insert(generator);
+            })?;
+        }
+        self.remove(page)
+    }
+
     /// Freezes a page as issued with `revision`: its name, structure and
     /// every symbol's column are kept for references until
     /// [`Tx::unfreeze_page`]. Freezing again re-takes the snapshot.

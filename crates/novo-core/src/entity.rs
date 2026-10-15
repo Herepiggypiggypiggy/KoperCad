@@ -4,7 +4,7 @@
 //! [`Tx`](crate::Tx) (or a [`Command`](crate::Command)), which validates every
 //! edit and records it for undo.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -90,6 +90,14 @@ pub struct ProjectRules {
     pub terminals: TerminalRules,
     #[serde(default, skip_serializing_if = "PotentialRules::is_off")]
     pub potentials: PotentialRules,
+    /// The generated-page kinds the user turned off, by generator id
+    /// (`bom`, `terminals`, `cables`, ...). Empty, the default, wants
+    /// every kind. Deleting a generated page ([`Tx::delete_page`]) adds
+    /// its kind, so it does not come back on open.
+    ///
+    /// [`Tx::delete_page`]: crate::Tx::delete_page
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub generated_pages_off: BTreeSet<String>,
 }
 
 impl ProjectRules {
@@ -104,11 +112,17 @@ impl ProjectRules {
             potentials: PotentialRules {
                 from_terminal_names: true,
             },
+            generated_pages_off: BTreeSet::new(),
         }
     }
 
     pub fn is_default(&self) -> bool {
         *self == ProjectRules::default()
+    }
+
+    /// Whether the project wants generated pages from `generator`.
+    pub fn wants_generated(&self, generator: &str) -> bool {
+        !self.generated_pages_off.contains(generator)
     }
 }
 

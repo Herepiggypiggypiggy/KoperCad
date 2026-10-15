@@ -766,6 +766,83 @@ fn page_order_is_natural() {
 }
 
 #[test]
+fn generated_pages_follow_every_drawn_page() {
+    let mut doc = Document::default();
+    doc.transact("pages", |tx| {
+        for (name, structure, generated) in [
+            ("1", "=A1", false),
+            ("20", "", true),
+            ("2", "=A2", false),
+            ("21", "=A1", true),
+            ("0", "", true),
+        ] {
+            let page = tx.add_page(name)?;
+            tx.update::<Page>(page, |p| {
+                p.structure = if structure.is_empty() {
+                    DeviceTag::default()
+                } else {
+                    tag(structure)
+                };
+                if generated {
+                    let generator = if name == "0" {
+                        CONTENTS_GENERATOR
+                    } else {
+                        "bom"
+                    };
+                    p.kind = PageKind::Generated {
+                        generator: generator.into(),
+                    };
+                }
+            })?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let names: Vec<&str> = doc
+        .project()
+        .pages_in_order()
+        .iter()
+        .map(|p| p.name.as_str())
+        .collect();
+    // The contents list opens the set; a report without a structure no
+    // longer jumps ahead of the drawing.
+    assert_eq!(names, ["0", "1", "2", "20", "21"]);
+}
+
+#[test]
+fn deleting_a_generated_page_turns_its_kind_off() {
+    assert!(ProjectRules::default().wants_generated("bom"));
+    let mut doc = Document::default();
+    let ((drawn, bom), _) = doc
+        .transact("Pages", |tx| {
+            let drawn = tx.add_page("1")?;
+            let bom = tx.add_page("20")?;
+            tx.update::<Page>(bom, |p| {
+                p.kind = PageKind::Generated {
+                    generator: "bom".into(),
+                }
+            })?;
+            Ok((drawn, bom))
+        })
+        .unwrap();
+
+    let before = doc.project().info().rules.clone();
+    doc.execute(Command::DeletePage { page: drawn }).unwrap();
+    assert_eq!(doc.project().info().rules, before);
+    doc.execute(Command::DeletePage { page: bom }).unwrap();
+    let rules = &doc.project().info().rules;
+    assert!(!rules.wants_generated("bom"));
+    assert!(rules.wants_generated("terminals"));
+    let back = Project::from_json(&doc.project().to_json()).unwrap();
+    assert_eq!(&back.info().rules, rules);
+
+    // One undo step brings the page and the kind back.
+    doc.undo().unwrap();
+    assert!(doc.project().page(bom).is_some());
+    assert!(doc.project().info().rules.wants_generated("bom"));
+}
+
+#[test]
 fn change_sets_name_touched_pages() {
     let mut doc = Document::default();
     let s = build_starter(&mut doc);
@@ -1900,4 +1977,37 @@ fn moving_to_another_page_carries_wires_and_labels() {
             .wires_leaving(&[a.into(), b.into(), stay.into()])
             .is_empty()
     );
+}
+
+#[test]
+fn follow_up_work_joins_the_last_undo_step() {
+    let mut doc = Document::default();
+    // Nothing to join yet: the follow-up is its own step.
+    doc.amend_last("Add report", |tx| tx.add_page("20"))
+        .unwrap();
+    assert_eq!(doc.undo_depth(), 1);
+    doc.mark_saved();
+
+    doc.transact("Add page", |tx| tx.add_page("1")).unwrap();
+    let (report, changes) = doc
+        .amend_last("Add report", |tx| tx.add_page("21"))
+        .unwrap();
+    assert_eq!(changes.added.len(), 1);
+    assert_eq!(doc.undo_depth(), 2);
+    assert_eq!(doc.undo_label(), Some("Add page"));
+    assert!(doc.is_dirty());
+
+    // One undo takes back the edit and its follow-up.
+    doc.undo().unwrap();
+    assert_eq!(doc.project().pages().count(), 1);
+    assert!(!doc.is_dirty());
+    doc.redo().unwrap();
+    assert!(doc.project().page(report).is_some());
+
+    // After an undo there is no step to join.
+    doc.undo().unwrap();
+    doc.amend_last("Add report", |tx| tx.add_page("22"))
+        .unwrap();
+    assert_eq!(doc.undo_label(), Some("Add report"));
+    assert!(!doc.can_redo());
 }

@@ -2,7 +2,9 @@
 
 use thiserror::Error;
 
-use crate::id::{AnyId, CableId, DeviceId, PageId, SymbolId, TerminalId, TextId, WireId};
+use crate::id::{
+    AnyId, CableId, DeviceId, PageId, RevisionId, SymbolId, TerminalId, TextId, WireId,
+};
 use crate::tag::TagError;
 
 /// Why an edit or a load was refused. A refused edit leaves the project
@@ -35,6 +37,8 @@ pub enum ModelError {
     },
     #[error("{id}: `{field}` is out of range")]
     InvalidValue { id: AnyId, field: &'static str },
+    #[error("{0} was issued and cannot be deleted; undo the issue instead")]
+    IssuedRevision(RevisionId),
     #[error("{text} cannot be attached to {target}; only symbols, junctions and wires carry texts")]
     InvalidAttachment { text: TextId, target: AnyId },
     #[error(
