@@ -4,8 +4,12 @@
 //! user accepts them (all at once or one by one) instead of placing
 //! terminals by hand.
 //!
-//! The cabinet side is the location that already holds a terminal strip;
-//! when both or neither do, the location with more devices. A declined
+//! Each side is an enclosure when the location is in a structure marked as
+//! one (`Project::enclosure_of`, so a door inside the cabinet is the
+//! cabinet), else its location; a wire within one enclosure needs no
+//! terminal. The cabinet side is the enclosure; when both or neither are,
+//! the side that already holds a terminal strip, then the one with more
+//! devices. A declined
 //! suggestion is remembered as a core `Dismissal` record about its wire
 //! (proposal `terminal.suggest`, see [`dismiss_suggestion`]) so it does not
 //! come back after every edit.
@@ -135,20 +139,43 @@ impl Groups {
     }
 }
 
-/// The one location all of `devices` share, with the first of them.
-fn single_location<'a>(
+/// Which side of a boundary a device is on: its enclosure (a structure
+/// marked as one, so a door inside the cabinet counts as the cabinet), else
+/// its location.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Place<'a> {
+    enclosure: bool,
+    location: &'a [String],
+}
+
+fn place_of<'a>(project: &'a Project, device: &'a novo_core::Device) -> Place<'a> {
+    match project.enclosure_of(&device.tag) {
+        Some(s) => Place {
+            enclosure: true,
+            location: &s.tag.location,
+        },
+        None => Place {
+            enclosure: false,
+            location: &device.tag.location,
+        },
+    }
+}
+
+/// The one place all of `devices` share, with the first of them.
+fn single_place<'a>(
     project: &'a Project,
     devices: &[DeviceId],
-) -> Option<&'a novo_core::Device> {
+) -> Option<(&'a novo_core::Device, Place<'a>)> {
     let first = project.device(*devices.first()?)?;
+    let place = place_of(project, first);
     devices
         .iter()
         .all(|&d| {
             project
                 .device(d)
-                .is_some_and(|d| d.tag.location == first.tag.location)
+                .is_some_and(|d| place_of(project, d) == place)
         })
-        .then_some(first)
+        .then_some((first, place))
 }
 
 fn structure(tag: &DeviceTag) -> DeviceTag {
@@ -209,10 +236,11 @@ pub fn suggest_terminals(project: &Project) -> Vec<Suggestion> {
         }
         *counts.entry(&d.tag.location).or_default() += 1;
     }
-    let rank = |location: &[String]| {
+    let rank = |place: Place| {
         (
-            strips.contains(location),
-            counts.get(location).copied().unwrap_or(0),
+            place.enclosure,
+            strips.contains(place.location),
+            counts.get(place.location).copied().unwrap_or(0),
         )
     };
     let mut groups = Groups::new(project);
@@ -248,19 +276,19 @@ pub fn suggest_terminals(project: &Project) -> Vec<Suggestion> {
             }
             (None, None) => continue,
         };
-        let (Some(da), Some(db)) = (single_location(project, &a), single_location(project, &b))
+        let (Some((da, pa)), Some((db, pb))) =
+            (single_place(project, &a), single_place(project, &b))
         else {
             continue;
         };
-        if da.tag.location == db.tag.location {
+        if pa == pb {
             continue;
         }
         let dismissed = is_dismissed(project, w);
-        let (internal, external, internal_end) = if rank(&db.tag.location) > rank(&da.tag.location)
-        {
-            (db, da, w.to)
+        let (internal, external, internal_end, place) = if rank(pb) > rank(pa) {
+            (db, da, w.to, pb)
         } else {
-            (da, db, w.from)
+            (da, db, w.from, pa)
         };
         let Some(at) = midpoint_of_longest_stretch(project, w.id) else {
             continue;
@@ -272,7 +300,14 @@ pub fn suggest_terminals(project: &Project) -> Vec<Suggestion> {
             Suggestion {
                 wire: w.id,
                 at,
-                strip: strip_tag(project, &structure(&internal.tag)),
+                strip: strip_tag(
+                    project,
+                    &DeviceTag {
+                        function: internal.tag.function.clone(),
+                        location: place.location.to_vec(),
+                        product: Vec::new(),
+                    },
+                ),
                 internal: internal.id,
                 external: external.id,
             },
@@ -428,17 +463,44 @@ pub fn migrate_legacy_dismissals(tx: &mut Tx<'_>) -> Result<bool> {
     Ok(!wires.is_empty())
 }
 
-/// Forgets a declined suggestion on a wire.
-pub fn restore_suggestion(tx: &mut Tx<'_>, wire: WireId) -> Result<()> {
-    if let Some(record) = tx.project().dismissal(DISMISS_KEY, &[wire.into()]) {
-        tx.remove(record.id)?;
+/// The wires of the connection `wire` is part of: every wire joined to it
+/// through junctions, or just `wire` when it runs pin to pin.
+fn connection_wires(project: &Project, wire: WireId) -> Vec<WireId> {
+    let Some(w) = project.wire(wire) else {
+        return vec![wire];
+    };
+    let Some(junction) = [w.from, w.to].into_iter().find(|e| e.as_pin().is_none()) else {
+        return vec![wire];
+    };
+    let mut groups = Groups::new(project);
+    let root = groups.root(junction);
+    let mut wires = Vec::new();
+    for other in project.wires() {
+        let joined = [other.from, other.to]
+            .into_iter()
+            .any(|e| e.as_pin().is_none() && groups.root(e) == root);
+        if joined {
+            wires.push(other.id);
+        }
     }
-    let legacy = tx
-        .project()
-        .wire(wire)
-        .is_some_and(|w| w.properties.contains_key(DISMISS_KEY));
-    if legacy {
-        tx.set_property(wire, DISMISS_KEY, None)?;
+    wires
+}
+
+/// Forgets a declined suggestion: the decline on any wire of the
+/// connection `wire` is part of, so it can be restored from whichever wire
+/// is suggested now.
+pub fn restore_suggestion(tx: &mut Tx<'_>, wire: WireId) -> Result<()> {
+    for wire in connection_wires(tx.project(), wire) {
+        if let Some(record) = tx.project().dismissal(DISMISS_KEY, &[wire.into()]) {
+            tx.remove(record.id)?;
+        }
+        let legacy = tx
+            .project()
+            .wire(wire)
+            .is_some_and(|w| w.properties.contains_key(DISMISS_KEY));
+        if legacy {
+            tx.set_property(wire, DISMISS_KEY, None)?;
+        }
     }
     Ok(())
 }
