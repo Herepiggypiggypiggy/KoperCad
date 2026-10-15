@@ -519,7 +519,7 @@ clear the selection.
 | Alt+Left / Alt+Right | Back / forward through jumps |
 | F8 / Shift+F8 | Next / previous problem |
 | Shift+P | Hide or show marks (counters stay) |
-| Shift+L | Live potentials: close and open contacts, see what each wire carries |
+| Shift+L | Live potentials: close and open contacts, see what each wire carries; a coil badge switches the coil on by hand, and the contacts of a device with a coil follow the coil (push buttons stay hand-set) |
 | Shift+O (held) | Show override marks |
 | Page Up / Page Down | Previous / next page |
 | Home | Zoom to fit (also double middle click) |
