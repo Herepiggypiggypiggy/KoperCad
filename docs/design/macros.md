@@ -18,9 +18,8 @@ device and can be exported to and imported from a single file, so a team can sha
    "macro"; the model word stays "block".
 2. **The library is a folder of files**, one macro per file, in the user's profile and never anywhere
    needing admin rights: `%APPDATA%\KoperCAD\Macros\` on Windows, `$XDG_DATA_HOME/novoelectric/macros/`
-   elsewhere (same convention as `parts.json` and `keymap.txt`). A second, optional folder (a team
-   share the user points at) is read the same way and listed with its folder name; it is read-only
-   unless the user saves into it.
+   elsewhere (same convention as `parts.json` and `keymap.txt`). An optional company folder the user
+   points at is read the same way.
 3. **One file format for library and sharing.** `<name>.kcmacro` is UTF-8 JSON (diffable, no
    binary). Export of several macros is the same file with a list; import accepts either.
 4. **Macros are copies, like any library source.** Placing one into a project copies the definition into
@@ -29,19 +28,27 @@ device and can be exported to and imported from a single file, so a team can sha
 
 ## File format (version 1)
 
+Agreed with the Macro library thread, which owns the library and file code:
+
 ```
 { "format": "kopercad-macro", "version": 1,
-  "macros": [ {
-    "name": "dol-starter", "description": "...", "revision": 3,
-    "parameters": [ { "name": "power", "default": 4.0, "description": "kW" } ],
-    "definition": { ...BlockDefinition members, as in the project JSON... },
-    "parts": [ { "device": <template id>, "manufacturer": "...", "order_no": "..." } ],
-    "cabinet": [ { "device": <template id>, "dx": 0.0, "dy": 0.0, "rotated": false } ],
-    "thumbnail": <optional small outline of the symbols> } ] }
+  "name": "dol-starter", "description": "...", "author": "...", "tags": ["motor"],
+  "definition": <novo_core::BlockDefinition as serialised, parameters and members included> }
 ```
 
-Unknown fields are ignored on read and kept on re-export. A newer `version` is refused with a message,
-the file untouched. A file that fails validation is rejected whole; nothing partial is imported.
+No new core types. When a macro is copied into a project the library fills `definition.source`
+(`BlockSource`: library = folder-relative path, version = file version). Later, optional additive
+fields carry the extras of step 5 (`parts`: manufacturer and order number per template device;
+`cabinet`: offsets per template device). Readers ignore unknown fields and keep them on re-export; a
+newer `version` is refused with the file untouched; a file that fails validation is rejected whole.
+
+## Who owns what
+
+| Piece | Owner | Where |
+| --- | --- | --- |
+| File read/write, per-user folder (subfolders are folders), optional company folder, index and search, rename, delete, move, import and export, thumbnails, starter macros | Macro library thread | module `macros` in `novo-parts` (no new crate) |
+| Capture (`DefineBlock`), placement, renumbering, wire numbers, parameters, preview summary, parts and cabinet carry-over | This thread | `novo-workflow` helpers over `novo-core` commands |
+| Ghost, browser drawer, save and import dialogs, commands | Whoever lands first, kept thin | `novo-app` |
 
 ## What a placement does
 
@@ -89,24 +96,17 @@ selection, terminals before step 3). Saving over a name asks first and bumps `re
 
 ## Where the code goes
 
-| Piece | Crate | Notes |
-| --- | --- | --- |
-| Macro file read and write, library folder scan, trash, validation | `novo-workflow` | Pure, no UI; tested on temp folders |
-| Placement helper: parts lookup, wire numbers, cabinet offsets, preview summary | `novo-workflow` using `novo-core` commands and `novo-parts` / `novo-layout` queries | No change to `novo-core` public API |
-| Ghost, browser drawer, save and import dialogs, commands | `novo-app` | Thin, per DESIGN |
-
-If a model gap shows up (for example the terminal case), it is described in the pull request and sent
-to WS-02, not patched here.
+See "Who owns what". If a model gap shows up (for example the terminal case), it is described in the
+pull request and sent to WS-02, not patched here.
 
 ## Steps (each a small draft pull request)
 
 1. This note.
-2. Macro file format, read and write, validation and version handling.
-3. Library folder: list, save, rename, delete to trash, export and import, with tests on temp folders.
-4. Placement helper: block placement plus wire numbers and the preview summary.
-5. Parts and cabinet offsets on save and placement.
-6. App: `save macro`, browser drawer, ghost preview, import and export menu items.
-7. Terminals inside macros (needs WS-02 review), update from library.
+2. Macro file and library folder (Macro library thread, `novo-parts`).
+3. Placement helper: block placement plus wire numbers and the preview summary.
+4. Parts and cabinet offsets on save and placement.
+5. App: `save macro`, browser drawer, ghost preview, import and export menu items.
+6. Terminals inside macros (needs WS-02 review), update from library.
 
 ## Not in this design
 
