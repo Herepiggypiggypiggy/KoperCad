@@ -309,6 +309,40 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["import dxf"],
     ),
+    verb(
+        cmd(
+            "file.import_dwg",
+            "Import DWG as background",
+            "Project",
+            &["autocad", "converter", "libredwg", "oda"],
+            Needs::Page,
+        ),
+        &["import dwg"],
+    ),
+    cmd(
+        "file.choose_dwg_converter",
+        "Choose the DWG converter",
+        "Project",
+        &["dwg2dxf", "libredwg", "oda file converter"],
+        Needs::Nothing,
+    ),
+    verb(
+        cmd(
+            "file.import_aml",
+            "Import AutomationML",
+            "Project",
+            &[
+                "aml",
+                "caex",
+                "plant",
+                "migrate",
+                "other tool",
+                "engineering",
+            ],
+            Needs::Project,
+        ),
+        &["import aml", "import automationml"],
+    ),
     cmd(
         "file.remove_background",
         "Remove the DXF background",
@@ -1092,6 +1126,34 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Export",
         &["cad", "autocad"],
         Needs::Project,
+    ),
+    verb(
+        cmd(
+            "export.step",
+            "Export the cabinet as STEP",
+            "Export",
+            &[
+                "3d",
+                "mechanical",
+                "solidworks",
+                "inventor",
+                "freecad",
+                "stp",
+                "step",
+            ],
+            Needs::Project,
+        ),
+        &["export step"],
+    ),
+    verb(
+        cmd(
+            "export.aml",
+            "Export the plant as AutomationML",
+            "Export",
+            &["aml", "caex", "iec 62714", "exchange", "engineering"],
+            Needs::Project,
+        ),
+        &["export aml", "export automationml"],
     ),
     verb(
         cmd(

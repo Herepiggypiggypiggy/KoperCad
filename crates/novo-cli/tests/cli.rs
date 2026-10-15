@@ -698,3 +698,89 @@ fn export_plate_writes_the_plate_pdf_of_the_enclosure() {
     assert_eq!(run.code, exit::USAGE);
     assert!(run.err.contains("no enclosure"), "{}", run.err);
 }
+
+/// A saved project with a cabinet: an enclosure with a plate and two devices.
+fn cabinet_project(dir: &Path) -> PathBuf {
+    use novo_core::{DeviceTag, MountingPlate, Project};
+    let path = dir.join("cab.novo");
+    let mut p = Project::new("Cab");
+    p.transact("setup", |tx| {
+        let cab = tx.add_structure(DeviceTag::parse("+CAB1").unwrap(), "Cabinet", true)?;
+        tx.set_plate(
+            cab,
+            Some(MountingPlate {
+                width: 600.0,
+                height: 800.0,
+                margin: 10.0,
+            }),
+        )?;
+        tx.add_device(DeviceTag::parse("=A1+CAB1-K1").unwrap(), "Contactor")?;
+        Ok(())
+    })
+    .unwrap();
+    novo_storage::ProjectFile::create(&path, &p)
+        .unwrap()
+        .close()
+        .unwrap();
+    path
+}
+
+#[test]
+fn export_step_writes_the_cabinet_and_says_what_it_left_out() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = cabinet_project(dir.path());
+    let out = dir.path().join("cab.stp");
+    let run = novo(&["export", "step", s(&path), "-o", s(&out)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    let text = std::fs::read_to_string(&out).unwrap();
+    assert!(text.starts_with("ISO-10303-21;"));
+    assert!(text.contains("'Mounting plate'"));
+    assert!(run.out.contains("solids"), "{}", run.out);
+
+    // A directory gets one file per enclosure.
+    let folder = dir.path().join("steps");
+    let run = novo(&["export", "step", s(&path), "-o", s(&folder)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert!(folder.join("+CAB1.stp").is_file());
+
+    // A tag that is not an enclosure is a usage error, not an empty file.
+    let run = novo(&[
+        "export",
+        "step",
+        s(&path),
+        "-o",
+        s(&out),
+        "--enclosure",
+        "+NOPE",
+    ]);
+    assert_eq!(run.code, exit::USAGE);
+}
+
+#[test]
+fn export_step_needs_a_mounting_plate() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+    let run = novo(&[
+        "export",
+        "step",
+        s(&path),
+        "-o",
+        s(&dir.path().join("x.stp")),
+    ]);
+    assert_eq!(run.code, exit::USAGE);
+    assert!(run.err.contains("mounting plate"), "{}", run.err);
+}
+
+#[test]
+fn export_aml_writes_caex_and_lists_what_the_format_cannot_carry() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+    let out = dir.path().join("demo.aml");
+    let run = novo(&["export", "aml", s(&path), "-o", s(&out)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    let text = std::fs::read_to_string(&out).unwrap();
+    assert!(text.contains("<CAEXFile"));
+    assert!(text.contains("Name=\"-K1\""));
+    assert!(run.out.contains("1 devices"), "{}", run.out);
+    assert!(run.out.contains("pages and drawings"), "{}", run.out);
+}

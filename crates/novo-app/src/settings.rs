@@ -48,6 +48,9 @@ pub struct Settings {
     pub workspaces: BTreeMap<String, WorkspaceLayout>,
     /// How far the fast-keys walk-through is (docs/ONBOARDING-DESIGN.md §2).
     pub onboarding: Onboarding,
+    /// The DWG converter program the person chose (`dwg2dxf` or the ODA File
+    /// Converter), tried before the ones KoperCAD finds itself.
+    pub dwg_converter: Option<PathBuf>,
     /// The start of the name a new page group gets (`G` makes `=G1`) in a
     /// project with no group to continue. Empty: the default.
     pub group_prefix: String,

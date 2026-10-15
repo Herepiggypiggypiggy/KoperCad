@@ -24,6 +24,7 @@ mod example;
 mod faults;
 mod heat;
 mod inspector;
+mod interop;
 mod learn;
 mod learn_ui;
 mod link;
@@ -884,6 +885,8 @@ impl NovoApp {
         self.generate_window(&ctx);
         self.issue_revision_dialog(&ctx);
         self.compare_window(&ctx);
+        self.aml_import_dialog(&ctx);
+        self.poll_dwg(&ctx);
         self.protection_window(&ctx);
         self.faults_window(&ctx);
         self.numbering_window(&ctx);
