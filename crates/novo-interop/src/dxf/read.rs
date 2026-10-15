@@ -35,6 +35,9 @@ type Pair = (i32, String);
 
 const SENTINEL: &[u8] = b"AutoCAD Binary DXF";
 const MAX_BLOCK_DEPTH: usize = 8;
+/// Most entities one file may expand to; a crafted file of nested inserts
+/// stops here with a warning instead of exhausting memory.
+const MAX_ENTITIES: usize = 2_000_000;
 
 /// Reads ASCII DXF bytes. UTF-8 when valid, else Windows-1252.
 pub fn read_dxf(bytes: &[u8]) -> Result<DxfRead, DxfError> {
@@ -293,6 +296,13 @@ impl Reader {
         depth: usize,
         out: &mut Vec<Entity>,
     ) {
+        if out.len() >= MAX_ENTITIES {
+            let msg = format!("more than {MAX_ENTITIES} entities; the rest was not imported");
+            if !self.warnings.contains(&msg) {
+                self.warnings.push(msg);
+            }
+            return;
+        }
         let layer = match (r.layer().as_str(), insert_layer) {
             ("0", Some(l)) => l.to_string(),
             (l, _) => l.to_string(),
@@ -448,6 +458,13 @@ impl Reader {
                 };
                 let base = block.base;
                 let inner = block.entities.clone();
+                let cols = r.get(70).and_then(|v| v.parse::<i32>().ok()).unwrap_or(1);
+                let rows = r.get(71).and_then(|v| v.parse::<i32>().ok()).unwrap_or(1);
+                if cols > 1 || rows > 1 {
+                    self.warnings.push(format!(
+                        "block `{name}` is inserted as an array ({cols} x {rows}); only the first copy was imported"
+                    ));
+                }
                 let sx = r.fd(41, 1.0);
                 let sy = r.fd(42, sx);
                 let place = Xf::insert(
