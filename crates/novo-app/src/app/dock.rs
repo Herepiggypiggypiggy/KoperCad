@@ -76,10 +76,16 @@ impl NovoApp {
             Tool::Wire(_) => DockTool::Connect,
             Tool::Select | Tool::Move(_) => DockTool::Select,
         };
+        let band = view.band_count();
         let hint = view
             .status_text()
             .filter(|h| !h.is_empty())
             .unwrap_or(elsewhere);
+        // Dragging a selection box says what letting go would take.
+        let hint = match band {
+            Some(n) => format!("{n} selected"),
+            None => hint,
+        };
         // A refusal reads as one: the Error tint and a warning icon, never
         // colour alone (DESIGN.md §4).
         let refused = view.editor.notice().is_some();

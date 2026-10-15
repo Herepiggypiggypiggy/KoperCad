@@ -1405,3 +1405,76 @@ fn a_double_click_on_a_device_puts_the_cursor_in_its_tag() {
         "the tag field has the cursor"
     );
 }
+
+#[test]
+fn an_inspector_edit_is_kept_when_the_selection_clears() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let k = d.place("km3", 80.0, 96.0);
+    d.editor_leave();
+    d.select(k);
+    d.frame();
+    let device = novo_editor::edit::device_of(d.doc().project(), AnyId::Symbol(k)).unwrap();
+
+    // Type into the description, then click away on empty canvas without
+    // pressing Enter.
+    ctx.memory_mut(|m| m.request_focus(egui::Id::new("inspector_description")));
+    d.frame();
+    d.frame_with(vec![
+        egui::Event::Key {
+            key: egui::Key::A,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::COMMAND,
+        },
+        egui::Event::Text("Pump contactor".into()),
+    ]);
+    d.app.canvas.schematic().unwrap().canvas.selection.clear();
+    d.frame();
+    d.frame();
+    assert_eq!(
+        d.doc().project().device(device).unwrap().description,
+        "Pump contactor",
+        "the edit survives the selection clearing"
+    );
+}
+
+#[test]
+fn dragging_a_selection_box_reports_how_many_it_would_take() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    d.place("coil", 200.0, 144.0);
+    let band = |d: &mut Drive| d.app.canvas.schematic().unwrap().band_count();
+    assert_eq!(band(&mut d), None);
+
+    // Press on empty canvas and drag across the coil.
+    let (_, canvas) = d.app.wb.canvas_area.unwrap();
+    let from = canvas.center() - egui::vec2(300.0, 200.0);
+    let to = canvas.center() + egui::vec2(300.0, 200.0);
+    let button = |pressed| egui::Event::PointerButton {
+        pos: from,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    d.frame_with(vec![egui::Event::PointerMoved(from)]);
+    d.frame_with(vec![button(true)]);
+    d.frame_with(vec![egui::Event::PointerMoved(to)]);
+    d.frame_with(vec![egui::Event::PointerMoved(to)]);
+    assert!(band(&mut d).is_some(), "a box is being dragged");
+    d.frame_with(vec![egui::Event::PointerButton {
+        pos: to,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    }]);
+    d.frame();
+    assert_eq!(band(&mut d), None, "gone when released");
+}
