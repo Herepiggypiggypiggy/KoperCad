@@ -20,9 +20,9 @@ use std::time::{Duration, Instant, SystemTime};
 use eframe::egui;
 
 use crate::actions::Action;
-use novo_core::{Command, ModelError, Outcome, PageId};
+use novo_core::{Command, ModelError, Outcome, PageId, PageKind};
 
-use crate::backend::{BackendError, PageRow, ProjectBackend, page_labels, page_rows};
+use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows};
 use crate::canvas::{CanvasView, OpenPage};
 use crate::settings::Settings;
 use crate::{APP_NAME, PROJECT_EXTENSION};
@@ -211,8 +211,12 @@ impl NovoApp {
         })
     }
 
+    #[cfg(test)]
     fn pages(&self) -> Vec<(PageId, String)> {
-        self.backend.document().map(page_labels).unwrap_or_default()
+        self.backend
+            .document()
+            .map(crate::backend::page_labels)
+            .unwrap_or_default()
     }
 
     /// The project panel's rows: each page, and each sheet of a generated
@@ -228,12 +232,27 @@ impl NovoApp {
     }
 
     /// Keeps the shown page valid after undo, redo or a reload removed it.
+    /// Without one, shows the first drawing page rather than the contents.
     fn fix_current_page(&mut self) {
-        let pages = self.pages();
+        let pages: Vec<(PageId, bool)> = self
+            .backend
+            .document()
+            .map(|doc| {
+                doc.project()
+                    .pages_in_order()
+                    .into_iter()
+                    .map(|p| (p.id, matches!(p.kind, PageKind::Generated { .. })))
+                    .collect()
+            })
+            .unwrap_or_default();
         self.recent_pages
             .retain(|r| pages.iter().any(|(id, _)| id == r));
         if !pages.iter().any(|(id, _)| Some(*id) == self.current_page) {
-            self.current_page = pages.first().map(|(id, _)| *id);
+            self.current_page = pages
+                .iter()
+                .find(|(_, generated)| !generated)
+                .or(pages.first())
+                .map(|(id, _)| *id);
         }
     }
 
@@ -470,6 +489,7 @@ impl NovoApp {
         self.canvas.document_replaced();
         self.wb.reports = Default::default();
         self.wb.sheet = 0;
+        self.add_generated_pages();
     }
 
     fn close_project(&mut self) {

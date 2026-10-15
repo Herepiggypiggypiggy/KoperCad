@@ -98,6 +98,34 @@ impl Reports {
 }
 
 impl NovoApp {
+    /// Adds the generated pages the project should have and lacks (DESIGN.md
+    /// §2: automatic): the contents first, the reports after the drawing
+    /// pages, each once it has something to list. Runs on new and open, as
+    /// one undo step.
+    pub(super) fn add_generated_pages(&mut self) {
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let specs = novo_reports::default_generated_pages(doc.project());
+        // The contents comes with the first report that has something to
+        // list, so a new, empty project stays a single drawing page.
+        if specs
+            .iter()
+            .all(|s| s.generator == novo_reports::TableOfContents::ID)
+        {
+            return;
+        }
+        match doc.transact("Generated pages", |tx| {
+            novo_reports::add_generated_pages(tx, &specs)
+        }) {
+            Ok(((), changes)) => self.changed_outside_canvas(&changes),
+            Err(e) => self.message(
+                super::Level::Error,
+                format!("Could not add the generated pages: {e}"),
+            ),
+        }
+    }
+
     /// Tells the live reports about a change set the document went through.
     pub(super) fn reports_heard(&mut self, changes: &ChangeSet) {
         self.wb.reports.heard(changes);

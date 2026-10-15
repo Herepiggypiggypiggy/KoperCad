@@ -169,11 +169,16 @@ impl Drive {
     }
 }
 
-/// What a saved and reopened project must keep: pages, devices, symbols,
-/// wires, terminals and potentials, in a comparable form.
+/// What a saved and reopened project must keep: drawing pages, devices,
+/// symbols, wires, terminals and potentials, in a comparable form. Opening
+/// adds the generated pages a project lacks, so they are left out.
 fn summary(project: &Project) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
-    for page in project.pages_in_order() {
+    for page in project
+        .pages_in_order()
+        .into_iter()
+        .filter(|p| !matches!(p.kind, novo_core::PageKind::Generated { .. }))
+    {
         out.push(format!("page {} {}", page.name, page.title));
     }
     let mut devices: Vec<String> = project.devices().map(|d| d.tag.to_string()).collect();
@@ -430,6 +435,22 @@ fn gate1_motor_starter_through_the_window() {
     e.app.open_path(&file);
     e.frame();
     assert_eq!(summary(e.doc().project()), before, "the reopened project");
+    // Opening gave it its generated pages, after the drawing pages, and
+    // still shows the first drawing page.
+    let generated: Vec<String> = e
+        .doc()
+        .project()
+        .pages_in_order()
+        .into_iter()
+        .filter(|p| matches!(p.kind, novo_core::PageKind::Generated { .. }))
+        .map(|p| format!("{} {}", p.name, p.title))
+        .collect();
+    assert!(
+        generated.iter().any(|p| p == "40 Terminal diagram"),
+        "{generated:?}"
+    );
+    let shown = e.app.current_page.and_then(|p| e.doc().project().page(p));
+    assert_eq!(shown.map(|p| p.name.as_str()), Some("1"));
     if let Some(out) = std::env::var_os("NOVO_GATE1_OUT") {
         e.app.run(&e.ctx.clone(), Action::CloseProject);
         std::fs::copy(&file, std::path::Path::new(&out).join("Starter.novo")).unwrap();

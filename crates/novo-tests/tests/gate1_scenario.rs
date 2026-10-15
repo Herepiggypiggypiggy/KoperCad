@@ -988,6 +988,18 @@ fn gap_assign_parts_from_the_catalog() {
 /// first frame, every edit runs through `NovoApp::execute`, File > Save
 /// writes it and File > Close closes it. A fresh window opens the same
 /// starter, and nothing was reported along the way.
+/// A project's file content without its generated pages and id counter,
+/// which opening a project may add to.
+fn drawing_json(project: &Project) -> serde_json::Value {
+    let mut json: serde_json::Value = serde_json::from_str(&project.to_json()).unwrap();
+    let object = json.as_object_mut().unwrap();
+    object.remove("next_id");
+    if let Some(pages) = object.get_mut("pages").and_then(|p| p.as_array_mut()) {
+        pages.retain(|p| p["kind"]["type"] != "generated");
+    }
+    json
+}
+
 #[test]
 fn scenario_through_the_window() {
     let library = Library::builtin().unwrap();
@@ -1011,7 +1023,7 @@ fn scenario_through_the_window() {
         motor_potentials(&flow, flow.project(), &s),
         supply_order(&s)
     );
-    let before = flow.project().to_json();
+    let before = drawing_json(flow.project());
     let mut window = flow.store;
     window.frame();
     assert_eq!(window.app.current_page(), Some(page));
@@ -1025,7 +1037,15 @@ fn scenario_through_the_window() {
     // A fresh window opens the same starter.
     let window = Window::open(&path);
     assert!(window.problems().is_empty(), "{:?}", window.problems());
-    assert_eq!(window.doc().project().to_json(), before);
+    // Opening adds the generated pages the starter now needs (G2-1); the
+    // drawing itself comes back unchanged.
+    assert_eq!(drawing_json(window.doc().project()), before);
+    assert!(
+        window.doc().project().pages().any(
+            |p| matches!(&p.kind, PageKind::Generated { generator } if generator == "terminals")
+        ),
+        "no terminal diagram page"
+    );
     let reflow = Flow::new(window, &library);
     assert_eq!(
         motor_potentials(&reflow, reflow.project(), &s),

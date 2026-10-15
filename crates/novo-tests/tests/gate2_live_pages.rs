@@ -308,7 +308,6 @@ fn open_in_window(dir: &std::path::Path) -> NovoApp {
 /// schematic pages, without the user adding them. Neither the app nor any
 /// engine adds a `PageKind::Generated` page today.
 #[test]
-#[ignore = "Gate 2 gap G2-1: nothing adds the generated pages (TEST_REPORT Round 12)"]
 fn gap_the_project_gets_its_generated_pages() {
     let dir = tempfile::tempdir().unwrap();
     let app = open_in_window(dir.path());
