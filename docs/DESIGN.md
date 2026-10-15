@@ -363,13 +363,15 @@ the screen:
   junction;
 - two wires of one conductor that would run over each other from a shared
   pin diverge at a derived junction; the stretch is stored and drawn once;
-- in Corners, a new or edited route that would lie over another conductor
-  is nudged one grid step sideways, up to three steps, keeping its ends on
-  their pins; if that cannot clear it, the gesture is refused;
-- in Lines, a segment that would lie over another conductor is refused
-  before it is placed, never nudged, because the line is exactly what the
-  user drew. In Corners a clicked corner that lies on another conductor is
-  refused the same way. The refusal is live while the pointer moves, not
+- in Corners, a new or edited route that would lie over another wire (of
+  any conductor) is nudged one grid step sideways, up to three steps,
+  keeping its ends on their pins, and the preview shows the nudge before
+  the click ("adjusted to avoid -W3 L1" in the dock hint); if that cannot
+  clear it, the gesture is refused;
+- in Lines, a segment that would lie over another wire is refused before
+  it is placed, never nudged, because the line is exactly what the user
+  drew. In Corners a clicked corner that lies on another wire is refused
+  the same way, and the user's placed corners are never moved. The refusal is live while the pointer moves, not
   only on click, so there is never a dead click, and never colour alone
   (the transient mark in §5): not-allowed cursor, the clashing segment
   tinted with the Error colour, a dashed outline of the refused corner or
@@ -385,9 +387,9 @@ the screen:
   not rewritten on load; novo-checks reports each as a warning (`wire.overlap`)
   that marks both segments, with the nudge as its fix. It is a warning, not
   an error: connectivity lives in the model, not in where the lines are;
-- merging two wires of one conductor is one undo step. The surviving wire
-  keeps its number and text and the other's is released; if both carry
-  different explicit numbers the merge is refused with the reason.
+- a refusal changes nothing and leaves the undo depth as it was. There is
+  no merging of overlapping wires, so a wire's number and text are never
+  at stake.
 
 A hand-drawn route (Lines, or Corners with clicked corners) is kept by
 `tidy`; selecting it and choosing `tidy` re-routes it on purpose. Moving a
@@ -411,9 +413,10 @@ Acceptance, for testers and reviewers, run in both modes unless marked:
    cursor, tint, outline and reason in the hint, and nothing changes.
    Corners: a clicked corner over another conductor is refused the same
    way; a router leg is nudged clear or refused.
-6. Two wires of one conductor from a shared pin store the shared stretch
-   once, with a junction where they diverge; merging keeps the surviving
-   number and text and refuses on two different explicit numbers.
+6. Two wires of one conductor leaving a shared pin store the shared
+   stretch once, with a junction where they diverge; a wire laid over a
+   wire of the same conductor elsewhere is nudged or refused like any
+   other. A refusal leaves the undo depth unchanged.
 7. Ending on a wire of the same potential makes a T-junction; ending on a
    different declared potential is refused with the reason.
 8. Esc mid-wire cancels the whole wire; Backspace removes one corner or
