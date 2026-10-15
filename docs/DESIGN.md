@@ -543,6 +543,17 @@ clear the selection.
 | Esc | The Escape ladder |
 | ? | Shortcut overlay |
 
+**Your own keys.** A text file `keymap.txt` in the KoperCAD folder under
+`%APPDATA%` overrides the keys above, one line per binding:
+`tool.cable = Ctrl+Shift+C`, `edit.duplicate = Alt+D` (a second line adds a
+second chord), `tool.repeat = none` (no key). A scope can be given
+(`canvas:`, `anywhere:`, `panel:`); by default a command keeps the scope it
+has, else Ctrl, Alt and F keys work anywhere and plain keys on the canvas
+only. It is read at start. A line that names no command, has a chord that
+does not parse or takes a chord another command uses is skipped, and one
+warning at start names the first of them. The palette and the shortcut
+overlay show the user's keys.
+
 A jump (G, an exact tag, F8, Alt+Left/Right, a drawer row, Tab to an
 off-screen proposal) moves the view only when it has to. If the target is
 already readable (2.5 mm text at 10 px or larger) and at least 48 px inside

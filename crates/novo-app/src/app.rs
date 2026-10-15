@@ -20,6 +20,7 @@ mod reports;
 mod revisions;
 mod terminals;
 mod title_revisions;
+mod userkeymap;
 mod wheel;
 mod workbench;
 mod xref;
@@ -161,7 +162,9 @@ impl NovoApp {
             .and_then(|s| eframe::get_value(s, Settings::STORAGE_KEY))
             .unwrap_or_default();
         novo_theme::apply(&cc.egui_ctx);
-        Self::with_settings(backend, canvas, settings)
+        let mut app = Self::with_settings(backend, canvas, settings);
+        app.load_user_keymap();
+        app
     }
 
     pub fn with_settings(
