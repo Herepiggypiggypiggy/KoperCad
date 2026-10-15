@@ -1228,13 +1228,32 @@ fn strip_heads(project: &Project, page: PageId) -> HashMap<SymbolId, String> {
                 .then(a.0.y.total_cmp(&b.0.y))
                 .then(a.1.cmp(&b.1))
         });
-        let mut prev: Option<Point> = None;
-        for (at, id) in syms {
-            let near = prev.is_some_and(|p| (p.x - at.x).hypot(p.y - at.y) <= STRIP_RUN_GAP);
-            if !near {
-                heads.insert(id, tag.clone());
+        // Runs are the groups of terminals chained by neighbours at most
+        // STRIP_RUN_GAP apart, whatever their order (two rows side by side
+        // stay two runs); each run is named at its first terminal in the
+        // sort order (leftmost, then topmost).
+        let near = |a: Point, b: Point| (a.x - b.x).hypot(a.y - b.y) <= STRIP_RUN_GAP;
+        let mut run: Vec<usize> = (0..syms.len()).collect();
+        fn root(run: &mut [usize], mut i: usize) -> usize {
+            while run[i] != i {
+                run[i] = run[run[i]];
+                i = run[i];
             }
-            prev = Some(at);
+            i
+        }
+        for i in 0..syms.len() {
+            for j in i + 1..syms.len() {
+                if near(syms[i].0, syms[j].0) {
+                    let (a, b) = (root(&mut run, i), root(&mut run, j));
+                    // The earlier terminal stays the root, so it heads the run.
+                    run[a.max(b)] = a.min(b);
+                }
+            }
+        }
+        for (i, (_, id)) in syms.iter().enumerate() {
+            if root(&mut run, i) == i {
+                heads.insert(*id, tag.clone());
+            }
         }
     }
     heads
@@ -1528,6 +1547,55 @@ mod tests {
         assert_eq!(reference.pos.x, tag.bounds().min.x);
         assert!(reference.pos.y >= tag.bounds().max.y);
         assert!(!reference.keep_color);
+    }
+
+    /// Two rows of one strip over the same x range (supply terminals at
+    /// the top of a page, motor outputs at the bottom) are two runs, one
+    /// name each, not one run per terminal.
+    #[test]
+    fn two_rows_of_a_strip_are_two_runs() {
+        let aligned: &[(f64, f64)] = &[
+            (100.0, 50.0),
+            (105.0, 50.0),
+            (110.0, 50.0),
+            (100.0, 150.0),
+            (105.0, 150.0),
+            (110.0, 150.0),
+        ];
+        let staggered: &[(f64, f64)] = &[
+            (100.0, 50.0),
+            (102.5, 120.0),
+            (110.0, 50.0),
+            (112.5, 120.0),
+            (120.0, 50.0),
+            (122.5, 120.0),
+        ];
+        for (at, expect) in [(aligned, vec![0, 3]), (staggered, vec![0, 1])] {
+            let mut doc = Document::default();
+            let ((page, syms), _) = doc
+                .transact("strip", |tx| {
+                    let page = tx.add_page("1")?;
+                    let x1 = tx.add_terminal_strip(DeviceTag::parse("-X1")?)?;
+                    let mut syms = Vec::new();
+                    for (i, &(x, y)) in at.iter().enumerate() {
+                        let t = tx.add_terminal(x1, (i + 1).to_string())?;
+                        syms.push(tx.place_symbol(
+                            page,
+                            "iec/terminal",
+                            MPlacement::at(Point::new(x, y)),
+                            vec![Pin::new("1", 0.0, -2.5), Pin::new("2", 0.0, 2.5)],
+                            SymbolRole::Terminal { terminals: vec![t] },
+                        )?);
+                    }
+                    Ok((page, syms))
+                })
+                .unwrap();
+            let heads = strip_heads(doc.project(), page);
+            let named: Vec<usize> = (0..syms.len())
+                .filter(|&i| heads.contains_key(&syms[i]))
+                .collect();
+            assert_eq!(named, expect, "{at:?}");
+        }
     }
 
     #[test]
