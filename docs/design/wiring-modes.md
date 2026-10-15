@@ -26,8 +26,7 @@ they differ, DESIGN wins.
   - No merging of wires (DESIGN #169): any overlapping wire is nudged in
     Corners or refused in Lines. Same pin and direction: derived junction.
   - Move with no room: `settle_wire` takes one flag. Interactive (drag or
-    keyboard nudge): refuse or accept as DESIGN decides (design reviewer
-    proposes refuse). Non-interactive (scripts, AI edits, undo/redo, file
+    keyboard nudge): refuse live (design reviewer decision). Non-interactive (scripts, AI edits, undo/redo, file
     open): accept and let `wire.overlap` report.
 - `edit::draw_wire_exact` takes explicit points and does not route (Lines).
 - `novo-checks`: `wire.overlap`, warning (as in DESIGN), for projects that already
@@ -67,8 +66,10 @@ they differ, DESIGN wins.
    overlap (nudge in Corners, refuse in Lines); no merge.
 9. T-junction onto a different declared potential: refused with the reason.
 10. Crossing: no dot, no overlap report.
-11. Move a symbol: wires settled, preview equals commit, one undo restores.
-    Move with no room: accepted and `wire.overlap` reports it.
+11. Move a symbol, preview equals commit, one undo restores. Interactive
+    move that no nudge can clear: refused live, symbol stays, undo depth
+    unchanged. Non-interactive (script, AI edit, undo/redo, file open): the
+    result is accepted and `wire.overlap` reports it.
 12. Shift+W mid-wire keeps the points; OS key repeat does not flip it back;
     the setting survives a restart.
 13. A click under 4 px of movement is never a drag. The refusal tint and hint
