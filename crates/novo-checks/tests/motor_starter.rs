@@ -9,16 +9,6 @@ use novo_checks::{ProblemKind, Severity, Summary, check};
 use novo_core::*;
 use novo_tests::{MotorStarter, motor_starter, stress_page};
 
-/// Kinds that come from numbers in properties (crate::calc_checks).
-const CALC_KINDS: [ProblemKind; 6] = [
-    ProblemKind::VoltageDrop,
-    ProblemKind::ShortCircuit,
-    ProblemKind::DisconnectionTime,
-    ProblemKind::ThermalWithstand,
-    ProblemKind::MotorStarter,
-    ProblemKind::ProtectiveConductor,
-];
-
 fn starter() -> (Document, MotorStarter) {
     let mut doc = Document::default();
     let handles = motor_starter(&mut doc).unwrap();
@@ -207,14 +197,25 @@ fn every_deliberate_error_is_flagged_exactly_once() {
     for p in &problems {
         by_kind.entry(p.kind).or_default().push(p);
     }
-    // The calculation kinds need numbers the fixture does not carry; they
-    // are tested in tests/calc_checks.rs.
+    // The starter has no lengths, supply rating or cabinet layout, so the
+    // checks that read those are tested in design_checks.rs and calc_checks.rs.
+    let needs_more = [
+        ProblemKind::VoltageDrop,
+        ProblemKind::ShortCircuit,
+        ProblemKind::UnplacedDevice,
+        ProblemKind::WireWithoutDuct,
+        ProblemKind::OverfullDuct,
+        ProblemKind::DisconnectionTime,
+        ProblemKind::ThermalWithstand,
+        ProblemKind::MotorStarter,
+        ProblemKind::ProtectiveConductor,
+    ];
     let kinds: Vec<ProblemKind> = ProblemKind::ALL
         .into_iter()
-        .filter(|k| !CALC_KINDS.contains(k))
+        .filter(|k| !needs_more.contains(k))
         .collect();
-    for kind in &kinds {
-        let found = by_kind.get(kind).map_or(0, Vec::len);
+    for &kind in &kinds {
+        let found = by_kind.get(&kind).map_or(0, Vec::len);
         assert_eq!(found, 1, "{kind:?} flagged {found} times: {problems:#?}");
     }
     assert_eq!(problems.len(), kinds.len());
