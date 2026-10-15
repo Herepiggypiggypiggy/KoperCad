@@ -9,6 +9,8 @@ use crate::punch::{PunchItem, PunchState, Severity};
 pub enum CommissioningError {
     #[error("{check:?} does not apply to {target:?}")]
     NotApplicable { target: Target, check: CheckKind },
+    #[error("the commissioning data is unreadable: {0}")]
+    Unreadable(String),
     #[error("no punch item {0}")]
     NoPunchItem(u64),
 }
@@ -60,6 +62,16 @@ impl CommissioningStore {
             next_punch: 1,
             ..Default::default()
         }
+    }
+
+    /// The store as the JSON document kept in the project file.
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(self).expect("the store is plain data")
+    }
+
+    /// Reads a document written by [`CommissioningStore::to_json`].
+    pub fn from_json(json: &str) -> Result<Self, CommissioningError> {
+        serde_json::from_str(json).map_err(|e| CommissioningError::Unreadable(e.to_string()))
     }
 
     pub fn is_empty(&self) -> bool {

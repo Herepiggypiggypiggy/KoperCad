@@ -121,8 +121,8 @@ fn the_store_round_trips_through_json() {
     store
         .set_check(rec(wire, CheckKind::Labelled, CheckState::Passed))
         .unwrap();
-    let json = serde_json::to_string(&store).unwrap();
-    let mut back: CommissioningStore = serde_json::from_str(&json).unwrap();
+    let json = store.to_json();
+    let mut back = CommissioningStore::from_json(&json).unwrap();
     assert_eq!(back.records().count(), 2);
     assert_eq!(back.open_punch_count(), 1);
     let next = back.add_punch(PunchItem {
