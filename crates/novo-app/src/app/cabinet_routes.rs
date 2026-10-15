@@ -6,8 +6,8 @@
 use eframe::egui;
 use novo_canvas::Viewport;
 use novo_core::{Project, Rail, RailKind, StructureId};
-use novo_routing::model::{route_connections, wire_connections};
-use novo_routing::{Kind, Rules};
+use novo_routing::Kind;
+use novo_routing::model::route_project;
 
 /// One routed wire, as a polyline in plate millimetres.
 #[derive(Debug, Clone, PartialEq)]
@@ -71,7 +71,7 @@ impl Overlay {
 /// Routes the wires of `structure`'s devices and reads the result as an
 /// overlay. Empty when no wire has both ends placed on this plate.
 pub(super) fn overlay(project: &Project, structure: StructureId) -> Overlay {
-    let routed = route_connections(project, &wire_connections(project), &Rules::default());
+    let routed = route_project(project);
     let Some((_, plan)) = routed.plans.iter().find(|(s, _)| *s == structure) else {
         return Overlay::default();
     };

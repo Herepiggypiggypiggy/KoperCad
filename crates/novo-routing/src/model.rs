@@ -70,6 +70,12 @@ pub fn wire_connections(project: &Project) -> Vec<Connection> {
         .collect()
 }
 
+/// Routes every wire of the project with the default rules: the one call a
+/// screen needs. Routes and unrouted ids are wire ids.
+pub fn route_project(project: &Project) -> Routed {
+    route_connections(project, &wire_connections(project), &Rules::default())
+}
+
 /// The device a pin physically sits on: the device of a device symbol, or
 /// the strip of a terminal symbol.
 fn device_of_pin(project: &Project, pin: PinRef) -> Option<DeviceId> {

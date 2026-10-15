@@ -123,3 +123,14 @@ fn wires_between_pins_are_connections_with_a_diameter_from_their_size() {
         None
     );
 }
+
+#[test]
+fn route_project_routes_every_wire_between_placed_pins() {
+    let (mut p, cab, pins) = project();
+    p.transact("wire", |tx| tx.connect(pins[0], pins[1]))
+        .unwrap();
+    let r = novo_routing::model::route_project(&p);
+    assert_eq!(r.routes.len(), 1);
+    assert!(r.unrouted.is_empty());
+    assert_eq!(r.plans[0].0, cab);
+}
