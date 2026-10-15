@@ -86,6 +86,8 @@ pub(super) struct SizingState {
     /// The "Size the enclosure" window is open.
     pub(super) panel_open: bool,
     pub(super) editor_open: bool,
+    /// The list has edits not yet written to its file.
+    dirty: bool,
     /// One line for the editor: what the last import or save did.
     notice: Option<String>,
 }
@@ -104,6 +106,7 @@ impl SizingState {
             inside: defaults.inside_max,
             panel_open: false,
             editor_open: false,
+            dirty: false,
             notice: None,
         }
     }
@@ -354,7 +357,7 @@ pub(super) fn show_editor(ctx: &egui::Context, state: &mut SizingState) {
                 .num_columns(9)
                 .striped(true)
                 .show(ui, |ui| {
-                    for head in ["Name", "W", "H", "D", "Plate W", "Plate H", "Margin", "Material", ""] {
+                    for head in ["Name", "W (mm)", "H (mm)", "D (mm)", "Plate W (mm)", "Plate H (mm)", "Margin (mm)", "Material", ""] {
                         ui.strong(head);
                     }
                     ui.end_row();
@@ -448,8 +451,12 @@ pub(super) fn show_editor(ctx: &egui::Context, state: &mut SizingState) {
             Err(e) => format!("Could not save: {e}"),
         });
     }
-    if changed {
+    // Written when typing stops (no field has focus) or the window closes,
+    // not on every keystroke.
+    state.dirty |= changed;
+    if state.dirty && (!open || !ctx.egui_wants_keyboard_input()) {
         state.save();
+        state.dirty = false;
     }
     state.editor_open = open;
 }
