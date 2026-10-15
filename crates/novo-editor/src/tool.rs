@@ -83,6 +83,9 @@ pub struct MoveTool {
     /// Quarter turns and mirroring applied on drop.
     pub turns: u8,
     pub mirrored: bool,
+    /// Shift: the wires on the moved pins stretch along instead of staying
+    /// behind as open ends.
+    pub carry: bool,
 }
 
 /// The active tool.
@@ -647,6 +650,11 @@ impl Editor {
 
     /// Picks up the selection to move it with the pointer.
     pub fn begin_move(&mut self, selection: &[AnyId]) -> bool {
+        self.begin_move_with(selection, false)
+    }
+
+    /// [`Self::begin_move`], with `carry` taking the wires along (Shift).
+    pub fn begin_move_with(&mut self, selection: &[AnyId], carry: bool) -> bool {
         self.link_hint = None;
         let ids: Vec<AnyId> = selection
             .iter()
@@ -665,6 +673,7 @@ impl Editor {
             from,
             turns: 0,
             mirrored: false,
+            carry,
         }));
         true
     }
@@ -857,7 +866,12 @@ impl Editor {
                 let grid = self.grid;
                 let result = doc.transact("Move", |tx| {
                     if delta != Point::ZERO {
-                        edit::transform_interactive(tx, &m.ids, Transform::Move(delta))?;
+                        let how = Transform::Move(delta);
+                        if m.carry {
+                            edit::transform_interactive(tx, &m.ids, how)?;
+                        } else {
+                            edit::transform_detached(tx, &m.ids, how)?;
+                        }
                     }
                     let pivot = edit::pivot(tx.project(), &m.ids, grid);
                     if let Some(c) = pivot {
