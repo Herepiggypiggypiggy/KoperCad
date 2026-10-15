@@ -239,6 +239,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["compare"],
     ),
     cmd("file.quit", "Quit", "Project", &["exit"], Needs::Nothing),
+    cmd(
+        "help.about",
+        "About",
+        "Project",
+        &["version", "credits", "kopervonk"],
+        Needs::Nothing,
+    ),
     verb(
         cmd(
             "file.import_dxf_background",
