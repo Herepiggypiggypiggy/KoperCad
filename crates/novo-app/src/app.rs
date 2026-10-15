@@ -661,11 +661,22 @@ impl NovoApp {
         self.space_pan(&ctx);
         self.space_released(&ctx);
         self.track_pointer(&ctx);
-        let commands = if self.modal_open() {
+        let mut commands = if self.modal_open() {
             Vec::new()
         } else {
             self.key_commands(&ctx)
         };
+        if self.cabinet_open {
+            // The schematic's keys must not edit the hidden page: rotate
+            // and delete go to the Cabinet, the rest keep only the view,
+            // file and undo actions.
+            for id in &commands {
+                if matches!(*id, "edit.rotate" | "edit.delete") {
+                    self.cabinet.keys.push((*id).to_owned());
+                }
+            }
+            commands.retain(|id| Action::from_id(id).is_some());
+        }
 
         self.window_width = ctx.content_rect().width();
         let pinned = self.outline_pinned() && !self.focus_mode;
