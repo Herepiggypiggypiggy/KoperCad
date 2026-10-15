@@ -16,7 +16,7 @@ use crate::id::{
     PotentialId, PotentialSystemId, RailId, RevisionId, StructureId, SymbolId, TerminalId, TextId,
     WireId,
 };
-use crate::project::{PAGE_ORDER, Project};
+use crate::project::{PAGE_ORDER, Project, contents_scope, panel_contents_generator};
 use crate::record::{Entity, Op, Record};
 use crate::tag::{Aspect, DeviceTag};
 
@@ -1231,6 +1231,17 @@ impl<'p> Tx<'p> {
             .pages()
             .filter_map(|p| rewrite(&p.structure).map(|n| (p.id, n)))
             .collect();
+        // The contents list of a panel names the panel in its generator id.
+        let generators: Vec<(PageId, String)> = self
+            .project
+            .pages()
+            .filter_map(|p| match &p.kind {
+                PageKind::Generated { generator } => contents_scope(generator)
+                    .and_then(|scope| rewrite(&scope))
+                    .map(|n| (p.id, panel_contents_generator(&n.location))),
+                _ => None,
+            })
+            .collect();
 
         for (i, new) in device_changes {
             self.update::<Device>(devices[i].0, |d| d.tag = new)?;
@@ -1243,6 +1254,9 @@ impl<'p> Tx<'p> {
         }
         for (id, new) in pages {
             self.update::<Page>(id, |p| p.structure = new)?;
+        }
+        for (id, generator) in generators {
+            self.update::<Page>(id, |p| p.kind = PageKind::Generated { generator })?;
         }
         Ok(())
     }
