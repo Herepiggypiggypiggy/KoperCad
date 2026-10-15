@@ -77,6 +77,31 @@ impl Document {
         Ok(Outcome { created, changes })
     }
 
+    /// Runs `edit` as part of the last undo step, so one undo takes back
+    /// both: for follow-up work an edit causes, such as generated pages
+    /// added as their content appears. Returns what `edit` changed. When
+    /// there is no step to join (nothing done yet, or the last action was
+    /// an undo), `edit` becomes its own step, labelled `label`.
+    pub fn amend_last<R>(
+        &mut self,
+        label: impl Into<String>,
+        edit: impl FnOnce(&mut Tx<'_>) -> Result<R>,
+    ) -> Result<(R, ChangeSet)> {
+        if self.undo.is_empty() || !self.redo.is_empty() {
+            return self.transact(label, edit);
+        }
+        let (value, transaction) = self.project.transact(label, edit)?;
+        let changes = transaction.changes();
+        if !transaction.is_empty() {
+            if self.saved_at == Some(self.undo.len()) {
+                self.saved_at = None; // the saved state is inside the step now
+            }
+            let last = self.undo.last_mut().expect("checked above");
+            last.ops.extend(transaction.ops);
+        }
+        Ok((value, changes))
+    }
+
     fn push(&mut self, transaction: Transaction) {
         if transaction.is_empty() {
             return;

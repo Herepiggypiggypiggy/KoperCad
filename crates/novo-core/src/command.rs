@@ -30,6 +30,10 @@ pub enum Command {
     SetProjectInfo {
         info: ProjectInfo,
     },
+    /// The user deletes a page; see [`Tx::delete_page`].
+    DeletePage {
+        page: PageId,
+    },
     AddPage {
         name: String,
         #[serde(default)]
@@ -294,6 +298,7 @@ impl Command {
     pub fn label(&self) -> String {
         match self {
             Command::SetProjectInfo { .. } => "Edit project info".into(),
+            Command::DeletePage { .. } => "Delete page".into(),
             Command::AddPage { .. } => "Add page".into(),
             Command::AddDevice { .. } => "Add device".into(),
             Command::SetTag { .. } => "Rename device".into(),
@@ -347,6 +352,10 @@ impl Tx<'_> {
         let created: AnyId = match command {
             Command::SetProjectInfo { info } => {
                 self.set_info(|i| *i = info)?;
+                return Ok(Vec::new());
+            }
+            Command::DeletePage { page } => {
+                self.delete_page(page)?;
                 return Ok(Vec::new());
             }
             Command::AddPage {
