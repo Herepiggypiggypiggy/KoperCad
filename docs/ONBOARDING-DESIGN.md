@@ -35,15 +35,17 @@ steps; each ticks itself when the user does it, so it measures real use, not cli
 
 | Step | Tick when |
 | --- | --- |
-| Q: place a symbol | a symbol is added by the place tool (change set `added` contains a symbol) |
-| W: draw a wire | a wire is added |
-| R: rotate | a symbol's rotation changes (`modified` after the rotate command) |
+| Q: place a symbol | the place tool commits a symbol (its command label or the `Action` the window runs), not any `added` in a change set |
+| W: draw a wire | the wire tool commits a wire |
+| R: rotate | the rotate command runs on a selection |
 | Ctrl+D: duplicate | the smart-duplicate action runs |
 | C: place a cable | a cable is added |
 | Ctrl+K: open the palette | the palette opens |
 
-- Detection reuses what the shell already sees: the `ChangeSet` returned by every command (the same
-  hook `reports_heard` uses) plus the `Action` the window runs. No new events in `novo-editor`.
+- Detection reuses what the shell already sees: the command label and the `Action` the window runs.
+  A change set alone is not enough: `added` also fires on paste, duplicate, undo of a delete and file
+  replay, so a step could tick without its key. `reports_heard` has three call sites, so step detection
+  goes through one new funnel that they all call. No new events in `novo-editor`.
 - It runs on a **practice project**: the start panel gets **Try the fast keys**, which does New and
   adds one empty page, then shows the card. It can also be opened on any open project from the Help menu
   (**Fast keys walk-through**) and from the palette (`help.walkthrough`).
@@ -75,5 +77,9 @@ the `gate1_tests` style, the card persists and dismisses, and the example opens 
 2. The practice project is a fresh untitled project, not a page in the example. Because a cable needs
    two devices with terminals, it starts with a motor and a terminal strip already placed, in the same
    single undo step as the project. Q and W stay free to draw.
-3. The card sits at the bottom right and steps aside, collapsed to a pill ("3 of 6"), while the live
+3. The Tester owns `novo-tests`: the implementing PR needs their sign-off in the PR, and `novo-tests`
+   keeps `novo-core` as its only normal dependency (a normal dependency added there would be pulled
+   into the app). The app also compiles `stress.rs` from that crate; gate it behind a feature if that
+   matters.
+4. The card sits at the bottom right and steps aside, collapsed to a pill ("3 of 6"), while the live
    view is on. The key on each step comes from the keymap. The Help menu item resets the progress.
