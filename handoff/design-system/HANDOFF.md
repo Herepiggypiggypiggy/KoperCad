@@ -5,15 +5,13 @@ Updated 2026-10-15 19:20 UTC.
 ## State
 - Repo herepiggypiggypiggy/kopercad, branch `claude/project-thread-mr5n3b`
   (the only branch I push to; restart it from main after each merge).
-- PR 1 (#448: spec, `docs/design/design-system.md`, `scripts/screenshot.sh`, this
-  folder): READY on 2338d9d, waiting for the integration lead to merge. Do not
-  push to it.
-- Local branches ds-tokens, ds-appearance hold the code PRs (stacked): tokens and
-  light theme, Preferences, start screen, dock, drawers, toasts, command field,
-  top bar. Split into small PRs from main once #448 is in. Still to do: outline
-  flyout tabs, inspector, dialogs, live view colours, empty states, icons,
-  canvas polish (with the canvas thread), learning widgets (after #456).
-- Before screenshots of the app and preview example taken at main 074138a.
+- #448 (spec) merged 19:13 UTC. PR 2 (this branch): tokens, light theme,
+  widgets, gallery, plus the review fixes that landed after the merge.
+- Next PRs, one at a time from main (local stack branch ds-appearance holds the
+  work): Preferences theme/density and canvas restyle, start screen, dock,
+  drawers, toasts, command field, top bar, outline, live view colours. Then
+  inspector, dialogs, empty states, icons, canvas polish (with the canvas
+  thread), learning widgets (novo-learn).
 
 ## Resume
 ```
