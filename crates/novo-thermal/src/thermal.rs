@@ -4,7 +4,7 @@
 
 use crate::flow::{self, Flow};
 use crate::linalg::{self, Builder};
-use crate::setup::{PortKind, Setup};
+use crate::setup::Setup;
 
 #[derive(Clone)]
 pub struct State {
@@ -237,40 +237,9 @@ pub fn solve_temperatures(s: &Setup, st: &mut State, load: f64, step: Option<&St
     linalg::bicgstab(&a, &rhs, &mut x, 1e-10, 3000);
 
     let mut change = 0.0_f64;
-    if std::env::var("THERMAL_DEBUG").is_ok() {
-        let ca = (0..n)
-            .map(|i| (x[i] - st.t_air[i]).abs())
-            .fold(0.0_f64, f64::max);
-        let cp = s
-            .plate_cells
-            .iter()
-            .enumerate()
-            .map(|(k, &i)| (x[n + k] - st.t_plate[i]).abs())
-            .fold(0.0_f64, f64::max);
-        let cd = (0..nd)
-            .map(|k| (x[n + np + k] - st.t_dev[k]).abs())
-            .fold(0.0_f64, f64::max);
-        let (im, _) = (0..n)
-            .map(|i| (i, (x[i] - st.t_air[i]).abs()))
-            .fold((0, 0.0), |m, v| if v.1 > m.1 { v } else { m });
-        eprintln!(
-            "  air {ca:.3} at ({},{}) old {:.2} new {:.2} qy {:.2e} qy_up {:.2e} qx {:.2e} plate {cp:.3} dev {cd:.3}",
-            im % s.nx,
-            im / s.nx,
-            st.t_air[im],
-            x[im],
-            st.flow.qy[im],
-            if im >= s.nx {
-                st.flow.qy[im - s.nx]
-            } else {
-                0.0
-            },
-            st.flow.qx[im]
-        );
-    }
-    for i in 0..n {
-        change = change.max((x[i] - st.t_air[i]).abs());
-        st.t_air[i] = x[i];
+    for (t, new) in st.t_air.iter_mut().zip(&x[..n]) {
+        change = change.max((new - *t).abs());
+        *t = *new;
     }
     for (k, &i) in s.plate_cells.iter().enumerate() {
         change = change.max((x[n + k] - st.t_plate[i]).abs());
@@ -285,20 +254,41 @@ pub fn solve_temperatures(s: &Setup, st: &mut State, load: f64, step: Option<&St
 
 /// Steady state at the given load factor.
 pub fn steady(s: &Setup, load: f64) -> State {
+    steady_from(s, load, None)
+}
+
+/// Steady state, starting from a similar solved state when one is given (the
+/// same grid, e.g. the central run for the uncertainty band runs).
+pub fn steady_from(s: &Setup, load: f64, init: Option<&State>) -> State {
     let total: f64 = s.devices.iter().map(|d| d.loss_w).sum::<f64>() * load;
     let rise = if s.k_ae > 0.0 { total / s.k_ae } else { 0.0 };
-    let mut st = State::uniform(s, s.ambient + rise.min(60.0));
-    for k in 0..s.devices.len() {
-        st.t_dev[k] = s.ambient + rise.min(60.0) + 10.0;
-    }
+    let n = s.n();
+    let mut st = match init {
+        Some(i) if i.t_air.len() == n && i.t_dev.len() == s.devices.len() => {
+            let mut st = i.clone();
+            st.t_buoy = st.t_air.clone();
+            st.flow.reset_ports(s.ports.len());
+            st.iterations = 0;
+            st.converged = false;
+            st
+        }
+        _ => {
+            let mut st = State::uniform(s, s.ambient + rise.min(60.0));
+            for k in 0..s.devices.len() {
+                st.t_dev[k] = s.ambient + rise.min(60.0) + 10.0;
+            }
+            st
+        }
+    };
+    let warm = init.is_some();
     // Fixed point between flow and temperature. The buoyancy driven flow can
     // swing between two states when a plume leans one way or the other, so the
     // temperature the flow sees is relaxed, and the relaxation is cut whenever
     // the change stops falling.
-    let mut alpha = 0.5;
+    let mut alpha = if warm { 0.3 } else { 0.5 };
     let mut previous = f64::INFINITY;
     for it in 0..s.params.max_iterations {
-        let relax = if it == 0 { 1.0 } else { alpha };
+        let relax = if it == 0 && !warm { 1.0 } else { alpha };
         for i in 0..st.t_buoy.len() {
             st.t_buoy[i] += relax * (st.t_air[i] - st.t_buoy[i]);
         }
@@ -307,9 +297,6 @@ pub fn steady(s: &Setup, load: f64) -> State {
         update_device_h(s, &mut st);
         let change = solve_temperatures(s, &mut st, load, None);
         st.iterations = it + 1;
-        if std::env::var("THERMAL_DEBUG").is_ok() {
-            eprintln!("it {it} change {change:.4} alpha {alpha:.3}");
-        }
         if change < s.params.tolerance_k && it >= 2 {
             st.converged = true;
             break;
@@ -381,9 +368,4 @@ pub fn plate_share(s: &Setup, st: &State, k: usize) -> f64 {
     let tp: f64 = d.plate.iter().map(|&(i, w)| w * st.t_plate[i]).sum();
     let q = g_plate * (st.t_dev[k] - tp);
     (q / d.loss_w).clamp(0.0, 1.0)
-}
-
-/// Mean air speed through an opening's cells etc. is derived in `report`.
-pub fn port_is_fan(s: &Setup, k: usize) -> bool {
-    matches!(s.ports[k].kind, PortKind::Fan { .. })
 }

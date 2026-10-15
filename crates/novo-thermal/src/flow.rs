@@ -43,6 +43,14 @@ impl Flow {
     }
 }
 
+impl Flow {
+    /// Adapts a flow solved for other openings to this setup's.
+    pub fn reset_ports(&mut self, ports: usize) {
+        self.port_q = vec![0.0; ports];
+        self.port_g = vec![0.0; ports];
+    }
+}
+
 /// Smallest open share of a face; below it the face is a wall.
 const SOLID: f64 = 0.02;
 /// Speed floor in the drag law, m/s, so that still air has a finite
@@ -147,18 +155,12 @@ pub fn sweep(s: &Setup, t_air: &[f64], flow: &mut Flow) {
     // conjugate gradients handles. No anchor: it would leak mass.
     let a = bld.finish();
     let closed = g.iter().all(|v| *v == 0.0);
-    let info = linalg::cg(&a, &rhs, &mut flow.p, 1e-10, 4000);
+    linalg::cg(&a, &rhs, &mut flow.p, 1e-9, 4000);
     if closed {
         let mean = flow.p.iter().sum::<f64>() / n as f64;
         for p in &mut flow.p {
             *p -= mean;
         }
-    }
-    if std::env::var("THERMAL_DEBUG").is_ok() {
-        eprintln!(
-            "    cg {} its residual {:.2e}",
-            info.iterations, info.residual
-        );
     }
 
     // Fluxes and speeds (relaxed).

@@ -286,6 +286,9 @@ pub enum Advice {
     AddFanPair { flow_m3h: i64 },
     /// Add a bottom and a top vent for chimney flow.
     AddVentPair { area_cm2: i64 },
+    /// The device heats its own housing too much: keep its loss at or
+    /// below this, or use a larger device.
+    ReduceLoss { id: u64, max_loss_w: i64 },
 }
 
 /// A suggestion that was tried in the model.

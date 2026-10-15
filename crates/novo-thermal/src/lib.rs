@@ -26,41 +26,102 @@ pub use setup::Error;
 
 use setup::Setup;
 
-fn run_steady(scn: &Scenario) -> Result<(Setup, thermal::State), Error> {
+pub(crate) fn run_steady(scn: &Scenario) -> Result<(Setup, thermal::State), Error> {
+    run_steady_from(scn, None)
+}
+
+pub(crate) fn run_steady_from(
+    scn: &Scenario,
+    init: Option<&thermal::State>,
+) -> Result<(Setup, thermal::State), Error> {
     let s = Setup::new(scn)?;
-    let st = thermal::steady(&s, 1.0);
+    let st = thermal::steady_from(&s, 1.0, init);
     Ok((s, st))
+}
+
+/// Runs `f` for every item on its own thread (the items are few and each run
+/// takes long enough to pay for it), results in input order.
+pub(crate) fn par_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = items.iter().map(|it| scope.spawn(|| f(it))).collect();
+        handles
+            .into_iter()
+            .map(|h| h.join().expect("simulation thread panicked"))
+            .collect()
+    })
+}
+
+/// What a steady run does besides the central estimate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Options {
+    /// Repeat the run at both ends of the assumptions for the uncertainty
+    /// band (three runs instead of one).
+    pub bands: bool,
+    /// Try move, fan and vent changes and report what they win.
+    pub advice: bool,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Options {
+            bands: true,
+            advice: false,
+        }
+    }
 }
 
 /// Steady state at full load, with the uncertainty band and hot spots.
 pub fn simulate_steady(scn: &Scenario) -> Result<ThermalResult, Error> {
-    let (s, st) = run_steady(scn)?;
-    let mut res = report::build(scn, &s, &st, 1.0, None);
-    widen_bands(scn, &mut res)?;
-    res.hot_spots = report::hot_spots(&res);
-    Ok(res)
+    simulate_steady_with(scn, Options::default())
 }
 
 /// [`simulate_steady`] plus tried recommendations (move a device, add fans,
 /// add vents). Each recommendation costs a few more simulations.
 pub fn simulate_steady_with_advice(scn: &Scenario) -> Result<ThermalResult, Error> {
-    let mut res = simulate_steady(scn)?;
-    res.recommendations = advice::recommend(scn, &res)?;
+    simulate_steady_with(
+        scn,
+        Options {
+            bands: true,
+            advice: true,
+        },
+    )
+}
+
+/// Steady state with the extras chosen in `options`. Without bands the
+/// bands equal the central estimate.
+pub fn simulate_steady_with(scn: &Scenario, options: Options) -> Result<ThermalResult, Error> {
+    let (s, st) = run_steady(scn)?;
+    let mut res = report::build(scn, &s, &st, 1.0, None);
+    if options.bands {
+        widen_bands(scn, &st, &mut res)?;
+    }
+    res.hot_spots = report::hot_spots(&res);
+    if options.advice {
+        res.recommendations = advice::recommend(scn, &res)?;
+    }
     Ok(res)
 }
 
 /// Runs the two ends of the assumption range and widens each device's band.
-fn widen_bands(scn: &Scenario, res: &mut ThermalResult) -> Result<(), Error> {
-    for params in [
+fn widen_bands(
+    scn: &Scenario,
+    central: &thermal::State,
+    res: &mut ThermalResult,
+) -> Result<(), Error> {
+    let ends = [
         scn.params.cooling_favourable(),
         scn.params.cooling_unfavourable(),
-    ] {
+    ];
+    let runs = par_map(&ends, |params| -> Result<ThermalResult, Error> {
         let other = Scenario {
-            params,
+            params: params.clone(),
             ..scn.clone()
         };
-        let (s, st) = run_steady(&other)?;
-        let r = report::build(&other, &s, &st, 1.0, None);
+        let (s, st) = run_steady_from(&other, Some(central))?;
+        Ok(report::build(&other, &s, &st, 1.0, None))
+    });
+    for r in runs {
+        let r = r?;
         for (d, o) in res.devices.iter_mut().zip(&r.devices) {
             d.surface_band_c.0 = d.surface_band_c.0.min(o.surface_c);
             d.surface_band_c.1 = d.surface_band_c.1.max(o.surface_c);
@@ -89,8 +150,7 @@ pub fn simulate_transient(
         settings
             .load_schedule
             .iter()
-            .filter(|(from, _)| *from <= t)
-            .last()
+            .rfind(|(from, _)| *from <= t)
             .map(|(_, f)| f.clamp(0.0, 1.0))
             .unwrap_or(1.0)
     };

@@ -89,13 +89,18 @@ returned.
 
 ### 2.4 Advice
 
-Rules produce candidates, then **each is tried in the model** and reported
-with the margin it wins:
+Rules produce candidates, then **each is tried in the model** (on a 30 mm
+grid, before and after alike, in parallel threads) and reported with the
+margin it wins; candidates that win under 0.3 K are dropped:
 
-1. Move the worst device to the coolest free spot that fits.
-2. Add an intake fan low and an exhaust fan high, sized with the sizing
-   helper's `3.1 W/K` flow rule, then checked by simulation.
+1. Move the worst devices to the coolest free spots that fit (three tried each).
+2. Add an intake fan low in the door and an exhaust fan high in the roof, from
+   the flow the sizing helper's `3.1 W/K` rule asks for upwards; the smallest
+   one that clears every limit is reported.
 3. Add a bottom and a top vent (chimney).
+4. A device that heats its own housing past its limit while the air around it
+   is fine gets "keep its loss near X W, or use a larger device": moving or
+   ventilating cannot fix that, and the model says so.
 
 ## 3. Result structure (for the visual thread)
 
@@ -108,7 +113,7 @@ with the margin it wins:
 | `plate_flux`, `air_flux` | heat flux vectors, W/m: conduction in plate, enthalpy carried by air |
 | `devices` | per device: surface and local air temperature, band, limit, margin, `Status` |
 | `hot_spots` | ranked list: device or air pocket, position, temperature, reason |
-| `recommendations` | tried advice with before/after margin |
+| `recommendations` | tried advice (move, fans, vents, loss cut) with before/after margin, ranked |
 | `balance` | losses in, per-face wall losses, openings, residual, mean rise vs IEC |
 | `openings` | flow, speed and operating point per vent and fan |
 | `assumptions`, `notes` | what was assumed with ranges; the honesty line |
@@ -119,21 +124,57 @@ and name hot spots.
 
 ## 4. Validation (tests that fail when the physics is wrong)
 
+`crates/novo-thermal/tests/physics.rs` and `advice.rs`. Each check is a hand
+calculation, a published formula or a conservation law, with the tolerance
+stated in the test.
+
 1. **Energy balance closes**: losses in = walls + openings + storage, residual
-   below 0.1 percent, for closed, vented and fan cases.
-2. **Matches IEC 60890 style estimate**: well mixed mean rise equals
-   `Pv/(k Ae)` within 5 percent; top hotter than half height.
-3. **Linearity**: doubling every loss doubles the rise, within 10 percent.
-4. **Symmetry**: a left-right mirrored layout gives a mirrored field.
-5. **Sensible heat of a fan**: air outlet rise `dT = P / (rho cp Q)`, the
-   `3.1 W/K` rule, within 5 percent.
-6. **Stack effect** against `Q = Cd A* sqrt(2 g H dT / T)` (CIBSE/ASHRAE),
-   within 30 percent.
-7. **Lumped time constant** `tau = C / (k Ae)` for the transient heat-up.
-8. **Fin**: the plate temperature decays with the fin length `sqrt(k t / U)`.
-9. **Plume**: warm air rises, `vy < 0` above a hot device; sources at the top
-   run hotter than the same sources at the bottom.
-10. Continuity: net mass flow through the ports is zero.
+   below 0.1 percent, for closed, vented and fan cases, and during heat-up.
+2. **IEC 60890 style estimate**: the well mixed mean rise is `Pv/(k Ae)` with
+   the sizing helper's constants. The model agrees within 15 percent (IEC's own
+   accuracy); heat going into the plate and out through the rear wall makes
+   the air a little cooler than the lumped estimate, and the test shows both
+   directions.
+3. **Linearity**: doubling every loss doubles the rise, within 10 percent;
+   a hotter ambient shifts everything equally.
+4. **Symmetry**: a left-right mirrored layout gives a mirrored field and
+   velocity (below 0.05 K).
+5. **Fans**: mass in equals mass out; the air leaves warmer by
+   `P / (rho cp Q)`, the `3.1 W/K` rule of the sizing helper; flow never
+   exceeds the free-blow flow of the fan curve.
+6. **Stack effect** against the chimney formula
+   `Q = Cd A* sqrt(2 g H dT / T)` (CIBSE/ASHRAE), within 30 percent, inlet low
+   and outlet high.
+7. **Heat-up** reaches the steady state; the time constant is the lumped
+   `C / (k Ae)` or up to 1.6 times slower (the air must carry the heat to the
+   wall mass), never faster.
+8. **Fin**: the plate temperature next to a line source decays with
+   `exp(-y / L)`, `L = sqrt(k t / U)`, within 25 percent.
+9. **Plume**: warm air rises above a hot device (`vy < 0`); a device above
+   another runs in warmer air than beside it.
+10. **Advice keeps its promise**: a loss cut or a move, made and run again on
+    the full grid, wins the margin the advice claimed (within a few K).
+11. No heat gives ambient everywhere; bad input is refused.
+
+Known limits seen while validating: the buoyancy flow can swing between two
+states when a plume leans left or right; the solver relaxes the temperature
+the flow sees and cuts the relaxation until the swing dies out, and says so in
+`converged` when it does not.
+
+## 4a. Cost and use
+
+`simulate_steady` runs three times (central plus the two ends of the
+assumptions, the ends in parallel threads, warm started): about 1 s for a
+cabinet of 1.0 m by 0.8 m on a 20 mm grid in a release build. Advice adds
+about 10 coarse runs in parallel, 2 to 4 s. `simulate_steady_with` takes
+`Options { bands, advice }` for a quick central run. A debug build is slow
+unless the crate is optimised, so the workspace sets
+`[profile.dev.package.novo-thermal] opt-level = 3`.
+
+![Demo: 153 W cabinet, air temperature with streamlines, plate with heat flow, device temperatures](thermal-simulation-demo.png)
+
+`cargo run -p novo-thermal --release --example demo` prints this case; with
+`--json` it dumps the fields.
 
 ## 5. Where the user finds it
 

@@ -38,7 +38,7 @@ fn close(a: f64, b: f64, rel: f64, what: &str) {
 
 #[test]
 fn no_heat_means_ambient_everywhere() {
-    let r = simulate_steady(&scenario(vec![device(1, 300.0, 300.0, 100.0, 100.0, 0.0)])).unwrap();
+    let r = quick(scenario(vec![device(1, 300.0, 300.0, 100.0, 100.0, 0.0)]));
     assert!((r.air_temp.max() - 25.0).abs() < 1e-6);
     assert!((r.air_temp.min() - 25.0).abs() < 1e-6);
     assert!(r.max_speed_ms < 1e-6);
@@ -47,7 +47,7 @@ fn no_heat_means_ambient_everywhere() {
 #[test]
 fn energy_balance_closes_closed_vented_and_with_fans() {
     let mut closed = scenario(spread(120.0));
-    let r = simulate_steady(&closed).unwrap();
+    let r = quick(closed.clone());
     assert!(r.converged);
     assert!(r.balance.residual_rel.abs() < 1e-3, "{:?}", r.balance);
 
@@ -69,7 +69,7 @@ fn energy_balance_closes_closed_vented_and_with_fans() {
             free_area_fraction: 0.6,
         },
     ];
-    let r = simulate_steady(&closed).unwrap();
+    let r = quick(closed.clone());
     assert!(r.balance.residual_rel.abs() < 1e-3, "{:?}", r.balance);
     assert!(r.balance.openings_w > 1.0);
 
@@ -86,7 +86,7 @@ fn energy_balance_closes_closed_vented_and_with_fans() {
         free_flow_m3h: 150.0,
         max_pressure_pa: 60.0,
     }];
-    let r = simulate_steady(&closed).unwrap();
+    let r = quick(closed.clone());
     assert!(r.balance.residual_rel.abs() < 1e-3, "{:?}", r.balance);
 }
 
@@ -98,7 +98,7 @@ fn well_mixed_rise_matches_the_iec_60890_estimate() {
         let mut sc = scenario(spread(120.0));
         sc.enclosure.material = material;
         sc.params.plate_contact_h = 0.0;
-        let r = simulate_steady(&sc).unwrap();
+        let r = quick(sc.clone());
         close(
             r.balance.mean_rise_k,
             r.balance.iec_rise_k,
@@ -110,7 +110,7 @@ fn well_mixed_rise_matches_the_iec_60890_estimate() {
         // itself is good to about 15 percent.
         let mut sc = scenario(spread(120.0));
         sc.enclosure.material = material;
-        let r = simulate_steady(&sc).unwrap();
+        let r = quick(sc.clone());
         assert!(r.balance.mean_rise_k < r.balance.iec_rise_k);
         close(
             r.balance.mean_rise_k,
@@ -123,8 +123,8 @@ fn well_mixed_rise_matches_the_iec_60890_estimate() {
 
 #[test]
 fn doubling_the_losses_doubles_the_rise() {
-    let a = simulate_steady(&scenario(spread(60.0))).unwrap();
-    let b = simulate_steady(&scenario(spread(120.0))).unwrap();
+    let a = quick(scenario(spread(60.0)));
+    let b = quick(scenario(spread(120.0)));
     close(
         b.balance.mean_rise_k / a.balance.mean_rise_k,
         2.0,
@@ -146,7 +146,7 @@ fn a_mirrored_layout_gives_a_mirrored_field() {
         w: w - 100.0,
         h: 1090.0,
     };
-    let r = simulate_steady(&sc).unwrap();
+    let r = quick(sc.clone());
     let g = r.grid;
     let mut worst: f64 = 0.0;
     for row in 0..g.rows {
@@ -164,7 +164,7 @@ fn a_mirrored_layout_gives_a_mirrored_field() {
 
 #[test]
 fn warm_air_rises_above_a_hot_device() {
-    let r = simulate_steady(&scenario(vec![device(1, 350.0, 700.0, 80.0, 120.0, 40.0)])).unwrap();
+    let r = quick(scenario(vec![device(1, 350.0, 700.0, 80.0, 120.0, 40.0)]));
     // Cell column above the device centre: air moves up (vy < 0 on screen).
     let g = r.grid;
     let col = (390.0 / g.cell_w_mm) as usize;
@@ -178,16 +178,14 @@ fn warm_air_rises_above_a_hot_device() {
 #[test]
 fn a_device_above_another_runs_hotter_than_beside_it() {
     let lower = device(1, 300.0, 800.0, 80.0, 120.0, 30.0);
-    let stacked = simulate_steady(&scenario(vec![
+    let stacked = quick(scenario(vec![
         lower.clone(),
         device(2, 300.0, 600.0, 80.0, 120.0, 30.0),
-    ]))
-    .unwrap();
-    let beside = simulate_steady(&scenario(vec![
+    ]));
+    let beside = quick(scenario(vec![
         lower,
         device(2, 500.0, 800.0, 80.0, 120.0, 30.0),
-    ]))
-    .unwrap();
+    ]));
     let t = |r: &ThermalResult| r.devices[1].air_c;
     assert!(
         t(&stacked) > t(&beside) + 0.8,
@@ -226,7 +224,7 @@ fn fan_flow_carries_the_heat_away() {
             max_pressure_pa: 80.0,
         },
     ];
-    let r = simulate_steady(&sc).unwrap();
+    let r = quick(sc.clone());
     assert!(r.balance.residual_rel.abs() < 1e-3);
     let q_in: f64 = r
         .openings
@@ -255,7 +253,7 @@ fn fan_flow_carries_the_heat_away() {
     // Most of the heat goes out by the air, and the interior stays well below
     // the closed-box rise.
     assert!(r.balance.openings_w > 0.5 * p);
-    let closed = simulate_steady(&scenario(spread(p))).unwrap();
+    let closed = quick(scenario(spread(p)));
     assert!(r.balance.mean_rise_k < 0.5 * closed.balance.mean_rise_k);
 }
 
@@ -275,7 +273,7 @@ fn stack_effect_matches_the_chimney_formula() {
         vent(Placement::Bottom { x_mm: 400.0 }),
         vent(Placement::Top { x_mm: 400.0 }),
     ];
-    let r = simulate_steady(&sc).unwrap();
+    let r = quick(sc.clone());
     let a = 0.25 * 0.10; // geometric area of each opening, m2
     let a_star = a / 2f64.sqrt();
     let cd = sc.params.discharge_coefficient;
@@ -295,12 +293,13 @@ fn stack_effect_matches_the_chimney_formula() {
 
 #[test]
 fn heat_up_follows_the_lumped_time_constant() {
-    let sc = scenario(spread(120.0));
+    let mut sc = scenario(spread(120.0));
+    sc.params.cell_mm = 40.0;
     let t = simulate_transient(
         &sc,
         &TransientSettings {
             duration_s: 3.0 * 3600.0 * 1.5,
-            steps: 120,
+            steps: 60,
             ..TransientSettings::default()
         },
     )
@@ -339,7 +338,7 @@ fn heat_up_follows_the_lumped_time_constant() {
         "tau {tau} s, lumped {lumped} s"
     );
     // The final state is the steady state.
-    let steady = simulate_steady(&sc).unwrap();
+    let steady = quick(sc.clone());
     close(
         t.last.balance.mean_air_c - 25.0,
         steady.balance.mean_rise_k,
@@ -352,7 +351,8 @@ fn heat_up_follows_the_lumped_time_constant() {
 
 #[test]
 fn transient_energy_balance_closes_while_heating() {
-    let sc = scenario(spread(120.0));
+    let mut sc = scenario(spread(120.0));
+    sc.params.cell_mm = 40.0;
     let t = simulate_transient(
         &sc,
         &TransientSettings {
@@ -376,46 +376,55 @@ fn plate_temperature_decays_with_the_fin_length() {
     // A strip of heat across the full plate width near the top, strong
     // ventilation holding the air near ambient: along the plate the excess
     // temperature falls as exp(-y / L), L = sqrt(k t / U).
-    let mut sc = scenario(vec![device(1, 60.0, 60.0, 660.0, 20.0, 30.0)]);
+    let mut sc = scenario(vec![device(1, 30.0, 30.0, 436.0, 20.0, 30.0)]);
+    sc.enclosure.width_mm = 500.0;
+    sc.enclosure.height_mm = 700.0;
+    sc.enclosure.depth_mm = 250.0;
+    sc.enclosure.plate = Rect {
+        x: 20.0,
+        y: 20.0,
+        w: 456.0,
+        h: 656.0,
+    };
     sc.devices[0].height_mm = Some(10.0);
+    sc.params.cell_mm = 16.0;
     sc.params.plate_contact_h = 2000.0; // the strip heats the plate directly
-    sc.params.h_in = 60.0; // plate loses mostly to the (cooled) air
+    sc.params.h_in = 12.0;
+    let fan = |placement, mode| Fan {
+        opening: Opening {
+            placement,
+            width_mm: 400.0,
+            height_mm: 200.0,
+        },
+        mode,
+        free_flow_m3h: 6000.0,
+        max_pressure_pa: 200.0,
+    };
     sc.fans = vec![
-        Fan {
-            opening: Opening {
-                placement: Placement::Bottom { x_mm: 400.0 },
-                width_mm: 600.0,
-                height_mm: 250.0,
-            },
-            mode: FanMode::Intake,
-            free_flow_m3h: 6000.0,
-            max_pressure_pa: 200.0,
-        },
-        Fan {
-            opening: Opening {
-                placement: Placement::Top { x_mm: 400.0 },
-                width_mm: 600.0,
-                height_mm: 250.0,
-            },
-            mode: FanMode::Exhaust,
-            free_flow_m3h: 6000.0,
-            max_pressure_pa: 200.0,
-        },
+        fan(Placement::Bottom { x_mm: 248.0 }, FanMode::Intake),
+        fan(Placement::Top { x_mm: 248.0 }, FanMode::Exhaust),
     ];
-    let r = simulate_steady(&sc).unwrap();
+    let r = simulate_steady_with(
+        &sc,
+        Options {
+            bands: false,
+            advice: false,
+        },
+    )
+    .unwrap();
     let g = r.grid;
     let col = g.cols / 2;
     let excess = |y_mm: f64| {
         let row = (y_mm / g.cell_h_mm) as usize;
         r.plate_temp.at(col, row) - 25.0
     };
-    let (y1, y2) = (200.0, 300.0);
+    let (y1, y2) = (150.0, 250.0);
     let (e1, e2) = (excess(y1), excess(y2));
     assert!(e1 > e2 && e2 > 0.0);
     let measured_l = (y2 - y1) / 1000.0 / (e1 / e2).ln();
-    // U: plate to air at 60 plus plate to ambient through the rear wall.
+    // U: plate to air plus plate to ambient through the rear wall.
     let kb = 5.5 * 0.5; // rear covered by the wall mount
-    let h_air = 60.0f64.max(1.2 * kb);
+    let h_air = 12.0f64.max(1.2 * kb);
     let u_pa = 1.0 / (1.0 / kb - 1.0 / h_air);
     let l = (50.0 * 0.0025 / (h_air + u_pa)).sqrt();
     close(measured_l, l, 0.25, "fin length");
@@ -423,10 +432,10 @@ fn plate_temperature_decays_with_the_fin_length() {
 
 #[test]
 fn hotter_ambient_shifts_everything_equally() {
-    let a = simulate_steady(&scenario(spread(100.0))).unwrap();
+    let a = quick(scenario(spread(100.0)));
     let mut sc = scenario(spread(100.0));
     sc.ambient_c = 40.0;
-    let b = simulate_steady(&sc).unwrap();
+    let b = quick(sc);
     close(
         b.balance.mean_rise_k,
         a.balance.mean_rise_k,

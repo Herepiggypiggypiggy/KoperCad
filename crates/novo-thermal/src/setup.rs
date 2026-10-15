@@ -66,7 +66,6 @@ pub fn surface_factors(i: Installation) -> [f64; 6] {
 }
 
 pub struct DeviceCells {
-    pub id_index: usize,
     /// Air cells under the footprint with their share of it (sums to 1).
     pub air: Vec<(usize, f64)>,
     /// Plate cells under the footprint with their share of the plate path.
@@ -131,7 +130,6 @@ pub struct Setup {
     pub params: Params,
     /// k times effective surface, W/K (IEC 60890 whole enclosure).
     pub k_ae: f64,
-    pub plate_rect: Rect,
     pub on_plate: Vec<bool>,
     /// Heat capacity of an air cell, J/K, per cell (open volume).
     pub c_air: Vec<f64>,
@@ -335,7 +333,7 @@ impl Setup {
 
         // Devices.
         let mut devices = Vec::new();
-        for (index, d) in s.devices.iter().enumerate() {
+        for d in &s.devices {
             let foot_mm2 = d.footprint.area();
             let cells = cells_of(&d.footprint);
             let total: f64 = cells.iter().map(|c| c.1).sum();
@@ -365,7 +363,6 @@ impl Setup {
                 .unwrap_or(500.0 * footprint_m2 * 100.0)
                 .max(1.0);
             devices.push(DeviceCells {
-                id_index: index,
                 air: air_w,
                 plate: plate_w,
                 footprint_m2,
@@ -383,10 +380,7 @@ impl Setup {
             |o: &Opening, index: usize, is_fan: bool, kind_of: &dyn Fn(f64) -> PortKind| {
                 let area_total = o.area_m2();
                 let cells: Vec<(usize, f64)> = match o.placement {
-                    Placement::Top { x_mm } => span_cells(x_mm, o.width_mm, hx_mm, nx)
-                        .into_iter()
-                        .map(|(c, f)| (c, f))
-                        .collect(),
+                    Placement::Top { x_mm } => span_cells(x_mm, o.width_mm, hx_mm, nx),
                     Placement::Bottom { x_mm } => span_cells(x_mm, o.width_mm, hx_mm, nx)
                         .into_iter()
                         .map(|(c, f)| ((ny - 1) * nx + c, f))
@@ -488,7 +482,6 @@ impl Setup {
             ports,
             params: p.clone(),
             k_ae,
-            plate_rect: e.plate,
             on_plate,
             c_air,
             c_plate,

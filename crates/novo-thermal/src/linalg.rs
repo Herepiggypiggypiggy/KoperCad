@@ -56,12 +56,12 @@ pub struct Csr {
 
 impl Csr {
     pub fn mul(&self, x: &[f64], out: &mut [f64]) {
-        for i in 0..self.n {
+        for (i, o) in out.iter_mut().enumerate().take(self.n) {
             let mut s = 0.0;
             for k in self.row_ptr[i]..self.row_ptr[i + 1] {
                 s += self.val[k] * x[self.col[k]];
             }
-            out[i] = s;
+            *o = s;
         }
     }
 
@@ -86,14 +86,6 @@ fn norm(a: &[f64]) -> f64 {
     dot(a, a).sqrt()
 }
 
-/// Outcome of an iterative solve.
-#[derive(Debug, Clone, Copy)]
-pub struct SolveInfo {
-    pub iterations: usize,
-    /// Residual norm over the right-hand side norm at the end.
-    pub residual: f64,
-}
-
 fn inverse_diagonal(a: &Csr) -> Vec<f64> {
     a.diagonal()
         .into_iter()
@@ -103,7 +95,7 @@ fn inverse_diagonal(a: &Csr) -> Vec<f64> {
 
 /// Jacobi preconditioned conjugate gradients for a symmetric positive
 /// (semi)definite system. `x` holds the start and receives the answer.
-pub fn cg(a: &Csr, b: &[f64], x: &mut [f64], tol: f64, max_iter: usize) -> SolveInfo {
+pub fn cg(a: &Csr, b: &[f64], x: &mut [f64], tol: f64, max_iter: usize) {
     let n = a.n;
     let minv = inverse_diagonal(a);
     let mut r = vec![0.0; n];
@@ -140,14 +132,10 @@ pub fn cg(a: &Csr, b: &[f64], x: &mut [f64], tol: f64, max_iter: usize) -> Solve
         }
         iterations += 1;
     }
-    SolveInfo {
-        iterations,
-        residual: norm(&r) / bnorm,
-    }
 }
 
 /// Jacobi preconditioned BiCGSTAB for the general (non symmetric) system.
-pub fn bicgstab(a: &Csr, b: &[f64], x: &mut [f64], tol: f64, max_iter: usize) -> SolveInfo {
+pub fn bicgstab(a: &Csr, b: &[f64], x: &mut [f64], tol: f64, max_iter: usize) {
     let n = a.n;
     let minv = inverse_diagonal(a);
     let bnorm = norm(b).max(1e-300);
@@ -190,8 +178,6 @@ pub fn bicgstab(a: &Csr, b: &[f64], x: &mut [f64], tol: f64, max_iter: usize) ->
             for i in 0..n {
                 x[i] += alpha * phat[i];
             }
-            r.copy_from_slice(&s);
-            iterations += 1;
             break;
         }
         for i in 0..n {
@@ -211,9 +197,5 @@ pub fn bicgstab(a: &Csr, b: &[f64], x: &mut [f64], tol: f64, max_iter: usize) ->
         if omega.abs() < 1e-300 {
             break;
         }
-    }
-    SolveInfo {
-        iterations,
-        residual: norm(&r) / bnorm,
     }
 }

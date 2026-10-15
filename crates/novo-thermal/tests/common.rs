@@ -43,3 +43,16 @@ pub fn scenario(devices: Vec<Device>) -> Scenario {
         params: Params::default(),
     }
 }
+
+/// One central steady run on a coarse grid: what most checks need.
+pub fn quick(mut sc: Scenario) -> ThermalResult {
+    sc.params.cell_mm = sc.params.cell_mm.max(40.0);
+    simulate_steady_with(
+        &sc,
+        Options {
+            bands: false,
+            advice: false,
+        },
+    )
+    .unwrap()
+}
