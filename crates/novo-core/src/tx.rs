@@ -4,9 +4,9 @@ use std::collections::BTreeSet;
 
 use crate::entity::{
     Cable, CableCore, Device, DeviceKind, Dismissal, Endpoint, Junction, Page, PageFreeze,
-    PageKind, Part, Pin, PinFeed, Potential, PotentialKind, PotentialSet, PotentialSpec,
-    PotentialSystem, ProjectInfo, Revision, Structure, SymbolInstance, SymbolKey, SymbolRole,
-    Terminal, Text, TextContent, TextPlacement, Value, Wire,
+    PageKind, Part, PeOverride, Pin, PinFeed, Potential, PotentialKind, PotentialSet,
+    PotentialSpec, PotentialSystem, ProjectInfo, Revision, Structure, SymbolInstance, SymbolKey,
+    SymbolRole, Terminal, Text, TextContent, TextPlacement, Value, Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::{Placement, Point};
@@ -517,8 +517,19 @@ impl<'p> Tx<'p> {
             jumper: None,
             part: None,
             feed: None,
+            pe_override: Default::default(),
             properties: Default::default(),
         })
+    }
+
+    /// Sets how several terminals count as PE terminals: by rule, or fixed
+    /// by hand either way. One undo step. Only the choice is stored; the
+    /// terminal's `kind` and symbol are the caller's to change with it.
+    pub fn set_terminal_pe(&mut self, terminals: &[TerminalId], mode: PeOverride) -> Result<()> {
+        for &terminal in terminals {
+            self.update::<Terminal>(terminal, |t| t.pe_override = mode)?;
+        }
+        Ok(())
     }
 
     /// Places a symbol on a page.

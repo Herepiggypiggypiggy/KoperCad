@@ -54,6 +54,8 @@ pub(crate) struct Workbench {
     pub(super) queued: Vec<&'static str>,
     /// The `renumber io` preview waiting for Enter or Esc, per station.
     pub(super) renumber: Option<Vec<novo_plc::commands::RenumberPlan>>,
+    /// The new pages, group and panel form, while open.
+    pub(super) page_form: Option<super::pages::PageForm>,
     /// Which sheet of a generated page the canvas shows (0 for the first).
     pub(super) sheet: usize,
     pub(super) nav: Navigator,
@@ -118,6 +120,7 @@ impl Default for Workbench {
             place_hold: None,
             queued: Vec::new(),
             renumber: None,
+            page_form: None,
             sheet: 0,
             nav: Navigator::default(),
             pending: None,

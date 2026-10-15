@@ -145,3 +145,64 @@ fn refuse_rejects_duplicate_names() {
     assert!(matches!(err, ModelError::DuplicateTerminal(id) if id == upper));
     assert!(doc.project().terminal_designation_groups().is_empty());
 }
+
+#[test]
+fn a_hand_toggle_of_the_pe_choice_is_stored_per_terminal_in_one_step() {
+    let mut doc = Document::default();
+    let ((a, b), _) = doc
+        .transact("Strip", |tx| {
+            let strip =
+                tx.add_device_of_kind("-X1".parse().unwrap(), "", DeviceKind::TerminalStrip)?;
+            Ok((tx.add_terminal(strip, "1")?, tx.add_terminal(strip, "2")?))
+        })
+        .unwrap();
+    assert_eq!(
+        doc.project().terminal(a).unwrap().pe_override,
+        PeOverride::Auto
+    );
+    let depth = doc.undo_depth();
+
+    doc.execute(Command::SetTerminalPe {
+        terminals: vec![a, b],
+        mode: PeOverride::ForcedPe,
+    })
+    .unwrap();
+    assert_eq!(doc.undo_depth(), depth + 1);
+    for t in [a, b] {
+        assert_eq!(
+            doc.project().terminal(t).unwrap().pe_override,
+            PeOverride::ForcedPe
+        );
+    }
+
+    // The choice is a file field only while it is set.
+    let json = serde_json::to_value(doc.project().terminal(a).unwrap()).unwrap();
+    assert_eq!(json["pe_override"], "forced_pe");
+    doc.execute(Command::SetTerminalPe {
+        terminals: vec![a],
+        mode: PeOverride::Auto,
+    })
+    .unwrap();
+    let json = serde_json::to_value(doc.project().terminal(a).unwrap()).unwrap();
+    assert!(json.get("pe_override").is_none());
+    assert_eq!(
+        doc.project().terminal(b).unwrap().pe_override,
+        PeOverride::ForcedPe
+    );
+
+    doc.undo().unwrap();
+    assert_eq!(
+        doc.project().terminal(a).unwrap().pe_override,
+        PeOverride::ForcedPe
+    );
+
+    let missing = doc.execute(Command::SetTerminalPe {
+        terminals: vec![a, TerminalId(9999)],
+        mode: PeOverride::ForcedNotPe,
+    });
+    assert!(missing.is_err());
+    assert_eq!(
+        doc.project().terminal(a).unwrap().pe_override,
+        PeOverride::ForcedPe
+    );
+}
