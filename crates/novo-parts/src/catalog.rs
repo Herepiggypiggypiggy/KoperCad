@@ -14,10 +14,18 @@ use novo_core::{Part, PartId, Properties, Value};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::search::{Matcher, normalize_code};
+use std::collections::{BTreeMap, HashMap};
+
+use crate::schema::{
+    Asset, Classification, DataSource, LetThroughPoint, Lifecycle, PartRef, PartTerminal, Price,
+    Provenance,
+};
+use crate::search::{Matcher, SearchDoc, normalize_code};
 
 /// Version of the catalog file format written by [`Catalog::save`].
-pub const CATALOG_FORMAT_VERSION: u32 = 1;
+/// Version 2 adds classification, terminals, price, lifecycle, assets and
+/// provenance; version 1 files still load.
+pub const CATALOG_FORMAT_VERSION: u32 = 2;
 
 /// Property keys this crate writes into `novo_core::Part::properties`. Other
 /// workstreams read them (cabinet layout reads the dimensions, cables read
@@ -68,6 +76,42 @@ pub struct CatalogPart {
     /// `coil_voltage_v`, `power_kw`, `poles`.
     #[serde(default, skip_serializing_if = "Properties::is_empty")]
     pub data: Properties,
+    /// ETIM and ECLASS codes.
+    #[serde(default, skip_serializing_if = "Classification::is_empty")]
+    pub class: Classification,
+    /// What the part does (`terminal`, `contactor`, `mcb`), the key to a symbol.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub function: String,
+    /// Connection points of the part.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub terminals: Vec<PartTerminal>,
+    /// List price as imported.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub price: Option<Price>,
+    #[serde(default, skip_serializing_if = "is_unknown_lifecycle")]
+    pub lifecycle: Lifecycle,
+    /// The part that replaces this one when it is phased out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replaced_by: Option<PartRef>,
+    /// Parts that can stand in for this one.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alternatives: Vec<PartRef>,
+    /// Local files (STEP, DXF, mesh) in the user's library.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub assets: Vec<Asset>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<Provenance>,
+    /// Source of individual `data` values, by key. A key with no entry has
+    /// an unknown source.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub sources: BTreeMap<String, DataSource>,
+    /// Let-through table of a protective device at 400 V, ascending in Ik.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub let_through: Vec<LetThroughPoint>,
+}
+
+fn is_unknown_lifecycle(value: &Lifecycle) -> bool {
+    *value == Lifecycle::Unknown
 }
 
 /// Identity of a part: manufacturer and order number, compared without
@@ -98,6 +142,11 @@ impl CatalogPart {
             order_number: order_number.into(),
             ..Default::default()
         }
+    }
+
+    /// Where a `data` value came from; unknown when not recorded.
+    pub fn source_of(&self, key: &str) -> DataSource {
+        self.sources.get(key).copied().unwrap_or_default()
     }
 
     pub fn key(&self) -> PartKey {
@@ -199,6 +248,7 @@ impl CatalogPart {
             keywords: Vec::new(),
             dimensions,
             data,
+            ..Default::default()
         }
     }
 
@@ -262,9 +312,22 @@ pub struct MergePreview {
 }
 
 /// A searchable set of parts, unique by [`PartKey`].
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default)]
 pub struct Catalog {
     parts: Vec<CatalogPart>,
+    /// Position of each part by key, so `get` and `upsert` stay constant
+    /// time when a maker catalog brings 100,000 rows.
+    index: HashMap<PartKey, usize>,
+    /// Order number alone (normalised) to positions, ascending.
+    by_order: HashMap<String, Vec<usize>>,
+    /// Pre-lowered search text per part, same positions as `parts`.
+    docs: Vec<SearchDoc>,
+}
+
+impl PartialEq for Catalog {
+    fn eq(&self, other: &Self) -> bool {
+        self.parts == other.parts
+    }
 }
 
 impl Catalog {
@@ -311,7 +374,7 @@ impl Catalog {
     }
 
     pub fn get(&self, key: &PartKey) -> Option<&CatalogPart> {
-        self.parts.iter().find(|p| &p.key() == key)
+        self.index.get(key).map(|&i| &self.parts[i])
     }
 
     pub fn find(&self, manufacturer: &str, order_number: &str) -> Option<&CatalogPart> {
@@ -322,22 +385,30 @@ impl Catalog {
     /// rarely collide between manufacturers; the first match wins.
     pub fn find_order_number(&self, order_number: &str) -> Option<&CatalogPart> {
         let wanted = normalize_code(order_number);
-        self.parts
-            .iter()
-            .find(|p| normalize_code(&p.order_number) == wanted)
+        let &first = self.by_order.get(&wanted)?.first()?;
+        Some(&self.parts[first])
     }
 
     /// Adds a part, or replaces the one with the same key. Returns `true`
     /// when the part is new.
     pub fn upsert(&mut self, part: CatalogPart) -> bool {
         let key = part.key();
-        match self.parts.iter_mut().find(|p| p.key() == key) {
-            Some(existing) => {
-                *existing = part;
+        match self.index.get(&key) {
+            Some(&i) => {
+                // The order number is part of the key, so `by_order` is unchanged.
+                self.docs[i] = SearchDoc::new(&part);
+                self.parts[i] = part;
                 false
             }
             None => {
+                let i = self.parts.len();
+                self.by_order
+                    .entry(normalize_code(&part.order_number))
+                    .or_default()
+                    .push(i);
+                self.docs.push(SearchDoc::new(&part));
                 self.parts.push(part);
+                self.index.insert(key, i);
                 true
             }
         }
@@ -345,8 +416,23 @@ impl Catalog {
 
     /// Removes a part. Returns it if it was there.
     pub fn remove(&mut self, key: &PartKey) -> Option<CatalogPart> {
-        let index = self.parts.iter().position(|p| &p.key() == key)?;
-        Some(self.parts.remove(index))
+        let index = self.index.get(key).copied()?;
+        let part = self.parts.remove(index);
+        self.docs.remove(index);
+        self.reindex();
+        Some(part)
+    }
+
+    fn reindex(&mut self) {
+        self.index.clear();
+        self.by_order.clear();
+        for (i, part) in self.parts.iter().enumerate() {
+            self.index.insert(part.key(), i);
+            self.by_order
+                .entry(normalize_code(&part.order_number))
+                .or_default()
+                .push(i);
+        }
     }
 
     /// Adds every part of `other`; its entries replace equal keys here.
@@ -389,7 +475,8 @@ impl Catalog {
         let mut hits: Vec<(u32, &CatalogPart)> = self
             .parts
             .iter()
-            .filter_map(|p| matcher.score_part(p).map(|s| (s, p)))
+            .zip(&self.docs)
+            .filter_map(|(p, doc)| matcher.score_doc(p, doc).map(|s| (s, p)))
             .collect();
         hits.sort_by(|a, b| {
             b.0.cmp(&a.0)
@@ -410,8 +497,9 @@ impl Catalog {
         let mut hits: Vec<(u32, &CatalogPart)> = self
             .parts
             .iter()
-            .filter(|p| !p.letter_codes.is_empty() && p.fits(letter_code))
-            .filter_map(|p| {
+            .zip(&self.docs)
+            .filter(|(p, _)| !p.letter_codes.is_empty() && p.fits(letter_code))
+            .filter_map(|(p, doc)| {
                 let rank = p
                     .letter_codes
                     .iter()
@@ -421,7 +509,7 @@ impl Catalog {
                 if matcher.is_empty() {
                     Some((base, p))
                 } else {
-                    matcher.score_part(p).map(|s| (s * 10 + base, p))
+                    matcher.score_doc(p, doc).map(|s| (s * 10 + base, p))
                 }
             })
             .collect();

@@ -24,6 +24,30 @@ pub enum Fallback {
     Cancelled,
 }
 
+impl Fallback {
+    /// Plain wording for the user, with the next step. `None` when nothing
+    /// should be said (no model was asked for, or the work was cancelled).
+    pub fn message(self) -> Option<&'static str> {
+        match self {
+            Fallback::NoModel | Fallback::Cancelled => None,
+            Fallback::Unreadable => Some("That file is not a STEP model. Pick another file."),
+            Fallback::NoGeometry => {
+                Some("The file has no solid shapes. Showing a box from the catalog size.")
+            }
+            Fallback::TooComplex => Some("The model is too detailed to show. Showing a box."),
+            Fallback::TimedOut => {
+                Some("Building the model took too long. Showing a box; Retry builds it again.")
+            }
+        }
+    }
+
+    /// Whether building the same file again could give another result.
+    /// A model that is too complex or has no shapes fails the same way.
+    pub fn can_retry(self) -> bool {
+        matches!(self, Fallback::TimedOut | Fallback::Cancelled)
+    }
+}
+
 /// How the model's axes were matched to width, height and depth.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Orientation {
@@ -669,5 +693,26 @@ mod tests {
         let b = g.detail().bounding_box();
         assert_eq!(b.triangle_count(), 12);
         assert_eq!(b.bounds, g.detail().bounds);
+    }
+}
+
+#[cfg(test)]
+mod fallback_text_tests {
+    use super::Fallback;
+
+    #[test]
+    fn every_failure_has_plain_words_and_retry_only_where_it_can_help() {
+        for r in [
+            Fallback::Unreadable,
+            Fallback::NoGeometry,
+            Fallback::TooComplex,
+            Fallback::TimedOut,
+        ] {
+            assert!(r.message().is_some_and(|m| m.ends_with('.')), "{r:?}");
+        }
+        assert!(Fallback::Cancelled.message().is_none());
+        assert!(Fallback::TimedOut.can_retry());
+        assert!(!Fallback::TooComplex.can_retry());
+        assert!(!Fallback::NoGeometry.can_retry());
     }
 }
