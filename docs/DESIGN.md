@@ -311,7 +311,8 @@ other.
   and the lines between your clicks connect by themselves, with at most two
   bends per leg. Each leg's elbow runs first along the axis the pointer has
   moved furthest from the last point; the preview shows it before the click
-  and R flips it (R is already rotate while placing, so no new key). Click
+  and R flips it (R is already rotate while placing, so no new key; in
+  Lines R does nothing, and it never rotates the wire in progress). Click
   a pin, a junction or a wire to finish.
 - **Lines** (AutoCAD style): you draw the lines. Each click commits one
   straight segment from the previous point, locked to the axis the pointer
@@ -400,7 +401,8 @@ A hand-drawn route (Lines, or Corners with clicked corners) is kept by
 `tidy`; selecting it and choosing `tidy` re-routes it on purpose. Moving a
 symbol stretches routed wires as before and stretches hand-drawn ones by
 moving only their end segments, so every corner the user placed stays
-where it was put.
+where it was put. If the pin leaves the axis of its end segment, a bend is
+added at the first corner; the stretch is never diagonal.
 
 Acceptance, for testers and reviewers, run in both modes unless marked:
 
