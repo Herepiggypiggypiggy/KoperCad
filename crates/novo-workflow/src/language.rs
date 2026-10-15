@@ -186,6 +186,11 @@ pub const DUTCH: &[Aliases] = &[
     nl("view.full_screen", &[], &["volledig scherm"]),
     nl("view.cabinet_table", &[], &["kast als tabel", "tabel"]),
     nl(
+        "sim.live",
+        &[],
+        &["live potentialen tonen", "contacten sluiten", "spanning"],
+    ),
+    nl(
         "view.toggle_marks",
         &[],
         &["markeringen tonen of verbergen"],

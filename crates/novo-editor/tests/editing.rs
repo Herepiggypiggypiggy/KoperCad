@@ -3,12 +3,14 @@
 //! driven headless through the editor the way the canvas drives it: pointer
 //! positions, clicks and keys in, model edits out.
 
-use novo_core::{AnyId, Document, Endpoint, PageId, Point, PotentialKind, SymbolRole};
+use novo_core::{
+    AnyId, Document, Endpoint, PageId, Point, PotentialKind, SymbolRole, TextAnchor, TextContent,
+};
 use novo_editor::edit::{self, PlaceOptions};
 use novo_editor::geometry::Target;
 use novo_editor::potential;
 use novo_editor::tool::{Clicked, Tool, WiringMode};
-use novo_editor::{Editor, EditorKey};
+use novo_editor::{Editor, EditorKey, LabelSource};
 
 /// Pick radius in millimetres, as at a normal zoom.
 const TOL: f64 = 1.5;
@@ -1943,6 +1945,48 @@ fn a_double_click_on_nothing_ends_the_wire_as_an_open_end_in_both_modes() {
 }
 
 #[test]
+fn dragging_a_label_moves_only_the_text_in_one_undo_step() {
+    let (mut doc, page, mut editor, [a, _, _]) = three_contacts();
+    let symbol_origin = doc.project().symbol(a).unwrap().placement.origin;
+    let depth = doc.undo_depth();
+
+    // A tag the canvas draws by itself gets a record at the place it is
+    // drawn, then moves by the distance dragged (grid-snapped).
+    let drawn = LabelSource::Drawn {
+        owner: AnyId::Symbol(a),
+        content: TextContent::DeviceTag,
+        at: p(48.0, 40.0),
+        anchor: TextAnchor::MiddleLeft,
+    };
+    let delta = editor.label_delta(p(48.2, 40.1), p(60.1, 52.2));
+    assert_eq!(delta, p(12.0, 12.0));
+    assert!(editor.move_label(&mut doc, page, &drawn, delta));
+    assert_eq!(doc.undo_depth(), depth + 1);
+    let record = doc
+        .project()
+        .texts_of(a)
+        .into_iter()
+        .next()
+        .expect("a record");
+    assert_eq!(doc.project().text_position(record), Some(p(60.0, 52.0)));
+    assert_eq!(
+        doc.project().symbol(a).unwrap().placement.origin,
+        symbol_origin
+    );
+
+    // The record then moves in place.
+    let again = LabelSource::Record(record);
+    assert!(editor.move_label(&mut doc, page, &again, p(-4.0, 2.0)));
+    assert_eq!(doc.project().text_position(record), Some(p(56.0, 54.0)));
+    assert_eq!(doc.project().texts_of(a).len(), 1);
+    assert!(!editor.move_label(&mut doc, page, &again, Point::ZERO));
+
+    doc.undo().unwrap();
+    doc.undo().unwrap();
+    assert!(doc.project().texts_of(a).is_empty());
+}
+
+#[test]
 fn a_double_click_on_empty_canvas_starts_a_wire_open_at_that_end() {
     for lines in [false, true] {
         let (mut doc, page, mut editor, [a, _, _]) = three_contacts();
@@ -2279,4 +2323,37 @@ fn joining_a_wire_lands_on_the_grid_not_where_the_pointer_crosses() {
     let at = editor.cursor().unwrap();
     assert_eq!(at.x, x);
     assert_eq!(at.y % editor.grid, 0.0, "{at:?} is off the grid");
+}
+
+#[test]
+fn corners_preview_shows_the_corner_and_t_piece_with_their_arms() {
+    use novo_core::Direction;
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/contacts/no", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.click(&mut doc, page, p(40.0, 120.0), TOL);
+    let a = symbol_at(&doc, page, p(40.0, 40.0));
+    let b = symbol_at(&doc, page, p(40.0, 120.0));
+    editor.begin_wire();
+    click_pin(&mut editor, &mut doc, page, a, "14");
+    click_pin(&mut editor, &mut doc, page, b, "13");
+    editor.leave_tool();
+    let (top, bottom) = (pin_pos(&doc, a, "14"), pin_pos(&doc, b, "13"));
+
+    // A second wire from the lower pin of the first device, pointer off to
+    // one side: the elbow is a corner with an arm back and an arm onwards.
+    editor.begin_wire();
+    click_pin(&mut editor, &mut doc, page, a, "13");
+    editor.hover(&doc, page, p(top.x + 40.0, top.y - 20.0), TOL);
+    let piece = editor.preview(&doc, page).piece.expect("a corner piece");
+    assert_eq!(piece.arms.len(), 2);
+    assert_ne!(piece.arms[0].vector(), -piece.arms[1].vector());
+
+    // On the first wire it is a T: the branch back, the wire's two ways on.
+    let mid = (top.y + bottom.y) / 2.0;
+    editor.hover(&doc, page, p(top.x, mid), TOL);
+    let t = editor.preview(&doc, page).piece.expect("a T piece");
+    assert_eq!(t.arms.len(), 3);
+    assert!(t.arms.contains(&Direction::Up) && t.arms.contains(&Direction::Down));
 }

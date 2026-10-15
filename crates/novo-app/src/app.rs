@@ -8,6 +8,7 @@ mod dock;
 mod drawers;
 mod inspector;
 mod link;
+mod live;
 mod pages;
 mod pdf;
 mod plc;
@@ -683,6 +684,7 @@ impl NovoApp {
             self.sync_connect_mode();
             self.tool_dock(&ctx, canvas_rect);
             self.inspector(&ctx, canvas_rect);
+            self.live_view(&ctx, canvas_rect);
         }
         self.toasts(&ctx, canvas_rect);
 
@@ -2084,6 +2086,19 @@ mod tests {
         assert!(!app.outline_open);
         app.run(&ctx, Action::FocusMode);
         assert!(!app.focus_mode);
+    }
+
+    #[test]
+    fn live_potentials_toggle_from_the_command_and_survive_frames() {
+        let ctx = themed_ctx();
+        let mut app = app_with(MemoryBackend::default());
+        app.run(&ctx, Action::NewProject);
+        assert!(!app.wb.live.on);
+        app.run_command(&ctx, "sim.live", None);
+        assert!(app.wb.live.on);
+        frame(&ctx, &mut app, sized(1366.0));
+        app.run_command(&ctx, "sim.live", None);
+        assert!(!app.wb.live.on);
     }
 
     #[test]
