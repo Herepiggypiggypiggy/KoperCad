@@ -166,7 +166,9 @@ this workspace only hosts them and has no report logic of its own.
 **This workspace is the one reports hub.** A second "hub" flag or window for
 reports (the UI-for-reports thread's #452) rebases onto it or drops its flag:
 the Reports chip, View › Workspace › Reports and the Reports menu all open
-this workspace and nothing else.
+this workspace and nothing else. **Order:** #475 (the workspace) merges
+first because it is the host; #452 then rebases onto `reports_view.rs` and
+adds its extras there. Neither waits on the other's review.
 
 **First pull request (step 8) and what it leaves for later.** Built: the
 report list with row counts, sortable and filterable tables, click selects
@@ -309,9 +311,11 @@ changes) sit in **View › Go to ▸**, because they are views of the same data.
   its text under 1700 px and shows only its key under 1250 px (the tooltip
   says "Search or run (Ctrl+K)"), the project name in the breadcrumb is cut
   to 14 characters under 1700 px (full name in the tooltip), and the
-  workspace chips use short names (Sch, Cab, 3D, Rep, Com; the full name is
-  the tooltip) under 1250 px. Workspace icons replace the short names when
-  the icon set has them. A test measures the free room between the left and
+  workspace chips use short names (Sch, Cab, 3D, Rpt, Cmn; the full name is
+  the tooltip) under 1250 px. The short names are a stopgap: the workspace
+  icons (`novo_theme::icons::canvas::{REPORTS, COMMISSIONING, VIEW_3D}`) replace
+  them, text-free with the full name as tooltip, as soon as the icon set and
+  the icon-and-label segment (design system) are on main. A test measures the free room between the left and
   right groups at 1100, 1280, 1366, 1600 and 1920 px.
 - Narrower than 1100 px: the mark opens one menu with the same eight names
   as cascading submenus. Nothing is missing, it is one click deeper. Wide, a
@@ -329,8 +333,10 @@ changes) sit in **View › Go to ▸**, because they are views of the same data.
 View has a **Touch layout** entry (off by default). It is reserved here and
 built by the Layout and branding thread: larger rows and hit targets (at least
 32 px) in menus, the switcher and the dock for a tablet or a touch screen. It
-is a setting in the user's file, like the status bar, and nothing in the menus
-or the registry changes with it.
+is **one** setting in the user's file, like the status bar, and nothing in the
+menus or the registry changes with it. The Commissioning panel's
+`large_buttons` (#494) is the same idea: it reads this setting instead of
+keeping its own, so a tablet user switches it on once.
 
 ### 5.3c Stable anchors
 
@@ -392,8 +398,10 @@ wants the bare canvas on a small screen has it.
 
 The issue pill stays in the top bar: each count lives in exactly one place
 (DESIGN.md §3). Status colours follow `ui-guidelines.md` and are never the
-only signal. The bar is not clickable except the mode chips; the saved state shows the
-project's file path in its tooltip.
+only signal. The bar is clickable in three places only: the mode chips turn their mode
+off, "Not saved" runs Save (pointing-hand cursor, tooltip "Click to save"),
+and the idle hint's hover lists the last three info messages. The saved state
+shows the project's file path in its tooltip.
 
 ## 8. The command surface (Ctrl+K)
 
