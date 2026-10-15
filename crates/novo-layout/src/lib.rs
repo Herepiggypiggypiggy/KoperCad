@@ -6,6 +6,7 @@
 
 pub mod model;
 pub mod plan;
+pub mod sizing;
 pub mod state;
 
 /// Footprint used for a device whose part has no dimensions (marked guessed).
