@@ -1,10 +1,13 @@
 # Learning modules: handoff
 
 ## State
-- Repo herepiggypiggypiggy/kopercad, branch `claude/project-thread-7lpw0d` (restart from main after each merge).
-- Merged: design (#456), tracks and glossary (#474). Open: engine PR (crate `novo-learn`: markup, lesson format, checks, runner, catalog, lint, progress; 46 unit tests plus `tests/repo_lessons.rs`) with `assets/lessons/README.md`.
-- Next: app shell (card, pointer overlay, Learn window, entries, event funnel and signals, anchors), after #428 merges (it owns `onboarding.rs`; do not edit it before then). The crate is not yet in `[workspace.dependencies]`; the lead registers it when `novo-app` needs it.
-- Content threads write lessons as drafts against `assets/lessons/README.md`.
+- Repo herepiggypiggypiggy/kopercad, branch `claude/project-thread-7lpw0d` (restart from main after each merge; it is the only branch this thread may push to).
+- Merged: design (#456), tracks and glossary (#474), walk-through #428 (not mine), `novo-learn` registered (#466). Open: engine PR #479 (crate `novo-learn`, head dbb3100, CI green, waiting on a main reviewer).
+- Shell is done locally on branch `learn-shell` (commit e46ecf7 on top of the engine): `crates/novo-app/src/app/learn.rs` (state, catalog, events, facts, run, start/restart/continue, progress), `learn_ui.rs` (card, pointer ring, numbered notes, Learn window), `learn_tests.rs` (15 headless tests incl. anchors doc check), `build.rs` embeds `assets/lessons`, `ProjectBackend::new_project_from`, `Action::Learn` + `help.learn`/`learn.*` commands (novo-workflow, with Dutch words), `assets/lessons/ui.toml` + `novo_learn::UiStrings`, `docs/design/lesson-anchors.md` (generated; `UPDATE_ANCHORS_DOC=1 cargo test -p novo-app anchors_doc`).
+- To ship it after #479 merges: `git fetch origin && git rebase --onto origin/main dbb3100 learn-shell && git push -f origin learn-shell:claude/project-thread-7lpw0d`, then open the PR (base main).
+- Deviations from the design, to put in the shell PR: Continue works only while the lesson's own project is still open (a later session starts at step 1; progress still shows steps done); authoring folder is the env var `KOPERCAD_LESSONS` (no `--lessons` flag yet); `zoom_at_least` is relative to the fit zoom of the page; the language is English until a language setting exists (`LearnState.lang`).
+- Next after the shell: replay test (`solve` ops through the real command path), more anchors (start panel buttons, outline, wheel, live card, inspector, parts, preferences, shortcuts sheet), the `fast-keys` conversion with the first-run thread, a problem-id registry for `problem_free`.
+- Anchors requested by content threads: drawing (dock.* done, wheel, live.card, pages.list, menu.canvas.place_component, outline.toggle, palette.field); productivity (issue.pill, outline.issues, inspector.part, parts.*, changes.list, compare.swap, preferences.*, shortcuts.sheet, project_settings.standard).
 
 ## Resume
 ```
