@@ -36,12 +36,23 @@ pub struct Plan {
 /// Fills rails left to right inside the usable plate area, starting a new
 /// rail when the row is full. Rail ids count up from `first_rail_id`.
 pub fn place_all(plate: &Plate, candidates: &[Candidate], first_rail_id: u64) -> Plan {
+    place_all_below(plate, candidates, first_rail_id, 0.0)
+}
+
+/// Like [`place_all`], but the first rail starts at `top` or lower, so a
+/// plan can sit below devices that are already placed.
+pub fn place_all_below(
+    plate: &Plate,
+    candidates: &[Candidate],
+    first_rail_id: u64,
+    top: f64,
+) -> Plan {
     let usable = plate.usable();
     let mut order: Vec<&Candidate> = candidates.iter().collect();
     order.sort_by(|a, b| a.sort_key.cmp(&b.sort_key).then(a.id.cmp(&b.id)));
 
     let mut plan = Plan::default();
-    let (mut x, mut y, mut row_h) = (usable.x, usable.y, 0.0_f64);
+    let (mut x, mut y, mut row_h) = (usable.x, usable.y.max(top), 0.0_f64);
     let mut rail_id = first_rail_id;
     let mut row_open = false;
     let mut full = false;
