@@ -238,7 +238,9 @@ pub(super) fn supply_disconnect(
             s.fail(
                 id,
                 at_symbols(e, *device),
-                format!("{tag} can be reached from the supply without passing a disconnecting device"),
+                format!(
+                    "{tag} can be reached from the supply without passing a disconnecting device"
+                ),
             );
         } else if strict.any(&nets) {
             s.unknown(
@@ -702,7 +704,8 @@ pub(super) fn protection(
             let tag = e.tag(*device);
             for sym in symbols {
                 let nets = e.nets.live_nets_of(sym);
-                if class_of(sym) == Class::Motor && nets.iter().any(|n| is_drive_pin_on(e, *n, sym.id))
+                if class_of(sym) == Class::Motor
+                    && nets.iter().any(|n| is_drive_pin_on(e, *n, sym.id))
                 {
                     s.pass(short_id);
                 } else if blocked.any(&nets) {
@@ -1006,7 +1009,9 @@ pub(super) fn ground_size_awg(e: &Env<'_>, s: &mut Sink, id: &'static str) {
     for (device, symbols) in devices_of_class(e, |c| c == Class::Motor) {
         let tag = e.tag(device);
         for sym in symbols {
-            let Some(pin) = motor_pe_pin(sym) else { continue };
+            let Some(pin) = motor_pe_pin(sym) else {
+                continue;
+            };
             let wires: Vec<WireId> = project.wires_at(Endpoint::pin(sym.id, pin)).collect();
             if wires.is_empty() {
                 continue;
@@ -1093,7 +1098,9 @@ pub(super) fn ampacity_rule(e: &Env<'_>, s: &mut Sink, set: StandardSet, id: &'s
         let mut thinnest: Option<(f64, f64)> = None;
         let mut bad: Vec<WireId> = Vec::new();
         for (index, pin) in symbol.pins.iter().enumerate() {
-            let Ok(index) = u16::try_from(index) else { break };
+            let Ok(index) = u16::try_from(index) else {
+                break;
+            };
             let end = Endpoint::pin(symbol.id, index);
             let mut protected: BTreeSet<WireId> = project.wires_at(end).collect();
             let load_side = pin.name.parse::<u32>().is_ok_and(|n| n % 2 == 0);
@@ -1221,7 +1228,10 @@ pub(super) fn motor_branch_size(e: &Env<'_>, s: &mut Sink, id: &'static str) {
                 s.unknown(
                     id,
                     vec![AnyId::Symbol(sym.id)],
-                    format!("{}: state the motor's full-load current (`flc_a`)", e.tag(device)),
+                    format!(
+                        "{}: state the motor's full-load current (`flc_a`)",
+                        e.tag(device)
+                    ),
                 );
             }
             continue;
@@ -1236,10 +1246,7 @@ pub(super) fn motor_branch_size(e: &Env<'_>, s: &mut Sink, id: &'static str) {
                 );
                 continue;
             };
-            let class = e
-                .project
-                .symbol(psym)
-                .map_or(Class::Other, class_of);
+            let class = e.project.symbol(psym).map_or(Class::Other, class_of);
             let Some(percent) = branch_percent(e, protector, class) else {
                 s.unknown(
                     id,
@@ -1286,7 +1293,10 @@ pub(super) fn overload_setting(e: &Env<'_>, s: &mut Sink, id: &'static str) {
                 let up = e.nets.upstream(net);
                 for p in up.poles.keys() {
                     if let Some(x) = project.symbol(*p)
-                        && matches!(class_of(x), Class::OverloadRelay | Class::MotorProtectionBreaker)
+                        && matches!(
+                            class_of(x),
+                            Class::OverloadRelay | Class::MotorProtectionBreaker
+                        )
                         && let Some(d) = symbol_device(x)
                     {
                         overloads.insert(d);
@@ -1306,7 +1316,8 @@ pub(super) fn overload_setting(e: &Env<'_>, s: &mut Sink, id: &'static str) {
             }
             let service_factor = device_number(e, device, "service_factor");
             let rise = device_number(e, device, "temp_rise_c");
-            let generous = service_factor.is_some_and(|f| f >= 1.15) || rise.is_some_and(|r| r <= 40.0);
+            let generous =
+                service_factor.is_some_and(|f| f >= 1.15) || rise.is_some_and(|r| r <= 40.0);
             let known = service_factor.is_some() || rise.is_some();
             for relay in overloads {
                 let Some(setting) = device_number(e, relay, "setting_a").filter(|a| *a > 0.0)
@@ -1314,7 +1325,10 @@ pub(super) fn overload_setting(e: &Env<'_>, s: &mut Sink, id: &'static str) {
                     s.unknown(
                         id,
                         at_symbols(e, relay),
-                        format!("{}: state its setting (`setting_a`) to check it against {tag}", e.tag(relay)),
+                        format!(
+                            "{}: state its setting (`setting_a`) to check it against {tag}",
+                            e.tag(relay)
+                        ),
                     );
                     continue;
                 };
@@ -1428,10 +1442,7 @@ pub(super) fn estop(
                 ),
             }
         }
-        if symbols
-            .iter()
-            .any(|x| class_of(x) == Class::EmergencyStop)
-        {
+        if symbols.iter().any(|x| class_of(x) == Class::EmergencyStop) {
             match (
                 device_colour(e, *device, "actuator_colour"),
                 device_colour(e, *device, "background_colour"),
@@ -1478,7 +1489,8 @@ pub(super) fn estop(
         s.unknown(
             category,
             category_unknown,
-            "Emergency stop devices without a `stop_category` (0 or 1) on the device or its part".to_owned(),
+            "Emergency stop devices without a `stop_category` (0 or 1) on the device or its part"
+                .to_owned(),
         );
     }
 }
@@ -1615,7 +1627,8 @@ pub(super) fn indicator_colours(e: &Env<'_>, s: &mut Sink, id: &'static str) {
         s.unknown(
             id,
             gaps,
-            "Lamps without a `function` or a colour (a coloured lamp symbol, or `lens_colour`)".to_owned(),
+            "Lamps without a `function` or a colour (a coloured lamp symbol, or `lens_colour`)"
+                .to_owned(),
         );
     }
     for (function, at) in odd {

@@ -348,10 +348,7 @@ mod tests {
     #[test]
     fn keys_classify_the_same_in_both_packs() {
         for pack in ["iec", "nfpa"] {
-            assert_eq!(
-                classify(&format!("{pack}/protection/fuse_3p")),
-                Class::Fuse
-            );
+            assert_eq!(classify(&format!("{pack}/protection/fuse_3p")), Class::Fuse);
             assert_eq!(
                 classify(&format!("{pack}/switches/main_switch_3p")),
                 Class::Disconnector
@@ -368,10 +365,7 @@ mod tests {
                 classify(&format!("{pack}/operators/pushbutton_mushroom_nc")),
                 Class::EmergencyStop
             );
-            assert_eq!(
-                classify(&format!("{pack}/motors/motor_3ph")),
-                Class::Motor
-            );
+            assert_eq!(classify(&format!("{pack}/motors/motor_3ph")), Class::Motor);
             assert_eq!(
                 classify(&format!("{pack}/protection/overload_relay")),
                 Class::OverloadRelay
@@ -388,7 +382,10 @@ mod tests {
             Some(false)
         );
         assert_eq!(is_break_contact("iec/coils/relay"), None);
-        assert_eq!(lamp_colour("iec/signalling/lamp_amber"), Some(Colour::Yellow));
+        assert_eq!(
+            lamp_colour("iec/signalling/lamp_amber"),
+            Some(Colour::Yellow)
+        );
         assert_eq!(lamp_colour("iec/signalling/lamp"), None);
     }
 

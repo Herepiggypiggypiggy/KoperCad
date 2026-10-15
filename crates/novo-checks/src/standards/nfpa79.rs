@@ -66,7 +66,11 @@ fn sccr_rule(e: &Env<'_>, s: &mut Sink) {
         return;
     };
     let marked = e.params.number(keys::PANEL_SCCR_KA);
-    let rating = marked.or(if report.complete { report.panel_ka } else { None });
+    let rating = marked.or(if report.complete {
+        report.panel_ka
+    } else {
+        None
+    });
     match rating {
         Some(r) if r + 1e-9 >= available => s.pass(NFPA_SCCR),
         Some(r) => s.fail(

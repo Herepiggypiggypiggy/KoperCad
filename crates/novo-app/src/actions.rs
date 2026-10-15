@@ -20,6 +20,7 @@ pub enum Action {
     ShowCabinet,
     SizeEnclosure,
     EnclosureList,
+    StandardsCheck,
     PinOutline,
     FocusMode,
     FullScreen,
@@ -43,6 +44,7 @@ impl Action {
         Action::ShowCabinet,
         Action::SizeEnclosure,
         Action::EnclosureList,
+        Action::StandardsCheck,
         Action::PinOutline,
         Action::FocusMode,
         Action::FullScreen,
@@ -68,6 +70,7 @@ impl Action {
             Action::ShowCabinet => "view.cabinet",
             Action::SizeEnclosure => "cabinet.size-enclosure",
             Action::EnclosureList => "cabinet.enclosures",
+            Action::StandardsCheck => "checks.standards",
             Action::PinOutline => "view.pin_outline",
             Action::FocusMode => "view.focus",
             Action::FullScreen => "view.full_screen",
@@ -96,6 +99,7 @@ impl Action {
             Action::ShowCabinet => "Cabinet",
             Action::SizeEnclosure => "Size the enclosure…",
             Action::EnclosureList => "Enclosures…",
+            Action::StandardsCheck => "Standards check…",
             Action::PinOutline => "Pin outline",
             Action::FocusMode => "Focus mode",
             Action::FullScreen => "Full screen",
@@ -122,6 +126,7 @@ impl Action {
             | Action::ShowCabinet
             | Action::SizeEnclosure
             | Action::EnclosureList
+            | Action::StandardsCheck
             | Action::PinOutline
             | Action::FocusMode
             | Action::FullScreen
@@ -151,6 +156,7 @@ impl Action {
             | Action::About
             | Action::OpenExample
             | Action::SizeEnclosure
+            | Action::StandardsCheck
             | Action::EnclosureList => return None,
         };
         Some(KeyboardShortcut::new(modifiers, key))

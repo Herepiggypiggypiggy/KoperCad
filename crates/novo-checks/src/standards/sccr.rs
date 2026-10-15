@@ -129,7 +129,11 @@ pub(super) fn compute(e: &Env<'_>) -> Option<SccrReport> {
         if !on_power {
             continue;
         }
-        found.entry(device).or_insert((kind, Vec::new())).1.push(s.id);
+        found
+            .entry(device)
+            .or_insert((kind, Vec::new()))
+            .1
+            .push(s.id);
     }
     // Terminal strips with a terminal on a power net.
     for s in project.symbols() {
@@ -190,7 +194,9 @@ pub(super) fn compute(e: &Env<'_>) -> Option<SccrReport> {
         let mut dist = u32::MAX;
         let mut up: BTreeSet<SymbolId> = BTreeSet::new();
         for sym in &symbols {
-            let Some(s) = project.symbol(*sym) else { continue };
+            let Some(s) = project.symbol(*sym) else {
+                continue;
+            };
             for n in nets.live_nets_of(s) {
                 if nets.circuit(n) != Circuit::Power {
                     continue;

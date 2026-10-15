@@ -118,7 +118,14 @@ impl<'a, 'b> Draw<'a, 'b> {
         )
     }
 
-    pub fn two_pole(&mut self, key: &str, device: DeviceId, main: bool, a: &str, b: &str) -> SymbolId {
+    pub fn two_pole(
+        &mut self,
+        key: &str,
+        device: DeviceId,
+        main: bool,
+        a: &str,
+        b: &str,
+    ) -> SymbolId {
         self.sym(key, device, main, &[a, b], &[&[0, 1]], &[])
     }
 
@@ -250,7 +257,14 @@ pub fn golden() -> Golden {
             let s2_sym = d.two_pole("iec/operators/pushbutton_nc", s2, true, "11", "12");
             let s1_sym = d.two_pole("iec/operators/pushbutton_no", s1, true, "13", "14");
             let coil_sym = d.sym("iec/coils/contactor", k1, true, &["A1", "A2"], &[], &[]);
-            let h1_sym = d.sym("iec/signalling/lamp_green", h1, true, &["X1", "X2"], &[], &[]);
+            let h1_sym = d.sym(
+                "iec/signalling/lamp_green",
+                h1,
+                true,
+                &["X1", "X2"],
+                &[],
+                &[],
+            );
             let control_wires = vec![
                 d.wire(feed_p, 0, f3_sym, 0),
                 d.wire(f3_sym, 1, s0_sym, 0),

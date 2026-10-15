@@ -27,6 +27,7 @@ mod project_settings;
 mod reports;
 mod revisions;
 mod sizing;
+mod standards;
 mod terminals;
 mod title_revisions;
 mod userkeymap;
@@ -132,6 +133,7 @@ pub struct NovoApp {
     wb: Workbench,
     messages: Vec<Message>,
     show_about: bool,
+    standards_open: bool,
     window_title: String,
     /// Opened on the first frame, so errors show in the window.
     open_on_start: Option<PathBuf>,
@@ -206,6 +208,7 @@ impl NovoApp {
             wb,
             messages: Vec::new(),
             show_about: false,
+            standards_open: false,
             window_title: String::new(),
             open_on_start: None,
             started: false,
@@ -335,6 +338,7 @@ impl NovoApp {
             | Action::ZoomToFit
             | Action::ShowCabinet
             | Action::SizeEnclosure
+            | Action::StandardsCheck
             | Action::EnclosureList => open,
             Action::Undo => doc.is_some_and(|d| d.can_undo()),
             Action::Redo => doc.is_some_and(|d| d.can_redo()),
@@ -375,6 +379,7 @@ impl NovoApp {
                 self.cabinet_open = true;
                 self.sizing.editor_open = true;
             }
+            Action::StandardsCheck => self.standards_open = true,
             Action::PinOutline => {
                 let pinned = !self.outline_pinned();
                 self.settings.outline_pinned = Some(pinned);
@@ -761,6 +766,7 @@ impl NovoApp {
         self.command_field(&ctx, canvas_rect);
         self.recovery_dialog(&ctx);
         self.about_dialog(&ctx);
+        self.standards_window(&ctx);
         self.renumber_dialog(&ctx);
         self.preferences_dialog(&ctx);
         self.parts_window(&ctx);

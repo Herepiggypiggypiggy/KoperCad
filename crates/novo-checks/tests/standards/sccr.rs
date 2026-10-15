@@ -39,9 +39,17 @@ fn without_a_limiter_the_weakest_component_sets_the_rating() {
     let r = sccr(&g);
     assert_eq!(r.panel_ka, Some(5.0));
     assert_eq!(r.limiting.len(), 2, "K1 and F2");
-    assert_fails(&g, "ul508a.sccr-adequate", "rating is 5 kA (limited by =A1+CAB-K1, =A1+CAB-F2), below the 10 kA available");
+    assert_fails(
+        &g,
+        "ul508a.sccr-adequate",
+        "rating is 5 kA (limited by =A1+CAB-K1, =A1+CAB-F2), below the 10 kA available",
+    );
     // The marked 65 kA is then above the calculation.
-    assert_fails(&g, "ul508a.sccr-marking", "marked rating, 65 kA, is above the calculated 5 kA");
+    assert_fails(
+        &g,
+        "ul508a.sccr-marking",
+        "marked rating, 65 kA, is above the calculated 5 kA",
+    );
 }
 
 #[test]
@@ -94,8 +102,15 @@ fn a_part_can_state_the_rating() {
         set(tx, part, "sccr_ka", 10.0);
         tx.assign_part(h.k1, part)
     });
-    let c = sccr(&g).components.into_iter().find(|c| c.tag.ends_with("-K1")).unwrap();
-    assert_eq!((c.rating_ka, c.source), (Some(10.0), standards::SccrSource::Marked));
+    let c = sccr(&g)
+        .components
+        .into_iter()
+        .find(|c| c.tag.ends_with("-K1"))
+        .unwrap();
+    assert_eq!(
+        (c.rating_ka, c.source),
+        (Some(10.0), standards::SccrSource::Marked)
+    );
 }
 
 #[test]
@@ -103,11 +118,21 @@ fn project_defaults_fill_unmarked_components_and_are_labelled() {
     let mut g = golden();
     let k1 = g.k1;
     g.clear(k1, "sccr_ka");
-    assert_fails(&g, "ul508a.sccr-components", "=A1+CAB-K1 has no short-circuit rating");
-    g.project_prop("standards.ul508a.default_sccr_ka.contactor", Some(5.0.into()));
+    assert_fails(
+        &g,
+        "ul508a.sccr-components",
+        "=A1+CAB-K1 has no short-circuit rating",
+    );
+    g.project_prop(
+        "standards.ul508a.default_sccr_ka.contactor",
+        Some(5.0.into()),
+    );
     let r = sccr(&g);
     let c = component(&r, "-K1");
-    assert_eq!((c.rating_ka, c.source), (Some(5.0), standards::SccrSource::Default));
+    assert_eq!(
+        (c.rating_ka, c.source),
+        (Some(5.0), standards::SccrSource::Default)
+    );
     assert_passes(&g, "ul508a.sccr-components");
 }
 
@@ -116,11 +141,19 @@ fn unknown_ratings_leave_the_panel_rating_undetermined_unless_one_already_fails(
     let mut g = golden();
     let (f2, q1) = (g.f2, g.q1);
     g.clear(f2, "sccr_ka");
-    assert_unknown(&g, "ul508a.sccr-adequate", "panel's rating is not determined");
+    assert_unknown(
+        &g,
+        "ul508a.sccr-adequate",
+        "panel's rating is not determined",
+    );
     // A known component below the supply fails whatever the rest is.
     g.prop(q1, "sccr_ka", 5.0);
     g.project_prop("supply.short_circuit_ka", Some(10.0.into()));
-    assert_fails(&g, "ul508a.sccr-adequate", "=A1+CAB-Q1 is rated 5 kA, below the 10 kA available");
+    assert_fails(
+        &g,
+        "ul508a.sccr-adequate",
+        "=A1+CAB-Q1 is rated 5 kA, below the 10 kA available",
+    );
 }
 
 #[test]
@@ -134,11 +167,19 @@ fn the_available_fault_current_must_be_stated() {
 fn the_marked_rating_is_required_and_not_above_the_calculation() {
     let mut g = golden();
     g.project_prop("panel.sccr_ka", Some(100.0.into()));
-    assert_fails(&g, "ul508a.sccr-marking", "marked rating, 100 kA, is above the calculated 65 kA");
+    assert_fails(
+        &g,
+        "ul508a.sccr-marking",
+        "marked rating, 100 kA, is above the calculated 65 kA",
+    );
     g.project_prop("panel.sccr_ka", Some(10.0.into()));
     assert_passes(&g, "ul508a.sccr-marking");
     g.project_prop("panel.sccr_ka", None);
-    assert_fails(&g, "ul508a.sccr-marking", "not marked: state `panel.sccr_ka` (calculated: 65 kA)");
+    assert_fails(
+        &g,
+        "ul508a.sccr-marking",
+        "not marked: state `panel.sccr_ka` (calculated: 65 kA)",
+    );
 }
 
 #[test]
@@ -166,7 +207,11 @@ fn terminal_strips_on_power_circuits_are_components() {
     let c = component(&r, "-X1");
     assert_eq!(c.kind, "terminal");
     assert_eq!(c.rating_ka, None);
-    assert_fails(&g, "ul508a.sccr-components", "=A1+CAB-X1 has no short-circuit rating");
+    assert_fails(
+        &g,
+        "ul508a.sccr-components",
+        "=A1+CAB-X1 has no short-circuit rating",
+    );
     g.prop(strip, "sccr_ka", 30.0);
     // The golden machine's fuse is current limiting and covers it; switch it
     // off to see the terminal's own rating.
@@ -181,7 +226,11 @@ fn terminal_strips_on_power_circuits_are_components() {
 fn control_circuit_devices_are_not_power_components() {
     let g = golden();
     let r = sccr(&g);
-    assert!(r.components.iter().all(|c| !c.tag.ends_with("-F3") && !c.tag.ends_with("-S0")));
+    assert!(
+        r.components
+            .iter()
+            .all(|c| !c.tag.ends_with("-F3") && !c.tag.ends_with("-S0"))
+    );
     assert_eq!(r.components.len(), 4);
 }
 

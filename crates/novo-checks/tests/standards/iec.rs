@@ -14,9 +14,16 @@ fn a_fuse_alone_is_not_a_disconnecting_device() {
     let mut g = golden();
     let q1 = g.q1_sym;
     g.rekey(q1, "iec/protection/fuse_3p");
-    assert_fails(&g, &id("supply-disconnect"), "=A1+FLD-M1 can be reached from the supply without passing a disconnecting device");
+    assert_fails(
+        &g,
+        &id("supply-disconnect"),
+        "=A1+FLD-M1 can be reached from the supply without passing a disconnecting device",
+    );
     // Nothing isolates, so there is nothing to lock.
-    assert_eq!(g.status(&id("disconnect-lockable")), RuleStatus::NotApplicable);
+    assert_eq!(
+        g.status(&id("disconnect-lockable")),
+        RuleStatus::NotApplicable
+    );
 }
 
 #[test]
@@ -57,9 +64,17 @@ fn an_unlockable_or_unstated_disconnector_is_reported() {
     let mut g = golden();
     let q1 = g.q1;
     g.prop(q1, "lockable", false);
-    assert_fails(&g, &id("disconnect-lockable"), "=A1+CAB-Q1 cannot be locked");
+    assert_fails(
+        &g,
+        &id("disconnect-lockable"),
+        "=A1+CAB-Q1 cannot be locked",
+    );
     g.clear(q1, "lockable");
-    assert_unknown(&g, &id("disconnect-lockable"), "state whether it can be locked");
+    assert_unknown(
+        &g,
+        &id("disconnect-lockable"),
+        "state whether it can be locked",
+    );
     g.prop(q1, "lockable", "yes");
     assert_passes(&g, &id("disconnect-lockable"));
 }
@@ -76,7 +91,11 @@ fn no_supply_feed_means_the_path_cannot_be_followed() {
         }
         Ok(())
     });
-    assert_unknown(&g, &id("supply-disconnect"), "not reached by any supply feed");
+    assert_unknown(
+        &g,
+        &id("supply-disconnect"),
+        "not reached by any supply feed",
+    );
 }
 
 #[test]
@@ -84,7 +103,11 @@ fn a_motor_without_its_protective_conductor_fails() {
     let mut g = golden();
     let wire = g.pe_wire;
     g.edit(|tx, _| tx.remove(wire));
-    assert_fails(&g, &id("pe-connection"), "has its PE connection unconnected");
+    assert_fails(
+        &g,
+        &id("pe-connection"),
+        "has its PE connection unconnected",
+    );
 }
 
 #[test]
@@ -109,7 +132,10 @@ fn a_motor_pe_on_a_live_net_fails_and_on_an_unnamed_net_is_unknown() {
             "iec/earth/earth",
             Placement::at(Point::new(5.0, 200.0)),
             vec![Pin::new("1", 0.0, 0.0)],
-            SymbolRole::Device { device: m1, main: false },
+            SymbolRole::Device {
+                device: m1,
+                main: false,
+            },
         )?;
         tx.connect(Endpoint::pin(m1_sym, 3), Endpoint::pin(spare, 0))?;
         Ok(())
@@ -126,7 +152,11 @@ fn the_protective_conductor_follows_the_phase_conductor() {
         g.style(*w, Some("BK"), Some(10.0));
     }
     g.style(pe_wire, Some("GNYE"), Some(6.0));
-    assert_fails(&g, &id("pe-size"), "protective conductor is 6 mm², phase conductors up to 10 mm² need at least 10 mm²");
+    assert_fails(
+        &g,
+        &id("pe-size"),
+        "protective conductor is 6 mm², phase conductors up to 10 mm² need at least 10 mm²",
+    );
     g.style(pe_wire, Some("GNYE"), Some(10.0));
     assert_passes(&g, &id("pe-size"));
     // 16 to 35 mm²: 16 mm².
@@ -165,7 +195,11 @@ fn the_protective_conductor_is_green_yellow_and_only_that() {
     assert_passes(&g, &id("pe-colour"));
     // Green-yellow on a power wire is misuse of the protective colour.
     g.style(w0, Some("GNYE"), Some(2.5));
-    assert_fails(&g, &id("pe-colour"), "a colour reserved for the protective conductor");
+    assert_fails(
+        &g,
+        &id("pe-colour"),
+        "a colour reserved for the protective conductor",
+    );
     // No colour at all is unknown.
     g.style(w0, Some("BK"), Some(2.5));
     g.style(pe_wire, None, Some(2.5));
@@ -177,7 +211,11 @@ fn a_colour_that_is_not_a_code_is_reported_as_unreadable() {
     let mut g = golden();
     let w = g.power_wires[1];
     g.style(w, Some("sparkly"), Some(2.5));
-    assert_unknown(&g, &id("conductor-colour"), "not a known code or name (sparkly)");
+    assert_unknown(
+        &g,
+        &id("conductor-colour"),
+        "not a known code or name (sparkly)",
+    );
 }
 
 #[test]
@@ -207,7 +245,11 @@ fn power_and_control_wires_take_their_circuit_colours() {
     let mut g = golden();
     let (w, c) = (g.power_wires[7], g.control_wires[2]);
     g.style(w, Some("BN"), Some(2.5));
-    assert_fails(&g, &id("conductor-colour"), "wire on power net L2 is brown, which should be black");
+    assert_fails(
+        &g,
+        &id("conductor-colour"),
+        "wire on power net L2 is brown, which should be black",
+    );
     // Orange is for circuits that stay live with the supply off.
     g.style(w, Some("OG"), Some(2.5));
     assert_passes(&g, &id("conductor-colour"));
@@ -226,7 +268,10 @@ fn the_colour_table_can_be_overridden_per_project() {
     g.style(w1, Some("BN"), Some(2.5));
     g.style(w2, Some("GY"), Some(2.5));
     assert_fails(&g, &id("conductor-colour"), "should be black");
-    g.project_prop("standards.iec60204.colour.ac_power", Some("BK, BN, GY".into()));
+    g.project_prop(
+        "standards.iec60204.colour.ac_power",
+        Some("BK, BN, GY".into()),
+    );
     assert_passes(&g, &id("conductor-colour"));
 }
 
@@ -236,7 +281,11 @@ fn a_neutral_conductor_is_blue() {
     let w = g.add_neutral(Some("BU"));
     assert_passes(&g, &id("neutral-colour"));
     g.style(w, Some("WH"), Some(1.0));
-    assert_fails(&g, &id("neutral-colour"), "neutral net N is white, which should be blue");
+    assert_fails(
+        &g,
+        &id("neutral-colour"),
+        "neutral net N is white, which should be blue",
+    );
     g.style(w, None, Some(1.0));
     assert_unknown(&g, &id("neutral-colour"), "no colour set");
 }
@@ -246,7 +295,11 @@ fn control_voltage_is_held_to_the_limits() {
     let mut g = golden();
     let l_plus = g.l_plus;
     g.edit(|tx, _| tx.update::<Potential>(l_plus, |p| p.voltage = Some(400.0)));
-    assert_fails(&g, &id("control-voltage"), "Control circuit L+ is 400 V dc, above the limit of 250 V");
+    assert_fails(
+        &g,
+        &id("control-voltage"),
+        "Control circuit L+ is 400 V dc, above the limit of 250 V",
+    );
     // The limit is a parameter, so a different edition can be entered.
     g.project_prop("standards.iec60204.max_control_dc_v", Some(500.0.into()));
     assert_passes(&g, &id("control-voltage"));
@@ -280,12 +333,20 @@ fn ac_control_voltage_has_its_own_limit() {
     let mut g = golden();
     tap_control_from_l1(&mut g);
     // L1 is 400 V in the golden machine.
-    assert_fails(&g, &id("control-voltage"), "Control circuit L1 is 400 V ac, above the limit of 277 V");
+    assert_fails(
+        &g,
+        &id("control-voltage"),
+        "Control circuit L1 is 400 V ac, above the limit of 277 V",
+    );
     let l1 = g.l1;
     g.edit(|tx, _| tx.update::<Potential>(l1, |p| p.voltage = Some(230.0)));
     assert_passes(&g, &id("control-voltage"));
     // NFPA 79 holds ac control to a lower limit.
-    assert_fails(&g, "nfpa79.control-voltage", "230 V ac, above the limit of 120 V");
+    assert_fails(
+        &g,
+        "nfpa79.control-voltage",
+        "230 V ac, above the limit of 120 V",
+    );
     g.project_prop("standards.nfpa79.max_control_ac_v", Some(240.0.into()));
     assert_passes(&g, "nfpa79.control-voltage");
 }
@@ -302,7 +363,11 @@ fn control_circuits_need_a_fuse_or_breaker() {
     let mut g = golden();
     let f3_sym = g.f3_sym;
     g.rekey(f3_sym, "iec/contacts/no");
-    assert_fails(&g, &id("control-protection"), "Control circuit L+ is fed without a fuse or circuit breaker");
+    assert_fails(
+        &g,
+        &id("control-protection"),
+        "Control circuit L+ is fed without a fuse or circuit breaker",
+    );
 }
 
 #[test]
@@ -310,7 +375,11 @@ fn power_loads_are_reached_only_through_a_protective_device() {
     let mut g = golden();
     let f1_sym = g.f1_sym;
     g.rekey(f1_sym, "iec/switches/disconnector_3p");
-    assert_fails(&g, &id("short-circuit-protection"), "=A1+FLD-M1 can be reached from the supply without passing a fuse or circuit breaker");
+    assert_fails(
+        &g,
+        &id("short-circuit-protection"),
+        "=A1+FLD-M1 can be reached from the supply without passing a fuse or circuit breaker",
+    );
     // A disconnector with fuses protects as well as isolates.
     g.rekey(f1_sym, "iec/protection/fuse_switch_3p");
     assert_passes(&g, &id("short-circuit-protection"));
@@ -321,7 +390,11 @@ fn a_motor_needs_overload_protection() {
     let mut g = golden();
     let (f2_sym, m1) = (g.f2_sym, g.m1);
     g.rekey(f2_sym, "iec/contacts/no");
-    assert_fails(&g, &id("motor-overload"), "=A1+FLD-M1 has no overload relay");
+    assert_fails(
+        &g,
+        &id("motor-overload"),
+        "=A1+FLD-M1 has no overload relay",
+    );
     // A thermal sensor in the motor is protection too.
     g.prop(m1, "thermal_protection", true);
     assert_passes(&g, &id("motor-overload"));
@@ -340,11 +413,21 @@ fn a_motor_behind_a_drive_counts_as_protected_by_it() {
         tx.remove(h.f2_sym)?;
         let drive = tx.add_device(tag("=A1+CAB-U1"), "Frequency converter")?;
         let mut d = Draw::new(tx, page);
-        let u1 = d.sym("iec/drives/frequency_converter", drive, true, &["L1", "L2", "L3", "U", "V", "W"], &[], &[]);
+        let u1 = d.sym(
+            "iec/drives/frequency_converter",
+            drive,
+            true,
+            &["L1", "L2", "L3", "U", "V", "W"],
+            &[],
+            &[],
+        );
         for (i, pin) in [3u16, 4, 5].into_iter().enumerate() {
             d.wire(u1, pin, m1_sym, i as u16);
         }
-        for (i, w) in [h.power_wires[2], h.power_wires[7], h.power_wires[12]].iter().enumerate() {
+        for (i, w) in [h.power_wires[2], h.power_wires[7], h.power_wires[12]]
+            .iter()
+            .enumerate()
+        {
             let _ = (i, w);
         }
         Ok(())
@@ -362,7 +445,11 @@ fn an_unfed_motor_is_unknown_not_unprotected() {
         }
         Ok(())
     });
-    assert_unknown(&g, &id("motor-overload"), "is not reached by any supply feed");
+    assert_unknown(
+        &g,
+        &id("motor-overload"),
+        "is not reached by any supply feed",
+    );
 }
 
 #[test]
@@ -371,7 +458,11 @@ fn an_emergency_stop_is_required_unless_declared_otherwise() {
     let s0_sym = g.s0_sym;
     g.rekey(s0_sym, "iec/operators/pushbutton_nc");
     g.clear(g.s0, "function");
-    assert_fails(&g, &id("estop-present"), "No emergency stop device is drawn");
+    assert_fails(
+        &g,
+        &id("estop-present"),
+        "No emergency stop device is drawn",
+    );
     g.project_prop("machine.estop_required", Some(false.into()));
     assert_eq!(g.status(&id("estop-present")), RuleStatus::NotApplicable);
 }
@@ -409,7 +500,11 @@ fn an_emergency_stop_is_red_on_yellow() {
     g.prop(s0, "background_colour", "WH");
     assert_fails(&g, &id("estop-colour"), "red on white");
     g.clear(s0, "background_colour");
-    assert_unknown(&g, &id("estop-colour"), "without `actuator_colour` and `background_colour`");
+    assert_unknown(
+        &g,
+        &id("estop-colour"),
+        "without `actuator_colour` and `background_colour`",
+    );
 }
 
 #[test]
@@ -429,14 +524,22 @@ fn push_button_colours_follow_their_function() {
     let mut g = golden();
     let (s1, s2) = (g.s1, g.s2);
     g.prop(s1, "actuator_colour", "RD");
-    assert_fails(&g, &id("pushbutton-colour"), "=A1+CAB-S1 (start) is red; that function takes green or black or grey or white");
+    assert_fails(
+        &g,
+        &id("pushbutton-colour"),
+        "=A1+CAB-S1 (start) is red; that function takes green or black or grey or white",
+    );
     g.prop(s1, "actuator_colour", "GN");
     g.prop(s2, "actuator_colour", "GN");
     assert_fails(&g, &id("pushbutton-colour"), "=A1+CAB-S2 (stop) is green");
     g.prop(s2, "actuator_colour", "BK");
     assert_passes(&g, &id("pushbutton-colour"));
     g.prop(s2, "function", "dance");
-    assert_unknown(&g, &id("pushbutton-colour"), "\"dance\" is not one the colour table knows");
+    assert_unknown(
+        &g,
+        &id("pushbutton-colour"),
+        "\"dance\" is not one the colour table knows",
+    );
     g.clear(s2, "function");
     assert_unknown(&g, &id("pushbutton-colour"), "without a `function`");
 }
@@ -446,16 +549,28 @@ fn lamp_colours_follow_what_they_say() {
     let mut g = golden();
     let h1 = g.h1;
     g.prop(h1, "function", "abnormal");
-    assert_fails(&g, &id("indicator-colour"), "(abnormal) is green; that meaning takes yellow");
+    assert_fails(
+        &g,
+        &id("indicator-colour"),
+        "(abnormal) is green; that meaning takes yellow",
+    );
     g.prop(h1, "function", "emergency");
     assert_fails(&g, &id("indicator-colour"), "takes red");
     g.prop(h1, "function", "fault");
-    assert_unknown(&g, &id("indicator-colour"), "\"fault\" is not one the colour table knows");
+    assert_unknown(
+        &g,
+        &id("indicator-colour"),
+        "\"fault\" is not one the colour table knows",
+    );
     // A colourless lamp states its lens colour.
     let h1_sym = g.h1_sym;
     g.rekey(h1_sym, "iec/signalling/lamp");
     g.prop(h1, "function", "normal");
-    assert_unknown(&g, &id("indicator-colour"), "Lamps without a `function` or a colour");
+    assert_unknown(
+        &g,
+        &id("indicator-colour"),
+        "Lamps without a `function` or a colour",
+    );
     g.prop(h1, "lens_colour", "GN");
     assert_passes(&g, &id("indicator-colour"));
 }
@@ -465,7 +580,11 @@ fn the_nameplate_lists_what_is_missing() {
     let mut g = golden();
     g.project_prop("machine.frequency_hz", None);
     g.project_prop("machine.full_load_current_a", None);
-    assert_fails(&g, &id("nameplate"), "not stated: frequency, full-load current");
+    assert_fails(
+        &g,
+        &id("nameplate"),
+        "not stated: frequency, full-load current",
+    );
     // IEC 60204-1 does not ask for the short-circuit rating on the nameplate
     // data this rule reads.
     g.project_prop("panel.sccr_ka", None);

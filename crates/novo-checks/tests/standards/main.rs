@@ -20,16 +20,25 @@ fn the_golden_machine_meets_every_rule_with_nothing_unknown() {
     for r in &report.results {
         let fine = matches!(r.status, RuleStatus::Pass | RuleStatus::NotApplicable);
         if !fine || !r.unknown.is_empty() || !r.open.is_empty() {
-            bad.push(format!("{} {:?} {:?} {:?}", r.rule.id, r.status, r.open.iter().map(|p| &p.message).collect::<Vec<_>>(), r.unknown.iter().map(|u| &u.why).collect::<Vec<_>>()));
+            bad.push(format!(
+                "{} {:?} {:?} {:?}",
+                r.rule.id,
+                r.status,
+                r.open.iter().map(|p| &p.message).collect::<Vec<_>>(),
+                r.unknown.iter().map(|u| &u.why).collect::<Vec<_>>()
+            ));
         }
     }
     assert!(bad.is_empty(), "{}", bad.join("\n"));
     // Rules that apply to this machine are evaluated, not skipped.
-    let evaluated = report.results.iter().filter(|r| r.status == RuleStatus::Pass).count();
+    let evaluated = report
+        .results
+        .iter()
+        .filter(|r| r.status == RuleStatus::Pass)
+        .count();
     assert!(evaluated >= 30, "only {evaluated} rules evaluated");
     let _ = standards::RULES.len();
 }
-
 
 /// Asserts a rule has an open finding whose message contains `needle`.
 pub fn assert_fails(g: &Golden, id: &str, needle: &str) {
@@ -60,5 +69,11 @@ pub fn assert_unknown(g: &Golden, id: &str, needle: &str) {
 
 pub fn assert_passes(g: &Golden, id: &str) {
     let r = g.result(id);
-    assert_eq!(r.status, RuleStatus::Pass, "{id}: {:?} {:?}", r.open.iter().map(|p| &p.message).collect::<Vec<_>>(), r.unknown.iter().map(|u| &u.why).collect::<Vec<_>>());
+    assert_eq!(
+        r.status,
+        RuleStatus::Pass,
+        "{id}: {:?} {:?}",
+        r.open.iter().map(|p| &p.message).collect::<Vec<_>>(),
+        r.unknown.iter().map(|u| &u.why).collect::<Vec<_>>()
+    );
 }

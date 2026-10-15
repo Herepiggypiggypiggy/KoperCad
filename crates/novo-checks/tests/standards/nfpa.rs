@@ -16,7 +16,11 @@ fn nfpa_neutral_is_white_or_grey_not_blue() {
     g.style(w, Some("GY"), Some(1.0));
     assert_passes(&g, &id("neutral-colour"));
     g.style(w, Some("BU"), Some(1.0));
-    assert_fails(&g, &id("neutral-colour"), "neutral net N is blue, which should be white or grey or white with blue stripe");
+    assert_fails(
+        &g,
+        &id("neutral-colour"),
+        "neutral net N is blue, which should be white or grey or white with blue stripe",
+    );
     // The same wire is right under IEC 60204-1.
     assert_passes(&g, "iec60204.neutral-colour");
 }
@@ -60,7 +64,11 @@ fn conductors_carry_what_their_protective_device_allows() {
     }
     g.prop(f1, RATED_CURRENT_A, 15.0);
     assert_fails(&g, &id("conductor-ampacity"), "=A1+CAB-F1 is rated 15 A");
-    assert_fails(&g, "ul508a.conductor-ampacity", "carries 10 A at 60 °C terminations");
+    assert_fails(
+        &g,
+        "ul508a.conductor-ampacity",
+        "carries 10 A at 60 °C terminations",
+    );
     // At 75 °C terminals 16 AWG is still 10 A: no help.
     g.project_prop("standards.nfpa79.terminal_temp_c", Some(75.0.into()));
     assert_fails(&g, &id("conductor-ampacity"), "=A1+CAB-F1");
@@ -77,7 +85,11 @@ fn a_motors_conductors_carry_125_percent_of_its_full_load_current() {
     let m1 = g.m1;
     g.prop(m1, "flc_a", 14.0);
     // 125 % of 14 A is 17.5 A; 14 AWG carries 15 A at 60 °C.
-    assert_fails(&g, &id("conductor-ampacity"), "a motor of 14 A full-load current needs 17.5 A (125 %)");
+    assert_fails(
+        &g,
+        &id("conductor-ampacity"),
+        "a motor of 14 A full-load current needs 17.5 A (125 %)",
+    );
     g.project_prop("standards.nfpa79.terminal_temp_c", Some(75.0.into()));
     assert_passes(&g, &id("conductor-ampacity"));
 }
@@ -95,7 +107,11 @@ fn ampacity_cannot_be_judged_for_unrated_devices_or_unsized_wires() {
     g.style(w, Some("BK"), Some(2.5));
     let c = g.control_wires[0];
     g.style(c, Some("BU"), Some(0.5));
-    assert_unknown(&g, &id("conductor-ampacity"), "thinner than the smallest AWG size");
+    assert_unknown(
+        &g,
+        &id("conductor-ampacity"),
+        "thinner than the smallest AWG size",
+    );
 }
 
 #[test]
@@ -105,13 +121,21 @@ fn motor_branch_devices_are_sized_by_type_against_full_load_current() {
     // Time-delay fuse: 175 % of 5 A = 8.75 A, up to the next standard rating, 10 A.
     assert_passes(&g, &id("motor-branch-size"));
     g.prop(f1, RATED_CURRENT_A, 15.0);
-    assert_fails(&g, &id("motor-branch-size"), "=A1+CAB-F1 is rated 15 A, above the 10 A allowed for =A1+FLD-M1 (175 % of 5 A");
+    assert_fails(
+        &g,
+        &id("motor-branch-size"),
+        "=A1+CAB-F1 is rated 15 A, above the 10 A allowed for =A1+FLD-M1 (175 % of 5 A",
+    );
     // A non-time-delay fuse may be 300 %: 15 A.
     g.prop(f1, "protection_kind", "non_time_delay_fuse");
     assert_passes(&g, &id("motor-branch-size"));
     // A fuse that does not say what it is cannot be sized.
     g.clear(f1, "protection_kind");
-    assert_unknown(&g, &id("motor-branch-size"), "state its type (`protection_kind`");
+    assert_unknown(
+        &g,
+        &id("motor-branch-size"),
+        "state its type (`protection_kind`",
+    );
     // A breaker is an inverse-time breaker unless it says otherwise: 250 %.
     let f1_sym = g.f1_sym;
     g.rekey(f1_sym, "iec/protection/mcb_3p");
@@ -126,14 +150,22 @@ fn motor_branch_size_needs_the_motors_full_load_current() {
     let mut g = golden();
     let m1 = g.m1;
     g.clear(m1, "flc_a");
-    assert_unknown(&g, &id("motor-branch-size"), "state the motor's full-load current");
+    assert_unknown(
+        &g,
+        &id("motor-branch-size"),
+        "state the motor's full-load current",
+    );
 }
 
 #[test]
 fn the_panel_rating_must_cover_the_available_fault_current() {
     let mut g = golden();
     g.project_prop("supply.short_circuit_ka", Some(100.0.into()));
-    assert_fails(&g, &id("sccr"), "rating is 65 kA, below the 100 kA available");
+    assert_fails(
+        &g,
+        &id("sccr"),
+        "rating is 65 kA, below the 100 kA available",
+    );
     g.project_prop("supply.short_circuit_ka", None);
     assert_unknown(&g, &id("sccr"), "available fault current");
     g.project_prop("supply.short_circuit_ka", Some(10.0.into()));
@@ -149,7 +181,11 @@ fn an_undetermined_panel_rating_is_not_a_pass() {
     assert_unknown(&g, &id("sccr"), "not determined");
     // Unless a known component already falls short of the supply.
     g.project_prop("supply.short_circuit_ka", Some(100.0.into()));
-    assert_fails(&g, &id("sccr"), "A component rated 65 kA is already below the 100 kA");
+    assert_fails(
+        &g,
+        &id("sccr"),
+        "A component rated 65 kA is already below the 100 kA",
+    );
 }
 
 #[test]

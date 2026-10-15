@@ -178,7 +178,11 @@ pub fn select(tx: &mut Tx<'_>, sets: &[StandardSet]) -> Result<()> {
     sets.sort();
     sets.dedup();
     let text = sets.iter().map(|s| s.id()).collect::<Vec<_>>().join(",");
-    set_info_property(tx, keys::SETS, (!text.is_empty()).then(|| Value::Text(text)))
+    set_info_property(
+        tx,
+        keys::SETS,
+        (!text.is_empty()).then_some(Value::Text(text)),
+    )
 }
 
 /// Sets or clears a project property the standards read: the supply fault

@@ -131,7 +131,10 @@ pub fn lines(project: &Project, report: &ComplianceReport) -> Vec<(bool, String)
                 .map_or("unknown".to_owned(), |r| format!("{} kA", kilo(r)));
             let effective = match (c.effective_ka, c.rating_ka) {
                 (Some(e), Some(r)) if (e - r).abs() > 1e-9 => {
-                    format!(", counts as {} kA behind a current-limiting device", kilo(e))
+                    format!(
+                        ", counts as {} kA behind a current-limiting device",
+                        kilo(e)
+                    )
                 }
                 _ => String::new(),
             };
@@ -157,7 +160,12 @@ pub fn lines(project: &Project, report: &ComplianceReport) -> Vec<(bool, String)
         for r in verify {
             out.push((
                 false,
-                format!("{} {}: {}", r.rule.id, r.rule.clause, r.rule.verify.unwrap_or("")),
+                format!(
+                    "{} {}: {}",
+                    r.rule.id,
+                    r.rule.clause,
+                    r.rule.verify.unwrap_or("")
+                ),
             ));
         }
     }
@@ -169,8 +177,7 @@ pub fn to_markdown(project: &Project, report: &ComplianceReport) -> String {
     let mut md = String::new();
     md.push_str(&format!(
         "# Standards compliance: {}\n\n> {}\n\n",
-        report.project_name,
-        NOTICE
+        report.project_name, NOTICE
     ));
     for set in &report.sets {
         md.push_str(&format!(
@@ -232,18 +239,22 @@ pub fn to_markdown(project: &Project, report: &ComplianceReport) -> String {
                 (None, _) => "not determined".to_owned(),
             }
         ));
-        md.push_str("| Component | Type | Rating | Source | Counts as |\n| --- | --- | --- | --- | --- |\n");
+        md.push_str(
+            "| Component | Type | Rating | Source | Counts as |\n| --- | --- | --- | --- | --- |\n",
+        );
         for c in &sccr.components {
             md.push_str(&format!(
                 "| {} | {} | {} | {} | {} |\n",
                 c.tag,
                 c.kind,
-                c.rating_ka.map_or("?".to_owned(), |r| format!("{} kA", kilo(r))),
+                c.rating_ka
+                    .map_or("?".to_owned(), |r| format!("{} kA", kilo(r))),
                 match c.source {
                     SccrSource::Unknown => "unknown",
                     other => other.label(),
                 },
-                c.effective_ka.map_or("?".to_owned(), |r| format!("{} kA", kilo(r)))
+                c.effective_ka
+                    .map_or("?".to_owned(), |r| format!("{} kA", kilo(r)))
             ));
         }
         md.push('\n');
@@ -288,7 +299,12 @@ pub fn to_csv(project: &Project, report: &ComplianceReport) -> String {
             row(r, "", "", String::new());
         }
         for p in &r.open {
-            row(r, "finding", &p.message, page_name(project, p.page).unwrap_or_default());
+            row(
+                r,
+                "finding",
+                &p.message,
+                page_name(project, p.page).unwrap_or_default(),
+            );
         }
         for w in &r.waived {
             row(

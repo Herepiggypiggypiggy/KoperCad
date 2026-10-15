@@ -107,7 +107,10 @@ impl<'a> Nets<'a> {
                     continue;
                 };
                 let class = class_of(s);
-                let pin_name = s.pins.get(usize::from(*pin)).map_or("", |p| p.name.as_str());
+                let pin_name = s
+                    .pins
+                    .get(usize::from(*pin))
+                    .map_or("", |p| p.name.as_str());
                 if is_ground_pin(pin_name) {
                     continue;
                 }
