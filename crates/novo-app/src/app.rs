@@ -348,8 +348,8 @@ impl NovoApp {
             | Action::ShowCabinet
             | Action::SizeEnclosure
             | Action::EnclosureList => open,
-            Action::Undo => doc.is_some_and(|d| d.can_undo()),
-            Action::Redo => doc.is_some_and(|d| d.can_redo()),
+            Action::Undo => !self.commissioning_locks_edits() && doc.is_some_and(|d| d.can_undo()),
+            Action::Redo => !self.commissioning_locks_edits() && doc.is_some_and(|d| d.can_redo()),
             _ => true,
         }
     }
@@ -813,7 +813,7 @@ impl NovoApp {
             self.undo_redo(false);
             self.message(
                 Level::Info,
-                "Commissioning does not edit the drawing. Run Commissioning again to leave it.",
+                "Commissioning is read-only. Close it (Ctrl+K, Commissioning) to edit.",
             );
         } else if !changes.is_empty() {
             self.reports_heard(&changes);

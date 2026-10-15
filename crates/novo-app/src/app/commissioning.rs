@@ -28,6 +28,10 @@ use super::{Level, NovoApp, OutlineMode};
 const TOUCH: f32 = 44.0;
 /// The same with Large on: for a tablet in a cabinet, gloves or a stylus.
 const TOUCH_LARGE: f32 = 64.0;
+/// How long the first touch of "Pass all open" waits for the second.
+const ARM_SECONDS: f64 = 5.0;
+/// Row and label text size with large buttons on.
+const TEXT_LARGE: f32 = 18.0;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Tab {
@@ -50,6 +54,9 @@ pub(crate) struct CommissioningMode {
     show_closed: bool,
     /// Bigger buttons and text for a tablet.
     large: bool,
+    /// "Pass all open" was touched once for this target at this time (egui
+    /// seconds); a second touch within `ARM_SECONDS` does it.
+    armed: Option<(Target, f64)>,
     /// The store changed and is not yet kept in the project file.
     dirty: bool,
 }
@@ -71,12 +78,14 @@ impl CommissioningMode {
             punch_severity: Severity::Minor,
             show_closed: false,
             large: false,
+            armed: None,
             dirty: false,
         }
     }
 
     /// Decides one check for the person set, with the value and note typed.
     pub(super) fn decide(&mut self, target: Target, check: CheckKind, state: CheckState) {
+        self.armed = None;
         let record = CheckRecord {
             target,
             check,
@@ -135,6 +144,58 @@ fn target_glyph(store: &CommissioningStore, target: Target) -> &'static str {
 /// The height of a touch target, for the Large switch.
 fn touch(large: bool) -> f32 {
     if large { TOUCH_LARGE } else { TOUCH }
+}
+
+/// Row and label text, bigger with large buttons so a tablet reads it too.
+fn sized(large: bool, text: String) -> egui::RichText {
+    let text = egui::RichText::new(text);
+    if large { text.size(TEXT_LARGE) } else { text }
+}
+
+/// Passes every open check of the target in two touches: the first arms the
+/// button with the count, the second does it; any other touch or a few
+/// seconds disarm it. It sits under the checks, away from "Next open".
+fn pass_all_open(ui: &mut egui::Ui, mode: &mut CommissioningMode, target: Target) {
+    let open: Vec<CheckKind> = target
+        .checks()
+        .iter()
+        .copied()
+        .filter(|&c| mode.store.state(target, c) == CheckState::Pending)
+        .collect();
+    let now_s = ui.input(|i| i.time);
+    if mode
+        .armed
+        .is_some_and(|(t, at)| t != target || open.is_empty() || now_s - at > ARM_SECONDS)
+    {
+        mode.armed = None;
+    }
+    if open.is_empty() {
+        return;
+    }
+    ui.add_space(8.0);
+    ui.horizontal(|ui| {
+        if mode.armed.is_some() {
+            if big_button(
+                ui,
+                mode.large,
+                &format!("Pass {} open · Pass them", open.len()),
+            )
+            .clicked()
+            {
+                for check in open {
+                    mode.decide(target, check, CheckState::Passed);
+                }
+                mode.armed = None;
+            } else if big_button(ui, mode.large, "Cancel").clicked() {
+                mode.armed = None;
+            } else {
+                ui.ctx()
+                    .request_repaint_after(std::time::Duration::from_secs_f64(ARM_SECONDS));
+            }
+        } else if big_button(ui, mode.large, &format!("Pass all {} open", open.len())).clicked() {
+            mode.armed = Some((target, now_s));
+        }
+    });
 }
 
 fn big_button(ui: &mut egui::Ui, large: bool, text: &str) -> egui::Response {
@@ -252,10 +313,13 @@ impl NovoApp {
                 return false;
             };
             let project = doc.project();
+            mode.large = self.settings.large_buttons;
             ui.horizontal_wrapped(|ui| {
                 ui.weak("By");
                 ui.add(egui::TextEdit::singleline(&mut mode.who).desired_width(80.0));
-                ui.checkbox(&mut mode.large, "Large");
+                if ui.checkbox(&mut mode.large, "Large buttons").changed() {
+                    self.settings.large_buttons = mode.large;
+                }
                 for (tab, label) in [(Tab::Checks, "Checks"), (Tab::Punch, "Punch list")] {
                     if ui.selectable_label(mode.tab == tab, label).clicked() {
                         mode.tab = tab;
@@ -349,23 +413,13 @@ fn checks_tab(
                     .desired_width(f32::INFINITY),
             );
         });
-        if info
-            .target
-            .checks()
-            .iter()
-            .any(|&c| mode.store.state(info.target, c) == CheckState::Pending)
-            && big_button(ui, mode.large, "Pass all open").clicked()
-        {
-            for &check in info.target.checks() {
-                if mode.store.state(info.target, check) == CheckState::Pending {
-                    mode.decide(info.target, check, CheckState::Passed);
-                }
-            }
-        }
         for &check in info.target.checks() {
             let state = mode.store.state(info.target, check);
             ui.horizontal_wrapped(|ui| {
-                ui.label(format!("{} {}", state_glyph(state), check.label()));
+                ui.label(sized(
+                    mode.large,
+                    format!("{} {}", state_glyph(state), check.label()),
+                ));
                 if big_button(ui, mode.large, "Pass").clicked() {
                     mode.decide(info.target, check, CheckState::Passed);
                 }
@@ -392,6 +446,7 @@ fn checks_tab(
                 ui.weak(format!("{}, {} {detail}", r.by, r.at));
             }
         }
+        pass_all_open(ui, mode, info.target);
         ui.separator();
     }
 
@@ -399,7 +454,10 @@ fn checks_tab(
         .auto_shrink([false, true])
         .show(ui, |ui| {
             for info in &on_page {
-                let text = format!("{} {}", target_glyph(&mode.store, info.target), info.label);
+                let text = sized(
+                    mode.large,
+                    format!("{} {}", target_glyph(&mode.store, info.target), info.label),
+                );
                 let row = egui::Button::selectable(mode.selected == Some(info.target), text)
                     .min_size(egui::vec2(ui.available_width(), touch(mode.large) * 0.7));
                 if ui.add(row).clicked() {
