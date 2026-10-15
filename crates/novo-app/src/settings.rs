@@ -2,6 +2,7 @@
 
 use novo_editor::tool::{ConnectMode, WiringMode};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 const MAX_RECENT: usize = 10;
@@ -34,6 +35,68 @@ pub struct Settings {
     /// Whether the live view skips its animations: states switch at once
     /// and a running motor shows an arrow instead of spinning.
     pub reduce_motion: bool,
+    /// The workspace shown when the app last ran (`Workspace::id`),
+    /// reopened with the project when it is available again
+    /// (docs/design/workspaces.md §4.1).
+    pub last_workspace: String,
+    /// Each workspace's panels as the person left them, by `Workspace::id`.
+    /// A workspace with no entry has its default layout.
+    pub workspaces: BTreeMap<String, WorkspaceLayout>,
+    /// How far the fast-keys walk-through is (docs/ONBOARDING-DESIGN.md §2).
+    pub onboarding: Onboarding,
+}
+
+/// The walk-through's progress, per user: kept so closing the app mid-way
+/// resumes, and so a skipped walk-through never comes back by itself.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Onboarding {
+    /// Step ids the person has done, in the order they did them.
+    pub ticked: Vec<String>,
+    /// Skipped, or all steps done and closed: never shown by itself again.
+    pub dismissed: bool,
+    /// The walk-through has been opened at least once, so the start panel
+    /// stops pointing at it.
+    pub started: bool,
+}
+
+impl Onboarding {
+    pub fn is_ticked(&self, step: &str) -> bool {
+        self.ticked.iter().any(|t| t == step)
+    }
+
+    /// Ticks a step; true when it was not ticked before.
+    pub fn tick(&mut self, step: &str) -> bool {
+        if self.is_ticked(step) {
+            return false;
+        }
+        self.ticked.push(step.to_owned());
+        true
+    }
+
+    /// Starts over, shown again (the command's reset).
+    pub fn restart(&mut self) {
+        self.ticked.clear();
+        self.dismissed = false;
+        self.started = true;
+    }
+}
+
+/// What one workspace remembers about its panels: a snapshot taken when the
+/// person leaves it and put back when they return. Per user, not per
+/// project, because it describes their screen. Strings keep an old settings
+/// file readable when a panel is renamed or removed; an unknown one means
+/// the default.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WorkspaceLayout {
+    /// Whether the outline takes space beside the canvas; `None` follows
+    /// the window width.
+    pub outline_pinned: Option<bool>,
+    /// `"pages"`, `"issues"` or `"changes"`.
+    pub outline_mode: String,
+    /// `"terminals"`, `"cables"` or `"devices"`; `None` is closed.
+    pub drawer: Option<String>,
 }
 
 impl Settings {
@@ -114,6 +177,29 @@ mod tests {
         let s: Settings = ron::from_str(old).unwrap();
         assert_eq!(s.recent_actions, vec!["view.fit"]);
         assert_eq!(s.outline_pinned, None);
+    }
+
+    #[test]
+    fn workspace_layouts_round_trip() {
+        let mut s = Settings {
+            last_workspace: "cabinet".into(),
+            ..Settings::default()
+        };
+        s.workspaces.insert(
+            "schematic".into(),
+            WorkspaceLayout {
+                outline_pinned: Some(true),
+                outline_mode: "issues".into(),
+                drawer: Some("cables".into()),
+            },
+        );
+        let text = ron::to_string(&s).unwrap();
+        let back: Settings = ron::from_str(&text).unwrap();
+        assert_eq!(back, s);
+        // Settings written before workspaces existed still load.
+        let old: Settings = ron::from_str("(recent_actions: [\"view.fit\"])").unwrap();
+        assert!(old.workspaces.is_empty());
+        assert_eq!(old.last_workspace, "");
     }
 
     #[test]
