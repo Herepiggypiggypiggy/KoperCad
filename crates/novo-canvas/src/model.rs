@@ -1685,6 +1685,9 @@ const BRIDGE_BAR_Y: f64 = 1.4;
 /// The symbol that carries the bridge dot.
 const BRIDGED_SYMBOL: &str = "iec/terminals/terminal_bridged";
 
+/// The one-ended variant: the same dot on its single lead.
+const END_BRIDGED_SYMBOL: &str = "iec/terminals/terminal_end_bridged";
+
 /// One heavy bar per run of connected terminals on a page, from the first
 /// lead to the last, never past them: the connected terminals of a jumper
 /// group on one strip that are chained by neighbours at most
@@ -1698,7 +1701,7 @@ fn bridge_bars(project: &Project, page: PageId) -> Vec<(Vec2, Vec2)> {
         let SymbolRole::Terminal { terminals } = &sym.role else {
             continue;
         };
-        if sym.symbol.0 != BRIDGED_SYMBOL {
+        if sym.symbol.0 != BRIDGED_SYMBOL && sym.symbol.0 != END_BRIDGED_SYMBOL {
             continue;
         }
         let [t] = terminals.as_slice() else {
@@ -2177,6 +2180,21 @@ mod tests {
             vec![(Vec2::new(100.0, 51.4), Vec2::new(116.0, 51.4))],
             "one bar across the run; lone terminals draw none"
         );
+        // A one-ended terminal joins the run like any other.
+        let (_, _) = doc
+            .transact("end", |tx| {
+                let id = tx
+                    .project()
+                    .symbols()
+                    .find(|s| s.placement.origin == Point::new(100.0, 50.0))
+                    .map(|s| s.id)
+                    .unwrap();
+                tx.update::<novo_core::SymbolInstance>(id, |s| {
+                    s.symbol = key(END_BRIDGED_SYMBOL);
+                })
+            })
+            .unwrap();
+        assert_eq!(bridge_bars(doc.project(), page).len(), 1);
         let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
         assert!(ps.scene().contains(BARS_ITEM));
         // Taking the far terminal's neighbour into the run extends the bar.
