@@ -69,8 +69,9 @@ A target belonging to more than one page counts once in the project and in each 
 
 ## Storage
 
-A new table in the project file, schema version 3 (a migration, with a committed v2 fixture as the
-autosave design requires):
+The project file gets schema version 3 with one generic `sidecar (key, data)` table of named JSON
+documents (#446); the whole commissioning store is the document `commissioning`. It is written at once
+(like revision snapshots), not with Save. The original two-table sketch:
 
 ```
 commissioning_checks (kind TEXT, id INTEGER, check TEXT, state TEXT, by TEXT, at TEXT, value TEXT, note TEXT,
@@ -82,6 +83,15 @@ It is a side table next to `records` and `snapshots`, so `novo-core` needs no ne
 (that is WS-02's) and the model stays a pure design. The recovery (autosave) file copies the tables
 along with the rest, so a crash does not lose a day of ticks. Opening an older file creates the empty
 tables; a newer file is refused as today.
+
+## How to reach it (entry points)
+
+- **Mode switch:** "Commissioning" next to Changes mode (owner: Workspaces, menus and navigation thread).
+- **Palette:** `Commissioning` (toggle) and `Export commissioning report`; shortcut proposal Shift+K.
+- **Tick panel:** the dock in the mode (Pass / Fail / Note, progress per page and cabinet).
+- **Punch list:** second tab of the same dock.
+- **Report:** File > Export > "Commissioning report (PDF, CSV)" (owner: UI integration: reports and checks) and
+  `kopercad-cli commissioning-report`.
 
 ## Where the code lives
 
