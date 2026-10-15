@@ -1,0 +1,13 @@
+[package]
+name = "novo-plc"
+description = "PLC cards and channels: card layouts, I/O address allocation and formatting (WS-17)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+novo-core.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true
