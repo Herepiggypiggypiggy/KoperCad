@@ -1206,6 +1206,14 @@ fn a_pe_terminal_is_offered_a_pe_block_first_and_accessories_stay_on_the_strip()
     cover.description = "End cover".into();
     cover.letter_codes = vec!["X".into()];
     assert!(!novo_parts::is_terminal_block(&cover));
+    // A block pasted without a connections column is still a block, and
+    // an explicit 0 connections marks an accessory whatever its name.
+    let mut pasted = CatalogPart::new("Phoenix Contact", "3044102");
+    pasted.description = "Feed-through terminal block UT 4".into();
+    pasted.letter_codes = vec!["X".into()];
+    assert!(novo_parts::is_terminal_block(&pasted));
+    pasted.data.insert("connections".into(), Value::Int(0));
+    assert!(!novo_parts::is_terminal_block(&pasted));
     let command = assign_part(p, &[gate.x1], &cover, AssignMode::Add);
     run(&mut doc, command);
     let p = doc.project();
