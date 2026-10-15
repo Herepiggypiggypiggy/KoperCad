@@ -660,6 +660,11 @@ pub(crate) fn wrong_terminal_blocks(cx: &Context<'_>, out: &mut Vec<Problem>) {
 pub(crate) fn cable_cores(cx: &Context<'_>, out: &mut Vec<Problem>) {
     use novo_cables::Finding;
     let project = cx.project;
+    // novo-cables builds its own netlist; skip that when there is nothing
+    // for it to check.
+    if project.cables().next().is_none() {
+        return;
+    }
     for finding in novo_cables::check(project) {
         let mut at: Vec<AnyId> = match &finding {
             Finding::ProtectiveCoreMisused { wire, .. }
