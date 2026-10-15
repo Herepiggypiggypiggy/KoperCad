@@ -1,0 +1,51 @@
+format = 1
+id = "nfpa/protection/fuse_switch_3p"
+name = "Fuse switch-disconnector, 3-pole"
+description = "3-pole switch-disconnector whose moving contacts carry the fuse links."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "protection"
+function = "protection.fuse_switch"
+keywords = ["fuse switch", "fuse disconnector", "nh", "3p", "nfpa", "ansi"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+  { id = "3", at = [8, 0], dir = "up" },
+  { id = "4", at = [8, 16], dir = "down" },
+  { id = "5", at = [16, 0], dir = "up" },
+  { id = "6", at = [16, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 1.5] },
+  { kind = "arc", center = [0, 3], r = 1.5, start = 270, end = 450 },
+  { kind = "arc", center = [0, 6], r = 1.5, start = 90, end = 270 },
+  { kind = "line", from = [0, 7.5], to = [0, 10.5] },
+  { kind = "line", from = [-3, 10.5], to = [3, 10.5] },
+  { kind = "line", from = [-3, 13.5], to = [3, 13.5] },
+  { kind = "line", from = [0, 13.5], to = [0, 16] },
+  { kind = "line", from = [8, 0], to = [8, 1.5] },
+  { kind = "arc", center = [8, 3], r = 1.5, start = 270, end = 450 },
+  { kind = "arc", center = [8, 6], r = 1.5, start = 90, end = 270 },
+  { kind = "line", from = [8, 7.5], to = [8, 10.5] },
+  { kind = "line", from = [5, 10.5], to = [11, 10.5] },
+  { kind = "line", from = [5, 13.5], to = [11, 13.5] },
+  { kind = "line", from = [8, 13.5], to = [8, 16] },
+  { kind = "line", from = [16, 0], to = [16, 1.5] },
+  { kind = "arc", center = [16, 3], r = 1.5, start = 270, end = 450 },
+  { kind = "arc", center = [16, 6], r = 1.5, start = 90, end = 270 },
+  { kind = "line", from = [16, 7.5], to = [16, 10.5] },
+  { kind = "line", from = [13, 10.5], to = [19, 10.5] },
+  { kind = "line", from = [13, 13.5], to = [19, 13.5] },
+  { kind = "line", from = [16, 13.5], to = [16, 16] },
+  { kind = "line", from = [0, 8], to = [16, 8], stroke = "dashed" },
+]
+
+[behavior]
+kind = "fuse"
+switched = true
+poles = [["1", "2"], ["3", "4"], ["5", "6"]]

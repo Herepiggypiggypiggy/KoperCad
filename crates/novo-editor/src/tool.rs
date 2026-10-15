@@ -2167,6 +2167,31 @@ impl Editor {
         })
     }
 
+    /// [`Self::move_selection`] for a person's arrow key: `carry` takes the
+    /// wires on the moved pins along, otherwise they stay behind as open
+    /// ends, as when dragging (DESIGN.md §4).
+    pub fn nudge_selection(
+        &mut self,
+        doc: &mut Document,
+        selection: &[AnyId],
+        delta: Point,
+        carry: bool,
+    ) -> bool {
+        let settle = self.auto_connect;
+        self.run(doc, "Move", |tx| {
+            let how = Transform::Move(delta);
+            if carry {
+                edit::transform_interactive(tx, selection, how)?;
+            } else {
+                edit::transform_detached(tx, selection, how)?;
+            }
+            if settle {
+                edit::settle(tx, &edit::symbols_in(selection))?;
+            }
+            Ok(())
+        })
+    }
+
     /// Deletes the selection; wires on deleted pins go with it.
     pub fn delete(&mut self, doc: &mut Document, selection: &[AnyId]) -> bool {
         let ok = self.run(doc, "Delete", |tx| edit::delete(tx, selection));

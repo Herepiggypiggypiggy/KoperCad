@@ -138,6 +138,8 @@ pub struct Handle {
     pub half: f32,
     pub color: Color,
     pub round: bool,
+    /// Draw the round marker as an open ring instead of a disc.
+    pub ring: bool,
 }
 
 impl Handle {
@@ -147,6 +149,7 @@ impl Handle {
             half,
             color,
             round: false,
+            ring: false,
         }
     }
 
@@ -156,6 +159,15 @@ impl Handle {
             half: radius,
             color,
             round: true,
+            ring: false,
+        }
+    }
+
+    /// An open ring of `radius` points, drawn with a thin line.
+    pub fn ring(at: Vec2, radius: f32, color: Color) -> Self {
+        Self {
+            ring: true,
+            ..Self::dot(at, radius, color)
         }
     }
 }

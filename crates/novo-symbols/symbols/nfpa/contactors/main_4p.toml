@@ -1,0 +1,49 @@
+format = 1
+id = "nfpa/contactors/main_4p"
+name = "Contactor main contacts, 4-pole"
+description = "4-pole main (power) contacts of a contactor, switched by the coil with the same tag."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "contactors"
+function = "contact.main"
+keywords = ["contactor", "main contact", "power", "4p", "nfpa", "ansi"]
+aliases = ["km4"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+  { id = "3", at = [8, 0], dir = "up" },
+  { id = "4", at = [8, 16], dir = "down" },
+  { id = "5", at = [16, 0], dir = "up" },
+  { id = "6", at = [16, 16], dir = "down" },
+  { id = "7", at = [24, 0], dir = "up" },
+  { id = "8", at = [24, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 6] },
+  { kind = "line", from = [0, 16], to = [0, 10] },
+  { kind = "line", from = [-3, 6], to = [3, 6] },
+  { kind = "line", from = [-3, 10], to = [3, 10] },
+  { kind = "line", from = [8, 0], to = [8, 6] },
+  { kind = "line", from = [8, 16], to = [8, 10] },
+  { kind = "line", from = [5, 6], to = [11, 6] },
+  { kind = "line", from = [5, 10], to = [11, 10] },
+  { kind = "line", from = [16, 0], to = [16, 6] },
+  { kind = "line", from = [16, 16], to = [16, 10] },
+  { kind = "line", from = [13, 6], to = [19, 6] },
+  { kind = "line", from = [13, 10], to = [19, 10] },
+  { kind = "line", from = [24, 0], to = [24, 6] },
+  { kind = "line", from = [24, 16], to = [24, 10] },
+  { kind = "line", from = [21, 6], to = [27, 6] },
+  { kind = "line", from = [21, 10], to = [27, 10] },
+  { kind = "line", from = [0, 8], to = [24, 8], stroke = "dashed" },
+]
+
+[behavior]
+kind = "contact"
+normally = "open"
+poles = [["1", "2"], ["3", "4"], ["5", "6"], ["7", "8"]]

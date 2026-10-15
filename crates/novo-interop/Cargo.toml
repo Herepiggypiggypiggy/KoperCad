@@ -9,6 +9,7 @@ license.workspace = true
 novo-core.workspace = true
 # Only the model adapter, as novo-pdf: no egui widget.
 novo-canvas = { path = "../novo-canvas", default-features = false, features = ["model"] }
+novo-parts.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

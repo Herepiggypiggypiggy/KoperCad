@@ -1,0 +1,31 @@
+format = 1
+id = "nfpa/terminals/terminal_fused"
+name = "Fuse terminal"
+description = "Terminal with a fuse holder."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "terminals"
+function = "terminal.fuse"
+keywords = ["terminal", "fuse", "fuse terminal", "nfpa", "ansi"]
+aliases = ["xf"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-3, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 1.8] },
+  { kind = "circle", center = [0, 3], r = 1.2 },
+  { kind = "line", from = [0, 4.2], to = [0, 11.8] },
+  { kind = "rect", at = [-1.2, 6], size = [2.4, 4] },
+  { kind = "circle", center = [0, 13], r = 1.2 },
+  { kind = "line", from = [0, 14.2], to = [0, 16] },
+]
+
+[behavior]
+kind = "fuse"
+poles = [["1", "2"]]

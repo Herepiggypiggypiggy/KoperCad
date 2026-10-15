@@ -1,0 +1,31 @@
+format = 1
+id = "nfpa/contacts/no"
+name = "Make contact (NO)"
+description = "Normally open contact, used for auxiliary contacts of relays and contactors."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "contacts"
+function = "contact.no"
+keywords = ["no", "make", "normally open", "auxiliary", "nfpa", "ansi"]
+aliases = ["no"]
+favorite = true
+
+connections = [
+  { id = "13", at = [0, 0], dir = "up" },
+  { id = "14", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 6] },
+  { kind = "line", from = [0, 16], to = [0, 10] },
+  { kind = "line", from = [-3, 6], to = [3, 6] },
+  { kind = "line", from = [-3, 10], to = [3, 10] },
+]
+
+[behavior]
+kind = "contact"
+normally = "open"
+poles = [["13", "14"]]

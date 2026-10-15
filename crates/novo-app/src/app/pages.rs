@@ -4,7 +4,7 @@
 //! under different page groups share one panel, hence one cabinet layout.
 
 use eframe::egui;
-use novo_core::{Command, DeviceTag, PageId, Project};
+use novo_core::{Aspect, Command, DeviceTag, PageId, Project};
 
 use super::{Level, NovoApp};
 
@@ -92,6 +92,73 @@ fn level(text: &str, prefix: char) -> Result<Option<DeviceTag>, String> {
         Ok(Some(tag))
     } else {
         Err(format!("`{text}` is not a plain {prefix} level"))
+    }
+}
+
+/// The command that renames a group (`aspect` Function) or panel (Location)
+/// to `text`, which may carry its `=` or `+`. `None` when the name did not
+/// change.
+pub(super) fn rename_level_command(
+    aspect: Aspect,
+    from: &DeviceTag,
+    text: &str,
+) -> Result<Option<Command>, String> {
+    let prefix = if aspect == Aspect::Function { '=' } else { '+' };
+    let Some(to) = level(text, prefix)? else {
+        return Err(format!("Name the {}", level_noun(aspect)));
+    };
+    let (from, to) = (from.levels(aspect).to_vec(), to.levels(aspect).to_vec());
+    if from == to {
+        return Ok(None);
+    }
+    Ok(Some(Command::RenameLevel { aspect, from, to }))
+}
+
+fn level_noun(aspect: Aspect) -> &'static str {
+    if aspect == Aspect::Function {
+        "page group"
+    } else {
+        "panel"
+    }
+}
+
+/// What a rename of `from` touches, for the line that reports it:
+/// "6 pages, 41 devices, 3 cables".
+pub(super) fn level_users(project: &Project, aspect: Aspect, from: &DeviceTag) -> String {
+    let levels = from.levels(aspect);
+    let uses = |t: &DeviceTag| t.levels(aspect).starts_with(levels);
+    let count = |n: usize, noun: &str| format!("{n} {noun}{}", if n == 1 { "" } else { "s" });
+    format!(
+        "{}, {}, {}",
+        count(
+            project.pages().filter(|p| uses(&p.structure)).count(),
+            "page"
+        ),
+        count(project.devices().filter(|d| uses(&d.tag)).count(), "device"),
+        count(project.cables().filter(|c| uses(&c.tag)).count(), "cable"),
+    )
+}
+
+/// What the rename box did this frame.
+pub(super) enum LevelEdit {
+    Editing,
+    Commit,
+    Cancel,
+}
+
+/// A group or panel header being renamed: Enter or clicking away keeps the
+/// name, Esc drops it.
+pub(super) fn level_edit(ui: &mut egui::Ui, text: &mut String) -> LevelEdit {
+    let edit = ui.add(egui::TextEdit::singleline(text).desired_width(f32::INFINITY));
+    if !edit.has_focus() && !edit.lost_focus() {
+        edit.request_focus();
+    }
+    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+        LevelEdit::Cancel
+    } else if edit.lost_focus() {
+        LevelEdit::Commit
+    } else {
+        LevelEdit::Editing
     }
 }
 
@@ -332,6 +399,33 @@ mod tests {
         assert!(doc.project().pages().any(|p| p.name == "3"));
         doc.undo().unwrap();
         assert_eq!(doc.project().pages().count(), 4);
+    }
+
+    #[test]
+    fn a_panel_renames_from_the_outline_text() {
+        let mut doc = Document::default();
+        let mut form = PageForm::new(FormKind::Pages, "10D41", "K1B1G1");
+        form.count = 2;
+        run(&mut doc, &form).unwrap();
+        let panel = DeviceTag::parse("+K1B1G1").unwrap();
+
+        let same = rename_level_command(Aspect::Location, &panel, "+K1B1G1").unwrap();
+        assert!(same.is_none());
+        assert!(rename_level_command(Aspect::Location, &panel, "  ").is_err());
+        assert!(rename_level_command(Aspect::Location, &panel, "a/b").is_err());
+        assert_eq!(
+            level_users(doc.project(), Aspect::Location, &panel),
+            "2 pages, 0 devices, 0 cables"
+        );
+
+        let command = rename_level_command(Aspect::Location, &panel, "K2").unwrap();
+        doc.execute(command.unwrap()).unwrap();
+        let panels = doc.project().panels();
+        assert_eq!(panels.len(), 1);
+        assert_eq!(panels[0].location.to_string(), "+K2");
+        assert_eq!(panels[0].pages.len(), 2);
+        doc.undo().unwrap();
+        assert_eq!(doc.project().panels()[0].location.to_string(), "+K1B1G1");
     }
 
     #[test]

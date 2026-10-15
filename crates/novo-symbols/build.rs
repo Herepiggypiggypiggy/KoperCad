@@ -27,15 +27,29 @@ fn main() {
     let mut files = Vec::new();
     collect(&root, &mut files);
 
-    let mut code = String::from("pub(crate) static BUILTIN: &[(&str, &str)] = &[\n");
+    // One table per pack (the first path segment), in file order.
+    let mut packs: Vec<(String, Vec<(String, String)>)> = Vec::new();
     for file in &files {
         let rel = file.strip_prefix(&root).unwrap().with_extension("");
         let id: Vec<_> = rel
             .components()
             .map(|c| c.as_os_str().to_string_lossy())
             .collect();
-        let abs = file.to_string_lossy();
-        writeln!(code, "    ({:?}, include_str!({:?})),", id.join("/"), abs).unwrap();
+        let pack = id[0].to_string();
+        let entry = (id.join("/"), file.to_string_lossy().into_owned());
+        match packs.iter_mut().find(|(name, _)| *name == pack) {
+            Some((_, list)) => list.push(entry),
+            None => packs.push((pack, vec![entry])),
+        }
+    }
+
+    let mut code = String::from("pub(crate) static BUILTIN: &[(&str, &[(&str, &str)])] = &[\n");
+    for (pack, list) in &packs {
+        writeln!(code, "    ({pack:?}, &[").unwrap();
+        for (id, abs) in list {
+            writeln!(code, "        ({id:?}, include_str!({abs:?})),").unwrap();
+        }
+        code.push_str("    ]),\n");
     }
     code.push_str("];\n");
 

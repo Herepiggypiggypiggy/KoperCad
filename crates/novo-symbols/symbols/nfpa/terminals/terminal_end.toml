@@ -1,0 +1,26 @@
+format = 1
+id = "nfpa/terminals/terminal_end"
+name = "Terminal"
+description = "One-ended terminal of a terminal strip: a wire ends in it. The same terminal drawn elsewhere is the other side."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "terminals"
+function = "terminal"
+keywords = ["terminal", "x", "clamp", "one-ended", "end", "nfpa", "ansi"]
+aliases = ["x"]
+favorite = true
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+]
+
+anchors = [
+  { role = "tag", at = [-3, 6], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 6.8] },
+  { kind = "circle", center = [0, 8], r = 1.2 },
+]
+
+[behavior]
+kind = "none"
