@@ -21,3 +21,4 @@ UI (PR #270): menu rows live in `novo-editor/src/view.rs` (context_menu) fed by 
 UI (PR #270): menu rows live in `novo-editor/src/view.rs` (context_menu) fed by `potential_menu::{feed_menu, pe_menu}`; actions in `novo-app/src/app/terminals.rs`. Not done: "New…" potential from the chip grid, wire-level override row, Show where it goes.
 
 Coil coupling: `novo_sim::settle` (src/coupling.rs) drives the contacts of a device that draws a `coil` symbol: NO closes and NC opens when the coil has two different live potentials (or is forced); `held` keeps seal-in circuits on. Devices without a coil (push buttons) stay hand-set. The live view shows coil badges (click = switch on by hand) and driven poles ignore clicks. Changeover contacts follow the coil too (break side at rest, make side when on). Not done: timers, time stepping.
+Live view: hovering a wire says what it carries now (or the short).

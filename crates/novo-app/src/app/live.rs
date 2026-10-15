@@ -23,6 +23,8 @@ use super::{Level, NovoApp};
 
 /// Radius of a pole badge, in screen points.
 const BADGE: f32 = 6.0;
+/// How close the pointer must be to a wire to describe it, in screen points.
+const HOVER_REACH: f32 = 5.0;
 /// Width of the glow on a lit wire, in screen points.
 const LIT_WIDTH: f32 = 4.5;
 
@@ -119,6 +121,18 @@ pub(super) fn lit_wires(
             Some(LitWire { points, live })
         })
         .collect()
+}
+
+/// Distance in screen points from `p` to the segment `a`-`b`.
+fn distance_to_segment(p: egui::Pos2, a: egui::Pos2, b: egui::Pos2) -> f32 {
+    let ab = b - a;
+    let len2 = ab.length_sq();
+    let t = if len2 <= f32::EPSILON {
+        0.0
+    } else {
+        (((p - a).dot(ab)) / len2).clamp(0.0, 1.0)
+    };
+    (a + ab * t).distance(p)
 }
 
 /// A switched pole of the page, for its badge.
@@ -320,6 +334,43 @@ impl NovoApp {
                 Live::Shorted(_) => egui::Stroke::new(LIT_WIDTH + 1.0, tokens::ERROR),
             };
             painter.add(egui::Shape::line(points, stroke));
+        }
+
+        // Hovering a wire says what it carries right now.
+        if let Some(pointer) = ctx.pointer_hover_pos()
+            && canvas.contains(pointer)
+            && ctx
+                .layer_id_at(pointer)
+                .is_none_or(|l| l.order == egui::Order::Background)
+        {
+            let hit = wires.iter().find(|w| {
+                w.points.windows(2).any(|seg| {
+                    distance_to_segment(pointer, to_screen(seg[0]), to_screen(seg[1]))
+                        <= HOVER_REACH
+                })
+            });
+            if let Some(wire) = hit {
+                let text = match &wire.live {
+                    Live::Dead => "Carries nothing".to_string(),
+                    Live::Carries(p) => {
+                        format!("Carries {}", colors.get(p).map_or("?", |c| c.0.as_str()))
+                    }
+                    Live::Shorted(ps) => format!(
+                        "Short: {}",
+                        ps.iter()
+                            .filter_map(|p| colors.get(p).map(|c| c.0.as_str()))
+                            .collect::<Vec<_>>()
+                            .join(" meets ")
+                    ),
+                };
+                egui::Area::new(egui::Id::new("live_wire_tip"))
+                    .order(egui::Order::Tooltip)
+                    .interactable(false)
+                    .fixed_pos(pointer + egui::vec2(14.0, 14.0))
+                    .show(ctx, |ui| {
+                        egui::Frame::popup(ui.style()).show(ui, |ui| ui.label(text));
+                    });
+            }
         }
 
         // Pole badges: a click closes or opens the pole.
@@ -616,5 +667,19 @@ mod tests {
         let colors: Vec<_> = doc.project().potentials().map(potential_color).collect();
         assert_eq!(colors.len(), 3);
         assert!(colors[0] != colors[1] && colors[1] != colors[2] && colors[0] != colors[2]);
+    }
+}
+
+#[cfg(test)]
+mod hover_tests {
+    use super::*;
+
+    #[test]
+    fn distance_to_a_segment_clamps_at_its_ends() {
+        let a = egui::pos2(0.0, 0.0);
+        let b = egui::pos2(10.0, 0.0);
+        assert_eq!(distance_to_segment(egui::pos2(5.0, 3.0), a, b), 3.0);
+        assert_eq!(distance_to_segment(egui::pos2(-4.0, 3.0), a, b), 5.0);
+        assert_eq!(distance_to_segment(egui::pos2(1.0, 1.0), a, a), 2f32.sqrt());
     }
 }
