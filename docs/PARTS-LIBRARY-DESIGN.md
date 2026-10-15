@@ -318,6 +318,37 @@ would be easy to script. What we use from it instead:
 4. Source record: kept as for any file; `terms_url` from the maker entry in the
    source table.
 
+## 3d. Source table per maker (survey relayed by the coordinator, 2026-10-15)
+
+This table was compiled by the coordinator thread from fetched pages and
+relayed to this one. I have not re-fetched the pages. "Verified" means the
+survey read it on the maker's or portal's page; "third party" means only an
+outside article says so. **No maker's own CAD terms have been read by anyone;
+CADENAS terms are unread; TraceParts terms require written consent for
+commercial use.** Every row is hand-off (flow B); `fetch_enabled` stays false.
+
+| Maker | Where the user gets CAD | Login | Formats | Terms status |
+| --- | --- | --- | --- | --- |
+| Schneider Electric | CAD button on each product page on se.com (free), TraceParts links. Page: `se.com/au/en/work/support/cad-files-drawings/automation-cad-files` | Not stated (the FAQ and page describe no login) | DXF, DWG, STEP AP203/214/242, IGES (verified) | se.com website terms read (personal, non-commercial copying, section 2a); CAD-specific terms unread |
+| WAGO | CADENAS PARTcommunity `wago.partcommunity.com` (verified, owner capture, section 3c) | Yes, free WAGO login | STEP AP214 in a ZIP with readme (captured); other formats per portal | CADENAS terms (`cadenas.de/terms-of-use-3d-cad-models`) unread; WAGO website terms silent |
+| Siemens | CAxOnline / Industry Online Support CAx tab | Free Siemens account (third party) | DWG, DXF, STEP, IGES (third party); EDZ for EPLAN | Unread. Siemens parts are also on TraceParts |
+| Phoenix Contact | Its own page lists only CAE systems; a 2010 article (third party) says CAD is on TraceParts. Owner capture: the Eplan Data Portal gives DXF and EDZ behind an Eplan ID (section 3c) | Yes for the Eplan portal | DXF (captured), EDZ | Unread; Eplan Cloud terms apply to the portal |
+| TraceParts (aggregator) | Several makers' CAD | Free account | Many | Written consent required for commercial use. Not a source for KoperCAD to ship from or script |
+
+**First Import target: Schneider's product-page CAD button.** It is the one
+maker route found with a free, per-product CAD download and a named format
+list, and no login mentioned. Import opens the product page and the Downloads
+watch imports the DXF, DWG or STEP the user saves. Notes:
+- The product page address pattern for `{order}` is not verified and the
+  source table ships empty; whoever verifies it adds it as data. The first
+  Schneider test is a person doing it once and reporting the page address and
+  the file name the browser saves.
+- DWG is stored but not read: the importer reads STEP size and hands out DXF,
+  and there is no DWG reader.
+- Because the se.com website terms limit copying to personal, non-commercial
+  use, the first-use notice stays in place and the question list (section 2a)
+  asks Schneider about CAD use in commercial projects.
+
 ## 4. Offline and no admin rights
 
 - The catalog is a file under `%LOCALAPPDATA%\KoperCAD\Catalog\` (already so in
