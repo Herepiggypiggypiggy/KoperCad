@@ -4,7 +4,7 @@
 
 use crate::plan::{Candidate, Plan, ROW_GAP_MM, place_all_below};
 use crate::{
-    Placement, Plate, Rail, Size, clearance_violations, collisions, outside, rail_overflows,
+    Duct, Placement, Plate, Rail, Size, clearance_violations, collisions, outside, rail_overflows,
 };
 
 /// Default snap grid for free placement (the Cabinet canvas grid).
@@ -35,6 +35,7 @@ impl Report {
 pub struct CabinetLayout {
     pub plate: Plate,
     pub rails: Vec<Rail>,
+    pub ducts: Vec<Duct>,
     pub placements: Vec<Placement>,
     pub grid: f64,
 }
@@ -44,6 +45,7 @@ impl CabinetLayout {
         CabinetLayout {
             plate,
             rails: Vec::new(),
+            ducts: Vec::new(),
             placements: Vec::new(),
             grid: DEFAULT_GRID_MM,
         }

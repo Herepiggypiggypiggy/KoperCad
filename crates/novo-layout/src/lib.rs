@@ -193,6 +193,38 @@ pub struct Rail {
     pub vertical: bool,
 }
 
+/// Default duct cross-section in mm when the model has none yet.
+pub const DEFAULT_DUCT_MM: f64 = 30.0;
+
+/// A wiring duct on the plate, from `(x, y)` for `length` to the right, or
+/// down when `vertical`. `width` is its size across the run on the plate.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Duct {
+    pub id: u64,
+    pub x: f64,
+    pub y: f64,
+    pub length: f64,
+    pub width: f64,
+    pub vertical: bool,
+}
+
+impl Duct {
+    /// The plate area the duct covers.
+    pub fn footprint(&self) -> Rect {
+        let (w, h) = if self.vertical {
+            (self.width, self.length)
+        } else {
+            (self.length, self.width)
+        };
+        Rect {
+            x: self.x,
+            y: self.y,
+            w,
+            h,
+        }
+    }
+}
+
 /// Length used on a rail: the footprint widths of its devices plus the
 /// default gap between neighbours.
 pub fn rail_used(rail: &Rail, placements: &[Placement]) -> f64 {

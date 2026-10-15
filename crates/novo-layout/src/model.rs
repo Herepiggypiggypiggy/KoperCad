@@ -17,7 +17,7 @@ use crate::drill::{
 use crate::plan::{Candidate, Plan};
 use crate::plate_drawing::{PlateDocument, documents};
 use crate::state::CabinetLayout;
-use crate::{Placement, Plate, Rail, Size};
+use crate::{DEFAULT_DUCT_MM, Duct, Placement, Plate, Rail, Size};
 
 /// Part property keys, the same as `novo_parts::keys`.
 const WIDTH_KEY: &str = "width_mm";
@@ -67,6 +67,22 @@ pub fn load(project: &Project, id: StructureId) -> Option<CabinetLayout> {
             x: r.x,
             y: r.y,
             length: r.length,
+            vertical: r.vertical,
+        })
+        .collect();
+    layout.ducts = project
+        .all::<ModelRail>()
+        .filter(|r| r.structure == id && r.kind == RailKind::Duct)
+        .map(|r| Duct {
+            id: r.id.raw(),
+            x: r.x,
+            y: r.y,
+            length: r.length,
+            width: if r.width > 0.0 {
+                r.width
+            } else {
+                DEFAULT_DUCT_MM
+            },
             vertical: r.vertical,
         })
         .collect();
