@@ -37,6 +37,7 @@ struct Broken {
     shorted_wire: WireId,
     zero_wire: WireId,
     overlapping: Vec<WireId>,
+    open_wire: WireId,
     extra_terminal: TerminalId,
     f3_sym: SymbolId,
     thin_wire: WireId,
@@ -110,6 +111,12 @@ fn break_it(doc: &mut Document, ms: &MotorStarter) -> Broken {
                 let b = tx.add_junction(page, Point::new(x1, 400.0))?;
                 overlapping.push(tx.connect(Endpoint::junction(a), Endpoint::junction(b))?);
             }
+            // 8c. A wire left open at one end.
+            let anchor = tx.add_junction(page, Point::new(300.0, 440.0))?;
+            let open_wire = tx.connect(
+                Endpoint::junction(anchor),
+                Endpoint::free(Point::new(300.0, 470.0)),
+            )?;
             // 9. A second -X1:3 with the same-name rule switched off (new
             //    projects join same-name terminals).
             tx.set_info(|i| i.rules.terminals.same_name = SameName::Off)?;
@@ -169,6 +176,7 @@ fn break_it(doc: &mut Document, ms: &MotorStarter) -> Broken {
                 shorted_wire,
                 zero_wire,
                 overlapping,
+                open_wire,
                 extra_terminal,
                 f3_sym: ms.f3_sym,
                 thin_wire,
@@ -238,6 +246,10 @@ fn every_deliberate_error_is_flagged_exactly_once() {
     );
     assert!(overlap.message.contains("share 20.0 mm of line"));
     assert_eq!(
+        one(ProblemKind::OpenWire).at,
+        vec![AnyId::from(b.open_wire)]
+    );
+    assert_eq!(
         one(ProblemKind::ZeroLengthWire).at,
         vec![AnyId::from(b.zero_wire)]
     );
@@ -295,9 +307,9 @@ fn every_deliberate_error_is_flagged_exactly_once() {
     let summary = Summary::of(&problems);
     assert_eq!(
         (summary.errors, summary.warnings, summary.infos),
-        (3, 12, 1)
+        (3, 13, 1)
     );
-    assert_eq!(summary.pill_text(), "3 errors · 12 warnings");
+    assert_eq!(summary.pill_text(), "3 errors · 13 warnings");
 
     // Reading order: main circuit page, then control page.
     let pages: Vec<Option<PageId>> = problems.iter().map(|p| p.page).collect();
