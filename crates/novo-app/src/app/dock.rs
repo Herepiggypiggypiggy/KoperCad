@@ -80,6 +80,9 @@ impl NovoApp {
             .status_text()
             .filter(|h| !h.is_empty())
             .unwrap_or(elsewhere);
+        // A refusal reads as one: the Error tint and a warning icon, never
+        // colour alone (DESIGN.md §4).
+        let refused = view.editor.notice().is_some();
         let proposals = view.editor.proposals().len() + self.page_proposals().len();
 
         // Aside: the bottom right corner, while the pointer works near the
@@ -118,6 +121,10 @@ impl NovoApp {
             )
         };
 
+        let place_tip = match self.wb.keymap.shortcut_text("tool.place") {
+            Some(key) => format!("Place symbol · {key} (hold for the wheel)"),
+            None => "Place symbol".to_owned(),
+        };
         let chosen = self.settings.wiring_mode();
         let mut chip = None;
         let mut picked = None;
@@ -130,7 +137,7 @@ impl NovoApp {
                     ui.horizontal(|ui| {
                         for (tool, icon, tip) in [
                             (DockTool::Select, icons::tool::SELECT, "Select · Esc"),
-                            (DockTool::Place, icons::tool::PLACE, "Place symbol · I"),
+                            (DockTool::Place, icons::tool::PLACE, place_tip.as_str()),
                             (
                                 DockTool::Connect,
                                 icons::tool::CONNECT,
@@ -170,7 +177,14 @@ impl NovoApp {
                         });
                         if !hint.is_empty() {
                             ui.separator();
-                            ui.label(egui::RichText::new(&hint).weak());
+                            if refused {
+                                ui.colored_label(
+                                    novo_theme::tokens::ERROR,
+                                    format!("{} {hint}", icons::status::WARNING),
+                                );
+                            } else {
+                                ui.label(egui::RichText::new(&hint).weak());
+                            }
                         }
                         if proposals > 0 {
                             ui.separator();

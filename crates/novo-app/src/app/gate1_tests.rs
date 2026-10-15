@@ -1190,3 +1190,21 @@ fn shift_w_switches_the_wiring_mode_and_the_setting_keeps_it() {
         Some(WiringMode::Lines)
     );
 }
+
+#[test]
+fn a_refusal_in_the_dock_and_the_place_key_come_from_the_keymap() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert!(d.app.wb.keymap.shortcut_text("tool.place").is_some());
+    // A refusal sets the editor's notice; the dock draws it (Error tint and
+    // icon) without trouble, and the notice is what tells it apart.
+    let view = d.app.canvas.schematic().unwrap();
+    assert!(!view.editor.begin_place("no/such/symbol", None));
+    assert!(view.editor.notice().is_some());
+    d.frame();
+    let text = d.app.canvas.schematic().unwrap().status_text();
+    assert!(text.is_some_and(|t| t.contains("No symbol")));
+}
