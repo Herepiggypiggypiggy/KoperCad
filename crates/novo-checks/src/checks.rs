@@ -518,7 +518,7 @@ fn ampacity(mm2: f64) -> Option<f64> {
 /// overload relays. Residual-current devices, surge arresters and
 /// magnetic-only motor circuit protectors do not protect a wire against
 /// overload.
-fn protects_against_overload(symbol: &SymbolInstance) -> bool {
+pub(crate) fn protects_against_overload(symbol: &SymbolInstance) -> bool {
     let key = symbol.symbol.0.as_str();
     let Some(name) = key
         .rsplit('/')
