@@ -72,3 +72,6 @@
 20:35 UTC #469 567d15f CHANGES (conflicts in changes_tests.rs, workbench.rs; design fine)
 20:45 UTC #508 7cc9514 READY (3D model block in Parts window)
 20:50 UTC #469 0c1ba09 READY (conflicts resolved)
+21:00 UTC #513 10af2ff READY (assembly checklist export; hand-written File row, second of #463/#513 drops it)
+21:00 UTC #453 4889968 READY (workspace switcher)
+21:00 UTC #463 531ac66 CHANGES (conflict again with main: #489/#411/#479)
