@@ -20,7 +20,7 @@ AppId={{AEB465B9-04F0-475B-AD7F-091D638587B5}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppMaker}
-AppPublisherURL=https://github.com/Herepiggypiggypiggy/NovoElectric
+AppPublisherURL=https://github.com/Herepiggypiggypiggy/kopercad
 ; Strictly per-user: no admin rights are ever requested, everything goes to
 ; %LOCALAPPDATA% and HKCU.
 DefaultDirName={localappdata}\Programs\{#AppName}

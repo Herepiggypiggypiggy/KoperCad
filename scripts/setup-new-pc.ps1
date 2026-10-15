@@ -10,7 +10,7 @@
     $ErrorActionPreference = 'Stop'
     $ProgressPreference = 'SilentlyContinue' # Invoke-WebRequest is very slow with it
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    $Repo = 'Herepiggypiggypiggy/NovoElectric'
+    $Repo = 'Herepiggypiggypiggy/kopercad'
     $Root = Join-Path $env:LOCALAPPDATA 'NovoElectric'
     New-Item -ItemType Directory -Force -Path $Root | Out-Null
 
