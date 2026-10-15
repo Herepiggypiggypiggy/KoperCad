@@ -69,6 +69,11 @@ pub const DUTCH: &[Aliases] = &[
         &["revisie"],
         &["uitgeven", "versie", "vrijgeven"],
     ),
+    nl(
+        "revision.compare",
+        &["vergelijk"],
+        &["verschil", "revisies vergelijken"],
+    ),
     nl("file.quit", &[], &["afsluiten", "stoppen"]),
     // Draw
     nl(

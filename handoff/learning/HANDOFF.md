@@ -2,7 +2,7 @@
 
 ## State
 - Repo herepiggypiggypiggy/kopercad, branch `claude/project-thread-7lpw0d` (restart from main after each merge).
-- Design PR open: `docs/design/learning-modules.md`. Nothing built yet.
+- Design merged (#456). Open now: PR with `assets/lessons/tracks.toml` and `glossary.toml` (content threads need them). Engine crate `novo-learn` is written and tested (37 tests) on a local branch, to go in the next PR once the tracks PR merges; backup patch in /mnt/project-files/handoff/learning/.
 
 ## Resume
 ```

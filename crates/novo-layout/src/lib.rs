@@ -8,6 +8,7 @@ pub mod drill;
 pub mod model;
 pub mod plan;
 pub mod plate_drawing;
+pub mod rules;
 pub mod sizing;
 pub mod sizing_model;
 pub mod state;

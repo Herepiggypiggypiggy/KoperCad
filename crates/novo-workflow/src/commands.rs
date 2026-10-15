@@ -228,6 +228,16 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["issue", "revision"],
     ),
+    verb(
+        cmd(
+            "revision.compare",
+            "Compare revisions",
+            "Project",
+            &["diff", "what changed", "between revisions", "revision list"],
+            Needs::Project,
+        ),
+        &["compare"],
+    ),
     cmd("file.quit", "Quit", "Project", &["exit"], Needs::Nothing),
     // Draw
     cmd(
