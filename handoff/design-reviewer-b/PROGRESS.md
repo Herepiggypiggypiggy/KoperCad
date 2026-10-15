@@ -39,3 +39,4 @@
 18:15 UTC #383 2477ae5 CHANGES (design): DESIGN.md sentence for Project settings modal vs Rules document
 18:16 UTC #383 93d4dcb READY (project drawing standard window)
 18:25 UTC #393 e4a2ae4 READY (blade line width)
+18:30 UTC #395 8972e56 CHANGES (design): Home=fit, right-click vs orbit, Alt+click, Esc, Ctrl+T
