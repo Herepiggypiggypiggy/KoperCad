@@ -651,6 +651,9 @@ click adds no extra corner and no zero-length segment.
 - A press in the zone always starts a wire (a click starts it, a drag
   connects); it never does nothing and never moves the device. A drag
   released on empty canvas cancels as before.
+- On a small symbol the zones never reach into the middle third of the
+  symbol's bounding box, so its body can always be clicked to select it;
+  box selection and Alt+click select it as well.
 - Hovering the zone shows the ring and the connect cursor immediately (no
   delay), so the user sees the grab before pressing.
 
