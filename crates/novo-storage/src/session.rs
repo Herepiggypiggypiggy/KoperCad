@@ -11,7 +11,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
-use novo_core::{ChangeSet, Project};
+use novo_core::{ChangeSet, Project, RevisionId};
 
 use crate::error::{Result, StorageError};
 use crate::file::{ProjectFile, Role, remove_if_exists, sibling};
@@ -117,9 +117,15 @@ impl Session {
     /// Opens the project file at `path`, and its recovery file if the last
     /// session did not close cleanly.
     pub fn open(path: impl AsRef<Path>) -> Result<Opened> {
-        let file = ProjectFile::open(path.as_ref())?;
+        let mut file = ProjectFile::open(path.as_ref())?;
         let project = file.load()?;
         let (recovered, set_aside) = read_recovery(&file)?;
+        if recovered.is_none() {
+            // Nothing can redo an undone revision any more; a recovered
+            // project may still hold one, so then they wait for the next
+            // open.
+            file.drop_orphan_snapshots(&project)?;
+        }
         let mut session = Session::with_file(file);
         session.recovery_pending = recovered.is_some();
         Ok(Opened {
@@ -161,6 +167,18 @@ impl Session {
         self.unautosaved.add(changes);
     }
 
+    /// Keeps `project` as the state issued with `revision`. It is written
+    /// to the project file at once, beside the records; an unsaved issue
+    /// leaves an orphan snapshot that the next open drops.
+    pub fn put_snapshot(&mut self, revision: RevisionId, project: &Project) -> Result<()> {
+        self.file.put_snapshot(revision, project)
+    }
+
+    /// The project as it was issued with `revision`, if a snapshot is kept.
+    pub fn snapshot(&self, revision: RevisionId) -> Result<Option<Project>> {
+        self.file.snapshot(revision)
+    }
+
     /// Whether anything changed since the last save.
     pub fn has_unsaved_changes(&self) -> bool {
         self.unsaved != Pending::Nothing
@@ -182,7 +200,9 @@ impl Session {
         if same_file(path, self.file.path()) {
             return self.save(project);
         }
-        let file = ProjectFile::create(path, project)?;
+        let mut file = ProjectFile::create(path, project)?;
+        // Snapshots of issued revisions travel with the project.
+        self.file.copy_snapshots_to(&mut file)?;
         self.drop_autosave_quietly();
         let old = std::mem::replace(&mut self.file, file);
         let _ = old.close();

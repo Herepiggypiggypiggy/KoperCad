@@ -3,7 +3,9 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use novo_core::{AnyId, ChangeSet, EntityKind, JSON_FORMAT_VERSION, Project, ProjectInfo, Record};
+use novo_core::{
+    AnyId, ChangeSet, EntityKind, JSON_FORMAT_VERSION, Project, ProjectInfo, Record, RevisionId,
+};
 use rusqlite::{Connection, OpenFlags, OptionalExtension, Transaction, params};
 
 use crate::error::{Result, StorageError, is_busy, is_not_a_database};
@@ -82,8 +84,10 @@ impl ProjectFile {
         let version = check_existing(&conn, path, schema::SCHEMA_VERSION)?;
         let conn = if version < schema::SCHEMA_VERSION {
             let mut memory = Connection::open_in_memory()?;
+            // rusqlite refuses -1 ("all pages") here; one step of any
+            // realistic file size copies everything.
             rusqlite::backup::Backup::new(&conn, &mut memory)?.run_to_completion(
-                -1,
+                i32::MAX,
                 Duration::ZERO,
                 None,
             )?;
@@ -290,6 +294,104 @@ impl ProjectFile {
         set_meta(&tx, "info", &to_json(project.info()))?;
         set_meta(&tx, "next_id", &project.next_id().to_string())?;
         finish_save(&tx)?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Keeps `project` as the state issued with `revision` (DESIGN §7,
+    /// Revisions), replacing any snapshot already kept for it.
+    pub fn put_snapshot(&mut self, revision: RevisionId, project: &Project) -> Result<()> {
+        use std::io::Write as _;
+        let mut encoder =
+            flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+        encoder.write_all(project.to_json().as_bytes())?;
+        let data = encoder.finish()?;
+        self.conn.execute(
+            "INSERT OR REPLACE INTO snapshots (revision, format, data) VALUES (?1, ?2, ?3)",
+            params![raw(revision.into()), JSON_FORMAT_VERSION, data],
+        )?;
+        Ok(())
+    }
+
+    /// The project as it was issued with `revision`, if a snapshot is kept.
+    pub fn snapshot(&self, revision: RevisionId) -> Result<Option<Project>> {
+        use std::io::Read as _;
+        let corrupt = |reason: String| StorageError::Corrupt {
+            path: self.path.clone(),
+            reason: format!("snapshot of {revision}: {reason}"),
+        };
+        let Some((format, data)) = self
+            .conn
+            .query_row(
+                "SELECT format, data FROM snapshots WHERE revision = ?1",
+                [raw(revision.into())],
+                |r| Ok((r.get::<_, u32>(0)?, r.get::<_, Vec<u8>>(1)?)),
+            )
+            .optional()?
+        else {
+            return Ok(None);
+        };
+        if format != JSON_FORMAT_VERSION {
+            return Err(corrupt(format!(
+                "uses format {format} but no migration upgraded it to {JSON_FORMAT_VERSION}"
+            )));
+        }
+        let mut json = String::new();
+        flate2::read::ZlibDecoder::new(data.as_slice())
+            .read_to_string(&mut json)
+            .map_err(|e| corrupt(e.to_string()))?;
+        Ok(Some(Project::from_json(&json)?))
+    }
+
+    /// The revisions a snapshot is kept for, in id order.
+    pub fn snapshot_revisions(&self) -> Result<Vec<RevisionId>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT revision FROM snapshots ORDER BY revision")?;
+        let ids = stmt.query_map([], |r| r.get::<_, i64>(0))?;
+        let mut out = Vec::new();
+        for id in ids {
+            out.push(RevisionId(id? as u64));
+        }
+        Ok(out)
+    }
+
+    /// Drops the snapshots of revisions `project` no longer has (issued and
+    /// then undone). Call it on open or close only: while the undo history
+    /// can still redo a revision, its snapshot must stay.
+    pub fn drop_orphan_snapshots(&mut self, project: &Project) -> Result<usize> {
+        let mut dropped = 0;
+        for revision in self.snapshot_revisions()? {
+            if project.issued_revision(revision).is_none() {
+                dropped += self.conn.execute(
+                    "DELETE FROM snapshots WHERE revision = ?1",
+                    [raw(revision.into())],
+                )?;
+            }
+        }
+        Ok(dropped)
+    }
+
+    /// Copies every kept snapshot into `other` as stored (save as).
+    pub(crate) fn copy_snapshots_to(&self, other: &mut ProjectFile) -> Result<()> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT revision, format, data FROM snapshots")?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, u32>(1)?,
+                r.get::<_, Vec<u8>>(2)?,
+            ))
+        })?;
+        let tx = other.conn.transaction()?;
+        for row in rows {
+            let (revision, format, data) = row?;
+            tx.execute(
+                "INSERT OR REPLACE INTO snapshots (revision, format, data) VALUES (?1, ?2, ?3)",
+                params![revision, format, data],
+            )?;
+        }
         tx.commit()?;
         Ok(())
     }
@@ -563,8 +665,21 @@ pub(crate) fn remove_if_exists(path: &Path) -> Result<()> {
 mod tests {
     use super::*;
 
+    /// The version after the newest, for steps made up by these tests.
+    const NEXT: u32 = schema::SCHEMA_VERSION + 1;
+
+    /// Every real step plus `step` as the next one.
+    fn with(step: fn(&Transaction<'_>) -> rusqlite::Result<()>) -> Vec<Migration> {
+        let mut chain = MIGRATIONS.to_vec();
+        chain.push(Migration {
+            to: NEXT,
+            run: step,
+        });
+        chain
+    }
+
     /// A future step: adds a column and fills it from the record JSON.
-    fn v2(tx: &Transaction<'_>) -> rusqlite::Result<()> {
+    fn future(tx: &Transaction<'_>) -> rusqlite::Result<()> {
         tx.execute_batch(
             "ALTER TABLE records ADD COLUMN name TEXT;
              UPDATE records SET name = json_extract(data, '$.name');",
@@ -582,9 +697,9 @@ mod tests {
             .close()
             .unwrap();
 
-        let chain = [MIGRATIONS[0], Migration { to: 2, run: v2 }];
+        let chain = with(future);
         let file = ProjectFile::connect(&path, false, &chain).unwrap();
-        assert_eq!(schema::user_version(&file.conn).unwrap(), 2);
+        assert_eq!(schema::user_version(&file.conn).unwrap(), NEXT);
         let name: String = file
             .conn
             .query_row("SELECT name FROM records WHERE kind = 'page'", [], |r| {
@@ -595,14 +710,39 @@ mod tests {
         assert_eq!(file.load().unwrap().to_json(), project.to_json());
         file.close().unwrap();
 
-        // The pre-upgrade copy is still a readable version 1 file.
-        let backup = dir.path().join("old.novo.v1.bak");
+        // The pre-upgrade copy is still a readable file of the old version.
+        let backup = dir
+            .path()
+            .join(format!("old.novo.v{}.bak", schema::SCHEMA_VERSION));
         let old = ProjectFile::open_as(&backup, Role::Project).unwrap();
         assert_eq!(old.load().unwrap().to_json(), project.to_json());
 
         // Opened again, nothing is left to do.
         let file = ProjectFile::connect(&path, false, &chain).unwrap();
+        assert_eq!(schema::user_version(&file.conn).unwrap(), NEXT);
+    }
+
+    #[test]
+    fn version_1_files_gain_an_empty_snapshot_table() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v1.novo");
+        let mut project = Project::new("Old");
+        project.transact("Page", |tx| tx.add_page("1")).unwrap();
+        // A version 1 file is a current one without the snapshot table.
+        let file = ProjectFile::create(&path, &project).unwrap();
+        file.conn
+            .execute_batch("DROP TABLE snapshots; PRAGMA user_version = 1;")
+            .unwrap();
+        file.close().unwrap();
+
+        assert_eq!(
+            ProjectFile::read(&path).unwrap().to_json(),
+            project.to_json()
+        );
+        let file = ProjectFile::open(&path).unwrap();
         assert_eq!(schema::user_version(&file.conn).unwrap(), 2);
+        assert_eq!(file.load().unwrap().to_json(), project.to_json());
+        assert!(file.snapshot_revisions().unwrap().is_empty());
     }
 
     #[test]
@@ -618,10 +758,12 @@ mod tests {
             .close()
             .unwrap();
 
-        let chain = [MIGRATIONS[0], Migration { to: 2, run: broken }];
-        assert!(ProjectFile::connect(&path, false, &chain).is_err());
+        assert!(ProjectFile::connect(&path, false, &with(broken)).is_err());
         let file = ProjectFile::open(&path).unwrap();
-        assert_eq!(schema::user_version(&file.conn).unwrap(), 1);
+        assert_eq!(
+            schema::user_version(&file.conn).unwrap(),
+            schema::SCHEMA_VERSION
+        );
         assert_eq!(file.load().unwrap().to_json(), project.to_json());
     }
 }

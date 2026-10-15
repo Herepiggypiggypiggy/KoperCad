@@ -66,6 +66,8 @@ lopdf = { version = "0.45", default-features = false }
 # PDF text outside WinAnsi: an embedded subset of the bundled Inter font.
 ttf-parser = { version = "0.25", default-features = false, features = ["std"] }
 subsetter = "0.2"
+# Compresses revision snapshots in project files (novo-storage).
+flate2 = "1"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

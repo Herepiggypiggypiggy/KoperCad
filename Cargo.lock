@@ -1999,6 +1999,7 @@ version = "0.1.0"
 name = "novo-storage"
 version = "0.1.0"
 dependencies = [
+ "flate2",
  "novo-core",
  "rusqlite",
  "serde",
