@@ -215,6 +215,7 @@ not restyle them.
 | `empty_state` | See 6 |
 | `card` | Grouped content on `raised` with `radius::SURFACE` |
 | `tooltip` | Name, then key, then one line of help at most |
+| `lesson_card`, `pointer`, `note`, `lesson_link`, `tip` | Guidance for learning modules, see 10 |
 
 Dialogs are for things outside the drawing loop (settings, issuing a
 revision, import). Everything inside the loop is a panel, the command field, or
@@ -337,3 +338,55 @@ For each panel and dialog, in both themes and all three densities:
    selection and hover, grid fade, page frame, title block, `CANVAS_LIGHT`.
 7. Lint: a test that fails on a raw colour, `FontId::new`, or a literal radius
    in `novo-app`.
+8. Guidance widgets (section 10) for the learning modules, once their engine
+   exists; until then the learning thread uses plain `novo_theme` tokens.
+
+## 10. Guidance: lesson cards, pointers, notes and tips
+
+The learning modules (`docs/design/learning-modules.md`) teach by pointing at
+the real controls. The design system owns how that looks, so lessons feel like
+part of the program and never like an overlay bolted on. Rule of the whole
+section: **guidance helps, it never gets in the way**. It never dims the
+screen, never blocks a click and never takes a key.
+
+**Lesson card.** A `raised` surface, `radius::SURFACE`, elevation 2, 320 pt
+wide, bottom right of the canvas with `space::XL` clear of the edges and
+above the dock's row. A 2 pt accent progress bar runs along its top edge.
+Header: lesson title in `caption` `text.secondary`, "2 of 4" in `caption`
+`text.tertiary`, a close `icon_button`. Body: the step title in `body-strong`,
+the step text in `body` `text.secondary` (three lines at most), the check state
+as an icon before the title (open circle, filled accent dot for the current
+step, `success` check for done, never colour alone). Footer: ghost buttons
+`Back`, `Show me how`, `Skip step`, and `Restart lesson` as a `caption` link on
+the right. A finished step shows a `success` check for 400 ms before the next
+opens; with Reduce motion it changes at once.
+
+**Pointer.** A ring on the target that says "look here": 2 pt `accent`, 14 pt
+radius around a point target, a rounded rectangle (`radius::SURFACE`, 4 pt
+padding) around a control or area, with a soft halo at 25% opacity. It pulses
+(halo grows 8 pt and fades, 1.2 s) and holds still under Reduce motion. When the
+target is far from the card, a 1.5 pt accent line with an arrowhead runs from
+the card edge to the ring. Copper on the canvas also means the selection, so the
+ring is always a ring offset 4 pt outside the item (never the item's own
+outline), always pulsing, and never touches the item's own look.
+
+**Note.** A numbered marker (18 pt circle, `accent` fill, `on.accent` number in
+`caption` semibold) beside its target, with a bubble next to it: `raised`,
+`radius::SURFACE`, elevation 2, 240 pt wide at most, `caption` text, a 6 pt tail
+toward the marker. Up to three per step, drawn together so a tour of a screen
+reads as a numbered set.
+
+**Tip.** A glossary word in a step's text: `text.primary` with a dotted
+underline in `text.tertiary`; hover shows the standard tooltip (name, then one
+sentence). Same widget as every other term hint in the app.
+
+**Lesson link.** In an empty state or panel footer: a 14 pt graduation cap
+icon, "Lesson: Terminal strips" in `caption`, `text.secondary`, turning `info`
+under the pointer. At most one per panel.
+
+**Learn window.** A centred panel like the start panel, on `panel`, tracks as
+`section_label`s, each lesson a `row` with title, summary in `caption`, level
+and minutes as `chip`s, a 20 pt progress ring (accent on `border.subtle`, a
+`success` check when complete), and one button: `Start`, `Continue` or `Do
+again`. `Coming soon` lessons are `text.tertiary`, not broken. Empty search
+shows the standard empty state.
