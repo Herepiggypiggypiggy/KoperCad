@@ -230,11 +230,13 @@ fn midpoint_of_longest_stretch(project: &Project, wire: WireId) -> Option<Point>
 pub fn suggest_terminals(project: &Project) -> Vec<Suggestion> {
     let mut strips: BTreeSet<&[String]> = BTreeSet::new();
     let mut counts: BTreeMap<&[String], usize> = BTreeMap::new();
+    // Counted by place, so devices on a cabinet's door count for it.
     for d in project.devices() {
+        let place = place_of(project, d);
         if d.kind == DeviceKind::TerminalStrip {
-            strips.insert(&d.tag.location);
+            strips.insert(place.location);
         }
-        *counts.entry(&d.tag.location).or_default() += 1;
+        *counts.entry(place.location).or_default() += 1;
     }
     let rank = |place: Place| {
         (
@@ -464,13 +466,23 @@ pub fn migrate_legacy_dismissals(tx: &mut Tx<'_>) -> Result<bool> {
 }
 
 /// The wires of the connection `wire` is part of: every wire joined to it
-/// through junctions, or just `wire` when it runs pin to pin.
+/// through junctions, or every wire between the same two pins.
 fn connection_wires(project: &Project, wire: WireId) -> Vec<WireId> {
     let Some(w) = project.wire(wire) else {
         return vec![wire];
     };
     let Some(junction) = [w.from, w.to].into_iter().find(|e| e.as_pin().is_none()) else {
-        return vec![wire];
+        let pins = |x: &novo_core::Wire| {
+            let mut p = [x.from, x.to];
+            p.sort();
+            p
+        };
+        let these = pins(w);
+        return project
+            .wires()
+            .filter(|x| pins(x) == these)
+            .map(|x| x.id)
+            .collect();
     };
     let mut groups = Groups::new(project);
     let root = groups.root(junction);

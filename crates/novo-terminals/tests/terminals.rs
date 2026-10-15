@@ -1733,3 +1733,39 @@ fn enclosures_decide_the_cabinet_side() {
     );
     assert!(found.iter().all(|f| f.0 != door));
 }
+
+#[test]
+fn parallel_wires_restore_from_either_and_doors_count_for_their_cabinet() {
+    let mut doc = Document::default();
+    let (ids, _) = doc
+        .transact("Draw", |tx| {
+            tx.add_structure(tag("+CAB1"), "", true)?;
+            tx.add_structure(tag("+CAB2"), "", true)?;
+            let page = tx.add_page("1")?;
+            // +CAB1 has one device of its own and two on its door; +CAB2
+            // has two. Counted with the door, +CAB1 is the bigger cabinet.
+            let k1 = tx.add_device(tag("+CAB1-K1"), "")?;
+            tx.add_device(tag("+CAB1+DOOR-S1"), "")?;
+            tx.add_device(tag("+CAB1+DOOR-S2"), "")?;
+            let k2 = tx.add_device(tag("+CAB2-K2"), "")?;
+            tx.add_device(tag("+CAB2-K3"), "")?;
+            let a = row_of_pins(tx, page, k1, &["2"], 40.0, 20.0)?;
+            let b = row_of_pins(tx, page, k2, &["1"], 40.0, 100.0)?;
+            // Two wires between the same two pins: one connection.
+            let first = tx.connect(Endpoint::pin(a, 0), Endpoint::pin(b, 0))?;
+            let second = tx.connect(Endpoint::pin(b, 0), Endpoint::pin(a, 0))?;
+            Ok((k1, first, second))
+        })
+        .unwrap();
+    let (k1, first, second) = ids;
+    let found = suggest_terminals(doc.project());
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].internal, k1);
+    assert_eq!(found[0].strip.to_string(), "+CAB1-X1");
+    doc.transact("Decline", |tx| dismiss_suggestion(tx, first))
+        .unwrap();
+    assert!(suggest_terminals(doc.project()).is_empty());
+    doc.transact("Restore", |tx| restore_suggestion(tx, second))
+        .unwrap();
+    assert_eq!(suggest_terminals(doc.project()).len(), 1);
+}
