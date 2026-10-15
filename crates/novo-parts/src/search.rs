@@ -43,7 +43,7 @@ impl Matcher {
     /// Score of a catalog part, or `None` if some word does not match.
     /// `doc` is the part's pre-lowered text, built once when the part is
     /// added, so a search over 100,000 parts allocates nothing per part.
-    pub(crate) fn score_doc(&self, part: &CatalogPart, doc: &SearchDoc) -> Option<u32> {
+    pub(crate) fn score_doc(&self, doc: &SearchDoc) -> Option<u32> {
         let mut total = 0;
         for (word, code) in &self.words {
             let mut best = 0;
@@ -86,7 +86,6 @@ impl Matcher {
                 best = 5;
             }
             if best == 0 {
-                let _ = part;
                 return None;
             }
             total += best;

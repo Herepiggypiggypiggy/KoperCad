@@ -1,7 +1,7 @@
 # Parts library at scale: handoff
 
-Branch `claude/project-thread-kmmhnd` in kopercad. First PR: schema v2 + indexed catalog (see PROGRESS.md for the number).
-State: schema and scale done and tested (`crates/novo-parts/tests/schema_v2.rs`). Nothing half-done.
-Resume: `cargo test -p novo-parts`; perf test asserts 100 ms in release only (`--release`).
-Coordinator session for lane threads: session_01PgJyn3Yh6bBF3XNhYuLmpc.
-Traps: `CatalogPart` has many fields now; construct with `..Default::default()`. Catalog fields are private; use `upsert`. Unknown stays unknown: never default a price, lifecycle or terminal position.
+Branch `claude/project-thread-kmmhnd` in kopercad. #512 (schema v2, indexed catalog) merged. Second PR: Parts window detail shows the v2 fields, `Catalog::retain`, review nits.
+Resume: `cargo test -p novo-parts -p novo-app -p novo-interop`; perf test asserts 100 ms in release only.
+Next: ETIM model bundle with attribution, BMEcat features/prices into v2, EDZ members, streaming import with progress and preview, compact catalog file above 5,000 parts (or SQLite).
+Coordinator session for lane threads: session_01PgJyn3Yh6bBF3XNhYuLmpc. Protection thread (cse_01CQXymGH5kY1GfABR1JHePK) reads `novo_parts::eng` keys.
+Traps: construct `CatalogPart` with `..Default::default()`. Keep large CatalogPart values boxed inside enums (clippy large_enum_variant). Unknown stays unknown: never default a price, lifecycle, source or terminal position.
