@@ -196,10 +196,12 @@ pub(super) fn strip_table(
     egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
         egui::Grid::new("strip")
             .striped(true)
-            .num_columns(4)
+            .num_columns(6)
             .spacing([24.0, 4.0])
             .show(ui, |ui| {
-                for head in ["Terminal", "Internal", "External", "State"] {
+                for head in [
+                    "Terminal", "Kind", "Jumper", "Internal", "External", "State",
+                ] {
                     ui.small(head);
                 }
                 ui.end_row();
@@ -228,6 +230,9 @@ pub(super) fn strip_table(
                             ui.label(&row.name).on_hover_text("Spare: not drawn");
                         }
                     }
+                    ui.label(novo_terminals::kind_label(row.kind));
+                    ui.label(jumper_cell(row))
+                        .on_hover_text("Terminals with the same jumper are connected");
                     ui.label(join(row.internal_targets()));
                     ui.label(join(row.external_targets()));
                     ui.weak(row.state().label());
@@ -236,6 +241,12 @@ pub(super) fn strip_table(
             });
     });
     go
+}
+
+/// The Jumper cell of a strip row: `J1` for a connected terminal, empty
+/// otherwise.
+fn jumper_cell(row: &novo_terminals::Row) -> String {
+    row.jumper.map_or_else(String::new, |j| format!("J{j}"))
 }
 
 /// The world area a proposed terminal would take, around its spot.
@@ -378,5 +389,34 @@ impl NovoApp {
             }
             Err(e) => self.message(Level::Error, format!("{label}: {e}")),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use novo_core::{JoinLink, TerminalKind};
+
+    fn row(jumper: Option<u32>) -> novo_terminals::Row {
+        novo_terminals::Row {
+            name: "1".into(),
+            level: 0,
+            terminals: Vec::new(),
+            kind: TerminalKind::Feedthrough,
+            jumper,
+            part: None,
+            occurrences: Vec::new(),
+            build: novo_terminals::Build {
+                clamps: 1,
+                links: 0,
+                link: JoinLink::Connector,
+            },
+        }
+    }
+
+    #[test]
+    fn the_jumper_cell_names_the_group_or_stays_empty() {
+        assert_eq!(jumper_cell(&row(Some(2))), "J2");
+        assert_eq!(jumper_cell(&row(None)), "");
     }
 }
