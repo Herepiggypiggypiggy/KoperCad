@@ -1615,4 +1615,10 @@ fn double_clicking_a_tag_opens_a_rename_box() {
         d.app.canvas.schematic().unwrap().renaming(),
         "the rename box is open on the tag"
     );
+    assert_ne!(
+        ctx.memory(|m| m.focused()),
+        Some(egui::Id::new("inspector_tag")),
+        "the properties do not also open and take the cursor"
+    );
+    assert!(d.app.wb.queued.is_empty(), "no properties command queued");
 }
