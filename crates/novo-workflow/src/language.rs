@@ -157,6 +157,7 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["onderbrekingspunten nummeren"],
     ),
+    nl("terminal.reset_pe", &["herstel"], &["aarde", "klemmen"]),
     nl("terminal.connect", &["verbind"], &["klemmen", "brug"]),
     nl("terminal.disconnect", &["ontkoppel"], &["klemmen", "brug"]),
     nl(

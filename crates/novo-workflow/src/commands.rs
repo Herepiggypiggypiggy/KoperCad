@@ -410,6 +410,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Selection,
     ),
     cmd(
+        "terminal.reset_pe",
+        "Reset PE override",
+        "Edit",
+        &["protective earth", "automatic pe"],
+        Needs::Selection,
+    ),
+    cmd(
         "terminal.strip_up",
         "Terminal strip number up",
         "Edit",
