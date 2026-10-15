@@ -14,8 +14,8 @@ Resume: `cargo test -p novo-reports commissioning`. `novo_pdf::export_report_pdf
 Next: export command (menu, CLI), then the large-target tablet layout in novo-app.
 
 ## How to reach it (entry points)
-Engine is on PR #404 (READY). UI entries, not built yet, requested from the UI threads (2026-10-15 18:45 UTC):
-- Command "Export commissioning report..." (palette, File/Export menu): PDF, CSV, xlsx. Owner of menu slot: UI integration: reports and checks (session_01TaTTPuTqhk8bHd277oJRFR).
-- `kopercad-cli commissioning --pdf/--csv` (novo-cli).
-- "Touch layout" toggle (View menu, palette, chip in the commissioning view header). Owner of placement: Workspaces, menus and navigation (session_01WAQSEGkMbyreCPG18tsSPc).
-Blocked on: `to_report_input` from novo-commissioning (PR #431, written after #404 merges).
+- Palette / command field: "Export commissioning report" (`export.commissioning`), PDF next to the project file as `<project> commissioning.pdf` (our own earlier PDF is replaced, anything else stays).
+- Commissioning tab (outline), "Report" row: PDF and CSV buttons, big touch targets.
+- CLI: `kopercad-cli commissioning-report <project> [-o out.pdf|.csv|.xlsx]` (CSV on stdout without -o).
+- Still open: File/Export menu item (UI integration thread, PR #452 export_menu), xlsx button, and the "Touch layout" toggle for the tablet layout (Workspaces thread).
+Code: novo_reports::commissioning, novo_pdf::{export_report_pdf, report_bytes}, novo-app app/commissioning.rs, novo-cli lib.rs.

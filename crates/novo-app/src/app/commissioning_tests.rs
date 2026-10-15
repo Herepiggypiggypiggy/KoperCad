@@ -120,3 +120,40 @@ fn another_project_starts_without_the_data() {
     );
     assert_eq!(d.app.backend.commissioning_json(), None);
 }
+
+#[test]
+fn the_report_is_written_as_pdf_and_csv_and_the_command_is_known() {
+    let (dir, mut d) = example();
+    let ctx = d.ctx.clone();
+    assert!(novo_workflow::commands::get("export.commissioning").is_some());
+    d.app.run_command(&ctx, "view.commissioning", None);
+    d.frame();
+    let pdf = dir.path().join("Plant commissioning.pdf");
+    d.app
+        .write_commissioning_report(novo_pdf::ReportFileFormat::Pdf, &pdf)
+        .expect("the PDF is written");
+    assert!(std::fs::read(&pdf).unwrap().starts_with(b"%PDF"));
+    assert_eq!(d.app.wb.last_export.as_deref(), Some(pdf.as_path()));
+
+    let csv = dir.path().join("Plant commissioning.csv");
+    d.app
+        .write_commissioning_report(novo_pdf::ReportFileFormat::Csv(Default::default()), &csv)
+        .expect("the CSV is written");
+    let text = std::fs::read_to_string(&csv).unwrap();
+    assert!(text.contains("Progress per cabinet"), "{text}");
+    assert!(
+        text.contains("Pending"),
+        "an untouched example is all pending"
+    );
+}
+
+#[test]
+fn a_file_that_is_not_ours_is_never_replaced() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("Plant.novo");
+    let first = super::commissioning::report_path(Some(&file), None, "Plant", "csv").unwrap();
+    assert_eq!(first, dir.path().join("Plant commissioning.csv"));
+    std::fs::write(&first, "mine").unwrap();
+    let next = super::commissioning::report_path(Some(&file), None, "Plant", "csv").unwrap();
+    assert_eq!(next, dir.path().join("Plant commissioning 2.csv"));
+}

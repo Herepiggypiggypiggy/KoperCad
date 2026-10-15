@@ -1916,6 +1916,7 @@ dependencies = [
  "calamine",
  "clap",
  "novo-checks",
+ "novo-commissioning",
  "novo-core",
  "novo-editor",
  "novo-interop",

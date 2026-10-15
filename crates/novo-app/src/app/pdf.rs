@@ -100,7 +100,7 @@ fn is_ours(path: &Path) -> bool {
 
 /// `path` itself when it is free or ours to replace, else the first free or
 /// ours of `<stem> 2.pdf`, `<stem> 3.pdf`...
-fn replaceable_path(path: &Path) -> PathBuf {
+pub(super) fn replaceable_path(path: &Path) -> PathBuf {
     let stem = path
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
@@ -121,7 +121,7 @@ fn replaceable_path(path: &Path) -> PathBuf {
 
 /// Writes `bytes` to a temporary file beside `path`, then renames it over
 /// `path`. The temporary file is removed when anything fails.
-fn write_replacing(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+pub(super) fn write_replacing(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }

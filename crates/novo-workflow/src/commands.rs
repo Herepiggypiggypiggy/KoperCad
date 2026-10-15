@@ -792,6 +792,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.commissioning",
+            "Export commissioning report",
+            "Export",
+            &["punch list", "sign-off", "handover", "inbedrijfstelling"],
+            Needs::Project,
+        ),
+        &["export commissioning", "commissioning report"],
+    ),
+    verb(
+        cmd(
             "export.bom",
             "Export bill of materials",
             "Export",

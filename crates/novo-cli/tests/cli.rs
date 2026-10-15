@@ -478,3 +478,34 @@ fn revisions_list_and_diff() {
     // Read only: the file is unchanged.
     assert_eq!(std::fs::read(file).unwrap(), before);
 }
+
+#[test]
+fn commissioning_report_writes_pdf_csv_and_xlsx() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = project(dir.path(), false);
+    let file = file.to_str().unwrap();
+
+    // Nothing ticked yet: every check is pending, and the report says so.
+    let csv = novo(&["commissioning-report", file]);
+    assert_eq!(csv.code, exit::OK, "{}", csv.err);
+    assert!(csv.out.contains("Progress per cabinet"), "{}", csv.out);
+    assert!(csv.out.contains("Pending"));
+    assert!(csv.out.contains("Customer"));
+
+    for name in ["report.pdf", "report.xlsx", "report.csv"] {
+        let target = dir.path().join(name);
+        let run = novo(&["commissioning-report", file, "-o", target.to_str().unwrap()]);
+        assert_eq!(run.code, exit::OK, "{name}: {}", run.err);
+        assert!(std::fs::metadata(&target).unwrap().len() > 0, "{name}");
+    }
+    let pdf = std::fs::read(dir.path().join("report.pdf")).unwrap();
+    assert!(pdf.starts_with(b"%PDF"));
+
+    let bad = novo(&[
+        "commissioning-report",
+        file,
+        "-o",
+        dir.path().join("report.txt").to_str().unwrap(),
+    ]);
+    assert_eq!(bad.code, exit::USAGE);
+}

@@ -222,6 +222,7 @@ const APP_COMMANDS: &[&str] = &[
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "export.commissioning",
     "file.import_dxf_background",
     "view.background",
     "file.remove_background",
@@ -560,6 +561,7 @@ impl NovoApp {
             "export.pdf" => {
                 self.export_pdf();
             }
+            "export.commissioning" => self.export_commissioning_pdf(),
             "file.import_dxf_background" => self.import_dxf_background(),
             "view.background" => self.toggle_background(),
             "file.remove_background" => self.remove_background(),
