@@ -191,7 +191,10 @@ jobs:
         run: |
           stamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           mkdir -p dist out
-          cp target/release/novoelectric.exe dist/
+          cp target/release/kopercad.exe dist/
+          # Launchers installed before the rename start novoelectric.exe after
+          # unpacking this zip; keep a copy until they have been refreshed.
+          cp target/release/kopercad.exe dist/novoelectric.exe
           if [ -f target/release/examples/demo.exe ]; then cp target/release/examples/demo.exe dist/canvas-demo.exe; fi
           {
             echo "KoperCAD experimental build $stamp"
