@@ -16,12 +16,14 @@ use novo_checks::Problem;
 use novo_core::{AnyId, ChangeSet, DeviceId, Document, PageId, SymbolId};
 use novo_editor::EditorKey;
 use novo_editor::tool::WiringMode;
+use novo_plc::link::LinkFormat;
 use novo_symbols::Library;
 use novo_workflow::commands::Context;
 use novo_workflow::keymap::{FAVOURITE_COMMANDS, Focus, Keymap};
 use novo_workflow::palette::{Mode, Sources, Target};
 use novo_xref::{LiveXref, Navigator, Place, Reference};
 
+use super::workspace::Workspace;
 use super::{Level, NovoApp};
 use crate::actions::Action;
 use crate::command_field::CommandField;
@@ -54,6 +56,8 @@ pub(crate) struct Workbench {
     pub(super) queued: Vec<&'static str>,
     /// The `renumber io` preview waiting for Enter or Esc, per station.
     pub(super) renumber: Option<Vec<novo_plc::commands::RenumberPlan>>,
+    /// The PLC tag import preview (file name and plan), waiting for Enter or Esc.
+    pub(super) plc_import: Option<(String, novo_plc::link::ImportPlan)>,
     /// The Preferences window is open.
     pub(super) preferences: bool,
     /// The Parts window (browser and one-click import), while open.
@@ -110,6 +114,8 @@ pub(crate) struct Workbench {
     pub(super) issue_filter: [bool; 3],
     /// F8 position in the problem list.
     pub(super) problem_at: Option<usize>,
+    /// A problem being waived (its index in the list) and the reason typed.
+    pub(super) waiving: Option<(usize, String)>,
     /// The last PDF written, for tests and the toast.
     pub(super) last_export: Option<PathBuf>,
     /// Hash of each spreadsheet export this session wrote, by path: only a
@@ -149,6 +155,7 @@ impl Default for Workbench {
             place_hold: None,
             queued: Vec::new(),
             renumber: None,
+            plc_import: None,
             preferences: false,
             parts: None,
             macro_save: None,
@@ -176,6 +183,7 @@ impl Default for Workbench {
             pill_rect: egui::Rect::NOTHING,
             issue_filter: [true; 3],
             problem_at: None,
+            waiving: None,
             last_export: None,
             sheet_exports: Default::default(),
             live: Default::default(),
@@ -238,6 +246,7 @@ const APP_COMMANDS: &[&str] = &[
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "export.assembly",
     "export.sheets",
     "export.sheets_csv",
     "file.import_dxf_background",
@@ -248,6 +257,12 @@ const APP_COMMANDS: &[&str] = &[
     "plc.add_card",
     "plc.to_plc",
     "plc.renumber_io",
+    "plc.import_tags",
+    "export.plc_csv",
+    "export.plc_plcopen",
+    "export.plc_tia",
+    "export.plc_studio5000",
+    "export.plc_address_plan",
     "xref.link",
     "app.preferences",
     "parts.browser",
@@ -471,15 +486,21 @@ impl NovoApp {
         if id == "edit.duplicate" {
             self.tour_tick("duplicate");
         }
-        if self.cabinet_open && matches!(id, "edit.rotate" | "edit.delete") {
+        if self.workspace() == Workspace::Cabinet && matches!(id, "edit.rotate" | "edit.delete") {
             self.cabinet.keys.push(id.to_owned());
             return;
         }
         let pointer = ctx.pointer_latest_pos();
         match id {
             "view.cabinet_table" if self.is_open() => {
-                self.cabinet.table = !(self.cabinet_open && self.cabinet.table);
-                self.cabinet_open = true;
+                let showing = self.workspace() == Workspace::Cabinet && self.cabinet.table;
+                self.cabinet.table = !showing;
+                self.switch_workspace(Workspace::Cabinet);
+            }
+            "heat.toggle" | "heat.airflow" | "heat.contours" if self.is_open() => {
+                self.switch_workspace(Workspace::Cabinet);
+                self.cabinet.table = false;
+                self.cabinet.heat.command(id);
             }
             "tool.place" => match argument.filter(|a| !a.trim().is_empty()) {
                 Some(text) => self.wb.field.open_with(Mode::Place, text, pointer),
@@ -580,6 +601,9 @@ impl NovoApp {
             "export.pdf" => {
                 self.export_pdf();
             }
+            "export.assembly" => {
+                self.export_assembly();
+            }
             "export.sheets" => {
                 self.export_spreadsheet();
             }
@@ -598,6 +622,22 @@ impl NovoApp {
             "plc.add_card" => self.plc_add_card(argument),
             "plc.to_plc" => self.plc_to_plc(),
             "plc.renumber_io" => self.plc_renumber_io(),
+            "plc.import_tags" => self.plc_import_tags(),
+            "export.plc_csv" => {
+                self.export_plc(LinkFormat::Csv);
+            }
+            "export.plc_plcopen" => {
+                self.export_plc(LinkFormat::PlcOpen);
+            }
+            "export.plc_tia" => {
+                self.export_plc(LinkFormat::Tia);
+            }
+            "export.plc_studio5000" => {
+                self.export_plc(LinkFormat::Studio5000);
+            }
+            "export.plc_address_plan" => {
+                self.export_plc(LinkFormat::Hardware);
+            }
             "xref.link" => self.xref_link(argument),
             "app.preferences" => self.wb.preferences = true,
             "parts.browser" => self.open_parts_browser(),
