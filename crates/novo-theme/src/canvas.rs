@@ -21,7 +21,8 @@ pub struct CanvasPalette {
     pub grid_major: [u8; 4],
     /// Symbol outlines.
     pub symbol: [u8; 4],
-    /// Wires and connections, tinted blue so they read apart from symbols.
+    /// Wires and connections: a mid, saturated blue, clearly darker than the
+    /// near-white symbols so a wire never merges into a terminal outline.
     pub wire: [u8; 4],
     /// Device tags, terminal numbers and page text.
     pub text: [u8; 4],
@@ -55,6 +56,15 @@ pub struct CanvasPalette {
     /// screen, so it stays a quiet grey rather than copper, which belongs
     /// to the selection.
     pub snap_marker: [u8; 4],
+    /// Filled dot at a true junction (three or more conductors, DESIGN §2),
+    /// the same copper dot as the logo. Darker than the selection, which
+    /// also gets a halo and a thicker line, so a selected net is told apart.
+    pub junction: [u8; 4],
+    /// Open ring on a wire end that was terminated unconnected. The case
+    /// and its Warning are defined in DESIGN §4.
+    pub wire_end: [u8; 4],
+    /// The small flag beside an unconnected wire end.
+    pub unconnected_flag: [u8; 4],
 }
 
 /// Converts a palette colour for drawing with egui.
@@ -69,8 +79,8 @@ pub const CANVAS_DARK: CanvasPalette = CanvasPalette {
     sheet_frame: [0x46, 0x45, 0x48, 0xFF],
     grid_minor: [0x20, 0x20, 0x23, 0xFF],
     grid_major: [0x2C, 0x2C, 0x30, 0xFF],
-    symbol: [0xD9, 0xD7, 0xD2, 0xFF],
-    wire: [0x9F, 0xB4, 0xD0, 0xFF],
+    symbol: [0xEC, 0xEA, 0xE5, 0xFF],
+    wire: [0x6F, 0x9B, 0xDB, 0xFF],
     text: [0xC4, 0xC2, 0xBD, 0xFF],
     cross_reference: [0x8F, 0xA8, 0xC8, 0xFF],
     connection_point: [0x7F, 0xB0, 0x86, 0xFF],
@@ -86,6 +96,9 @@ pub const CANVAS_DARK: CanvasPalette = CanvasPalette {
     removed: [0xE0, 0x76, 0x6C, 0x80],
     mark_text: [0xC4, 0xC2, 0xBD, 0xFF],
     snap_marker: [0x85, 0x83, 0x80, 0xFF],
+    junction: [0xC8, 0x8A, 0x5E, 0xFF],
+    wire_end: [0xC8, 0x8A, 0x5E, 0xFF],
+    unconnected_flag: [0xD6, 0xA5, 0x5C, 0xFF],
 };
 
 #[cfg(test)]
@@ -117,10 +130,25 @@ mod tests {
             p.selection,
             p.error,
             p.warning,
+            p.junction,
+            p.wire_end,
+            p.unconnected_flag,
         ] {
             let ratio = crate::tokens::tests::contrast(to_color32(c), sheet);
             assert!(ratio >= 4.5, "{c:?}: {ratio}");
         }
+    }
+
+    #[test]
+    fn wires_are_told_apart_from_symbols_and_junctions_are_not_the_selection() {
+        let p = CANVAS_DARK;
+        let ratio = crate::tokens::tests::contrast(to_color32(p.symbol), to_color32(p.wire));
+        assert!(ratio >= 2.0, "symbol against wire: {ratio}");
+        let rgb = |c: [u8; 4]| [c[0], c[1], c[2]];
+        for c in [p.junction, p.wire_end] {
+            assert_ne!(rgb(c), rgb(p.selection));
+        }
+        assert_eq!(rgb(p.unconnected_flag), rgb(p.warning));
     }
 
     #[test]

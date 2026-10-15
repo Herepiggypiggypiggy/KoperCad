@@ -18,8 +18,9 @@ window from `docs/DESIGN.md` §3, drawn with these tokens and widgets.
    spacing, not colour.
 2. **One accent, copper, used rarely.** Copper (the conductor) marks focus,
    the active tool, the selection on the canvas, the primary button and the
-   logo. Nothing else is copper, so it always means "here". Copper is never
-   a mark: proposals, problems, overrides and changes use other colours, so
+   logo, plus the conductor joints and open wire ends on the canvas (the
+   same copper dot as the logo). Nothing else is copper, so it always means
+   "here". Copper is never a mark: proposals, problems, overrides and changes use other colours, so
    the selection is always unambiguous (DESIGN §5).
 3. **Status colours mean status.** Muted green, amber and red only for OK,
    warning and error, always with an icon or text, never colour alone.
@@ -112,6 +113,26 @@ references, muted green open connection points. Printing and PDF stay black on w
 The DESIGN.md §5 marks are in the palette too: proposals in the hover hue
 at 55% (dashed, where hover is solid), a grey override diamond, and change
 marks in the status colours at 50%. A test keeps every mark off copper.
+
+Links (`docs/design/canvas-feedback.png`): wires are a mid saturated blue
+`#6F9BDB` and symbols near white `#ECEAE5`, at least 2:1 apart, so a wire
+never merges into a terminal outline. A filled copper dot (`junction`,
+radius 3.5 px at 100% zoom) marks a true junction only: three or more
+conductors joining, as DESIGN §2 defines it (IEC 60617: no dot on a
+straight run, corner, crossing or a wire ending on a pin). Joints are not
+marks (marks are proposals, problems, overrides and changes), and the
+selection never relies on colour alone: it is also 2.5 px thicker with a
+halo, and junctions are fixed-size dots, so a selected net stays
+unmistakable without colour vision. Pins: a free pin is a hollow ring
+(open-connection green, r 3), a connected pin a small filled dot in the wire
+colour (r 2.5), so a pin end never looks like a junction. A wire ended
+unconnected (DESIGN §4, the `wire.open` Warning) gets an open copper ring
+(`wire_end`, r 4, 1.6 px line) and an amber flag (`unconnected_flag`, 16 px
+pole, 10 px pennant) with the tooltip "Unconnected". The radial place picker (five wedges: Terminal,
+Switch, Relay, Breaker, More...; inner radius 38, outer 110, hovered wedge
+copper outline, its items as pills on an outer ring) and the
+right-click menu (26 px rows, 236 px wide, shortcut right-aligned) are in
+the same mock-up; behaviour is Workflow's spec.
 
 The app maps it onto `novo_canvas::widget::CanvasStyle` (background, grid,
 selection, hover, rubber band, snap marker) and `novo_canvas::model::ModelStyle`
