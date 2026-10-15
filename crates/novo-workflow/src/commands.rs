@@ -839,6 +839,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.assembly",
+            "Export assembly checklist (PDF)",
+            "Export",
+            &["workshop", "build sheet", "mounting", "drill", "cabinet"],
+            Needs::Project,
+        ),
+        &["export assembly", "assembly checklist"],
+    ),
+    verb(
+        cmd(
             "export.sheets_csv",
             "Export for bulk edit (CSV files)",
             "Export",

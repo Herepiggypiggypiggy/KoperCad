@@ -174,10 +174,10 @@ impl NovoApp {
             button = button.shortcut_text(keys);
         }
         let response = ui.add_enabled(reason.is_none(), button);
-        let response = if matches!(info.id, "export.sheets" | "export.sheets_csv") {
-            response.on_hover_text(super::SHEETS_HINT)
-        } else {
-            response
+        let response = match info.id {
+            "export.sheets" | "export.sheets_csv" => response.on_hover_text(super::SHEETS_HINT),
+            "export.assembly" => response.on_hover_text(super::ASSEMBLY_HINT),
+            _ => response,
         };
         if let Some(reason) = reason {
             response.on_disabled_hover_text(reason);
