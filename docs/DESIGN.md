@@ -251,6 +251,33 @@ starts there connects and a drag anywhere else on the symbol moves it.
 the text and edits it. Alt+click selects the deepest item under the
 pointer. Clicking empty canvas clears the selection.
 
+**Double click and drag.** A double click means one thing per place, and
+the tool decides whether it is a wire gesture or an edit gesture, so it
+never changes meaning in the middle of work.
+
+| Double click on | Select tool (default) | Connect tool (W) |
+| --- | --- | --- |
+| Text (tag, wire number, label) | Rename in place, as F2 | Nothing; leave the tool first |
+| A device | Open its properties: the inspector shows it and the cursor lands in the first field (the tag) | Nothing |
+| A wire | Edit its number in place | Ends or starts a wire (open ends, below) |
+| A pin | Select the device | Starts a connection |
+| Empty canvas | Nothing (Home or double middle click fits the view) | Starts a free wire, or ends the one in progress |
+| A page tab | Rename the page | Rename the page |
+
+A double click in the Place mode places like a click and has no further
+meaning. The first click of a double click does what a click does, so a
+double click on text selects it first and a double click on a device
+selects it first; nothing is lost if the second click is slow.
+
+**Moving needs no key.** Press on a device and drag more than 4 px and it
+moves, selected or not: the press selects it (as a click would) and the
+drag moves the whole selection if the device was already part of it. Pins
+still win within their grab zone, so a drag from a pin connects (§4, pin
+or body). The move snaps to the grid, shows the wires stretching, follows
+the no-overlap rules, and Esc during the drag puts everything back. M
+keeps working as the keyboard move: it picks the selection up at the
+pointer and a click puts it down. Undo takes back one whole move.
+
 **Escape ladder.** Cancel the step in progress, then leave the tool, then
 clear the selection.
 
@@ -269,6 +296,7 @@ clear the selection.
 | 1 to 9 | Favourite symbols, only while the place query is empty |
 | W | Connect, for chains (one connection is a drag from a pin); Shift+W switches Corners / Lines, also in the middle of a wire |
 | R / X | Rotate / mirror while placing or on the selection |
+| M | Move the selection with the pointer (a drag does the same, no key needed) |
 | F2 | Edit the selected tag or text |
 | Enter | Accept the highlighted proposal |
 | Tab | Next proposal |
@@ -567,6 +595,16 @@ Acceptance:
     in the mode's way. A double click on a pin starts connected. A single
     click on empty canvas starts nothing. Dragging either cap onto a pin
     connects it.
+17. Select tool: double click on a tag renames it in place; on a device
+    opens its properties with the cursor in the tag; on a wire edits its
+    number; on a page tab renames the page. The same gestures in the Connect
+    tool do the wire meanings in the table and nothing else.
+18. Click a device, then drag it: it moves without M, with wires stretching
+    live and a refused position shown as in check 9; Esc mid-drag restores
+    it; undo takes back one move. Dragging an unselected device selects and
+    moves it in one gesture. M still picks up and drops.
+19. A slow second click of a double click never loses the selection or
+    starts a drag.
 
 Keys match the logical character, not the physical position, so `?`,
 Ctrl+Z and Ctrl+Y work on Dutch, German (QWERTZ) and US layouts alike.
@@ -591,7 +629,7 @@ between fields as usual.
   area when zoomed out. Shift+P hides them; counters remain.
 - Copper is never a mark (a proposal, problem, override or change), so
   selection is always unambiguous. Copper also draws junction dots
-  (filled, of a fixed size: 3 px radius, 3.5 px for a T), which are
+  (filled, one fixed size, 3.5 px radius), which are
   not marks; selection never relies on colour alone, because it is
   thicker and haloed, and a junction dot never changes size.
 - Proposal, problem and override differ in colour, line style and
