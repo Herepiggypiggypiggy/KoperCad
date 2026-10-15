@@ -26,7 +26,7 @@ use crate::art::LibraryArt;
 use crate::catalog::Match;
 use crate::edit::device_of;
 use crate::potential::{PotentialMenu, PotentialSpec};
-use crate::potential_menu::{self, FeedMenu, PeMenu};
+use crate::potential_menu::{self, FeedMenu, PeMenu, WireOverrideMenu};
 use crate::tool::{Editor, EditorKey, LabelSource};
 
 /// A label dragged on its own, from the press to the release.
@@ -102,6 +102,10 @@ struct ContextMenu {
     potentials: PotentialMenu,
     /// Selected potential feeds: the Set potential chips.
     feed: Option<FeedMenu>,
+    /// Selected wires: the override rows.
+    wire_override: Option<WireOverrideMenu>,
+    /// The name typed under "New…".
+    new_potential: String,
     /// Selected terminals: the PE rows.
     pe: Option<PeMenu>,
     device: Option<DeviceId>,
@@ -956,6 +960,8 @@ impl SchematicView {
                 anchor,
                 empty: selection.is_empty(),
                 potentials,
+                wire_override: potential_menu::wire_override_menu(document.project(), &selection),
+                new_potential: String::new(),
                 feed: potential_menu::feed_menu(document.project(), &selection),
                 pe: potential_menu::pe_menu(document.project(), &selection),
                 device,
@@ -1526,6 +1532,20 @@ impl SchematicView {
                                 }
                             }
                         });
+                        ui.menu_button("New…", |ui| {
+                            let field = ui.add(
+                                egui::TextEdit::singleline(&mut menu.new_potential)
+                                    .hint_text("Potential name")
+                                    .desired_width(140.0),
+                            );
+                            field.request_focus();
+                            if ui.input(|i| i.key_pressed(Key::Enter))
+                                && potential_menu::new_spec(&menu.new_potential).is_some()
+                            {
+                                chosen = Some(MenuChoice::New);
+                                ui.close();
+                            }
+                        });
                         if !feed.others.is_empty() {
                             ui.menu_button("Other…  ▸", |ui| {
                                 for (i, spec) in feed.others.iter().enumerate() {
@@ -1535,6 +1555,20 @@ impl SchematicView {
                                     }
                                 }
                             });
+                        }
+                        ui.separator();
+                    }
+                    if let Some(w) = &menu.wire_override {
+                        ui.menu_button("Override potential  ▸", |ui| {
+                            for (i, chip) in w.chips.iter().enumerate() {
+                                if ui.button(&chip.name).clicked() {
+                                    chosen = Some(MenuChoice::WireOverride(i));
+                                    ui.close();
+                                }
+                            }
+                        });
+                        if w.overridden && ui.button("Remove override").clicked() {
+                            chosen = Some(MenuChoice::WireOverride(usize::MAX));
                         }
                         ui.separator();
                     }
@@ -1613,11 +1647,15 @@ impl SchematicView {
                 (Some(MenuChoice::Chip(i)), Some(f)) => {
                     f.chips.get(i).map(|c| (f.feeds.clone(), c.clone()))
                 }
+                (Some(MenuChoice::New), Some(f)) => {
+                    potential_menu::new_spec(&menu.new_potential).map(|c| (f.feeds.clone(), c))
+                }
                 (Some(MenuChoice::Other(i)), Some(f)) => {
                     f.others.get(i).map(|c| (f.feeds.clone(), c.clone()))
                 }
                 _ => None,
             };
+        let wire_override = menu.wire_override.clone();
         let choice_suggestion = match chosen {
             Some(MenuChoice::Potential(i)) => suggestion(i),
             _ => None,
@@ -1635,7 +1673,16 @@ impl SchematicView {
                     self.editor.assign_potentials(document, &wires, &s);
                 }
             }
-            Some(MenuChoice::Chip(_) | MenuChoice::Other(_)) => {
+            Some(MenuChoice::WireOverride(i)) => {
+                if let Some(w) = &wire_override {
+                    let spec = w.chips.get(i);
+                    if spec.is_some() || i == usize::MAX {
+                        self.editor
+                            .override_wire_potential(document, &w.wires, spec);
+                    }
+                }
+            }
+            Some(MenuChoice::Chip(_) | MenuChoice::Other(_) | MenuChoice::New) => {
                 if let Some((feeds, spec)) = feed_pick {
                     self.editor.set_feed_potential(document, &feeds, &spec);
                 }
@@ -1691,6 +1738,10 @@ enum MenuChoice {
     Chip(usize),
     /// A project potential under Other…
     Other(usize),
+    /// The name typed under New…
+    New,
+    /// A chip of Override potential (`usize::MAX`: remove the override).
+    WireOverride(usize),
     Rename,
     RenameLabel,
     Key(EditorKey),

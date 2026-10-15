@@ -5,6 +5,7 @@
 
 use novo_core::{
     AnyId, PeOverride, PotentialKind, Project, SymbolId, SymbolRole, TerminalId, TerminalKind,
+    WireId,
 };
 
 use crate::potential::PotentialSpec;
@@ -21,6 +22,36 @@ pub fn chips() -> Vec<PotentialSpec> {
         PotentialSpec::new("+24 V", PotentialKind::DcPositive, Some(24.0)),
         PotentialSpec::new("0 V", PotentialKind::DcNegative, Some(0.0)),
     ]
+}
+
+/// The potential typed under "New…": a trimmed, non-empty name. The kind
+/// follows the usual names (L1.. line, N, PE/PEN, +24 V and 0 V as DC),
+/// anything else is a signal potential.
+pub fn new_spec(name: &str) -> Option<PotentialSpec> {
+    let name = name.trim();
+    if name.is_empty() {
+        return None;
+    }
+    let upper = name.to_uppercase();
+    let kind = if upper == "N" {
+        PotentialKind::Neutral
+    } else if upper == "PE" {
+        PotentialKind::ProtectiveEarth
+    } else if upper == "PEN" {
+        PotentialKind::Pen
+    } else if upper.len() == 2
+        && upper.starts_with('L')
+        && upper[1..].chars().all(|c| c.is_ascii_digit())
+    {
+        PotentialKind::Line
+    } else if upper.starts_with('+') {
+        PotentialKind::DcPositive
+    } else if upper.starts_with('0') {
+        PotentialKind::DcNegative
+    } else {
+        PotentialKind::Signal
+    };
+    Some(PotentialSpec::new(name, kind, None))
 }
 
 /// The "Set potential" part of the menu of selected feeds.
@@ -70,6 +101,39 @@ pub fn feed_menu(project: &Project, selection: &[AnyId]) -> Option<FeedMenu> {
     })
 }
 
+/// The override rows of selected wires: one conductor takes a potential of
+/// its own, whatever its net carries (DESIGN "one conductor can be
+/// overridden").
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct WireOverrideMenu {
+    pub wires: Vec<WireId>,
+    /// Some selected wire already has an override ("Remove override").
+    pub overridden: bool,
+    pub chips: Vec<PotentialSpec>,
+}
+
+/// The override menu for the wires in `selection`, or `None` without one.
+pub fn wire_override_menu(project: &Project, selection: &[AnyId]) -> Option<WireOverrideMenu> {
+    let wires: Vec<WireId> = selection
+        .iter()
+        .filter_map(|id| match id {
+            AnyId::Wire(w) => Some(*w),
+            _ => None,
+        })
+        .collect();
+    if wires.is_empty() {
+        return None;
+    }
+    let overridden = wires
+        .iter()
+        .any(|&w| project.wire(w).is_some_and(|w| w.potential.is_some()));
+    Some(WireOverrideMenu {
+        wires,
+        overridden,
+        chips: chips(),
+    })
+}
+
 /// The PE rows of selected terminals.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct PeMenu {
@@ -111,4 +175,21 @@ pub fn pe_menu(project: &Project, selection: &[AnyId]) -> Option<PeMenu> {
         all_pe,
         overridden,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_typed_name_gets_its_usual_kind() {
+        let kind = |n: &str| new_spec(n).map(|s| s.kind);
+        assert_eq!(kind(" L4 "), Some(PotentialKind::Line));
+        assert_eq!(kind("pe"), Some(PotentialKind::ProtectiveEarth));
+        assert_eq!(kind("+12 V"), Some(PotentialKind::DcPositive));
+        assert_eq!(kind("0V2"), Some(PotentialKind::DcNegative));
+        assert_eq!(kind("Pump run"), Some(PotentialKind::Signal));
+        assert_eq!(kind("   "), None);
+        assert_eq!(new_spec(" L4 ").unwrap().name, "L4");
+    }
 }
