@@ -117,7 +117,9 @@ pinned from its pin button or the "Pin outline" command. Three modes:
 **Canvas.** Two floating things:
 - The **tool dock** (bottom centre): Select, Place, Connect, Text, the hint
   for the current step ("Click the second pin · R rotate · Esc stop") and
-  the proposals count. There are no terminal, cable or potential tools. The
+  the proposals count. There are no terminal or potential tools, and no
+  cable chip: the cable tool (C) shows as the Select chip with the hint
+  "Cable: click along the wires that belong to it · Esc to stop". The
   "Compact dock" setting leaves only the hint and the count. It moves aside
   while a gesture is in progress near it (it never fades), and can be
   dragged to any edge.
