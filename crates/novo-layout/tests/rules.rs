@@ -445,3 +445,32 @@ fn a_project_plan_applies_in_one_undo_step_and_stays_clean() {
     p.apply(&applied.inverse()).unwrap();
     assert!(load(&p, cab).unwrap().placements.is_empty());
 }
+
+#[test]
+fn preview_skips_placed_devices_and_continues_below_them() {
+    use novo_layout::state::CabinetLayout;
+    let specs = vec![spec(1, "K", 45.0, 90.0), spec(2, "K", 45.0, 90.0)];
+    let mut layout = CabinetLayout::new(plate());
+    layout.placements.push(Placement {
+        id: 1,
+        x: 10.0,
+        y: 10.0,
+        rotated: false,
+        size: specs[0].size,
+        clearance: None,
+        rail: Some(4),
+    });
+    layout.rails.push(novo_layout::Rail {
+        id: 4,
+        x: 10.0,
+        y: 10.0,
+        length: 400.0,
+        vertical: false,
+    });
+    let plan = novo_layout::rules::preview(&layout, &specs, &RuleSet::standard());
+    // Only device 2 is proposed, below device 1, on a rail after rail 4.
+    assert_eq!(plan.placements.len(), 1);
+    let (_, y, rail) = at(&plan, 2);
+    assert!(y >= 10.0 + 90.0 + 40.0, "y {y}");
+    assert_eq!(rail, 5);
+}

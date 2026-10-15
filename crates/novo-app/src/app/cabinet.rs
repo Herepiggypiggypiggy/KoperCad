@@ -19,6 +19,7 @@ use novo_layout::state::CabinetLayout;
 
 use super::cabinet_door::DoorState;
 use super::cabinet_inspector;
+use super::cabinet_rules::RulesState;
 use super::{Level, NovoApp};
 use crate::theme;
 
@@ -48,6 +49,8 @@ pub(super) struct CabinetState {
     pub(super) keys: Vec<String>,
     /// The door and depth panel: its form and the model value it follows.
     door: DoorState,
+    /// The rules Place all follows, with their editor.
+    pub(super) rules: RulesState,
     /// The table face (Ctrl+T) is shown instead of the plate.
     pub(super) table: bool,
     /// The plate card of the inspector is shown with nothing selected.
@@ -80,6 +83,7 @@ impl CabinetState {
             ghost: None,
             keys: Vec::new(),
             door: DoorState::default(),
+            rules: RulesState::default(),
             table: false,
             plate_card: false,
         }
@@ -103,6 +107,10 @@ pub(super) enum Ask {
     Rotate(Vec<u64>),
     Remove(Vec<u64>),
     SetEnclosure(novo_layout::enclosure::Enclosure),
+    /// Use these place rules from now on and keep them in the user's file.
+    SetPlaceRules(novo_layout::rules::RuleSet),
+    /// Back to the standard place rules.
+    ResetPlaceRules,
 }
 
 /// The Cabinet drawing of a layout, with the layout's problems as box states.
@@ -509,7 +517,10 @@ impl NovoApp {
                         out.response.rect,
                         *left,
                         facts,
-                        &mut self.cabinet.door,
+                        cabinet_inspector::Editors {
+                            door: &mut self.cabinet.door,
+                            rules: &mut self.cabinet.rules,
+                        },
                         &shown,
                         &tag_of,
                     )
@@ -667,7 +678,16 @@ impl NovoApp {
             Ask::TogglePlateCard => self.cabinet.plate_card ^= true,
             Ask::PlaceAll => {
                 if let Some(layout) = layout {
-                    let plan = layout.preview(cands);
+                    // By the user's place rules, from the devices of this panel.
+                    let specs = structure
+                        .zip(self.backend.document())
+                        .map(|(s, doc)| novo_layout::rules::model::specs(doc.project(), s))
+                        .unwrap_or_default();
+                    let plan = if specs.is_empty() {
+                        layout.preview(cands)
+                    } else {
+                        novo_layout::rules::preview(&layout, &specs, &self.cabinet.rules.rules)
+                    };
                     if plan.placements.is_empty() {
                         self.message(Level::Info, "Nothing fits on the plate");
                     } else {
@@ -717,6 +737,8 @@ impl NovoApp {
                     set_enclosure(tx, structure, &enclosure)
                 });
             }
+            Ask::SetPlaceRules(rules) => self.set_place_rules(rules),
+            Ask::ResetPlaceRules => self.reset_place_rules(),
             Ask::SetPlateSize(s, plate) => {
                 self.cabinet_edit("Set plate size", move |tx| set_plate(tx, s, plate));
             }

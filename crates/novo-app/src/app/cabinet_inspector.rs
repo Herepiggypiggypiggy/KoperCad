@@ -11,6 +11,7 @@ use novo_theme::widgets;
 
 use super::cabinet::{Ask, problem_lines};
 use super::cabinet_door::DoorState;
+use super::cabinet_rules::RulesState;
 /// The inspector's width, the same as the schematic's.
 const WIDTH: f32 = super::inspector::INSPECTOR_WIDTH;
 const MARGIN: f32 = 12.0;
@@ -42,6 +43,12 @@ pub(super) enum Facts {
         used_percent: f64,
         placed: usize,
     },
+}
+
+/// The side panels of the Plate card that keep a form between frames.
+pub(super) struct Editors<'a> {
+    pub(super) door: &'a mut DoorState,
+    pub(super) rules: &'a mut RulesState,
 }
 
 /// Collects what the inspector shows for the layout as drawn (`shown`).
@@ -123,7 +130,7 @@ pub(super) fn overlay(
     canvas: egui::Rect,
     left: bool,
     facts: &Facts,
-    door: &mut DoorState,
+    editors: Editors<'_>,
     shown: &CabinetLayout,
     tag_of: &impl Fn(u64) -> String,
 ) -> Option<Ask> {
@@ -149,7 +156,7 @@ pub(super) fn overlay(
                     ui.set_width(WIDTH);
                     egui::ScrollArea::vertical()
                         .max_height(max_height)
-                        .show(ui, |ui| show(ui, facts, door, shown, tag_of))
+                        .show(ui, |ui| show(ui, facts, editors, shown, tag_of))
                         .inner
                 })
                 .inner
@@ -160,10 +167,11 @@ pub(super) fn overlay(
 fn show(
     ui: &mut egui::Ui,
     facts: &Facts,
-    door: &mut DoorState,
+    editors: Editors<'_>,
     shown: &CabinetLayout,
     tag_of: &impl Fn(u64) -> String,
 ) -> Option<Ask> {
+    let Editors { door, rules } = editors;
     let mut ask = None;
     match facts {
         Facts::Devices(devices) => {
@@ -248,6 +256,14 @@ fn show(
                 .default_open(true)
                 .show(ui, |ui| {
                     if let Some(a) = door.show(ui, shown, tag_of) {
+                        ask = Some(a);
+                    }
+                });
+            // Where Place all puts each kind of device.
+            egui::CollapsingHeader::new("Place rules")
+                .default_open(false)
+                .show(ui, |ui| {
+                    if let Some(a) = rules.show(ui) {
                         ask = Some(a);
                     }
                 });

@@ -44,6 +44,7 @@
 use std::fmt;
 
 use crate::plan::{Candidate, Plan, Proposed, ROW_GAP_MM};
+use crate::state::CabinetLayout;
 use crate::{DEFAULT_CLEARANCE_MM, Plate, Rail, Size};
 
 /// Where on the plate a kind of device goes.
@@ -609,6 +610,25 @@ pub fn place_all_rules(
         }
     }
     plan
+}
+
+/// What Place all proposes for the devices of `specs` that are not on the
+/// plate yet, by the rules. Like [`CabinetLayout::preview`], the plan sits
+/// below everything already placed, its rails continue the numbering, and it
+/// is only a proposal: apply it with `model::apply_plan`.
+pub fn preview(layout: &CabinetLayout, specs: &[Spec], rules: &RuleSet) -> Plan {
+    let unplaced: Vec<Spec> = specs
+        .iter()
+        .filter(|s| !layout.placements.iter().any(|p| p.id == s.id))
+        .cloned()
+        .collect();
+    let top = layout
+        .placements
+        .iter()
+        .map(|p| p.footprint().bottom() + ROW_GAP_MM)
+        .fold(0.0, f64::max);
+    let first_rail = layout.rails.iter().map(|r| r.id + 1).max().unwrap_or(1);
+    place_all_rules(&layout.plate, &unplaced, rules, first_rail, top)
 }
 
 pub mod model {

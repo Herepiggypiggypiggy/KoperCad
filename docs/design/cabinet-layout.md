@@ -105,8 +105,18 @@ rule * zone=middle rail=shared
   `apply_plan` and the single undo step are unchanged.
   `rules::model::specs` reads kind, part clearances and loss from a project.
 
-Not done here: the app uses the rules (a rules file and a small editor on the
-Cabinet canvas), rotating devices to fit, and vertical stacking of small
+In the app (`crates/novo-app/src/app/cabinet_rules.rs`): **Place all** on the
+Cabinet canvas follows the rules (`rules::preview`, which like the first-fit
+preview skips placed devices and sits below them). The rules live in
+`%APPDATA%\KoperCAD\place-rules.txt` next to `keymap.txt`; no file means the
+standard rules, and a file with a mistake is named once in a warning with its
+line number and the standard rules are used until it is fixed. The editor is
+the **Place rules** section of the Plate card (the Plate chip on the Cabinet
+canvas, below Inside and door): the rules as text, a line with a mistake is
+named under the box and cannot be applied, **Apply** uses and saves them,
+**Reset to standard** deletes the file.
+
+Not done here: rotating devices to fit, and vertical stacking of small
 devices.
 
 ## 5c. Inside and door (R2)

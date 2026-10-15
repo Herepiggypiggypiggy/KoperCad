@@ -373,3 +373,95 @@ fn the_enclosure_is_set_in_one_undo_step_and_drawn_with_its_checks() {
     d.frame();
     assert!(layout_of(&d, cab).unwrap().enclosure.is_none());
 }
+
+/// Y of each device's top edge on the plate, by tag text.
+fn plate_y(d: &Drive, cab: novo_core::StructureId, tag: &str) -> f64 {
+    let id = project(d)
+        .all::<novo_core::Device>()
+        .find(|dev| dev.tag.to_string() == tag)
+        .unwrap()
+        .id
+        .raw();
+    layout_of(d, cab)
+        .unwrap()
+        .placements
+        .iter()
+        .find(|p| p.id == id)
+        .unwrap_or_else(|| panic!("{tag} is placed"))
+        .y
+}
+
+fn place_all(d: &mut Drive, cab: novo_core::StructureId) {
+    let layout = novo_layout::model::load(project(d), cab);
+    let cands = novo_layout::model::candidates(project(d), cab);
+    d.app.cabinet_ask(Ask::PlaceAll, Some(cab), layout, &cands);
+    d.app.cabinet_ask(Ask::Accept, Some(cab), None, &[]);
+    d.frame();
+}
+
+fn open_cabinet(d: &mut Drive) -> novo_core::StructureId {
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    cab
+}
+
+#[test]
+fn place_all_follows_the_place_rules_and_they_are_kept_in_the_users_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let file = dir.path().join("place-rules.txt");
+    let cab = open_cabinet(&mut d);
+    d.app.cabinet.rules.path = Some(file.clone());
+
+    // The standard rules put protection (Q) above relays (K).
+    place_all(&mut d, cab);
+    assert!(plate_y(&d, cab, "=A1+CAB1-Q1") < plate_y(&d, cab, "=A1+CAB1-K1"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+
+    // The user turns it around; the file is written and the next Place all
+    // follows it.
+    let rules = novo_layout::rules::RuleSet::parse(
+        "rule K zone=top rail=shared\nrule Q zone=bottom rail=own\nrule * zone=middle rail=shared\n",
+    )
+    .unwrap();
+    d.app
+        .cabinet_ask(Ask::SetPlaceRules(rules.clone()), Some(cab), None, &[]);
+    assert_eq!(
+        novo_layout::rules::RuleSet::parse(&std::fs::read_to_string(&file).unwrap()).unwrap(),
+        rules
+    );
+    place_all(&mut d, cab);
+    assert!(plate_y(&d, cab, "=A1+CAB1-K1") < plate_y(&d, cab, "=A1+CAB1-Q1"));
+
+    // A fresh start reads the file back; Reset removes it.
+    let (state, warning) = super::cabinet_rules::RulesState::load(file.clone());
+    assert_eq!(warning, None);
+    assert_eq!(state.rules, rules);
+    d.app
+        .cabinet_ask(Ask::ResetPlaceRules, Some(cab), None, &[]);
+    assert!(!file.exists());
+    assert_eq!(
+        d.app.cabinet.rules.rules,
+        novo_layout::rules::RuleSet::standard()
+    );
+}
+
+#[test]
+fn a_place_rules_file_with_a_mistake_is_named_and_not_used() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("place-rules.txt");
+    std::fs::write(&file, "gap 10\nrule Q zone=sideways\n").unwrap();
+    let (state, warning) = super::cabinet_rules::RulesState::load(file);
+    let warning = warning.expect("a warning");
+    assert!(warning.contains("line 2"), "{warning}");
+    assert_eq!(state.rules, novo_layout::rules::RuleSet::standard());
+}
