@@ -2151,7 +2151,14 @@ name = "novo-view3d"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "eframe",
+ "egui",
+ "egui-wgpu",
+ "flate2",
  "glam",
+ "naga",
+ "pollster 1.0.1",
+ "wgpu",
 ]
 
 [[package]]
