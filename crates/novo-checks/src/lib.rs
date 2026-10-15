@@ -27,9 +27,9 @@
 //! | [`MissingPart`](ProblemKind::MissingPart) | info | A device or cable without a part |
 //!
 //! Not checked here:
-//! - Wires further from a protective device than its own connection points
-//!   (through terminals, contactors, cable cores): the undersized-wire check
-//!   only looks at the wires that end on the device.
+//! - Wires beyond the next device on a protective device's load side (past
+//!   a contactor, say): the undersized-wire check follows the load-side net
+//!   through terminals and cable cores, not through other devices' poles.
 //! - A wire on two cable cores: novo-core refuses it on every edit and load
 //!   (`ModelError::WireAlreadyOnCore`), so it cannot occur.
 //!
@@ -272,7 +272,7 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     checks::potential_conflicts(&cx, netlist, &mut problems);
     checks::zero_length_wires(&cx, &mut problems);
     checks::missing_parts(&cx, &mut problems);
-    checks::undersized_wires(&cx, &mut problems);
+    checks::undersized_wires(&cx, netlist, &mut problems);
     checks::wrong_terminal_blocks(&cx, &mut problems);
     checks::cable_cores(&cx, &mut problems);
     checks::terminal_use(&cx, netlist, &mut problems);

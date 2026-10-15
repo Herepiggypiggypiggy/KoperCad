@@ -511,12 +511,15 @@ fn protects_against_overload(symbol: &SymbolInstance) -> bool {
     .any(|kind| name.starts_with(kind))
 }
 
-/// Wires that end on an overcurrent protective device and are thinner than
+/// Wires an overcurrent protective device protects that are thinner than
 /// its rated current needs ([`Project::rated_current_a`]: the device's own
-/// `rated_current_a`, else its part's). A wire's cross-section is its own,
-/// else its cable core's; wires without one are not checked. One problem
-/// per device, marking the device's symbols and every such wire.
-pub(crate) fn undersized_wires(cx: &Context<'_>, out: &mut Vec<Problem>) {
+/// `rated_current_a`, else its part's): the wires ending on it, and on its
+/// load side (even-numbered connection points, IEC 60445: `2`, `4`, `6`)
+/// every wire of that net, through terminals and cable cores up to the next
+/// device. A wire's cross-section is its own, else its cable core's; wires
+/// without one are not checked. One problem per device, marking the
+/// device's symbols and every such wire.
+pub(crate) fn undersized_wires(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Problem>) {
     let project = cx.project;
     let section = |wire: &novo_core::Wire| {
         wire.cross_section_mm2.or_else(|| {
@@ -533,9 +536,17 @@ pub(crate) fn undersized_wires(cx: &Context<'_>, out: &mut Vec<Problem>) {
         let Some(rated) = project.rated_current_a(device).filter(|a| *a > 0.0) else {
             continue;
         };
-        for pin in 0..symbol.pins.len() {
-            let Ok(pin) = u16::try_from(pin) else { break };
-            for wire in project.wires_at(Endpoint::pin(symbol.id, pin)) {
+        for (index, pin) in symbol.pins.iter().enumerate() {
+            let Ok(index) = u16::try_from(index) else {
+                break;
+            };
+            let end = Endpoint::pin(symbol.id, index);
+            let mut protected: BTreeSet<novo_core::WireId> = project.wires_at(end).collect();
+            let load_side = pin.name.parse::<u32>().is_ok_and(|n| n % 2 == 0);
+            if load_side && let Some(net) = netlist.net_of(end) {
+                protected.extend(netlist.net(net).wires.iter().copied());
+            }
+            for wire in protected {
                 let Some(wire) = project.wire(wire) else {
                     continue;
                 };
