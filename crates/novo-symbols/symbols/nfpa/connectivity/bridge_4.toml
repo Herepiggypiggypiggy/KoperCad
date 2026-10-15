@@ -1,0 +1,36 @@
+format = 1
+id = "nfpa/connectivity/bridge_4"
+name = "Terminal bridge, 4 positions"
+description = "Jumper bridge linking 4 adjacent terminals."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "connectivity"
+function = "connectivity.bridge"
+keywords = ["bridge", "jumper", "link", "terminal bridge", "4", "nfpa", "ansi"]
+aliases = ["br4"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [8, 0], dir = "up" },
+  { id = "3", at = [16, 0], dir = "up" },
+  { id = "4", at = [24, 0], dir = "up" },
+]
+
+anchors = [
+  { role = "tag", at = [-3, 3], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 3] },
+  { kind = "line", from = [8, 0], to = [8, 3] },
+  { kind = "line", from = [16, 0], to = [16, 3] },
+  { kind = "line", from = [24, 0], to = [24, 3] },
+  { kind = "line", from = [0, 3], to = [24, 3] },
+  { kind = "circle", center = [0, 3], r = 0.6, fill = true },
+  { kind = "circle", center = [8, 3], r = 0.6, fill = true },
+  { kind = "circle", center = [16, 3], r = 0.6, fill = true },
+  { kind = "circle", center = [24, 3], r = 0.6, fill = true },
+]
+
+[behavior]
+kind = "conductor"
+poles = [["1", "2", "3", "4"]]

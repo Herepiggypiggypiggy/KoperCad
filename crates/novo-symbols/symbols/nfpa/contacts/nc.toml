@@ -1,0 +1,32 @@
+format = 1
+id = "nfpa/contacts/nc"
+name = "Break contact (NC)"
+description = "Normally closed contact, used for auxiliary contacts of relays and contactors."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "contacts"
+function = "contact.nc"
+keywords = ["nc", "break", "normally closed", "auxiliary", "nfpa", "ansi"]
+aliases = ["nc"]
+favorite = true
+
+connections = [
+  { id = "21", at = [0, 0], dir = "up" },
+  { id = "22", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 6] },
+  { kind = "line", from = [0, 16], to = [0, 10] },
+  { kind = "line", from = [-3, 6], to = [3, 6] },
+  { kind = "line", from = [-3, 10], to = [3, 10] },
+  { kind = "line", from = [-3, 12], to = [3, 4] },
+]
+
+[behavior]
+kind = "contact"
+normally = "closed"
+poles = [["21", "22"]]

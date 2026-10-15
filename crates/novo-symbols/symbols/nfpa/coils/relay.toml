@@ -1,0 +1,30 @@
+format = 1
+id = "nfpa/coils/relay"
+name = "Relay coil"
+description = "Operating coil of a control relay; its contacts carry the same device tag."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "coils"
+function = "coil.relay"
+keywords = ["coil", "relay", "auxiliary", "a1", "a2", "nfpa", "ansi"]
+aliases = ["coil", "k"]
+favorite = true
+
+connections = [
+  { id = "A1", at = [0, 0], dir = "up" },
+  { id = "A2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "circle", center = [0, 8], r = 4 },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+  { kind = "text", at = [0, 8], text = "CR" },
+]
+
+[behavior]
+kind = "coil"
+poles = [["A1", "A2"]]

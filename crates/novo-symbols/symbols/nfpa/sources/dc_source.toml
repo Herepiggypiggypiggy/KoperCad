@@ -1,0 +1,29 @@
+format = 1
+id = "nfpa/sources/dc_source"
+name = "DC voltage source"
+description = "DC voltage source, such as a 24 V DC supply rail."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "sources"
+function = "source.dc"
+keywords = ["dc source", "supply", "voltage source", "24v", "nfpa", "ansi"]
+
+connections = [
+  { id = "+", at = [0, 0], dir = "up" },
+  { id = "-", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-5.5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "circle", center = [0, 8], r = 4 },
+  { kind = "text", at = [0, 8], text = "=", size = 4 },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+]
+
+[behavior]
+kind = "source"
+type = "dc"
+poles = [["+", "-"]]

@@ -89,7 +89,8 @@ impl NovoApp {
                     Drawer::Terminals => match strip {
                         Some(strip) => {
                             let view = novo_terminals::strip_view(project, strip);
-                            if let Some(o) = strip_table(ui, &view, &selected) {
+                            let screen = novo_terminals::screen(project, strip);
+                            if let Some(o) = strip_table(ui, &view, &screen, &selected) {
                                 actions.push(DrawerAction::Go(Place {
                                     page: o.page,
                                     symbol: Some(o.symbol),

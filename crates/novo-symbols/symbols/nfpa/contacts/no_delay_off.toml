@@ -1,0 +1,32 @@
+format = 1
+id = "nfpa/contacts/no_delay_off"
+name = "Make contact, delayed on opening"
+description = "Timer contact that opens after the off-delay of its timer relay."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "contacts"
+function = "contact.no.delay_off"
+keywords = ["timer", "delay", "no", "delay off", "nfpa", "ansi"]
+
+connections = [
+  { id = "17", at = [0, 0], dir = "up" },
+  { id = "18", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-13.5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 6] },
+  { kind = "line", from = [0, 16], to = [0, 10] },
+  { kind = "line", from = [-3, 6], to = [3, 6] },
+  { kind = "line", from = [-3, 10], to = [3, 10] },
+  { kind = "line", from = [-1, 8], to = [-8, 8] },
+  { kind = "arc", center = [-10, 8], r = 2, start = -90, end = 90 },
+]
+
+[behavior]
+kind = "contact"
+normally = "open"
+delay = "off"
+poles = [["17", "18"]]

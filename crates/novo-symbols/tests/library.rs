@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use novo_symbols::{Library, SvgOptions, Symbol, to_svg, validate};
+use novo_symbols::{Library, Pack, SvgOptions, Symbol, to_svg, validate};
 
 fn builtin() -> Library {
     Library::builtin().unwrap_or_else(|e| panic!("built-in library failed to load: {e}"))
@@ -19,7 +19,7 @@ fn builtin_library_loads_and_validates() {
 #[test]
 fn directory_loader_matches_builtin() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("symbols");
-    let from_dir = Library::load_dir(&dir).unwrap();
+    let from_dir = Library::load_dir_pack(&dir, Pack::Iec).unwrap();
     let builtin = builtin();
     assert_eq!(from_dir.len(), builtin.len());
     for symbol in builtin.iter() {

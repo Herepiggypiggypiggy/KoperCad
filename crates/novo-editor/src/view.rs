@@ -485,6 +485,23 @@ impl SchematicView {
             .collect()
     }
 
+    /// Width and height in mm of the box around the selection.
+    pub fn selection_size(&self) -> Option<(f64, f64)> {
+        let scene = self.scene.as_ref()?;
+        let mut bounds = novo_canvas::Aabb::EMPTY;
+        for id in self.selection() {
+            let b = scene.scene().item_bounds(item_id(id))?;
+            bounds = bounds.union(&b);
+        }
+        let size = bounds.max - bounds.min;
+        (size.x >= 0.0 && size.y >= 0.0).then(|| (f64::from(size.x), f64::from(size.y)))
+    }
+
+    /// Selects exactly `ids` (the copy after a duplicate).
+    pub fn select_ids(&mut self, ids: &[AnyId]) {
+        self.select(ids);
+    }
+
     fn select(&mut self, ids: &[AnyId]) {
         self.canvas.selection.clear();
         self.canvas
@@ -1294,6 +1311,30 @@ impl SchematicView {
         {
             self.editor
                 .key(document, EditorKey::MoveWithWires, &selection);
+        }
+        // Shift+arrows nudge the selection one grid step (DESIGN.md §4: plain
+        // arrows stay with the terminal strip keys). The wires follow the
+        // "Moving a symbol" preference; Ctrl+Shift+arrow does the other.
+        if !selection.is_empty() && matches!(self.editor.tool(), crate::tool::Tool::Select) {
+            let step = self.editor.grid;
+            for (key, delta) in [
+                (Key::ArrowLeft, Point::new(-step, 0.0)),
+                (Key::ArrowRight, Point::new(step, 0.0)),
+                (Key::ArrowUp, Point::new(0.0, -step)),
+                (Key::ArrowDown, Point::new(0.0, step)),
+            ] {
+                let (plain, flipped) = ctx.input_mut(|i| {
+                    (
+                        i.consume_key(egui::Modifiers::SHIFT, key),
+                        i.consume_key(egui::Modifiers::SHIFT | egui::Modifiers::COMMAND, key),
+                    )
+                });
+                if plain || flipped {
+                    let carry = flipped != self.move_carries;
+                    self.editor
+                        .nudge_selection(document, &selection, delta, carry);
+                }
+            }
         }
         for (key, action) in [
             (Key::W, EditorKey::Wire),

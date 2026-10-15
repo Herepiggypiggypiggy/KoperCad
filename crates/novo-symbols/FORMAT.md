@@ -150,6 +150,25 @@ stored per user (under the user's config directory) and layered over them;
 the editor never writes back into the library files, which may sit in a
 read-only install folder.
 
+## Packs
+
+Symbols are grouped into packs, one drawing standard per directory under
+`symbols/`: `iec` (IEC 60617) and `nfpa` (NFPA 79 / ANSI Y32.2). The first
+segment of an id is the pack. `Library::builtin()` is the IEC pack;
+`Library::builtin_pack(Pack::Nfpa)` is the NFPA pack, and
+`Library::load_dir_pack(dir, pack)` reads one pack from a folder laid out
+like `symbols/`. Aliases and favourites are unique per pack, so `no` or
+`mcb3` work in both and a library holds one pack at a time.
+
+The same path below the pack root is the same device
+(`Pack::counterpart("iec/contacts/no", Pack::Nfpa)` is `nfpa/contacts/no`).
+A symbol and its counterpart have the same `function`, `behavior` and
+connection ids, order and roles, so switching a project's standard is a key
+rewrite. Only artwork (and the positions it needs) differ. A pack may lack a
+device the standard does not have. `tests/packs.rs` checks all of this.
+`handoff/ws25/generator/gen_nfpa.py` writes the NFPA files from the IEC ones.
+Design: `docs/design/symbol-packs.md`.
+
 ## Terminals
 
 Every terminal clamp is drawn the same way: a circle of radius 1.2 mm on the
