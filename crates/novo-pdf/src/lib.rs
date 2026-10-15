@@ -29,6 +29,7 @@
 
 mod draw;
 mod font;
+mod inter;
 
 use novo_canvas::model::{
     ModelStyle, PageScene, PlaceholderArt, SheetContent, SheetLine, SheetText, SymbolArt,
@@ -294,9 +295,12 @@ pub fn export_pdf_with_reports(
     info.producer(TextStr("NovoElectric"));
     info.finish();
 
+    // Embedded only when some line needs it (see `inter`).
+    let mut inter = inter::Inter::new();
+    let mut inter_id: Option<Ref> = None;
     for (i, o) in out.iter().enumerate() {
         let (w, h) = o.size_mm;
-        let mut writer = draw::PageWriter::new(h);
+        let mut writer = draw::PageWriter::new(h, &mut inter);
         let mut annotations = Vec::new();
         if let Some(sheet) = pages.get(i) {
             let page = sheet.page;
@@ -373,15 +377,25 @@ pub fn export_pdf_with_reports(
         page.parent(tree_id)
             .media_box(Rect::new(0.0, 0.0, w * PT_PER_MM, h * PT_PER_MM))
             .contents(o.content);
-        page.resources()
-            .fonts()
-            .pair(Name(font::FONT_NAME), font_id);
+        let mut resources = page.resources();
+        let mut fonts = resources.fonts();
+        fonts.pair(Name(font::FONT_NAME), font_id);
+        if writer.uses_inter() {
+            let id = *inter_id.get_or_insert_with(&mut alloc);
+            fonts.pair(Name(inter::FONT_NAME), id);
+        }
+        fonts.finish();
+        resources.finish();
         if !annotations.is_empty() {
             page.annotations(annotations);
         }
         page.finish();
         let data = writer.finish();
         pdf.stream(o.content, &data);
+    }
+
+    if let Some(id) = inter_id {
+        inter.write(&mut pdf, id, &mut alloc);
     }
 
     if options.bookmarks && !pages.is_empty() {

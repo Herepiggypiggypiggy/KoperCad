@@ -5,9 +5,8 @@
 //! of 1/1000 of the font size), which lets labels be anchored exactly
 //! (right-aligned and centred text lines up in print).
 //!
-//! TODO(WS-09): embed a subset of Inter (novo-theme) as a CID font so
-//! characters outside WinAnsi (Ω, Greek, CJK) print; until then they are
-//! written as `?`.
+//! Lines with characters outside WinAnsi (Ω, Greek, CJK) are set in an
+//! embedded Inter subset instead (see `inter`).
 
 /// Name of the font resource in every page's resource dictionary.
 pub const FONT_NAME: &[u8] = b"F1";
@@ -67,6 +66,11 @@ pub fn encode_char(c: char) -> u8 {
     }
 }
 
+/// Whether every character of `text` has a WinAnsi code.
+pub fn is_winansi(text: &str) -> bool {
+    text.chars().all(|c| c == '?' || encode_char(c) != b'?')
+}
+
 /// A string in WinAnsi bytes.
 pub fn encode(text: &str) -> Vec<u8> {
     text.chars().map(encode_char).collect()
@@ -113,5 +117,7 @@ mod tests {
         assert_eq!(encode("2 Ω"), b"2 ?".to_vec());
         assert_eq!(encode("°±µ"), vec![0xB0, 0xB1, 0xB5]);
         assert_eq!(encode("–€"), vec![0x96, 0x80]);
+        assert!(is_winansi("-K1? 2,5 mm² ±"));
+        assert!(!is_winansi("2 kΩ"));
     }
 }

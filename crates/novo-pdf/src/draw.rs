@@ -5,6 +5,7 @@
 //! every coordinate below is written in the drawing's own millimetres.
 
 use crate::font;
+use crate::inter::{self, Inter};
 use novo_canvas::{Color, Label, Primitive, Shape, Stroke, Vec2, WidthUnit};
 use pdf_writer::types::{LineCapStyle, LineJoinStyle};
 use pdf_writer::{Content, Name, Str};
@@ -17,15 +18,18 @@ pub const PT_PER_MM: f32 = 72.0 / 25.4;
 const MM_PER_PT: f32 = 25.4 / 72.0;
 
 /// Writes one page.
-pub struct PageWriter {
+pub struct PageWriter<'a> {
     content: Content,
     stroke: Option<(Color, f32)>,
     fill: Option<Color>,
+    /// The export's Inter subset, for lines outside WinAnsi.
+    inter: &'a mut Inter,
+    uses_inter: bool,
 }
 
-impl PageWriter {
+impl<'a> PageWriter<'a> {
     /// A new page of `height_mm`, with the millimetre transform set.
-    pub fn new(height_mm: f32) -> Self {
+    pub fn new(height_mm: f32, inter: &'a mut Inter) -> Self {
         let mut content = Content::new();
         content.transform([PT_PER_MM, 0.0, 0.0, -PT_PER_MM, 0.0, height_mm * PT_PER_MM]);
         // Wiring diagrams read best with round ends and corners, like pen
@@ -36,7 +40,15 @@ impl PageWriter {
             content,
             stroke: None,
             fill: None,
+            inter,
+            uses_inter: false,
         }
+    }
+
+    /// Whether the page set any text in Inter (its resources then need the
+    /// font).
+    pub fn uses_inter(&self) -> bool {
+        self.uses_inter
     }
 
     pub fn finish(self) -> Vec<u8> {
@@ -137,14 +149,30 @@ impl PageWriter {
     }
 
     /// Draws a label in Helvetica, anchored and rotated like the canvas
-    /// draws it. Lines are aligned within the text box by the anchor.
+    /// draws it. Lines are aligned within the text box by the anchor. A
+    /// line Helvetica cannot carry is set in Inter (see [`inter`]).
     pub fn label(&mut self, label: &Label) {
         let size = label.height;
         if size <= 0.0 || label.color.0[3] == 0 || label.text.trim().is_empty() {
             return;
         }
-        let lines: Vec<Vec<u8>> = label.text.lines().map(font::encode).collect();
-        let widths: Vec<f32> = lines.iter().map(|l| font::text_width(l) * size).collect();
+        // (font, encoded line, width in mm)
+        let lines: Vec<(&[u8], Vec<u8>, f32)> = label
+            .text
+            .lines()
+            .map(|line| {
+                if font::is_winansi(line) {
+                    let bytes = font::encode(line);
+                    let w = font::text_width(&bytes) * size;
+                    (font::FONT_NAME, bytes, w)
+                } else {
+                    let (bytes, w) = self.inter.encode(line);
+                    self.uses_inter = true;
+                    (inter::FONT_NAME, bytes, w * size)
+                }
+            })
+            .collect();
+        let widths: Vec<f32> = lines.iter().map(|l| l.2).collect();
         let box_w = widths.iter().copied().fold(0.0, f32::max);
         let box_h = lines.len() as f32 * size;
         let frac = label.anchor.fractions();
@@ -155,10 +183,14 @@ impl PageWriter {
         self.set_fill(label.color);
         let c = &mut self.content;
         c.begin_text();
-        c.set_font(Name(font::FONT_NAME), 1.0);
-        for (i, (line, w)) in lines.iter().zip(&widths).enumerate() {
+        let mut current: Option<&[u8]> = None;
+        for (i, ((name, line, _), w)) in lines.iter().zip(&widths).enumerate() {
             if line.is_empty() {
                 continue;
+            }
+            if current != Some(*name) {
+                c.set_font(Name(name), 1.0);
+                current = Some(*name);
             }
             let local =
                 origin + Vec2::new(frac.x * (box_w - w), (i as f32 + font::BASELINE) * size);
@@ -210,7 +242,8 @@ mod tests {
 
     #[test]
     fn page_starts_with_the_millimetre_transform() {
-        let s = text(PageWriter::new(297.0));
+        let mut inter = Inter::new();
+        let s = text(PageWriter::new(297.0, &mut inter));
         let first = s.lines().next().unwrap();
         assert!(first.ends_with(" cm"), "{first}");
         assert!(first.starts_with("2.83"), "{first}");
@@ -218,7 +251,8 @@ mod tests {
 
     #[test]
     fn circles_are_four_beziers_and_filled_when_asked() {
-        let mut w = PageWriter::new(100.0);
+        let mut inter = Inter::new();
+        let mut w = PageWriter::new(100.0, &mut inter);
         w.primitive(&Primitive::filled(
             Shape::circle(Vec2::new(10.0, 10.0), 1.0),
             Color::BLACK,
@@ -230,7 +264,8 @@ mod tests {
 
     #[test]
     fn fills_on_open_shapes_are_ignored() {
-        let mut w = PageWriter::new(100.0);
+        let mut inter = Inter::new();
+        let mut w = PageWriter::new(100.0, &mut inter);
         w.primitive(
             &Primitive::stroked(Shape::line(Vec2::ZERO, Vec2::ONE), Stroke::default())
                 .with_fill(Color::BLACK),
@@ -241,7 +276,8 @@ mod tests {
 
     #[test]
     fn label_text_is_written_and_anchored() {
-        let mut w = PageWriter::new(100.0);
+        let mut inter = Inter::new();
+        let mut w = PageWriter::new(100.0, &mut inter);
         w.label(&Label::new(Vec2::new(50.0, 20.0), "-K1", 2.5).anchored(Anchor::BottomRight));
         let s = text(w);
         assert!(s.contains("(-K1) Tj"), "{s}");
@@ -253,8 +289,22 @@ mod tests {
     }
 
     #[test]
+    fn a_line_outside_winansi_switches_to_inter_and_back() {
+        let mut inter = Inter::new();
+        let mut w = PageWriter::new(100.0, &mut inter);
+        w.label(&Label::new(Vec2::ZERO, "-R1\n10 kΩ\n5 W", 2.5));
+        assert!(w.uses_inter());
+        let s = text(w);
+        let fonts: Vec<&str> = s.lines().filter(|l| l.ends_with(" Tf")).collect();
+        assert_eq!(fonts, ["/F1 1 Tf", "/F2 1 Tf", "/F1 1 Tf"], "{s}");
+        assert!(s.contains("(-R1) Tj"), "{s}");
+        assert!(s.contains("(5 W) Tj"), "{s}");
+    }
+
+    #[test]
     fn arcs_split_into_quarter_turns() {
-        let mut w = PageWriter::new(100.0);
+        let mut inter = Inter::new();
+        let mut w = PageWriter::new(100.0, &mut inter);
         w.primitive(&Primitive::stroked(
             Shape::Arc {
                 center: Vec2::ZERO,
