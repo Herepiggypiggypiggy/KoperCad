@@ -22,6 +22,7 @@ use novo_workflow::keymap::{FAVOURITE_COMMANDS, Focus, Keymap};
 use novo_workflow::palette::{Mode, Sources, Target};
 use novo_xref::{LiveXref, Navigator, Place, Reference};
 
+use super::workspace::Workspace;
 use super::{Level, NovoApp};
 use crate::actions::Action;
 use crate::command_field::CommandField;
@@ -435,15 +436,16 @@ impl NovoApp {
             }
             return;
         }
-        if self.cabinet_open && matches!(id, "edit.rotate" | "edit.delete") {
+        if self.workspace() == Workspace::Cabinet && matches!(id, "edit.rotate" | "edit.delete") {
             self.cabinet.keys.push(id.to_owned());
             return;
         }
         let pointer = ctx.pointer_latest_pos();
         match id {
             "view.cabinet_table" if self.is_open() => {
-                self.cabinet.table = !(self.cabinet_open && self.cabinet.table);
-                self.cabinet_open = true;
+                let showing = self.workspace() == Workspace::Cabinet && self.cabinet.table;
+                self.cabinet.table = !showing;
+                self.switch_workspace(Workspace::Cabinet);
             }
             "tool.place" => match argument.filter(|a| !a.trim().is_empty()) {
                 Some(text) => self.wb.field.open_with(Mode::Place, text, pointer),

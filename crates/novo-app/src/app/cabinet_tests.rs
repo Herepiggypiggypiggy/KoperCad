@@ -174,10 +174,10 @@ fn the_table_face_toggles_and_problems_are_in_words() {
     d.app.run(&ctx, Action::NewProject);
     d.frame();
     d.app.run_command(&ctx, "view.cabinet_table", None);
-    assert!(d.app.cabinet_open && d.app.cabinet.table);
+    assert!(d.app.workspace() == Workspace::Cabinet && d.app.cabinet.table);
     d.frame();
     d.app.run_command(&ctx, "view.cabinet_table", None);
-    assert!(d.app.cabinet_open && !d.app.cabinet.table);
+    assert!(d.app.workspace() == Workspace::Cabinet && !d.app.cabinet.table);
     d.frame();
 
     // Rotate and delete from the palette go to the Cabinet, not the page.
