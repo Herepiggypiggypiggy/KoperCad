@@ -58,10 +58,12 @@ impl NovoApp {
     /// Keeps the editor on the person's auto-connection mode.
     pub(super) fn sync_connect_mode(&mut self) {
         let mode = self.settings.connect_mode();
-        if let Some(view) = self.canvas.schematic()
-            && view.editor.connect_mode() != mode
-        {
-            view.editor.set_connect_mode(mode);
+        let carries = self.settings.move_carries;
+        if let Some(view) = self.canvas.schematic() {
+            if view.editor.connect_mode() != mode {
+                view.editor.set_connect_mode(mode);
+            }
+            view.move_carries = carries;
         }
     }
 
