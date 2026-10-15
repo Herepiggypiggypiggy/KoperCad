@@ -2045,6 +2045,9 @@ dependencies = [
 [[package]]
 name = "novo-routing"
 version = "0.1.0"
+dependencies = [
+ "novo-core",
+]
 
 [[package]]
 name = "novo-sim"
