@@ -754,7 +754,9 @@ in place mode. The wheel has two rings and no hidden level.
   The first sector's items show at once; moving onto a different sector
   switches the outer ring only after the pointer has rested there for
   180 ms, so a sweep across the sectors toward an item never flickers or
-  swaps the items under the pointer.
+  swaps the items under the pointer. Clicking a wedge keeps its items up
+  until an item is clicked, and only a click on an outer-ring item places;
+  a click on a wedge alone never does.
 - Pick by clicking, by press-drag-release (a flick), or by keys 1 to 5 then
   1 to 8 (1 to 5 on the inner ring); Backspace goes back a ring and Esc
   closes. Picking an item attaches the symbol to the pointer exactly as the

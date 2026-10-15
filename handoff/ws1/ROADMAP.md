@@ -40,3 +40,7 @@ From the design review (5523325325):
 ## Open questions
 - Resolved: WS-06's `SchematicView::show` now returns the frame's merged ChangeSet (#38, 81c0caa).
 - Panels and search (named panels, tag search, Go to all references) were built locally and then shelved, because DESIGN.md decides the layout. See HANDOFF.
+
+## Next (2026-10-15)
+- Owner hands-on check of the place wheel: docs/HANDS-ON-WHEEL.md.
+- Ctrl+, for Preferences, `resolve_while_wiring` in the shell, `link` pick-flow preview, `xref.link` toast wording, Enter-path test for New... potential. Details in HANDOFF "Current state".

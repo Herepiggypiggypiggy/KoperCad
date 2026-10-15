@@ -112,5 +112,9 @@ claude/data-model-amzaxu origin/main`, then new PR for new work.
   `place all` = one `Command::Batch` of `PlaceDevice`. Deleting a device or enclosure deletes
   its placements; deleting a rail leaves the devices on the plate, off the rail. A plate with
   rails or devices on it cannot be removed. Clearances live in `novo-layout`, not the model.
+  Ducts are `Rail`s of kind `Duct`: `vertical` (runs down instead of right), `width` and
+  `height` (cross-section mm, 0 while unknown; file fields only when set). `MoveRail` moves
+  the devices on the rail with it; also `SetRailSize { rail, length, width, height }` and
+  `DeleteRail`.
 - PRs get squash-merged: rebase follow-ups with `git rebase --onto origin/main <old-head>`.
 - Commit trailers: Co-Authored-By Claude line + Claude-Session link (see git log).

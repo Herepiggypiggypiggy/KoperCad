@@ -2,7 +2,7 @@
 //! model stores placements. Every edit returns nothing and never fails
 //! silently: problems are reported by [`CabinetLayout::report`].
 
-use crate::plan::{Candidate, Plan, place_all};
+use crate::plan::{Candidate, Plan, ROW_GAP_MM, place_all_below};
 use crate::{
     Placement, Plate, Rail, Size, clearance_violations, collisions, outside, rail_overflows,
 };
@@ -107,13 +107,20 @@ impl CabinetLayout {
     }
 
     /// Proposes a layout for the unplaced devices on the empty plate. The
-    /// plan is only a proposal; [`Self::accept`] applies it.
+    /// plan sits below everything already placed and is only a proposal;
+    /// [`Self::accept`] applies it.
     pub fn preview(&self, all: &[Candidate]) -> Plan {
         let unplaced: Vec<Candidate> = self.unplaced(all).into_iter().cloned().collect();
-        place_all(
+        let top = self
+            .placements
+            .iter()
+            .map(|p| p.footprint().bottom() + ROW_GAP_MM)
+            .fold(0.0, f64::max);
+        place_all_below(
             &self.plate,
             &unplaced,
             self.rails.iter().map(|r| r.id + 1).max().unwrap_or(1),
+            top,
         )
     }
 
@@ -121,6 +128,9 @@ impl CabinetLayout {
     pub fn accept(&mut self, plan: &Plan, all: &[Candidate]) {
         self.rails.extend(plan.rails.iter().cloned());
         for p in &plan.placements {
+            if self.placements.iter().any(|q| q.id == p.id) {
+                continue;
+            }
             if let Some(c) = all.iter().find(|c| c.id == p.id) {
                 self.placements.push(Placement {
                     id: p.id,

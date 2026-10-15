@@ -62,6 +62,9 @@ fn rail(c: &mut Cabinet) -> RailId {
             y: 100.0,
             length: 560.0,
             kind: RailKind::DinRail,
+            vertical: false,
+            width: 0.0,
+            height: 0.0,
         },
     ) {
         AnyId::Rail(r) => r,
@@ -197,6 +200,9 @@ fn the_model_refuses_what_cannot_be_placed() {
                 y: 0.0,
                 length: f64::NAN,
                 kind: RailKind::Duct,
+                vertical: false,
+                width: 0.0,
+                height: 0.0,
             })
             .is_err()
     );
@@ -262,4 +268,112 @@ fn placements_survive_json_and_old_files_load() {
     let plain = Project::default().to_json();
     assert!(!plain.contains("rails") && !plain.contains("cabinet_placements"));
     assert!(!plain.contains("plate"));
+}
+
+fn duct(c: &mut Cabinet, x: f64, y: f64, vertical: bool) -> RailId {
+    match created(
+        &mut c.doc,
+        Command::AddRail {
+            structure: c.cab,
+            x,
+            y,
+            length: 300.0,
+            kind: RailKind::Duct,
+            vertical,
+            width: 40.0,
+            height: 60.0,
+        },
+    ) {
+        AnyId::Rail(r) => r,
+        other => panic!("{other:?}"),
+    }
+}
+
+fn rails(doc: &Document) -> Vec<Rail> {
+    doc.project().all::<Rail>().cloned().collect()
+}
+
+#[test]
+fn a_duct_has_a_direction_and_a_cross_section() {
+    let mut c = cabinet();
+    let id = duct(&mut c, 50.0, 200.0, true);
+    let d = &rails(&c.doc)[0];
+    assert_eq!(
+        (d.id, d.vertical, d.width, d.height),
+        (id, true, 40.0, 60.0)
+    );
+
+    c.doc
+        .execute(Command::SetRailSize {
+            rail: id,
+            length: 250.0,
+            width: 30.0,
+            height: 50.0,
+        })
+        .unwrap();
+    let d = &rails(&c.doc)[0];
+    assert_eq!((d.length, d.width, d.height), (250.0, 30.0, 50.0));
+    c.doc.undo().unwrap();
+    assert_eq!(rails(&c.doc)[0].length, 300.0);
+
+    for bad in [(0.0, 1.0, 1.0), (100.0, -1.0, 1.0), (100.0, 1.0, f64::NAN)] {
+        let command = Command::SetRailSize {
+            rail: id,
+            length: bad.0,
+            width: bad.1,
+            height: bad.2,
+        };
+        assert!(c.doc.execute(command).is_err());
+    }
+    assert_eq!(rails(&c.doc)[0].width, 40.0);
+
+    // Plain rails and old files leave the fields out of the JSON.
+    let mut plain = cabinet();
+    rail(&mut plain);
+    let json = plain.doc.project().to_json();
+    // Only the plate has a width.
+    assert!(!json.contains("vertical"));
+    assert_eq!(json.matches("\"width\"").count(), 1);
+    let json = c.doc.project().to_json();
+    assert_eq!(Project::from_json(&json).unwrap().to_json(), json);
+}
+
+#[test]
+fn moving_a_duct_moves_the_devices_on_it_and_deleting_it_leaves_them() {
+    let mut c = cabinet();
+    let (q1, q2) = (c.q1, c.q2);
+    let id = duct(&mut c, 20.0, 100.0, false);
+    place(&mut c, q1, 30.0, Some((id, 10.0)));
+    place(&mut c, q2, 400.0, None);
+
+    c.doc
+        .execute(Command::MoveRail {
+            rail: id,
+            x: 50.0,
+            y: 140.0,
+        })
+        .unwrap();
+    let d = &rails(&c.doc)[0];
+    assert_eq!((d.x, d.y), (50.0, 140.0));
+    let all = placements(&c.doc);
+    let on = all.iter().find(|p| p.device == q1).unwrap();
+    let off = all.iter().find(|p| p.device == q2).unwrap();
+    assert_eq!((on.x, on.y, on.rail_offset), (60.0, 130.0, Some(10.0)));
+    assert_eq!((off.x, off.y), (400.0, 90.0));
+    c.doc.undo().unwrap();
+    let all = placements(&c.doc);
+    assert_eq!(all.iter().find(|p| p.device == q1).unwrap().x, 30.0);
+    assert_eq!(rails(&c.doc)[0].x, 20.0);
+
+    let nan = Command::MoveRail {
+        rail: id,
+        x: f64::NAN,
+        y: 0.0,
+    };
+    assert!(c.doc.execute(nan).is_err());
+
+    c.doc.execute(Command::DeleteRail { rail: id }).unwrap();
+    assert!(rails(&c.doc).is_empty());
+    assert!(placements(&c.doc).iter().all(|p| p.rail.is_none()));
+    assert_eq!(placements(&c.doc).len(), 2);
 }

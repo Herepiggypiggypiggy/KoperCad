@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use crate::entity::{
     BlockDefinition, BlockInstance, CabinetPlacement, Cable, Device, DeviceKind, Dismissal,
     Endpoint, Junction, Page, PageKind, Part, PinRef, Potential, PotentialSystem, ProjectInfo,
-    Rail, Revision, SameName, Structure, SymbolInstance, SymbolRole, Terminal, Text, Wire,
+    Rail, Revision, SameName, Structure, SymbolInstance, SymbolRole, Terminal, Text, Value, Wire,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::Point;
@@ -135,17 +135,37 @@ pub const CONTENTS_GENERATOR: &str = "toc";
 /// generated pages; within each, structure, then name. See
 /// [`Project::pages_in_order`].
 pub(crate) fn page_cmp(a: &Page, b: &Page) -> Ordering {
-    let section = |p: &Page| match &p.kind {
+    page_section(a)
+        .cmp(&page_section(b))
+        .then_with(|| levels_cmp(&a.structure.function, &b.structure.function))
+        .then_with(|| levels_cmp(&a.structure.location, &b.structure.location))
+        .then_with(|| page_order(a).cmp(&page_order(b)))
+        .then_with(|| natural_cmp(&a.name, &b.name))
+        .then(a.id.cmp(&b.id))
+}
+
+/// Property key of a page's place among its siblings (an integer); see
+/// [`Project::sibling_pages`].
+pub const PAGE_ORDER: &str = "order";
+
+/// The explicit place of a page in its group and panel. A page with none
+/// (every page of an untouched project, and a page added later) sorts after
+/// the ones that have one, by name as before.
+fn page_order(page: &Page) -> i64 {
+    match page.properties.get(PAGE_ORDER) {
+        Some(Value::Int(n)) => *n,
+        _ => i64::MAX,
+    }
+}
+
+/// Where a page sits in the reading order before its structure counts: the
+/// contents list, drawn pages, then the other generated pages.
+fn page_section(page: &Page) -> u8 {
+    match &page.kind {
         PageKind::Generated { generator } if generator == CONTENTS_GENERATOR => 0,
         PageKind::Generated { .. } => 2,
         _ => 1,
-    };
-    section(a)
-        .cmp(&section(b))
-        .then_with(|| levels_cmp(&a.structure.function, &b.structure.function))
-        .then_with(|| levels_cmp(&a.structure.location, &b.structure.location))
-        .then_with(|| natural_cmp(&a.name, &b.name))
-        .then(a.id.cmp(&b.id))
+    }
 }
 
 /// Property key for a rated current in amperes, on a part or a device.
@@ -651,6 +671,9 @@ impl Project {
                 };
                 if rail.length <= 0.0 {
                     return Err(bad("length"));
+                }
+                if rail.width < 0.0 || rail.height < 0.0 {
+                    return Err(bad("cross_section"));
                 }
                 let on_plate = self
                     .structures
@@ -1238,6 +1261,21 @@ impl Project {
         let mut pages: Vec<&Page> = self.pages.values().collect();
         pages.sort_by(|a, b| page_cmp(a, b));
         pages
+    }
+
+    /// The pages that share `page`'s group, panel and section (contents,
+    /// drawn or other generated), `page` included, in reading order. This
+    /// is the list a drag in the outline reorders; see
+    /// [`Command::ReorderPages`](crate::Command::ReorderPages).
+    pub fn sibling_pages(&self, page: PageId) -> Vec<PageId> {
+        let Some(this) = self.pages.get(&page) else {
+            return Vec::new();
+        };
+        self.pages_in_order()
+            .into_iter()
+            .filter(|p| p.structure == this.structure && page_section(p) == page_section(this))
+            .map(|p| p.id)
+            .collect()
     }
 
     /// The page groups (`=10D41`): the function levels of drawn pages and

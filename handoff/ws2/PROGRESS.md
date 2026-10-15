@@ -30,3 +30,4 @@
 2026-10-15 03:22 UTC #125 merged. Follow-ups rebased on main 64647d0 (696 tests), opening PR.
 - 2026-10-15 04:20 UTC: core PR for Outputs and WS-01: generated page order (contents first, reports after the drawing), `ProjectRules.generated_pages_off`, `DeletePage`, `Document::amend_last`, issued revisions undeletable.
 - 2026-10-15 17:20 UTC: cabinet placement storage for Layout (Rail, CabinetPlacement, Structure.plate, SetPlateSize/AddRail/PlaceDevice/RotatePlacement/RemovePlacement), 1029 tests.
+- 2026-10-15 17:55 UTC: ducts for Wire routing: Rail.vertical/width/height, AddRail fields, MoveRail, SetRailSize, DeleteRail; 1163 tests.

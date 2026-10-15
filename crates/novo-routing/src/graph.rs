@@ -24,6 +24,8 @@ struct Run {
     fixed: f64,
     lo: f64,
     hi: f64,
+    /// Cross-section, mm squared.
+    area: f64,
 }
 
 impl Run {
@@ -41,9 +43,25 @@ pub struct Network {
     runs: Vec<Run>,
     /// Per run, the positions along it where it is joined to another duct.
     splits: Vec<Vec<f64>>,
-    /// Ids of ducts that were not horizontal, vertical, finite or had no length.
+    /// Ids of ducts that were not horizontal, vertical, finite, had no length,
+    /// or repeated an earlier duct's id.
     pub ignored: Vec<u64>,
 }
+
+/// How full the ducts already are while a wire is being routed.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Load<'a> {
+    /// Used cross-section per run, mm squared.
+    pub used: &'a [f64],
+    /// Cross-section of the wire being routed.
+    pub wire_area: f64,
+}
+
+/// Fill ratio (of the allowed share of the cross-section) above which
+/// a duct starts to cost extra.
+const PENALTY_FROM: f64 = 0.8;
+/// Longest a duct's cost can be stretched, so a full duct stays routable.
+const PENALTY_CAP: f64 = 20.0;
 
 /// Points along the ducts, each with the run it lies on.
 type Path = Vec<(Point, usize)>;
@@ -74,6 +92,7 @@ impl Network {
                     fixed: d.a.y,
                     lo: d.a.x.min(d.b.x),
                     hi: d.a.x.max(d.b.x),
+                    area: d.width * d.height,
                 });
             } else if dx < EPS {
                 runs.push(Run {
@@ -82,12 +101,23 @@ impl Network {
                     fixed: d.a.x,
                     lo: d.a.y.min(d.b.y),
                     hi: d.a.y.max(d.b.y),
+                    area: d.width * d.height,
                 });
             } else {
                 ignored.push(d.id);
             }
         }
+        // Stable sort, then the first duct of a repeated id wins.
         runs.sort_by_key(|r| r.id);
+        let mut kept: Vec<Run> = Vec::with_capacity(runs.len());
+        for r in runs {
+            if kept.last().is_some_and(|k| k.id == r.id) {
+                ignored.push(r.id);
+            } else {
+                kept.push(r);
+            }
+        }
+        let runs = kept;
         ignored.sort();
 
         let mut splits: Vec<Vec<f64>> = runs.iter().map(|r| vec![r.lo, r.hi]).collect();
@@ -205,10 +235,24 @@ impl Network {
     /// Routes one job: through the ducts when both anchors reach one
     /// connected set of ducts, otherwise in free air.
     pub fn route(&self, job: &Job, rules: &Rules) -> Route {
+        let used = vec![0.0; self.runs.len()];
+        self.route_loaded(
+            job,
+            rules,
+            Load {
+                used: &used,
+                wire_area: 0.0,
+            },
+        )
+    }
+
+    /// Like [`Network::route`], with the ducts' current fill steering the
+    /// wire away from ducts that would pass their limit.
+    pub(crate) fn route_loaded(&self, job: &Job, rules: &Rules, load: Load) -> Route {
         let mut best: Option<(f64, Entry, Entry, Path)> = None;
         for ea in self.entries(&job.from, rules) {
             for eb in self.entries(&job.to, rules) {
-                let Some((cost, path)) = self.shortest(&ea, &eb) else {
+                let Some((cost, path)) = self.shortest(&ea, &eb, rules, load) else {
                     continue;
                 };
                 let total = ea.stub + eb.stub + cost;
@@ -239,9 +283,45 @@ impl Network {
         finish(job, Kind::Ducted, points, ducts, detour, rules)
     }
 
+    /// Cost multiplier of a run: 1 until it would pass 80% of its allowed
+    /// fill with this wire added, then rising steeply.
+    fn penalty(&self, run: usize, rules: &Rules, load: Load) -> f64 {
+        if !self.sized(run) {
+            return 1.0;
+        }
+        let cap = self.runs[run].area * rules.fill_limit;
+        let after = (load.used[run] + load.wire_area) / cap;
+        if !after.is_finite() {
+            return PENALTY_CAP;
+        }
+        (1.0 + 4.0 * (after - PENALTY_FROM).max(0.0) / (1.0 - PENALTY_FROM)).min(PENALTY_CAP)
+    }
+
+    /// True when the duct has a known cross-section. An unsized duct is
+    /// neither penalised nor counted as overfull; it is reported instead.
+    pub(crate) fn sized(&self, run: usize) -> bool {
+        let a = self.runs[run].area;
+        a.is_finite() && a > 0.0
+    }
+
+    /// Number of ducts in the network (ignored ones are not counted).
+    pub fn duct_count(&self) -> usize {
+        self.runs.len()
+    }
+
+    /// Index of a duct by id, in id order.
+    pub(crate) fn run_index(&self, id: u64) -> Option<usize> {
+        self.runs.binary_search_by_key(&id, |r| r.id).ok()
+    }
+
+    /// (id, cross-section) of the duct at index `i`.
+    pub(crate) fn run_info(&self, i: usize) -> (u64, f64) {
+        (self.runs[i].id, self.runs[i].area)
+    }
+
     /// Shortest way along the ducts between two entries. Returns the cost
     /// and the points after the first entry with the run each step lies on.
-    fn shortest(&self, a: &Entry, b: &Entry) -> Option<(f64, Path)> {
+    fn shortest(&self, a: &Entry, b: &Entry, rules: &Rules, load: Load) -> Option<(f64, Path)> {
         let mut nodes: BTreeMap<(i64, i64), usize> = BTreeMap::new();
         let mut pts: Vec<Point> = Vec::new();
         let mut adj: Vec<Vec<(usize, f64, usize)>> = Vec::new();
@@ -266,7 +346,7 @@ impl Network {
             for w in ts.windows(2) {
                 let (p, q) = (r.at(w[0]), r.at(w[1]));
                 let (u, v) = (node(p, &mut pts, &mut adj), node(q, &mut pts, &mut adj));
-                let len = w[1] - w[0];
+                let len = (w[1] - w[0]) * self.penalty(i, rules, load);
                 adj[u].push((v, len, i));
                 adj[v].push((u, len, i));
             }

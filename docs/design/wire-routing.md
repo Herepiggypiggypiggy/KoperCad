@@ -57,7 +57,7 @@ overrides the designer makes (see §6) are stored.
    so a wire never crosses the plate in free air to save duct length. The
    three nearest ducts are tried per end and the cheapest total wins; ties break on the lower duct
    id, so results are stable.
-3. **Shortest path (fill penalty planned).** Dijkstra over the duct graph between the two stub entry
+3. **Shortest path.** Dijkstra over the duct graph between the two stub entry
    points, edge cost = length plus a **fill penalty** that rises as the duct
    passes 80% of its capacity, so wires spread to a second duct before the
    first overflows. Equal costs break on lower node id.
@@ -70,19 +70,20 @@ overrides the designer makes (see §6) are stored.
    flagged "free air", and a problem entry says so. It never fails silently
    and never returns length zero.
 
-## 5. Order and fill (planned, not in the engine yet)
+## 5. Order and fill
 
-Today `route_all` routes in input order. The plan is that jobs are routed in a fixed order (longest direct distance first, then job id)
+`plan` routes jobs in a fixed order (longest direct distance first, then job id)
 so the result is deterministic and the big wires get the short paths. Fill is
-accumulated as jobs are routed. After routing, `fill(duct)` is the used area
-over capacity; a duct above 1.0 is an **overfull duct** problem naming the duct
-and the jobs through it, a duct above the fill limit but not over capacity is
-a warning.
+accumulated as jobs are routed. After routing, a duct's ratio is the wire
+area in it over its capacity (duct area times the fill limit); a ratio above
+1.0 is an **overfull duct** problem naming the duct and the jobs through it.
+There is no separate warning tier: the fill limit is the line. A wire without
+a known diameter counts as 3 mm and is reported as a **guessed wire**. A duct with no cross-section yet (0 x 0, as the model stores an unknown size) is not penalised and not called overfull: it is reported as an **unsized duct** when wires run through it. A repeated duct id is ignored after the first.
 
 ## 6. Queries and commands
 
 Pure queries (no mutation, shared by checks, reports and scripts):
-1. `route_all(layout, ducts, jobs, rules)`: every route plus the duct fill.
+1. `plan(network, jobs, rules)`: every route (in job order), the duct fill and the problems. `route_all` routes without fill.
 2. `route(job)`: one job, used for a live preview while a device is dragged.
 3. `duct_fill(result)`: per duct, used area, capacity, ratio, job ids.
 4. `problems(result)`: free-air routes, overfull ducts, unsized wires.

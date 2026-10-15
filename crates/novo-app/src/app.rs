@@ -11,6 +11,7 @@ mod duplicate;
 mod inspector;
 mod link;
 mod live;
+mod live_anim;
 mod pages;
 mod pdf;
 mod plc;
@@ -1241,13 +1242,24 @@ impl NovoApp {
             Ok(None) => return,
             Err(e) => return self.message(Level::Warning, e),
         };
-        let used = self
+        let (used, merges) = self
             .backend
             .document()
-            .map(|d| pages::level_users(d.project(), aspect, from))
+            .map(|d| {
+                let project = d.project();
+                (
+                    pages::level_users(project, aspect, from),
+                    pages::merges_with_existing(project, aspect, from, text),
+                )
+            })
             .unwrap_or_default();
+        let merged = match (merges, aspect) {
+            (false, _) => "",
+            (true, Aspect::Function) => " (merges with the existing page group)",
+            (true, _) => " (merges with the existing panel)",
+        };
         match self.execute(command) {
-            Some(Ok(_)) => self.message(Level::Info, format!("Renamed {from}: {used}")),
+            Some(Ok(_)) => self.message(Level::Info, format!("Renamed {from}{merged}: {used}")),
             Some(Err(e)) => self.message(Level::Error, format!("Could not rename {from}: {e}")),
             None => {}
         }
@@ -1330,6 +1342,35 @@ impl NovoApp {
             })
             .inner;
         response.dnd_set_drag_payload(row.page);
+        // A page dropped on another page of the same group and panel takes
+        // its place before or after it; names stay as they are.
+        let siblings = self
+            .backend
+            .document()
+            .map(|d| d.project().sibling_pages(row.page))
+            .unwrap_or_default();
+        let lower_half = |response: &egui::Response| {
+            ui.ctx()
+                .pointer_latest_pos()
+                .is_some_and(|p| p.y > response.rect.center().y)
+        };
+        if let Some(dragged) = response.dnd_hover_payload::<PageId>()
+            && pages::order_after_drop(&siblings, *dragged, row.page, lower_half(&response))
+                .is_some()
+        {
+            let y = if lower_half(&response) {
+                response.rect.bottom()
+            } else {
+                response.rect.top()
+            };
+            let stroke = ui.visuals().selection.stroke;
+            ui.painter().hline(response.rect.x_range(), y, stroke);
+        }
+        let mut reorder = response
+            .dnd_release_payload::<PageId>()
+            .and_then(|dragged| {
+                pages::order_after_drop(&siblings, *dragged, row.page, lower_half(&response))
+            });
         let drawn = self.backend.document().is_some_and(|d| {
             d.project()
                 .page(row.page)
@@ -1347,7 +1388,23 @@ impl NovoApp {
             .backend
             .document()
             .and_then(|d| d.project().page(row.page).map(|p| p.structure.clone()));
+        let up = pages::order_after_step(&siblings, row.page, false);
+        let down = pages::order_after_step(&siblings, row.page, true);
         response.context_menu(|ui| {
+            if ui
+                .add_enabled(up.is_some(), egui::Button::new("Move up"))
+                .clicked()
+            {
+                reorder = up.clone();
+                ui.close();
+            }
+            if ui
+                .add_enabled(down.is_some(), egui::Button::new("Move down"))
+                .clicked()
+            {
+                reorder = down.clone();
+                ui.close();
+            }
             if let Some(s) = structure
                 && ui.button("Move to group or panel…").clicked()
             {
@@ -1367,7 +1424,18 @@ impl NovoApp {
                 ui.close();
             }
         });
+        if let Some(pages) = reorder {
+            self.reorder_pages(pages);
+        }
         response.clicked()
+    }
+
+    /// Puts the pages of a group and panel in the given order, as one undo
+    /// step.
+    fn reorder_pages(&mut self, pages: Vec<PageId>) {
+        if let Some(Err(e)) = self.execute(Command::ReorderPages { pages }) {
+            self.message(Level::Error, format!("Could not reorder the pages: {e}"));
+        }
     }
 
     /// Below the pinning width the outline floats over the canvas, opened

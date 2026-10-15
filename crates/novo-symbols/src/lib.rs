@@ -1,5 +1,6 @@
-//! Symbol library (owned by WS-05, packs by WS-25): IEC 60617 and NFPA symbol geometry, connection
-//! points, function types and the behavior slots used by simulation.
+//! Symbol library (owned by WS-05, packs by WS-25): IEC 60617 and NFPA
+//! symbol geometry, connection points, function types and the behavior
+//! slots used by simulation.
 //!
 //! Symbols are data: one TOML file per symbol under `symbols/`, embedded in
 //! the binary at build time. `FORMAT.md` documents the format.

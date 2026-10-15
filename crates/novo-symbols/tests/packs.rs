@@ -151,3 +151,19 @@ fn directory_loader_reads_one_pack() {
         }
     }
 }
+
+#[test]
+fn every_nfpa_function_has_a_letter_code_like_its_counterpart() {
+    let iec = pack(Pack::Iec);
+    for symbol in pack(Pack::Nfpa).iter() {
+        let other = Pack::counterpart(&symbol.id, Pack::Iec).and_then(|id| iec.get(&id));
+        if let Some(other) = other {
+            assert_eq!(
+                novo_symbols::letter_code(&symbol.function),
+                novo_symbols::letter_code(&other.function),
+                "{}",
+                symbol.id
+            );
+        }
+    }
+}
