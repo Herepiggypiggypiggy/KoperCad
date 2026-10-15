@@ -24,7 +24,9 @@ use thiserror::Error;
 
 use crate::bmecat::import_bmecat;
 use crate::catalog::{CatalogPart, Dimensions, PartKey};
+use crate::csv::import_catalog;
 use crate::library::{FileKind, ImportFlow, LocalLibrary, NewSource, SourceRecord};
+use crate::recipes::{ApplyContext, GENERIC, MakerRecipe, RecipeReport, recipe_for};
 use crate::step::step_box;
 
 /// A file a maker offers for a part.
@@ -179,6 +181,8 @@ pub struct ImportOutcome {
     pub dxf_members: Vec<(String, String)>,
     /// Files that were stored but could not be read for data, with why.
     pub notes: Vec<String>,
+    /// What the maker's recipe read into the parts above.
+    pub recipe: Box<RecipeReport>,
 }
 
 /// Where an import is. The UI shows this and nothing else.
@@ -396,7 +400,14 @@ impl<'a> ImportJob<'a> {
         let (inner_step, terms) = if is_archive {
             match read_zip(bytes) {
                 Ok(z) => {
-                    self.outcome.xml_members.extend(z.xml);
+                    // Catalog packages carry BMEcat files; EPLAN data carries other XML.
+                    for (member, text) in z.xml {
+                        if looks_like_bmecat(&text) {
+                            self.read_bmecat(&member, &text);
+                        } else {
+                            self.outcome.xml_members.push((member, text));
+                        }
+                    }
                     self.outcome.dxf_members.extend(z.dxf);
                     (z.step, z.terms_url)
                 }
@@ -439,16 +450,14 @@ impl<'a> ImportJob<'a> {
                     .notes
                     .push(format!("{name}: no size read ({e})")),
             },
-            FileKind::Bmecat => match std::str::from_utf8(bytes)
-                .map_err(|_| "not text".to_owned())
-                .and_then(|t| import_bmecat(t, &self.manufacturer).map_err(|e| e.to_string()))
-            {
-                Ok(parts) => self.outcome.parts.extend(parts),
-                Err(e) => self
+            FileKind::Bmecat => match std::str::from_utf8(bytes) {
+                Ok(t) => self.read_bmecat(name, t),
+                Err(_) => self
                     .outcome
                     .notes
-                    .push(format!("{name}: no parts read ({e})")),
+                    .push(format!("{name}: no parts read (not text)")),
             },
+            FileKind::Csv => self.read_csv(name, bytes),
             FileKind::Zip | FileKind::Edz => {
                 if let Some((inner, text)) = inner_step {
                     match step_box(&text) {
@@ -472,6 +481,81 @@ impl<'a> ImportJob<'a> {
         }
         self.outcome.records.push(record);
         Ok(())
+    }
+}
+
+impl ImportJob<'_> {
+    fn recipe(&self) -> &'static MakerRecipe {
+        recipe_for(&self.manufacturer).unwrap_or(&GENERIC)
+    }
+
+    /// Reads BMEcat text into parts and runs the maker's recipe over them.
+    fn read_bmecat(&mut self, name: &str, text: &str) {
+        match import_bmecat(text, &self.manufacturer) {
+            Ok(parts) => self.take_parts(parts, name, "import:bmecat"),
+            Err(e) => self
+                .outcome
+                .notes
+                .push(format!("{name}: no parts read ({e})")),
+        }
+    }
+
+    /// Reads a CSV price list or product table into parts.
+    fn read_csv(&mut self, name: &str, bytes: &[u8]) {
+        let text = decode_text(bytes);
+        match import_catalog(&text, &self.manufacturer) {
+            Ok(report) => {
+                for (line, why) in &report.skipped {
+                    self.outcome
+                        .notes
+                        .push(format!("{name}: line {line} skipped ({why})"));
+                }
+                self.take_parts(report.parts, name, "import:csv");
+            }
+            Err(e) => self
+                .outcome
+                .notes
+                .push(format!("{name}: no parts read ({e})")),
+        }
+    }
+
+    fn take_parts(&mut self, mut parts: Vec<CatalogPart>, file: &str, source: &str) {
+        let ctx = ApplyContext {
+            source,
+            file,
+            imported: &self.today,
+        };
+        let report = self.recipe().apply(&mut parts, &ctx);
+        self.outcome.recipe.absorb(report);
+        self.outcome.parts.extend(parts);
+    }
+}
+
+fn looks_like_bmecat(text: &str) -> bool {
+    let head: String = text.chars().take(4096).collect();
+    head.to_ascii_uppercase().contains("<BMECAT")
+}
+
+/// Text of a downloaded table: UTF-8 (with or without BOM), else the
+/// Windows-1252 that German spreadsheet exports use.
+fn decode_text(bytes: &[u8]) -> String {
+    let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes);
+    match std::str::from_utf8(bytes) {
+        Ok(t) => t.to_owned(),
+        Err(_) => bytes.iter().map(|&b| cp1252(b)).collect(),
+    }
+}
+
+fn cp1252(b: u8) -> char {
+    match b {
+        0x80 => '\u{20ac}',
+        0x8a => '\u{160}',
+        0x8e => '\u{17d}',
+        0x96 => '\u{2013}',
+        0x97 => '\u{2014}',
+        0x9a => '\u{161}',
+        0x9e => '\u{17e}',
+        _ => char::from(b),
     }
 }
 
@@ -628,7 +712,9 @@ pub struct Arrival {
 pub struct DownloadsWatcher {
     dir: PathBuf,
     since: SystemTime,
-    order_code: String,
+    /// Codes any of which, in a file name, ties it to the part.
+    order_codes: Vec<String>,
+    recipe: Option<&'static MakerRecipe>,
     last_sizes: HashMap<PathBuf, u64>,
 }
 
@@ -639,9 +725,27 @@ impl DownloadsWatcher {
         DownloadsWatcher {
             dir: dir.into(),
             since,
-            order_code: crate::search::normalize_code(order_number),
+            order_codes: vec![crate::search::normalize_code(order_number)],
+            recipe: None,
             last_sizes: HashMap::new(),
         }
+    }
+
+    /// Like [`DownloadsWatcher::new`], with the maker's recipe: the number
+    /// variants its files use, the catalog packages it publishes, and the
+    /// file types its downloads come as.
+    pub fn for_maker(
+        dir: impl Into<PathBuf>,
+        since: SystemTime,
+        manufacturer: &str,
+        order_number: &str,
+    ) -> Self {
+        let mut w = Self::new(dir, since, order_number);
+        if let Some(recipe) = recipe_for(manufacturer) {
+            w.order_codes = recipe.file_codes(order_number);
+            w.recipe = Some(recipe);
+        }
+        w
     }
 
     /// Files that have arrived and finished. A STEP or DXF file must carry
@@ -664,12 +768,20 @@ impl DownloadsWatcher {
                 continue;
             }
             let kind = FileKind::of_file_name(&name);
-            let names_the_part = crate::search::normalize_code(&name).contains(&self.order_code);
-            let suits = match kind {
-                FileKind::Step | FileKind::Dxf | FileKind::Zip => names_the_part,
-                FileKind::Bmecat | FileKind::Edz => true,
-                FileKind::Other => false,
-            };
+            let code = crate::search::normalize_code(&name);
+            let names_the_part = self
+                .order_codes
+                .iter()
+                .any(|c| !c.is_empty() && code.contains(c));
+            let package = self.recipe.is_some_and(|r| r.recognises_package(&name));
+            let kind_ok = self.recipe.is_none_or(|r| r.accepts_kind(kind));
+            let suits = kind_ok
+                && match kind {
+                    FileKind::Step | FileKind::Dxf => names_the_part,
+                    FileKind::Zip | FileKind::Csv => names_the_part || package,
+                    FileKind::Bmecat | FileKind::Edz => true,
+                    FileKind::Other => false,
+                };
             let Ok(meta) = entry.metadata() else { continue };
             if !suits || !meta.is_file() || meta.modified().is_ok_and(|m| m < self.since) {
                 continue;

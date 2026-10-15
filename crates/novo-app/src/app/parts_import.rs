@@ -9,7 +9,7 @@ use std::time::SystemTime;
 
 use novo_parts::{
     Arrival, Catalog, CatalogPart, DownloadsWatcher, FetchError, Fetcher, ImportFlow, ImportJob,
-    ImportState, LocalLibrary, PartKey, RemoteFile, SourceTable,
+    ImportState, LocalLibrary, PartKey, RemoteFile, SourceTable, recipe_for,
 };
 
 /// Seconds between looks at the Downloads folder.
@@ -54,6 +54,10 @@ pub(crate) struct Import {
     pub label: String,
     pub page_url: Option<String>,
     pub page_verified: bool,
+    /// What the user does on the maker's page, from the maker's recipe.
+    pub steps: Vec<String>,
+    /// Set when the order number does not look like the maker's.
+    pub order_warning: Option<String>,
     pub phase: Phase,
     watcher: Option<DownloadsWatcher>,
     /// Files the user said no to, so the watch does not ask again.
@@ -92,18 +96,37 @@ impl Import {
             // with a fetcher that has no files.
             _ => (Phase::Waiting, None),
         };
-        let page_verified = sources
-            .get(&part.manufacturer)
-            .is_some_and(|s| s.page_verified);
+        let recipe = recipe_for(&part.manufacturer);
+        // A maker without a confirmed part page: open its home page, whose
+        // steps say to search for the number.
+        let (page_url, page_verified) = match (page_url, recipe) {
+            (None, Some(r)) if phase == Phase::Waiting => {
+                (Some(r.page_for(&part.order_number)), true)
+            }
+            (url, _) => (
+                url,
+                sources
+                    .get(&part.manufacturer)
+                    .is_some_and(|s| s.page_verified),
+            ),
+        };
         Import {
             key: part.key(),
             label: part.to_string(),
             page_url,
             page_verified,
+            steps: recipe.map_or_else(Vec::new, |r| r.steps_for(&part.order_number)),
+            order_warning: recipe.and_then(|r| r.check_order(&part.order_number)),
             phase,
             declined: Vec::new(),
-            watcher: downloads
-                .map(|d| DownloadsWatcher::new(d, SystemTime::now(), &part.order_number)),
+            watcher: downloads.map(|d| {
+                DownloadsWatcher::for_maker(
+                    d,
+                    SystemTime::now(),
+                    &part.manufacturer,
+                    &part.order_number,
+                )
+            }),
             last_poll: f64::NEG_INFINITY,
         }
     }
@@ -215,6 +238,7 @@ pub(crate) fn import_path(
             "{} part(s) added to your catalog.",
             outcome.parts.len()
         ));
+        summary.lines.extend(outcome.recipe.summary_lines());
     }
     if !outcome.xml_members.is_empty() || !outcome.dxf_members.is_empty() {
         summary.lines.push(format!(
@@ -258,6 +282,81 @@ mod tests {
         assert_eq!(
             imp.page_url.as_deref(),
             Some("https://wago.partcommunity.com/3d-cad-models/?catalog=wago&part=2002-1201")
+        );
+    }
+
+    #[test]
+    fn a_maker_without_a_confirmed_part_page_opens_its_home_page_with_steps() {
+        let dir = tempfile::tempdir().unwrap();
+        let lib = LocalLibrary::at(dir.path().join("lib"));
+        let weidmueller = CatalogPart {
+            manufacturer: "Weidmüller".into(),
+            order_number: "WDU 2.5".into(),
+            ..Default::default()
+        };
+        let imp = Import::start(
+            &weidmueller,
+            &lib,
+            &SourceTable::builtin(),
+            None,
+            "2026-10-15",
+        );
+        assert_eq!(imp.page_url.as_deref(), Some("https://www.weidmueller.com"));
+        assert!(
+            imp.steps.iter().any(|s| s.contains("WDU 2.5")),
+            "{:?}",
+            imp.steps
+        );
+        assert!(
+            imp.order_warning.is_some(),
+            "a type name is not an order number"
+        );
+        assert!(!imp.watching(), "no Downloads folder known");
+        // A maker with no recipe at all keeps the old behaviour: no page, no steps.
+        let other = CatalogPart {
+            manufacturer: "Nobody".into(),
+            order_number: "1".into(),
+            ..Default::default()
+        };
+        let imp = Import::start(&other, &lib, &SourceTable::builtin(), None, "2026-10-15");
+        assert!(imp.page_url.is_none() && imp.steps.is_empty());
+    }
+
+    #[test]
+    fn a_downloaded_bmecat_file_adds_structured_parts_and_says_what_it_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let lib = LocalLibrary::at(dir.path().join("lib"));
+        let file = dir.path().join("lapp_bmecat.xml");
+        fs::write(
+            &file,
+            include_str!("../../../novo-parts/tests/golden/lapp/sample.xml"),
+        )
+        .unwrap();
+        let cat = dir.path().join("parts.json");
+        let lapp = CatalogPart {
+            manufacturer: "Lapp".into(),
+            order_number: "1119303".into(),
+            ..Default::default()
+        };
+        let (summary, changed) = import_path(
+            &lapp,
+            &file,
+            ImportFlow::Manual,
+            &lib,
+            &SourceTable::builtin(),
+            Some(&cat),
+            "2026-10-15",
+        )
+        .unwrap();
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].function, "cable");
+        assert!(
+            summary
+                .lines
+                .iter()
+                .any(|l| l.contains("structured part data")),
+            "{:?}",
+            summary.lines
         );
     }
 

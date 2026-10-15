@@ -1,0 +1,3 @@
+2026-10-15 19:53 UTC  Recipes, mapping engine, import wiring, golden samples written on top of #512 (70a39ae); tests green locally.
+2026-10-15 19:59 UTC  STOPPED on session-limit notice (relayed). Work is UNCOMMITTED in the container; last workspace clippy/test run ended in a linker error (cc), not yet diagnosed (check disk space first). novo-parts and novo-app parts tests passed before that.
+2026-10-15 19:59 UTC  STOPPED on session-limit notice. Work is UNCOMMITTED in the container. Last workspace clippy/test hit ENOSPC at link (disk full; target/ deleted). novo-parts and novo-app parts tests passed before that; rerun fmt, clippy, workspace tests, then commit and open PR on #512 branch.
