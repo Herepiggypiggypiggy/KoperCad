@@ -4,8 +4,8 @@
 //! choices reused by the command palette.
 
 use novo_core::{
-    AnyId, PeOverride, PotentialKind, Project, SymbolId, SymbolRole, TerminalId, TerminalKind,
-    WireId,
+    AnyId, Endpoint, PageId, PeOverride, PotentialKind, Project, SymbolId, SymbolRole, TerminalId,
+    TerminalKind, WireId,
 };
 
 use crate::potential::PotentialSpec;
@@ -132,6 +132,37 @@ pub fn wire_override_menu(project: &Project, selection: &[AnyId]) -> Option<Wire
         overridden,
         chips: chips(),
     })
+}
+
+/// Show where it goes: every wire and terminal of `page` on a net that
+/// carries the potential of the feed `feed`, to select and so light up.
+pub fn where_it_goes(project: &Project, page: PageId, feed: SymbolId) -> Vec<AnyId> {
+    let Some(SymbolRole::PotentialFeed { potential }) = project.symbol(feed).map(|s| &s.role)
+    else {
+        return Vec::new();
+    };
+    let netlist = project.netlist();
+    let carries = |net: novo_core::NetId| netlist.net(net).potentials.contains(potential);
+    let mut found: Vec<AnyId> = project
+        .wires()
+        .filter(|w| w.page == page)
+        .filter(|w| netlist.net_of_wire(w).is_some_and(carries))
+        .map(|w| AnyId::Wire(w.id))
+        .collect();
+    found.extend(
+        project
+            .symbols()
+            .filter(|s| s.page == page && matches!(s.role, SymbolRole::Terminal { .. }))
+            .filter(|s| {
+                (0..s.pins.len()).any(|pin| {
+                    netlist
+                        .net_of(Endpoint::pin(s.id, pin as u16))
+                        .is_some_and(carries)
+                })
+            })
+            .map(|s| AnyId::Symbol(s.id)),
+    );
+    found
 }
 
 /// The PE rows of selected terminals.
