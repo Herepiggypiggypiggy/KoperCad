@@ -299,6 +299,36 @@ pub const DUTCH: &[Aliases] = &[
         &["werkplaats", "boren"],
     ),
     nl("export.sheets_csv", &["exporteer csv"], &["csv"]),
+    nl(
+        "plc.import_tags",
+        &["importeer plc", "importeer tags"],
+        &["plc", "tags", "inlezen"],
+    ),
+    nl(
+        "export.plc_csv",
+        &["exporteer plc", "exporteer io"],
+        &["plc", "io lijst"],
+    ),
+    nl(
+        "export.plc_plcopen",
+        &["exporteer plcopen", "exporteer codesys"],
+        &["plcopen", "codesys"],
+    ),
+    nl(
+        "export.plc_tia",
+        &["exporteer tia", "exporteer siemens"],
+        &["tia", "siemens"],
+    ),
+    nl(
+        "export.plc_studio5000",
+        &["exporteer studio 5000", "exporteer rockwell"],
+        &["rockwell", "studio 5000"],
+    ),
+    nl(
+        "export.plc_address_plan",
+        &["exporteer adresplan"],
+        &["adresplan"],
+    ),
 ];
 
 /// Dutch command arguments and the English chip each one stands for.

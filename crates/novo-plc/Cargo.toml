@@ -12,6 +12,10 @@ novo-symbols.workspace = true
 # (the egui view), which a headless engine must not pull in.
 novo-editor = { path = "../novo-editor", default-features = false }
 thiserror.workspace = true
+# Tag files for the PLC engineering tools: Excel (TIA), XML (PLCopen).
+rust_xlsxwriter.workspace = true
+calamine.workspace = true
+quick-xml.workspace = true
 
 [lints]
 workspace = true
