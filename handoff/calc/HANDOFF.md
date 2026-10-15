@@ -24,6 +24,18 @@ lib.rs, `calc_checks.rs`, tests/calc_checks.rs. The Gate 1 test in
 tests/motor_starter.rs skips the six calc kinds (they need numbers).
 Panel PR #413 also adds VoltageDrop/ShortCircuit: expect a small enum merge.
 
+## How to reach it (user-visible entry)
+Results appear as problems in the Issues list (design checks panel, #413):
+kinds VoltageDrop, ShortCircuit, DisconnectionTime, ThermalWithstand,
+MotorStarter, ProtectiveConductor; waivable like any problem. Inputs are
+properties: project `supply.short_circuit_ka`, `supply.voltage_v`,
+`check.voltage_drop_pct`; device/part `rated_current_a`,
+`breaking_capacity_ka`, `trip_curve`, `let_through_i2t`, relay
+`setting_min_a`/`setting_max_a`, contactor `ac3_current_a`, `max_scpd_a`;
+wire/cable `length_m`, `load_current_a`, `insulation`. Settings section
+("Project settings > Electrical") proposed to the UI integration thread
+(session_01TaTTPuTqhk8bHd277oJRFR) on 2026-10-15.
+
 ## Decisions
 - Pure functions on numbers so the same code serves checks, property sheet
   and Python. `Finding { rule, severity, message }`; `Rule` is the stable
