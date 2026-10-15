@@ -14,7 +14,7 @@ use novo_core::{
 
 use crate::catalog::{Catalog, SymbolClass, classify, model_groups, model_pins};
 use crate::edit::{self, PlaceOptions, Transform};
-use crate::geometry::{EPS, Target, endpoint_direction, route_through, snap, target_at};
+use crate::geometry::{self, EPS, Target, endpoint_direction, route_through, snap, target_at};
 use crate::lines::{self, elbow, exact_bends, lock_axis};
 use crate::naming::{self, Numbering, parse_tag_input, tag_conflict};
 use crate::overlap::Refusal;
@@ -729,6 +729,11 @@ impl Editor {
                 .filter(|t| matches!(t, Target::Endpoint(Endpoint::Pin { .. }, _))),
             _ => None,
         };
+        // A wire is joined on the grid, not wherever the pointer crosses it.
+        if let Some(Target::Wire(w, q)) = self.target {
+            let at = geometry::snap_along_wire(project, w, q, self.grid);
+            self.target = Some(Target::Wire(w, at));
+        }
         self.cursor = Some(match self.target {
             Some(t) => t.position(),
             None => snap(raw, self.grid),
