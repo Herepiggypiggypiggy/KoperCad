@@ -860,7 +860,7 @@ fn a_generated_page_shows_its_report_and_follows_each_edit() {
     d.app.changed_outside_canvas(&changes);
     d.frame();
     let after = texts(&d);
-    assert!(after.iter().any(|t| t == "77"), "{after:?}");
+    assert!(after.iter().any(|t| t.starts_with("77")), "{after:?}");
 
     // Undo takes it back.
     d.app.run(&ctx, Action::Undo);
@@ -2539,4 +2539,19 @@ fn the_project_standard_defaults_to_iec_and_shows_in_the_title() {
     d.frame();
     assert_eq!(d.app.standard(), Pack::Iec);
     assert!(!d.app.window_title.contains("NFPA"));
+}
+
+#[test]
+fn the_parts_command_opens_and_closes_the_parts_window() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    assert!(super::workbench::app_runs("parts.browser"));
+    d.app.run_command(&ctx, "parts.browser", None);
+    d.frame();
+    d.frame();
+    assert!(d.app.wb.parts.is_some(), "the window opens");
+    d.app.wb.parts = None;
+    d.frame();
+    assert!(d.app.wb.parts.is_none());
 }

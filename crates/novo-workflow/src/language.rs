@@ -35,6 +35,7 @@ pub const DUTCH: &[Aliases] = &[
     // Project
     nl("file.new", &[], &["nieuw project", "nieuw"]),
     nl("file.open", &[], &["project openen", "openen"]),
+    nl("file.example", &[], &["voorbeeld openen", "voorbeeld"]),
     nl("file.save", &[], &["opslaan", "bewaren"]),
     nl("file.save_as", &[], &["opslaan als"]),
     nl("file.close", &[], &["project sluiten", "sluiten"]),
@@ -50,12 +51,22 @@ pub const DUTCH: &[Aliases] = &[
         &["voorkeuren"],
         &["instellingen", "opties"],
     ),
+    nl(
+        "parts.browser",
+        &["onderdelen"],
+        &["artikelen", "onderdeel"],
+    ),
     nl("project.standard", &["tekennorm"], &["norm", "standaard"]),
     nl("terminal.toggle_pe", &["pe-klem"], &["aardklem", "aarde"]),
     nl(
         "revision.issue",
         &["revisie"],
         &["uitgeven", "versie", "vrijgeven"],
+    ),
+    nl(
+        "revision.compare",
+        &["vergelijk"],
+        &["verschil", "revisies vergelijken"],
     ),
     nl("file.quit", &[], &["afsluiten", "stoppen"]),
     // Draw
@@ -192,6 +203,16 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("view.full_screen", &[], &["volledig scherm"]),
     nl("view.cabinet_table", &[], &["kast als tabel", "tabel"]),
+    nl(
+        "cabinet.size-enclosure",
+        &[],
+        &["kast dimensioneren", "kastmaat", "koeling", "warmte"],
+    ),
+    nl(
+        "cabinet.enclosures",
+        &[],
+        &["kasten", "kastenlijst", "behuizingen"],
+    ),
     nl("view.changes", &["wijzigingen"], &["vergelijk", "verschil"]),
     nl(
         "sim.live",

@@ -14,6 +14,7 @@ novo-routing.workspace = true
 novo-terminals.workspace = true
 
 [dev-dependencies]
+novo-symbols.workspace = true
 novo-tests = { path = "../novo-tests" }
 
 [lints]
