@@ -1,0 +1,34 @@
+format = 1
+id = "nfpa/operators/pushbutton_nc"
+name = "Push button, break contact"
+description = "Manually operated push button with a normally closed contact, such as a stop button."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "operators"
+function = "contact.nc.push"
+keywords = ["push button", "stop", "nc", "button", "nfpa", "ansi"]
+aliases = ["pbnc"]
+favorite = true
+
+connections = [
+  { id = "11", at = [0, 0], dir = "up" },
+  { id = "12", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-10, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 6] },
+  { kind = "line", from = [0, 16], to = [0, 10] },
+  { kind = "line", from = [-3, 6], to = [3, 6] },
+  { kind = "line", from = [-3, 10], to = [3, 10] },
+  { kind = "line", from = [-3, 12], to = [3, 4] },
+  { kind = "line", from = [-1, 8], to = [-8, 8] },
+  { kind = "line", from = [-8, 5], to = [-8, 11] },
+]
+
+[behavior]
+kind = "contact"
+normally = "closed"
+poles = [["11", "12"]]

@@ -1,0 +1,30 @@
+format = 1
+id = "nfpa/protection/fuse"
+name = "Fuse"
+description = "Fuse (general symbol), for cartridge fuses and fuse links."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "protection"
+function = "protection.fuse"
+keywords = ["fuse", "f", "cartridge", "nfpa", "ansi"]
+aliases = ["fuse", "f"]
+favorite = true
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-4, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "arc", center = [0, 6], r = 2, start = 270, end = 450 },
+  { kind = "arc", center = [0, 10], r = 2, start = 90, end = 270 },
+  { kind = "line", from = [0, 12], to = [0, 16] },
+]
+
+[behavior]
+kind = "fuse"
+poles = [["1", "2"]]

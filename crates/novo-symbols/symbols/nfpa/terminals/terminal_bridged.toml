@@ -1,0 +1,28 @@
+format = 1
+id = "nfpa/terminals/terminal_bridged"
+name = "Terminal, connected"
+description = "Feed-through terminal that is connected (jumpered) to its neighbours on the strip: a dot on the upper lead. The heavy bar between the dots of a run is drawn by the page scene (novo-canvas), from the first to the last lead."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "terminals"
+function = "terminal"
+keywords = ["terminal", "clamp", "connected", "bridged", "jumper", "nfpa", "ansi"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 8], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-3, 4], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 2.8] },
+  { kind = "circle", center = [0, 4], r = 1.2 },
+  { kind = "polyline", points = [[0.37, 1.553], [0.153, 1.77], [-0.153, 1.77], [-0.37, 1.553], [-0.37, 1.247], [-0.153, 1.03], [0.153, 1.03], [0.37, 1.247]], closed = true, fill = true },
+  { kind = "line", from = [0, 5.2], to = [0, 8] },
+]
+
+[behavior]
+kind = "conductor"
+poles = [["1", "2"]]

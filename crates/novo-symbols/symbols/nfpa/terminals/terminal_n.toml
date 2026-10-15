@@ -1,0 +1,29 @@
+format = 1
+id = "nfpa/terminals/terminal_n"
+name = "Neutral terminal"
+description = "Neutral (N) terminal of a terminal strip, usually blue."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "terminals"
+function = "terminal.n"
+keywords = ["terminal", "n", "neutral", "blue", "nfpa", "ansi"]
+aliases = ["xn"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up", role = "n" },
+  { id = "2", at = [0, 8], dir = "down", role = "n" },
+]
+
+anchors = [
+  { role = "tag", at = [-3, 4], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 2.8] },
+  { kind = "circle", center = [0, 4], r = 1.2 },
+  { kind = "line", from = [0, 5.2], to = [0, 8] },
+  { kind = "text", at = [2, 4], text = "N", size = 2, align = "left" },
+]
+
+[behavior]
+kind = "conductor"
+poles = [["1", "2"]]

@@ -1,0 +1,29 @@
+format = 1
+id = "nfpa/terminals/terminal_pe_end"
+name = "PE terminal"
+description = "One-ended protective earth terminal of a terminal strip."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "terminals"
+function = "terminal.pe"
+keywords = ["terminal", "pe", "earth", "ground", "protective earth", "one-ended", "nfpa", "ansi"]
+aliases = ["xpe1"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up", role = "pe" },
+]
+
+anchors = [
+  { role = "tag", at = [-3, 6], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 6.8] },
+  { kind = "circle", center = [0, 8], r = 1.2 },
+  { kind = "line", from = [1.2, 8], to = [4, 8] },
+  { kind = "line", from = [4, 6.4], to = [4, 9.6] },
+  { kind = "line", from = [4.8, 6.9], to = [4.8, 9.1] },
+  { kind = "line", from = [5.6, 7.4], to = [5.6, 8.6] },
+]
+
+[behavior]
+kind = "none"

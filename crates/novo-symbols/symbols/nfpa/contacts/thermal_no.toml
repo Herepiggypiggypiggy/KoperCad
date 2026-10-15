@@ -1,0 +1,31 @@
+format = 1
+id = "nfpa/contacts/thermal_no"
+name = "Thermal overload contact, make"
+description = "Auxiliary make contact of an overload relay (97-98); closes when the relay trips."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "contacts"
+function = "contact.no.thermal"
+keywords = ["overload", "thermal", "trip", "97", "98", "signal", "nfpa", "ansi"]
+
+connections = [
+  { id = "97", at = [0, 0], dir = "up" },
+  { id = "98", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-14, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 6] },
+  { kind = "line", from = [0, 16], to = [0, 10] },
+  { kind = "line", from = [-3, 6], to = [3, 6] },
+  { kind = "line", from = [-3, 10], to = [3, 10] },
+  { kind = "line", from = [-1, 8], to = [-4, 8] },
+  { kind = "polyline", points = [[-4, 8], [-5.5, 5.5], [-7.5, 10.5], [-9.5, 5.5], [-11, 8]] },
+]
+
+[behavior]
+kind = "contact"
+normally = "open"
+poles = [["97", "98"]]

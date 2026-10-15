@@ -5,6 +5,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 
+use crate::pack::Pack;
 use crate::symbol::Symbol;
 use crate::validate::{Issue, validate};
 
@@ -68,12 +69,39 @@ pub struct Library {
 }
 
 impl Library {
-    /// The library compiled into this crate from `symbols/`.
+    /// The IEC pack compiled into this crate from `symbols/iec/`. This is the
+    /// default library; see [`Library::builtin_pack`] for other standards.
     pub fn builtin() -> Result<Library, LoadError> {
-        Library::from_sources(BUILTIN.iter().map(|(id, text)| (id.to_string(), *text)))
+        Library::builtin_pack(Pack::Iec)
     }
 
-    /// Loads every `*.toml` file below `dir`; ids are the paths relative to
+    /// One built-in pack. Aliases and favourites are unique within the pack,
+    /// not across packs, so packs are loaded one at a time.
+    pub fn builtin_pack(pack: Pack) -> Result<Library, LoadError> {
+        let sources = BUILTIN
+            .iter()
+            .filter(|(name, _)| *name == pack.id())
+            .flat_map(|(_, list)| list.iter())
+            .map(|(id, text)| (id.to_string(), *text));
+        Library::from_sources(sources)
+    }
+
+    /// Loads the files of one pack from `dir/<pack>/…`; ids stay relative to
+    /// `dir` (`nfpa/contacts/no`), as in the built-in set. For a user or
+    /// company folder laid out like `symbols/`.
+    pub fn load_dir_pack(dir: &Path, pack: Pack) -> Result<Library, LoadError> {
+        let prefix = format!("{}/", pack.id());
+        let sources = read_dir_sources(dir)?;
+        Library::from_sources(
+            sources
+                .iter()
+                .filter(|(id, _)| id.starts_with(&prefix))
+                .map(|(id, text)| (id.clone(), text.as_str())),
+        )
+    }
+
+    /// Loads every `*.toml` file below `dir` as one library (a folder of
+    /// symbols of a single pack, or a user folder); ids are the paths relative to
     /// `dir` without the extension, using `/` separators. Fails on the first
     /// problem in any file.
     pub fn load_dir(dir: &Path) -> Result<Library, LoadError> {
