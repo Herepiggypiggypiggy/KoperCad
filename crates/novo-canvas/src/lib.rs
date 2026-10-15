@@ -17,8 +17,10 @@
 //! - `render::CanvasRenderer`: wgpu pipeline that draws meshes (feature
 //!   `gpu`, on by default through `egui`).
 //! - [`widget`] (feature `egui`): an egui widget wiring all of it together.
+//! - [`cabinet`]: the Cabinet view (plate, rails, device boxes) from plain structs.
 //! - [`model`] (feature `model`): keeps a scene in sync with a `novo-core` page.
 
+pub mod cabinet;
 pub mod demo;
 pub mod drafting;
 pub mod geom;
