@@ -30,12 +30,13 @@ What goes wrong in page-first tools (EPLAN):
 | PLC station | A text name shared by its cards (`plc.station`) | the name | its cards in slot order |
 | Card (CPU, I/O card, coupler) | A `Device` with `kind = Plc` | slot, start addresses, card layout override | address ranges, free channels |
 | Card layout (what channels it has) | The part's `plc.channels` (`DI16`, `DI8 DQ8`, `AI4`), else the device's | in the part | channel list |
-| Channel | A symbol of the card (`SymbolRole::Device { main: false }`) with `plc.channel` | the channel number | address, label, I/O list row |
+| Channel | A symbol of the card (`SymbolRole::Device { main: false }`) with `plc.channel` | its type and number (`"DI 3"`) | address, label, I/O list row |
 | Card overview | The card's main symbol (`main: true`), optional | | its channel image |
 | Signal text | The channel symbol's `plc.signal` | only when typed | otherwise the connected device's description |
 
-A card is a device like any other: it has a tag (`-A4`, letter code A from
-the shared IEC 81346-2 table, `plc.*` functions), a part, a location and
+A card is a device like any other: it has a tag (`-K4`; its letter code
+comes from `novo_symbols::letter_code`, which codes PLCs and their I/O
+modules K, DESIGN §6), a part, a location and
 cross references. A channel is one function of that device, exactly as a
 contact is one function of a contactor. That is the whole idea: **PLC I/O
 reuses device ownership**, so references, renaming, Shift+G, the inspector
@@ -58,11 +59,21 @@ fields.
 | `AQ2` (or `AO2`) | 2 analog outputs | outputs | 16 bits |
 
 Channels are numbered from 0 per type in the order written (`DI8 DQ8`:
-DI 0-7, DQ 0-7; `DI8 DQ8 DI8`: the second DI group is DI 8-15). Inside its
+DI 0-7, DQ 0-7; `DI8 DQ8 DI8`: the second DI group is DI 8-15). The five
+types number separately: `RO` is its own type, so `DQ4 RO4` has DQ 0-3 and
+RO 0-3, although both use the output space. Inside its
 space a card packs digital channels bit by bit and starts each analog
 channel on a word. The part supplies the layout; a device-level `plc.channels`
 is an override (marked, resettable, DESIGN §7), for cards with no part yet.
 A card with neither has no channels and the Issues list says so.
+
+### Channel identity
+
+A channel symbol stores which channel it draws as type and number,
+`plc.channel = "DI 3"`. The type is stored, not taken from the symbol, so a
+DI symbol that says `"DQ 3"` is a mismatch the checks can see (§7), and a
+number alone is never ambiguous on a mixed card. Placement always writes it;
+the inspector chip (§4) changes it.
 
 ## 3. Addresses
 
@@ -77,19 +88,21 @@ This is the same reasoning as the pinned flow for pages (DESIGN §8).
 
 **A channel's address is always derived:** card start plus channel offset.
 It is never typed, never stored on the symbol and never drawn as a literal
-text, so it cannot drift. Rename the card start in the inspector and every
+text, so it cannot drift. Change the card start in the inspector and every
 channel label, the overview and the I/O list follow in the same undo step.
 
 | Change | What happens |
 | --- | --- |
 | Add a card | Next free range in its station, one undo step with the add |
-| Change a card's start (inspector) | Its channels follow; an overlap is refused while typing, with the card it would overlap |
+| Change a card's start (inspector) | Its channels follow; the inspector refuses an overlap while typing, naming the card it would overlap. A script or AI edit through `SetProperty` is not refused; the overlap is then a problem (§7) |
 | Change the part to a bigger card | Its range grows; if that overlaps the next card, a problem is marked on both (never a silent shift) |
 | `renumber io` | Re-packs the station in slot order, with a preview listing every address that moves; one undo step. The only command that moves addresses |
 | Delete a card | Its range becomes free; nothing else moves |
 
 Digital and analog share a space as on most PLCs: a 16-channel DI card takes
-2 bytes of the input space, a 4-channel AI card 8 bytes (aligned to a word).
+2 bytes of the input space, a 4-channel AI card 8 bytes. A card with analog
+channels in a space starts there on a word (an even byte), and inside the
+card each analog channel starts on a word too.
 
 **How addresses read is a rule**, one sentence in the Rules document:
 "PLC addresses are written [IEC 61131 ▾ | Siemens | Rockwell | Plain]".
@@ -111,7 +124,7 @@ Channel symbols already exist in `novo-symbols` (`iec/plc/digital_input`,
 with an `address` anchor.
 
 - **Placing.** The grammar is mnemonic plus device, as for contacts
-  (`no K1`): `di A4` places the next undrawn DI channel of `-A4`;
+  (`no K1`): `di K4` places the next undrawn DI channel of `-K4`;
   `di` alone takes the card last used on this page, else the only card with
   a free DI channel, else asks in the surface by listing the cards with free
   DI channels (pickable rows, DESIGN §4). Sticky: the next click places the
@@ -119,14 +132,17 @@ with an `address` anchor.
   aliases from WS-08's table (`ingang`, `uitgang`).
 - **From a signal.** With a contact, sensor or coil selected, `to plc`
   (`naar plc`) places the next free channel of the right type next to it and
-  connects it: an NO contact or sensor gets a DI, a coil or valve a DQ. One
+  connects it: a contact (NO or NC: fault, E-stop and overload feedback are
+  usually NC) or a sensor gets a DI, a coil or valve a DQ. The sense is
+  recorded in the signal text ("Overload -F3 tripped (NC)"), not in the
+  channel. One
   undo step. This is the "running signal to the PLC" sentence as a command.
 - **Choosing a channel.** The inspector of a channel shows its card and
-  channel as one chip (`-A4 · DI 3`). Picking another free channel moves the
+  channel as one chip (`-K4 · DI 3`). Picking another free channel moves the
   identity, not the drawing. A taken channel is listed with where it is
   drawn, not hidden.
 - **Labels.** At the `address` anchor the canvas draws the derived address
-  (`%IX4.3`); below the tag, the card location (`-A4 2.1`) as for contacts.
+  (`%IX4.3`); below the tag, the card location (`-K4 2.1`) as for contacts.
   These are scene labels like cross reference labels, not `Text` records.
   The signal text sits at `function_text` when the symbol has that anchor.
 - **The overview.** The card's main symbol, when drawn, carries a channel
@@ -165,7 +181,7 @@ including spares, in address order:
 | --- | --- |
 | Address | derived, in the project's style |
 | Type | DI, DQ, RO, AI, AQ |
-| Card | tag and slot (`-A4`, slot 3) |
+| Card | tag and slot (`-K4`, slot 3) |
 | Channel | number among the card's channels of its type |
 | Pin | the channel symbol's pin name, else the part's terminal designation |
 | Signal | `plc.signal`, else the connected device's description |
@@ -187,10 +203,15 @@ Marked in place and listed in Issues (WS-14 runs them through `novo-plc`):
 | Two cards' address ranges overlap | Error | both cards (overview or first channel) |
 | A channel is drawn twice | Error | both symbols |
 | A channel number is beyond the card's layout | Error | the symbol |
-| A channel symbol's type does not match its channel (DI symbol on a DQ) | Error | the symbol |
+| A channel symbol's type does not match its stored channel (a DI symbol with `"DQ 3"`) | Error | the symbol |
 | A card has no layout (no part and no `plc.channels`) | Warning | the card |
 | A drawn channel is connected to nothing | Warning | the symbol |
 | Two cards in one station share a slot | Warning | both cards |
+| A channel symbol has no `plc.channel` | Warning | the symbol |
+| A card has channels in a space but no start there (made by a script) | Warning | the card |
+
+With the Rockwell style, addresses are slot and channel, so byte overlaps are
+not reported (§11).
 
 Spare channels are not a problem; they are a column in the I/O list.
 
@@ -198,8 +219,8 @@ Spare channels are not a problem; they are a column in the I/O list.
 
 | Piece | Crate | Thread |
 | --- | --- | --- |
-| Card layouts, address allocation and formatting, channel index, labels, I/O rows, problems, `renumber io` and `to plc` as commands | `novo-plc` | WS-17 |
-| `di A4` placement and `to plc` in the command surface, aliases | `novo-workflow`, `novo-editor` | WS-08, WS-06 (calling `novo-plc`) |
+| Card layouts, address allocation and formatting, channel index, labels, I/O rows, problems, `renumber io` and `to plc` as composed transactions | `novo-plc` | WS-17 |
+| `di K4` placement and `to plc` in the command surface, aliases | `novo-workflow`, `novo-editor` | WS-08, WS-06 (calling `novo-plc`) |
 | Address and card labels in the scene, channel image | `novo-canvas` via the xref label path | WS-03, WS-10 |
 | G / Shift+G between channels and the overview | `novo-xref` | WS-10 (channels are ordinary device functions already) |
 | I/O list report and its pages | `novo-reports` | Outputs |
@@ -219,7 +240,9 @@ has settled in use, WS-02 may make these typed:
 - `ProjectRules::plc { address_style }` in place of `plc.address_style`;
 - the card fields (`station`, `slot`, `start.i`, `start.q`, `channels`
   override) as `Device.plc: Option<PlcCard>`;
-- `plc.channel` and `plc.signal` on channel symbols.
+- `plc.channel` and `plc.signal` on channel symbols;
+- stations as `Structure` records, so renaming a station is one edit
+  instead of one per card.
 
 ## 10. Engine pull requests, in order
 
@@ -230,14 +253,19 @@ has settled in use, WS-02 may make these typed:
 3. Channel index: which symbol draws which channel, labels, free channels,
    the "next channel" query placement needs; the problems of §7.
 4. Commands: add card with allocated start, place next channel, `to plc`,
-   `renumber io` with preview, all as `novo-core` commands (one undo step).
+   `renumber io` with preview. Each is one `transact` composed of existing
+   `novo-core` commands (`AddDevice`, `PlaceSymbol`, `SetProperty`,
+   `Connect`), so it is one undo step on the same path as scripts and AI
+   edits. `novo-plc` adds no `Command` variants; anything that would need
+   one goes to WS-02 first.
 5. I/O list rows for the Outputs thread, and the rows for the Devices drawer.
 
 ## 11. Open questions
 
 - Rockwell addressing is slot and channel, not bytes. Is the byte model plus
   a style enough, or does a Rockwell project need its own allocation? (v1:
-  the style reads slot and channel; allocation is unused there.)
+  the style reads slot and channel; allocation is unused there, and Issues
+  reports no byte overlaps in a Rockwell-style project.)
 - Safety PLC channels (F-DI with two pins and a test pulse output) need a
   two-pin channel symbol and a pairing rule; deferred to a later PR.
 - Distributed I/O (several couplers per station on a fieldbus): one station
