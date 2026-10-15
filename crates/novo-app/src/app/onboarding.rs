@@ -278,7 +278,7 @@ impl NovoApp {
                     if next.is_some() {
                         let key = self.step_key(&STEPS[STEPS.len() - 1]);
                         ui.weak(format!(
-                            "Skip hides this. {key}, then "fast keys", brings it back."
+                            "Skip hides this. {key}, then fast keys, brings it back."
                         ));
                     }
                     if next.is_none() {
