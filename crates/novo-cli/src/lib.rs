@@ -99,6 +99,10 @@ enum Export {
     Wires(ReportArgs),
     /// Table of contents (the pages).
     Toc(ReportArgs),
+    /// Cable schedule: one row per cable core with its two ends.
+    Cables(ReportArgs),
+    /// Plug connection lists: every pin of every plug with its wire.
+    Plugs(ReportArgs),
     /// Every report in one workbook, one sheet each.
     Reports {
         file: PathBuf,
@@ -212,6 +216,10 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
         Cmd::Export(Export::Devices(args)) => export_reports(&args.file, &["devices"], &args, out),
         Cmd::Export(Export::Wires(args)) => export_reports(&args.file, &["wires"], &args, out),
         Cmd::Export(Export::Toc(args)) => export_reports(&args.file, &["toc"], &args, out),
+        Cmd::Export(Export::Cables(args)) => {
+            export_reports(&args.file, &["cableschedule"], &args, out)
+        }
+        Cmd::Export(Export::Plugs(args)) => export_reports(&args.file, &["plugs"], &args, out),
         Cmd::Export(Export::Reports { file, output }) => {
             let args = ReportArgs {
                 file,
