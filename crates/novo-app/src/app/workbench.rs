@@ -169,11 +169,8 @@ impl Default for Workbench {
             last_export: None,
             live: Default::default(),
             changes: None,
-<<<<<<< HEAD
             background_panel: None,
-=======
             commissioning: None,
->>>>>>> origin/main
             underlay_seen: None,
         }
     }
