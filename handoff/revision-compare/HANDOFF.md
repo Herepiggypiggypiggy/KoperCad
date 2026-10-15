@@ -1,16 +1,22 @@
 # Revision compare handoff
 
-Branch: claude/project-thread-udo78r (kopercad). Owner: this thread, started
-2026-10-15 from the coordinator's brief. Existing revision work is WS-18
-(handoff/ws18): issue, snapshots, `diff`, Changes mode, title block fields.
+Design: docs/design/revision-compare.md (#400, READY). Existing revision
+work is WS-18 (handoff/ws18). Roster: coordination/threads.md.
 
-State: design note written and PR opened as draft. No code yet.
+Agreement with the Revision diff thread (#401): one row type, `ChangeRow`
+(list.rs), which gained `fields: Vec<FieldChange>`. This thread owns the
+compare engine, list.rs, CLI and Python; that thread owns the app list,
+PDF change report, overlay and the From/To pickers. Ping them when the
+engine merges.
 
-Resume: read docs/design/revision-compare.md, then build step 2 in
-crates/novo-revisions (new `compare.rs`; reuse `diff`, `changed_sheets`,
-`Session::snapshot`). Do not change novo-core: the note is a `properties`
-entry. Run `cargo fmt --all`, clippy with -D warnings, `cargo test --workspace`.
+State: engine PR (branch claude/revision-compare-engine, based on #401):
+`compare`, `Side`, `Comparison`, `CompareError`, `FieldChange`,
+`field_changes`, `Group`/`group_of`, unnumbered wire labels by their ends.
+Next: CLI `revisions list|diff` (novo-cli) and the Python call (novo-py),
+then the reviewer notes on #400: old-format snapshot test once a migration
+exists (storage returns an error today, compare reports `Unreadable`),
+name the cache counter when the app caches, batch-move folding.
 
-Rules: PRs stay drafts, no builds, no push after READY, message the reviewer
-with the head SHA after each push (roster: handoff/threads.md).
-Related: #343 revision table (draft, frame owner).
+Resume: `cargo test -p novo-revisions`; fmt and clippy as CLAUDE.md.
+Rules: PRs stay drafts, no builds, no push after READY, message the
+reviewer with the head SHA after each push.

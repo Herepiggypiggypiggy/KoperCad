@@ -1,0 +1,44 @@
+format = 1
+id = "nfpa/protection/rcd_2p"
+name = "Residual current device, 2-pole"
+description = "2-pole residual current circuit breaker (RCCB) that trips on earth leakage."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "protection"
+function = "protection.rcd"
+keywords = ["rcd", "rccb", "residual current", "earth leakage", "2p", "fi", "nfpa", "ansi"]
+aliases = ["rcd2", "rcd"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 24], dir = "down" },
+  { id = "N", at = [8, 0], dir = "up", role = "n" },
+  { id = "N'", at = [8, 24], dir = "down", role = "n" },
+]
+
+anchors = [
+  { role = "tag", at = [-9.5, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [-1.714, 8], to = [6.286, 8], stroke = "dashed" },
+  { kind = "ellipse", center = [4, 20], rx = 7, ry = 1.6 },
+  { kind = "polyline", points = [[-3, 20], [-8, 20], [-8, 8], [-1.714, 8]], stroke = "dashed" },
+  { kind = "text", at = [-9, 20], text = "GFI", size = 2.2, align = "right" },
+  { kind = "line", from = [0, 0], to = [0, 6] },
+  { kind = "line", from = [0, 16], to = [0, 10] },
+  { kind = "line", from = [-3, 6], to = [3, 6] },
+  { kind = "line", from = [-3, 10], to = [3, 10] },
+  { kind = "arc", center = [0, 8], r = 4.6, start = 135, end = 225 },
+  { kind = "line", from = [0, 16], to = [0, 24] },
+  { kind = "line", from = [8, 0], to = [8, 6] },
+  { kind = "line", from = [8, 16], to = [8, 10] },
+  { kind = "line", from = [5, 6], to = [11, 6] },
+  { kind = "line", from = [5, 10], to = [11, 10] },
+  { kind = "arc", center = [8, 8], r = 4.6, start = 135, end = 225 },
+  { kind = "line", from = [8, 16], to = [8, 24] },
+]
+
+[behavior]
+kind = "breaker"
+trip = ["residual"]
+poles = [["1", "2"], ["N", "N'"]]
