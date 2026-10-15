@@ -387,6 +387,21 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["jumper", "bridge", "cross connect"],
         Needs::Selection,
     ),
+    verb(
+        cmd(
+            "terminal.toggle_pe",
+            "Toggle PE terminal",
+            "Edit",
+            &[
+                "pe",
+                "protective earth",
+                "earth terminal",
+                "ground terminal",
+            ],
+            Needs::Selection,
+        ),
+        &["pe"],
+    ),
     cmd(
         "terminal.disconnect",
         "Disconnect terminals",

@@ -50,6 +50,7 @@ pub const DUTCH: &[Aliases] = &[
         &["voorkeuren"],
         &["instellingen", "opties"],
     ),
+    nl("terminal.toggle_pe", &["pe-klem"], &["aardklem", "aarde"]),
     nl("file.quit", &[], &["afsluiten", "stoppen"]),
     // Draw
     nl(
