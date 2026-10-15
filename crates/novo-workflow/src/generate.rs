@@ -208,12 +208,15 @@ struct Row {
     extent: (f64, f64),
 }
 
+/// The rows ready to place, the lines left out by `When`, and header warnings.
+type Prepared = (Vec<Row>, Vec<usize>, Vec<String>);
+
 /// Checks every row and prepares it; nothing is changed.
 fn prepare(
     sheet: &SpecSheet,
     lookup: Lookup<'_>,
     options: &Vars,
-) -> Result<(Vec<Row>, Vec<usize>, Vec<String>), Vec<SheetProblem>> {
+) -> Result<Prepared, Vec<SheetProblem>> {
     let mut problems = Vec::new();
     let mut rows = Vec::new();
     let mut skipped = Vec::new();
@@ -733,10 +736,10 @@ pub fn macros_used(sheet: &SpecSheet) -> Vec<String> {
     };
     let mut out: Vec<String> = Vec::new();
     for row in &sheet.rows {
-        if let Some(name) = row.get(c).map(|s| s.trim()).filter(|s| !s.is_empty()) {
-            if !out.iter().any(|o| o.eq_ignore_ascii_case(name)) {
-                out.push(name.to_owned());
-            }
+        if let Some(name) = row.get(c).map(|s| s.trim()).filter(|s| !s.is_empty())
+            && !out.iter().any(|o| o.eq_ignore_ascii_case(name))
+        {
+            out.push(name.to_owned());
         }
     }
     out

@@ -205,13 +205,13 @@ pub fn set_param(def: &mut BlockDefinition, name: &str, default: Value, spec: Pa
 /// Sets the condition of a template member (`None` clears it).
 pub fn set_when(def: &mut BlockDefinition, member: AnyId, condition: Option<&str>) {
     for record in &mut def.members {
-        if record.id() == member {
-            if let Some(props) = record.properties_mut() {
-                match condition {
-                    Some(c) => props.insert(WHEN_KEY.into(), Value::Text(c.into())),
-                    None => props.remove(WHEN_KEY),
-                };
-            }
+        if record.id() == member
+            && let Some(props) = record.properties_mut()
+        {
+            match condition {
+                Some(c) => props.insert(WHEN_KEY.into(), Value::Text(c.into())),
+                None => props.remove(WHEN_KEY),
+            };
         }
     }
 }
@@ -269,23 +269,23 @@ pub(crate) fn coerce(param: &Param, given: &Value) -> Result<Value, Problem> {
                         return Err(Problem::NotANumber { name, value: shown });
                     }
                 };
-            if let Some(min) = param.spec.min {
-                if n < min {
-                    return Err(Problem::BelowMin {
-                        name,
-                        value: shown,
-                        min,
-                    });
-                }
+            if let Some(min) = param.spec.min
+                && n < min
+            {
+                return Err(Problem::BelowMin {
+                    name,
+                    value: shown,
+                    min,
+                });
             }
-            if let Some(max) = param.spec.max {
-                if n > max {
-                    return Err(Problem::AboveMax {
-                        name,
-                        value: shown,
-                        max,
-                    });
-                }
+            if let Some(max) = param.spec.max
+                && n > max
+            {
+                return Err(Problem::AboveMax {
+                    name,
+                    value: shown,
+                    max,
+                });
             }
             Ok(Val::Num(n).to_value())
         }
@@ -492,10 +492,10 @@ fn excluded_members(def: &BlockDefinition, vars: &Vars) -> Result<BTreeSet<AnyId
         for r in &def.members {
             match r {
                 Record::Symbol(s) => {
-                    if let SymbolRole::Device { device, .. } = &s.role {
-                        if out.contains(&AnyId::from(*device)) {
-                            out.insert(s.id.into());
-                        }
+                    if let SymbolRole::Device { device, .. } = &s.role
+                        && out.contains(&AnyId::from(*device))
+                    {
+                        out.insert(s.id.into());
                     }
                 }
                 Record::Wire(w) => {
@@ -503,10 +503,8 @@ fn excluded_members(def: &BlockDefinition, vars: &Vars) -> Result<BTreeSet<AnyId
                         out.insert(w.id.into());
                     }
                 }
-                Record::Text(t) => {
-                    if t.attached_to.is_some_and(|a| out.contains(&a)) {
-                        out.insert(t.id.into());
-                    }
+                Record::Text(t) if t.attached_to.is_some_and(|a| out.contains(&a)) => {
+                    out.insert(t.id.into());
                 }
                 _ => {}
             }
@@ -602,10 +600,10 @@ pub fn place_parametric(
         };
         count = inst.count;
         let mut values = inst.values.clone();
-        if declared("count") {
-            if let Some(v) = values.iter_mut().find(|(n, _)| n == "count") {
-                v.1 = Value::Int(count as i64);
-            }
+        if declared("count")
+            && let Some(v) = values.iter_mut().find(|(n, _)| n == "count")
+        {
+            v.1 = Value::Int(count as i64);
         }
         let at = Point::new(
             origin.x + inst.pitch.x * (index as f64 - 1.0),
@@ -663,4 +661,67 @@ pub fn asked_values(def: &BlockDefinition, values: &[(String, Value)]) -> BTreeM
         .filter(|(n, _)| !derived.contains(n))
         .cloned()
         .collect()
+}
+
+/// The macro name the shipped DOL starter has.
+pub const STARTER_DOL: &str = "Motor starter DOL";
+
+/// Gives a shipped macro the typed and calculated parameters it should have.
+/// Until the macro library carries these specs in its own files, the app
+/// calls this on the starters it loads; a macro of another name is left
+/// alone.
+///
+/// "Motor starter DOL" gets a power range, a supply voltage list, and a
+/// calculated rated current `P / (sqrt(3) * U * 0.8)` (0.8 stands for motor
+/// efficiency times power factor: a planning value, not a nameplate value),
+/// printed on the motor and the overload relay.
+pub fn enrich_starter(def: &mut BlockDefinition) {
+    if def.name != STARTER_DOL {
+        return;
+    }
+    set_param(
+        def,
+        "power",
+        Value::Float(2.2),
+        ParamSpec {
+            label: "Motor power".into(),
+            kind: ParamKind::Number,
+            min: Some(0.09),
+            max: Some(250.0),
+            unit: "kW".into(),
+            ..ParamSpec::default()
+        },
+    );
+    set_param(
+        def,
+        "voltage",
+        Value::Int(400),
+        ParamSpec {
+            label: "Supply voltage".into(),
+            kind: ParamKind::Choice,
+            choices: ["230", "400", "480", "690"].map(String::from).to_vec(),
+            unit: "V".into(),
+            ..ParamSpec::default()
+        },
+    );
+    set_param(
+        def,
+        "current",
+        Value::Float(0.0),
+        ParamSpec {
+            label: "Rated current (planning value)".into(),
+            unit: "A".into(),
+            derive: Some("round(power * 1000 / (sqrt(3) * voltage * 0.8), 1)".into()),
+            ..ParamSpec::default()
+        },
+    );
+    for member in &mut def.members {
+        if let Record::Device(d) = member {
+            match d.description.as_str() {
+                "Motor {power} kW" => d.description = "Motor {power} kW, {current} A".into(),
+                "Overload relay" => d.description = "Overload relay, set {current} A".into(),
+                _ => {}
+            }
+        }
+    }
 }

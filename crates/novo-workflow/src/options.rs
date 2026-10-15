@@ -189,10 +189,10 @@ pub fn define_option(tx: &mut Tx<'_>, def: OptionDef) -> Result<()> {
         .cloned();
     tx.set_info(|i| {
         i.properties.insert(OPTIONS_KEY.into(), Value::Text(json));
-        if let Some(c) = &current {
-            if def.check(c).is_err() {
-                i.properties.remove(&format!("{VALUE_PREFIX}{}", def.id));
-            }
+        if let Some(c) = &current
+            && def.check(c).is_err()
+        {
+            i.properties.remove(&format!("{VALUE_PREFIX}{}", def.id));
         }
     })
 }
@@ -420,10 +420,8 @@ pub fn evaluate(project: &Project, assignment: &Assignment) -> Evaluation {
                         out.inactive.insert(t.id.into());
                     }
                 }
-                Record::CabinetPlacement(c) => {
-                    if off.contains(&AnyId::from(c.device)) {
-                        out.inactive.insert(c.id.into());
-                    }
+                Record::CabinetPlacement(c) if off.contains(&AnyId::from(c.device)) => {
+                    out.inactive.insert(c.id.into());
                 }
                 _ => {}
             }
@@ -529,10 +527,10 @@ pub fn configuration(project: &Project, assignment: &Assignment) -> Configuratio
         devices.push(tag);
     }
     for t in project.terminals() {
-        if eval.is_active(t.id) {
-            if let Some(p) = t.part {
-                add_part(project, p);
-            }
+        if eval.is_active(t.id)
+            && let Some(p) = t.part
+        {
+            add_part(project, p);
         }
     }
     for c in project.cables() {

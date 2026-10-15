@@ -210,11 +210,11 @@ impl Parser {
     }
 
     fn op(&mut self, ops: &[&'static str]) -> Option<&'static str> {
-        if let Some(Tok::Op(o)) = self.peek() {
-            if let Some(found) = ops.iter().find(|x| *x == o) {
-                self.at += 1;
-                return Some(found);
-            }
+        if let Some(Tok::Op(o)) = self.peek()
+            && let Some(found) = ops.iter().find(|x| *x == o)
+        {
+            self.at += 1;
+            return Some(found);
         }
         None
     }

@@ -40,6 +40,7 @@ mod sizing;
 mod terminals;
 mod title_revisions;
 mod userkeymap;
+mod variants;
 mod wheel;
 mod workbench;
 mod workspace;
@@ -61,6 +62,8 @@ mod example_tests;
 mod gate1_tests;
 #[cfg(test)]
 mod onboarding_tests;
+#[cfg(test)]
+mod variants_tests;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -807,6 +810,8 @@ impl NovoApp {
         self.project_settings_dialog(&ctx);
         self.macro_save_dialog(&ctx);
         self.macro_place_window(&ctx);
+        self.options_window(&ctx);
+        self.generate_window(&ctx);
         self.issue_revision_dialog(&ctx);
         self.compare_window(&ctx);
         self.page_form_dialog(&ctx);
