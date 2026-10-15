@@ -3,6 +3,7 @@
 //! toasts for messages, the dialogs and action dispatch. There is no menu
 //! bar and no status bar.
 
+mod assembly;
 mod cabinet;
 mod cabinet_inspector;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
@@ -48,6 +49,8 @@ mod workspace;
 mod xref;
 
 #[cfg(test)]
+mod assembly_tests;
+#[cfg(test)]
 mod cabinet_tests;
 #[cfg(test)]
 mod changes_tests;
@@ -70,6 +73,7 @@ use eframe::egui;
 use crate::actions::Action;
 
 /// Hover text of the bulk-edit exports (the data to edit, not the reports).
+const ASSEMBLY_HINT: &str = "The workshop sheet of every cabinet: prepare, drill, mount, wire, label and check, with a box to tick at each line. Needs a cabinet with a mounting plate.";
 const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel. Export only: bringing the edited file back comes with the import dialog. The generated reports are under Export all reports to Excel.";
 use novo_core::{Aspect, Command, DeviceTag, ModelError, Outcome, PageId, PageKind};
 use pages::{FormKind, PageForm, PageView};
