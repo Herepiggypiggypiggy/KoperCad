@@ -45,7 +45,6 @@ pub(crate) struct Workbench {
     pub(super) xref: LiveXref,
     /// The generated pages' reports, live.
     pub(super) reports: super::reports::Reports,
-    /// The `renumber io` preview waiting for Enter or Esc, per station.
     /// The place wheel, when open.
     pub(super) wheel: Option<super::wheel::Wheel>,
     /// A key that opens the wheel went down at this time (egui seconds),
@@ -53,6 +52,7 @@ pub(crate) struct Workbench {
     pub(super) place_hold: Option<(f64, Vec<egui::Key>)>,
     /// Commands the canvas asked for, run next frame by id.
     pub(super) queued: Vec<&'static str>,
+    /// The `renumber io` preview waiting for Enter or Esc, per station.
     pub(super) renumber: Option<Vec<novo_plc::commands::RenumberPlan>>,
     /// Which sheet of a generated page the canvas shows (0 for the first).
     pub(super) sheet: usize,
