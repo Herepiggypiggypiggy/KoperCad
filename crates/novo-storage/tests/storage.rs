@@ -784,6 +784,7 @@ fn issue(doc: &mut Document, index: &str) -> (RevisionId, ChangeSet) {
             date: "2026-10-15".into(),
             author: "TV".into(),
             description: String::new(),
+            note: String::new(),
         })
         .unwrap();
     match outcome.created[..] {

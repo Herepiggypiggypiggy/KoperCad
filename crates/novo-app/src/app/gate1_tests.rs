@@ -1920,6 +1920,7 @@ fn the_title_block_prints_the_set_revision_after_an_issue() {
             date: "2026-10-15".into(),
             author: "TV".into(),
             description: String::new(),
+            note: String::new(),
         })
         .unwrap();
     d.app.changed_outside_canvas(&outcome.changes);
