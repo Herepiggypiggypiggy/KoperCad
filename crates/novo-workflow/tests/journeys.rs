@@ -753,3 +753,55 @@ fn every_grammar_form_can_be_picked_without_typing_syntax() {
         Target::Device(gate.k1)
     );
 }
+
+#[test]
+fn wiring_mode_is_one_key_and_findable_by_its_names() {
+    use novo_workflow::keymap::{Chord, Focus, Key};
+    let mut doc = Document::default();
+    motor_starter(&mut doc).unwrap();
+    let library = Library::builtin().unwrap();
+    let keymap = Keymap::workflow();
+    let palette = Palette::default();
+    let src = sources(doc.project(), &library, &keymap);
+
+    // Shift+W switches, W still connects; neither types into a field.
+    let shift_w = Chord::shift(Key::letter('w'));
+    assert_eq!(keymap.resolve(shift_w, Focus::Canvas), Some("wire.mode"));
+    assert_eq!(keymap.resolve(shift_w, Focus::TextField), None);
+    assert_eq!(
+        keymap.resolve(Chord::plain(Key::letter('w')), Focus::Canvas),
+        Some("tool.connect")
+    );
+    assert_eq!(
+        keymap.shortcut_text("wire.mode").as_deref(),
+        Some("Shift+W")
+    );
+
+    // Typed "mode", "lines" and the names of the two programs find it.
+    for query in ["mode", "lines", "eplan", "autocad", "modus", "lijnen"] {
+        let rows = palette.search(query, &src);
+        assert!(
+            rows.iter()
+                .take(3)
+                .any(|r| r.target == Target::Command("wire.mode")),
+            "{query}: {:?}",
+            rows.iter().take(3).map(|r| &r.label).collect::<Vec<_>>()
+        );
+    }
+    // The verb with a mode runs that mode, in either language.
+    for (query, mode) in [
+        ("wiring mode lines", "lines"),
+        ("wiring mode corners", "corners"),
+        ("bedradingsmodus lijnen", "lines"),
+        ("bedradingsmodus hoeken", "corners"),
+    ] {
+        assert_eq!(
+            palette.search(query, &src)[0].target,
+            Target::Run {
+                command: "wire.mode",
+                argument: mode.into()
+            },
+            "{query}"
+        );
+    }
+}

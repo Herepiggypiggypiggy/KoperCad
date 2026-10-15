@@ -42,6 +42,9 @@ pub mod layout;
 
 pub use address::{Address, AddressStyle};
 pub use card::{Card, LayoutSource, address_style, allocate, cards, next_start};
-pub use index::{DrawnChannel, FromKey, Functions, Issue, PlcIndex, channel_key, parse_channel};
+pub use commands::{RenumberPlan, StartMove};
+pub use index::{
+    DrawnChannel, FromKey, Functions, Issue, PlcIndex, READS, channel_key, parse_channel,
+};
 pub use io::IoRow;
 pub use layout::{CardLayout, Channel, ChannelType, Group, LayoutError, Space};

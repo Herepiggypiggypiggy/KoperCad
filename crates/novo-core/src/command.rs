@@ -13,7 +13,7 @@ use crate::entity::{
     PotentialKind, PotentialSet, PotentialSpec, ProjectInfo, SymbolKey, SymbolRole, TextContent,
     TextPlacement, Value,
 };
-use crate::error::Result;
+use crate::error::{ModelError, Result};
 use crate::geom::{Placement, Point};
 use crate::id::{
     AnyId, BlockDefinitionId, BlockInstanceId, CableId, DeviceId, PageId, PartId, PotentialId,
@@ -29,6 +29,10 @@ use crate::tx::Tx;
 pub enum Command {
     SetProjectInfo {
         info: ProjectInfo,
+    },
+    /// The user deletes a page; see [`Tx::delete_page`].
+    DeletePage {
+        page: PageId,
     },
     AddPage {
         name: String,
@@ -294,6 +298,7 @@ impl Command {
     pub fn label(&self) -> String {
         match self {
             Command::SetProjectInfo { .. } => "Edit project info".into(),
+            Command::DeletePage { .. } => "Delete page".into(),
             Command::AddPage { .. } => "Add page".into(),
             Command::AddDevice { .. } => "Add device".into(),
             Command::SetTag { .. } => "Rename device".into(),
@@ -347,6 +352,10 @@ impl Tx<'_> {
         let created: AnyId = match command {
             Command::SetProjectInfo { info } => {
                 self.set_info(|i| *i = info)?;
+                return Ok(Vec::new());
+            }
+            Command::DeletePage { page } => {
+                self.delete_page(page)?;
                 return Ok(Vec::new());
             }
             Command::AddPage {
@@ -585,6 +594,11 @@ impl Tx<'_> {
             }
             Command::Insert { record } => self.insert_record(record)?,
             Command::Remove { id } => {
+                // An issued set went out with this index, and pages are
+                // frozen with it; undoing the issue is the way back.
+                if let AnyId::Revision(revision) = id {
+                    return Err(ModelError::IssuedRevision(revision));
+                }
                 self.remove(id)?;
                 return Ok(Vec::new());
             }

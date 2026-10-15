@@ -266,7 +266,7 @@ clear the selection.
 | Ctrl+Shift+F / F11 | Focus mode / full screen |
 | I | Place (command surface in place mode at the pointer) |
 | 1 to 9 | Favourite symbols, only while the place query is empty |
-| W | Connect, for chains (one connection is a drag from a pin) |
+| W | Connect, for chains (one connection is a drag from a pin); Shift+W switches Corners / Lines, also in the middle of a wire |
 | R / X | Rotate / mirror while placing or on the selection |
 | F2 | Edit the selected tag or text |
 | Enter | Accept the highlighted proposal |
@@ -295,10 +295,144 @@ the view, nothing moves. Otherwise the view centres on the target and zooms
 in to readable size (a closer zoom the user already had is kept), unless
 the target is too big to fit, when it zooms out just enough.
 
-There are no keys for corners, T-pieces, terminals, cables or potentials,
-because the user does not place those. "Repeat last tool" is the first item
+There are no keys for T-pieces, terminals, cables or potentials, because
+the user does not place those. Corners are clicks in a wire being made,
+never symbols. "Repeat last tool" is the first item
 of the context menu on empty canvas and the first row of an empty command
 surface; it has no key, so Enter always means accept.
+
+**Wiring modes.** The Connect tool has two modes, named for the two ways
+CAD programs let you wire. Both make the same thing: a connection with a
+stored route (corners here are the bend points of a route, never pieces
+the user places, §9), so a project drawn in one mode edits the same in the
+other.
+
+- **Corners** (the default, EPLAN style): click where the wire should turn
+  and the lines between your clicks connect by themselves, with at most two
+  bends per leg. Each leg's elbow runs first along the axis the pointer has
+  moved furthest from the last point; the preview shows it before the click
+  and R flips it (R is already rotate while placing, so no new key). Click
+  a pin, a junction or a wire to finish.
+- **Lines** (AutoCAD style): you draw the lines. Each click commits one
+  straight segment from the previous point, locked to the axis the pointer
+  is nearer to (a diagonal pointer snaps to the nearer axis), and nothing is
+  routed for you. Click a pin, a junction or a wire to finish; Enter or a
+  double click finishes on the last point when it is on a pin or a wire.
+
+**A drag from a pin is not a mode.** In any tool and either mode, pressing
+on a pin and moving more than 4 px (the same threshold as pan) is the quick
+connection: release on a pin or a wire and the router picks the whole
+route; release on nothing and it cancels, as Esc does. A press that moves
+less than 4 px is a click, so a shaky click never becomes a line. The
+connection budget of 1 in §6 is the drag; a wire with N corners costs N + 2
+clicks in either mode.
+
+In both modes, Backspace takes back the last corner or segment and Esc
+cancels the whole wire in progress (then the rest of the Escape ladder). A
+wire that ends on another wire of the same potential makes a T-junction; on
+a wire of a different declared potential it is refused with the reason. A
+route never passes through another conductor's pin or junction. Lines are
+orthogonal only (§12 for diagonals).
+
+**The toggle.** Shift+W switches mode, from anywhere on the drawing and
+also in the middle of a wire (the points already placed stay and the next
+click follows the new mode). W is the wire, Shift+W is how wires are
+drawn, the same pairing as G and Shift+G. A small two-segment chip
+`Corners | Lines` sits right of the Connect icon in the tool dock, always
+visible and never behind a hover. It is quiet (faint text) while another
+tool is active, and clicking either segment selects Connect in that mode,
+so tool and mode change in one action. The selected segment is the usual
+lift, not copper, which stays on the active tool's underline. The Connect
+icon itself carries the mode (an L for Corners, a straight segment for
+Lines). The tooltip reads "Connect · W · Shift+W switches". The mode is
+also named in the dock hint ("Lines: click a pin · click each corner ·
+click a pin · Backspace undo · Shift+W corners"). Compact dock keeps the mode word in
+the hint. A held Shift+W does not flip back and forth: key repeat is
+ignored. The command surface lists `Wiring mode: corners` and `Wiring
+mode: lines` under Draw (command `wire.mode`, typed "mode" or "lines").
+The mode is a Preference of the user, not of the project, so two people
+on one project each keep their own. Switching never changes a wire that
+already exists.
+
+**Lines never overlap.** The rule holds for every way a wire is made,
+moved or edited, in both modes, and is enforced by the editor engine, not
+the screen:
+
+- two wires on a page never share any length; they may cross (a crossing
+  without a connection gets no dot, §2) and may meet at a pin or a
+  junction;
+- two wires of one conductor that would run over each other from a shared
+  pin diverge at a derived junction; the stretch is stored and drawn once;
+- in Corners, a new or edited route that would lie over another wire (of
+  any conductor) is nudged one grid step sideways, up to three steps,
+  keeping its ends on their pins, and the preview shows the nudge before
+  the click ("adjusted to avoid -W3 L1" in the dock hint); if that cannot
+  clear it, the gesture is refused;
+- in Lines, a segment that would lie over another wire is refused before
+  it is placed, never nudged, because the line is exactly what the user
+  drew. In Corners a clicked corner that lies on another wire is refused
+  the same way, and the user's placed corners are never moved. The
+  refusal is live while the pointer moves, not only on click, so there is never a dead click, and never colour alone
+  (the transient mark in §5): not-allowed cursor, the clashing segment
+  tinted with the Error colour, a dashed outline of the refused corner or
+  line with a cross, the preview kept up to the last legal point, and the
+  dock hint in Error text ("Overlaps -W3 L1"). Nothing opens a dialog;
+- the reason is returned as data (the other conductor and the stretch), not
+  only drawn as text, so the dock, the tester and scripts read the same
+  answer;
+- an interactive move (dragging or nudging a symbol) is held to the same
+  rule: the check runs on its wires while the ghost moves, a wire that
+  would overlap is nudged where it can be, and where no nudge clears it the
+  move is refused live with the same cursor, tint, outline and hint. The
+  owner's words are that lines are never allowed or able to overlap, so a
+  person's action cannot create one;
+- paths that cannot ask (scripts, AI edits, undo and redo, opening a file)
+  accept an overlap and report it: the file is not rewritten on load, and
+  novo-checks reports each overlap as a warning (`wire.overlap`) that
+  marks both segments, with the nudge as its fix. It is a warning, not an
+  error: connectivity lives in the model, not in where the lines are, and
+  an overlap can only arrive from these paths;
+- a refusal changes nothing and leaves the undo depth as it was. There is
+  no merging of overlapping wires, so a wire's number and text are never
+  at stake.
+
+A hand-drawn route (Lines, or Corners with clicked corners) is kept by
+`tidy`; selecting it and choosing `tidy` re-routes it on purpose. Moving a
+symbol stretches routed wires as before and stretches hand-drawn ones by
+moving only their end segments, so every corner the user placed stays
+where it was put.
+
+Acceptance, for testers and reviewers, run in both modes unless marked:
+
+1. W, drag pin to pin: a routed wire, no overlap (identical in both modes).
+   Releasing a drag on nothing cancels. A press under 4 px is a click.
+2. Shift+W: the chip and the hint change mode; Shift+W again: back. Holding
+   Shift+W does not flip repeatedly. Shift+W in the middle of a wire keeps
+   the points placed and the next click follows the new mode.
+3. Corners, EPLAN style: click pin, click two corners, click pin: a wire
+   through those corners, every segment horizontal or vertical; R flips an
+   elbow, shown in the preview before the click.
+4. Lines, AutoCAD style: click pin, click two corners, click pin: the same
+   wire, with no segment the user did not click.
+5. Lines: a segment over another wire is refused live, with the
+   cursor, tint, outline and reason in the hint, and nothing changes.
+   Corners: a clicked corner over another wire is refused the same
+   way; a router leg is nudged clear or refused.
+6. Two wires of one conductor leaving a shared pin store the shared
+   stretch once, with a junction where they diverge; a wire laid over a
+   wire of the same conductor elsewhere is nudged or refused like any
+   other. A refusal leaves the undo depth unchanged.
+7. Ending on a wire of the same potential makes a T-junction; ending on a
+   different declared potential is refused with the reason.
+8. Esc mid-wire cancels the whole wire; Backspace removes one corner or
+   segment; undo removes one whole wire.
+9. Dragging a symbol so that a wire would lie over another wire nudges
+   that wire, or, where no nudge clears it, is refused live with the
+   reason. A script, an AI edit or an undo that would overlap goes through
+   and shows in Issues, marking both segments. A file with existing
+   overlaps opens unchanged and shows them in Issues.
+10. Quit and reopen: the mode is the one last used, read from the user's
+    Preferences and not from the project file.
 
 Keys match the logical character, not the physical position, so `?`,
 Ctrl+Z and Ctrl+Y work on Dutch, German (QWERTZ) and US layouts alike.
@@ -315,6 +449,7 @@ between fields as usual.
 | Proposal (terminals, cable, part) | Dashed steel blue at 55%, 1 px; the highlighted one dashed at full strength, 2 px. Proposals are never solid, so none can be mistaken for a drawn wire | "↵ accept · Tab next" on the highlighted one only |
 | Warning | Small amber triangle, top right of the object, screen sized | on hover |
 | Error | Small red octagon, same place | on hover |
+| Refused wire (transient, never stored) | The clashing segment tinted Error, a dashed Error outline of the refused corner or line with a cross, the Error icon in the dock hint | "Overlaps -W3 L1" in the dock hint; the not-allowed cursor |
 | Override | Hollow grey diamond, top left, while Shift+O is held | the inspector shows "override" and a reset arrow |
 | Change (Changes mode only) | Added green, modified amber, removed faint red dashed ghost | listed in the outline |
 
@@ -544,7 +679,7 @@ Changes mode, WS-09 the PDF.
 | Question | Options considered | Decision |
 | --- | --- | --- |
 | Pages | Hand-made; flowing; pinned flow | **Pinned flow:** automatic pagination, user page breaks never move, and pages freeze when a revision is issued so `page.column` references never move under a printed set |
-| Generated pages under pinned flow | Freeze them too; append new sheets at the end; reflow | **Reflow.** Generated pages (BOM, terminal and cable diagrams, lists) sit in their own numbered sections after the schematic pages, so their growth never renumbers a schematic page. No reference points into them, so they reflow freely inside their section; the PDF bookmarks and the contents list name each sheet by what it shows (strip -X1, cable -W3), and a revision marks the generated sheets whose content changed; anything that ever links into a generated sheet points at it by name, never by `page.column`. A generated sheet's "n of m" counts within its own section, and a schematic title block's "n of m" counts schematic pages only, so a growing section never changes a frozen title block. A generated sheet is named by its section number plus a letter (`20a`, `20b`, ... `20z`, `20aa`, skipping `i`, `l` and `o` so `20l` never reads as `201`), never with a dot, so a sheet name can never be read as a `page.column` reference. Inserted schematic pages use the same letters (§3); generated sections are numbered after the schematic pages (the contents list alone opens the set as section `0`; it reflows like any other section and is not counted among schematic pages), and if a name ever clashes the schematic page keeps it and the sheet takes a `'` mark (`20b'`) |
+| Generated pages under pinned flow | Freeze them too; append new sheets at the end; reflow | **Reflow.** Generated pages (BOM, terminal and cable diagrams, lists) sit in their own numbered sections after the schematic pages, so their growth never renumbers a schematic page. In page order the contents list opens the set and every other generated page comes after every drawn (schematic or overview) page, whatever its structure; generated pages sort among themselves by structure, then name. A project wants every kind of generated page until the user deletes one: deleting a generated page turns its whole kind off in the project rules, so it does not come back on open. Deleting one terminal diagram (strip -X3) therefore drops the diagrams for every strip, so the status line says what happened ("Terminal diagrams turned off · Rules to turn back on"); the delete is one undo step, and undo turns the kind back on; and Rules lists the turned-off kinds, each with a rule sentence that turns it back on. No reference points into them, so they reflow freely inside their section; the PDF bookmarks and the contents list name each sheet by what it shows (strip -X1, cable -W3), and a revision marks the generated sheets whose content changed; anything that ever links into a generated sheet points at it by name, never by `page.column`. A generated sheet's "n of m" counts within its own section, and a schematic title block's "n of m" counts schematic pages only, so a growing section never changes a frozen title block. A generated sheet is named by its section number plus a letter (`20a`, `20b`, ... `20z`, `20aa`, skipping `i`, `l` and `o` so `20l` never reads as `201`), never with a dot, so a sheet name can never be read as a `page.column` reference. Inserted schematic pages use the same letters (§3); generated sections are numbered after the schematic pages (the contents list alone opens the set as section `0`; it reflows like any other section and is not counted among schematic pages), and if a name ever clashes the schematic page keeps it and the sheet takes a `'` mark (`20b'`) |
 | Routing | Manual; always automatic; route once and keep | **Route once and keep:** moving a symbol stretches its connections; `tidy` re-routes on request |
 | Where a project starts | Page-first; structure-first; intent-first | **Structure-first**, with the empty page offering "type what you are building" |
 | Window | A Workbench; B Focus; C Split | **A**, with B as Focus mode and C as the drawer docked right |
@@ -558,6 +693,7 @@ Changes mode, WS-09 the PDF.
 | Saving | Save command and prompts; continuous | **Continuous**, into the project's own file; revisions are the checkpoints (see Checkpoints) |
 | Checkpoints | Every export; revisions only; both | **Revisions only:** issuing a revision freezes the schematic pages and keeps a snapshot; a plain export prints the current state and checkpoints nothing, so Changes always compares against something with a name |
 | Junction dots | Every meeting point; three or more conductors | **Three or more**; straight runs, corners and crossings get none |
+| Wiring modes | One automatic mode only; Corners and Lines as one merged mode; Corners and Lines as two modes | **Two modes, Corners (default) and Lines.** They match the two ways Tadjiro knows from EPLAN and AutoCAD, and they differ in a real way: Corners lets the router join the points and nudges its own legs clear, Lines routes nothing and refuses an overlap instead of nudging it. A drag from pin to pin stays the cheapest connection in both. Overlaps are refused wherever a person is acting (drawing, an interactive move) and only reported where nothing can ask (scripts, AI edits, undo, opening a file) |
 
 ## 9. What we leave behind
 
@@ -568,7 +704,7 @@ Changes mode, WS-09 the PDF.
 | Separate editors for terminals and cables | EPLAN | They hide the schematic when you need it; the drawer keeps them beside it |
 | Insert centre, symbol trees, ribbon | EPLAN, AutoCAD Electrical | Spatial hunting; the command surface finds by name |
 | Frozen macros | Most CAD | Go stale on placement; blocks stay linked |
-| Corner and T-piece symbols | EPLAN | Drawing artefacts of connectivity, not intent |
+| Corner and T-piece symbols | EPLAN | Drawing artefacts of connectivity, not intent. The corners of a wire are bend points of its route, not objects |
 | Linking cross references by hand | EPLAN | References follow ownership |
 | Assigning potentials wire by wire | EPLAN | The source declares it once |
 | Save prompts and "save before closing?" | Most desktop software | Work is never lost and never asked about |
@@ -643,6 +779,9 @@ Checklist for every UI pull request:
 ## 12. Open questions
 
 - Does the dock moving aside during gestures feel calm in a real build?
+- Diagonal lines in Lines mode (Shift to release the axis lock, 45 degrees).
+  They add a second geometry to every overlap, junction and hit-test rule
+  and to the PDF; left out until someone draws a sheet that needs one.
 - A light theme for review in bright rooms. Dark stays the default; tokens
   are named by role, so a light set can be added without touching screens.
 - How much of the structure board is a form and how much is drawing?

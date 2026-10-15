@@ -25,17 +25,17 @@ The crate is `novo-revisions`. It is already listed in
      table).
 
 ## State
-- 2026-10-15: DESIGN (#142), the Revision record and `IssueRevision`
-  (#157), and the storage snapshot table (#159) are merged.
-- Open: the `novo-revisions` engine PR (`IndexRule`, `diff` into a
-  `ChangeSet` by page, `PageRevisions` for the title block; a page's
-  re-taken freeze is not a change).
-- Ready locally (branch `ws02-outputs`): generated pages sort after every
-  drawn page, `ProjectRules.generated_pages`, and Remove refuses an issued
+- 2026-10-15: DESIGN (#142), the Revision record (#157), the storage
+  snapshot table (#159) and the `novo-revisions` engine (#163) are merged.
+- Open: the core PR with generated page order, `generated_pages_off`,
+  `DeletePage`, `Document::amend_last`, and Remove refusing an issued
   revision.
-- Next:
-  - an issue flow in the app that pairs `IssueRevision` with
-    `Session::put_snapshot`; wrap the snapshot writes in one transaction
-    if issues ever come in bulk (Reviewer B's #159 note);
-  - Changes mode (latest revision against now), with WS-03 and WS-06
-    owning the marks and WS-09 owning the PDF.
+- Next, in WS-18 (the lead assigned all three):
+  - diff `ProjectInfo` too (title and rule changes are not records);
+  - `IndexRule::next` skips indexes already taken;
+  - mark generated sheets whose content changed. Ask the Outputs thread
+    for a per-sheet fingerprint.
+- Later: an issue flow in the app that pairs `IssueRevision` with
+  `Session::put_snapshot`, writing snapshots in one transaction when
+  issues come in bulk; then Changes mode (WS-03 and WS-06 own the marks,
+  WS-09 the PDF).

@@ -22,3 +22,6 @@
 2026-10-15 04:30 UTC #160 merged. PR 4 (io_rows + #160 review notes) opened from main.
 2026-10-15 04:35 UTC #162 READY on 1df1812. Notes (io_rows_with, Rockwell addresses without starts) go into the commands PR.
 2026-10-15 04:40 UTC #162 merged. PR 5 (commands + #162 notes) opened from main. Told Outputs io_rows is on main.
+2026-10-15 04:45 UTC #165 READY on 5b70aea. Follow-ups noted in ROADMAP (renumber preview names skipped bad-layout cards; ModelError variant for 'no free channel' is a WS-02 ask).
+2026-10-15 (after 04:45) UTC Follow-up: RenumberPlan{moves, skipped} built on ws17-follow, patch 0007; waits for #165 to merge.
+2026-10-15 04:16 UTC #165 merged as f74e14e (lead's combined run 799/0/3). Engine part of plc.md §10 complete. Follow-up PR for RenumberPlan opened from main.

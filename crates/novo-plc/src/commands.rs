@@ -142,12 +142,33 @@ pub struct StartMove {
 
 /// What `renumber io` would do to a station: its cards re-packed in slot
 /// order from byte 0 in each space, analog cards on a word. Shown as the
-/// preview; empty when nothing moves.
-pub fn renumber_plan(project: &Project, station: &str) -> Vec<StartMove> {
-    let mut moves = Vec::new();
+/// preview.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RenumberPlan {
+    /// Start addresses that move; empty when nothing moves.
+    pub moves: Vec<StartMove>,
+    /// Cards left where they are because their layout does not parse, so
+    /// their size is unknown. The preview lists them; their ranges are not
+    /// reserved, so fix the layout and renumber again.
+    pub skipped: Vec<DeviceId>,
+}
+
+impl RenumberPlan {
+    /// True when nothing moves and nothing was skipped.
+    pub fn is_empty(&self) -> bool {
+        self.moves.is_empty() && self.skipped.is_empty()
+    }
+}
+
+/// Plans `renumber io` for one station.
+pub fn renumber_plan(project: &Project, station: &str) -> RenumberPlan {
+    let mut plan = RenumberPlan::default();
     let mut next = [0u32; 2];
     for card in cards(project).iter().filter(|c| c.station == station) {
-        let layout = card.channels();
+        let Ok(layout) = &card.layout else {
+            plan.skipped.push(card.device);
+            continue;
+        };
         for space in Space::ALL {
             let bytes = layout.bytes(space);
             if bytes == 0 {
@@ -159,7 +180,7 @@ pub fn renumber_plan(project: &Project, station: &str) -> Vec<StartMove> {
             }
             let from = card.start[space as usize];
             if from != Some(*cursor) {
-                moves.push(StartMove {
+                plan.moves.push(StartMove {
                     card: card.device,
                     space,
                     from,
@@ -169,12 +190,12 @@ pub fn renumber_plan(project: &Project, station: &str) -> Vec<StartMove> {
             *cursor += bytes;
         }
     }
-    moves
+    plan
 }
 
 /// Applies a [`renumber_plan`]: the only edit that moves addresses.
-pub fn apply_renumber(tx: &mut Tx, plan: &[StartMove]) -> Result<()> {
-    for m in plan {
+pub fn apply_renumber(tx: &mut Tx, plan: &RenumberPlan) -> Result<()> {
+    for m in &plan.moves {
         tx.set_property(
             m.card,
             start_key(m.space),

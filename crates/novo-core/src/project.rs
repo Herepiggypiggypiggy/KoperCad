@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::entity::{
     BlockDefinition, BlockInstance, Cable, Device, DeviceKind, Dismissal, Endpoint, Junction, Page,
-    Part, PinRef, Potential, PotentialSystem, ProjectInfo, Revision, SameName, Structure,
+    PageKind, Part, PinRef, Potential, PotentialSystem, ProjectInfo, Revision, SameName, Structure,
     SymbolInstance, SymbolRole, Terminal, Text, Wire,
 };
 use crate::error::{ModelError, Result};
@@ -112,9 +112,19 @@ pub struct PageContents {
     pub wires: Vec<WireId>,
 }
 
-/// Reading order of pages: structure, then name; see
+/// The generator id of the contents list, the one generated page that
+/// opens the set rather than following the drawing.
+pub const CONTENTS_GENERATOR: &str = "toc";
+
+/// Reading order of pages: the contents list, drawn pages, then the other
+/// generated pages; within each, structure, then name. See
 /// [`Project::pages_in_order`].
 pub(crate) fn page_cmp(a: &Page, b: &Page) -> Ordering {
+    let section = |p: &Page| match &p.kind {
+        PageKind::Generated { generator } if generator == CONTENTS_GENERATOR => 0,
+        PageKind::Generated { .. } => 2,
+        _ => 1,
+    };
     let levels = |a: &[String], b: &[String]| {
         a.iter()
             .zip(b)
@@ -122,7 +132,9 @@ pub(crate) fn page_cmp(a: &Page, b: &Page) -> Ordering {
             .find(|o| o.is_ne())
             .unwrap_or_else(|| a.len().cmp(&b.len()))
     };
-    levels(&a.structure.function, &b.structure.function)
+    section(a)
+        .cmp(&section(b))
+        .then_with(|| levels(&a.structure.function, &b.structure.function))
         .then_with(|| levels(&a.structure.location, &b.structure.location))
         .then_with(|| natural_cmp(&a.name, &b.name))
         .then(a.id.cmp(&b.id))
@@ -1116,7 +1128,10 @@ impl Project {
 
     // ----- queries ---------------------------------------------------------
 
-    /// Pages in reading order: by structure (function levels, then
+    /// Pages in reading order: the contents list
+    /// ([`CONTENTS_GENERATOR`]) opens the set, then drawn pages (schematic
+    /// and overview), then the other generated pages (DESIGN §8: their
+    /// sections follow the schematic pages). Within each, by structure (function levels, then
     /// location levels, each in natural order; pages without a structure
     /// first), then by name in natural order (`2` before `10`).
     pub fn pages_in_order(&self) -> Vec<&Page> {

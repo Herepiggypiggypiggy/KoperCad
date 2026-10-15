@@ -189,6 +189,23 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["wire", "chain"],
         Needs::Page,
     ),
+    // Shift+W with no argument switches; the argument names the mode. The
+    // mode is a user preference, so no project or page is needed.
+    with_arguments(
+        verb(
+            cmd(
+                "wire.mode",
+                "Wiring mode",
+                "Draw",
+                &[
+                    "mode", "corners", "lines", "eplan", "autocad", "draw", "wire", "route",
+                ],
+                Needs::Nothing,
+            ),
+            &["wiring mode"],
+        ),
+        &["corners", "lines"],
+    ),
     cmd("edit.rotate", "Rotate", "Draw", &["turn"], Needs::Selection),
     cmd("edit.mirror", "Mirror", "Draw", &["flip"], Needs::Selection),
     // PLC and I/O (docs/design/plc.md section 4): the command surface only

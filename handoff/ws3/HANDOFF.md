@@ -3,8 +3,8 @@
 ## State (2026-10-15 03:20 UTC)
 - Repo github.com/Herepiggypiggypiggy/NovoElectric, crate crates/novo-canvas.
 - One pinned branch: claude/canvas-engine-ymvwu2. So PRs go up one at a time.
-- Merged: #4, #28, #47, #93, #103, #109 (sheets), #120 (perf).
-- Open: the drawing PR (see PROGRESS for number and head).
+- Merged: #4, #28, #47, #93, #103, #109 (sheets), #120 (perf), #126 (drawing, strip runs as proximity groups), #144 (jump reveal, SheetText.bold), #154 (bold face).
+- Open: nothing.
   Reviewer B (session_01QSnXFBDRyvwwzhT1S1gFGN) has correctness; design reviewer (session_0114emQ5fSFrzcALbR4S18TU) anything visual.
 - Next, ready locally (ffca612 on top of #120; patch in next-pr/canvas-drawing/): canvas-drawing
   - JunctionGlyph::Plain (<3 wires, no dot); NoteAnchor mapped from xref LabelAnchor (#102);

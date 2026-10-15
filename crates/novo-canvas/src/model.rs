@@ -385,8 +385,8 @@ pub struct SheetLine {
 
 /// `text` cut with an ellipsis so that it fits `width` mm at `height`,
 /// by the same width estimate as [`Label::size`].
-fn fit_text(text: &str, width: f32, height: f32) -> String {
-    let advance = crate::text::ADVANCE * height;
+fn fit_text(text: &str, width: f32, height: f32, bold: bool) -> String {
+    let advance = crate::text::advance(bold) * height;
     if advance <= 0.0 {
         return text.to_owned();
     }
@@ -800,14 +800,7 @@ impl PageScene {
                     f if f > 0.75 => Anchor::CenterRight,
                     _ => Anchor::Center,
                 };
-                // A bold cell's second pass widens it: keep that inside too.
-                let width = t.size.x
-                    - if t.bold {
-                        crate::text::BOLD_SHIFT * t.height
-                    } else {
-                        0.0
-                    };
-                let text = fit_text(&t.text, width, t.height);
+                let text = fit_text(&t.text, t.size.x, t.height, t.bold);
                 if !text.is_empty() {
                     item.labels.push(
                         Label::new(pos, text, t.height)
