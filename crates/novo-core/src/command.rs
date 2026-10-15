@@ -39,6 +39,13 @@ pub enum Command {
         page: PageId,
         name: String,
     },
+    /// Renames a group (`=10D41`) or panel (`+K1B1G1`) everywhere its name
+    /// is copied; see [`Tx::rename_level`].
+    RenameLevel {
+        aspect: crate::tag::Aspect,
+        from: Vec<String>,
+        to: Vec<String>,
+    },
     AddPage {
         name: String,
         #[serde(default)]
@@ -324,6 +331,10 @@ impl Command {
             Command::SetProjectInfo { .. } => "Edit project info".into(),
             Command::DeletePage { .. } => "Delete page".into(),
             Command::RenamePage { .. } => "Rename page".into(),
+            Command::RenameLevel { aspect, .. } => match aspect {
+                crate::tag::Aspect::Function => "Rename group".into(),
+                _ => "Rename panel".into(),
+            },
             Command::AddPage { .. } => "Add page".into(),
             Command::SetPageStructure { .. } => "Move page to group or panel".into(),
             Command::AddDevice { .. } => "Add device".into(),
@@ -390,6 +401,10 @@ impl Tx<'_> {
                     });
                 }
                 self.update::<crate::Page>(page, |p| p.name = name)?;
+                return Ok(Vec::new());
+            }
+            Command::RenameLevel { aspect, from, to } => {
+                self.rename_level(aspect, &from, &to)?;
                 return Ok(Vec::new());
             }
             Command::DeletePage { page } => {
