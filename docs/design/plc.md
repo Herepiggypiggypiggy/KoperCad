@@ -57,8 +57,10 @@ fields.
 | `AI4` | 4 analog inputs | inputs | 16 bits |
 | `AQ2` (or `AO2`) | 2 analog outputs | outputs | 16 bits |
 
-Channels are numbered from 0 per group in the order written (`DI8 DQ8`:
-DI 0-7, DQ 0-7). The part supplies the layout; a device-level `plc.channels`
+Channels are numbered from 0 per type in the order written (`DI8 DQ8`:
+DI 0-7, DQ 0-7; `DI8 DQ8 DI8`: the second DI group is DI 8-15). Inside its
+space a card packs digital channels bit by bit and starts each analog
+channel on a word. The part supplies the layout; a device-level `plc.channels`
 is an override (marked, resettable, DESIGN §7), for cards with no part yet.
 A card with neither has no channels and the Issues list says so.
 
@@ -164,7 +166,7 @@ including spares, in address order:
 | Address | derived, in the project's style |
 | Type | DI, DQ, RO, AI, AQ |
 | Card | tag and slot (`-A4`, slot 3) |
-| Channel | number within its group |
+| Channel | number among the card's channels of its type |
 | Pin | the channel symbol's pin name, else the part's terminal designation |
 | Signal | `plc.signal`, else the connected device's description |
 | Connected to | the first device on the channel's net beyond terminals (`-K1:13`), and the field terminal (`-X2:7`) |
