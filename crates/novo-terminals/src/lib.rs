@@ -54,7 +54,6 @@ mod move_strip;
 mod naming;
 mod occurrence;
 mod place;
-mod plug;
 mod rules;
 mod screen;
 pub mod strings;
@@ -72,12 +71,11 @@ pub use naming::{
     base_name_for_potential, compare_names, kind_for_name, kind_for_potential, kind_key,
     named_potential, next_free_name, next_free_number, next_order, potential_fits,
 };
-pub use occurrence::{Occurrence, Side, State, Target, occurrence_in, occurrences, side};
+pub use occurrence::{Occurrence, Side, State, Target, occurrence_in, occurrences};
 pub use place::{
     Drop, Placed, place_named, place_terminals, strip_by_tag, strip_in_use, terminal_length,
     terminal_pins,
 };
-pub use plug::{Contact, PlugList, connectors, plug_list};
 pub use rules::{
     LEGACY_JOIN_LINK_KEY, LEGACY_SAME_NAME_KEY, migrate_legacy_rules, rules, set_rules,
 };
