@@ -63,4 +63,4 @@ Proposed entries (to be built by the UI integration threads, not in this PR):
 - 3D cabinet view: parts show their mesh while `GeometryService` builds (box first, mesh when `Ready`).
 - Status of a failed model uses the cached failure message; "Retry" calls `forget(key)`.
 
-Status of the engine: complete and tested; no UI yet. Whether maker meshes are wanted at all is the owner's decision (3d-view.md section 12); this PR is a draft until then.
+Status of the engine: complete and tested; no UI yet. The owner decided maker meshes are wanted (3d-view.md section 12 answered yes).
