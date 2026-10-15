@@ -3,6 +3,12 @@
 For a fresh cloud session that takes over as **integration lead**: the role that coordinates the threads and merges PRs.
 Last updated 2026-10-14 17:17 UTC (final from the first lead session) by the integration lead (session_011PfTJ1QaP1JQJPwXcFnxBE).
 
+## 0c. State at 2026-10-15 04:00 UTC (integration lead)
+- **Main d563971**, 713 tests passing locally (fmt, clippy -D warnings clean, Linux). Merged 02:50-03:55: #87, #111, #115-#125, #127-#132, #134, #135, #137 (#116 DESIGN page names; #119 page freeze; #124 shared IEC 81346-2:2019 letter_code table in novo-symbols; #125 blocks; #134 Inter subset for Unicode PDF text).
+- **Open:** #126 WS-03 drawing (main + B READY on 1bf0920, waits design), #133 WS-06 page-name letters (A + design), #136 WS-08 coil.contactor + DESIGN §6 (B READY, waits design), #138 WS-01 drawers (A + design), #139 WS-11 optional terminal pins (B).
+- **Phase 3 started:** the Data model thread also owns WS-18 Revisions (DESIGN first). A WS-17 PLC thread was requested from the coordinator. The tester is assessing Gate 2.
+- **Rules applied tonight:** a head that moves after READY goes back to its reviewer (#122, #124, #126); a third reviewer's pending blocking finding holds a merge (#126).
+
 ## 0b. State at 2026-10-15 02:55 UTC (integration lead cse_01FiLvRBKEcNNHbQEGhYyL1S)
 - **Main 89971f4.** main + #87 + #111 + #117 + #115 tested together: fmt and clippy -D warnings clean, `cargo test --workspace` 679 passed, 0 failed, 2 ignored (Linux). Since 21:20 this lead merged 35 PRs (#80 through #117); see `handoff/integration-lead/PROGRESS.md`.
 - **CI still down** (Actions billing); CI fails within seconds on every push. Local checks remain the signal; Windows unverified.

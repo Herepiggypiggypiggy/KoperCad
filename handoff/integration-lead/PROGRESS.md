@@ -74,3 +74,20 @@
 - 22:40 Merged #107, #96 and #110 (DESIGN sheet letters). WS-01 asked to merge main into #105 (gate1_tests conflict).
 - 22:45 Merged #109 (WS-03 report sheets in frame; B + design READY on 3dfbc1f; combined 669 passed). Sent sheet_name 20a/20b fix to Outputs; WS-03 on to perf then drawing.
 - 02:50 Health review. Merged #87 (tester), #111 (WS-07), #117 (WS-02 Structure + Dismissal), #115 (sheet letters), all main-reviewer READY on their heads; combined 679 passed. Nudged five threads stopped since 22:30; Actions still billing-blocked. MAIN-HANDOFF §0b added.
+- 02:57 Merged #118 (lead handoff §0b; B READY) and #116 (DESIGN page names take letters; design READY, docs only). Design READY on #113, which waits on A. Asked WS-07 to hide internal property keys in the sheet; WS-06 to move declines onto Dismissal records.
+- 03:05 Merged #120 (WS-03 label perf; B READY on 95279c2; combined 680 passed). Open: #105/#112/#113 (A), #122 WS-11 (B), #123 checks (main).
+- 03:08 Merged #119 (WS-02 page freeze; main READY on af6f81d; combined 681 passed). Moved #112 review from A to B; A does #105 delta then #113.
+- 03:12 Merged #121 (WS-07 terminal block fallback; main READY on 50eefe3; combined with #122 681 passed). #122 head moved after B's READY (61ba067), back to B. #124 letter-code table to main reviewer; #112 now 133ef4a with B.
+- 03:15 Merged #122 (WS-11 dismissals + Terminal.part; B READY on 61ba067) and #123 (outputs checks; main READY on 7e1a69c); combined 686 passed. WS-07 asked to fix terminal_kind_of for real PE articles.
+- 03:20 Merged #105 (WS-01 focus; A READY 80236df), #112 (WS-08 renumber + page jump; A+B READY 133ef4a), #113 (WS-06; A + design READY 6e541ba); combined 691 passed. WS-01 queue and WS-06 follow-up unblocked; #124 to main reviewer after a main merge; #126 WS-03 drawing with B + design.
+- 03:24 Merged #125 (WS-02 blocks; main READY on 2cb2bba; combined 696 passed). WS-02 to scope interruption-point names per block placement.
+- 03:27 Merged #127 (WS-10 frozen-page xref test; B READY c1e1267; combined 697 passed). #124 moved after A's READY (9d58401, Q rule narrowed); delta to main reviewer. Open: #126 (design), #128 (main), #129 (B).
+- 03:31 Merged #128 (outputs PDF sheet title blocks; main READY 84cea53) and #129 (WS-11 enclosure-aware suggestions; B READY be973c3); combined 698 passed. #126 waits on design only; #124 waits on main reviewer's delta READY.
+- 03:34 Merged #124 (WS-08 letter_code table in novo-symbols, IEC 81346-2:2019; A READY 9d15ff6 + main READY on delta 9d58401; combined 702 passed). #126 held for main reviewer's possible finding (B + design READY). New: #130 WS-01 bundle A (A), #131 WS-02 follow-ups (main). WS-08 owns coil.contactor + DESIGN §6 notes.
+- 03:38 Merged #132 (WS-07 internal keys hidden, PE detection; B READY 5fd8de5; combined 704 passed). #126 CHANGES NEEDED from main reviewer (strip_heads repeats -X1 on two-row strips); WS-03 fixing.
+- 03:42 Merged #130 (WS-01 bundle A; A READY a20e364; combined 706 passed). #131 CHANGES NEEDED (block detaches on an outside wired load), relayed to WS-02. #126 at 1bf0920 for delta checks. New: #134 outputs fonts (main), #135 WS-11 (B).
+- 03:45 Merged #134 (outputs: Unicode PDF text via Inter subset, ttf-parser + subsetter in workspace deps; main READY c7ea4d6; combined 712 passed). #126 at 1bf0920: B READY; waiting main delta + design.
+- 03:48 Merged #135 (WS-11 #129 follow-ups; B READY 391e515; combined 713 passed). #126 main delta READY on 1bf0920, waiting design delta. Design queue: #126, #133, #136.
+- 03:51 Merged #137 (WS-07 PE words in description head only; B READY 6990b6e; combined 713 passed). Open: #126, #133, #136 (design), #138 drawers (A + design), #131 (WS-02 fixing).
+- 03:55 Merged #131 (WS-02 block/freeze follow-ups with geometry check; main READY on 544b628; combined 713 passed). WS-02 queue empty.
+- 03:58 Phase 3 kickoff: WS-02 thread also owns WS-18 Revisions (DESIGN first). Tester assessing Gate 2 (live terminal/cable/report pages). Asked coordinator for a WS-17 PLC thread.
