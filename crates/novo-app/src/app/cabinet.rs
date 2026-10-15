@@ -43,6 +43,8 @@ pub(super) struct CabinetState {
     /// Keys the shell left for the Cabinet this frame (`edit.rotate`,
     /// `edit.delete`).
     pub(super) keys: Vec<String>,
+    /// Text buffers of the inspector for the selected device.
+    panel_fields: super::cabinet_panel::PanelFields,
 }
 
 /// A placed device being dragged across the plate.
@@ -70,6 +72,7 @@ impl CabinetState {
             drag: None,
             ghost: None,
             keys: Vec::new(),
+            panel_fields: Default::default(),
         }
     }
 }
@@ -86,6 +89,8 @@ pub(super) enum Ask {
     Drop(u64, f64, f64),
     Rotate(Vec<u64>),
     Remove(Vec<u64>),
+    /// Set a panel-building value (power loss, mounting, clearance) of a device.
+    SetPanelValue(super::cabinet_panel::PanelEdit),
 }
 
 /// The Cabinet drawing of a layout, with the layout's problems as box states.
@@ -317,6 +322,33 @@ impl NovoApp {
                         }
                     });
 
+                // The inspector: panel data of the one selected placed device.
+                let selected_one = match self.cabinet.view.selection.ids() {
+                    [one] => novo_canvas::cabinet::box_of(*one),
+                    _ => None,
+                }
+                .filter(|id| {
+                    layout
+                        .as_ref()
+                        .is_some_and(|l| l.placements.iter().any(|p| p.id == *id))
+                });
+                if let Some(id) = selected_one {
+                    egui::Panel::right("cabinet_inspector")
+                        .exact_size(200.0)
+                        .resizable(false)
+                        .show(ui, |ui| {
+                            if let Some(edit) = super::cabinet_panel::show(
+                                ui,
+                                &mut self.cabinet.panel_fields,
+                                project,
+                                id,
+                                &tag_of(id),
+                            ) {
+                                ask = Some(Ask::SetPanelValue(edit));
+                            }
+                        });
+                }
+
                 let view = cabinet_view(&shown, &tag_of);
                 self.cabinet.scene.set(&view);
                 if self.cabinet.fitted != location {
@@ -499,6 +531,20 @@ impl NovoApp {
                 self.cabinet_edit("Remove from plate", move |tx| {
                     devices.iter().try_for_each(|d| unplace_device(tx, *d))
                 });
+            }
+            Ask::SetPanelValue(edit) => {
+                let Some(doc) = self.backend.document() else {
+                    return;
+                };
+                match super::cabinet_panel::command(doc.project(), &edit) {
+                    Ok(Some(command)) => {
+                        self.cabinet_edit("Set panel data", move |tx| {
+                            tx.execute(command).map(|_| ())
+                        });
+                    }
+                    Ok(None) => {}
+                    Err(e) => self.message(Level::Warning, e.to_string()),
+                }
             }
             Ask::SetPlate(s) => {
                 self.cabinet_edit("Set plate", move |tx| set_plate(tx, s, DEFAULT_PLATE));

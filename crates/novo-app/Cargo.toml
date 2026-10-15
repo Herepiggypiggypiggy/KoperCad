@@ -16,6 +16,7 @@ novo-core.workspace = true
 novo-storage.workspace = true
 novo-canvas.workspace = true
 novo-layout.workspace = true
+novo-parts.workspace = true
 novo-cables.workspace = true
 novo-theme.workspace = true
 novo-symbols.workspace = true

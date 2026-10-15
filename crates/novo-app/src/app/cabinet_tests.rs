@@ -161,3 +161,65 @@ fn a_ghost_is_drawn_but_never_stored() {
     // Without a hovering payload the ghost is cleared again.
     assert!(d.app.cabinet.ghost.is_none());
 }
+
+#[test]
+fn panel_data_edits_are_one_undo_step_and_bad_input_changes_nothing() {
+    use super::cabinet_panel::PanelEdit;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    let device = novo_layout::model::candidates(project(&d), cab)[0].id;
+    let l = layout_of(&d, cab);
+    d.app
+        .cabinet_ask(Ask::Drop(device, 100.0, 120.0), Some(cab), l, &[]);
+
+    let set = |d: &mut Drive, key: &'static str, text: &str| {
+        let l = layout_of(d, cab);
+        d.app.cabinet_ask(
+            Ask::SetPanelValue(PanelEdit {
+                device,
+                key,
+                text: text.into(),
+            }),
+            Some(cab),
+            l,
+            &[],
+        );
+    };
+    let margins = |d: &Drive| {
+        let l = layout_of(d, cab).unwrap();
+        l.placements.first().map(|p| p.margins)
+    };
+    set(&mut d, "clearance_above_mm", "40");
+    assert_eq!(margins(&d).unwrap().above, Some(40.0));
+    // A negative number or an unknown mounting type is refused.
+    set(&mut d, "clearance_below_mm", "-3");
+    assert_eq!(margins(&d).unwrap().below, None);
+    set(&mut d, "mounting", "glue");
+    let device_id = novo_core::DeviceId::from(device);
+    assert!(
+        !project(&d)
+            .device(device_id)
+            .unwrap()
+            .properties
+            .contains_key("mounting")
+    );
+    set(&mut d, "mounting", "din_rail");
+    set(&mut d, "power_loss_w", "4,5");
+    let panel =
+        super::cabinet_panel::panel_data(project(&d), project(&d).device(device_id).unwrap());
+    assert_eq!(panel.power_loss_w, Some(4.5));
+    assert_eq!(panel.mounting, Some(novo_parts::Mounting::DinRail));
+    d.app.run(&ctx, Action::Undo);
+    let panel =
+        super::cabinet_panel::panel_data(project(&d), project(&d).device(device_id).unwrap());
+    assert_eq!(panel.power_loss_w, None);
+    assert_eq!(panel.mounting, Some(novo_parts::Mounting::DinRail));
+}
