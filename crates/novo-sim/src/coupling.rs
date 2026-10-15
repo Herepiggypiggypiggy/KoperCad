@@ -154,6 +154,8 @@ pub struct Settled {
     /// A timer is counting: the state will change by itself as the clock
     /// advances, so the caller should keep stepping.
     pub timing: bool,
+    /// Seconds until the last running timer is done; 0 when none runs.
+    pub remaining: f64,
 }
 
 /// Solves `manual` poles with the coils coupled to their contacts, with
@@ -221,13 +223,14 @@ pub fn settle_timed(
         }
     }
     let (poles, solution) = last.expect("at least one round");
-    let (_, timing) = poles_for(project, manual, &driven, &coils, &energized, clock);
+    let (_, remaining) = poles_for(project, manual, &driven, &coils, &energized, clock);
     Settled {
         poles,
         solution,
         energized,
         driven,
-        timing,
+        timing: remaining > 0.0,
+        remaining,
     }
 }
 
@@ -264,9 +267,9 @@ fn poles_for(
     coils: &[&SymbolInstance],
     energized: &BTreeSet<SymbolId>,
     clock: &Clock,
-) -> (PoleState, bool) {
+) -> (PoleState, f64) {
     let mut poles = manual.clone();
-    let mut timing = false;
+    let mut remaining = 0.0_f64;
     for symbol in project.symbols().filter(|s| driven.contains(&s.id)) {
         let Some((rest, delay)) = contact_of(symbol) else {
             continue;
@@ -280,7 +283,9 @@ fn poles_for(
                 let wait = delay_of(project, symbol.device());
                 let elapsed = seen.filter(|&(was, _)| was).map(|(_, at)| clock.now - at);
                 let done = on && elapsed.is_some_and(|e| e >= wait);
-                timing |= on && !done;
+                if on && !done {
+                    remaining = remaining.max(wait - elapsed.unwrap_or(0.0));
+                }
                 done
             }
             Delay::Off => {
@@ -288,7 +293,9 @@ fn poles_for(
                 // Right after the coil dropped, before the clock has seen
                 // it, the contact still holds.
                 let holding = !on && seen.is_some_and(|(was, at)| was || clock.now - at < wait);
-                timing |= holding && seen.is_some_and(|(was, at)| !was && clock.now - at < wait);
+                if let Some((false, at)) = seen.filter(|_| holding) {
+                    remaining = remaining.max(wait - (clock.now - at));
+                }
                 on || holding
             }
         };
@@ -299,5 +306,5 @@ fn poles_for(
             _ => {}
         }
     }
-    (poles, timing)
+    (poles, remaining)
 }

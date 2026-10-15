@@ -519,7 +519,7 @@ clear the selection.
 | Alt+Left / Alt+Right | Back / forward through jumps |
 | F8 / Shift+F8 | Next / previous problem |
 | Shift+P | Hide or show marks (counters stay) |
-| Shift+L | Live potentials: close and open contacts, see what each wire carries; a coil badge switches the coil on by hand, and the contacts of a device with a coil follow the coil (push buttons stay hand-set) |
+| Shift+L | Live potentials: close and open contacts, see what each wire carries; a coil badge switches the coil on by hand, and the contacts of a device with a coil follow the coil (push buttons stay hand-set); on-delay and off-delay contacts wait for the coil's delay, and the card shows the seconds left |
 | Shift+O (held) | Show override marks |
 | Page Up / Page Down | Previous / next page |
 | Home | Zoom to fit (also double middle click) |
@@ -729,6 +729,10 @@ in place mode. The wheel has two rings and no hidden level.
   hover: the favourites used in this project first, then the defaults of
   that category. Relays, for example: coil, normally open, normally
   closed, changeover, timer coil.
+  The first sector's items show at once; moving onto a different sector
+  switches the outer ring only after the pointer has rested there for
+  180 ms, so a sweep across the sectors toward an item never flickers or
+  swaps the items under the pointer.
 - Pick by clicking, by press-drag-release (a flick), or by keys 1 to 5 then
   1 to 8 (1 to 5 on the inner ring); Backspace goes back a ring and Esc
   closes. Picking an item attaches the symbol to the pointer exactly as the

@@ -1941,6 +1941,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-layout"
+version = "0.1.0"
+
+[[package]]
 name = "novo-parts"
 version = "0.1.0"
 dependencies = [

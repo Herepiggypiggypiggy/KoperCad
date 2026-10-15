@@ -35,7 +35,7 @@ use pages::{FormKind, PageForm, PageView};
 use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows};
 use crate::canvas::{CanvasView, OpenPage};
 use crate::settings::Settings;
-use crate::{APP_MAKER, APP_NAME, DATA_DIR_NAME, PROJECT_EXTENSION};
+use crate::{APP_MAKER, APP_NAME, PROJECT_EXTENSION};
 use novo_theme::widgets::{primary_button, section_label, segment};
 use workbench::Workbench;
 pub(crate) use workbench::app_runs;
@@ -563,7 +563,7 @@ impl NovoApp {
             .set_title("Save project")
             .add_filter("KoperCAD project", &[PROJECT_EXTENSION])
             .set_file_name(project_file_name(&name));
-        // A project's first save goes to Documents\NovoElectric (DESIGN.md §3,
+        // A project's first save goes to Documents\KoperCAD (DESIGN.md §3,
         // §6); later "Save as" starts next to the current file.
         let folder = match &self.project_path {
             Some(path) => path.parent().map(Path::to_owned),
@@ -1542,11 +1542,12 @@ fn ago(t: SystemTime) -> String {
     }
 }
 
-/// Where new projects are saved: `<Documents>\NovoElectric`. Documents comes
+/// Where new projects are saved: `<Documents>\KoperCAD` (or the old
+/// `NovoElectric` folder if that is where the projects already are). Documents comes
 /// from the known-folder lookup, because company PCs often redirect it to
 /// OneDrive; it is always inside the user's profile.
 fn projects_dir() -> Option<PathBuf> {
-    dirs::document_dir().map(|docs| docs.join(DATA_DIR_NAME))
+    dirs::document_dir().map(|docs| crate::migrate::projects_dir_in(&docs))
 }
 
 /// `<name>.novo`, with the characters Windows forbids in file names replaced.
@@ -1701,7 +1702,9 @@ mod tests {
     #[test]
     fn new_projects_are_saved_under_documents() {
         if let Some(dir) = projects_dir() {
-            assert!(dir.ends_with(DATA_DIR_NAME));
+            assert!(
+                dir.ends_with(crate::DATA_DIR_NAME) || dir.ends_with(crate::LEGACY_DATA_DIR_NAME)
+            );
             assert!(dir.parent().is_some_and(|p| p.is_absolute()));
         }
     }

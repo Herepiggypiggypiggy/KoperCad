@@ -10,9 +10,11 @@ layout and circuit simulation. Native Rust, no web technology, fully offline, sc
 
 > **Name.** The product is KoperCAD and the maker is KoperVonk (decided 2026-10-15); it was called
 > NovoElectric before. The repository is now `kopercad`. Names people never see keep the old name for now: the `novo-*`
-> crates, `novoelectric.exe`, the `novoelectric` Python module, the release asset name and the data
-> folders (`%LOCALAPPDATA%\NovoElectric`, `Documents\NovoElectric`, `%APPDATA%\NovoElectric`). Moving
-> the data folders needs a migration from the old location first.
+> crates, the `novoelectric` Python module and the release asset name. The program is `kopercad.exe`
+> (the experimental zip also carries a `novoelectric.exe` copy for launchers installed before the
+> rename). Settings and the parts catalog moved to `%APPDATA%\KoperCAD`; projects stay in
+> `Documents\NovoElectric` for anyone who already has one; `%LOCALAPPDATA%\NovoElectric` still holds
+> the launcher's builds.
 
 It is a design of its own, aimed at what EPLAN Electric P8 and AutoCAD Electrical do, not a copy of either.
 
@@ -36,10 +38,10 @@ What is verified and what is not:
 
 - **Verified on Linux:** `cargo fmt`, `cargo clippy -D warnings` and all workspace tests passed on
   every merge (about 920 tests at the last full count, 0 failing, a few ignored).
-- **Windows:** the repository is public, so GitHub Actions runs again and the Windows runner builds
-  main. Experimental Windows builds 1 to 4 have been published (build 4 is main `f6be257`) and have
-  been run by hand on the owner's PC. Everything merged after build 4 (see below) is not in any build
-  yet; no new build is cut until the owner asks for one.
+- **Windows:** the repository is public, so GitHub Actions runs again. The Windows CI job on main
+  builds and tests the workspace and passes on every recent main push. Experimental Windows builds
+  1 to 4 have been published (build 4 is main `f6be257`). Everything merged after build 4 is not in
+  any build yet; no new build is cut until the owner asks for one.
 - **Not yet done:** the in-app dialogs for several finished engines (see below), the full set of
   app-side revision features, and the cabinet, routing and full simulation phases.
 

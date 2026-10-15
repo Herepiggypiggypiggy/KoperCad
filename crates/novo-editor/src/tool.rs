@@ -732,6 +732,14 @@ impl Editor {
         self.begin_move_with(selection, false)
     }
 
+    /// Whether the move in hand takes the wires along; the view sets it
+    /// from the default and the Shift key while the move runs.
+    pub fn set_move_carry(&mut self, carry: bool) {
+        if let Tool::Move(m) = &mut self.tool {
+            m.carry = carry;
+        }
+    }
+
     /// [`Self::begin_move`], with `carry` taking the wires along (Shift).
     pub fn begin_move_with(&mut self, selection: &[AnyId], carry: bool) -> bool {
         self.link_hint = None;
@@ -1621,9 +1629,27 @@ impl Editor {
         if delta == Point::ZERO {
             return false;
         }
+        let square = self.wire_mode == WiringMode::Corners;
         self.run(doc, "Move wire", |tx| {
-            edit::move_wire_part(tx, wire, kind, delta)
+            edit::move_wire_part(tx, wire, kind, delta, square)
         })
+    }
+
+    /// The route a wire would have with a part dragged by `delta`: what the
+    /// drop will store, in the current wiring mode.
+    pub fn moved_route(
+        &self,
+        doc: &Document,
+        wire: WireId,
+        kind: edit::PartKind,
+        delta: Point,
+    ) -> Option<Vec<Point>> {
+        let project = doc.project();
+        let w = project.wire(wire)?;
+        let a = project.endpoint_position(w.from)?;
+        let b = project.endpoint_position(w.to)?;
+        let square = self.wire_mode == WiringMode::Corners;
+        Some(edit::moved_route(a, &w.route, b, kind, delta, square))
     }
 
     /// How far a wire part dragged from `from` to `to` moves.
@@ -2008,8 +2034,13 @@ impl Editor {
                 "Corners: click a pin or wire to finish, empty space for a corner · R flips the bend · Backspace undo · Esc cancels · Shift+W lines"
                     .into()
             }
-            Tool::Move(_) => self.link_hint.clone().unwrap_or_else(|| {
-                "Click to drop · R rotate · X mirror · Esc cancels the move".into()
+            Tool::Move(m) => self.link_hint.clone().unwrap_or_else(|| {
+                let shift = if m.carry {
+                    "Shift: leave the wires"
+                } else {
+                    "Shift: take the wires along"
+                };
+                format!("Click to drop · R rotate · X mirror · {shift} · Esc cancels the move")
             }),
         };
         let text = if self.proposals.is_empty() {
@@ -2104,7 +2135,12 @@ impl Editor {
                         let bends = route_through(a, from, &corners, cursor, to);
                         preview.wire.extend(bends);
                         preview.wire.push(cursor);
-                        preview.piece = pending_piece(project, page, &preview.wire, self.target);
+                        // A drag from a pin is the quick connection: the router
+                        // picks the route, so there is no piece to place.
+                        if !w.drag {
+                            preview.piece =
+                                pending_piece(project, page, &preview.wire, self.target);
+                        }
                     }
                 }
             }

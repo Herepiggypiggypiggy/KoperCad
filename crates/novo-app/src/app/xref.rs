@@ -20,8 +20,13 @@ impl NovoApp {
             None => Vec::new(),
         };
         if let Some(view) = self.canvas.schematic() {
-            view.canvas
-                .set_related(related.into_iter().map(|s| item_id(AnyId::Symbol(s))));
+            let lit = view.where_lit();
+            view.canvas.set_related(
+                related
+                    .into_iter()
+                    .map(|s| item_id(AnyId::Symbol(s)))
+                    .chain(lit),
+            );
         }
     }
 

@@ -43,8 +43,8 @@ fn table_of_contents_lists_pages_in_order() {
     assert_eq!(
         rows(&toc, "pages"),
         strings(&[
-            &["1", "Main circuit", "", "Schematic"],
-            &["2", "Control circuit", "", "Schematic"],
+            &["1", "Main circuit", "", "", "Schematic"],
+            &["2", "Control circuit", "", "", "Schematic"],
         ])
     );
 }
@@ -638,7 +638,7 @@ fn csv_quotes_and_localises() {
     assert!(csv.starts_with("Wire no.;From;To;"));
     assert!(csv.contains(";1,5;=A1-W1 BK;"));
     let toc = to_csv(&report(&doc, "toc"), &semicolon);
-    assert!(toc.contains("1;\"Main; power\";;Schematic\r\n"));
+    assert!(toc.contains("1;\"Main; power\";;;Schematic\r\n"));
 }
 
 #[test]
