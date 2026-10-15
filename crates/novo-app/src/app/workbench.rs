@@ -109,6 +109,8 @@ pub(crate) struct Workbench {
     pub(super) live: super::live::LiveView,
     /// Changes mode, while it is on.
     pub(super) changes: Option<super::changes::ChangesMode>,
+    /// Commissioning mode's data and panel state, once opened.
+    pub(super) commissioning: Option<super::commissioning::CommissioningMode>,
     /// The background drawing last handed to the canvas: page, project
     /// revision and the key it has.
     pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
@@ -164,6 +166,7 @@ impl Default for Workbench {
             last_export: None,
             live: Default::default(),
             changes: None,
+            commissioning: None,
             underlay_seen: None,
         }
     }
@@ -214,6 +217,7 @@ const APP_COMMANDS: &[&str] = &[
     "view.toggle_marks",
     "sim.live",
     "view.changes",
+    "view.commissioning",
     "check.problems",
     "check.next_problem",
     "check.previous_problem",
@@ -529,6 +533,7 @@ impl NovoApp {
             "view.toggle_marks" => self.wb.marks ^= true,
             "sim.live" => self.toggle_live(),
             "view.changes" => self.toggle_changes(argument),
+            "view.commissioning" => self.toggle_commissioning(),
             "check.problems" => self.show_issues(false),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),
@@ -758,6 +763,7 @@ impl NovoApp {
         list.extend(self.problem_marks(page));
         list.extend(self.pe_override_marks(page));
         list.extend(self.changes_marks(page));
+        list.extend(self.commissioning_marks(page));
         let hidden = !self.wb.marks;
         // Cross references are printed drawing content: they go into the
         // page scene, like the tags, so the PDF shows them the same way.

@@ -48,7 +48,10 @@ fn passing_and_not_applicable_move_progress() {
     let p = progress(project, &store, Scope::Project);
     assert_eq!(p.passed, 1);
     let blank = progress(project, &CommissioningStore::new(), Scope::Project);
-    assert_eq!(p.total, blank.total - 1);
+    assert_eq!(
+        p.total, blank.total,
+        "not applicable still counts, as in the report"
+    );
     let page_total: usize = progress_by_page(project, &store)
         .iter()
         .map(|(_, p)| p.passed)
@@ -177,4 +180,42 @@ fn the_report_input_lists_every_check_and_punch_item() {
     assert_eq!(input.punch[0].tag, failed[0].tag);
     let output = novo_reports::commissioning::commissioning_report(&input);
     assert!(output.row_count() > 0);
+}
+
+#[test]
+fn not_applicable_counts_as_done_and_an_empty_scope_is_zero() {
+    let (doc, m) = starter();
+    let project = doc.project();
+    let mut store = CommissioningStore::new();
+    let wire = Target::Wire(m.motor_wires[0]);
+    store
+        .set_check(rec(wire, CheckKind::Continuity, CheckState::Passed))
+        .unwrap();
+    store
+        .set_check(rec(wire, CheckKind::Labelled, CheckState::NotApplicable))
+        .unwrap();
+    let p = progress(project, &store, Scope::Project);
+    assert_eq!((p.passed, p.not_applicable), (1, 1));
+    assert_eq!(p.done(), 2);
+    assert_eq!(
+        p.total,
+        progress(project, &CommissioningStore::new(), Scope::Project).total
+    );
+    assert_eq!(Progress::default().percent(), 0.0);
+}
+
+#[test]
+fn prune_drops_decisions_about_deleted_objects() {
+    let (mut doc, m) = starter();
+    let mut store = CommissioningStore::new();
+    let wire = Target::Wire(m.motor_wires[0]);
+    store
+        .set_check(rec(wire, CheckKind::Continuity, CheckState::Passed))
+        .unwrap();
+    store.prune(doc.project());
+    assert_eq!(store.records().count(), 1);
+    doc.transact("Delete", |tx| tx.remove(m.motor_wires[0]))
+        .unwrap();
+    store.prune(doc.project());
+    assert_eq!(store.records().count(), 0);
 }

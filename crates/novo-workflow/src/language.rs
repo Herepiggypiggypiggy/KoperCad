@@ -221,6 +221,11 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("view.changes", &["wijzigingen"], &["vergelijk", "verschil"]),
     nl(
+        "view.commissioning",
+        &["inbedrijfstelling"],
+        &["uitvoeren", "afvinken", "restpunten"],
+    ),
+    nl(
         "sim.live",
         &[],
         &["live potentialen tonen", "contacten sluiten", "spanning"],

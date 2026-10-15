@@ -46,7 +46,7 @@ impl ChangesMode {
 
 /// The objects a change shows as on `page` in `project`: the object itself,
 /// or the symbols and wires that draw a device, terminal or cable.
-fn shown_on(project: &Project, id: AnyId, page: PageId) -> Vec<AnyId> {
+pub(super) fn shown_on(project: &Project, id: AnyId, page: PageId) -> Vec<AnyId> {
     match id {
         AnyId::Symbol(_) | AnyId::Wire(_) | AnyId::Text(_) | AnyId::Junction(_) => project
             .record(id)

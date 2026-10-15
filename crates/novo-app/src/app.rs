@@ -9,6 +9,7 @@ mod cabinet_inspector;
 mod cabinet_routes;
 mod changes;
 mod checks;
+mod commissioning;
 mod compare;
 mod dock;
 mod drawers;
@@ -43,6 +44,8 @@ mod cabinet_tests;
 #[cfg(test)]
 mod changes_tests;
 #[cfg(test)]
+mod commissioning_tests;
+#[cfg(test)]
 mod compare_tests;
 #[cfg(test)]
 mod example_tests;
@@ -75,6 +78,7 @@ enum OutlineMode {
     Pages,
     Issues,
     Changes,
+    Commissioning,
 }
 
 impl OutlineMode {
@@ -83,6 +87,7 @@ impl OutlineMode {
             OutlineMode::Pages => "Pages",
             OutlineMode::Issues => "Issues",
             OutlineMode::Changes => "Changes",
+            OutlineMode::Commissioning => "Commissioning",
         }
     }
 }
@@ -561,6 +566,7 @@ impl NovoApp {
     fn document_replaced(&mut self) {
         self.canvas.document_replaced();
         self.wb.reports = Default::default();
+        self.wb.commissioning = None;
         self.wb.sheet = 0;
         self.add_generated_pages();
     }
@@ -1082,6 +1088,7 @@ impl NovoApp {
                 OutlineMode::Pages,
                 OutlineMode::Issues,
                 OutlineMode::Changes,
+                OutlineMode::Commissioning,
             ] {
                 if ui
                     .selectable_label(self.outline_mode == mode, mode.label())
@@ -1108,6 +1115,12 @@ impl NovoApp {
         });
         if self.outline_mode == OutlineMode::Issues {
             if self.issues_list(ui) {
+                self.outline_open = false;
+            }
+            return;
+        }
+        if self.outline_mode == OutlineMode::Commissioning {
+            if self.commissioning_outline(ui) {
                 self.outline_open = false;
             }
             return;

@@ -686,6 +686,22 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["changes"],
     ),
+    verb(
+        cmd(
+            "view.commissioning",
+            "Commissioning",
+            "View",
+            &[
+                "commission",
+                "punch list",
+                "check off",
+                "continuity",
+                "torque",
+            ],
+            Needs::Project,
+        ),
+        &["commissioning"],
+    ),
     cmd(
         "sim.live",
         "Show live potentials",
