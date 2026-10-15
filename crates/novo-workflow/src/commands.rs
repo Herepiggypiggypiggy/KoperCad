@@ -168,6 +168,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "project.standard",
+            "Drawing standard",
+            "Project",
+            &["iec", "nfpa", "standard", "symbols", "project settings"],
+            Needs::Project,
+        ),
+        &["standard"],
+    ),
+    verb(
+        cmd(
             "app.preferences",
             "Preferences",
             "Project",
