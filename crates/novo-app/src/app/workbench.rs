@@ -497,6 +497,11 @@ impl NovoApp {
                 self.cabinet.table = !showing;
                 self.switch_workspace(Workspace::Cabinet);
             }
+            "heat.toggle" | "heat.airflow" | "heat.contours" if self.is_open() => {
+                self.switch_workspace(Workspace::Cabinet);
+                self.cabinet.table = false;
+                self.cabinet.heat.command(id);
+            }
             "tool.place" => match argument.filter(|a| !a.trim().is_empty()) {
                 Some(text) => self.wb.field.open_with(Mode::Place, text, pointer),
                 None => self.wb.field.open(Mode::Place, pointer),

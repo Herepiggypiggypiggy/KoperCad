@@ -1867,6 +1867,7 @@ dependencies = [
  "novo-commissioning",
  "novo-core",
  "novo-editor",
+ "novo-heatview",
  "novo-interop",
  "novo-layout",
  "novo-parts",
@@ -1983,6 +1984,10 @@ dependencies = [
  "novo-terminals",
  "novo-xref",
 ]
+
+[[package]]
+name = "novo-heatview"
+version = "0.1.0"
 
 [[package]]
 name = "novo-interop"
