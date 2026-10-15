@@ -3,9 +3,9 @@
 //! lists. Each row names the object in words (`Device -K1`, `Wire 12`) as
 //! it reads in the newer state, or in the older one for a removed object.
 
-use novo_core::{AnyId, PageId, Project, SymbolRole};
+use novo_core::{AnyId, Endpoint, PageId, Project, SymbolRole};
 
-use crate::{Change, ChangeKind, ChangeSet, diff};
+use crate::{Change, ChangeKind, ChangeSet, FieldChange, diff};
 
 /// One row of the change list.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18,6 +18,9 @@ pub struct ChangeRow {
     /// What the object is: `Device -K1`, `Wire 12`, `Text "Pump 1"`.
     pub label: String,
     pub kind: ChangeKind,
+    /// What differs, field by field, with old and new values. Empty from
+    /// [`change_list`]; [`crate::compare`] fills it for changed objects.
+    pub fields: Vec<FieldChange>,
 }
 
 /// The change list between `old` and `new`: pages in page order (pages
@@ -65,6 +68,7 @@ fn rows_of(
             id: c.id,
             label: label(c, old, new),
             kind: c.kind.clone(),
+            fields: Vec::new(),
         })
         .collect();
     rows.sort_by(|a, b| a.label.cmp(&b.label));
@@ -97,10 +101,18 @@ fn name_of(project: &Project, id: AnyId) -> Option<String> {
                 _ => format!("Symbol {}", s.symbol.0),
             }
         }
-        AnyId::Wire(w) => match project.wire(w)?.number.as_deref() {
-            Some(n) if !n.is_empty() => format!("Wire {n}"),
-            _ => "Wire".to_owned(),
-        },
+        AnyId::Wire(w) => {
+            let wire = project.wire(w)?;
+            match wire.number.as_deref() {
+                Some(n) if !n.is_empty() => format!("Wire {n}"),
+                // Unnumbered: name it by its ends so rows tell apart.
+                _ => match (end_name(project, wire.from), end_name(project, wire.to)) {
+                    (Some(a), Some(b)) => format!("Wire {a} to {b}"),
+                    (Some(a), None) | (None, Some(a)) => format!("Wire at {a}"),
+                    (None, None) => "Wire".to_owned(),
+                },
+            }
+        }
         AnyId::Terminal(t) => {
             let t = project.terminal(t)?;
             let strip = project.device(t.strip).map(|d| d.tag.to_string());
@@ -125,5 +137,28 @@ fn name_of(project: &Project, id: AnyId) -> Option<String> {
         },
         AnyId::Junction(_) => "Junction".to_owned(),
         _ => return None,
+    })
+}
+
+/// Where a wire end sits, in words: `-K1:A1`, `-X1:3` or a symbol key.
+/// `None` for a junction or open end.
+fn end_name(project: &Project, end: Endpoint) -> Option<String> {
+    let Endpoint::Pin { symbol, pin } = end else {
+        return None;
+    };
+    let symbol = project.symbol(symbol)?;
+    let pin_name = symbol.pins.get(usize::from(pin)).map(|p| p.name.as_str());
+    let owner = match &symbol.role {
+        SymbolRole::Device { device, .. } => project.device(*device)?.tag.to_string(),
+        SymbolRole::Terminal { terminals } => {
+            let t = project.terminal(*terminals.first()?)?;
+            let strip = project.device(t.strip).map(|d| d.tag.to_string());
+            return Some(format!("{}:{}", strip.unwrap_or_default(), t.name));
+        }
+        _ => symbol.symbol.0.to_string(),
+    };
+    Some(match pin_name {
+        Some(p) if !p.is_empty() => format!("{owner}:{p}"),
+        _ => owner,
     })
 }

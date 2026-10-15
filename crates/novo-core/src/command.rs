@@ -9,9 +9,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::entity::{
-    BlockOverride, BlockParameter, CableCore, DeviceKind, Endpoint, MountingPlate, PageFormat,
-    PageKind, PeOverride, Pin, PotentialKind, PotentialSet, PotentialSpec, ProjectInfo, RailKind,
-    SymbolKey, SymbolRole, TextContent, TextPlacement, Value,
+    BlockDefinition, BlockOverride, BlockParameter, CableCore, DeviceKind, Endpoint, MountingPlate,
+    PageFormat, PageKind, PeOverride, Pin, PotentialKind, PotentialSet, PotentialSpec, ProjectInfo,
+    RailKind, SymbolKey, SymbolRole, TextContent, TextPlacement, Value,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::{Placement, Point};
@@ -238,6 +238,11 @@ pub enum Command {
         #[serde(default)]
         parameters: Vec<BlockParameter>,
     },
+    /// Copies a block definition from outside the project (a macro file)
+    /// into it; see [`Tx::adopt_block_definition`].
+    AdoptBlockDefinition {
+        definition: BlockDefinition,
+    },
     /// Places a block; see [`Tx::place_block`].
     PlaceBlock {
         definition: BlockDefinitionId,
@@ -333,14 +338,14 @@ pub enum Command {
     RemovePlacement {
         placement: CabinetPlacementId,
     },
-    /// Records a declined proposal; see [`Tx::dismiss`]. Remove the
-    /// dismissal to bring the proposal back.
     /// Switches the drawing standard and re-keys the listed symbols to its
     /// pack, in one undo step; see [`Tx::switch_standard`].
     SwitchStandard {
         standard: String,
         symbols: Vec<(SymbolId, SymbolKey)>,
     },
+    /// Records a declined proposal; see [`Tx::dismiss`]. Remove the
+    /// dismissal to bring the proposal back.
     Dismiss {
         proposal: String,
         subjects: Vec<AnyId>,
@@ -439,6 +444,9 @@ impl Command {
             Command::MoveToPage { .. } => "Move to page".into(),
             Command::AddStructure { .. } => "Add structure".into(),
             Command::DefineBlock { .. } => "Define block".into(),
+            Command::AdoptBlockDefinition { definition } => {
+                format!("Add block {}", definition.name)
+            }
             Command::PlaceBlock { .. } => "Place block".into(),
             Command::SetBlockValues { .. } => "Set block parameters".into(),
             Command::SetBlockOverride { .. } => "Mark block edit".into(),
@@ -696,6 +704,9 @@ impl Tx<'_> {
                 origin,
                 parameters,
             } => self.define_block(name, &items, origin, parameters)?.into(),
+            Command::AdoptBlockDefinition { definition } => {
+                self.adopt_block_definition(definition)?.into()
+            }
             Command::PlaceBlock {
                 definition,
                 page,

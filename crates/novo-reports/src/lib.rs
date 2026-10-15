@@ -77,6 +77,7 @@
 
 mod assembly;
 mod bom;
+pub mod commissioning;
 mod cutlist;
 mod defaults;
 mod devices;
