@@ -9,6 +9,7 @@ fn issue(doc: &mut Document, index: &str, date: &str) -> Result<RevisionId> {
             date: date.into(),
             author: "TV".into(),
             description: "Issue".into(),
+            note: String::new(),
         })?
         .created;
     match created[..] {
@@ -105,4 +106,53 @@ fn an_issued_revision_is_undone_not_deleted() {
     assert!(doc.project().issued_revision(a).is_some());
     doc.undo().unwrap();
     assert!(doc.project().issued_revision(a).is_none());
+}
+
+#[test]
+fn a_longer_note_is_kept_with_the_revision() {
+    let mut doc = Document::default();
+    let issue_with = |doc: &mut Document, index: &str, note: &str| {
+        let created = doc
+            .execute(Command::IssueRevision {
+                index: index.into(),
+                date: "2026-10-15".into(),
+                author: "TV".into(),
+                description: "Issue".into(),
+                note: note.into(),
+            })
+            .unwrap()
+            .created;
+        let [AnyId::Revision(id)] = created[..] else {
+            panic!("{created:?}")
+        };
+        id
+    };
+    let a = issue_with(&mut doc, "A", "Customer asked for a second motor.");
+    let b = issue_with(&mut doc, "B", "  ");
+    let project = doc.project();
+    assert_eq!(
+        project.issued_revision(a).unwrap().note(),
+        "Customer asked for a second motor."
+    );
+    assert_eq!(project.issued_revision(b).unwrap().note(), "");
+    assert!(project.issued_revision(b).unwrap().properties.is_empty());
+
+    // The note travels with the file; a command without one still parses.
+    let back = Project::from_json(&project.to_json()).unwrap();
+    assert_eq!(
+        back.issued_revision(a).unwrap().note(),
+        project.issued_revision(a).unwrap().note()
+    );
+    let old: Command =
+        serde_json::from_str(r#"{"command":"issue_revision","index":"C","date":"2026-10-16"}"#)
+            .unwrap();
+    assert!(matches!(old, Command::IssueRevision { note, .. } if note.is_empty()));
+
+    // One undo step takes the revision and its note.
+    doc.undo().unwrap();
+    assert!(doc.project().issued_revision(b).is_none());
+    assert_eq!(
+        doc.project().issued_revision(a).unwrap().note(),
+        "Customer asked for a second motor."
+    );
 }

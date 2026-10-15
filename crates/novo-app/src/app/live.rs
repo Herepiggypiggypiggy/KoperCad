@@ -15,8 +15,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use eframe::egui;
 use novo_canvas::model::WireLook;
 use novo_core::{
-    NetId, Netlist, PageId, Potential, PotentialId, PotentialKind, Project, SymbolId, SymbolRole,
-    WireId,
+    Endpoint, NetId, Netlist, PageId, PinRef, Potential, PotentialId, PotentialKind, Project,
+    SymbolId, SymbolRole, WireId,
 };
 use novo_sim::{
     Clock, Live, PoleState, Settled, Solution, inputs_seen, is_coil, is_lamp, is_load, is_motor,
@@ -109,6 +109,53 @@ impl LiveView {
             });
         }
         self.solved.as_ref().expect("solved above")
+    }
+
+    /// What a lesson step can read off the live view: the devices whose coil
+    /// is energized, the pins that carry a potential and the devices with a
+    /// pole closed, all by tag and designation.
+    pub(super) fn learn_facts(
+        &mut self,
+        project: &Project,
+    ) -> (BTreeSet<String>, BTreeSet<String>, BTreeSet<String>) {
+        let tag_of = |symbol: SymbolId| {
+            project
+                .pin_designation(PinRef::new(symbol, 0))
+                .and_then(|d| d.rsplit_once(':').map(|(tag, _)| tag.to_owned()))
+        };
+        let solved = self.solved(project, 0.0);
+        let coils = solved
+            .settled
+            .energized
+            .iter()
+            .filter_map(|s| tag_of(*s))
+            .collect();
+        let closed = project
+            .symbols()
+            .filter(|s| (0..s.pass_through.len()).any(|g| solved.settled.poles.is_closed(s.id, g)))
+            .filter_map(|s| tag_of(s.id))
+            .collect();
+        let mut pins = BTreeSet::new();
+        for symbol in project.symbols() {
+            for index in 0..symbol.pins.len() {
+                let Ok(pin) = u16::try_from(index) else {
+                    continue;
+                };
+                let live = solved.settled.solution.of(
+                    &solved.netlist,
+                    Endpoint::Pin {
+                        symbol: symbol.id,
+                        pin,
+                    },
+                );
+                if !matches!(live, Live::Dead)
+                    && let Some(d) = project.pin_designation(PinRef::new(symbol.id, pin))
+                {
+                    pins.insert(d);
+                }
+            }
+        }
+        (coils, pins, closed)
     }
 
     /// Closes the pole if open and opens it if closed.

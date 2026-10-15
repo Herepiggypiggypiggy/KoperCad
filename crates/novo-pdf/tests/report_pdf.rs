@@ -99,3 +99,27 @@ fn cells_starting_with_page_are_printed() {
     assert!(all.contains("page 3 wiring"), "{all}");
     assert!(all.contains("page 9 see drawing"));
 }
+
+#[test]
+fn report_bytes_writes_each_format() {
+    use novo_pdf::{ReportFileFormat, report_bytes};
+    use std::path::Path;
+    let report = commissioning_report(&input(3));
+    for name in ["a.pdf", "a.csv", "a.xlsx"] {
+        let format = ReportFileFormat::from_path(Path::new(name)).expect("known");
+        let bytes = report_bytes(&report, format, &options()).expect("written");
+        assert!(!bytes.is_empty(), "{name}");
+    }
+    assert!(ReportFileFormat::from_path(Path::new("a.txt")).is_none());
+    let csv = report_bytes(
+        &report,
+        ReportFileFormat::from_path(Path::new("a.csv")).unwrap(),
+        &options(),
+    )
+    .unwrap();
+    assert!(
+        String::from_utf8(csv)
+            .unwrap()
+            .contains("Progress per cabinet")
+    );
+}
