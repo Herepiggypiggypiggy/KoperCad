@@ -228,6 +228,31 @@ fn a_plate_that_is_too_small_keeps_the_bottom_rows_and_reports_the_rest() {
 }
 
 #[test]
+fn several_bottom_rows_under_top_rows_never_leave_the_plate() {
+    // One device per row (300 of 400 mm usable width): a protection row on
+    // top, then bottom rows that do not all fit. The gap under the top row
+    // counts for every bottom row, not only the first.
+    let p = Plate {
+        width: 420.0,
+        height: 400.0,
+        margin: 10.0,
+    };
+    let mut specs = vec![spec(1, "Q", 18.0, 90.0)];
+    specs.extend((2..=5).map(|i| spec(i, "X", 300.0, 60.0)));
+    let plan = place_all_rules(&p, &specs, &RuleSet::standard(), 1, 0.0);
+    let ps = placements(&plan, &specs);
+    assert!(!plan.unplaced.is_empty());
+    assert!(plan.placements.iter().any(|q| q.id == 1));
+    assert!(outside(&p, &ps).is_empty());
+    assert!(collisions(&ps).is_empty());
+    let limit = p.usable().y + p.usable().h;
+    for q in &plan.placements {
+        let h = specs.iter().find(|s| s.id == q.id).unwrap().size.height;
+        assert!(q.y + h <= limit + 1e-9, "id {} ends at {}", q.id, q.y + h);
+    }
+}
+
+#[test]
 fn a_device_wider_than_the_plate_is_unplaced() {
     let specs = vec![spec(1, "K", 500.0, 90.0), spec(2, "K", 45.0, 90.0)];
     let plan = place_all_rules(&plate(), &specs, &RuleSet::standard(), 1, 0.0);

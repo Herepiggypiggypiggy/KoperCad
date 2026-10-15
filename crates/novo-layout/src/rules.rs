@@ -546,10 +546,9 @@ pub fn place_all_rules(
         let add = kept
             .last()
             .map_or(row.height, |l| between(l, row) + row.height);
-        let lead = match (kept.is_empty(), top_last) {
-            (true, Some(l)) => between(l, row),
-            _ => 0.0,
-        };
+        // The gap under the top rows belongs to the whole block, so it counts
+        // for every row, measured to the block's first row.
+        let lead = top_last.map_or(0.0, |l| between(l, kept.first().copied().unwrap_or(row)));
         if top_end + lead + height + add > limit {
             skipped.push(row);
         } else {
