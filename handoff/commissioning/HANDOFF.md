@@ -1,11 +1,13 @@
 # Commissioning thread: handoff
 
-PRs: app #471 (stacked on #431 and #446, design reviewer), design #399 (`ws-commissioning-design`), engine #431 (`ws-commissioning-engine`, crate
+PRs merged: design #399, engine #431, storage #446, app #471. Open: #494 (`ws-commissioning-design`), engine #431 (`ws-commissioning-engine`, crate
 `novo-commissioning`), storage #446 (`ws-commissioning-storage`, schema v3 `sidecar` table).
 
 ## How to reach it (entry points)
 - Built in app PR #471 (`ws-commissioning-app`): palette/command `Commissioning` (`view.commissioning`) and the outline's fourth tab "Commissioning" (Checks and Punch list).
-- Still to do: items below.
+- Follow-up PR #494: edit lock while the tab shows (canvas edits undone; command edits not yet), Pass all open, Large switch.
+- Not mine: CLI command and File > Export entry (report thread session_015JWsgz1ouocSSfvtqPic6V, PR #452 export menu); read data with `ProjectFile::read_only(p)?.sidecar("commissioning")` + `CommissioningStore::from_json` + `to_report_input`.
+- Open: Space/F keys (collide with pan and tool keys; with the Workspaces keymap), lock for command edits, `ProjectFile::create_as` does not copy sidecars (WS-28 scripted save-as).
 - Mode switch "Commissioning" next to Changes mode (Workspaces, menus and navigation thread, session_01WAQSEGkMbyreCPG18tsSPc).
 - Palette `Commissioning` / `Export commissioning report`; shortcut proposal Shift+K.
 - Tick panel (Pass / Fail / Note) and Punch list tab in the mode's dock (built by this thread in novo-app).
