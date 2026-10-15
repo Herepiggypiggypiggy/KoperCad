@@ -209,14 +209,7 @@ impl InsertSearch {
 /// symbols that are not devices of their own (interruption points,
 /// potential feeds, bridges, earth).
 pub fn letter_code(symbol: &Symbol) -> Option<&'static str> {
-    letter_code_of(&symbol.function)
-}
-
-/// The letter code for a library function type (`coil.relay`,
-/// `protection.mpcb`). The one table: the schematic editor (WS-06) takes
-/// its letters from here too, so placing and searching agree.
-pub fn letter_code_of(function: &str) -> Option<&'static str> {
-    let f = function;
+    let f = symbol.function.as_str();
     let has = |prefix: &str| f == prefix || f.starts_with(&format!("{prefix}."));
     Some(if has("connectivity") || has("earth") {
         return None;

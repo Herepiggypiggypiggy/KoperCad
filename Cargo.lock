@@ -1920,7 +1920,6 @@ dependencies = [
  "novo-canvas",
  "novo-core",
  "novo-symbols",
- "novo-workflow",
 ]
 
 [[package]]

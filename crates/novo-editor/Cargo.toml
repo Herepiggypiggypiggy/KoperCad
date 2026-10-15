@@ -19,7 +19,6 @@ egui = ["art", "dep:egui", "novo-canvas/egui"]
 [dependencies]
 novo-core.workspace = true
 novo-symbols.workspace = true
-novo-workflow.workspace = true
 # Not the workspace entry: that one keeps novo-canvas's default features
 # (the egui widget), which the `art` feature must not pull in.
 novo-canvas = { path = "../novo-canvas", default-features = false, features = ["model"], optional = true }
