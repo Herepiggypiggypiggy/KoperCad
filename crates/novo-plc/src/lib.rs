@@ -14,6 +14,9 @@
 //!   PLC program uses.
 //! - [`Address`]: a channel's address, always derived from its card's start
 //!   and its place in the layout, written in the project's [`AddressStyle`].
+//! - [`PlcIndex`]: which symbol draws which channel (`plc.channel = "DI 3"` on a
+//!   non-main symbol of the card), address labels, free channels and the
+//!   next one to place, and the [`Issue`]s the design checks report.
 //!
 //! ```
 //! use novo_plc::{AddressStyle, CardLayout, ChannelType, Space};
@@ -28,8 +31,10 @@
 
 pub mod address;
 pub mod card;
+pub mod index;
 pub mod layout;
 
 pub use address::{Address, AddressStyle};
 pub use card::{Card, LayoutSource, address_style, allocate, cards, next_start};
+pub use index::{DrawnChannel, FromKey, Functions, Issue, PlcIndex, channel_key, parse_channel};
 pub use layout::{CardLayout, Channel, ChannelType, Group, LayoutError, Space};
