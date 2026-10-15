@@ -951,7 +951,7 @@ impl PageScene {
                 .is_some_and(|t| t.content == TextContent::DeviceTag)
         });
         let text = symbol_text(project, sym).filter(|_| !tag_text);
-        let has_tag = text.is_some();
+        let mut tag = None;
         if let Some(text) = text {
             // To the right of the placed symbol, vertically centred on its
             // pins, whatever its rotation or mirroring.
@@ -971,12 +971,11 @@ impl PageScene {
             };
             // The tag is the device's own text: always horizontal, and
             // always the item's first label.
-            item.labels.insert(
-                0,
-                Label::new(pos, text, self.style.tag_height)
-                    .anchored(anchor)
-                    .colored(self.style.tag_color),
-            );
+            let label = Label::new(pos, text, self.style.tag_height)
+                .anchored(anchor)
+                .colored(self.style.tag_color);
+            tag = Some(label.clone());
+            item.labels.insert(0, label);
         }
         if let Some(strip) = self.strip_heads.get(&id) {
             // Left of the run's first terminal; the terminals' own names
@@ -1001,7 +1000,6 @@ impl PageScene {
             );
         }
         if let Some(note) = self.notes.get(&id) {
-            let tag = has_tag.then(|| item.labels[0].clone());
             let label = self.note_label(&item, tag.as_ref(), note);
             item.labels.push(label);
         }

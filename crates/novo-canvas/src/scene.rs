@@ -150,12 +150,20 @@ impl Item {
     }
 
     /// Distance to the ink, and to the nearest label with its index.
+    /// An item with no ink and no text (a junction drawn plain) is picked
+    /// at its snap points instead, so it can still be selected and deleted.
     fn parts_distance(&self, p: Vec2, zoom: f32) -> (f32, Option<(f32, usize)>) {
-        let ink = self
-            .primitives
-            .iter()
-            .map(|prim| prim.distance(p, zoom))
-            .fold(f32::INFINITY, f32::min);
+        let ink = if self.is_invisible() {
+            self.snap_points
+                .iter()
+                .map(|s| s.pos.distance(p))
+                .fold(f32::INFINITY, f32::min)
+        } else {
+            self.primitives
+                .iter()
+                .map(|prim| prim.distance(p, zoom))
+                .fold(f32::INFINITY, f32::min)
+        };
         let text = self
             .labels
             .iter()
@@ -166,9 +174,18 @@ impl Item {
     }
 
     /// True when any ink or text touches `rect`.
+    /// An item with neither (see [`Self::distance`]) touches `rect` when a
+    /// snap point is inside it.
     pub fn intersects(&self, rect: &Aabb) -> bool {
+        if self.is_invisible() {
+            return self.snap_points.iter().any(|s| rect.contains_point(s.pos));
+        }
         self.primitives.iter().any(|p| p.intersects(rect))
             || self.labels.iter().any(|l| l.intersects(rect))
+    }
+
+    fn is_invisible(&self) -> bool {
+        self.primitives.is_empty() && self.labels.is_empty()
     }
 }
 
@@ -792,5 +809,28 @@ mod label_pick_tests {
         assert_eq!((on_text.id, on_text.label), (ItemId(1), Some(0)));
         let on_line = scene.pick(Vec2::new(0.1, 8.0), 0.5, 2.0).unwrap();
         assert_eq!(on_line.label, None);
+    }
+
+    /// A junction drawn plain has no ink or text, but is still picked and
+    /// box-selected at its connection point.
+    #[test]
+    fn an_item_without_ink_is_picked_at_its_snap_points() {
+        let mut s = Scene::new();
+        let at = Vec2::new(10.0, 20.0);
+        s.insert(
+            ItemId(7),
+            Item::new(LayerId(0)).with_snap(SnapPoint::connection(at)),
+        );
+        assert_eq!(
+            s.pick(at + Vec2::new(0.5, 0.0), 1.0, 1.0).unwrap().id,
+            ItemId(7)
+        );
+        assert!(s.pick(at + Vec2::new(3.0, 0.0), 1.0, 1.0).is_none());
+        let around = Aabb::new(at - Vec2::ONE, at + Vec2::ONE);
+        let beside = Aabb::new(at + Vec2::splat(2.0), at + Vec2::splat(4.0));
+        for mode in [BoxMode::Window, BoxMode::Crossing] {
+            assert_eq!(s.box_select(&around, mode, 1.0), vec![ItemId(7)]);
+            assert!(s.box_select(&beside, mode, 1.0).is_empty());
+        }
     }
 }
