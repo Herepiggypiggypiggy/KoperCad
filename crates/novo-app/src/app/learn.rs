@@ -202,17 +202,21 @@ impl LearnState {
         self.coming.as_ref().is_some_and(|c| c.contains(id))
     }
 
-    /// Lessons with a lint error against this build's commands, anchors
-    /// and signals.
-    fn lint_errors(&self) -> BTreeSet<String> {
+    /// What the lint says about the lessons against this build's commands,
+    /// anchors and signals.
+    pub(crate) fn lint_report(&self) -> novo_learn::Report {
         let registry = Registry {
             commands: COMMANDS.iter().map(|c| c.id.to_owned()).collect(),
             anchors: ANCHORS.iter().map(|a| (*a).to_owned()).collect(),
             signals: SIGNALS.iter().map(|s| (*s).to_owned()).collect(),
         };
         let example = example_project();
-        let report = lint(&self.catalog, &self.files, &registry, example.as_ref());
-        report
+        lint(&self.catalog, &self.files, &registry, example.as_ref())
+    }
+
+    /// Lessons with a lint error, which are listed as coming soon.
+    fn lint_errors(&self) -> BTreeSet<String> {
+        self.lint_report()
             .findings
             .iter()
             .filter(|f| f.severity == Severity::Error)

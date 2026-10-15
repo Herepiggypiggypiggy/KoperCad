@@ -386,3 +386,30 @@ fn anchors_doc_is_current() {
         "docs/design/lesson-anchors.md is out of date: run `UPDATE_ANCHORS_DOC=1 cargo test -p novo-app anchors_doc`"
     );
 }
+
+#[test]
+fn the_shipped_lessons_lint_without_errors_against_this_build() {
+    // Ready lessons may only name commands, anchors and signals this build
+    // has; drafts may be ahead of it and only warn.
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    let report = d.app.learn.lint_report();
+    let errors: Vec<String> = report.errors().map(ToString::to_string).collect();
+    assert!(errors.is_empty(), "{}", errors.join("\n"));
+}
+
+#[test]
+fn a_ready_lesson_naming_a_missing_anchor_is_coming_soon() {
+    let (_dir, mut d) = drive();
+    let mut files = files();
+    files.insert(
+        "tiny/lesson.toml".into(),
+        LESSON.replace(
+            "text = \"A reading step has a Next button.\"",
+            "text = \"Look.\"\npoint = { ui = \"nowhere.at.all\" }",
+        ),
+    );
+    d.app.learn.use_files(files);
+    assert!(d.app.learn.is_coming_soon("tiny"));
+}
