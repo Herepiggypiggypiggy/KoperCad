@@ -298,6 +298,8 @@ pub fn export_pdf_with_reports(
     // Embedded only when some line needs it (see `inter`).
     let mut inter = inter::Inter::new();
     let mut inter_id: Option<Ref> = None;
+    // Helvetica-Bold, written only when a page uses it.
+    let mut bold_id: Option<Ref> = None;
     for (i, o) in out.iter().enumerate() {
         let (w, h) = o.size_mm;
         let mut writer = draw::PageWriter::new(h, &mut inter);
@@ -384,6 +386,10 @@ pub fn export_pdf_with_reports(
             let id = *inter_id.get_or_insert_with(&mut alloc);
             fonts.pair(Name(inter::FONT_NAME), id);
         }
+        if writer.uses_bold() {
+            let id = *bold_id.get_or_insert_with(&mut alloc);
+            fonts.pair(Name(font::BOLD_NAME), id);
+        }
         fonts.finish();
         resources.finish();
         if !annotations.is_empty() {
@@ -396,6 +402,11 @@ pub fn export_pdf_with_reports(
 
     if let Some(id) = inter_id {
         inter.write(&mut pdf, id, &mut alloc);
+    }
+    if let Some(id) = bold_id {
+        pdf.type1_font(id)
+            .base_font(Name(b"Helvetica-Bold"))
+            .encoding_predefined(Name(b"WinAnsiEncoding"));
     }
 
     if options.bookmarks && !pages.is_empty() {
@@ -459,7 +470,7 @@ pub fn sheet_content(name: &str, number: (usize, usize), layout: &PageLayout) ->
                     Align::Center => Anchor::Center,
                     Align::Right => Anchor::CenterRight,
                 },
-                bold: false,
+                bold: t.bold,
             })
             .collect(),
         lines: layout
