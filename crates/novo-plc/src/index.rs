@@ -41,8 +41,9 @@ impl Functions for FromKey {
     }
 }
 
-/// The record kinds the PLC engine reads, for live reports' dependencies.
-/// It also reads the project info (the address style).
+/// The record kinds the PLC engine reads, for live reports' dependencies:
+/// pages for where channels are drawn ([`PlcIndex::io_rows`]). It also
+/// reads the project info (the address style).
 pub const READS: &[EntityKind] = &[
     EntityKind::Device,
     EntityKind::Part,
@@ -105,8 +106,14 @@ pub enum Issue {
     NoStart { card: DeviceId, space: Space },
     /// A drawn channel with no wire on any of its pins.
     Unconnected { symbol: SymbolId, card: DeviceId },
-    /// Two cards of one station in the same slot.
-    SharedSlot { cards: [DeviceId; 2], slot: u16 },
+    /// Two cards of one station in the same slot. `clash` is set under
+    /// the Rockwell style, where slot and channel are the address, so the
+    /// cards' addresses collide and it is an error.
+    SharedSlot {
+        cards: [DeviceId; 2],
+        slot: u16,
+        clash: bool,
+    },
 }
 
 impl Issue {
@@ -194,7 +201,7 @@ impl Issue {
             Issue::Unconnected { card, .. } => {
                 format!("This channel of {} is connected to nothing", tag(card))
             }
-            Issue::SharedSlot { cards, slot } => format!(
+            Issue::SharedSlot { cards, slot, .. } => format!(
                 "{} and {} are both in slot {slot}",
                 tag(&cards[0]),
                 tag(&cards[1])
@@ -206,7 +213,8 @@ impl Issue {
     pub fn is_error(&self) -> bool {
         matches!(
             self,
-            Issue::Overlap { .. }
+            Issue::SharedSlot { clash: true, .. }
+                | Issue::Overlap { .. }
                 | Issue::DrawnTwice { .. }
                 | Issue::NoSuchChannel { .. }
                 | Issue::TypeMismatch { .. }
@@ -384,6 +392,7 @@ impl PlcIndex {
                     issues.push(Issue::SharedSlot {
                         cards: [a.device, b.device],
                         slot: sa,
+                        clash: self.style == AddressStyle::Rockwell,
                     });
                 }
             }
@@ -405,9 +414,15 @@ impl PlcIndex {
                 });
                 continue;
             };
-            let count = self
-                .card(ch.card)
-                .map_or(0, |c| c.channels().count(ch.kind));
+            let Some(card) = self.card(ch.card) else {
+                continue;
+            };
+            // A card whose layout does not parse is reported once, as
+            // BadLayout, not again on every channel drawn for it.
+            if card.layout.is_err() {
+                continue;
+            }
+            let count = card.channels().count(ch.kind);
             if number >= count {
                 issues.push(Issue::NoSuchChannel {
                     symbol: ch.symbol,

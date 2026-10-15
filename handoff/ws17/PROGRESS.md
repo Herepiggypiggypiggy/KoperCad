@@ -17,3 +17,6 @@
 2026-10-15 04:05 UTC Local stack (0002-0004) rebased onto #152 head c7a9347; workspace clippy clean, 766 passed / 0 failed / 1 ignored (before the rebase, base 96289b8). Patches now apply on top of #152.
 2026-10-15 04:10 UTC #152 READY (main reviewer) on c7a9347; waiting for the lead to merge. Frozen: no more pushes.
 2026-10-15 04:15 UTC #152 merged. PR 3 (channel index) opened from main f5e4980.
+2026-10-15 04:20 UTC PR #160 opened (channel index), head 95430f7, sent to main reviewer. Patches 0003-0004 rebased onto it (branch ws17-next).
+2026-10-15 04:25 UTC #160 READY (main reviewer) on 95430f7. Non-blocking notes (Rockwell SharedSlot error, skip NoSuchChannel on bad layout, READS Page) go into the io_rows PR.
+2026-10-15 04:30 UTC #160 merged. PR 4 (io_rows + #160 review notes) opened from main.

@@ -17,6 +17,8 @@
 //! - [`PlcIndex`]: which symbol draws which channel (`plc.channel = "DI 3"` on a
 //!   non-main symbol of the card), address labels, free channels and the
 //!   next one to place, and the [`Issue`]s the design checks report.
+//! - [`PlcIndex::io_rows`]: the I/O list, one [`IoRow`] per channel with
+//!   spares, for the `io` report and the Devices drawer.
 //!
 //! ```
 //! use novo_plc::{AddressStyle, CardLayout, ChannelType, Space};
@@ -32,9 +34,11 @@
 pub mod address;
 pub mod card;
 pub mod index;
+pub mod io;
 pub mod layout;
 
 pub use address::{Address, AddressStyle};
 pub use card::{Card, LayoutSource, address_style, allocate, cards, next_start};
 pub use index::{DrawnChannel, FromKey, Functions, Issue, PlcIndex, channel_key, parse_channel};
+pub use io::IoRow;
 pub use layout::{CardLayout, Channel, ChannelType, Group, LayoutError, Space};
