@@ -150,10 +150,11 @@ pub const COMMANDS: &[CommandInfo] = &[
             "page.new",
             "New page",
             "Project",
-            &["add page"],
+            &["add page", "page"],
             Needs::Project,
         ),
-        &["new page", "page"],
+        // Not a bare "page": `page 2` goes to page 2.
+        &["new page", "add page"],
     ),
     verb(
         cmd(
