@@ -996,8 +996,8 @@ impl Editor {
         edit::check_draw(project, page, start, &corners, end).map_err(|r| overlap_notice(&r))
     }
 
-    /// Enter or a double click: finishes on the last point of the wire in
-    /// progress when that point is on a pin or a wire.
+    /// A double click with the Connect tool and no wire in progress starts
+    /// a wire open at the pointer, on empty canvas only.
     fn start_free(&mut self) -> bool {
         let (Tool::Wire(w), Some(at)) = (&mut self.tool, self.cursor) else {
             return false;
@@ -1010,6 +1010,8 @@ impl Editor {
         true
     }
 
+    /// Enter or a double click: finishes on the last point of the wire in
+    /// progress when that point is on a pin or a wire.
     fn finish_wire_here(&mut self, doc: &mut Document, open_ok: bool) -> bool {
         let Tool::Wire(w) = self.tool.clone() else {
             return false;
@@ -1018,7 +1020,11 @@ impl Editor {
             return false;
         };
         let Some(&last) = w.corners.last() else {
-            self.notice = Some("Click a pin or wire to finish".into());
+            // A double click on a pin that has just started a wire has
+            // nothing to finish yet, and nothing to complain about.
+            if !open_ok {
+                self.notice = Some("Click a pin or wire to finish".into());
+            }
             return true;
         };
         let end = match target_at(doc.project(), page, last, tolerance) {
