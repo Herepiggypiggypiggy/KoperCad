@@ -17,3 +17,4 @@
 2026-10-15 16:45 UTC #279 df2c826 READY (Show where it goes; follow-ups: highlight not selection, scope note).
 2026-10-15 17:00 UTC #282 7eede6c READY (hover note on Show where it goes). #283 16f06d9 READY (no corner piece on pin drags; follow-up to #263).
 17:30 UTC #288 fb31b87 READY (Corners mode squares slanted wire on corner drag; follow-up to #269)
+17:45 UTC #291 d4c586d READY (Preferences Connections/Moving follow-ups to #259/#261)
