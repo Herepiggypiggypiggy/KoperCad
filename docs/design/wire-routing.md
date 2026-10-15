@@ -78,7 +78,7 @@ accumulated as jobs are routed. After routing, a duct's ratio is the wire
 area in it over its capacity (duct area times the fill limit); a ratio above
 1.0 is an **overfull duct** problem naming the duct and the jobs through it.
 There is no separate warning tier: the fill limit is the line. A wire without
-a known diameter counts as 3 mm and is reported as a **guessed wire**.
+a known diameter counts as 3 mm and is reported as a **guessed wire**. A duct with no cross-section yet (0 x 0, as the model stores an unknown size) is not penalised and not called overfull: it is reported as an **unsized duct** when wires run through it. A repeated duct id is ignored after the first.
 
 ## 6. Queries and commands
 

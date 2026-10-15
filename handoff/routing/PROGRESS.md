@@ -3,3 +3,4 @@
 2026-10-15 18:10 UTC #334 merged. Follow-up PR: NaN guard, collinear merge, reach rule, doc planned markers; 15 tests.
 2026-10-15 18:25 UTC #353 merged; reviewer B found merge_collinear dropping a turn-back point. Fix PR: only drop a middle point lying between its neighbours.
 2026-10-15 18:50 UTC #355 merged. Fill PR: plan(), DuctFill, Problem, penalty, 6 tests in tests/fill.rs.
+2026-10-15 19:10 UTC #358 merged. Follow-up PR for reviewer notes: unsized ducts, duplicate ids.

@@ -24,6 +24,9 @@ pub enum Problem {
     FreeAir { job: u64 },
     /// The wire has no known size; a default was used.
     GuessedWire { job: u64 },
+    /// A duct without a known cross-section carries wires, so its fill
+    /// cannot be checked.
+    UnsizedDuct { duct: u64, jobs: Vec<u64> },
     /// A duct carries more than its fill limit.
     OverfullDuct {
         duct: u64,
@@ -39,7 +42,7 @@ pub struct Plan {
     pub routes: Vec<Route>,
     /// Every duct, by id.
     pub fill: Vec<DuctFill>,
-    /// Free-air wires, guessed wires, then overfull ducts.
+    /// Free-air wires, guessed wires, unsized ducts, then overfull ducts.
     pub problems: Vec<Problem>,
 }
 
@@ -106,10 +109,8 @@ pub fn plan(network: &Network, jobs: &[Job], rules: &Rules) -> Plan {
                 duct,
                 used_mm2: used[ix],
                 capacity_mm2: capacity,
-                ratio: if capacity > 0.0 {
+                ratio: if network.sized(ix) {
                     used[ix] / capacity
-                } else if used[ix] > 0.0 {
-                    f64::INFINITY
                 } else {
                     0.0
                 },
@@ -128,6 +129,15 @@ pub fn plan(network: &Network, jobs: &[Job], rules: &Rules) -> Plan {
         guessed
             .into_iter()
             .map(|i| Problem::GuessedWire { job: jobs[i].id }),
+    );
+    problems.extend(
+        fill.iter()
+            .enumerate()
+            .filter(|(ix, f)| !network.sized(*ix) && !f.jobs.is_empty())
+            .map(|(_, f)| Problem::UnsizedDuct {
+                duct: f.duct,
+                jobs: f.jobs.clone(),
+            }),
     );
     problems.extend(
         fill.iter()
