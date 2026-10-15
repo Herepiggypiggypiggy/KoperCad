@@ -67,6 +67,35 @@ pub struct CanvasPalette {
     pub unconnected_flag: [u8; 4],
 }
 
+/// Colours for the live potentials view (Shift+L): a wire is lit in the
+/// colour of the potential it carries. Screen only, like the canvas palette.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PotentialPalette {
+    pub protective_earth: [u8; 4],
+    pub pen: [u8; 4],
+    pub neutral: [u8; 4],
+    pub dc_positive: [u8; 4],
+    pub dc_negative: [u8; 4],
+    /// Line conductors and signals, by the last digit of their name, so
+    /// L1, L2 and L3 stay apart.
+    pub line: [[u8; 4]; 4],
+}
+
+/// The dark potential palette.
+pub const POTENTIALS_DARK: PotentialPalette = PotentialPalette {
+    protective_earth: [0x7F, 0xD0, 0x8A, 0xFF],
+    pen: [0xB8, 0xD0, 0x6A, 0xFF],
+    neutral: [0x5C, 0x8D, 0xE0, 0xFF],
+    dc_positive: [0xE0, 0x76, 0x6C, 0xFF],
+    dc_negative: [0x6C, 0x7C, 0xE0, 0xFF],
+    line: [
+        [0xE0, 0xA2, 0x4A, 0xFF],
+        [0xC0, 0x70, 0xD0, 0xFF],
+        [0x4F, 0xC1, 0xD0, 0xFF],
+        [0xD0, 0xD0, 0x5C, 0xFF],
+    ],
+};
+
 /// Converts a palette colour for drawing with egui.
 pub fn to_color32([r, g, b, a]: [u8; 4]) -> egui::Color32 {
     egui::Color32::from_rgba_unmultiplied(r, g, b, a)
@@ -190,5 +219,41 @@ mod tests {
         }
         let ratio = crate::tokens::tests::contrast(to_color32(p.mark_text), to_color32(p.sheet));
         assert!(ratio >= 4.5);
+    }
+
+    #[test]
+    fn potential_colours_are_readable_on_the_sheet_and_tell_the_conductors_apart() {
+        let p = POTENTIALS_DARK;
+        let sheet = to_color32(CANVAS_DARK.sheet);
+        let all: Vec<[u8; 4]> = [
+            p.protective_earth,
+            p.pen,
+            p.neutral,
+            p.dc_positive,
+            p.dc_negative,
+        ]
+        .into_iter()
+        .chain(p.line)
+        .collect();
+        for c in &all {
+            let ratio = crate::tokens::tests::contrast(to_color32(*c), sheet);
+            assert!(ratio >= 4.5, "{c:?}: {ratio}");
+        }
+        for (i, a) in all.iter().enumerate() {
+            for b in &all[i + 1..] {
+                assert_ne!(a, b);
+            }
+        }
+        // The three line conductors differ clearly in hue, not just a shade.
+        let spread = |a: [u8; 4], b: [u8; 4]| {
+            (0..3)
+                .map(|i| (i32::from(a[i]) - i32::from(b[i])).unsigned_abs())
+                .sum::<u32>()
+        };
+        for (i, a) in p.line[..3].iter().enumerate() {
+            for b in &p.line[i + 1..3] {
+                assert!(spread(*a, *b) >= 120, "{a:?} {b:?}");
+            }
+        }
     }
 }
