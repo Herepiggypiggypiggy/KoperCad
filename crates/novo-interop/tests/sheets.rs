@@ -2,8 +2,8 @@
 
 use novo_core::{Command, Device, DeviceTag, Document, Value};
 use novo_interop::sheets::{
-    ApplyError, Cell, CsvOptions, Resolution, TableKind, Workbook, export_project, plan_import,
-    read_csv, read_xlsx, to_csv, xlsx_bytes,
+    ApplyError, Cell, CsvOptions, Resolution, TableKind, WHY_HEADER, Workbook, export_project,
+    plan_import, read_csv, read_xlsx, rejected_workbook, to_csv, xlsx_bytes,
 };
 use novo_tests::{MotorStarter, motor_starter};
 
@@ -566,4 +566,58 @@ fn ids_may_carry_their_kind_and_terminals_may_say_number() {
         &read_csv(&csv, Some(TableKind::Terminals)).unwrap(),
     );
     assert_eq!(plan.selected(), 1, "{}", plan.rejected_report());
+}
+
+#[test]
+fn rejected_rows_come_back_as_a_workbook_to_fix_and_reimport() {
+    let (mut doc, h) = starter();
+    let mut book = export_project(doc.project());
+    set(
+        &mut book,
+        TableKind::Devices,
+        h.k1.raw(),
+        "Tag",
+        Cell::text("not a tag"),
+    );
+    set(
+        &mut book,
+        TableKind::Devices,
+        h.f1.raw(),
+        "Description",
+        Cell::text("fine"),
+    );
+    let book = via_xlsx(&book);
+    let plan = plan_import(doc.project(), &book);
+    assert_eq!(plan.rejected.len(), 1);
+    let fix = rejected_workbook(&plan, &book).expect("one rejected row");
+    let table = &fix.tables[0];
+    assert_eq!(table.rows.len(), 1);
+    assert_eq!(table.headers.last().map(String::as_str), Some(WHY_HEADER));
+    assert!(
+        table.rows[0]
+            .cells
+            .last()
+            .unwrap()
+            .as_text()
+            .contains("not a valid tag")
+    );
+
+    // Fix the tag in the rejects file, import it: the row now applies.
+    let mut fix = via_xlsx(&fix);
+    set(
+        &mut fix,
+        TableKind::Devices,
+        h.k1.raw(),
+        "Tag",
+        Cell::text("=A1+CAB-K5"),
+    );
+    let again = plan_import(doc.project(), &fix);
+    assert!(again.rejected.is_empty(), "{}", again.rejected_report());
+    again.apply(&mut doc).unwrap();
+    assert_eq!(tag(&doc, h.k1), "=A1+CAB-K5");
+
+    // Nothing rejected, no workbook.
+    let clean = via_xlsx(&export_project(doc.project()));
+    let plan = plan_import(doc.project(), &clean);
+    assert!(rejected_workbook(&plan, &clean).is_none());
 }

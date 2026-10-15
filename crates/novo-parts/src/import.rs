@@ -611,6 +611,11 @@ pub fn default_downloads_dir() -> Option<PathBuf> {
     dirs::download_dir()
 }
 
+/// How far before the click a file's time may be and still count as new.
+/// Covers the coarse file-time clock (a few ms on Linux) and FAT/exFAT's
+/// 2 s rounding on a Downloads folder on a removable or network disk.
+pub const MTIME_SLACK: std::time::Duration = std::time::Duration::from_secs(2);
+
 /// A finished file found in Downloads.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Arrival {
@@ -634,11 +639,15 @@ pub struct DownloadsWatcher {
 
 impl DownloadsWatcher {
     /// Starts watching `dir` for files newer than `since` (the time of the
+    /// click, give or take [`MTIME_SLACK`]: file times are rounded by the
+    /// system clock and by the file system, so a file saved right after the
+    /// click can carry a time a little before it. Without the slack such a
+    /// file was sometimes missed).
     /// click) that suit the part.
     pub fn new(dir: impl Into<PathBuf>, since: SystemTime, order_number: &str) -> Self {
         DownloadsWatcher {
             dir: dir.into(),
-            since,
+            since: since.checked_sub(MTIME_SLACK).unwrap_or(since),
             order_code: crate::search::normalize_code(order_number),
             last_sizes: HashMap::new(),
         }
