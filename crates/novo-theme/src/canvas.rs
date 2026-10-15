@@ -77,8 +77,8 @@ pub const CANVAS_DARK: CanvasPalette = CanvasPalette {
     background: [0x0E, 0x0E, 0x10, 0xFF],
     sheet: [0x13, 0x13, 0x15, 0xFF],
     sheet_frame: [0x46, 0x45, 0x48, 0xFF],
-    grid_minor: [0x20, 0x20, 0x23, 0xFF],
-    grid_major: [0x2C, 0x2C, 0x30, 0xFF],
+    grid_minor: [0x2E, 0x2E, 0x33, 0xFF],
+    grid_major: [0x40, 0x40, 0x45, 0xFF],
     symbol: [0xEC, 0xEA, 0xE5, 0xFF],
     wire: [0x6F, 0x9B, 0xDB, 0xFF],
     text: [0xC4, 0xC2, 0xBD, 0xFF],
@@ -137,6 +137,18 @@ mod tests {
             let ratio = crate::tokens::tests::contrast(to_color32(c), sheet);
             assert!(ratio >= 4.5, "{c:?}: {ratio}");
         }
+    }
+
+    #[test]
+    fn grid_dots_show_on_the_sheet_without_competing_with_the_drawing() {
+        let p = CANVAS_DARK;
+        let sheet = to_color32(p.sheet);
+        let minor = crate::tokens::tests::contrast(to_color32(p.grid_minor), sheet);
+        let major = crate::tokens::tests::contrast(to_color32(p.grid_major), sheet);
+        assert!(minor >= 1.3, "minor grid dots: {minor}");
+        assert!(major >= minor + 0.3, "major grid dots: {major}");
+        let frame = crate::tokens::tests::contrast(to_color32(p.sheet_frame), sheet);
+        assert!(major < frame, "grid stays quieter than the page frame");
     }
 
     #[test]
