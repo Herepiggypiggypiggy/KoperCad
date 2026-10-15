@@ -60,8 +60,8 @@ pub struct CanvasPalette {
     /// the same copper dot as the logo. Darker than the selection, which
     /// also gets a halo and a thicker line, so a selected net is told apart.
     pub junction: [u8; 4],
-    /// Open ring on a wire end that was terminated unconnected. Held back
-    /// until DESIGN §4 defines that case and the check it raises.
+    /// Open ring on a wire end that was terminated unconnected. The case
+    /// and its Warning are defined in DESIGN §4.
     pub wire_end: [u8; 4],
     /// The small flag beside an unconnected wire end.
     pub unconnected_flag: [u8; 4],

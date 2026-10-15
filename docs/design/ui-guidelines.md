@@ -123,9 +123,12 @@ straight run, corner, crossing or a wire ending on a pin). Joints are not
 marks (marks are proposals, problems, overrides and changes), and the
 selection never relies on colour alone: it is also 2.5 px thicker with a
 halo, and junctions are fixed-size dots, so a selected net stays
-unmistakable without colour vision. `wire_end` (open ring) and
-`unconnected_flag` (amber) are palette entries held back until DESIGN §4
-defines a wire ended unconnected and the check it raises. The radial place picker (five wedges: Terminal,
+unmistakable without colour vision. Pins: a free pin is a hollow ring
+(open-connection green, r 3), a connected pin a small filled dot in the wire
+colour (r 2.5), so a pin end never looks like a junction. A wire ended
+unconnected (DESIGN §4, the `wire.open` Warning) gets an open copper ring
+(`wire_end`, r 4, 1.6 px line) and an amber flag (`unconnected_flag`, 16 px
+pole, 10 px pennant) with the tooltip "Unconnected". The radial place picker (five wedges: Terminal,
 Switch, Relay, Breaker, More...; inner radius 38, outer 110, hovered wedge
 copper outline, its items as pills on an outer ring) and the
 right-click menu (26 px rows, 236 px wide, shortcut right-aligned) are in
