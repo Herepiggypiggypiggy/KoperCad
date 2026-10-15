@@ -24,6 +24,7 @@ impl Default for EditorCanvas {
     fn default() -> Self {
         let mut view = SchematicView::default();
         view.canvas.style = theme::canvas_style();
+        view.canvas.bold_family = Some(novo_theme::fonts::strong_family());
         view.set_style(theme::model_style());
         EditorCanvas {
             view,
