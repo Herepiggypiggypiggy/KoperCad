@@ -137,6 +137,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["sample", "motor starter", "demo"],
         Needs::Nothing,
     ),
+    cmd(
+        "file.practice",
+        "Try the fast keys",
+        "Project",
+        &["practice", "tutorial", "learn"],
+        Needs::Nothing,
+    ),
     cmd("file.save", "Save", "Project", &[], Needs::Project),
     cmd(
         "file.save_as",
@@ -252,6 +259,23 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["compare"],
     ),
     cmd("file.quit", "Quit", "Project", &["exit"], Needs::Nothing),
+    verb(
+        cmd(
+            "file.import_dxf_background",
+            "Import DXF as background",
+            "Project",
+            &["underlay", "drawing", "dwg", "reference"],
+            Needs::Page,
+        ),
+        &["import dxf"],
+    ),
+    cmd(
+        "file.remove_background",
+        "Remove the DXF background",
+        "Project",
+        &["underlay", "dxf", "reference drawing"],
+        Needs::Page,
+    ),
     // Draw
     cmd(
         "tool.repeat",
@@ -682,6 +706,22 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["changes"],
     ),
+    verb(
+        cmd(
+            "view.commissioning",
+            "Commissioning",
+            "View",
+            &[
+                "commission",
+                "punch list",
+                "check off",
+                "continuity",
+                "torque",
+            ],
+            Needs::Project,
+        ),
+        &["commissioning"],
+    ),
     cmd(
         "sim.live",
         "Show live potentials",
@@ -697,11 +737,25 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd(
+        "help.walkthrough",
+        "Fast keys walk-through",
+        "View",
+        &["tour", "tutorial", "walkthrough", "help"],
+        Needs::Nothing,
+    ),
+    cmd(
         "view.shortcuts",
         "Keyboard shortcuts",
         "View",
         &["keys", "help", "overlay"],
         Needs::Nothing,
+    ),
+    cmd(
+        "view.background",
+        "Show or hide the DXF background",
+        "View",
+        &["underlay", "dxf", "reference drawing"],
+        Needs::Page,
     ),
     // Check
     verb(
@@ -731,6 +785,23 @@ pub const COMMANDS: &[CommandInfo] = &[
     // Export
     verb(
         cmd(
+            "export.dxf_page",
+            "Export this page as DXF",
+            "Export",
+            &["cad", "autocad"],
+            Needs::Page,
+        ),
+        &["export dxf"],
+    ),
+    cmd(
+        "export.dxf_all",
+        "Export all pages as DXF",
+        "Export",
+        &["cad", "autocad"],
+        Needs::Project,
+    ),
+    verb(
+        cmd(
             "export.pdf",
             "Export PDF",
             "Export",
@@ -748,6 +819,26 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export bom", "bom"],
+    ),
+    verb(
+        cmd(
+            "export.sheets",
+            "Export for bulk edit (.xlsx)",
+            "Export",
+            &["excel", "xlsx", "spreadsheet", "round trip"],
+            Needs::Project,
+        ),
+        &["export bulk edit", "export for editing"],
+    ),
+    verb(
+        cmd(
+            "export.sheets_csv",
+            "Export for bulk edit (CSV files)",
+            "Export",
+            &["csv"],
+            Needs::Project,
+        ),
+        &["export csv", "csv"],
     ),
 ];
 

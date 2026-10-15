@@ -62,7 +62,11 @@ assets/lessons/
   Adding a folder needs no Rust edit. Windows build and experimental builds need nothing extra.
 - A person (or a trainer) can add lessons without admin rights in
   `%APPDATA%\KoperCAD\lessons\<id>\` with the same layout; they are listed as "Yours" and an id that
-  matches a built-in one is refused with a message in the Learn window.
+  matches a built-in one is refused with a message in the Learn window. That folder is untrusted
+  data: `catalog::read_dir` does not follow symbolic links, skips files over 64 KB (text) or 2 MB
+  (projects) and folders over 2000 files, reads nothing outside the folder, and names every skip.
+  A `project` path is relative and resolves inside the lessons folder; `..` may reach a sibling
+  lesson but never out of the folder, and absolute or drive paths are refused.
 
 ## 2. `lesson.toml`
 
@@ -82,6 +86,7 @@ topics = ["wiring"]             # panels may offer "Lesson: ..." links by topic
 needs = ["fast-keys"]           # lessons worth doing first (advice, never a lock)
 next = ["potentials"]           # offered on the last step
 project = "project.json"        # or "@example", "@blank", or a relative path
+finished = "finished.json"      # optional: the same drawing at the end ("Open finished version")
 page = "Main circuit"           # page shown on open (by name)
 
 [[step]]
@@ -189,7 +194,8 @@ A check is a small predicate. Two families, because both are needed:
 
 | Check | True when |
 | --- | --- |
-| `{ command = "tool.connect" }` | `run_command("tool.connect")` ran (key, palette, wheel, menu, all one funnel, as #428 §5.2) |
+| `{ command = "tool.connect" }` | `run_command("tool.connect")` ran (palette, menu, and every key that is a command) |
+| `{ signal = "wheel_opened" }` | the shell raised a named signal for something that is not a command: the place wheel opened, Tab took the next proposal (`proposal_next`), Enter accepted one (`proposal_accept`). The names are a registry in `novo-app`, linted like commands |
 | `{ tool = "wire" }` | the tool in hand is `select`, `place`, `wire`, `cable` or `text` |
 | `{ opened = "drawer.terminals" }` | the anchor became visible (a panel, drawer or menu opened) |
 | `{ clicked = "outline.issues" }` | the anchor was clicked |
@@ -204,11 +210,20 @@ now has X".
 | Check | True when |
 | --- | --- |
 | `{ wire = { from = "-F1:2", to = "-K1:1" } }` | a wire (or a routed chain through junctions) joins those pins |
-| `{ device = { tag = "-K2", symbol = "iec/contactors/coil" } }` | a device with that tag (and optional symbol key) exists |
-| `{ count = { kind = "symbol", page = "Main circuit", at_least = 4 } }` | that many entities exist |
+| `{ device = { tag = "-K2", symbol = "iec/contactors/coil" } }` | a device with that tag and/or a symbol of that key exists; give `symbol` alone when the program assigns the tag, and `at_least` to count |
+| `{ count = { kind = "symbol", page = "Main circuit", at_least = 4 } }` | that many entities exist; kinds are symbol, wire, device, page, cable, text, junction and feed (feed symbols and pins that define a potential) |
 | `{ field = { device = "-M1", name = "part", is_set = true } }` | a property is set or equals a value |
 | `{ cable = { name = "-W1", cores_at_least = 4 } }` | a cable exists |
-| `{ problem_free = "wire.overlap" }` | the named design check reports nothing |
+| `{ problem_free = "wire.overlap" }` | the named design check reports nothing (the shell passes the ids that report something in `Facts`, so the engine needs no `novo-checks`) |
+| `{ potential = { wire = "-F1:2", is = "L1" } }` | the net of that pin carries that potential |
+| `{ potential_kind = { kind = "protective_earth", page = "Motor feeder" } }` | some wire (on that page) is on a net with a potential of that kind |
+| `{ wiring_mode = "lines" }` | the wiring mode setting |
+| `{ live = true }`, `{ coil_on = "-K1" }`, `{ pole_closed = "-S1" }`, `{ lit = "-K1:A1" }` | the live view is on, a coil is energized, a pole is closed, a pin carries voltage (the shell passes these in `Facts`; "released" is `{ not = { coil_on = ... } }`) |
+
+Anything that is shell or simulation state rather than document state (tool, page, selection,
+zoom, wiring mode, live view, design-check results) arrives in `Facts`, filled in by the app. That is
+what keeps `novo-learn` dependent on `novo-core` alone: it never calls `novo-checks`, `novo-cables`,
+`novo-parts` or `novo-sim`. Cables, parts and potentials are read from the model itself.
 
 Combinators: `{ all = [ ... ] }`, `{ any = [ ... ] }`, `{ not = { ... } }`.
 
@@ -218,7 +233,9 @@ How a step completes
   When it is true the step ticks, a short check mark flashes, and the next step opens after about
   half a second (immediately with `reduce_motion`). Reading steps wait for Next.
 - State checks are also tested **on entering** a step. Authors must not write a step that is
-  already true at its start; the lint test (section 7) fails when one is, except reading steps.
+  already true at its start. The lint tests this against the sample project: an error for the
+  first step, a warning for later ones (an earlier step may legitimately change what is true), with
+  the replay test (section 7) as the final word.
 - Undo of the work of an already ticked step does not un-tick it (the person has moved on), but
   the current step's own state check turns false again if its work is undone.
 - A check names things the person controls (tags, pins, pages). Do not check a tag the engine
@@ -228,7 +245,14 @@ How a step completes
   from the command funnel and state checks read the model.
 
 New check kinds are an app change (small, in `novo-learn` with a test). `format = 1` lessons keep
-working; a lesson that uses a kind this build does not know is listed as "Needs a newer KoperCAD".
+working.
+
+**Strict and lenient, stated once.** There is one parser and it is strict: an unknown key, check kind
+or `solve` operation is an error, which is what catches a typo in CI. At run time the same error
+never hides or crashes anything: the lesson is listed in the Learn window as **Needs a newer
+KoperCAD** (for an unknown `format` or an unknown kind, `LessonError::NeedsNewer` and `UnknownKind`)
+or **Cannot be opened** with the reason (anything else), and every other lesson works. The lint
+decides which it is: a built-in lesson that does not parse is a CI failure, never a user-facing one.
 
 ## 6. What the person sees
 
@@ -295,15 +319,24 @@ CI (all run in the normal `cargo test --workspace`, Linux, no window)
 - **Lint** (`novo-learn`): the TOML parses with no unknown keys; ids are unique and well formed;
   `track`, `needs`, `next` and `project` resolve; text markup is balanced; every `{key:...}`
   command, every `command` check and every `ui` target exists in the registries (`ready` lessons;
-  `draft` lessons may name unknown ones); every canvas target resolves in the sample project; no
-  state check is true at the start of its step; the size limits hold.
+  `draft` lessons may name unknown ones); `project` and `finished` load through `from_json`; a canvas
+  target that is not in the sample project at the start is a warning (it may be drawn by an earlier
+  step; the replay confirms); a state check that already holds at the start is an error for the first
+  step and a warning later; the size limits hold. The parse part of this runs as plain
+  `cargo test -p novo-learn` (`crates/novo-learn/tests/repo_lessons.rs`), so a content PR fails
+  there before the app-side lint even runs.
+- **Project format bumps.** `project.json` carries `JSON_FORMAT_VERSION`. A core bump would break
+  every lesson at once, so the test above loads each one and names the file; the fix is one
+  command per lesson (`kopercad-cli json`, in `assets/lessons/README.md`) and changes nothing else.
 - **Replay** (`novo-app/src/app/learn_tests.rs`, gate1-style headless): each lesson's project is
   opened, then every step's `solve` is run in order through the real command path and the step's
   `expect` must become true. If a lesson passes, a person who does the same things gets the same
   ticks. This is also how a cloud thread without a screen knows its lesson works.
-- `solve` operations: `{ command = "id", arg = "..." }`, `{ place = { symbol, page, x, y } }`,
-  `{ wire = ["tag:pin", "tag:pin"] }`, `{ select = "-K1" }`, `{ page = "name" }`,
-  `{ cable = { name, wires = [...] } }`. New operations are added with the check kinds above.
+- `solve` operations: `{ command = "id", arg = "..." }`, `{ place = { symbol, page, x, y, parent } }`
+  (`parent` places it as another function of an existing device, such as a contact image of `-K1`),
+  `{ wire = ["tag:pin", "tag:pin"], via = [[x, y]], mode = "lines" }`,
+  `{ tee = { from, onto, at = [x, y] } }` (a wire that starts with a T on another wire),
+  `{ feed_row = { names = ["L1", "L2"], page, x, y } }`, `{ select = "-K1" }`, `{ page = "name" }`. New operations are added with the check kinds above.
 
 Authoring loop for a thread with no window: write `lesson.toml` and `project.json`, run
 `cargo test -p novo-learn -p novo-app learn`, read the report. For someone with the app:
@@ -342,13 +375,20 @@ progress" is a single button:
 
 ## 9. How it plugs into the app
 
-- **One event funnel.** Everything the card needs already reaches `run_command(id)` (#428 §5.2),
-  the tool in hand (`tour_watch`), `backend.record(&changes)` and page and selection changes. They
-  call `learn_event(LessonEvent)`, a thin function that hands the event and a `&Project` to
-  `novo-learn`. #428's `tour_tick` calls the same function until the walk-through is a lesson, so
-  there is one detector, not two.
+- **Events come from three places, not one.** `run_command(id)` sees palette, menu and every key that
+  is a command. Editor keys do not pass it: W, Tab and Enter on proposals are handled in the editor
+  and the workbench, and holding Q reaches `open_wheel`. Those raise **signals** from their existing
+  hook points (`proposal_next`, `proposal_accept`, `wheel_opened`), and the tool in hand is a fact
+  (`{ tool = "wire" }` ticks when W arms the tool, which is the honest tick #428 uses). Document
+  changes arrive through `backend.record(&changes)`. All of them call `learn_event` or
+  `learn_update`, thin functions that hand the event or the facts and a `&Project` to `novo-learn`.
+  #428's `tour_tick` becomes one call to the same function when the walk-through is converted to the
+  `fast-keys` lesson, so there is one detector, not two. Until then this work does not edit
+  `onboarding.rs`.
 - **Anchors** are one line per control (`anchor(ui, id, rect)`), stored in a frame-local map the
-  overlay reads. Feature threads add them for their own controls; the rule joins the findability
+  overlay reads. `anchor` is the low-level piece: the discoverability thread's `tip(response, label,
+  command_id)` (#434) takes the anchor id too and calls it, so a control gets its tooltip, its
+  shortcut and its lesson anchor in one call and there is no second tooltip convention. Feature threads add them for their own controls; the rule joins the findability
   rule of #434: *a control or panel a lesson could point at registers an anchor id*.
 - **The overlay** is an `egui::Area` with `interactable(false)` at `Order::Foreground`, so it can
   draw over panels without taking a click.
@@ -398,9 +438,16 @@ Each lesson starts as `draft` until the control it teaches has an anchor on main
   The anchor rule is added to their findability checklist.
 - **Workspaces** (cse_01WAQSEGkMbyreCPG18tsSPc): panels move; anchors keep ids across moves, so
   lessons do not care where a panel lives. They own the stable names of the areas.
-- **Design system thread**: owns the pointer ring, the card and the note bubble look, and the
-  "Lesson: ..." link widget. This work ships a plain version from `novo_theme` tokens and they
-  restyle it.
+- **Design system thread** (section 10 of `docs/design/design-system.md`, #448): builds `pointer`,
+  `lesson_card`, `note`, `tip` and `lesson_link` in `novo-theme`. The shell calls them with plain
+  data so they stay free of lesson logic: `pointer(ctx, rect, pulsing)` for a ring or area
+  (`pulsing` off with reduce motion), `note(ctx, rect, number, text)` for a numbered callout,
+  `lesson_card(ui, header, body, buttons) -> Option<CardAction>` where `header` is lesson title
+  with step `n of m`, `body` is a closure that draws the step rows and text (the shell renders the
+  markup, since keycaps and `{tip:}` need the keymap and glossary), `buttons` says which of Back,
+  Show me how, Skip step, Next, Restart lesson and Close are enabled, and `CardAction` names the one
+  pressed. `lesson_link(ui, lesson_title) -> bool` is the "Lesson: ..." line in an empty state.
+  Until those land the shell draws plain versions from `novo_theme` tokens.
 - **Workflow thread**: owns `commands.rs` and the keymap. Adds `help.learn`, `learn.next`,
   `learn.back`, `learn.restart` and `learn.close` with keywords "lesson", "tutorial", "training",
   "learn", "teach".
