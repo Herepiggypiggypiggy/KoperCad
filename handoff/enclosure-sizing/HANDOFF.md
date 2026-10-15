@@ -4,11 +4,10 @@ Branch `claude/project-thread-4m13wx`. #402 merged: engine `novo-layout/src/sizi
 
 API: `EnclosureCatalog` (user list; `from_csv` accepts `;`, `,` or tab and decimal comma, `to_csv`), `recommend(devices, catalog, request)`, `thermal(enclosure, loss, request)`, `effective_surface`, `sizing_model::sizing_devices(project, structure)`. Part keys read: `width_mm`, `height_mm`, `depth_mm`, `power_loss_w`, `clearance_*_mm`, `load_factor`; device property overrides part.
 
-## How to reach it (user-visible entries; none placed yet)
-Owned by the "UI integration: cabinet, 3D, enclosure" thread (session_01G52sVY5N34jPsrkqWukApR), who got the API and the proposal:
-- Cabinet side panel "Size the enclosure", command `cabinet.size-enclosure`.
-- "Enclosures..." catalog editor with CSV import and export, command `cabinet.enclosures`, file `enclosures.csv` under `%APPDATA%`.
-- Issues-list problem "needs about N W of cooling" (open: who adds it; the catalog lives outside the project, so the check needs the enclosure's own dimensions from the Enclosure thread's #409 fields).
+## How to reach it
+- Cabinet view (Ctrl+2), right side panel "Size the enclosure": free space, ducts, temperatures, how it stands; result block with enclosure, plate fill, inside temperature, "Natural cooling is enough" or "Needs about N W of cooling, or a fan of about V m3/h", and notes. Code: `crates/novo-app/src/app/sizing.rs`, hooked in `app/cabinet.rs`.
+- "Enclosures..." button in that panel opens the list window (edit rows, Add, Remove, Import CSV, Export CSV). The list is saved on every change as `enclosures.csv` in `%APPDATA%\KoperCAD` (no admin rights).
+- Not yet: command palette ids (`cabinet.size-enclosure`, `cabinet.enclosures`), and the Issues-list problem "needs about N W of cooling" (waits for #409's inside size; outside surface needs a wall thickness input).
 
 ## Traps
 - Constants (K_*, surface factors) are planning values, unverified against a maker handbook; the UI must say so.

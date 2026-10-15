@@ -180,6 +180,9 @@ impl NovoApp {
         let cands = structure
             .map(|s| candidates(project, s))
             .unwrap_or_default();
+        let sizing_devices = structure
+            .map(|s| novo_layout::sizing_model::sizing_devices(project, s))
+            .unwrap_or_default();
         let tag_of = |id: u64| {
             project
                 .get::<Device>(DeviceId::from(id))
@@ -317,6 +320,13 @@ impl NovoApp {
                         }
                     });
 
+                egui::Panel::right("cabinet_sizing")
+                    .exact_size(260.0)
+                    .resizable(false)
+                    .show(ui, |ui| {
+                        super::sizing::show_panel(ui, &mut self.sizing, &sizing_devices);
+                    });
+
                 let view = cabinet_view(&shown, &tag_of);
                 self.cabinet.scene.set(&view);
                 if self.cabinet.fitted != location {
@@ -437,6 +447,8 @@ impl NovoApp {
                 });
             }
         }
+
+        super::sizing::show_editor(ui.ctx(), &mut self.sizing);
 
         if let Some(ask) = ask {
             self.cabinet_ask(ask, structure, layout, &cands);

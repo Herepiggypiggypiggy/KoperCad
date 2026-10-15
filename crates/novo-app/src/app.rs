@@ -22,6 +22,7 @@ mod preferences;
 mod project_settings;
 mod reports;
 mod revisions;
+mod sizing;
 mod terminals;
 mod title_revisions;
 mod userkeymap;
@@ -139,6 +140,8 @@ pub struct NovoApp {
     /// The Cabinet canvas is shown instead of the schematic (Ctrl+2).
     cabinet_open: bool,
     cabinet: cabinet::CabinetState,
+    /// The "Size the enclosure" panel and the Enclosures list.
+    sizing: sizing::SizingState,
     /// The outline flyout is showing over the canvas.
     outline_open: bool,
     /// What the outline lists.
@@ -205,6 +208,7 @@ impl NovoApp {
             focus_mode: false,
             cabinet_open: false,
             cabinet: cabinet::CabinetState::new(),
+            sizing: sizing::SizingState::new(),
             outline_open: false,
             outline_mode: OutlineMode::Pages,
             breadcrumb_link: None,
