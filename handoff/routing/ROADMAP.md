@@ -18,7 +18,7 @@ Scope: crate `novo-routing`, pure engine that routes wires through ducts on the 
 
 ## Next
 1. (Wire list thread owns the WireList cut-length column and cutting list; they call `route_connections`.)
-2. novo-checks: routing problems (free air, overfull and unsized duct, guessed wire) as issues.
+2. novo-checks: routing problems (free air, overfull and unsized duct, guessed wire) as issues. Done as `check_routing`; wiring into the app waits on shared wire list connections.
 3. Thin Cabinet canvas drawing.
 
 ## Open questions

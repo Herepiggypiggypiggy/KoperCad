@@ -7,3 +7,4 @@
 2026-10-15 19:40 UTC #364 merged, WS-02 #362 merged. Bridge PR: model::ducts/network with tests/model.rs.
 2026-10-15 20:15 UTC #371 merged. Connection PR: route_connections, anchors at footprint edge midpoints.
 2026-10-15 20:40 UTC #381 merged. Follow-up: library pin direction for anchors, duplicate connection ids unrouted. Wire list thread owns the WireList column; I take the novo-checks routing problems next.
+2026-10-15 21:00 UTC #408 merged. novo-checks PR: `check_routing(project, connections, rules)`, kinds WireRouting (warning: free air, overfull duct) and RoutingData (info: unsized duct, guessed wire sizes); 4 tests in novo-checks/tests/routing.rs. Not in `check()` yet: it needs the wire list's connections.

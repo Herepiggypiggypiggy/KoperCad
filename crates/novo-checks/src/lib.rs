@@ -28,6 +28,8 @@
 //! | [`WireOverlap`](ProblemKind::WireOverlap) | warning | Two wires on a page sharing a stretch of line |
 //! | [`OpenWire`](ProblemKind::OpenWire) | warning | A wire with an open end that is connected to nothing |
 //! | [`MissingPart`](ProblemKind::MissingPart) | info | A device or cable without a part |
+//! | [`WireRouting`](ProblemKind::WireRouting) | warning | A wire no duct reaches, or a duct over its fill limit ([`check_routing`]) |
+//! | [`RoutingData`](ProblemKind::RoutingData) | info | A duct without a size, or wires without one ([`check_routing`]) |
 //!
 //! Not checked here:
 //! - Wires beyond the next device on a protective device's load side (past
@@ -48,6 +50,7 @@
 
 mod checks;
 mod contacts;
+mod routing;
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -131,11 +134,19 @@ pub enum ProblemKind {
     /// A wire with an open end (`wire.open`, DESIGN.md §4): an end connected
     /// to nothing. Open ends are allowed while sketching; they join no net.
     OpenWire,
+    /// A wire no duct reaches (it would run in free air) or a duct fuller
+    /// than its fill limit (novo-routing). Only found by [`check_routing`],
+    /// which needs the wire list's connections.
+    WireRouting,
+    /// What routing could not check for lack of data: a duct without a size,
+    /// or wires without a known size (a default is used). Only found by
+    /// [`check_routing`].
+    RoutingData,
 }
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 17] = [
+    pub const ALL: [ProblemKind; 19] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -153,6 +164,8 @@ impl ProblemKind {
         ProblemKind::MissingPart,
         ProblemKind::WireOverlap,
         ProblemKind::OpenWire,
+        ProblemKind::WireRouting,
+        ProblemKind::RoutingData,
     ];
 
     pub fn severity(self) -> Severity {
@@ -172,8 +185,9 @@ impl ProblemKind {
             | ProblemKind::TerminalUse
             | ProblemKind::WireOverlap
             | ProblemKind::OpenWire
+            | ProblemKind::WireRouting
             | ProblemKind::Plc => Severity::Warning,
-            ProblemKind::MissingPart => Severity::Info,
+            ProblemKind::MissingPart | ProblemKind::RoutingData => Severity::Info,
         }
     }
 
@@ -197,6 +211,8 @@ impl ProblemKind {
             ProblemKind::Plc => "PLC",
             ProblemKind::WireOverlap => "Wires overlap",
             ProblemKind::OpenWire => "Open wire end",
+            ProblemKind::WireRouting => "Wire routing",
+            ProblemKind::RoutingData => "Routing data",
         }
     }
 }
@@ -305,6 +321,23 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     checks::plc(&cx, &mut problems);
     checks::wire_overlaps(&cx, &mut problems);
     checks::open_wires(&cx, &mut problems);
+    cx.sort(&mut problems);
+    problems
+}
+
+/// The wire routing problems of `connections` (the wire list's: one per pair
+/// of pins a wire joins), found by routing them through the ducts of the
+/// cabinet layout. Separate from [`check`] because the checks have no wire
+/// list of their own; the app passes the connections it already has.
+/// Connections that cannot be routed (device not placed) are not problems.
+pub fn check_routing(
+    project: &Project,
+    connections: &[novo_routing::model::Connection],
+    rules: &novo_routing::Rules,
+) -> Vec<Problem> {
+    let cx = Context::new(project);
+    let mut problems = Vec::new();
+    routing::routing(&cx, connections, rules, &mut problems);
     cx.sort(&mut problems);
     problems
 }

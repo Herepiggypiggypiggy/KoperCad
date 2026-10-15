@@ -2,7 +2,7 @@
 
 ## State
 - Repo herepiggypiggypiggy/kopercad, my branch `claude/project-thread-euksez` (restart from main after each merge).
-- Connection PR on this branch (route_connections); earlier PRs merged. Next: WireList Length column, then checks.
+- Checks PR on this branch (`novo_checks::check_routing`, takes the wire list's connections); earlier PRs merged. Next: the app calls check_routing with the wire list connections once the wire list thread exposes them; then thin cabinet canvas drawing.
 
 ## Resume
 ```

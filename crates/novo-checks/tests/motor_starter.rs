@@ -197,11 +197,16 @@ fn every_deliberate_error_is_flagged_exactly_once() {
     for p in &problems {
         by_kind.entry(p.kind).or_default().push(p);
     }
-    for kind in ProblemKind::ALL {
+    // The routing kinds need the wire list's connections: check_routing.
+    let checked: Vec<_> = ProblemKind::ALL
+        .into_iter()
+        .filter(|k| !matches!(k, ProblemKind::WireRouting | ProblemKind::RoutingData))
+        .collect();
+    for &kind in &checked {
         let found = by_kind.get(&kind).map_or(0, Vec::len);
         assert_eq!(found, 1, "{kind:?} flagged {found} times: {problems:#?}");
     }
-    assert_eq!(problems.len(), ProblemKind::ALL.len());
+    assert_eq!(problems.len(), checked.len());
 
     let one = |kind| by_kind[&kind][0];
     let ids = |list: &[AnyId]| list.to_vec();

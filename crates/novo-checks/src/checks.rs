@@ -27,7 +27,7 @@ fn grid_key(page: PageId, p: Point) -> GridKey {
     )
 }
 
-fn plural(n: usize, one: &str, many: &str) -> String {
+pub(crate) fn plural(n: usize, one: &str, many: &str) -> String {
     format!("{n} {}", if n == 1 { one } else { many })
 }
 
