@@ -30,6 +30,7 @@ mod csv;
 mod import;
 mod library;
 mod macros;
+mod panel;
 mod recipes;
 mod schema;
 mod search;
@@ -67,6 +68,7 @@ pub use macros::{
     MACRO_PACK_FORMAT, MacroEntry, MacroError, MacroFile, MacroLibrary, MacroPack, OnConflict,
     PackEntry, STARTER_FOLDER, starter_macros, user_macros_dir,
 };
+pub use panel::{Clearances, Mounting, PanelData, is_panel_number_key, migrate_properties};
 pub use recipes::{
     ApplyContext, Dim, GENERIC, Login, MakerRecipe, Mapped, Quantity, RECIPES, RecipeReport, Route,
     Skipped, Verified, local_keys, parse_quantity, recipe_for,

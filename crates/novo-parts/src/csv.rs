@@ -414,6 +414,7 @@ pub fn import_catalog(text: &str, default_manufacturer: &str) -> Result<ImportRe
                 }
             }
         }
+        crate::panel::migrate_properties(&mut part.data);
         report.parts.push(part);
     }
     Ok(report)

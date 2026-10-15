@@ -7,6 +7,7 @@ mod assembly;
 mod background_panel;
 mod cabinet;
 mod cabinet_inspector;
+mod cabinet_panel;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
 mod cabinet_rules;
