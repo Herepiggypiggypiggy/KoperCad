@@ -18,6 +18,7 @@ novo-cables = { path = "crates/novo-cables" }
 novo-canvas = { path = "crates/novo-canvas" }
 novo-checks = { path = "crates/novo-checks" }
 novo-cli = { path = "crates/novo-cli" }
+novo-commissioning = { path = "crates/novo-commissioning" }
 novo-core = { path = "crates/novo-core" }
 novo-editor = { path = "crates/novo-editor" }
 novo-interop = { path = "crates/novo-interop" }
@@ -35,6 +36,8 @@ novo-symbols = { path = "crates/novo-symbols" }
 novo-terminals = { path = "crates/novo-terminals" }
 novo-tests = { path = "crates/novo-tests" }
 novo-theme = { path = "crates/novo-theme" }
+novo-view3d = { path = "crates/novo-view3d" }
+novo-learn = { path = "crates/novo-learn" }
 novo-workflow = { path = "crates/novo-workflow" }
 novo-xref = { path = "crates/novo-xref" }
 
@@ -56,6 +59,12 @@ calamine = { version = "0.36", default-features = false }
 # Known-folder lookup for Documents (SHGetKnownFolderPath on Windows), so
 # redirected or OneDrive Documents folders resolve without our own unsafe.
 dirs = "6"
+# Reads the ZIP a maker portal serves a STEP file in (novo-parts).
+zip = { version = "8", default-features = false, features = ["deflate"] }
+# Reads BMEcat catalogs (novo-parts).
+quick-xml = "0.41"
+# Hashes imported maker files for their source record (novo-parts).
+sha2 = "0.11"
 eframe = { version = "0.36", default-features = false, features = ["wgpu", "default_fonts", "x11", "wayland"] }
 clap = { version = "4.6", features = ["derive"] }
 # abi3: one wheel serves every CPython from 3.9 on.

@@ -7,7 +7,7 @@
 //! symbols first (DESIGN.md §4, I and the favourite digits).
 
 use novo_core::{Direction, Pin, TerminalKind};
-use novo_symbols::{Library, Symbol};
+use novo_symbols::{Library, Pack, Symbol};
 
 /// What a symbol turns into when it is placed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,6 +71,15 @@ pub fn classify(symbol: &Symbol) -> SymbolClass {
 /// novo-symbols. `None` for symbols that are not devices of their own.
 pub fn letter_code(function: &str) -> Option<&'static str> {
     novo_symbols::letter_code(function)
+}
+
+/// `id` in the pack of `library`; unchanged when the library has no single
+/// pack (a company library).
+fn localize(library: &Library, id: &str) -> String {
+    library
+        .pack()
+        .and_then(|pack| Pack::counterpart(id, pack))
+        .unwrap_or_else(|| id.to_owned())
 }
 
 /// Short names that rank first in the insert search (DESIGN.md §4), on
@@ -151,21 +160,33 @@ const RECENT_LIMIT: usize = 16;
 impl Catalog {
     /// The catalog of the built-in IEC library.
     pub fn builtin() -> Self {
-        let library = Library::builtin().expect("the built-in symbol library is valid");
+        Catalog::builtin_pack(Pack::Iec)
+    }
+
+    /// The catalog of one built-in pack (the project's drawing standard).
+    pub fn builtin_pack(pack: Pack) -> Self {
+        let library = Library::builtin_pack(pack).expect("the built-in symbol library is valid");
         Catalog::new(library)
     }
 
     pub fn new(library: Library) -> Self {
         let favourites = DEFAULT_FAVOURITES
             .iter()
+            .map(|id| localize(&library, id))
             .filter(|id| library.get(id).is_some())
-            .map(|id| id.to_string())
             .collect();
         Catalog {
             library,
             recent: Vec::new(),
             favourites,
         }
+    }
+
+    /// The id of the same device in this catalog's pack: `in_pack("iec/
+    /// contacts/no")` is `nfpa/contacts/no` in an NFPA catalog. The editor's
+    /// own tables (mnemonics, favourites, the potential feed) name IEC ids.
+    pub fn in_pack(&self, id: &str) -> String {
+        localize(&self.library, id)
     }
 
     pub fn library(&self) -> &Library {
@@ -291,7 +312,7 @@ impl Catalog {
             .iter()
             .map(|a| (a.as_str(), symbol.id.as_str()));
         for (mnemonic, id) in MNEMONICS.iter().copied().chain(library_aliases) {
-            if id == symbol.id {
+            if Pack::same_device(id, &symbol.id) {
                 if mnemonic == joined {
                     best = best.max(1000);
                     hint = mnemonic.into();

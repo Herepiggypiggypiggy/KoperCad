@@ -58,6 +58,9 @@ coordinator in its own small PR first.
 | `novo-cli` | WS-28 | `kopercad-cli` command-line tool |
 | `novo-py` | WS-28 | Python bindings (PyO3) |
 | `novo-theme` | Layout and branding | Dark theme, design tokens, icons, logo (`assets/branding`) |
+| `novo-view3d` | WS-29 | 3D cabinet view: renderer, scene from cabinet data, camera (design `docs/design/3d-view.md`) |
+| `novo-commissioning` | Commissioning | Commissioning mode: checks, progress and punch list (pure engine; design PR #399) |
+| `novo-learn` | Learning | Learning modules engine: lessons, steps, checks, progress (design `docs/design/learning-modules.md`) |
 | `novo-tests` | Tester | Cross-crate tests and the Gate 1 fixture |
 | `novo-app` | WS-01 | Application shell, wiring crates together |
 

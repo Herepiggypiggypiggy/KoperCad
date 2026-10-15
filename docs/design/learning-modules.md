@@ -1,0 +1,414 @@
+# Learning modules: lessons that run inside the program
+
+Status: proposal for review. Nothing here is built yet. Thin UI over existing commands, as
+`docs/DESIGN.md` asks. Owner: the Learning modules thread. Builds on, and does not repeat,
+`docs/ONBOARDING-DESIGN.md` (example project and fast-keys walk-through, PR #428) and
+`docs/design/discoverability.md` (Help menu, tips, hints, PR #434).
+
+## Why
+
+The fast keys are the product's point and a text page does not teach them. A person learns this
+program by doing: the pointer shows where, the card says why, and the step ticks when the person
+really did it. The fast-keys walk-through (#428) is one such lesson hard-coded in Rust. This page
+turns it into a system: a **lesson** is a data file plus a sample project, any thread can add one
+without touching code, and one engine runs them all.
+
+Goals
+
+1. A **Learn** section, found from the Help menu, the start panel and Ctrl+K.
+2. Lessons made of **steps**. A step has a card, a **pointer** on the real control or canvas spot,
+   optional **notes** (tooltip-style callouts) and a **check** that ticks when the person does it.
+3. Each lesson opens **its own sample project**, through the Open example path (#394).
+4. Progress saved per user, locally. Restart, skip, back.
+5. A lesson is a folder of **plain text** in the repository. Content threads add lessons by adding
+   folders, and CI tells them if a lesson is broken. No cloud session needs a window to write one.
+
+Not goals: video, animated overlays, a web player, telemetry (nothing leaves the machine), Dutch
+text in v1 (the format has room for it, see "Language").
+
+## The pieces
+
+| Piece | Where | What it is |
+| --- | --- | --- |
+| Lesson files | `assets/lessons/<lesson-id>/` | `lesson.toml` and `project.json`; text only |
+| `novo-learn` crate | `crates/novo-learn` | Pure engine: parse, validate, step runner, check evaluation, progress. Depends on `novo-core` only (no egui, no editor). Needs registering by the coordinator in its own small PR first, as CLAUDE.md requires |
+| Learn shell | `crates/novo-app/src/app/learn.rs` | The Learn window, the lesson card, the pointer overlay, the event funnel, the anchors |
+| Lint and replay tests | `novo-learn/tests` and `novo-app/src/app/learn_tests.rs` | Every lesson in `assets/lessons` is parsed, checked against the command and anchor registries, and replayed headless |
+
+The engine is pure so it is testable without a window and so content can be linted in CI.
+
+## 1. Lesson folder
+
+```
+assets/lessons/
+  tracks.toml                 tracks and their order (framework owns; rarely changes)
+  glossary.toml               terms for {tip:...} (append-only; one table per term)
+  fast-keys/
+    lesson.toml
+    project.json              the sample project for this lesson
+  wiring-modes/
+    lesson.toml
+    project.json
+```
+
+- `project.json` is the existing diffable project form (`Project::to_json`, `novo-core/src/json.rs`,
+  validated on load). A content thread builds the starting project in the app or from a test
+  builder, saves it, and runs `kopercad-cli json file.kopercad > project.json`. Keep it under 200 KB.
+- A lesson may reuse another lesson's project with `project = "../wiring-modes/project.json"`, or
+  use `project = "@example"` (the built-in motor starter, same builder as Open example) or
+  `project = "@blank"` (a fresh project with one empty page, like the practice project in #428).
+  Sharing is for lessons that really continue the same drawing; each lesson normally owns its file.
+- Lessons are **embedded in the binary** by `novo-app/build.rs`, which scans `assets/lessons/*/`.
+  Adding a folder needs no Rust edit. Windows build and experimental builds need nothing extra.
+- A person (or a trainer) can add lessons without admin rights in
+  `%APPDATA%\KoperCAD\lessons\<id>\` with the same layout; they are listed as "Yours" and an id that
+  matches a built-in one is refused with a message in the Learn window.
+
+## 2. `lesson.toml`
+
+```toml
+format = 1                      # lesson format version; unknown versions are listed as "needs a newer KoperCAD"
+id = "wiring-modes"             # folder name, lowercase, hyphens; never changes once shipped
+version = 1                     # bump when steps change meaning; see "Progress"
+status = "ready"                # ready | draft (drafts are hidden unless Preferences > Show draft lessons)
+title = "Corners and Lines"
+title_nl = "Hoeken en lijnen"   # optional, any text field takes a _nl twin
+summary = "Draw the same wire two ways and pick the one that suits your hand."
+track = "drawing"               # a key in tracks.toml
+order = 20                      # sort inside the track; leave gaps of 10 so threads do not collide
+level = "beginner"              # beginner | intermediate | advanced
+minutes = 6
+topics = ["wiring"]             # panels may offer "Lesson: ..." links by topic
+needs = ["fast-keys"]           # lessons worth doing first (advice, never a lock)
+next = ["potentials"]           # offered on the last step
+project = "project.json"        # or "@example", "@blank", or a relative path
+page = "Main circuit"           # page shown on open (by name)
+
+[[step]]
+id = "pick-tool"                # stable; progress is kept per step id
+title = "Pick the wire tool"
+text = """
+Press {key:tool.connect}, or click **Connect** in the dock.
+Click empty canvas to cancel any time.
+"""
+point = { ui = "dock.connect" }                  # the pointer (section 4)
+expect = { tool = "wire" }                       # the check (section 5)
+
+[[step]]
+id = "first-wire"
+title = "Wire the contactor to the fuse"
+text = "Click the {tip:pin} **-F1:2**, then **-K1:1**. The wire gets its {tip:potential} name for you."
+point = { at = { device = "-F1", pin = "2" } }
+note = [
+  { at = { device = "-K1", pin = "1" }, text = "Finish here" },
+]
+expect = { wire = { from = "-F1:2", to = "-K1:1" } }
+solve = [ { wire = ["-F1:2", "-K1:1"] } ]        # used by CI today (section 7); a later "Do it for me" reuses it
+
+[[step]]
+id = "toggle"
+title = "Switch mode"
+text = "{key:wire.mode} switches Corners and Lines. Draw the next wire the other way."
+point = { ui = "dock.wire_mode" }
+expect = { command = "wire.mode" }
+
+[[step]]
+id = "done"
+title = "That is all of it"
+text = "You can now choose how wires bend. Next: potentials."
+pause = true                    # no check: the person presses Next
+```
+
+Rules of the format
+
+- TOML only. `[[step]]` tables run in file order. Every text field is plain, with the small markup
+  in section 3.
+- `id` fields use `[a-z0-9-]`. A step id never changes after it ships (progress is keyed by it).
+- A step with no `expect` is a **reading step** and shows a **Next** button. `pause = true` forces
+  Next even when there is an `expect` (read, then act).
+- Unknown keys are an error in CI, so a typo cannot silently disable a check.
+
+## 3. Step text
+
+One short paragraph, three lines or fewer on the card. Markup, all optional:
+
+| Markup | Shows |
+| --- | --- |
+| `**bold**` | Strong text, for names of controls and devices |
+| `{key:command.id}` | The command's key **from the live keymap**, as a keycap. A rebound key reads right, an unbound one reads "(no key)" and the step must also say how to reach it another way. Never type a key by hand |
+| `{ui:anchor.id}` | The control's visible name, so a rename does not break the lesson |
+| `{tip:term}` | The word, dotted underline, hover tooltip from `glossary.toml`. Tooltips are the way to explain a word without bloating the step |
+| blank line | New paragraph |
+
+## 4. Pointers, notes and tooltips
+
+A step has at most one **pointer** (`point`) and up to three **notes** (`note`, small callouts with
+a number marker). Both take the same **target**:
+
+```toml
+point = { ui = "dock.connect" }                         # a control
+point = { ui = ["mark.menu", "mark.menu.save"] }        # a path: points at the deepest one visible
+point = { at = { device = "-K1" } }                     # a device on the shown page
+point = { at = { device = "-K1", pin = "A1" } }         # a pin
+point = { at = { page = "Control circuit", x = 120, y = 60 } }   # a canvas spot in mm
+point = { at = { wire = ["-F1:2", "-K1:1"] } }          # a wire by its ends
+point = { area = { page = "Main circuit", x = 20, y = 20, w = 80, h = 50 } }  # a region
+point = { ui = "dock.connect", view = "keep" }          # canvas targets default to view = "reveal"
+```
+
+- **UI anchors.** The app registers a stable string id with the screen rectangle of each control
+  every frame (`anchor(ui, "dock.connect", response.rect)`). A lesson names the id. The catalogue
+  of ids lives in `novo-app/src/app/anchors.rs` and is generated into
+  `docs/design/lesson-anchors.md` (a test keeps them equal). Ids are `area.thing` in lowercase:
+  `dock.*`, `mark.menu.*`, `outline.*`, `inspector.*`, `drawer.terminals.*`, `palette.field`,
+  `start.*`, `learn.*`. Renaming a control keeps its id.
+- **Path targets.** If the target control is inside a closed menu or drawer, the pointer goes to
+  the deepest anchor that is visible and the card says "Open the mark menu first" using the next id
+  in the path's visible name. The person is never stuck wondering where it went.
+- **Canvas targets** use device tags and pin names, never entity ids, so a rebuilt sample project
+  keeps working. They go through `novo-canvas` viewport math and move with pan and zoom. With
+  `view = "reveal"` (default) the view is moved only if the target is off screen, using the same
+  reveal as cross reference jumps; a lesson never changes the zoom of a person who already has it
+  in view.
+- **Look.** A soft pulsing ring (or rectangle for areas) in the accent colour, plus a short arrow
+  from the card when the target is far from it. It never dims the screen, never blocks a click and
+  never takes a key (`interactable(false)`). With `reduce_motion` the ring is static. Colours come
+  from `novo_theme` tokens; the design-system thread owns the look.
+- **Notes** are the in-place tooltips: a numbered marker with a small bubble next to the target,
+  shown while the step is active. Use them for "this is the inspector, this is the issue pill"
+  steps (reading steps that tour a screen) so one step can explain three places.
+- A target that does not exist (symbol not on the page, anchor missing in this build) never panics:
+  the card shows the text without a pointer and the engine logs it; CI reports it as an error for
+  `ready` lessons.
+
+## 5. Checks: the step ticks when the person does it
+
+A check is a small predicate. Two families, because both are needed:
+
+**Events** say what the person did. They are good for keys, tools and panels.
+
+| Check | True when |
+| --- | --- |
+| `{ command = "tool.connect" }` | `run_command("tool.connect")` ran (key, palette, wheel, menu, all one funnel, as #428 §5.2) |
+| `{ tool = "wire" }` | the tool in hand is `select`, `place`, `wire`, `cable` or `text` |
+| `{ opened = "drawer.terminals" }` | the anchor became visible (a panel, drawer or menu opened) |
+| `{ clicked = "outline.issues" }` | the anchor was clicked |
+| `{ page = "Control circuit" }` | that page is shown |
+| `{ selected = "-K1" }` | the selection is exactly that device (or `selected_count = 3`) |
+| `{ zoom_at_least = 2.0 }` | the view is at least that zoomed in |
+
+**State** says what the document is now. It is robust: it does not care which way the person got
+there (key, drag, palette) and survives undo and redo, so it is the right check for "the drawing
+now has X".
+
+| Check | True when |
+| --- | --- |
+| `{ wire = { from = "-F1:2", to = "-K1:1" } }` | a wire (or a routed chain through junctions) joins those pins |
+| `{ device = { tag = "-K2", symbol = "iec/contactors/coil" } }` | a device with that tag (and optional symbol key) exists |
+| `{ count = { kind = "symbol", page = "Main circuit", at_least = 4 } }` | that many entities exist |
+| `{ field = { device = "-M1", name = "part", is_set = true } }` | a property is set or equals a value |
+| `{ cable = { name = "-W1", cores_at_least = 4 } }` | a cable exists |
+| `{ problem_free = "wire.overlap" }` | the named design check reports nothing |
+
+Combinators: `{ all = [ ... ] }`, `{ any = [ ... ] }`, `{ not = { ... } }`.
+
+How a step completes
+
+- On each event and after each committed change the engine evaluates the current step's check.
+  When it is true the step ticks, a short check mark flashes, and the next step opens after about
+  half a second (immediately with `reduce_motion`). Reading steps wait for Next.
+- State checks are also tested **on entering** a step. Authors must not write a step that is
+  already true at its start; the lint test (section 7) fails when one is, except reading steps.
+- Undo of the work of an already ticked step does not un-tick it (the person has moved on), but
+  the current step's own state check turns false again if its work is undone.
+- A check names things the person controls (tags, pins, pages). Do not check a tag the engine
+  invents (auto tags depend on numbering); check by `symbol` and `count` instead.
+- **Honest ticks.** Same rule as #428: a tick means the person did the thing. A change set alone is
+  not proof (`added` also fires on paste, duplicate, undo and replay), which is why events come
+  from the command funnel and state checks read the model.
+
+New check kinds are an app change (small, in `novo-learn` with a test). `format = 1` lessons keep
+working; a lesson that uses a kind this build does not know is listed as "Needs a newer KoperCAD".
+
+## 6. What the person sees
+
+The **lesson card** sits bottom right of the canvas, in the same place and family as the #428 walk-through
+card (only one of the two shows at a time; starting a lesson hides the walk-through). It never
+takes a key and never blocks input.
+
+```
+ Corners and Lines · 2 of 4                        ✕
+ ○ Pick the wire tool
+ ● Wire the contactor to the fuse
+   Click pins -F1:2 and then -K1:1. A potential is named for you.
+   [ Back ]  [ Show me how ]  [ Skip step ]        ⟲ Restart lesson
+```
+
+- **Show me how** flashes the pointer again. A **Do it for me** button that runs the step's `solve`
+  as one undo step is not in the first version; the format keeps `solve` so it can be added
+  without changing any lesson.
+- **Back** returns the card to the previous step (it does not undo the drawing). **Skip step**
+  moves on without the tick and records "skipped". **Restart lesson** reopens a fresh copy of the
+  sample project and clears this lesson's progress after a confirm. ✕ closes the card and keeps
+  progress; the Learn window offers **Continue**.
+- Esc does not close the card: Esc belongs to the editor.
+- The last step shows "Done", a summary of what was covered, and the lessons in `next`.
+
+The **Learn window** (a centred panel like the start panel, not a modal) lists tracks from
+`tracks.toml`; each lesson shows title, summary, level, minutes, a progress ring and one button:
+**Start**, **Continue** (with "step 3 of 9"), or **Do again**. A search field filters by title,
+summary and topics. A lesson that names a command or anchor this build does not have is shown as
+**Coming soon** (greyed, not broken); that is how content can land before the UI it teaches.
+
+Starting a lesson replaces the open project, so it goes through `leave_then` like Open example:
+unsaved work gets the usual choice first. The lesson's project opens as an untitled project named
+"Lesson: <title>", marked saved, so closing it untouched leaves nothing under Unsaved; the first edit
+makes it dirty and Ctrl+S keeps the person's own copy. Nothing is ever written to the lesson files.
+
+### Where to find it (feature-visibility rule)
+
+| Entry | How |
+| --- | --- |
+| Start panel | A **Learn** button beside Open example; on a first run it is the highlighted one, with a **Continue: <lesson> (step n of m)** line when something is under way |
+| Help menu (#434) | **Learn…** opens the window |
+| Palette | `help.learn` opens the window; `help.learn wiring` starts the best match; `learn.next`, `learn.back`, `learn.restart`, `learn.close` act on the running lesson |
+| Panels | A faint **Lesson: Terminal strips** link in an empty state, from the lesson's `topics` (the design-system thread owns the widget) |
+| Shortcut sheet (#434) | Links to Learn |
+
+## 7. Content threads: how to write a lesson
+
+Rules of thumb (the reviewer checks them)
+
+1. One idea per lesson, 6 to 12 steps, 5 to 10 minutes. Start with what the person will have at
+   the end. End with `next`.
+2. One action per step. If the text has "and then", it is two steps.
+3. **Teach the key first**, the click second. The fast keys are the product. Write `{key:...}` and
+   show the control with `point`; do not write "click the button" when a key exists.
+4. Plain words, no EPLAN terms or comparisons. Explain a word once with `{tip:...}`.
+5. Never teach a feature that is unfinished or hidden. Mark such a lesson `status = "draft"`.
+6. The sample project has just enough drawing to make the point, a name that says what it is, and
+   illustrative parts (say so in its description, as the example does).
+7. Every action step has a `solve`, so the lesson is tested and the person has "Show me how".
+
+CI (all run in the normal `cargo test --workspace`, Linux, no window)
+
+- **Lint** (`novo-learn`): the TOML parses with no unknown keys; ids are unique and well formed;
+  `track`, `needs`, `next` and `project` resolve; text markup is balanced; every `{key:...}`
+  command, every `command` check and every `ui` target exists in the registries (`ready` lessons;
+  `draft` lessons may name unknown ones); every canvas target resolves in the sample project; no
+  state check is true at the start of its step; the size limits hold.
+- **Replay** (`novo-app/src/app/learn_tests.rs`, gate1-style headless): each lesson's project is
+  opened, then every step's `solve` is run in order through the real command path and the step's
+  `expect` must become true. If a lesson passes, a person who does the same things gets the same
+  ticks. This is also how a cloud thread without a screen knows its lesson works.
+- `solve` operations: `{ command = "id", arg = "..." }`, `{ place = { symbol, page, x, y } }`,
+  `{ wire = ["tag:pin", "tag:pin"] }`, `{ select = "-K1" }`, `{ page = "name" }`,
+  `{ cable = { name, wires = [...] } }`. New operations are added with the check kinds above.
+
+Authoring loop for a thread with no window: write `lesson.toml` and `project.json`, run
+`cargo test -p novo-learn -p novo-app learn`, read the report. For someone with the app:
+`kopercad --lessons <folder>` loads lessons from a folder on top of the built-in ones, and the Learn
+window has a **Reload** button, so edits show without a rebuild.
+
+## Language
+
+English first, but nothing a person reads is typed in Rust. Every lesson string is in the lesson
+files: any text field (`title`, `summary`, `text`, a note's `text`, a glossary entry) takes a `_nl`
+twin, and the loader picks the app language and falls back to English. The card's own words (Back,
+Skip step, Restart lesson, Continue, Coming soon, ...) live in one file, `assets/lessons/ui.toml`,
+with the same `_nl` twins, so the Dutch work edits data only. A lint test fails when a `_nl` twin
+exists for a field that is missing in English, and reports lessons that lack a Dutch twin as a
+count, not an error.
+
+## 8. Progress
+
+Per user, local, never uploaded. One small file, `%APPDATA%\KoperCAD\learn.json`
+(`dirs::config_dir()`), not the egui settings blob, so it survives a settings reset and "reset
+progress" is a single button:
+
+```json
+{ "format": 1,
+  "lessons": { "wiring-modes": { "version": 1, "done": ["pick-tool"], "skipped": [],
+                                  "current": "first-wire", "completed": "2026-10-15" } } }
+```
+
+- Written on each tick, with the same write-then-rename the project autosave uses. A bad or newer
+  file is renamed aside (`learn.json.bad`) and a fresh one started; the app never fails to start
+  over it.
+- If an author bumps `version`, the lesson shows **Updated**; steps whose ids still exist keep
+  their ticks, a removed id is dropped, and the person can press Do again.
+- The first-run flag from #428 (`Settings.onboarding`) stays where it is. When the walk-through
+  becomes the `fast-keys` lesson, its ticked step ids map one to one onto lesson steps and migrate once.
+
+## 9. How it plugs into the app
+
+- **One event funnel.** Everything the card needs already reaches `run_command(id)` (#428 §5.2),
+  the tool in hand (`tour_watch`), `backend.record(&changes)` and page and selection changes. They
+  call `learn_event(LessonEvent)`, a thin function that hands the event and a `&Project` to
+  `novo-learn`. #428's `tour_tick` calls the same function until the walk-through is a lesson, so
+  there is one detector, not two.
+- **Anchors** are one line per control (`anchor(ui, id, rect)`), stored in a frame-local map the
+  overlay reads. Feature threads add them for their own controls; the rule joins the findability
+  rule of #434: *a control or panel a lesson could point at registers an anchor id*.
+- **The overlay** is an `egui::Area` with `interactable(false)` at `Order::Foreground`, so it can
+  draw over panels without taking a click.
+- **Ownership.** `novo-learn` and `learn.rs`: this thread. `assets/lessons/<id>/`: the content
+  thread that wrote it. `tracks.toml` and `glossary.toml`: this thread (append rows by PR; rows are
+  independent so they merge cleanly). Anchors: the thread that owns the control. `novo-core` is
+  read through queries; no model change is needed (the JSON form already exists).
+
+## 10. Suggested first lessons and who writes them
+
+Four content threads, one track each, listed in `assets/lessons/tracks.toml`. Track titles are the
+ones the threads were given; lesson ids below are suggestions (the folder name), and each thread
+owns its list.
+
+| Track (`track =`) | Lessons |
+| --- | --- |
+| **Schematic basics and motor control** (`basics`) | `tour` (screen tour: dock, outline, inspector, pill, Ctrl+K, `?`), `fast-keys` (the #428 steps as a lesson), `first-schematic` (build the control circuit of the motor starter from `@blank`), `wiring-modes`, `proposals-and-tags`, `duplicate-and-numbering`, `pages-and-functions`, `cross-references`, `potentials`, `motor-starter`, `save-and-share` |
+| **Terminals, PLC and documentation** (`terminals`) | `terminal-strips`, `connection-screens`, `cables-and-shields`, `plc-io`, `generated-pages`, `wire-list-and-bom`, `pdf-export` |
+| **Cabinet layout and panel building** (`cabinet`) | `cabinet-layout`, `enclosure-sizing`, `wire-routing`, `view-3d`, `panel-plate-drawing`, `commissioning` |
+| **Productivity, checks and data** (`productivity`) | `design-checks`, `blocks-and-macros`, `spreadsheets`, `revisions-and-compare`, `live-view`, `import-dxf-and-parts`, `parts-library` |
+
+Each lesson starts as `draft` until the control it teaches has an anchor on main, then flips to
+`ready` in its own PR.
+
+## 11. Build order (small draft PRs, no build)
+
+1. This page, with the thread's handoff files. Merge first so the content threads can start.
+2. Coordinator registers `novo-learn` (small PR).
+3. `novo-learn`: format structs, parser, validation, check evaluation, runner, progress store, the
+   lint, with the `wiring-modes` and `tour` lessons as test data. No UI.
+4. App shell: event funnel, anchors for the dock, mark menu and start panel, the card, the pointer
+   overlay, the Learn window, start-panel and Help entries, `help.learn`. One real lesson end to end.
+5. `build.rs` embedding, user lesson folder, `--lessons`, Reload, the replay tests.
+6. Anchor rollout in the other threads' controls; `docs/design/lesson-anchors.md` generated.
+7. Content PRs from the four threads (they can start at step 1 as drafts).
+8. The #428 walk-through becomes `fast-keys`; the old card code is deleted.
+9. Later: Dutch text, "common mistake" hints (`[[step.mistake]]` with a `when` check and a
+   `say`), a lesson badge on panels the person has never opened, an end-of-track summary.
+
+## Coordination
+
+- **Sample project and first-run walk-through** (cse_019sSSXcKhY8k5uYwY3cgSyf): owns #428, the
+  example and the practice project. This work reuses their funnel and `open_example` path; the
+  walk-through becomes lesson `fast-keys` after #428 merges, converted by them with this engine.
+- **Onboarding and discoverability** (cse_01CpKBFnbxA5RuJyh1pGkTdZ): owns the Help menu, tips and
+  hints (#434). Learn is one Help item; the shortcut sheet links to it; hint counters stay theirs.
+  The anchor rule is added to their findability checklist.
+- **Workspaces** (cse_01WAQSEGkMbyreCPG18tsSPc): panels move; anchors keep ids across moves, so
+  lessons do not care where a panel lives. They own the stable names of the areas.
+- **Design system thread**: owns the pointer ring, the card and the note bubble look, and the
+  "Lesson: ..." link widget. This work ships a plain version from `novo_theme` tokens and they
+  restyle it.
+- **Workflow thread**: owns `commands.rs` and the keymap. Adds `help.learn`, `learn.next`,
+  `learn.back`, `learn.restart` and `learn.close` with keywords "lesson", "tutorial", "training",
+  "learn", "teach".
+- **Tester**: owns `novo-tests`; the lint and replay tests live in `novo-learn` and `novo-app` and
+  add no dependency there.
+
+## Decisions
+
+Settled with the coordinator: TOML for lessons and JSON for projects; no **Do it for me** in the
+first version (the `solve` hook stays); English first with every string translatable (section
+"Language").

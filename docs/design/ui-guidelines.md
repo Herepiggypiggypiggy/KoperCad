@@ -1,5 +1,9 @@
 # Interface guidelines
 
+> The tokens, type, spacing, states, components and canvas rules now live in
+> [`design-system.md`](design-system.md), which also adds the light theme and
+> density. This page keeps the layout, branding and label-placement notes.
+
 How KoperCAD looks: the visual language. The look lives in
 the `novo-theme` crate; this page says how to use it. Owned by the layout and
 branding thread; how the work flows (shortcuts, steps, defaults) belongs to

@@ -406,6 +406,9 @@ pub fn wire_end_glyph(end: Vec2, away: Vec2, style: &ModelStyle) -> Vec<Primitiv
 /// Layers a page scene uses.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ModelLayers {
+    /// An imported drawing (DXF) under everything else; see
+    /// [`PageScene::set_underlay`].
+    pub underlay: LayerId,
     pub frame: LayerId,
     pub wires: LayerId,
     pub symbols: LayerId,
@@ -560,7 +563,18 @@ pub struct PageScene {
     /// Wires drawn in another colour and width than the style's; see
     /// [`Self::set_wire_looks`].
     wire_looks: HashMap<WireId, WireLook>,
+    /// A background drawing; see [`Self::set_underlay`].
+    underlay: Option<Underlay>,
     pub style: ModelStyle,
+}
+
+/// A drawing shown under a page, already in page millimetres (y down). It
+/// is reference only: never selected, snapped to or printed by the page
+/// exporters, which do not set one.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Underlay {
+    pub primitives: Vec<Primitive>,
+    pub labels: Vec<Label>,
 }
 
 /// A wire's own stroke, in place of [`ModelStyle::wire`]: the live view
@@ -649,6 +663,7 @@ impl PageScene {
     pub fn new(project: &Project, page: PageId, art: &dyn SymbolArt) -> Self {
         let mut scene = Scene::new();
         let layers = ModelLayers {
+            underlay: scene.add_layer(Layer::new("Underlay", -20)),
             frame: scene.add_layer(Layer::new("Frame", -10)),
             wires: scene.add_layer(Layer::new("Wires", 0)),
             symbols: scene.add_layer(Layer::new("Symbols", 10)),
@@ -668,6 +683,7 @@ impl PageScene {
             strip_heads: HashMap::new(),
             focus: None,
             wire_looks: HashMap::new(),
+            underlay: None,
             style: ModelStyle::default(),
         };
         s.rebuild(project, art);
@@ -920,6 +936,28 @@ impl PageScene {
         true
     }
 
+    /// Shows `underlay` under the page, or nothing for `None`. Kept across
+    /// rebuilds. Returns whether anything changed.
+    pub fn set_underlay(&mut self, underlay: Option<Underlay>) -> bool {
+        if underlay == self.underlay {
+            return false;
+        }
+        self.underlay = underlay;
+        self.draw_underlay();
+        true
+    }
+
+    fn draw_underlay(&mut self) {
+        self.scene.remove(UNDERLAY_ITEM);
+        let Some(u) = &self.underlay else {
+            return;
+        };
+        let mut item = Item::new(self.layers.underlay).unselectable();
+        item.primitives = u.primitives.clone();
+        item.labels = u.labels.clone();
+        self.scene.insert(UNDERLAY_ITEM, item);
+    }
+
     /// The sheet shown, if any.
     pub fn sheet(&self) -> Option<&SheetContent> {
         self.sheet.as_ref()
@@ -934,6 +972,7 @@ impl PageScene {
         self.wire_junctions.clear();
         self.text_hosts.clear();
         self.frame(project);
+        self.draw_underlay();
         self.strip_heads = strip_heads(project, self.page);
         let contents = project.page_contents(self.page);
         for id in contents.symbols {
@@ -1683,16 +1722,32 @@ const STRIP_RUN_GAP: f64 = 20.0;
 /// Item id of the bridge bars of a page's jumper groups (no model object
 /// has this id).
 const BARS_ITEM: ItemId = ItemId(u64::MAX - 1);
+const UNDERLAY_ITEM: ItemId = ItemId(u64::MAX - 2);
 
 /// Height of a connected terminal's bridge bar in its symbol, in mm
 /// (`terminal_bridged.toml`: the dot sits on the upper lead at this height).
 const BRIDGE_BAR_Y: f64 = 1.4;
 
 /// The symbol that carries the bridge dot.
+#[cfg(test)]
 const BRIDGED_SYMBOL: &str = "iec/terminals/terminal_bridged";
 
 /// The one-ended variant: the same dot on its single lead.
+#[cfg(test)]
 const END_BRIDGED_SYMBOL: &str = "iec/terminals/terminal_end_bridged";
+
+#[cfg(test)]
+#[path = "nfpa_keys_test.rs"]
+mod nfpa_keys_test;
+
+/// Whether a symbol key is one of the two terminals that carry the bridge
+/// dot, in any pack.
+fn is_bridged(key: &str) -> bool {
+    matches!(
+        novo_symbols::Pack::path_of(key),
+        "terminals/terminal_bridged" | "terminals/terminal_end_bridged"
+    )
+}
 
 /// One heavy bar per run of connected terminals on a page, from the first
 /// lead to the last, never past them: the connected terminals of a jumper
@@ -1707,7 +1762,7 @@ fn bridge_bars(project: &Project, page: PageId) -> Vec<(Vec2, Vec2)> {
         let SymbolRole::Terminal { terminals } = &sym.role else {
             continue;
         };
-        if sym.symbol.0 != BRIDGED_SYMBOL && sym.symbol.0 != END_BRIDGED_SYMBOL {
+        if !is_bridged(&sym.symbol.0) {
             continue;
         }
         let [t] = terminals.as_slice() else {

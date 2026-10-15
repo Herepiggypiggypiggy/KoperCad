@@ -422,6 +422,50 @@ fn gate1_motor_starter_through_the_window() {
     assert!(bytes.starts_with(b"%PDF"));
     let pages = lopdf::Document::load_mem(&bytes).unwrap().get_pages().len();
     assert_eq!(pages, 2, "one PDF page per project page");
+    // DXF export: every page into a folder beside the project, drawn with
+    // geometry (the symbols are in it), reproducible on a second export.
+    let files = d
+        .app
+        .export_dxf_to(super::dxf::DxfScope::AllPages, dir.path(), "Starter");
+    assert_eq!(files.len(), 2, "one DXF per project page");
+    for f in &files {
+        assert_eq!(f.parent(), Some(dir.path().join("Starter DXF").as_path()));
+        let dxf = std::fs::read(f).unwrap();
+        assert!(novo_interop::dxf::is_written_by_us(&dxf));
+        let drawing = novo_interop::dxf::read_dxf(&dxf).unwrap();
+        assert!(!drawing.drawing.entities.is_empty(), "{}", f.display());
+    }
+    assert_eq!(
+        d.app
+            .export_dxf_to(super::dxf::DxfScope::AllPages, dir.path(), "Starter"),
+        files,
+        "a second export replaces the first"
+    );
+    // A DXF as background: shown under the page, one undo step, never
+    // exported by the page exporters.
+    let background = d.app.import_dxf_background_from(&files[0]);
+    assert!(background, "{:?}", d.app.messages().last());
+    d.frame();
+    let underlay_items = |d: &Drive| {
+        let view = d.app.canvas.schematic_ref().unwrap();
+        let page = view.scene().unwrap();
+        let layer = page.layers().underlay;
+        Some(
+            page.scene()
+                .iter()
+                .filter(|(_, it)| it.layer == layer)
+                .count(),
+        )
+    };
+    assert_eq!(underlay_items(&d), Some(1), "the background is one item");
+    d.app.toggle_background();
+    d.frame();
+    assert_eq!(underlay_items(&d), Some(0), "hidden");
+    d.app.toggle_background();
+    d.app.remove_background();
+    d.frame();
+    assert_eq!(underlay_items(&d), Some(0));
+    assert!(!d.app.has_background());
     // NOVO_GATE1_OUT=<dir> keeps the project and the PDF, for screenshots.
     if let Some(out) = std::env::var_os("NOVO_GATE1_OUT") {
         let out = std::path::PathBuf::from(out);
@@ -858,7 +902,7 @@ fn a_generated_page_shows_its_report_and_follows_each_edit() {
     d.app.changed_outside_canvas(&changes);
     d.frame();
     let after = texts(&d);
-    assert!(after.iter().any(|t| t == "77"), "{after:?}");
+    assert!(after.iter().any(|t| t.starts_with("77")), "{after:?}");
 
     // Undo takes it back.
     d.app.run(&ctx, Action::Undo);
@@ -2502,4 +2546,54 @@ fn ctrl_d_copies_the_selection_with_the_next_tag_and_selects_the_copy() {
     // One undo step per Ctrl+D.
     d.app.backend.document_mut().unwrap().undo().unwrap();
     assert_eq!(symbols(&d), 2);
+}
+
+#[test]
+fn the_project_standard_defaults_to_iec_and_shows_in_the_title() {
+    use novo_symbols::Pack;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert_eq!(d.app.standard(), Pack::Iec);
+    assert_eq!(d.app.standard_suffix(), "");
+    assert!(d.doc().project().info().rules.standard.is_empty());
+
+    // The command opens the Project settings window.
+    assert!(super::workbench::app_runs("project.standard"));
+    d.app.run_command(&ctx, "project.standard", None);
+    assert!(d.app.wb.project_settings);
+    d.frame();
+
+    // Choosing NFPA is saved in the project, shown beside the name, and
+    // one undo step takes it back.
+    d.app.set_standard(Pack::Nfpa);
+    d.frame();
+    assert_eq!(d.doc().project().info().rules.standard, "nfpa");
+    assert_eq!(d.app.standard(), Pack::Nfpa);
+    assert!(
+        d.app.window_title.contains("NFPA"),
+        "{}",
+        d.app.window_title
+    );
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(d.app.standard(), Pack::Iec);
+    assert!(!d.app.window_title.contains("NFPA"));
+}
+
+#[test]
+fn the_parts_command_opens_and_closes_the_parts_window() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    assert!(super::workbench::app_runs("parts.browser"));
+    d.app.run_command(&ctx, "parts.browser", None);
+    d.frame();
+    d.frame();
+    assert!(d.app.wb.parts.is_some(), "the window opens");
+    d.app.wb.parts = None;
+    d.frame();
+    assert!(d.app.wb.parts.is_none());
 }

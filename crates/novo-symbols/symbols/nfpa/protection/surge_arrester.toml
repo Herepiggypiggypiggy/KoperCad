@@ -1,0 +1,30 @@
+format = 1
+id = "nfpa/protection/surge_arrester"
+name = "Surge arrester"
+description = "Surge protective device (SPD) between a conductor and earth."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "protection"
+function = "protection.surge"
+keywords = ["surge arrester", "spd", "overvoltage", "lightning", "nfpa", "ansi"]
+aliases = ["spd"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "PE", at = [0, 16], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-4, 8], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 6] },
+  { kind = "polyline", points = [[-1.8, 6], [1.8, 6], [0, 7.7]], closed = true, fill = true },
+  { kind = "polyline", points = [[-1.8, 10], [1.8, 10], [0, 8.3]], closed = true, fill = true },
+  { kind = "line", from = [0, 10], to = [0, 16] },
+]
+
+[behavior]
+kind = "passive"
+type = "surge_arrester"
+poles = [["1", "PE"]]

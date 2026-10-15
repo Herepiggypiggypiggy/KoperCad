@@ -35,6 +35,13 @@ pub const DUTCH: &[Aliases] = &[
     // Project
     nl("file.new", &[], &["nieuw project", "nieuw"]),
     nl("file.open", &[], &["project openen", "openen"]),
+    nl("file.example", &[], &["voorbeeld openen", "voorbeeld"]),
+    nl("file.practice", &[], &["snelle toetsen", "oefenen"]),
+    nl(
+        "help.walkthrough",
+        &[],
+        &["rondleiding", "snelle toetsen uitleg"],
+    ),
     nl("file.save", &[], &["opslaan", "bewaren"]),
     nl("file.save_as", &[], &["opslaan als"]),
     nl("file.close", &[], &["project sluiten", "sluiten"]),
@@ -50,11 +57,22 @@ pub const DUTCH: &[Aliases] = &[
         &["voorkeuren"],
         &["instellingen", "opties"],
     ),
+    nl(
+        "parts.browser",
+        &["onderdelen"],
+        &["artikelen", "onderdeel"],
+    ),
+    nl("project.standard", &["tekennorm"], &["norm", "standaard"]),
     nl("terminal.toggle_pe", &["pe-klem"], &["aardklem", "aarde"]),
     nl(
         "revision.issue",
         &["revisie"],
         &["uitgeven", "versie", "vrijgeven"],
+    ),
+    nl(
+        "revision.compare",
+        &["vergelijk"],
+        &["verschil", "revisies vergelijken"],
     ),
     nl("file.quit", &[], &["afsluiten", "stoppen"]),
     // Draw
@@ -191,7 +209,22 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("view.full_screen", &[], &["volledig scherm"]),
     nl("view.cabinet_table", &[], &["kast als tabel", "tabel"]),
+    nl(
+        "cabinet.size-enclosure",
+        &[],
+        &["kast dimensioneren", "kastmaat", "koeling", "warmte"],
+    ),
+    nl(
+        "cabinet.enclosures",
+        &[],
+        &["kasten", "kastenlijst", "behuizingen"],
+    ),
     nl("view.changes", &["wijzigingen"], &["vergelijk", "verschil"]),
+    nl(
+        "view.commissioning",
+        &["inbedrijfstelling"],
+        &["uitvoeren", "afvinken", "restpunten"],
+    ),
     nl(
         "sim.live",
         &[],
@@ -212,6 +245,27 @@ pub const DUTCH: &[Aliases] = &[
     nl("check.problems", &["problemen", "fouten"], &["controles"]),
     nl("check.next_problem", &[], &["volgend probleem"]),
     nl("check.previous_problem", &[], &["vorig probleem"]),
+    nl(
+        "file.import_dxf_background",
+        &["importeer dxf"],
+        &["achtergrond", "onderlegger", "tekening"],
+    ),
+    nl(
+        "view.background",
+        &[],
+        &["achtergrond tonen", "achtergrond verbergen", "dxf"],
+    ),
+    nl(
+        "file.remove_background",
+        &[],
+        &["achtergrond verwijderen", "dxf"],
+    ),
+    nl(
+        "export.dxf_page",
+        &["exporteer dxf"],
+        &["cad", "autocad", "pagina"],
+    ),
+    nl("export.dxf_all", &[], &["alle paginas", "cad", "autocad"]),
     // Export
     nl(
         "export.pdf",
@@ -223,6 +277,16 @@ pub const DUTCH: &[Aliases] = &[
         &["exporteer stuklijst", "stuklijst"],
         &["onderdelenlijst"],
     ),
+    nl(
+        "export.sheets",
+        &[
+            "exporteer spreadsheet",
+            "exporteer excel",
+            "excel exporteren",
+        ],
+        &["excel"],
+    ),
+    nl("export.sheets_csv", &["exporteer csv"], &["csv"]),
 ];
 
 /// Dutch command arguments and the English chip each one stands for.

@@ -88,8 +88,9 @@ pub trait Report: Send + Sync {
     /// Builds the report's tables from the project.
     fn generate(&self, project: &Project) -> ReportOutput;
 
-    /// Whether [`crate::default_generated_pages`] proposes a page for this
-    /// report. False for reports that are exports first (the cable schedule).
+    /// Whether [`default_generated_pages`](crate::default_generated_pages)
+    /// proposes a page for this report. A report that is exported on demand
+    /// (the cut list) says `false`; its page is added by hand.
     fn proposed_by_default(&self) -> bool {
         true
     }
@@ -287,7 +288,15 @@ impl LiveReports {
     /// The current output of a report, regenerated if anything it reads
     /// changed. `None` for an unknown id.
     pub fn get(&mut self, project: &Project, id: &str) -> Option<&ReportOutput> {
-        let i = self.entries.iter().position(|e| e.report.id() == id)?;
+        let i = match self.entries.iter().position(|e| e.report.id() == id) {
+            Some(i) => i,
+            None => {
+                // The contents list of a panel is not registered up front:
+                // a generated page naming the panel brings it in.
+                self.register(Box::new(crate::PanelContents::of_generator(id)?));
+                self.entries.len() - 1
+            }
+        };
         self.refresh(i, project);
         Some(self.output_at(i))
     }

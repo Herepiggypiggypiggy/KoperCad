@@ -9,11 +9,20 @@ license.workspace = true
 novo-core.workspace = true
 # Only the model adapter, as novo-pdf: no egui widget.
 novo-canvas = { path = "../novo-canvas", default-features = false, features = ["model"] }
+novo-layout.workspace = true
 novo-parts.workspace = true
 thiserror.workspace = true
+# Polygon triangulation (port of Mapbox earcut), pure Rust.
+earcutr = "0.5"
+# Per-user cache folder.
+dirs.workspace = true
+# Pure-Rust Excel writer and reader: no Excel install, nothing to elevate.
+rust_xlsxwriter.workspace = true
+calamine.workspace = true
 
 [dev-dependencies]
 novo-tests = { path = "../novo-tests" }
+tempfile.workspace = true
 
 [lints]
 workspace = true
