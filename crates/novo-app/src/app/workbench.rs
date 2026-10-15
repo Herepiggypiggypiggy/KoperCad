@@ -314,7 +314,7 @@ impl NovoApp {
 
     /// Enter, Tab and Delete belong to the editor's wire proposals while it
     /// has any; otherwise to the terminal proposals shown on this page.
-    fn terminal_proposals_have_keys(&self) -> bool {
+    pub(super) fn terminal_proposals_have_keys(&self) -> bool {
         let wires = self
             .canvas
             .schematic_ref()
@@ -400,6 +400,7 @@ impl NovoApp {
     /// between (a held Space pans); every other key runs its command.
     pub(super) fn run_key_command(&mut self, ctx: &egui::Context, id: &str) {
         if id == "tool.place" {
+            self.tour_tick("place");
             self.arm_place_hold(ctx);
         } else if id == "view.command_field_here" {
             self.wb.space_down = ctx.pointer_latest_pos().or(Some(egui::Pos2::ZERO));
@@ -421,11 +422,15 @@ impl NovoApp {
         }
         if let Some(action) = Action::from_id(id) {
             if action == Action::CommandPalette {
+                self.tour_tick("commands");
                 self.wb.field.open(Mode::All, None);
             } else {
                 self.run(ctx, action);
             }
             return;
+        }
+        if id == "edit.duplicate" {
+            self.tour_tick("duplicate");
         }
         let pointer = ctx.pointer_latest_pos();
         match id {

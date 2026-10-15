@@ -14,6 +14,7 @@ mod inspector;
 mod link;
 mod live;
 mod live_anim;
+mod onboarding;
 mod pages;
 mod pdf;
 mod plc;
@@ -37,6 +38,8 @@ mod changes_tests;
 mod example_tests;
 #[cfg(test)]
 mod gate1_tests;
+#[cfg(test)]
+mod onboarding_tests;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -110,6 +113,7 @@ enum Leaving {
     Open,
     OpenPath(PathBuf),
     Example,
+    Practice,
     Close,
     Quit,
 }
@@ -337,11 +341,15 @@ impl NovoApp {
         }
         if action != Action::CommandPalette {
             self.settings.remember_action(action.id());
+        } else {
+            self.tour_tick("commands");
         }
         match action {
             Action::NewProject => self.leave_then(ctx, Leaving::New),
             Action::OpenProject => self.leave_then(ctx, Leaving::Open),
             Action::OpenExample => self.leave_then(ctx, Leaving::Example),
+            Action::TryFastKeys => self.leave_then(ctx, Leaving::Practice),
+            Action::ShowWalkthrough => self.show_walkthrough(),
             Action::SaveProject => {
                 self.save();
             }
@@ -411,6 +419,7 @@ impl NovoApp {
             }
             Leaving::OpenPath(path) => self.open_path(&path),
             Leaving::Example => self.open_example(),
+            Leaving::Practice => self.start_practice(),
             Leaving::Close => self.close_project(),
             Leaving::Quit => {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -733,6 +742,8 @@ impl NovoApp {
             self.tool_dock(&ctx, canvas_rect);
             self.inspector(&ctx, canvas_rect);
             self.live_view(&ctx, canvas_rect);
+            self.tour_watch(&ctx);
+            self.walkthrough_card(&ctx, canvas_rect);
             self.changes_card(&ctx, canvas_rect);
         }
         self.toasts(&ctx, canvas_rect);
@@ -1535,8 +1546,16 @@ impl NovoApp {
             ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
                 ui.weak("No project open");
                 ui.add_space(8.0);
+                if self.first_run() {
+                    self.action_button(ui, Action::TryFastKeys, picked);
+                    ui.weak("Two minutes: place, wire, cable, live view");
+                    ui.add_space(8.0);
+                }
                 for a in [Action::NewProject, Action::OpenProject, Action::OpenExample] {
                     self.action_button(ui, a, picked);
+                }
+                if !self.first_run() {
+                    self.action_button(ui, Action::TryFastKeys, picked);
                 }
                 let unsaved = self.backend.unsaved_projects();
                 if !unsaved.is_empty() {

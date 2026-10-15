@@ -9,6 +9,8 @@ pub enum Action {
     NewProject,
     OpenProject,
     OpenExample,
+    TryFastKeys,
+    ShowWalkthrough,
     SaveProject,
     SaveProjectAs,
     CloseProject,
@@ -30,6 +32,8 @@ impl Action {
         Action::NewProject,
         Action::OpenProject,
         Action::OpenExample,
+        Action::TryFastKeys,
+        Action::ShowWalkthrough,
         Action::SaveProject,
         Action::SaveProjectAs,
         Action::CloseProject,
@@ -53,6 +57,8 @@ impl Action {
             Action::NewProject => "file.new",
             Action::OpenProject => "file.open",
             Action::OpenExample => "file.example",
+            Action::TryFastKeys => "file.practice",
+            Action::ShowWalkthrough => "help.walkthrough",
             Action::SaveProject => "file.save",
             Action::SaveProjectAs => "file.save_as",
             Action::CloseProject => "file.close",
@@ -79,6 +85,8 @@ impl Action {
             Action::NewProject => "New project",
             Action::OpenProject => "Open project…",
             Action::OpenExample => "Open example",
+            Action::TryFastKeys => "Try the fast keys",
+            Action::ShowWalkthrough => "Fast keys walk-through",
             Action::SaveProject => "Save",
             Action::SaveProjectAs => "Save as…",
             Action::CloseProject => "Close project",
@@ -103,6 +111,7 @@ impl Action {
             Action::NewProject
             | Action::OpenProject
             | Action::OpenExample
+            | Action::TryFastKeys
             | Action::SaveProject
             | Action::SaveProjectAs
             | Action::CloseProject
@@ -115,6 +124,7 @@ impl Action {
             | Action::PinOutline
             | Action::FocusMode
             | Action::FullScreen
+            | Action::ShowWalkthrough
             | Action::CommandPalette => "View",
         }
     }
@@ -137,7 +147,11 @@ impl Action {
             Action::FocusMode => (cmd_shift, Key::F),
             Action::FullScreen => (Modifiers::NONE, Key::F11),
             Action::CommandPalette => (cmd, Key::K),
-            Action::PinOutline | Action::About | Action::OpenExample => return None,
+            Action::PinOutline
+            | Action::About
+            | Action::OpenExample
+            | Action::TryFastKeys
+            | Action::ShowWalkthrough => return None,
         };
         Some(KeyboardShortcut::new(modifiers, key))
     }
