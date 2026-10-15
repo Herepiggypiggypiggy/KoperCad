@@ -54,7 +54,6 @@
 //! assert_eq!(Summary::of(&problems).pill_text(), "No issues");
 //! ```
 
-pub mod calc;
 mod checks;
 mod contacts;
 mod physical;
