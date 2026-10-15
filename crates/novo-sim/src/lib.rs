@@ -15,10 +15,13 @@
 //! closed every pin of it conducts to every other.
 
 mod coupling;
+mod loads;
 
 pub use coupling::{
     Clock, DEFAULT_DELAY, Settled, delay_seconds, is_coil, is_timer_contact, settle, settle_timed,
 };
+
+pub use loads::{is_load, loads_on};
 
 use std::collections::{HashSet, VecDeque};
 
