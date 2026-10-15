@@ -12,6 +12,8 @@ novo-core = { workspace = true }
 novo-canvas = { path = "../novo-canvas", default-features = false, features = ["model"] }
 novo-reports = { workspace = true }
 pdf-writer = { workspace = true }
+subsetter = { workspace = true }
+ttf-parser = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
