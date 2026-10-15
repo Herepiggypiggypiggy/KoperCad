@@ -289,7 +289,7 @@ row of them, evenly spaced, as far as the pointer stretches.
   hand does not flip it. The first symbol sits at the press point.
 - **Spacing.** The pitch is the symbol's own (its width or height plus its
   clearance, rounded up to the grid; a terminal takes its strip's pitch).
-  The mouse wheel, or the + and - keys, shrink or grow it by one grid
+  The mouse wheel or + (wider) and - (narrower) change it by one grid
   step while dragging, and the hint shows the pitch. Every symbol sits on
   the grid.
   Per kind: a terminal takes its strip's pitch (so a row of terminals
@@ -333,6 +333,34 @@ reason in the hint and nothing changes.
 its grab zone) starts a wire there and the next click or drag continues
 it; in any other tool a click on a pin selects its device and a drag from
 it connects (§4, pin or body).
+
+**Box selection.** Pressing on empty canvas and dragging more than 4 px
+draws a selection box. Dragging right encloses: only items wholly inside
+are taken (a solid box). Dragging left crosses: every item the box
+touches is taken (a dashed box). The two modes are the two directions of
+one gesture, so nothing is chosen in advance.
+
+- **Live highlight.** While the pointer moves, every item the box would
+  take is shown in the hover colour (steel blue, never copper) and the
+  hint counts them ("5 selected"). Release takes exactly what was
+  highlighted; Esc cancels and leaves the selection as it was.
+- **Modifiers.** Shift adds to the selection and Ctrl toggles, both
+  decided at release, so the highlight shows the result of the gesture.
+- **What counts as an item.** A device is taken as a whole (its tag and
+  text come with it), a wire as one wire, and a page frame or title block
+  never. Pins alone are not items.
+- A press that moves under 4 px is a click and clears the selection, as
+  before.
+
+**Grid dots.** The canvas shows the grid as dots so placing and snapping
+can be seen. A dot sits on every grid point and every fifth is a little
+larger (a major dot); the dot colour is Layout's and stays faint enough
+never to compete with wires. Dots are screen sized (1 px, major 2 px) and
+thin out with zoom: when the grid pitch on screen falls under 8 px only
+the major dots show, and when the major pitch falls under 8 px none do. The HUD
+still names the grid. Snap works the same whether or not the dots show,
+and `grid` in the command surface (or the View chip) shows and hides
+them; it is a per-user setting like the wiring mode.
 
 **Escape ladder.** Cancel the step in progress, then leave the tool, then
 clear the selection.
@@ -670,6 +698,14 @@ Acceptance:
 21. Rename a contact to an existing coil's tag: it links in one undoable
     step with the toast and no dialog. The same with `link`, the context
     menu and drag. A tag of a motor is refused with the reason.
+22. Drag right over two devices and a wire they touch: the enclosed ones
+    highlight live and the hint counts them; release selects exactly
+    those. Drag left over the same area: the touched ones highlight, the
+    box is dashed. Shift adds, Ctrl toggles, Esc cancels with the old
+    selection kept.
+23. Zoom out: grid dots thin to major dots then to none, never shimmer;
+    zoom in: all dots return. `grid` hides them and the choice survives a
+    restart. Snap is unchanged either way.
 
 Keys match the logical character, not the physical position, so `?`,
 Ctrl+Z and Ctrl+Y work on Dutch, German (QWERTZ) and US layouts alike.
