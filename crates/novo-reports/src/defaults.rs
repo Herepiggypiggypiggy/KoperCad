@@ -58,7 +58,7 @@ pub fn default_generated_pages_with(
     let mut specs = Vec::new();
     for report in crate::standard_reports() {
         let id = report.id();
-        if !enabled(id) || has_kind(id) {
+        if !enabled(id) || has_kind(id) || !report.proposed_by_default() {
             continue;
         }
         let name = if id == TableOfContents::ID && !taken("0") {

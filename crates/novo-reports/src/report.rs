@@ -82,6 +82,12 @@ pub trait Report: Send + Sync {
     /// Builds the report's tables from the project.
     fn generate(&self, project: &Project) -> ReportOutput;
 
+    /// Whether [`crate::default_generated_pages`] proposes a page for this
+    /// report. False for reports that are exports first (the cable schedule).
+    fn proposed_by_default(&self) -> bool {
+        true
+    }
+
     /// Whether the report reads other reports' output (the table of
     /// contents counts their sheets). [`LiveReports`] then hands it its
     /// cached outputs through [`Report::generate_with`] instead of the
