@@ -4,7 +4,7 @@
 //! copies as far as the pointer stretches. These are the pure pieces: the
 //! drag state, the pitch, the count and the stop before a collision.
 
-use novo_core::{PageId, Placement, Point, Project};
+use novo_core::{DeviceId, PageId, Placement, Point, Project, SymbolRole};
 use novo_symbols::Symbol;
 
 use crate::catalog::Catalog;
@@ -80,9 +80,63 @@ pub fn bounds_on_page(symbol: &Symbol, placement: &Placement) -> (Point, Point) 
     )
 }
 
+/// The spacing of the terminals of `strip` already on `page` in the row the
+/// press is on (same line across the row's axis), so a new row of terminals
+/// lines up with the strip it joins. `None` with fewer than two there.
+pub fn strip_pitch(
+    project: &Project,
+    page: PageId,
+    strip: DeviceId,
+    row: &RowDrag,
+    grid: f64,
+) -> Option<f64> {
+    let across = if row.horizontal {
+        row.press.y
+    } else {
+        row.press.x
+    };
+    let mut at: Vec<f64> = project
+        .page_contents(page)
+        .symbols
+        .iter()
+        .filter_map(|id| project.symbol(*id))
+        .filter(|s| match &s.role {
+            SymbolRole::Terminal { terminals } => terminals
+                .iter()
+                .any(|t| project.terminal(*t).is_some_and(|t| t.strip == strip)),
+            _ => false,
+        })
+        .filter_map(|s| {
+            let o = s.placement.origin;
+            let (a, c) = if row.horizontal {
+                (o.x, o.y)
+            } else {
+                (o.y, o.x)
+            };
+            ((c - across).abs() < grid / 2.0).then_some(a)
+        })
+        .collect();
+    at.sort_by(f64::total_cmp);
+    at.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+    let pitch = at
+        .windows(2)
+        .map(|w| w[1] - w[0])
+        .fold(f64::INFINITY, f64::min);
+    pitch.is_finite().then_some(pitch)
+}
+
 /// The distance between neighbours: the symbol's extent along the axis plus
 /// one grid step (plus the user's `extra_steps`), rounded up to the grid.
-pub fn pitch(symbol: &Symbol, placement: &Placement, row: &RowDrag, grid: f64) -> f64 {
+pub fn pitch(
+    symbol: &Symbol,
+    placement: &Placement,
+    row: &RowDrag,
+    grid: f64,
+    strip_pitch: Option<f64>,
+) -> f64 {
+    if let Some(strip) = strip_pitch {
+        return (strip + f64::from(row.extra_steps) * grid).max(grid);
+    }
     let (lo, hi) = bounds_on_page(symbol, placement);
     let extent = if row.horizontal {
         hi.x - lo.x
@@ -106,9 +160,8 @@ pub fn positions(
     symbol: &Symbol,
     placement: Placement,
     row: &RowDrag,
-    grid: f64,
+    pitch: f64,
 ) -> (Vec<Point>, Option<Point>) {
-    let pitch = pitch(symbol, &placement, row, grid);
     let along = row.along();
     let sign = if along < 0.0 { -1.0 } else { 1.0 };
     let wanted = ((along.abs() / pitch).floor() as usize + 1).min(MAX_COUNT);
