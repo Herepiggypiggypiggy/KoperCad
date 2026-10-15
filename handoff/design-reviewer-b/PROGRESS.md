@@ -49,3 +49,4 @@
 18:58 UTC #464 ab1d519 CHANGES (design): own test fails on main (#458 twin), wheel hidden-items hint, favourites
 19:00 UTC #460 8853389 CHANGES (design): tokens, no entry point (dead_code), cache, label
 19:02 UTC #464 d26347d READY (wheel/catalog follow drawing standard)
+19:03 UTC #475 91d95db CHANGES (design, draft): stack not building, row selection, §3.4 gaps, keyboard, export scope
