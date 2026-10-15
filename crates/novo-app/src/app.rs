@@ -36,7 +36,7 @@ use std::time::{Duration, Instant, SystemTime};
 use eframe::egui;
 
 use crate::actions::Action;
-use novo_core::{Command, DeviceTag, ModelError, Outcome, PageId, PageKind};
+use novo_core::{Aspect, Command, DeviceTag, ModelError, Outcome, PageId, PageKind};
 use pages::{FormKind, PageForm, PageView};
 
 use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows};
@@ -140,6 +140,9 @@ pub struct NovoApp {
     page_view: PageView,
     /// The page being renamed in the outline, with the text so far.
     renaming_page: Option<(PageId, String)>,
+    /// The group or panel header being renamed in the outline: its aspect,
+    /// its tag and the text so far.
+    renaming_level: Option<(Aspect, DeviceTag, String)>,
     /// Window width last frame, which decides whether the outline pins.
     window_width: f32,
 }
@@ -194,6 +197,7 @@ impl NovoApp {
             page_filter: String::new(),
             page_view: PageView::Function,
             renaming_page: None,
+            renaming_level: None,
             window_width: 0.0,
         }
     }
@@ -1098,17 +1102,54 @@ impl NovoApp {
         let drops =
             std::cell::RefCell::new(Vec::<(PageId, Option<DeviceTag>, Option<DeviceTag>)>::new());
         let forms = std::cell::RefCell::new(Vec::<PageForm>::new());
+        // The header being renamed shows a text box; the rename starts from
+        // a double click or the context menu.
+        let editing = std::cell::RefCell::new(self.renaming_level.take());
+        let started = std::cell::RefCell::new(None::<(Aspect, DeviceTag, String)>);
+        let finished = std::cell::RefCell::new(None::<(Aspect, DeviceTag, String)>);
+        let header_edit = |ui: &mut egui::Ui, aspect: Aspect, tag: &DeviceTag| -> bool {
+            let mut editing = editing.borrow_mut();
+            let Some((a, t, text)) = editing.as_mut() else {
+                return false;
+            };
+            if *a != aspect || t != tag {
+                return false;
+            }
+            match pages::level_edit(ui, text) {
+                pages::LevelEdit::Editing => {}
+                pages::LevelEdit::Commit => {
+                    *finished.borrow_mut() = Some((*a, t.clone(), text.clone()));
+                    *editing = None;
+                }
+                pages::LevelEdit::Cancel => *editing = None,
+            }
+            true
+        };
+        let rename_text =
+            |tag: &DeviceTag| tag.to_string().trim_start_matches(['=', '+']).to_owned();
         let group_header = |ui: &mut egui::Ui| {
-            if group.function.is_empty() {
+            if group.function.is_empty() || header_edit(ui, Aspect::Function, &group) {
                 return;
             }
-            let r = ui.strong(group.to_string());
+            let r = ui.add(
+                egui::Label::new(egui::RichText::new(group.to_string()).strong())
+                    .sense(egui::Sense::click()),
+            );
+            if r.double_clicked() {
+                *started.borrow_mut() =
+                    Some((Aspect::Function, group.clone(), rename_text(&group)));
+            }
             if let Some(dropped) = r.dnd_release_payload::<PageId>() {
                 drops
                     .borrow_mut()
                     .push((*dropped, Some(group.clone()), None));
             }
             r.context_menu(|ui| {
+                if ui.button("Rename…").clicked() {
+                    *started.borrow_mut() =
+                        Some((Aspect::Function, group.clone(), rename_text(&group)));
+                    ui.close();
+                }
                 if ui.button("New panel in this group…").clicked() {
                     forms
                         .borrow_mut()
@@ -1124,16 +1165,28 @@ impl NovoApp {
             panel_text.push_str(&format!("  ↔ same layout as {}", others.join(", ")));
         }
         let panel_header = |ui: &mut egui::Ui| {
-            if panel.location.is_empty() {
+            if panel.location.is_empty() || header_edit(ui, Aspect::Location, &panel) {
                 return;
             }
-            let r = ui.label(egui::RichText::new(&panel_text).weak());
+            let r = ui.add(
+                egui::Label::new(egui::RichText::new(&panel_text).weak())
+                    .sense(egui::Sense::click()),
+            );
+            if r.double_clicked() {
+                *started.borrow_mut() =
+                    Some((Aspect::Location, panel.clone(), rename_text(&panel)));
+            }
             if let Some(dropped) = r.dnd_release_payload::<PageId>() {
                 drops
                     .borrow_mut()
                     .push((*dropped, None, Some(panel.clone())));
             }
             r.context_menu(|ui| {
+                if ui.button("Rename…").clicked() {
+                    *started.borrow_mut() =
+                        Some((Aspect::Location, panel.clone(), rename_text(&panel)));
+                    ui.close();
+                }
                 if ui.button("New pages in this panel…").clicked() {
                     forms.borrow_mut().push(PageForm::new(
                         FormKind::Pages,
@@ -1168,11 +1221,35 @@ impl NovoApp {
             }
         }
         *shown = structure;
+        self.renaming_level = started.into_inner().or(editing.into_inner());
+        if let Some((aspect, from, text)) = finished.into_inner() {
+            self.rename_level(aspect, &from, &text);
+        }
         for (page, g, p) in drops.into_inner() {
             self.move_page(page, g, p);
         }
         if let Some(form) = forms.into_inner().pop() {
             self.wb.page_form = Some(form);
+        }
+    }
+
+    /// Renames a page group or panel everywhere its name is used, as one
+    /// undo step, and says what it touched.
+    fn rename_level(&mut self, aspect: Aspect, from: &DeviceTag, text: &str) {
+        let command = match pages::rename_level_command(aspect, from, text) {
+            Ok(Some(command)) => command,
+            Ok(None) => return,
+            Err(e) => return self.message(Level::Warning, e),
+        };
+        let used = self
+            .backend
+            .document()
+            .map(|d| pages::level_users(d.project(), aspect, from))
+            .unwrap_or_default();
+        match self.execute(command) {
+            Some(Ok(_)) => self.message(Level::Info, format!("Renamed {from}: {used}")),
+            Some(Err(e)) => self.message(Level::Error, format!("Could not rename {from}: {e}")),
+            None => {}
         }
     }
 
