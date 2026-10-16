@@ -243,14 +243,14 @@ fn epoch_id() -> egui::Id {
 
 /// The person dragged the panel: from now on it stays where they left it
 /// instead of following its side of the canvas.
-fn mark_moved(ctx: &egui::Context, id: egui::Id) {
+pub(super) fn mark_moved(ctx: &egui::Context, id: egui::Id) {
     ctx.data_mut(|d| {
         let epoch: u32 = d.get_persisted(epoch_id()).unwrap_or(0);
         d.insert_persisted(id.with("moved"), epoch);
     });
 }
 
-fn is_moved(ctx: &egui::Context, id: egui::Id) -> bool {
+pub(super) fn is_moved(ctx: &egui::Context, id: egui::Id) -> bool {
     ctx.data_mut(|d| {
         let epoch: u32 = d.get_persisted(epoch_id()).unwrap_or(0);
         d.get_persisted::<u32>(id.with("moved")) == Some(epoch)

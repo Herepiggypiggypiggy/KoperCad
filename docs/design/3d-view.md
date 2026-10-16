@@ -622,7 +622,9 @@ squared. The label pass now takes the bounds once (`project_in`):
 | 200 devices, 60 wires | | 0.10 ms |
 
 A test counts the scene-bounds walks per frame and requires the same number
-with 20 and with 600 devices (it fails with 22 against 602 on the old code).
+with 20 and with 600 devices (it fails with 22 against 602 on the old code),
+and that it is one: `show` hands its bounds to the overlay and the dimension
+painter, so a frame walks the scene once.
 The label cost left at 3000 devices (1.5 ms, three times the rest of the
 widget) was not the overlap check: a grid for it measured the same. It was the
 text layout of a chip for every device in view, of which nearly all are too
