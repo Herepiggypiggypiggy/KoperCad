@@ -646,6 +646,16 @@ impl NovoApp {
         let Some(target) = step.point.clone() else {
             return;
         };
+        // The door form sits below the plate fields: scroll to what the step
+        // points at, so the ring is not drawn around a clipped control.
+        if let Some(ui) = &target.ui {
+            let ids = ui.ids();
+            if ids.contains(&"cabinet.door.apply") {
+                self.cabinet.door.reveal = Some("cabinet.door.apply");
+            } else if ids.contains(&"cabinet.door") {
+                self.cabinet.door.reveal = Some("cabinet.door");
+            }
+        }
         if target.view == novo_learn::lesson::View::Keep {
             return;
         }

@@ -46,6 +46,7 @@ pub(super) struct Panel {
     side: Side,
     width: f32,
     collapsible: bool,
+    scroll_bar: bool,
 }
 
 impl Panel {
@@ -63,12 +64,20 @@ impl Panel {
             side,
             width,
             collapsible: true,
+            scroll_bar: false,
         }
     }
 
     /// A panel that cannot be rolled up to its title.
     pub(super) fn fixed_open(mut self) -> Self {
         self.collapsible = false;
+        self
+    }
+
+    /// The scroll bar is always drawn, so a form that continues below the
+    /// fold shows that there is more.
+    pub(super) fn scroll_bar_always(mut self) -> Self {
+        self.scroll_bar = true;
         self
     }
 
@@ -113,7 +122,16 @@ impl Panel {
         } else {
             window.current_pos(start)
         };
+        // The window's own scroll area has no bar setting, so a solid
+        // (non-floating) bar is asked for through the style while it is built.
+        let before = self.scroll_bar.then(|| ctx.global_style().spacing.scroll);
+        if self.scroll_bar {
+            ctx.global_style_mut(|st| st.spacing.scroll = egui::style::ScrollStyle::solid());
+        }
         let shown = window.show(ctx, add);
+        if let Some(scroll) = before {
+            ctx.global_style_mut(|st| st.spacing.scroll = scroll);
+        }
         if let Some(r) = &shown
             && r.response.drag_started()
         {

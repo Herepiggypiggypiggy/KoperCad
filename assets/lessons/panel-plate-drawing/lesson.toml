@@ -83,7 +83,7 @@ Each DIN rail gets 5.5 mm clearance holes, 10 mm in from each end and at most 20
 You do not add them; they come from the rails.
 """
 text_nl = """
-Elke DIN-rail krijgt gaten van 5,5 mm, 10 mm van elk uiteinde en hoogstens 200 mm uit elkaar: hier vier gaten op elke rail van 580 mm, samen 20.
+Elke DIN-rail krijgt gaten van 5,5 mm, 10 mm van elk uiteinde en hoogstens 200 mm uit elkaar: hier vier gaten op elke rail van 535 mm, samen 20.
 Je voegt ze niet toe; ze komen uit de rails.
 """
 

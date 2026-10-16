@@ -147,6 +147,7 @@ pub(super) fn overlay(
     };
     let shown = super::panel::Panel::new("cabinet_inspector", "Inspector", canvas, side, WIDTH)
         .fixed_open()
+        .scroll_bar_always()
         .show(ctx, |ui| show(ui, facts, project, fields, door));
     super::cabinet_bar::note_rect(
         ctx,

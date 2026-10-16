@@ -341,6 +341,7 @@ const APP_COMMANDS: &[&str] = &[
     "export.labels",
     "cabinet.routes",
     "cabinet.rails",
+    "cabinet.door",
     "export.bom",
     "export.reports",
     "view.reports",
@@ -866,6 +867,7 @@ impl NovoApp {
             }
             "cabinet.routes" => self.toggle_cabinet_routes(),
             "cabinet.rails" => self.toggle_cabinet_rails(),
+            "cabinet.door" => self.open_cabinet_door(),
             "export.wirecut" => {
                 self.export_wire_cut();
             }

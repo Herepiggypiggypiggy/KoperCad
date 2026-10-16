@@ -476,6 +476,21 @@ impl super::NovoApp {
         }
     }
 
+    /// Opens the plate card with its "Inside and door" section in view (the
+    /// command `cabinet.door`; the only other way is Plate setup and a scroll).
+    pub(super) fn open_cabinet_door(&mut self) {
+        if self.backend.document().is_none() {
+            return;
+        }
+        if self.workspace() != super::workspace::Workspace::Cabinet {
+            self.switch_workspace(super::workspace::Workspace::Cabinet);
+        }
+        self.cabinet.table = false;
+        self.cabinet.plate_card = true;
+        self.cabinet.view.selection.clear();
+        self.cabinet.door.reveal = Some("cabinet.door");
+    }
+
     /// Applies what the list asked for as one undo step.
     pub(super) fn cabinet_rail_ask(&mut self, structure: Option<StructureId>, ask: RailAsk) {
         let Some(structure) = structure else {

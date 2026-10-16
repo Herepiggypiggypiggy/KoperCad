@@ -331,7 +331,7 @@ fn the_default_cabinet_run_follows_the_2d_engine_for_housing_and_plate() {
         d.surface_c, d2.surface_c, d.plate_share, d2.plate_share, d.h_w_m2k
     );
     assert!(s.progress.converged, "{:?}", s.progress);
-    assert!(((d.surface_c - 25.0) / (d2.surface_c - 25.0) - 1.0).abs() < 0.15);
+    assert!(((d.surface_c - 25.0) / (d2.surface_c - 25.0) - 1.0).abs() < 0.10);
     assert!((d.plate_share - d2.plate_share).abs() < 0.06);
     assert!(
         d.h_w_m2k > 5.0 && d.h_w_m2k < 15.0,
