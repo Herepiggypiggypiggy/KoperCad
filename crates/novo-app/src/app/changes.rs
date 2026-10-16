@@ -288,7 +288,13 @@ impl NovoApp {
             super::panel::Side::Left,
             260.0,
         )
-        .top(if live { 150.0 } else { 10.0 })
+        .top(if live {
+            // Under the live potentials card, whatever height it has.
+            ctx.memory(|m| m.area_rect(super::panel::id("live_card")))
+                .map_or(150.0, |r| r.bottom() - canvas.top() + 16.0)
+        } else {
+            10.0
+        })
         .fixed_open()
         .fit()
         .show(ctx, |ui| {
