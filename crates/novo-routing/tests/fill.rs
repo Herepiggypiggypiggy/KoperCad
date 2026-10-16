@@ -14,6 +14,7 @@ fn job(id: u64, x0: f64, x1: f64, y: f64, d: Option<f64>) -> Job {
     let anchor = |x| Anchor {
         pos: Point::new(x, y),
         facing: Facing::Any,
+        z_mm: None,
     };
     Job {
         id,
@@ -27,6 +28,7 @@ const RULES: Rules = Rules {
     slack_mm: 0.0,
     max_stub_mm: 150.0,
     fill_limit: 0.5,
+    bend_mm: 0.0,
 };
 
 fn wire_area(d: f64) -> f64 {
