@@ -6,6 +6,8 @@ use std::collections::BTreeMap;
 
 use crate::enclosure::{DoorReport, Enclosure, check};
 use crate::plan::{Candidate, Plan, ROW_GAP_MM, place_all_below};
+use crate::surfaces::Surfaces;
+use crate::swing::{DoorDevice, PlateDevice, SweepSettings, SwingReport, sweep};
 use crate::{
     Duct, Margins, Placement, Plate, Rail, Size, clearance_violations, collisions, outside,
     rail_overflows,
@@ -46,6 +48,9 @@ pub struct CabinetLayout {
     pub enclosure: Option<Enclosure>,
     /// Depth of the parts of placed devices, by device id, where known.
     pub depths: BTreeMap<u64, f64>,
+    /// Devices on the inside of the door (door coordinates), swept when the
+    /// door opens.
+    pub door_devices: Vec<DoorDevice>,
 }
 
 impl CabinetLayout {
@@ -58,6 +63,7 @@ impl CabinetLayout {
             grid: DEFAULT_GRID_MM,
             enclosure: None,
             depths: BTreeMap::new(),
+            door_devices: Vec::new(),
         }
     }
 
@@ -70,6 +76,33 @@ impl CabinetLayout {
             .map(|p| (p.id, self.depths.get(&p.id).copied()))
             .collect();
         Some(check(enclosure, &self.plate, &depths))
+    }
+
+    /// Door devices swept against the plate devices and the walls; `None`
+    /// until the enclosure has an interior.
+    pub fn swing_report(&self) -> Option<SwingReport> {
+        let enclosure = self.enclosure.as_ref()?;
+        let (surfaces, _) = Surfaces::from_enclosure(enclosure, &self.plate, &[]);
+        let plate_devices: Vec<PlateDevice> = self
+            .placements
+            .iter()
+            .filter_map(|p| {
+                Some(PlateDevice {
+                    id: p.id,
+                    surface: crate::surfaces::MAIN_PLATE.into(),
+                    rect: p.footprint(),
+                    depth: *self.depths.get(&p.id)?,
+                    mesh: None,
+                })
+            })
+            .collect();
+        Some(sweep(
+            enclosure,
+            &surfaces,
+            &self.door_devices,
+            &plate_devices,
+            &SweepSettings::default(),
+        ))
     }
 
     /// A position snapped to the grid, for dropping and dragging.

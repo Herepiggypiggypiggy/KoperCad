@@ -219,6 +219,11 @@ impl DoorState {
         match (layout.enclosure.as_ref(), layout.door_report()) {
             (Some(e), Some(report)) => {
                 report_lines(ui, e, &report, tag_of);
+                if let Some(swing) = layout.swing_report() {
+                    for (bad, text) in swing_sentences(&swing, tag_of) {
+                        line(ui, bad, text);
+                    }
+                }
                 ui.add_space(6.0);
                 top_view(ui, e, layout, &report);
             }
@@ -306,6 +311,38 @@ pub(super) fn sentences(
             format!(
                 "Every placed device fits behind the door ({:.0} mm usable depth).",
                 e.usable_depth()
+            ),
+        ));
+    }
+    out
+}
+
+/// The door swing sweep as sentences: one per touch, or one line saying the
+/// devices on the door clear everything. Nothing when no device is on the door.
+pub(super) fn swing_sentences(
+    report: &novo_layout::swing::SwingReport,
+    tag_of: &impl Fn(u64) -> String,
+) -> Vec<(bool, String)> {
+    let mut out: Vec<(bool, String)> = report
+        .hits
+        .iter()
+        .map(|h| (true, h.message(tag_of)))
+        .collect();
+    for id in &report.unknown_depth {
+        out.push((
+            false,
+            format!(
+                "{} on the door has no depth and was not swept.",
+                tag_of(*id)
+            ),
+        ));
+    }
+    if report.hits.is_empty() && report.swept > 0 {
+        out.push((
+            false,
+            format!(
+                "Devices on the door clear everything up to {:.0} degrees.",
+                report.max_angle_deg
             ),
         ));
     }

@@ -1223,3 +1223,46 @@ fn right_click_on_the_plate_opens_a_menu_for_what_is_under_it() {
     let menu = d.app.cabinet.menu.expect("a menu opened on the plate");
     assert_eq!(menu.target, Target::Plate);
 }
+
+#[test]
+fn door_devices_are_swept_and_named_in_the_door_panel() {
+    use novo_layout::enclosure::{Door, Enclosure, Hinge};
+    use novo_layout::state::CabinetLayout;
+    use novo_layout::swing::DoorDevice;
+    use novo_layout::{Plate, Rect};
+    let mut layout = CabinetLayout::new(Plate {
+        width: 560.0,
+        height: 760.0,
+        margin: 10.0,
+    });
+    assert!(layout.swing_report().is_none());
+    layout.enclosure = Some(Enclosure {
+        width: 600.0,
+        height: 800.0,
+        depth: 250.0,
+        plate_setback: 20.0,
+        door: Some(Door {
+            hinge: Hinge::Left,
+            ..Door::default()
+        }),
+        front_clearance: None,
+        hinge_side_clearance: None,
+    });
+    let tag = |id: u64| format!("-H{id}");
+    let none = layout.swing_report().unwrap();
+    assert!(super::cabinet_door::swing_sentences(&none, &tag).is_empty());
+    layout.door_devices.push(DoorDevice {
+        id: 1,
+        rect: Rect {
+            x: 560.0,
+            y: 300.0,
+            w: 39.5,
+            h: 40.0,
+        },
+        depth: 40.0,
+        mesh: None,
+    });
+    let lines = super::cabinet_door::swing_sentences(&layout.swing_report().unwrap(), &tag);
+    assert_eq!(lines.len(), 1);
+    assert!(lines[0].0 && lines[0].1.contains("-H1") && lines[0].1.contains("[door.swing]"));
+}
