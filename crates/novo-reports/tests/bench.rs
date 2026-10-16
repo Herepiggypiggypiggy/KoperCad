@@ -188,8 +188,9 @@ fn the_bench_cut_list_groups_ticks_and_marks_estimates() {
     assert_eq!(out.sections[1].key, "estimates");
     let group = out
         .section(&BenchCut::group_key(Some(1.5), "BK"))
+        // Nineteen device-to-device wires and six that end at a supply feed.
         .expect("group");
-    assert_eq!(group.rows.len(), 19);
+    assert_eq!(group.rows.len(), 25);
     for row in &group.rows {
         assert_eq!(text(&row.cells[0]), TICK_BOX);
         // Cut = route + 2 x 10 mm.
@@ -213,7 +214,7 @@ fn the_bench_cut_list_groups_ticks_and_marks_estimates() {
         .map(|r| text(&r.cells[2]).trim_start_matches('~').parse().unwrap())
         .collect();
     assert!(cuts.windows(2).all(|w| w[0] >= w[1]));
-    assert!(text(&out.sections[1].rows[0].cells[0]).contains("16 of 19"));
+    assert!(text(&out.sections[1].rows[0].cells[0]).contains("22 of 25"));
 }
 
 #[test]

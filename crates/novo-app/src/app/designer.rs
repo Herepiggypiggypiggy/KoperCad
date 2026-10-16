@@ -471,7 +471,7 @@ impl NovoApp {
                 } else {
                     format!(" ({n} design problems)")
                 };
-                self.message(Level::Info, format!("{verb} {}{tail}", path.display()));
+                self.message_file(format!("{verb} {}{tail}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
