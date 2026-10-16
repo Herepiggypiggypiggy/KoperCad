@@ -188,6 +188,25 @@ fn export_pdf_draws_every_page_or_the_ones_asked() {
 }
 
 #[test]
+fn export_eplan_writes_a_pxf_file_and_never_replaces_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+    let target = dir.path().join("demo.epj");
+    let run = novo(&["export", "eplan", s(&path), "-o", s(&target)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    let text = std::fs::read_to_string(&target).unwrap();
+    assert!(text.contains("<EplanPxfRoot") && text.contains("PxfVersion=\"1.23\""));
+    assert!(run.out.contains("2 pages"), "{}", run.out);
+    assert!(
+        run.out.contains("not been opened in a real EPLAN"),
+        "{}",
+        run.out
+    );
+    let again = novo(&["export", "eplan", s(&path), "-o", s(&target)]);
+    assert_eq!(again.code, exit::WRITE, "{}", again.err);
+}
+
+#[test]
 fn export_dxf_writes_one_file_or_one_per_page() {
     let dir = tempfile::tempdir().unwrap();
     let path = project(dir.path(), false);

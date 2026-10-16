@@ -8,3 +8,4 @@
 2026-10-15 21:45 UTC #479 merged (READY from two reviewers). Shell rebased onto main; engine got the extra kinds the terminals lessons need; ran all four content PRs against it on a scratch merge and told the content threads what to fix. Opening the shell PR.
 2026-10-16 08:42 UTC #581 merged (lessons listed as early access). Reproduced the misaligned highlights: fixed coordinates versus where the person's own feeds land; fixed with feed/pin targets.
 2026-10-16 09:00 UTC #601: real Show me how with Start/End wire markers, Shift+L keeps the lesson card, `how`/`how_nl` fields; lesson threads told. Next: replay gate and anchors.
+2026-10-16 12:10 UTC #642 merged (replay gate, 142 steps tick). Second runner PR: rename/tee/feed_row/cable/issue_revision/assign_part/held-key ops, `manual` marker, menu-row anchors with fallback, free-text control-name ratchet; fmt, clippy and tests pass locally.

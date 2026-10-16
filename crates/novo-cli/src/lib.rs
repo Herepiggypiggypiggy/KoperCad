@@ -232,6 +232,16 @@ enum Export {
         #[arg(short, long)]
         output: PathBuf,
     },
+    /// The project as an EPLAN PXF file (`.epj`) for EPLAN 2024 to import.
+    /// Devices and terminals on drawn symbols, pages, cables and cores;
+    /// wires and texts are counted as not written. Never opened in a real
+    /// EPLAN yet: import it into a test project first.
+    Eplan {
+        file: PathBuf,
+        /// Output file (.epj); never replaces an existing file.
+        #[arg(short, long)]
+        output: PathBuf,
+    },
     /// The whole project as diffable JSON.
     Json {
         file: PathBuf,
@@ -443,6 +453,30 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             output,
             delimiter,
         } => commissioning_report(&file, output.as_deref(), delimiter, out),
+        Cmd::Export(Export::Eplan { file, output }) => {
+            if output.exists() {
+                return Err(Failure::new(
+                    exit::WRITE,
+                    format!(
+                        "cannot write {}: it already exists; export never replaces a file",
+                        output.display()
+                    ),
+                ));
+            }
+            let project = read(&file)?;
+            let export = novo_interop::eplan::pxf::write_pxf(
+                &project,
+                &novo_interop::eplan::pxf::PxfWriteOptions::default(),
+            );
+            std::fs::write(&output, export.text).map_err(|e| {
+                Failure::new(
+                    exit::WRITE,
+                    format!("cannot write {}: {e}", output.display()),
+                )
+            })?;
+            print(out, &export.report.text())?;
+            Ok(exit::OK)
+        }
         Cmd::Export(Export::Json { file, output }) => {
             let project = read(&file)?;
             let text = project.to_json();

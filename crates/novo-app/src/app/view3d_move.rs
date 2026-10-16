@@ -70,8 +70,6 @@ pub(super) struct Landing {
 /// The drag in progress, kept from one frame to the next.
 #[derive(Debug, Default)]
 pub(super) struct MoveState {
-    /// Dragging in the view moves things (the Move tool). On by default.
-    pub(super) off: bool,
     active: Option<Active>,
 }
 

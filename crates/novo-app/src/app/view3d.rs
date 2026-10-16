@@ -8,17 +8,19 @@ use std::sync::Arc;
 use eframe::egui;
 use novo_core::{Device, DeviceId, Project, StructureId};
 use novo_layout::model::{candidates, load};
-use novo_view3d::build::{Options, model::scene};
+use novo_view3d::build::{DOOR_HINGE, Options, WireInput, model};
 use novo_view3d::camera::ViewPreset;
+use novo_view3d::door::open_angle;
 use novo_view3d::palette::View3dTheme;
 use novo_view3d::scene::{ItemId, ItemKind};
 use novo_view3d::widget::{View3d, ViewOptions};
-use novo_view3d::{Look, MeshLibrary, Scene};
+use novo_view3d::{Layers, Look, MeshLibrary, Scene};
 
 use super::cabinet_inspector;
 
 use super::NovoApp;
 use super::heat_3d::{self, Heat3d, Place};
+use super::view3d_controls::{self, Controls};
 use super::view3d_move::{self, MoveState};
 
 /// The one view of the app.
@@ -47,6 +49,12 @@ pub(crate) struct View3dMode {
     /// Overlays without the moving tracers, and the lines the tracers follow.
     heat_base: Vec<novo_view3d::Overlay>,
     heat_flow: heat_3d::Flow,
+    /// The layers the scene was built with.
+    built_layers: Layers,
+    /// The routed wires of an enclosure at a project revision.
+    wires: Option<(StructureId, u64, Vec<WireInput>)>,
+    /// The toolbar's layers and door.
+    pub(super) controls: Controls,
 }
 
 /// What a `view.*` command asks of the 3D view.
@@ -70,6 +78,9 @@ impl Default for View3dMode {
             heat_shown: None,
             heat_base: Vec::new(),
             heat_flow: heat_3d::Flow::default(),
+            built_layers: Layers::default(),
+            wires: None,
+            controls: Controls::default(),
         }
     }
 }
@@ -87,6 +98,14 @@ fn enclosure(project: &Project, preferred: Option<&novo_core::DeviceTag>) -> Opt
 }
 
 impl NovoApp {
+    /// How far the shown enclosure's door opens, in degrees; `None` without
+    /// a door or a cabinet.
+    pub(super) fn view3d_door_limit(&self) -> Option<f64> {
+        let project = self.backend.document()?.project();
+        let id = enclosure(project, self.cabinet.location.as_ref())?;
+        model::door_limit_deg(project, id)
+    }
+
     /// Whether some enclosure has a plate to draw.
     pub(super) fn view3d_has_cabinet(&self) -> bool {
         self.backend
@@ -108,9 +127,27 @@ impl NovoApp {
         };
         let revision = project.revision();
         let mode = &mut self.view3d;
-        let stale = !matches!(&mode.built, Some((s, r, _)) if *s == id && *r == revision);
-        if stale && let Some(built) = scene(project, id, &Options::default()) {
-            mode.built = Some((id, revision, Arc::new(built)));
+        let layers = mode.controls.layers;
+        let stale = !matches!(&mode.built, Some((s, r, _)) if *s == id && *r == revision)
+            || mode.built_layers != layers;
+        if stale {
+            // Routing is the slow part: it is redone only for a new revision.
+            let wires = if layers.wires {
+                if !matches!(&mode.wires, Some((s, r, _)) if *s == id && *r == revision) {
+                    mode.wires = Some((id, revision, model::wires(project, id)));
+                }
+                mode.wires.as_ref().map(|w| w.2.clone()).unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            let options = Options {
+                shell: model::shell(project, id),
+                wires,
+            };
+            if let Some(built) = model::scene(project, id, &options) {
+                mode.built = Some((id, revision, Arc::new(layers.apply(built))));
+                mode.built_layers = layers;
+            }
         }
         let Some((_, _, scene)) = &mode.built else {
             return;
@@ -145,15 +182,6 @@ impl NovoApp {
             mode.synced = (cabinet_rev, mode.view.state.selection.clone());
         }
 
-        ui.horizontal_wrapped(|ui| {
-            let mut on = !mode.mv.off;
-            ui.checkbox(&mut on, "Move").on_hover_text(
-                "Drag a device, rail or duct to move it on the plate (same grid and checks \
-                 as the Cabinet). R turns the selection, Delete takes it off. Off: a drag \
-                 draws a selection box.",
-            );
-            mode.mv.off = !on;
-        });
         let solution = self.cabinet.heat.solution();
         if let Some(sol) = &solution {
             heat_controls(ui, &mut mode.heat, sol);
@@ -215,7 +243,17 @@ impl NovoApp {
             mode.view.set_overlays(all);
             ui.ctx().request_repaint();
         }
-        mode.view.drag_items = !mode.mv.off;
+        mode.view.drag_items = mode.controls.move_items;
+        // The toolbar sits in the view's corner; the door goes where it says.
+        let limit = model::door_limit_deg(project, id);
+        let view_rect = ui.available_rect_before_wrap();
+        view3d_controls::toolbar(ui.ctx(), view_rect, &mut mode.controls, limit);
+        mode.controls.clamp_door(limit);
+        let target = mode.controls.door_target(limit);
+        if let Some(angle) = open_angle(scene, DOOR_HINGE, target) {
+            mode.view
+                .set_door(DOOR_HINGE, angle, now, options.reduced_motion);
+        }
         let out = mode
             .view
             .show(ui, scene, &mode.library, &Look::for_theme(theme), options);

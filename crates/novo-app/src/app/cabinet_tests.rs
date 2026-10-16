@@ -955,6 +955,111 @@ fn escape_and_the_cabinet_tab_also_leave_the_table() {
     assert_eq!(d.app.workspace(), Workspace::Cabinet);
 }
 
+/// Starts the lesson `id` and skips to the step `step`.
+fn lesson_at(d: &mut Drive, dir: &std::path::Path, id: &str, step: &str) {
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.join("learn.json"));
+    d.app.start_lesson(id);
+    d.frame();
+    while d
+        .app
+        .learn
+        .run
+        .as_ref()
+        .and_then(|r| r.step())
+        .is_some_and(|s| s.id != step)
+    {
+        assert!(d.app.learn.run.as_mut().unwrap().skip());
+    }
+}
+
+fn step_done(d: &mut Drive, step: &str) -> bool {
+    d.frame();
+    d.app.learn.run.as_ref().unwrap().is_done(step)
+}
+
+#[test]
+fn cabinet_actions_tick_their_lesson_steps() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    lesson_at(&mut d, dir.path(), "cabinet-layout", "drag-first");
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    let devices = novo_layout::model::candidates(project(&d), cab);
+    let (a, b) = (devices[0].id, devices[1].id);
+
+    let l = layout_of(&d, cab);
+    d.app
+        .cabinet_ask(Ask::Drop(a, 100.0, 100.0), Some(cab), l, &[]);
+    assert!(
+        step_done(&mut d, "drag-first"),
+        "a drop raises cabinet_dropped"
+    );
+
+    while d
+        .app
+        .learn
+        .run
+        .as_ref()
+        .unwrap()
+        .step()
+        .is_some_and(|s| s.id != "rotate")
+    {
+        d.app.learn.run.as_mut().unwrap().skip();
+    }
+    let l = layout_of(&d, cab);
+    d.app.cabinet_ask(Ask::Rotate(vec![a]), Some(cab), l, &[]);
+    assert!(step_done(&mut d, "rotate"), "a turn raises cabinet_rotated");
+
+    while d
+        .app
+        .learn
+        .run
+        .as_ref()
+        .unwrap()
+        .step()
+        .is_some_and(|s| s.id != "take-off")
+    {
+        d.app.learn.run.as_mut().unwrap().skip();
+    }
+    let l = layout_of(&d, cab);
+    d.app.cabinet_ask(Ask::Remove(vec![a]), Some(cab), l, &[]);
+    assert!(
+        step_done(&mut d, "take-off"),
+        "a removal raises cabinet_removed"
+    );
+    let _ = b;
+
+    while d
+        .app
+        .learn
+        .run
+        .as_ref()
+        .unwrap()
+        .step()
+        .is_some_and(|s| s.id != "accept")
+    {
+        d.app.learn.run.as_mut().unwrap().skip();
+    }
+    let layout = layout_of(&d, cab);
+    let cands = novo_layout::model::candidates(project(&d), cab);
+    d.app.cabinet_ask(Ask::PlaceAll, Some(cab), layout, &cands);
+    d.app.cabinet_ask(Ask::Accept, Some(cab), None, &[]);
+    assert!(
+        step_done(&mut d, "accept"),
+        "accepting raises cabinet_plan_accepted"
+    );
+}
+
+#[test]
+fn exporting_the_wire_cut_ticks_its_lesson_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    lesson_at(&mut d, dir.path(), "cut-lengths", "export-cut");
+    let path = dir.path().join("cut.csv");
+    assert!(d.app.export_wire_cut_to(&path).is_some());
+    assert!(step_done(&mut d, "export-cut"));
+}
+
 #[test]
 fn the_cabinet_registers_the_controls_and_panels_lessons_point_at() {
     use novo_layout::enclosure::{Door, Enclosure, Hinge};

@@ -5,3 +5,4 @@
 - 19:15 #439 merged. Renderer PR: branch merged with main, renderer/widget/examples/GPU tests brought in and adapted to the data-only Look; wires drawn as tubes and pickable; marquee across the eye plane; fmt, clippy (workspace) and 44 tests pass.
 - 19:41 #481 merged (renderer, widget, examples, GPU tests, wires). Next: follow-up PR with door animation and the design notes; waiting on the UI integration thread for the 3D face.
 - 2026-10-16 overlays (meshes, ribbons) and door animation driver, GPU tests for both; PR from main.
+- 2026-10-16 #647 merged (overlays, door driver). Follow-up: shell and door from the enclosure, routed wires, layers, 3D toolbar with door angle, view.3d_door/_shell/_wires, Ctrl+6 and Shift+D.
