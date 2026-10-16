@@ -108,6 +108,7 @@ pub(crate) const ANCHORS: &[&str] = &[
     "cabinet.problems",
     "cabinet.inspector",
     "cabinet.door",
+    "cabinet.surface",
     "cabinet.door.apply",
     "cabinet.routes_panel",
     "cabinet.wire_rules",

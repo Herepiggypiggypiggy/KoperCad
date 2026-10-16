@@ -1346,6 +1346,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "cabinet.surface",
+            "Cabinet surfaces",
+            "View",
+            &["surface", "door", "wall", "roof", "floor", "side plate"],
+            Needs::Project,
+        ),
+        &["pick surface", "show surfaces"],
+    ),
+    verb(
+        cmd(
             "cabinet.door",
             "Inside size and door (Cabinet)",
             "View",

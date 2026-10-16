@@ -375,6 +375,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "cabinet.plate",
     "cabinet.cutlist",
     "cabinet.door",
+    "cabinet.surface",
     "export.bom",
     "export.reports",
     "view.reports",
@@ -966,6 +967,11 @@ impl NovoApp {
                 self.cabinet.keys.push(id.to_owned());
             }
             "cabinet.door" => self.open_cabinet_door(),
+            "cabinet.surface" if self.is_open() => {
+                self.switch_workspace(Workspace::Cabinet);
+                self.cabinet.table = false;
+                self.cabinet.surface_open = true;
+            }
             "export.wirecut" => {
                 self.export_wire_cut();
             }

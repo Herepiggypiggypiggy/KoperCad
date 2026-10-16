@@ -58,6 +58,10 @@ pub(super) struct CabinetState {
     pub(super) table: bool,
     /// The plate card of the inspector is shown with nothing selected.
     pub(super) plate_card: bool,
+    /// The surface picked in the header (`None` is the mounting plate) and
+    /// the picker asked to open by `cabinet.surface`.
+    pub(super) surface: Option<String>,
+    pub(super) surface_open: bool,
     /// Every wire's route is drawn over the plate, with the route table
     /// beside it (Route all).
     pub(super) routes: bool,
@@ -103,6 +107,8 @@ impl CabinetState {
             panel_fields: Default::default(),
             table: false,
             plate_card: false,
+            surface: None,
+            surface_open: false,
             routes: false,
             routes_cache: Default::default(),
             rules: cabinet_rules::RulesState::new(),
@@ -402,6 +408,16 @@ impl NovoApp {
                 .map(|s| s.id)
         });
         let layout = structure.and_then(|s| load(project, s));
+        let surfaces = structure.and_then(|s| super::cabinet_surfaces::summarize(project, s));
+        if let Some(sum) = &surfaces
+            && self
+                .cabinet
+                .surface
+                .as_deref()
+                .is_some_and(|n| sum.row(n).is_none())
+        {
+            self.cabinet.surface = None;
+        }
         self.cabinet.rules.ensure_loaded();
         let judged = match (structure, &layout) {
             (Some(s), Some(_)) => Some(cabinet_rules::judge(project, s, &self.cabinet.rules.rules)),
@@ -500,6 +516,39 @@ impl NovoApp {
             });
             if layout.is_none() {
                 return;
+            }
+            if let Some(sum) = surfaces.as_ref().filter(|s| s.rows.len() > 1) {
+                cabinet_bar::group(ui, "Surface", |ui| {
+                    let picked = self.cabinet.surface.clone();
+                    let current = picked.clone().unwrap_or_else(|| "plate".to_owned());
+                    let combo = egui::ComboBox::from_id_salt("cabinet_surface")
+                        .selected_text(current.clone());
+                    if std::mem::take(&mut self.cabinet.surface_open) {
+                        egui::Popup::open_id(
+                            ui.ctx(),
+                            ui.make_persistent_id("cabinet_surface").with("popup"),
+                        );
+                    }
+                    let r = combo.show_ui(ui, |ui| {
+                        for row in &sum.rows {
+                            let on = row.name == current;
+                            let line = ui.selectable_label(on, row.label());
+                            if line.clicked() {
+                                self.cabinet.surface =
+                                    (row.name != "plate").then(|| row.name.clone());
+                            }
+                        }
+                    });
+                    let r = r
+                        .response
+                        .on_hover_text("Surface to work on (View > Workspace > Cabinet surfaces)");
+                    cabinet_bar::note(&mut anchors, "cabinet.surface", "Surface", &r);
+                    if !sum.problems.is_empty() {
+                        let text = format!("{} surface problems", sum.problems.len());
+                        cabinet_bar::pill(ui, &text, Some(novo_theme::widgets::Level::Warning))
+                            .on_hover_text(sum.problems.join("\n"));
+                    }
+                });
             }
             if has_plan {
                 cabinet_bar::group(ui, "Preview, nothing stored yet", |ui| {
@@ -763,6 +812,12 @@ impl NovoApp {
                     ui.add_space(12.0);
                 }
                 cabinet_bar::pill(ui, &format!("{placed} placed"), None);
+                if let (Some(sum), Some(name)) = (&surfaces, &self.cabinet.surface)
+                    && let Some(note) = sum.note(name)
+                {
+                    ui.label(note);
+                    ui.weak("The plate drawing stays until the surface view arrives.");
+                }
                 if unplaced > 0 {
                     cabinet_bar::pill(
                         ui,
