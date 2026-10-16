@@ -195,7 +195,7 @@ impl NovoApp {
         let mut open_inbox = false;
         let modal = egui::Modal::new(egui::Id::new("parts_bulk")).show(ctx, |ui| {
             ui.set_width(640.0);
-            ui.heading("Parts import");
+            super::dialog_ui::title(ui, "Parts import", "");
             ui.weak(format!("Folder: {}", report.folder.display()));
             if report.rejected > 0 {
                 ui.colored_label(
@@ -316,7 +316,7 @@ impl NovoApp {
         let (mut go, mut cancel) = (false, false);
         let modal = egui::Modal::new(egui::Id::new("auto_assign")).show(ctx, |ui| {
             ui.set_width(460.0);
-            ui.heading("Assign parts to all devices");
+            super::dialog_ui::title(ui, "Assign parts to all devices", "");
             ui.label(format!(
                 "{} device(s) have exactly one fitting catalog part:",
                 preview.rows.len()
@@ -335,8 +335,8 @@ impl NovoApp {
             }
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                go = ui.button("Accept all").clicked();
-                cancel = ui.button("Cancel").clicked();
+                go = novo_theme::widgets::primary_button(ui, "Accept all").clicked();
+                cancel = novo_theme::widgets::ghost_button(ui, "Cancel").clicked();
             });
         });
         if go {

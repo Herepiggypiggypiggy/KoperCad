@@ -31,6 +31,7 @@ mod clipboard;
 mod commissioning;
 mod compare;
 mod device_renumber;
+mod dialog_ui;
 mod dock;
 mod drawers;
 mod duplicate;
