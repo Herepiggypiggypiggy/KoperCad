@@ -98,9 +98,27 @@ impl Ox {
 
     /// The rectangle of the topmost painted text that is exactly `text`.
     fn label(&self, text: &str) -> Option<egui::Rect> {
+        // The lesson card repeats control names in its `how` lines (bold spans paint as
+        // labels of their own): skip the labels from its "N OF M" header to its Restart
+        // button, so a menu drawn after the card still counts.
+        let end = self
+            .labels
+            .iter()
+            .rposition(|(t, _)| t.contains("Restart lesson"));
+        let start = self
+            .labels
+            .iter()
+            .rposition(|(t, _)| t.contains('·') && t.contains(" OF "));
+        let card = match (start, end) {
+            (Some(s), Some(e)) if s < e => Some(s..=e),
+            _ => None,
+        };
         self.labels
             .iter()
+            .enumerate()
             .rev()
+            .filter(|(i, _)| !card.as_ref().is_some_and(|c| c.contains(i)))
+            .map(|(_, l)| l)
             .find(|(t, _)| t.trim() == text)
             .map(|(_, r)| *r)
     }

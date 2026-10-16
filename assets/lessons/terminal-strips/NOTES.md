@@ -46,44 +46,6 @@ Not driven: hover tooltips. The "Show me how" pointer is not driven either.
 - The Terminals drawer shows 7 of the 8 rows without scrolling at the 1600x900 test size (row 7 is below the fold); the text only names rows 5 and 1 to 6.
 - The same-name (join) rule cannot be applied from the editor (rename refuses a taken name, `place_named` is script-only, `rule_sentence` is shown nowhere): not taught (glossary `same-name-rule`).
 
-## Pending how
+## How lists
 
-Paste as `how = [...]` / `how_nl = [...]` under each step when the framework reads the field. Keys are `{key:...}`.
-
-### accept-one
-- EN: ["Look at the drawing: the highlighted dashed terminal has a note \"+CAB-X1 terminal\" beside it", "Press {key:proposal.accept}"]
-- NL: ["Kijk op de tekening: bij de gemarkeerde gestippelde klem staat de toelichting \"+CAB-X1 terminal\"", "Druk op {key:proposal.accept}"]
-
-### next-proposal
-- EN: ["Press {key:proposal.next}; the note moves to the next dashed terminal"]
-- NL: ["Druk op {key:proposal.next}; de toelichting springt naar de volgende gestippelde klem"]
-
-### accept-all
-- EN: ["Press {key:view.command_palette} to open the command field", "Type **accept all**", "Press Enter"]
-- NL: ["Druk op {key:view.command_palette} om het commandoveld te openen", "Typ **accept all**", "Druk op Enter"]
-
-### open-drawer
-- EN: ["Press {key:view.terminals_drawer}, or click the **Terminals** tab at the bottom of the window"]
-- NL: ["Druk op {key:view.terminals_drawer}, of klik onderin op het tabblad **Terminals**"]
-
-### select-two
-- EN: ["Click the round body of terminal **5** (not its end pin, that starts a wire)", "Hold Shift and click the body of terminal **7**"]
-- NL: ["Klik op het ronde lichaam van klem **5** (niet op het uiteinde, dat start een draad)", "Houd Shift ingedrukt en klik op het lichaam van klem **7**"]
-
-### connect
-- EN: ["Right-click one of the two selected terminals", "Click **Connect terminals** in the menu"]
-- NL: ["Klik met rechts op een van de twee geselecteerde klemmen", "Klik in het menu op **Connect terminals**"]
-
-### toggle-pe
-- EN: ["Click the terminal **PE**", "Press {key:view.command_palette}, type **pe** and press Enter (or right-click it and choose **Toggle PE terminal**)"]
-- NL: ["Klik op de klem **PE**", "Druk op {key:view.command_palette}, typ **pe** en druk op Enter (of klik met rechts en kies **Toggle PE terminal**)"]
-
-### reset-pe
-- EN: ["Right-click the terminal **PE**", "Click **Reset PE override**"]
-- NL: ["Klik met rechts op de klem **PE**", "Klik op **Reset PE override**"]
-
-### move-strip
-- EN: ["Click the terminal **PE** so that only it is selected", "Press {key:terminal.strip_up}; {key:terminal.strip_down} moves it back"]
-- NL: ["Klik op de klem **PE** zodat alleen die geselecteerd is", "Druk op {key:terminal.strip_up}; {key:terminal.strip_down} zet hem terug"]
-
-Reading steps (goal, read-table, done) need no `how`.
+The `how`, `how_nl` and `demo` lists are in lesson.toml (reading steps have none).

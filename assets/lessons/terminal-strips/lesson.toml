@@ -21,8 +21,7 @@ page = "Pump and valve feeder"
 # Seven devices in two locations (+CAB, +FLD), eight wires run between a cabinet device and a
 # field device and there is no terminal yet. Finished: `terminal_strips_finished`.
 # Every step is replayed through the real window by crates/novo-app/src/app/lesson_verify_terminals.rs
-# `terminal_strips_steps_work_in_the_window`. The `how` lists are in NOTES.md ("Pending how")
-# until the framework reads the field.
+# `terminal_strips_steps_work_in_the_window`.
 
 [[step]]
 id = "goal"
@@ -63,6 +62,11 @@ De gestippelde markeringen op de pagina zijn voorgestelde {tip:terminal}en, éé
 De gemarkeerde, op de meest linkse draad onder de omvormer, heeft een toelichting ernaast met "+CAB-X1 terminal".
 Als je hem overneemt, komt klem **1** in zijn draad te staan en ontstaat de strook **-X1**.
 """
+how = ["Look at the drawing: the highlighted dashed terminal has a note \"+CAB-X1 terminal\" beside it", "Press {key:proposal.accept}"]
+how_nl = ["Kijk op de tekening: bij de gemarkeerde gestippelde klem staat de toelichting \"+CAB-X1 terminal\"", "Druk op {key:proposal.accept}"]
+demo = [
+  { press = "proposal.accept" },
+]
 point = { area = { page = "Pump and valve feeder", x = 36, y = 114, w = 8, h = 12 } }
 expect = { device = { tag = "-X1" } }
 solve = [ { command = "proposal.accept" } ]
@@ -84,6 +88,11 @@ text_nl = """
 De markering, met zijn toelichting, springt naar de volgende gestippelde klem rechts; bij de laatste gaat hij terug naar de eerste.
 Zo bekijk je elk voorstel voordat je er een overneemt.
 """
+how = ["Press {key:proposal.next}; the note moves to the next dashed terminal"]
+how_nl = ["Druk op {key:proposal.next}; de toelichting springt naar de volgende gestippelde klem"]
+demo = [
+  { press = "proposal.next" },
+]
 point = { area = { page = "Pump and valve feeder", x = 52, y = 114, w = 8, h = 12 } }
 expect = { command = "proposal.next" }
 solve = [ { command = "proposal.next" } ]
@@ -103,6 +112,13 @@ text_nl = """
 Alle overgebleven gestippelde klemmen worden in één keer geplaatst en genummerd: 2 en 3, dan PE voor de aarddraad, dan 4 tot 7.
 Zeven klemmen met de hand zijn zeven plaatsingen, zeven nummers en zeven draadwijzigingen.
 """
+how = ["Press {key:view.command_palette} to open the command field", "Type **accept all**", "Press Enter"]
+how_nl = ["Druk op {key:view.command_palette} om het commandoveld te openen", "Typ **accept all**", "Druk op Enter"]
+demo = [
+  { press = "view.command_palette" },
+  { type = "accept all" },
+  { key = "Enter" },
+]
 point = { ui = "palette.button" }
 expect = { count = { kind = "symbol", page = "Pump and valve feeder", at_least = 23 } }
 solve = [ { command = "proposal.accept_all" } ]
@@ -127,6 +143,11 @@ text_nl = """
 De lade Klemmen toont de strook waar je mee werkt als tabel, onder de tekening.
 Je ziet de strook van de geselecteerde klem, anders de strook die je het laatst gebruikte.
 """
+how = ["Press {key:view.terminals_drawer}, or click the **Terminals** tab at the bottom of the window"]
+how_nl = ["Druk op {key:view.terminals_drawer}, of klik onderin op het tabblad **Terminals**"]
+demo = [
+  { press = "view.terminals_drawer" },
+]
 expect = { command = "view.terminals_drawer" }
 solve = [ { command = "view.terminals_drawer" } ]
 # verified: Ctrl+3 (keymap.rs) -> workbench.rs `toggle_drawer(Drawer::Terminals)`; tab label
@@ -167,6 +188,8 @@ text_nl = """
 Klemmen **5** en **7** voeren allebei 0 V, dus ze kunnen gebrugd worden.
 Beide selecteren is de eerste helft daarvan: de volgende stap brugt ze.
 """
+how = ["Click the round body of terminal **5** (not its end pin, that starts a wire)", "Hold Shift and click the body of terminal **7**"]
+how_nl = ["Klik op het ronde lichaam van klem **5** (niet op het uiteinde, dat start een draad)", "Houd Shift ingedrukt en klik op het lichaam van klem **7**"]
 point = { area = { page = "Pump and valve feeder", x = 116, y = 110, w = 8, h = 12 } }
 note = [
   { area = { page = "Pump and valve feeder", x = 140, y = 110, w = 8, h = 12 }, text = "Then this one", text_nl = "Dan deze" },
@@ -194,6 +217,8 @@ Een {tip:jumper} verbindt de twee klemmen elektrisch, zodat één signaal beide 
 Hier is geen toets voor, alleen het rechtsklikmenu.
 Daarna toont de lade bij klem **5** de brug **J1** en staat **7** onder **Bridged to**.
 """
+how = ["Right-click one of the two selected terminals", "Click **Connect terminals** in the menu"]
+how_nl = ["Klik met rechts op een van de twee geselecteerde klemmen", "Klik in het menu op **Connect terminals**"]
 point = { area = { page = "Pump and valve feeder", x = 140, y = 110, w = 8, h = 12 } }
 expect = { command = "terminal.connect" }
 solve = [ { command = "terminal.connect" } ]
@@ -218,6 +243,15 @@ text_nl = """
 KoperCAD stelt het soort automatisch in, maar je mag het overrulen, bijvoorbeeld voor een klem die in jouw installatie beschermingsaarde is terwijl de draad niet als PE is gemarkeerd.
 Hier zet je de klem **PE** om naar een gewone doorgangsklem; de lade toont dan dat soort.
 """
+how = ["Click the terminal **PE**", "Press {key:view.command_palette}, type **pe** and press Enter (or right-click it and choose **Toggle PE terminal**)"]
+how_nl = ["Klik op de klem **PE**", "Druk op {key:view.command_palette}, typ **pe** en druk op Enter (of klik met rechts en kies **Toggle PE terminal**)"]
+demo = [
+  { move = { area = { page = "Pump and valve feeder", x = 60, y = 114, w = 8, h = 12 } } },
+  { click = true },
+  { press = "view.command_palette" },
+  { type = "pe" },
+  { key = "Enter" },
+]
 point = { area = { page = "Pump and valve feeder", x = 60, y = 114, w = 8, h = 12 } }
 expect = { command = "terminal.toggle_pe" }
 solve = [ { select = "-X1:PE" }, { command = "terminal.toggle_pe" } ]
@@ -239,6 +273,8 @@ text_nl = """
 Door de overschrijving te herstellen beslist KoperCAD weer zelf.
 De klem is weer PE, omdat zijn draad het potentiaal PE draagt.
 """
+how = ["Right-click the terminal **PE**", "Click **Reset PE override**"]
+how_nl = ["Klik met rechts op de klem **PE**", "Klik op **Reset PE override**"]
 point = { area = { page = "Pump and valve feeder", x = 60, y = 114, w = 8, h = 12 } }
 expect = { command = "terminal.reset_pe" }
 solve = [ { command = "terminal.reset_pe" } ]
@@ -258,6 +294,13 @@ text_nl = """
 Aardklemmen staan meestal op een eigen strook, zodat je ze in de kast uit elkaar houdt.
 De PE-klem gaat naar een nieuwe strook **-X2** en houdt zijn naam; met de pijl omlaag zet je hem terug.
 """
+how = ["Click the terminal **PE** so that only it is selected", "Press {key:terminal.strip_up}; {key:terminal.strip_down} moves it back"]
+how_nl = ["Klik op de klem **PE** zodat alleen die geselecteerd is", "Druk op {key:terminal.strip_up}; {key:terminal.strip_down} zet hem terug"]
+demo = [
+  { move = { area = { page = "Pump and valve feeder", x = 60, y = 114, w = 8, h = 12 } } },
+  { click = true },
+  { press = "terminal.strip_up" },
+]
 point = { area = { page = "Pump and valve feeder", x = 60, y = 114, w = 8, h = 12 } }
 expect = { terminal = { strip = "-X2", name = "PE" } }
 solve = [ { select = "-X1:PE" }, { command = "terminal.strip_up" } ]

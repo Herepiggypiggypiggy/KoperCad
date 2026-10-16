@@ -22,7 +22,7 @@ page = "Pump and valve feeder"
 # the four pump wires, the valve cables still proposals, and the generated pages (contents,
 # lists, "Terminal diagram", "Cable diagram"). Finished: `connection_screens_finished`.
 # Every step is replayed through the real window by crates/novo-app/src/app/lesson_verify_terminals.rs
-# `connection_screens_steps_work_in_the_window`. The `how` lists are in NOTES.md ("Pending how").
+# `connection_screens_steps_work_in_the_window`.
 
 [[step]]
 id = "goal"
@@ -52,6 +52,8 @@ text_nl = """
 De paginalijst toont alle pagina's, ook de {tip:generated-page}s; zie je alleen een knop **Pages** linksboven, klik daar dan eerst op.
 Open de rij **40  Terminal diagram · +CAB-X1**: KoperCAD tekende het klemmenplan van strook -X1 zelf.
 """
+how = ["If the page list is not on the left, click **Pages** at the top left", "Click the row **40  Terminal diagram · +CAB-X1**"]
+how_nl = ["Staat de paginalijst niet links, klik dan linksboven op **Pages**", "Klik op de rij **40  Terminal diagram · +CAB-X1**"]
 expect = { page = "Terminal diagram" }
 solve = [ { page = "Terminal diagram" } ]
 # verified: the outline is the "Pages" button (flyout) or the pinned panel; rows are built by
@@ -101,6 +103,11 @@ The Cables drawer sits under the sheet, so the diagram stays on screen while you
 text_nl = """
 De lade Kabels staat onder het blad, zodat het plan in beeld blijft terwijl je kabels wijzigt.
 """
+how = ["Press {key:view.cables_drawer}, or click the **Cables** tab at the bottom of the window"]
+how_nl = ["Druk op {key:view.cables_drawer}, of klik onderin op het tabblad **Cables**"]
+demo = [
+  { press = "view.cables_drawer" },
+]
 expect = { command = "view.cables_drawer" }
 solve = [ { command = "view.cables_drawer" } ]
 # verified: Ctrl+4 (keymap.rs) -> workbench.rs `toggle_drawer(Drawer::Cables)`; tab label "Cables"
@@ -120,6 +127,8 @@ text_nl = """
 De draden naar de twee ventielen worden als kabels voorgesteld, één per ventiel.
 Als je ze overneemt, krijgt elke draad een kabel en een ader, en die drukt het plan af.
 """
+how = ["In the Cables drawer click **Accept 2 proposed** (top right of the drawer)"]
+how_nl = ["Klik in de lade Cables op **Accept 2 proposed** (rechtsboven in de lade)"]
 expect = { cable = { name = "-W2", cores_at_least = 2 } }
 # GAP solve: the drawer button "Accept 2 proposed" has no command id and no solve op of its
 #   own; the `cable` ops below build the same two cables through the engine.
@@ -162,6 +171,11 @@ The Terminals drawer shows the same rows as the sheet, as a table you can click.
 text_nl = """
 De lade Klemmen toont dezelfde rijen als het blad, als tabel waarin je kunt klikken.
 """
+how = ["Press {key:view.terminals_drawer}, or click the **Terminals** tab at the bottom of the window"]
+how_nl = ["Druk op {key:view.terminals_drawer}, of klik onderin op het tabblad **Terminals**"]
+demo = [
+  { press = "view.terminals_drawer" },
+]
 expect = { command = "view.terminals_drawer" }
 solve = [ { command = "view.terminals_drawer" } ]
 # verified: toggle_drawer sets the tab when another one is open; the strip shown is the only one,
@@ -178,6 +192,8 @@ Clicking a terminal's name in the table takes you to it on the schematic, select
 text_nl = """
 Een klik op de naam van een klem in de tabel brengt je naar die klem op het schema, geselecteerd, zodat je hem daar kunt aanpassen.
 """
+how = ["In the Terminals drawer click the number **4** in the first column (**Terminal**)"]
+how_nl = ["Klik in de lade Terminals op het nummer **4** in de eerste kolom (**Terminal**)"]
 point = { area = { page = "Terminal diagram", x = 156, y = 38, w = 22, h = 8 } }
 expect = { page = "Pump and valve feeder" }
 solve = [ { page = "Pump and valve feeder" } ]
@@ -201,6 +217,15 @@ Klem 4 wordt 11.
 Dubbelklik op het nummer naast de klem op de tekening.
 Het vak dat opent bevat het oude nummer; selecteer alles met Ctrl+A, zodat wat je typt het vervangt in plaats van erbij komt.
 """
+how = ["On the drawing, double-click the number **4** just left of the selected terminal", "Press Ctrl+A to select the old number in the box", "Type **11**", "Press Enter"]
+how_nl = ["Dubbelklik op de tekening op het nummer **4** links van de geselecteerde klem", "Druk op Ctrl+A om het oude nummer in het vak te selecteren", "Typ **11**", "Druk op Enter"]
+demo = [
+  { move = { area = { page = "Pump and valve feeder", x = 104, y = 100, w = 8, h = 8 } } },
+  { double_click = true },
+  { keys = ["Ctrl", "A"] },
+  { type = "11" },
+  { key = "Enter" },
+]
 point = { area = { page = "Pump and valve feeder", x = 104, y = 100, w = 8, h = 8 } }
 expect = { terminal = { strip = "-X1", name = "11" } }
 # GAP solve: a `rename` op (terminal "-X1:4" to "11") is agreed with the learning thread, not in
@@ -224,6 +249,11 @@ text_nl = """
 Spring terug naar waar je vandaan kwam: het klemmenplan.
 De rij van de klem toont nu **11**, op dezelfde plek, en de draadnummers ernaast zijn niet verschoven.
 """
+how = ["Press {key:nav.back}"]
+how_nl = ["Druk op {key:nav.back}"]
+demo = [
+  { press = "nav.back" },
+]
 # No `point`: a target on the diagram page would switch the view there when the step opens,
 # and the step would tick before the person pressed anything (found by the headless replay).
 expect = { page = "Terminal diagram" }

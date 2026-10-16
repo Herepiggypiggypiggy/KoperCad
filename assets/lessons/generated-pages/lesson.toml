@@ -51,6 +51,8 @@ Open the table of contents, the first page KoperCAD writes. In the page list you
 text_nl = """
 Open de inhoudsopgave, de eerste pagina die KoperCAD schrijft. In de paginalijst zijn **1** en **2** je getekende pagina's; de zes geschreven pagina's staan onder **Contents and reports**.
 """
+how = ["Click **Pages** at the top left of the drawing (on a window 1700 pixels wide or more the list is already open)", "Under the folder **Contents and reports** click **0a  Table of contents**"]
+how_nl = ["Klik linksboven bij de tekening op **Pages** (op een scherm van 1700 pixels of breder staat de lijst al open)", "Klik onder de map **Contents and reports** op **0a  Table of contents**"]
 expect = { page = "Table of contents" }
 solve = [ { page = "Table of contents" } ]
 
@@ -83,6 +85,9 @@ title_nl = "Terug naar de tekening"
 # two presses to reach page 2 (checked in lesson_verify_outputs.rs).
 text = "Go back to your drawing: **Control circuit** is page 2, two pages on from the contents. Page Down steps one page at a time; a click on the row in the page list works too."
 text_nl = "Ga terug naar je tekening: **Control circuit** is pagina 2, twee pagina's na de inhoudsopgave. Page Down gaat een pagina per keer verder; een klik op de regel in de paginalijst werkt ook."
+how = ["Press {key:nav.next_page} (Page Down) once: **1  Main circuit**", "Press {key:nav.next_page} again: **2  Control circuit**", "Or click **Pages**, then the row **Control circuit**"]
+how_nl = ["Druk één keer op {key:nav.next_page} (Page Down): **1  Main circuit**", "Druk nogmaals op {key:nav.next_page}: **2  Control circuit**", "Of klik op **Pages** en dan op de regel **Control circuit**"]
+demo = [ { press = "nav.next_page" }, { wait = 0.4 }, { press = "nav.next_page" } ]
 expect = { page = "Control circuit" }
 solve = [ { page = "Control circuit" } ]
 
@@ -101,6 +106,9 @@ Add a green pilot lamp to the right of the coil, so you can watch the lists reac
 text_nl = """
 Plaats een groene signaallamp rechts van de spoel, zodat je de lijsten kunt zien reageren. Een nieuw apparaat krijgt een eigen naam, zoals -P1: zijn **tag**.
 """
+how = ["Press {key:tool.place}", "Type **lamp green** and press Enter", "Click the empty spot right of the coil"]
+how_nl = ["Druk op {key:tool.place}", "Typ **lamp green** en druk op Enter", "Klik op de lege plek rechts van de spoel"]
+demo = [ { press = "tool.place" }, { type = "lamp green" }, { key = "Enter" }, { move = { at = { page = "Control circuit", x = 104, y = 168 } } }, { click = true } ]
 point = { area = { page = "Control circuit", x = 96, y = 164, w = 16, h = 24 } }
 note = [
   { ui = "dock.place", text = "Same as the key", text_nl = "Hetzelfde als de toets" },
@@ -118,6 +126,9 @@ title_nl = "Open de apparatenlijst"
 # (Device list).
 text = "Open the **Device list**, two pages on from the control circuit, past the bill of materials."
 text_nl = "Open de **Device list**, twee pagina's na het stroomkringschema, voorbij de stuklijst."
+how = ["Press {key:nav.next_page} twice: the first press shows **10  Bill of materials**, the second **20  Device list**", "Or click **Pages**, then **20  Device list**"]
+how_nl = ["Druk twee keer op {key:nav.next_page}: de eerste keer **10  Bill of materials**, de tweede keer **20  Device list**", "Of klik op **Pages** en dan op **20  Device list**"]
+demo = [ { press = "nav.next_page" }, { wait = 0.4 }, { press = "nav.next_page" } ]
 expect = { page = "Device list" }
 solve = [ { page = "Device list" } ]
 

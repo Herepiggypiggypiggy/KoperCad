@@ -30,17 +30,4 @@ GAPS
 - Anchors a pointer would use do not exist (`revision.submit`, `mark.menu.export`, `palette.field`).
 - Opening a project with frozen pages adds no generated pages (confirmed in reports.rs); the freeze step says so.
 
-## Pending how
-
-- intro: (reading)
-- issue-open
-  - en: ["Press {key:view.command_palette}, type **issue**, press Enter", "Or click **File**, **Revisions**, **Issue revision**"]
-  - nl: ["Druk op {key:view.command_palette}, typ **issue**, druk op Enter", "Of klik op **File**, **Revisions**, **Issue revision**"]
-- issue-submit
-  - en: ["Type **First issue** in **What changed**", "Check **Index**, **Date** and **By**", "Click **Issue A** (or press Enter)"]
-  - nl: ["Typ **First issue** bij **What changed**", "Controleer **Index**, **Date** en **By**", "Klik op **Issue A** (of druk op Enter)"]
-- title-block: (reading)
-- export
-  - en: ["Press {key:view.command_palette}, type **export pdf**, press Enter", "Or click **File**, **Export**, **Export PDF**"]
-  - nl: ["Druk op {key:view.command_palette}, typ **export pdf**, druk op Enter", "Of klik op **File**, **Export**, **Export PDF**"]
-- where-is-it, check-bookmarks, check-links, freeze, pages-and-next-time: (reading)
+The `how` and `how_nl` lines are in lesson.toml.

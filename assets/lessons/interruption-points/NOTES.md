@@ -50,42 +50,13 @@ back; "number interruption" renames both to 1; the coil's contact image reads "1
 - The rename box does not preselect the name (Ctrl+A needed).
 - No anchors for the place field or the palette field (palette.button is used).
 
-## Pending how
+## How lists
 
-### first-point
-- EN: ["Tap {key:tool.place} (a quick tap, do not hold it)", "Type **ip** and press Enter", "Click on the empty space just below -S1:14", "Press {key:edit.escape}"]
-- NL: ["Tik op {key:tool.place} (een snelle tik, niet ingedrukt houden)", "Typ **ip** en druk op Enter", "Klik op de lege ruimte net onder -S1:14", "Druk op {key:edit.escape}"]
+The `how`, `how_nl` and `demo` lists are in lesson.toml (reading steps have none).
 
-### next-page
-- EN: ["Press {key:nav.next_page}"]
-- NL: ["Druk op {key:nav.next_page}"]
-
-### pick-second
-- EN: ["Tap {key:tool.place}", "Type **ip** and press Enter", "Do not click yet"]
-- NL: ["Tik op {key:tool.place}", "Typ **ip** en druk op Enter", "Klik nog niet"]
-
-### second-point
-- EN: ["Press {key:edit.rotate} twice: the arrow now points up", "Click on the empty space straight above the coil -K1, in line with its pin A1", "Press {key:edit.escape}"]
-- NL: ["Druk twee keer op {key:edit.rotate}: de pijl wijst nu omhoog", "Klik op de lege ruimte recht boven de spoel -K1, in lijn met aansluiting A1", "Druk op {key:edit.escape}"]
-
-### same-name
-- EN: ["Double-click the name **IP2** beside the new point", "Press Ctrl+A to select the old name", "Type **IP1**", "Press Enter"]
-- NL: ["Dubbelklik op de naam **IP2** naast het nieuwe punt", "Druk op Ctrl+A om de oude naam te selecteren", "Typ **IP1**", "Druk op Enter"]
-
-### jump
-- EN: ["With the new point selected press {key:nav.partner}"]
-- NL: ["Druk met het nieuwe punt geselecteerd op {key:nav.partner}"]
-
-### renumber
-- EN: ["Press {key:view.command_palette}", "Type **number interruption** and press Enter"]
-- NL: ["Druk op {key:view.command_palette}", "Typ **number interruption** en druk op Enter"]
-
-### back
-- EN: ["Press {key:nav.partner} again"]
-- NL: ["Druk nogmaals op {key:nav.partner}"]
-
-### contact-image
-- EN: ["Click the coil **-K1**", "Press {key:nav.all_references}"]
-- NL: ["Klik op de spoel **-K1**", "Druk op {key:nav.all_references}"]
-
-Reading steps (goal, done) need no `how`.
+## Where the person ends (jump, renumber, back)
+Checked by lesson_verify_terminals.rs `interruption_points_steps_work_in_the_window` (keys) and
+`interruption_points_solves_end_on_the_pages_the_text_names` (the lesson's own solve commands): jump ends on page 1
+"Start signal", renumber leaves the view on page 1 with the point selected, back ends on page 2 "Contactor coil".
+A solve-only replay cannot reach this because same-name has no rename solve op (`xref.link` does not pair
+interruption points): GAP solve rename.

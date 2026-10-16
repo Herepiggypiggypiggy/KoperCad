@@ -1,7 +1,7 @@
 # Lesson: cables and shields. Builder and tests: crates/novo-tests/tests/lessons/cables.rs
 # Every step is replayed headless from project.json by crates/novo-app/src/app/lesson_verify_cables.rs
 # (keys, palette and clicks through the real app). NOTES.md has the verified path per step, the
-# remaining GAPs and the "Pending how" lists (the `how` / `how_nl` fields are not in the parser yet).
+# remaining GAPs.
 format = 1
 id = "cables-and-shields"
 version = 2
@@ -47,6 +47,17 @@ text_nl = """
 De lade Cables onder de tekening toont elke kabel met zijn aders en telt de kabels die het programma voorstelt.
 Na het openen zie je het tabblad **Cables** en de knop **Accept 2 proposed**.
 """
+how = [
+  "Press {key:view.cables_drawer}",
+  "The drawer opens under the drawing with the tabs **Terminals**, **Cables** and **Devices**; **Cables** is selected",
+]
+how_nl = [
+  "Druk op {key:view.cables_drawer}",
+  "De lade opent onder de tekening met de tabbladen **Terminals**, **Cables** en **Devices**; **Cables** is geselecteerd",
+]
+demo = [
+  { press = "view.cables_drawer" },
+]
 # verified: keymap.rs:392 Ctrl+4 (Anywhere) -> view.cables_drawer; workbench.rs:670 toggles the drawer;
 # tabs and the button drawers.rs:62, :76. Test: open_the_drawer (key chord Ctrl+4, drawer = Cables).
 # `opened = "drawer.cables"` is not an anchor in learn.rs ANCHORS, so the check is the command.
@@ -81,6 +92,17 @@ To decide yourself which wires share a cable, take the Cable tool: you draw a li
 text_nl = """
 Wil je zelf bepalen welke draden een kabel delen, kies dan het gereedschap Kabel: je trekt een lijn over de draden die bij elkaar horen. Begin met de twee draden van de niveauzender, onder klem 4 en 5.
 """
+how = [
+  "Move the pointer over the drawing",
+  "Press {key:tool.cable}; the status line says the Cable tool is active",
+]
+how_nl = [
+  "Beweeg de aanwijzer over de tekening",
+  "Druk op {key:tool.cable}; de statusregel meldt dat het gereedschap Kabel actief is",
+]
+demo = [
+  { press = "tool.cable" },
+]
 # verified: keymap.rs:348 C (Canvas) -> tool.cable; workbench.rs:601 begin_cable (tool.rs:696). The dock has
 # no Cable button (dock.rs maps it to Select), so the key or Ctrl+K "cable" is the way.
 point = { area = { page = "Pump station", x = 80, y = 104, w = 24, h = 24 } }
@@ -97,6 +119,23 @@ Click on the empty page left of the first transmitter wire, then right of the se
 text_nl = """
 Klik op de lege pagina links van de eerste draad van de niveauzender en dan rechts van de tweede draad, en rond de lijn af. Beide draden worden een kabel met 3 aders, -W1; de derde ader blijft vrij.
 """
+how = [
+  "Click on empty page at the left of the first transmitter wire, about halfway between terminal 4 and -B1",
+  "Click again at the right of the second wire, so the line crosses both",
+  "Press {key:proposal.accept} to finish; the toast reads Cable =P1-W1",
+]
+how_nl = [
+  "Klik op lege pagina links van de eerste draad van de zender, ongeveer halverwege klem 4 en -B1",
+  "Klik opnieuw rechts van de tweede draad, zodat de lijn beide kruist",
+  "Druk op {key:proposal.accept} om af te ronden; de melding zegt Cable =P1-W1",
+]
+demo = [
+  { move = { at = { page = "Pump station", x = 80, y = 116 } } },
+  { click = true },
+  { move = { at = { page = "Pump station", x = 104, y = 116 } } },
+  { click = true },
+  { press = "proposal.accept" },
+]
 # verified: tool.rs:1109-1121 (clicked points), tool.rs:1904 EditorKey::Finish = Enter (keymap.rs:370
 # proposal.accept), tool.rs:1730 finish_cable, app.rs:973 -> drawers.rs:128 make_cable: one undo step "Draw cable",
 # toast "Cable =P1-W1: 3x1.5 on 2 wires". Test: draw_the_transmitter_cable.
@@ -114,6 +153,14 @@ One proposal is left, for the motor. Accepting it turns the four motor wires int
 text_nl = """
 Er blijft een voorstel over, voor de motor. Overnemen maakt van de vier motordraden de kabel -W2 met een ader per draad; de lade toont nu twee kabels.
 """
+how = [
+  "In the drawer, click **Accept 1 proposed**",
+  "The list on the left now shows two cables",
+]
+how_nl = [
+  "Klik in de lade op **Accept 1 proposed**",
+  "De lijst links toont nu twee kabels",
+]
 # verified: drawers.rs:76 button "Accept {n} proposed" -> accept_cable_proposals drawers.rs:153 (one undo step
 # "Accept cables", toast "Accepted 1 cable: =P1-W2 4G1.5"). Test: accept_the_motor_cable (click by label).
 # GAP: no command id and no key for "accept cable proposals"; only the drawer button.
@@ -147,6 +194,14 @@ Click -W1 in the cable list on the left. Its Cores column reads 2 of 3: the thir
 text_nl = """
 Klik links in de kabellijst op -W1. De kolom Cores toont 2 of 3: de derde ader heeft nog geen draad, een vrije ader voor later.
 """
+how = [
+  "Click **=P1-W1** in the list on the left",
+  "Read **2 of 3** in its Cores column",
+]
+how_nl = [
+  "Klik links in de lijst op **=P1-W1**",
+  "Lees **2 of 3** in de kolom Cores",
+]
 # verified: drawers.rs:198-222 (list; click on the tag = ShowCable), "{used} of {cores}" drawers.rs:214.
 # Test: read_the_cores clicks the label and checks drawer_cable and the 2 of 3 count.
 # GAP solve: no click operation; a reading step.

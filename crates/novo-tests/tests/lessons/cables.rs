@@ -314,8 +314,8 @@ pub fn cables_and_shields_finished() -> Project {
 
 // ----- wire numbers ---------------------------------------------------------
 
-/// The pump station after the cables lesson, with three motor wires
-/// numbered by hand (the last number is a typo: 2 twice) and the generated
+/// The pump station after the cables lesson, with two motor wires
+/// numbered by hand (1 and 2) and the generated
 /// pages the program adds on open. Nothing else has a number.
 pub fn wire_numbers_start() -> Project {
     let mut doc = Document::new(cables_and_shields_finished());
@@ -478,15 +478,15 @@ fn the_unshielded_signal_cable_has_nothing_to_report_before_the_shield_step() {
 fn every_wire_numbers_step_expect_holds_on_the_finished_project() {
     let start = wire_numbers_start();
     let finished = wire_numbers_finished();
-    // The start has the typo (2 twice) and only three numbers; the finished one numbers every wire.
+    // The start has two numbers (1 and 2); the finished one numbers every wire.
     let numbers =
         |p: &Project| -> Vec<Option<String>> { p.wires().map(|w| w.number.clone()).collect() };
-    assert_eq!(numbers(&start).iter().flatten().count(), 3);
+    assert_eq!(numbers(&start).iter().flatten().count(), 2);
     assert!(numbers(&finished).iter().all(Option::is_some));
     let number =
         |p: &Project, a: &str, b: &str| p.wire(wire_between(p, a, b)).unwrap().number.clone();
     assert_eq!(number(&start, "-M1:V1", "-X1:").as_deref(), Some("2"));
-    assert_eq!(number(&start, "-M1:W1", "-X1:").as_deref(), Some("2"));
+    assert_eq!(number(&start, "-M1:W1", "-X1:"), None);
     assert_eq!(number(&finished, "-B1:+", "-X1:4").as_deref(), Some("100"));
 
     // The wire list shows the numbers and the potential and cable core columns.

@@ -47,36 +47,6 @@ read from the `SheetContent` the canvas was given (texts and lines with their mi
 - A terminal name (and an interruption name) in the rename box is not preselected; the person needs Ctrl+A.
 - The Terminals drawer shows 7 of the 8 rows without scrolling at the 1600x900 test size.
 
-## Pending how
+## How lists
 
-Paste as `how = [...]` / `how_nl = [...]` when the framework reads the field.
-
-### open-diagram
-- EN: ["If the page list is not on the left, click **Pages** at the top left", "Click the row **40  Terminal diagram · +CAB-X1**"]
-- NL: ["Staat de paginalijst niet links, klik dan linksboven op **Pages**", "Klik op de rij **40  Terminal diagram · +CAB-X1**"]
-
-### open-cables
-- EN: ["Press {key:view.cables_drawer}, or click the **Cables** tab at the bottom of the window"]
-- NL: ["Druk op {key:view.cables_drawer}, of klik onderin op het tabblad **Cables**"]
-
-### accept-cables
-- EN: ["In the Cables drawer click **Accept 2 proposed** (top right of the drawer)"]
-- NL: ["Klik in de lade Cables op **Accept 2 proposed** (rechtsboven in de lade)"]
-
-### open-terminals
-- EN: ["Press {key:view.terminals_drawer}, or click the **Terminals** tab at the bottom of the window"]
-- NL: ["Druk op {key:view.terminals_drawer}, of klik onderin op het tabblad **Terminals**"]
-
-### show-terminal
-- EN: ["In the Terminals drawer click the number **4** in the first column (**Terminal**)"]
-- NL: ["Klik in de lade Terminals op het nummer **4** in de eerste kolom (**Terminal**)"]
-
-### rename
-- EN: ["On the drawing, double-click the number **4** just left of the selected terminal", "Press Ctrl+A to select the old number in the box", "Type **11**", "Press Enter"]
-- NL: ["Dubbelklik op de tekening op het nummer **4** links van de geselecteerde klem", "Druk op Ctrl+A om het oude nummer in het vak te selecteren", "Typ **11**", "Druk op Enter"]
-
-### back-to-diagram
-- EN: ["Press {key:nav.back}"]
-- NL: ["Druk op {key:nav.back}"]
-
-Reading steps (goal, read-diagram, see-follow, done) need no `how`.
+The `how`, `how_nl` and `demo` lists are in lesson.toml (reading steps have none).

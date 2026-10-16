@@ -533,12 +533,12 @@ fn wire_numbers_each_instruction_works_in_the_app() {
     assert_eq!(lv.d.app.workspace(), super::workspace::Workspace::Reports);
     lv.ticked("open-wire-list");
 
-    // read-list: the Wire no. column holds 1, 2, 2 and seven empty cells
+    // read-list: the Wire no. column holds 1, 2 and eight empty cells
     let list = report(&mut lv, "wires");
     let mut have = column(&list, "Wire no.");
     have.sort();
-    assert_eq!(have.iter().filter(|c| c.is_empty()).count(), 7);
-    assert_eq!(have.iter().filter(|c| *c == "2").count(), 2);
+    assert_eq!(have.iter().filter(|c| c.is_empty()).count(), 8);
+    assert_eq!(have.iter().filter(|c| *c == "2").count(), 1);
     assert_eq!(have.iter().filter(|c| *c == "1").count(), 1);
     let heads: Vec<&str> = list.sections[0]
         .columns
@@ -577,15 +577,14 @@ fn wire_numbers_each_instruction_works_in_the_app() {
         novo_numbering::Mode::Fill,
         &novo_numbering::Scope::Project,
     );
+    assert_eq!(plan.summary(), "7 numbered, 2 settled, 0 unchanged");
     assert_eq!(
-        plan.summary(),
-        "6 numbered, 1 renumbered, 2 settled, 0 unchanged"
+        plan.changed_groups()
+            .filter(|g| !g.old.is_empty() && g.new.as_deref() != g.old.first().map(String::as_str))
+            .count(),
+        0,
+        "no number is changed, only empty nets are filled"
     );
-    let second_two = plan
-        .changed_groups()
-        .find(|g| g.old == ["2"] && g.new.as_deref() == Some("7"))
-        .is_some();
-    assert!(second_two, "the second 2 becomes 7");
     let before = numbers_by_wire(lv.project());
     lv.ticked_then_next("preview");
     lv.click_label("Close window");
@@ -602,7 +601,7 @@ fn wire_numbers_each_instruction_works_in_the_app() {
     lv.palette("number wires");
     assert_eq!(
         lv.last(),
-        "Wire numbers: 6 numbered, 1 renumbered, 2 settled, 0 unchanged"
+        "Wire numbers: 7 numbered, 2 settled, 0 unchanged"
     );
     assert_eq!(lv.d.doc().undo_depth(), depth + 1, "one undo step");
     lv.ticked("number-wires");
@@ -612,11 +611,7 @@ fn wire_numbers_each_instruction_works_in_the_app() {
     );
     let kept = numbers_by_wire(lv.project());
     assert_eq!(kept["=P1+CAB-X1:1 > =P1+FLD-M1:U1"].as_deref(), Some("1"));
-    assert_eq!(
-        kept["=P1+CAB-X1:3 > =P1+FLD-M1:W1"].as_deref(),
-        Some("7"),
-        "the second 2 became 7"
-    );
+    assert_eq!(kept["=P1+CAB-X1:2 > =P1+FLD-M1:V1"].as_deref(), Some("2"));
     assert!(
         !novo_numbering::check(lv.project(), &scheme)
             .iter()
@@ -632,6 +627,14 @@ fn wire_numbers_each_instruction_works_in_the_app() {
         vec![novo_core::AnyId::Wire(w)],
         "the click selects that wire"
     );
+    // A number another net already uses is refused and nothing changes.
+    let before_typed = numbers_by_wire(lv.project());
+    lv.palette("number wire 1");
+    assert_eq!(
+        lv.last(),
+        "Wire number: Wire number: 1 is already used on another net"
+    );
+    assert_eq!(numbers_by_wire(lv.project()), before_typed);
     lv.palette("number wire 100");
     assert_eq!(
         lv.last(),
@@ -875,7 +878,7 @@ fn plc_io_each_instruction_works_in_the_app() {
     lv.key(egui::Key::L, egui::Modifiers::SHIFT);
     assert!(lv.d.app.wb.live.on);
     lv.ticked("live-on");
-    assert!(lv.has_label("All open") && lv.has_label("PLC program…"));
+    assert!(lv.has_label("Reset") && lv.has_label("PLC program…"));
 
     // press-button: the round badge on -S1
     lv.not_yet("press-button");

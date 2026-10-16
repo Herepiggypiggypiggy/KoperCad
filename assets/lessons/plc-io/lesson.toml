@@ -3,7 +3,7 @@
 # start at byte 4 (project.json); builder and tests: crates/novo-tests/tests/lessons/plc.rs.
 # Every step is replayed headless from project.json by crates/novo-app/src/app/lesson_verify_cables.rs (keys,
 # palette text, clicks on the drawing and on live badges through the real app). NOTES.md has the verified path
-# per step, the remaining GAPs and the "Pending how" lists (the `how` / `how_nl` fields are not in the parser yet).
+# per step and the remaining GAPs.
 
 format = 1
 id = "plc-io"
@@ -51,6 +51,21 @@ A PLC card has channels: DI are digital inputs (signals into the PLC), DQ digita
 text_nl = """
 Een PLC-kaart heeft kanalen: DI zijn digitale ingangen (signalen naar de PLC), DQ digitale uitgangen (signalen uit de PLC). Een kaart met 16 DI en 8 DQ maakt de kaart -K2 naast de analoge kaart -K1. De kaart zelf wordt niet getekend; zijn kanalen wel, zodra je er signalen naartoe stuurt.
 """
+how = [
+  "Press {key:view.command_palette}",
+  "Type **add card DI16 DQ8** and press Enter",
+  "The toast reads Added card =A1+CAB-K2",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}",
+  "Typ **add card DI16 DQ8** en druk op Enter",
+  "De melding zegt Added card =A1+CAB-K2",
+]
+demo = [
+  { press = "view.command_palette" },
+  { type = "add card DI16 DQ8" },
+  { key = "Enter" },
+]
 # verified: Ctrl+K keymap.rs:313; verb "add card" (commands.rs:457) -> plc.rs:34 plc_add_card; toast "Added card =A1+CAB-K2 (DI16 DQ8)";
 # the tag comes from next_device_tag (-K1 is the analog card). Test: plc_io_each_instruction_works_in_the_app.
 # GAP: the card is only a device: no card symbol is drawn (plc.md section 4 overview) and the command field offers no
@@ -69,6 +84,12 @@ Sending a signal to the PLC works on the selected device, so first select the st
 text_nl = """
 Een signaal naar de PLC sturen werkt op het geselecteerde onderdeel, dus selecteer eerst de startknop: klik op het symbool -S1 op de tekening.
 """
+how = [
+  "Click the pushbutton symbol -S1 on the drawing; it shows as selected",
+]
+how_nl = [
+  "Klik op het drukknopsymbool -S1 op de tekening; het wordt geselecteerd",
+]
 # verified: a click on a symbol selects it; plc.to_plc is greyed in the command field until one symbol is selected
 # (commands.rs:466 Needs::Selection, plc.rs:72-80).
 point = { at = { device = "-S1" } }
@@ -85,6 +106,21 @@ The command Send signal to PLC gives a contact the next free DI channel of a car
 text_nl = """
 De opdracht Send signal to PLC geeft een contact het volgende vrije DI-kanaal van een kaart, tekent het 50 mm naar rechts en verbindt het met de knop. Hier verschijnt rechts van -S1 een digitale-ingangsbox (DI), verbonden met de vrije pin van de knop.
 """
+how = [
+  "Press {key:view.command_palette}",
+  "Type **to plc** and press Enter",
+  "A DI box appears 50 mm right of -S1",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}",
+  "Typ **to plc** en druk op Enter",
+  "Een DI-box verschijnt 50 mm rechts van -S1",
+]
+demo = [
+  { press = "view.command_palette" },
+  { type = "to plc" },
+  { key = "Enter" },
+]
 # verified: verb "to plc" (commands.rs:466) -> plc.rs:72-148; a contact gets a DI, the channel lands 50 mm right (plc.rs:16);
 # toast "Sent to =A1+CAB-K2: next free DI channel"; the page holds 4 symbols before and 5 after; one undo step.
 point = { ui = "palette.button" }
@@ -104,6 +140,23 @@ Do the same for the lamp: select the lamp symbol -H1, then run Send signal to PL
 text_nl = """
 Doe hetzelfde voor de lamp: selecteer het lampsymbool -H1 en voer dan Send signal to PLC uit. Een lamp is een uitgang, dus hij krijgt het volgende vrije DQ-kanaal: rechts van -H1 verschijnt een digitale-uitgangsbox (DQ), verbonden met de lamp.
 """
+how = [
+  "Click the lamp symbol -H1",
+  "Press {key:view.command_palette}, type **to plc** and press Enter",
+  "A DQ box appears 50 mm right of -H1",
+]
+how_nl = [
+  "Klik op het lampsymbool -H1",
+  "Druk op {key:view.command_palette}, typ **to plc** en druk op Enter",
+  "Een DQ-box verschijnt 50 mm rechts van -H1",
+]
+demo = [
+  { move = { at = { device = "-H1" } } },
+  { click = true },
+  { press = "view.command_palette" },
+  { type = "to plc" },
+  { key = "Enter" },
+]
 # verified: as select-button and button-to-plc (the lamp's function is signal.lamp.green, which signal_channel_type sends to a DQ); a lamp, horn or coil gets a DQ; page holds 6 symbols after. The app picks the channel, the person
 # cannot choose it. Oddity: the wire from the lamp's lower pin retraces 4 mm of the lamp's lead before it turns right.
 point = { ui = "palette.button" }
@@ -123,6 +176,19 @@ The page I/O list is written from the drawing. Your two channels are among the s
 text_nl = """
 De pagina I/O list wordt uit de tekening gemaakt. Je twee kanalen staan tussen de reserves: de knop op %IX12.0 als DI van -K2 en de lamp op %QX0.0 als DQ, elk met signaaltekst en waar het getekend is. De adressen staan nog niet naast de kanaalboxen op de tekening; in deze lijst lees je ze.
 """
+how = [
+  "Press {key:view.command_palette}, type **page 30** and press Enter",
+  "Find the rows Pump start button and Pump running lamp",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **page 30** en druk op Enter",
+  "Zoek de rijen Pump start button en Pump running lamp",
+]
+demo = [
+  { press = "view.command_palette" },
+  { type = "page 30" },
+  { key = "Enter" },
+]
 # verified: "page 30" opens the page named 30 (palette.rs PAGE_WORDS); rows printed by the test (Address, Type, Card, Ch., Pin,
 # Signal, Terminal, Connected to, Drawn at): %IX12.0 DI =A1+CAB-K2 0 "Pump start button" =A1+CAB-S1:14; %QX0.0 DQ ... "Pump running lamp" =A1+CAB-H1:X2.
 # GAP: channel symbols carry no address or signal text on the drawing; the Devices drawer does not expand a card into channels;
@@ -142,6 +208,23 @@ The analog card starts at byte 4 and -K2 at byte 12, so bytes 0 to 3 and 5 to 11
 text_nl = """
 De analoge kaart begint op byte 4 en -K2 op byte 12, dus de bytes 0 tot 3 en 5 tot 11 gaan verloren. Renumber I/O toont vooraf elk startadres dat verschuift (-K1 %I4 naar %I0, -K2 %I12 naar %I8); Enter past toe, Esc annuleert. Daarna staat de knop op %IX8.0.
 """
+how = [
+  "Press {key:view.command_palette}, type **renumber io** and press Enter",
+  "Read the preview: -K1 %I4 to %I0, -K2 %I12 to %I8",
+  "Press Enter (or click **Renumber (Enter)**); Esc cancels",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **renumber io** en druk op Enter",
+  "Lees de voorvertoning: -K1 %I4 naar %I0, -K2 %I12 naar %I8",
+  "Druk op Enter (of klik op **Renumber (Enter)**); Esc annuleert",
+]
+demo = [
+  { press = "view.command_palette" },
+  { type = "renumber io" },
+  { key = "Enter" },
+  { say = "Enter applies, Esc cancels", say_nl = "Enter past toe, Esc annuleert" },
+  { key = "Enter" },
+]
 # verified: verb "renumber io" (commands.rs:588) -> plc.rs:155 plc_renumber_io -> dialog "Renumber I/O" with buttons "Renumber (Enter)" and
 # "Cancel (Esc)" (plc.rs:190); Enter applies in one undo step, toast "Renumbered I/O: 2 start address(es) moved".
 # The field check `equals` exists in novo-learn check.rs FieldCheck.
@@ -160,6 +243,17 @@ The live view works on a drawing page: open page 1, Pump control.
 text_nl = """
 De live-weergave werkt op een tekeningpagina: open pagina 1, Pump control.
 """
+how = [
+  "Press {key:view.command_palette}, type **page 1** and press Enter",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **page 1** en druk op Enter",
+]
+demo = [
+  { press = "view.command_palette" },
+  { type = "page 1" },
+  { key = "Enter" },
+]
 # verified: "page 1" opens page 1 (palette.rs page_query).
 point = { ui = "palette.button" }
 expect = { page = "Pump control" }
@@ -175,7 +269,18 @@ Live potentials colours every wire by what it carries right now. Everything star
 text_nl = """
 Live potentials kleurt elke draad naar wat hij nu voert. Alles begint uitgeschakeld: contacten zijn open en de PLC-uitgangen staan uit. Linksboven op de tekening zegt een kaart dat.
 """
-# verified: keymap.rs:373 Shift+L (Canvas) -> sim.live; toggle_live live.rs:449; card "Live potentials" with "All open" live.rs ~750.
+how = [
+  "Move the pointer over the drawing",
+  "Press {key:sim.live}; a card Live potentials appears at the top left",
+]
+how_nl = [
+  "Beweeg de aanwijzer over de tekening",
+  "Druk op {key:sim.live}; linksboven verschijnt de kaart Live potentials",
+]
+demo = [
+  { press = "sim.live" },
+]
+# verified: keymap.rs:373 Shift+L (Canvas) -> sim.live; toggle_live live.rs:449; card "Live potentials" with "Reset" and "PLC program…" live.rs:875-905.
 expect = { live = true }
 solve = [ { command = "sim.live" } ]
 
@@ -189,6 +294,18 @@ In the live view every switch shows a small round badge between its two pins. Cl
 text_nl = """
 In de live-weergave toont elke schakelaar een klein rond knopje tussen zijn twee pinnen. Klik op het knopje van -S1: de knop sluit en blijft gesloten tot je opnieuw klikt, de draad licht op en de stip op de DI-box wordt gevuld.
 """
+how = [
+  "Click the round badge halfway between the two pins of -S1",
+  "The wire lights up and the dot on the DI box fills",
+]
+how_nl = [
+  "Klik op het ronde knopje halverwege de twee pinnen van -S1",
+  "De draad licht op en de stip op de DI-box wordt gevuld",
+]
+demo = [
+  { move = { at = { page = "Pump control", x = 48, y = 44 } } },
+  { click = true },
+]
 # verified: pole badge at the middle of the pass-through pins (live.rs:262-290; (48,44) here), click flips the pole (live.rs ~900).
 # Test: the click at the badge's world position closes the pole (PoleState) and `pole_closed` holds.
 point = { at = { page = "Pump control", x = 48, y = 44 } }
@@ -204,11 +321,23 @@ id = "switch-output"
 title = "Switch the output on"
 title_nl = "Schakel de uitgang in"
 text = """
-There is no PLC program here: you are the program. A PLC output box shows a small square badge above its pin. Click it on the DQ box: the output puts 24 V on the lamp and -H1 lights. All open on the card switches everything off again.
+There is no PLC program here: you are the program. A PLC output box shows a small square badge above its pin. Click it on the DQ box: the output puts 24 V on the lamp and -H1 lights. Reset on the card switches everything off again.
 """
 text_nl = """
-Er is hier geen PLC-programma: jij bent het programma. Een PLC-uitgangsbox toont een klein vierkant knopje boven zijn pin. Klik erop bij de DQ-box: de uitgang zet 24 V op de lamp en -H1 brandt. Met All open op de kaart zet je alles weer uit.
+Er is hier geen PLC-programma: jij bent het programma. Een PLC-uitgangsbox toont een klein vierkant knopje boven zijn pin. Klik erop bij de DQ-box: de uitgang zet 24 V op de lamp en -H1 brandt. Met Reset op de kaart zet je alles weer uit.
 """
+how = [
+  "Click the square badge just above the pin of the DQ box",
+  "The lamp -H1 lights; **Reset** on the card switches everything off again",
+]
+how_nl = [
+  "Klik op het vierkante knopje net boven de pin van de DQ-box",
+  "De lamp -H1 brandt; **Reset** op de kaart zet alles weer uit",
+]
+demo = [
+  { move = { at = { page = "Pump control", x = 170, y = 51 } } },
+  { click = true },
+]
 # verified: output badge 5 mm above the box's pin (live.rs:311-336; (170,51) here); click toggles `forced`; novo-sim puts 24 V on the pin.
 # The live card also has a button "PLC program…" that runs a ladder or Structured Text program on these channels (live.rs ~790).
 point = { at = { page = "Pump control", x = 170, y = 51 } }

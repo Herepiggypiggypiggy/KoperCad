@@ -1,7 +1,7 @@
 # Lesson: wire numbers and the wire list. Builder and tests: crates/novo-tests/tests/lessons/cables.rs
 # Every step is replayed headless from project.json by crates/novo-app/src/app/lesson_verify_cables.rs
 # (keys, palette text and clicks through the real app). NOTES.md has the verified path per step, the
-# remaining GAPs and the "Pending how" lists (the `how` / `how_nl` fields are not in the parser yet).
+# remaining GAPs.
 # What exists now (docs/design/wire-numbering.md, crates/novo-numbering): a numbering scheme stored in the project,
 # "Number wires" (fills what has none, keeps unique numbers, fixes duplicates), the Wire numbering window with a
 # preview, "Renumber wires" (starts over, typed numbers stay) and "Number wire <text>" (types and locks one).
@@ -30,11 +30,11 @@ title = "Names and numbers of wires"
 title_nl = "Namen en nummers van draden"
 text = """
 A wire has two names. Its {tip:potential} (L1, +24 V) comes from the net. Its {tip:wire-number} is what the wire list and the labels print.
-The pump station has three motor wires numbered by hand (1, 2, 2: a typo) and the rest unnumbered. At the end every wire has one number and a duplicate is gone.
+The pump station has two motor wires numbered by hand (1 and 2) and the rest unnumbered. At the end every wire has one number and no number is used on two different nets.
 """
 text_nl = """
 Een draad heeft twee namen. Zijn {tip:potential} (L1, +24 V) komt van het net. Zijn {tip:wire-number} staat in de draadlijst en op de labels.
-Het pompstation heeft drie motordraden met de hand genummerd (1, 2, 2: een typfout) en de rest zonder nummer. Aan het eind heeft elke draad een nummer en is het dubbele nummer weg.
+Het pompstation heeft twee motordraden met de hand genummerd (1 en 2) en de rest zonder nummer. Aan het eind heeft elke draad een nummer en staat geen nummer op twee verschillende netten.
 """
 pause = true
 
@@ -48,6 +48,21 @@ The wire list is written from the drawing and always current. Opening it shows t
 text_nl = """
 De draadlijst wordt uit de tekening gemaakt en is altijd actueel. Openen toont het Reports-venster met een rij per verbinding en een kolom **Wire no.**
 """
+how = [
+  "Press {key:view.command_palette}",
+  "Type **wire list** and press Enter",
+  "The Reports view opens on the wire list",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}",
+  "Typ **wire list** en druk op Enter",
+  "Het Reports-venster opent op de draadlijst",
+]
+demo = [
+  { press = "view.command_palette" },
+  { type = "wire list" },
+  { key = "Enter" },
+]
 # verified: command report.wires (commands.rs:1139 verb "wire list"), Ctrl+K opens the field (keymap.rs:313),
 # show_report reports_view.rs:80. Test: wire_numbers_each_instruction_works_in_the_app.
 point = { ui = "palette.button" }
@@ -59,13 +74,13 @@ id = "read-list"
 title = "Read the Wire no. column"
 title_nl = "Lees de kolom Wire no."
 text = """
-Only the three motor connections have a number: 1, 2 and 2 again, two different wires with the same number. All other rows are empty. **Potential** is what the net carries; **Cable** is the cable and core of each wire.
+Only the two motor connections -M1:U1 and -M1:V1 have a number: 1 and 2. The other eight rows are empty. **Potential** is what the net carries; **Cable** is the cable and core of each wire.
 """
 text_nl = """
-Alleen de drie motorverbindingen hebben een nummer: 1, 2 en nogmaals 2, twee verschillende draden met hetzelfde nummer. Alle andere rijen zijn leeg. **Potential** is wat het net voert; **Cable** is de kabel en ader van elke draad.
+Alleen de twee motorverbindingen -M1:U1 en -M1:V1 hebben een nummer: 1 en 2. De andere acht rijen zijn leeg. **Potential** is wat het net voert; **Cable** is de kabel en ader van elke draad.
 """
 # verified: wires.rs:191-206 columns "Wire no.", "From", "To", "Potential", "Colour", "mm²", "Cable", ...
-# Test reads the report: rows 1, 2, 2 and seven empty.
+# Test reads the report: rows 1, 2 and eight empty.
 pause = true
 
 [[step]]
@@ -78,6 +93,15 @@ Numbering works on the drawing: switch back to the Schematic view.
 text_nl = """
 Nummeren doe je op de tekening: schakel terug naar het venster Schematic.
 """
+how = [
+  "Press {key:view.schematic}",
+]
+how_nl = [
+  "Druk op {key:view.schematic}",
+]
+demo = [
+  { press = "view.schematic" },
+]
 # verified: keymap.rs:389 Ctrl+1 (Anywhere) -> view.schematic (workspace.rs:64).
 expect = { command = "view.schematic" }
 solve = [ { command = "view.schematic" } ]
@@ -87,14 +111,29 @@ id = "preview"
 title = "Preview what numbering would do"
 title_nl = "Bekijk wat nummeren zou doen"
 text = """
-The Wire numbering window shows the scheme (Sequential: 1, 2, 3...) and a preview of every change before anything is written. The second 2 becomes 7 and every unnumbered net gets the next free number. Close the window; nothing changed yet.
+The Wire numbering window shows the scheme (Sequential: 1, 2, 3...) and a preview of every change before anything is written. It would number the seven nets that have none, and keep 1 and 2. Had two nets carried the same number, the preview would show the later one changing. Close the window; nothing changed yet.
 """
 text_nl = """
-Het venster Wire numbering toont het schema (Sequential: 1, 2, 3...) en een voorvertoning van elke wijziging voordat er iets wordt geschreven. De tweede 2 wordt 7 en elk net zonder nummer krijgt het volgende vrije nummer. Sluit het venster; er is nog niets veranderd.
+Het venster Wire numbering toont het schema (Sequential: 1, 2, 3...) en een voorvertoning van elke wijziging voordat er iets wordt geschreven. Het nummert de zeven netten zonder nummer en houdt 1 en 2. Hadden twee netten hetzelfde nummer gehad, dan toont de voorvertoning dat het latere nummer verandert. Sluit het venster; er is nog niets veranderd.
 """
+how = [
+  "Press {key:view.command_palette}, type **wire numbering** and press Enter",
+  "Read the Preview tab: each row shows old number, arrow, new number",
+  "Click **Close window**",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **wire numbering** en druk op Enter",
+  "Lees het tabblad Preview: elke rij toont oud nummer, pijl, nieuw nummer",
+  "Klik op **Close window**",
+]
+demo = [
+  { press = "view.command_palette" },
+  { type = "wire numbering" },
+  { key = "Enter" },
+]
 # verified: commands.rs:681 verb "wire numbering" -> workbench.rs:657 open_numbering(Fill, Preview); window
 # numbering.rs:178 (scheme, modes, scope, Preview and Conflicts tabs, Number button, "Close window").
-# Test: the plan of that window is 6 numbered, 1 renumbered (2 -> 7), 2 settled.
+# Test: the plan of that window is 7 numbered, 2 settled, nothing renumbered.
 point = { ui = "palette.button" }
 expect = { command = "wires.numbering" }
 pause = true
@@ -105,11 +144,22 @@ id = "number-wires"
 title = "Number all wires"
 title_nl = "Nummer alle draden"
 text = """
-Number wires gives every net without a number the next free one, keeps the numbers that are unique (1 and the first 2) and fixes the duplicate. One undo step; the toast reads "6 numbered, 1 renumbered, 2 settled".
+Number wires gives every net without a number the next free one and keeps 1 and 2. One undo step; the toast reads "Wire numbers: 7 numbered, 2 settled, 0 unchanged". If two nets ever share a number, this command also renumbers the later one.
 """
 text_nl = """
-Number wires geeft elk net zonder nummer het volgende vrije nummer, houdt de nummers die uniek zijn (1 en de eerste 2) en herstelt het dubbele nummer. Een undo-stap; de melding zegt "6 numbered, 1 renumbered, 2 settled".
+Number wires geeft elk net zonder nummer het volgende vrije nummer, en houdt 1 en 2. Een undo-stap; de melding zegt "Wire numbers: 7 numbered, 2 settled, 0 unchanged". Delen twee netten ooit een nummer, dan geeft deze opdracht het latere net een nieuw nummer.
 """
+how = [
+  "Press {key:view.command_palette}, type **number wires** and press Enter",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **number wires** en druk op Enter",
+]
+demo = [
+  { press = "view.command_palette" },
+  { type = "number wires" },
+  { key = "Enter" },
+]
 # verified: commands.rs:672 "wires.number" ("Number wires"), workbench.rs:656 -> numbering.rs:75 number_wires:
 # plan Mode::Fill over the project, one undo step "Number wires".
 point = { ui = "palette.button" }
@@ -122,13 +172,29 @@ id = "type-number"
 title = "Type a number yourself"
 title_nl = "Typ zelf een nummer"
 text = """
-Click the wire from terminal 4 to the transmitter to select it, then run **number wire 100** from the command field. The whole net takes 100 and numbering runs leave it alone from now on.
+Click the wire from terminal 4 to the transmitter to select it, then run **number wire 100** from the command field. The whole net takes 100 and numbering runs leave it alone from now on. A number another net already uses, such as 1, is refused: the toast reads "1 is already used on another net" and nothing changes.
 """
 text_nl = """
-Klik op de draad van klem 4 naar de zender om hem te selecteren en voer dan **number wire 100** uit in het opdrachtveld. Het hele net krijgt 100 en nummerrondes laten het voortaan met rust.
+Klik op de draad van klem 4 naar de zender om hem te selecteren en voer dan **number wire 100** uit in het opdrachtveld. Het hele net krijgt 100 en nummerrondes laten het voortaan met rust. Een nummer dat een ander net al gebruikt, zoals 1, wordt geweigerd: de melding zegt "1 is already used on another net" en er verandert niets.
 """
+how = [
+  "Click the vertical wire between terminal 4 and the transmitter -B1; it turns selected",
+  "Press {key:view.command_palette}, type **number wire 100** and press Enter",
+]
+how_nl = [
+  "Klik op de verticale draad tussen klem 4 en de zender -B1; hij wordt geselecteerd",
+  "Druk op {key:view.command_palette}, typ **number wire 100** en druk op Enter",
+]
+demo = [
+  { move = { at = { wire = ["-X1:4", "-B1:+"] } } },
+  { click = true },
+  { press = "view.command_palette" },
+  { type = "number wire 100" },
+  { key = "Enter" },
+]
 # verified: commands.rs:706 verb "number wire" (wires.set_number, Needs::Selection) -> numbering.rs:92
-# set_wire_number: novo_numbering::set_number types the number on the net and locks it; toast
+# set_wire_number: novo_numbering::set_number types the number on the net and locks it (manual.rs:20-31 refuses a
+# number another net uses; the test types `number wire 1` first and sees the toast); toast
 # "Wire number 100 is fixed: numbering runs leave it alone".
 point = { at = { wire = ["-X1:4", "-B1:+"] } }
 expect = { command = "wires.set_number" }
@@ -145,6 +211,21 @@ Renumber wires opens the window in Renumber mode: it numbers all wires again in 
 text_nl = """
 Renumber wires opent het venster in de stand Renumber: het nummert alle draden opnieuw in leesvolgorde, maar 100 blijft. Klik onder Wires op **Project** en dan op **Renumber**; de melding zegt "8 renumbered, 1 unchanged".
 """
+how = [
+  "Press {key:view.command_palette}, type **renumber wires** and press Enter",
+  "In the window click **Project** next to Wires",
+  "Click **Renumber**, then close the window with **Close window**",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **renumber wires** en druk op Enter",
+  "Klik in het venster naast Wires op **Project**",
+  "Klik op **Renumber** en sluit het venster met **Close window**",
+]
+demo = [
+  { press = "view.command_palette" },
+  { type = "renumber wires" },
+  { key = "Enter" },
+]
 # verified: commands.rs:691 verb "renumber wires" -> workbench.rs:660 open_numbering(Renumber, Preview); with a
 # wire selected the window opens on "Selection", hence the click on "Project" (numbering.rs:45-47, :233-246).
 # Test: the click on Renumber applies one undo step; 8 renumbered, the typed net keeps 100.
@@ -165,6 +246,17 @@ Open the wire list again. Every row has a number now, 100 on the level loop and 
 text_nl = """
 Open de draadlijst opnieuw. Elke rij heeft nu een nummer, 100 op de niveaulus en geen nummer dubbel op verschillende netten.
 """
+how = [
+  "Press {key:view.command_palette}, type **wire list** and press Enter",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **wire list** en druk op Enter",
+]
+demo = [
+  { press = "view.command_palette" },
+  { type = "wire list" },
+  { key = "Enter" },
+]
 # verified: report.wires again; the list is live (reports.rs reports_heard). Test reads the report.
 point = { ui = "palette.button" }
 expect = { command = "report.wires" }
@@ -180,6 +272,19 @@ The cable diagram lists each core of -W2 with its wire number and potential, so 
 text_nl = """
 Het kabeldiagram toont elke ader van -W2 met haar draadnummer en potentiaal, zodat de werkplaats beide einden van een ader met hetzelfde nummer kan labelen.
 """
+how = [
+  "Press {key:view.command_palette}, type **cable diagram** and press Enter",
+  "Find the section for -W2 and read its Wire no. column",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **cable diagram** en druk op Enter",
+  "Zoek het blok voor -W2 en lees de kolom Wire no.",
+]
+demo = [
+  { press = "view.command_palette" },
+  { type = "cable diagram" },
+  { key = "Enter" },
+]
 # verified: commands.rs:1148 verb "cable diagram" (report.cables); novo-reports diagrams.rs sections per cable with
 # columns Core, mm², Wire no., Potential, From, Cabinet end, To, Field end, Note.
 point = { ui = "palette.button" }

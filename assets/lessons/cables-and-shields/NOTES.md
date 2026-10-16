@@ -21,21 +21,4 @@ GAPs still open
 - No Cable button in the dock. The generated Cable diagram page appears only when a project opens.
 - Wished for: check kinds `field` on a cable (part, length) and `cable` with `shield_connected`; solve ops `cable_part`, `cable_shield`, a click on a control; anchors `drawer.cables` / `drawer.cables.accept` (until then the checks are commands).
 
-## Pending how
-The `how` / `how_nl` fields are not in the lesson parser yet; paste these per step id when they land.
-
-- open-drawer
-  - how: ["Press {key:view.cables_drawer}", "The drawer opens under the drawing with the tabs **Terminals**, **Cables** and **Devices**; **Cables** is selected"]
-  - how_nl: ["Druk op {key:view.cables_drawer}", "De lade opent onder de tekening met de tabbladen **Terminals**, **Cables** en **Devices**; **Cables** is geselecteerd"]
-- cable-tool
-  - how: ["Move the pointer over the drawing", "Press {key:tool.cable}; the status line says the Cable tool is active"]
-  - how_nl: ["Beweeg de aanwijzer over de tekening", "Druk op {key:tool.cable}; de statusregel meldt dat het gereedschap Kabel actief is"]
-- draw-line
-  - how: ["Click on empty page at the left of the first transmitter wire, about halfway between terminal 4 and -B1", "Click again at the right of the second wire, so the line crosses both", "Press {key:proposal.accept} to finish; the toast reads Cable =P1-W1"]
-  - how_nl: ["Klik op lege pagina links van de eerste draad van de zender, ongeveer halverwege klem 4 en -B1", "Klik opnieuw rechts van de tweede draad, zodat de lijn beide kruist", "Druk op {key:proposal.accept} om af te ronden; de melding zegt Cable =P1-W1"]
-- accept
-  - how: ["In the drawer, click **Accept 1 proposed**", "The list on the left now shows two cables"]
-  - how_nl: ["Klik in de lade op **Accept 1 proposed**", "De lijst links toont nu twee kabels"]
-- free-core (reading)
-  - how: ["Click **=P1-W1** in the list on the left", "Read **2 of 3** in its Cores column"]
-  - how_nl: ["Klik links in de lijst op **=P1-W1**", "Lees **2 of 3** in de kolom Cores"]
+The `how`, `how_nl` and `demo` lists are in lesson.toml.

@@ -31,21 +31,4 @@ GAPS
 - "Open finished version" (ui.toml) has no button in the app yet; the last step describes the finished result in words instead.
 - Wished: a check kind `page_count` with `at_most`, to tick a delete step.
 
-## Pending how
-(paste as `how` / `how_nl` when the field lands; keys as {key:command.id})
-
-- intro: (reading, no how)
-- open-contents
-  - en: ["Click **Pages** at the top left of the drawing (on a window 1700 pixels wide or more the list is already open)", "Under the folder **Contents and reports** click **0a  Table of contents**"]
-  - nl: ["Klik linksboven bij de tekening op **Pages** (op een scherm van 1700 pixels of breder staat de lijst al open)", "Klik onder de map **Contents and reports** op **0a  Table of contents**"]
-- read-contents: (reading)
-- back-to-drawing
-  - en: ["Press {key:nav.next_page} (Page Down) once: **1  Main circuit**", "Press {key:nav.next_page} again: **2  Control circuit**", "Or click **Pages**, then the row **Control circuit**"]
-  - nl: ["Druk één keer op {key:nav.next_page} (Page Down): **1  Main circuit**", "Druk nogmaals op {key:nav.next_page}: **2  Control circuit**", "Of klik op **Pages** en dan op de regel **Control circuit**"]
-- place-lamp
-  - en: ["Press {key:tool.place}", "Type **lamp green** and press Enter", "Click the empty spot right of the coil"]
-  - nl: ["Druk op {key:tool.place}", "Typ **lamp green** en druk op Enter", "Klik op de lege plek rechts van de spoel"]
-- open-device-list
-  - en: ["Press {key:nav.next_page} twice: the first press shows **10  Bill of materials**, the second **20  Device list**", "Or click **Pages**, then **20  Device list**"]
-  - nl: ["Druk twee keer op {key:nav.next_page}: de eerste keer **10  Bill of materials**, de tweede keer **20  Device list**", "Of klik op **Pages** en dan op **20  Device list**"]
-- new-row, sheet-names, what-you-edit: (reading)
+The `how` and `how_nl` lines are in lesson.toml.

@@ -60,6 +60,9 @@ Open the Issue revision window. It proposes the next index (**A**), today's date
 text_nl = """
 Open het venster Issue revision. Het stelt de volgende index (**A**), de datum van vandaag en je initialen voor.
 """
+how = ["Press {key:view.command_palette}, type **issue**, press Enter", "Or click **File**, **Revisions**, **Issue revision**"]
+how_nl = ["Druk op {key:view.command_palette}, typ **issue**, druk op Enter", "Of klik op **File**, **Revisions**, **Issue revision**"]
+demo = [ { press = "view.command_palette" }, { type = "issue" }, { key = "Enter" } ]
 expect = { command = "revision.issue" }
 solve = [ { command = "revision.issue" } ]
 
@@ -83,6 +86,9 @@ text_nl = """
 Typ **First issue** onder **What changed**, controleer **Index**, **Date** en **By** (je initialen) en klik op **Issue A**.
 Druk hier op Next als de melding zegt dat de revisie is uitgegeven.
 """
+how = ["Type **First issue** in **What changed**", "Check **Index**, **Date** and **By**", "Click **Issue A** (or press Enter)"]
+how_nl = ["Typ **First issue** bij **What changed**", "Controleer **Index**, **Date** en **By**", "Klik op **Issue A** (of druk op Enter)"]
+demo = [ { type = "First issue" }, { key = "Enter" } ]
 
 [[step]]
 id = "title-block"
@@ -117,6 +123,9 @@ Write the whole set as one vector PDF: press {key:view.command_palette}, type **
 text_nl = """
 Schrijf de hele set als één vector-PDF: druk op {key:view.command_palette}, typ **export pdf** en druk op Enter, of kies **File > Export > Export PDF**.
 """
+how = ["Press {key:view.command_palette}, type **export pdf**, press Enter", "Or click **File**, **Export**, **Export PDF**"]
+how_nl = ["Druk op {key:view.command_palette}, typ **export pdf**, druk op Enter", "Of klik op **File**, **Export**, **Export PDF**"]
+demo = [ { press = "view.command_palette" }, { type = "export pdf" }, { key = "Enter" } ]
 expect = { command = "export.pdf" }
 solve = [ { command = "export.pdf" } ]
 

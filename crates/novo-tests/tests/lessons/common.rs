@@ -61,7 +61,8 @@ const LESSON_KEYS: &[&str] = &[
     "step",
 ];
 const STEP_KEYS: &[&str] = &[
-    "id", "title", "title_nl", "text", "text_nl", "point", "note", "expect", "solve", "pause",
+    "id", "title", "title_nl", "text", "text_nl", "how", "how_nl", "point", "note", "expect",
+    "solve", "pause", "demo",
 ];
 
 /// Lints one lesson folder against its sample project. Returns every
@@ -178,12 +179,8 @@ pub fn lint(id: &str, project: &Project) -> Vec<String> {
                 bad(format!("{at}: `{{key:{cmd}}}` is not a command"));
             }
         }
+        // No `expect` is a reading step with a Next button (novo-learn lint).
         let expect = step.get("expect").and_then(|v| v.as_table());
-        if expect.is_none() && step.get("pause").and_then(|v| v.as_bool()) != Some(true) {
-            bad(format!(
-                "{at}: has no `expect`; add one or set pause = true"
-            ));
-        }
         if let Some(cmd) = expect
             .and_then(|e| e.get("command"))
             .and_then(|v| v.as_str())

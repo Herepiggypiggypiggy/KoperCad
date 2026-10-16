@@ -22,7 +22,7 @@ page = "Start signal"
 # "Indicator lamps" (a make contact -K1 13/14 to -H1 and a break contact -K1 21/22 to -H2).
 # Finished: `interruption_points_finished`.
 # Every step is replayed through the real window by crates/novo-app/src/app/lesson_verify_terminals.rs
-# `interruption_points_steps_work_in_the_window`. The `how` lists are in NOTES.md ("Pending how").
+# `interruption_points_steps_work_in_the_window`.
 # A `point` on ANOTHER page makes the runner switch the view when the step opens, which ticks a
 # `page` check at once; steps that change page therefore carry no `point`.
 
@@ -58,6 +58,16 @@ De startknop -S1 eindigt bij zijn onderste aansluiting 14 en het signaal moet op
 Tik op Q (een snelle tik: ingedrukt houden opent het wiel), typ **ip** voor een {tip:interruption-point} en druk op Enter, klik dan op de lege ruimte net onder -S1:14.
 Een korte draad verbindt de aansluiting met de pijl. Druk op {key:edit.escape} om het plaatsen te stoppen.
 """
+how = ["Tap {key:tool.place} (a quick tap, do not hold it)", "Type **ip** and press Enter", "Click on the empty space just below -S1:14", "Press {key:edit.escape}"]
+how_nl = ["Tik op {key:tool.place} (een snelle tik, niet ingedrukt houden)", "Typ **ip** en druk op Enter", "Klik op de lege ruimte net onder -S1:14", "Druk op {key:edit.escape}"]
+demo = [
+  { press = "tool.place" },
+  { type = "ip" },
+  { key = "Enter" },
+  { ghost = { symbol = "iec/connectivity/interruption_point", page = "Start signal", x = 40, y = 120 } },
+  { click = true },
+  { press = "edit.escape" },
+]
 point = { at = { device = "-S1", pin = "14" } }
 note = [
   { area = { page = "Start signal", x = 36, y = 112, w = 8, h = 14 }, text = "Click here, in line with the pin", text_nl = "Klik hier, in lijn met de pin" },
@@ -87,6 +97,11 @@ Page 2 holds the coil -K1 where the signal has to arrive.
 text_nl = """
 Pagina 2 bevat de spoel -K1 waar het signaal moet aankomen.
 """
+how = ["Press {key:nav.next_page}"]
+how_nl = ["Druk op {key:nav.next_page}"]
+demo = [
+  { press = "nav.next_page" },
+]
 expect = { page = "Contactor coil" }
 solve = [ { command = "nav.next_page" } ]
 # verified: PageDown = nav.next_page (keymap.rs); page order here is 0 contents, 1, 2, 3, then the
@@ -106,6 +121,13 @@ text_nl = """
 Het signaal heeft op deze pagina een tweede punt nodig.
 Tik op Q, typ **ip** en druk op Enter, maar klik nog niet.
 """
+how = ["Tap {key:tool.place}", "Type **ip** and press Enter", "Do not click yet"]
+how_nl = ["Tik op {key:tool.place}", "Typ **ip** en druk op Enter", "Klik nog niet"]
+demo = [
+  { press = "tool.place" },
+  { type = "ip" },
+  { key = "Enter" },
+]
 expect = { tool = "place" }
 solve = [ { command = "tool.place", arg = "ip" } ]
 # verified: `tool.place` with an argument opens the field filled in (workbench.rs); the typed
@@ -126,6 +148,15 @@ Het signaal komt van boven, dus het punt moet andersom hangen: druk twee keer op
 Klik dan op de lege ruimte recht boven de spoel -K1, in lijn met de bovenste aansluiting A1.
 De draad naar de spoel wordt getekend en het nieuwe punt heet **IP2**. Druk op {key:edit.escape} om het plaatsen te stoppen.
 """
+how = ["Press {key:edit.rotate} twice: the arrow now points up", "Click on the empty space straight above the coil -K1, in line with its pin A1", "Press {key:edit.escape}"]
+how_nl = ["Druk twee keer op {key:edit.rotate}: de pijl wijst nu omhoog", "Klik op de lege ruimte recht boven de spoel -K1, in lijn met aansluiting A1", "Druk op {key:edit.escape}"]
+demo = [
+  { press = "edit.rotate" },
+  { press = "edit.rotate" },
+  { ghost = { symbol = "iec/connectivity/interruption_point", page = "Contactor coil", x = 40, y = 40, turns = 2 } },
+  { click = true },
+  { press = "edit.escape" },
+]
 point = { at = { device = "-K1", pin = "A1" } }
 note = [
   { area = { page = "Contactor coil", x = 36, y = 32, w = 8, h = 14 }, text = "Click here", text_nl = "Klik hier" },
@@ -153,6 +184,15 @@ text_nl = """
 Twee punten met dezelfde naam zijn één verbinding en elk toont waar het andere staat.
 Dubbelklik op de naam **IP2** naast het nieuwe punt, selecteer de oude naam met Ctrl+A, typ **IP1** en druk op Enter.
 """
+how = ["Double-click the name **IP2** beside the new point", "Press Ctrl+A to select the old name", "Type **IP1**", "Press Enter"]
+how_nl = ["Dubbelklik op de naam **IP2** naast het nieuwe punt", "Druk op Ctrl+A om de oude naam te selecteren", "Typ **IP1**", "Druk op Enter"]
+demo = [
+  { move = { area = { page = "Contactor coil", x = 36, y = 30, w = 14, h = 12 } } },
+  { double_click = true },
+  { keys = ["Ctrl", "A"] },
+  { type = "IP1" },
+  { key = "Enter" },
+]
 point = { area = { page = "Contactor coil", x = 36, y = 30, w = 14, h = 12 } }
 expect = { wire = { from = "-S1:14", to = "-K1:A1" } }
 solve = [ { command = "xref.link" } ]
@@ -176,18 +216,27 @@ title = "Jump to the other end"
 title_nl = "Spring naar het andere uiteinde"
 text = """
 The partner is always one key away, however many pages lie between.
-With the new point selected press {key:nav.partner}: you land on its partner on page 1.
+With the new point selected press {key:nav.partner}: you land on its partner on page 1, **Start signal**.
 """
 text_nl = """
 Het partnerpunt is altijd één toets verder, hoeveel pagina's er ook tussen liggen.
-Druk met het nieuwe punt geselecteerd op {key:nav.partner}: je komt bij het partnerpunt op pagina 1.
+Druk met het nieuwe punt geselecteerd op {key:nav.partner}: je komt bij het partnerpunt op pagina 1, **Start signal**.
 """
+how = ["With the new point selected press {key:nav.partner}"]
+how_nl = ["Druk met het nieuwe punt geselecteerd op {key:nav.partner}"]
+demo = [
+  { press = "nav.partner" },
+]
 expect = { page = "Start signal" }
 solve = [ { command = "nav.partner" } ]
 # verified: G = nav.partner (keymap.rs) -> xref.rs `go_partner`; needs a selected symbol (toast
 #   "Select a coil, contact or interruption point first"); novo-xref nav.rs `Navigator::go` shows
 #   the page and selects the partner. Alt+Left returns (history).
 # No `point`: see the note at the top.
+# Where the person ends (verified headless, by keys and by these solve commands): jump -> page 1
+#   "Start signal"; renumber -> still page 1, the point stays selected; back -> page 2 "Contactor
+#   coil". This holds only after the REAL rename in same-name: its solve (`xref.link`) cannot make
+#   IP1 and IP2 partners, so a solve-only replay of jump/renumber/back has no pair to jump between.
 # verified headless: step jump (G key event; the double click had selected the point).
 
 [[step]]
@@ -195,13 +244,20 @@ id = "renumber"
 title = "Number them automatically"
 title_nl = "Nummer ze automatisch"
 text = """
-Press {key:view.command_palette}, type **number interruption** and press Enter.
+Press {key:view.command_palette}, type **number interruption** and press Enter; you stay on page 1.
 The pair is renamed **1**: points are numbered from the first page onwards, and a pair keeps one name.
 """
 text_nl = """
-Druk op {key:view.command_palette}, typ **number interruption** en druk op Enter.
+Druk op {key:view.command_palette}, typ **number interruption** en druk op Enter; je blijft op pagina 1.
 Het paar wordt **1** genoemd: punten worden genummerd vanaf de eerste pagina, en een paar houdt één naam.
 """
+how = ["Press {key:view.command_palette}", "Type **number interruption** and press Enter"]
+how_nl = ["Druk op {key:view.command_palette}", "Typ **number interruption** en druk op Enter"]
+demo = [
+  { press = "view.command_palette" },
+  { type = "number interruption" },
+  { key = "Enter" },
+]
 point = { ui = "palette.button" }
 expect = { command = "interruption.renumber" }
 solve = [ { command = "interruption.renumber" } ]
@@ -218,11 +274,16 @@ id = "back"
 title = "Jump back"
 title_nl = "Spring terug"
 text = """
-Press {key:nav.partner} again: the same key takes you to the partner, which is back on page 2.
+Press {key:nav.partner} again: the same key takes you to the partner, which is back on page 2, **Contactor coil**, with the point still selected.
 """
 text_nl = """
-Druk nogmaals op {key:nav.partner}: dezelfde toets brengt je naar het partnerpunt, dus terug naar pagina 2.
+Druk nogmaals op {key:nav.partner}: dezelfde toets brengt je naar het partnerpunt, dus terug naar pagina 2, **Contactor coil**, met het punt nog geselecteerd.
 """
+how = ["Press {key:nav.partner} again"]
+how_nl = ["Druk nogmaals op {key:nav.partner}"]
+demo = [
+  { press = "nav.partner" },
+]
 expect = { page = "Contactor coil" }
 solve = [ { command = "nav.partner" } ]
 # verified: the point is still selected after the jump (workbench.rs `after_canvas_frame`
@@ -241,6 +302,13 @@ text_nl = """
 Onder de spoel **-K1** staat zijn {tip:contact-image}: 13-14 3.1 betekent dat de contacten 13-14 op pagina 3, kolom 1 staan.
 Klik op de spoel en druk op {key:nav.all_references} voor een lijst van elke plek waar -K1 getekend staat; die lijst typ je nooit zelf.
 """
+how = ["Click the coil **-K1**", "Press {key:nav.all_references}"]
+how_nl = ["Klik op de spoel **-K1**", "Druk op {key:nav.all_references}"]
+demo = [
+  { move = { at = { device = "-K1" } } },
+  { click = true },
+  { press = "nav.all_references" },
+]
 point = { at = { device = "-K1" } }
 note = [
   { at = { device = "-K1" }, text = "13-14 3.1 · 21-22 3.2: contact pair, page 3, column 1 and 2", text_nl = "13-14 3.1 · 21-22 3.2: contactpaar, pagina 3, kolom 1 en 2" },

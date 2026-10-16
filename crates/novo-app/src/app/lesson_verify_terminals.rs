@@ -872,6 +872,34 @@ impl Lx {
 
 #[test]
 fn interruption_points_steps_work_in_the_window() {
+    interruption_points_run(false);
+}
+
+/// The same walk, but `jump`, `renumber` and `back` run the lesson's own `solve` commands, so the
+/// replay ends on the same pages as a person pressing the keys.
+#[test]
+fn interruption_points_solves_end_on_the_pages_the_text_names() {
+    interruption_points_run(true);
+}
+
+impl Lx {
+    /// Runs the `solve` commands of the step `id` through the command path.
+    fn solve_commands(&mut self, id: &str) {
+        let lesson = self.d.app.learn.run.as_ref().unwrap().lesson().clone();
+        let step = lesson.steps.iter().find(|s| s.id == id).unwrap();
+        assert!(!step.solve.is_empty());
+        let ctx = self.d.ctx.clone();
+        for op in &step.solve {
+            let novo_learn::lesson::SolveOp::Command(c) = op else {
+                panic!("step `{id}` solves with {op:?}");
+            };
+            self.d.app.run_command(&ctx, &c.command, c.arg.as_deref());
+            self.frames(2);
+        }
+    }
+}
+
+fn interruption_points_run(by_solve: bool) {
     let mut l = Lx::start("interruption-points");
     let wires0 = l.project().wires().count();
     assert!(l.points().is_empty());
@@ -963,19 +991,31 @@ fn interruption_points_steps_work_in_the_window() {
 
     // jump: G with the point selected.
     l.open("jump");
-    l.press(egui::Key::G);
+    if by_solve {
+        l.solve_commands("jump");
+    } else {
+        l.press(egui::Key::G);
+    }
     l.ticked("jump");
     assert_eq!(l.page_title(), "Start signal");
 
     // renumber: the command field.
     l.open("renumber");
-    l.palette("number interruption");
+    if by_solve {
+        l.solve_commands("renumber");
+    } else {
+        l.palette("number interruption");
+    }
     l.ticked("renumber");
     assert!(l.points().iter().all(|p| p.0 == "1"), "{:?}", l.points());
 
     // back: G again.
     l.open("back");
-    l.press(egui::Key::G);
+    if by_solve {
+        l.solve_commands("back");
+    } else {
+        l.press(egui::Key::G);
+    }
     l.ticked("back");
     assert_eq!(l.page_title(), "Contactor coil");
 
