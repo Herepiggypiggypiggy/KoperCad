@@ -192,10 +192,7 @@ fn order_problems_names_a_backwards_dependency_and_phase() {
 
 #[test]
 fn the_cabinet_lesson_projects_build_in_a_sound_order() {
-    for file in [
-        "cabinet-layout/finished.json",
-        "rails-and-ducts/finished.json",
-    ] {
+    for file in ["cabinet-layout/finished.json", "wire-routing/project.json"] {
         let (layout, list) = cabinet_steps(&lesson(file), &[]);
         assert!(!layout.placements.is_empty(), "{file}");
         assert!(
@@ -222,8 +219,8 @@ fn the_cabinet_lesson_projects_build_in_a_sound_order() {
 }
 
 #[test]
-fn the_rails_and_ducts_lesson_cuts_the_ducts_before_any_device() {
-    let (layout, list) = cabinet_steps(&lesson("rails-and-ducts/finished.json"), &[]);
+fn the_wire_routing_lesson_cuts_the_ducts_before_any_device() {
+    let (layout, list) = cabinet_steps(&lesson("wire-routing/project.json"), &[]);
     assert!(!layout.ducts.is_empty());
     let last_duct = list.iter().rposition(|s| s.phase == Phase::Ducts).unwrap();
     let first_device = list.iter().position(|s| s.phase == Phase::Devices).unwrap();

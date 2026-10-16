@@ -602,6 +602,19 @@ impl<'p> Tx<'p> {
         self.update::<SymbolInstance>(symbol, |s| s.role = role)
     }
 
+    /// Swaps the library symbol a placed symbol is drawn with. Pins, role and
+    /// placement stay; the caller picks a key whose pins match the old one
+    /// (a feed that turns into the protective earth feed, say).
+    pub fn set_symbol_key(&mut self, symbol: SymbolId, key: SymbolKey) -> Result<()> {
+        if key.0.is_empty() {
+            return Err(ModelError::InvalidValue {
+                id: symbol.into(),
+                field: "symbol",
+            });
+        }
+        self.update::<SymbolInstance>(symbol, |s| s.symbol = key)
+    }
+
     /// Adds a junction (connection dot).
     pub fn add_junction(&mut self, page: PageId, position: Point) -> Result<JunctionId> {
         self.insert(|id| Junction { id, page, position })

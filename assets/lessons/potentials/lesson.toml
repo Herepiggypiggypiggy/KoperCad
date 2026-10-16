@@ -147,7 +147,7 @@ demo = [
   { right_click = true },
   { say = "Click the PE chip in the menu.", say_nl = "Klik op de chip PE in het menu." },
 ]
-point = { at = { page = "Motor feeder", x = 104, y = 92 } }
+point = { at = { feed = "L4" } }
 expect = { potential_kind = { kind = "protective_earth", page = "Motor feeder" } }
 
 [[step]]
@@ -173,7 +173,7 @@ demo = [
   { right_click = true },
   { say = "Choose Show where it goes.", say_nl = "Kies Show where it goes." },
 ]
-point = { at = { page = "Motor feeder", x = 80, y = 20 } }
+point = { at = { feed = "L1" } }
 pause = true
 
 [[step]]

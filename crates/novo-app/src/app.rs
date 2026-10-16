@@ -30,6 +30,7 @@ mod heat_run_tests;
 mod inspector;
 mod interop;
 mod learn;
+mod learn_demo;
 mod learn_ui;
 mod link;
 mod live;
@@ -806,7 +807,13 @@ impl NovoApp {
             self.outline_keys(&ctx);
         }
         let mut commands = if self.modal_open() {
-            Vec::new()
+            // The place key pressed again over its own wheel swaps it for
+            // the part search; every other key waits for the wheel.
+            if self.wheel_place_press(&ctx) {
+                vec!["tool.place"]
+            } else {
+                Vec::new()
+            }
         } else {
             self.key_commands(&ctx)
         };
@@ -997,8 +1004,11 @@ impl NovoApp {
     }
 
     fn modal_open(&self) -> bool {
+        self.wb.wheel.is_some() || self.modal_open_but_wheel()
+    }
+
+    fn modal_open_but_wheel(&self) -> bool {
         self.show_about
-            || self.wb.wheel.is_some()
             || self.wb.renumber.is_some()
             || self.wb.page_form.is_some()
             || self.wb.sheet_import.is_some()

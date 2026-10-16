@@ -6,7 +6,7 @@
 //! lesson files and `ui.toml`; nothing a person reads is typed here.
 
 use eframe::egui;
-use novo_learn::{Entry, Phase, Span, Standing, Target, parse_markup};
+use novo_learn::{Demo, Entry, Phase, Span, Standing, Target, parse_markup};
 use novo_theme::{tokens, widgets::section_label};
 
 use super::NovoApp;
@@ -17,6 +17,7 @@ use super::learn::Move;
 enum CardAction {
     Move(Move),
     ShowMe,
+    StopDemo,
     Restart,
     ConfirmRestart,
     CancelRestart,
@@ -29,11 +30,17 @@ struct Card {
     header: String,
     step_title: String,
     text: String,
+    /// The author's numbered instructions (`how`), with markup.
+    steps: Vec<String>,
     ticked: bool,
     finished: bool,
     can_next: bool,
     first: bool,
     show_me: bool,
+    /// The how-to lines of the demonstration, and the one being done.
+    how: Vec<(String, bool)>,
+    /// A demonstration is on show (playing, or settled on its markers).
+    demo_on: bool,
     next_lessons: Vec<(String, String)>,
     words: Words,
 }
@@ -42,6 +49,9 @@ struct Card {
 struct Words {
     back: String,
     show_me: String,
+    how_title: String,
+    replay: String,
+    stop: String,
     skip: String,
     next: String,
     restart: String,
@@ -61,25 +71,29 @@ impl NovoApp {
             return;
         }
         self.pointer(ctx, canvas);
+        self.learn_demo_overlay(ctx, canvas);
         let Some(card) = self.card() else {
             return;
         };
         let confirm = self.learn.confirm_restart;
-        let pill = self.wb.live.on;
         let mut action = None;
-        egui::Area::new(egui::Id::new("lesson_card"))
+        let card_rect = egui::Area::new(egui::Id::new("lesson_card"))
             .order(egui::Order::Middle)
             .pivot(egui::Align2::RIGHT_BOTTOM)
             .fixed_pos(canvas.right_bottom() - egui::vec2(12.0, 72.0))
             .show(ctx, |ui| {
                 egui::Frame::popup(ui.style()).show(ui, |ui| {
                     ui.set_max_width(340.0);
-                    action = self.draw_card(ui, &card, confirm, pill);
+                    action = self.draw_card(ui, &card, confirm);
                 });
-            });
+            })
+            .response
+            .rect;
+        self.learn.card_pos = Some(card_rect.center());
         match action {
             Some(CardAction::Move(how)) => self.learn_move(how),
             Some(CardAction::ShowMe) => self.learn_show_me(),
+            Some(CardAction::StopDemo) => self.learn_stop_demo(),
             Some(CardAction::Restart) => self.learn.confirm_restart = true,
             Some(CardAction::ConfirmRestart) => {
                 self.learn.confirm_restart = false;
@@ -101,6 +115,9 @@ impl NovoApp {
         let words = Words {
             back: say("back"),
             show_me: say("show_me"),
+            how_title: say("how_title"),
+            replay: say("demo_replay"),
+            stop: say("demo_stop"),
             skip: say("skip_step"),
             next: say("next"),
             restart: say("restart_lesson"),
@@ -136,28 +153,31 @@ impl NovoApp {
             header,
             step_title: step.map(|s| s.title(lang).to_owned()).unwrap_or_default(),
             text: step.map(|s| s.text(lang).to_owned()).unwrap_or_default(),
+            steps: step
+                .map(|s| {
+                    s.how(lang)
+                        .iter()
+                        .enumerate()
+                        .map(|(i, line)| format!("{}. {line}", i + 1))
+                        .collect()
+                })
+                .unwrap_or_default(),
             ticked: run.phase() == Phase::Ticked,
             finished,
             can_next: run.can_advance(),
             first: run.index() == 0,
-            show_me: step.is_some_and(|s| s.point.is_some() || !s.note.is_empty()),
+            show_me: step.is_some_and(|s| {
+                s.point.is_some() || !s.note.is_empty() || !Demo::for_step(s).is_empty()
+            }),
+            how: self.learn_how_lines(),
+            demo_on: self.learn.demo.is_some(),
             next_lessons,
             words,
         })
     }
 
-    fn draw_card(
-        &self,
-        ui: &mut egui::Ui,
-        card: &Card,
-        confirm: bool,
-        pill: bool,
-    ) -> Option<CardAction> {
+    fn draw_card(&self, ui: &mut egui::Ui, card: &Card, confirm: bool) -> Option<CardAction> {
         let mut action = None;
-        if pill {
-            ui.weak(&card.header);
-            return None;
-        }
         ui.horizontal(|ui| {
             section_label(ui, &card.header);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -201,6 +221,25 @@ impl NovoApp {
                 title
             });
             self.markup(ui, &card.text);
+            if !card.steps.is_empty() {
+                ui.add_space(4.0);
+                section_label(ui, &card.words.how_title);
+                for line in &card.steps {
+                    self.markup(ui, line);
+                }
+            }
+            if card.steps.is_empty() && !card.how.is_empty() {
+                ui.add_space(4.0);
+                section_label(ui, &card.words.how_title);
+                for (line, active) in &card.how {
+                    let text = egui::RichText::new(line);
+                    ui.label(if *active {
+                        text.strong().color(tokens::ACCENT_HOVER)
+                    } else {
+                        text
+                    });
+                }
+            }
             ui.add_space(4.0);
             ui.horizontal_wrapped(|ui| {
                 if ui
@@ -209,8 +248,18 @@ impl NovoApp {
                 {
                     action = Some(CardAction::Move(Move::Back));
                 }
-                if card.show_me && ui.button(&card.words.show_me).clicked() {
-                    action = Some(CardAction::ShowMe);
+                if card.show_me {
+                    let label = if card.demo_on {
+                        &card.words.replay
+                    } else {
+                        &card.words.show_me
+                    };
+                    if ui.button(label).clicked() {
+                        action = Some(CardAction::ShowMe);
+                    }
+                }
+                if card.demo_on && ui.button(&card.words.stop).clicked() {
+                    action = Some(CardAction::StopDemo);
                 }
                 if card.can_next {
                     if novo_theme::widgets::primary_button(ui, &card.words.next).clicked() {
@@ -548,7 +597,8 @@ impl NovoApp {
             if ui.small_button(self.learn.say("reset_progress")).clicked() {
                 *reset = true;
             }
-            ui.checkbox(&mut self.learn.show_drafts, "Drafts");
+            let early = self.learn.say("early_access");
+            ui.checkbox(&mut self.learn.show_drafts, early);
         });
     }
 
@@ -578,6 +628,9 @@ impl NovoApp {
                     Standing::Completed => meta.push("✓".to_owned()),
                     Standing::Updated => meta.push(self.learn.say("updated")),
                     Standing::NotStarted => {}
+                }
+                if lesson.status == novo_learn::Status::Draft {
+                    meta.push(self.learn.say("early_access"));
                 }
                 if coming {
                     meta.push(self.learn.say("coming_soon"));
