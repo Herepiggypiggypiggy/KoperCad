@@ -75,6 +75,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("help.whats_new", at("Help")),
     ("help.about", at("Help")),
     ("view.shortcuts", at("Help")),
+    ("help.keymap_file", at("Help")),
     // File > Export, split by what the file is for.
     ("export.pdf", under("File", "Export drawings")),
     ("export.pdf_page", under("File", "Export drawings")),
@@ -118,6 +119,9 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("plc.renumber_io", under("Edit", "Renumber")),
     // Draw
     ("xref.link", at("Draw")),
+    ("draw.text", at("Draw")),
+    ("net.select", under("Edit", "Net")),
+    ("net.trace", under("Edit", "Net")),
     ("plc.add_card", under("Draw", "PLC")),
     ("plc.to_plc", under("Draw", "PLC")),
     ("plc.overview", under("Draw", "PLC")),
@@ -193,6 +197,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("export.reports", at("Reports")),
     ("export.assembly", at("Reports")),
     ("view.bench", at("Reports")),
+    ("report.designer", at("Reports")),
     ("export.bench_cut", at("Reports")),
     ("export.ferrules", at("Reports")),
     ("export.labels", at("Reports")),

@@ -18,6 +18,7 @@ enum DockTool {
     Place,
     Connect,
     Cable,
+    Text,
 }
 
 /// What the tool in hand has to say (see `NovoApp::tool_hint`).
@@ -179,6 +180,7 @@ impl NovoApp {
             Tool::Place(_) => DockTool::Place,
             Tool::Wire(_) => DockTool::Connect,
             Tool::Cable(_) => DockTool::Cable,
+            Tool::Text => DockTool::Text,
             Tool::Select | Tool::Move(_) | Tool::Paste(_) => DockTool::Select,
         };
         // Aside: the bottom right corner, while the pointer works near the
@@ -198,7 +200,7 @@ impl NovoApp {
         let busy = dragging
             || match view.editor.tool() {
                 Tool::Wire(w) => w.start.is_some(),
-                Tool::Move(_) | Tool::Paste(_) => true,
+                Tool::Move(_) | Tool::Paste(_) | Tool::Text => true,
                 Tool::Cable(c) => !c.points.is_empty(),
                 Tool::Select | Tool::Place(_) => false,
             };
@@ -236,6 +238,7 @@ impl NovoApp {
         let can_undo = self.is_enabled(crate::actions::Action::Undo);
         let can_redo = self.is_enabled(crate::actions::Action::Redo);
         let mut history = None;
+        let text_tip = super::tips::tip_text(&self.wb.keymap, "Add text", "draw.text");
         let chosen = self.settings.wiring_mode();
         let mut chip = None;
         let mut picked = None;
@@ -364,10 +367,16 @@ impl NovoApp {
                             }
                             response.surrender_focus();
                         }
-                        ui.add_enabled_ui(false, |ui| {
-                            widgets::tool_button(ui, icons::tool::TEXT, false, "Text")
-                                .on_disabled_hover_text("Text · Comes later");
-                        });
+                        let response = widgets::tool_button(
+                            ui,
+                            icons::tool::TEXT,
+                            active == DockTool::Text,
+                            &text_tip,
+                        );
+                        if response.clicked() {
+                            picked = Some(DockTool::Text);
+                        }
+                        response.surrender_focus();
                         if in_bar {
                             // See `tool_hint`: the bar shows it.
                         } else if !hint.is_empty() {
@@ -431,6 +440,11 @@ impl NovoApp {
                 }
             }
             Some(DockTool::Cable) => self.wb.queued.push("tool.cable"),
+            Some(DockTool::Text) => {
+                if let Some(view) = self.canvas.schematic() {
+                    view.editor.begin_text();
+                }
+            }
             None => {}
         }
     }

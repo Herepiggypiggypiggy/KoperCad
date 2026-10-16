@@ -52,6 +52,15 @@ pub const DUTCH: &[Aliases] = &[
         ],
     ),
     nl(
+        "help.keymap_file",
+        &[],
+        &[
+            "toetsenbestand openen",
+            "sneltoetsen aanpassen",
+            "toetsen wijzigen",
+        ],
+    ),
+    nl(
         "help.show_hints",
         &[],
         &["hints opnieuw tonen", "tips opnieuw", "hints"],
@@ -264,6 +273,25 @@ pub const DUTCH: &[Aliases] = &[
         "xref.link",
         &["koppel", "koppelen"],
         &["contact aan spoel koppelen", "kruisverwijzing koppelen"],
+    ),
+    nl(
+        "draw.text",
+        &["tekst"],
+        &["tekst toevoegen", "notitie", "opmerking"],
+    ),
+    nl(
+        "net.select",
+        &[],
+        &["net selecteren", "heel net selecteren", "verbonden draden"],
+    ),
+    nl(
+        "net.trace",
+        &[],
+        &[
+            "waar gaat dit heen",
+            "apparaten aan dit net",
+            "paginas van dit net",
+        ],
     ),
     nl("edit.escape", &[], &["annuleren"]),
     // Navigate
@@ -768,6 +796,11 @@ pub const DUTCH: &[Aliases] = &[
         "view.bench",
         &["werkbank uitvoer", "open werkbank"],
         &["werkbank", "adereindhulzen", "etiketten", "draadsnijlijst"],
+    ),
+    nl(
+        "report.designer",
+        &["rapportontwerper", "open rapportontwerper"],
+        &["sjabloon", "titelblok", "ontwerper"],
     ),
     nl(
         "export.bench_cut",
