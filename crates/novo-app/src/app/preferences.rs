@@ -22,6 +22,9 @@ impl NovoApp {
             ui.set_width(340.0);
             ui.heading("Preferences");
             ui.add_space(6.0);
+            egui::ScrollArea::vertical()
+                .max_height((ctx.content_rect().height() - 160.0).max(200.0))
+                .show(ui, |ui| {
             ui.strong("Appearance");
             ui.add_space(2.0);
             ui.label("Theme");
@@ -95,6 +98,7 @@ impl NovoApp {
             ui.add_space(2.0);
             ui.checkbox(&mut calm, "Reduce motion");
             ui.weak("The live view switches states at once and shows an arrow on running motors instead of spinning them.");
+                });
             ui.add_space(8.0);
             ui.button("Close (Esc)").clicked()
         });
