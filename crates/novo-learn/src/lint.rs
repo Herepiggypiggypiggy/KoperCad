@@ -322,6 +322,18 @@ fn lint_lesson(
         } else if step.pause {
             sink.warn(Some(step), "`pause` on a reading step does nothing".into());
         }
+        if step.manual.is_some() && !step.solve.is_empty() {
+            sink.error(
+                Some(step),
+                "`manual` and `solve` together: a step is scripted or marked manual, not both"
+                    .into(),
+            );
+        } else if step.expect.is_some() && step.solve.is_empty() && step.manual.is_none() {
+            sink.warn(
+                Some(step),
+                "no `solve` and no `manual = \"why\"`: the replay cannot check this step".into(),
+            );
+        }
         for op in &step.solve {
             match op {
                 SolveOp::Command(c) if !registry.commands.contains(&c.command) => {
@@ -508,6 +520,122 @@ fn lint_check_targets(
     }
 }
 
+/// A bold phrase in step text that looks like the name of a control
+/// (a button, a menu, a panel) written as plain text.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct UiName {
+    pub lesson: String,
+    pub step: String,
+    pub phrase: String,
+    /// The anchor whose name this is, when the phrase is a registered one.
+    pub anchor: Option<String>,
+}
+
+/// Names a step writes as plain bold text that the program should supply:
+/// the phrase is the name of a registered anchor (`labels`), a menu path
+/// (`File > Export`), or sits next to a word that makes it a control
+/// ("click **Apply**", "the **Reports** tab"). Typed values, tags and key
+/// names are not control names. A step shows a control with `{ui:id}`, so its
+/// name is always the one on screen and the highlight can point at it.
+pub fn ui_names(lesson: &Lesson, labels: &[(&str, &str)]) -> Vec<UiName> {
+    let mut found = Vec::new();
+    for step in &lesson.steps {
+        let mut texts = vec![step.title.as_str(), step.text.as_str()];
+        texts.extend(step.note.iter().map(|n| n.text.as_str()));
+        texts.extend(step.how.iter().map(String::as_str));
+        for text in texts {
+            let Ok(spans) = markup::parse_markup(text) else {
+                continue;
+            };
+            for (i, span) in spans.iter().enumerate() {
+                let Span::Bold(phrase) = span else { continue };
+                let before = match i.checked_sub(1).and_then(|j| spans.get(j)) {
+                    Some(Span::Text(t)) => t.to_lowercase(),
+                    _ => String::new(),
+                };
+                let after = match spans.get(i + 1) {
+                    Some(Span::Text(t)) => t.to_lowercase(),
+                    _ => String::new(),
+                };
+                let anchor = labels
+                    .iter()
+                    .find(|(_, label)| label.eq_ignore_ascii_case(phrase))
+                    .map(|(id, _)| (*id).to_owned());
+                if anchor.is_some() || looks_like_control(phrase, &before, &after) {
+                    found.push(UiName {
+                        lesson: lesson.id.clone(),
+                        step: step.id.clone(),
+                        phrase: phrase.clone(),
+                        anchor,
+                    });
+                }
+            }
+        }
+    }
+    found.sort();
+    found.dedup();
+    found
+}
+
+fn looks_like_control(phrase: &str, before: &str, after: &str) -> bool {
+    const KEYS: [&str; 14] = [
+        "enter",
+        "esc",
+        "escape",
+        "shift",
+        "ctrl",
+        "alt",
+        "tab",
+        "space",
+        "delete",
+        "backspace",
+        "home",
+        "end",
+        "f2",
+        "f1",
+    ];
+    const VERBS: [&str; 8] = [
+        "click", "choose", "press", "tap", "open", "use", "pick", "select",
+    ];
+    const NOUNS: [&str; 14] = [
+        "button", "menu", "tab", "window", "panel", "dialog", "drawer", "card", "badge", "list",
+        "pill", "chip", "field", "box",
+    ];
+    let first = phrase.chars().next();
+    if !first.is_some_and(|c| c.is_uppercase()) {
+        return false;
+    }
+    if phrase.contains('>') {
+        return true;
+    }
+    let lower = phrase.to_lowercase();
+    let tag_like = phrase.chars().count() <= 3 && phrase.chars().all(|c| !c.is_lowercase());
+    if KEYS.contains(&lower.as_str()) || tag_like {
+        return false;
+    }
+    let last_word = |t: &str, n: usize| -> Vec<String> {
+        t.split(|c: char| !c.is_alphanumeric() && c != '-')
+            .filter(|w| !w.is_empty())
+            .rev()
+            .take(n)
+            .map(str::to_owned)
+            .collect()
+    };
+    let words_before = last_word(before, 2);
+    let verb_before = words_before.iter().any(|w| {
+        VERBS.contains(&w.as_str()) || w == "on" && words_before.iter().any(|v| v == "click")
+    }) && before.trim_end().len()
+        == before.trim_end().trim_end_matches(['.', ',']).len();
+    let noun_after = after
+        .split_whitespace()
+        .next()
+        .is_some_and(|w| NOUNS.contains(&w.trim_matches(|c: char| !c.is_alphabetic())));
+    let noun_before = words_before
+        .first()
+        .is_some_and(|w| NOUNS.contains(&w.as_str()));
+    verb_before || noun_after || noun_before
+}
+
 /// A one-line summary per severity, for a test's failure message.
 pub fn summary(report: &Report) -> String {
     let mut by: BTreeMap<&str, usize> = BTreeMap::new();
@@ -584,6 +712,7 @@ title = "Duplicate"
 text = "Select **-K1**."
 point = { at = { device = "-K1", pin = "A1" } }
 expect = { count = { kind = "device", at_least = 99 } }
+manual = "the fixture has no such device"
 "#;
 
     #[test]
@@ -648,6 +777,7 @@ expect = { tool = "select" }
         assert_eq!(report.errors().count(), 1, "{:?}", messages(&report));
         // An event check never holds at the start.
         let steps = steps.replace("{ tool = \"select\" }", "{ command = \"edit.escape\" }");
+        let steps = format!("{steps}solve = [ {{ command = \"edit.escape\" }} ]\n");
         assert!(
             run(&lesson_toml("", &steps), &example())
                 .findings
@@ -732,5 +862,51 @@ expect = { signal = "proposal_nxt" }
         assert_eq!(report.errors().count(), 1);
         assert!(messages(&report)[0].contains("demo/lesson.toml"));
         assert!(summary(&report).contains("1 errors"));
+    }
+
+    #[test]
+    fn ui_names_finds_controls_written_as_bold_text() {
+        let toml = lesson_toml(
+            "",
+            "[[step]]\nid = \"a\"\ntitle = \"Go\"\ntext = \"\"\"\nClick **Add rail**, then the **Reports** tab. Type **mcb** and press **Enter** on **-K1** or **L1**.\nOpen **File > Export > Export PDF**. The **Apply** button is next to **Place all**.\n\"\"\"\n",
+        );
+        let lesson = crate::Lesson::parse(&toml).expect("parses");
+        let labels = [("cabinet.place_all", "Place all")];
+        let found = ui_names(&lesson, &labels);
+        let phrases: Vec<&str> = found.iter().map(|f| f.phrase.as_str()).collect();
+        assert_eq!(
+            phrases,
+            [
+                "Add rail",
+                "Apply",
+                "File > Export > Export PDF",
+                "Place all",
+                "Reports"
+            ]
+        );
+        let anchored: Vec<_> = found.iter().filter_map(|f| f.anchor.as_deref()).collect();
+        assert_eq!(anchored, ["cabinet.place_all"]);
+    }
+
+    #[test]
+    fn a_step_is_scripted_or_marked_manual() {
+        let steps = "[[step]]\nid = \"a\"\ntitle = \"A\"\ntext = \"t\"\nexpect = { command = \"tool.connect\" }\n\n\
+                     [[step]]\nid = \"b\"\ntitle = \"B\"\ntext = \"t\"\nexpect = { command = \"tool.connect\" }\nmanual = \"a file dialog\"\n\n\
+                     [[step]]\nid = \"c\"\ntitle = \"C\"\ntext = \"t\"\nexpect = { command = \"tool.connect\" }\nmanual = \"x\"\nsolve = [ { command = \"tool.connect\" } ]\n";
+        let report = run(&lesson_toml("", steps), &example());
+        let on = |step: &str, severity: Severity| {
+            report
+                .findings
+                .iter()
+                .any(|f| f.step.as_deref() == Some(step) && f.severity == severity)
+        };
+        assert!(on("a", Severity::Warning));
+        assert!(
+            !report
+                .findings
+                .iter()
+                .any(|f| f.step.as_deref() == Some("b") && f.message.contains("manual"))
+        );
+        assert!(on("c", Severity::Error));
     }
 }
