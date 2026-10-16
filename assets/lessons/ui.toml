@@ -196,3 +196,7 @@ text_nl = "Stoppen"
 [demo_say]
 text = "{arg}"
 text_nl = "{arg}"
+
+[no_key]
+text = "command palette: {label}"
+text_nl = "opdrachtenlijst: {label}"

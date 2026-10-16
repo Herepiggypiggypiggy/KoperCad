@@ -108,10 +108,7 @@ impl NovoApp {
 
     /// The person's own key for a command.
     fn demo_key_text(&self, command: &str) -> String {
-        self.wb
-            .keymap
-            .shortcut_text(command)
-            .unwrap_or_else(|| "(no key)".to_owned())
+        self.learn_key_text(command)
     }
 
     /// Plays the demonstration on top of the canvas.

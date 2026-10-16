@@ -26,9 +26,15 @@ pub struct CommandField {
     /// The search engine and its memory (recent picks, favourites).
     pub palette: Palette,
     open: Option<OpenField>,
+    /// Where the field was drawn this frame, for lessons to point at.
+    rect: Option<egui::Rect>,
 }
 
 impl CommandField {
+    pub fn rect(&self) -> Option<egui::Rect> {
+        self.rect
+    }
+
     pub fn open(&mut self, mode: Mode, at: Option<egui::Pos2>) {
         self.open = Some(OpenField {
             mode,
@@ -110,6 +116,7 @@ impl CommandField {
     /// completion in the field, any other row is returned and closes it.
     pub fn enter(&mut self, sources: &Sources<'_>) -> Option<Target> {
         let rows = self.rows(sources);
+        self.rect = None;
         let open = self.open.as_mut()?;
         let row = rows.get(open.selected.min(rows.len().saturating_sub(1)))?;
         self.pick(row)
@@ -234,6 +241,7 @@ impl CommandField {
                 .and_then(|row| self.pick(row)),
             _ => None,
         };
+        self.rect = Some(area.response.rect);
         if self.open.is_some() && area.response.clicked_elsewhere() {
             self.open = None;
         }

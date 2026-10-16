@@ -61,6 +61,19 @@ pub(crate) const ANCHORS: &[&str] = &[
     "dock.lines",
     "dock.hint",
     "dock.proposals",
+    "palette.field",
+    "issue.pill",
+    "drawer.terminals",
+    "drawer.terminals.tab",
+    "drawer.cables",
+    "drawer.cables.tab",
+    "drawer.cables.accept",
+    "drawer.devices",
+    "drawer.devices.tab",
+    "live.card",
+    "live.pole",
+    "live.coil",
+    "live.output",
     "cabinet.place_all",
     "cabinet.accept",
     "cabinet.rules",
@@ -859,6 +872,18 @@ impl NovoApp {
             }
         }
         learn.seen = std::mem::take(&mut learn.anchors);
+    }
+
+    /// The person's key for a command; a command with no key reads as its
+    /// name in the command palette, never as a blank.
+    pub(super) fn learn_key_text(&self, command: &str) -> String {
+        self.wb.keymap.shortcut_text(command).unwrap_or_else(|| {
+            let label = COMMANDS
+                .iter()
+                .find(|c| c.id == command)
+                .map_or(command, |c| c.label);
+            self.learn.say_with("no_key", &[("label", label)])
+        })
     }
 
     /// Where a control was last drawn.
