@@ -1125,6 +1125,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "view.reset_panels",
+        "Reset panel layout",
+        "View",
+        &["panels", "windows", "layout", "reset", "position", "size"],
+        Needs::Nothing,
+    ),
+    cmd(
         "help.walkthrough",
         "Fast keys walk-through",
         "View",

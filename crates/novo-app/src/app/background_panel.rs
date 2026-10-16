@@ -82,9 +82,8 @@ impl NovoApp {
         let mut commit = false;
         let mut reset = false;
         let mut open = true;
-        egui::Window::new("DXF background")
+        super::panel::dialog(ctx, "DXF background", [420.0, 0.0])
             .open(&mut open)
-            .resizable(false)
             .show(ctx, |ui| {
                 ui.weak(&name);
                 egui::Grid::new("background_grid")

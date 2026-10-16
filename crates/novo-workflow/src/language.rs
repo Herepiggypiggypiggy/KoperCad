@@ -43,6 +43,15 @@ pub const DUTCH: &[Aliases] = &[
         &["rondleiding", "snelle toetsen uitleg"],
     ),
     nl(
+        "view.reset_panels",
+        &[],
+        &[
+            "vensters herstellen",
+            "indeling herstellen",
+            "panelen resetten",
+        ],
+    ),
+    nl(
         "help.show_hints",
         &[],
         &["hints opnieuw tonen", "tips opnieuw", "hints"],

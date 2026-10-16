@@ -224,9 +224,8 @@ impl NovoApp {
         let mut open = true;
         let mut action = None::<PlcAction>;
         let plc = &mut self.wb.live.plc;
-        egui::Window::new("PLC program")
+        super::panel::dialog(ctx, "PLC program", [560.0, 640.0])
             .open(&mut open)
-            .default_size([560.0, 640.0])
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     if ui.button("Open…").clicked() {

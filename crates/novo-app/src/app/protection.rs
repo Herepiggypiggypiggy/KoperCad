@@ -167,9 +167,8 @@ impl NovoApp {
             });
         }
         let mut open = true;
-        egui::Window::new("Protection")
+        super::panel::dialog(ctx, "Protection", [920.0, 600.0])
             .open(&mut open)
-            .default_size([920.0, 600.0])
             .show(ctx, |ui| show(ui, state, &study));
         state.open = open;
     }

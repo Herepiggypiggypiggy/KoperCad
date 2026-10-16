@@ -45,9 +45,8 @@ impl NovoApp {
         let mut ambient_done = false;
         let mut save: Option<StandardsFormat> = None;
         let mut open = true;
-        egui::Window::new("Standards check")
+        super::panel::dialog(ctx, "Standards check", [640.0, 520.0])
             .open(&mut open)
-            .default_size([640.0, 520.0])
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.label("Check against:");

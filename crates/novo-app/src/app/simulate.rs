@@ -291,9 +291,8 @@ impl super::NovoApp {
             state.motor = motors.first().copied();
         }
         let mut open = true;
-        egui::Window::new("Simulate motor start")
+        super::panel::dialog(ctx, "Simulate motor start", [560.0, 0.0])
             .open(&mut open)
-            .default_width(560.0)
             .show(ctx, |ui| {
                 let Some(motor_symbol) = state.motor else {
                     ui.weak("The project has no motor. Place one and give it a power (kW).");
