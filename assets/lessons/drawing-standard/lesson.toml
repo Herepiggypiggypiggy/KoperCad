@@ -1,0 +1,231 @@
+# Lesson: draw to IEC or to NFPA (the drawing standard of a project).
+# Sample project: a stop and start circuit with a lamp, drawn in IEC 60617
+# (project.json); finished.json is the same project after "Switch placed
+# symbols" to NFPA 79. Builder and tests:
+# crates/novo-tests/tests/lessons/standard.rs. Reviewer notes with the
+# verified UI path per step and the GAP list: NOTES.md.
+#
+# STATUS: draft, and it has to stay draft. Two things this lesson teaches do
+# not work in the app yet (verified in code, see the GAP comments):
+#  1. There is no control that switches the placed symbols. The Project
+#     settings window only stores the rule and says "placed symbols stay as
+#     drawn" (project_settings.rs:58-60). The engine exists
+#     (novo_workflow::switch::plan, #447), WS-01 owns the button.
+#  2. The editor only ever loads the IEC symbol library
+#     (novo-editor tool.rs:449 Editor::default -> Catalog::builtin() = IEC;
+#     view.rs:257 builds the canvas artwork from it), so a symbol that carries
+#     an NFPA key is drawn as a placeholder box. The PDF export has the same
+#     limit (pdf.rs:49 uses the editor's library).
+
+format = 1
+id = "drawing-standard"
+version = 1
+status = "draft"
+title = "IEC or NFPA: the Drawing Standard"
+title_nl = "IEC of NFPA: de tekennorm"
+summary = "Switch a project from IEC 60617 to NFPA 79 and see the same circuit drawn with the other symbols."
+summary_nl = "Zet een project om van IEC 60617 naar NFPA 79 en zie hetzelfde schema met de andere symbolen getekend."
+track = "terminals"
+order = 70
+level = "beginner"
+minutes = 6
+topics = ["symbols", "standard", "project settings"]
+needs = []
+next = ["generated-pages"]
+project = "project.json"
+page = "Control circuit"
+
+[[step]]
+id = "goal"
+title = "What you will have"
+title_nl = "Wat je straks hebt"
+text = """
+By the end this circuit is drawn to NFPA 79 instead of IEC 60617.
+It is the same circuit: same tags, same wires, other symbols.
+"""
+text_nl = """
+Straks is dit schema getekend volgens NFPA 79 in plaats van IEC 60617.
+Het is hetzelfde schema: dezelfde tags en draden, andere symbolen.
+"""
+point = { area = { page = "Control circuit", x = 24, y = 16, w = 110, h = 190 } }
+note = [
+  { at = { device = "-K1" }, text = "A coil: a rectangle in IEC", text_nl = "Een spoel: in IEC een rechthoek" },
+  { at = { device = "-H1" }, text = "A lamp: a cross in IEC", text_nl = "Een lamp: in IEC een kruis" },
+]
+pause = true
+
+[[step]]
+id = "open-settings"
+title = "Open the Drawing standard"
+title_nl = "Open de tekennorm"
+# verified: project.standard is labelled "Drawing standard", group Project,
+# keywords iec / nfpa / standard / symbols (commands.rs:177-185); verb
+# "standard" (Dutch alias "tekennorm", language.rs:59). It has no default key,
+# so the command field is the way: Ctrl+K (keymap.rs:313), TextEdit with hint
+# "Search or run: ..." (command_field.rs:184-197); with an empty field it is
+# also listed under the Project heading. The handler opens the "Project
+# settings" window (workbench.rs:550 -> project_settings.rs:55).
+text = """
+Press {key:view.command_palette}, type **standard** and press Enter.
+The Project settings window opens.
+"""
+text_nl = """
+Druk op {key:view.command_palette}, typ **standard** en druk op Enter.
+Het venster Project settings opent.
+"""
+point = { ui = "palette.field" }
+expect = { command = "project.standard" }
+solve = [ { command = "project.standard" } ]
+
+[[step]]
+id = "pick-nfpa"
+title = "Choose NFPA 79"
+title_nl = "Kies NFPA 79"
+# verified: radio buttons "IEC 60617 (default)" and "NFPA 79 / ANSI Y32.2"
+# under the bold label "Drawing standard" (project_settings.rs:57, 63-66).
+# Choosing one runs set_standard (project_settings.rs:28-43): one undo step
+# named "Drawing standard", rule stored as "nfpa" (an IEC project stores "").
+# The window title then reads "<project> · NFPA - KoperCAD" (app.rs:843,
+# project_settings.rs:20-26).
+# GAP: the check wanted is the state "project rule standard = nfpa"; no such
+# check kind exists. `clicked` is the closest.
+text = """
+Click the radio button **NFPA 79 / ANSI Y32.2**.
+The title bar now shows · NFPA after the project name.
+"""
+text_nl = """
+Klik op de keuzeknop **NFPA 79 / ANSI Y32.2**.
+De titelbalk toont nu · NFPA achter de projectnaam.
+"""
+point = { ui = "settings.standard.nfpa" }
+expect = { clicked = "settings.standard.nfpa" }
+# GAP: solve has no operation for a project rule.
+solve = [ { command = "project.standard" } ]
+
+[[step]]
+id = "a-rule-not-a-view"
+title = "It is a rule of the project"
+title_nl = "Het is een regel van het project"
+# verified: the standard is ProjectRules.standard (novo-core entity.rs:101),
+# written to the project file only when it is not IEC (drawing_standard.rs in
+# novo-core tests: only_a_set_standard_reaches_the_file), undoable
+# (gate1_tests.rs:2508-2535), so it is a project rule and not a view or user
+# setting: it travels with the file to a colleague. On its own it does not
+# redraw anything; the window says "Picks the symbol pack for new symbols;
+# placed symbols stay as drawn" (project_settings.rs:58-60).
+# GAP: in the app today even "new symbols" stay IEC: the place wheel asks the
+# catalog for the NFPA twin but the editor's catalog is IEC only, so it falls
+# back to the IEC key (wheel.rs:356-363).
+text = """
+The standard is saved in the project file, so a colleague opens it the same way.
+On its own it redraws nothing: symbols already on the page stay as they are.
+"""
+text_nl = """
+De norm wordt in het projectbestand bewaard, dus een collega opent het precies zo.
+Op zichzelf tekent het niets opnieuw: symbolen die al op de pagina staan blijven zoals ze zijn.
+"""
+pause = true
+
+[[step]]
+id = "switch-symbols"
+title = "Switch the placed symbols"
+title_nl = "Zet de geplaatste symbolen om"
+# GAP (blocking): there is no "Switch placed symbols" control. WS-25 wrote the
+# engine (novo_workflow::switch::plan(project, Pack::Nfpa).command(), one
+# Command::SwitchStandard = one undo step, handoff/ws25/HANDOFF.md "Half-done")
+# and left the button to WS-01 in this window. The anchor id and the label
+# below are the planned ones. Until the button exists this step cannot be
+# done in the app.
+# What the engine does (tests in standard.rs): every symbol gets the key of its
+# twin (`iec/coils/contactor` -> `nfpa/coils/contactor`); tags, pins, positions,
+# wires, parts and roles are untouched; the rule becomes "nfpa".
+text = """
+In the same window, press **Switch placed symbols**.
+Every symbol on every page gets the NFPA drawing of the same device.
+"""
+text_nl = """
+Druk in hetzelfde venster op **Switch placed symbols**.
+Elk symbool op elke pagina krijgt de NFPA-tekening van hetzelfde apparaat.
+"""
+point = { ui = "settings.standard.switch" }
+expect = { device = { tag = "=A1+CAB-K1", symbol = "nfpa/coils/contactor" } }
+# GAP: solve has no operation that switches the standard.
+solve = [ { command = "project.standard" } ]
+
+[[step]]
+id = "look"
+title = "Look at the result"
+title_nl = "Bekijk het resultaat"
+# verified (library): all 174 IEC symbols have an NFPA twin with the same
+# function, behaviour, connection ids and connection points (symbol-packs.md
+# section 2; tests/packs.rs; checked again for this circuit in standard.rs).
+# In this circuit every symbol is drawn differently except the potential
+# feeds (L, N), which are shared. NFPA look: contacts are two bars (NC with a
+# slash), coils and lamps are circles (lamp with its colour letter G), the
+# pushbutton has a stem, the breaker a blade with an arc
+# (symbol-packs.md section 4, render sheets in docs/design/nfpa-breadth/).
+# GAP (blocking): the canvas has no NFPA artwork to draw with (editor loads
+# the IEC library only), so the symbols appear as placeholder boxes.
+text = """
+The coil **-K1** is a circle with an M now, contacts are two bars, the lamp a circle with a G.
+Tags, wires and parts did not change.
+"""
+text_nl = """
+De spoel **-K1** is nu een cirkel met een M, contacten zijn twee streepjes, de lamp een cirkel met een G.
+Tags, draden en onderdelen zijn niet veranderd.
+"""
+point = { area = { page = "Control circuit", x = 24, y = 16, w = 110, h = 190 } }
+note = [
+  { at = { device = "-K1" }, text = "Coil: now a circle with M", text_nl = "Spoel: nu een cirkel met M" },
+  { at = { device = "-S1" }, text = "Start button: contact bars with a stem", text_nl = "Startknop: contactstreepjes met een stang" },
+  { at = { device = "-H1" }, text = "Lamp: circle with G", text_nl = "Lamp: cirkel met G" },
+]
+pause = true
+
+[[step]]
+id = "check-twins"
+title = "What to check afterwards"
+title_nl = "Wat je daarna controleert"
+# verified: switch::plan lists symbols that have no twin
+# (SwitchPlan.without_counterpart, devices_without_counterpart(); switch.rs:
+# 29-67). They keep their old key and still work (every engine reads the
+# function, not the key: symbol-packs.md "Risks", tests nfpa_keys.rs in xref,
+# checks, terminals, plc, sim and canvas). Symbols of a company library belong
+# to no pack and are left alone silently (switch.rs, `foreign`). Today every
+# built-in IEC symbol has a twin, so nothing is left behind in this circuit
+# (plan.is_complete() asserted in standard.rs).
+# GAP: the plan's lists are not shown anywhere in the app; there is no "left
+# as drawn" notice, no marker on such a symbol and no Issues entry.
+# Oddity: wires keep their old route. Twins have the same connection points
+# (checked for all 174), so wires still meet the symbols exactly.
+text = """
+A symbol with no NFPA twin, such as one from your own library, keeps its old drawing.
+Scan the page for any that still look like IEC.
+"""
+text_nl = """
+Een symbool zonder NFPA-tegenhanger, zoals een uit je eigen bibliotheek, houdt zijn oude tekening.
+Loop de pagina na op symbolen die nog op IEC lijken.
+"""
+pause = true
+
+[[step]]
+id = "back-to-iec"
+title = "Going back"
+title_nl = "Terug"
+# verified: the switch is one undo step (standard.rs test
+# one_undo_goes_back_to_iec_and_switching_back_restores_the_start), and the
+# radio button in step pick-nfpa was a separate undo step, so two presses of
+# Ctrl+Z go back to the IEC start; or choose IEC 60617 and press Switch placed
+# symbols (the window's radio alone redraws nothing).
+# Oddity: switch::plan(.., Pack::Iec).command() writes the rule as "iec"
+# where the radio button writes "" for IEC; both read as IEC, the file differs
+# by that one line.
+text = """
+To go back, choose **IEC 60617 (default)** and press **Switch placed symbols** again.
+Or press {key:edit.undo} twice: once for the symbols, once for the rule.
+"""
+text_nl = """
+Om terug te gaan kies je **IEC 60617 (default)** en druk je opnieuw op **Switch placed symbols**.
+Of druk twee keer op {key:edit.undo}: één keer voor de symbolen, één keer voor de regel.
+"""
+pause = true

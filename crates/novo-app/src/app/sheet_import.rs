@@ -8,7 +8,9 @@
 use std::path::Path;
 
 use eframe::egui;
-use novo_interop::sheets::{ImportPlan, Resolution, TableKind, plan_import_with, read_file};
+use novo_interop::sheets::{
+    AddedRow, ImportPlan, Resolution, TableKind, plan_import_with, read_file,
+};
 use novo_parts::Catalog;
 
 use super::{Level, NovoApp};
@@ -145,9 +147,9 @@ impl SheetImport {
         let changed = self.groups.iter().filter(|g| self.has_plain(g)).count();
         let conflicts = self.groups.iter().filter(|g| self.has_conflict(g)).count();
         [
-            self.groups.len() + self.plan.new_devices.len(),
+            self.groups.len() + self.plan.added_rows().len(),
             changed,
-            self.plan.new_devices.len(),
+            self.plan.added_rows().len(),
             conflicts,
             self.plan.rejected.len(),
         ]
@@ -161,8 +163,8 @@ impl SheetImport {
             }
         }
         if self.shows_new() {
-            for i in 0..self.plan.new_devices.len() {
-                self.plan.select_new(i, value);
+            for i in 0..self.plan.added_rows().len() {
+                self.plan.select_added(i, value);
             }
         }
     }
@@ -210,7 +212,7 @@ impl NovoApp {
         };
         let catalog = Catalog::load_default().unwrap_or_default();
         let plan = plan_import_with(doc.project(), &book, &catalog);
-        if plan.changes.is_empty() && plan.new_devices.is_empty() && plan.rejected.is_empty() {
+        if plan.changes.is_empty() && plan.added_rows().is_empty() && plan.rejected.is_empty() {
             let text = format!(
                 "{name}: nothing to import, {} rows match",
                 plan.rows_unchanged
@@ -276,6 +278,13 @@ impl NovoApp {
                     if import.shows_new() {
                         for i in 0..import.plan.new_devices.len() {
                             new_row(ui, &mut import.plan, i);
+                        }
+                        // Terminals, cables and cores the sheet adds.
+                        let skip = import.plan.new_devices.len();
+                        for (k, added) in
+                            import.plan.added_rows().into_iter().enumerate().skip(skip)
+                        {
+                            added_row(ui, &mut import.plan, k, &added);
                         }
                     }
                     if matches!(import.filter, Filter::All | Filter::Rejected) {
@@ -404,6 +413,21 @@ fn row(ui: &mut egui::Ui, import: &mut SheetImport, g: usize) {
         }
     });
     ui.add_space(2.0);
+}
+
+/// One terminal, cable or core the sheet adds: its tick, line and what it is.
+fn added_row(ui: &mut egui::Ui, plan: &mut ImportPlan, index: usize, added: &AddedRow) {
+    let mut selected = added.selected;
+    ui.horizontal_wrapped(|ui| {
+        if ui.checkbox(&mut selected, "").changed() {
+            plan.select_added(index, selected);
+        }
+        ui.weak(format!("{} line {}", added.table.name(), added.line));
+        ui.strong(format!("new {}", added.label));
+        if let Some(parent) = &added.left_out_with {
+            ui.weak(format!("(left out: {parent} is not added)"));
+        }
+    });
 }
 
 /// One device the sheet adds: its tick, line, tag and the values it sets.
@@ -583,6 +607,43 @@ mod tests {
                 .project()
                 .devices()
                 .all(|x| x.tag != tag("-M1"))
+        );
+    }
+
+    #[test]
+    fn a_new_cable_row_is_listed_counted_and_can_be_left_out() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut d, _) = drive_with_sheet(dir.path(), "x");
+        let mut book = export_project(d.app.document().unwrap().project());
+        let mut cables = novo_interop::sheets::Table::new(
+            TableKind::Cables,
+            vec!["Id".into(), "Tag".into(), "Description".into()],
+        );
+        cables.push(vec![
+            Cell::text(""),
+            Cell::text("-W9"),
+            Cell::text("New cable"),
+        ]);
+        book.tables.push(cables);
+        let path = dir.path().join("cable.xlsx");
+        std::fs::write(&path, xlsx_bytes(&book).unwrap()).unwrap();
+        d.app.import_sheet_from(&path);
+        let import = d.app.wb.sheet_import.as_mut().expect("the preview opens");
+        assert_eq!(import.counts()[2], 1, "one added row");
+        assert_eq!(import.plan.selected(), 1);
+        import.filter = Filter::New;
+        import.set_listed(false);
+        assert!(import.plan.is_empty());
+        import.set_listed(true);
+        let import = d.app.wb.sheet_import.take().unwrap();
+        d.app.apply_sheet_import(&import.plan);
+        assert!(
+            d.app
+                .document()
+                .unwrap()
+                .project()
+                .cables()
+                .any(|c| c.tag == tag("-W9"))
         );
     }
 

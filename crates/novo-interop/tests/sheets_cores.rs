@@ -220,13 +220,15 @@ fn bad_cells_reject_the_whole_row_with_every_reason() {
 }
 
 #[test]
-fn no_cores_are_added_and_rows_must_name_a_core() {
+fn a_core_row_past_the_end_adds_a_core_and_rows_must_name_a_core() {
     let (doc, h) = starter();
     let mut book = via_xlsx(&export_project(doc.project()));
     set(&mut book, h.w1, 4, "Core No", Cell::Number(5.0)); // pretend a 5th core
     let plan = plan_import(doc.project(), &book);
+    // A 5th core is a new core (see sheets_new_rows.rs); this one reuses the
+    // name of core 4, so it is refused.
     assert_eq!(plan.rejected.len(), 1);
-    assert!(plan.rejected[0].reasons[0].contains("does not add cores"));
+    assert!(plan.rejected[0].reasons[0].contains("already has a core called"));
     let mut book = via_xlsx(&export_project(doc.project()));
     set(&mut book, h.w1, 4, "Core No", Cell::Empty);
     let plan = plan_import(doc.project(), &book);

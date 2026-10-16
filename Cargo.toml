@@ -99,3 +99,7 @@ codegen-units = 1
 # which makes its tests and the app's debug builds crawl.
 [profile.dev.package.novo-thermal]
 opt-level = 3
+
+# The flow solver is numeric code too (see novo-thermal above).
+[profile.dev.package.novo-cfd]
+opt-level = 3
