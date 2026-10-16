@@ -23,6 +23,7 @@ mod dock;
 mod drawers;
 mod duplicate;
 mod dxf;
+mod eplan_import;
 mod example;
 mod faults;
 mod heat;
@@ -948,6 +949,7 @@ impl NovoApp {
         self.issue_revision_dialog(&ctx);
         self.compare_window(&ctx);
         self.aml_import_dialog(&ctx);
+        self.eplan_import_dialog(&ctx);
         self.eplan_guide_dialog(&ctx);
         self.poll_dwg(&ctx);
         self.protection_window(&ctx);

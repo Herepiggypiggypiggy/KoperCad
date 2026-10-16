@@ -399,6 +399,11 @@ pub const DUTCH: &[Aliases] = &[
         &["automationml", "installatie", "overnemen", "migreren"],
     ),
     nl(
+        "file.import_eplan",
+        &["importeer eplan"],
+        &["eplan", "pxf", "migreren", "overnemen", "paginamacro"],
+    ),
+    nl(
         "file.import_dwg",
         &["importeer dwg"],
         &["autocad", "converter", "achtergrond"],
