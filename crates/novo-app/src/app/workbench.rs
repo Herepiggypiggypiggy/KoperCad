@@ -1034,6 +1034,9 @@ impl NovoApp {
             return;
         }
         let picked = self.with_field(|field, sources| field.show(ctx, canvas, sources));
+        if let Some(rect) = self.wb.field.rect() {
+            self.anchor("palette.field", rect, "Command field");
+        }
         if let Some(target) = picked {
             self.run_target(ctx, target);
         }

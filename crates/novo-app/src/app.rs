@@ -131,6 +131,8 @@ mod example_tests;
 #[cfg(test)]
 mod gate1_tests;
 #[cfg(test)]
+mod learn_replay;
+#[cfg(test)]
 mod learn_tests;
 #[cfg(test)]
 mod lesson_verify_cables;
@@ -708,6 +710,12 @@ impl NovoApp {
         self.learn_project_changed();
         self.canvas.document_replaced();
         self.wb.reports = Default::default();
+        // The live view, an open drawer and a preview belong to the project
+        // they were opened on; a lesson (or any project) starts clean.
+        self.wb.live = Default::default();
+        self.wb.drawer = None;
+        self.wb.renumber = None;
+        self.wb.field.close();
         self.wb.commissioning = None;
         self.wb.sheet = 0;
         self.add_generated_pages();

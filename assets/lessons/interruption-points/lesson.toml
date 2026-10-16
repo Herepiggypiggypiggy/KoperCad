@@ -129,7 +129,7 @@ demo = [
   { key = "Enter" },
 ]
 expect = { tool = "place" }
-solve = [ { command = "tool.place", arg = "ip" } ]
+solve = [ { command = "tool.place", arg = "ip" }, { key = "Enter" } ]
 # verified: `tool.place` with an argument opens the field filled in (workbench.rs); the typed
 #   words choose the symbol and Enter arms the place tool, which the `tool` fact reads.
 # verified headless: step pick-second (the tool is Place only after Enter, not after Q).
