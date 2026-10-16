@@ -78,6 +78,7 @@ mod terminals;
 mod title_revisions;
 mod userkeymap;
 mod variants;
+mod view3d;
 mod wheel;
 mod wire_production;
 mod workbench;
@@ -234,6 +235,7 @@ pub struct NovoApp {
     workspace: workspace::Workspace,
     cabinet: cabinet::CabinetState,
     reports_view: reports_view::ReportsView,
+    view3d: view3d::View3dMode,
     /// The "Size the enclosure" panel and the Enclosures list.
     sizing: sizing::SizingState,
     protection: protection::ProtectionState,
@@ -310,6 +312,7 @@ impl NovoApp {
             workspace: workspace::Workspace::Schematic,
             cabinet: cabinet::CabinetState::new(),
             reports_view: Default::default(),
+            view3d: Default::default(),
             sizing: sizing::SizingState::new(),
             protection: protection::ProtectionState::new(),
             outline_open: false,
@@ -870,6 +873,8 @@ impl NovoApp {
             .show(ui, |ui| {
                 if self.is_open() && self.workspace() == workspace::Workspace::Cabinet {
                     self.cabinet_show(ui);
+                } else if self.is_open() && self.workspace() == workspace::Workspace::View3d {
+                    self.view3d_show(ui);
                 } else if reports {
                     self.reports_central(ui);
                 } else if self.is_open() {

@@ -319,6 +319,7 @@ const APP_COMMANDS: &[&str] = &[
     "export.bom",
     "export.reports",
     "view.reports",
+    "view.3d",
     "report.toc",
     "report.bom",
     "report.devices",
@@ -715,6 +716,7 @@ impl NovoApp {
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
             "view.toggle_marks" => self.wb.marks ^= true,
             "view.reports" => self.switch_workspace(super::workspace::Workspace::Reports),
+            "view.3d" => self.switch_workspace(Workspace::View3d),
             "export.bom" => {
                 self.export_report("bom", super::reports_view::ReportFormat::Excel);
             }

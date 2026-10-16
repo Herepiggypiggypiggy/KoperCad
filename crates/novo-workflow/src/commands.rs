@@ -823,6 +823,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d",
+        "3D view",
+        "View",
+        &["3d", "cabinet in 3d", "orbit", "render"],
+        Needs::Project,
+    ),
+    cmd(
         "view.terminals_drawer",
         "Terminals",
         "View",

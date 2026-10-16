@@ -445,6 +445,7 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["alle rapporten", "excel exporteren"],
     ),
+    nl("view.3d", &[], &["3d", "driedimensionaal"]),
     nl("view.reports", &[], &["rapporten", "lijsten"]),
     nl("report.toc", &["inhoud", "inhoudsopgave"], &["paginalijst"]),
     nl(
