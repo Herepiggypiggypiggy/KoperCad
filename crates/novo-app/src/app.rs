@@ -20,6 +20,9 @@ mod cable_controls;
 mod cable_cores;
 #[cfg(test)]
 mod cable_cores_tests;
+mod calculations;
+#[cfg(test)]
+mod calculations_tests;
 mod change_report;
 mod changes;
 mod checks;
@@ -31,6 +34,7 @@ mod dock;
 mod drawers;
 mod duplicate;
 mod dxf;
+mod electrical;
 mod eplan_import;
 mod example;
 mod faults;
@@ -94,6 +98,7 @@ mod protection;
 mod reports;
 mod reports_view;
 mod revisions;
+mod safety;
 mod sheet_import;
 mod sheets;
 mod shortcuts_sheet;
@@ -1071,6 +1076,9 @@ impl NovoApp {
         self.poll_dwg(&ctx);
         self.protection_window(&ctx);
         self.faults_window(&ctx);
+        self.calculations_window(&ctx);
+        self.electrical_window(&ctx);
+        self.safety_window(&ctx);
         self.numbering_window(&ctx);
         self.page_form_dialog(&ctx);
         self.sheet_import_dialog(&ctx);

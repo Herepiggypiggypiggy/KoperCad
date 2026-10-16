@@ -44,6 +44,7 @@ impl NovoApp {
             .unwrap_or(ambient);
         let mut ambient_done = false;
         let mut save: Option<StandardsFormat> = None;
+        let (mut to_inputs, mut to_calc) = (false, false);
         let mut open = true;
         super::panel::dialog(ctx, "Standards check", [640.0, 520.0])
             .open(&mut open)
@@ -84,6 +85,22 @@ impl NovoApp {
                             .speed(0.5),
                     );
                     ambient_done = r.drag_stopped() || r.lost_focus();
+                });
+                ui.horizontal(|ui| {
+                    if ui
+                        .button("Electrical inputs...")
+                        .on_hover_text("Supply short-circuit current, panel SCCR, machine data and e-stop: the numbers the rules below are unknown without")
+                        .clicked()
+                    {
+                        to_inputs = true;
+                    }
+                    if ui
+                        .button("Calculations...")
+                        .on_hover_text("Cable rating, voltage drop, short circuit and starter sizing with the numbers")
+                        .clicked()
+                    {
+                        to_calc = true;
+                    }
                 });
                 if report.sets.is_empty() {
                     ui.label("Choose at least one standard to see the report.");
@@ -133,6 +150,12 @@ impl NovoApp {
             self.edit_project("Ambient temperature", |tx| {
                 standards::set_info_property(tx, keys::AMBIENT_C, Some(Value::Float(new_ambient)))
             });
+        }
+        if to_inputs {
+            self.toggle_electrical_open();
+        }
+        if to_calc && self.wb.calculations.is_none() {
+            self.toggle_calculations();
         }
         if let Some(format) = save {
             self.export_standards_report(format);

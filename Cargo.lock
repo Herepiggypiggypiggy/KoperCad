@@ -1899,6 +1899,7 @@ dependencies = [
  "novo-reports",
  "novo-revisions",
  "novo-routing",
+ "novo-safety",
  "novo-sim",
  "novo-storage",
  "novo-symbols",
