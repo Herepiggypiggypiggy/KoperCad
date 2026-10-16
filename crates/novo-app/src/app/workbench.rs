@@ -673,9 +673,22 @@ impl NovoApp {
             "heat.toggle" | "heat.airflow" | "heat.contours" | "heat.simulate"
                 if self.is_open() =>
             {
-                self.switch_workspace(Workspace::Cabinet);
-                self.cabinet.table = false;
-                self.cabinet.heat.command(id);
+                // In 3D, Simulate and Airflow act there: the result and its
+                // airflow lines are drawn in the 3D view. The rest is the
+                // plate's map, so it goes to the Cabinet.
+                if self.workspace() == Workspace::View3d
+                    && matches!(id, "heat.simulate" | "heat.airflow")
+                {
+                    if id == "heat.simulate" {
+                        self.cabinet.heat.command(id);
+                    } else {
+                        self.view3d.toggle_heat_airflow();
+                    }
+                } else {
+                    self.switch_workspace(Workspace::Cabinet);
+                    self.cabinet.table = false;
+                    self.cabinet.heat.command(id);
+                }
             }
             "tool.place" => match argument.filter(|a| !a.trim().is_empty()) {
                 Some(text) => self.wb.field.open_with(Mode::Place, text, pointer),

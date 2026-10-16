@@ -984,7 +984,15 @@ impl NovoApp {
             .response
             .rect;
 
-        if !self.focus_mode && !pinned && !reports && self.is_open() {
+        // The Cabinet and 3D bars use the corner the Pages button would
+        // sit on; the page list belongs to the drawing.
+        let drawing = self.workspace() == workspace::Workspace::Schematic;
+        if !self.focus_mode
+            && !pinned
+            && !reports
+            && self.is_open()
+            && (drawing || self.outline_open)
+        {
             self.outline_flyout(&ctx, canvas_rect, &mut picked);
         }
         if !self.focus_mode && self.workspace() == workspace::Workspace::Schematic {

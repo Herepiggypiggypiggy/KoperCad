@@ -69,6 +69,52 @@ pub(super) struct Input {
     pub kept: Option<Arc<Solution>>,
 }
 
+impl Input {
+    /// The plate and its placed devices, with the loss each one gives off.
+    /// Shared by the Cabinet and the 3D view, so a run starts the same way
+    /// from either.
+    pub(super) fn from_layout(
+        project: &novo_core::Project,
+        shown: &novo_layout::state::CabinetLayout,
+        tag_of: &dyn Fn(u64) -> String,
+        ambient: f64,
+        solution: Option<Arc<Solution>>,
+        kept: Option<Arc<Solution>>,
+    ) -> Input {
+        use novo_core::{Device, DeviceId};
+        let items = shown
+            .placements
+            .iter()
+            .map(|p| {
+                let f = p.footprint();
+                let device = project.get::<Device>(DeviceId::from(p.id));
+                let loss = device.map_or(0.0, |d| {
+                    let s = novo_layout::sizing_model::sizing_device(project, d);
+                    s.power_loss * s.load_factor
+                });
+                Item {
+                    id: p.id,
+                    tag: tag_of(p.id),
+                    x: f.x,
+                    y: f.y,
+                    w: f.w,
+                    h: f.h,
+                    loss_w: loss,
+                    loss_known: device
+                        .is_some_and(|d| novo_thermal::bridge::device_loss_w(project, d).is_some()),
+                }
+            })
+            .collect();
+        Input {
+            plate: (shown.plate.width, shown.plate.height),
+            ambient,
+            items,
+            solution,
+            kept,
+        }
+    }
+}
+
 /// What a run needs to remember about the moment it started.
 #[derive(Debug, Clone)]
 pub(super) struct Meta {
@@ -645,7 +691,7 @@ fn totals(input: &Input) -> (f64, usize) {
 }
 
 /// Simulate / Cancel, the fidelity badge and the last notice.
-fn simulate_controls(ui: &mut egui::Ui, state: &mut HeatState) {
+pub(super) fn simulate_controls(ui: &mut egui::Ui, state: &mut HeatState) {
     if state.running() {
         if ui
             .button("Cancel")
@@ -725,7 +771,14 @@ pub(super) fn start_run(
             };
             state.start(bridge.scenario, meta);
         }
-        Err(e) => state.fail(format!("Cannot simulate: {e}")),
+        Err(e) => {
+            let hint = if e.to_string().contains("is not set") {
+                ". Set it in the Cabinet: Size enclosure or Plate setup"
+            } else {
+                ""
+            };
+            state.fail(format!("Cannot simulate: {e}{hint}"));
+        }
     }
 }
 

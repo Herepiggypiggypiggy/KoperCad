@@ -64,6 +64,13 @@ pub(crate) struct View3dMode {
     pub(super) stats: Stats,
 }
 
+impl View3dMode {
+    /// `heat.airflow` while the 3D view is shown.
+    pub(super) fn toggle_heat_airflow(&mut self) {
+        self.heat.lines = !self.heat.lines;
+    }
+}
+
 /// What a `view.*` command asks of the 3D view.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum Pending {
@@ -199,10 +206,42 @@ impl NovoApp {
             mode.synced = (cabinet_rev, mode.view.state.selection.clone());
         }
 
-        let solution = self.cabinet.heat.solution();
-        if let Some(sol) = &solution {
-            heat_controls(ui, &mut mode.heat, sol);
+        // Simulate works from here as it does in the Cabinet: the run is
+        // built from the same plate and devices.
+        self.cabinet.heat.poll(ui.ctx());
+        if self.cabinet.heat.take_request() {
+            let layout = load(project, id);
+            match layout {
+                Some(layout) => {
+                    let tag_of = |d: u64| {
+                        project
+                            .get::<Device>(DeviceId::from(d))
+                            .and_then(|d| d.tag.device_code().map(str::to_owned))
+                            .unwrap_or_default()
+                    };
+                    let input = super::heat::Input::from_layout(
+                        project,
+                        &layout,
+                        &tag_of,
+                        self.sizing.request().ambient_max,
+                        None,
+                        None,
+                    );
+                    super::heat::start_run(&mut self.cabinet.heat, project, id, &input);
+                }
+                None => self
+                    .cabinet
+                    .heat
+                    .fail("Open an enclosure with a mounting plate to simulate".into()),
+            }
         }
+        let solution = self.cabinet.heat.solution();
+        heat_controls(
+            ui,
+            &mut self.cabinet.heat,
+            &mut mode.heat,
+            solution.as_deref(),
+        );
         let wanted = solution.as_ref().map(|s| (s.id, mode.heat));
         // The landing box of a dragged device, rail or duct.
         let landings = mode.mv.landings();
@@ -420,13 +459,34 @@ impl NovoApp {
     }
 }
 
-/// The Heat strip above the 3D view: slice, shell and airflow of the last
-/// simulation result (Cabinet > Heat > Simulate makes one).
-fn heat_controls(ui: &mut egui::Ui, h: &mut Heat3d, sol: &super::heat_run::Solution) {
+/// The Heat strip above the 3D view: Simulate (with progress while it runs),
+/// then slice, shell and airflow of the result. Before a first run it says
+/// how to get one.
+fn heat_controls(
+    ui: &mut egui::Ui,
+    state: &mut super::heat::HeatState,
+    h: &mut Heat3d,
+    sol: Option<&super::heat_run::Solution>,
+) {
     use novo_heatview::cfd::Axis;
-    let range = heat_3d::range(&sol.snapshot, sol.ambient);
     ui.horizontal_wrapped(|ui| {
-        ui.label("Heat");
+        ui.add_space(8.0);
+        ui.label(egui::RichText::new("Heat").strong());
+        super::heat::simulate_controls(ui, state);
+        let Some(sol) = sol else {
+            if !state.running() {
+                ui.label(
+                    egui::RichText::new(
+                        "Press Simulate to see temperatures, airflow and hot spots in 3D",
+                    )
+                    .small()
+                    .color(novo_theme::tokens::TEXT_MUTED),
+                );
+            }
+            return;
+        };
+        let range = heat_3d::range(&sol.snapshot, sol.ambient);
+        ui.separator();
         ui.checkbox(&mut h.slice, "Slice").on_hover_text(
             "A plane through the cabinet coloured by temperature (X across, Y up, Z out of the plate)",
         );
