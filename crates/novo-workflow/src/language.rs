@@ -583,6 +583,11 @@ pub const DUTCH: &[Aliases] = &[
         &["3d snelheid tonen"],
         &["framesnelheid", "prestaties", "snelheid"],
     ),
+    nl(
+        "view.3d_hints",
+        &["3d hulp tonen"],
+        &["muis en toetsen", "bediening"],
+    ),
     nl("view.iso", &[], &["isometrisch", "hoekzicht"]),
     nl("view.front", &[], &["vooraanzicht", "deurzijde"]),
     nl("view.top", &[], &["bovenaanzicht", "van boven"]),

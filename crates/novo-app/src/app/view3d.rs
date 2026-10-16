@@ -24,6 +24,7 @@ use super::heat::{self, HeatState};
 use super::heat_3d::{self, Heat3d, Place};
 use super::view3d_controls::{self, Controls};
 use super::view3d_heat;
+use super::view3d_hints::Hints;
 use super::view3d_move::{self, MoveState};
 use super::view3d_stats::{Build, Stats};
 
@@ -64,6 +65,8 @@ pub(crate) struct View3dMode {
     wires: Option<(StructureId, u64, Vec<WireInput>)>,
     /// The toolbar's layers and door.
     pub(super) controls: Controls,
+    /// The legend of mouse and keys.
+    pub(super) hints: Hints,
     /// The frame statistics panel and the cost of the last scene rebuild.
     pub(super) stats: Stats,
 }
@@ -94,6 +97,7 @@ impl Default for View3dMode {
             built_layers: Layers::default(),
             wires: None,
             controls: Controls::default(),
+            hints: Hints::default(),
             stats: Stats::default(),
         }
     }
@@ -301,6 +305,7 @@ impl NovoApp {
         );
         view3d_heat::show(ui.ctx(), view_rect, &mut self.cabinet.heat, stale);
         mode.stats.frame(ui.ctx(), view_rect, &mut mode.view);
+        mode.hints.show(ui.ctx(), view_rect);
         mode.controls.clamp_door(limit);
         let target = mode.controls.door_target(limit);
         if let Some(angle) = open_angle(scene, DOOR_HINGE, target) {

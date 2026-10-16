@@ -195,6 +195,19 @@ fn hiding_the_door_layer_closes_it_and_a_door_command_brings_it_back() {
     assert_eq!(d.app.view3d.controls.door_deg, 100.0);
 }
 
+#[test]
+fn the_hints_command_folds_and_unfolds_the_legend() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    assert!(d.app.view3d.hints.open);
+    d.app.run_command(&ctx, "view.3d_hints", None);
+    d.frame();
+    assert!(!d.app.view3d.hints.open);
+    d.app.run_command(&ctx, "view.3d_hints", None);
+    assert!(d.app.view3d.hints.open);
+}
+
 /// One frame with `key` pressed, as the app sees a keystroke.
 fn press(d: &mut Drive, key: egui::Key, modifiers: egui::Modifiers) {
     d.frame_with(vec![egui::Event::Key {
