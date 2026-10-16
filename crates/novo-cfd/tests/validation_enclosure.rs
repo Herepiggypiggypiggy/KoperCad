@@ -4,6 +4,7 @@
 
 mod validation;
 use novo_cfd::Control;
+use novo_cfd::flow::{RunStatus, SteadyConfig, SteadyLimits, SteadyRun};
 use novo_cfd::mesh::MeshSettings;
 use novo_cfd::solids::{FlowSetup, SolidsSettings};
 use novo_layout::Rect;
@@ -110,6 +111,69 @@ fn sealed_enclosure_matches_iec_60890_and_the_2d_engine() {
             two_d.balance.mean_rise_k,
         );
         assert!(imbalance.abs() < 0.005);
+        assert!(e_iec.abs() < 0.2, "IEC {e_iec} at {cells} cells");
+        assert!(e_2d.abs() < 0.2, "2D {e_2d} at {cells} cells");
+    }
+}
+
+/// Same as [`mean_air_rise`] with the steady path (pseudo-transient, window
+/// means). Returns the rise, the heat imbalance and the iterations.
+fn mean_air_rise_steady(scn: &Scenario, target_cells: usize) -> (f64, f64, usize) {
+    let st = SolidsSettings {
+        mesh: MeshSettings {
+            target_cells,
+            ..MeshSettings::default()
+        },
+        ..SolidsSettings::default()
+    };
+    let setup = FlowSetup::new(scn, &st).unwrap();
+    let mut s = setup.solver();
+    let mut run = SteadyRun::staged(
+        &s,
+        vec![SteadyConfig::first_order(), SteadyConfig::second_order()],
+        SteadyLimits::default(),
+        scn.ambient_c,
+        Vec::new(),
+    );
+    while run.advance(&mut s, 50) == RunStatus::Running {}
+    let rep = run.report();
+    assert!(rep.converged, "{rep:?}");
+    let med = setup.cfg.medium.as_ref().unwrap();
+    let m = &s.mesh;
+    let (mut sum, mut vol) = (0.0, 0.0);
+    for k in 0..m.n[2] {
+        for j in 0..m.n[1] {
+            for i in 0..m.n[0] {
+                let id = m.cell([i, j, k]);
+                if med.fluid_frac[id] > 0.99 {
+                    let v = m.volume([i, j, k]);
+                    sum += v * s.t[id];
+                    vol += v;
+                }
+            }
+        }
+    }
+    (sum / vol - scn.ambient_c, rep.imbalance, rep.iterations)
+}
+
+/// The steady path against IEC 60890 and the 2D engine, like the march above.
+#[test]
+fn sealed_enclosure_steady_path_matches_iec_60890_and_the_2d_engine() {
+    let scn = scenario(50.0);
+    let two_d = simulate_steady(&scn).unwrap();
+    let iec = two_d.balance.iec_rise_k;
+    for cells in [1000, 1800] {
+        let (rise, imbalance, iterations) = mean_air_rise_steady(&scn, cells);
+        let case = format!("sealed enclosure 50 W, {cells} cells, steady path ({iterations} it)");
+        println!("VALIDATION | {case} | heat balance imbalance | {imbalance:+.4} | 0 | -");
+        let e_iec = report(&case, "mean air rise K vs IEC 60890", rise, iec);
+        let e_2d = report(
+            &case,
+            "mean air rise K vs 2D engine",
+            rise,
+            two_d.balance.mean_rise_k,
+        );
+        assert!(imbalance.abs() < 0.02);
         assert!(e_iec.abs() < 0.2, "IEC {e_iec} at {cells} cells");
         assert!(e_2d.abs() < 0.2, "2D {e_2d} at {cells} cells");
     }

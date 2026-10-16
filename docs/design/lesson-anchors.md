@@ -43,6 +43,19 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `cabinet.heat`: {ui:cabinet.heat} shows **Heat**
 - `cabinet.canvas`: {ui:cabinet.canvas} shows **Cabinet canvas**
 - `workspace.view3d`: {ui:workspace.view3d} shows **3D canvas**
+- `switcher.schematic`: {ui:switcher.schematic} shows **Schematic chip**
+- `switcher.cabinet`: {ui:switcher.cabinet} shows **Cabinet chip**
+- `switcher.view3d`: {ui:switcher.view3d} shows **3D chip**
+- `switcher.reports`: {ui:switcher.reports} shows **Reports chip**
+- `switcher.commissioning`: {ui:switcher.commissioning} shows **Commissioning chip**
+- `outline.pages`: {ui:outline.pages} shows **Pages list**
+- `commissioning.who`: {ui:commissioning.who} shows **By field**
+- `commissioning.punch`: {ui:commissioning.punch} shows **Punch tab**
+- `commissioning.report`: {ui:commissioning.report} shows **Report PDF button**
+- `commissioning.next_open`: {ui:commissioning.next_open} shows **Next open button**
+- `commissioning.pass`: {ui:commissioning.pass} shows **Pass button**
+- `commissioning.fail`: {ui:commissioning.fail} shows **Fail button**
+- `commissioning.resolve`: {ui:commissioning.resolve} shows **Resolve button**
 - `cabinet.unplaced`: {ui:cabinet.unplaced} shows **Unplaced list**
 - `cabinet.problems`: {ui:cabinet.problems} shows **Problems**
 - `cabinet.inspector`: {ui:cabinet.inspector} shows **Cabinet inspector**

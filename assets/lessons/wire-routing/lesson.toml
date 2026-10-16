@@ -10,7 +10,7 @@
 format = 1
 id = "wire-routing"
 version = 2
-status = "early"
+status = "ready"
 title = "Route the wires and watch the ducts"
 title_nl = "Draden routeren en de kanalen in de gaten houden"
 summary = "Switch on Route all, read the length of every wire and the fill of every duct, and see a move change the numbers."
