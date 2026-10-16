@@ -8,8 +8,8 @@ use eframe::egui;
 use super::cabinet::Ask;
 use novo_canvas::Viewport;
 use novo_core::{Project, Rail, RailKind, StructureId};
-use novo_routing::Kind;
 use novo_routing::model::route_project;
+use novo_routing::{Kind, WireRules, project_rules};
 use novo_theme::tokens;
 
 /// One routed wire, as a polyline in plate millimetres.
@@ -59,6 +59,8 @@ pub(super) struct Overlay {
     pub(super) rows: Vec<RouteRow>,
     /// What the designer has to look at, in words.
     pub(super) notes: Vec<String>,
+    /// The project's wire production rules the lengths were made with.
+    pub(super) rules: WireRules,
 }
 
 impl Overlay {
@@ -94,8 +96,12 @@ impl Overlay {
 /// overlay. Empty when no wire has both ends placed on this plate.
 pub(super) fn overlay(project: &Project, structure: StructureId) -> Overlay {
     let routed = route_project(project);
+    let rules = WireRules::of(project);
     let Some((_, plan)) = routed.plans.iter().find(|(s, _)| *s == structure) else {
-        return Overlay::default();
+        return Overlay {
+            rules,
+            ..Overlay::default()
+        };
     };
     let rows = rows(project, &routed, plan);
     let notes = notes(plan, &routed, &rows);
@@ -139,6 +145,7 @@ pub(super) fn overlay(project: &Project, structure: StructureId) -> Overlay {
         ducts,
         rows,
         notes,
+        rules,
     }
 }
 
@@ -243,14 +250,60 @@ fn notes(
     notes
 }
 
-/// Green up to 80% of the allowed fill, amber to 100%, red above.
-fn tint(ratio: f64) -> egui::Color32 {
-    if ratio > 1.0 {
-        tokens::ERROR
-    } else if ratio > 0.8 {
-        tokens::WARNING
-    } else {
-        tokens::SUCCESS
+/// How a duct reads on the plate. The colour is never the only cue: each
+/// tone has its own label ([`duct_label`]) and the over-full one says so in
+/// words.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Tone {
+    /// Nothing runs in it: drawn faintly, no label.
+    Idle,
+    /// Up to 80% of the allowed fill.
+    Ok,
+    /// Above 80%, up to the limit.
+    Busy,
+    /// Above the allowed fill.
+    Over,
+    /// Wires run in it but it has no cross-section yet.
+    NoSize,
+}
+
+pub(super) fn tone(d: &DuctFill) -> Tone {
+    match d.ratio {
+        _ if d.wires == 0 => Tone::Idle,
+        None => Tone::NoSize,
+        Some(r) if r > 1.0 => Tone::Over,
+        Some(r) if r > 0.8 => Tone::Busy,
+        Some(_) => Tone::Ok,
+    }
+}
+
+fn colour(tone: Tone) -> egui::Color32 {
+    match tone {
+        Tone::Idle | Tone::NoSize => tokens::TEXT_MUTED,
+        Tone::Ok => tokens::SUCCESS,
+        Tone::Busy => tokens::WARNING,
+        Tone::Over => tokens::ERROR,
+    }
+}
+
+/// The text on a duct, longest form first so the caller can take the first
+/// that fits: the fill and the wires in it (`62% · 4`), then the fill alone
+/// (`62%`); `over 112% · 9` past the limit, `no size · 3` without a
+/// cross-section. Empty for a duct nothing runs in.
+pub(super) fn duct_labels(d: &DuctFill) -> Vec<String> {
+    let percent = |r: f64| (r * 100.0).round();
+    match (tone(d), d.ratio) {
+        (Tone::Idle, _) => Vec::new(),
+        (Tone::NoSize, _) | (_, None) => vec![format!("no size · {}", d.wires), "no size".into()],
+        (Tone::Over, Some(r)) => vec![
+            format!("over {:.0}% · {}", percent(r), d.wires),
+            format!("over {:.0}%", percent(r)),
+            format!("{:.0}%", percent(r)),
+        ],
+        (_, Some(r)) => vec![
+            format!("{:.0}% · {}", percent(r), d.wires),
+            format!("{:.0}%", percent(r)),
+        ],
     }
 }
 
@@ -274,12 +327,12 @@ impl OverlayCache {
     }
 }
 
-/// A fill label needs this much room on screen (points), else it is left
-/// off and the tint alone shows the duct.
-const LABEL_MIN: egui::Vec2 = egui::vec2(30.0, 14.0);
-
-fn fits(area: egui::Rect) -> bool {
-    area.width() >= LABEL_MIN.x && area.height() >= LABEL_MIN.y
+/// Room (points) a label of `chars` characters needs on screen: about 6
+/// points a character and a line of text high; too small and the tint and
+/// outline alone show the duct. A narrow vertical duct has no room for text
+/// at all (nothing is rotated).
+fn fits(area: egui::Rect, label: &str) -> bool {
+    area.width() >= 6.0 * label.chars().count() as f32 + 6.0 && area.height() >= 14.0
 }
 
 /// The route table beside the plate: the summary, what to look at, the
@@ -292,6 +345,9 @@ pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) ->
         .show(ui, |ui| {
             ui.add_space(6.0);
             ui.strong("Routes");
+            if let Some(a) = rules_section(ui, &overlay.rules) {
+                ask = Some(a);
+            }
             if overlay.rows.is_empty() {
                 ui.weak("No wire has both ends placed on this plate");
                 return;
@@ -359,6 +415,80 @@ pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) ->
     ask
 }
 
+/// The wire production rules, kept in the project: service loop, duct
+/// reach and fill limit, end allowances, estimate constants. Collapsed by
+/// default; a changed value is kept when the drag ends or the entry loses
+/// focus, so one edit is one undo step. A reset arrow puts a rule back to
+/// its default.
+fn rules_section(ui: &mut egui::Ui, rules: &WireRules) -> Option<Ask> {
+    let mut ask = None;
+    let custom = project_rules::RULES
+        .iter()
+        .filter(|r| rules.value(r.key).is_some_and(|v| v != r.default))
+        .count();
+    let title = if custom == 0 {
+        "Wire rules".to_owned()
+    } else {
+        format!("Wire rules ({custom} changed)")
+    };
+    egui::CollapsingHeader::new(title)
+        .id_salt("cabinet_wire_rules")
+        .default_open(false)
+        .show(ui, |ui| {
+            ui.weak(
+                "Kept in the project. They set cut lengths, the wire list and the wire cut file.",
+            );
+            for r in &project_rules::RULES {
+                let Some(current) = rules.value(r.key) else {
+                    continue;
+                };
+                let id = egui::Id::new(("wire_rule", r.key));
+                ui.horizontal(|ui| {
+                    ui.label(r.label);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if current != r.default
+                            && ui
+                                .small_button("\u{21ba}")
+                                .on_hover_text(format!("Back to {} {}", r.default, r.unit))
+                                .clicked()
+                        {
+                            ask = Some(Ask::SetWireRule(r.key, None));
+                        }
+                        let mut value = ui.data(|d| d.get_temp::<f64>(id)).unwrap_or(current);
+                        let speed = ((r.max - r.min) / 400.0).clamp(0.01, 5.0);
+                        let response = ui.add(
+                            egui::DragValue::new(&mut value)
+                                .range(r.min..=r.max)
+                                .speed(speed)
+                                .suffix(format!(" {}", r.unit)),
+                        );
+                        if response.changed() {
+                            ui.data_mut(|d| d.insert_temp(id, value));
+                        }
+                        if (response.drag_stopped() || response.lost_focus())
+                            && ui.data(|d| d.get_temp::<f64>(id)).is_some()
+                        {
+                            ui.data_mut(|d| d.remove_temp::<f64>(id));
+                            if value != current {
+                                ask = Some(Ask::SetWireRule(r.key, Some(value)));
+                            }
+                        }
+                    });
+                });
+            }
+            if !rules.ignored.is_empty() {
+                ui.colored_label(
+                    tokens::WARNING,
+                    format!(
+                        "{} in the file could not be read and use the default",
+                        rules.ignored.join(", ")
+                    ),
+                );
+            }
+        });
+    ask
+}
+
 /// Paints the overlay. `rect` is the canvas widget's screen rectangle.
 pub(super) fn draw(painter: &egui::Painter, rect: egui::Rect, view: &Viewport, overlay: &Overlay) {
     let to_screen = |x: f32, y: f32| {
@@ -368,32 +498,26 @@ pub(super) fn draw(painter: &egui::Painter, rect: egui::Rect, view: &Viewport, o
     for d in &overlay.ducts {
         let (x, y, w, h) = d.rect;
         let area = egui::Rect::from_two_pos(to_screen(x, y), to_screen(x + w, y + h));
-        match d.ratio {
-            Some(ratio) => {
-                let c = tint(ratio);
-                painter.rect_filled(area, 0.0, c.gamma_multiply(0.25));
-                if d.wires > 0 && fits(area) {
-                    painter.text(
-                        area.center(),
-                        egui::Align2::CENTER_CENTER,
-                        format!("{:.0}%", ratio * 100.0),
-                        egui::FontId::proportional(tokens::FONT_SMALL),
-                        c,
-                    );
-                }
-            }
-            None => {
-                painter.rect_filled(area, 0.0, tokens::TEXT_MUTED.gamma_multiply(0.2));
-                if d.wires > 0 && fits(area) {
-                    painter.text(
-                        area.center(),
-                        egui::Align2::CENTER_CENTER,
-                        "no size",
-                        egui::FontId::proportional(tokens::FONT_SMALL),
-                        tokens::TEXT_MUTED,
-                    );
-                }
-            }
+        let tone = tone(d);
+        let c = colour(tone);
+        let wash = if tone == Tone::Idle { 0.1 } else { 0.25 };
+        painter.rect_filled(area, 0.0, c.gamma_multiply(wash));
+        if tone != Tone::Idle {
+            painter.rect_stroke(
+                area,
+                0.0,
+                egui::Stroke::new(1.0, c.gamma_multiply(0.7)),
+                egui::StrokeKind::Inside,
+            );
+        }
+        if let Some(label) = duct_labels(d).into_iter().find(|l| fits(area, l)) {
+            painter.text(
+                area.center(),
+                egui::Align2::CENTER_CENTER,
+                label,
+                egui::FontId::proportional(tokens::FONT_SMALL),
+                c,
+            );
         }
     }
     for r in &overlay.routes {

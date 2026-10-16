@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use novo_core::{CableId, EntityKind, Project};
-use novo_routing::Rules;
+use novo_routing::WireRules;
 use novo_routing::model::{Connection, route_connections};
 
 use crate::report::{Dependencies, Report};
@@ -53,7 +53,7 @@ fn layout_lengths(project: &Project) -> HashMap<CableId, f64> {
     {
         return HashMap::new();
     }
-    let routed = route_connections(project, &connections, &Rules::default());
+    let routed = route_connections(project, &connections, &WireRules::of(project).routing);
     let mut lengths: HashMap<CableId, f64> = HashMap::new();
     for (id, route) in routed.routes {
         let metres = (route.length_mm / 100.0).ceil() / 10.0;

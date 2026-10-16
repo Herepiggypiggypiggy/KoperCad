@@ -119,6 +119,8 @@ pub(super) enum Ask {
     TogglePlateCard,
     ToggleRoutes,
     ExportWireCut,
+    /// Set a wire production rule of the project (`None` back to its default).
+    SetWireRule(&'static str, Option<f64>),
     ExportWireProduction,
     ExportWiringDxf(StructureId),
     /// Select a placed device (from the problems list), on the plate.
@@ -931,6 +933,11 @@ impl NovoApp {
                 self.export_plate_pdf();
             }
             Ask::ToggleRoutes => self.cabinet.routes ^= true,
+            Ask::SetWireRule(key, value) => {
+                self.cabinet_edit("Wire rule", move |tx| {
+                    novo_routing::project_rules::set_rule(tx, key, value)
+                });
+            }
             Ask::ExportWireCut => {
                 self.export_wire_cut();
             }
