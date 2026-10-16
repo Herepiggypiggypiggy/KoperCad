@@ -19,6 +19,8 @@ const RING: f32 = 110.0;
 const REACH: f32 = 200.0;
 /// How long a held key has to stay down before it opens the wheel.
 pub(super) const HOLD: f64 = 0.25;
+/// How long the place key must be seen up before a new press counts.
+pub(super) const REARM: f64 = 0.08;
 /// How long the pointer must stay on another wedge before the outer ring
 /// follows it, so a path from one wedge's items that clips a neighbouring
 /// wedge does not change the choice.
@@ -177,13 +179,64 @@ impl NovoApp {
     /// A key that opens the wheel went down: a tap runs the command, a
     /// hold of [`HOLD`] seconds opens the wheel instead. Decided on later
     /// frames by [`Self::place_hold_tick`].
+    ///
+    /// A press is ignored while an earlier one is still being decided or
+    /// the key has not been seen up since (see [`Self::place_hold_tick`]):
+    /// Windows can deliver a held key's repeats as fresh presses, which
+    /// used to re-arm the hold and open the part search under the wheel.
     pub(super) fn arm_place_hold(&mut self, ctx: &egui::Context) {
+        if self.wb.place_hold.is_some() || self.wb.place_latch.is_some() {
+            return;
+        }
         let (time, down) = ctx.input(|i| (i.time, i.keys_down.iter().copied().collect::<Vec<_>>()));
         self.wb.place_hold = Some((time, down));
         ctx.request_repaint_after(std::time::Duration::from_secs_f64(HOLD));
     }
 
+    /// A fresh press of the place key while only the wheel is up. Looked at,
+    /// not taken: the wheel reads its own keys.
+    pub(super) fn wheel_place_press(&self, ctx: &egui::Context) -> bool {
+        if self.wb.wheel.is_none() || self.modal_open_but_wheel() {
+            return false;
+        }
+        ctx.input(|i| {
+            i.events.iter().any(|e| {
+                let egui::Event::Key {
+                    key,
+                    pressed: true,
+                    repeat: false,
+                    modifiers,
+                    ..
+                } = e
+                else {
+                    return false;
+                };
+                crate::keys::chord_of(*key, *modifiers).is_some_and(|c| {
+                    self.wb
+                        .keymap
+                        .resolve(c, novo_workflow::keymap::Focus::Canvas)
+                        == Some("tool.place")
+                })
+            })
+        })
+    }
+
     pub(super) fn place_hold_tick(&mut self, ctx: &egui::Context) {
+        // After a decision the keys stay latched until one has been up for
+        // `REARM` seconds (as the hold itself ends when any of them is let go), so repeats cannot start a second decision.
+        if let Some((keys, up_since)) = self.wb.place_latch.take() {
+            let (now, any_down) =
+                ctx.input(|i| (i.time, keys.iter().all(|k| i.keys_down.contains(k))));
+            if any_down {
+                self.wb.place_latch = Some((keys, None));
+            } else {
+                let since = up_since.unwrap_or(now);
+                if now - since < REARM {
+                    self.wb.place_latch = Some((keys, Some(since)));
+                    ctx.request_repaint_after(std::time::Duration::from_secs_f64(REARM));
+                }
+            }
+        }
         let Some((since, keys)) = &self.wb.place_hold else {
             return;
         };
@@ -196,9 +249,13 @@ impl NovoApp {
         let (since, keys) = (*since, keys.clone());
         if !down {
             self.wb.place_hold = None;
+            // A tap with the wheel still up from an earlier hold replaces it.
+            self.wb.wheel = None;
             self.run_command(ctx, "tool.place", None);
         } else if now - since >= HOLD {
             self.wb.place_hold = None;
+            self.wb.place_latch = Some((keys.clone(), None));
+            self.wb.field.close();
             self.open_wheel(ctx, keys);
         } else {
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(HOLD - (now - since)));
