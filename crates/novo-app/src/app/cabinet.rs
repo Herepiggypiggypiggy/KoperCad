@@ -444,7 +444,9 @@ impl NovoApp {
         let has_plan = self.cabinet.preview.is_some();
 
         let mut ask: Option<Ask> = None;
-        ui.horizontal(|ui| {
+        // Wrapped, so no header button (Table, Place all) is ever clipped
+        // off a narrow window.
+        ui.horizontal_wrapped(|ui| {
             ui.add_space(8.0);
             let current = location
                 .as_ref()
@@ -592,6 +594,14 @@ impl NovoApp {
                 self.cabinet.keys.clear();
                 self.cabinet.drag = None;
                 self.cabinet.ghost = None;
+                // Escape leaves the table for the plate.
+                let leave = !self.wb.field.is_open()
+                    && !self.modal_open()
+                    && !ui.ctx().egui_wants_keyboard_input()
+                    && ui.input(|i| i.key_pressed(egui::Key::Escape));
+                if leave {
+                    ask = Some(Ask::ToggleTable);
+                }
                 let selected = self.cabinet_selected();
                 if let Some(id) = cabinet_table(ui, &shown, &cands, &tag_of, &selected) {
                     // A row is its device: select it and show it on the plate.

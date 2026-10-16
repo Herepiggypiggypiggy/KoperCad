@@ -687,3 +687,63 @@ fn moving_a_device_during_the_place_all_preview_takes_the_preview_first() {
     let p = l.placements.iter().find(|p| p.id == device).unwrap();
     assert_eq!((p.x, p.y), (300.0, 200.0));
 }
+
+#[test]
+fn the_table_face_can_be_left_by_key_and_by_button() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (_, _) = selected_on_plate(&mut d);
+    let ctrl_t = |d: &mut Drive| {
+        d.frame_with(vec![egui::Event::Key {
+            key: egui::Key::T,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::COMMAND,
+        }]);
+        d.frame();
+    };
+    for _ in 0..2 {
+        ctrl_t(&mut d);
+        assert!(d.app.cabinet.table, "Ctrl+T shows the table");
+        ctrl_t(&mut d);
+        assert!(!d.app.cabinet.table, "Ctrl+T returns to the plate");
+    }
+    // The header button and a selected row also lead back.
+    d.app.cabinet_ask(Ask::ToggleTable, None, None, &[]);
+    assert!(d.app.cabinet.table);
+    d.app.cabinet_ask(Ask::ToggleTable, None, None, &[]);
+    assert!(!d.app.cabinet.table);
+    // Leaving the Cabinet and coming back never strands the table face.
+    d.app.cabinet_ask(Ask::ToggleTable, None, None, &[]);
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::ShowSchematic);
+    d.frame();
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    ctrl_t(&mut d);
+    assert!(
+        !d.app.cabinet.table || {
+            ctrl_t(&mut d);
+            !d.app.cabinet.table
+        }
+    );
+}
+
+#[test]
+fn escape_and_the_cabinet_tab_also_leave_the_table() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (_, _) = selected_on_plate(&mut d);
+    let ctx = d.ctx.clone();
+    d.app.cabinet_ask(Ask::ToggleTable, None, None, &[]);
+    d.frame();
+    press(&mut d, egui::Key::Escape);
+    d.frame();
+    assert!(!d.app.cabinet.table, "Escape returns to the plate");
+    d.app.cabinet_ask(Ask::ToggleTable, None, None, &[]);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    assert!(!d.app.cabinet.table, "the Cabinet tab returns to the plate");
+    assert_eq!(d.app.workspace(), Workspace::Cabinet);
+}

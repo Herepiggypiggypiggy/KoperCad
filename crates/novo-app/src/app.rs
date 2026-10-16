@@ -473,7 +473,14 @@ impl NovoApp {
             Action::Redo => self.undo_redo(true),
             Action::ZoomToFit => self.canvas.zoom_to_fit(),
             Action::ShowSchematic => self.switch_workspace(workspace::Workspace::Schematic),
-            Action::ShowCabinet => self.switch_workspace(workspace::Workspace::Cabinet),
+            Action::ShowCabinet => {
+                // Asking for the Cabinet again from its table face (Ctrl+2,
+                // the Cabinet tab) goes back to the plate drawing.
+                if self.workspace() == workspace::Workspace::Cabinet {
+                    self.cabinet.table = false;
+                }
+                self.switch_workspace(workspace::Workspace::Cabinet);
+            }
             Action::SizeEnclosure => {
                 self.switch_workspace(workspace::Workspace::Cabinet);
                 self.sizing.panel_open = true;
