@@ -16,8 +16,9 @@ use novo_layout::model::{
 };
 use novo_layout::plan::Plan;
 use novo_layout::state::CabinetLayout;
+use novo_layout::surfaces::MAIN_PLATE;
 
-use super::cabinet_bar;
+use super::cabinet_bar::{self, Foldable};
 use super::cabinet_door::DoorState;
 use super::cabinet_inspector;
 use super::cabinet_routes;
@@ -58,6 +59,12 @@ pub(super) struct CabinetState {
     pub(super) table: bool,
     /// The plate card of the inspector is shown with nothing selected.
     pub(super) plate_card: bool,
+    /// The surface picked in the header (`None` is the mounting plate) and
+    /// the picker asked to open by `cabinet.surface`.
+    pub(super) surface: Option<String>,
+    pub(super) surface_open: bool,
+    /// The id of the picker's popup, as egui's combo box keys it.
+    pub(super) surface_popup: Option<egui::Id>,
     /// Every wire's route is drawn over the plate, with the route table
     /// beside it (Route all).
     pub(super) routes: bool,
@@ -110,6 +117,9 @@ impl CabinetState {
             panel_fields: Default::default(),
             table: false,
             plate_card: false,
+            surface: None,
+            surface_open: false,
+            surface_popup: None,
             routes: false,
             routes_cache: Default::default(),
             rules: cabinet_rules::RulesState::new(),
@@ -131,6 +141,7 @@ pub(super) enum Ask {
     PlaceAll,
     /// Export the plate drawing PDF of the shown enclosure.
     ExportPlate,
+    ExportPlateDxf,
     Accept,
     Cancel,
     ToggleTable,
@@ -409,6 +420,16 @@ impl NovoApp {
                 .map(|s| s.id)
         });
         let layout = structure.and_then(|s| load(project, s));
+        let surfaces = structure.and_then(|s| super::cabinet_surfaces::summarize(project, s));
+        if let Some(sum) = &surfaces
+            && self
+                .cabinet
+                .surface
+                .as_deref()
+                .is_some_and(|n| sum.row(n).is_none())
+        {
+            self.cabinet.surface = None;
+        }
         self.cabinet.rules.ensure_loaded();
         let judged = match (structure, &layout) {
             (Some(s), Some(_)) => Some(cabinet_rules::judge(project, s, &self.cabinet.rules.rules)),
@@ -455,7 +476,8 @@ impl NovoApp {
                     + r.outside.len()
                     + r.too_close.len()
                     + r.rail_overflows.len()
-                    + s.door_report().map_or(0, |d| d.problems());
+                    + s.door_report().map_or(0, |d| d.problems())
+                    + s.swing_report().map_or(0, |d| d.problems());
                 (l.placements.len(), l.unplaced(&cands).len(), problems)
             }
             _ => (0, cands.len(), 0),
@@ -466,16 +488,72 @@ impl NovoApp {
         });
 
         let mut ask: Option<Ask> = None;
-        let narrow = ui.available_width() < cabinet_bar::WIDE;
         let place_key = self.command_shortcut_text(ui.ctx(), "cabinet.place-all");
         let plate_face = !self.cabinet.table;
         let mut anchors: Vec<cabinet_bar::Anchor> = Vec::new();
+        let fold = {
+            use cabinet_bar::{Foldable, GROUP_GAP, button_width, text_width};
+            let pad = 2.0 * ui.spacing().button_padding.x;
+            let panel = text_width(
+                ui,
+                &location
+                    .as_ref()
+                    .map_or_else(|| "No panel".to_owned(), ToString::to_string),
+            ) + pad
+                + ui.spacing().icon_width
+                + 8.0;
+            let place = 1.2 * button_width(ui, icons::SQUARES_FOUR, "Place all")
+                + place_key
+                    .as_deref()
+                    .map_or(0.0, |k| text_width(ui, k) + 12.0);
+            let route = if plate_face {
+                GROUP_GAP + button_width(ui, icons::PATH, "Route all")
+            } else {
+                0.0
+            };
+            let view = button_width(ui, "", "Plate") + button_width(ui, "", "Table") + pad;
+            let fixed = 4.0 + GROUP_GAP * 3.0 + panel + place + route + view;
+            let more = GROUP_GAP + button_width(ui, icons::DOTS_THREE, "More");
+            let mut items = vec![
+                (
+                    Foldable::Rules,
+                    button_width(ui, icons::SLIDERS_HORIZONTAL, "Rules"),
+                ),
+                (
+                    Foldable::Rails,
+                    button_width(ui, icons::ROWS, "Rails and ducts"),
+                ),
+                (
+                    Foldable::CutList,
+                    button_width(ui, icons::SCISSORS, "Cut list"),
+                ),
+                (
+                    Foldable::Export,
+                    GROUP_GAP + button_width(ui, icons::EXPORT, "Export") + 8.0,
+                ),
+            ];
+            if plate_face {
+                items.push((
+                    Foldable::Arrange,
+                    GROUP_GAP
+                        + button_width(ui, icons::RULER, "Plate setup")
+                        + button_width(ui, icons::ARROWS_OUT, "Size enclosure"),
+                ));
+                items.push((Foldable::Heat, button_width(ui, icons::FLAME, "Heat")));
+            }
+            if layout.is_none() || has_plan {
+                items.clear();
+            }
+            cabinet_bar::Fold::plan(ui.available_width(), fixed, more, &items)
+        };
+        let captions = ui.available_width() >= cabinet_bar::WIDE;
+        let caption = |c: &'static str| captions.then_some(c);
         let mut all_placed_note = false;
         let mut delete_rail: Option<u64> = None;
         let mut move_rail: Option<super::cabinet_rails::RailDrag> = None;
         ui.horizontal_top(|ui| {
             ui.add_space(4.0);
-            cabinet_bar::group(ui, "Panel", |ui| {
+            cabinet_bar::group(ui, caption("Panel"), |ui| {
                 let current = location
                     .as_ref()
                     .map_or_else(|| "No panel".to_owned(), ToString::to_string);
@@ -491,25 +569,44 @@ impl NovoApp {
                             }
                         }
                     });
-                match (structure, &location) {
-                    (None, Some(l)) => {
-                        if ui.button("Create cabinet").clicked() {
-                            ask = Some(Ask::CreateCabinet(l.clone()));
-                        }
-                    }
-                    (Some(s), _)
-                        if layout.is_none() && ui.button("Set plate 600 x 800 mm").clicked() =>
-                    {
-                        ask = Some(Ask::SetPlate(s));
-                    }
-                    _ => {}
-                }
             });
             if layout.is_none() {
                 return;
             }
+            if let Some(sum) = surfaces.as_ref().filter(|s| s.rows.len() > 1) {
+                cabinet_bar::group(ui, caption("Surface"), |ui| {
+                    let picked = self.cabinet.surface.clone();
+                    let current = picked.clone().unwrap_or_else(|| MAIN_PLATE.to_owned());
+                    let combo = egui::ComboBox::from_id_salt("cabinet_surface")
+                        .selected_text(current.clone());
+                    let popup = ui.make_persistent_id("cabinet_surface").with("popup");
+                    self.cabinet.surface_popup = Some(popup);
+                    if std::mem::take(&mut self.cabinet.surface_open) {
+                        egui::Popup::open_id(ui.ctx(), popup);
+                    }
+                    let r = combo.show_ui(ui, |ui| {
+                        for row in &sum.rows {
+                            let on = row.name == current;
+                            let line = ui.selectable_label(on, row.label());
+                            if line.clicked() {
+                                self.cabinet.surface =
+                                    (row.name != MAIN_PLATE).then(|| row.name.clone());
+                            }
+                        }
+                    });
+                    let r = r
+                        .response
+                        .on_hover_text("Surface to work on (View > Cabinet > Cabinet surfaces)");
+                    cabinet_bar::note(&mut anchors, "cabinet.surface", "Surface", &r);
+                    if !sum.problems.is_empty() {
+                        let text = format!("{} surface problems", sum.problems.len());
+                        cabinet_bar::pill(ui, &text, Some(novo_theme::widgets::Level::Warning))
+                            .on_hover_text(sum.problems.join("\n"));
+                    }
+                });
+            }
             if has_plan {
-                cabinet_bar::group(ui, "Preview, nothing stored yet", |ui| {
+                cabinet_bar::group(ui, Some("Preview, nothing stored yet"), |ui| {
                     let accept =
                         cabinet_bar::primary(ui, icons::CHECK, "Accept", Some("Enter"), true);
                     if cabinet_bar::note(&mut anchors, "cabinet.accept", "Accept", &accept)
@@ -523,7 +620,7 @@ impl NovoApp {
                 });
                 return;
             }
-            cabinet_bar::group(ui, "Place", |ui| {
+            cabinet_bar::group(ui, caption("Place"), |ui| {
                 let r = cabinet_bar::primary(
                     ui,
                     icons::SQUARES_FOUR,
@@ -547,7 +644,7 @@ impl NovoApp {
                 if r.clicked() {
                     ask = Some(Ask::PlaceAll);
                 }
-                if !narrow {
+                if !fold.has(Foldable::Rules) {
                     let rules = cabinet_bar::button(ui, icons::SLIDERS_HORIZONTAL, "Rules", false)
                         .on_hover_text("Where Place all puts each kind of device");
                     if cabinet_bar::note(&mut anchors, "cabinet.rules", "Rules", &rules).clicked() {
@@ -555,8 +652,8 @@ impl NovoApp {
                     }
                 }
             });
-            if !narrow && plate_face {
-                cabinet_bar::group(ui, "Arrange", |ui| {
+            if plate_face && !fold.has(Foldable::Arrange) {
+                cabinet_bar::group(ui, caption("Arrange"), |ui| {
                     let plate = cabinet_bar::button(
                         ui,
                         icons::RULER,
@@ -582,8 +679,8 @@ impl NovoApp {
                     }
                 });
             }
-            if plate_face || !narrow {
-                cabinet_bar::group(ui, "Route", |ui| {
+            if plate_face || !(fold.has(Foldable::Rails) && fold.has(Foldable::CutList)) {
+                cabinet_bar::group(ui, caption("Route"), |ui| {
                     if plate_face {
                         let routes = cabinet_bar::button(
                             ui,
@@ -600,7 +697,7 @@ impl NovoApp {
                             ask = Some(Ask::ToggleRoutes);
                         }
                     }
-                    if !narrow {
+                    if !fold.has(Foldable::Rails) {
                         let rails = cabinet_bar::button(
                             ui,
                             icons::ROWS,
@@ -621,7 +718,7 @@ impl NovoApp {
                             self.cabinet.rails.open ^= true;
                         }
                     }
-                    if !narrow {
+                    if !fold.has(Foldable::CutList) {
                         let cut = cabinet_bar::button(
                             ui,
                             icons::SCISSORS,
@@ -637,7 +734,7 @@ impl NovoApp {
                     }
                 });
             }
-            cabinet_bar::group(ui, "View", |ui| {
+            cabinet_bar::group(ui, caption("View"), |ui| {
                 ui.scope(|ui| {
                     // One joined control: no gap between the two halves.
                     ui.spacing_mut().item_spacing.x = 0.0;
@@ -652,37 +749,59 @@ impl NovoApp {
                         ask = Some(Ask::ToggleTable);
                     }
                 });
-                if plate_face && !narrow {
+                if plate_face && !fold.has(Foldable::Heat) {
                     let heat = super::heat::toggle(ui, &mut self.cabinet.heat);
                     cabinet_bar::note(&mut anchors, "cabinet.heat", "Heat", &heat);
                 }
             });
-            if narrow {
-                cabinet_bar::group(ui, "More", |ui| {
+            if fold.any() {
+                cabinet_bar::group(ui, caption("More"), |ui| {
                     let more = ui.menu_button(format!("{}  More", icons::DOTS_THREE), |ui| {
-                        if cabinet_bar::button(ui, icons::SLIDERS_HORIZONTAL, "Rules", false)
-                            .clicked()
-                        {
-                            self.cabinet.rules.editor_open ^= true;
-                            ui.close();
+                        if fold.has(Foldable::Rules) {
+                            let r = cabinet_bar::button(
+                                ui,
+                                icons::SLIDERS_HORIZONTAL,
+                                "Rules",
+                                self.cabinet.rules.editor_open,
+                            )
+                            .on_hover_text("Where Place all puts each kind of device");
+                            if cabinet_bar::note(&mut anchors, "cabinet.rules", "Rules", &r)
+                                .clicked()
+                            {
+                                self.cabinet.rules.editor_open ^= true;
+                                ui.close();
+                            }
                         }
-                        if plate_face {
-                            if cabinet_bar::button(
+                        if fold.has(Foldable::Arrange) {
+                            let plate = cabinet_bar::button(
                                 ui,
                                 icons::RULER,
                                 "Plate setup",
                                 self.cabinet.plate_card,
+                            )
+                            .on_hover_text("Size, fill and door of the mounting plate");
+                            if cabinet_bar::note(
+                                &mut anchors,
+                                "cabinet.plate",
+                                "Plate setup",
+                                &plate,
                             )
                             .clicked()
                             {
                                 ask = Some(Ask::TogglePlateCard);
                                 ui.close();
                             }
-                            if cabinet_bar::button(
+                            let size = cabinet_bar::button(
                                 ui,
                                 icons::ARROWS_OUT,
                                 "Size enclosure",
                                 self.sizing.panel_open,
+                            );
+                            if cabinet_bar::note(
+                                &mut anchors,
+                                "cabinet.sizing",
+                                "Size enclosure",
+                                &size,
                             )
                             .clicked()
                             {
@@ -690,49 +809,98 @@ impl NovoApp {
                                 ui.close();
                             }
                         }
-                        if cabinet_bar::button(
-                            ui,
-                            icons::ROWS,
-                            "Rails and ducts",
-                            self.cabinet.rails.open,
-                        )
-                        .clicked()
+                        if fold.has(Foldable::Rails) {
+                            let rails = cabinet_bar::button(
+                                ui,
+                                icons::ROWS,
+                                "Rails and ducts",
+                                self.cabinet.rails.open,
+                            )
+                            .on_hover_text(
+                                "Add, move, resize and delete rails and ducts (Ctrl+Shift+R)",
+                            );
+                            if cabinet_bar::note(
+                                &mut anchors,
+                                "cabinet.rails",
+                                "Rails and ducts",
+                                &rails,
+                            )
+                            .clicked()
+                            {
+                                self.cabinet.rails.open ^= true;
+                                ui.close();
+                            }
+                        }
+                        if fold.has(Foldable::CutList) {
+                            let cut = cabinet_bar::button(
+                                ui,
+                                icons::SCISSORS,
+                                "Cut list",
+                                self.cabinet.rules.cut_open,
+                            )
+                            .on_hover_text("Bars of rail and duct to buy and cut");
+                            if cabinet_bar::note(&mut anchors, "cabinet.cutlist", "Cut list", &cut)
+                                .clicked()
+                            {
+                                self.cabinet.rules.cut_open ^= true;
+                                ui.close();
+                            }
+                        }
+                        if fold.has(Foldable::Heat) {
+                            let heat = super::heat::toggle(ui, &mut self.cabinet.heat);
+                            cabinet_bar::note(&mut anchors, "cabinet.heat", "Heat", &heat);
+                        }
+                        if fold.has(Foldable::Export) {
+                            let item = cabinet_bar::button(
+                                ui,
+                                icons::EXPORT,
+                                "Plate drawing (PDF)",
+                                false,
+                            )
+                            .on_hover_text("Plate drawing with drill table");
+                            cabinet_bar::note(
+                                &mut anchors,
+                                "cabinet.plate_drawing",
+                                "Plate drawing",
+                                &item,
+                            );
+                            if item.clicked() {
+                                ask = Some(Ask::ExportPlate);
+                                ui.close();
+                            }
+                        }
+                        if cabinet_bar::button(ui, icons::EXPORT, "Plate drawing (DXF)", false)
+                            .on_hover_text("Plate drawing for a CNC or CAD, with the drill table")
+                            .clicked()
                         {
-                            self.cabinet.rails.open ^= true;
-                            ui.close();
-                        }
-                        if cabinet_bar::button(
-                            ui,
-                            icons::SCISSORS,
-                            "Cut list",
-                            self.cabinet.rules.cut_open,
-                        )
-                        .clicked()
-                        {
-                            self.cabinet.rules.cut_open ^= true;
-                            ui.close();
-                        }
-                        if plate_face {
-                            super::heat::toggle(ui, &mut self.cabinet.heat);
-                        }
-                        let item =
-                            cabinet_bar::button(ui, icons::EXPORT, "Plate drawing (PDF)", false)
-                                .on_hover_text("Plate drawing with drill table");
-                        cabinet_bar::note(
-                            &mut anchors,
-                            "cabinet.plate_drawing",
-                            "Plate drawing",
-                            &item,
-                        );
-                        if item.clicked() {
-                            ask = Some(Ask::ExportPlate);
+                            ask = Some(Ask::ExportPlateDxf);
                             ui.close();
                         }
                     });
                     cabinet_bar::note(&mut anchors, "cabinet.more", "More", &more.response);
+                    // Lessons point at folded controls: until the menu is open
+                    // the More button stands in for them.
+                    for (f, id, label) in [
+                        (Foldable::Rules, "cabinet.rules", "Rules"),
+                        (Foldable::Arrange, "cabinet.plate", "Plate setup"),
+                        (Foldable::Arrange, "cabinet.sizing", "Size enclosure"),
+                        (Foldable::Rails, "cabinet.rails", "Rails and ducts"),
+                        (Foldable::CutList, "cabinet.cutlist", "Cut list"),
+                        (Foldable::Heat, "cabinet.heat", "Heat"),
+                        (Foldable::Export, "cabinet.plate_drawing", "Plate drawing"),
+                    ] {
+                        if fold.has(f) && !anchors.iter().any(|a| a.id == id) {
+                            anchors.push(cabinet_bar::Anchor {
+                                id,
+                                label,
+                                rect: more.response.rect,
+                                clicked: false,
+                            });
+                        }
+                    }
                 });
             } else {
-                cabinet_bar::group(ui, "Output", |ui| {
+                cabinet_bar::group(ui, caption("Output"), |ui| {
                     let export = ui.menu_button(format!("{}  Export", icons::EXPORT), |ui| {
                         let item = ui
                             .button("Plate drawing (PDF)")
@@ -745,6 +913,14 @@ impl NovoApp {
                         );
                         if item.clicked() {
                             ask = Some(Ask::ExportPlate);
+                            ui.close();
+                        }
+                        if ui
+                            .button("Plate drawing (DXF)")
+                            .on_hover_text("Plate drawing for a CNC or CAD, with the drill table")
+                            .clicked()
+                        {
+                            ask = Some(Ask::ExportPlateDxf);
                             ui.close();
                         }
                     });
@@ -761,14 +937,19 @@ impl NovoApp {
                 });
             }
         });
-        if layout.is_some() {
-            ui.horizontal(|ui| {
+        if layout.is_some() && plate_face && self.cabinet.heat.on && !has_plan {
+            // The Heat strip is a second row of its own while Heat is on: the
+            // bar above and the counts below keep their place, and a long
+            // strip wraps instead of running off the pane.
+            ui.horizontal_wrapped(|ui| {
                 ui.add_space(8.0);
-                if plate_face && self.cabinet.heat.on && !has_plan {
-                    ui.label(egui::RichText::new("Heat").strong());
-                    super::heat::strip(ui, &mut self.cabinet.heat);
-                    ui.add_space(12.0);
-                }
+                ui.label(egui::RichText::new("Heat").strong());
+                super::heat::strip(ui, &mut self.cabinet.heat);
+            });
+        }
+        if layout.is_some() {
+            ui.horizontal_wrapped(|ui| {
+                ui.add_space(8.0);
                 cabinet_bar::pill(ui, &format!("{placed} placed"), None);
                 if unplaced > 0 {
                     cabinet_bar::pill(
@@ -795,9 +976,12 @@ impl NovoApp {
                     let pill = cabinet_bar::pill(ui, &label, None);
                     cabinet_bar::note(&mut anchors, "cabinet.problems", "Problems", &pill);
                 } else if let Some(shown) = &shown {
-                    // The count opens the list; a row selects its device.
-                    let error = novo_theme::Palette::of(ui).error;
-                    let list = ui.menu_button(egui::RichText::new(label).color(error), |ui| {
+                    // The count opens the list; a row selects its device. It is
+                    // a pill like the counts beside it, in the error colour.
+                    let pill =
+                        cabinet_bar::pill(ui, &label, Some(novo_theme::widgets::Level::Error))
+                            .on_hover_cursor(egui::CursorIcon::PointingHand);
+                    egui::Popup::menu(&pill).show(|ui| {
                         for p in &shown.placements {
                             let lines = problem_lines(shown, p.id, &tag_of);
                             if lines.is_empty() {
@@ -812,21 +996,52 @@ impl NovoApp {
                             }
                         }
                     });
-                    cabinet_bar::note(&mut anchors, "cabinet.problems", "Problems", &list.response);
+                    cabinet_bar::note(&mut anchors, "cabinet.problems", "Problems", &pill);
                 }
                 if let Some(j) = judged.as_ref().filter(|j| !j.violations.is_empty()) {
                     let n = j.violations.len();
-                    ui.weak(format!(
-                        "{n} rule {}",
-                        if n == 1 { "problem" } else { "problems" }
-                    ))
-                    .on_hover_ui(|ui| {
+                    let pill = cabinet_bar::pill(
+                        ui,
+                        &format!("{n} rule {}", if n == 1 { "problem" } else { "problems" }),
+                        Some(novo_theme::widgets::Level::Warning),
+                    )
+                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                    // A click opens the list, like the problems pill.
+                    egui::Popup::menu(&pill).show(|ui| {
                         for v in j.violations.iter().take(12) {
                             ui.label(v.describe(&self.cabinet.rules.rules, &|id| tag_of(id)));
                         }
                     });
                 }
             });
+        }
+        // The picked surface and what is wrong with surface names, in full
+        // and wrapped to the width (not squeezed into the status strip).
+        if let Some(sum) = &surfaces {
+            let note = self.cabinet.surface.as_deref().and_then(|n| sum.note(n));
+            if note.is_some() || !sum.problems.is_empty() {
+                ui.vertical(|ui| {
+                    ui.add_space(2.0);
+                    if let Some(note) = note {
+                        ui.add(egui::Label::new(note).wrap());
+                        ui.add(
+                            egui::Label::new(egui::RichText::new(
+                                "The plate drawing stays until the surface view arrives.",
+                            ))
+                            .wrap(),
+                        );
+                    }
+                    for problem in &sum.problems {
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(problem)
+                                    .color(novo_theme::Palette::of(ui).warning),
+                            )
+                            .wrap(),
+                        );
+                    }
+                });
+            }
         }
         ui.separator();
 
@@ -859,8 +1074,9 @@ impl NovoApp {
                             .into_iter()
                             .map(|c| {
                                 let size = format!("{} x {} mm", c.size.width, c.size.height);
+                                // One banner says what "~" means, not a word on every row.
                                 let size = if c.size.guessed {
-                                    format!("{size} (guessed)")
+                                    format!("~{size}")
                                 } else {
                                     size
                                 };
@@ -876,6 +1092,19 @@ impl NovoApp {
                         ui.add_space(6.0);
                         ui.strong("Unplaced");
                         ui.weak("Drag onto the plate");
+                        if unplaced_list
+                            .iter()
+                            .any(|(_, _, size)| size.starts_with('~'))
+                        {
+                            ui.add_space(2.0);
+                            ui.label(
+                                egui::RichText::new(
+                                    "~ Size guessed from the device type until a part is assigned.",
+                                )
+                                .size(12.0)
+                                .color(novo_theme::Palette::of(ui).text_tertiary),
+                            );
+                        }
                         ui.add_space(4.0);
                         for (id, tag, size) in &unplaced_list {
                             ui.dnd_drag_source(egui::Id::new(("cabinet_device", *id)), *id, |ui| {
@@ -1037,8 +1266,13 @@ impl NovoApp {
                         project,
                         s,
                         (self.cabinet.rails.hover, self.cabinet.rails.selected),
-                        (14.0 / zoom).max(8.0),
+                        ((14.0 / zoom).max(8.0), novo_theme::Palette::of(ui)),
                     );
+                    if self.cabinet.rails.hover.is_some() {
+                        out.response
+                            .clone()
+                            .on_hover_text("Drag to move. Click to select, Delete removes.");
+                    }
                 }
                 if let Some(rail) = self.cabinet.rails.selected {
                     let rect = out.response.rect;
@@ -1055,6 +1289,7 @@ impl NovoApp {
                         project,
                         rail,
                         moved,
+                        novo_theme::Palette::of(ui),
                     );
                 }
                 if let Some(input) = &heat_input {
@@ -1392,13 +1627,41 @@ impl NovoApp {
                 }
             }
             None => {
-                ui.add_space(24.0);
+                // The empty state names the next step and puts its button
+                // right under the sentence, not at the far end of the bar.
+                ui.add_space(48.0);
                 ui.vertical_centered(|ui| {
-                    ui.weak(match (&location, structure) {
+                    ui.label(match (&location, structure) {
                         (None, _) => "No panel yet. Give a page a panel name (+K1) to lay it out.",
                         (Some(_), None) => "This panel has no cabinet yet.",
                         _ => "Set the size of the mounting plate to start placing devices.",
                     });
+                    ui.add_space(8.0);
+                    match (&location, structure) {
+                        (Some(l), None) => {
+                            if cabinet_bar::primary(ui, icons::CUBE, "Create cabinet", None, true)
+                                .clicked()
+                            {
+                                ask = Some(Ask::CreateCabinet(l.clone()));
+                            }
+                        }
+                        (Some(_), Some(s)) => {
+                            if cabinet_bar::primary(
+                                ui,
+                                icons::RULER,
+                                "Set plate 600 x 800 mm",
+                                None,
+                                true,
+                            )
+                            .clicked()
+                            {
+                                ask = Some(Ask::SetPlate(s));
+                            }
+                            ui.add_space(4.0);
+                            ui.weak("You can change the size later under Plate setup.");
+                        }
+                        _ => {}
+                    }
                 });
             }
         }
@@ -1540,6 +1803,9 @@ impl NovoApp {
             Ask::ExportPlate => {
                 self.learn_command("export.plate");
                 self.export_plate_pdf();
+            }
+            Ask::ExportPlateDxf => {
+                self.export_plate_dxf();
             }
             Ask::ToggleRoutes => self.cabinet.routes ^= true,
             Ask::SetWireRule(key, value) => {

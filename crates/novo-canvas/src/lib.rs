@@ -21,6 +21,7 @@
 //! - [`model`] (feature `model`): keeps a scene in sync with a `novo-core` page.
 
 pub mod cabinet;
+pub mod declutter;
 pub mod demo;
 pub mod drafting;
 pub mod geom;

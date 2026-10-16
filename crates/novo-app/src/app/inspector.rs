@@ -8,7 +8,7 @@
 use eframe::egui;
 use novo_canvas::model::SymbolArt;
 use novo_core::{AnyId, DeviceId, DeviceKind, DeviceTag, Project, SymbolRole, Value};
-use novo_theme::widgets;
+use novo_theme::{icons, widgets};
 use novo_xref::{Place, XrefIndex};
 
 use super::part_picker::{Candidate, PartPicker, device_candidates, picker_ui};
@@ -500,17 +500,29 @@ impl NovoApp {
             .show(ctx, |ui| {
                 egui::Frame::popup(ui.style()).show(ui, |ui| {
                     ui.set_width(INSPECTOR_WIDTH);
-                    pin_row(ui, true, &mut unpin);
-                    match &page {
-                        Some((name, title)) => {
-                            ui.heading(format!("Page {name}"));
-                            if !title.is_empty() {
-                                ui.label(title);
+                    ui.horizontal(|ui| {
+                        let heading = match &page {
+                            Some((name, _)) => format!("Page {name}"),
+                            None => "No page open".to_owned(),
+                        };
+                        ui.add(egui::Label::new(egui::RichText::new(heading).heading()).truncate());
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if widgets::icon_toggle(
+                                ui,
+                                icons::action::PIN,
+                                true,
+                                "Unpin: the inspector slides away with the selection",
+                            )
+                            .clicked()
+                            {
+                                unpin = true;
                             }
-                        }
-                        None => {
-                            ui.weak("No page open");
-                        }
+                        });
+                    });
+                    if let Some((_, title)) = &page
+                        && !title.is_empty()
+                    {
+                        ui.label(title);
                     }
                     ui.add_space(6.0);
                     ui.weak("Nothing selected");
@@ -703,20 +715,31 @@ fn inspector_body(
     description_id: egui::Id,
     actions: &mut Vec<InspectorAction>,
 ) {
-    let mut toggle = false;
-    pin_row(ui, state.pinned, &mut toggle);
-    if toggle {
-        actions.push(InspectorAction::Pin(!state.pinned));
-    }
-    let tag = ui.add(
-        egui::TextEdit::singleline(&mut state.tag)
-            .id(tag_id)
-            .font(egui::TextStyle::Heading)
-            .desired_width(f32::INFINITY),
-    );
-    if committed(ui, &tag) && state.tag.trim() != info.tag {
-        actions.push(InspectorAction::Rename(state.tag.trim().to_owned()));
-    }
+    // Header: the tag is the title, the pin an icon at the right.
+    let tag_height = 24.0;
+    ui.horizontal(|ui| {
+        let pin_width = 26.0;
+        let tag = ui.add_sized(
+            [
+                ui.available_width() - pin_width - ui.spacing().item_spacing.x,
+                tag_height,
+            ],
+            egui::TextEdit::singleline(&mut state.tag)
+                .id(tag_id)
+                .font(egui::TextStyle::Heading),
+        );
+        if committed(ui, &tag) && state.tag.trim() != info.tag {
+            actions.push(InspectorAction::Rename(state.tag.trim().to_owned()));
+        }
+        let tip = if state.pinned {
+            "Unpin: the inspector slides away with the selection"
+        } else {
+            "Pin: keep the inspector open, showing the page when nothing is selected"
+        };
+        if widgets::icon_toggle(ui, icons::action::PIN, state.pinned, tip).clicked() {
+            actions.push(InspectorAction::Pin(!state.pinned));
+        }
+    });
     let description = ui.add(
         egui::TextEdit::singleline(&mut state.description)
             .id(description_id)
@@ -727,26 +750,18 @@ fn inspector_body(
         actions.push(InspectorAction::Describe(state.description.clone()));
     }
 
-    ui.add_space(6.0);
-    widgets::section_label(ui, "Relations");
-    if info.relations.is_empty() {
-        ui.weak("Not drawn yet");
-    }
-    for relation in &info.relations {
-        if relation_card(ui, relation).clicked() {
-            actions.push(InspectorAction::Go(relation.place));
-        }
-    }
-
+    // Behaviour fields that only some devices have come first: they are what
+    // the person usually came to change.
     if info.delay.is_some() {
         ui.add_space(6.0);
-        widgets::section_label(ui, "Time (s)");
-        let delay = ui.add(
-            egui::TextEdit::singleline(&mut state.delay)
-                .id(egui::Id::new("inspector_delay"))
-                .hint_text("Seconds")
-                .desired_width(f32::INFINITY),
-        );
+        let delay = labelled_edit(ui, "Time", "s", |ui| {
+            ui.add(
+                egui::TextEdit::singleline(&mut state.delay)
+                    .id(egui::Id::new("inspector_delay"))
+                    .hint_text("Seconds")
+                    .desired_width(f32::INFINITY),
+            )
+        });
         if committed(ui, &delay)
             && let Ok(seconds) = state.delay.trim().parse::<f64>()
             && seconds >= 0.0
@@ -755,43 +770,49 @@ fn inspector_body(
             actions.push(InspectorAction::SetDelay(seconds));
         }
     }
-
     if info.mate.is_some() {
         ui.add_space(6.0);
-        widgets::section_label(ui, "Other half");
-        let mate = ui
-            .add(
+        let mate = labelled_edit(ui, "Other half", "", |ui| {
+            ui.add(
                 egui::TextEdit::singleline(&mut state.mate)
                     .id(egui::Id::new("inspector_mate"))
-                    .hint_text("Tag of the plug or socket it mates with")
+                    .hint_text("Tag of the plug or socket")
                     .desired_width(f32::INFINITY),
             )
-            .on_hover_text("Design checks report a pin wired on one half and not the other.");
+            .on_hover_text("Design checks report a pin wired on one half and not the other.")
+        });
         if committed(ui, &mate) && Some(state.mate.trim()) != info.mate.as_deref() {
             actions.push(InspectorAction::SetMate(state.mate.clone()));
         }
     }
 
+    // Part: one line, name left, the action right.
     ui.add_space(6.0);
     widgets::section_label(ui, "Part");
     ui.horizontal(|ui| {
-        if info.part.is_empty() {
-            ui.weak("No part");
-        } else {
-            ui.label(&info.part);
-        }
         let label = match (state.picker.open, info.part.is_empty()) {
             (true, _) => "Close",
             (false, true) => "Choose...",
             (false, false) => "Change...",
         };
-        if ui
-            .small_button(label)
-            .on_hover_text("Pick this device's part from the catalog (Parts window: Ctrl+K, Parts)")
-            .clicked()
-        {
-            state.picker.toggle();
-        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if widgets::ghost_button(ui, label)
+                .on_hover_text(
+                    "Pick this device's part from the catalog (Parts window: Ctrl+K, Parts)",
+                )
+                .clicked()
+            {
+                state.picker.toggle();
+            }
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                if info.part.is_empty() {
+                    ui.weak("No part assigned");
+                } else {
+                    ui.add(egui::Label::new(&info.part).truncate())
+                        .on_hover_text(&info.part);
+                }
+            });
+        });
     });
     if state.picker.open
         && let Some(key) = picker_ui(
@@ -805,44 +826,105 @@ fn inspector_body(
         state.picker.close();
     }
 
-    ui.add_space(6.0);
+    widgets::collapsing_section(
+        ui,
+        "inspector_relations",
+        "Relations",
+        &info.relations.len().to_string(),
+        true,
+        |ui| {
+            if info.relations.is_empty() {
+                ui.weak("Not drawn yet");
+            }
+            for relation in &info.relations {
+                if relation_card(ui, relation).clicked() {
+                    actions.push(InspectorAction::Go(relation.place));
+                }
+            }
+        },
+    );
+
     calc_inputs_section(ui, info, actions);
-    ui.add_space(6.0);
-    widgets::section_label(ui, "Properties");
+
+    // The rest of the device's properties are the advanced part: closed
+    // until opened, and absent when there are none.
     if info.properties.is_empty() {
-        ui.weak("None");
         return;
     }
-    ui.add(
-        egui::TextEdit::singleline(&mut state.filter)
-            .hint_text("Search properties")
-            .desired_width(f32::INFINITY),
-    );
-    let filter = state.filter.to_lowercase();
-    for (key, value) in &info.properties {
-        if filter.is_empty()
-            || key.to_lowercase().contains(&filter)
-            || value.to_lowercase().contains(&filter)
-        {
-            let part_value = info
-                .part_values
-                .iter()
-                .find(|(k, _)| k == key)
-                .map(|(_, v)| v);
-            ui.horizontal(|ui| {
-                widgets::field(ui, key, value);
-                if let Some(part_value) = part_value
-                    && ui
-                        .small_button("\u{21A9}")
-                        .on_hover_text(format!("Back to the part's value: {part_value}"))
-                        .clicked()
+    let many = info.properties.len() > 6;
+    widgets::collapsing_section(
+        ui,
+        "inspector_properties",
+        "All properties",
+        &info.properties.len().to_string(),
+        !many,
+        |ui| {
+            if many {
+                ui.add(
+                    egui::TextEdit::singleline(&mut state.filter)
+                        .hint_text("Search properties")
+                        .desired_width(f32::INFINITY),
+                );
+            }
+            let filter = state.filter.to_lowercase();
+            for (key, value) in &info.properties {
+                if filter.is_empty()
+                    || key.to_lowercase().contains(&filter)
+                    || value.to_lowercase().contains(&filter)
                 {
-                    actions.push(InspectorAction::ResetProperty(key.clone()));
+                    let part_value = info
+                        .part_values
+                        .iter()
+                        .find(|(k, _)| k == key)
+                        .map(|(_, v)| v);
+                    ui.horizontal(|ui| {
+                        widgets::field(ui, key, value);
+                        if let Some(part_value) = part_value
+                            && widgets::icon_button(
+                                ui,
+                                icons::action::RESET,
+                                &format!("Back to the part's value: {part_value}"),
+                            )
+                            .clicked()
+                        {
+                            actions.push(InspectorAction::ResetProperty(key.clone()));
+                        }
+                    });
                 }
-            });
-        }
-    }
+            }
+        },
+    );
 }
+
+/// A label in a fixed column, the field filling the rest of the row and an
+/// optional unit after it; returns the field's response.
+fn labelled_edit(
+    ui: &mut egui::Ui,
+    label: &str,
+    unit: &str,
+    field: impl FnOnce(&mut egui::Ui) -> egui::Response,
+) -> egui::Response {
+    ui.horizontal(|ui| {
+        ui.add_sized(
+            [LABEL_WIDTH, 22.0],
+            egui::Label::new(egui::RichText::new(label).color(ui.visuals().weak_text_color())),
+        );
+        if !unit.is_empty() {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.weak(unit);
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), field)
+                    .inner
+            })
+            .inner
+        } else {
+            field(ui)
+        }
+    })
+    .inner
+}
+
+/// Width of the label column of the inspector's rows.
+const LABEL_WIDTH: f32 = 104.0;
 
 /// Where a symbol is drawn, for a relation card: `Page 3 · Control circuit
 /// · column 4`, with the page structure in front when it has one.
@@ -896,52 +978,40 @@ fn relation_card(ui: &mut egui::Ui, relation: &Relation) -> egui::Response {
         }
     }
     let x = picture.right() + 8.0;
+    let room = rect.right() - x;
     let visuals = ui.visuals();
+    let painter = ui.painter_at(rect);
+    let ellipsis = widgets::paint_text_ellipsis;
     let mut y = rect.top() + 6.0;
-    let painter = ui.painter();
-    let title = painter.text(
-        egui::pos2(x, y),
-        egui::Align2::LEFT_TOP,
+    let title = ellipsis(
+        &painter,
+        egui::pos2(x, y + 7.0),
         &relation.what,
         egui::FontId::proportional(13.0),
         visuals.strong_text_color(),
+        room,
     );
     y = title.bottom() + 2.0;
     if !relation.pins.is_empty() {
-        let pins = painter.text(
-            egui::pos2(x, y),
-            egui::Align2::LEFT_TOP,
+        let pins = ellipsis(
+            &painter,
+            egui::pos2(x, y + 7.0),
             &relation.pins,
             egui::FontId::monospace(12.0),
             visuals.text_color(),
+            room,
         );
         y = pins.bottom() + 2.0;
     }
-    painter.text(
-        egui::pos2(x, y),
-        egui::Align2::LEFT_TOP,
+    ellipsis(
+        &painter,
+        egui::pos2(x, y + 6.0),
         &relation.page,
         egui::FontId::proportional(11.0),
         visuals.weak_text_color(),
+        room,
     );
     response
-}
-
-/// The pin toggle at the top of the inspector; `toggle` is set when clicked.
-fn pin_row(ui: &mut egui::Ui, pinned: bool, toggle: &mut bool) {
-    ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-        if ui
-            .selectable_label(pinned, "Pin")
-            .on_hover_text(if pinned {
-                "Unpin: the inspector slides away with the selection"
-            } else {
-                "Pin: keep the inspector open, showing the page when nothing is selected"
-            })
-            .clicked()
-        {
-            *toggle = true;
-        }
-    });
 }
 
 /// Enter, or leaving the field after a change, commits it.
@@ -953,11 +1023,23 @@ fn committed(ui: &egui::Ui, response: &egui::Response) -> bool {
 /// starter calculations read from the device. A value the part supplies is
 /// shown dimmed with a hint; typing overrides it on this device only.
 fn calc_inputs_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<InspectorAction>) {
-    let any = info.calc_inputs.iter().any(|(v, _)| !v.is_empty());
-    egui::CollapsingHeader::new("Calculation inputs")
-        .id_salt("inspector_calc_inputs")
-        .default_open(any)
-        .show(ui, |ui| {
+    let set = info
+        .calc_inputs
+        .iter()
+        .filter(|(v, _)| !v.is_empty())
+        .count();
+    let summary = if set == 0 {
+        String::new()
+    } else {
+        format!("{set} set")
+    };
+    widgets::collapsing_section(
+        ui,
+        "inspector_calc_inputs",
+        "Calculation inputs",
+        &summary,
+        set > 0,
+        |ui| {
             for ((key, label, unit, hint), (shown, from_part)) in
                 DEVICE_INPUTS.iter().zip(&info.calc_inputs)
             {
@@ -969,31 +1051,41 @@ fn calc_inputs_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<I
                 } else {
                     shown.clone()
                 };
-                ui.horizontal(|ui| {
-                    ui.label(*label);
-                    let edit = egui::TextEdit::singleline(&mut text)
-                        .id(id)
-                        .hint_text(*hint)
-                        .desired_width(70.0);
-                    let r = ui.add(edit).on_hover_text(if *from_part {
+                let r = labelled_edit(ui, label, unit, |ui| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut text)
+                            .id(id)
+                            .hint_text(*hint)
+                            .desired_width(f32::INFINITY),
+                    )
+                    .on_hover_text(if *from_part {
                         format!("{key}: from the part. Type to override on this device.")
                     } else {
                         (*key).to_owned()
-                    });
-                    ui.weak(*unit);
-                    if r.has_focus() {
-                        ui.data_mut(|d| d.insert_temp(id, text.clone()));
-                    }
-                    if r.lost_focus() {
-                        ui.data_mut(|d| d.remove::<String>(id));
-                        if text.trim() != shown.trim() {
-                            actions.push(InspectorAction::SetInput(key, text.clone()));
-                        }
-                    }
+                    })
                 });
+                if r.has_focus() {
+                    ui.data_mut(|d| d.insert_temp(id, text.clone()));
+                }
+                if r.lost_focus() {
+                    ui.data_mut(|d| d.remove::<String>(id));
+                    if text.trim() != shown.trim() {
+                        actions.push(InspectorAction::SetInput(key, text.clone()));
+                    }
+                }
             }
-            ui.weak("Blank is unknown: the checks stay silent, nothing is guessed. Results: Check > Calculations.");
-        });
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(
+                        "Blank is unknown: the checks stay silent, nothing is guessed. Results: Check > Calculations.",
+                    )
+                    .small()
+                    .weak(),
+                )
+                .wrap(),
+            );
+        },
+    );
 }
 
 #[cfg(test)]
