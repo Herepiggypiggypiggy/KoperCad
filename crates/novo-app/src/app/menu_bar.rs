@@ -148,6 +148,7 @@ impl NovoApp {
                 }
             }
         });
+        self.anchor(&format!("menu.{menu}"), response.response.rect, menu);
         if focus {
             response.response.request_focus();
         }
@@ -179,6 +180,7 @@ impl NovoApp {
             button = button.shortcut_text(keys);
         }
         let response = ui.add_enabled(reason.is_none(), button);
+        self.anchor(&format!("cmd.{}", info.id), response.rect, info.label);
         let response = match info.id {
             "export.sheets" | "export.sheets_csv" => response.on_hover_text(super::SHEETS_HINT),
             "export.assembly" => response.on_hover_text(super::ASSEMBLY_HINT),

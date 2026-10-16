@@ -98,6 +98,10 @@ pub(crate) const ANCHORS: &[&str] = &[
     "cabinet.sizing",
     "cabinet.rails",
     "cabinet.plate_drawing",
+    "cabinet.more",
+    "issues.list",
+    "macro.place",
+    "macros.window",
 ];
 
 /// What the shell keeps about learning.
@@ -255,14 +259,27 @@ impl LearnState {
         self.coming.as_ref().is_some_and(|c| c.contains(id))
     }
 
+    /// What this build offers a lesson: its commands, anchors and signals.
+    pub(crate) fn lint_registry(&self) -> Registry {
+        Registry {
+            commands: COMMANDS.iter().map(|c| c.id.to_owned()).collect(),
+            anchors: ANCHORS
+                .iter()
+                .map(|a| (*a).to_owned())
+                .chain(
+                    super::learn_labels::menu_anchors()
+                        .iter()
+                        .map(|m| m.id.clone()),
+                )
+                .collect(),
+            signals: SIGNALS.iter().map(|s| (*s).to_owned()).collect(),
+        }
+    }
+
     /// What the lint says about the lessons against this build's commands,
     /// anchors and signals.
     pub(crate) fn lint_report(&self) -> novo_learn::Report {
-        let registry = Registry {
-            commands: COMMANDS.iter().map(|c| c.id.to_owned()).collect(),
-            anchors: ANCHORS.iter().map(|a| (*a).to_owned()).collect(),
-            signals: SIGNALS.iter().map(|s| (*s).to_owned()).collect(),
-        };
+        let registry = self.lint_registry();
         let example = example_project();
         lint(&self.catalog, &self.files, &registry, example.as_ref())
     }
@@ -423,7 +440,13 @@ impl NovoApp {
     /// Registers a control's place on screen this frame, so a lesson can
     /// point at it. `label` is the name `{ui:id}` shows in step text.
     pub(super) fn anchor(&mut self, id: &str, rect: egui::Rect, label: &str) {
-        debug_assert!(ANCHORS.contains(&id), "unregistered anchor `{id}`");
+        debug_assert!(
+            ANCHORS.contains(&id)
+                || super::learn_labels::menu_anchors()
+                    .iter()
+                    .any(|m| m.id == id),
+            "unregistered anchor `{id}`"
+        );
         self.learn.anchors.insert(id.to_owned(), rect);
         if !self.learn.labels.contains_key(id) {
             self.learn.labels.insert(id.to_owned(), label.to_owned());
@@ -908,11 +931,23 @@ impl NovoApp {
 
     /// Where a control was last drawn.
     pub(super) fn learn_anchor(&self, id: &str) -> Option<egui::Rect> {
-        self.learn
-            .anchors
-            .get(id)
-            .or_else(|| self.learn.seen.get(id))
-            .copied()
+        let drawn = |id: &str| {
+            self.learn
+                .anchors
+                .get(id)
+                .or_else(|| self.learn.seen.get(id))
+                .copied()
+        };
+        // A control that is folded away or inside a closed menu is pointed
+        // at through the one that opens it.
+        let mut id = id.to_owned();
+        for _ in 0..3 {
+            if let Some(rect) = drawn(&id) {
+                return Some(rect);
+            }
+            id = super::learn_labels::anchor_fallback(&id)?;
+        }
+        None
     }
 }
 

@@ -7,8 +7,9 @@ license.workspace = true
 
 [features]
 default = ["model", "egui"]
-# Scene builder from the project (the only code that reads novo-core / novo-layout).
-model = ["dep:novo-core", "dep:novo-layout"]
+# Scene builder from the project (the only code that reads novo-core / novo-layout
+# / novo-routing).
+model = ["dep:novo-core", "dep:novo-layout", "dep:novo-routing"]
 # The wgpu renderer (`render`). Headless users (novo-cli, novo-py) turn default
 # features off and never link wgpu.
 gpu = ["dep:wgpu"]
@@ -18,6 +19,7 @@ egui = ["gpu", "dep:egui", "dep:egui-wgpu"]
 [dependencies]
 novo-core = { workspace = true, optional = true }
 novo-layout = { workspace = true, optional = true }
+novo-routing = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 egui = { workspace = true, optional = true }
 egui-wgpu = { workspace = true, optional = true }
