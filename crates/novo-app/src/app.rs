@@ -71,6 +71,7 @@ mod simulate;
 mod sizing;
 mod standards;
 mod status_bar;
+mod symbol_preview;
 mod terminals;
 mod title_revisions;
 mod userkeymap;

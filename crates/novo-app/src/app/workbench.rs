@@ -45,6 +45,9 @@ pub(crate) struct Workbench {
     pub(super) field: CommandField,
     pub(super) keymap: Keymap,
     pub(super) xref: LiveXref,
+    /// The symbol library as canvas art, for the inspector's symbol
+    /// previews; built once, when first needed.
+    pub(super) preview_art: Option<novo_editor::art::LibraryArt>,
     /// The generated pages' reports, live.
     pub(super) reports: super::reports::Reports,
     /// The place wheel, when open.
@@ -175,6 +178,7 @@ impl Default for Workbench {
             field: CommandField::default(),
             keymap: Keymap::workflow(),
             xref: LiveXref::default(),
+            preview_art: None,
             reports: Default::default(),
             wheel: None,
             place_hold: None,
