@@ -118,7 +118,7 @@ impl LearnState {
             hidden: false,
             window: false,
             filter: String::new(),
-            show_drafts: true,
+            show_drafts: false,
             confirm_restart: false,
             coming: None,
             anchors: BTreeMap::new(),

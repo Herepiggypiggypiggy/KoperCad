@@ -1,11 +1,11 @@
 format = 1
 id = "revisions-and-compare"
 version = 1
-status = "draft"
+status = "early"
 title = "Issue a revision and see what changed"
 summary = "Freeze the drawing as revision A, change it, compare, and issue revision B."
-track = "productivity"
-order = 50
+track = "outputs"
+order = 40
 level = "beginner"
 minutes = 8
 topics = ["revision", "compare", "changes"]
