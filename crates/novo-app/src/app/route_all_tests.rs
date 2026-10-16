@@ -8,7 +8,7 @@ use super::gate1_tests::Drive;
 use crate::actions::Action;
 
 /// Two placed devices joined by a wire, with a duct between them.
-fn wired_cabinet(d: &mut Drive) {
+pub(super) fn wired_cabinet(d: &mut Drive) {
     d.app
         .backend
         .document_mut()
@@ -98,4 +98,52 @@ fn the_wire_cut_file_is_written_next_to_the_project_and_not_over_a_stranger() {
     let book = dir.path().join("production.xlsx");
     assert_eq!(d.app.export_wire_production_to(&book), Some(book.clone()));
     assert!(std::fs::metadata(&book).unwrap().len() > 0);
+}
+
+/// Place all on the motor starter, then Route all: the rows' ducts are
+/// joined by the trunk, so every wire runs in a duct and none through air.
+#[test]
+fn place_all_then_route_all_routes_every_wire_of_the_motor_starter() {
+    use super::cabinet::Ask;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    d.frame();
+    let cab = d
+        .doc()
+        .project()
+        .structures()
+        .find(|s| s.enclosure)
+        .expect("the example has a cabinet")
+        .id;
+    if d.doc()
+        .project()
+        .get::<novo_core::Structure>(cab)
+        .unwrap()
+        .plate
+        .is_none()
+    {
+        d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+        d.frame();
+    }
+    let layout = novo_layout::model::load(d.doc().project(), cab);
+    let cands = novo_layout::model::candidates(d.doc().project(), cab);
+    d.app.cabinet_ask(Ask::PlaceAll, Some(cab), layout, &cands);
+    d.frame();
+    d.app.cabinet_ask(Ask::Accept, Some(cab), None, &[]);
+    d.frame();
+
+    let ducts = novo_layout::model::ducts(d.doc().project(), cab);
+    assert!(ducts.iter().any(|x| x.vertical), "a trunk duct came along");
+    let routed = novo_routing::model::route_project(d.doc().project());
+    // Wires to the field motor have an end off this plate; the rest route.
+    assert_eq!(routed.routes.len(), 11, "unrouted: {:?}", routed.unrouted);
+    for (id, r) in &routed.routes {
+        assert_eq!(
+            r.kind,
+            novo_routing::Kind::Ducted,
+            "wire {id} is in free air"
+        );
+    }
 }

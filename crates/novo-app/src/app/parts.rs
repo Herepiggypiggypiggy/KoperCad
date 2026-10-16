@@ -463,6 +463,8 @@ enum PartsAction {
     AskRemove(PartKey),
     CancelRemove,
     Remove(PartKey),
+    /// Give the selected devices this part.
+    UseForSelection(PartKey),
     Close,
 }
 
@@ -558,6 +560,7 @@ impl NovoApp {
         }
         let mut close = !open;
         let mut error = None;
+        let mut assign = None;
         for action in actions {
             match action {
                 PartsAction::Select(key) => win.selected = Some(key),
@@ -603,11 +606,15 @@ impl NovoApp {
                         error = Some(format!("Parts library: {e}"));
                     }
                 }
+                PartsAction::UseForSelection(key) => assign = win.catalog.get(&key).cloned(),
                 PartsAction::Close => close = true,
             }
         }
         if let Some(text) = error {
             self.message(Level::Error, text);
+        }
+        if let Some(part) = assign {
+            self.use_part_for_selection(&part);
         }
         if close {
             self.wb.parts = None;
@@ -858,6 +865,14 @@ fn detail_ui(ui: &mut egui::Ui, win: &PartsWindow, actions: &mut Vec<PartsAction
                 });
         }
         let key = part.key();
+        ui.add_space(8.0);
+        if ui
+            .button("Use for selected device")
+            .on_hover_text("Gives the devices selected on the drawing this part (one undo step)")
+            .clicked()
+        {
+            actions.push(PartsAction::UseForSelection(key.clone()));
+        }
         ui.add_space(8.0);
         ui.strong("Source");
         let records = win.records(&key);

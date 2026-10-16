@@ -26,6 +26,7 @@ use novo_xref::Place;
 use super::changes::shown_on;
 use super::pdf::{replaceable_path, write_replacing};
 use super::revisions::iso_date;
+use super::workspace::Workspace;
 use super::{Level, NovoApp, OutlineMode, projects_dir};
 
 /// Minimum height of the buttons: comfortable for a finger on a tablet.
@@ -236,15 +237,11 @@ fn place_of(project: &Project, info: &TargetInfo, current: Option<PageId>) -> Op
 }
 
 impl NovoApp {
-    /// The `view.commissioning` command: the mode on in the outline, or off.
-    /// Turning it off drops the in-memory store, which is safe because every
-    /// change is flushed to the project in the frame it is made.
-    pub(super) fn toggle_commissioning(&mut self) {
-        if self.wb.commissioning.is_some() && self.outline_mode == OutlineMode::Commissioning {
-            self.wb.commissioning = None;
-            self.outline_mode = OutlineMode::Pages;
-            return;
-        }
+    /// The `view.commissioning` command opens the Commissioning workspace:
+    /// the mode is on, its panel in the outline's place. Leaving it drops the
+    /// in-memory store, which is safe because every change is flushed to the
+    /// project in the frame it is made.
+    pub(super) fn enter_commissioning(&mut self) {
         self.load_commissioning();
         self.outline_mode = OutlineMode::Commissioning;
         if !self.outline_pinned() {
@@ -252,10 +249,36 @@ impl NovoApp {
         }
     }
 
+    /// The Commissioning workspace is left: the mode is off.
+    pub(super) fn leave_commissioning(&mut self) {
+        self.wb.commissioning = None;
+        if self.outline_mode == OutlineMode::Commissioning {
+            self.outline_mode = OutlineMode::Pages;
+        }
+    }
+
     /// Commissioning mode is showing, so the drawing is not edited: a change
     /// the canvas makes is taken back (see `after_canvas`).
     pub(super) fn commissioning_locks_edits(&self) -> bool {
-        self.wb.commissioning.is_some() && self.outline_mode == OutlineMode::Commissioning
+        self.workspace() == Workspace::Commissioning
+            || (self.wb.commissioning.is_some() && self.outline_mode == OutlineMode::Commissioning)
+    }
+
+    /// Each frame in the Commissioning workspace: its store is loaded (a
+    /// project opened or created meanwhile dropped it) and its panel is the
+    /// outline's tab. Picking another outline tab leaves the workspace for
+    /// the schematic, keeping that tab.
+    pub(super) fn sync_commissioning_workspace(&mut self) {
+        if self.workspace() != Workspace::Commissioning || !self.is_open() {
+            return;
+        }
+        if self.outline_mode != OutlineMode::Commissioning {
+            let chosen = self.outline_mode;
+            self.switch_workspace(Workspace::Schematic);
+            self.outline_mode = chosen;
+            return;
+        }
+        self.load_commissioning();
     }
 
     /// Reads the project's commissioning data when the mode has none yet.
@@ -559,6 +582,26 @@ fn checks_tab(
                     mode.dirty = true;
                 }
             });
+            // A failure raises a punch item by itself; say so and link to it.
+            if state == CheckState::Failed {
+                let item = mode
+                    .store
+                    .punch_items()
+                    .find(|p| {
+                        p.target == Some(info.target)
+                            && p.check == Some(check)
+                            && !p.state.is_closed()
+                    })
+                    .map(|p| (p.title.clone(), severity_label(p.severity)));
+                if let Some((title, severity)) = item {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.weak(format!("Punch item raised: {title} ({severity})"));
+                        if ui.small_button("Open punch list").clicked() {
+                            mode.tab = Tab::Punch;
+                        }
+                    });
+                }
+            }
             if let Some(r) = mode.store.record(info.target, check)
                 && !r.by.is_empty()
             {

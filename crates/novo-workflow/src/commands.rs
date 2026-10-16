@@ -339,6 +339,18 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["import dwg"],
     ),
+    verb(
+        cmd(
+            "file.eplan_export_script",
+            "Get the EPLAN export script",
+            "Project",
+            &[
+                "eplan", "export", "pxf", "epj", "migrate", "bridge", "script",
+            ],
+            Needs::Nothing,
+        ),
+        &["get eplan script"],
+    ),
     cmd(
         "file.choose_dwg_converter",
         "Choose the DWG converter",
@@ -362,6 +374,24 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["import aml", "import automationml"],
+    ),
+    verb(
+        cmd(
+            "file.import_eplan",
+            "Import EPLAN project (PXF)",
+            "Project",
+            &[
+                "eplan",
+                "pxf",
+                "epj",
+                "emp",
+                "migrate",
+                "other tool",
+                "page macro",
+            ],
+            Needs::Project,
+        ),
+        &["import eplan", "import pxf"],
     ),
     cmd(
         "file.remove_background",
@@ -511,9 +541,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     cmd(
         "edit.paste_keep_tags",
-        "Paste with the original tags",
+        "Paste with the original tags where free",
         "Edit",
         &[],
+        Needs::Clipboard,
+    ),
+    cmd(
+        "edit.paste_in_place",
+        "Paste in place",
+        "Edit",
+        &["same position"],
         Needs::Clipboard,
     ),
     cmd(
@@ -804,6 +841,55 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d",
+        "3D view",
+        "View",
+        &["3d", "cabinet in 3d", "orbit", "render"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_door",
+        "Open or close the door in 3D",
+        "View",
+        &["door", "open door", "close door", "swing"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_shell",
+        "Show or hide the enclosure in 3D",
+        "View",
+        &["shell", "enclosure", "box", "see through"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_wires",
+        "Show or hide the wires in 3D",
+        "View",
+        &["wires", "routes", "cables"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.iso",
+        "Isometric view",
+        "View",
+        &["3d", "corner view", "perspective"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.front",
+        "Front view",
+        "View",
+        &["3d", "door side", "look at the door"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.top",
+        "Top view",
+        "View",
+        &["3d", "from above", "plan"],
+        Needs::Project,
+    ),
+    cmd(
         "view.terminals_drawer",
         "Terminals",
         "View",
@@ -844,6 +930,16 @@ pub const COMMANDS: &[CommandInfo] = &[
         "View",
         &[],
         Needs::Nothing,
+    ),
+    verb(
+        cmd(
+            "cabinet.place-all",
+            "Place all devices (Cabinet)",
+            "View",
+            &["place", "fill plate", "auto place", "layout", "din rail"],
+            Needs::Project,
+        ),
+        &["place all"],
     ),
     cmd(
         "cabinet.size-enclosure",
@@ -1008,6 +1104,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd(
+        "help.show_hints",
+        "Show hints again",
+        "View",
+        &["hints", "tips", "reset", "help"],
+        Needs::Nothing,
+    ),
+    cmd(
         "help.walkthrough",
         "Fast keys walk-through",
         "View",
@@ -1075,6 +1178,16 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["route all", "route wires"],
+    ),
+    verb(
+        cmd(
+            "cabinet.rails",
+            "Rails and ducts (Cabinet)",
+            "View",
+            &["rail", "duct", "trunk", "din rail", "add duct", "move duct"],
+            Needs::Project,
+        ),
+        &["add rail", "add duct"],
     ),
     cmd(
         "view.background_place",
@@ -1151,6 +1264,26 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["cable diagram"],
+    ),
+    verb(
+        cmd(
+            "report.cutlist",
+            "Cut list",
+            "View",
+            &["cut length", "wire lengths", "sleeves"],
+            Needs::Project,
+        ),
+        &["cut list"],
+    ),
+    verb(
+        cmd(
+            "report.labels",
+            "Labels",
+            "View",
+            &["label printer", "wire labels", "terminal labels"],
+            Needs::Project,
+        ),
+        &["labels"],
     ),
     verb(
         cmd(
@@ -1241,6 +1374,23 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.eplan",
+            "Export EPLAN project (PXF)",
+            "Export",
+            &[
+                "eplan",
+                "pxf",
+                "epj",
+                "hand back",
+                "exchange",
+                "engineering",
+            ],
+            Needs::Project,
+        ),
+        &["export eplan", "export pxf"],
+    ),
+    verb(
+        cmd(
             "export.pdf",
             "Export PDF",
             "Export",
@@ -1265,6 +1415,23 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export commissioning", "commissioning report"],
+    ),
+    verb(
+        cmd(
+            "export.standards_report",
+            "Export standards compliance report",
+            "Export",
+            &[
+                "iec 60204",
+                "ul 508a",
+                "nfpa 79",
+                "compliance",
+                "customer",
+                "checklist",
+            ],
+            Needs::Project,
+        ),
+        &["export standards", "standards report"],
     ),
     verb(
         cmd(
@@ -1338,6 +1505,55 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export wiring plan"],
+    ),
+    verb(
+        cmd(
+            "view.bench",
+            "Bench output...",
+            "Export",
+            &[
+                "bench",
+                "ferrule",
+                "ferrules",
+                "labels",
+                "label sheet",
+                "cut list",
+                "workshop",
+                "print",
+            ],
+            Needs::Project,
+        ),
+        &["bench output", "open bench output"],
+    ),
+    verb(
+        cmd(
+            "export.bench_cut",
+            "Export bench cut list (PDF)",
+            "Export",
+            &["wire cut", "bench", "workshop", "print", "tick", "strip"],
+            Needs::Project,
+        ),
+        &["export bench cut list", "bench cut list"],
+    ),
+    verb(
+        cmd(
+            "export.ferrules",
+            "Export ferrule table (PDF)",
+            "Export",
+            &["ferrule", "end sleeve", "crimp", "colour", "bench"],
+            Needs::Project,
+        ),
+        &["export ferrules", "ferrule table"],
+    ),
+    verb(
+        cmd(
+            "export.labels",
+            "Export label sheets (PDF)",
+            "Export",
+            &["labels", "stickers", "wire flags", "print", "tape"],
+            Needs::Project,
+        ),
+        &["export labels", "print labels"],
     ),
     verb(
         cmd(

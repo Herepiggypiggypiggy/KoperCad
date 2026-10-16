@@ -123,6 +123,15 @@ impl Chord {
         }
     }
 
+    pub const fn ctrl_alt(key: Key) -> Chord {
+        Chord {
+            ctrl: true,
+            shift: false,
+            alt: true,
+            key,
+        }
+    }
+
     pub const fn shift(key: Key) -> Chord {
         Chord {
             shift: true,
@@ -330,6 +339,7 @@ impl Keymap {
         bind(Chord::ctrl(l('x')), Canvas, "edit.cut");
         bind(Chord::ctrl(l('v')), Canvas, "edit.paste");
         bind(Chord::ctrl_shift(l('v')), Canvas, "edit.paste_keep_tags");
+        bind(Chord::ctrl_alt(l('v')), Canvas, "edit.paste_in_place");
         bind(Chord::ctrl(l('d')), Canvas, "edit.duplicate");
         bind(Chord::ctrl(l('a')), Canvas, "edit.select_all");
         bind(Chord::plain(Delete), Canvas, "edit.delete");
@@ -391,9 +401,13 @@ impl Keymap {
         bind(Chord::ctrl(Digit(3)), Anywhere, "view.terminals_drawer");
         bind(Chord::ctrl(Digit(4)), Anywhere, "view.cables_drawer");
         bind(Chord::ctrl(Digit(5)), Anywhere, "view.devices_drawer");
+        bind(Chord::ctrl(Digit(6)), Anywhere, "view.3d");
+        bind(Chord::shift(l('d')), Canvas, "view.3d_door");
         bind(Chord::ctrl_shift(l('f')), Anywhere, "view.focus");
         bind(Chord::plain(F(11)), Anywhere, "view.full_screen");
         bind(Chord::ctrl(l('t')), Anywhere, "view.cabinet_table");
+        bind(Chord::ctrl_shift(l('p')), Anywhere, "cabinet.place-all");
+        bind(Chord::ctrl_shift(l('r')), Anywhere, "cabinet.rails");
         bind(Chord::shift(l('h')), Canvas, "heat.toggle");
         bind(Chord::plain(Char('?')), Canvas, "view.shortcuts");
         Keymap { bindings }
@@ -650,6 +664,11 @@ mod tests {
         assert_eq!(ctrl(3), Some("view.terminals_drawer"));
         assert_eq!(ctrl(4), Some("view.cables_drawer"));
         assert_eq!(ctrl(5), Some("view.devices_drawer"));
+        assert_eq!(ctrl(6), Some("view.3d"));
+        assert_eq!(
+            map.resolve(Chord::shift(Key::Letter('D')), Focus::Canvas),
+            Some("view.3d_door")
+        );
         assert_eq!(
             map.resolve(Chord::plain(Key::F(8)), Focus::Panel),
             Some("check.next_problem")

@@ -38,7 +38,18 @@ pub(crate) const LESSONS_ENV: &str = "KOPERCAD_LESSONS";
 const TICK_SHOWN: Duration = Duration::from_millis(500);
 
 /// Signals the shell raises for things that do not pass through a command.
-pub(crate) const SIGNALS: &[&str] = &["wheel_opened", "proposal_next", "proposal_accept"];
+pub(crate) const SIGNALS: &[&str] = &[
+    "wheel_opened",
+    "proposal_next",
+    "proposal_accept",
+    "problem_waived",
+    "waiver_restored",
+    "cabinet_dropped",
+    "cabinet_rotated",
+    "cabinet_removed",
+    "cabinet_plan_accepted",
+    "wire_cut_exported",
+];
 
 /// Every control a lesson may point at. A control joins this list when its
 /// owner calls `NovoApp::anchor` for it; `docs/design/lesson-anchors.md` is
@@ -55,6 +66,42 @@ pub(crate) const ANCHORS: &[&str] = &[
     "dock.lines",
     "dock.hint",
     "dock.proposals",
+    "palette.field",
+    "issue.pill",
+    "drawer.terminals",
+    "drawer.terminals.tab",
+    "drawer.cables",
+    "drawer.cables.tab",
+    "drawer.cables.accept",
+    "drawer.devices",
+    "drawer.devices.tab",
+    "live.card",
+    "live.pole",
+    "live.coil",
+    "live.output",
+    "cabinet.place_all",
+    "cabinet.accept",
+    "cabinet.rules",
+    "cabinet.plate",
+    "cabinet.routes",
+    "cabinet.cutlist",
+    "cabinet.table",
+    "cabinet.heat",
+    "cabinet.canvas",
+    "cabinet.unplaced",
+    "cabinet.problems",
+    "cabinet.inspector",
+    "cabinet.door",
+    "cabinet.door.apply",
+    "cabinet.routes_panel",
+    "cabinet.wire_rules",
+    "cabinet.sizing",
+    "cabinet.rails",
+    "cabinet.plate_drawing",
+    "cabinet.more",
+    "issues.list",
+    "macro.place",
+    "macros.window",
 ];
 
 /// What the shell keeps about learning.
@@ -89,6 +136,13 @@ pub(crate) struct LearnState {
     ticked_at: Option<Instant>,
     /// The pointer pulses harder until this moment (Show me how).
     pub(super) flash_until: Option<Instant>,
+    /// The "Show me how" demonstration that is playing, and the how-to line
+    /// it is on.
+    pub(super) demo: Option<super::learn_demo::DemoRun>,
+    pub(super) demo_caption: Option<usize>,
+    /// Where the card was last drawn, where the demonstration's pointer
+    /// starts.
+    pub(super) card_pos: Option<egui::Pos2>,
     /// A lesson is opening its own project; `document_replaced` must not
     /// end the run.
     opening: bool,
@@ -120,6 +174,9 @@ impl LearnState {
             revealed: None,
             ticked_at: None,
             flash_until: None,
+            demo: None,
+            demo_caption: None,
+            card_pos: None,
             opening: false,
             advance_after: TICK_SHOWN,
         };
@@ -202,19 +259,34 @@ impl LearnState {
         self.coming.as_ref().is_some_and(|c| c.contains(id))
     }
 
+    /// What this build offers a lesson: its commands, anchors and signals.
+    pub(crate) fn lint_registry(&self) -> Registry {
+        Registry {
+            commands: COMMANDS.iter().map(|c| c.id.to_owned()).collect(),
+            anchors: ANCHORS
+                .iter()
+                .map(|a| (*a).to_owned())
+                .chain(
+                    super::learn_labels::menu_anchors()
+                        .iter()
+                        .map(|m| m.id.clone()),
+                )
+                .collect(),
+            signals: SIGNALS.iter().map(|s| (*s).to_owned()).collect(),
+        }
+    }
+
     /// What the lint says about the lessons against this build's commands,
     /// anchors and signals.
     pub(crate) fn lint_report(&self) -> novo_learn::Report {
-        let registry = Registry {
-            commands: COMMANDS.iter().map(|c| c.id.to_owned()).collect(),
-            anchors: ANCHORS.iter().map(|a| (*a).to_owned()).collect(),
-            signals: SIGNALS.iter().map(|s| (*s).to_owned()).collect(),
-        };
+        let registry = self.lint_registry();
         let example = example_project();
         lint(&self.catalog, &self.files, &registry, example.as_ref())
     }
 
-    /// Lessons with a lint error, which are listed as coming soon.
+    /// Lessons with a lint error, which are listed as coming soon. An early
+    /// access lesson only warns: it starts, and a pointer whose control this
+    /// build does not have yet is left out.
     fn lint_errors(&self) -> BTreeSet<String> {
         self.lint_report()
             .findings
@@ -368,7 +440,13 @@ impl NovoApp {
     /// Registers a control's place on screen this frame, so a lesson can
     /// point at it. `label` is the name `{ui:id}` shows in step text.
     pub(super) fn anchor(&mut self, id: &str, rect: egui::Rect, label: &str) {
-        debug_assert!(ANCHORS.contains(&id), "unregistered anchor `{id}`");
+        debug_assert!(
+            ANCHORS.contains(&id)
+                || super::learn_labels::menu_anchors()
+                    .iter()
+                    .any(|m| m.id == id),
+            "unregistered anchor `{id}`"
+        );
         self.learn.anchors.insert(id.to_owned(), rect);
         if !self.learn.labels.contains_key(id) {
             self.learn.labels.insert(id.to_owned(), label.to_owned());
@@ -435,7 +513,7 @@ impl NovoApp {
                 Tool::Place(_) => "place",
                 Tool::Wire(_) => "wire",
                 Tool::Cable(_) => "cable",
-                Tool::Select | Tool::Move(_) => "select",
+                Tool::Select | Tool::Move(_) | Tool::Paste(_) => "select",
             }
             .to_owned();
             facts.selection = view
@@ -447,6 +525,21 @@ impl NovoApp {
                 })
                 .collect();
             facts.zoom = f64::from(view.canvas.viewport.zoom) / self.learn_fit_zoom(view).max(1e-6);
+        }
+        // Devices clicked on the cabinet plate count as selected too, so a
+        // plate-only device (no symbol on a page) can be picked in a lesson.
+        let plate: Vec<String> = self
+            .cabinet
+            .view
+            .selection
+            .ids()
+            .iter()
+            .filter_map(|i| novo_canvas::cabinet::box_of(*i))
+            .filter_map(|id| project.get::<novo_core::Device>(novo_core::DeviceId::from(id)))
+            .map(|d| d.tag.to_string())
+            .collect();
+        if !plate.is_empty() {
+            facts.selection = plate;
         }
         if facts.live {
             let (coils, pins, closed) = self.wb.live.learn_facts(project);
@@ -590,6 +683,16 @@ impl NovoApp {
                 min: (p.0.min(q.0), p.1.min(q.1)),
                 max: (p.0.max(q.0), p.1.max(q.1)),
             });
+        }
+        if let Some(name) = &at.feed {
+            return feed_spot(project, name, self.current_page);
+        }
+        if at.device.is_none()
+            && let Some(pin) = &at.pin
+        {
+            let found = novo_learn::check::pins_named(project, pin);
+            let (page, p) = pin_spot(project, *found.first()?)?;
+            return Some(Spot::point(page, p));
         }
         if let Some(device) = &at.device {
             if let Some(pin) = &at.pin {
@@ -748,6 +851,7 @@ impl NovoApp {
     pub(super) fn learn_show_me(&mut self) {
         self.learn.flash_until = Some(Instant::now() + Duration::from_millis(2500));
         self.learn.revealed = None;
+        self.learn_start_demo();
     }
 
     /// `help.learn`, with or without a word to look for, and the
@@ -813,13 +917,37 @@ impl NovoApp {
         learn.seen = std::mem::take(&mut learn.anchors);
     }
 
+    /// The person's key for a command; a command with no key reads as its
+    /// name in the command palette, never as a blank.
+    pub(super) fn learn_key_text(&self, command: &str) -> String {
+        self.wb.keymap.shortcut_text(command).unwrap_or_else(|| {
+            let label = COMMANDS
+                .iter()
+                .find(|c| c.id == command)
+                .map_or(command, |c| c.label);
+            self.learn.say_with("no_key", &[("label", label)])
+        })
+    }
+
     /// Where a control was last drawn.
     pub(super) fn learn_anchor(&self, id: &str) -> Option<egui::Rect> {
-        self.learn
-            .anchors
-            .get(id)
-            .or_else(|| self.learn.seen.get(id))
-            .copied()
+        let drawn = |id: &str| {
+            self.learn
+                .anchors
+                .get(id)
+                .or_else(|| self.learn.seen.get(id))
+                .copied()
+        };
+        // A control that is folded away or inside a closed menu is pointed
+        // at through the one that opens it.
+        let mut id = id.to_owned();
+        for _ in 0..3 {
+            if let Some(rect) = drawn(&id) {
+                return Some(rect);
+            }
+            id = super::learn_labels::anchor_fallback(&id)?;
+        }
+        None
     }
 }
 
@@ -853,6 +981,33 @@ impl Spot {
 fn symbol_tag(project: &Project, symbol: novo_core::SymbolId) -> Option<String> {
     let designation = project.pin_designation(PinRef::new(symbol, 0))?;
     designation.rsplit_once(':').map(|(tag, _)| tag.to_owned())
+}
+
+/// Where the feed of a potential is: the triangle and its stub, on the
+/// current page when it has one there.
+fn feed_spot(project: &Project, name: &str, current: Option<PageId>) -> Option<Spot> {
+    let mut found: Option<&novo_core::SymbolInstance> = None;
+    for symbol in project.symbols() {
+        let novo_core::SymbolRole::PotentialFeed { potential } = &symbol.role else {
+            continue;
+        };
+        if project.potential(*potential).is_none_or(|p| p.name != name) {
+            continue;
+        }
+        if found.is_none() || Some(symbol.page) == current {
+            found = Some(symbol);
+            if Some(symbol.page) == current {
+                break;
+            }
+        }
+    }
+    let symbol = found?;
+    let o = symbol.placement.origin;
+    Some(Spot {
+        page: symbol.page,
+        min: (o.x - 3.0, o.y - 1.0),
+        max: (o.x + 3.0, o.y + 9.0),
+    })
 }
 
 /// Where a pin is on its page.

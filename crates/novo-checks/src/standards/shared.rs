@@ -13,6 +13,8 @@ use super::ampacity::{self, covers, grounding_conductor, next_standard_rating};
 use super::netclass::{Circuit, Current};
 use super::symbols::{Class, Colour, class_of, is_break_contact, lamp_colour};
 use super::{Env, Sink, StandardSet, as_bool, as_f64, device_property, keys};
+use crate::calc::Insulation;
+use crate::calc::cable::{Circuit as CableCircuit, Loaded, Method};
 
 // ----- small readers -----------------------------------------------------
 
@@ -249,7 +251,10 @@ pub(super) fn supply_disconnect(
                 format!("{tag} is reached through a circuit breaker only; state `isolating = true` on it if it is suitable for isolation"),
             );
         } else if open.any(&nets) {
-            s.pass(id);
+            s.pass_note(
+                id,
+                format!("{tag}: reached only through a disconnecting device"),
+            );
             for net in &nets {
                 for sym in e.nets.upstream(*net).poles.keys() {
                     if let Some(symbol) = project.symbol(*sym)
@@ -271,7 +276,7 @@ pub(super) fn supply_disconnect(
     for device in isolators {
         let tag = e.tag(device);
         match device_flag(e, device, "lockable") {
-            Some(true) => s.pass(lock_id),
+            Some(true) => s.pass_note(lock_id, format!("{tag}: lockable in OFF")),
             Some(false) => s.fail(
                 lock_id,
                 at_symbols(e, device),
@@ -372,6 +377,7 @@ pub(super) fn colours(
     conductor_id: &'static str,
 ) {
     let project = e.project;
+    let mut ok_colours: BTreeMap<(&'static str, &'static str), usize> = BTreeMap::new();
     let mut unset: BTreeMap<&'static str, Vec<AnyId>> = BTreeMap::new();
     let mut unreadable: BTreeMap<&'static str, Vec<(AnyId, String)>> = BTreeMap::new();
     let mut unclassified: Vec<AnyId> = Vec::new();
@@ -442,6 +448,7 @@ pub(super) fn colours(
                 let excepted = rule == conductor_id && scheme.excepted.contains(&colour);
                 if allowed.contains(&colour) || excepted {
                     s.pass(rule);
+                    *ok_colours.entry((rule, colour.name())).or_default() += 1;
                 } else {
                     wrong.entry((rule, net, colour)).or_default().push(wire.id);
                 }
@@ -496,6 +503,9 @@ pub(super) fn colours(
                 colour.name()
             ),
         );
+    }
+    for ((rule, colour), n) in ok_colours {
+        s.note(rule, format!("{} {colour}", plural(n, "wire", "wires")));
     }
     for (rule, wires) in unset {
         s.unknown(
@@ -707,7 +717,7 @@ pub(super) fn protection(
                 if class_of(sym) == Class::Motor
                     && nets.iter().any(|n| is_drive_pin_on(e, *n, sym.id))
                 {
-                    s.pass(short_id);
+                    s.pass_note(short_id, format!("{tag}: supplied through a drive"));
                 } else if blocked.any(&nets) {
                     s.fail(
                         short_id,
@@ -715,7 +725,7 @@ pub(super) fn protection(
                         format!("{tag} can be reached from the supply without passing a fuse or circuit breaker"),
                     );
                 } else if open.any(&nets) {
-                    s.pass(short_id);
+                    s.pass_note(short_id, format!("{tag}: behind a fuse or circuit breaker"));
                 } else if starts.is_empty() {
                     s.unknown(
                         short_id,
@@ -789,7 +799,10 @@ pub(super) fn protection(
     for (device, symbols) in &motors {
         let tag = e.tag(*device);
         if device_flag(e, *device, "thermal_protection") == Some(true) {
-            s.pass(overload_id);
+            s.pass_note(
+                overload_id,
+                format!("{tag}: thermal protection in the motor"),
+            );
             continue;
         }
         for sym in symbols {
@@ -821,7 +834,7 @@ pub(super) fn protection(
                 .iter()
                 .any(|(_, pnets)| pnets.iter().any(|n| region.contains(n)));
             if protected {
-                s.pass(overload_id);
+                s.pass_note(overload_id, format!("{tag}: overload protection upstream"));
             } else {
                 s.fail(
                     overload_id,
@@ -1075,11 +1088,162 @@ pub(super) fn ground_size_awg(e: &Env<'_>, s: &mut Sink, id: &'static str) {
 
 // ----- ampacity ------------------------------------------------------------
 
-/// Conductors against the current they carry, in AWG terms.
-pub(super) fn ampacity_rule(e: &Env<'_>, s: &mut Sink, set: StandardSet, id: &'static str) {
+/// Which ampacity tables a conductor rule reads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Tables {
+    /// North American: AWG sizes, 60 or 75 degrees C terminations.
+    Awg,
+    /// IEC 60364-5-52 by installation method, ambient and grouping.
+    Iec,
+}
+
+/// What a conductor carries and under which assumptions.
+struct Got {
+    amps: f64,
+    /// How the wire was rated, e.g. `14 AWG` or `PVC, method C`.
+    rated_as: String,
+    /// The conditions, e.g. `at 60 °C terminations`.
+    at: String,
+}
+
+/// A property of a wire, else of its cable, else of the project.
+fn wire_text(e: &Env<'_>, wire: WireId, key: &str, project_key: &str) -> Option<String> {
+    let project = e.project;
+    let text = |v: &Value| match v {
+        Value::Text(t) if !t.trim().is_empty() => Some(t.trim().to_owned()),
+        _ => None,
+    };
+    project
+        .wire(wire)
+        .and_then(|w| w.properties.get(key).and_then(text))
+        .or_else(|| {
+            let (cable, _) = project.core_of_wire(wire)?;
+            project.cable(cable)?.properties.get(key).and_then(text)
+        })
+        .or_else(|| e.params.text(project_key).map(str::to_owned))
+}
+
+/// A numeric property of a wire, else of its cable.
+fn wire_number(e: &Env<'_>, wire: WireId, key: &str) -> Option<f64> {
+    let project = e.project;
+    project
+        .wire(wire)
+        .and_then(|w| w.properties.get(key).and_then(as_f64))
+        .or_else(|| {
+            let (cable, _) = project.core_of_wire(wire)?;
+            project.cable(cable)?.properties.get(key).and_then(as_f64)
+        })
+}
+
+/// Reads an IEC 60364-5-52 rating: method, insulation, ambient and
+/// grouping from the wire (or cable, or project). A missing installation
+/// method is not guessed: the wire cannot be rated.
+fn iec_rating(e: &Env<'_>, wire: WireId, mm2: f64, loaded: Loaded) -> Result<Got, Option<String>> {
+    let Some(method_text) = wire_text(
+        e,
+        wire,
+        keys::INSTALLATION_METHOD,
+        keys::DEFAULT_INSTALLATION_METHOD,
+    ) else {
+        return Err(Some(format!(
+            "no installation method (`{}` on the wire or cable, or `{}` on the project): the ampacity depends on it and is not guessed",
+            keys::INSTALLATION_METHOD,
+            keys::DEFAULT_INSTALLATION_METHOD
+        )));
+    };
+    let Some(method) = Method::parse(&method_text) else {
+        return Err(Some(format!(
+            "the installation method \"{method_text}\" is not one of B1, B2 or C"
+        )));
+    };
+    let insulation = match wire_text(e, wire, keys::INSULATION, keys::INSULATION)
+        .map(|t| t.to_ascii_uppercase())
+        .as_deref()
+    {
+        None | Some("PVC") => Insulation::Pvc,
+        Some("XLPE") | Some("EPR") => Insulation::Xlpe,
+        Some(other) => {
+            return Err(Some(format!(
+                "the insulation \"{other}\" is not PVC or XLPE"
+            )));
+        }
+    };
+    let ambient = e.params.number(keys::AMBIENT_C).unwrap_or(40.0);
+    let circuits = wire_number(e, wire, keys::GROUPED_CIRCUITS)
+        .filter(|n| *n >= 1.0)
+        .map_or(1, |n| n.round() as u32);
+    let circuit = CableCircuit {
+        design_current: 0.0,
+        device_rating: 0.0,
+        section_mm2: mm2,
+        insulation,
+        method,
+        loaded,
+        ambient_c: ambient,
+        grouped_circuits: circuits,
+    };
+    static TABLES: std::sync::OnceLock<crate::calc::tables::TableSet> = std::sync::OnceLock::new();
+    let tables = TABLES.get_or_init(crate::calc::tables::TableSet::builtin);
+    match circuit.rating_with(tables) {
+        Some(amps) => Ok(Got {
+            amps,
+            rated_as: format!(
+                "{}, method {}",
+                if insulation == Insulation::Pvc {
+                    "PVC"
+                } else {
+                    "XLPE"
+                },
+                method.label().split(' ').next().unwrap_or("")
+            ),
+            at: format!(
+                "at {} °C ambient, {}",
+                ambient,
+                if circuits == 1 {
+                    "ungrouped".to_owned()
+                } else {
+                    format!("{circuits} grouped circuits")
+                }
+            ),
+        }),
+        None if !tables.sections().contains(&mm2) => Err(Some(format!(
+            "a {mm2} mm² cross-section the tables do not list (standard sections 1.5 to 120 mm²)"
+        ))),
+        None => Err(Some(format!(
+            "the {ambient} °C ambient is outside the table (10 to 60 °C for PVC, 10 to 80 °C for XLPE)"
+        ))),
+    }
+}
+
+/// Conductors against the current they carry.
+pub(super) fn ampacity_rule(
+    e: &Env<'_>,
+    s: &mut Sink,
+    set: StandardSet,
+    id: &'static str,
+    tables: Tables,
+) {
     let project = e.project;
     let terminal_c = e.params.limit(set, "terminal_temp_c", 60.0);
-    let rate = |mm2: f64| ampacity::ampacity(mm2, terminal_c);
+    // 125 % of the motor current under NEC 430.22; the motor current itself
+    // under IEC 60204-1.
+    let motor_factor = if tables == Tables::Awg { 1.25 } else { 1.0 };
+    let three_phase = e.params.number(keys::PHASES).is_none_or(|p| p > 1.5);
+    let rate = |wire: WireId, mm2: f64, loaded: Loaded| -> Result<Got, Option<String>> {
+        match tables {
+            Tables::Awg => ampacity::ampacity(mm2, terminal_c)
+                .map(|amps| Got {
+                    amps,
+                    rated_as: ampacity::awg_for_area(mm2)
+                        .map_or("-", |a| a.label)
+                        .to_owned(),
+                    at: format!("at {} °C terminations", number(terminal_c)),
+                })
+                .ok_or(None),
+            Tables::Iec => iec_rating(e, wire, mm2, loaded),
+        }
+    };
+    let mut reasons: BTreeMap<String, Vec<AnyId>> = BTreeMap::new();
     let mut unknown_wires: Vec<AnyId> = Vec::new();
     let mut unrated: Vec<AnyId> = Vec::new();
     // Motor branch protectors are sized against the motor (NEC 430.52, rule
@@ -1104,8 +1268,13 @@ pub(super) fn ampacity_rule(e: &Env<'_>, s: &mut Sink, set: StandardSet, id: &'s
             continue;
         };
         let branch_device = motor_branch.contains(&symbol.id);
-        let mut thinnest: Option<(f64, f64)> = None;
+        let mut thinnest: Option<(f64, Got)> = None;
         let mut bad: Vec<WireId> = Vec::new();
+        let loaded = if symbol.pins.len() >= 6 {
+            Loaded::Three
+        } else {
+            Loaded::Two
+        };
         for (index, pin) in symbol.pins.iter().enumerate() {
             let Ok(index) = u16::try_from(index) else {
                 break;
@@ -1119,53 +1288,72 @@ pub(super) fn ampacity_rule(e: &Env<'_>, s: &mut Sink, set: StandardSet, id: &'s
             for w in protected {
                 match wire_section(e, w) {
                     None => unknown_wires.push(AnyId::Wire(w)),
-                    Some(mm2) => match rate(mm2) {
-                        None => unknown_wires.push(AnyId::Wire(w)),
+                    Some(mm2) => match rate(w, mm2, loaded) {
+                        Err(None) => unknown_wires.push(AnyId::Wire(w)),
+                        Err(Some(why)) => reasons.entry(why).or_default().push(AnyId::Wire(w)),
                         // NEC 240.4(B): a device may be the next standard rating
-                        // above the wire's ampacity (800 A and below).
-                        Some(amps)
+                        // above the wire's ampacity (800 A and below). IEC
+                        // 60364-4-43 has no such allowance.
+                        Ok(got)
                             if !branch_device
-                                && amps + 1e-9 < rated
-                                && !(rated <= 800.0
-                                    && next_standard_rating(amps) >= rated - 1e-9) =>
+                                && got.amps + 1e-9 < rated
+                                && !(tables == Tables::Awg
+                                    && rated <= 800.0
+                                    && next_standard_rating(got.amps) >= rated - 1e-9) =>
                         {
                             bad.push(w);
-                            if thinnest.is_none_or(|(m, _)| mm2 < m) {
-                                thinnest = Some((mm2, amps));
+                            if thinnest.as_ref().is_none_or(|(m, _)| mm2 < *m) {
+                                thinnest = Some((mm2, got));
                             }
                         }
-                        Some(_) => s.pass(id),
+                        Ok(got) => s.pass_note(
+                            id,
+                            format!(
+                                "{}: {} mm² wire ({}) carries {} A {}, device {} A",
+                                e.tag(device),
+                                number(mm2),
+                                got.rated_as,
+                                number(got.amps),
+                                got.at,
+                                number(rated)
+                            ),
+                        ),
                     },
                 }
             }
         }
-        if let Some((mm2, amps)) = thinnest {
+        if let Some((mm2, got)) = thinnest {
             let mut at: Vec<AnyId> = bad.iter().map(|w| AnyId::Wire(*w)).collect();
             at.push(AnyId::Symbol(symbol.id));
             s.fail(
                 id,
                 at,
                 format!(
-                    "{} is rated {} A, but {} on it {} thinner: the thinnest, {} mm² (rated as {}), carries {} A at {} °C terminations",
+                    "{} is rated {} A, but {} on it {} thinner: the thinnest, {} mm² (rated as {}), carries {} A {}",
                     e.tag(device),
                     number(rated),
                     plural(bad.len(), "wire", "wires"),
                     if bad.len() == 1 { "is" } else { "are" },
                     number(mm2),
-                    ampacity::awg_for_area(mm2).map_or("-", |a| a.label),
-                    number(amps),
-                    number(terminal_c)
+                    got.rated_as,
+                    number(got.amps),
+                    got.at
                 ),
             );
         }
     }
-    // Motors: 125 % of the full-load current.
+    // Motors: the full-load current times the factor of the standard.
     for (device, symbols) in devices_of_class(e, |c| c == Class::Motor) {
         let Some(flc) = device_number(e, device, keys::FLC_A).filter(|a| *a > 0.0) else {
             unrated.extend(at_symbols(e, device));
             continue;
         };
-        let need = 1.25 * flc;
+        let need = motor_factor * flc;
+        let loaded = if three_phase {
+            Loaded::Three
+        } else {
+            Loaded::Two
+        };
         for sym in symbols {
             for (i, pin) in sym.pins.iter().enumerate() {
                 if is_ground(&pin.name) {
@@ -1173,19 +1361,27 @@ pub(super) fn ampacity_rule(e: &Env<'_>, s: &mut Sink, set: StandardSet, id: &'s
                 }
                 let Ok(i) = u16::try_from(i) else { break };
                 for w in project.wires_at(Endpoint::pin(sym.id, i)) {
-                    match wire_section(e, w).and_then(|a| rate(a).map(|amps| (a, amps))) {
-                        None => unknown_wires.push(AnyId::Wire(w)),
-                        Some((_, amps)) if amps + 1e-9 >= need => s.pass(id),
-                        Some((mm2, amps)) => s.fail(
+                    let Some(mm2) = wire_section(e, w) else {
+                        unknown_wires.push(AnyId::Wire(w));
+                        continue;
+                    };
+                    match rate(w, mm2, loaded) {
+                        Err(None) => unknown_wires.push(AnyId::Wire(w)),
+                        Err(Some(why)) => reasons.entry(why).or_default().push(AnyId::Wire(w)),
+                        Ok(Got { amps, .. }) if amps + 1e-9 >= need => {
+                            s.pass_note(id, format!("{}: wire carries {} A, needs {} A", e.tag(device), number(amps), number(need)))
+                        }
+                        Ok(Got { amps, rated_as, at }) => s.fail(
                             id,
                             vec![AnyId::Wire(w), AnyId::Symbol(sym.id)],
                             format!(
-                                "{}: a {} mm² wire carries {} A, a motor of {} A full-load current needs {} A (125 %)",
+                                "{}: a {} mm² wire ({rated_as}) carries {} A {at}, a motor of {} A full-load current needs {} A{}",
                                 e.tag(device),
                                 number(mm2),
                                 number(amps),
                                 number(flc),
-                                number(need)
+                                number(need),
+                                if motor_factor > 1.0 { " (125 %)" } else { "" }
                             ),
                         ),
                     }
@@ -1200,6 +1396,15 @@ pub(super) fn ampacity_rule(e: &Env<'_>, s: &mut Sink, set: StandardSet, id: &'s
             "Protective devices without a rated current (`rated_current_a`) and motors without a full-load current (`flc_a`): their conductors cannot be checked".to_owned(),
         );
     }
+    for (why, mut at) in reasons {
+        at.sort();
+        at.dedup();
+        s.unknown(
+            id,
+            at.clone(),
+            format!("{} {why}", plural_have(at.len(), "wire has", "wires have")),
+        );
+    }
     unknown_wires.sort();
     unknown_wires.dedup();
     if !unknown_wires.is_empty() {
@@ -1207,8 +1412,13 @@ pub(super) fn ampacity_rule(e: &Env<'_>, s: &mut Sink, set: StandardSet, id: &'s
             id,
             unknown_wires.clone(),
             format!(
-                "{} no cross-section, or one thinner than the smallest AWG size in the table",
-                plural_have(unknown_wires.len(), "wire has", "wires have")
+                "{} no cross-section, or one thinner than the smallest {} size in the table",
+                plural_have(unknown_wires.len(), "wire has", "wires have"),
+                if tables == Tables::Awg {
+                    "AWG"
+                } else {
+                    "standard"
+                }
             ),
         );
     }

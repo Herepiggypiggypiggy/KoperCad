@@ -2,6 +2,7 @@
 //! the user. Today that is the drawing standard, which picks the symbol pack.
 
 use eframe::egui;
+use novo_core::Value;
 use novo_symbols::Pack;
 
 use super::{Level, NovoApp};
@@ -38,6 +39,39 @@ impl NovoApp {
         }) {
             Ok(((), changes)) => self.changed_outside_canvas(&changes),
             Err(e) => self.message(Level::Error, format!("Drawing standard: {e}")),
+        }
+    }
+
+    /// Whether a project property (`tag.rule`, `structure.list`) holds this
+    /// text. Both are opt-in design-check rules (docs/design/eplan-nets.md).
+    pub(super) fn project_property_is(&self, key: &str, value: &str) -> bool {
+        self.backend.document().is_some_and(|d| {
+            matches!(d.project().info().properties.get(key), Some(Value::Text(t)) if t == value)
+        })
+    }
+
+    /// Switches an opt-in check rule on (the property is `value`) or off
+    /// (the property is removed), one undo step.
+    pub(super) fn set_project_property(&mut self, key: &str, value: &str, on: bool) {
+        if self.project_property_is(key, value) == on {
+            return;
+        }
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let result = doc.transact("Check rules", |tx| {
+            tx.set_info(|i| {
+                if on {
+                    i.properties
+                        .insert(key.to_owned(), Value::Text(value.to_owned()));
+                } else {
+                    i.properties.remove(key);
+                }
+            })
+        });
+        match result {
+            Ok(((), changes)) => self.changed_outside_canvas(&changes),
+            Err(e) => self.message(Level::Error, format!("Check rules: {e}")),
         }
     }
 
@@ -79,6 +113,9 @@ impl NovoApp {
             .map(|d| d.project().info().rules.standard.clone())
             .unwrap_or_default();
         let mut apply = false;
+        let mut tag_rule = self.project_property_is("tag.rule", "page-column");
+        let mut structure_complete = self.project_property_is("structure.list", "complete");
+        let mut neutral_rule = self.project_property_is("neutral.rule", "supply-and-external");
         let mut group_prefix = self.settings.group_prefix.clone();
         let mut cabinet_prefix = self.settings.cabinet_prefix.clone();
         // The preview uses what is typed now, over this project's names.
@@ -138,10 +175,31 @@ already has. These letters only start a project that has none yet. Yours, for ev
             if let Some((group, cabinet)) = &preview {
                 ui.weak(format!("Next page group {group}, next cabinet {cabinet}"));
             }
+            ui.add_space(10.0);
+            ui.strong("Extra design checks");
+            ui.weak("Off until you ask. Findings appear under Issues.");
+            ui.checkbox(&mut tag_rule, "Device names follow page and column")
+                .on_hover_text(
+                    "A name is its letters, the two-digit page and the column of its main \
+symbol: K031 on page 3, column 1; K031.2 for a repeat.",
+                );
+            ui.checkbox(&mut structure_complete, "My structure list is complete")
+                .on_hover_text(
+                    "Report function and location codes on devices and pages that no \
+structure node names.",
+                );
+            ui.checkbox(&mut neutral_rule, "Neutral only to supply and external devices")
+                .on_hover_text(
+                    "Report a device on a neutral conductor unless it is a terminal or plug, \
+or its Supply or External property is set.",
+                );
             ui.add_space(8.0);
             ui.button("Close (Esc)").clicked()
         });
         self.set_standard(pack);
+        self.set_project_property("tag.rule", "page-column", tag_rule);
+        self.set_project_property("structure.list", "complete", structure_complete);
+        self.set_project_property("neutral.rule", "supply-and-external", neutral_rule);
         self.settings.group_prefix = group_prefix.trim().to_owned();
         self.settings.cabinet_prefix = cabinet_prefix.trim().to_owned();
         if apply {

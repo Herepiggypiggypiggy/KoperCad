@@ -191,7 +191,12 @@ fn break_it(doc: &mut Document, ms: &MotorStarter) -> Broken {
 fn every_deliberate_error_is_flagged_exactly_once() {
     let (mut doc, ms) = starter();
     let b = break_it(&mut doc, &ms);
-    let problems = check(doc.project());
+    // The deliberate L/N short also puts the motor on neutral: a consequence
+    // of the same fault, covered in tests/house_rules, not a second fault.
+    let problems: Vec<_> = check(doc.project())
+        .into_iter()
+        .filter(|p| p.kind != ProblemKind::MotorPhases)
+        .collect();
 
     let mut by_kind: BTreeMap<ProblemKind, Vec<&novo_checks::Problem>> = BTreeMap::new();
     for p in &problems {
@@ -222,6 +227,32 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         ProblemKind::DepthUnknown,
         ProblemKind::PlateTooBig,
         ProblemKind::DoorSwing,
+        // Own fixtures; see tests/eplan_style.
+        ProblemKind::AmbiguousInterruption,
+        ProblemKind::WireNumber,
+        ProblemKind::UntaggedDevice,
+        ProblemKind::UnnamedTerminal,
+        ProblemKind::SameShortTag,
+        ProblemKind::DuplicatePage,
+        ProblemKind::DanglingJunction,
+        // Own fixtures; see tests/house_rules.
+        ProblemKind::UnwiredTerminal,
+        ProblemKind::StrayWireEnd,
+        ProblemKind::ContactType,
+        ProblemKind::ContactPosition,
+        ProblemKind::ContactDrawnTwice,
+        ProblemKind::VoltageClassMix,
+        ProblemKind::ConductorContinuity,
+        ProblemKind::MotorPhases,
+        ProblemKind::CoilSupply,
+        ProblemKind::PlugPinOneSided,
+        ProblemKind::RelaySize,
+        ProblemKind::CableText,
+        ProblemKind::NeutralUse,
+        ProblemKind::PlugPins,
+        ProblemKind::TagRule,
+        ProblemKind::DisplayedTag,
+        ProblemKind::StructureCode,
     ];
     let kinds: Vec<ProblemKind> = ProblemKind::ALL
         .into_iter()

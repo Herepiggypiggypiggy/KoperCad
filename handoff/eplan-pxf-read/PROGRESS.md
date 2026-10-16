@@ -1,0 +1,4 @@
+2026-10-16 09:10 UTC slice 1 written: tokenizer, ML text, model, reader, report, 15 tests, design doc.
+2026-10-16 09:20 UTC #607 merged (R2 READY). Follow-up PR: linear-time tag scan in stream.rs (R2 requirement). Next: slice 2 import plan.
+2026-10-16 09:30 UTC slices 2+3 written: plan_pxf/PxfPlan, CLI import eplan, File > Import > EPLAN project (PXF). Local branch local/pxf-plan; push after #617 merges.
+2026-10-16 10:45 UTC #622 and #646 merged. Slice 4 is blocked on facts no synthetic file can give: line (O31) end points, node (O42) positions, symbol pin rows (O20 / S48x823). Added `kopercad-cli eplan survey <file>` (names, counts, value shapes, never values) so a real export can be checked and the field table filled in without sharing its content. Next: when a survey exists, read nodes, lines and pins into ConnGraph (eplan::nets) and draw symbols with the mapper.

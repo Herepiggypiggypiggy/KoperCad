@@ -11,12 +11,15 @@ pub mod camera;
 pub mod cube;
 pub mod cull;
 pub mod demo;
+pub mod door;
 pub mod feel;
 pub mod governor;
 pub mod labels;
+pub mod layers;
 pub mod look;
 pub mod math;
 pub mod mesh;
+pub mod overlay;
 pub mod palette;
 pub mod pick;
 pub mod scene;
@@ -30,9 +33,11 @@ pub mod render;
 pub mod widget;
 
 pub use camera::{Camera, Projection, ViewPreset};
+pub use layers::Layers;
 pub use look::Look;
 pub use math::{Aabb, Ray};
 pub use mesh::{GeometryKey, MeshData, MeshLibrary, PartGeometry};
+pub use overlay::{Overlay, OverlayLines, OverlayMesh};
 pub use scene::{
     CONTRACT_VERSION, Group, GroupId, Item, ItemId, ItemKind, Mark, PlateFrame, Pose, Profile,
     Scene, Shape, Wire,

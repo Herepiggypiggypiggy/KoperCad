@@ -43,6 +43,11 @@ pub const DUTCH: &[Aliases] = &[
         &["rondleiding", "snelle toetsen uitleg"],
     ),
     nl(
+        "help.show_hints",
+        &[],
+        &["hints opnieuw tonen", "tips opnieuw", "hints"],
+    ),
+    nl(
         "help.learn",
         &["leren", "les"],
         &["leren", "training", "cursus", "uitleg"],
@@ -155,6 +160,7 @@ pub const DUTCH: &[Aliases] = &[
     nl("edit.cut", &[], &["knippen"]),
     nl("edit.paste", &[], &["plakken"]),
     nl("edit.paste_keep_tags", &[], &["plakken met originele tags"]),
+    nl("edit.paste_in_place", &[], &["plakken op dezelfde plek"]),
     nl("edit.duplicate", &[], &["dupliceren", "kopie"]),
     nl("macro.save", &["macro opslaan"], &["opslaan als macro"]),
     nl(
@@ -393,14 +399,29 @@ pub const DUTCH: &[Aliases] = &[
         &["installatie", "automationml", "uitwisselen"],
     ),
     nl(
+        "export.eplan",
+        &["exporteer eplan"],
+        &["eplan", "pxf", "terugsturen", "uitwisselen"],
+    ),
+    nl(
         "file.import_aml",
         &["importeer aml"],
         &["automationml", "installatie", "overnemen", "migreren"],
     ),
     nl(
+        "file.import_eplan",
+        &["importeer eplan"],
+        &["eplan", "pxf", "migreren", "overnemen", "paginamacro"],
+    ),
+    nl(
         "file.import_dwg",
         &["importeer dwg"],
         &["autocad", "converter", "achtergrond"],
+    ),
+    nl(
+        "file.eplan_export_script",
+        &["eplan script ophalen"],
+        &["eplan", "exporteren", "migreren", "overstappen", "pxf"],
     ),
     nl(
         "file.choose_dwg_converter",
@@ -430,6 +451,11 @@ pub const DUTCH: &[Aliases] = &[
         &["restpuntenlijst", "oplevering"],
     ),
     nl(
+        "export.standards_report",
+        &["exporteer normenrapport", "normenrapport exporteren"],
+        &["conformiteitsrapport", "normen pdf"],
+    ),
+    nl(
         "export.plate",
         &["exporteer montageplaat", "montageplaat exporteren"],
         &["boortabel", "boren"],
@@ -439,6 +465,25 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["alle rapporten", "excel exporteren"],
     ),
+    nl("view.3d", &[], &["3d", "driedimensionaal"]),
+    nl(
+        "view.3d_door",
+        &["deur openen in 3d"],
+        &["deur", "deur open", "deur dicht"],
+    ),
+    nl(
+        "view.3d_shell",
+        &["kast tonen in 3d"],
+        &["behuizing", "kast zien"],
+    ),
+    nl(
+        "view.3d_wires",
+        &["draden tonen in 3d"],
+        &["draden", "bedrading"],
+    ),
+    nl("view.iso", &[], &["isometrisch", "hoekzicht"]),
+    nl("view.front", &[], &["vooraanzicht", "deurzijde"]),
+    nl("view.top", &[], &["bovenaanzicht", "van boven"]),
     nl("view.reports", &[], &["rapporten", "lijsten"]),
     nl("report.toc", &["inhoud", "inhoudsopgave"], &["paginalijst"]),
     nl(
@@ -450,6 +495,8 @@ pub const DUTCH: &[Aliases] = &[
     nl("report.wires", &["draadlijst"], &["draden", "aders"]),
     nl("report.terminals", &["klemmenlijst"], &["klemmenstrook"]),
     nl("report.cables", &["kabellijst"], &["kabels"]),
+    nl("report.cutlist", &["zaaglijst"], &["afkortlijst"]),
+    nl("report.labels", &["labels", "etiketten"], &["markeringen"]),
     nl(
         "export.sheets",
         &[
@@ -465,6 +512,16 @@ pub const DUTCH: &[Aliases] = &[
         &["werkplaats", "boren"],
     ),
     nl("export.sheets_csv", &["exporteer csv"], &["csv"]),
+    nl(
+        "cabinet.place-all",
+        &["plaats alles", "plaats alle componenten"],
+        &["plaat", "indeling", "din-rail"],
+    ),
+    nl(
+        "cabinet.rails",
+        &["rails en kanalen", "voeg kanaal toe"],
+        &["din-rail", "kabelgoot", "kanaal", "rail"],
+    ),
     nl(
         "cabinet.routes",
         &["bedraad alles", "routeer alle draden"],
@@ -487,6 +544,26 @@ pub const DUTCH: &[Aliases] = &[
         "export.wirecut_page",
         &["voeg draadproductiepagina toe"],
         &["pdf", "afdrukken", "draadsnijden"],
+    ),
+    nl(
+        "view.bench",
+        &["werkbank uitvoer", "open werkbank"],
+        &["werkbank", "adereindhulzen", "etiketten", "draadsnijlijst"],
+    ),
+    nl(
+        "export.bench_cut",
+        &["exporteer werkbank snijlijst"],
+        &["snijlijst", "draden afkorten", "afstrippen"],
+    ),
+    nl(
+        "export.ferrules",
+        &["exporteer adereindhulzen"],
+        &["adereindhulzen", "krimpen", "kleurcode"],
+    ),
+    nl(
+        "export.labels",
+        &["exporteer etiketten", "print etiketten"],
+        &["etiketten", "stickers", "draadvlaggen"],
     ),
     nl(
         "export.wirecut_xlsx",

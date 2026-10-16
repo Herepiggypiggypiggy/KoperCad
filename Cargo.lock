@@ -1878,10 +1878,12 @@ dependencies = [
  "dirs",
  "eframe",
  "env_logger",
+ "glam",
  "log",
  "lopdf",
  "novo-cables",
  "novo-canvas",
+ "novo-cfd",
  "novo-checks",
  "novo-commissioning",
  "novo-core",
@@ -1903,6 +1905,8 @@ dependencies = [
  "novo-terminals",
  "novo-tests",
  "novo-theme",
+ "novo-thermal",
+ "novo-view3d",
  "novo-workflow",
  "novo-xref",
  "rfd",
@@ -1941,6 +1945,7 @@ dependencies = [
 name = "novo-cfd"
 version = "0.1.0"
 dependencies = [
+ "novo-cfd",
  "novo-layout",
  "novo-thermal",
  "rayon",
@@ -2025,6 +2030,9 @@ dependencies = [
 [[package]]
 name = "novo-heatview"
 version = "0.1.0"
+dependencies = [
+ "novo-cfd",
+]
 
 [[package]]
 name = "novo-interop"
@@ -2040,11 +2048,14 @@ dependencies = [
  "novo-layout",
  "novo-parts",
  "novo-routing",
+ "novo-symbols",
  "novo-tests",
  "novo-view3d",
  "rust_xlsxwriter",
+ "serde",
  "tempfile",
  "thiserror 2.0.21",
+ "toml",
 ]
 
 [[package]]
@@ -2284,6 +2295,7 @@ dependencies = [
  "naga",
  "novo-core",
  "novo-layout",
+ "novo-routing",
  "novo-theme",
  "pollster 1.0.1",
  "wgpu",

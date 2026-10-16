@@ -100,6 +100,30 @@ fn coil_shows_contact_image_and_contacts_show_the_coil() {
 }
 
 #[test]
+fn coil_label_has_one_table_row_per_contact_group() {
+    use novo_xref::ContactKind;
+    let f = fixture();
+    let x = XrefIndex::build(f.doc.project(), &FromKey);
+    let label = x.label(f.k1_coil).unwrap();
+    let rows: Vec<(ContactKind, &str, &str)> = label
+        .rows
+        .iter()
+        .map(|r| (r.kind, r.pins.as_str(), r.location.as_str()))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            (ContactKind::NormallyOpen, "13-14", "2.2"),
+            (ContactKind::NormallyClosed, "21-22", "2.8"),
+            (ContactKind::NormallyOpen, "33-34", "3.4"),
+        ]
+    );
+    assert!(label.extra_lines().is_empty());
+    // A contact's label has no table.
+    assert!(x.label(f.k1_contacts[0]).unwrap().rows.is_empty());
+}
+
+#[test]
 fn moving_a_contact_updates_the_coil_at_once() {
     let mut f = fixture();
     let mut live = LiveXref::default();
@@ -192,7 +216,7 @@ fn shift_g_lists_every_occurrence() {
             .iter()
             .map(|r| r.location.to_string())
             .collect();
-        assert_eq!(all, ["2.5", "2.2", "2.8", "3.4"]);
+        assert_eq!(all, ["2.2", "2.5", "2.8", "3.4"]);
     }
 }
 
@@ -839,4 +863,36 @@ fn interruption_points_are_numbered_automatically() {
         ("2", "1", "3")
     );
     assert_eq!(next_interruption_name(doc.project()), "4");
+}
+
+#[test]
+fn shift_g_list_leads_with_the_page_and_sorts_by_page() {
+    let f = fixture();
+    let x = XrefIndex::build(f.doc.project(), &FromKey);
+    let nav = Navigator::default();
+    // From the page 3 contact: the coil (page 2) is not first in `all_references`.
+    let here = Place {
+        page: f.pages[2],
+        symbol: Some(f.k1_contacts[2]),
+    };
+    let reader = DeviceTag::default();
+    let rows: Vec<String> = nav
+        .all(&x, here)
+        .iter()
+        .map(|r| r.list_row_from(&reader, ""))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            "2.2  \u{b7}  NO 13-14",
+            "2.5  \u{b7}  A1-A2",
+            "2.8  \u{b7}  NC 21-22",
+            "3.4  \u{b7}  NO 33-34"
+        ]
+    );
+    let r = nav.all(&x, here)[0];
+    assert_eq!(
+        r.list_row_from(&reader, "Power"),
+        "2.2 Power  \u{b7}  NO 13-14"
+    );
 }

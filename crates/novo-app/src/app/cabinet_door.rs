@@ -135,6 +135,7 @@ impl DoorState {
         }
         let draft = self.draft.as_mut()?;
         let mut ask = None;
+        let top = ui.cursor().left_top();
 
         ui.weak("Depth and door swing are checked against these. The plate is taken as centred.");
         ui.add_space(4.0);
@@ -188,15 +189,15 @@ impl DoorState {
         let changed = layout.enclosure != Some(draft.enclosure());
         let valid = draft.width > 0.0 && draft.height > 0.0 && draft.depth > 0.0;
         ui.add_space(4.0);
-        if ui
+        let apply = ui
             .add_enabled(changed && valid, egui::Button::new("Apply"))
             .on_disabled_hover_text(if valid {
                 "Nothing changed"
             } else {
                 "Width, height and depth are needed"
-            })
-            .clicked()
-        {
+            });
+        super::cabinet_bar::note_ctx(ui.ctx(), "cabinet.door.apply", "Apply", &apply);
+        if apply.clicked() {
             ask = Some(Ask::SetEnclosure(draft.enclosure()));
         }
         ui.separator();
@@ -211,6 +212,9 @@ impl DoorState {
                 ui.weak("Set the inside size to see the top view and the checks.");
             }
         }
+        let card =
+            egui::Rect::from_min_max(top, egui::pos2(ui.max_rect().right(), ui.cursor().top()));
+        super::cabinet_bar::note_rect(ui.ctx(), "cabinet.door", "Door and depth", card, false);
         ask
     }
 }

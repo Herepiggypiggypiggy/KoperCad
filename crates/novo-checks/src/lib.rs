@@ -38,6 +38,30 @@
 //! | [`UnplacedDevice`](ProblemKind::UnplacedDevice) | info | A device not yet placed on a mounting plate |
 //! | [`WireWithoutDuct`](ProblemKind::WireWithoutDuct) | warning | A wire between placed devices that no duct serves |
 //! | [`OverfullDuct`](ProblemKind::OverfullDuct) | warning | A duct filled beyond its limit |
+//! | [`AmbiguousInterruption`](ProblemKind::AmbiguousInterruption) | warning | A name used by more than two interruption points |
+//! | [`WireNumber`](ProblemKind::WireNumber) | warning | A wire number used on two nets |
+//! | [`UntaggedDevice`](ProblemKind::UntaggedDevice) | warning | A device without a product level in its tag |
+//! | [`UnnamedTerminal`](ProblemKind::UnnamedTerminal) | warning | A terminal without a number or name |
+//! | [`SameShortTag`](ProblemKind::SameShortTag) | info | One short tag under two function or location levels |
+//! | [`DuplicatePage`](ProblemKind::DuplicatePage) | warning | Two pages with one name in one structure |
+//! | [`DanglingJunction`](ProblemKind::DanglingJunction) | warning | A junction no wire ends on |
+//! | [`UnwiredTerminal`](ProblemKind::UnwiredTerminal) | warning | A terminal or plug pin with no wire on any side |
+//! | [`StrayWireEnd`](ProblemKind::StrayWireEnd) | warning | An open wire end that lies on a pin, junction or wire without joining it |
+//! | [`ContactType`](ProblemKind::ContactType) | warning | A contact whose pin numbers do not match NO, NC or changeover |
+//! | [`ContactPosition`](ProblemKind::ContactPosition) | warning | A contact position beyond the contacts the device has |
+//! | [`ContactDrawnTwice`](ProblemKind::ContactDrawnTwice) | warning | One physical contact drawn more than once |
+//! | [`VoltageClassMix`](ProblemKind::VoltageClassMix) | warning | Extra-low and low voltage under one function code |
+//! | [`ConductorContinuity`](ProblemKind::ConductorContinuity) | warning | A PE or N terminal that does not reach its conductor |
+//! | [`MotorPhases`](ProblemKind::MotorPhases) | warning | A motor whose windings cannot get three different phases |
+//! | [`CoilSupply`](ProblemKind::CoilSupply) | warning | A coil not fed between a control voltage and its return |
+//! | [`PlugPinOneSided`](ProblemKind::PlugPinOneSided) | warning | A plug pin wired on one half only |
+//! | [`RelaySize`](ProblemKind::RelaySize) | warning | A relay larger than the contacts drawn need, when its sizes are declared |
+//! | [`CableText`](ProblemKind::CableText) | warning | A cable whose cores, cross-section or protective core disagree with its `4G1.5` text |
+//! | [`NeutralUse`](ProblemKind::NeutralUse) | warning | A device on a neutral net that is neither supply nor external (opt-in) |
+//! | [`PlugPins`](ProblemKind::PlugPins) | info | Overview of the pins of a plug, wired and free |
+//! | [`TagRule`](ProblemKind::TagRule) | warning | A device name that breaks the page and column rule (opt-in) |
+//! | [`DisplayedTag`](ProblemKind::DisplayedTag) | warning | A tag text on a symbol that is not the device's tag |
+//! | [`StructureCode`](ProblemKind::StructureCode) | warning | A function or location code not in a structure list declared complete |
 //! | [`Standard`](ProblemKind::Standard) | per rule | A rule of a selected standard (IEC 60204-1, NFPA 79, UL 508A) is not met; see [`standards`] |
 //! | [`DeviceCollision`](ProblemKind::DeviceCollision) | error | Two devices overlapping on a mounting plate |
 //! | [`DeviceOutsidePlate`](ProblemKind::DeviceOutsidePlate) | error | A device beyond the usable area of its plate |
@@ -72,8 +96,11 @@
 pub mod calc;
 mod calc_checks;
 mod checks;
+mod connection_rules;
 mod contacts;
 mod door;
+mod house_rules;
+mod more_rules;
 mod physical;
 pub mod protection;
 pub mod standards;
@@ -184,6 +211,56 @@ pub enum ProblemKind {
     /// A protective conductor thinner than the rule for its phase
     /// conductors (`calc::pe`).
     ProtectiveConductor,
+    /// A name used by more than two interruption points. EPLAN pairs them
+    /// two by two in page order, KoperCAD joins all of one name, so an
+    /// imported project and this one read it differently.
+    AmbiguousInterruption,
+    /// A wire number used on two nets.
+    WireNumber,
+    /// A device without a product level in its tag.
+    UntaggedDevice,
+    /// A terminal without a number or name.
+    UnnamedTerminal,
+    /// One short tag under two function or location levels.
+    SameShortTag,
+    /// Two pages with one name in the same structure.
+    DuplicatePage,
+    /// A junction no wire ends on.
+    DanglingJunction,
+    /// A terminal or plug pin no wire reaches (findings C02).
+    UnwiredTerminal,
+    /// An open wire end lying on a pin, junction or wire without being connected (C03).
+    StrayWireEnd,
+    /// A contact whose pin numbers do not suit its type: NO ends in 3, 4, 7 or 8, NC in 1, 2, 5 or 6 (C05).
+    ContactType,
+    /// A contact position beyond the auxiliary contacts the device declares (C06).
+    ContactPosition,
+    /// One physical contact of a device drawn more than once (C07).
+    ContactDrawnTwice,
+    /// Extra-low and low voltage under one function code (C10).
+    VoltageClassMix,
+    /// A PE or N terminal not connected to its conductor (C11).
+    ConductorContinuity,
+    /// A motor whose windings cannot receive three different phases (C14).
+    MotorPhases,
+    /// A coil without control voltage on one side and its return on the other (C15).
+    CoilSupply,
+    /// A plug pin wired on one half only (C17).
+    PlugPinOneSided,
+    /// A relay larger than the auxiliary contacts drawn need (C08).
+    RelaySize,
+    /// A cable whose cores disagree with its text such as `4G1.5` (C12).
+    CableText,
+    /// A device on a neutral net that is neither supply nor external, when selected (C16).
+    NeutralUse,
+    /// An overview of the pins of a plug (C18).
+    PlugPins,
+    /// A device name that breaks the project's page-and-column rule, when selected (F01).
+    TagRule,
+    /// A tag text on a symbol that differs from the device's tag (F04).
+    DisplayedTag,
+    /// A function or location code the structure list does not know (H01).
+    StructureCode,
     /// A device drawn in the schematic but not placed on any mounting plate,
     /// in a project where the cabinet layout has been started.
     UnplacedDevice,
@@ -227,7 +304,7 @@ pub enum ProblemKind {
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 37] = [
+    pub const ALL: [ProblemKind; 61] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -265,6 +342,30 @@ impl ProblemKind {
         ProblemKind::DepthUnknown,
         ProblemKind::PlateTooBig,
         ProblemKind::DoorSwing,
+        ProblemKind::AmbiguousInterruption,
+        ProblemKind::WireNumber,
+        ProblemKind::UntaggedDevice,
+        ProblemKind::UnnamedTerminal,
+        ProblemKind::SameShortTag,
+        ProblemKind::DuplicatePage,
+        ProblemKind::DanglingJunction,
+        ProblemKind::UnwiredTerminal,
+        ProblemKind::StrayWireEnd,
+        ProblemKind::ContactType,
+        ProblemKind::ContactPosition,
+        ProblemKind::ContactDrawnTwice,
+        ProblemKind::VoltageClassMix,
+        ProblemKind::ConductorContinuity,
+        ProblemKind::MotorPhases,
+        ProblemKind::CoilSupply,
+        ProblemKind::PlugPinOneSided,
+        ProblemKind::RelaySize,
+        ProblemKind::CableText,
+        ProblemKind::NeutralUse,
+        ProblemKind::PlugPins,
+        ProblemKind::TagRule,
+        ProblemKind::DisplayedTag,
+        ProblemKind::StructureCode,
     ];
 
     pub fn severity(self) -> Severity {
@@ -302,10 +403,34 @@ impl ProblemKind {
             | ProblemKind::RailOverflow
             | ProblemKind::DoorGapTight
             | ProblemKind::DoorSwing
+            | ProblemKind::AmbiguousInterruption
+            | ProblemKind::WireNumber
+            | ProblemKind::UntaggedDevice
+            | ProblemKind::UnnamedTerminal
+            | ProblemKind::DuplicatePage
+            | ProblemKind::DanglingJunction
+            | ProblemKind::UnwiredTerminal
+            | ProblemKind::StrayWireEnd
+            | ProblemKind::ContactType
+            | ProblemKind::ContactPosition
+            | ProblemKind::ContactDrawnTwice
+            | ProblemKind::VoltageClassMix
+            | ProblemKind::ConductorContinuity
+            | ProblemKind::MotorPhases
+            | ProblemKind::CoilSupply
+            | ProblemKind::PlugPinOneSided
+            | ProblemKind::RelaySize
+            | ProblemKind::CableText
+            | ProblemKind::NeutralUse
+            | ProblemKind::TagRule
+            | ProblemKind::DisplayedTag
+            | ProblemKind::StructureCode
             | ProblemKind::Plc => Severity::Warning,
-            ProblemKind::MissingPart | ProblemKind::UnplacedDevice | ProblemKind::DepthUnknown => {
-                Severity::Info
-            }
+            ProblemKind::MissingPart
+            | ProblemKind::UnplacedDevice
+            | ProblemKind::DepthUnknown
+            | ProblemKind::PlugPins
+            | ProblemKind::SameShortTag => Severity::Info,
         }
     }
 
@@ -349,6 +474,30 @@ impl ProblemKind {
             ProblemKind::DepthUnknown => "Depth unknown",
             ProblemKind::PlateTooBig => "Plate too big",
             ProblemKind::DoorSwing => "Door swing",
+            ProblemKind::AmbiguousInterruption => "Interruption name used often",
+            ProblemKind::WireNumber => "Wire number",
+            ProblemKind::UntaggedDevice => "Device without tag",
+            ProblemKind::UnnamedTerminal => "Unnamed terminal",
+            ProblemKind::SameShortTag => "Same short tag",
+            ProblemKind::DuplicatePage => "Duplicate page",
+            ProblemKind::DanglingJunction => "Dangling junction",
+            ProblemKind::UnwiredTerminal => "Unwired terminal",
+            ProblemKind::StrayWireEnd => "Wire end on something",
+            ProblemKind::ContactType => "Contact numbering",
+            ProblemKind::ContactPosition => "Contact beyond relay",
+            ProblemKind::ContactDrawnTwice => "Contact drawn twice",
+            ProblemKind::VoltageClassMix => "Voltage classes mixed",
+            ProblemKind::ConductorContinuity => "Earth or neutral broken",
+            ProblemKind::MotorPhases => "Motor phases",
+            ProblemKind::CoilSupply => "Coil supply",
+            ProblemKind::PlugPinOneSided => "Plug pin on one half",
+            ProblemKind::RelaySize => "Relay too large",
+            ProblemKind::CableText => "Cable text",
+            ProblemKind::NeutralUse => "Neutral use",
+            ProblemKind::PlugPins => "Plug pins",
+            ProblemKind::TagRule => "Tag rule",
+            ProblemKind::DisplayedTag => "Displayed tag",
+            ProblemKind::StructureCode => "Unknown structure code",
         }
     }
 
@@ -392,6 +541,30 @@ impl ProblemKind {
             ProblemKind::DepthUnknown => "check.depth_unknown",
             ProblemKind::PlateTooBig => "check.plate_too_big",
             ProblemKind::DoorSwing => "check.door_swing",
+            ProblemKind::AmbiguousInterruption => "check.ambiguous_interruption",
+            ProblemKind::WireNumber => "check.wire_number",
+            ProblemKind::UntaggedDevice => "check.untagged_device",
+            ProblemKind::UnnamedTerminal => "check.unnamed_terminal",
+            ProblemKind::SameShortTag => "check.same_short_tag",
+            ProblemKind::DuplicatePage => "check.duplicate_page",
+            ProblemKind::DanglingJunction => "check.dangling_junction",
+            ProblemKind::UnwiredTerminal => "check.unwired_terminal",
+            ProblemKind::StrayWireEnd => "check.stray_wire_end",
+            ProblemKind::ContactType => "check.contact_type",
+            ProblemKind::ContactPosition => "check.contact_position",
+            ProblemKind::ContactDrawnTwice => "check.contact_drawn_twice",
+            ProblemKind::VoltageClassMix => "check.voltage_class_mix",
+            ProblemKind::ConductorContinuity => "check.conductor_continuity",
+            ProblemKind::MotorPhases => "check.motor_phases",
+            ProblemKind::CoilSupply => "check.coil_supply",
+            ProblemKind::PlugPinOneSided => "check.plug_pin_one_sided",
+            ProblemKind::RelaySize => "check.relay_size",
+            ProblemKind::CableText => "check.cable_text",
+            ProblemKind::NeutralUse => "check.neutral_use",
+            ProblemKind::PlugPins => "check.plug_pins",
+            ProblemKind::TagRule => "check.tag_rule",
+            ProblemKind::DisplayedTag => "check.displayed_tag",
+            ProblemKind::StructureCode => "check.structure_code",
         }
     }
 }
@@ -515,6 +688,29 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     checks::plc(&cx, &mut problems);
     checks::wire_overlaps(&cx, &mut problems);
     checks::open_wires(&cx, &mut problems);
+    connection_rules::ambiguous_interruptions(&cx, &mut problems);
+    connection_rules::wire_numbers(&cx, netlist, &mut problems);
+    connection_rules::untagged_devices(&cx, &mut problems);
+    connection_rules::unnamed_terminals(&cx, &mut problems);
+    connection_rules::same_short_tags(&cx, &mut problems);
+    connection_rules::duplicate_pages(&cx, &mut problems);
+    connection_rules::dangling_junctions(&cx, &mut problems);
+    house_rules::terminals_and_plugs(&cx, &mut problems);
+    house_rules::stray_wire_ends(&cx, &mut problems);
+    house_rules::contact_types(&cx, &mut problems);
+    house_rules::contact_positions(&cx, &mut problems);
+    house_rules::contacts_drawn_twice(&cx, &mut problems);
+    house_rules::voltage_classes(&cx, netlist, &mut problems);
+    house_rules::conductor_continuity(&cx, netlist, &mut problems);
+    house_rules::motor_phases(&cx, netlist, &mut problems);
+    house_rules::coil_supply(&cx, netlist, &mut problems);
+    more_rules::relay_size(&cx, &mut problems);
+    more_rules::cable_text(&cx, &mut problems);
+    more_rules::neutral_use(&cx, netlist, &mut problems);
+    more_rules::plug_overview(&cx, &mut problems);
+    house_rules::tag_rule(&cx, &mut problems);
+    house_rules::displayed_tags(&cx, &mut problems);
+    house_rules::structure_codes(&cx, &mut problems);
     calc_checks::run(&cx, netlist, &mut problems);
     physical::unplaced_devices(&cx, &mut problems);
     physical::routing(&cx, &mut problems);

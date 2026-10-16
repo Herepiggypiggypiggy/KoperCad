@@ -18,6 +18,8 @@ struct Globals {
     nudge: vec4<f32>,
     // xyz: view direction (towards the scene), used for orthographic views.
     view_dir: vec4<f32>,
+    // xy: size of the image being drawn, in pixels.
+    viewport: vec4<f32>,
 }
 
 @group(0) @binding(0) var<uniform> g: Globals;
@@ -136,4 +138,111 @@ fn vs_bg(@builtin(vertex_index) idx: u32) -> BgOut {
 @fragment
 fn fs_bg(b: BgOut) -> @location(0) vec4<f32> {
     return mix(g.bg_top, g.bg_bottom, clamp(b.t, 0.0, 1.0));
+}
+
+// Overlays (heat layer and the like): vertex colours, flat shading from the
+// triangle itself, no instancing.
+
+struct OverlayVertex {
+    @location(0) pos: vec3<f32>,
+    @location(1) color: vec4<f32>,
+}
+
+struct OverlayOut {
+    @builtin(position) clip: vec4<f32>,
+    @location(0) world: vec3<f32>,
+    @location(1) color: vec4<f32>,
+}
+
+@vertex
+fn vs_overlay(v: OverlayVertex) -> OverlayOut {
+    var o: OverlayOut;
+    o.clip = g.view_proj * vec4<f32>(v.pos, 1.0);
+    o.world = v.pos;
+    o.color = v.color;
+    return o;
+}
+
+@fragment
+fn fs_overlay(f: OverlayOut) -> @location(0) vec4<f32> {
+    // The triangle's own normal, from the screen derivatives of its position.
+    var n = normalize(cross(dpdx(f.world), dpdy(f.world)));
+    var to_eye = normalize(g.eye.xyz - f.world);
+    if (g.params.w > 0.5) {
+        to_eye = -g.view_dir.xyz;
+    }
+    // Two-sided: turn the normal towards the viewer.
+    if (dot(n, to_eye) < 0.0) {
+        n = -n;
+    }
+    let l = normalize(g.light.xyz);
+    let ambient = g.light.w;
+    let hemi = mix(0.55, 1.0, n.y * 0.5 + 0.5);
+    let diffuse = max(dot(n, l), 0.0);
+    let head = max(dot(n, to_eye), 0.0);
+    let shade = ambient * hemi + (1.0 - ambient) * (0.7 * diffuse + 0.3 * head);
+    let rgb = to_srgb(to_linear(f.color.rgb) * shade);
+    return vec4<f32>(rgb, f.color.a);
+}
+
+// Polylines as ribbons of constant pixel width. One instance is one segment;
+// six vertices make its quad.
+
+struct RibbonIn {
+    @location(0) pa: vec3<f32>,
+    @location(1) pb: vec3<f32>,
+    @location(2) ca: vec4<f32>,
+    @location(3) cb: vec4<f32>,
+    @location(4) width: f32,
+}
+
+struct RibbonOut {
+    @builtin(position) clip: vec4<f32>,
+    @location(0) color: vec4<f32>,
+}
+
+@vertex
+fn vs_ribbon(@builtin(vertex_index) idx: u32, s: RibbonIn) -> RibbonOut {
+    var o: RibbonOut;
+    var ts = array<f32, 6>(0.0, 0.0, 1.0, 0.0, 1.0, 1.0);
+    var sides = array<f32, 6>(-1.0, 1.0, -1.0, 1.0, 1.0, -1.0);
+    let t = ts[idx];
+    let side = sides[idx];
+    var a = g.view_proj * vec4<f32>(s.pa, 1.0);
+    var b = g.view_proj * vec4<f32>(s.pb, 1.0);
+    let eps = 1e-3;
+    if (a.w < eps && b.w < eps) {
+        // Wholly behind the camera: a degenerate quad outside the view.
+        o.clip = vec4<f32>(2.0, 2.0, 2.0, 1.0);
+        o.color = vec4<f32>(0.0);
+        return o;
+    }
+    if (a.w < eps) {
+        a = mix(a, b, (eps - a.w) / (b.w - a.w));
+    }
+    if (b.w < eps) {
+        b = mix(b, a, (eps - b.w) / (a.w - b.w));
+    }
+    let half = g.viewport.xy * 0.5;
+    let na = a.xy / a.w;
+    let nb = b.xy / b.w;
+    var d = (nb - na) * half;
+    let len = length(d);
+    if (len > 1e-4) {
+        d = d / len;
+    } else {
+        d = vec2<f32>(1.0, 0.0);
+    }
+    let normal = vec2<f32>(-d.y, d.x);
+    let offset = (normal * side + d * (t * 2.0 - 1.0)) * (s.width * 0.5) / half;
+    let base = mix(a, b, t);
+    let ndc = mix(na, nb, t) + offset;
+    o.clip = vec4<f32>(ndc * base.w, base.z, base.w);
+    o.color = mix(s.ca, s.cb, t);
+    return o;
+}
+
+@fragment
+fn fs_ribbon(f: RibbonOut) -> @location(0) vec4<f32> {
+    return f.color;
 }

@@ -84,7 +84,11 @@ impl Workspace {
     fn is_built(self) -> bool {
         matches!(
             self,
-            Workspace::Schematic | Workspace::Cabinet | Workspace::Reports
+            Workspace::Schematic
+                | Workspace::Cabinet
+                | Workspace::View3d
+                | Workspace::Reports
+                | Workspace::Commissioning
         )
     }
 
@@ -150,8 +154,13 @@ impl NovoApp {
             Workspace::Cabinet => None,
             Workspace::Reports if !self.is_open() => Some("Open a project first"),
             Workspace::Reports => None,
-            Workspace::View3d => Some("The 3D view is not built yet"),
-            Workspace::Commissioning => Some("Commissioning is not built yet"),
+            Workspace::View3d if !self.is_open() => Some("Open a project first"),
+            Workspace::View3d if !self.view3d_has_cabinet() => {
+                Some("Set a mounting plate in the Cabinet first")
+            }
+            Workspace::View3d => None,
+            Workspace::Commissioning if !self.is_open() => Some("Open a project first"),
+            Workspace::Commissioning => None,
         }
     }
 
@@ -165,6 +174,7 @@ impl NovoApp {
         {
             return;
         }
+        let left_commissioning = self.workspace == Workspace::Commissioning;
         let left = self.layout_snapshot();
         self.settings
             .workspaces
@@ -173,6 +183,14 @@ impl NovoApp {
         self.settings.last_workspace = workspace.id().to_owned();
         let layout = self.layout_of(workspace);
         self.apply_layout(&layout);
+        // Commissioning is the schematic page, read-only, with the
+        // commissioning panel (design section 3.5): the mode goes on and
+        // off with the workspace.
+        if workspace == Workspace::Commissioning {
+            self.enter_commissioning();
+        } else if left_commissioning {
+            self.leave_commissioning();
+        }
         // The selection travels (§6): a row picked in Reports opens the
         // drawing on its page with the device selected.
         if workspace == Workspace::Schematic
@@ -279,12 +297,69 @@ mod tests {
         let ctx = d.ctx.clone();
         d.app.run(&ctx, Action::NewProject);
         d.frame();
-        for w in [Workspace::View3d, Workspace::Commissioning] {
-            assert!(d.app.workspace_unavailable(w).is_some(), "{w:?}");
-            d.app.switch_workspace(w);
-            assert_eq!(d.app.workspace(), Workspace::Schematic);
-        }
+        let w = Workspace::View3d;
+        assert!(d.app.workspace_unavailable(w).is_some());
+        d.app.switch_workspace(w);
+        assert_eq!(d.app.workspace(), Workspace::Schematic);
         assert!(d.app.workspace_unavailable(Workspace::Cabinet).is_none());
+    }
+
+    #[test]
+    fn commissioning_is_a_workspace_that_turns_the_mode_on_and_off() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::NewProject);
+        d.frame();
+        assert!(
+            d.app
+                .workspace_unavailable(Workspace::Commissioning)
+                .is_none()
+        );
+        d.app.switch_workspace(Workspace::Commissioning);
+        d.frame();
+        assert_eq!(d.app.workspace(), Workspace::Commissioning);
+        assert!(d.app.commissioning_locks_edits());
+        d.app.switch_workspace(Workspace::Schematic);
+        d.frame();
+        assert!(!d.app.commissioning_locks_edits());
+        assert!(d.app.wb.commissioning.is_none());
+    }
+
+    #[test]
+    fn commissioning_survives_jumps_a_new_project_and_stays_locked() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::NewProject);
+        d.frame();
+        d.app.switch_workspace(Workspace::Commissioning);
+        d.frame();
+        // A jump from the panel shows a page without leaving.
+        let page = d.app.current_page.expect("a page");
+        d.app.show_page(page);
+        d.frame();
+        assert_eq!(d.app.workspace(), Workspace::Commissioning);
+        assert!(d.app.wb.commissioning.is_some());
+        // A new project drops the store; the workspace loads it again and
+        // the lock never lets go.
+        d.app.run(&ctx, Action::NewProject);
+        d.frame();
+        d.frame();
+        assert_eq!(d.app.workspace(), Workspace::Commissioning);
+        assert!(d.app.wb.commissioning.is_some());
+        assert!(d.app.commissioning_locks_edits());
+        // Another outline tab leaves the workspace and unlocks.
+        d.app.outline_mode = OutlineMode::Pages;
+        d.frame();
+        assert_eq!(d.app.workspace(), Workspace::Schematic);
+        assert!(!d.app.commissioning_locks_edits());
+        // Closing the project leaves it too.
+        d.app.switch_workspace(Workspace::Commissioning);
+        d.frame();
+        d.app.run(&ctx, Action::CloseProject);
+        d.frame();
+        assert_eq!(d.app.workspace(), Workspace::Schematic);
     }
 
     #[test]

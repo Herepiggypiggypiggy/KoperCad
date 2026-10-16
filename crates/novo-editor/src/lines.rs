@@ -154,6 +154,7 @@ pub fn draw_wire_exact(
     if !bends.is_empty() {
         tx.update::<Wire>(wire, |w| w.route = bends)?;
     }
+    crate::edit::join_coincident(tx, page)?;
     Ok(wire)
 }
 

@@ -1,14 +1,17 @@
-# Cabinet track, lesson 5. Sample: the finished cabinet of rails-and-ducts (the inside size is
-# not set, so the Inside and door form starts from its defaults).
+# Cabinet track, lesson 5. Sample: wire-routing/project.json (the inside size is not set, so the
+# Inside and door form starts from its defaults: inside = plate size 600 x 800, depth 250, setback 20,
+# door left, 90 degrees).
 #
-# NOT ON MAIN yet (the whole lesson): enclosure inside size, depth and door check, #409.
-# Numbers below follow the form defaults in #409: inside = plate size, depth 250, setback 20,
-# door left, 90 degrees. With depth 100 the usable depth is 80 mm, so -K1, -F2 (90 mm deep) and
-# -T1 (85 mm) are too deep, and -F1 (68) and -F3 (70) still fit. Re-check against the merged code.
+# Verified on main (59a37de0) in cabinet_door.rs and novo_layout::enclosure: usable depth = depth
+# - setback - what is on the door = 230 mm by default; the open door then needs 600 mm in front
+# (the inside width at 90 degrees). With depth 100 the usable depth is 80 mm: -K1 and -F2 (90 mm)
+# are 10 mm too deep, -T1 (85 mm) 5 mm; -F1 (68 mm) and -F3 (70 mm) still fit with a 12 and 10 mm
+# gap. The panel is the "Inside and door" section of the Plate card in the inspector.
+# Needs from the Cabinet owner: the anchors named below.
 format = 1
 id = "enclosure-door-and-depth"
-version = 1
-status = "draft"
+version = 2
+status = "early"
 title = "Will the door close?"
 title_nl = "Sluit de deur nog?"
 summary = "Enter the inside size and door of the cabinet and let KoperCAD check device depth and the room the open door needs."
@@ -20,49 +23,99 @@ minutes = 7
 topics = ["cabinet", "enclosure", "door"]
 needs = ["cabinet-layout"]
 next = ["heat-and-sizing"]
-project = "../rails-and-ducts/finished.json"
+project = "../wire-routing/project.json"
 
 [[step]]
 id = "open-cabinet"
+how = ["Press {key:view.cabinet}."]
+how_nl = ["Druk op {key:view.cabinet}."]
 title = "Open the cabinet"
-text = "Press {key:view.cabinet}. The plate is placed; now we describe the box around it."
+title_nl = "Open de kast"
+text = """
+Press {key:view.cabinet}. The plate is filled; now you describe the box around it, because a device that is too deep stops the door from closing.
+"""
+text_nl = """
+Druk op {key:view.cabinet}. De plaat is gevuld; nu beschrijf je de kast eromheen, want een component dat te diep is laat de deur niet sluiten.
+"""
 point = { ui = "switcher.cabinet" }
 expect = { command = "view.cabinet" }
 solve = [ { command = "view.cabinet" } ]
 
 [[step]]
 id = "open-panel"
+how = ["Click an empty spot on the plate to clear the selection.", "Click Plate in the header.", "Find the section Inside and door."]
+how_nl = ["Klik op een lege plek op de plaat om de selectie te wissen.", "Klik op Plate in de kop.", "Zoek de sectie Inside and door."]
 title = "Open Inside and door"
-text = "Open the **Inside and door** panel on the right. Until the inside size is known nothing about depth can be checked."
-point = { ui = "cabinet.door" }
-expect = { opened = "cabinet.door" }
+title_nl = "Open Inside and door"
+text = """
+Click an empty spot on the plate to clear the selection, then click **Plate setup**. The inspector shows the plate and, below it, the section **Inside and door**.
+Until the inside size is known nothing about depth can be checked, and the section says so: "Set the inside size to see the top view and the checks."
+"""
+text_nl = """
+Klik op een lege plek op de plaat om de selectie te wissen en klik dan op **Plate setup**. De inspector toont de plaat en daaronder het onderdeel **Inside and door**.
+Zolang de binnenmaat niet bekend is, kan er niets over diepte worden gecontroleerd en dat zegt het onderdeel ook: "Set the inside size to see the top view and the checks."
+"""
+point = { ui = "cabinet.plate" }
+expect = { clicked = "cabinet.plate" }
 
 [[step]]
 id = "read-form"
-title = "What the form asks"
+title = "What the form asks: the box"
+title_nl = "Wat het formulier vraagt: de kast"
 text = """
-Inside width, height and depth, the setback of the plate from the back wall, and the door: hinge side, how far it opens and what stands out on its inside.
+**Inside width**, **Inside height** and **Inside depth** are the size of the enclosure inside, not the outside. **Plate setback** is how far the plate stands from the back wall.
+Right now they are filled in for you: the plate size, a depth of 250 mm and a setback of 20 mm.
+"""
+text_nl = """
+**Inside width**, **Inside height** en **Inside depth** zijn de maten van de kast aan de binnenkant, niet de buitenkant. **Plate setback** is hoever de plaat van de achterwand staat.
+Nu zijn ze alvast ingevuld: de plaatmaat, een diepte van 250 mm en een setback van 20 mm.
 """
 point = { ui = "cabinet.door" }
-note = [
-  { ui = "cabinet.door", text = "Inside size of the enclosure, not the outside" },
-]
+
+[[step]]
+id = "read-door"
+title = "What the form asks: the door"
+title_nl = "Wat het formulier vraagt: de deur"
+text = """
+**Hinge** is the side the door hangs on, **Opens to** the angle it opens, and **On the door** how deep what is mounted on the inside of the door is.
+**Free in front** and **Free at hinge** are optional: tick one to enter the space you really have in the room. Now: hinge left, 90 degrees.
+"""
+text_nl = """
+**Hinge** is de kant waar de deur aan hangt, **Opens to** de hoek waarmee hij opent en **On the door** hoe diep wat aan de binnenkant van de deur zit.
+**Free in front** en **Free at hinge** zijn optioneel: vink er een aan om de ruimte in te vullen die je werkelijk hebt. Nu: scharnier links, 90 graden.
+"""
+point = { ui = "cabinet.door" }
 
 [[step]]
 id = "apply-defaults"
+how = ["Leave the numbers as they are.", "Click Apply."]
+how_nl = ["Laat de getallen zoals ze zijn.", "Klik op Apply."]
 title = "Apply the starting values"
+title_nl = "Pas de beginwaarden toe"
 text = """
-Leave the numbers as they are and click **Apply**. The panel below says that every device fits behind the door, and the top view draws the plate, the devices as deep as their parts and the open door.
+Leave the numbers as they are and click **Apply**. The section now says "Every placed device fits behind the door (230 mm usable depth)", and the {tip:door-swing} line "The open door needs 600 mm in front".
+Below it a top view draws the plate, the devices as deep as their parts and the open door. Apply is greyed out when nothing has changed.
+"""
+text_nl = """
+Laat de getallen staan en klik op **Apply**. Het onderdeel zegt nu "Every placed device fits behind the door (230 mm usable depth)" en bij de {tip:door-swing}-regel "The open door needs 600 mm in front".
+Eronder tekent een bovenaanzicht de plaat, de componenten zo diep als hun artikelen en de open deur. Apply is grijs als er niets is veranderd.
 """
 point = { ui = "cabinet.door.apply" }
 expect = { clicked = "cabinet.door.apply" }
 
 [[step]]
 id = "shallow"
+how = ["Double-click Inside depth.", "Type 100 and press Enter.", "Click Apply."]
+how_nl = ["Dubbelklik op Inside depth.", "Typ 100 en druk op Enter.", "Klik op Apply."]
 title = "Try a shallow cabinet"
+title_nl = "Probeer een ondiepe kast"
 text = """
-Set the inside depth to **100 mm** and click **Apply**. The {tip:usable-depth} drops to 80 mm.
-The contactor, the overload relay and the transformer are deeper than that.
+Double-click **Inside depth**, type **100** and press Enter, then click **Apply**. The {tip:usable-depth} is now 100 - 20 = 80 mm.
+The contactor **-K1**, the fuse **-F2** (both 90 mm deep) and the transformer **-T1** (85 mm) are deeper than that.
+"""
+text_nl = """
+Dubbelklik op **Inside depth**, typ **100** en druk op Enter en klik dan op **Apply**. De {tip:usable-depth} is nu 100 - 20 = 80 mm.
+De contactor **-K1**, de zekering **-F2** (beide 90 mm diep) en de transformator **-T1** (85 mm) zijn dieper dan dat.
 """
 point = { ui = "cabinet.door.apply" }
 expect = { clicked = "cabinet.door.apply" }
@@ -70,25 +123,47 @@ expect = { clicked = "cabinet.door.apply" }
 [[step]]
 id = "read-depth"
 title = "Read the sentences"
+title_nl = "Lees de zinnen"
 text = """
-Each too-deep device gets a sentence such as **-K1 is 10 mm too deep: the door cannot close**.
-The header problem count includes them.
+Each device that is too deep gets a red sentence: **-K1 is 10 mm too deep: the door cannot close.**, the same for **-F2**, and 5 mm for **-T1**.
+The three boxes are marked on the plate and counted in the header's problem count; click the count to select them one by one.
+**-F1** (68 mm) and **-F3** (70 mm) still fit.
+"""
+text_nl = """
+Elk component dat te diep is krijgt een rode zin: **-K1 is 10 mm too deep: the door cannot close.**, hetzelfde voor **-F2** en 5 mm voor **-T1**.
+De drie kaders worden op de plaat gemarkeerd en geteld in het aantal problemen in de kopregel; klik op het aantal om ze een voor een te selecteren.
+**-F1** (68 mm) en **-F3** (70 mm) passen nog.
 """
 point = { ui = "cabinet.problems" }
 
 [[step]]
 id = "swing"
 title = "How much room the open door needs"
+title_nl = "Hoeveel ruimte de open deur nodig heeft"
 text = """
-Tick **Free in front** and enter the space in front of the cabinet, in mm.
-If the open door needs more, the panel says by how much it is short. This is the {tip:door-swing}.
+Tick the box beside **Free in front**, enter **500** mm for the space in front of the cabinet and click **Apply**.
+The section says "The open door needs 600 mm in front, 500 mm are free (100 mm short)." in red: a 600 mm wide door that opens 90 degrees sweeps 600 mm.
+Lower **Opens to** to 60 degrees and Apply again: the door then needs about 520 mm and the shortfall shrinks.
+"""
+text_nl = """
+Vink het vakje naast **Free in front** aan, vul **500** mm in voor de ruimte voor de kast en klik op **Apply**.
+Het onderdeel zegt in rood "The open door needs 600 mm in front, 500 mm are free (100 mm short).": een deur van 600 mm breed die 90 graden opent beschrijft 600 mm.
+Zet **Opens to** op 60 graden en klik opnieuw op Apply: de deur heeft dan ongeveer 520 mm nodig en het tekort wordt kleiner.
 """
 point = { ui = "cabinet.door" }
 
 [[step]]
 id = "undo"
-title = "Back to a deeper cabinet"
-text = "{key:edit.undo} takes the inside size back to the previous values. Every Apply is one undo step."
+how = ["Press {key:edit.undo}."]
+how_nl = ["Druk op {key:edit.undo}."]
+title = "Back to the earlier values"
+title_nl = "Terug naar de eerdere waarden"
+text = """
+Press {key:edit.undo}. The inside size goes back to the values before the last Apply. Every Apply is one undo step, so a few presses return the cabinet to where it started.
+"""
+text_nl = """
+Druk op {key:edit.undo}. De binnenmaat gaat terug naar de waarden van voor de laatste Apply. Elke Apply is één stap, dus met een paar keer drukken staat de kast weer zoals bij het begin.
+"""
 point = { ui = "cabinet.door" }
 expect = { command = "edit.undo" }
 solve = [ { command = "edit.undo" } ]
@@ -96,6 +171,10 @@ solve = [ { command = "edit.undo" } ]
 [[step]]
 id = "done"
 title = "The box is known now"
+title_nl = "De kast is nu bekend"
 text = """
-With the inside size in the project, the plate drawing and the 3D view can show the door too.
+With the inside size stored in the project, the plate drawing and the 3D view can show the door too, and a device that no longer fits is flagged at once.
+"""
+text_nl = """
+Met de binnenmaat in het project kunnen de plaattekening en de 3D-weergave ook de deur tonen en wordt een component dat niet meer past meteen gemarkeerd.
 """

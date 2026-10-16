@@ -90,6 +90,7 @@ impl Solver for StubSolver {
                     .into(),
             ],
             accuracy: AccuracyStatement {
+                validated: false,
                 headline: "Not validated: placeholder result.".into(),
                 benchmarks: Vec::new(),
                 limits: vec!["No flow or heat transfer is solved in the depth direction.".into()],

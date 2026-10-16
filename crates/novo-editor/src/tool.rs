@@ -19,7 +19,7 @@ use crate::geometry::{self, EPS, Target, endpoint_direction, route_through, snap
 use crate::lines::{self, elbow, exact_bends, lock_axis};
 use crate::naming::{self, Numbering, parse_tag_input, tag_conflict};
 use crate::overlap::Refusal;
-use crate::potential::{self, FEED_SYMBOL, PotentialMenu, Suggestion};
+use crate::potential::{self, FEED_PE_SYMBOL, FEED_SYMBOL, FeedSymbols, PotentialMenu, Suggestion};
 use crate::row::{self, RowDrag};
 
 /// Placing one symbol, over and over.
@@ -127,6 +127,19 @@ pub enum Tool {
     Wire(WireTool),
     Move(MoveTool),
     Cable(CableTool),
+    Paste(PasteTool),
+}
+
+/// A paste in hand: the copied drawing follows the pointer until the next
+/// click, which asks the app to paste it there ([`Editor::take_paste_request`]).
+#[derive(Debug, Clone, PartialEq)]
+pub struct PasteTool {
+    /// The copied symbols as drawn at their source.
+    pub symbols: Vec<SymbolInstance>,
+    /// One polyline per copied wire, at the source.
+    pub paths: Vec<Vec<Point>>,
+    /// The source point the pointer holds (the top-left corner).
+    pub origin: Point,
 }
 
 /// Drawing a cable: a line over wires (DESIGN.md, C in the keys table and
@@ -144,7 +157,7 @@ impl Tool {
         match self {
             Tool::Wire(_) => Tool::Wire(WireTool::default()),
             Tool::Cable(_) => Tool::Cable(CableTool::default()),
-            Tool::Move(_) | Tool::Select => Tool::Select,
+            Tool::Move(_) | Tool::Select | Tool::Paste(_) => Tool::Select,
             Tool::Place(p) => Tool::Place(p.clone()),
         }
     }
@@ -214,6 +227,8 @@ pub struct Preview {
     pub moving: Vec<AnyId>,
     /// The wire in progress: start, bends and the pointer.
     pub wire: Vec<Point>,
+    /// Wires of a paste in hand, one polyline each.
+    pub paths: Vec<Vec<Point>>,
     /// A pin, junction or wire point the next click would connect to.
     pub target: Option<Point>,
     /// Proposed wires between facing free pins ([`edit::facing_wires`]),
@@ -395,6 +410,71 @@ fn link_plan(
     (!mine.is_empty()).then_some((mine, partner))
 }
 
+/// How far apart (mm, vertically) two symbols' origins may be and still count
+/// as standing on the same row.
+const ROW_TOLERANCE: f64 = 5.0;
+
+/// What clearing the tag of `device` joins: its symbols and the device on its
+/// left. Left means the nearest symbol of another device, on the same page,
+/// whose origin is further left than the device's leftmost symbol and no more
+/// than [`ROW_TOLERANCE`] above or below it. A tie in distance goes to the
+/// closer row, then the lower symbol id. Following the chain makes K1, K2, K3
+/// side by side all end up on K1 when K2 and K3 are cleared. The reason when
+/// there is nothing on the left is plain words.
+fn join_left_plan(
+    project: &Project,
+    device: DeviceId,
+) -> Result<(Vec<SymbolId>, SymbolId, DeviceId), String> {
+    let mine: Vec<&SymbolInstance> = project.symbols_of_device(device);
+    let Some(anchor) = mine
+        .iter()
+        .min_by(|a, b| {
+            a.placement
+                .origin
+                .x
+                .total_cmp(&b.placement.origin.x)
+                .then(a.id.cmp(&b.id))
+        })
+        .copied()
+    else {
+        return Err("A tag cannot be empty: nothing is drawn for this device to join".into());
+    };
+    let origin = anchor.placement.origin;
+    let found = project
+        .page_contents(anchor.page)
+        .symbols
+        .into_iter()
+        .filter_map(|id| project.symbol(id))
+        .filter_map(|s| match s.role {
+            SymbolRole::Device { device: d, .. } if d != device => Some((s, d)),
+            _ => None,
+        })
+        .filter(|(s, _)| {
+            let o = s.placement.origin;
+            o.x < origin.x && (o.y - origin.y).abs() <= ROW_TOLERANCE
+        })
+        .min_by(|(a, _), (b, _)| {
+            let key = |s: &SymbolInstance| {
+                (
+                    origin.x - s.placement.origin.x,
+                    (s.placement.origin.y - origin.y).abs(),
+                )
+            };
+            let (ka, kb) = (key(a), key(b));
+            ka.0.total_cmp(&kb.0)
+                .then(ka.1.total_cmp(&kb.1))
+                .then(a.id.cmp(&b.id))
+        });
+    match found {
+        Some((s, d)) => Ok((mine.iter().map(|s| s.id).collect(), s.id, d)),
+        None => Err(
+            "A tag cannot be empty: there is no device on its left to join (clear it \
+             only next to the device it belongs to)"
+                .into(),
+        ),
+    }
+}
+
 /// The reason shown when a line would lie over another wire.
 fn overlap_notice(_refusal: &Refusal) -> String {
     "Overlaps another wire".into()
@@ -439,6 +519,7 @@ pub struct Editor {
     hover_raw: Option<Point>,
     /// The wires of a finished cable line, until the app takes them.
     cable_request: Option<Vec<WireId>>,
+    paste_request: Option<Point>,
     notice: Option<String>,
     link_hint: Option<String>,
     row: Option<RowDrag>,
@@ -474,6 +555,7 @@ impl Editor {
             hovered: None,
             hover_raw: None,
             cable_request: None,
+            paste_request: None,
             notice: None,
             link_hint: None,
             row: None,
@@ -519,7 +601,7 @@ impl Editor {
         match &self.tool {
             Tool::Wire(w) => w.start.is_some(),
             Tool::Cable(c) => !c.points.is_empty(),
-            Tool::Move(_) => true,
+            Tool::Move(_) | Tool::Paste(_) => true,
             _ => false,
         }
     }
@@ -701,6 +783,32 @@ impl Editor {
     /// cable out of them.
     pub fn take_cable_request(&mut self) -> Option<Vec<WireId>> {
         self.cable_request.take()
+    }
+
+    /// Puts a copied drawing on the pointer (Ctrl+V): it follows the grid
+    /// until a click, which the app answers with the paste.
+    pub fn begin_paste(
+        &mut self,
+        symbols: Vec<SymbolInstance>,
+        paths: Vec<Vec<Point>>,
+        origin: Point,
+    ) {
+        self.set_tool(Tool::Paste(PasteTool {
+            symbols,
+            paths,
+            origin,
+        }));
+    }
+
+    /// Whether a paste is in hand.
+    pub fn pasting(&self) -> bool {
+        matches!(self.tool, Tool::Paste(_))
+    }
+
+    /// Where the click that dropped a paste was (snapped), once: the app
+    /// pastes there, offset by the clip's origin.
+    pub fn take_paste_request(&mut self) -> Option<Point> {
+        self.paste_request.take()
     }
 
     /// A press with a symbol on the pointer: a drag from here places a row
@@ -905,7 +1013,7 @@ impl Editor {
                 c.points.clear();
                 true
             }
-            Tool::Move(_) => {
+            Tool::Move(_) | Tool::Paste(_) => {
                 self.tool = Tool::Select;
                 true
             }
@@ -1011,6 +1119,12 @@ impl Editor {
                 _ => Clicked::Unhandled,
             },
             Tool::Place(p) => self.commit_place(doc, page, &p, at),
+            Tool::Paste(_) => {
+                self.paste_request = Some(at);
+                self.tool = Tool::Select;
+                self.notice = None;
+                Clicked::Step
+            }
             Tool::Wire(mut w) => {
                 let target = self.target;
                 match (w.start, target) {
@@ -2227,7 +2341,9 @@ impl Editor {
     }
 
     /// Renames a device from what the user typed (F2). A tag in use or a
-    /// malformed one is refused with the reason, and nothing changes.
+    /// malformed one is refused with the reason, and nothing changes. An
+    /// emptied tag makes the device part of the device on its left (the
+    /// nearest on its row, see `join_left_plan`), as one undo step.
     pub fn rename(
         &mut self,
         doc: &mut Document,
@@ -2239,6 +2355,18 @@ impl Editor {
             .device(device)
             .map(|d| d.tag.clone())
             .ok_or("The device no longer exists")?;
+        if input.trim().is_empty() {
+            // An emptied tag joins the device on the left.
+            let (mine, partner, other) = join_left_plan(doc.project(), device)?;
+            let tag = doc
+                .project()
+                .device(other)
+                .map(|d| d.tag.clone())
+                .ok_or("The device on its left no longer exists")?;
+            return self
+                .check_link(doc.project(), &mine, partner)
+                .and_then(|()| self.link_contacts(doc, &mine, partner, &tag));
+        }
         let tag = parse_tag_input(input, &old)?;
         if tag == old {
             return Ok(());
@@ -2365,6 +2493,15 @@ impl Editor {
             .device(device)
             .map(|d| d.tag.clone())
             .ok_or("The device no longer exists")?;
+        if input.trim().is_empty() {
+            let (mine, partner, other) = join_left_plan(doc.project(), device)?;
+            self.check_link(doc.project(), &mine, partner)?;
+            return doc
+                .project()
+                .device(other)
+                .map(|d| d.tag.clone())
+                .ok_or_else(|| "The device on its left no longer exists".into());
+        }
         let tag = parse_tag_input(input, &old)?;
         if tag != old
             && let Some(reason) = tag_conflict(doc.project(), device, &tag)
@@ -2399,8 +2536,12 @@ impl Editor {
         spec: &potential::PotentialSpec,
     ) -> bool {
         let label = format!("Set potential {}", spec.name);
+        let symbols = FeedSymbols {
+            line: self.catalog.in_pack(FEED_SYMBOL),
+            earth: self.catalog.in_pack(FEED_PE_SYMBOL),
+        };
         self.run(doc, &label, |tx| {
-            potential::set_feed_potential(tx, feeds, spec).map(|_| ())
+            potential::set_feed_potential(tx, feeds, spec, &symbols).map(|_| ())
         })
     }
 
@@ -2443,9 +2584,17 @@ impl Editor {
             self.notice = Some("The symbol library has no potential feed".into());
             return false;
         };
+        let Some(earth) = self
+            .catalog
+            .get(&self.catalog.in_pack(FEED_PE_SYMBOL))
+            .cloned()
+        else {
+            self.notice = Some("The symbol library has no earth feed".into());
+            return false;
+        };
         let label = suggestion.label.clone();
         self.run(doc, &label, |tx| {
-            potential::assign(tx, &feed, wires, &suggestion.specs)
+            potential::assign(tx, &feed, &earth, wires, &suggestion.specs)
         })
     }
 
@@ -2573,6 +2722,9 @@ impl Editor {
                 "Click the next point · Enter or click the last point again to finish · Esc cancels"
                     .into()
             }
+            Tool::Paste(_) => {
+                "Paste: click to drop it · Esc cancels · Ctrl+Alt+V pastes in place".into()
+            }
             Tool::Move(m) => self.link_hint.clone().unwrap_or_else(|| {
                 let wires = if m.carry {
                     String::new()
@@ -2699,6 +2851,25 @@ impl Editor {
                         }
                     }
                 }
+            }
+            Tool::Paste(p) => {
+                let by = cursor - p.origin;
+                preview.symbols = p
+                    .symbols
+                    .iter()
+                    .map(|s| {
+                        let mut s = s.clone();
+                        s.id = SymbolId::from(PREVIEW_ID);
+                        s.page = page;
+                        s.placement.origin = s.placement.origin + by;
+                        s
+                    })
+                    .collect();
+                preview.paths = p
+                    .paths
+                    .iter()
+                    .map(|path| path.iter().map(|&q| q + by).collect())
+                    .collect();
             }
             Tool::Move(m) => {
                 preview.moving = m.ids.clone();

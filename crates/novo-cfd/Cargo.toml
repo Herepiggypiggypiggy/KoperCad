@@ -6,12 +6,17 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+novo-layout.workspace = true
 novo-thermal.workspace = true
 rayon.workspace = true
 thiserror.workspace = true
 
-[lints]
-workspace = true
+[features]
+# The synthetic multi-level stand-in solver, for tests and UI development.
+demo = []
 
 [dev-dependencies]
-novo-layout.workspace = true
+novo-cfd = { path = ".", features = ["demo"] }
+
+[lints]
+workspace = true

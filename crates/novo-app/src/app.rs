@@ -5,28 +5,48 @@
 
 mod assembly;
 mod background_panel;
+mod bench;
 mod cabinet;
+mod cabinet_bar;
 mod cabinet_door;
 mod cabinet_inspector;
 mod cabinet_panel;
+mod cabinet_rails;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
 mod cabinet_rules;
+mod cable_controls;
 mod change_report;
 mod changes;
 mod checks;
+mod clipboard;
 mod commissioning;
 mod compare;
 mod dock;
 mod drawers;
 mod duplicate;
 mod dxf;
+mod eplan_import;
 mod example;
 mod faults;
 mod heat;
+mod heat_3d;
+#[cfg(test)]
+mod heat_3d_tests;
+mod heat_compare;
+#[cfg(test)]
+mod heat_compare_tests;
+mod heat_progress;
+#[cfg(test)]
+mod heat_progress_tests;
+mod heat_run;
+#[cfg(test)]
+mod heat_run_tests;
 mod inspector;
 mod interop;
 mod learn;
+mod learn_demo;
+mod learn_labels;
 mod learn_ui;
 mod link;
 mod live;
@@ -46,6 +66,7 @@ mod onboarding;
 mod outline;
 mod outline_tree;
 mod pages;
+mod part_picker;
 mod parts;
 mod parts_import;
 mod parts_quality;
@@ -67,12 +88,24 @@ mod shortcuts_sheet;
 mod simulate;
 mod sizing;
 mod standards;
+mod standards_report;
+#[cfg(test)]
+mod standards_report_tests;
 mod status_bar;
+mod symbol_preview;
 mod terminals;
+mod tips;
 mod title_revisions;
 mod userkeymap;
 mod variants;
+mod view3d;
+mod view3d_controls;
+#[cfg(test)]
+mod view3d_tests;
 mod wheel;
+mod wire_panel;
+#[cfg(test)]
+mod wire_panel_tests;
 mod wire_production;
 mod workbench;
 mod workspace;
@@ -83,6 +116,10 @@ mod assembly_pack_tests;
 #[cfg(test)]
 mod assembly_tests;
 #[cfg(test)]
+mod bench_tests;
+#[cfg(test)]
+mod cabinet_rails_tests;
+#[cfg(test)]
 mod cabinet_routes_tests;
 #[cfg(test)]
 mod cabinet_rules_tests;
@@ -90,6 +127,8 @@ mod cabinet_rules_tests;
 mod cabinet_tests;
 #[cfg(test)]
 mod changes_tests;
+#[cfg(test)]
+mod clipboard_tests;
 #[cfg(test)]
 mod commissioning_tests;
 #[cfg(test)]
@@ -99,7 +138,15 @@ mod example_tests;
 #[cfg(test)]
 mod gate1_tests;
 #[cfg(test)]
+mod learn_replay;
+#[cfg(test)]
 mod learn_tests;
+#[cfg(test)]
+mod lesson_verify_cables;
+#[cfg(test)]
+mod lesson_verify_outputs;
+#[cfg(test)]
+mod lesson_verify_terminals;
 #[cfg(test)]
 mod numbering_tests;
 #[cfg(test)]
@@ -113,6 +160,8 @@ mod route_all_tests;
 #[cfg(test)]
 mod shortcuts_sheet_tests;
 #[cfg(test)]
+mod tips_tests;
+#[cfg(test)]
 mod variants_tests;
 
 use std::path::{Path, PathBuf};
@@ -124,7 +173,7 @@ use crate::actions::Action;
 
 /// Hover text of the bulk-edit exports (the data to edit, not the reports).
 const ASSEMBLY_HINT: &str = "The shop-floor print pack of every cabinet: build order (rails, ducts, devices, wires, labels), then prepare with the cut list, drill table, mount, wire, label and check, then the wire cutting list. Needs a cabinet with a mounting plate.";
-const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel. Export only: bringing the edited file back comes with the import dialog. The generated reports are under Export all reports to Excel.";
+const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel. Edit the file in Excel and bring it back with File > Import spreadsheet. The generated reports are under Export all reports to Excel.";
 use novo_core::{Aspect, Command, DeviceTag, ModelError, Outcome, PageId, PageKind};
 use pages::PageView;
 
@@ -226,6 +275,7 @@ pub struct NovoApp {
     workspace: workspace::Workspace,
     cabinet: cabinet::CabinetState,
     reports_view: reports_view::ReportsView,
+    view3d: view3d::View3dMode,
     /// The "Size the enclosure" panel and the Enclosures list.
     sizing: sizing::SizingState,
     protection: protection::ProtectionState,
@@ -302,6 +352,7 @@ impl NovoApp {
             workspace: workspace::Workspace::Schematic,
             cabinet: cabinet::CabinetState::new(),
             reports_view: Default::default(),
+            view3d: Default::default(),
             sizing: sizing::SizingState::new(),
             protection: protection::ProtectionState::new(),
             outline_open: false,
@@ -468,9 +519,19 @@ impl NovoApp {
             Action::Quit => self.leave_then(ctx, Leaving::Quit),
             Action::Undo => self.undo_redo(false),
             Action::Redo => self.undo_redo(true),
+            Action::ZoomToFit if self.workspace() == workspace::Workspace::View3d => {
+                self.view3d.pending = Some(view3d::Pending::Fit);
+            }
             Action::ZoomToFit => self.canvas.zoom_to_fit(),
             Action::ShowSchematic => self.switch_workspace(workspace::Workspace::Schematic),
-            Action::ShowCabinet => self.switch_workspace(workspace::Workspace::Cabinet),
+            Action::ShowCabinet => {
+                // Asking for the Cabinet again from its table face (Ctrl+2,
+                // the Cabinet tab) goes back to the plate drawing.
+                if self.workspace() == workspace::Workspace::Cabinet {
+                    self.cabinet.table = false;
+                }
+                self.switch_workspace(workspace::Workspace::Cabinet);
+            }
             Action::SizeEnclosure => {
                 self.switch_workspace(workspace::Workspace::Cabinet);
                 self.sizing.panel_open = true;
@@ -659,9 +720,19 @@ impl NovoApp {
         self.learn_project_changed();
         self.canvas.document_replaced();
         self.wb.reports = Default::default();
+        // The live view, an open drawer and a preview belong to the project
+        // they were opened on; a lesson (or any project) starts clean.
+        self.wb.live = Default::default();
+        self.wb.drawer = None;
+        self.wb.renumber = None;
+        self.wb.field.close();
         self.wb.commissioning = None;
         self.wb.sheet = 0;
         self.add_generated_pages();
+        // Nothing to commission in a closed project.
+        if !self.is_open() && self.workspace() == workspace::Workspace::Commissioning {
+            self.switch_workspace(workspace::Workspace::Schematic);
+        }
     }
 
     fn close_project(&mut self) {
@@ -802,24 +873,51 @@ impl NovoApp {
         if !self.modal_open() {
             self.outline_keys(&ctx);
         }
+        if !self.modal_open() {
+            self.clipboard_events(&ctx);
+        }
         let mut commands = if self.modal_open() {
-            Vec::new()
+            // The place key pressed again over its own wheel swaps it for
+            // the part search; every other key waits for the wheel.
+            if self.wheel_place_press(&ctx) {
+                vec!["tool.place"]
+            } else {
+                Vec::new()
+            }
         } else {
             self.key_commands(&ctx)
         };
+        // Shift+D swings the 3D door; elsewhere it is not a command.
+        let in_3d = self.workspace() == workspace::Workspace::View3d;
+        commands.retain(|id| in_3d || *id != "view.3d_door");
         if self.workspace() != workspace::Workspace::Schematic {
             // The schematic's keys must not edit the hidden page: rotate
             // and delete go to the Cabinet, the rest keep only the view,
             // file and undo actions.
             let cabinet = self.workspace() == workspace::Workspace::Cabinet;
             for id in &commands {
-                if cabinet && matches!(*id, "edit.rotate" | "edit.delete") {
+                if cabinet
+                    && matches!(
+                        *id,
+                        "edit.rotate" | "edit.delete" | "terminal.strip_up" | "terminal.strip_down"
+                    )
+                {
                     self.cabinet.keys.push((*id).to_owned());
+                } else if cabinet && *id == "edit.mirror" {
+                    self.message(
+                        Level::Info,
+                        "Mirror does not apply on the plate: a device only turns a quarter (R).",
+                    );
                 }
             }
             commands.retain(|id| {
                 Action::from_id(id).is_some()
                     || *id == "view.cabinet_table"
+                    || *id == "cabinet.place-all"
+                    || *id == "cabinet.rails"
+                    || *id == "view.command_field_here"
+                    || *id == "view.3d"
+                    || *id == "view.3d_door"
                     || id.starts_with("heat.")
             });
         }
@@ -847,11 +945,14 @@ impl NovoApp {
                 .resizable(false)
                 .show(ui, |ui| self.outline(ui, &mut picked));
         }
+        self.sync_commissioning_workspace();
         self.drawer(ui);
         let canvas_rect = egui::CentralPanel::no_frame()
             .show(ui, |ui| {
                 if self.is_open() && self.workspace() == workspace::Workspace::Cabinet {
                     self.cabinet_show(ui);
+                } else if self.is_open() && self.workspace() == workspace::Workspace::View3d {
+                    self.view3d_show(ui);
                 } else if reports {
                     self.reports_central(ui);
                 } else if self.is_open() {
@@ -905,6 +1006,7 @@ impl NovoApp {
         self.preferences_dialog(&ctx);
         self.shortcuts_window(&ctx);
         self.background_panel(&ctx);
+        self.bench_window(&ctx);
         self.parts_window(&ctx);
         self.project_settings_dialog(&ctx);
         self.macro_browser_window(&ctx);
@@ -915,6 +1017,8 @@ impl NovoApp {
         self.issue_revision_dialog(&ctx);
         self.compare_window(&ctx);
         self.aml_import_dialog(&ctx);
+        self.eplan_import_dialog(&ctx);
+        self.eplan_guide_dialog(&ctx);
         self.poll_dwg(&ctx);
         self.protection_window(&ctx);
         self.faults_window(&ctx);
@@ -957,6 +1061,7 @@ impl NovoApp {
         if let Some(page) = self.canvas.take_page_request() {
             self.show_page(page);
         }
+        self.after_paste_click();
         let asked = self.canvas.take_commands();
         self.wb.queued.extend(asked);
         let cable = self
@@ -994,8 +1099,11 @@ impl NovoApp {
     }
 
     fn modal_open(&self) -> bool {
+        self.wb.wheel.is_some() || self.modal_open_but_wheel()
+    }
+
+    fn modal_open_but_wheel(&self) -> bool {
         self.show_about
-            || self.wb.wheel.is_some()
             || self.wb.renumber.is_some()
             || self.wb.page_form.is_some()
             || self.wb.sheet_import.is_some()
@@ -1034,8 +1142,12 @@ impl NovoApp {
         if self.wb.pending.is_some_and(|p| p.page != page) {
             self.wb.pending = None;
         }
-        // A page is a schematic page: picking one leaves the Cabinet.
-        self.switch_workspace(workspace::Workspace::Schematic);
+        // A page is a schematic page: picking one leaves the Cabinet, the
+        // Reports and the 3D view. Commissioning is the schematic page, so
+        // a jump inside it stays there.
+        if self.workspace() != workspace::Workspace::Commissioning {
+            self.switch_workspace(workspace::Workspace::Schematic);
+        }
     }
 
     /// Shows sheet `sheet` of a generated page (0 for any other page).

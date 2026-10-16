@@ -14,7 +14,7 @@
     },
     "properties": {}
   },
-  "next_id": 104,
+  "next_id": 110,
   "parts": [
     {
       "id": 71,
@@ -1890,134 +1890,206 @@
     {
       "id": 91,
       "structure": 81,
-      "x": 10.0,
+      "x": 55.0,
       "y": 10.0,
-      "length": 580.0,
+      "length": 535.0,
       "kind": "din_rail",
       "properties": {}
+    },
+    {
+      "id": 92,
+      "structure": 81,
+      "x": 55.0,
+      "y": 210.0,
+      "length": 535.0,
+      "kind": "din_rail",
+      "properties": {}
+    },
+    {
+      "id": 93,
+      "structure": 81,
+      "x": 55.0,
+      "y": 335.0,
+      "length": 535.0,
+      "kind": "din_rail",
+      "properties": {}
+    },
+    {
+      "id": 94,
+      "structure": 81,
+      "x": 55.0,
+      "y": 550.0,
+      "length": 535.0,
+      "kind": "din_rail",
+      "properties": {}
+    },
+    {
+      "id": 95,
+      "structure": 81,
+      "x": 55.0,
+      "y": 740.0,
+      "length": 535.0,
+      "kind": "din_rail",
+      "properties": {}
+    },
+    {
+      "id": 96,
+      "structure": 81,
+      "x": 32.5,
+      "y": 122.5,
+      "length": 557.5,
+      "kind": "duct",
+      "width": 25.0,
+      "height": 60.0,
+      "properties": {
+        "duct_class": "power"
+      }
+    },
+    {
+      "id": 97,
+      "structure": 81,
+      "x": 32.5,
+      "y": 187.5,
+      "length": 557.5,
+      "kind": "duct",
+      "width": 25.0,
+      "height": 60.0,
+      "properties": {
+        "duct_class": "signal"
+      }
+    },
+    {
+      "id": 98,
+      "structure": 81,
+      "x": 32.5,
+      "y": 315.0,
+      "length": 557.5,
+      "kind": "duct",
+      "width": 25.0,
+      "height": 60.0,
+      "properties": {
+        "duct_class": "signal"
+      }
+    },
+    {
+      "id": 99,
+      "structure": 81,
+      "x": 32.5,
+      "y": 457.5,
+      "length": 557.5,
+      "kind": "duct",
+      "width": 25.0,
+      "height": 60.0,
+      "properties": {
+        "duct_class": "power"
+      }
     },
     {
       "id": 100,
       "structure": 81,
-      "x": 10.0,
-      "y": 640.0,
-      "length": 580.0,
-      "kind": "din_rail",
-      "properties": {}
+      "x": 32.5,
+      "y": 700.0,
+      "length": 557.5,
+      "kind": "duct",
+      "width": 25.0,
+      "height": 60.0,
+      "properties": {
+        "duct_class": "power"
+      }
     },
     {
       "id": 101,
       "structure": 81,
-      "x": 10.0,
-      "y": 125.0,
-      "length": 580.0,
-      "kind": "duct",
-      "width": 40.0,
-      "height": 40.0,
-      "properties": {}
-    },
-    {
-      "id": 102,
-      "structure": 81,
-      "x": 10.0,
-      "y": 585.0,
-      "length": 580.0,
-      "kind": "duct",
-      "width": 40.0,
-      "height": 40.0,
-      "properties": {}
-    },
-    {
-      "id": 103,
-      "structure": 81,
-      "x": 555.0,
-      "y": 125.0,
-      "length": 500.0,
+      "x": 32.5,
+      "y": 10.0,
+      "length": 780.0,
       "kind": "duct",
       "vertical": true,
-      "width": 40.0,
-      "height": 40.0,
-      "properties": {}
+      "width": 25.0,
+      "height": 60.0,
+      "properties": {
+        "duct_class": "mixed"
+      }
     }
   ],
   "cabinet_placements": [
     {
-      "id": 92,
+      "id": 102,
       "device": 9,
       "structure": 81,
-      "x": 10.0,
+      "x": 55.0,
       "y": 10.0,
       "rail": 91,
       "rail_offset": 0.0,
       "properties": {}
     },
     {
-      "id": 93,
+      "id": 103,
       "device": 11,
       "structure": 81,
-      "x": 74.0,
+      "x": 119.0,
       "y": 10.0,
       "rail": 91,
       "rail_offset": 64.0,
       "properties": {}
     },
     {
-      "id": 94,
+      "id": 104,
       "device": 14,
       "structure": 81,
-      "x": 129.0,
+      "x": 174.0,
       "y": 10.0,
       "rail": 91,
       "rail_offset": 119.0,
       "properties": {}
     },
     {
-      "id": 95,
+      "id": 105,
       "device": 10,
       "structure": 81,
-      "x": 157.0,
-      "y": 10.0,
-      "rail": 91,
-      "rail_offset": 147.0,
+      "x": 55.0,
+      "y": 210.0,
+      "rail": 92,
+      "rail_offset": 0.0,
       "properties": {}
     },
     {
-      "id": 96,
+      "id": 106,
       "device": 15,
       "structure": 81,
-      "x": 212.0,
-      "y": 10.0,
-      "rail": 91,
-      "rail_offset": 202.0,
+      "x": 55.0,
+      "y": 335.0,
+      "rail": 93,
+      "rail_offset": 0.0,
       "properties": {}
     },
     {
-      "id": 97,
+      "id": 107,
       "device": 16,
       "structure": 81,
-      "x": 252.0,
-      "y": 10.0,
-      "rail": 91,
-      "rail_offset": 242.0,
+      "x": 95.0,
+      "y": 335.0,
+      "rail": 93,
+      "rail_offset": 40.0,
       "properties": {}
     },
     {
-      "id": 98,
+      "id": 108,
       "device": 82,
       "structure": 81,
-      "x": 292.0,
-      "y": 10.0,
-      "rail": 91,
-      "rail_offset": 282.0,
+      "x": 55.0,
+      "y": 550.0,
+      "rail": 94,
+      "rail_offset": 0.0,
       "properties": {}
     },
     {
-      "id": 99,
+      "id": 109,
       "device": 12,
       "structure": 81,
-      "x": 10.0,
-      "y": 640.0,
-      "rail": 100,
+      "x": 55.0,
+      "y": 740.0,
+      "rail": 95,
       "rail_offset": 0.0,
       "properties": {}
     }

@@ -3,15 +3,17 @@
 //!
 //! Method: fractional step. Convection explicit (TVD or QUICK), diffusion
 //! implicit, then a pressure projection (multigrid-preconditioned CG) makes
-//! the velocity divergence free. Walls only (closed domain); openings come
-//! with the solids and openings lane.
+//! the velocity divergence free. The domain is closed unless
+//! [`FlowConfig::openings`] opens patches of the walls to the outside air
+//! (see [`crate::openings`]).
 
 mod mesh;
+mod par;
 mod pressure;
 mod scheme;
 mod solver;
 
-pub use mesh::Mesh;
-pub use pressure::PressureSolver;
+pub use mesh::{Mesh, other_axes};
+pub use pressure::{PressureSolver, Smoother};
 pub use scheme::Scheme;
 pub use solver::{Face, FaceBc, FlowConfig, FlowSolver, ThermalBc};

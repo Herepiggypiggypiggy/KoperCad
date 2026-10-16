@@ -1,7 +1,7 @@
 format = 1
 id = "terminal-strips"
-version = 1
-status = "draft"   # GAP: several controls below have no UI anchor yet, see NOTES.md
+version = 2
+status = "early"   # GAP: several controls below have no UI anchor yet, see NOTES.md
 title = "Terminal strips"
 title_nl = "Klemmenstroken"
 summary = "Accept the terminals KoperCAD proposes where wires leave the cabinet, read the strip, bridge two terminals and move the earth terminal to its own strip."
@@ -9,26 +9,33 @@ summary_nl = "Neem de klemmen over die KoperCAD voorstelt waar draden de kast ve
 track = "terminals"
 order = 10
 level = "beginner"
-minutes = 8
+minutes = 9
 topics = ["terminals"]
 needs = []
 next = ["connection-screens"]
 project = "project.json"
+finished = "finished.json"
 page = "Pump and valve feeder"
 
 # Start project: crates/novo-tests/tests/lessons/terminals.rs `terminal_strips_start`.
-# Seven devices in two locations (+CAB, +FLD), eight wires cross the boundary and
-# there is no terminal yet. Finished: `terminal_strips_finished`.
+# Seven devices in two locations (+CAB, +FLD), eight wires run between a cabinet device and a
+# field device and there is no terminal yet. Finished: `terminal_strips_finished`.
+# Every step is replayed through the real window by crates/novo-app/src/app/lesson_verify_terminals.rs
+# `terminal_strips_steps_work_in_the_window`.
 
 [[step]]
 id = "goal"
 title = "What you will have"
 title_nl = "Wat je straks hebt"
 text = """
+You will let KoperCAD place and number the terminals for you, instead of typing each one.
 At the end strip **-X1** holds seven numbered terminals, two of them bridged, and the earth terminal sits on its own strip **-X2**.
+KoperCAD proposes a terminal on every wire that runs between a device in the cabinet (+CAB) and a device in the field (+FLD).
 """
 text_nl = """
+Je laat KoperCAD de klemmen plaatsen en nummeren, in plaats van ze zelf te typen.
 Aan het eind heeft klemmenstrook **-X1** zeven genummerde klemmen, waarvan twee gebrugd, en staat de aardklem op een eigen strook **-X2**.
+KoperCAD stelt een klem voor bij elke draad tussen een component in de kast (+CAB) en een component in het veld (+FLD).
 """
 pause = true
 point = { at = { device = "-U1" } }
@@ -37,224 +44,272 @@ note = [
   { at = { device = "-M1" }, text = "In the field (+FLD)", text_nl = "In het veld (+FLD)" },
 ]
 # Location comes from the device tag (`+CAB-U1`, `+FLD-M1`): crates/novo-core tag.rs.
-# Which wires get a proposal: crates/novo-terminals/src/suggest.rs `suggest_terminals`.
+# Which wires get a proposal: crates/novo-terminals/src/suggest.rs `suggest_terminals`: a wire
+# with a device pin at BOTH ends, in different locations. A wire that starts at a potential
+# feed gets none (the sample's PE wire therefore runs from the converter's PE2 pin).
 
 [[step]]
 id = "accept-one"
 title = "Accept the highlighted terminal"
 title_nl = "Neem de gemarkeerde klem over"
 text = """
-Dashed marks show where a {tip:terminal} belongs: every wire that leaves the cabinet.
-Press {key:proposal.accept} to accept the highlighted one.
+The dashed marks on the page are proposed {tip:terminal}s, one for each wire that leaves the cabinet.
+The highlighted one, on the leftmost wire under the converter, has a note beside it that reads "+CAB-X1 terminal".
+Accepting it places terminal **1** in its wire and creates the strip **-X1**.
 """
 text_nl = """
-Gestippelde markeringen tonen waar een {tip:terminal} hoort: bij elke draad die de kast verlaat.
-Druk op {key:proposal.accept} om de gemarkeerde over te nemen.
+De gestippelde markeringen op de pagina zijn voorgestelde {tip:terminal}en, één voor elke draad die de kast verlaat.
+De gemarkeerde, op de meest linkse draad onder de omvormer, heeft een toelichting ernaast met "+CAB-X1 terminal".
+Als je hem overneemt, komt klem **1** in zijn draad te staan en ontstaat de strook **-X1**.
 """
+how = ["Look at the drawing: the highlighted dashed terminal has a note \"+CAB-X1 terminal\" beside it", "Press {key:proposal.accept}"]
+how_nl = ["Kijk op de tekening: bij de gemarkeerde gestippelde klem staat de toelichting \"+CAB-X1 terminal\"", "Druk op {key:proposal.accept}"]
+demo = [
+  { press = "proposal.accept" },
+]
 point = { area = { page = "Pump and valve feeder", x = 36, y = 114, w = 8, h = 12 } }
 expect = { device = { tag = "-X1" } }
 solve = [ { command = "proposal.accept" } ]
-# verified: Enter is bound to proposal.accept (crates/novo-workflow/src/keymap.rs:370);
-#   handler crates/novo-app/src/app/terminals.rs:30 `accept_proposal` (accepts only a proposal
-#   in view, else it scrolls it into view first); first proposal = first wire in drawing order
-#   (suggest.rs `suggest_terminals`), here the U wire at x=40, so it becomes terminal 1.
-# verified: dashed Proposal marks and the note "+CAB-X1 terminal · ↵ accept · Tab next"
-#   terminals.rs:276 `proposal_marks`; the strip -X1 is created on accept (suggest.rs
-#   `accept_suggestions`). View > marks on by default (`wb.marks`, Shift+P toggles).
+# verified: Enter is bound to proposal.accept (crates/novo-workflow/src/keymap.rs); handler
+#   crates/novo-app/src/app/terminals.rs `accept_proposal` (accepts only a proposal in view, else
+#   scrolls it into view first); the first proposal is the first wire in drawing order
+#   (suggest.rs `suggest_terminals`), the U wire at x=40, so it becomes terminal 1.
+# verified headless: lesson_verify_terminals.rs step accept-one (Enter key event).
 
 [[step]]
 id = "next-proposal"
-title = "Jump to the next proposal"
-title_nl = "Spring naar het volgende voorstel"
+title = "Look at the next proposal"
+title_nl = "Bekijk het volgende voorstel"
 text = """
-{key:proposal.next} moves the highlight to the next dashed terminal.
-The note beside the mark always belongs to the highlighted one.
+The highlight, with its note, moves to the next dashed terminal on the right; at the last one it wraps round to the first.
+You can look at every proposal before you accept any.
 """
 text_nl = """
-{key:proposal.next} verplaatst de markering naar de volgende gestippelde klem.
-De toelichting naast de markering hoort altijd bij de gemarkeerde.
+De markering, met zijn toelichting, springt naar de volgende gestippelde klem rechts; bij de laatste gaat hij terug naar de eerste.
+Zo bekijk je elk voorstel voordat je er een overneemt.
 """
-point = { area = { page = "Pump and valve feeder", x = 44, y = 114, w = 8, h = 12 } }
+how = ["Press {key:proposal.next}; the note moves to the next dashed terminal"]
+how_nl = ["Druk op {key:proposal.next}; de toelichting springt naar de volgende gestippelde klem"]
+demo = [
+  { press = "proposal.next" },
+]
+point = { area = { page = "Pump and valve feeder", x = 52, y = 114, w = 8, h = 12 } }
 expect = { command = "proposal.next" }
 solve = [ { command = "proposal.next" } ]
-# verified: Tab bound to proposal.next (keymap.rs:371); app/workbench.rs:493 (claimed only while terminal proposals are on the page: workbench.rs:370) runs `next_proposal`
-#   (terminals.rs:85), which wraps around and scrolls an off-screen proposal into view.
+# verified: Tab bound to proposal.next (keymap.rs); workbench.rs runs `next_proposal`
+#   (terminals.rs), which wraps around and scrolls an off-screen proposal into view.
+# verified headless: step next-proposal (Tab key event; the highlight index goes 0 to 1).
 
 [[step]]
 id = "accept-all"
 title = "Accept all the rest"
 title_nl = "Neem de rest in één keer over"
 text = """
-Press {key:view.command_palette}, type **accept all** and press Enter.
-Every dashed terminal is placed and numbered: 2, 3, then PE, then 4 to 7.
+Every remaining dashed terminal is placed and numbered in one go: 2 and 3, then PE for the earth wire, then 4 to 7.
+Placing seven terminals by hand would be seven placements, seven numbers and seven wire edits.
 """
 text_nl = """
-Druk op {key:view.command_palette}, typ **accept all** en druk op Enter.
-Alle gestippelde klemmen worden geplaatst en genummerd: 2, 3, dan PE, dan 4 tot 7.
+Alle overgebleven gestippelde klemmen worden in één keer geplaatst en genummerd: 2 en 3, dan PE voor de aarddraad, dan 4 tot 7.
+Zeven klemmen met de hand zijn zeven plaatsingen, zeven nummers en zeven draadwijzigingen.
 """
-point = { ui = "palette.field" }
+how = ["Press {key:view.command_palette} to open the command field", "Type **accept all**", "Press Enter"]
+how_nl = ["Druk op {key:view.command_palette} om het commandoveld te openen", "Typ **accept all**", "Druk op Enter"]
+demo = [
+  { press = "view.command_palette" },
+  { type = "accept all" },
+  { key = "Enter" },
+]
+point = { ui = "palette.button" }
 expect = { count = { kind = "symbol", page = "Pump and valve feeder", at_least = 23 } }
 solve = [ { command = "proposal.accept_all" } ]
-# verified: command `proposal.accept_all` has NO default key (keymap.rs has no binding); the verb
-#   "accept all" is in the palette (crates/novo-workflow/src/commands.rs:333) and the app runs it
-#   (workbench.rs:503 -> terminals.rs:114 `accept_all_proposals`, toast "Accepted 7 terminals on
-#   +CAB-X1"). That is why the text names Ctrl+K and the typed words.
-# Numbering (suggest.rs `accept_suggestions` + place.rs `place_terminals`): terminals are numbered
-#   left to right on vertical wires, lowest free number first (naming.rs `next_free_number`); a
-#   wire whose net is PE gets a PE terminal named PE (naming.rs `base_name_for_potential`).
+# verified: command `proposal.accept_all` has NO default key; the verb "accept all" is in the
+#   command field (crates/novo-workflow/src/commands.rs) and the app runs it (workbench.rs ->
+#   terminals.rs `accept_all_proposals`, toast "Accepted 7 terminals on +CAB-X1").
+# Numbering (suggest.rs `accept_suggestions` + place.rs `place_terminals`): left to right on
+#   vertical wires, lowest free number first (naming.rs `next_free_number`); a wire whose net is
+#   PE gets the name PE (naming.rs `base_name_for_potential`).
 # 15 symbols at the start + 8 terminals = 23.
+# verified headless: step accept-all (command field, Ctrl+K, "accept all", Enter).
 
 [[step]]
 id = "open-drawer"
 title = "Open the Terminals drawer"
 title_nl = "Open de lade Klemmen"
 text = """
-{key:view.terminals_drawer} opens the {ui:drawer.terminals.tab} drawer under the drawing.
+The Terminals drawer lists the strip you are working on as a table, under the drawing.
 It shows the strip of the terminal you selected, else the strip you used last.
 """
 text_nl = """
-{key:view.terminals_drawer} opent de lade {ui:drawer.terminals.tab} onder de tekening.
+De lade Klemmen toont de strook waar je mee werkt als tabel, onder de tekening.
 Je ziet de strook van de geselecteerde klem, anders de strook die je het laatst gebruikte.
 """
-point = { ui = "drawer.terminals.tab" }
-expect = { opened = "drawer.terminals" }
+how = ["Press {key:view.terminals_drawer}, or click the **Terminals** tab at the bottom of the window"]
+how_nl = ["Druk op {key:view.terminals_drawer}, of klik onderin op het tabblad **Terminals**"]
+demo = [
+  { press = "view.terminals_drawer" },
+]
+expect = { command = "view.terminals_drawer" }
 solve = [ { command = "view.terminals_drawer" } ]
-# verified: Ctrl+3 (keymap.rs:391) -> workbench.rs:512 `toggle_drawer(Drawer::Terminals)`;
-#   tab label "Terminals" crates/novo-app/src/app/drawers.rs:61; the strip is chosen by
-#   terminals.rs `drawer_strip` (selection, else editor.strip set on accept, else first).
+# verified: Ctrl+3 (keymap.rs) -> workbench.rs `toggle_drawer(Drawer::Terminals)`; tab label
+#   "Terminals" (drawers.rs); the strip is chosen by terminals.rs `drawer_strip`.
+# GAP anchor: the drawer has no anchor id, so there is no pointer and the check is the command
+#   (an `opened = "drawer.terminals"` check can never tick in this build).
+# verified headless: step open-drawer (Ctrl+3; the tab "Terminals" and the title "+CAB-X1" are painted).
 
 [[step]]
 id = "read-table"
 title = "Read the strip"
 title_nl = "Lees de strook"
 text = """
-One row per terminal. **Internal** is the cabinet side, **External** the field side.
-The **Kind** column shows PE for the earth wire: KoperCAD sees it from the wire's potential.
+There is one row per terminal. **Internal** is what the cabinet wire reaches and **External** what the field wire reaches.
+**Kind** shows PE for the earth terminal, which KoperCAD recognises from the potential of its wire.
+You can check a whole strip here without opening the drawing.
 """
 text_nl = """
-Eén rij per klem. **Internal** is de kastzijde, **External** de veldzijde.
-De kolom **Kind** toont PE bij de aarddraad: KoperCAD ziet dat aan het potentiaal van de draad.
+Er is één rij per klem. **Internal** is wat de kastdraad bereikt en **External** wat de velddraad bereikt.
+**Kind** toont PE bij de aardklem, die KoperCAD herkent aan het potentiaal van zijn draad.
+Je controleert hier een hele strook zonder de tekening te openen.
 """
 pause = true
-point = { ui = "drawer.terminals.table" }
-note = [
-  { ui = "drawer.terminals.head.terminal", text = "Next free number; PE and N are named by kind", text_nl = "Eerstvolgend vrije nummer; PE en N krijgen hun naam van het soort" },
-  { ui = "drawer.terminals.head.internal", text = "What the cabinet wire reaches", text_nl = "Wat de kastdraad bereikt" },
-  { ui = "drawer.terminals.head.external", text = "What the field wire reaches", text_nl = "Wat de velddraad bereikt" },
-]
-# verified: columns "Terminal", "Kind", "Jumper", "Internal", "External", "Cable", "State"
-#   (terminals.rs:183 STRIP_HEADS, grid at terminals.rs:205); hover on a name "Show on the drawing"
-#   (terminals.rs:228), on Jumper "Terminals with the same jumper are connected" (terminals.rs:239).
+# verified: columns "Terminal", "Kind", "Jumper", "Bridged to", "Internal", "Wire in", "External",
+#   "Wire out", "Cable", "State" (terminals.rs STRIP_HEADS); hover on a name "Show on the drawing".
 # verified: Kind text is `novo_terminals::kind_label` ("feed-through", "PE").
+# verified headless: step read-table asserts the painted column heads and the PE row.
 
 [[step]]
 id = "select-two"
 title = "Select two terminals that carry the same signal"
 title_nl = "Selecteer twee klemmen met hetzelfde signaal"
 text = """
-Terminals **5** and **7** both carry 0 V.
-Click one, then Shift+click the other.
+Terminals **5** and **7** both carry 0 V, so they can be bridged.
+Selecting both is the first half of that: the next step bridges them.
 """
 text_nl = """
-Klemmen **5** en **7** voeren allebei 0 V.
-Klik op de ene en Shift+klik op de andere.
+Klemmen **5** en **7** voeren allebei 0 V, dus ze kunnen gebrugd worden.
+Beide selecteren is de eerste helft daarvan: de volgende stap brugt ze.
 """
+how = ["Click the round body of terminal **5** (not its end pin, that starts a wire)", "Hold Shift and click the body of terminal **7**"]
+how_nl = ["Klik op het ronde lichaam van klem **5** (niet op het uiteinde, dat start een draad)", "Houd Shift ingedrukt en klik op het lichaam van klem **7**"]
 point = { area = { page = "Pump and valve feeder", x = 116, y = 110, w = 8, h = 12 } }
 note = [
   { area = { page = "Pump and valve feeder", x = 140, y = 110, w = 8, h = 12 }, text = "Then this one", text_nl = "Dan deze" },
 ]
 expect = { selected_count = 2 }
 solve = [ { select = "-X1:5" }, { select = "-X1:7", add = true } ]
-# GAP: `select` in solve takes a device tag; a terminal designation (+CAB-X1:5) and `add = true`
-#   are not in the design doc's solve list. Needs: select by terminal designation, additive select.
-# verified: Shift+click adds to the selection (crates/novo-canvas/src/selection.rs:17
-#   SelectOp::from_modifiers). Terminal numbers 5 and 7 = the 0 V wires of -Y1 and -Y2 (after
-#   accept all: 1 2 3 PE 4 5 6 7).
+# GAP solve: `select` takes a device tag; selecting a terminal by designation (`-X1:5`) is not
+#   in the engine yet.
+# verified: Shift+click adds to the selection (crates/novo-canvas/src/selection.rs
+#   SelectOp::from_modifiers). Click the BODY of the terminal (the circle 4 mm under its origin):
+#   a click on its end pin starts a wire instead.
+# verified headless: step select-two (real pointer click and Shift+click).
 
 [[step]]
 id = "connect"
 title = "Bridge them with a jumper"
 title_nl = "Brug ze met een brug"
 text = """
-Right-click one of them and choose **Connect terminals** to add a {tip:jumper}.
-The command is {key:terminal.connect}; it has no key.
+A {tip:jumper} joins the two terminals electrically, so one signal feeds both without extra wire.
+There is no key for this, only the right-click menu.
+Afterwards the drawer gives terminal **5** the jumper **J1** and lists **7** under **Bridged to**.
 """
 text_nl = """
-Klik met rechts op een van beide en kies **Connect terminals**.
-Het commando is {key:terminal.connect}; het heeft geen toets.
+Een {tip:jumper} verbindt de twee klemmen elektrisch, zodat één signaal beide voedt zonder extra draad.
+Hier is geen toets voor, alleen het rechtsklikmenu.
+Daarna toont de lade bij klem **5** de brug **J1** en staat **7** onder **Bridged to**.
 """
-point = { ui = "canvas.menu.connect_terminals" }
+how = ["Right-click one of the two selected terminals", "Click **Connect terminals** in the menu"]
+how_nl = ["Klik met rechts op een van de twee geselecteerde klemmen", "Klik in het menu op **Connect terminals**"]
+point = { area = { page = "Pump and valve feeder", x = 140, y = 110, w = 8, h = 12 } }
 expect = { command = "terminal.connect" }
 solve = [ { command = "terminal.connect" } ]
-# verified: context-menu row "Connect terminals" appears with 2+ terminals selected
-#   (crates/novo-editor/src/view.rs:1744) and runs terminal.connect -> terminals.rs:357
-#   `connect_terminals` (same jumper group J1, terminals redrawn with the bridged symbol).
-# GAP/BUG: `terminal.connect` (and terminal.disconnect, terminal.strip_up/down/lowest) are missing
-#   from APP_COMMANDS (crates/novo-app/src/app/workbench.rs:181), so Ctrl+K lists them greyed
-#   "Comes later" (command_field.rs:82) although the menu and keys run them. Owner: Workflow thread
-#   / app shell. Until fixed the right-click menu is the only mouse path.
-# GAP: no check kind for "a jumper group is set"; the command event is the closest.
+# verified: right-click row "Connect terminals" appears with 2+ terminals selected
+#   (crates/novo-editor/src/view.rs context menu) and runs terminal.connect -> terminals.rs
+#   `connect_terminals` (same jumper group, terminals redrawn with the bridged symbol).
+# GAP: `terminal.connect` (and terminal.disconnect, terminal.strip_up/down/lowest) have no row
+#   in the command field (not in APP_COMMANDS, workbench.rs), so the right-click menu is the only
+#   mouse path; the lesson names it. Owner: Workflow thread / app shell.
+# GAP check: no check kind for "a jumper group is set"; the command event is the closest.
+# verified headless: step connect (right click, then a click on the painted row "Connect terminals").
 
 [[step]]
 id = "toggle-pe"
 title = "Switch a terminal to PE by hand"
 title_nl = "Zet een klem met de hand op PE"
 text = """
-Click the **PE** {tip:pe-terminal}, press {key:view.command_palette}, type **pe** and press Enter.
-Its kind in the drawer becomes feed-through: that is a manual choice.
+KoperCAD sets the kind automatically, but you may overrule it, for example for a terminal that is protective earth in your plant while its wire is not marked PE.
+Here you switch the **PE** {tip:pe-terminal} to a plain feed-through; the drawer then shows that kind.
 """
 text_nl = """
-Klik op de klem **PE**, druk op {key:view.command_palette}, typ **pe** en druk op Enter.
-De soort in de lade wordt feed-through: dat is een handmatige keuze.
+KoperCAD stelt het soort automatisch in, maar je mag het overrulen, bijvoorbeeld voor een klem die in jouw installatie beschermingsaarde is terwijl de draad niet als PE is gemarkeerd.
+Hier zet je de klem **PE** om naar een gewone doorgangsklem; de lade toont dan dat soort.
 """
-point = { area = { page = "Pump and valve feeder", x = 60, y = 110, w = 8, h = 12 } }
+how = ["Click the terminal **PE**", "Press {key:view.command_palette}, type **pe** and press Enter (or right-click it and choose **Toggle PE terminal**)"]
+how_nl = ["Klik op de klem **PE**", "Druk op {key:view.command_palette}, typ **pe** en druk op Enter (of klik met rechts en kies **Toggle PE terminal**)"]
+demo = [
+  { move = { area = { page = "Pump and valve feeder", x = 60, y = 114, w = 8, h = 12 } } },
+  { click = true },
+  { press = "view.command_palette" },
+  { type = "pe" },
+  { key = "Enter" },
+]
+point = { area = { page = "Pump and valve feeder", x = 60, y = 114, w = 8, h = 12 } }
 expect = { command = "terminal.toggle_pe" }
 solve = [ { select = "-X1:PE" }, { command = "terminal.toggle_pe" } ]
-# verified: `terminal.toggle_pe` has verb "pe" (commands.rs:446) and no key; the app runs it
-#   (workbench.rs:226 APP_COMMANDS) -> terminals.rs:363 `toggle_pe` (earth.rs: all PE -> feed-through,
-#   else all -> PE; sets a PeOverride so the automatic rule leaves it alone). Also in the
-#   right-click menu: "Toggle PE terminal   pe" (view.rs:1717).
+# GAP solve: select by terminal designation (see select-two).
+# verified: `terminal.toggle_pe` has verb "pe" (commands.rs) and no key; the app runs it
+#   (workbench.rs APP_COMMANDS) -> terminals.rs `toggle_pe` (earth.rs: all PE -> feed-through,
+#   else all -> PE; sets a PeOverride so the automatic rule leaves it alone).
+# verified headless: step toggle-pe (click the terminal, Ctrl+K, "pe", Enter): kind becomes feed-through.
 
 [[step]]
 id = "reset-pe"
 title = "Hand it back to the automatic rule"
 title_nl = "Geef het terug aan de automatische regel"
 text = """
-Right-click the terminal and choose **Reset PE override**.
-It is PE again, because its wire carries the PE potential.
+Resetting the override lets KoperCAD decide again.
+The terminal is PE again, because its wire carries the PE potential.
 """
 text_nl = """
-Klik met rechts op de klem en kies **Reset PE override**.
-Hij is weer PE, omdat zijn draad het potentiaal PE draagt.
+Door de overschrijving te herstellen beslist KoperCAD weer zelf.
+De klem is weer PE, omdat zijn draad het potentiaal PE draagt.
 """
-point = { ui = "canvas.menu.reset_pe" }
+how = ["Right-click the terminal **PE**", "Click **Reset PE override**"]
+how_nl = ["Klik met rechts op de klem **PE**", "Klik op **Reset PE override**"]
+point = { area = { page = "Pump and valve feeder", x = 60, y = 114, w = 8, h = 12 } }
 expect = { command = "terminal.reset_pe" }
 solve = [ { command = "terminal.reset_pe" } ]
-# verified: menu row appears only for a hand-set terminal (view.rs:1722), command
-#   `terminal.reset_pe` (commands.rs:468, no key, also in Ctrl+K: workbench.rs:227) ->
-#   terminals.rs:375 `reset_pe_override` + `mark_earthed` (earth.rs).
+# verified: the menu row appears only for a hand-set terminal; command `terminal.reset_pe`
+#   (commands.rs, no key, also in the command field) -> terminals.rs `reset_pe_override`.
+# verified headless: step reset-pe (right click, click the painted row "Reset PE override").
 
 [[step]]
 id = "move-strip"
 title = "Move the PE terminal to its own strip"
 title_nl = "Verplaats de PE-klem naar een eigen strook"
 text = """
-With only the PE terminal selected press {key:terminal.strip_up}: it moves to strip **-X2**.
-{key:terminal.strip_down} moves it back; {key:terminal.strip_lowest} takes the lowest free number.
+Earth terminals usually sit on a strip of their own so they can be told apart in the cabinet.
+The PE terminal moves to a new strip **-X2** and keeps its name; the Down arrow moves it back.
 """
 text_nl = """
-Druk met alleen de PE-klem geselecteerd op {key:terminal.strip_up}: hij gaat naar strook **-X2**.
-{key:terminal.strip_down} zet hem terug; {key:terminal.strip_lowest} neemt het laagste vrije nummer.
+Aardklemmen staan meestal op een eigen strook, zodat je ze in de kast uit elkaar houdt.
+De PE-klem gaat naar een nieuwe strook **-X2** en houdt zijn naam; met de pijl omlaag zet je hem terug.
 """
-point = { area = { page = "Pump and valve feeder", x = 60, y = 110, w = 8, h = 12 } }
-expect = { device = { tag = "-X2" } }
+how = ["Click the terminal **PE** so that only it is selected", "Press {key:terminal.strip_up}; {key:terminal.strip_down} moves it back"]
+how_nl = ["Klik op de klem **PE** zodat alleen die geselecteerd is", "Druk op {key:terminal.strip_up}; {key:terminal.strip_down} zet hem terug"]
+demo = [
+  { move = { area = { page = "Pump and valve feeder", x = 60, y = 114, w = 8, h = 12 } } },
+  { click = true },
+  { press = "terminal.strip_up" },
+]
+point = { area = { page = "Pump and valve feeder", x = 60, y = 114, w = 8, h = 12 } }
+expect = { terminal = { strip = "-X2", name = "PE" } }
 solve = [ { select = "-X1:PE" }, { command = "terminal.strip_up" } ]
-# verified: Up/Down/Ctrl+Up bound to terminal.strip_up/down/lowest (keymap.rs:365-367), plain
-#   arrows are left to the strip keys (editor nudges use Shift+arrows: view.rs:1314); handler
-#   terminals.rs:385 -> move-strip engine novo-terminals/src/move_strip.rs `move_to_strip`: a
-#   strip +CAB-X2 is created, the old strip stays while terminals remain on it. The arrows act
-#   only when nothing but terminals is selected (terminals.rs:349).
-# GAP: no engine/UI check kind for "terminal -X2:PE exists" (a strip device -X2 is the closest).
+# GAP solve: select by terminal designation (see select-two).
+# verified: Up/Down/Ctrl+Up bound to terminal.strip_up/down/lowest (keymap.rs); handler
+#   terminals.rs -> novo-terminals/src/move_strip.rs `move_to_strip`: a strip +CAB-X2 is created
+#   and the old one stays while terminals remain on it. The arrows act only when nothing but
+#   terminals is selected.
+# verified headless: step move-strip (click the PE terminal, press Up).
 
 [[step]]
 id = "done"
@@ -262,16 +317,17 @@ title = "Terminals done"
 title_nl = "Klemmen klaar"
 text = """
 Numbers are the lowest free one, PE and N wires get PE and N, and every edit is one undo step.
-Next: how a strip is printed as a connection screen.
+Compare with the finished result: strip -X1 lists terminals 1 to 7 with 5 and 7 bridged, and strip -X2 holds the PE terminal.
+Next lesson: how a strip is printed as a connection screen.
 """
 text_nl = """
 Nummers zijn het laagste vrije nummer, PE- en N-draden krijgen PE en N, en elke wijziging is één stap ongedaan maken.
+Vergelijk met het eindresultaat: strook -X1 toont klem 1 tot 7 met 5 en 7 gebrugd, en strook -X2 bevat de PE-klem.
 Volgende les: hoe een strook als klemmenplan wordt afgedrukt.
 """
 pause = true
 # Same-name rule (novo-terminals rules.rs, project rule `rules.terminals.same_name`, Join in new
 # projects): two drawings of one terminal name on a strip are ONE terminal. GAP: the editor has no
-# way to apply it (rename refuses a taken name: novo-editor edit.rs:333 "already used on this
-# strip"; `place_named` is only called by scripts), and the rule sentence (strings.rs
-# `rule_sentence`) is not shown anywhere. Therefore the lesson does not teach it; see glossary
+# way to apply it (rename refuses a taken name: novo-editor edit.rs "already used on this
+# strip"; `place_named` is only called by scripts), so the lesson does not teach it; see glossary
 # term `same-name-rule`.

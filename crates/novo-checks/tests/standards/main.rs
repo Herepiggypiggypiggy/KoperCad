@@ -1,8 +1,10 @@
 //! Standards compliance rule sets (IEC 60204-1, NFPA 79, UL 508A): the golden
 //! machine meets every rule, and each test breaks one thing.
 
+mod document;
 mod golden;
 mod iec;
+mod iec_ampacity;
 mod nfpa;
 mod report;
 mod sccr;

@@ -9,12 +9,21 @@
 //! Where the user finds it: Cabinet view, Heat layer, "Simulate"
 //! (`cabinet.thermal.simulate`). The app side is lane CFD-F.
 
+pub mod accuracy;
+pub mod cabinet;
 pub mod flow;
+pub mod mesh;
+pub mod openings;
+pub mod rad;
 pub mod result;
 pub mod sched;
+pub mod solids;
 pub mod solver;
 mod stub;
+pub mod turb;
 
+pub use cabinet::CabinetSolver;
 pub use result::*;
+pub use solids::SolidProps;
 pub use solver::{CfdError, Control, Solver};
 pub use stub::StubSolver;

@@ -1,7 +1,7 @@
 format = 1
 id = "connection-screens"
-version = 1
-status = "draft"   # GAP: anchors and one check kind are missing, see NOTES.md
+version = 2
+status = "early"   # GAP: anchors and one check kind are missing, see NOTES.md
 title = "Terminal connection screens"
 title_nl = "Klemmenplannen"
 summary = "Open the generated terminal diagram of a finished strip, read it, then change a cable and a terminal number and watch the page follow."
@@ -9,17 +9,20 @@ summary_nl = "Open het gegenereerde klemmenplan van een afgewerkte strook, lees 
 track = "terminals"
 order = 20
 level = "beginner"
-minutes = 8
+minutes = 9
 topics = ["terminals", "generated-pages"]
 needs = ["terminal-strips"]
 next = ["interruption-points"]
 project = "project.json"
+finished = "finished.json"
 page = "Pump and valve feeder"
 
 # Start project: terminals.rs `connection_screens_start`: the strip +CAB-X1 with eight terminals
 # (wires numbered 101.. inside, 201.. outside), terminals 5 and 7 bridged, the pump cable -W1 on
 # the four pump wires, the valve cables still proposals, and the generated pages (contents,
 # lists, "Terminal diagram", "Cable diagram"). Finished: `connection_screens_finished`.
+# Every step is replayed through the real window by crates/novo-app/src/app/lesson_verify_terminals.rs
+# `connection_screens_steps_work_in_the_window`.
 
 [[step]]
 id = "goal"
@@ -27,11 +30,11 @@ title = "What you will have"
 title_nl = "Wat je straks hebt"
 text = """
 You will read a terminal connection screen and see it change by itself when a cable or a terminal number changes.
-It is a page KoperCAD draws for you; nothing on it is typed.
+It is a page KoperCAD draws for you; nothing on it is typed, so it can never disagree with the drawing and nobody has to redraw it.
 """
 text_nl = """
 Je leest een klemmenplan en ziet dat het vanzelf verandert als een kabel of een klemnummer verandert.
-Het is een pagina die KoperCAD voor je tekent; er is niets op getypt.
+Het is een pagina die KoperCAD voor je tekent; er is niets op getypt, dus hij spreekt de tekening nooit tegen en niemand hoeft hem opnieuw te tekenen.
 """
 pause = true
 point = { area = { page = "Pump and valve feeder", x = 36, y = 100, w = 120, h = 28 } }
@@ -42,36 +45,36 @@ id = "open-diagram"
 title = "Open the terminal diagram"
 title_nl = "Open het klemmenplan"
 text = """
-Open **Pages** at the top left and pick **Terminal diagram · +CAB-X1**, a {tip:generated-page}.
-The outline has no key of its own; {key:view.pin_outline} keeps it open.
+The page list lists every page, including the {tip:generated-page}s; if you only see a **Pages** button at the top left, click it first.
+Open the row **40  Terminal diagram · +CAB-X1**: KoperCAD drew the connection screen of strip -X1 itself.
 """
 text_nl = """
-Open **Pages** linksboven en kies **Terminal diagram · +CAB-X1**.
-De outline heeft geen eigen toets; {key:view.pin_outline} houdt hem open.
+De paginalijst toont alle pagina's, ook de {tip:generated-page}s; zie je alleen een knop **Pages** linksboven, klik daar dan eerst op.
+Open de rij **40  Terminal diagram · +CAB-X1**: KoperCAD tekende het klemmenplan van strook -X1 zelf.
 """
-point = { ui = "outline.pages" }
+how = ["If the page list is not on the left, click **Pages** at the top left", "Click the row **40  Terminal diagram · +CAB-X1**"]
+how_nl = ["Staat de paginalijst niet links, klik dan linksboven op **Pages**", "Klik op de rij **40  Terminal diagram · +CAB-X1**"]
 expect = { page = "Terminal diagram" }
 solve = [ { page = "Terminal diagram" } ]
-# verified: the outline is the "Pages" button (flyout, crates/novo-app/src/app.rs:1535) or the
-#   pinned panel (app.rs:999 `outline`, mode tabs Pages/Issues/Changes at app.rs:1007);
-#   `view.pin_outline` (commands.rs:614, Action::PinOutline) has no default key. Rows are built
-#   by crates/novo-app/src/backend.rs:700 `page_rows`: "40  Terminal diagram · +CAB-X1"
-#   (sheet name, report title, strip tag). The page title is "Terminal diagram"
-#   (crates/novo-reports/src/diagrams.rs:38, report id `terminals`).
-# verified: PageUp/PageDown walk the page order, which here has three lists in between
-#   (0 contents, 1, 10 bill of materials, 20, 30, 40), so the outline is the shorter way.
+# verified: the outline is the "Pages" button (flyout) or the pinned panel; rows are built by
+#   crates/novo-app/src/backend.rs `page_rows`: "40  Terminal diagram · +CAB-X1" (sheet name,
+#   report title, strip tag). The page title is "Terminal diagram" (novo-reports diagrams.rs).
+# verified headless: step open-diagram clicks the painted "Pages" button, then the painted row.
+# GAP anchor: no anchor for the outline button or its rows, so there is no pointer.
 
 [[step]]
 id = "read-diagram"
 title = "Read the screen"
 title_nl = "Lees het plan"
 text = """
-Each row is one terminal block. Left of it the cabinet side with its wire number, right of it the field side.
+Each row is one terminal block. Left of it the cabinet side with the device pin and its wire number, right of it the field side with the cable and core.
 The thick bar beside **5** and **7** is the jumper.
+You can check what lands where without opening a single schematic page.
 """
 text_nl = """
-Elke rij is één klemmenblok. Links de kastzijde met het draadnummer, rechts de veldzijde.
+Elke rij is één klemmenblok. Links de kastzijde met het aansluitpunt en het draadnummer, rechts de veldzijde met kabel en ader.
 De dikke streep naast **5** en **7** is de brug.
+Zo controleer je wat waar aankomt zonder één schema te openen.
 """
 pause = true
 point = { area = { page = "Terminal diagram", x = 14, y = 26, w = 392, h = 60 } }
@@ -81,143 +84,182 @@ note = [
   { area = { page = "Terminal diagram", x = 319, y = 26, w = 54, h = 60 }, text = "Cable and core. Empty where there is no cable yet", text_nl = "Kabel en ader. Leeg waar nog geen kabel is" },
 ]
 # verified: the sheet is drawn by crates/novo-reports/src/strip_diagram.rs `strip_sheet`: title
-#   "Terminal strip · +CAB-X1" and "page 1 / 1" (strip_diagram.rs:116), column heads Internal,
-#   Wire, Terminal, Wire, External, Cable, Page (strip_diagram.rs:164-190), one block per row
-#   (spare rows read "(spare)"), a jumper bar per group left of the blocks (strip_diagram.rs:248).
-#   It reads the same `novo_terminals::screen` rows as the Terminals drawer, so the two never
-#   disagree. The canvas shows it through crates/novo-app/src/app/reports.rs:63 `content`.
-# Coordinates: A3 landscape, x0 = 15 mm, columns at 16 / 101.8 / 129 / 207 / 234 / 320 / 375 mm,
-#   rows 6 mm high from y = 37 (these numbers come from the layout the tests print).
+#   "Terminal strip · +CAB-X1", column heads Internal, Wire, Terminal, Wire, External, Cable, Page,
+#   one block per row (spare rows read "(spare)"), a jumper bar per group left of the blocks. It
+#   reads the same `novo_terminals::screen` rows as the Terminals drawer. The canvas shows it
+#   through crates/novo-app/src/app/reports.rs `content`.
+# Coordinates: A3 landscape, columns at 16 / 101.8 / 129 / 207 / 234 / 320 / 375 mm, rows 6 mm high
+#   from y = 37.
+# verified headless: step read-diagram asserts the column heads and the sheet texts inside each
+#   note area (`SheetContent`, the canvas itself cannot paint without a graphics adapter).
 
 [[step]]
 id = "open-cables"
 title = "Open the Cables drawer"
 title_nl = "Open de lade Kabels"
 text = """
-{key:view.cables_drawer} opens the {ui:drawer.cables.tab} drawer under the sheet.
-The diagram stays on screen above it.
+The Cables drawer sits under the sheet, so the diagram stays on screen while you change cables.
 """
 text_nl = """
-{key:view.cables_drawer} opent de lade {ui:drawer.cables.tab} onder het blad.
-Het plan blijft er boven in beeld.
+De lade Kabels staat onder het blad, zodat het plan in beeld blijft terwijl je kabels wijzigt.
 """
-point = { ui = "drawer.cables.tab" }
-expect = { opened = "drawer.cables" }
+how = ["Press {key:view.cables_drawer}, or click the **Cables** tab at the bottom of the window"]
+how_nl = ["Druk op {key:view.cables_drawer}, of klik onderin op het tabblad **Cables**"]
+demo = [
+  { press = "view.cables_drawer" },
+]
+expect = { command = "view.cables_drawer" }
 solve = [ { command = "view.cables_drawer" } ]
-# verified: Ctrl+4 (keymap.rs:392) -> workbench.rs:513 `toggle_drawer(Drawer::Cables)`; tab label
-#   "Cables" (drawers.rs:62). The drawer belongs to the window, not to a page, so it shows over
-#   a generated page too (drawers.rs:36 `drawer`).
+# verified: Ctrl+4 (keymap.rs) -> workbench.rs `toggle_drawer(Drawer::Cables)`; tab label "Cables"
+#   (drawers.rs). The drawer belongs to the window, so it shows over a generated page too.
+# GAP anchor: drawer tabs have no anchor id, so there is no pointer and no `opened` check.
+# verified headless: step open-cables (Ctrl+4).
 
 [[step]]
 id = "accept-cables"
 title = "Accept the proposed valve cables"
 title_nl = "Neem de voorgestelde ventielkabels over"
 text = """
-The wires to the two valves are proposed as cables. Click **Accept 2 proposed**.
+The wires to the two valves are proposed as cables, one per valve.
+Accepting them gives each wire a cable and a core, which the diagram prints.
 """
 text_nl = """
-De draden naar de twee ventielen worden als kabels voorgesteld. Klik op **Accept 2 proposed**.
+De draden naar de twee ventielen worden als kabels voorgesteld, één per ventiel.
+Als je ze overneemt, krijgt elke draad een kabel en een ader, en die drukt het plan af.
 """
-point = { ui = "drawer.cables.accept" }
+how = ["In the Cables drawer click **Accept 2 proposed** (top right of the drawer)"]
+how_nl = ["Klik in de lade Cables op **Accept 2 proposed** (rechtsboven in de lade)"]
 expect = { cable = { name = "-W2", cores_at_least = 2 } }
-solve = [ { command = "cables.accept_proposed" } ]
-# verified: the button is "Accept {n} proposed" on the Cables tab (drawers.rs:76), handler
-#   drawers.rs:153 `accept_cable_proposals` -> novo_cables::accept_proposals (one undo step);
-#   toast "Accepted 2 cables". The pump cable -W1 is already in the project, so the proposals are
-#   X1 -> -Y1 (-W2) and X1 -> -Y2 (-W3) (novo-cables propose.rs:263 `propose_cables`).
-# GAP: no command id for the button; `solve` therefore uses an invented `cables.accept_proposed`.
-#   Needs a real command (Workflow thread: "accept cables") or a solve operation `{ cable = ... }`
-#   that does exactly this.
+# GAP solve: the drawer button "Accept 2 proposed" has no command id and no solve op of its
+#   own; the `cable` ops below build the same two cables through the engine.
+solve = [
+  { cable = { name = "-W2", wires = [["-X1:4", "-Y1:A1"], ["-X1:5", "-Y1:A2"]] } },
+  { cable = { name = "-W3", wires = [["-X1:6", "-Y2:A1"], ["-X1:7", "-Y2:A2"]] } },
+]
+# verified: the button is "Accept {n} proposed" on the Cables tab (drawers.rs), handler
+#   `accept_cable_proposals` -> novo_cables::accept_proposals (one undo step); toast "Accepted 2
+#   cables". The pump cable -W1 is already in the project, so the proposals are -X1 to -Y1 (-W2)
+#   and -X1 to -Y2 (-W3) (novo-cables propose.rs `propose_cables`).
+# verified headless: step accept-cables clicks the painted button.
 
 [[step]]
 id = "see-follow"
 title = "The diagram followed"
 title_nl = "Het plan is meegekomen"
 text = """
-The Cable column now names -W2 and -W3 on the valve rows. Nothing was refreshed or exported.
-Press {key:view.fit} if the sheet is hidden behind the drawer.
+The Cable column of the diagram now names -W2 and -W3 on the valve rows.
+Nothing was refreshed or exported: a generated page is rebuilt from the drawing whenever something it shows changes.
 """
 text_nl = """
-De kolom Cable noemt nu -W2 en -W3 bij de ventielrijen. Er is niets ververst of geëxporteerd.
-Druk op {key:view.fit} als het blad achter de lade verdwijnt.
+De kolom Cable van het plan noemt nu -W2 en -W3 bij de ventielrijen.
+Er is niets ververst of geëxporteerd: een gegenereerde pagina wordt opnieuw opgebouwd zodra iets wat hij toont verandert.
 """
 pause = true
 point = { area = { page = "Terminal diagram", x = 319, y = 59, w = 54, h = 28 } }
 # verified: generated pages are live. `LiveReports::notify_since` regenerates only the reports
-#   whose dependencies changed (novo-reports sheets.rs / reports.rs:45 `live`; report.rs:247 `notify_since`); the app hands the
-#   change sets over in app/reports.rs:40 `heard`. Cables are a dependency of the terminal
-#   diagram (diagrams.rs:15 `model_dependencies`). view.fit = Home (keymap.rs:388).
+#   whose dependencies changed (novo-reports); the app hands the change sets over in
+#   app/reports.rs `heard`. Cables are a dependency of the terminal diagram (diagrams.rs).
+# verified headless: step see-follow reads the sheet texts and finds -W2 and -W3 under the Cable head.
 
 [[step]]
 id = "open-terminals"
 title = "Open the Terminals drawer"
 title_nl = "Open de lade Klemmen"
 text = """
-{key:view.terminals_drawer} switches the drawer to the {ui:drawer.terminals.tab} tab: the same rows as the sheet, as a table.
+The Terminals drawer shows the same rows as the sheet, as a table you can click.
 """
 text_nl = """
-{key:view.terminals_drawer} schakelt de lade om naar het tabblad {ui:drawer.terminals.tab}: dezelfde rijen als het blad, als tabel.
+De lade Klemmen toont dezelfde rijen als het blad, als tabel waarin je kunt klikken.
 """
-point = { ui = "drawer.terminals.tab" }
-expect = { opened = "drawer.terminals" }
+how = ["Press {key:view.terminals_drawer}, or click the **Terminals** tab at the bottom of the window"]
+how_nl = ["Druk op {key:view.terminals_drawer}, of klik onderin op het tabblad **Terminals**"]
+demo = [
+  { press = "view.terminals_drawer" },
+]
+expect = { command = "view.terminals_drawer" }
 solve = [ { command = "view.terminals_drawer" } ]
-# verified: toggle_drawer sets the tab when another one is open (terminals.rs:149 `toggle_drawer`);
-#   the strip shown is the only one, +CAB-X1 (terminals.rs `drawer_strip`).
+# verified: toggle_drawer sets the tab when another one is open; the strip shown is the only one,
+#   +CAB-X1 (terminals.rs `drawer_strip`).
+# verified headless: step open-terminals (Ctrl+3 while the Cables tab is open).
 
 [[step]]
 id = "show-terminal"
 title = "Go to terminal 4 on the drawing"
 title_nl = "Ga naar klem 4 op de tekening"
 text = """
-Click the name **4** in the first column. The drawing opens with that terminal selected.
+Clicking a terminal's name in the table takes you to it on the schematic, selected, so you can change it there.
 """
 text_nl = """
-Klik op de naam **4** in de eerste kolom. De tekening opent met die klem geselecteerd.
+Een klik op de naam van een klem in de tabel brengt je naar die klem op het schema, geselecteerd, zodat je hem daar kunt aanpassen.
 """
-point = { ui = "drawer.terminals.row.4" }
+how = ["In the Terminals drawer click the number **4** in the first column (**Terminal**)"]
+how_nl = ["Klik in de lade Terminals op het nummer **4** in de eerste kolom (**Terminal**)"]
+point = { area = { page = "Terminal diagram", x = 156, y = 38, w = 22, h = 8 } }
 expect = { page = "Pump and valve feeder" }
 solve = [ { page = "Pump and valve feeder" } ]
-# verified: terminals.rs:226 `selectable_label(on, &row.name)` with hover "Show on the drawing"
-#   -> DrawerAction::Go (drawers.rs:94, handled at drawers.rs:117) -> workbench.rs:703 `jump(place, true)`: shows the page,
-#   selects and centres the symbol (workbench.rs:713 `after_canvas_frame`) and records the
-#   jump in the history, so Alt+Left returns to the diagram.
+# verified: terminals.rs `strip_table`: the name cell is a selectable label with hover "Show on
+#   the drawing" -> DrawerAction::Go (drawers.rs) -> workbench.rs `jump(place, true)`: shows the
+#   page, selects and centres the symbol and records the jump in the history, so Alt+Left
+#   returns to the diagram.
+# verified headless: step show-terminal clicks the painted cell "4" in the Terminal column.
 
 [[step]]
 id = "rename"
 title = "Give it another number"
 title_nl = "Geef hem een ander nummer"
 text = """
-Double-click the number **4** beside the terminal, type **11** and press Enter.
+Terminal 4 becomes 11.
+Double-click the number beside the terminal on the drawing.
+The box that opens holds the old number; select it all with Ctrl+A, so that what you type replaces it instead of being added to it.
 """
 text_nl = """
-Dubbelklik op het nummer **4** naast de klem, typ **11** en druk op Enter.
+Klem 4 wordt 11.
+Dubbelklik op het nummer naast de klem op de tekening.
+Het vak dat opent bevat het oude nummer; selecteer alles met Ctrl+A, zodat wat je typt het vervangt in plaats van erbij komt.
 """
-point = { area = { page = "Pump and valve feeder", x = 102, y = 100, w = 10, h = 8 } }
+how = ["On the drawing, double-click the number **4** just left of the selected terminal", "Press Ctrl+A to select the old number in the box", "Type **11**", "Press Enter"]
+how_nl = ["Dubbelklik op de tekening op het nummer **4** links van de geselecteerde klem", "Druk op Ctrl+A om het oude nummer in het vak te selecteren", "Typ **11**", "Druk op Enter"]
+demo = [
+  { move = { area = { page = "Pump and valve feeder", x = 104, y = 100, w = 8, h = 8 } } },
+  { double_click = true },
+  { keys = ["Ctrl", "A"] },
+  { type = "11" },
+  { key = "Enter" },
+]
+point = { area = { page = "Pump and valve feeder", x = 104, y = 100, w = 8, h = 8 } }
 expect = { terminal = { strip = "-X1", name = "11" } }
-# GAP: solve `rename = { terminal = "-X1:4", to = "11" }` is agreed with the learning thread, not in the engine yet.
-# verified: double click on a terminal name opens the rename box (crates/novo-editor/src/view.rs:
-#   966 `LabelKind::TerminalName`); the edit is `rename_label` (edit.rs:310), which refuses a
-#   name already on the strip. F2 does NOT rename a terminal (view.rs F2 handler looks for a
-#   device only), so the text names the double-click.
-# GAP: no check kind for a terminal ({ terminal = { strip, name } }) and no solve operation
-#   `rename`. The app's state-check set has nothing that sees a terminal name.
+solve = [ { rename = { target = "-X1:4", to = "11" } } ]
+# verified: double click on a terminal name opens the rename box (crates/novo-editor/src/view.rs
+#   `LabelKind::TerminalName`); the edit is `rename_label` (edit.rs), which refuses a name already
+#   on the strip. F2 STILL does not rename a terminal (the F2 handler looks for a device only), so
+#   the text names the double-click.
+# verified headless: step rename (real double click at the label, typed text, Enter).
 
 [[step]]
 id = "back-to-diagram"
 title = "Back to the diagram"
 title_nl = "Terug naar het plan"
 text = """
-{key:nav.back} jumps back to where you came from: the terminal diagram. Row **11** is there, in the same place.
+Jump back to where you came from: the terminal diagram.
+Its row for the terminal now reads **11**, in the same place, and the wire numbers beside it did not move.
 """
 text_nl = """
-{key:nav.back} springt terug naar waar je vandaan kwam: het klemmenplan. Rij **11** staat er, op dezelfde plek.
+Spring terug naar waar je vandaan kwam: het klemmenplan.
+De rij van de klem toont nu **11**, op dezelfde plek, en de draadnummers ernaast zijn niet verschoven.
 """
-point = { area = { page = "Terminal diagram", x = 156, y = 60, w = 22, h = 8 } }
+how = ["Press {key:nav.back}"]
+how_nl = ["Druk op {key:nav.back}"]
+demo = [
+  { press = "nav.back" },
+]
+# No `point`: a target on the diagram page would switch the view there when the step opens,
+# and the step would tick before the person pressed anything (found by the headless replay).
 expect = { page = "Terminal diagram" }
 solve = [ { command = "nav.back" } ]
-# verified: Alt+Left = nav.back (keymap.rs:382); the drawer jump recorded the diagram page in
-#   the history (workbench.rs:703); handler xref.rs:116 `go_history`. The row keeps its place
-#   because strip order is stored on the terminal, not derived from the name.
+# verified: Alt+Left = nav.back (keymap.rs); the drawer jump recorded the diagram page in the
+#   history (workbench.rs `jump`); handler xref.rs `go_history`. The row keeps its place because
+#   strip order is stored on the terminal, not derived from the name.
+# verified headless: step back-to-diagram (Alt+Left); the sheet text "11" sits where "4" was.
 
 [[step]]
 id = "done"
@@ -225,10 +267,12 @@ title = "One source, many views"
 title_nl = "Eén bron, vele weergaven"
 text = """
 The sheet, the drawer and the PDF all read the same strip, so they cannot disagree.
-Next: signals that continue on another page.
+Compare with the finished result: the diagram lists terminals 1 to 3, PE, 11 and 5 to 7, with -W2 and -W3 in the Cable column.
+Next lesson: signals that continue on another page.
 """
 text_nl = """
 Het blad, de lade en de pdf lezen dezelfde strook, dus ze kunnen elkaar niet tegenspreken.
+Vergelijk met het eindresultaat: het plan toont klem 1 tot 3, PE, 11 en 5 tot 7, met -W2 en -W3 in de kolom Cable.
 Volgende les: signalen die op een andere pagina doorlopen.
 """
 pause = true

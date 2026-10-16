@@ -1,0 +1,917 @@
+# EPLAN function and symbol meaning <-> KoperCAD symbol, written by hand for KoperCAD.
+#
+# Nothing here is copied from EPLAN's symbol library, macros or data: a row says
+# "a device that an EPLAN user calls one of `names`, tags with one of `letters`
+# and pins like this, is this KoperCAD symbol". Names are plain device words in
+# English, Dutch and German; letters are the IEC 81346-2 class letters (the first
+# one is the usual choice); pin designations follow EN 50005 / IEC 61666 and are
+# the same on both sides, with `pins` naming an alias set for common variants.
+# Symbols are listed pack-less (`contacts/no`) and resolve in the IEC or NFPA pack.
+#
+# Order matters: when several rows match equally well the earlier one wins, so
+# the common device comes before its variants.
+
+[pinset.poles]          # main-circuit pole notation L1/T1 ... on a 1..6 or 1..8 device
+L1 = "1"
+T1 = "2"
+L2 = "3"
+T2 = "4"
+L3 = "5"
+T3 = "6"
+L4 = "7"
+T4 = "8"
+
+[pinset.poles_n]        # the same, with N as pole 4 on a 1..8 device
+L1 = "1"
+T1 = "2"
+L2 = "3"
+T2 = "4"
+L3 = "5"
+T3 = "6"
+N = "7"
+"N'" = "8"
+
+[pinset.motor]
+U = "U1"
+V = "V1"
+W = "W1"
+"1U1" = "U1"
+"1V1" = "V1"
+"1W1" = "W1"
+U2 = "U2"
+V2 = "V2"
+W2 = "W2"
+PE2 = "PE"
+
+[pinset.sensor3]        # three-wire proximity sensor, by terminal or by wire colour
+"L+" = "1"
+M = "3"
+Q = "4"
+BN = "1"
+BU = "3"
+BK = "4"
+"-" = "3"
+"+" = "1"
+
+[pinset.diode]
+"+" = "A"
+"-" = "K"
+ANODE = "A"
+CATHODE = "K"
+"1" = "A"
+"2" = "K"
+
+[pinset.lamp]
+"1" = "X1"
+"2" = "X2"
+"+" = "X1"
+"-" = "X2"
+H1 = "X1"
+H2 = "X2"
+
+[pinset.coil]
+"1" = "A1"
+"2" = "A2"
+"+" = "A1"
+"-" = "A2"
+
+[pinset.dc]
+"L+" = "+"
+M = "-"
+"24V" = "+"
+"0V" = "-"
+"1" = "+"
+"2" = "-"
+
+[pinset.supply]
+"+" = "L+"
+"-" = "M"
+"24V" = "L+"
+"0V" = "M"
+
+# ---------------------------------------------------------------- coils
+[[entry]]
+symbol = "coils/relay"
+letters = ["K"]
+names = ["relay coil", "relay", "coil", "auxiliary relay", "relais spoel", "relaisspoel", "relais", "spoel", "hulprelais", "relaisspule", "spule", "hilfsrelais"]
+pins = "coil"
+[[entry]]
+symbol = "coils/contactor"
+letters = ["K", "Q"]
+names = ["contactor coil", "coil contactor", "contactor", "power contactor", "contactorspoel", "spoel contactor", "vermogenscontactor", "schuetzspule", "schuetz spule", "schutzspule", "schuetz", "leistungsschuetz"]
+pins = "coil"
+[[entry]]
+symbol = "coils/brake"
+letters = ["Y"]
+names = ["brake coil", "brake magnet", "brake", "remspoel", "rem", "bremsmagnet", "bremsspule", "bremse"]
+pins = "coil"
+[[entry]]
+symbol = "coils/solenoid"
+letters = ["Y"]
+names = ["solenoid", "electromagnet", "actuator coil", "magneetspoel", "magneet", "elektromagneet", "hubmagnet", "magnetspule"]
+pins = "coil"
+[[entry]]
+symbol = "coils/solenoid_valve"
+letters = ["Y"]
+names = ["solenoid valve", "valve coil", "valve", "magneetventiel", "ventiel", "ventielspoel", "magnetventil", "ventil", "ventilspule"]
+pins = "coil"
+[[entry]]
+symbol = "coils/timer_on_delay"
+letters = ["K"]
+names = ["on delay timer", "on-delay timer", "timer on delay", "time relay on delay", "timer", "time relay", "aanvertraagd relais", "tijdrelais", "aanspreekvertraagd", "anzugsverzoegert", "zeitrelais", "zeitrelais anzugsverzoegert"]
+pins = "coil"
+[[entry]]
+symbol = "coils/timer_off_delay"
+letters = ["K"]
+names = ["off delay timer", "off-delay timer", "timer off delay", "time relay off delay", "afvalvertraagd relais", "afvalvertraagd", "abfallverzoegert", "zeitrelais abfallverzoegert"]
+pins = "coil"
+
+# ---------------------------------------------------------------- connectivity
+[[entry]]
+symbol = "connectivity/bridge_2"
+letters = []
+names = ["bridge 2", "jumper 2", "potential bridge 2", "brug 2", "doorverbinding 2", "bruecke 2"]
+[[entry]]
+symbol = "connectivity/bridge_3"
+letters = []
+names = ["bridge 3", "jumper 3", "potential bridge 3", "brug 3", "doorverbinding 3", "bruecke 3"]
+[[entry]]
+symbol = "connectivity/bridge_4"
+letters = []
+names = ["bridge 4", "jumper 4", "potential bridge 4", "brug 4", "doorverbinding 4", "bruecke 4"]
+[[entry]]
+symbol = "connectivity/interruption_point"
+letters = []
+names = ["interruption point", "interruption point inward", "interruption point outward", "page connector", "off page connector", "onderbrekingspunt", "verwijzing", "unterbrechungsstelle", "querverweis stelle"]
+[[entry]]
+symbol = "connectivity/potential_feed"
+letters = []
+names = ["potential feed", "potential connection point", "potential marker", "potential source", "potentiaal", "potentiaalaansluiting", "potentialeinspeisung", "potentialanschluss"]
+
+[[entry]]
+symbol = "connectivity/potential_feed_pe"
+letters = []
+names = ["pe potential feed", "protective earth potential feed", "pe feed", "pe potential", "pe potentiaal", "pe aansluiting", "pe potentialeinspeisung", "pe einspeisung", "schutzleiter potential"]
+
+# ---------------------------------------------------------------- main contacts
+[[entry]]
+symbol = "contactors/main_3p"
+letters = ["K", "Q"]
+names = ["main contact", "power contact", "main contacts", "contactor main contacts", "contactor power contacts", "hoofdcontact", "hoofdcontacten", "vermogenscontact", "hauptkontakt", "hauptkontakte", "leistungskontakt"]
+pins = "poles"
+[[entry]]
+symbol = "contactors/main_1p"
+letters = ["K", "Q"]
+names = ["main contact", "power contact", "main contact 1 pole", "hoofdcontact", "hauptkontakt"]
+pins = "poles"
+[[entry]]
+symbol = "contactors/main_2p"
+letters = ["K", "Q"]
+names = ["main contact", "power contact", "main contact 2 pole", "hoofdcontact", "hauptkontakt"]
+pins = "poles"
+[[entry]]
+symbol = "contactors/main_4p"
+letters = ["K", "Q"]
+names = ["main contact", "power contact", "main contact 4 pole", "hoofdcontact", "hauptkontakt"]
+pins = "poles_n"
+
+# ---------------------------------------------------------------- auxiliary contacts
+[[entry]]
+symbol = "contacts/no"
+letters = ["K", "S"]
+names = ["normally open contact", "normally open", "n/o contact", "no contact", "make contact", "contact no", "maakcontact", "sluitcontact", "hulpcontact maak", "schliesser", "schliesserkontakt", "hilfskontakt schliesser"]
+[[entry]]
+symbol = "contacts/nc"
+letters = ["K", "S"]
+names = ["normally closed contact", "normally closed", "n/c contact", "nc contact", "break contact", "contact nc", "verbreekcontact", "hulpcontact verbreek", "oeffner", "oeffnerkontakt", "hilfskontakt oeffner"]
+[[entry]]
+symbol = "contacts/changeover"
+letters = ["K", "S"]
+names = ["changeover contact", "change-over contact", "changeover", "co contact", "wisselcontact", "wechsler", "wechslerkontakt"]
+[[entry]]
+symbol = "contacts/no_delay_on"
+letters = ["K"]
+names = ["normally open contact on delay", "no contact on delay", "make contact on delay", "timer contact no on delay", "maakcontact aanvertraagd", "schliesser anzugsverzoegert"]
+[[entry]]
+symbol = "contacts/no_delay_off"
+letters = ["K"]
+names = ["normally open contact off delay", "no contact off delay", "make contact off delay", "timer contact no off delay", "maakcontact afvalvertraagd", "schliesser abfallverzoegert"]
+[[entry]]
+symbol = "contacts/nc_delay_on"
+letters = ["K"]
+names = ["normally closed contact on delay", "nc contact on delay", "break contact on delay", "timer contact nc on delay", "verbreekcontact aanvertraagd", "oeffner anzugsverzoegert"]
+[[entry]]
+symbol = "contacts/nc_delay_off"
+letters = ["K"]
+names = ["normally closed contact off delay", "nc contact off delay", "break contact off delay", "timer contact nc off delay", "verbreekcontact afvalvertraagd", "oeffner abfallverzoegert"]
+[[entry]]
+symbol = "contacts/position_no"
+letters = ["S", "B"]
+names = ["position switch normally open", "limit switch normally open", "limit switch no", "position switch no", "eindschakelaar maak", "positieschakelaar maak", "endschalter schliesser", "positionsschalter schliesser"]
+[[entry]]
+symbol = "contacts/position_nc"
+letters = ["S", "B"]
+names = ["position switch normally closed", "limit switch normally closed", "limit switch nc", "position switch nc", "limit switch", "position switch", "eindschakelaar verbreek", "eindschakelaar", "positieschakelaar", "endschalter oeffner", "endschalter", "positionsschalter"]
+[[entry]]
+symbol = "contacts/thermal_no"
+letters = ["B", "F"]
+names = ["thermal contact normally open", "thermal switch no", "thermostat normally open", "thermisch contact maak", "thermostaat maak", "thermokontakt schliesser", "thermostat schliesser"]
+[[entry]]
+symbol = "contacts/thermal_nc"
+letters = ["B", "F"]
+names = ["thermal contact normally closed", "thermal switch nc", "thermal contact", "thermostat", "bimetal contact", "motor thermistor contact", "thermisch contact verbreek", "thermisch contact", "thermokontakt oeffner", "thermokontakt"]
+
+# ---------------------------------------------------------------- drives
+[[entry]]
+symbol = "drives/frequency_converter"
+letters = ["T", "U"]
+names = ["frequency converter", "frequency inverter", "variable frequency drive", "vfd", "inverter", "drive", "frequentieomvormer", "frequentieregelaar", "omvormer", "frequenzumrichter", "umrichter"]
+[[entry]]
+symbol = "drives/soft_starter"
+letters = ["T", "U"]
+names = ["soft starter", "softstarter", "soft start", "zachtanloop", "sanftanlauf", "sanftstarter"]
+
+# ---------------------------------------------------------------- earth
+[[entry]]
+symbol = "earth/earth"
+letters = []
+names = ["earth", "ground", "earth connection", "aarde", "aardverbinding", "erde", "erdung"]
+[[entry]]
+symbol = "earth/protective_earth"
+letters = []
+names = ["protective earth", "pe", "protective conductor", "pe conductor", "beveiligingsaarde", "veiligheidsaarde", "aardleiding", "schutzleiter", "schutzerde"]
+[[entry]]
+symbol = "earth/chassis"
+letters = []
+names = ["chassis", "frame", "chassis ground", "frame ground", "frame connection", "massa", "chassis aarde", "masse", "gehaeuse"]
+
+# ---------------------------------------------------------------- measuring
+[[entry]]
+symbol = "measuring/ammeter"
+letters = ["P"]
+names = ["ammeter", "current meter", "amperemeter", "stroommeter", "strommesser"]
+[[entry]]
+symbol = "measuring/voltmeter"
+letters = ["P"]
+names = ["voltmeter", "voltage meter", "spanningsmeter", "spannungsmesser"]
+[[entry]]
+symbol = "measuring/wattmeter"
+letters = ["P"]
+names = ["wattmeter", "power meter", "vermogensmeter", "leistungsmesser"]
+[[entry]]
+symbol = "measuring/energy_meter"
+letters = ["P"]
+names = ["energy meter", "kwh meter", "electricity meter", "elektriciteitsmeter", "kwh teller", "energiemeter", "energiezaehler", "stromzaehler"]
+[[entry]]
+symbol = "measuring/frequency_meter"
+letters = ["P"]
+names = ["frequency meter", "frequentiemeter", "frequenzmesser"]
+[[entry]]
+symbol = "measuring/power_factor_meter"
+letters = ["P"]
+names = ["power factor meter", "cos phi meter", "cosphi meter", "arbeidsfactormeter", "leistungsfaktormesser"]
+[[entry]]
+symbol = "measuring/ohmmeter"
+letters = ["P"]
+names = ["ohmmeter", "resistance meter", "weerstandsmeter", "widerstandsmesser"]
+[[entry]]
+symbol = "measuring/hour_counter"
+letters = ["P"]
+names = ["hour counter", "operating hours counter", "hour meter", "urenteller", "bedrijfsurenteller", "betriebsstundenzaehler", "stundenzaehler"]
+[[entry]]
+symbol = "measuring/flow_meter"
+letters = ["P", "B"]
+names = ["flow meter", "flow indicator", "doorstroommeter", "debietmeter", "durchflussmesser", "durchflussanzeige"]
+[[entry]]
+symbol = "measuring/pressure_gauge"
+letters = ["P"]
+names = ["pressure gauge", "pressure indicator", "manometer", "drukmeter", "druckanzeige"]
+[[entry]]
+symbol = "measuring/tachometer"
+letters = ["P", "B"]
+names = ["tachometer", "speed indicator", "rpm meter", "toerenteller", "toerenmeter", "drehzahlmesser", "tachometer anzeige"]
+[[entry]]
+symbol = "measuring/thermometer"
+letters = ["P"]
+names = ["thermometer", "temperature indicator", "temperature gauge", "temperatuurmeter", "temperatuuraanduiding", "temperaturanzeige"]
+[[entry]]
+symbol = "measuring/current_transformer"
+letters = ["T"]
+names = ["current transformer", "ct", "stroomtransformator", "stroomtrafo", "stromwandler"]
+
+# ---------------------------------------------------------------- motors
+[[entry]]
+symbol = "motors/motor_3ph"
+letters = ["M"]
+names = ["motor", "three phase motor", "3 phase motor", "ac motor", "induction motor", "asynchronous motor", "motor 3 phase", "driefasenmotor", "draaistroommotor", "asynchrone motor", "elektromotor", "drehstrommotor", "asynchronmotor", "motor 3-phasig"]
+pins = "motor"
+[[entry]]
+symbol = "motors/motor_3ph_6t"
+letters = ["M"]
+names = ["motor 6 terminals", "three phase motor 6 terminals", "motor star delta", "motor star-delta", "motor ster driehoek", "motor sterdriehoek", "motor stern dreieck", "motor sterndreieck"]
+pins = "motor"
+[[entry]]
+symbol = "motors/motor_3ph_dahlander"
+letters = ["M"]
+names = ["dahlander motor", "pole changing motor", "two speed motor", "dahlandermotor", "poolomschakelbare motor", "tweetoerenmotor", "polumschaltbarer motor"]
+[[entry]]
+symbol = "motors/motor_1ph"
+letters = ["M"]
+names = ["single phase motor", "1 phase motor", "motor 1 phase", "eenfasemotor", "enkelfasige motor", "wechselstrommotor", "einphasenmotor"]
+pins = "motor"
+[[entry]]
+symbol = "motors/motor_dc"
+letters = ["M"]
+names = ["dc motor", "direct current motor", "gelijkstroommotor", "dc motor", "gleichstrommotor"]
+[[entry]]
+symbol = "motors/fan_1ph"
+letters = ["M"]
+names = ["fan", "ac fan", "fan motor", "ventilator", "ventilatormotor", "lueftermotor", "luefter"]
+pins = "motor"
+[[entry]]
+symbol = "motors/fan_dc"
+letters = ["M"]
+names = ["dc fan", "fan 24v", "ventilator gelijkstroom", "gleichstromluefter", "gleichstrom luefter"]
+[[entry]]
+symbol = "motors/generator_3ph"
+letters = ["G"]
+names = ["generator", "three phase generator", "alternator", "generator 3 phase", "driefasengenerator", "dynamo", "drehstromgenerator", "generator 3-phasig"]
+pins = "motor"
+
+# ---------------------------------------------------------------- operators
+[[entry]]
+symbol = "operators/pushbutton_no"
+letters = ["S"]
+names = ["pushbutton normally open", "push button no", "pushbutton", "push button", "start button", "pushbutton start", "drukknop maak", "drukknop", "startknop", "taster schliesser", "taster", "starttaster"]
+[[entry]]
+symbol = "operators/pushbutton_nc"
+letters = ["S"]
+names = ["pushbutton normally closed", "push button nc", "stop button", "pushbutton stop", "drukknop verbreek", "stopknop", "taster oeffner", "stoptaster"]
+[[entry]]
+symbol = "operators/pushbutton_changeover"
+letters = ["S"]
+names = ["pushbutton changeover", "push button changeover", "pushbutton co", "drukknop wissel", "taster wechsler"]
+[[entry]]
+symbol = "operators/pushbutton_mushroom_no"
+letters = ["S"]
+names = ["mushroom pushbutton normally open", "mushroom button no", "paddenstoelknop maak", "pilztaster schliesser"]
+[[entry]]
+symbol = "operators/pushbutton_mushroom_nc"
+letters = ["S"]
+names = ["mushroom pushbutton normally closed", "mushroom button nc", "mushroom pushbutton", "mushroom button", "paddenstoelknop verbreek", "paddenstoelknop", "pilztaster oeffner", "pilztaster"]
+[[entry]]
+symbol = "operators/emergency_stop"
+letters = ["S"]
+names = ["emergency stop", "emergency stop pushbutton", "e-stop", "estop", "emergency off", "noodstop", "noodstopknop", "nooduit", "not-aus", "not aus", "notaus taster", "not halt"]
+[[entry]]
+symbol = "operators/selector_no"
+letters = ["S"]
+names = ["selector switch normally open", "selector switch", "rotary switch no", "turn switch", "draaischakelaar maak", "draaischakelaar", "keuzeschakelaar", "waehlschalter", "drehschalter"]
+[[entry]]
+symbol = "operators/selector_nc"
+letters = ["S"]
+names = ["selector switch normally closed", "rotary switch nc", "draaischakelaar verbreek", "keuzeschakelaar verbreek", "waehlschalter oeffner", "drehschalter oeffner"]
+[[entry]]
+symbol = "operators/keyswitch_no"
+letters = ["S"]
+names = ["key switch normally open", "key switch", "keyswitch", "key operated switch no", "sleutelschakelaar maak", "sleutelschakelaar", "schluesselschalter schliesser", "schluesselschalter"]
+[[entry]]
+symbol = "operators/keyswitch_nc"
+letters = ["S"]
+names = ["key switch normally closed", "keyswitch nc", "sleutelschakelaar verbreek", "schluesselschalter oeffner"]
+[[entry]]
+symbol = "operators/footswitch_no"
+letters = ["S"]
+names = ["foot switch normally open", "foot switch", "footswitch", "voetschakelaar maak", "voetschakelaar", "fussschalter schliesser", "fussschalter", "fusstaster"]
+[[entry]]
+symbol = "operators/footswitch_nc"
+letters = ["S"]
+names = ["foot switch normally closed", "footswitch nc", "voetschakelaar verbreek", "fussschalter oeffner"]
+[[entry]]
+symbol = "operators/pullcord_no"
+letters = ["S"]
+names = ["pull cord switch normally open", "pull cord switch", "pullcord", "rope switch", "trekkoordschakelaar maak", "trekkoordschakelaar", "seilzugschalter schliesser", "seilzugschalter"]
+[[entry]]
+symbol = "operators/pullcord_nc"
+letters = ["S"]
+names = ["pull cord switch normally closed", "pullcord nc", "trekkoordschakelaar verbreek", "seilzugschalter oeffner", "noodtrekkoord"]
+
+# ---------------------------------------------------------------- passive
+[[entry]]
+symbol = "passive/resistor"
+letters = ["R"]
+names = ["resistor", "resistance", "weerstand", "widerstand"]
+[[entry]]
+symbol = "passive/resistor_variable"
+letters = ["R"]
+names = ["variable resistor", "rheostat", "trimmer resistor", "regelbare weerstand", "instelbare weerstand", "veraenderlicher widerstand", "stellwiderstand"]
+[[entry]]
+symbol = "passive/potentiometer"
+letters = ["R"]
+names = ["potentiometer", "pot", "trimpotmeter", "poti"]
+[[entry]]
+symbol = "passive/capacitor"
+letters = ["C"]
+names = ["capacitor", "condenser", "condensator", "kondensator"]
+[[entry]]
+symbol = "passive/capacitor_polarized"
+letters = ["C"]
+names = ["polarized capacitor", "electrolytic capacitor", "polarised capacitor", "elco", "elektrolytische condensator", "gepolariseerde condensator", "elektrolytkondensator", "gepolter kondensator"]
+[[entry]]
+symbol = "passive/capacitor_variable"
+letters = ["C"]
+names = ["variable capacitor", "trimmer capacitor", "regelbare condensator", "veraenderlicher kondensator", "drehkondensator"]
+[[entry]]
+symbol = "passive/inductor"
+letters = ["L"]
+names = ["inductor", "coil inductance", "choke", "inductance", "smoorspoel", "spoel zelfinductie", "drossel", "induktivitaet"]
+[[entry]]
+symbol = "passive/inductor_core"
+letters = ["L"]
+names = ["inductor with core", "iron core inductor", "choke with core", "smoorspoel met kern", "spoel met kern", "drossel mit kern"]
+[[entry]]
+symbol = "passive/diode"
+letters = ["V"]
+names = ["diode", "rectifier diode", "gelijkrichtdiode", "gleichrichterdiode"]
+pins = "diode"
+[[entry]]
+symbol = "passive/zener_diode"
+letters = ["V"]
+names = ["zener diode", "z-diode", "zenerdiode", "z diode"]
+pins = "diode"
+[[entry]]
+symbol = "passive/led"
+letters = ["V", "H"]
+names = ["led", "light emitting diode", "led diode", "lichtgevende diode", "leuchtdiode", "led leuchtdiode"]
+pins = "diode"
+[[entry]]
+symbol = "passive/photodiode"
+letters = ["V", "B"]
+names = ["photodiode", "photo diode", "fotodiode"]
+pins = "diode"
+[[entry]]
+symbol = "passive/photoresistor"
+letters = ["R", "B"]
+names = ["photoresistor", "ldr", "light dependent resistor", "photo resistor", "lichtgevoelige weerstand", "fotoweerstand", "lichtabhaengiger widerstand"]
+[[entry]]
+symbol = "passive/thermistor_ntc"
+letters = ["R", "B"]
+names = ["ntc", "ntc thermistor", "thermistor ntc", "ntc weerstand", "ntc widerstand", "heissleiter"]
+[[entry]]
+symbol = "passive/thermistor_ptc"
+letters = ["R", "B"]
+names = ["ptc", "ptc thermistor", "thermistor ptc", "thermistor", "motor ptc", "ptc weerstand", "ptc fuehler", "kaltleiter", "ptc widerstand"]
+[[entry]]
+symbol = "passive/varistor"
+letters = ["R", "F"]
+names = ["varistor", "vdr", "voltage dependent resistor", "spanningsafhankelijke weerstand", "spannungsabhaengiger widerstand"]
+[[entry]]
+symbol = "passive/heater"
+letters = ["E"]
+names = ["heater", "heating element", "resistance heater", "cabinet heater", "anti condensation heater", "verwarming", "verwarmingselement", "kastverwarming", "heizung", "heizelement", "schaltschrankheizung"]
+[[entry]]
+symbol = "passive/heater_3ph"
+letters = ["E"]
+names = ["heater 3 phase", "three phase heater", "heating element 3 phase", "verwarming 3 fase", "driefasige verwarming", "heizung 3-phasig", "drehstromheizung"]
+[[entry]]
+symbol = "passive/thyristor"
+letters = ["V"]
+names = ["thyristor", "scr", "silicon controlled rectifier"]
+[[entry]]
+symbol = "passive/triac"
+letters = ["V"]
+names = ["triac", "bidirectional thyristor"]
+[[entry]]
+symbol = "passive/transistor_npn"
+letters = ["V"]
+names = ["npn transistor", "transistor npn", "transistor"]
+[[entry]]
+symbol = "passive/transistor_pnp"
+letters = ["V"]
+names = ["pnp transistor", "transistor pnp"]
+[[entry]]
+symbol = "passive/bridge_rectifier"
+letters = ["V", "T"]
+names = ["bridge rectifier", "rectifier bridge", "rectifier", "graetz bridge", "gelijkrichter", "bruggelijkrichter", "gleichrichter", "brueckengleichrichter"]
+
+# ---------------------------------------------------------------- PLC
+[[entry]]
+symbol = "plc/digital_input"
+letters = ["A", "K"]
+names = ["digital input", "plc digital input", "di", "input", "digitale ingang", "ingang", "digitaler eingang", "eingang"]
+[[entry]]
+symbol = "plc/digital_output"
+letters = ["A", "K"]
+names = ["digital output", "plc digital output", "do", "output", "digitale uitgang", "uitgang", "digitaler ausgang", "ausgang"]
+[[entry]]
+symbol = "plc/analog_input"
+letters = ["A", "K"]
+names = ["analog input", "plc analog input", "ai", "analoge ingang", "analoger eingang"]
+[[entry]]
+symbol = "plc/analog_output"
+letters = ["A", "K"]
+names = ["analog output", "plc analog output", "ao", "analoge uitgang", "analoger ausgang"]
+[[entry]]
+symbol = "plc/relay_output"
+letters = ["A", "K"]
+names = ["relay output", "plc relay output", "relais uitgang", "relaisuitgang", "relaisausgang"]
+[[entry]]
+symbol = "plc/power_supply"
+letters = ["A", "G"]
+names = ["plc power supply", "plc supply", "io supply", "plc voeding", "plc spannungsversorgung", "plc versorgung"]
+pins = "supply"
+
+# ---------------------------------------------------------------- protection
+[[entry]]
+symbol = "protection/fuse"
+letters = ["F"]
+names = ["fuse", "fuse link", "fuse 1 pole", "zekering", "smeltveiligheid", "sicherung", "schmelzsicherung"]
+[[entry]]
+symbol = "protection/fuse_2p"
+letters = ["F"]
+names = ["fuse", "fuse 2 pole", "fuse link", "zekering", "sicherung"]
+[[entry]]
+symbol = "protection/fuse_3p"
+letters = ["F"]
+names = ["fuse", "fuse 3 pole", "fuse link", "zekering", "sicherung"]
+pins = "poles"
+[[entry]]
+symbol = "protection/fuse_4p"
+letters = ["F"]
+names = ["fuse", "fuse 4 pole", "fuse link", "zekering", "sicherung"]
+pins = "poles_n"
+[[entry]]
+symbol = "protection/fuse_switch_1p"
+letters = ["F", "Q"]
+names = ["fuse switch disconnector", "fuse switch", "fuse disconnector", "fuse switch 1 pole", "lastscheider met zekering", "zekeringlastscheider", "sicherungslasttrenner", "sicherungstrenner"]
+[[entry]]
+symbol = "protection/fuse_switch_3p"
+letters = ["F", "Q"]
+names = ["fuse switch disconnector", "fuse switch", "fuse disconnector", "fuse switch 3 pole", "lastscheider met zekering", "zekeringlastscheider", "sicherungslasttrenner", "sicherungstrenner"]
+pins = "poles"
+[[entry]]
+symbol = "protection/mcb_1p"
+letters = ["F", "Q"]
+names = ["circuit breaker", "miniature circuit breaker", "mcb", "circuit breaker 1 pole", "automatic fuse", "installation breaker", "installatieautomaat", "automaat", "lijnbeveiligingsautomaat", "leitungsschutzschalter", "ls schalter", "sicherungsautomat"]
+[[entry]]
+symbol = "protection/mcb_2p"
+letters = ["F", "Q"]
+names = ["circuit breaker", "miniature circuit breaker", "mcb", "circuit breaker 2 pole", "installatieautomaat", "automaat", "leitungsschutzschalter"]
+[[entry]]
+symbol = "protection/mcb_3p"
+letters = ["F", "Q"]
+names = ["circuit breaker", "miniature circuit breaker", "mcb", "circuit breaker 3 pole", "installatieautomaat", "automaat", "leitungsschutzschalter"]
+pins = "poles"
+[[entry]]
+symbol = "protection/mcb_4p"
+letters = ["F", "Q"]
+names = ["circuit breaker", "miniature circuit breaker", "mcb", "circuit breaker 4 pole", "installatieautomaat", "automaat", "leitungsschutzschalter"]
+pins = "poles_n"
+[[entry]]
+symbol = "protection/mcb_1p_n"
+letters = ["F", "Q"]
+names = ["circuit breaker 1 pole and neutral", "mcb 1p n", "mcb 1+n", "circuit breaker 1p+n", "automaat 1p+n", "leitungsschutzschalter 1p+n"]
+[[entry]]
+symbol = "protection/mcb_3p_n"
+letters = ["F", "Q"]
+names = ["circuit breaker 3 pole and neutral", "mcb 3p n", "mcb 3+n", "circuit breaker 3p+n", "automaat 3p+n", "leitungsschutzschalter 3p+n"]
+[[entry]]
+symbol = "protection/motor_protection_breaker"
+letters = ["Q", "F"]
+names = ["motor protection switch", "motor protection circuit breaker", "motor protective circuit breaker", "motor starter protector", "mpcb", "motor circuit breaker", "motor protection breaker", "motorbeveiligingsschakelaar", "motorbeveiliging", "motorschutzschalter", "motorschutz"]
+[[entry]]
+symbol = "protection/motor_circuit_protector"
+letters = ["Q", "F"]
+names = ["motor circuit protector", "mcp", "magnetic only breaker", "magnetic circuit breaker", "magnetisch motorbeveiligingsautomaat", "magnetischer motorschutzschalter"]
+[[entry]]
+symbol = "protection/overload_relay"
+letters = ["F"]
+names = ["overload relay", "thermal overload relay", "thermal overload", "motor overload", "bimetal relay", "thermisch relais", "thermische beveiliging", "overbelastingsrelais", "motorrelais", "ueberstromrelais", "thermorelais", "motorschutzrelais", "bimetallrelais"]
+pins = "poles"
+[[entry]]
+symbol = "protection/rcd_2p"
+letters = ["F", "Q"]
+names = ["residual current device", "rcd", "residual current circuit breaker", "rccb", "earth leakage breaker", "fi switch", "aardlekschakelaar", "aardlekautomaat", "differentieelschakelaar", "fi-schalter", "fi schalter", "fehlerstromschutzschalter"]
+[[entry]]
+symbol = "protection/rcd_4p"
+letters = ["F", "Q"]
+names = ["residual current device 4 pole", "rcd 4 pole", "rcd 4p", "rccb 4p", "aardlekschakelaar 4p", "fi-schalter 4-polig", "fehlerstromschutzschalter 4-polig"]
+[[entry]]
+symbol = "protection/rcbo_2p"
+letters = ["F", "Q"]
+names = ["rcbo", "residual current breaker with overcurrent", "rcbo 2 pole", "rcbo 1p+n", "aardlekautomaat 1p+n", "fi/ls-schalter", "fi ls schalter", "fi/ls schalter"]
+[[entry]]
+symbol = "protection/rcbo_4p"
+letters = ["F", "Q"]
+names = ["rcbo 4 pole", "rcbo 3p+n", "residual current breaker with overcurrent 4 pole", "aardlekautomaat 3p+n", "fi/ls-schalter 4-polig", "fi/ls schalter 4-polig"]
+[[entry]]
+symbol = "protection/surge_arrester"
+letters = ["F"]
+names = ["surge arrester", "surge protection device", "surge protector", "spd", "lightning arrester", "overspanningsbeveiliging", "overspanningsafleider", "bliksembeveiliging", "ueberspannungsschutz", "ueberspannungsableiter", "blitzschutz"]
+
+# ---------------------------------------------------------------- sensors
+[[entry]]
+symbol = "sensors/inductive_pnp"
+letters = ["B"]
+names = ["inductive sensor", "inductive proximity sensor", "inductive sensor pnp", "proximity sensor pnp", "proximity switch pnp", "inductieve sensor", "inductieve naderingsschakelaar", "naderingsschakelaar", "naderingssensor", "induktiver sensor", "induktiver naeherungsschalter", "naeherungsschalter", "initiator"]
+pins = "sensor3"
+[[entry]]
+symbol = "sensors/inductive_npn"
+letters = ["B"]
+names = ["inductive sensor npn", "inductive proximity sensor npn", "proximity sensor npn", "proximity switch npn", "inductieve sensor npn", "induktiver sensor npn"]
+pins = "sensor3"
+[[entry]]
+symbol = "sensors/capacitive_pnp"
+letters = ["B"]
+names = ["capacitive sensor", "capacitive proximity sensor", "capacitive sensor pnp", "capacitieve sensor", "capacitieve naderingsschakelaar", "kapazitiver sensor", "kapazitiver naeherungsschalter"]
+pins = "sensor3"
+[[entry]]
+symbol = "sensors/capacitive_npn"
+letters = ["B"]
+names = ["capacitive sensor npn", "capacitive proximity sensor npn", "capacitieve sensor npn", "kapazitiver sensor npn"]
+pins = "sensor3"
+[[entry]]
+symbol = "sensors/photoelectric_pnp"
+letters = ["B"]
+names = ["photoelectric sensor", "photo sensor", "photoelectric sensor pnp", "optical sensor", "light barrier", "light sensor", "fotocel", "optische sensor", "lichtschakelaar", "lichtschranke", "optischer sensor", "reflexlichtschranke", "lichttaster"]
+pins = "sensor3"
+[[entry]]
+symbol = "sensors/photoelectric_npn"
+letters = ["B"]
+names = ["photoelectric sensor npn", "photo sensor npn", "optical sensor npn", "fotocel npn", "lichtschranke npn"]
+pins = "sensor3"
+[[entry]]
+symbol = "sensors/proximity_no"
+letters = ["B", "S"]
+names = ["proximity switch normally open", "proximity switch no", "proximity contact no", "naderingsschakelaar maak", "naeherungsschalter schliesser"]
+[[entry]]
+symbol = "sensors/proximity_nc"
+letters = ["B", "S"]
+names = ["proximity switch normally closed", "proximity switch nc", "proximity contact nc", "naderingsschakelaar verbreek", "naeherungsschalter oeffner"]
+[[entry]]
+symbol = "sensors/float_no"
+letters = ["B", "S"]
+names = ["float switch normally open", "float switch", "level switch no", "level switch", "vlotterschakelaar maak", "vlotterschakelaar", "niveauschakelaar", "schwimmerschalter schliesser", "schwimmerschalter", "niveauschalter"]
+[[entry]]
+symbol = "sensors/float_nc"
+letters = ["B", "S"]
+names = ["float switch normally closed", "level switch nc", "vlotterschakelaar verbreek", "schwimmerschalter oeffner"]
+[[entry]]
+symbol = "sensors/flow_no"
+letters = ["B", "S"]
+names = ["flow switch normally open", "flow switch", "flow switch no", "stromingsschakelaar maak", "stromingsschakelaar", "stroomschakelaar", "stroemungsschalter schliesser", "stroemungsschalter", "stroemungswaechter"]
+[[entry]]
+symbol = "sensors/flow_nc"
+letters = ["B", "S"]
+names = ["flow switch normally closed", "flow switch nc", "stromingsschakelaar verbreek", "stroemungsschalter oeffner"]
+[[entry]]
+symbol = "sensors/pressure_no"
+letters = ["B", "S"]
+names = ["pressure switch normally open", "pressure switch", "pressure switch no", "pressostat", "drukschakelaar maak", "drukschakelaar", "druckschalter schliesser", "druckschalter"]
+[[entry]]
+symbol = "sensors/pressure_nc"
+letters = ["B", "S"]
+names = ["pressure switch normally closed", "pressure switch nc", "drukschakelaar verbreek", "druckschalter oeffner"]
+[[entry]]
+symbol = "sensors/temperature_no"
+letters = ["B", "S"]
+names = ["temperature switch normally open", "temperature switch", "temperature switch no", "thermostat no", "temperatuurschakelaar maak", "temperatuurschakelaar", "temperaturschalter schliesser", "temperaturschalter", "temperaturwaechter"]
+[[entry]]
+symbol = "sensors/temperature_nc"
+letters = ["B", "S"]
+names = ["temperature switch normally closed", "temperature switch nc", "thermostat nc", "temperatuurschakelaar verbreek", "temperaturschalter oeffner"]
+[[entry]]
+symbol = "sensors/pt100"
+letters = ["B"]
+names = ["pt100", "pt1000", "rtd", "resistance thermometer", "temperature sensor pt100", "temperature sensor", "weerstandsthermometer", "temperatuursensor", "widerstandsthermometer", "temperaturfuehler", "temperatursensor"]
+[[entry]]
+symbol = "sensors/transmitter"
+letters = ["B"]
+names = ["transmitter", "transducer", "measuring transducer", "sensor 4-20 ma", "analog sensor", "pressure transmitter", "meetomvormer", "transmitter 4-20 ma", "druktransmitter", "messumformer", "messwandler", "drucktransmitter"]
+[[entry]]
+symbol = "sensors/encoder"
+letters = ["B"]
+names = ["encoder", "rotary encoder", "incremental encoder", "pulse encoder", "draaiencoder", "impulsgever", "inkrementalgeber", "drehgeber"]
+
+# ---------------------------------------------------------------- signalling
+[[entry]]
+symbol = "signalling/lamp"
+letters = ["H"]
+names = ["lamp", "signal lamp", "indicator lamp", "pilot light", "indicator light", "signal light", "signaallamp", "signaalLamp", "controlelamp", "indicatielamp", "lamp", "meldeleuchte", "leuchtmelder", "signallampe", "lampe", "kontrollleuchte"]
+pins = "lamp"
+[[entry]]
+symbol = "signalling/lamp_red"
+letters = ["H"]
+names = ["red lamp", "red signal lamp", "red indicator", "red pilot light", "lamp red", "rode lamp", "rode signaallamp", "rood", "meldeleuchte rot", "leuchtmelder rot", "rote lampe"]
+pins = "lamp"
+[[entry]]
+symbol = "signalling/lamp_green"
+letters = ["H"]
+names = ["green lamp", "green signal lamp", "green indicator", "green pilot light", "lamp green", "groene lamp", "groene signaallamp", "groen", "meldeleuchte gruen", "leuchtmelder gruen", "gruene lampe"]
+pins = "lamp"
+[[entry]]
+symbol = "signalling/lamp_amber"
+letters = ["H"]
+names = ["amber lamp", "yellow lamp", "yellow signal lamp", "amber signal lamp", "orange lamp", "lamp amber", "gele lamp", "oranje lamp", "geel", "meldeleuchte gelb", "leuchtmelder gelb", "gelbe lampe", "orange"]
+pins = "lamp"
+[[entry]]
+symbol = "signalling/lamp_blue"
+letters = ["H"]
+names = ["blue lamp", "blue signal lamp", "blue indicator", "lamp blue", "blauwe lamp", "blauwe signaallamp", "blauw", "meldeleuchte blau", "leuchtmelder blau", "blaue lampe"]
+pins = "lamp"
+[[entry]]
+symbol = "signalling/lamp_white"
+letters = ["H"]
+names = ["white lamp", "white signal lamp", "white indicator", "clear lamp", "lamp white", "witte lamp", "witte signaallamp", "wit", "meldeleuchte weiss", "leuchtmelder weiss", "weisse lampe"]
+pins = "lamp"
+[[entry]]
+symbol = "signalling/beacon"
+letters = ["H"]
+names = ["beacon", "signal beacon", "flashing light", "rotating beacon", "strobe", "zwaailamp", "signaalzuil", "flitslicht", "signalleuchte", "blitzleuchte", "rundumleuchte", "blinkleuchte", "signalsaeule"]
+[[entry]]
+symbol = "signalling/horn"
+letters = ["H", "P"]
+names = ["horn", "signal horn", "claxon", "signaalhoorn", "hoorn", "hupe", "signalhupe"]
+[[entry]]
+symbol = "signalling/buzzer"
+letters = ["H", "P"]
+names = ["buzzer", "audible signal", "acoustic signal", "zoemer", "akoestisch signaal", "summer", "akustischer melder"]
+[[entry]]
+symbol = "signalling/bell"
+letters = ["H", "P"]
+names = ["bell", "alarm bell", "electric bell", "bel", "alarmbel", "klingel", "glocke", "wecker"]
+
+# ---------------------------------------------------------------- sources
+[[entry]]
+symbol = "sources/ac_source"
+letters = ["G"]
+names = ["ac source", "ac voltage source", "ac supply", "mains supply", "mains", "wisselspanningsbron", "netvoeding", "net", "wechselspannungsquelle", "netz", "netzeinspeisung"]
+[[entry]]
+symbol = "sources/dc_source"
+letters = ["G"]
+names = ["dc source", "dc voltage source", "dc supply", "voltage source", "gelijkspanningsbron", "gleichspannungsquelle", "spannungsquelle"]
+pins = "dc"
+[[entry]]
+symbol = "sources/battery"
+letters = ["G"]
+names = ["battery", "accumulator", "cell", "accu", "batterij", "batterie", "akku", "akkumulator"]
+pins = "dc"
+[[entry]]
+symbol = "sources/current_source"
+letters = ["G"]
+names = ["current source", "constant current source", "stroombron", "stromquelle", "konstantstromquelle"]
+
+# ---------------------------------------------------------------- supplies
+[[entry]]
+symbol = "supplies/power_supply_dc"
+letters = ["G", "T"]
+names = ["power supply", "power supply unit", "psu", "dc power supply", "24v power supply", "switch mode power supply", "ac/dc converter", "voeding", "voedingsunit", "gestabiliseerde voeding", "netvoeding 24v", "netzteil", "stromversorgung", "schaltnetzteil", "stabilisiertes netzteil"]
+pins = "supply"
+[[entry]]
+symbol = "supplies/dc_dc_converter"
+letters = ["G", "T"]
+names = ["dc/dc converter", "dc dc converter", "dcdc converter", "dc converter", "gelijkspanningsomvormer", "dc/dc omvormer", "gleichspannungswandler", "dc/dc wandler"]
+
+# ---------------------------------------------------------------- switches
+[[entry]]
+symbol = "switches/main_switch_3p"
+letters = ["Q"]
+names = ["main switch", "main isolator", "main disconnect", "main switch 3 pole", "hoofdschakelaar", "hoofdschakelaar 3 polig", "hauptschalter", "hauptschalter 3-polig"]
+pins = "poles"
+[[entry]]
+symbol = "switches/main_switch_4p"
+letters = ["Q"]
+names = ["main switch 4 pole", "main isolator 4 pole", "hoofdschakelaar 4 polig", "hauptschalter 4-polig"]
+pins = "poles_n"
+[[entry]]
+symbol = "switches/switch_disconnector_3p"
+letters = ["Q"]
+names = ["switch disconnector", "load break switch", "isolating switch", "isolator switch", "switch disconnector 3 pole", "lastscheider", "lastscheidingsschakelaar", "lasttrennschalter", "lasttrenner"]
+pins = "poles"
+[[entry]]
+symbol = "switches/switch_disconnector_1p"
+letters = ["Q"]
+names = ["switch disconnector 1 pole", "load break switch 1 pole", "lastscheider 1 polig", "lasttrennschalter 1-polig"]
+[[entry]]
+symbol = "switches/switch_disconnector_2p"
+letters = ["Q"]
+names = ["switch disconnector 2 pole", "load break switch 2 pole", "lastscheider 2 polig", "lasttrennschalter 2-polig"]
+[[entry]]
+symbol = "switches/switch_disconnector_4p"
+letters = ["Q"]
+names = ["switch disconnector 4 pole", "load break switch 4 pole", "lastscheider 4 polig", "lasttrennschalter 4-polig"]
+pins = "poles_n"
+[[entry]]
+symbol = "switches/disconnector_3p"
+letters = ["Q"]
+names = ["disconnector", "isolator", "disconnect switch", "disconnector 3 pole", "scheider", "scheidingsschakelaar", "trenner", "trennschalter"]
+pins = "poles"
+[[entry]]
+symbol = "switches/disconnector_1p"
+letters = ["Q"]
+names = ["disconnector 1 pole", "isolator 1 pole", "scheider 1 polig", "trennschalter 1-polig"]
+[[entry]]
+symbol = "switches/disconnector_2p"
+letters = ["Q"]
+names = ["disconnector 2 pole", "isolator 2 pole", "scheider 2 polig", "trennschalter 2-polig"]
+[[entry]]
+symbol = "switches/disconnector_4p"
+letters = ["Q"]
+names = ["disconnector 4 pole", "isolator 4 pole", "scheider 4 polig", "trennschalter 4-polig"]
+pins = "poles_n"
+[[entry]]
+symbol = "switches/changeover_switch_3p"
+letters = ["Q", "S"]
+names = ["changeover switch", "changeover switch 3 pole", "transfer switch", "omschakelaar", "omschakelaar 3 polig", "umschalter", "umschalter 3-polig"]
+
+# ---------------------------------------------------------------- terminals
+[[entry]]
+symbol = "terminals/terminal"
+letters = ["X"]
+names = ["terminal", "terminal block", "feed through terminal", "terminal 2 connections", "klem", "rijgklem", "doorgangsklem", "klemme", "reihenklemme", "durchgangsklemme"]
+[[entry]]
+symbol = "terminals/terminal_end"
+letters = ["X"]
+names = ["terminal 1 connection", "terminal one sided", "single connection terminal", "klem 1 aansluiting", "klemme 1 anschluss", "klemme einseitig"]
+[[entry]]
+symbol = "terminals/terminal_bridged"
+letters = ["X"]
+names = ["bridged terminal", "terminal with jumper", "terminal bridged", "klem met brug", "doorverbonden klem", "klemme mit bruecke", "brueckenklemme"]
+[[entry]]
+symbol = "terminals/terminal_end_bridged"
+letters = ["X"]
+names = ["bridged terminal 1 connection", "terminal bridged one sided", "klem met brug 1 aansluiting", "klemme mit bruecke einseitig"]
+[[entry]]
+symbol = "terminals/terminal_pe"
+letters = ["X"]
+names = ["pe terminal", "protective earth terminal", "earth terminal", "ground terminal", "pe klem", "aardklem", "pe klemme", "schutzleiterklemme", "erdungsklemme"]
+[[entry]]
+symbol = "terminals/terminal_pe_end"
+letters = ["X"]
+names = ["pe terminal 1 connection", "earth terminal one sided", "pe klem 1 aansluiting", "pe klemme einseitig"]
+[[entry]]
+symbol = "terminals/terminal_n"
+letters = ["X"]
+names = ["n terminal", "neutral terminal", "neutral conductor terminal", "n klem", "nulklem", "nulleiderklem", "n klemme", "neutralleiterklemme", "n-klemme"]
+[[entry]]
+symbol = "terminals/terminal_n_end"
+letters = ["X"]
+names = ["n terminal 1 connection", "neutral terminal one sided", "n klem 1 aansluiting", "n klemme einseitig"]
+[[entry]]
+symbol = "terminals/terminal_fused"
+letters = ["X"]
+names = ["fuse terminal", "fused terminal", "terminal with fuse", "zekeringklem", "klem met zekering", "sicherungsklemme", "klemme mit sicherung"]
+[[entry]]
+symbol = "terminals/terminal_disconnect"
+letters = ["X"]
+names = ["disconnect terminal", "knife disconnect terminal", "isolating terminal", "test disconnect terminal", "scheidbare klem", "messerklem", "scheidingsklem", "trennklemme", "messertrennklemme"]
+[[entry]]
+symbol = "terminals/terminal_2level"
+letters = ["X"]
+names = ["double level terminal", "two level terminal", "2 level terminal", "double deck terminal", "dubbeldeksklem", "tweeetagenklem", "2 etages klem", "doppelstockklemme", "zweistockklemme"]
+[[entry]]
+symbol = "terminals/terminal_3level"
+letters = ["X"]
+names = ["three level terminal", "triple level terminal", "3 level terminal", "driedeksklem", "drieetagenklem", "3 etages klem", "dreistockklemme"]
+[[entry]]
+symbol = "terminals/end_plate"
+letters = ["X"]
+names = ["end plate", "terminal end plate", "end cover", "eindplaat", "afsluitplaat", "abschlussplatte", "endplatte"]
+[[entry]]
+symbol = "terminals/end_bracket"
+letters = ["X"]
+names = ["end bracket", "end stop", "terminal end bracket", "eindsteun", "eindhouder", "endklammer", "endhalter"]
+[[entry]]
+symbol = "terminals/plug"
+letters = ["X"]
+names = ["plug", "male connector", "connector male", "plug connector", "stekker", "connector stekker", "stecker", "steckverbinder stift"]
+[[entry]]
+symbol = "terminals/socket"
+letters = ["X"]
+names = ["socket", "female connector", "connector female", "jack", "connector bus", "bus", "buchse", "steckverbinder buchse", "kupplung"]
+[[entry]]
+symbol = "terminals/plug_socket"
+letters = ["X"]
+names = ["plug and socket", "plug socket", "connector pair", "connector", "mating connector", "steker en bus", "connector", "steckverbinder", "stecker buchse", "steckverbindung"]
+[[entry]]
+symbol = "terminals/socket_outlet"
+letters = ["X"]
+names = ["socket outlet", "power socket", "wall socket", "outlet", "schuko socket", "stopcontact", "wandcontactdoos", "contactdoos", "steckdose", "schutzkontaktsteckdose"]
+
+# ---------------------------------------------------------------- transformers
+[[entry]]
+symbol = "transformers/transformer_1ph"
+letters = ["T"]
+names = ["transformer", "single phase transformer", "control transformer", "isolating transformer", "transformator", "trafo", "stuurstroomtransformator", "scheidingstransformator", "transformator 1 fase", "transformator", "steuertransformator", "trenntransformator", "einphasentransformator"]
+[[entry]]
+symbol = "transformers/transformer_3ph"
+letters = ["T"]
+names = ["three phase transformer", "3 phase transformer", "transformer 3 phase", "driefasentransformator", "transformator 3 fase", "drehstromtransformator", "dreiphasentransformator", "drehstromtrafo"]
+[[entry]]
+symbol = "transformers/reactor_3ph"
+letters = ["L"]
+names = ["reactor", "line reactor", "three phase reactor", "motor choke", "mains choke", "netsmoorspoel", "driefasen smoorspoel", "motorsmoorspoel", "netzdrossel", "motordrossel", "dreiphasige drossel", "kommutierungsdrossel"]
+[[entry]]
+symbol = "transformers/emc_filter"
+letters = ["Z"]
+names = ["emc filter", "line filter", "mains filter", "rfi filter", "emi filter", "filter", "emc filter 3 phase", "netfilter", "emc-filter", "storingsfilter", "netzfilter", "emv filter", "emv-filter", "entstoerfilter"]

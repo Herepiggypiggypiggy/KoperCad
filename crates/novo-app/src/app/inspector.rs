@@ -6,10 +6,13 @@
 //! description are edited in place, each edit one undo step.
 
 use eframe::egui;
-use novo_core::{AnyId, DeviceId, Project, SymbolRole, Value};
+use novo_canvas::model::SymbolArt;
+use novo_core::{AnyId, DeviceId, DeviceKind, DeviceTag, Project, SymbolRole, Value};
 use novo_theme::widgets;
 use novo_xref::{Place, XrefIndex};
 
+use super::part_picker::{Candidate, PartPicker, device_candidates, picker_ui};
+use super::symbol_preview::{self, SymbolPreview, symbol_preview};
 use super::xref::xref_of;
 use super::{Level, NovoApp};
 
@@ -37,6 +40,9 @@ pub(super) struct DeviceInfo {
     pub part_values: Vec<(String, String)>,
     /// The set time in seconds, for a device with a timer contact.
     pub delay: Option<f64>,
+    /// For a plug or socket: the tag of its other half (`plug.mate`),
+    /// empty when none is named. `None` for any other device.
+    pub mate: Option<String>,
 }
 
 /// One place the device is drawn: `NO 13-14 2.6`.
@@ -46,6 +52,14 @@ pub(super) struct Relation {
     pub place: Place,
     /// The main function (a contactor's coil).
     pub main: bool,
+    /// What it is, `Coil`, `NO contact`, `Main contacts`.
+    pub what: String,
+    /// Its connection designations, `13-14`; empty for a coil.
+    pub pins: String,
+    /// Where: `Page 3 Control circuit, column 4`.
+    pub page: String,
+    /// A picture of the symbol as drawn there.
+    pub preview: Option<SymbolPreview>,
 }
 
 /// The inspector's fields while they are edited.
@@ -55,10 +69,13 @@ pub(super) struct InspectorState {
     tag: String,
     description: String,
     delay: String,
+    mate: String,
     pub(super) filter: String,
     /// The pin: a pinned inspector stays where it is with nothing selected
     /// and shows the page (DESIGN.md §3).
     pub(super) pinned: bool,
+    /// The Part row's search list.
+    picker: PartPicker,
     /// What was shown last, drawn while the panel slides away.
     leaving: Option<(DeviceInfo, bool)>,
 }
@@ -69,9 +86,13 @@ enum InspectorAction {
     Rename(String),
     Describe(String),
     SetDelay(f64),
+    /// The tag of a plug's other half; empty clears it.
+    SetMate(String),
     /// The reset arrow of an overridden property: back to the part's value.
     ResetProperty(String),
     Pin(bool),
+    /// A part picked in the Part row.
+    AssignPart(novo_parts::PartKey),
 }
 
 /// The one device the selection draws, if it draws exactly one.
@@ -91,6 +112,7 @@ pub(super) fn selected_device(project: &Project, selection: &[AnyId]) -> Option<
 pub(super) fn device_info(
     project: &Project,
     index: Option<&XrefIndex>,
+    art: Option<&dyn SymbolArt>,
     device: DeviceId,
 ) -> Option<DeviceInfo> {
     let d = project.device(device)?;
@@ -105,7 +127,29 @@ pub(super) fn device_info(
             index
                 .device_references(device)
                 .into_iter()
-                .map(|r| (r.row(), Place::of(r), r.main))
+                .map(|r| {
+                    let title = project
+                        .page(r.location.page)
+                        .map(|p| p.title.as_str())
+                        .unwrap_or_default();
+                    let at = page_line(&r.location, title);
+                    let what = match (r.main, r.kind.label()) {
+                        (true, _) => "Coil".to_owned(),
+                        (false, "main") => "Main contacts".to_owned(),
+                        (false, "") => "Symbol".to_owned(),
+                        (false, k) => format!("{k} contact"),
+                    };
+                    let preview = art.and_then(|art| symbol_preview(project, art, r.symbol));
+                    (
+                        r.row(),
+                        Place::of(r),
+                        r.main,
+                        what,
+                        r.pins.clone(),
+                        at,
+                        preview,
+                    )
+                })
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
@@ -113,7 +157,15 @@ pub(super) fn device_info(
     // reading order.
     let mut relations: Vec<Relation> = relations
         .into_iter()
-        .map(|(row, place, main)| Relation { row, place, main })
+        .map(|(row, place, main, what, pins, page, preview)| Relation {
+            row,
+            place,
+            main,
+            what,
+            pins,
+            page,
+            preview,
+        })
         .collect();
     relations.sort_by_key(|r| !r.main);
     let properties = d
@@ -149,6 +201,10 @@ pub(super) fn device_info(
         properties,
         part_values,
         delay,
+        mate: (d.kind == DeviceKind::Connector).then(|| match d.properties.get("plug.mate") {
+            Some(Value::Text(t)) => t.clone(),
+            _ => String::new(),
+        }),
     })
 }
 
@@ -184,6 +240,9 @@ impl NovoApp {
             device.is_some() || self.wb.inspector.pinned,
             0.15,
         );
+        if device.is_none() && self.wire_panel(ctx, canvas) {
+            return;
+        }
         let Some(device) = device else {
             let pinned = self.wb.inspector.pinned;
             let leaving = self.wb.inspector.leaving.take();
@@ -199,22 +258,61 @@ impl NovoApp {
                 // The panel slides away with what it last showed.
                 let mut state = InspectorState::default();
                 let mut actions = Vec::new();
-                self.inspector_area(ctx, canvas, left, slide, &info, &mut state, &mut actions);
+                self.inspector_area(
+                    ctx,
+                    canvas,
+                    left,
+                    slide,
+                    (&info, &[]),
+                    &mut state,
+                    &mut actions,
+                );
                 self.wb.inspector.leaving = Some((info, left));
             }
             return;
         };
+        if self.wb.preview_art.is_none()
+            && let Some(library) = self.library()
+        {
+            let art =
+                novo_editor::art::LibraryArt::new(library, crate::theme::model_style().symbol);
+            self.wb.preview_art = Some(art);
+        }
         let info = {
             let index = xref_of(&*self.backend, &*self.canvas, &mut self.wb.xref);
             let Some(doc) = self.backend.document() else {
                 return;
             };
-            device_info(doc.project(), index, device)
+            let art = self.wb.preview_art.as_ref().map(|a| a as &dyn SymbolArt);
+            device_info(doc.project(), index, art, device)
         };
         let Some(info) = info else {
             return;
         };
         let left = self.selection_under_inspector(canvas, &selection);
+        if self.wb.inspector.picker.open
+            && let Some(problem) = self.wb.part_catalog.ensure()
+        {
+            self.message(Level::Error, problem);
+        }
+        let candidates = match (
+            self.wb.part_catalog.get(),
+            self.backend.document(),
+            self.wb.inspector.picker.open,
+        ) {
+            (Some(catalog), Some(doc), true) => {
+                let scope = format!(
+                    "{device:?}{}",
+                    doc.project()
+                        .device(device)
+                        .map_or(String::new(), |d| d.tag.to_string())
+                );
+                self.wb.inspector.picker.rows(&scope, |query| {
+                    device_candidates(catalog, doc.project(), device, query)
+                })
+            }
+            _ => Vec::new(),
+        };
 
         // The fields follow the model unless they are being edited.
         let tag_id = egui::Id::new("inspector_tag");
@@ -238,11 +336,23 @@ impl NovoApp {
             state.delay = info.delay.map(|d| d.to_string()).unwrap_or_default();
         }
 
+        if focused != Some(egui::Id::new("inspector_mate")) {
+            state.mate = info.mate.clone().unwrap_or_default();
+        }
+
         let mut actions = Vec::new();
         let state = &mut self.wb.inspector;
         state.leaving = Some((info.clone(), left));
         let mut shown = std::mem::take(state);
-        self.inspector_area(ctx, canvas, left, slide, &info, &mut shown, &mut actions);
+        self.inspector_area(
+            ctx,
+            canvas,
+            left,
+            slide,
+            (&info, &candidates),
+            &mut shown,
+            &mut actions,
+        );
         self.wb.inspector = shown;
 
         for action in actions {
@@ -256,8 +366,10 @@ impl NovoApp {
                 }
                 InspectorAction::Describe(text) => self.describe(device, text),
                 InspectorAction::SetDelay(seconds) => self.set_delay(device, seconds),
+                InspectorAction::SetMate(tag) => self.set_mate(device, &tag),
                 InspectorAction::ResetProperty(key) => self.reset_property(device, &key),
                 InspectorAction::Pin(on) => self.wb.inspector.pinned = on,
+                InspectorAction::AssignPart(key) => self.assign_device_part(device, &key),
             }
         }
     }
@@ -271,7 +383,7 @@ impl NovoApp {
         canvas: egui::Rect,
         left: bool,
         slide: f32,
-        info: &DeviceInfo,
+        (info, candidates): (&DeviceInfo, &[Candidate]),
         state: &mut InspectorState,
         actions: &mut Vec<InspectorAction>,
     ) {
@@ -305,7 +417,15 @@ impl NovoApp {
                     egui::ScrollArea::vertical()
                         .max_height(max_height)
                         .show(ui, |ui| {
-                            inspector_body(ui, info, state, tag_id, description_id, actions)
+                            inspector_body(
+                                ui,
+                                info,
+                                candidates,
+                                state,
+                                tag_id,
+                                description_id,
+                                actions,
+                            )
                         });
                 });
             });
@@ -377,7 +497,7 @@ impl NovoApp {
         else {
             return;
         };
-        if tag != old.0 && !tag.is_empty() {
+        if tag != old.0 {
             let result = self.with_editor(|editor, doc| editor.rename(doc, device, &tag));
             if let Some(Err(reason)) = result {
                 self.message(Level::Warning, reason);
@@ -385,6 +505,27 @@ impl NovoApp {
         }
         if description != old.1 {
             self.describe(device, description);
+        }
+    }
+
+    /// Gives a device the catalog part `key`, as one undo step.
+    pub(super) fn assign_device_part(&mut self, device: DeviceId, key: &novo_parts::PartKey) {
+        let Some((command, title)) = self.backend.document().and_then(|d| {
+            let catalog = self.wb.part_catalog.get()?;
+            let command =
+                super::part_picker::assign_device_command(d.project(), catalog, device, key)?;
+            let part = catalog.get(key)?;
+            Some((
+                command,
+                format!("{} {}", part.manufacturer, part.order_number),
+            ))
+        }) else {
+            return;
+        };
+        match self.execute(command) {
+            Some(Ok(_)) => self.message(Level::Info, format!("Part set: {title}")),
+            Some(Err(e)) => self.message(Level::Error, format!("Could not set the part: {e}")),
+            None => {}
         }
     }
 
@@ -399,6 +540,32 @@ impl NovoApp {
         let label = format!("Set the time of {}", old.tag);
         let value = Value::Text(format!("{seconds} s"));
         match doc.transact(label, |tx| tx.set_property(device, "delay", Some(value))) {
+            Ok(((), changes)) => self.changed_outside_canvas(&changes),
+            Err(e) => self.message(Level::Error, format!("Could not change it: {e}")),
+        }
+    }
+
+    /// Names the other half of a plug or socket (`plug.mate`), as one undo
+    /// step; empty clears it. Design checks compare the wiring of the two
+    /// halves.
+    pub(super) fn set_mate(&mut self, device: DeviceId, tag: &str) {
+        let tag = tag.trim();
+        let value = if tag.is_empty() {
+            None
+        } else if DeviceTag::parse(tag).is_ok() {
+            Some(Value::Text(tag.to_owned()))
+        } else {
+            self.message(Level::Warning, format!("\"{tag}\" is not a device tag"));
+            return;
+        };
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let Some(old) = doc.project().device(device) else {
+            return;
+        };
+        let label = format!("Set the other half of {}", old.tag);
+        match doc.transact(label, |tx| tx.set_property(device, "plug.mate", value)) {
             Ok(((), changes)) => self.changed_outside_canvas(&changes),
             Err(e) => self.message(Level::Error, format!("Could not change it: {e}")),
         }
@@ -454,6 +621,7 @@ impl NovoApp {
 fn inspector_body(
     ui: &mut egui::Ui,
     info: &DeviceInfo,
+    candidates: &[Candidate],
     state: &mut InspectorState,
     tag_id: egui::Id,
     description_id: egui::Id,
@@ -489,18 +657,7 @@ fn inspector_body(
         ui.weak("Not drawn yet");
     }
     for relation in &info.relations {
-        let hover = if relation.main {
-            "Main function · show on the drawing"
-        } else {
-            "Show on the drawing"
-        };
-        let text = egui::RichText::new(&relation.row);
-        let text = if relation.main { text.strong() } else { text };
-        if ui
-            .selectable_label(false, text)
-            .on_hover_text(hover)
-            .clicked()
-        {
+        if relation_card(ui, relation).clicked() {
             actions.push(InspectorAction::Go(relation.place));
         }
     }
@@ -523,12 +680,53 @@ fn inspector_body(
         }
     }
 
+    if info.mate.is_some() {
+        ui.add_space(6.0);
+        widgets::section_label(ui, "Other half");
+        let mate = ui
+            .add(
+                egui::TextEdit::singleline(&mut state.mate)
+                    .id(egui::Id::new("inspector_mate"))
+                    .hint_text("Tag of the plug or socket it mates with")
+                    .desired_width(f32::INFINITY),
+            )
+            .on_hover_text("Design checks report a pin wired on one half and not the other.");
+        if committed(ui, &mate) && Some(state.mate.trim()) != info.mate.as_deref() {
+            actions.push(InspectorAction::SetMate(state.mate.clone()));
+        }
+    }
+
     ui.add_space(6.0);
     widgets::section_label(ui, "Part");
-    if info.part.is_empty() {
-        ui.weak("No part");
-    } else {
-        ui.label(&info.part);
+    ui.horizontal(|ui| {
+        if info.part.is_empty() {
+            ui.weak("No part");
+        } else {
+            ui.label(&info.part);
+        }
+        let label = match (state.picker.open, info.part.is_empty()) {
+            (true, _) => "Close",
+            (false, true) => "Choose...",
+            (false, false) => "Change...",
+        };
+        if ui
+            .small_button(label)
+            .on_hover_text("Pick this device's part from the catalog (Parts window: Ctrl+K, Parts)")
+            .clicked()
+        {
+            state.picker.toggle();
+        }
+    });
+    if state.picker.open
+        && let Some(key) = picker_ui(
+            ui,
+            &mut state.picker,
+            candidates,
+            "No part in the catalog matches. Open the Parts window to import one.",
+        )
+    {
+        actions.push(InspectorAction::AssignPart(key));
+        state.picker.close();
     }
 
     ui.add_space(6.0);
@@ -566,6 +764,89 @@ fn inspector_body(
             });
         }
     }
+}
+
+/// Where a symbol is drawn, for a relation card: `Page 3 · Control circuit
+/// · column 4`, with the page structure in front when it has one.
+fn page_line(location: &novo_core::Location, title: &str) -> String {
+    let mut parts = vec![format!(
+        "Page {}{}",
+        structure_prefix(location),
+        location.page_name
+    )];
+    if !title.trim().is_empty() {
+        parts.push(title.trim().to_owned());
+    }
+    parts.push(format!("column {}", location.column));
+    parts.join(" · ")
+}
+
+fn structure_prefix(location: &novo_core::Location) -> String {
+    let s = location.structure.to_string();
+    if s.is_empty() { s } else { format!("{s}/") }
+}
+
+/// Height of a relation's picture and of its card.
+const CARD_HEIGHT: f32 = 56.0;
+
+/// One place the device is drawn: a picture of the symbol as drawn there,
+/// what it is with its tag and pins, and the page. The whole card is the
+/// click target that jumps there.
+fn relation_card(ui: &mut egui::Ui, relation: &Relation) -> egui::Response {
+    let width = ui.available_width();
+    let (rect, response) =
+        ui.allocate_exact_size(egui::vec2(width, CARD_HEIGHT), egui::Sense::click());
+    let response = response.on_hover_text(if relation.main {
+        "Main function · show on the drawing"
+    } else {
+        "Show on the drawing"
+    });
+    if response.hovered() {
+        ui.painter()
+            .rect_filled(rect, 4.0, ui.visuals().widgets.hovered.weak_bg_fill);
+    }
+    let picture = egui::Rect::from_min_size(rect.min, egui::vec2(CARD_HEIGHT, CARD_HEIGHT));
+    match &relation.preview {
+        Some(preview) => symbol_preview::paint(ui, picture, preview, relation.main),
+        None => {
+            ui.painter().rect_stroke(
+                picture,
+                4.0,
+                ui.visuals().widgets.noninteractive.bg_stroke,
+                egui::StrokeKind::Inside,
+            );
+        }
+    }
+    let x = picture.right() + 8.0;
+    let visuals = ui.visuals();
+    let mut y = rect.top() + 6.0;
+    let painter = ui.painter();
+    let title = painter.text(
+        egui::pos2(x, y),
+        egui::Align2::LEFT_TOP,
+        &relation.what,
+        egui::FontId::proportional(13.0),
+        visuals.strong_text_color(),
+    );
+    y = title.bottom() + 2.0;
+    if !relation.pins.is_empty() {
+        let pins = painter.text(
+            egui::pos2(x, y),
+            egui::Align2::LEFT_TOP,
+            &relation.pins,
+            egui::FontId::monospace(12.0),
+            visuals.text_color(),
+        );
+        y = pins.bottom() + 2.0;
+    }
+    painter.text(
+        egui::pos2(x, y),
+        egui::Align2::LEFT_TOP,
+        &relation.page,
+        egui::FontId::proportional(11.0),
+        visuals.weak_text_color(),
+    );
+    response
 }
 
 /// The pin toggle at the top of the inspector; `toggle` is set when clicked.
@@ -616,11 +897,47 @@ mod tests {
             selected_device(&project, &[AnyId::Device(k1), AnyId::Device(k2)]),
             None
         );
-        let info = device_info(&project, None, k1).unwrap();
+        let info = device_info(&project, None, None, k1).unwrap();
         assert_eq!(info.tag, "-K1");
         assert_eq!(info.description, "Pump");
         assert!(info.part.is_empty() && info.relations.is_empty());
         assert_eq!(info.delay, None, "no coil, no time field");
+        assert_eq!(info.mate, None, "only plugs name another half");
+    }
+
+    #[test]
+    fn a_plug_names_its_other_half() {
+        let mut project = Project::new("Plant");
+        let ((plug, other), _) = project
+            .transact("setup", |tx| {
+                let plug = tx.add_device_of_kind(
+                    DeviceTag::parse("-XM1").unwrap(),
+                    "",
+                    DeviceKind::Connector,
+                )?;
+                let other = tx.add_device_of_kind(
+                    DeviceTag::parse("-XF1").unwrap(),
+                    "",
+                    DeviceKind::Connector,
+                )?;
+                tx.set_property(plug, "plug.mate", Some(Value::Text("-XF1".into())))?;
+                Ok((plug, other))
+            })
+            .unwrap();
+        assert_eq!(
+            device_info(&project, None, None, plug)
+                .unwrap()
+                .mate
+                .as_deref(),
+            Some("-XF1")
+        );
+        assert_eq!(
+            device_info(&project, None, None, other)
+                .unwrap()
+                .mate
+                .as_deref(),
+            Some("")
+        );
     }
 
     #[test]
@@ -639,7 +956,7 @@ mod tests {
                 Ok((k1, part))
             })
             .unwrap();
-        let info = device_info(&project, None, k1).unwrap();
+        let info = device_info(&project, None, None, k1).unwrap();
         // Only the property that differs is an override; one that equals the
         // part's, or that the part does not have, is not.
         assert_eq!(
@@ -650,8 +967,76 @@ mod tests {
         project
             .transact("Reset", |tx| tx.set_property(k1, "rated_current", None))
             .unwrap();
-        let info = device_info(&project, None, k1).unwrap();
+        let info = device_info(&project, None, None, k1).unwrap();
         assert!(info.part_values.is_empty());
         assert!(project.part(part).is_some());
+    }
+
+    #[test]
+    fn relations_describe_each_place_with_a_picture_of_its_symbol() {
+        use novo_core::{Document, Pin, Placement, Point};
+        let mut doc = Document::default();
+        let k1 = doc
+            .transact("Draw", |tx| {
+                let p1 = tx.add_page("1")?;
+                let p2 = tx.add_page("2")?;
+                let k1 = tx.add_device(DeviceTag::parse("-K1")?, "")?;
+                tx.place_symbol(
+                    p2,
+                    "iec/contacts/no",
+                    Placement::at(Point::new(140.0, 100.0)),
+                    vec![Pin::new("13", 0.0, -8.0), Pin::new("14", 0.0, 8.0)],
+                    SymbolRole::Device {
+                        device: k1,
+                        main: false,
+                    },
+                )?;
+                tx.place_symbol(
+                    p1,
+                    "iec/coils/relay",
+                    Placement::at(Point::new(190.0, 100.0)),
+                    vec![Pin::new("A1", 0.0, -8.0), Pin::new("A2", 0.0, 8.0)],
+                    SymbolRole::Device {
+                        device: k1,
+                        main: true,
+                    },
+                )?;
+                Ok(k1)
+            })
+            .unwrap()
+            .0;
+        let library = novo_symbols::Library::shared(novo_symbols::Pack::Iec);
+        let index = XrefIndex::build(doc.project(), library);
+        let art = novo_editor::art::LibraryArt::new(
+            library,
+            novo_canvas::Stroke::world(0.35, novo_canvas::Color::BLACK),
+        );
+        let info = device_info(doc.project(), Some(&index), Some(&art), k1).unwrap();
+        assert_eq!(info.relations.len(), 2);
+        let (coil, contact) = (&info.relations[0], &info.relations[1]);
+        assert!(coil.main && coil.what == "Coil");
+        assert_eq!(contact.what, "NO contact");
+        assert_eq!(contact.pins, "13-14");
+        assert_eq!(contact.page, "Page 2 · column 4");
+        for r in &info.relations {
+            let preview = r.preview.as_ref().expect("a picture of every symbol");
+            assert!(!preview.shapes.is_empty() && preview.pins.len() == 2);
+        }
+    }
+
+    #[test]
+    fn page_line_names_structure_title_and_column() {
+        use novo_core::{DeviceTag, Location};
+        let at = |structure: &str, column| Location {
+            page: novo_core::PageId(1),
+            page_name: "3".into(),
+            structure: DeviceTag::parse(structure).unwrap_or_default(),
+            column,
+        };
+        assert_eq!(page_line(&at("", 4), ""), "Page 3 · column 4");
+        assert_eq!(
+            page_line(&at("=A2", 1), " Control "),
+            "Page =A2/3 · Control · column 1"
+        );
     }
 }

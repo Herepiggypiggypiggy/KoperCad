@@ -21,6 +21,8 @@ novo-routing.workspace = true
 novo-cables.workspace = true
 novo-theme.workspace = true
 novo-heatview.workspace = true
+novo-cfd.workspace = true
+novo-thermal.workspace = true
 novo-symbols.workspace = true
 novo-editor.workspace = true
 novo-workflow.workspace = true
@@ -36,6 +38,8 @@ novo-terminals.workspace = true
 novo-plc.workspace = true
 novo-revisions.workspace = true
 novo-sim.workspace = true
+novo-view3d.workspace = true
+glam.workspace = true
 novo-tests.workspace = true
 log = "0.4"
 env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
@@ -44,6 +48,7 @@ serde.workspace = true
 dirs.workspace = true
 
 [dev-dependencies]
+novo-cfd = { workspace = true, features = ["demo"] }
 ron = "0.12"
 tempfile.workspace = true
 lopdf.workspace = true

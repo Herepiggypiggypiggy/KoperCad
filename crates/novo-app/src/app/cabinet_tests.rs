@@ -1,5 +1,6 @@
 //! The Cabinet canvas: plate, place all as one undo step.
 
+use eframe::egui;
 use novo_core::{CabinetPlacement, DeviceTag, Project, Rail, Value};
 
 use super::cabinet::Ask;
@@ -575,4 +576,587 @@ fn plate_export_before_the_cabinet_was_opened_says_what_to_do() {
     assert!(d.app.export_plate_pdf().is_none());
     let last = d.app.messages().last().unwrap();
     assert!(last.text.contains("Open the Cabinet"), "{}", last.text);
+}
+
+#[test]
+fn space_held_and_dragged_pans_the_cabinet_not_the_hidden_schematic() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let space = |pressed| egui::Event::Key {
+        key: egui::Key::Space,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    };
+    let at = egui::Event::PointerMoved(egui::pos2(700.0, 400.0));
+    let cabinet_before = d.app.cabinet.view.viewport;
+    let schematic_before = d.app.canvas.schematic_ref().unwrap().canvas.viewport;
+    d.frame_with(vec![at, space(true)]);
+    d.frame_with(vec![egui::Event::PointerMoved(egui::pos2(760.0, 430.0))]);
+    d.frame_with(vec![egui::Event::PointerMoved(egui::pos2(780.0, 440.0))]);
+    d.frame_with(vec![space(false)]);
+    d.frame();
+    assert_ne!(d.app.cabinet.view.viewport.center, cabinet_before.center);
+    assert_eq!(
+        d.app.canvas.schematic_ref().unwrap().canvas.viewport.center,
+        schematic_before.center
+    );
+    assert!(!d.app.wb.field.is_open(), "a pan opens no field");
+}
+
+#[test]
+fn the_3d_workspace_opens_once_the_cabinet_has_a_plate() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    assert!(d.app.workspace_unavailable(Workspace::View3d).is_some());
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    assert!(d.app.workspace_unavailable(Workspace::View3d).is_none());
+    d.app.run_command(&ctx, "view.3d", None);
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::View3d);
+    assert!(d.app.view3d.built.is_some(), "the scene was built");
+}
+
+#[test]
+fn space_in_the_3d_workspace_leaves_the_hidden_schematic_alone_and_taps_open_the_field() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    d.app.run_command(&ctx, "view.3d", None);
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::View3d);
+    let space = |pressed| egui::Event::Key {
+        key: egui::Key::Space,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    };
+    let at = egui::Event::PointerMoved(egui::pos2(700.0, 400.0));
+    let before = d.app.canvas.schematic_ref().unwrap().canvas.viewport.center;
+    d.frame_with(vec![at.clone(), space(true)]);
+    d.frame_with(vec![egui::Event::PointerMoved(egui::pos2(780.0, 440.0))]);
+    d.frame_with(vec![space(false)]);
+    d.frame();
+    let after = d.app.canvas.schematic_ref().unwrap().canvas.viewport.center;
+    assert_eq!(after, before);
+    d.frame_with(vec![at, space(true)]);
+    d.frame_with(vec![space(false)]);
+    d.frame();
+    assert!(d.app.wb.field.is_open(), "a tap opens the field");
+}
+
+/// A terminal strip made as `-X1` has no location; Place all still puts it
+/// on the plate of the only cabinet. With a second cabinet it names the
+/// strip and says why it is left off.
+#[test]
+fn place_all_places_a_terminal_strip_without_a_location_and_names_what_it_leaves() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    let strip = d
+        .app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Strip", |tx| {
+            tx.add_terminal_strip(DeviceTag::parse("-X1").unwrap())
+        })
+        .unwrap()
+        .0
+        .raw();
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    let cands = novo_layout::model::candidates(project(&d), cab);
+    d.app
+        .cabinet_ask(Ask::PlaceAll, Some(cab), layout_of(&d, cab), &cands);
+    d.app.cabinet_ask(Ask::Accept, Some(cab), None, &[]);
+    d.frame();
+    let layout = layout_of(&d, cab).unwrap();
+    assert!(
+        layout.placements.iter().any(|p| p.id == strip),
+        "X1 is on the plate"
+    );
+    assert_eq!(layout.placements.len(), 4);
+}
+
+/// With two cabinets a strip without a location belongs to neither: Place all
+/// names it and says why instead of leaving it out silently.
+#[test]
+fn place_all_names_a_device_no_cabinet_takes() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Strip and second cabinet", |tx| {
+            tx.add_terminal_strip(DeviceTag::parse("-X1").unwrap())?;
+            tx.add_structure(DeviceTag::parse("+CAB2").unwrap(), "Second", true)?;
+            Ok(())
+        })
+        .unwrap();
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d)
+        .structures()
+        .find(|s| s.enclosure && s.tag.to_string() == "+CAB1")
+        .unwrap()
+        .id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    let cands = novo_layout::model::candidates(project(&d), cab);
+    d.app
+        .cabinet_ask(Ask::PlaceAll, Some(cab), layout_of(&d, cab), &cands);
+    let texts: Vec<_> = d.app.messages().iter().map(|m| m.text.clone()).collect();
+    assert!(
+        texts
+            .iter()
+            .any(|t| t.starts_with("Not placed: -X1") && t.contains("no location")),
+        "{texts:?}"
+    );
+}
+
+#[test]
+fn place_all_command_shows_the_preview_from_any_workspace() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    d.app.run(&ctx, Action::ShowSchematic);
+    d.frame();
+    assert!(d.app.cabinet.preview.is_none());
+
+    // The command (Ctrl+Shift+P) opens the Cabinet and makes the preview on
+    // the next frame; nothing is stored until Enter.
+    d.app.run_command(&ctx, "cabinet.place-all", None);
+    assert_eq!(d.app.workspace(), Workspace::Cabinet);
+    d.frame();
+    d.frame();
+    assert!(d.app.cabinet.preview.is_some());
+    assert_eq!(project(&d).all::<CabinetPlacement>().count(), 0);
+    assert_eq!(
+        d.app
+            .wb
+            .keymap
+            .shortcut_text("cabinet.place-all")
+            .as_deref(),
+        Some("Ctrl+Shift+P")
+    );
+}
+
+/// Cabinet with one placed, selected device and the plate on screen.
+fn selected_on_plate(d: &mut Drive) -> (novo_core::StructureId, u64) {
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    let device = novo_layout::model::candidates(project(d), cab)[0].id;
+    let l = layout_of(d, cab);
+    d.app
+        .cabinet_ask(Ask::Drop(device, 100.0, 120.0), Some(cab), l, &[]);
+    d.frame();
+    d.app.cabinet_ask(Ask::Select(device), Some(cab), None, &[]);
+    d.frame();
+    (cab, device)
+}
+
+fn press(d: &mut Drive, key: egui::Key) {
+    d.frame_with(vec![egui::Event::Key {
+        key,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    }]);
+}
+
+#[test]
+fn r_on_the_plate_turns_the_selected_device_in_one_undo_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (cab, _) = selected_on_plate(&mut d);
+    let size = |d: &Drive| {
+        let l = layout_of(d, cab).unwrap();
+        let p = &l.placements[0];
+        (p.rotated, p.footprint().w, p.footprint().h)
+    };
+    let (r0, w0, h0) = size(&d);
+    assert!(!r0);
+    press(&mut d, egui::Key::R);
+    d.frame();
+    let (r1, w1, h1) = size(&d);
+    assert!(r1, "R turned the device");
+    assert_eq!((w1, h1), (h0, w0));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::Undo);
+    assert_eq!(size(&d), (false, w0, h0));
+}
+
+#[test]
+fn delete_on_the_plate_unplaces_the_device_and_keeps_it_in_the_project() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (cab, device) = selected_on_plate(&mut d);
+    let devices = |d: &Drive| project(d).devices().count();
+    let before = devices(&d);
+    press(&mut d, egui::Key::Delete);
+    d.frame();
+    assert_eq!(project(&d).all::<CabinetPlacement>().count(), 0);
+    assert_eq!(devices(&d), before, "the device stays in the project");
+    let cands = novo_layout::model::candidates(project(&d), cab);
+    let l = layout_of(&d, cab).unwrap();
+    assert!(l.unplaced(&cands).iter().any(|c| c.id == device));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::Undo);
+    assert_eq!(project(&d).all::<CabinetPlacement>().count(), 1);
+}
+
+#[test]
+fn x_on_the_plate_says_why_it_does_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (_, _) = selected_on_plate(&mut d);
+    press(&mut d, egui::Key::X);
+    assert!(d.app.messages().iter().any(|m| m.text.contains("Mirror")));
+}
+
+#[test]
+fn moving_a_device_during_the_place_all_preview_takes_the_preview_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    let layout = layout_of(&d, cab);
+    let cands = novo_layout::model::candidates(project(&d), cab);
+    d.app.cabinet_ask(Ask::PlaceAll, Some(cab), layout, &cands);
+    d.frame();
+    assert!(d.app.cabinet.preview.is_some());
+    let device = cands[0].id;
+
+    let l = layout_of(&d, cab);
+    d.app
+        .cabinet_ask(Ask::Drop(device, 300.0, 200.0), Some(cab), l, &[]);
+    d.frame();
+    assert!(d.app.cabinet.preview.is_none(), "the preview is committed");
+    let l = layout_of(&d, cab).unwrap();
+    assert_eq!(l.placements.len(), 3);
+    let p = l.placements.iter().find(|p| p.id == device).unwrap();
+    assert_eq!((p.x, p.y), (300.0, 200.0));
+}
+
+#[test]
+fn the_table_face_can_be_left_by_key_and_by_button() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (_, _) = selected_on_plate(&mut d);
+    let ctrl_t = |d: &mut Drive| {
+        d.frame_with(vec![egui::Event::Key {
+            key: egui::Key::T,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::COMMAND,
+        }]);
+        d.frame();
+    };
+    for _ in 0..2 {
+        ctrl_t(&mut d);
+        assert!(d.app.cabinet.table, "Ctrl+T shows the table");
+        ctrl_t(&mut d);
+        assert!(!d.app.cabinet.table, "Ctrl+T returns to the plate");
+    }
+    // The header button and a selected row also lead back.
+    d.app.cabinet_ask(Ask::ToggleTable, None, None, &[]);
+    assert!(d.app.cabinet.table);
+    d.app.cabinet_ask(Ask::ToggleTable, None, None, &[]);
+    assert!(!d.app.cabinet.table);
+    // Leaving the Cabinet and coming back never strands the table face.
+    d.app.cabinet_ask(Ask::ToggleTable, None, None, &[]);
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::ShowSchematic);
+    d.frame();
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    ctrl_t(&mut d);
+    assert!(
+        !d.app.cabinet.table || {
+            ctrl_t(&mut d);
+            !d.app.cabinet.table
+        }
+    );
+}
+
+#[test]
+fn escape_and_the_cabinet_tab_also_leave_the_table() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (_, _) = selected_on_plate(&mut d);
+    let ctx = d.ctx.clone();
+    d.app.cabinet_ask(Ask::ToggleTable, None, None, &[]);
+    d.frame();
+    press(&mut d, egui::Key::Escape);
+    d.frame();
+    assert!(!d.app.cabinet.table, "Escape returns to the plate");
+    d.app.cabinet_ask(Ask::ToggleTable, None, None, &[]);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    assert!(!d.app.cabinet.table, "the Cabinet tab returns to the plate");
+    assert_eq!(d.app.workspace(), Workspace::Cabinet);
+}
+
+/// Starts the lesson `id` and skips to the step `step`.
+fn lesson_at(d: &mut Drive, dir: &std::path::Path, id: &str, step: &str) {
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.join("learn.json"));
+    d.app.start_lesson(id);
+    d.frame();
+    while d
+        .app
+        .learn
+        .run
+        .as_ref()
+        .and_then(|r| r.step())
+        .is_some_and(|s| s.id != step)
+    {
+        assert!(d.app.learn.run.as_mut().unwrap().skip());
+    }
+}
+
+fn step_done(d: &mut Drive, step: &str) -> bool {
+    d.frame();
+    d.app.learn.run.as_ref().unwrap().is_done(step)
+}
+
+#[test]
+fn cabinet_actions_tick_their_lesson_steps() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    lesson_at(&mut d, dir.path(), "cabinet-layout", "drag-first");
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    let devices = novo_layout::model::candidates(project(&d), cab);
+    let (a, b) = (devices[0].id, devices[1].id);
+
+    let l = layout_of(&d, cab);
+    d.app
+        .cabinet_ask(Ask::Drop(a, 100.0, 100.0), Some(cab), l, &[]);
+    assert!(
+        step_done(&mut d, "drag-first"),
+        "a drop raises cabinet_dropped"
+    );
+
+    while d
+        .app
+        .learn
+        .run
+        .as_ref()
+        .unwrap()
+        .step()
+        .is_some_and(|s| s.id != "rotate")
+    {
+        d.app.learn.run.as_mut().unwrap().skip();
+    }
+    let l = layout_of(&d, cab);
+    d.app.cabinet_ask(Ask::Rotate(vec![a]), Some(cab), l, &[]);
+    assert!(step_done(&mut d, "rotate"), "a turn raises cabinet_rotated");
+
+    while d
+        .app
+        .learn
+        .run
+        .as_ref()
+        .unwrap()
+        .step()
+        .is_some_and(|s| s.id != "take-off")
+    {
+        d.app.learn.run.as_mut().unwrap().skip();
+    }
+    let l = layout_of(&d, cab);
+    d.app.cabinet_ask(Ask::Remove(vec![a]), Some(cab), l, &[]);
+    assert!(
+        step_done(&mut d, "take-off"),
+        "a removal raises cabinet_removed"
+    );
+    let _ = b;
+
+    while d
+        .app
+        .learn
+        .run
+        .as_ref()
+        .unwrap()
+        .step()
+        .is_some_and(|s| s.id != "accept")
+    {
+        d.app.learn.run.as_mut().unwrap().skip();
+    }
+    let layout = layout_of(&d, cab);
+    let cands = novo_layout::model::candidates(project(&d), cab);
+    d.app.cabinet_ask(Ask::PlaceAll, Some(cab), layout, &cands);
+    d.app.cabinet_ask(Ask::Accept, Some(cab), None, &[]);
+    assert!(
+        step_done(&mut d, "accept"),
+        "accepting raises cabinet_plan_accepted"
+    );
+}
+
+#[test]
+fn exporting_the_wire_cut_ticks_its_lesson_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    lesson_at(&mut d, dir.path(), "cut-lengths", "export-cut");
+    let path = dir.path().join("cut.csv");
+    assert!(d.app.export_wire_cut_to(&path).is_some());
+    assert!(step_done(&mut d, "export-cut"));
+}
+
+#[test]
+fn the_cabinet_registers_the_controls_and_panels_lessons_point_at() {
+    use novo_layout::enclosure::{Door, Enclosure, Hinge};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    let e = Enclosure {
+        width: 650.0,
+        height: 850.0,
+        depth: 250.0,
+        plate_setback: 20.0,
+        door: Some(Door {
+            hinge: Hinge::Right,
+            max_angle: 110.0,
+            inner_depth: 0.0,
+        }),
+        front_clearance: Some(400.0),
+        hinge_side_clearance: None,
+    };
+    d.app
+        .cabinet_ask(Ask::SetEnclosure(e), Some(cab), None, &[]);
+    d.app.cabinet.plate_card = true;
+    d.app.cabinet.routes = true;
+    d.app.cabinet.rails.open = true;
+    d.app.sizing.panel_open = true;
+    d.frame();
+    d.frame();
+    for id in [
+        "cabinet.canvas",
+        "cabinet.unplaced",
+        "cabinet.problems",
+        "cabinet.inspector",
+        "cabinet.door",
+        "cabinet.door.apply",
+        "cabinet.routes_panel",
+        "cabinet.wire_rules",
+        "cabinet.sizing",
+        "cabinet.rails",
+        "cabinet.plate_drawing",
+    ] {
+        let rect = d
+            .app
+            .learn_anchor(id)
+            .unwrap_or_else(|| panic!("`{id}` is not on screen"));
+        assert!(rect.width() > 0.0 && rect.height() > 0.0, "{id}: {rect:?}");
+    }
+}
+
+#[test]
+fn the_selection_travels_between_the_cabinet_and_3d_and_view_commands_run() {
+    use novo_view3d::scene::{ItemId, ItemKind};
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    let device = novo_layout::model::candidates(project(&d), cab)[0].id;
+    let l = layout_of(&d, cab);
+    d.app
+        .cabinet_ask(Ask::Drop(device, 100.0, 120.0), Some(cab), l, &[]);
+    d.frame();
+
+    // Selected in the Cabinet, selected in 3D.
+    d.app.cabinet_ask(Ask::Select(device), None, None, &[]);
+    d.app.run_command(&ctx, "view.3d", None);
+    d.frame();
+    assert_eq!(
+        d.app
+            .view3d
+            .view
+            .state
+            .selection
+            .iter()
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![ItemId::new(ItemKind::Device, device)]
+    );
+
+    // The view commands switch to 3D and are spent by the next frame.
+    d.app.run_command(&ctx, "view.schematic", None);
+    d.frame();
+    d.app.run_command(&ctx, "view.iso", None);
+    assert_eq!(d.app.workspace(), Workspace::View3d);
+    assert!(d.app.view3d.pending.is_some());
+    d.frame();
+    assert!(d.app.view3d.pending.is_none());
 }

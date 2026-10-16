@@ -35,9 +35,11 @@
 //! is missing when a rule cannot be evaluated.
 
 mod ampacity;
+pub mod document;
 mod iec60204;
 mod netclass;
 mod nfpa79;
+pub mod provenance;
 mod report;
 pub mod rules;
 mod sccr;
@@ -152,6 +154,16 @@ pub mod keys {
     pub const LET_THROUGH_KA: &str = "let_through_ka";
     /// Motor: full-load current, A.
     pub const FLC_A: &str = "flc_a";
+    /// Wire or cable: installation method, `B1`, `B2` or `C` (IEC 60364-5-52).
+    pub const INSTALLATION_METHOD: &str = "installation_method";
+    /// Project: the installation method of wires that state none.
+    pub const DEFAULT_INSTALLATION_METHOD: &str = "machine.installation_method";
+    /// Wire, cable or project: conductor insulation, `PVC` (default) or `XLPE`.
+    pub const INSULATION: &str = "insulation";
+    /// Wire or cable: loaded circuits bunched with it (default 1).
+    pub const GROUPED_CIRCUITS: &str = "grouped_circuits";
+    /// Project: ambient air temperature in the enclosure, degrees C (default 40).
+    pub const AMBIENT_C: &str = "machine.ambient_c";
 }
 
 /// The name a waiver of a standards rule is stored under.
@@ -349,6 +361,9 @@ pub struct RuleResult {
     pub open: Vec<Problem>,
     pub waived: Vec<WaivedFinding>,
     pub unknown: Vec<Unknown>,
+    /// What passed, one short line per thing (a device tag, a net): the
+    /// evidence behind a pass. May be shorter than `checked`.
+    pub evidence: Vec<String>,
 }
 
 /// Every rule of the selected standards, evaluated.
@@ -418,6 +433,7 @@ struct Acc {
     checked: usize,
     fails: Vec<(Vec<AnyId>, String)>,
     unknown: Vec<Unknown>,
+    evidence: Vec<String>,
 }
 
 /// What the rules read: the project, its circuits and the parameters. Shared
@@ -464,6 +480,23 @@ impl Sink {
     /// One more thing evaluated and found fine.
     pub(crate) fn pass(&mut self, id: &'static str) {
         self.acc.entry(id).or_default().checked += 1;
+    }
+
+    /// Evidence for a rule without counting a thing: a summary line.
+    pub(crate) fn note(&mut self, id: &'static str, note: String) {
+        let acc = self.acc.entry(id).or_default();
+        if !acc.evidence.contains(&note) {
+            acc.evidence.push(note);
+        }
+    }
+
+    /// One more thing evaluated and found fine, with what it was.
+    pub(crate) fn pass_note(&mut self, id: &'static str, note: String) {
+        let acc = self.acc.entry(id).or_default();
+        acc.checked += 1;
+        if !acc.evidence.contains(&note) {
+            acc.evidence.push(note);
+        }
     }
 
     /// One thing evaluated and found wanting.
@@ -578,6 +611,7 @@ fn finish(env: &Env<'_>, mut sink: Sink) -> ComplianceReport {
             open,
             waived,
             unknown: acc.unknown,
+            evidence: acc.evidence,
         });
     }
     ComplianceReport {

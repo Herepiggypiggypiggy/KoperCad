@@ -4,3 +4,5 @@
 2. rayon kernels once the flow core (#575) is on main: parallel loops inside the pool installed by `sched::install`; single-thread equality tests.
 3. Grid sequencing: coarse solution interpolated as the initial state of Medium (needs a warm-start hook on `Solver`, to agree with CFD-A).
 4. Benchmarks example on the real solver; optional wgpu smoother behind a feature with CPU fallback.
+5. (done) Threaded independent flow loops, bit-identical. Next: red-black sweeps, once CFD-A's hooks PR is on main.
+6. (done) Red-black pressure smoother behind a switch, threaded restrict/prolong/CG updates. Next: the serial diffusion and energy sweeps, then flip the default if a full step gains.
