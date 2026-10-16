@@ -1168,6 +1168,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_place",
+        "Place a device in 3D",
+        "View",
+        &["place", "put", "add device", "unplaced", "drop"],
+        Needs::Project,
+    ),
+    cmd(
         "view.3d_dimensions",
         "Show or hide dimensions in 3D",
         "View",
