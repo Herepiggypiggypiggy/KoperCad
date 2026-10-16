@@ -22,6 +22,7 @@ use super::cabinet_inspector;
 use super::NovoApp;
 use super::heat::{self, HeatState};
 use super::heat_3d::{self, Heat3d, Place};
+use super::heat_spots;
 use super::view3d_controls::{self, Controls};
 use super::view3d_heat;
 use super::view3d_move::{self, MoveState};
@@ -218,7 +219,21 @@ impl NovoApp {
         }
         let solution = self.cabinet.heat.solution();
         if let Some(sol) = &solution {
-            heat_controls(ui, &mut mode.heat, sol);
+            let tag_of = |raw: u64| {
+                project
+                    .get::<Device>(DeviceId::from(raw))
+                    .and_then(|d| d.tag.device_code().map(str::to_owned))
+                    .unwrap_or_else(|| format!("device {raw}"))
+            };
+            if let Some(raw) = heat_controls(ui, &mut mode.heat, sol, &tag_of) {
+                // Jump to the device: select it and bring it into view.
+                let item = ItemId::new(ItemKind::Device, raw);
+                if scene.get(item).is_some() {
+                    mode.view.state.selection = BTreeSet::from([item]);
+                    mode.view
+                        .fit(scene, ui.input(|i| i.time), options.reduced_motion);
+                }
+            }
         }
         let wanted = solution.as_ref().map(|s| (s.id, mode.heat));
         // The landing box of a dragged device, rail or duct.
@@ -507,9 +522,15 @@ fn run_heat(
 
 /// The Heat strip above the 3D view: slice, shell and airflow of the last
 /// simulation result (Cabinet > Heat > Simulate makes one).
-fn heat_controls(ui: &mut egui::Ui, h: &mut Heat3d, sol: &super::heat_run::Solution) {
+fn heat_controls(
+    ui: &mut egui::Ui,
+    h: &mut Heat3d,
+    sol: &super::heat_run::Solution,
+    tag_of: &dyn Fn(u64) -> String,
+) -> Option<u64> {
     use novo_heatview::cfd::Axis;
     let range = heat_3d::range(&sol.snapshot, sol.ambient);
+    let mut jump = None;
     ui.horizontal_wrapped(|ui| {
         ui.label("Heat");
         ui.checkbox(&mut h.slice, "Slice").on_hover_text(
@@ -538,5 +559,7 @@ fn heat_controls(ui: &mut egui::Ui, h: &mut Heat3d, sol: &super::heat_run::Solut
                 .small()
                 .color(novo_theme::tokens::TEXT_MUTED),
         );
+        jump = heat_spots::menu(ui, &sol.snapshot, tag_of);
     });
+    jump
 }

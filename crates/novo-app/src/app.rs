@@ -55,6 +55,7 @@ mod heat_run;
 #[cfg(test)]
 mod heat_run_tests;
 mod heat_settings;
+mod heat_spots;
 mod inspector;
 mod interop;
 mod learn;
