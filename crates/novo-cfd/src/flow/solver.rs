@@ -8,6 +8,12 @@ pub enum ThermalBc {
     Adiabatic,
     /// Fixed wall temperature, degrees C.
     Fixed(f64),
+    /// Heat leaves through a film to air at `t_out` (degrees C):
+    /// `h` is the film coefficient, W/m2K (an outside wall, IEC 60890).
+    Convective {
+        h: f64,
+        t_out: f64,
+    },
 }
 
 /// Condition on one of the six domain faces (all walls).
@@ -51,6 +57,9 @@ pub struct FlowConfig {
     pub nu: f64,
     /// Thermal diffusivity, m2/s.
     pub alpha: f64,
+    /// Thermal conductivity of the fluid, W/mK (with `alpha` it gives
+    /// rho cp, which turns film coefficients into the cell equation).
+    pub conductivity: f64,
     /// Thermal expansion coefficient, 1/K.
     pub beta: f64,
     /// Gravity vector, m/s2, in the frame of the mesh (`y` down: `[0, 9.81, 0]`).
@@ -67,6 +76,7 @@ impl FlowConfig {
         FlowConfig {
             nu: 1.55e-5,
             alpha: 2.2e-5,
+            conductivity: 0.026,
             beta: 1.0 / 298.15,
             gravity: [0.0, 9.81, 0.0],
             scheme: Scheme::VanLeer,
@@ -471,12 +481,21 @@ impl FlowSolver {
                             let w = m.dx[a][s];
                             for upper in [false, true] {
                                 if (!upper && s == 0) || (upper && s + 1 == n[a]) {
-                                    if let ThermalBc::Fixed(tw) =
-                                        self.cfg.faces[2 * a + upper as usize].thermal
-                                    {
-                                        let cw = alpha / (0.5 * w * w);
-                                        a_sum += cw;
-                                        a_nb += cw * tw;
+                                    match self.cfg.faces[2 * a + upper as usize].thermal {
+                                        ThermalBc::Adiabatic => {}
+                                        ThermalBc::Fixed(tw) => {
+                                            let cw = alpha / (0.5 * w * w);
+                                            a_sum += cw;
+                                            a_nb += cw * tw;
+                                        }
+                                        ThermalBc::Convective { h, t_out } => {
+                                            // half cell of air in series with the film
+                                            let r = 0.5 * w / self.cfg.conductivity + 1.0 / h;
+                                            let cw =
+                                                self.cfg.alpha / (self.cfg.conductivity * r * w);
+                                            a_sum += cw;
+                                            a_nb += cw * t_out;
+                                        }
                                     }
                                 } else {
                                     let q = if upper { s + 1 } else { s - 1 };
