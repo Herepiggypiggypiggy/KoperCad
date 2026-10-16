@@ -2804,7 +2804,7 @@ mod tests {
     #[test]
     fn a_wire_far_below_a_tall_table_still_moves_it() {
         let (mut doc, page, k1, _s1, _w) = doc();
-        let rows: Vec<NoteRow> = (0..20)
+        let rows: Vec<NoteRow> = (0..40)
             .map(|i| NoteRow {
                 glyph: NoteGlyph::NormallyOpen,
                 pins: "13-14".into(),
@@ -2832,14 +2832,14 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         let home = labels_of(&ps);
-        assert_eq!(home.len(), 20);
+        assert_eq!(home.len(), 40);
         let ink = ps.scene().get(item_id(k1)).unwrap().primitives[0]
             .shape
             .bounds();
         let x = home[0].bounds().center().x;
-        // More than 60 mm below the ink, inside the table's lower rows.
-        let top = ink.max.y + 70.0;
-        assert!(home[19].bounds().max.y > top + 10.0, "the table is tall");
+        // Far more than 60 mm below the ink, inside the table's lower rows.
+        let top = ink.max.y + 110.0;
+        assert!(home[39].bounds().max.y > top + 10.0, "the table is tall");
         let (_, changes) = wire_span(&mut doc, page, x, top - 5.0, top + 15.0);
         assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
         let moved = labels_of(&ps);
