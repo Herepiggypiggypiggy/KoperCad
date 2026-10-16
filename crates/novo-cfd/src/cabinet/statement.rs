@@ -9,6 +9,7 @@
 
 use crate::accuracy::flow_core_statement;
 use crate::result::{AccuracyStatement, Fidelity};
+use crate::turb::TurbModel;
 
 /// Set when the cabinet against IEC 60890 and the 2D engine is within the
 /// tolerance of `tests/validation_cabinet.rs` for the sealed and the vented
@@ -48,4 +49,32 @@ pub fn accuracy_for(fidelity: Fidelity) -> AccuracyStatement {
         benchmarks: core.benchmarks,
         limits,
     }
+}
+
+/// The accuracy statement of a result with a turbulence model: the generic
+/// "turbulence is not modelled" limit is replaced by what the model does and
+/// where it stops being valid.
+pub fn accuracy_with_turbulence(fidelity: Fidelity, model: TurbModel) -> AccuracyStatement {
+    let mut a = accuracy_for(fidelity);
+    if model == TurbModel::Laminar {
+        return a;
+    }
+    let name = match model {
+        TurbModel::KOmegaSst => "k-omega SST",
+        _ => "k-epsilon (cross check)",
+    };
+    if let Some(first) = a
+        .limits
+        .iter_mut()
+        .find(|l| l.starts_with("Turbulence and radiation"))
+    {
+        *first = format!(
+            "Turbulence: {name} with wall functions; radiation is not modelled, so surface \
+             temperatures of hot devices are slightly high. The wall functions assume attached \
+             flow, and the heat flux of natural-convection walls is under-predicted when the \
+             first cell is thicker than the boundary layer (coarse grids)."
+        );
+    }
+    a.headline.push_str(&format!(" Turbulence: {name}."));
+    a
 }
