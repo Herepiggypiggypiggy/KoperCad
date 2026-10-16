@@ -791,6 +791,14 @@ impl NovoApp {
                 self.cabinet.keys.clear();
                 self.cabinet.drag = None;
                 self.cabinet.ghost = None;
+                // Escape leaves the table for the plate.
+                let leave = !self.wb.field.is_open()
+                    && !self.modal_open()
+                    && !ui.ctx().egui_wants_keyboard_input()
+                    && ui.input(|i| i.key_pressed(egui::Key::Escape));
+                if leave {
+                    ask = Some(Ask::ToggleTable);
+                }
                 let selected = self.cabinet_selected();
                 if let Some(id) = cabinet_table(ui, &shown, &cands, &tag_of, &selected) {
                     // A row is its device: select it and show it on the plate.
@@ -1064,7 +1072,8 @@ impl NovoApp {
                     ask = Some(Ask::Accept);
                 } else if has_plan && escape {
                     ask = Some(Ask::Cancel);
-                } else if let (Some(layout), false) = (&layout, has_plan) {
+                } else if let Some(layout) = &layout {
+                    let on_plate = shown;
                     // Dropping a device from the list.
                     if let (Some(id), Some(at)) =
                         (out.response.dnd_release_payload::<u64>(), out.cursor_raw)
@@ -1115,7 +1124,7 @@ impl NovoApp {
                             .is_some()
                         });
                         if !on_grip
-                            && let Some(p) = layout.placements.iter().rev().find(|p| {
+                            && let Some(p) = on_plate.placements.iter().rev().find(|p| {
                                 let f = p.footprint();
                                 wx >= f.x && wx <= f.right() && wy >= f.y && wy <= f.bottom()
                             })
@@ -1397,6 +1406,14 @@ impl NovoApp {
         layout: Option<CabinetLayout>,
         cands: &[novo_layout::plan::Candidate],
     ) {
+        // Editing the plate while a Place all preview is up takes the
+        // preview first (one undo step), so a drag, turn or take-off never
+        // acts on a layout that is not stored yet.
+        if self.cabinet.preview.is_some()
+            && matches!(ask, Ask::Drop(..) | Ask::Rotate(_) | Ask::Remove(_))
+        {
+            self.cabinet_ask(Ask::Accept, structure, None, cands);
+        }
         match ask {
             Ask::Panel(l) => {
                 self.cabinet.location = Some(l);
