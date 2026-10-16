@@ -124,6 +124,12 @@ mod gate1_tests;
 #[cfg(test)]
 mod learn_tests;
 #[cfg(test)]
+mod lesson_verify_cables;
+#[cfg(test)]
+mod lesson_verify_outputs;
+#[cfg(test)]
+mod lesson_verify_terminals;
+#[cfg(test)]
 mod numbering_tests;
 #[cfg(test)]
 mod onboarding_tests;

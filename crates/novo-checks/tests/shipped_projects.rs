@@ -58,11 +58,7 @@ fn shipped_projects_have_no_eplan_style_problems() {
         };
         loaded += 1;
         for problem in check(&project) {
-            // Known: the starting project of the wire-numbers lesson gives two
-            // wires on different nets the number 2 (lessons thread to fix).
-            let known = file.ends_with("wire-numbers/project.json")
-                && problem.kind == ProblemKind::WireNumber;
-            if watched.contains(&problem.kind) && !known {
+            if watched.contains(&problem.kind) {
                 bad.push(format!("{}: {}", file.display(), problem.message));
             }
         }
