@@ -704,6 +704,11 @@ impl NovoApp {
                                 w: f.w,
                                 h: f.h,
                                 loss_w: loss,
+                                loss_known: project
+                                    .get::<Device>(DeviceId::from(p.id))
+                                    .is_some_and(|d| {
+                                        novo_thermal::bridge::device_loss_w(project, d).is_some()
+                                    }),
                             }
                         })
                         .collect();

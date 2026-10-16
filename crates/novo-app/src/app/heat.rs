@@ -45,6 +45,9 @@ pub(super) struct Item {
     pub w: f64,
     pub h: f64,
     pub loss_w: f64,
+    /// False when no loss figure exists for the device (drawn as "no data",
+    /// not as a cool 0 W device).
+    pub loss_known: bool,
 }
 
 /// What the view draws from: the plate and its devices.
@@ -199,6 +202,10 @@ impl HeatState {
                         }));
                     }
                 }
+                Event::Lost => {
+                    done = true;
+                    self.notice = Some("The simulation stopped unexpectedly".into());
+                }
                 Event::Finished(result) => {
                     done = true;
                     self.notice = match result {
@@ -271,6 +278,7 @@ pub(super) fn layout_key(input: &Input) -> u64 {
             i.w.to_bits(),
             i.h.to_bits(),
             i.loss_w.to_bits(),
+            i.loss_known,
         )
             .hash(&mut h);
     }
@@ -441,6 +449,28 @@ pub(super) fn chips(ui: &mut egui::Ui, state: &mut HeatState) {
     }
 }
 
+/// Fidelity as the header and legend say it: a result that has not been
+/// checked against benchmarks is a preview, never just "converged".
+fn status_label(p: &novo_cfd::Progress, validated: bool) -> String {
+    let state = if !validated {
+        "not validated"
+    } else if p.converged {
+        "converged"
+    } else {
+        "not converged"
+    };
+    format!("{} · {state}", p.fidelity.label())
+}
+
+/// Total loss of the devices that have a figure, and how many have none.
+fn totals(input: &Input) -> (f64, usize) {
+    let known = input.items.iter().filter(|i| i.loss_known);
+    (
+        known.map(|i| i.loss_w).sum(),
+        input.items.iter().filter(|i| !i.loss_known).count(),
+    )
+}
+
 /// Simulate / Cancel, the fidelity badge and the last notice.
 fn simulate_controls(ui: &mut egui::Ui, state: &mut HeatState) {
     if state.running() {
@@ -474,13 +504,9 @@ fn simulate_controls(ui: &mut egui::Ui, state: &mut HeatState) {
         }
         if let Some(sol) = &state.solution {
             let p = &sol.snapshot.progress;
-            let verdict = if p.converged {
-                "converged"
-            } else {
-                "not converged"
-            };
+            let validated = !sol.snapshot.accuracy.benchmarks.is_empty();
             ui.label(
-                egui::RichText::new(format!("{} · {verdict}", p.fidelity.label()))
+                egui::RichText::new(status_label(p, validated))
                     .small()
                     .color(t::TEXT_MUTED),
             );
@@ -582,7 +608,7 @@ pub(super) fn paint_over(
     }
     paint_peaks(&painter, cache, &to_screen);
     let stale = matches!(&cache.source, Source::Solved(sol) if sol.layout_key != layout_key(input));
-    legend(ui.ctx(), rect, cache, stale);
+    legend(ui.ctx(), rect, cache, input, stale);
 }
 
 fn paint_map(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64, f64) -> Pos2) {
@@ -701,9 +727,26 @@ fn paint_rims(
     to_screen: &dyn Fn(f64, f64) -> Pos2,
 ) {
     for i in &input.items {
-        let temp = device_temp(cache, i);
         let a = to_screen(i.x, i.y);
         let b = to_screen(i.x + i.w, i.y + i.h);
+        if !i.loss_known {
+            let r = Rect::from_two_pos(a, b);
+            let corners = [
+                r.left_top(),
+                r.right_top(),
+                r.right_bottom(),
+                r.left_bottom(),
+                r.left_top(),
+            ];
+            painter.extend(Shape::dashed_line(
+                &corners,
+                Stroke::new(1.5, t::TEXT_MUTED),
+                6.0,
+                4.0,
+            ));
+            continue;
+        }
+        let temp = device_temp(cache, i);
         let color = rgb(heat::ramp(cache.range.t(temp)), 1.0);
         painter.rect_stroke(
             Rect::from_two_pos(a, b),
@@ -777,7 +820,15 @@ fn paint_badges(
     zoom: f32,
 ) {
     let font = FontId::monospace(t::FONT_SMALL);
-    for i in input.items.iter().filter(|i| i.loss_w > 0.0) {
+    for i in input
+        .items
+        .iter()
+        .filter(|i| i.loss_w > 0.0 || !i.loss_known)
+    {
+        if !i.loss_known {
+            paint_no_data(painter, i, to_screen, zoom, &font);
+            continue;
+        }
         let Reading {
             temp,
             verdict,
@@ -816,6 +867,35 @@ fn paint_badges(
             t::TEXT,
         );
     }
+}
+
+/// A device without loss data says so instead of showing a made-up temperature.
+fn paint_no_data(
+    painter: &egui::Painter,
+    i: &Item,
+    to_screen: &dyn Fn(f64, f64) -> Pos2,
+    zoom: f32,
+    font: &FontId,
+) {
+    if (i.w as f32) * zoom < 76.0 || (i.h as f32) * zoom < 30.0 {
+        return;
+    }
+    let br = to_screen(i.x + i.w, i.y + i.h);
+    let pill = Rect::from_min_size(br - Vec2::new(70.0, 26.0), Vec2::new(64.0, 20.0));
+    painter.rect(
+        pill,
+        10.0,
+        t::BG_2,
+        Stroke::new(1.0, t::BORDER_STRONG),
+        egui::StrokeKind::Inside,
+    );
+    painter.text(
+        pill.center(),
+        Align2::CENTER_CENTER,
+        "no data",
+        font.clone(),
+        t::TEXT_MUTED,
+    );
 }
 
 fn paint_peaks(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64, f64) -> Pos2) {
@@ -860,7 +940,7 @@ fn paint_peaks(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64, f
     }
 }
 
-fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, stale: bool) {
+fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: bool) {
     egui::Area::new(egui::Id::new("heat_legend"))
         .fixed_pos(rect.right_top() + Vec2::new(-176.0, 12.0))
         .order(egui::Order::Foreground)
@@ -913,6 +993,19 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, stale: bool) {
                 );
                 ui.add_space(4.0);
                 let small = |text: &str, color| egui::RichText::new(text).small().color(color);
+                let (total_w, unknown) = totals(input);
+                ui.label(small(&format!("Total loss {total_w:.0} W"), t::TEXT));
+                if unknown > 0 {
+                    let (noun, verb) = if unknown == 1 {
+                        ("device", "has")
+                    } else {
+                        ("devices", "have")
+                    };
+                    ui.label(small(
+                        &format!("{unknown} {noun} {verb} no loss data (shown dashed)"),
+                        t::WARNING,
+                    ));
+                }
                 match &cache.source {
                     Source::Synthetic => {
                         ui.label(small(
@@ -923,7 +1016,8 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, stale: bool) {
                     }
                     Source::Solved(sol) => {
                         let p = &sol.snapshot.progress;
-                        ui.label(small(p.fidelity.label(), t::TEXT));
+                        let validated = !sol.snapshot.accuracy.benchmarks.is_empty();
+                        ui.label(small(&status_label(p, validated), t::TEXT));
                         if stale {
                             ui.label(small(
                                 "Out of date: the layout changed since this run.",
@@ -966,6 +1060,7 @@ mod tests {
                     w: 150.0,
                     h: 200.0,
                     loss_w: 80.0,
+                    loss_known: true,
                 },
                 Item {
                     id: 2,
@@ -975,6 +1070,7 @@ mod tests {
                     w: 45.0,
                     h: 90.0,
                     loss_w: 2.0,
+                    loss_known: true,
                 },
             ],
             solution: None,
@@ -1174,5 +1270,28 @@ mod tests {
         state.start(scenario(), meta(&i), || {});
         assert_eq!(state.runs, runs);
         run_to_end(&mut state);
+    }
+
+    #[test]
+    fn devices_without_loss_data_are_counted_not_summed() {
+        let mut i = input();
+        i.items[1].loss_known = false;
+        i.items[1].loss_w = 0.0;
+        assert_eq!(totals(&i), (80.0, 1));
+        assert_eq!(totals(&input()), (82.0, 0));
+        // Knowing a loss changes the picture's cache key.
+        assert_ne!(layout_key(&i), layout_key(&input()));
+    }
+
+    #[test]
+    fn a_result_nobody_validated_is_never_just_converged() {
+        let mut state = HeatState::new();
+        let i = input();
+        state.start(scenario(), meta(&i), || {});
+        run_to_end(&mut state);
+        let sol = state.solution().unwrap();
+        let p = &sol.snapshot.progress;
+        assert!(status_label(p, false).ends_with("not validated"));
+        assert!(status_label(p, true).ends_with("converged"));
     }
 }
