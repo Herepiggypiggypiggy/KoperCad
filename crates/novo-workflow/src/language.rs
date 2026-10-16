@@ -71,6 +71,11 @@ pub const DUTCH: &[Aliases] = &[
     nl("learn.restart", &[], &["les opnieuw", "les herstarten"]),
     nl("learn.close", &[], &["les sluiten"]),
     nl("file.save", &[], &["opslaan", "bewaren"]),
+    nl(
+        "project.languages",
+        &[],
+        &["rapporttaal", "taal", "vertalingen", "pdf taal"],
+    ),
     nl("file.save_as", &[], &["opslaan als"]),
     nl("file.close", &[], &["project sluiten", "sluiten"]),
     // Not a bare "pagina": `pagina 2` goes to page 2.
