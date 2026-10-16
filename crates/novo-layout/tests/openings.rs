@@ -164,7 +164,7 @@ fn the_layout_reports_devices_over_openings_and_loads_them_from_the_project() {
 fn unknown_surface_names_are_sentences() {
     let o = Opening::parse("a", "plate round 10 5 5 to plate2 1 1").unwrap();
     let known = vec!["plate".to_string()];
-    let p = unknown_surfaces(&[o.clone()], &known);
+    let p = unknown_surfaces(std::slice::from_ref(&o), &known);
     assert_eq!(p.len(), 1);
     assert!(p[0].contains("'plate2'") && p[0].contains("known: plate"));
     assert!(unknown_surfaces(&[o], &["plate".into(), "plate2".into()]).is_empty());
