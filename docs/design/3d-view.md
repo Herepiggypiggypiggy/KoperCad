@@ -626,9 +626,20 @@ A test counts the scene-bounds walks per frame and requires the same number
 with 20 and with 600 devices (it fails with 22 against 602 on the old code),
 and that it is one: `show` hands its bounds to the overlay and the dimension
 painter, so a frame walks the scene once.
-The remaining label cost at 3000 devices is about 1 ms, in the overlap check of
-`labels::visible_labels` (candidates times shown labels); the next lever, not
-needed at today's sizes.
+The label cost left at 3000 devices (1.5 ms, three times the rest of the
+widget) was not the overlap check: a grid for it measured the same. It was the
+text layout of a chip for every device in view, of which nearly all are too
+small to carry a label. A device now gets its chip laid out only when it could
+show one (28 px wide, selected, hovered, or still fading out), and the shown
+set is a hash set instead of a list searched per chip:
+
+| Widget CPU per frame, 1366x768 | before | after |
+| --- | --- | --- |
+| 1000 devices, 300 wires, labels on | 0.43 ms | 0.19 ms |
+| 3000 devices, 1000 wires, labels on | 1.50 ms | 0.51 ms |
+
+(Same release `uicost` run, the labels-off row is 0.48 ms at 3000 devices, so
+labels now cost 0.03 ms.) A test counts the chips laid out per frame.
 
 **Renderer on llvmpipe at 1366x768** (4 cores, software rasteriser, forced to the
 discrete tier so shadows and MSAA settings match a real GPU; wall ms per frame

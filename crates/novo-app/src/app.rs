@@ -50,6 +50,7 @@ mod heat_3d_tests;
 mod heat_compare;
 #[cfg(test)]
 mod heat_compare_tests;
+mod heat_legend;
 mod heat_live;
 #[cfg(test)]
 mod heat_live_tests;
@@ -140,6 +141,9 @@ mod view3d_heat;
 mod view3d_move;
 #[cfg(test)]
 mod view3d_move_tests;
+mod view3d_rail;
+#[cfg(test)]
+mod view3d_rail_tests;
 mod view3d_stats;
 #[cfg(test)]
 mod view3d_tests;
