@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use novo_checks::standards::Colour;
 use novo_core::{
-    CabinetPlacement, Device, DeviceKind, Project, Rail as ModelRail, RailKind, StructureId, Value,
-    WireId,
+    CabinetPlacement, Device, DeviceKind, Netlist, PotentialKind, Project, Rail as ModelRail,
+    RailKind, StructureId, Value, WireId,
 };
 use novo_layout::enclosure::{Enclosure, Hinge};
 use novo_layout::model::{enclosure_of, load};
@@ -153,17 +153,35 @@ pub fn insulation(colour: Colour) -> WireColour {
 }
 
 /// The colour a wire has in the schematic: its own colour, else the name of
-/// its cable core when that is a colour code. `None` when neither is set or
-/// the text is not a colour the standards checks know either.
+/// its cable core when that is a colour code, else the colour its potential
+/// has in 3d-look.md section 3: protective earth green-yellow, neutral and
+/// 0 V blue, positive DC red. A line conductor stays plain: whether it is
+/// power (black) or control (red) is not in the model. `None` when none of
+/// these applies or the text is not a colour the standards checks know.
 pub fn wire_colour(project: &Project, wire: WireId) -> Option<WireColour> {
+    wire_colour_in(project, &project.netlist(), wire)
+}
+
+/// [`wire_colour`] with the netlist at hand, for many wires.
+fn wire_colour_in(project: &Project, netlist: &Netlist, wire: WireId) -> Option<WireColour> {
     let w = project.wire(wire)?;
     let own = w.color.as_deref().map(str::trim).filter(|t| !t.is_empty());
     let colour = match own {
         Some(text) => Colour::parse(text),
         None => {
-            let (cable, core) = project.core_of_wire(wire)?;
-            let core = project.cable(cable)?.cores.get(core)?;
-            Colour::parse(&core.name)
+            let named = project.core_of_wire(wire).and_then(|(cable, core)| {
+                let core = project.cable(cable)?.cores.get(core)?;
+                Colour::parse(&core.name)
+            });
+            named.or_else(|| {
+                let potential = netlist.net(netlist.net_of_wire(w)?).potential()?;
+                match project.potential(potential)?.kind {
+                    PotentialKind::ProtectiveEarth => Some(Colour::GreenYellow),
+                    PotentialKind::Neutral | PotentialKind::DcNegative => Some(Colour::Blue),
+                    PotentialKind::DcPositive => Some(Colour::Red),
+                    PotentialKind::Line | PotentialKind::Pen | PotentialKind::Signal => None,
+                }
+            })
         }
     };
     colour.map(insulation)
@@ -176,6 +194,7 @@ pub fn wires(project: &Project, id: StructureId) -> Vec<WireInput> {
     let Some((_, plan)) = routed.plans.iter().find(|(s, _)| *s == id) else {
         return Vec::new();
     };
+    let netlist = project.netlist();
     let diameters: std::collections::HashMap<u64, Option<f64>> = wire_connections(project)
         .into_iter()
         .map(|c| (c.id, c.diameter_mm))
@@ -191,7 +210,7 @@ pub fn wires(project: &Project, id: StructureId) -> Vec<WireInput> {
             points: r.points.iter().map(|p| (p.x, p.y)).collect(),
             ducts: r.ducts.clone(),
             diameter_mm: diameters.get(&r.job).copied().flatten(),
-            colour: wire_colour(project, WireId::from(r.job)),
+            colour: wire_colour_in(project, &netlist, WireId::from(r.job)),
         })
         .collect()
 }

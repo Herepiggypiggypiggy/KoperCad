@@ -12,3 +12,4 @@
 - 2026-10-16 #755 review (R7): the governor reads the whole-app frame interval, so Tier::step_down now floors at Integrated; a hardware adapter never steps itself down to Software.
 - 2026-10-16 PR: performance pass. Found the label pass costing 51 ms per frame at 1000 devices (View3d::project walked the scene bounds per label); now 0.45 ms. Examples: `uicost` (widget CPU headless), `orbit --tier --shadows --no-edges --heat N`. Numbers in the design doc.
 - 2026-10-16 PR: a frame walks the scene bounds once (show passes them to paint_overlay and paint_dimensions; test now requires one walk).
+- 2026-10-16 PR: wires without a colour take their potential colour (PE green-yellow, neutral and 0 V blue, positive DC red); line conductors stay grey (circuit class not in the model).
