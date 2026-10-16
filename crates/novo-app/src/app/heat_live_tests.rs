@@ -179,6 +179,41 @@ fn with_auto_off_the_result_only_goes_stale() {
     assert!(!state.running());
 }
 
+struct Fails(std::sync::atomic::AtomicUsize);
+
+impl Solver for Fails {
+    fn solve(
+        &self,
+        _: &novo_thermal::Scenario,
+        _: Fidelity,
+        _: &Control,
+        _: &mut dyn FnMut(&novo_cfd::CfdSnapshot),
+    ) -> Result<novo_cfd::CfdSnapshot, novo_cfd::CfdError> {
+        self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Err(novo_cfd::CfdError::Cancelled)
+    }
+}
+
+#[test]
+fn a_run_that_fails_is_not_started_again_every_frame() {
+    let (mut p, cab, hot) = fixture();
+    let ctx = egui::Context::default();
+    let mut state = HeatState::new();
+    frame(&mut state, &ctx, &p, cab, 0.0);
+    state.start_current();
+    settle(&mut state, &ctx, &p, cab, 0.0);
+    move_hot(&mut p, cab, hot, 300.0, 400.0);
+    // From here every run fails before its first snapshot.
+    let fails = std::sync::Arc::new(Fails(Default::default()));
+    state.set_solver_for_test(fails.clone());
+    for t in 1..60 {
+        frame(&mut state, &ctx, &p, cab, f64::from(t));
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert_eq!(fails.0.load(std::sync::atomic::Ordering::SeqCst), 1);
+    assert!(state.live.is_stale());
+}
+
 #[test]
 fn a_move_during_a_run_cancels_it_and_starts_the_next() {
     let (mut p, cab, hot) = fixture();

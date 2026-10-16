@@ -17,6 +17,8 @@ pub(super) struct Solution {
     pub id: u64,
     /// The scenario this result solved.
     pub scenario: Arc<novo_thermal::Scenario>,
+    /// `heat_live::scenario_key` of it.
+    pub scenario_key: u64,
     /// Hash of the layout the run was started from; a different one marks
     /// the result out of date.
     pub layout_key: u64,

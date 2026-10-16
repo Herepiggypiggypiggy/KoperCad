@@ -58,6 +58,7 @@ fn solve(scn: &Scenario, id: u64) -> Solution {
         snapshot: Arc::new(snap),
         id,
         scenario: Arc::new(scn.clone()),
+        scenario_key: 0,
         layout_key: 0,
         ambient: scn.ambient_c,
         plate: [p.x, p.y, p.w, p.h],

@@ -103,6 +103,8 @@ pub(super) struct HeatState {
     pub(super) live: super::heat_live::Live,
     /// Counts the snapshots, so each one gets its own cache key.
     snap_seq: u64,
+    #[cfg(test)]
+    test_solver: Option<Arc<dyn novo_cfd::Solver>>,
     /// `heat.simulate` was asked for; the Cabinet view starts the run on its
     /// next frame, when it has the project.
     requested: bool,
@@ -169,6 +171,8 @@ impl HeatState {
             runs: 0,
             live: super::heat_live::Live::default(),
             snap_seq: 0,
+            #[cfg(test)]
+            test_solver: None,
             notice: None,
         }
     }
@@ -272,9 +276,21 @@ impl HeatState {
         self.live.clear_superseded();
         self.runs += 1;
         self.pending = Some(meta);
-        self.run = Some(Runner::start(heat_run::default_solver(), scenario, top));
+        #[cfg(test)]
+        let solver = self
+            .test_solver
+            .clone()
+            .unwrap_or_else(heat_run::default_solver);
+        #[cfg(not(test))]
+        let solver = heat_run::default_solver();
+        self.run = Some(Runner::start(solver, scenario, top));
         self.progress = None;
         self.history.clear();
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_solver_for_test(&mut self, s: Arc<dyn novo_cfd::Solver>) {
+        self.test_solver = Some(s);
     }
 
     /// Why a run could not start, shown next to the Simulate button.
@@ -303,6 +319,7 @@ impl HeatState {
                         self.solution = Some(Arc::new(Solution {
                             snapshot,
                             id: self.snap_seq,
+                            scenario_key: super::heat_live::scenario_key(&m.scenario),
                             scenario: m.scenario.clone(),
                             layout_key: m.layout_key,
                             ambient: m.ambient,

@@ -8,6 +8,7 @@
 //! Medium, Fine, so the first picture is a quick preview and the last one
 //! the proper result.
 
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use eframe::egui;
@@ -24,11 +25,20 @@ const DEBOUNCE_S: f64 = 0.4;
 /// Cabinets with more devices than this start with auto re-solve off.
 const AUTO_DEVICES: usize = 40;
 
+/// Identity of a scenario for "same cabinet": a hash of its exact contents,
+/// so floats never need to compare equal to themselves.
+pub(super) fn scenario_key(s: &Scenario) -> u64 {
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    format!("{s:?}").hash(&mut h);
+    h.finish()
+}
+
 /// What the project gave at one revision.
 struct Current {
     key: (StructureId, u64, u64),
     /// `None` when the bridge cannot build one (no plate).
     scenario: Option<Arc<Scenario>>,
+    scenario_key: u64,
     plate: [f64; 4],
     ambient: f64,
     messages: Vec<String>,
@@ -47,6 +57,10 @@ pub(super) struct Live {
     /// A run was cancelled for the edited cabinet and none has replaced it
     /// yet, even when it left no result behind.
     rerun: bool,
+    /// The scenario a run was last started for, by key. An automatic run is
+    /// not started again for it, so a failed or stopped run is not retried
+    /// every frame.
+    started_for: Option<u64>,
     devices: usize,
 }
 
@@ -78,8 +92,8 @@ impl Live {
     /// compare (before the first sync) the layout key of the Cabinet view
     /// decides.
     pub(super) fn out_of_date(&self, sol: &Solution, layout_key: u64) -> bool {
-        match self.current.as_ref().and_then(|c| c.scenario.as_ref()) {
-            Some(now) => *sol.scenario != **now,
+        match self.current.as_ref().filter(|c| c.scenario.is_some()) {
+            Some(now) => sol.scenario_key != now.scenario_key,
             None => sol.layout_key != layout_key,
         }
     }
@@ -122,9 +136,11 @@ impl HeatState {
                 self.live.changed_at = now;
             }
             self.live.devices = scenario.as_ref().map_or(0, |s| s.devices.len());
+            let scenario_key = scenario.as_deref().map_or(0, scenario_key);
             self.live.current = Some(Current {
                 key,
                 scenario,
+                scenario_key,
                 plate,
                 ambient,
                 messages,
@@ -133,15 +149,16 @@ impl HeatState {
         let Some(cur) = self.live.current.as_ref() else {
             return;
         };
-        let Some(scenario) = cur.scenario.clone() else {
+        if cur.scenario.is_none() {
             self.live.stale = false;
             return;
-        };
-        let stale = self.solution().is_some_and(|s| *s.scenario != *scenario);
+        }
+        let now_key = cur.scenario_key;
+        let stale = self.solution().is_some_and(|s| s.scenario_key != now_key);
         let run_old = self
             .pending
             .as_ref()
-            .is_some_and(|m| *m.scenario != *scenario);
+            .is_some_and(|m| scenario_key(&m.scenario) != now_key);
         self.live.stale = stale;
         if !self.live.auto_on() || !(stale || run_old || self.live.rerun) {
             return;
@@ -155,7 +172,7 @@ impl HeatState {
             }
             return;
         }
-        if self.run.is_some() || dragging {
+        if self.run.is_some() || dragging || self.live.started_for == Some(now_key) {
             return;
         }
         let wait = DEBOUNCE_S - (now - self.live.changed_at);
@@ -176,6 +193,7 @@ impl HeatState {
             self.fail("Open an enclosure with a mounting plate to simulate".into());
             return;
         };
+        self.live.started_for = Some(cur.scenario_key);
         let meta = Meta {
             scenario: scenario.clone(),
             layout_key: 0,
