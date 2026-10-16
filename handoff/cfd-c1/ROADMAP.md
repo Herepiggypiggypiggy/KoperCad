@@ -3,17 +3,14 @@
 Scope: turn a `novo_thermal::Scenario` into a graded Cartesian grid with cell classification (crate `novo-cfd`, module `mesh/`). Pure functions, no solver code.
 
 Done
-- Graded axes (geometric growth, hard neighbour-ratio bound by splitting), planes at walls, device/obstacle faces, opening edges.
-- Cell classification with exact volume shares (cut-cell lite), material ids, `MixedCell` list.
-- Presets 50k / 500k / 2M cells by `MeshSettings::for_fidelity`.
-- `MeshPreview` (counts, sizes, ratios, memory, `summary()` line) for the UI.
-- Tests in `crates/novo-cfd/tests/mesh.rs`.
+- Round 1 (#577): graded axes, exact cut-cell shares, presets 50k/500k/2M, `MeshPreview`.
+- Round 2 (branch claude/cfd-c1-refine): cells across every body and opening (`min_cells_across`, default 3), a budget ladder that lowers the number when the bodies alone exceed the target (`GridPlan`), planes at body faces kept unless they are slivers, ducts and rails one cell fewer, plate lateral edges as planes, faster growth inside solids, `BodyResolution` and `unresolved_bodies` in the preview, `plate_slab` and `resolve_thin` switches, `LevelTuning::mesh` to pass mesh rules to the cabinet solver, `examples/mesh_study.rs` and `mesh_grid.rs`.
 
 Next
-- Nested/coarsened levels for grid sequencing if CFD-E needs them (today `locate` maps points between independent grids).
-- Parallel classification (rayon) if profiling at 2M+ cells shows it matters.
-- Resolve the plate slab with its own plane when CFD-C2 asks for it.
+- Rerun `mesh_study` once CFD-C2's sheet/lumped device model (#705) is on main and add the mesh-independence test to `tests/validation_device.rs` territory (CFD-G owns the table).
+- Near-wall air cells next to hot device faces are still set by `near_ratio` only; the laminar thermal boundary layer (about 2 mm at 60 K) is not resolved at 6k cells, so surface temperatures there depend on the solver's wall treatment.
+- Nested levels for grid sequencing if CFD-E needs them (`locate` maps points between independent grids).
 
 Open questions
-- `ObstacleKind::Solid` maps to `MaterialKind::Wall`; a `Partition` kind would be clearer (CFD-A owns `result.rs`).
-- Opening planes in z (depth) are not added: the scenario does not say where in depth a wall opening sits.
+- `ObstacleKind::Solid` maps to `MaterialKind::Wall` (CFD-A owns `result.rs`).
+- Opening planes in z are not added: the scenario does not give the depth of a wall opening.

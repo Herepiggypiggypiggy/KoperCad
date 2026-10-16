@@ -2,9 +2,9 @@
 
 use novo_thermal::Scenario;
 
-use super::regions::{Region, regions};
-use super::{MeshError, MeshSettings, plan_grid};
-use crate::result::{Grid3, MaterialInfo};
+use super::regions::Region;
+use super::{MeshError, MeshSettings, THIN_MM, plan_grid_report};
+use crate::result::{Grid3, MaterialInfo, MaterialKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CellClass {
@@ -38,14 +38,42 @@ pub struct Mesh {
     pub materials: Vec<MaterialInfo>,
     /// Volume per material id, m3 (index = id; ids of dropped items are 0).
     pub material_volume_m3: Vec<f64>,
+    /// How many cells each solid body spans, per axis.
+    pub bodies: Vec<BodyResolution>,
+    /// The bodies alone needed more cells than the target (see
+    /// `GridPlan::over_budget`).
+    pub over_budget: bool,
+}
+
+/// Cells across one solid body, counted by cell centres inside it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BodyResolution {
+    pub material: u16,
+    pub name: String,
+    pub cells_across: [usize; 3],
+    /// Axes along which the body is a thin plate or rail (below `THIN_MM`),
+    /// which may live in cut cells. Any other thin body (a slim relay) is
+    /// not excused: it needs two cells like the rest.
+    pub thin: [bool; 3],
+}
+
+impl BodyResolution {
+    /// At least two cells across every axis, except a thin plate or rail
+    /// axis: what a temperature on the body's surface needs to mean
+    /// something. The plate lives in cut cells unless `resolve_thin` is on.
+    pub fn is_resolved(&self) -> bool {
+        (0..3).all(|a| self.thin[a] || self.cells_across[a] >= 2)
+    }
 }
 
 impl Mesh {
     /// Mesh a scenario with the given settings.
     pub fn build(scn: &Scenario, st: &MeshSettings) -> Result<Mesh, MeshError> {
-        let grid = plan_grid(scn, st)?;
-        let (regs, materials) = regions(scn);
-        Ok(Mesh::classify(grid, &regs, materials))
+        let plan = plan_grid_report(scn, st)?;
+        let (regs, materials) = super::regions_with(scn, st.plate_slab);
+        let mut mesh = Mesh::classify(plan.grid, &regs, materials);
+        mesh.over_budget = plan.over_budget;
+        Ok(mesh)
     }
 
     /// Classify a given grid against solid regions (priority order).
@@ -136,6 +164,7 @@ impl Mesh {
             }
         }
         vol[0] = air * 1e-9;
+        let bodies = bodies(&grid, regs, &materials);
         Mesh {
             grid,
             class,
@@ -144,6 +173,8 @@ impl Mesh {
             mixed,
             materials,
             material_volume_m3: vol,
+            bodies,
+            over_budget: false,
         }
     }
 
@@ -239,4 +270,32 @@ fn resolve(lo: [f64; 3], hi: [f64; 3], boxes: &[&Region]) -> Vec<(u16, f64)> {
     }
     acc.sort_by_key(|p| p.0);
     acc
+}
+
+fn bodies(grid: &Grid3, regs: &[Region], materials: &[MaterialInfo]) -> Vec<BodyResolution> {
+    regs.iter()
+        .map(|r| {
+            let across = |a: usize| {
+                let e = edges(grid, a);
+                e.windows(2)
+                    .filter(|w| {
+                        let c = 0.5 * (w[0] + w[1]);
+                        c > r.lo[a] && c < r.hi[a]
+                    })
+                    .count()
+            };
+            let sheet_kind = materials.iter().any(|m| {
+                m.id == r.material && matches!(m.kind, MaterialKind::Plate | MaterialKind::Rail)
+            });
+            BodyResolution {
+                material: r.material,
+                name: materials
+                    .iter()
+                    .find(|m| m.id == r.material)
+                    .map_or_else(String::new, |m| m.name.clone()),
+                cells_across: [across(0), across(1), across(2)],
+                thin: std::array::from_fn(|a| sheet_kind && r.hi[a] - r.lo[a] < THIN_MM),
+            }
+        })
+        .collect()
 }
