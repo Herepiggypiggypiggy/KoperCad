@@ -346,7 +346,7 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["geweigerde voorstellen", "afgewezen klemmen", "herstellen"],
     ),
-    nl("view.terminals_drawer", &[],&["klemmen", "klemmenstroken"]),
+    nl("view.terminals_drawer", &[], &["klemmen", "klemmenstroken"]),
     nl("view.cables_drawer", &[], &["kabels", "aders"]),
     nl("view.devices_drawer", &[], &["apparaten", "onderdelen"]),
     nl("view.focus", &[], &["focusmodus"]),
