@@ -50,6 +50,7 @@ mod heat_3d_tests;
 mod heat_compare;
 #[cfg(test)]
 mod heat_compare_tests;
+mod heat_legend;
 mod heat_live;
 #[cfg(test)]
 mod heat_live_tests;
