@@ -416,3 +416,14 @@ fn a_ready_lesson_naming_a_missing_anchor_is_coming_soon() {
     d.app.learn.use_files(files);
     assert!(d.app.learn.is_coming_soon("tiny"));
 }
+
+#[test]
+fn early_access_lessons_are_listed_by_default() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = Drive::new(&dir.path().join("untitled"));
+    assert!(!d.app.learn.show_drafts);
+    assert!(
+        d.app.learn.catalog.visible(false).count() > 0,
+        "the build ships lessons"
+    );
+}

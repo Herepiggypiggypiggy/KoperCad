@@ -2829,3 +2829,43 @@ fn a_cable_line_collects_the_wires_it_touches() {
     assert!(editor.take_cable_request().is_none());
     assert!(editor.notice().is_some());
 }
+
+#[test]
+fn joining_a_wire_never_glides_along_it_off_the_grid() {
+    use novo_editor::geometry::{snap_along_wire, wire_points};
+    let (mut doc, page, [a, _b, c, _d]) = two_rows();
+    let w1 = doc
+        .transact("w1", |tx| {
+            edit::draw_wire(
+                tx,
+                page,
+                target(tx.project(), a, "14"),
+                &[],
+                target(tx.project(), c, "13"),
+            )
+        })
+        .unwrap()
+        .0;
+    let pts = wire_points(doc.project(), w1).unwrap();
+    // The horizontal stretch y = 88 runs x = 40..60. With a 15 mm grid the
+    // only grid line inside it is x = 45; the pointer sweeps the whole
+    // stretch, including the part nearest the end at x = 60 whose own grid
+    // line is the wire end, and always lands on 45.
+    assert!(pts.iter().any(|q| (q.y - 88.0).abs() < 1e-6));
+    let mut x = 40.5;
+    while x < 59.6 {
+        let at = snap_along_wire(doc.project(), w1, p(x, 88.0), 15.0);
+        assert_eq!(at, p(45.0, 88.0), "pointer at x = {x}");
+        x += 0.5;
+    }
+    // A fine grid still picks the nearest line, as before.
+    assert_eq!(
+        snap_along_wire(doc.project(), w1, p(52.4, 88.0), 5.0),
+        p(50.0, 88.0)
+    );
+    // No grid line inside the stretch: nothing to snap to, the point stays.
+    assert_eq!(
+        snap_along_wire(doc.project(), w1, p(52.4, 88.0), 40.0),
+        p(52.4, 88.0)
+    );
+}

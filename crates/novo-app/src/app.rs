@@ -24,6 +24,9 @@ mod dxf;
 mod example;
 mod faults;
 mod heat;
+mod heat_run;
+#[cfg(test)]
+mod heat_run_tests;
 mod inspector;
 mod interop;
 mod learn;

@@ -711,8 +711,24 @@ impl NovoApp {
                         plate: (shown.plate.width, shown.plate.height),
                         ambient: self.sizing.request().ambient_max,
                         items,
+                        solution: self.cabinet.heat.solution(),
                     }
                 });
+                if self.cabinet.heat.take_request() {
+                    match (structure, &heat_input) {
+                        (Some(s), Some(input)) => super::heat::start_run(
+                            &mut self.cabinet.heat,
+                            project,
+                            s,
+                            input,
+                            ui.ctx(),
+                        ),
+                        _ => self
+                            .cabinet
+                            .heat
+                            .fail("Open an enclosure with a mounting plate to simulate".into()),
+                    }
+                }
                 let dragging = self.cabinet.drag.is_some();
                 // The map goes under the canvas: it paints no background of
                 // its own while the map is on.

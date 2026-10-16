@@ -214,7 +214,9 @@ impl LearnState {
         lint(&self.catalog, &self.files, &registry, example.as_ref())
     }
 
-    /// Lessons with a lint error, which are listed as coming soon.
+    /// Lessons with a lint error, which are listed as coming soon. An early
+    /// access lesson only warns: it starts, and a pointer whose control this
+    /// build does not have yet is left out.
     fn lint_errors(&self) -> BTreeSet<String> {
         self.lint_report()
             .findings
