@@ -30,6 +30,9 @@ pub(crate) struct View3dMode {
     /// the overlays were built for.
     heat: Heat3d,
     heat_shown: Option<(u64, Heat3d)>,
+    /// Overlays without the moving tracers, and the lines the tracers follow.
+    heat_base: Vec<novo_view3d::Overlay>,
+    heat_flow: heat_3d::Flow,
     /// The layers the scene was built with.
     built_layers: Layers,
     /// The routed wires of an enclosure at a project revision.
@@ -46,6 +49,8 @@ impl Default for View3dMode {
             built: None,
             heat: Heat3d::default(),
             heat_shown: None,
+            heat_base: Vec::new(),
+            heat_flow: heat_3d::Flow::default(),
             built_layers: Layers::default(),
             wires: None,
             controls: Controls::default(),
@@ -133,17 +138,39 @@ impl NovoApp {
             heat_controls(ui, &mut mode.heat, sol);
         }
         let wanted = solution.as_ref().map(|s| (s.id, mode.heat));
+        let tracing = solution.is_some() && mode.heat.lines && !self.settings.reduce_motion;
         if wanted != mode.heat_shown {
-            let overlays = solution.as_ref().map_or_else(Vec::new, |sol| {
-                let place = Place {
-                    plate_x: sol.plate[0],
-                    plate_y: sol.plate[1],
-                    frame: scene.frame,
-                };
-                heat_3d::overlays(&sol.snapshot, sol.ambient, place, &mode.heat)
+            let place = |sol: &super::heat_run::Solution| Place {
+                plate_x: sol.plate[0],
+                plate_y: sol.plate[1],
+                frame: scene.frame,
+            };
+            mode.heat_flow = match &solution {
+                Some(sol) if mode.heat.lines => heat_3d::flow(&sol.snapshot, place(sol)),
+                _ => heat_3d::Flow::default(),
+            };
+            mode.heat_base = solution.as_ref().map_or_else(Vec::new, |sol| {
+                heat_3d::overlays(
+                    &sol.snapshot,
+                    sol.ambient,
+                    place(sol),
+                    &mode.heat,
+                    &mode.heat_flow,
+                )
             });
-            mode.view.set_overlays(overlays);
             mode.heat_shown = wanted;
+            if !tracing {
+                mode.view.set_overlays(mode.heat_base.clone());
+            }
+        }
+        if tracing {
+            let mut all = mode.heat_base.clone();
+            let t = heat_3d::tracers(&mode.heat_flow, ui.input(|i| i.time));
+            if !t.positions.is_empty() {
+                all.push(novo_view3d::Overlay::Lines(t));
+            }
+            mode.view.set_overlays(all);
+            ui.ctx().request_repaint();
         }
         // The toolbar sits in the view's corner; the door goes where it says.
         let limit = model::door_limit_deg(project, id);
