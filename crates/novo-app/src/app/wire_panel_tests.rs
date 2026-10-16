@@ -48,3 +48,13 @@ fn edits_reach_every_selected_wire_and_bad_input_is_refused() {
     .unwrap();
     assert_eq!(facts(doc.project(), wires[0]).unwrap().method, "");
 }
+
+#[test]
+fn leaving_a_field_without_an_edit_commits_nothing() {
+    use super::wire_panel::should_commit;
+    assert!(!should_commit(true, "BK", "BK"));
+    assert!(!should_commit(true, " BK ", "BK"));
+    assert!(!should_commit(false, "RD", "BK"));
+    assert!(should_commit(true, "RD", "BK"));
+    assert!(should_commit(true, "", "BK"));
+}

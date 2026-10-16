@@ -130,6 +130,13 @@ const METHODS: [(&str, &str); 4] = [
     ("C", "C: clipped or on a tray"),
 ];
 
+/// Whether leaving a field commits: only when its text really changed, so
+/// tabbing through never overwrites other selected wires or makes an empty
+/// undo step.
+pub(super) fn should_commit(lost_focus: bool, value: &str, shown: &str) -> bool {
+    lost_focus && value.trim() != shown.trim()
+}
+
 /// A labelled text field whose edit is committed when it loses focus.
 #[allow(clippy::too_many_arguments)]
 fn text_row(
@@ -150,7 +157,7 @@ fn text_row(
                 .hint_text(hint)
                 .desired_width(130.0),
         );
-        if r.lost_focus() && value.trim() != shown.trim() {
+        if should_commit(r.lost_focus(), value, shown) {
             edits.push(edit(value.clone()));
         }
     });
