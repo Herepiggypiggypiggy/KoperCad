@@ -152,6 +152,8 @@ fn main() {
                 look: &look,
                 size_px: size,
                 quality,
+                overlays: &[],
+                overlay_revision: 0,
             },
         );
         queue.submit([encoder.finish()]);
@@ -211,6 +213,8 @@ fn main() {
                 look: &look,
                 size_px: size,
                 quality: Quality::new(Mode::Settled, Tier::Discrete),
+                overlays: &[],
+                overlay_revision: 0,
             },
         );
         queue.submit([encoder.finish()]);

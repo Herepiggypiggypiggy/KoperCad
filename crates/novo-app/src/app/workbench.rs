@@ -395,6 +395,7 @@ const APP_COMMANDS: &[&str] = &[
     "wires.unlock_number",
     "edit.select_all",
     "view.cabinet_table",
+    "cabinet.place-all",
     "heat.toggle",
     "heat.airflow",
     "heat.contours",
@@ -638,6 +639,11 @@ impl NovoApp {
                 let showing = self.workspace() == Workspace::Cabinet && self.cabinet.table;
                 self.cabinet.table = !showing;
                 self.switch_workspace(Workspace::Cabinet);
+            }
+            "cabinet.place-all" if self.is_open() => {
+                self.switch_workspace(Workspace::Cabinet);
+                self.cabinet.table = false;
+                self.cabinet.keys.push(id.to_owned());
             }
             "heat.toggle" | "heat.airflow" | "heat.contours" | "heat.simulate"
                 if self.is_open() =>
