@@ -1674,7 +1674,7 @@ pub const COMMANDS: &[CommandInfo] = &[
     verb(
         cmd(
             "report.cutlist",
-            "Cut list",
+            "Cut list (wire by the metre)",
             "View",
             &["cut length", "wire lengths", "sleeves"],
             Needs::Project,
@@ -1694,7 +1694,7 @@ pub const COMMANDS: &[CommandInfo] = &[
     verb(
         cmd(
             "report.wirecut",
-            "Wire cut list",
+            "Wire cut list (machine job)",
             "View",
             &["wire machine", "cut and strip", "production"],
             Needs::Project,
