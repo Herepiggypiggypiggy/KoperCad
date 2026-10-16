@@ -30,16 +30,32 @@ pub(crate) struct EplanPartsImport {
     catalog_path: Option<PathBuf>,
 }
 
-/// File text as a string: UTF-8 (BOM allowed) or UTF-16 with a BOM.
+/// One Windows-1252 byte as a character: 0x80 to 0x9F through the table,
+/// everything else as Latin-1.
+fn cp1252(b: u8) -> char {
+    const HIGH: [char; 32] = [
+        '\u{20ac}', '\u{81}', '\u{201a}', '\u{192}', '\u{201e}', '\u{2026}', '\u{2020}',
+        '\u{2021}', '\u{2c6}', '\u{2030}', '\u{160}', '\u{2039}', '\u{152}', '\u{8d}', '\u{17d}',
+        '\u{8f}', '\u{90}', '\u{2018}', '\u{2019}', '\u{201c}', '\u{201d}', '\u{2022}', '\u{2013}',
+        '\u{2014}', '\u{2dc}', '\u{2122}', '\u{161}', '\u{203a}', '\u{153}', '\u{9d}', '\u{17e}',
+        '\u{178}',
+    ];
+    match b {
+        0x80..=0x9f => HIGH[usize::from(b - 0x80)],
+        _ => char::from(b),
+    }
+}
+
+/// File text as a string: UTF-16 with a BOM, UTF-8, else Windows-1252 (German EPLAN exports).
 pub(crate) fn decode_text(bytes: &[u8]) -> String {
     let utf16 = |rest: &[u8], le: bool| {
-        let units: Vec<u16> = rest
-            .chunks_exact(2)
-            .map(|c| {
+        let units: Vec<u16> = (0..rest.len() / 2)
+            .map(|i| {
+                let pair = [rest[2 * i], rest[2 * i + 1]];
                 if le {
-                    u16::from_le_bytes([c[0], c[1]])
+                    u16::from_le_bytes(pair)
                 } else {
-                    u16::from_be_bytes([c[0], c[1]])
+                    u16::from_be_bytes(pair)
                 }
             })
             .collect();
@@ -48,7 +64,10 @@ pub(crate) fn decode_text(bytes: &[u8]) -> String {
     match bytes {
         [0xff, 0xfe, rest @ ..] => utf16(rest, true),
         [0xfe, 0xff, rest @ ..] => utf16(rest, false),
-        _ => String::from_utf8_lossy(bytes).into_owned(),
+        _ => match std::str::from_utf8(bytes) {
+            Ok(text) => text.to_owned(),
+            Err(_) => bytes.iter().map(|&b| cp1252(b)).collect(),
+        },
     }
 }
 
@@ -263,5 +282,17 @@ impl NovoApp {
         } else if cancel || modal.should_close() {
             self.wb.eplan_parts = None;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::decode_text;
+
+    #[test]
+    fn windows_1252_and_utf8_both_decode() {
+        assert_eq!(decode_text(b"Weidm\xFCller"), "Weidm\u{fc}ller");
+        assert_eq!(decode_text(b"\x80 \x96"), "\u{20ac} \u{2013}");
+        assert_eq!(decode_text("Weidm\u{fc}ller".as_bytes()), "Weidm\u{fc}ller");
     }
 }

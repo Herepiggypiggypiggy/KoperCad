@@ -99,7 +99,7 @@ impl PlcCardForm {
             if layout.has_analog(space) && start % 2 != 0 {
                 return Err("a card with analog channels starts on an even byte".into());
             }
-            let end = start + bytes;
+            let end = start.checked_add(bytes).ok_or("the start is too large")?;
             for c in cards(project).iter().filter(|c| c.station == station) {
                 if let Some(r) = c.range(space)
                     && start < r.end
@@ -483,6 +483,20 @@ mod tests {
             ..PlcCardForm::default()
         };
         assert!(f.check(&project).unwrap_err().contains("slot"));
+    }
+
+    #[test]
+    fn a_start_near_the_top_of_the_range_is_refused_not_overflowed() {
+        let f = PlcCardForm {
+            counts: [8, 0, 0, 0, 0],
+            start_input: "4294967295".into(),
+            ..PlcCardForm::default()
+        };
+        assert!(
+            f.check(&Project::new("t"))
+                .unwrap_err()
+                .contains("too large")
+        );
     }
 
     #[test]
