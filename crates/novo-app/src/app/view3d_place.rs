@@ -76,6 +76,8 @@ pub(super) fn landing(layout: &CabinetLayout, c: &Candidate, at: (f64, f64)) -> 
         },
         clash,
         rail,
+        follower: false,
+        blockers: Vec::new(),
     })
 }
 
