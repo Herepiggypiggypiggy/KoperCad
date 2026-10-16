@@ -111,6 +111,8 @@ pub(super) enum Ask {
     /// Set the plate to new dimensions from the inspector.
     SetPlateSize(StructureId, MountingPlate),
     PlaceAll,
+    /// Export the plate drawing PDF of the shown enclosure.
+    ExportPlate,
     Accept,
     Cancel,
     ToggleTable,
@@ -516,6 +518,13 @@ impl NovoApp {
                 {
                     ask = Some(Ask::ToggleTable);
                 }
+                if ui
+                    .button("Plate drawing")
+                    .on_hover_text("Plate drawing with drill table (PDF)")
+                    .clicked()
+                {
+                    ask = Some(Ask::ExportPlate);
+                }
                 if ui.button("Size enclosure").clicked() {
                     self.sizing.panel_open = !self.sizing.panel_open;
                 }
@@ -918,6 +927,9 @@ impl NovoApp {
             Ask::Cancel => self.cabinet.preview = None,
             Ask::ToggleTable => self.cabinet.table ^= true,
             Ask::TogglePlateCard => self.cabinet.plate_card ^= true,
+            Ask::ExportPlate => {
+                self.export_plate_pdf();
+            }
             Ask::ToggleRoutes => self.cabinet.routes ^= true,
             Ask::ExportWireCut => {
                 self.export_wire_cut();

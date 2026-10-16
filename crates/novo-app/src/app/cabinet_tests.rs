@@ -564,3 +564,15 @@ fn the_enclosure_is_set_in_one_undo_step_and_drawn_with_its_checks() {
     d.frame();
     assert!(layout_of(&d, cab).unwrap().enclosure.is_none());
 }
+
+#[test]
+fn plate_export_before_the_cabinet_was_opened_says_what_to_do() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert!(d.app.export_plate_pdf().is_none());
+    let last = d.app.messages().last().unwrap();
+    assert!(last.text.contains("Open the Cabinet"), "{}", last.text);
+}

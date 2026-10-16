@@ -1,0 +1,77 @@
+format = 1
+id = "time-savers"
+version = 1
+status = "draft"
+title = "Three settings that save time every day"
+summary = "Set the auto connections, give a key your own command and pick the drawing standard."
+track = "productivity"
+order = 70
+level = "beginner"
+minutes = 7
+topics = ["settings", "preferences", "keymap", "standard"]
+needs = []
+next = []
+project = "project.json"
+finished = "finished.json"
+page = "Main circuit"
+
+[[step]]
+id = "open-prefs"
+title = "Open Preferences"
+text = "Run **preferences** from the command field ({key:view.command_palette}). These settings belong to you, not to the project."
+point = { ui = "palette.field" }
+expect = { command = "app.preferences" }
+solve = [ { command = "app.preferences" } ]
+
+[[step]]
+id = "auto-connect"
+title = "Choose how auto connections behave"
+text = """
+**Auto connections** draw wires between facing free pins after you place or move a symbol.
+**Draw them** saves the most clicks; **Ask me each time** is gentler; **Never** leaves wiring to you.
+"""
+point = { ui = "preferences.auto_connections" }
+expect = { clicked = "preferences.auto_connections" }
+
+[[step]]
+id = "move-carries"
+title = "Moving a symbol"
+text = "Choose whether a moved symbol leaves its wires or takes them along. Holding Shift always does the other one, so either default is one key away."
+point = { ui = "preferences.move_carries" }
+
+[[step]]
+id = "close-prefs"
+title = "Close Preferences"
+text = "Press Esc or **Close**. Settings are saved as you click, there is no Save button."
+
+[[step]]
+id = "keymap"
+title = "Your own keys in a text file"
+text = """
+Keys live in a plain text file named **keymap.txt** in your KoperCAD folder under **%APPDATA%**.
+One line each: `tool.cable = F6`. A line KoperCAD cannot read is skipped and reported once at start.
+"""
+point = { ui = "shortcuts.sheet" }
+note = [
+  { ui = "shortcuts.sheet", text = "{key:view.shortcuts} shows every key you have now, including yours." },
+]
+
+[[step]]
+id = "open-standard"
+title = "Open the drawing standard"
+text = "Run **standard** from the command field. Unlike Preferences, this setting is saved in the project."
+point = { ui = "palette.field" }
+expect = { command = "project.standard" }
+solve = [ { command = "project.standard" } ]
+
+[[step]]
+id = "pick-standard"
+title = "Pick a standard"
+text = "IEC 60617 is the default. **NFPA 79 / ANSI Y32.2** gives new symbols the American look; symbols already placed stay as drawn."
+point = { ui = "project_settings.standard" }
+expect = { clicked = "project_settings.standard" }
+
+[[step]]
+id = "done"
+title = "Set once, saved for good"
+text = "Auto connections and the keymap follow you to every project; the standard travels with the project it belongs to."
