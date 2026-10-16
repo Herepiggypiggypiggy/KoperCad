@@ -2857,7 +2857,7 @@ fn rotating_a_wired_part_is_not_refused_by_its_own_wire() {
         novo_editor::overlap::page_overlaps(doc.project(), page).is_empty(),
         "rotating must leave no wire along another"
     );
-    doc.undo();
+    doc.undo().unwrap();
     assert_eq!(doc.project().symbol(s1).unwrap().placement, before);
     let wires_after: Vec<_> = doc
         .project()
@@ -2883,6 +2883,6 @@ fn rotating_a_part_whose_wires_cannot_keep_clear_still_turns_it() {
     let before = doc.project().symbol(fuse).unwrap().placement;
     assert!(editor.rotate_selection(&mut doc, &[AnyId::Symbol(fuse)]));
     assert_ne!(doc.project().symbol(fuse).unwrap().placement, before);
-    doc.undo();
+    doc.undo().unwrap();
     assert_eq!(doc.project().symbol(fuse).unwrap().placement, before);
 }
