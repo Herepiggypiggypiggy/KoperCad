@@ -43,6 +43,15 @@ pub const DUTCH: &[Aliases] = &[
         &["rondleiding", "snelle toetsen uitleg"],
     ),
     nl(
+        "view.reset_panels",
+        &[],
+        &[
+            "vensters herstellen",
+            "indeling herstellen",
+            "panelen resetten",
+        ],
+    ),
+    nl(
         "help.show_hints",
         &[],
         &["hints opnieuw tonen", "tips opnieuw", "hints"],
@@ -65,6 +74,15 @@ pub const DUTCH: &[Aliases] = &[
         &["nieuwe pagina", "pagina toevoegen"],
         &["pagina", "blad"],
     ),
+    nl("page.rename", &[], &["pagina hernoemen", "paginatitel"]),
+    nl(
+        "page.duplicate",
+        &[],
+        &["pagina kopieren", "pagina dupliceren"],
+    ),
+    nl("page.delete", &[], &["pagina verwijderen"]),
+    nl("page.move_up", &[], &["pagina omhoog"]),
+    nl("page.move_down", &[], &["pagina omlaag"]),
     nl("project.rules", &["regels"], &["nummering", "instellingen"]),
     nl(
         "app.preferences",
@@ -82,6 +100,26 @@ pub const DUTCH: &[Aliases] = &[
         "parts.import_step",
         &["importeer 3d-model"],
         &["3d-model", "step", "stp"],
+    ),
+    nl(
+        "parts.import_folder",
+        &["importeer onderdelen", "importeer catalogus"],
+        &["catalogus", "bmecat", "inbox", "map", "fabrikant"],
+    ),
+    nl(
+        "parts.auto_assign",
+        &["wijs onderdelen toe"],
+        &["automatisch", "artikelen toewijzen", "voorstellen"],
+    ),
+    nl(
+        "parts.clear",
+        &["onderdeel verwijderen"],
+        &["artikel wissen", "ontkoppelen"],
+    ),
+    nl(
+        "parts.remove_unused",
+        &["ongebruikte onderdelen"],
+        &["opruimen", "ongebruikt", "artikelen opruimen"],
     ),
     nl("project.standard", &["tekennorm"], &["norm", "standaard"]),
     nl(
@@ -126,6 +164,22 @@ pub const DUTCH: &[Aliases] = &[
         &["modus", "hoeken", "lijnen", "tekenen"],
     ),
     nl("tool.cable", &["kabel"], &["kabel tekenen", "aders"]),
+    nl(
+        "cable.rename",
+        &["hernoem kabel"],
+        &["kabel hernoemen", "kabelnaam"],
+    ),
+    nl("cable.delete", &[], &["kabel verwijderen", "kabel wissen"]),
+    nl(
+        "cable.retype",
+        &["kabeltype"],
+        &["kabeltype wijzigen", "aders", "afgeschermd"],
+    ),
+    nl(
+        "cable.restore_proposals",
+        &[],
+        &["afgewezen kabels terugzetten", "opnieuw voorstellen"],
+    ),
     nl(
         "wire.end_on_part",
         &[],
@@ -208,7 +262,6 @@ pub const DUTCH: &[Aliases] = &[
     nl("nav.forward", &[], &["vooruit"]),
     nl("nav.previous_page", &[], &["vorige pagina"]),
     nl("nav.next_page", &[], &["volgende pagina"]),
-    nl("nav.changes", &["wijzigingen"], &["gewijzigd sinds export"]),
     // View
     nl("view.command_palette", &[], &["opdrachtveld", "zoeken"]),
     nl(
@@ -330,7 +383,12 @@ pub const DUTCH: &[Aliases] = &[
     nl(
         "sim.live",
         &[],
-        &["live potentialen tonen", "contacten sluiten", "spanning"],
+        &[
+            "simuleer live potentialen",
+            "live potentialen tonen",
+            "contacten sluiten",
+            "spanning",
+        ],
     ),
     nl(
         "sim.plc_program",
@@ -456,6 +514,11 @@ pub const DUTCH: &[Aliases] = &[
         &["conformiteitsrapport", "normen pdf"],
     ),
     nl(
+        "export.standards_xlsx",
+        &["exporteer normenrapport excel", "normenrapport excel"],
+        &["conformiteitsrapport excel", "normen spreadsheet"],
+    ),
+    nl(
         "export.plate",
         &["exporteer montageplaat", "montageplaat exporteren"],
         &["boortabel", "boren"],
@@ -528,9 +591,29 @@ pub const DUTCH: &[Aliases] = &[
         &["plaat", "indeling", "din-rail"],
     ),
     nl(
+        "cabinet.rules",
+        &["plaatsingsregels", "regels voor plaatsing"],
+        &["regels", "afstand", "plaatsing"],
+    ),
+    nl(
+        "cabinet.plate",
+        &["plaat instellen", "montageplaat"],
+        &["plaat", "montageplaat", "afmetingen"],
+    ),
+    nl(
+        "cabinet.cutlist",
+        &["zaaglijst", "knippenlijst"],
+        &["zaaglijst", "lengtes", "knippen"],
+    ),
+    nl(
         "cabinet.rails",
         &["rails en kanalen", "voeg kanaal toe"],
         &["din-rail", "kabelgoot", "kanaal", "rail"],
+    ),
+    nl(
+        "cabinet.door",
+        &["binnenmaat en deur", "deurdraaiing", "scharnierkant"],
+        &["deur", "scharnier", "binnenmaat", "diepte"],
     ),
     nl(
         "cabinet.routes",

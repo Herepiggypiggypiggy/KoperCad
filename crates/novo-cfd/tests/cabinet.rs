@@ -295,9 +295,15 @@ fn turbulence_is_an_option_that_shows_in_the_snapshot_and_the_statement() {
     }
 }
 
+/// The mesh spends its cell budget on bodies first (WS CFD-C1), so a 120 cell
+/// request no longer leaves a 150 mm device unresolved: the grid grows past the
+/// request to the floor that gives the device cells across, the note says so
+/// by not raising the "not resolved" warning, and the band stays the narrow
+/// one. A device the grid really cannot resolve still gets the wide band; that
+/// path is exercised by the mesh tests (`a_slim_device_is_kept_and_reported`).
 #[test]
-fn a_device_the_grid_cannot_resolve_says_so() {
-    let mut t = Tuning::default().with_cells(450);
+fn a_small_cell_request_still_resolves_the_device() {
+    let mut t = Tuning::default().with_cells(120);
     t.coarse.steady_tol = 1e-2;
     let s = CabinetSolver::new(t)
         .solve(
@@ -308,13 +314,36 @@ fn a_device_the_grid_cannot_resolve_says_so() {
         )
         .unwrap();
     assert!(
-        s.notes.iter().any(|n| n.contains("not resolved")),
+        !s.notes.iter().any(|n| n.contains("not resolved")),
         "{:?}",
         s.notes
     );
+    assert!(s.temperature_c.len() > 120);
     let d = &s.devices[0];
-    // the band spans the whole range from the air to twice the rise
-    assert!(d.surface_band_c.1 - d.surface_band_c.0 >= 1.9 * (d.surface_c - 25.0).max(0.0));
+    assert!(d.surface_band_c.1 - d.surface_band_c.0 < 1.0 * (d.surface_c - 25.0).max(1.0));
+}
+
+/// The default solver (plate sheet, lumped devices) lands near the 2D engine
+/// for the sealed reference case, with the films updated during the march.
+#[test]
+fn the_default_cabinet_run_follows_the_2d_engine_for_housing_and_plate() {
+    let scn = scenario(false);
+    let two_d = novo_thermal::simulate_steady(&scn).unwrap();
+    let d2 = &two_d.devices[0];
+    let (s, _) = solve(&scn);
+    let d = &s.devices[0];
+    println!(
+        "CABINET | housing {:.1} (2D {:.1}) | plate share {:.3} (2D {:.3}) | h {:.1}",
+        d.surface_c, d2.surface_c, d.plate_share, d2.plate_share, d.h_w_m2k
+    );
+    assert!(s.progress.converged, "{:?}", s.progress);
+    assert!(((d.surface_c - 25.0) / (d2.surface_c - 25.0) - 1.0).abs() < 0.10);
+    assert!((d.plate_share - d2.plate_share).abs() < 0.06);
+    assert!(
+        d.h_w_m2k > 5.0 && d.h_w_m2k < 15.0,
+        "film never updated: {}",
+        d.h_w_m2k
+    );
 }
 
 #[test]
@@ -387,4 +416,12 @@ fn k_epsilon_still_marches() {
         "{:?}",
         snap.notes
     );
+}
+
+#[test]
+fn a_steady_result_with_a_heat_balance_error_above_two_percent_says_so() {
+    // the note is derived from the same number the progress carries
+    let (s, _) = solve(&scenario(false));
+    let noted = s.notes.iter().any(|n| n.contains("Heat balance off by"));
+    assert_eq!(noted, s.progress.energy_balance_rel > 0.02);
 }

@@ -255,9 +255,8 @@ impl NovoApp {
         options.push(Side::Now);
         let mut open = true;
         let mut jump: Option<PageId> = None;
-        egui::Window::new("Compare revisions")
+        super::panel::dialog(ctx, "Compare revisions", [520.0, 480.0])
             .open(&mut open)
-            .default_size([520.0, 480.0])
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.label("From");

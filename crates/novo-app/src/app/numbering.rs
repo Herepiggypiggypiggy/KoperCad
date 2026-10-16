@@ -198,9 +198,8 @@ impl NovoApp {
         let mut apply = false;
         let mut save_only = false;
         let mut reveal: Option<WireId> = None;
-        egui::Window::new("Wire numbering")
+        super::panel::dialog(ctx, "Wire numbering", [560.0, 560.0])
             .open(&mut open)
-            .default_size([560.0, 560.0])
             .show(ctx, |ui| {
                 scheme_ui(ui, &mut win.scheme);
                 ui.separator();

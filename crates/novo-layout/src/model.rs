@@ -40,9 +40,17 @@ fn number(value: &Value) -> Option<f64> {
     }
 }
 
-/// The footprint of a device from the first of its parts that has a width
-/// and height; guessed when none has.
+/// The footprint of a device: its own width and height when it has both
+/// (a terminal strip assembled from blocks has no single part), else those
+/// of the first of its parts that has them; guessed when none has.
 pub fn device_size(project: &Project, device: &Device) -> Size {
+    let own = |key: &str| device.properties.get(key).and_then(number);
+    if let (Some(w), Some(h)) = (own(WIDTH_KEY), own(HEIGHT_KEY))
+        && w > 0.0
+        && h > 0.0
+    {
+        return Size::from_part(Some(w), Some(h));
+    }
     for part in &device.parts {
         if let Some(part) = project.get::<novo_core::Part>(*part) {
             let w = part.properties.get(WIDTH_KEY).and_then(number);

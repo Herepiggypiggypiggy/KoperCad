@@ -281,9 +281,8 @@ pub(super) fn show_window(
     }
     let mut open = true;
     let mut ask = None;
-    let window = egui::Window::new("Rails and ducts")
+    let window = super::panel::dialog(ctx, "Rails and ducts", [560.0, 0.0])
         .open(&mut open)
-        .default_width(560.0)
         .show(ctx, |ui| {
             let Some(structure) = structure else {
                 ui.weak("This panel has no cabinet yet.");
@@ -475,6 +474,21 @@ impl super::NovoApp {
         } else {
             self.cabinet.rails.open ^= true;
         }
+    }
+
+    /// Opens the plate card with its "Inside and door" section in view (the
+    /// command `cabinet.door`; the only other way is Plate setup and a scroll).
+    pub(super) fn open_cabinet_door(&mut self) {
+        if self.backend.document().is_none() {
+            return;
+        }
+        if self.workspace() != super::workspace::Workspace::Cabinet {
+            self.switch_workspace(super::workspace::Workspace::Cabinet);
+        }
+        self.cabinet.table = false;
+        self.cabinet.plate_card = true;
+        self.cabinet.view.selection.clear();
+        self.cabinet.door.reveal = Some("cabinet.door");
     }
 
     /// Applies what the list asked for as one undo step.

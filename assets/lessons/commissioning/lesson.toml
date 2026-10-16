@@ -110,11 +110,11 @@ title = "Fail one"
 title_nl = "Keur er een af"
 text = """
 Press **Next open** again, write what you saw in the **Note** field, for example "terminal loose", and press **Fail**.
-The check is marked failed with your note, and KoperCAD raises a punch item itself: the status line says "Punch item raised:" with the title and the severity.
+The check is marked failed with your note, and KoperCAD raises a punch item itself: the line under the check says "Punch item raised:" with the title and the severity.
 """
 text_nl = """
 Druk nogmaals op **Next open**, schrijf in het veld **Note** wat je zag, bijvoorbeeld "klem los", en druk op **Fail**.
-De controle wordt afgekeurd met je notitie en KoperCAD maakt zelf een punt aan: de statusregel zegt "Punch item raised:" met de titel en de ernst.
+De controle wordt afgekeurd met je notitie en KoperCAD maakt zelf een punt aan: de regel onder de controle zegt "Punch item raised:" met de titel en de ernst.
 """
 point = { ui = "commissioning.fail" }
 expect = { clicked = "commissioning.fail" }
@@ -144,11 +144,11 @@ title = "Close it out"
 title_nl = "Sluit het af"
 text = """
 When the fault is fixed, click **Fixed** on the item. The person who checks it then clicks **Verified**, and the item is closed; **Reopen** puts it back to Open.
-If it will not be fixed, click **Won't fix**: the item is closed as not to be fixed and stays on record. Tick **Show closed** to see closed items too.
+If it will not be fixed, click **Won't fix** (offered on Open items only): the item is closed as not to be fixed and stays on record. Tick **Show closed** to see closed items too.
 """
 text_nl = """
 Als de fout is hersteld, klik je op **Fixed** bij het punt. Wie het controleert klikt dan op **Verified** en het punt is gesloten; **Reopen** zet het terug op Open.
-Wordt het niet hersteld, klik dan op **Won't fix**: het punt wordt gesloten als niet te herstellen en blijft vastgelegd. Vink **Show closed** aan om ook gesloten punten te zien.
+Wordt het niet hersteld, klik dan op **Won't fix** (alleen bij open punten): het punt wordt gesloten als niet te herstellen en blijft vastgelegd. Vink **Show closed** aan om ook gesloten punten te zien.
 """
 point = { ui = "commissioning.resolve" }
 

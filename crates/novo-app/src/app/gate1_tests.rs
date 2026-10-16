@@ -694,7 +694,7 @@ fn marks_keys_and_export_follow_the_design() {
     assert!(d.app.wb.field.is_open());
     d.app.wb.field.close();
 
-    // A command the app cannot run yet is listed greyed, with a reason.
+    // The rules command is listed and runs: no "Comes later" any more.
     d.app.wb.field.open(Mode::All, None);
     d.app.wb.field.type_text("rules");
     let rows = d.app.with_field(|field, sources| field.rows(sources));
@@ -702,7 +702,7 @@ fn marks_keys_and_export_follow_the_design() {
         .iter()
         .find(|r| r.target == novo_workflow::palette::Target::Command("project.rules"))
         .expect("the rules command is listed");
-    assert_eq!(rules.disabled, Some("Comes later"));
+    assert_eq!(rules.disabled, None);
     d.app.wb.field.close();
 
     // A saved project's PDF goes next to its file, named after it; a second

@@ -199,6 +199,7 @@ impl FlowSolver {
             }
         };
         self.update_drag_rate();
+        self.tick_films();
         // ---- energy
         let old_t = self.t.clone();
         let sch = cfg.scheme.unwrap_or(self.cfg.scheme);
@@ -217,6 +218,7 @@ impl FlowSolver {
                 break;
             }
         }
+        self.advance_sheet_pseudo(dt_t);
         lap(&mut st.phase_s[1]);
         let max_dt_k = self
             .t

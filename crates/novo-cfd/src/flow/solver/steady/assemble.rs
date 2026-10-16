@@ -324,9 +324,12 @@ impl FlowSolver {
                             if (!upper && s == 0) || (upper && s + 1 == n[a]) {
                                 let a_wall = wall_value(wall_alpha, m, &[ix], fidx);
                                 let kc = a_wall.map_or(kc, |aw| aw * cc);
-                                let closed = 1.0
+                                let mut closed = 1.0
                                     - self.open.afrac[a]
                                         [m.idx(a, with(ix, a, if upper { n[a] } else { 0 }))];
+                                if fidx == 4 {
+                                    closed *= self.rear_bare(i, j);
+                                }
                                 match self.cfg.faces[fidx].thermal {
                                     ThermalBc::Adiabatic => {}
                                     ThermalBc::Fixed(tw) => {
@@ -381,6 +384,13 @@ impl FlowSolver {
                                 }
                             }
                         }
+                    }
+                    if k == 0
+                        && let Some((g, tp)) = self.sheet_coupling(i, j)
+                    {
+                        let cw = g / (cc * m.volume(ix));
+                        diag += cw;
+                        rhs += cw * tp;
                     }
                     cf.diag = diag + conv_diag.max(conv_nb);
                     cf.rhs = rhs;

@@ -2,6 +2,7 @@ use super::mesh::Mesh;
 use super::par::{for_planes, max_over_planes};
 use super::pressure::{PressureSolver, Smoother};
 use super::scheme::{Sample, Scheme, face_value};
+use super::sheet::{PlateSheet, SheetGeometry};
 use crate::openings::{OpenPatch, OpenSet};
 use crate::solids::Medium;
 
@@ -101,7 +102,32 @@ pub struct FlowConfig {
     /// default is tight (benchmarks); a march to a steady state does not need
     /// the last digits and may loosen it.
     pub pressure_tol: f64,
+    /// The mounting plate as a thin sheet on the rear face (`ZMin`), if any.
+    /// Where it covers a column, the rear thermal condition acts only on the
+    /// bare part and the sheet carries the heat to the outside instead.
+    pub plate: Option<PlateSheet>,
+    /// Surface film coefficient of each device (by the slot of
+    /// [`Medium::dev_slot`]), W/m2K. A face between a device cell and an air
+    /// cell then conducts as the half cell of the device in series with this
+    /// film; empty keeps plain cell-to-cell conduction.
+    pub device_film_h: Vec<f64>,
+    /// True exposed surface of each device (to air, without the foot), m2.
+    /// The film conducts as if the faces the grid found had this area (the
+    /// grid cuts a device in steps), so the result does not depend on how
+    /// the mesh meets the device. Missing or 0 = the grid's own area.
+    pub device_exposed_m2: Vec<f64>,
+    /// True contact area of each device on the plate sheet, m2; same idea.
+    pub device_contact_m2: Vec<f64>,
+    /// Height of each device (the 2D engine's characteristic length), m, and
+    /// the radiation constants: with them the solver refreshes the films
+    /// itself every [`FILM_EVERY`] steps or iterations.
+    pub device_length_m: Vec<f64>,
+    pub device_emissivity: f64,
+    pub device_view: f64,
 }
+
+/// Steps (or steady iterations) between refreshes of the device films.
+pub const FILM_EVERY: usize = 10;
 
 impl FlowConfig {
     /// Air near 25 degrees C with closed no-slip adiabatic walls.
@@ -121,6 +147,13 @@ impl FlowConfig {
             rho: 1.18,
             medium: None,
             pressure_tol: 1e-9,
+            plate: None,
+            device_film_h: Vec::new(),
+            device_exposed_m2: Vec::new(),
+            device_contact_m2: Vec::new(),
+            device_length_m: Vec::new(),
+            device_emissivity: 0.85,
+            device_view: 0.5,
         }
     }
 }
@@ -184,6 +217,66 @@ pub struct FlowSolver {
     drag_cell: Option<[Vec<f64>; 3]>,
     /// Drag rate `F |u|` on each velocity face, 1/s (lagged one step).
     drag_rate: [Vec<f64>; 3],
+    /// Plate sheet state, if the configuration has one.
+    sheet: Option<Sheet>,
+    /// Faces between a device cell and an air cell that carry a film.
+    film_faces: Vec<FilmFace>,
+    /// Factor on each device's film coefficient (true area over grid area).
+    film_scale: Vec<f64>,
+    film_clock: usize,
+    /// Radiation part of each device's film, W/m2K: it does not warm the air,
+    /// so only the rest of the film is a boundary layer (see
+    /// [`film_conductance`]).
+    film_rad: Vec<f64>,
+}
+
+/// Temperatures and constants of the plate sheet.
+struct Sheet {
+    geo: SheetGeometry,
+    t: Vec<f64>,
+    /// Exchange with the cell in front, W/K: contact where a solid stands on
+    /// the column, film where it is bare.
+    g_col: Vec<f64>,
+    /// The contact part of `g_col`, W/K.
+    g_contact: Vec<f64>,
+}
+
+/// A face between a device cell and an air cell.
+struct FilmFace {
+    axis: usize,
+    /// Cell on the high side (key of `k_face`).
+    hi: usize,
+    /// Distance between the two cell centres, m.
+    dist: f64,
+    /// Half cell of the device in series, m2K/W.
+    r_dev: f64,
+    /// Device slot.
+    slot: usize,
+    /// The air cell of the face.
+    air: usize,
+    /// Distance from the device surface to the centre of the air cell, m.
+    y_air: f64,
+}
+
+/// Conductance per area from a device surface to the centre of an air cell
+/// `y` away, W/m2K, for a surface film `h` that is defined against the air
+/// outside the boundary layer.
+///
+/// A cell centre outside the layer (`y` over the layer depth `2 k / h`, the
+/// quadratic temperature profile of natural convection) sees the film as it
+/// is. A cell centre inside it already sits partly in the layer the film
+/// stands for, so the film acts against a temperature that is further out:
+/// `h / (1 - (1 - y / delta)^2)`, which runs to plain conduction `k / y` as
+/// the mesh resolves the layer. Without it a fine mesh counts the layer twice.
+fn film_conductance(h: f64, h_rad: f64, y: f64, k: f64) -> f64 {
+    let h_c = (h - h_rad).max(1e-3);
+    let delta = 2.0 * k / h_c;
+    let conv = if y >= delta {
+        h_c
+    } else {
+        h_c / (1.0 - (1.0 - y / delta).powi(2))
+    };
+    conv + h_rad
 }
 
 impl FlowSolver {
@@ -232,6 +325,113 @@ impl FlowSolver {
             }
             kf
         });
+        let mut k_face = k_face;
+        let cfg_film_len = cfg.device_film_h.len();
+        let mut film_faces = Vec::new();
+        let mut film_scale = Vec::new();
+        if let Some(md) = cfg
+            .medium
+            .as_ref()
+            .filter(|_| !cfg.device_film_h.is_empty())
+        {
+            for a in 0..3 {
+                for k in 0..mesh.n[2] {
+                    for j in 0..mesh.n[1] {
+                        for i in 0..mesh.n[0] {
+                            let hi_ix = [i, j, k];
+                            if hi_ix[a] == 0 {
+                                continue;
+                            }
+                            let (lo, hi) =
+                                (mesh.cell(with(hi_ix, a, hi_ix[a] - 1)), mesh.cell(hi_ix));
+                            let dev_is_lo = md.dev_frac[lo] >= 0.5 && md.fluid_frac[hi] >= 0.5;
+                            let dev_is_hi = md.dev_frac[hi] >= 0.5 && md.fluid_frac[lo] >= 0.5;
+                            if !dev_is_lo && !dev_is_hi {
+                                continue;
+                            }
+                            let (dc, dix) = if dev_is_lo {
+                                (lo, with(hi_ix, a, hi_ix[a] - 1))
+                            } else {
+                                (hi, hi_ix)
+                            };
+                            let slot = md.dev_slot[dc] as usize;
+                            if slot >= cfg.device_film_h.len() {
+                                continue;
+                            }
+                            film_faces.push(FilmFace {
+                                axis: a,
+                                hi,
+                                dist: mesh.centre[a][hi_ix[a]] - mesh.centre[a][hi_ix[a] - 1],
+                                r_dev: 0.5 * mesh.dx[a][dix[a]] / k_cell[dc],
+                                slot,
+                                air: if dev_is_lo { hi } else { lo },
+                                y_air: 0.5
+                                    * mesh.dx[a][if dev_is_lo { hi_ix[a] } else { hi_ix[a] - 1 }],
+                            });
+                        }
+                    }
+                }
+            }
+            let mut stair = vec![0.0; cfg.device_film_h.len()];
+            for f in &film_faces {
+                stair[f.slot] += mesh.area(f.axis, mesh.unindex(f.hi));
+            }
+            film_scale = stair
+                .iter()
+                .enumerate()
+                .map(|(i, a)| match cfg.device_exposed_m2.get(i) {
+                    Some(t) if *t > 0.0 && *a > 0.0 => t / a,
+                    _ => 1.0,
+                })
+                .collect();
+            for f in &film_faces {
+                let h = cfg.device_film_h[f.slot];
+                let g = film_conductance(h, 0.0, f.y_air, cfg.conductivity);
+                k_face[f.axis][f.hi] = f.dist / (f.r_dev + 1.0 / (g * film_scale[f.slot]));
+            }
+        }
+        let sheet = cfg.plate.as_ref().map(|pl| {
+            let geo = SheetGeometry::new(
+                pl,
+                &mesh.dx[0],
+                &mesh.dx[1],
+                &mesh.centre[0],
+                &mesh.centre[1],
+            );
+            let cols = geo.area.len();
+            let mut g_col = vec![0.0; cols];
+            let mut g_contact = vec![0.0; cols];
+            // contact area of each device: grid steps against the true foot
+            let mut base = vec![0.0; cfg.device_contact_m2.len()];
+            if let Some(md) = cfg.medium.as_ref() {
+                for c in 0..cols {
+                    let slot = md.dev_slot[mesh.cell([c % geo.nx, c / geo.nx, 0])] as usize;
+                    if slot < base.len() {
+                        base[slot] += geo.area[c];
+                    }
+                }
+            }
+            for c in 0..cols {
+                let id = mesh.cell([c % geo.nx, c / geo.nx, 0]);
+                let fluid = cfg.medium.as_ref().map_or(1.0, |md| md.fluid_frac[id]);
+                let slot = cfg
+                    .medium
+                    .as_ref()
+                    .map_or(usize::MAX, |md| md.dev_slot[id] as usize);
+                let scale = match (cfg.device_contact_m2.get(slot), base.get(slot)) {
+                    (Some(t), Some(b)) if *t > 0.0 && *b > 0.0 => t / b,
+                    _ => 1.0,
+                };
+                g_contact[c] = geo.area[c] * pl.h_contact * (1.0 - fluid) * scale;
+                g_col[c] = g_contact[c] + geo.area[c] * pl.h_air * fluid;
+            }
+            Sheet {
+                geo,
+                t: vec![t_init; cols],
+                g_col,
+                g_contact,
+            }
+        });
         let drag_cell = cfg
             .medium
             .as_ref()
@@ -258,6 +458,11 @@ impl FlowSolver {
             q_cell,
             drag_cell,
             drag_rate,
+            sheet,
+            film_faces,
+            film_scale,
+            film_clock: 0,
+            film_rad: vec![0.0; cfg_film_len],
             vel,
             p: vec![0.0; cells],
             t: vec![t_init; cells],
@@ -277,6 +482,186 @@ impl FlowSolver {
     /// red-black runs on all threads of the current rayon pool.
     pub fn set_pressure_smoother(&mut self, smoother: Smoother) {
         self.pressure.set_smoother(smoother);
+    }
+
+    /// Counts a step or iteration and refreshes the films every
+    /// [`FILM_EVERY`].
+    pub(crate) fn tick_films(&mut self) {
+        if self.cfg.device_length_m.is_empty() {
+            return;
+        }
+        self.film_clock += 1;
+        if self.film_clock.is_multiple_of(FILM_EVERY) {
+            self.update_device_films();
+        }
+    }
+
+    /// Sets the surface film of every device from the present state: the
+    /// 2D engine's correlation (natural plus forced convection and
+    /// radiation), relaxed halfway as it does.
+    pub fn update_device_films(&mut self) {
+        for slot in 0..self.cfg.device_length_m.len() {
+            let Some((t_dev, t_air, speed)) = self.device_film_state(slot) else {
+                continue;
+            };
+            let h = novo_thermal::device_h(
+                self.cfg.device_length_m[slot],
+                t_dev,
+                t_air,
+                speed,
+                self.cfg.device_emissivity,
+                self.cfg.device_view,
+            );
+            let old = self.cfg.device_film_h.get(slot).copied().unwrap_or(h);
+            // radiation share of the film (the 2D engine's linearisation)
+            let tf = 0.5 * (t_dev + t_air) + 273.15;
+            let h_rad =
+                4.0 * self.cfg.device_emissivity * 5.670_374e-8 * tf.powi(3) * self.cfg.device_view;
+            self.set_device_film_split(slot, 0.5 * old + 0.5 * h, h_rad);
+        }
+    }
+
+    /// Sets the film coefficient of device `slot`, W/m2K, on every face it
+    /// shares with air (see [`FlowConfig::device_film_h`]).
+    pub fn set_device_film(&mut self, slot: usize, h: f64) {
+        self.set_device_film_split(slot, h, 0.0);
+    }
+
+    /// As [`FlowSolver::set_device_film`], with `h_rad` of `h` being radiation.
+    pub fn set_device_film_split(&mut self, slot: usize, h: f64, h_rad: f64) {
+        if let Some(v) = self.cfg.device_film_h.get_mut(slot) {
+            *v = h.max(1e-3);
+        }
+        if let Some(v) = self.film_rad.get_mut(slot) {
+            *v = h_rad.clamp(0.0, 0.9 * h.max(1e-3));
+        }
+        let h_rad = self.film_rad.get(slot).copied().unwrap_or(0.0);
+        for f in self.film_faces.iter().filter(|f| f.slot == slot) {
+            let g = film_conductance(h.max(1e-3), h_rad, f.y_air, self.cfg.conductivity)
+                * self.film_scale[slot];
+            self.k_face[f.axis][f.hi] = f.dist / (f.r_dev + 1.0 / g);
+        }
+    }
+
+    /// One Gauss-Seidel sweep of the plate sheet against the present cell
+    /// temperatures, implicit over `dt` from the temperatures `po` at its
+    /// start; returns the largest change, K.
+    pub(crate) fn sheet_sweep(&mut self, dt: f64, po: &[f64]) -> f64 {
+        match (self.sheet.as_mut(), self.cfg.plate.as_ref()) {
+            (Some(sh), Some(pl)) => sheet_sweep(&self.mesh, sh, pl, &self.t, dt, po),
+            _ => 0.0,
+        }
+    }
+
+    /// Steady path: the sheet follows the cells over the pseudo step `dt`
+    /// (a few sweeps; its capacity is small, so it is nearly algebraic).
+    pub(crate) fn advance_sheet_pseudo(&mut self, dt: f64) {
+        let Some(po) = self.sheet.as_ref().map(|s| s.t.clone()) else {
+            return;
+        };
+        for _ in 0..20 {
+            if self.sheet_sweep(dt, &po) < 1e-9 {
+                break;
+            }
+        }
+    }
+
+    /// Plate sheet constants for the steady assembly: exchange with the cell
+    /// in front of column (`i`, `j`), W/K, and the plate temperature there.
+    pub(crate) fn sheet_coupling(&self, i: usize, j: usize) -> Option<(f64, f64)> {
+        let sh = self.sheet.as_ref()?;
+        let c = i + self.mesh.n[0] * j;
+        Some((sh.g_col[c], sh.t[c]))
+    }
+
+    /// Mean temperature of device `slot` (weighted by its volume share),
+    /// the mean of the air cells touching it and their mean speed, m/s; for
+    /// the surface film. `None` without films or when it touches no air.
+    pub fn device_film_state(&self, slot: usize) -> Option<(f64, f64, f64)> {
+        let md = self.cfg.medium.as_ref()?;
+        let m = &self.mesh;
+        let (mut t_air, mut speed, mut w_air) = (0.0, 0.0, 0.0);
+        let mut seen = std::collections::HashSet::new();
+        for f in self.film_faces.iter().filter(|f| f.slot == slot) {
+            if seen.insert(f.air) {
+                t_air += self.t[f.air];
+                speed += self.cell_speed(f.air);
+                w_air += 1.0;
+            }
+        }
+        if w_air == 0.0 {
+            return None;
+        }
+        let (mut tv, mut v) = (0.0, 0.0);
+        for (id, s) in md.dev_slot.iter().enumerate() {
+            if *s as usize == slot {
+                let ix = m.unindex(id);
+                let w = md.dev_frac[id] * m.volume(ix);
+                tv += w * self.t[id];
+                v += w;
+            }
+        }
+        (v > 0.0).then(|| (tv / v, t_air / w_air, speed / w_air))
+    }
+
+    /// Area of the faces between device `slot` and air that carry its film, m2.
+    pub fn device_film_area_m2(&self, slot: usize) -> f64 {
+        self.film_faces
+            .iter()
+            .filter(|f| f.slot == slot)
+            .map(|f| self.mesh.area(f.axis, self.mesh.unindex(f.hi)))
+            .sum()
+    }
+
+    /// Heat from device `slot` into the air through its film faces, W.
+    pub fn device_film_w(&self, slot: usize) -> f64 {
+        let m = &self.mesh;
+        self.film_faces
+            .iter()
+            .filter(|f| f.slot == slot)
+            .map(|f| {
+                let hi_ix = m.unindex(f.hi);
+                let dev = if f.air == f.hi {
+                    m.cell(with(hi_ix, f.axis, hi_ix[f.axis] - 1))
+                } else {
+                    f.hi
+                };
+                self.k_face[f.axis][f.hi] / f.dist
+                    * m.area(f.axis, hi_ix)
+                    * (self.t[dev] - self.t[f.air])
+            })
+            .sum()
+    }
+
+    /// Speed at the centre of cell `id` from its face velocities, m/s.
+    fn cell_speed(&self, id: usize) -> f64 {
+        let m = &self.mesh;
+        let ix = m.unindex(id);
+        let c: Vec<f64> = (0..3)
+            .map(|a| {
+                0.5 * (self.vel[a][m.idx(a, ix)] + self.vel[a][m.idx(a, with(ix, a, ix[a] + 1))])
+            })
+            .collect();
+        (c[0] * c[0] + c[1] * c[1] + c[2] * c[2]).sqrt()
+    }
+
+    /// Plate temperature of each rear column (`i + nx * j`), degrees C.
+    pub fn plate_temps(&self) -> Option<&[f64]> {
+        self.sheet.as_ref().map(|s| s.t.as_slice())
+    }
+
+    /// Heat from the cell in front of rear column `col` into the plate, W:
+    /// `(through contact with solids standing on it, through the air film)`.
+    pub fn plate_exchange_w(&self, col: usize) -> (f64, f64) {
+        let Some(sh) = &self.sheet else {
+            return (0.0, 0.0);
+        };
+        let id = self.mesh.cell([col % sh.geo.nx, col / sh.geo.nx, 0]);
+        let dt = self.t[id] - sh.t[col];
+        (
+            sh.g_contact[col] * dt,
+            (sh.g_col[col] - sh.g_contact[col]) * dt,
+        )
     }
 
     pub fn pressure_levels(&self) -> usize {
@@ -360,6 +745,7 @@ impl FlowSolver {
 
     /// Advances one step of `dt` seconds.
     pub fn step(&mut self, dt: f64) -> StepInfo {
+        self.tick_films();
         let old_t = self.t.clone();
         let old_vel = self.vel.clone();
         self.update_drag_rate();
@@ -810,7 +1196,10 @@ impl FlowSolver {
                 ix[b] = jb;
                 ix[c] = kc;
                 let edge = if upper { m.n[a] } else { 0 };
-                let closed = 1.0 - self.open.afrac[a][m.idx(a, with(ix, a, edge))];
+                let mut closed = 1.0 - self.open.afrac[a][m.idx(a, with(ix, a, edge))];
+                if face == 4 {
+                    closed *= self.rear_bare(ix[0], ix[1]);
+                }
                 let id = m.cell(ix);
                 let (t, k) = (self.t[id], self.k_cell[id]);
                 let half = 0.5 * m.dx[a][ix[a]];
@@ -823,7 +1212,25 @@ impl FlowSolver {
                 sum += closed * g * m.area(a, ix);
             }
         }
+        if face == 4
+            && let (Some(sh), Some(pl)) = (&self.sheet, &self.cfg.plate)
+        {
+            sum +=
+                sh.t.iter()
+                    .zip(&sh.geo.area)
+                    .map(|(t, a)| pl.u_out * a * (t - pl.t_out))
+                    .sum::<f64>();
+        }
         sum
+    }
+
+    /// Share of the rear face above column (`i`, `j`) that the plate sheet
+    /// does not cover (1 without a sheet).
+    fn rear_bare(&self, i: usize, j: usize) -> f64 {
+        self.cfg
+            .plate
+            .as_ref()
+            .map_or(1.0, |p| 1.0 - p.cover[i + self.mesh.n[0] * j])
     }
 
     /// Heat carried out through the openings relative to `t_ref`, W.
@@ -856,6 +1263,13 @@ impl FlowSolver {
                     sum += self.c_cell[id] * m.volume(ix) * (self.t[id] - t_ref);
                 }
             }
+        }
+        if let (Some(sh), Some(pl)) = (&self.sheet, &self.cfg.plate) {
+            sum +=
+                sh.t.iter()
+                    .zip(&sh.geo.area)
+                    .map(|(t, a)| pl.cap * a * (t - t_ref))
+                    .sum::<f64>();
         }
         sum
     }
@@ -929,6 +1343,7 @@ impl FlowSolver {
             }
         }
         let old = self.t.clone();
+        let plate_old = self.sheet.as_ref().map(|s| s.t.clone());
         let (nu_t, wall_alpha) = (self.nu_t.as_deref(), self.wall_alpha.as_deref());
         let pr_t = self.cfg.prandtl_t;
         // conductivity of a cell with the eddy part added
@@ -954,9 +1369,12 @@ impl FlowSolver {
                                     let a_wall = wall_value(wall_alpha, m, &[ix], face);
                                     let kc = a_wall.map_or(kc, |aw| aw * cc);
                                     // an opening takes its share of the face off the wall
-                                    let closed = 1.0
+                                    let mut closed = 1.0
                                         - self.open.afrac[a]
                                             [m.idx(a, with(ix, a, if upper { n[a] } else { 0 }))];
+                                    if a == 2 && !upper {
+                                        closed *= self.rear_bare(i, j);
+                                    }
                                     match self.cfg.faces[2 * a + upper as usize].thermal {
                                         ThermalBc::Adiabatic => {}
                                         ThermalBc::Fixed(tw) => {
@@ -1013,6 +1431,14 @@ impl FlowSolver {
                                 }
                             }
                         }
+                        if k == 0
+                            && let Some(sh) = &self.sheet
+                        {
+                            let col = i + n[0] * j;
+                            let cw = sh.g_col[col] / (cc * m.volume(ix));
+                            a_sum += cw;
+                            a_nb += cw * sh.t[col];
+                        }
                         let new = (old[id] / dt + rhs[id] + a_nb) / (1.0 / dt + a_sum);
                         change = change.max((new - self.t[id]).abs());
                         scale = scale.max(new.abs());
@@ -1020,11 +1446,58 @@ impl FlowSolver {
                     }
                 }
             }
+            if let (Some(sh), Some(pl), Some(po)) = (
+                self.sheet.as_mut(),
+                self.cfg.plate.as_ref(),
+                plate_old.as_ref(),
+            ) {
+                change = change.max(sheet_sweep(m, sh, pl, &self.t, dt, po));
+            }
             if change <= 1e-12 * scale {
                 break;
             }
         }
     }
+}
+
+/// One Gauss-Seidel sweep of the plate sheet `sh` against cell temperatures
+/// `t`; see [`FlowSolver::sheet_sweep`].
+fn sheet_sweep(m: &Mesh, sh: &mut Sheet, pl: &PlateSheet, t: &[f64], dt: f64, po: &[f64]) -> f64 {
+    let mut change: f64 = 0.0;
+    let nx = sh.geo.nx;
+    #[allow(clippy::needless_range_loop)]
+    for c in 0..sh.t.len() {
+        let area = sh.geo.area[c];
+        if area <= 0.0 {
+            continue;
+        }
+        let (i, j) = (c % nx, c / nx);
+        let cap = pl.cap * area / dt;
+        let g_out = pl.u_out * area;
+        let (mut num, mut den) = (cap * po[c] + g_out * pl.t_out, cap + g_out);
+        let mut link = |g: f64, other: usize| {
+            num += g * sh.t[other];
+            den += g;
+        };
+        if i + 1 < nx {
+            link(sh.geo.g_x[c], c + 1);
+        }
+        if i > 0 {
+            link(sh.geo.g_x[c - 1], c - 1);
+        }
+        if c + nx < sh.t.len() {
+            link(sh.geo.g_y[c], c + nx);
+        }
+        if c >= nx {
+            link(sh.geo.g_y[c - nx], c - nx);
+        }
+        num += sh.g_col[c] * t[m.cell([i, j, 0])];
+        den += sh.g_col[c];
+        let new = num / den;
+        change = change.max((new - sh.t[c]).abs());
+        sh.t[c] = new;
+    }
+    change
 }
 
 fn with(mut ix: [usize; 3], axis: usize, v: usize) -> [usize; 3] {
@@ -1054,4 +1527,29 @@ fn wall_value(
         }
     }
     (count > 0).then(|| sum / count as f64)
+}
+
+#[cfg(test)]
+mod film_tests {
+    use super::film_conductance;
+
+    #[test]
+    fn the_film_runs_from_the_correlation_to_plain_conduction() {
+        let (h, k) = (6.0, 0.026);
+        let delta = 2.0 * k / h;
+        // outside the layer: the film as given, radiation included
+        assert_eq!(film_conductance(h + 3.0, 3.0, 2.0 * delta, k), h + 3.0);
+        // at the edge of the layer the two branches meet
+        let edge = film_conductance(h, 0.0, delta, k);
+        let inside = film_conductance(h, 0.0, delta * 0.999, k);
+        assert!((edge - inside).abs() < 0.01 * h, "{edge} {inside}");
+        // far inside: conduction to the cell centre, k / y
+        let y = delta * 1e-3;
+        let g = film_conductance(h, 0.0, y, k);
+        assert!((g * y / k - 1.0).abs() < 0.01, "{g}");
+        // never below the film
+        for i in 1..100 {
+            assert!(film_conductance(h, 0.0, delta * i as f64 / 50.0, k) >= h - 1e-12);
+        }
+    }
 }

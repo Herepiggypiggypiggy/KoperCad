@@ -1,0 +1,1 @@
+- 2026-10-16: stale marking, auto re-solve, Auto switch, tests (hot device moves hot spot; stale; debounce; supersede). PR opened from main.

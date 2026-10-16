@@ -53,6 +53,9 @@ pub(crate) struct FaultsWindow {
     view: Option<(f64, f64)>,
     /// A run is needed (scenario, band or study changed).
     stale: bool,
+    /// The built-in example study is showing: no `<project>.faults.json`
+    /// exists, and the numbers are not from the drawing.
+    example: bool,
 }
 
 impl NovoApp {
@@ -62,6 +65,7 @@ impl NovoApp {
         }
         let file = self.backend.file().filter(|_| !self.backend.is_untitled());
         let path = file.map(|f| f.with_extension("faults.json"));
+        let example = !path.as_deref().is_some_and(|p| p.exists());
         let study = match path.as_deref().filter(|p| p.exists()) {
             Some(p) => match std::fs::read_to_string(p)
                 .map_err(|e| e.to_string())
@@ -83,6 +87,7 @@ impl NovoApp {
             result: None,
             view: None,
             stale: true,
+            example,
         });
     }
 
@@ -97,9 +102,8 @@ impl NovoApp {
         }
         let mut open = true;
         let mut note: Option<(Level, String)> = None;
-        egui::Window::new("Fault scenarios")
+        super::panel::dialog(ctx, "Fault scenarios", [760.0, 640.0])
             .open(&mut open)
-            .default_size([760.0, 640.0])
             .show(ctx, |ui| {
                 header(ui, &mut win, &mut note);
                 ui.separator();
@@ -179,6 +183,13 @@ fn header(ui: &mut egui::Ui, win: &mut FaultsWindow, note: &mut Option<(Level, S
                  not; slowest whether the cable is still protected.",
             );
     });
+    if win.example {
+        ui.colored_label(
+            tokens::WARNING,
+            "Example study: a built-in pump feeder, not your drawing. \
+             Save study writes it next to the project to edit by hand.",
+        );
+    }
     if let Some(s) = win.study.scenarios.get(win.selected)
         && !s.description.is_empty()
     {
@@ -194,7 +205,10 @@ fn header(ui: &mut egui::Ui, win: &mut FaultsWindow, note: &mut Option<(Level, S
             && let Some(path) = &win.path
         {
             *note = Some(match std::fs::write(path, win.study.to_json()) {
-                Ok(()) => (Level::Info, format!("Saved {}", path.display())),
+                Ok(()) => {
+                    win.example = false;
+                    (Level::Info, format!("Saved {}", path.display()))
+                }
                 Err(e) => (Level::Error, format!("Could not save the study: {e}")),
             });
         }

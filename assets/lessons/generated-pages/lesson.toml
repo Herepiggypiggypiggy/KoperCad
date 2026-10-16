@@ -51,7 +51,7 @@ Open the table of contents, the first page KoperCAD writes. In the page list you
 text_nl = """
 Open de inhoudsopgave, de eerste pagina die KoperCAD schrijft. In de paginalijst zijn **1** en **2** je getekende pagina's; de zes geschreven pagina's staan onder **Contents and reports**.
 """
-how = ["Click **Pages** at the top left of the drawing (on a window 1700 pixels wide or more the list is already open)", "Under the folder **Contents and reports** click **0a  Table of contents**"]
+how = ["Click **Pages** in the top bar (on a window 1700 pixels wide or more the list is already open)", "Under the folder **Contents and reports** click **0a  Table of contents**"]
 how_nl = ["Klik linksboven bij de tekening op **Pages** (op een scherm van 1700 pixels of breder staat de lijst al open)", "Klik onder de map **Contents and reports** op **0a  Table of contents**"]
 expect = { page = "Table of contents" }
 solve = [ { page = "Table of contents" } ]

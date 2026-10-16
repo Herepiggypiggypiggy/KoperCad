@@ -22,6 +22,8 @@ pub(super) struct CableEdit {
     cable: Option<CableId>,
     length: String,
     pub(super) picker: PartPicker,
+    /// Name, type and proposal choices (cable_cores.rs).
+    pub(super) ui: super::cable_cores::CableUi,
 }
 
 /// What a click or edit in the cable controls asks for.
@@ -36,6 +38,19 @@ pub(super) enum CableAction {
         core: usize,
         to: Option<ShieldConnection>,
     },
+    /// Put a wire on a core, or free the core with `None`.
+    SetCoreWire {
+        core: usize,
+        wire: Option<novo_core::WireId>,
+    },
+    SwapCores(usize, usize),
+    SetSpare {
+        core: usize,
+        spare: bool,
+    },
+    Rename(String),
+    Delete,
+    Retype(novo_cables::CableType),
 }
 
 /// A length typed as `12`, `12.5` or `12,5` metres. Empty clears it.
@@ -99,10 +114,9 @@ pub(super) fn cable_controls(
         return;
     };
     if edit.cable != Some(cable) {
-        *edit = CableEdit {
-            cable: Some(cable),
-            ..CableEdit::default()
-        };
+        edit.cable = Some(cable);
+        edit.length.clear();
+        edit.picker = PartPicker::default();
     }
     let length_id = egui::Id::new(("cable_length", cable.raw()));
     if ui.ctx().memory(|m| m.focused()) != Some(length_id) {
@@ -258,7 +272,7 @@ fn shield_row(
 
 impl NovoApp {
     /// Runs one change to a cable as an undo step of its own.
-    fn change_cable<R>(
+    pub(super) fn change_cable<R>(
         &mut self,
         label: String,
         edit: impl FnOnce(&mut novo_core::Tx<'_>) -> novo_core::Result<R>,
@@ -317,6 +331,7 @@ impl NovoApp {
                     novo_cables::connect_shield(tx, cable, core, to)
                 });
             }
+            other => self.cable_edit_action(cable, &tag, other),
         }
     }
 

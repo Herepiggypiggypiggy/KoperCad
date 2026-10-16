@@ -27,8 +27,13 @@ pub fn accuracy_for(fidelity: Fidelity) -> AccuracyStatement {
         _ => "Fine grid: the best this build offers.",
     };
     let mut limits = vec![
-        "The share of a device's heat that leaves through the mounting plate is not resolved \
-         (reads 0); device temperatures matched the 2D estimate in the sealed reference case."
+        "Device housing temperatures use the 2D engine's contact to the plate and surface film, \
+         so on a grid of 1500 cells they agree with it to about 5 %. On finer grids the air next \
+         to the device is resolved and comes out hotter than the 2D slice average: in the \
+         sealed 50 W reference case the housing rise is 10 to 20 % above the 2D estimate from \
+         6000 cells up and still creeps up with refinement (88 C at 6000 cells, about 92 C at \
+         150000, against 82 C). Neither engine is checked \
+         against a measurement."
             .into(),
         "Turbulence and radiation are not modelled: surface temperatures of hot devices are \
          slightly high without radiation, and flow in a strongly forced cabinet is laminar."

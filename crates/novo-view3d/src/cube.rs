@@ -119,6 +119,54 @@ pub fn visible_cells(camera: &Camera) -> Vec<CubeCell> {
     out
 }
 
+/// Where a face's name sits: the face centre and the face's own right and up
+/// half-extents, in the local space of [`view_cube_hit`] (x right, y up). The
+/// text is laid on this frame, so it turns and foreshortens with the face.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FaceLabel {
+    pub dir: [i8; 3],
+    pub center: [f32; 2],
+    pub right: [f32; 2],
+    pub up: [f32; 2],
+    /// How squarely the face looks at the eye, 0 to 1 (label fades with it).
+    pub facing: f32,
+}
+
+/// The labels of the six faces that are turned towards the camera.
+pub fn visible_labels(camera: &Camera) -> Vec<FaceLabel> {
+    let (right, up, fwd) = camera.basis();
+    let reach = 3f32.sqrt();
+    let local = |p: Vec3| [p.dot(right) / reach, p.dot(up) / reach];
+    let mut out = Vec::new();
+    for axis in 0..3 {
+        for sign in [-1i8, 1] {
+            let mut n = Vec3::ZERO;
+            n[axis] = sign as f32;
+            let facing = n.dot(-fwd);
+            if facing <= 1e-4 {
+                continue;
+            }
+            // Text up is world up on the sides, away from the viewer on top.
+            let text_up = match (axis, sign) {
+                (1, 1) => -Vec3::Z,
+                (1, _) => Vec3::Z,
+                _ => Vec3::Y,
+            };
+            let text_right = text_up.cross(n);
+            let mut dir = [0i8; 3];
+            dir[axis] = sign;
+            out.push(FaceLabel {
+                dir,
+                center: local(n),
+                right: local(text_right),
+                up: local(text_up),
+                facing,
+            });
+        }
+    }
+    out
+}
+
 /// The standard view a face click goes to; edges and corners have none.
 pub fn preset_of(hit: &CubeHit) -> Option<crate::camera::ViewPreset> {
     use crate::camera::ViewPreset::*;
@@ -212,6 +260,29 @@ mod tests {
             let my = cell.quad.iter().map(|q| q[1]).sum::<f32>() / 4.0;
             let hit = view_cube_hit(&c, [mx, my]).unwrap();
             assert_eq!(hit.dir, cell.dir);
+        }
+    }
+
+    #[test]
+    fn labels_sit_on_the_faces_and_are_never_mirrored() {
+        for preset in [ViewPreset::Front, ViewPreset::Iso, ViewPreset::Top] {
+            let mut c = front();
+            enter_standard(&mut c, preset);
+            let labels = visible_labels(&c);
+            assert_eq!(labels.len(), visible_cells(&c).len() / 9);
+            for l in labels {
+                // The centre of the face is the centre cell of that face.
+                let centre = visible_cells(&c)
+                    .into_iter()
+                    .find(|cell| cell.dir == l.dir)
+                    .unwrap();
+                let mx = centre.quad.iter().map(|q| q[0]).sum::<f32>() / 4.0;
+                let my = centre.quad.iter().map(|q| q[1]).sum::<f32>() / 4.0;
+                assert!((mx - l.center[0]).abs() < 1e-5 && (my - l.center[1]).abs() < 1e-5);
+                // Right then up is counter clockwise on screen: not a mirror.
+                let det = l.right[0] * l.up[1] - l.right[1] * l.up[0];
+                assert!(det > 0.0, "{:?} is mirrored", l.dir);
+            }
         }
     }
 
