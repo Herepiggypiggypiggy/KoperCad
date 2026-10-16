@@ -1,17 +1,21 @@
-# Cabinet track, lesson 3. Sample: the finished cabinet of rails-and-ducts (two rails, ducts).
-# Routes are derived from placements and ducts, nothing is stored, so there is no finished.json.
+# Cabinet track, lesson 3. Sample (project.json): the finished plate of cabinet-layout plus one
+# vertical duct down the right-hand end that joins the five ducts Place all lays (Place all joins
+# none of them, so without it every wire between rows is in free air). Routes are derived from
+# placements and ducts, nothing is stored, so there is no finished.json.
 #
-# NOT ON MAIN yet (keep status = "draft" until all are):
-#   - the routes and duct fill overlay and its toggle: #460 (not hooked into the Cabinet yet)
-#   - ducts drawn on the plate: #461
+# Verified on main (e2fa0013) with the overlay code on this sample: 11 wires routed, none in free
+# air, fullest duct 10 %, the longest wires 1924 mm (-F2 to -X1), the note "11 wires have no size:
+# duct fill assumes 3 mm", and every length +100 mm when the service loop goes from 50 to 100 mm.
+# Needs from the Cabinet owner: the anchors named below. Ducts cannot be selected or deleted, so
+# the old "take a duct away" step is gone; free air is explained in words.
 format = 1
 id = "wire-routing"
-version = 1
+version = 2
 status = "early"
 title = "Route the wires and watch the ducts"
 title_nl = "Draden routeren en de kanalen in de gaten houden"
-summary = "Turn on the routes, read the fill of each duct, and see a wire go off the road when a duct is removed."
-summary_nl = "Zet de routes aan, lees de vulling van elk kanaal en zie een draad van de route afwijken als een kanaal wordt verwijderd."
+summary = "Switch on Route all, read the length of every wire and the fill of every duct, and see a move change the numbers."
+summary_nl = "Zet Route all aan, lees de lengte van elke draad en de vulling van elk kanaal en zie hoe een verplaatsing de getallen verandert."
 track = "cabinet"
 order = 30
 level = "intermediate"
@@ -19,88 +23,138 @@ minutes = 8
 topics = ["cabinet", "routing", "ducts"]
 needs = ["rails-and-ducts"]
 next = ["cut-lengths"]
-project = "../rails-and-ducts/finished.json"
+project = "project.json"
 
 [[step]]
 id = "open-cabinet"
 title = "Open the cabinet"
-text = "Press {key:view.cabinet}. The devices sit on two rails with ducts between them. Nobody has drawn a single wire here."
+title_nl = "Open de kast"
+text = """
+Press {key:view.cabinet}. The devices sit on five rails with ducts beside the rows, and one duct runs down the right-hand end and joins them.
+The schematic has the wires; here you will see which way each one would run in the panel.
+"""
+text_nl = """
+Druk op {key:view.cabinet}. De componenten zitten op vijf rails met kanalen naast de rijen en één kanaal loopt langs de rechterkant en verbindt ze.
+Het schema heeft de draden; hier zie je welke weg elke draad in de kast zou nemen.
+"""
 point = { ui = "switcher.cabinet" }
 expect = { command = "view.cabinet" }
 solve = [ { command = "view.cabinet" } ]
 
 [[step]]
 id = "routes-on"
-title = "Show the routes"
+title = "Route all the wires"
+title_nl = "Route alle draden"
 text = """
-Click **Routes**. Every wire of the schematic that has both ends on this plate appears as a line that follows the ducts.
+Click **Route all**. A panel **Routes** opens on the right and a line appears for every wire that has both ends placed on this plate:
+it leaves the device, runs along the ducts and enters the other device. Eleven wires of this panel are routed.
 """
-# NOT ON MAIN: the Routes toggle (#460 builds the overlay).
+text_nl = """
+Klik op **Route all**. Rechts opent een paneel **Routes** en voor elke draad met beide einden op deze plaat verschijnt een lijn:
+die verlaat het component, loopt langs de kanalen en gaat het andere component in. Elf draden van dit paneel worden gerouteerd.
+"""
 point = { ui = "cabinet.routes" }
 expect = { clicked = "cabinet.routes" }
 
 [[step]]
 id = "summary-line"
 title = "Read the summary"
+title_nl = "Lees de samenvatting"
 text = """
-The line next to the toggle says how many wires were routed and how full the fullest duct is.
-Each duct also carries its own fill in percent.
+Under the title the panel says "11 wires routed, fullest duct 10%". If a wire had no duct to run in, it would say how many are "in free air".
+The amber line "11 wires have no size: duct fill assumes 3 mm" means the wires carry no cross-section yet, so KoperCAD counts each as a 3 mm wire.
 """
-point = { ui = "cabinet.routes" }
-note = [
-  { ui = "cabinet.routes", text = "Wires routed, fullest duct" },
-]
+text_nl = """
+Onder de titel staat "11 wires routed, fullest duct 10%". Had een draad geen kanaal om in te lopen, dan stond er hoeveel er "in free air" lopen.
+De oranje regel "11 wires have no size: duct fill assumes 3 mm" betekent dat de draden nog geen doorsnede hebben, dus KoperCAD rekent elke draad als 3 mm.
+"""
+point = { ui = "cabinet.routes_panel" }
+
+[[step]]
+id = "table"
+title = "Every wire has a length"
+title_nl = "Elke draad heeft een lengte"
+text = """
+The list below is sorted longest first. Each wire shows its number and cut length in mm; the line under it shows both ends, "routed" and how many ducts it uses.
+The longest are the three from **-F2** to **-X1** at 1924 mm each: the terminal strip is at the bottom, and every wire has to go round through the duct on the right-hand end.
+The length includes a 50 mm service loop at each end.
+"""
+text_nl = """
+De lijst eronder staat op lengte, langste eerst. Elke draad toont nummer en zaaglengte in mm; de regel eronder toont beide einden, "routed" en hoeveel kanalen de draad gebruikt.
+De langste zijn de drie van **-F2** naar **-X1** met 1924 mm per stuk: de klemmenstrook zit onderaan en elke draad moet via het kanaal aan de rechterkant.
+De lengte bevat een lus van 50 mm per uiteinde.
+"""
+point = { ui = "cabinet.routes_panel" }
 
 [[step]]
 id = "fill"
 title = "What the percentage means"
+title_nl = "Wat het percentage betekent"
 text = """
-100 % is the {tip:duct-fill} limit, half of the cross-section by default. Under 100 % the duct is fine; above it the wires will not pull easily.
+Each duct on the plate carries a label with its fill, for example 10% on the duct at the right-hand end, which holds all eleven wires.
+100% is the {tip:duct-fill} limit, half of the duct's cross-section by default. Under 80% the duct is calm, up to 100% it is busy,
+and over 100% it is labelled "over" in words and the wires will not pull easily. A duct that no wire uses has no label.
+"""
+text_nl = """
+Elk kanaal op de plaat heeft een label met zijn vulling, bijvoorbeeld 10% op het kanaal aan de rechterkant, dat alle elf draden bevat.
+100% is de {tip:duct-fill}-grens, standaard de helft van de doorsnede van het kanaal. Onder 80% is het kanaal rustig, tot 100% druk
+en boven 100% staat er "over" in woorden en laten de draden zich moeilijk trekken. Een kanaal zonder draden heeft geen label.
 """
 point = { ui = "cabinet.canvas" }
 
 [[step]]
 id = "move-device"
 title = "Move a device, the wires follow"
+title_nl = "Verplaats een component, de draden volgen"
 text = """
-Drag **-F2** a little to the right along its rail. The routes and the percentages update at once.
-Nothing was edited by hand; routes are worked out from the plate every time.
+Drag **-F2** a little to the left and let go. The lines and the table update at once: the lengths of the wires at **-F2** change.
+Nothing was edited by hand; routes are worked out from the plate again after every change. Then press {key:edit.undo}.
+"""
+text_nl = """
+Sleep **-F2** een stukje naar links en laat los. De lijnen en de tabel worden direct bijgewerkt: de lengtes van de draden bij **-F2** veranderen.
+Er is niets met de hand aangepast; routes worden na elke wijziging opnieuw uit de plaat berekend. Druk daarna op {key:edit.undo}.
 """
 point = { ui = "cabinet.canvas" }
 expect = { signal = "cabinet_dropped" }
 
 [[step]]
-id = "remove-duct"
-title = "Take a duct away"
+id = "wire-rules"
+title = "Change a wire rule"
+title_nl = "Verander een draadregel"
 text = """
-Select the vertical duct on the right and press {key:edit.delete}.
-The wires to **-X1** lose their road and turn red and dashed: {tip:free-air}.
+In the Routes panel open **Wire rules**. Set **Service loop per end** from 50 mm to 100 mm.
+Every length in the table grows by 100 mm (1924 becomes 2024), because each wire has two ends.
+The rules are kept in the project, so the wire list and the cut files use the same numbers. The reset arrow puts a rule back to its default.
 """
-# NOT ON MAIN: selecting a duct (#461 draws ducts but they are not selectable yet).
-point = { ui = "cabinet.canvas" }
-expect = { command = "edit.delete" }
-solve = [ { command = "edit.delete" } ]
+text_nl = """
+Open in het paneel Routes **Wire rules**. Zet **Service loop per end** van 50 mm op 100 mm.
+Elke lengte in de tabel wordt 100 mm langer (1924 wordt 2024), want elke draad heeft twee uiteinden.
+De regels worden in het project bewaard, dus de draadlijst en de zaagbestanden gebruiken dezelfde getallen. Met de reset-pijl zet je een regel terug op de standaardwaarde.
+"""
+point = { ui = "cabinet.wire_rules" }
 
 [[step]]
-id = "read-free-air"
-title = "Why free air is a warning"
+id = "free-air"
+title = "When a wire has no road"
+title_nl = "Als een draad geen weg heeft"
 text = """
-A dashed wire has no duct path, so its length is a straight guess. The problem list names it.
-Nothing is hidden or set to zero.
+If a wire's ends cannot reach one connected set of ducts, it is drawn dashed and the table says "free air": a straight line, only a guess of its length.
+Ducts that do not touch each other cause this: on the plate of the previous lesson, where Place all lays five separate ducts, all eleven wires run in free air.
+Free air is shown, never hidden or set to zero, so it cannot slip into a cut list unnoticed.
 """
-point = { ui = "cabinet.problems" }
-
-[[step]]
-id = "undo"
-title = "Put the duct back"
-text = "{key:edit.undo} brings the duct back and the wires return to their road."
-point = { ui = "cabinet.canvas" }
-expect = { command = "edit.undo" }
-solve = [ { command = "edit.undo" } ]
+text_nl = """
+Kunnen de uiteinden van een draad geen verbonden stelsel van kanalen bereiken, dan wordt de draad gestippeld getekend en zegt de tabel "free air": een rechte lijn en slechts een schatting van de lengte.
+Kanalen die elkaar niet raken veroorzaken dit: op de plaat van de vorige les, waar Place all vijf losse kanalen legt, lopen alle elf draden in free air.
+Free air wordt getoond, nooit verborgen of op nul gezet, dus het glipt niet ongemerkt in een zaaglijst.
+"""
 
 [[step]]
 id = "done"
 title = "Routes you can trust"
+title_nl = "Routes die je kunt vertrouwen"
 text = """
-Routes come from the plate, so they are never stale. Next: the wire list shows the cut length of each wire.
+Routes come from the plate, so they are never stale. Next: how a cut length is made up, and the wire cut file for a machine.
+"""
+text_nl = """
+Routes komen uit de plaat, dus ze zijn nooit verouderd. Straks: hoe een zaaglengte is opgebouwd en het zaagbestand voor een machine.
 """

@@ -236,19 +236,23 @@ fn place_of(project: &Project, info: &TargetInfo, current: Option<PageId>) -> Op
 }
 
 impl NovoApp {
-    /// The `view.commissioning` command: the mode on in the outline, or off.
-    /// Turning it off drops the in-memory store, which is safe because every
-    /// change is flushed to the project in the frame it is made.
-    pub(super) fn toggle_commissioning(&mut self) {
-        if self.wb.commissioning.is_some() && self.outline_mode == OutlineMode::Commissioning {
-            self.wb.commissioning = None;
-            self.outline_mode = OutlineMode::Pages;
-            return;
-        }
+    /// The `view.commissioning` command opens the Commissioning workspace:
+    /// the mode is on, its panel in the outline's place. Leaving it drops the
+    /// in-memory store, which is safe because every change is flushed to the
+    /// project in the frame it is made.
+    pub(super) fn enter_commissioning(&mut self) {
         self.load_commissioning();
         self.outline_mode = OutlineMode::Commissioning;
         if !self.outline_pinned() {
             self.outline_open = true;
+        }
+    }
+
+    /// The Commissioning workspace is left: the mode is off.
+    pub(super) fn leave_commissioning(&mut self) {
+        self.wb.commissioning = None;
+        if self.outline_mode == OutlineMode::Commissioning {
+            self.outline_mode = OutlineMode::Pages;
         }
     }
 
@@ -559,6 +563,26 @@ fn checks_tab(
                     mode.dirty = true;
                 }
             });
+            // A failure raises a punch item by itself; say so and link to it.
+            if state == CheckState::Failed {
+                let item = mode
+                    .store
+                    .punch_items()
+                    .find(|p| {
+                        p.target == Some(info.target)
+                            && p.check == Some(check)
+                            && !p.state.is_closed()
+                    })
+                    .map(|p| (p.title.clone(), severity_label(p.severity)));
+                if let Some((title, severity)) = item {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.weak(format!("Punch item raised: {title} ({severity})"));
+                        if ui.small_button("Open punch list").clicked() {
+                            mode.tab = Tab::Punch;
+                        }
+                    });
+                }
+            }
             if let Some(r) = mode.store.record(info.target, check)
                 && !r.by.is_empty()
             {

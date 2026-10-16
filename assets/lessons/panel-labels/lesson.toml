@@ -20,7 +20,7 @@ minutes = 6
 topics = ["cabinet", "labels", "export"]
 needs = ["cut-lengths"]
 next = ["view-3d"]
-project = "../rails-and-ducts/finished.json"
+project = "../wire-routing/project.json"
 
 [[step]]
 id = "open-reports"

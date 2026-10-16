@@ -52,6 +52,8 @@ pub(crate) struct Workbench {
     /// A key that opens the wheel went down at this time (egui seconds),
     /// with the keys then held: a tap runs Place, a hold opens the wheel.
     pub(super) place_hold: Option<(f64, Vec<egui::Key>)>,
+    /// The keys of a hold that opened the wheel, and since when all were up.
+    pub(super) place_latch: Option<(Vec<egui::Key>, Option<f64>)>,
     /// Commands the canvas asked for, run next frame by id.
     pub(super) queued: Vec<&'static str>,
     /// The `renumber io` preview waiting for Enter or Esc, per station.
@@ -176,6 +178,7 @@ impl Default for Workbench {
             reports: Default::default(),
             wheel: None,
             place_hold: None,
+            place_latch: None,
             queued: Vec::new(),
             renumber: None,
             plc_import: None,
@@ -694,7 +697,10 @@ impl NovoApp {
             }
             "sim.faults" => self.toggle_faults(),
             "view.changes" => self.toggle_changes(argument),
-            "view.commissioning" => self.toggle_commissioning(),
+            "view.commissioning" if self.workspace() == Workspace::Commissioning => {
+                self.switch_workspace(Workspace::Schematic);
+            }
+            "view.commissioning" => self.switch_workspace(Workspace::Commissioning),
             "check.problems" => self.show_issues(false),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),

@@ -20,7 +20,7 @@ minutes = 7
 topics = ["cabinet", "enclosure", "door"]
 needs = ["cabinet-layout"]
 next = ["heat-and-sizing"]
-project = "../rails-and-ducts/finished.json"
+project = "../wire-routing/project.json"
 
 [[step]]
 id = "open-cabinet"
