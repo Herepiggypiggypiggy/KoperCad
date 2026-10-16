@@ -6,110 +6,128 @@
       "description": "Contactor S00, 3 pole, AC-3 9 A / 4 kW at 400 V, coil 24 V DC, 1 NO",
       "letter_codes": ["K", "Q"], "keywords": ["contactor", "coil 24vdc", "s00"],
       "dimensions": { "width_mm": 45.0, "height_mm": 57.5, "depth_mm": 73.0 },
-      "data": { "poles": 3, "rated_current_a": 9.0, "rated_power_kw": 4.0, "coil_voltage": "24 V DC", "auxiliary_contacts": "1 NO", "mounting": "DIN rail 35 mm" }
+      "data": { "power_loss_w": 2.5, "max_ambient_c": 60.0, "poles": 3, "rated_current_a": 9.0, "rated_power_kw": 4.0, "coil_voltage": "24 V DC", "auxiliary_contacts": "1 NO", "mounting": "DIN rail 35 mm" },
+      "sources": { "power_loss_w": "estimated", "max_ambient_c": "estimated" }
     },
     {
       "manufacturer": "Siemens", "order_number": "3RT2016-1AP01", "type_number": "3RT2016",
       "description": "Contactor S00, 3 pole, AC-3 9 A / 4 kW at 400 V, coil 230 V AC, 1 NO",
       "letter_codes": ["K", "Q"], "keywords": ["contactor", "coil 230vac", "s00"],
       "dimensions": { "width_mm": 45.0, "height_mm": 57.5, "depth_mm": 73.0 },
-      "data": { "poles": 3, "rated_current_a": 9.0, "rated_power_kw": 4.0, "coil_voltage": "230 V AC", "auxiliary_contacts": "1 NO", "mounting": "DIN rail 35 mm" }
+      "data": { "power_loss_w": 2.3, "max_ambient_c": 60.0, "poles": 3, "rated_current_a": 9.0, "rated_power_kw": 4.0, "coil_voltage": "230 V AC", "auxiliary_contacts": "1 NO", "mounting": "DIN rail 35 mm" },
+      "sources": { "power_loss_w": "estimated", "max_ambient_c": "estimated" }
     },
     {
       "manufacturer": "Siemens", "order_number": "3RT2017-1BB41", "type_number": "3RT2017",
       "description": "Contactor S00, 3 pole, AC-3 12 A / 5.5 kW at 400 V, coil 24 V DC, 1 NO",
       "letter_codes": ["K", "Q"], "keywords": ["contactor", "coil 24vdc", "s00"],
       "dimensions": { "width_mm": 45.0, "height_mm": 57.5, "depth_mm": 73.0 },
-      "data": { "poles": 3, "rated_current_a": 12.0, "rated_power_kw": 5.5, "coil_voltage": "24 V DC", "auxiliary_contacts": "1 NO", "mounting": "DIN rail 35 mm" }
+      "data": { "power_loss_w": 2.7, "max_ambient_c": 60.0, "poles": 3, "rated_current_a": 12.0, "rated_power_kw": 5.5, "coil_voltage": "24 V DC", "auxiliary_contacts": "1 NO", "mounting": "DIN rail 35 mm" },
+      "sources": { "power_loss_w": "estimated", "max_ambient_c": "estimated" }
     },
     {
       "manufacturer": "Siemens", "order_number": "3RH2122-1BB40", "type_number": "3RH2122",
       "description": "Contactor relay S00, 2 NO + 2 NC, coil 24 V DC",
       "letter_codes": ["K"], "keywords": ["contactor relay", "relay", "auxiliary", "coil 24vdc"],
       "dimensions": { "width_mm": 45.0, "height_mm": 57.5, "depth_mm": 73.0 },
-      "data": { "coil_voltage": "24 V DC", "auxiliary_contacts": "2 NO + 2 NC", "mounting": "DIN rail 35 mm" }
+      "data": { "power_loss_w": 1.8, "max_ambient_c": 60.0, "coil_voltage": "24 V DC", "auxiliary_contacts": "2 NO + 2 NC", "mounting": "DIN rail 35 mm" },
+      "sources": { "power_loss_w": "estimated", "max_ambient_c": "estimated" }
     },
     {
       "manufacturer": "Siemens", "order_number": "3RV2011-1EA10", "type_number": "3RV2011",
       "description": "Motor protection circuit breaker S00, 2.8 to 4 A",
       "letter_codes": ["Q", "F"], "keywords": ["mpcb", "motor protection", "breaker", "motor starter protector"],
       "dimensions": { "width_mm": 45.0, "height_mm": 97.0, "depth_mm": 97.0 },
-      "data": { "poles": 3, "setting_min_a": 2.8, "setting_max_a": 4.0, "mounting": "DIN rail 35 mm" }
+      "data": { "power_loss_w": 4.0, "max_ambient_c": 60.0, "poles": 3, "setting_min_a": 2.8, "setting_max_a": 4.0, "mounting": "DIN rail 35 mm" },
+      "sources": { "power_loss_w": "estimated", "max_ambient_c": "estimated" }
     },
     {
       "manufacturer": "Siemens", "order_number": "3RV2011-1FA10", "type_number": "3RV2011",
       "description": "Motor protection circuit breaker S00, 3.5 to 5 A",
       "letter_codes": ["Q", "F"], "keywords": ["mpcb", "motor protection", "breaker", "motor starter protector"],
       "dimensions": { "width_mm": 45.0, "height_mm": 97.0, "depth_mm": 97.0 },
-      "data": { "poles": 3, "setting_min_a": 3.5, "setting_max_a": 5.0, "mounting": "DIN rail 35 mm" }
+      "data": { "power_loss_w": 5.0, "max_ambient_c": 60.0, "poles": 3, "setting_min_a": 3.5, "setting_max_a": 5.0, "mounting": "DIN rail 35 mm" },
+      "sources": { "power_loss_w": "estimated", "max_ambient_c": "estimated" }
     },
     {
       "manufacturer": "Siemens", "order_number": "3RV2011-1JA10", "type_number": "3RV2011",
       "description": "Motor protection circuit breaker S00, 7 to 10 A",
       "letter_codes": ["Q", "F"], "keywords": ["mpcb", "motor protection", "breaker", "motor starter protector"],
       "dimensions": { "width_mm": 45.0, "height_mm": 97.0, "depth_mm": 97.0 },
-      "data": { "poles": 3, "setting_min_a": 7.0, "setting_max_a": 10.0, "mounting": "DIN rail 35 mm" }
+      "data": { "power_loss_w": 6.5, "max_ambient_c": 60.0, "poles": 3, "setting_min_a": 7.0, "setting_max_a": 10.0, "mounting": "DIN rail 35 mm" },
+      "sources": { "power_loss_w": "estimated", "max_ambient_c": "estimated" }
     },
     {
       "manufacturer": "Siemens", "order_number": "3RU2116-1EB0", "type_number": "3RU2116",
       "description": "Thermal overload relay S00, 2.8 to 4 A, 1 NO + 1 NC",
       "letter_codes": ["F", "B"], "keywords": ["overload", "ol", "thermal overload relay"],
       "dimensions": { "width_mm": 45.0, "height_mm": 76.0, "depth_mm": 70.0 },
-      "data": { "poles": 3, "setting_min_a": 2.8, "setting_max_a": 4.0, "auxiliary_contacts": "1 NO + 1 NC" }
+      "data": { "power_loss_w": 3.5, "max_ambient_c": 60.0, "poles": 3, "setting_min_a": 2.8, "setting_max_a": 4.0, "auxiliary_contacts": "1 NO + 1 NC" },
+      "sources": { "power_loss_w": "estimated", "max_ambient_c": "estimated" }
     },
     {
       "manufacturer": "Siemens", "order_number": "3RU2116-1FB0", "type_number": "3RU2116",
       "description": "Thermal overload relay S00, 3.5 to 5 A, 1 NO + 1 NC",
       "letter_codes": ["F", "B"], "keywords": ["overload", "ol", "thermal overload relay"],
       "dimensions": { "width_mm": 45.0, "height_mm": 76.0, "depth_mm": 70.0 },
-      "data": { "poles": 3, "setting_min_a": 3.5, "setting_max_a": 5.0, "auxiliary_contacts": "1 NO + 1 NC" }
+      "data": { "power_loss_w": 4.5, "max_ambient_c": 60.0, "poles": 3, "setting_min_a": 3.5, "setting_max_a": 5.0, "auxiliary_contacts": "1 NO + 1 NC" },
+      "sources": { "power_loss_w": "estimated", "max_ambient_c": "estimated" }
     },
     {
       "manufacturer": "Siemens", "order_number": "3RU2116-1JB0", "type_number": "3RU2116",
       "description": "Thermal overload relay S00, 7 to 10 A, 1 NO + 1 NC",
       "letter_codes": ["F", "B"], "keywords": ["overload", "ol", "thermal overload relay"],
       "dimensions": { "width_mm": 45.0, "height_mm": 76.0, "depth_mm": 70.0 },
-      "data": { "poles": 3, "setting_min_a": 7.0, "setting_max_a": 10.0, "auxiliary_contacts": "1 NO + 1 NC" }
+      "data": { "power_loss_w": 6.0, "max_ambient_c": 60.0, "poles": 3, "setting_min_a": 7.0, "setting_max_a": 10.0, "auxiliary_contacts": "1 NO + 1 NC" },
+      "sources": { "power_loss_w": "estimated", "max_ambient_c": "estimated" }
     },
     {
       "manufacturer": "Siemens", "order_number": "3NW7033", "type_number": "3NW7033",
       "description": "Cylindrical fuse holder 10 x 38 mm, 3 pole",
       "letter_codes": ["F"], "keywords": ["fuse", "fuse holder", "10x38"],
       "dimensions": { "width_mm": 54.0, "height_mm": 81.0, "depth_mm": 70.0 },
-      "data": { "poles": 3, "fuse_size": "10 x 38", "mounting": "DIN rail 35 mm" }
+      "data": { "power_loss_w": 4.5, "poles": 3, "fuse_size": "10 x 38", "mounting": "DIN rail 35 mm" },
+      "sources": { "power_loss_w": "estimated" }
     },
     {
       "manufacturer": "Siemens", "order_number": "5SY6106-7", "type_number": "5SY6106-7",
       "description": "Miniature circuit breaker 1 pole, C 6 A, 6 kA",
       "letter_codes": ["F", "Q"], "keywords": ["mcb", "circuit breaker", "c6"],
       "dimensions": { "width_mm": 18.0, "height_mm": 90.0, "depth_mm": 70.0 },
-      "data": { "poles": 1, "rated_current_a": 6.0, "trip_curve": "C", "breaking_capacity_ka": 6.0, "mounting": "DIN rail 35 mm" }
+      "data": { "power_loss_w": 1.5, "poles": 1, "rated_current_a": 6.0, "trip_curve": "C", "breaking_capacity_ka": 6.0, "mounting": "DIN rail 35 mm" },
+      "sources": { "power_loss_w": "estimated" }
     },
     {
       "manufacturer": "Siemens", "order_number": "5SY6116-7", "type_number": "5SY6116-7",
       "description": "Miniature circuit breaker 1 pole, C 16 A, 6 kA",
       "letter_codes": ["F", "Q"], "keywords": ["mcb", "circuit breaker", "c16"],
       "dimensions": { "width_mm": 18.0, "height_mm": 90.0, "depth_mm": 70.0 },
-      "data": { "poles": 1, "rated_current_a": 16.0, "trip_curve": "C", "breaking_capacity_ka": 6.0, "mounting": "DIN rail 35 mm" }
+      "data": { "power_loss_w": 2.5, "poles": 1, "rated_current_a": 16.0, "trip_curve": "C", "breaking_capacity_ka": 6.0, "mounting": "DIN rail 35 mm" },
+      "sources": { "power_loss_w": "estimated" }
     },
     {
       "manufacturer": "Siemens", "order_number": "5SY6316-7", "type_number": "5SY6316-7",
       "description": "Miniature circuit breaker 3 pole, C 16 A, 6 kA",
       "letter_codes": ["F", "Q"], "keywords": ["mcb", "circuit breaker", "c16"],
       "dimensions": { "width_mm": 53.0, "height_mm": 90.0, "depth_mm": 70.0 },
-      "data": { "poles": 3, "rated_current_a": 16.0, "trip_curve": "C", "breaking_capacity_ka": 6.0, "mounting": "DIN rail 35 mm" }
+      "data": { "power_loss_w": 7.5, "poles": 3, "rated_current_a": 16.0, "trip_curve": "C", "breaking_capacity_ka": 6.0, "mounting": "DIN rail 35 mm" },
+      "sources": { "power_loss_w": "estimated" }
     },
     {
       "manufacturer": "Siemens", "order_number": "3SU1100-0AB40-1BA0", "type_number": "3SU1100",
       "description": "Push button 22 mm, green, momentary, 1 NO",
       "letter_codes": ["S"], "keywords": ["pb", "push button", "start", "green", "no"],
-      "data": { "colour": "green", "contacts": "1 NO", "mounting": "22 mm front hole" }
+      "dimensions": { "width_mm": 30.0, "height_mm": 30.0, "depth_mm": 60.0 },
+      "data": { "power_loss_w": 0.0, "colour": "green", "contacts": "1 NO", "mounting": "22 mm front hole" },
+      "sources": { "power_loss_w": "estimated" }
     },
     {
       "manufacturer": "Siemens", "order_number": "3SU1100-0AB20-1CA0", "type_number": "3SU1100",
       "description": "Push button 22 mm, red, momentary, 1 NC",
       "letter_codes": ["S"], "keywords": ["pb", "push button", "stop", "red", "nc"],
-      "data": { "colour": "red", "contacts": "1 NC", "mounting": "22 mm front hole" }
+      "dimensions": { "width_mm": 30.0, "height_mm": 30.0, "depth_mm": 60.0 },
+      "data": { "power_loss_w": 0.0, "colour": "red", "contacts": "1 NC", "mounting": "22 mm front hole" },
+      "sources": { "power_loss_w": "estimated" }
     },
     {
       "manufacturer": "Siemens", "order_number": "1LE1003-0EB42-2AA4", "type_number": "1LE1003",
@@ -122,74 +140,87 @@
       "description": "Feed-through terminal block 2.5 mm², grey, screw connection",
       "letter_codes": ["X"], "keywords": ["term", "terminal", "feed-through", "ut 2.5"],
       "dimensions": { "width_mm": 5.2, "height_mm": 47.5, "depth_mm": 42.5 },
-      "data": { "cross_section_mm2": 2.5, "colour": "grey", "connections": 2, "mounting": "DIN rail 35 mm" }
+      "data": { "power_loss_w": 0.3, "cross_section_mm2": 2.5, "colour": "grey", "connections": 2, "mounting": "DIN rail 35 mm" },
+      "sources": { "power_loss_w": "estimated" }
     },
     {
       "manufacturer": "Phoenix Contact", "order_number": "3044089", "type_number": "UT 2,5-PE",
       "description": "Protective conductor terminal block 2.5 mm², green-yellow",
       "letter_codes": ["X"], "keywords": ["term", "terminal", "pe", "earth", "ground", "ut 2.5"],
       "dimensions": { "width_mm": 5.2, "height_mm": 47.5, "depth_mm": 42.5 },
-      "data": { "cross_section_mm2": 2.5, "colour": "green-yellow", "connections": 2, "mounting": "DIN rail 35 mm" }
+      "data": { "power_loss_w": 0.0, "cross_section_mm2": 2.5, "colour": "green-yellow", "connections": 2, "mounting": "DIN rail 35 mm" },
+      "sources": { "power_loss_w": "estimated" }
     },
     {
       "manufacturer": "Phoenix Contact", "order_number": "3044102", "type_number": "UT 4",
       "description": "Feed-through terminal block 4 mm², grey, screw connection",
       "letter_codes": ["X"], "keywords": ["term", "terminal", "feed-through", "ut 4"],
       "dimensions": { "width_mm": 6.2, "height_mm": 47.5, "depth_mm": 42.5 },
-      "data": { "cross_section_mm2": 4.0, "colour": "grey", "connections": 2, "mounting": "DIN rail 35 mm" }
+      "data": { "power_loss_w": 0.4, "cross_section_mm2": 4.0, "colour": "grey", "connections": 2, "mounting": "DIN rail 35 mm" },
+      "sources": { "power_loss_w": "estimated" }
     },
     {
       "manufacturer": "Phoenix Contact", "order_number": "3044128", "type_number": "UT 4-PE",
       "description": "Protective conductor terminal block 4 mm², green-yellow",
       "letter_codes": ["X"], "keywords": ["term", "terminal", "pe", "earth", "ground", "ut 4"],
       "dimensions": { "width_mm": 6.2, "height_mm": 47.5, "depth_mm": 42.5 },
-      "data": { "cross_section_mm2": 4.0, "colour": "green-yellow", "connections": 2, "mounting": "DIN rail 35 mm" }
+      "data": { "power_loss_w": 0.0, "cross_section_mm2": 4.0, "colour": "green-yellow", "connections": 2, "mounting": "DIN rail 35 mm" },
+      "sources": { "power_loss_w": "estimated" }
     },
     {
       "manufacturer": "Phoenix Contact", "order_number": "2904601", "type_number": "QUINT4-PS/1AC/24DC/5",
       "description": "Power supply 1 phase, 24 V DC, 5 A",
       "letter_codes": ["G", "T"], "keywords": ["psu", "power supply", "24vdc"],
       "dimensions": { "width_mm": 35.0, "height_mm": 130.0, "depth_mm": 125.0 },
-      "data": { "output_voltage_v": 24.0, "output_current_a": 5.0, "input": "100 to 240 V AC", "mounting": "DIN rail 35 mm" }
+      "data": { "power_loss_w": 8.0, "output_voltage_v": 24.0, "output_current_a": 5.0, "input": "100 to 240 V AC", "mounting": "DIN rail 35 mm" },
+      "sources": { "power_loss_w": "estimated" }
     },
     {
       "manufacturer": "Schneider Electric", "order_number": "LC1D09BD", "type_number": "LC1D09",
       "description": "TeSys D contactor, 3 pole, AC-3 9 A / 4 kW at 400 V, coil 24 V DC, 1 NO + 1 NC",
       "letter_codes": ["K", "Q"], "keywords": ["contactor", "coil 24vdc", "tesys"],
       "dimensions": { "width_mm": 45.0, "height_mm": 77.0, "depth_mm": 93.0 },
-      "data": { "poles": 3, "rated_current_a": 9.0, "rated_power_kw": 4.0, "coil_voltage": "24 V DC", "auxiliary_contacts": "1 NO + 1 NC", "mounting": "DIN rail 35 mm" }
+      "data": { "power_loss_w": 3.0, "max_ambient_c": 60.0, "poles": 3, "rated_current_a": 9.0, "rated_power_kw": 4.0, "coil_voltage": "24 V DC", "auxiliary_contacts": "1 NO + 1 NC", "mounting": "DIN rail 35 mm" },
+      "sources": { "power_loss_w": "estimated", "max_ambient_c": "estimated" }
     },
     {
       "manufacturer": "Schneider Electric", "order_number": "LC1D09P7", "type_number": "LC1D09",
       "description": "TeSys D contactor, 3 pole, AC-3 9 A / 4 kW at 400 V, coil 230 V AC, 1 NO + 1 NC",
       "letter_codes": ["K", "Q"], "keywords": ["contactor", "coil 230vac", "tesys"],
       "dimensions": { "width_mm": 45.0, "height_mm": 77.0, "depth_mm": 86.0 },
-      "data": { "poles": 3, "rated_current_a": 9.0, "rated_power_kw": 4.0, "coil_voltage": "230 V AC", "auxiliary_contacts": "1 NO + 1 NC", "mounting": "DIN rail 35 mm" }
+      "data": { "power_loss_w": 2.8, "max_ambient_c": 60.0, "poles": 3, "rated_current_a": 9.0, "rated_power_kw": 4.0, "coil_voltage": "230 V AC", "auxiliary_contacts": "1 NO + 1 NC", "mounting": "DIN rail 35 mm" },
+      "sources": { "power_loss_w": "estimated", "max_ambient_c": "estimated" }
     },
     {
       "manufacturer": "Schneider Electric", "order_number": "GV2ME14", "type_number": "GV2ME14",
       "description": "TeSys GV2 motor circuit breaker, 6 to 10 A",
       "letter_codes": ["Q", "F"], "keywords": ["mpcb", "motor protection", "breaker"],
       "dimensions": { "width_mm": 45.0, "height_mm": 89.0, "depth_mm": 97.0 },
-      "data": { "poles": 3, "setting_min_a": 6.0, "setting_max_a": 10.0, "mounting": "DIN rail 35 mm" }
+      "data": { "power_loss_w": 6.0, "poles": 3, "setting_min_a": 6.0, "setting_max_a": 10.0, "mounting": "DIN rail 35 mm" },
+      "sources": { "power_loss_w": "estimated" }
     },
     {
       "manufacturer": "Schneider Electric", "order_number": "LRD14", "type_number": "LRD14",
       "description": "TeSys D thermal overload relay, 7 to 10 A",
       "letter_codes": ["F", "B"], "keywords": ["overload", "ol", "thermal overload relay"],
-      "data": { "poles": 3, "setting_min_a": 7.0, "setting_max_a": 10.0, "auxiliary_contacts": "1 NO + 1 NC" }
+      "data": { "power_loss_w": 6.0, "poles": 3, "setting_min_a": 7.0, "setting_max_a": 10.0, "auxiliary_contacts": "1 NO + 1 NC" },
+      "sources": { "power_loss_w": "estimated" }
     },
     {
       "manufacturer": "Schneider Electric", "order_number": "XB5AA31", "type_number": "XB5AA31",
       "description": "Push button 22 mm, green, spring return, 1 NO",
       "letter_codes": ["S"], "keywords": ["pb", "push button", "start", "green", "no"],
-      "data": { "colour": "green", "contacts": "1 NO", "mounting": "22 mm front hole" }
+      "dimensions": { "width_mm": 30.0, "height_mm": 30.0, "depth_mm": 60.0 },
+      "data": { "power_loss_w": 0.0, "colour": "green", "contacts": "1 NO", "mounting": "22 mm front hole" },
+      "sources": { "power_loss_w": "estimated" }
     },
     {
       "manufacturer": "Schneider Electric", "order_number": "XB5AA42", "type_number": "XB5AA42",
       "description": "Push button 22 mm, red, spring return, 1 NC",
       "letter_codes": ["S"], "keywords": ["pb", "push button", "stop", "red", "nc"],
-      "data": { "colour": "red", "contacts": "1 NC", "mounting": "22 mm front hole" }
+      "dimensions": { "width_mm": 30.0, "height_mm": 30.0, "depth_mm": 60.0 },
+      "data": { "power_loss_w": 0.0, "colour": "red", "contacts": "1 NC", "mounting": "22 mm front hole" },
+      "sources": { "power_loss_w": "estimated" }
     },
     {
       "manufacturer": "Lapp", "order_number": "1119304", "type_number": "ÖLFLEX CLASSIC 110 4G1,5",
