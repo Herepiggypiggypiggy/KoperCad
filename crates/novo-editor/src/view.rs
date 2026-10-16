@@ -86,6 +86,10 @@ enum RenameTarget {
     /// A symbol's own label that is not a device tag: a terminal's name, a
     /// feed's potential, an interruption point's name.
     Label(SymbolId),
+    /// A free text already on the page.
+    Note(novo_core::TextId),
+    /// A free text still to be added at this point (empty words add none).
+    NewNote(PageId, Point),
 }
 
 struct RenameBox {
@@ -255,6 +259,15 @@ fn label_drag_at(
         from: at,
         to: at,
     })
+}
+
+/// The words of a free text (not a label of something else), for editing.
+fn free_text(project: &novo_core::Project, text: novo_core::TextId) -> Option<String> {
+    let t = project.text(text)?;
+    match (&t.content, t.attached_to) {
+        (TextContent::Literal { text }, None) => Some(text.clone()),
+        _ => None,
+    }
 }
 
 fn point(v: Vec2) -> Point {
@@ -1041,6 +1054,9 @@ impl SchematicView {
                     .symbol(s)
                     .and_then(|sym| model::symbol_text(document.project(), sym))
                     .map(|text| (RenameTarget::Label(s), text)),
+                (LabelKind::Literal, _) => label.text.and_then(|t| {
+                    free_text(document.project(), t).map(|words| (RenameTarget::Note(t), words))
+                }),
                 (LabelKind::WireNumber, AnyId::Wire(w)) => document.project().wire(w).map(|w| {
                     (
                         RenameTarget::Wire(w.id),
@@ -1058,6 +1074,18 @@ impl SchematicView {
                     focus: true,
                 });
             }
+        }
+
+        // The click of the text tool: ask for the words where it landed.
+        if let Some(at) = self.editor.take_text_request() {
+            let anchor = ctx.pointer_latest_pos().unwrap_or(rect.center());
+            self.rename = Some(RenameBox {
+                target: RenameTarget::NewNote(page, at),
+                text: String::new(),
+                anchor,
+                error: None,
+                focus: true,
+            });
         }
 
         // Double click on a device with nothing in hand opens its
@@ -1400,7 +1428,22 @@ impl SchematicView {
             let device = selection
                 .iter()
                 .find_map(|&id| device_of(document.project(), id));
-            if let Some(device) = device
+            let note = selection.iter().find_map(|&id| match id {
+                AnyId::Text(t) => free_text(document.project(), t).map(|w| (t, w)),
+                _ => None,
+            });
+            if device.is_none()
+                && let Some((t, words)) = note
+            {
+                let anchor = ctx.pointer_latest_pos().unwrap_or(rect.center());
+                self.rename = Some(RenameBox {
+                    target: RenameTarget::Note(t),
+                    text: words,
+                    anchor,
+                    error: None,
+                    focus: true,
+                });
+            } else if let Some(device) = device
                 && let Some(d) = document.project().device(device)
             {
                 let anchor = ctx.pointer_latest_pos().unwrap_or(rect.center());
@@ -1665,6 +1708,11 @@ impl SchematicView {
                             );
                             ui.weak(if feed {
                                 "Enter sets the feed's potential · Esc cancels"
+                            } else if matches!(
+                                rename.target,
+                                RenameTarget::Note(_) | RenameTarget::NewNote(..)
+                            ) {
+                                "Enter sets the text · Esc cancels"
                             } else if rename.text.trim().is_empty() {
                                 "Empty: Enter joins the device on its left · Esc cancels"
                             } else {
@@ -1683,6 +1731,23 @@ impl SchematicView {
                     })
                     .map_err(|e| e.to_string())
                     .and_then(|(r, _)| r),
+                RenameTarget::NewNote(page, at) => {
+                    self.editor.add_note(document, page, at, &rename.text);
+                    Ok(())
+                }
+                RenameTarget::Note(text) => {
+                    let words = rename.text.trim().to_owned();
+                    if words.is_empty() {
+                        Err("A text cannot be empty; Delete removes it".to_owned())
+                    } else {
+                        document
+                            .transact("Edit text", |tx| {
+                                tx.set_text(text, Some(TextContent::Literal { text: words }), None)
+                            })
+                            .map(|_| ())
+                            .map_err(|e| e.to_string())
+                    }
+                }
                 RenameTarget::Wire(wire) => {
                     let number = rename.text.trim();
                     let number = (!number.is_empty()).then(|| number.to_string());
@@ -1737,6 +1802,9 @@ impl SchematicView {
                         }
                         if ui.button("Paste   Ctrl+V").clicked() {
                             chosen = Some(MenuChoice::Command("edit.paste"));
+                        }
+                        if ui.button("Add text   Shift+T").clicked() {
+                            chosen = Some(MenuChoice::Command("draw.text"));
                         }
                         if ui.button("New page after this").clicked() {
                             chosen = Some(MenuChoice::NewPage);
@@ -1909,6 +1977,24 @@ impl SchematicView {
                             .clicked()
                         {
                             chosen = Some(MenuChoice::MakeCable);
+                        }
+                    }
+                    // A selection of terminals already has a tall menu; its nets are
+                    // one right-click away on the wire, and in Edit > Net.
+                    if !menu.wires.is_empty() || menu.symbols > menu.terminals {
+                        if ui
+                            .button("Select net")
+                            .on_hover_text("Every wire of this net on the page")
+                            .clicked()
+                        {
+                            chosen = Some(MenuChoice::Command("net.select"));
+                        }
+                        if ui
+                            .button("Pages and devices on this net")
+                            .on_hover_text("A list with a jump to each device and page")
+                            .clicked()
+                        {
+                            chosen = Some(MenuChoice::Command("net.trace"));
                         }
                     }
                     ui.separator();
@@ -3061,7 +3147,8 @@ mod tests {
         h.view.editor.begin_place("iec/coils/relay", None);
         h.click(100.0, 100.0, egui::PointerButton::Secondary);
         assert!(h.view.menu.is_some());
-        h.click(160.0, 160.0, egui::PointerButton::Primary);
+        // Outside the menu, whatever rows it has.
+        h.click(400.0, 400.0, egui::PointerButton::Primary);
         assert!(h.view.menu.is_none());
         assert_eq!(h.doc.project().symbols().count(), 0);
         // The next click places as usual.

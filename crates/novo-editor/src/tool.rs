@@ -132,6 +132,8 @@ pub enum Tool {
     Move(MoveTool),
     Cable(CableTool),
     Paste(PasteTool),
+    /// Free text: one click says where, the view asks for the words.
+    Text,
 }
 
 /// A paste in hand: the copied drawing follows the pointer until the next
@@ -162,6 +164,7 @@ impl Tool {
             Tool::Wire(_) => Tool::Wire(WireTool::default()),
             Tool::Cable(_) => Tool::Cable(CableTool::default()),
             Tool::Move(_) | Tool::Select | Tool::Paste(_) => Tool::Select,
+            Tool::Text => Tool::Text,
             Tool::Place(p) => Tool::Place(p.clone()),
         }
     }
@@ -524,6 +527,8 @@ pub struct Editor {
     /// The wires of a finished cable line, until the app takes them.
     cable_request: Option<Vec<WireId>>,
     paste_request: Option<Point>,
+    /// Where the click of the text tool was, until the view takes it.
+    text_request: Option<Point>,
     notice: Option<String>,
     link_hint: Option<String>,
     row: Option<RowDrag>,
@@ -560,6 +565,7 @@ impl Editor {
             hover_raw: None,
             cable_request: None,
             paste_request: None,
+            text_request: None,
             notice: None,
             link_hint: None,
             row: None,
@@ -590,6 +596,7 @@ impl Editor {
             )),
             Tool::Wire(_) => Some("Wire".into()),
             Tool::Cable(_) => Some("Cable".into()),
+            Tool::Text => Some("Text".into()),
             _ => None,
         }
     }
@@ -605,7 +612,7 @@ impl Editor {
         match &self.tool {
             Tool::Wire(w) => w.start.is_some(),
             Tool::Cable(c) => !c.points.is_empty(),
-            Tool::Move(_) | Tool::Paste(_) => true,
+            Tool::Move(_) | Tool::Paste(_) | Tool::Text => true,
             _ => false,
         }
     }
@@ -811,6 +818,53 @@ impl Editor {
             paths,
             origin,
         }));
+    }
+
+    /// Arms the text tool (`draw.text`): the next click on the page says
+    /// where the text goes; Esc cancels.
+    pub fn begin_text(&mut self) {
+        self.set_tool(Tool::Text);
+    }
+
+    /// Whether the text tool is armed.
+    pub fn placing_text(&self) -> bool {
+        matches!(self.tool, Tool::Text)
+    }
+
+    /// Where the click of the text tool was (snapped), once: the view then
+    /// asks for the words and adds the text.
+    pub fn take_text_request(&mut self) -> Option<Point> {
+        self.text_request.take()
+    }
+
+    /// Adds a free text with these words at `at` on `page`, one undo step,
+    /// and returns it. Empty words add nothing.
+    pub fn add_note(
+        &mut self,
+        doc: &mut Document,
+        page: PageId,
+        at: Point,
+        words: &str,
+    ) -> Option<novo_core::TextId> {
+        let words = words.trim();
+        if words.is_empty() {
+            return None;
+        }
+        let mut made = None;
+        let words = words.to_owned();
+        self.run(doc, "Add text", |tx| {
+            made = Some(tx.add_text(
+                page,
+                TextContent::Literal { text: words },
+                TextPlacement {
+                    offset: at,
+                    ..Default::default()
+                },
+                None,
+            )?);
+            Ok(())
+        });
+        made
     }
 
     /// Whether a paste is in hand.
@@ -1026,7 +1080,7 @@ impl Editor {
                 c.points.clear();
                 true
             }
-            Tool::Move(_) | Tool::Paste(_) => {
+            Tool::Move(_) | Tool::Paste(_) | Tool::Text => {
                 self.tool = Tool::Select;
                 true
             }
@@ -1134,6 +1188,12 @@ impl Editor {
             Tool::Place(p) => self.commit_place(doc, page, &p, at),
             Tool::Paste(_) => {
                 self.paste_request = Some(at);
+                self.tool = Tool::Select;
+                self.notice = None;
+                Clicked::Step
+            }
+            Tool::Text => {
+                self.text_request = Some(at);
                 self.tool = Tool::Select;
                 self.notice = None;
                 Clicked::Step
@@ -2794,6 +2854,7 @@ impl Editor {
                 "Click the next point · Enter or click the last point again to finish · Esc cancels"
                     .into()
             }
+            Tool::Text => "Text: click where it goes, then type · Esc cancels".into(),
             Tool::Paste(_) => {
                 "Paste: click to drop it · Esc cancels · Ctrl+Alt+V pastes in place".into()
             }
@@ -2850,7 +2911,7 @@ impl Editor {
         };
         let project = doc.project();
         match &self.tool {
-            Tool::Select => {}
+            Tool::Select | Tool::Text => {}
             Tool::Place(p) => {
                 let pole_plan = self.pole_plan();
                 let shown = pole_plan.as_ref().map_or(p.symbol.as_str(), |r| r.symbol);
