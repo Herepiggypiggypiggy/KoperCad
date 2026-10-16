@@ -337,7 +337,16 @@ pub(super) fn swing_sentences(
             ),
         ));
     }
-    if report.hits.is_empty() && report.swept > 0 {
+    if report.swept > 0 && !report.unchecked_plate.is_empty() {
+        out.push((
+            false,
+            format!(
+                "Not checked against the door devices: {} on the plate without a depth.",
+                report.unchecked_plate.len()
+            ),
+        ));
+    }
+    if report.hits.is_empty() && report.swept > 0 && report.unchecked_plate.is_empty() {
         out.push((
             false,
             format!(

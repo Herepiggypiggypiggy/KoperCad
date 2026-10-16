@@ -6,3 +6,6 @@ Resume: `cargo test -p novo-layout -p novo-app && cargo clippy --workspace --all
 - Truth: with the axis at the wall edge, door devices never move towards the plate, so plate devices only matter when already touching at 0 degrees (rule `door.closed`). Real catches are the strike-side wall and (with an offset) the hinge side. The test checks the strike-side angle against the closed-form value.
 - The door leaf itself is not swept; walls are 2 mm slabs.
 - `CabinetLayout.door_devices` is empty until slice 4 fills it from the `surface` property; the sentences appear in the Door and depth panel (`cabinet_door::swing_sentences`) and the Cabinet header problem count includes hits.
+
+- Plate devices without a depth cannot be obstacles: `SwingReport.unchecked_plate` lists them and the panel says so instead of claiming a clear sweep.
+- Slice 1 has no UI path that puts a device on the door; the slice that fills `door_devices` from the `surface` property (roadmap item 4) adds it.

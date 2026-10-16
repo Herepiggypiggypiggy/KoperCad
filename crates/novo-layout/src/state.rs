@@ -96,13 +96,20 @@ impl CabinetLayout {
                 })
             })
             .collect();
-        Some(sweep(
+        let mut report = sweep(
             enclosure,
             &surfaces,
             &self.door_devices,
             &plate_devices,
             &SweepSettings::default(),
-        ))
+        );
+        report.unchecked_plate = self
+            .placements
+            .iter()
+            .filter(|p| !self.depths.contains_key(&p.id))
+            .map(|p| p.id)
+            .collect();
+        Some(report)
     }
 
     /// A position snapped to the grid, for dropping and dragging.

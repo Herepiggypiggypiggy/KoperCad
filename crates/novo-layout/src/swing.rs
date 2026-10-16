@@ -126,6 +126,9 @@ pub struct SwingReport {
     pub unknown_depth: Vec<u64>,
     /// How many door devices were swept.
     pub swept: usize,
+    /// Placed plate devices with no known depth: they could not be used as
+    /// obstacles, so a clear result does not cover them.
+    pub unchecked_plate: Vec<u64>,
 }
 
 impl SwingReport {

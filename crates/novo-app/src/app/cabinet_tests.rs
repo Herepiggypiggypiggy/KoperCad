@@ -1265,4 +1265,33 @@ fn door_devices_are_swept_and_named_in_the_door_panel() {
     let lines = super::cabinet_door::swing_sentences(&layout.swing_report().unwrap(), &tag);
     assert_eq!(lines.len(), 1);
     assert!(lines[0].0 && lines[0].1.contains("-H1") && lines[0].1.contains("[door.swing]"));
+    layout.door_devices[0].rect.x = 100.0;
+    layout.door_devices[0].rect.w = 20.0;
+    assert!(
+        super::cabinet_door::swing_sentences(&layout.swing_report().unwrap(), &tag)[0]
+            .1
+            .contains("clear everything")
+    );
+    layout.placements.push(novo_layout::Placement {
+        id: 9,
+        x: 50.0,
+        y: 50.0,
+        rotated: false,
+        size: novo_layout::Size {
+            width: 40.0,
+            height: 40.0,
+            guessed: false,
+        },
+        clearance: None,
+        margins: Default::default(),
+        rail: None,
+    });
+    let lines = super::cabinet_door::swing_sentences(&layout.swing_report().unwrap(), &tag);
+    assert_eq!(lines.len(), 1);
+    assert!(
+        lines[0]
+            .1
+            .contains("Not checked against the door devices: 1")
+    );
+    assert!(!lines[0].1.contains("clear everything"));
 }
