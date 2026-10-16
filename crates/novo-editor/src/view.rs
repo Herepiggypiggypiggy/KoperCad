@@ -471,6 +471,10 @@ impl SchematicView {
         self.canvas.zoom_to_fit();
     }
 
+    pub fn zoom_to_sheet(&mut self) {
+        self.canvas.zoom_to_sheet();
+    }
+
     /// What the next click does, for the status bar.
     pub fn status_text(&self) -> Option<String> {
         self.status.clone()

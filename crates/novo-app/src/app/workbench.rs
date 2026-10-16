@@ -480,6 +480,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "cable.restore_proposals",
     "edit.select_all",
     "view.cabinet_table",
+    "view.fit_sheet",
     "cabinet.place-all",
     "heat.toggle",
     "heat.airflow",
@@ -740,6 +741,13 @@ impl NovoApp {
                 let showing = self.workspace() == Workspace::Cabinet && self.cabinet.table;
                 self.cabinet.table = !showing;
                 self.switch_workspace(Workspace::Cabinet);
+            }
+            "view.fit_sheet" if self.is_open() => {
+                if self.workspace() == Workspace::View3d {
+                    self.view3d.pending = Some(super::view3d::Pending::Fit);
+                } else {
+                    self.canvas.zoom_to_sheet();
+                }
             }
             "cabinet.place-all" if self.is_open() => {
                 self.switch_workspace(Workspace::Cabinet);
