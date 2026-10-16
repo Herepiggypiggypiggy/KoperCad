@@ -137,7 +137,16 @@ pub fn is_coil(symbol: &SymbolInstance) -> bool {
 /// `..._nc`, changeover ones `co`, `..._co` or `changeover`; a timer contact
 /// adds `_delay_on` or `_delay_off`.
 fn contact_of(symbol: &SymbolInstance) -> Option<(Rest, Delay)> {
-    if symbol.pass_through.is_empty() || symbol.device().is_none() {
+    if symbol.device().is_none() {
+        return None;
+    }
+    rest_of(symbol)
+}
+
+/// [`contact_of`] without the need for a device: hand-operated contacts that
+/// have no tag yet still have a rest state.
+fn rest_of(symbol: &SymbolInstance) -> Option<(Rest, Delay)> {
+    if symbol.pass_through.is_empty() {
         return None;
     }
     let full = name_of(symbol);
@@ -152,12 +161,61 @@ fn contact_of(symbol: &SymbolInstance) -> Option<(Rest, Delay)> {
             return None;
         }
         Rest::Changeover
-    } else if name == "nc" || name.ends_with("_nc") {
+    } else if name == "nc" || name.ends_with("_nc") || name == "emergency_stop" {
         Rest::Closed
     } else {
         Rest::Open
     };
     Some((rest, delay))
+}
+
+/// Whether a symbol is a protective or isolating device (fuse, breaker,
+/// disconnector, switch disconnector) that conducts in a plant that is
+/// switched on.
+fn conducts_when_on(symbol: &SymbolInstance) -> bool {
+    let path = &symbol.symbol.0;
+    !symbol.pass_through.is_empty()
+        && (path.contains("/protection/")
+            || (path.contains("/switches/") && !path.contains("changeover")))
+}
+
+/// Whether the design says this device starts switched off: a text `state`
+/// property of `open`, `off`, `0`, `false` or `aus`.
+fn designed_off(project: &Project, symbol: &SymbolInstance) -> bool {
+    let value = symbol
+        .device()
+        .and_then(|d| project.device(d))
+        .and_then(|d| d.properties.get("state"));
+    match value {
+        Some(Value::Text(t)) => matches!(
+            t.trim().to_lowercase().as_str(),
+            "open" | "off" | "0" | "false" | "aus"
+        ),
+        Some(Value::Int(0)) => true,
+        _ => false,
+    }
+}
+
+/// The poles of a plant at rest: normally closed contacts and
+/// pushbuttons closed, a changeover on its first path, fuses, breakers and
+/// disconnectors on unless their device's `state` property says it is off.
+/// Contacts a coil drives are corrected by [`settle`].
+pub fn rest_state(project: &Project) -> PoleState {
+    let mut poles = PoleState::all_open();
+    for symbol in project.symbols() {
+        if conducts_when_on(symbol) {
+            if !designed_off(project, symbol) {
+                poles.set_all(project, symbol.id, true);
+            }
+            continue;
+        }
+        match rest_of(symbol) {
+            Some((Rest::Closed, _)) => poles.set_all(project, symbol.id, true),
+            Some((Rest::Changeover, _)) => poles.set(symbol.id, 0, true),
+            _ => {}
+        }
+    }
+    poles
 }
 
 /// The result of [`settle`].
@@ -321,10 +379,12 @@ fn poles_for(
             }
         };
         match rest {
-            Rest::Open if operated => poles.set_all(project, symbol.id, true),
-            Rest::Closed if !operated => poles.set_all(project, symbol.id, true),
-            Rest::Changeover => poles.set(symbol.id, usize::from(operated), true),
-            _ => {}
+            Rest::Open => poles.set_all(project, symbol.id, operated),
+            Rest::Closed => poles.set_all(project, symbol.id, !operated),
+            Rest::Changeover => {
+                poles.set(symbol.id, 0, !operated);
+                poles.set(symbol.id, 1, operated);
+            }
         }
     }
     (poles, remaining)

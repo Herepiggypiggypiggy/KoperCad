@@ -38,6 +38,7 @@ pub use devices::{
 };
 pub use plc::{inputs_seen, is_plc_input, is_plc_output, output_drives};
 
+pub use coupling::rest_state;
 pub use loads::{is_load, loads_on};
 
 use std::collections::{HashSet, VecDeque};

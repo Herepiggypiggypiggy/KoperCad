@@ -4,8 +4,8 @@
 //! novo-sim. Nothing here touches the model: the states live in the
 //! workbench and the wires are lit in the canvas's own wire layer.
 //!
-//! Poles start open (a plant at rest). A badge sits on every switched pole of
-//! the page: click it to close or open every pole of the device together,
+//! Poles start as a plant at rest (break contacts closed, breakers on). A badge sits on every switched pole of
+//! the page: hold a pushbutton to press it, click any other pole to close or open every pole of the device together,
 //! Shift+click to drive that one pole apart (its badge then gets an amber ring). A wire carrying one potential is lit in that
 //! potential's colour, wires nothing reaches are dimmed, and a net where two
 //! potentials meet is drawn red.
@@ -41,6 +41,8 @@ pub(crate) struct LiveView {
     /// Poles closed by hand. A contact whose device draws a coil follows the
     /// coil instead; a hand-set state only adds to it.
     pub(super) poles: PoleState,
+    /// A pushbutton held down: the symbol and the poles as they were before.
+    held: Option<(SymbolId, PoleState)>,
     /// Coils switched on by hand, whatever feeds them.
     pub(super) forced: BTreeSet<SymbolId>,
     /// Seconds the bench has run, for timer contacts.
@@ -208,8 +210,66 @@ impl LiveView {
     /// per-pole override this puts the poles back in step.
     pub(super) fn flip_together(&mut self, project: &Project, symbol: SymbolId, group: usize) {
         let closed = self.poles.is_closed(symbol, group);
-        self.poles.set_all(project, symbol, !closed);
+        for member in together(project, symbol) {
+            self.poles.set_all(project, member, !closed);
+        }
     }
+
+    /// Puts every pole in the state of a plant at rest.
+    pub(super) fn reset_poles(&mut self, project: &Project) {
+        self.poles = novo_sim::rest_state(project);
+        self.held = None;
+    }
+
+    /// A pushbutton goes down: its poles switch to the opposite of the
+    /// pressed pole until [`release`](Self::release).
+    fn press(&mut self, project: &Project, symbol: SymbolId, group: usize) {
+        if self.held.is_none() {
+            self.held = Some((symbol, self.poles.clone()));
+            self.flip_together(project, symbol, group);
+        }
+    }
+
+    /// The pushbutton comes back up and its poles with it.
+    fn release(&mut self, project: &Project) {
+        if let Some((symbol, before)) = self.held.take() {
+            for member in together(project, symbol) {
+                for group in 0..project.symbol(member).map_or(0, |s| s.pass_through.len()) {
+                    self.poles
+                        .set(member, group, before.is_closed(member, group));
+                }
+            }
+        }
+    }
+}
+
+/// The symbols that switch together with `symbol`: the ones drawn for the
+/// same device from the same library symbol (the three single-pole halves of
+/// a breaker, joined by its mechanical link), `symbol` itself first.
+pub(super) fn together(project: &Project, symbol: SymbolId) -> Vec<SymbolId> {
+    let Some(this) = project.symbol(symbol) else {
+        return vec![symbol];
+    };
+    let mut members = vec![symbol];
+    if let Some(device) = this.device() {
+        members.extend(
+            project
+                .symbols_of_device(device)
+                .into_iter()
+                .filter(|s| s.id != symbol && s.symbol == this.symbol && !s.pass_through.is_empty())
+                .map(|s| s.id),
+        );
+    }
+    members
+}
+
+/// A pushbutton or foot switch: it springs back when let go.
+fn is_momentary(project: &Project, symbol: SymbolId) -> bool {
+    project.symbol(symbol).is_some_and(|s| {
+        let name = s.symbol.0.rsplit('/').next().unwrap_or("");
+        s.symbol.0.contains("/operators/")
+            && (name.starts_with("pushbutton") || name.starts_with("footswitch"))
+    })
 }
 
 /// One wire of the page and what it carries.
@@ -274,10 +334,13 @@ pub(super) struct PoleBadge {
 pub(super) fn pole_badges(project: &Project, page: PageId, poles: &PoleState) -> Vec<PoleBadge> {
     let mut badges = Vec::new();
     for symbol in project.symbols().filter(|s| s.page == page) {
-        let closed_poles = (0..symbol.pass_through.len())
-            .filter(|&g| poles.is_closed(symbol.id, g))
-            .count();
-        let mixed = closed_poles != 0 && closed_poles != symbol.pass_through.len();
+        let (mut closed_poles, mut all_poles) = (0, 0);
+        for member in together(project, symbol.id) {
+            let n = project.symbol(member).map_or(0, |m| m.pass_through.len());
+            all_poles += n;
+            closed_poles += (0..n).filter(|&g| poles.is_closed(member, g)).count();
+        }
+        let mixed = closed_poles != 0 && closed_poles != all_poles;
         for (group, pins) in symbol.pass_through.iter().enumerate() {
             let at: Vec<_> = pins
                 .iter()
@@ -458,10 +521,13 @@ impl NovoApp {
     pub(super) fn toggle_live(&mut self) {
         self.wb.live.on ^= true;
         if self.wb.live.on {
+            if let Some(doc) = self.backend.document() {
+                self.wb.live.reset_poles(doc.project());
+            }
             self.tour_tick("live");
             self.message(
                 Level::Info,
-                "Live potentials: contacts start open. Click a pole badge to close it",
+                "Live potentials: the plant is at rest, break contacts closed. Click a pole badge to switch the device, hold a pushbutton",
             );
         }
     }
@@ -627,6 +693,7 @@ impl NovoApp {
 
         // Pole badges: a click closes or opens the pole.
         let mut clicked: Option<(SymbolId, usize, bool)> = None;
+        let mut pressed: Option<(SymbolId, usize)> = None;
         for badge in &badges {
             let at = to_screen(badge.at);
             if !canvas.expand(BADGE).contains(at) {
@@ -673,8 +740,12 @@ impl NovoApp {
                             if badge.closed { "open" } else { "close" },
                         )
                     };
-                    if response.on_hover_text(tip).clicked() {
-                        let shift = ui.input(|i| i.modifiers.shift);
+                    let shift = ui.input(|i| i.modifiers.shift);
+                    let momentary = is_momentary(project, badge.symbol) && !shift;
+                    if momentary && response.is_pointer_button_down_on() {
+                        pressed = Some((badge.symbol, badge.group));
+                    }
+                    if response.on_hover_text(tip).clicked() && !momentary {
                         clicked = Some((badge.symbol, badge.group, !shift));
                     }
                 });
@@ -805,7 +876,8 @@ impl NovoApp {
                         ui.horizontal(|ui| {
                             ui.weak(format!("{closed} of {} poles closed", badges.len()));
                             if ui
-                                .add_enabled(closed > 0, egui::Button::new("All open").small())
+                                .small_button("Reset")
+                                .on_hover_text("Back to the plant at rest")
                                 .clicked()
                             {
                                 open_all = true;
@@ -875,7 +947,9 @@ impl NovoApp {
             self.wb.live.on = false;
         }
         if open_all {
-            self.wb.live.poles = PoleState::all_open();
+            if let Some(doc) = self.backend.document() {
+                self.wb.live.reset_poles(doc.project());
+            }
             self.wb.live.forced.clear();
             self.wb.live.clock.reset();
         }
@@ -883,6 +957,21 @@ impl NovoApp {
             && !self.wb.live.forced.remove(&coil)
         {
             self.wb.live.forced.insert(coil);
+        }
+        match pressed {
+            Some((symbol, group)) if !driven.contains(&symbol) => {
+                if let Some(doc) = self.backend.document() {
+                    self.wb.live.press(doc.project(), symbol, group);
+                }
+                ctx.request_repaint();
+            }
+            None if self.wb.live.held.is_some() => {
+                if let Some(doc) = self.backend.document() {
+                    self.wb.live.release(doc.project());
+                }
+                ctx.request_repaint();
+            }
+            _ => {}
         }
         if let Some((symbol, group, together)) = clicked
             && !driven.contains(&symbol)
@@ -1019,6 +1108,73 @@ mod tests {
         live.flip(q, 2);
         live.flip_together(doc.project(), q, 0);
         assert!((0..3).all(|g| !live.poles.is_closed(q, g)));
+    }
+
+    #[test]
+    fn single_pole_symbols_of_one_device_switch_together_and_a_pushbutton_springs_back() {
+        let mut doc = Document::default();
+        let (page, poles) = doc
+            .transact("Breaker", |tx| {
+                let page = tx.add_page("1")?;
+                let f1 = tx.add_device(novo_core::DeviceTag::product("F1"), "")?;
+                let s1 = tx.add_device(novo_core::DeviceTag::product("S1"), "")?;
+                let mut ids = Vec::new();
+                for _ in 0..3 {
+                    let id = block(
+                        tx,
+                        page,
+                        0.0,
+                        SymbolRole::Device {
+                            device: f1,
+                            main: true,
+                        },
+                    );
+                    tx.update::<novo_core::SymbolInstance>(id, |s| {
+                        s.symbol = novo_core::SymbolKey("iec/protection/mcb_1p".into());
+                        s.pass_through = vec![vec![0, 1]]
+                    })?;
+                    ids.push(id);
+                }
+                let push = block(
+                    tx,
+                    page,
+                    0.0,
+                    SymbolRole::Device {
+                        device: s1,
+                        main: true,
+                    },
+                );
+                tx.update::<novo_core::SymbolInstance>(push, |s| {
+                    s.symbol = novo_core::SymbolKey("iec/operators/pushbutton_no".into());
+                    s.pass_through = vec![vec![0, 1]]
+                })?;
+                ids.push(push);
+                Ok((page, ids))
+            })
+            .unwrap()
+            .0;
+        let project = doc.project();
+        let mut live = LiveView::default();
+        live.reset_poles(project);
+        // Breaker halves start on and switch off together from any one of them.
+        assert!(poles[..3].iter().all(|&p| live.poles.is_closed(p, 0)));
+        live.flip_together(project, poles[1], 0);
+        assert!(poles[..3].iter().all(|&p| !live.poles.is_closed(p, 0)));
+        live.flip(poles[2], 0);
+        assert!(
+            pole_badges(project, page, &live.poles)
+                .iter()
+                .filter(|b| poles[..3].contains(&b.symbol))
+                .all(|b| b.mixed)
+        );
+        // A pushbutton is closed only while held.
+        let push = poles[3];
+        assert!(is_momentary(project, push) && !is_momentary(project, poles[0]));
+        assert!(!live.poles.is_closed(push, 0));
+        live.press(project, push, 0);
+        assert!(live.poles.is_closed(push, 0));
+        live.release(project);
+        assert!(!live.poles.is_closed(push, 0));
     }
 
     #[test]
