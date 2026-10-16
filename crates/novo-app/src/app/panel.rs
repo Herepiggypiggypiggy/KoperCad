@@ -34,6 +34,13 @@ const DIALOG_MIN_WIDTH: f32 = 380.0;
 pub(super) enum Side {
     Left,
     Right,
+    BottomLeft,
+    BottomRight,
+}
+
+/// The egui id of the panel named `name`, for code that asks where it is.
+pub(super) fn id(name: &str) -> egui::Id {
+    egui::Id::new(("panel", name))
 }
 
 /// A panel on the canvas: where it starts, how big, and what it is called.
@@ -47,6 +54,7 @@ pub(super) struct Panel {
     width: f32,
     collapsible: bool,
     scroll_bar: bool,
+    top: f32,
 }
 
 impl Panel {
@@ -65,7 +73,14 @@ impl Panel {
             width,
             collapsible: true,
             scroll_bar: false,
+            top: TOP,
         }
+    }
+
+    /// Starts this far below the canvas top instead of under the top bar.
+    pub(super) fn top(mut self, offset: f32) -> Self {
+        self.top = offset;
+        self
     }
 
     /// A panel that cannot be rolled up to its title.
@@ -85,13 +100,18 @@ impl Panel {
     /// width it had last frame (a right-hand panel is as wide as its
     /// content, so the corner depends on it).
     fn start(&self, ctx: &egui::Context, id: egui::Id) -> egui::Pos2 {
-        let width = ctx
-            .memory(|m| m.area_rect(id))
-            .map_or(self.width, |r| r.width());
-        let y = self.canvas.top() + TOP;
+        let last = ctx.memory(|m| m.area_rect(id));
+        let width = last.map_or(self.width, |r| r.width());
+        let height = last.map_or(160.0, |r| r.height());
+        let top = self.canvas.top() + self.top;
+        let bottom = self.canvas.bottom() - BOTTOM - MARGIN - height;
+        let left = self.canvas.left() + MARGIN;
+        let right = self.canvas.right() - MARGIN - width;
         match self.side {
-            Side::Left => egui::pos2(self.canvas.left() + MARGIN, y),
-            Side::Right => egui::pos2(self.canvas.right() - MARGIN - width, y),
+            Side::Left => egui::pos2(left, top),
+            Side::Right => egui::pos2(right, top),
+            Side::BottomLeft => egui::pos2(left, bottom.max(top)),
+            Side::BottomRight => egui::pos2(right, bottom.max(top)),
         }
     }
 
@@ -102,10 +122,10 @@ impl Panel {
         ctx: &egui::Context,
         add: impl FnOnce(&mut egui::Ui) -> R,
     ) -> Option<egui::InnerResponse<Option<R>>> {
-        let id = egui::Id::new(("panel", self.id));
+        let id = id(self.id);
         let moved = is_moved(ctx, id);
         let start = self.start(ctx, id);
-        let max_height = (self.canvas.height() - TOP - BOTTOM).max(MIN_HEIGHT);
+        let max_height = (self.canvas.height() - self.top - BOTTOM).max(MIN_HEIGHT);
         let mut window = egui::Window::new(&self.title)
             .id(id)
             .order(egui::Order::Middle)
@@ -236,6 +256,22 @@ mod tests {
         let right = frame(&ctx, Side::Right);
         assert!(canvas().contains_rect(right), "{right:?}");
         assert!(right.right() >= canvas().right() - MARGIN - 1.0);
+    }
+
+    #[test]
+    fn bottom_panels_sit_in_the_bottom_corners_of_the_canvas() {
+        for side in [Side::BottomLeft, Side::BottomRight] {
+            let ctx = egui::Context::default();
+            let _ = frame(&ctx, side);
+            let rect = frame(&ctx, side);
+            assert!(canvas().contains_rect(rect), "{side:?} {rect:?}");
+            assert!(
+                rect.bottom() > canvas().bottom() - MARGIN - BOTTOM - 2.0,
+                "{rect:?}"
+            );
+            let against_left = rect.left() <= MARGIN + 1.0;
+            assert_eq!(against_left, side == Side::BottomLeft, "{rect:?}");
+        }
     }
 
     #[test]

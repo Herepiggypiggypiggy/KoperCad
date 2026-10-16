@@ -1392,13 +1392,13 @@ fn the_inspector_edits_the_selected_device_in_one_undo_step() {
     let ctx = d.ctx.clone();
     d.app.run(&ctx, Action::NewProject);
     d.frame();
-    let inspector = || ctx.memory(|m| m.area_rect(egui::Id::new("inspector")));
+    let inspector = || ctx.memory(|m| m.area_rect(super::panel::id("inspector")));
     let k = d.place("km3", 80.0, 96.0);
     d.editor_leave();
     d.app.canvas.schematic().unwrap().canvas.selection.clear();
     d.frame();
     d.frame();
-    let layer = egui::LayerId::new(egui::Order::Middle, egui::Id::new("inspector"));
+    let layer = egui::LayerId::new(egui::Order::Middle, super::panel::id("inspector"));
     let shown = |ctx: &egui::Context| ctx.memory(|m| m.areas().visible_last_frame(&layer));
     assert!(!shown(&ctx), "nothing selected, no inspector");
 
@@ -1565,13 +1565,13 @@ fn link_joins_a_contact_to_a_coil_by_tags_or_by_selection() {
     let ctx = d.ctx.clone();
     d.app.run(&ctx, Action::NewProject);
     d.frame();
-    let inspector = || ctx.memory(|m| m.area_rect(egui::Id::new("inspector")));
+    let inspector = || ctx.memory(|m| m.area_rect(super::panel::id("inspector")));
     let k = d.place("km3", 80.0, 96.0);
     d.editor_leave();
     d.app.canvas.schematic().unwrap().canvas.selection.clear();
     d.frame();
     d.frame();
-    let layer = egui::LayerId::new(egui::Order::Middle, egui::Id::new("inspector"));
+    let layer = egui::LayerId::new(egui::Order::Middle, super::panel::id("inspector"));
     let shown = |ctx: &egui::Context| ctx.memory(|m| m.areas().visible_last_frame(&layer));
     assert!(!shown(&ctx), "nothing selected, no inspector");
 

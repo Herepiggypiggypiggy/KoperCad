@@ -14,7 +14,6 @@ const WINDOW: usize = 240;
 /// A gap longer than this is the view standing still, not a slow frame.
 const IDLE_GAP_MS: f32 = 250.0;
 /// Margin from the view's corner, in points.
-const MARGIN: f32 = 12.0;
 /// How fast the view turns while measuring: a full turn in 12 seconds.
 const SPIN_RAD_PER_S: f32 = std::f32::consts::TAU / 12.0;
 
@@ -76,40 +75,41 @@ impl Stats {
             view.spin(ctx, SPIN_RAD_PER_S);
         }
         let text = report(render_stats().as_ref(), &self.samples(), self.build);
-        egui::Area::new(egui::Id::new("view3d_stats"))
-            .order(egui::Order::Middle)
-            .pivot(egui::Align2::LEFT_BOTTOM)
-            .fixed_pos(view_rect.left_bottom() + egui::vec2(MARGIN, -MARGIN))
-            .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.label(egui::RichText::new(&text).monospace().small());
-                    ui.horizontal(|ui| {
-                        let label = if self.spin {
-                            "✔ Spin the view"
-                        } else {
-                            "Spin the view"
-                        };
-                        if ui
-                            .selectable_label(self.spin, label)
-                            .on_hover_text("Turn the view steadily so every frame is a moving one")
-                            .clicked()
-                        {
-                            self.spin = !self.spin;
-                            self.intervals.clear();
-                        }
-                        if ui
-                            .button("Copy")
-                            .on_hover_text("Copy these lines to paste into a message")
-                            .clicked()
-                        {
-                            ctx.copy_text(text.clone());
-                        }
-                        if ui.button("Close").clicked() {
-                            self.toggle();
-                        }
-                    });
-                });
+        super::panel::Panel::new(
+            "view3d_stats",
+            "Frame statistics",
+            view_rect,
+            super::panel::Side::BottomLeft,
+            400.0,
+        )
+        .show(ctx, |ui| {
+            ui.label(egui::RichText::new(&text).monospace().small());
+            ui.horizontal(|ui| {
+                let label = if self.spin {
+                    "✔ Spin the view"
+                } else {
+                    "Spin the view"
+                };
+                if ui
+                    .selectable_label(self.spin, label)
+                    .on_hover_text("Turn the view steadily so every frame is a moving one")
+                    .clicked()
+                {
+                    self.spin = !self.spin;
+                    self.intervals.clear();
+                }
+                if ui
+                    .button("Copy")
+                    .on_hover_text("Copy these lines to paste into a message")
+                    .clicked()
+                {
+                    ctx.copy_text(text.clone());
+                }
+                if ui.button("Close").clicked() {
+                    self.toggle();
+                }
             });
+        });
     }
 }
 

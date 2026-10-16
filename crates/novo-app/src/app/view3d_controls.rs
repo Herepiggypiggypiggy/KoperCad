@@ -65,6 +65,9 @@ impl Controls {
     }
 }
 
+/// Wide enough for every toggle and the door slider on one row.
+const TOOLBAR_WIDTH: f32 = 760.0;
+
 /// The toolbar, top left of the view. `limit` is how far the enclosure's door
 /// opens, `None` when it has none.
 pub(super) fn toolbar(
@@ -74,65 +77,66 @@ pub(super) fn toolbar(
     limit: Option<f64>,
 ) -> Changed {
     let mut changed = Changed::default();
-    egui::Area::new(egui::Id::new("view3d_toolbar"))
-        .order(egui::Order::Middle)
-        .fixed_pos(view.left_top() + egui::vec2(MARGIN, MARGIN))
-        .show(ctx, |ui| {
-            egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    let layers = &mut controls.layers;
-                    changed.layers |=
-                        toggle(ui, &mut layers.shell, "Enclosure", "Show the enclosure box");
-                    changed.layers |= toggle(ui, &mut layers.door, "Door", "Show the door");
-                    changed.layers |=
-                        toggle(ui, &mut layers.wires, "Wires", "Show the routed wires");
-                    toggle(
-                        ui,
-                        &mut controls.move_items,
-                        "Move",
-                        "Drag a device, rail or duct to move it on the plate (grid and checks \
+    super::panel::Panel::new(
+        "view3d_toolbar",
+        "3D view",
+        view,
+        super::panel::Side::Left,
+        TOOLBAR_WIDTH,
+    )
+    .top(MARGIN)
+    .show(ctx, |ui| {
+        ui.horizontal_wrapped(|ui| {
+            let layers = &mut controls.layers;
+            changed.layers |= toggle(ui, &mut layers.shell, "Enclosure", "Show the enclosure box");
+            changed.layers |= toggle(ui, &mut layers.door, "Door", "Show the door");
+            changed.layers |= toggle(ui, &mut layers.wires, "Wires", "Show the routed wires");
+            toggle(
+                ui,
+                &mut controls.move_items,
+                "Move",
+                "Drag a device, rail or duct to move it on the plate (grid and checks \
                          as in the Cabinet). R turns the selection, Delete takes it off. Off: \
                          a drag draws a selection box.",
-                    );
-                    toggle(
-                        ui,
-                        &mut controls.shadows,
-                        "Shadows",
-                        "Soft shadows from the key light (View > 3D > Shadows)",
-                    );
-                    ui.separator();
-                    if let Some(limit) = limit
-                        && controls.layers.door
-                    {
-                        ui.separator();
-                        let label = if controls.door_deg > 0.0 {
-                            "Close door"
-                        } else {
-                            "Open door"
-                        };
-                        if ui
-                            .button(label)
-                            .on_hover_text("Open or close the door (Shift+D)")
-                            .clicked()
-                        {
-                            controls.toggle_door(Some(limit));
-                            changed.door = true;
-                        }
-                        ui.spacing_mut().slider_width = SLIDER_WIDTH;
-                        let slider = egui::Slider::new(&mut controls.door_deg, 0.0..=limit)
-                            .suffix("°")
-                            .max_decimals(0);
-                        if ui
-                            .add(slider)
-                            .on_hover_text("How far the door is open")
-                            .changed()
-                        {
-                            changed.door = true;
-                        }
-                    }
-                });
-            });
+            );
+            toggle(
+                ui,
+                &mut controls.shadows,
+                "Shadows",
+                "Soft shadows from the key light (View > 3D > Shadows)",
+            );
+            ui.separator();
+            if let Some(limit) = limit
+                && controls.layers.door
+            {
+                ui.separator();
+                let label = if controls.door_deg > 0.0 {
+                    "Close door"
+                } else {
+                    "Open door"
+                };
+                if ui
+                    .button(label)
+                    .on_hover_text("Open or close the door (Shift+D)")
+                    .clicked()
+                {
+                    controls.toggle_door(Some(limit));
+                    changed.door = true;
+                }
+                ui.spacing_mut().slider_width = SLIDER_WIDTH;
+                let slider = egui::Slider::new(&mut controls.door_deg, 0.0..=limit)
+                    .suffix("°")
+                    .max_decimals(0);
+                if ui
+                    .add(slider)
+                    .on_hover_text("How far the door is open")
+                    .changed()
+                {
+                    changed.door = true;
+                }
+            }
         });
+    });
     changed
 }
 

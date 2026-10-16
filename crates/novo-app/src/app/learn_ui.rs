@@ -77,18 +77,18 @@ impl NovoApp {
         };
         let confirm = self.learn.confirm_restart;
         let mut action = None;
-        let card_rect = egui::Area::new(egui::Id::new("lesson_card"))
-            .order(egui::Order::Middle)
-            .pivot(egui::Align2::RIGHT_BOTTOM)
-            .fixed_pos(canvas.right_bottom() - egui::vec2(12.0, 72.0))
-            .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.set_max_width(340.0);
-                    action = self.draw_card(ui, &card, confirm);
-                });
-            })
-            .response
-            .rect;
+        let card_rect = super::panel::Panel::new(
+            "lesson_card",
+            self.learn.say("learn"),
+            canvas,
+            super::panel::Side::BottomRight,
+            340.0,
+        )
+        .fixed_open()
+        .show(ctx, |ui| {
+            action = self.draw_card(ui, &card, confirm);
+        })
+        .map_or(egui::Rect::NOTHING, |r| r.response.rect);
         self.learn.card_pos = Some(card_rect.center());
         match action {
             Some(CardAction::Move(how)) => self.learn_move(how),
