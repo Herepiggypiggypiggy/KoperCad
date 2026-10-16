@@ -1,24 +1,47 @@
 # Lesson tracks, in the order the Learn window lists them.
 # Owned by the Learning modules thread; a lesson picks its track with
 # `track = "<id>"` and its place inside it with `order` (leave gaps of 10).
+# The plan behind the tracks, order and `needs` is docs/design/lesson-plan.md.
 # Format: docs/design/learning-modules.md
 
 [[track]]
-id = "basics"
-title = "Schematic basics and motor control"
-summary = "Place, wire and number a first circuit, then build a motor starter."
+id = "start"
+title = "Start here"
+title_nl = "Begin hier"
+summary = "Place parts with the keyboard, wire them, give them a supply and set the program up for you."
+summary_nl = "Onderdelen plaatsen met het toetsenbord, bedraden, voeden en het programma naar je hand zetten."
+
+[[track]]
+id = "circuits"
+title = "Circuits"
+title_nl = "Schema's"
+summary = "Draw a motor starter, follow a coil to its contacts, try it live and reuse it as a macro."
+summary_nl = "Een motorstarter tekenen, een spoel naar zijn contacten volgen, live proberen en als macro hergebruiken."
 
 [[track]]
 id = "terminals"
-title = "Terminals, PLC and documentation"
-summary = "Terminal strips, cables, PLC cards and the pages and reports generated from the drawing."
+title = "Terminals, cables and PLC"
+title_nl = "Klemmen, kabels en PLC"
+summary = "Terminal strips and their plans, signals across pages, cables and shields, wire numbers and PLC cards."
+summary_nl = "Klemmenstroken en hun plannen, signalen over pagina's, kabels en schermen, draadnummers en PLC-kaarten."
+
+[[track]]
+id = "outputs"
+title = "Checks, lists and issuing"
+title_nl = "Controles, lijsten en uitgeven"
+summary = "Design checks, the pages KoperCAD writes for you, wire list and bill of materials, revisions and PDF."
+summary_nl = "Ontwerpcontroles, de pagina's die KoperCAD voor je schrijft, draadlijst en stuklijst, revisies en PDF."
 
 [[track]]
 id = "cabinet"
-title = "Cabinet layout and panel building"
-summary = "Lay out the enclosure, size it, route wires and see the panel in 3D."
+title = "Cabinet and panel building"
+title_nl = "Kast en paneelbouw"
+summary = "Lay out the plate, size and route, check door and heat, then drawings and labels for the workshop, 3D and commissioning."
+summary_nl = "De plaat indelen, afmeten en routeren, deur en warmte controleren, dan tekeningen en labels voor de werkplaats, 3D en inbedrijfstelling."
 
 [[track]]
-id = "productivity"
-title = "Productivity, checks and data"
-summary = "Macros, spreadsheets, design checks, revisions and import and export."
+id = "data"
+title = "Parts and data"
+title_nl = "Onderdelen en gegevens"
+summary = "Find and import parts, edit hundreds of devices in Excel and hand over DXF."
+summary_nl = "Onderdelen zoeken en importeren, honderden apparaten in Excel bewerken en DXF aanleveren."

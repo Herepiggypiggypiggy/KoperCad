@@ -38,6 +38,13 @@
 //! | [`UnplacedDevice`](ProblemKind::UnplacedDevice) | info | A device not yet placed on a mounting plate |
 //! | [`WireWithoutDuct`](ProblemKind::WireWithoutDuct) | warning | A wire between placed devices that no duct serves |
 //! | [`OverfullDuct`](ProblemKind::OverfullDuct) | warning | A duct filled beyond its limit |
+//! | [`AmbiguousInterruption`](ProblemKind::AmbiguousInterruption) | warning | A name used by more than two interruption points |
+//! | [`WireNumber`](ProblemKind::WireNumber) | warning | A wire number on two nets, or two numbers on one net |
+//! | [`UntaggedDevice`](ProblemKind::UntaggedDevice) | warning | A device without a product level in its tag |
+//! | [`UnnamedTerminal`](ProblemKind::UnnamedTerminal) | warning | A terminal without a number or name |
+//! | [`SameShortTag`](ProblemKind::SameShortTag) | info | One short tag under two function or location levels |
+//! | [`DuplicatePage`](ProblemKind::DuplicatePage) | warning | Two pages with one name in one structure |
+//! | [`DanglingJunction`](ProblemKind::DanglingJunction) | warning | A junction no wire ends on |
 //! | [`Standard`](ProblemKind::Standard) | per rule | A rule of a selected standard (IEC 60204-1, NFPA 79, UL 508A) is not met; see [`standards`] |
 //! | [`DeviceCollision`](ProblemKind::DeviceCollision) | error | Two devices overlapping on a mounting plate |
 //! | [`DeviceOutsidePlate`](ProblemKind::DeviceOutsidePlate) | error | A device beyond the usable area of its plate |
@@ -72,6 +79,7 @@
 pub mod calc;
 mod calc_checks;
 mod checks;
+mod connection_rules;
 mod contacts;
 mod door;
 mod physical;
@@ -184,6 +192,22 @@ pub enum ProblemKind {
     /// A protective conductor thinner than the rule for its phase
     /// conductors (`calc::pe`).
     ProtectiveConductor,
+    /// A name used by more than two interruption points. EPLAN pairs them
+    /// two by two in page order, KoperCAD joins all of one name, so an
+    /// imported project and this one read it differently.
+    AmbiguousInterruption,
+    /// A wire number on two nets, or several numbers on one net.
+    WireNumber,
+    /// A device without a product level in its tag.
+    UntaggedDevice,
+    /// A terminal without a number or name.
+    UnnamedTerminal,
+    /// One short tag under two function or location levels.
+    SameShortTag,
+    /// Two pages with one name in the same structure.
+    DuplicatePage,
+    /// A junction no wire ends on.
+    DanglingJunction,
     /// A device drawn in the schematic but not placed on any mounting plate,
     /// in a project where the cabinet layout has been started.
     UnplacedDevice,
@@ -227,7 +251,7 @@ pub enum ProblemKind {
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 37] = [
+    pub const ALL: [ProblemKind; 44] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -265,6 +289,13 @@ impl ProblemKind {
         ProblemKind::DepthUnknown,
         ProblemKind::PlateTooBig,
         ProblemKind::DoorSwing,
+        ProblemKind::AmbiguousInterruption,
+        ProblemKind::WireNumber,
+        ProblemKind::UntaggedDevice,
+        ProblemKind::UnnamedTerminal,
+        ProblemKind::SameShortTag,
+        ProblemKind::DuplicatePage,
+        ProblemKind::DanglingJunction,
     ];
 
     pub fn severity(self) -> Severity {
@@ -302,10 +333,17 @@ impl ProblemKind {
             | ProblemKind::RailOverflow
             | ProblemKind::DoorGapTight
             | ProblemKind::DoorSwing
+            | ProblemKind::AmbiguousInterruption
+            | ProblemKind::WireNumber
+            | ProblemKind::UntaggedDevice
+            | ProblemKind::UnnamedTerminal
+            | ProblemKind::DuplicatePage
+            | ProblemKind::DanglingJunction
             | ProblemKind::Plc => Severity::Warning,
-            ProblemKind::MissingPart | ProblemKind::UnplacedDevice | ProblemKind::DepthUnknown => {
-                Severity::Info
-            }
+            ProblemKind::MissingPart
+            | ProblemKind::UnplacedDevice
+            | ProblemKind::DepthUnknown
+            | ProblemKind::SameShortTag => Severity::Info,
         }
     }
 
@@ -349,6 +387,13 @@ impl ProblemKind {
             ProblemKind::DepthUnknown => "Depth unknown",
             ProblemKind::PlateTooBig => "Plate too big",
             ProblemKind::DoorSwing => "Door swing",
+            ProblemKind::AmbiguousInterruption => "Interruption name used often",
+            ProblemKind::WireNumber => "Wire number",
+            ProblemKind::UntaggedDevice => "Device without tag",
+            ProblemKind::UnnamedTerminal => "Unnamed terminal",
+            ProblemKind::SameShortTag => "Same short tag",
+            ProblemKind::DuplicatePage => "Duplicate page",
+            ProblemKind::DanglingJunction => "Dangling junction",
         }
     }
 
@@ -392,6 +437,13 @@ impl ProblemKind {
             ProblemKind::DepthUnknown => "check.depth_unknown",
             ProblemKind::PlateTooBig => "check.plate_too_big",
             ProblemKind::DoorSwing => "check.door_swing",
+            ProblemKind::AmbiguousInterruption => "check.ambiguous_interruption",
+            ProblemKind::WireNumber => "check.wire_number",
+            ProblemKind::UntaggedDevice => "check.untagged_device",
+            ProblemKind::UnnamedTerminal => "check.unnamed_terminal",
+            ProblemKind::SameShortTag => "check.same_short_tag",
+            ProblemKind::DuplicatePage => "check.duplicate_page",
+            ProblemKind::DanglingJunction => "check.dangling_junction",
         }
     }
 }
@@ -515,6 +567,13 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     checks::plc(&cx, &mut problems);
     checks::wire_overlaps(&cx, &mut problems);
     checks::open_wires(&cx, &mut problems);
+    connection_rules::ambiguous_interruptions(&cx, &mut problems);
+    connection_rules::wire_numbers(&cx, netlist, &mut problems);
+    connection_rules::untagged_devices(&cx, &mut problems);
+    connection_rules::unnamed_terminals(&cx, &mut problems);
+    connection_rules::same_short_tags(&cx, &mut problems);
+    connection_rules::duplicate_pages(&cx, &mut problems);
+    connection_rules::dangling_junctions(&cx, &mut problems);
     calc_checks::run(&cx, netlist, &mut problems);
     physical::unplaced_devices(&cx, &mut problems);
     physical::routing(&cx, &mut problems);

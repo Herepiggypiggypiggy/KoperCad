@@ -222,6 +222,14 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         ProblemKind::DepthUnknown,
         ProblemKind::PlateTooBig,
         ProblemKind::DoorSwing,
+        // Own fixtures; see tests/eplan_style.
+        ProblemKind::AmbiguousInterruption,
+        ProblemKind::WireNumber,
+        ProblemKind::UntaggedDevice,
+        ProblemKind::UnnamedTerminal,
+        ProblemKind::SameShortTag,
+        ProblemKind::DuplicatePage,
+        ProblemKind::DanglingJunction,
     ];
     let kinds: Vec<ProblemKind> = ProblemKind::ALL
         .into_iter()
