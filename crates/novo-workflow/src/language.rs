@@ -35,6 +35,11 @@ pub const DUTCH: &[Aliases] = &[
     // Project
     nl("file.new", &[], &["nieuw project", "nieuw"]),
     nl("file.open", &[], &["project openen", "openen"]),
+    nl(
+        "file.open_read_only",
+        &[],
+        &["alleen lezen openen", "alleen lezen", "inzien", "bekijken"],
+    ),
     nl("file.example", &[], &["voorbeeld openen", "voorbeeld"]),
     nl("file.practice", &[], &["snelle toetsen", "oefenen"]),
     nl(
@@ -696,6 +701,16 @@ pub const DUTCH: &[Aliases] = &[
         "view.3d_shadows",
         &["schaduw tonen in 3d"],
         &["schaduw", "schaduwen"],
+    ),
+    nl(
+        "view.3d_position",
+        &["positie tonen in 3d"],
+        &["positie", "coordinaten", "afstand"],
+    ),
+    nl(
+        "view.3d_place",
+        &["apparaat plaatsen in 3d"],
+        &["plaatsen", "apparaat", "component"],
     ),
     nl(
         "view.3d_dimensions",
