@@ -784,3 +784,58 @@ fn place_all_command_shows_the_preview_from_any_workspace() {
         Some("Ctrl+Shift+P")
     );
 }
+
+#[test]
+fn the_cabinet_registers_the_controls_and_panels_lessons_point_at() {
+    use novo_layout::enclosure::{Door, Enclosure, Hinge};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    let e = Enclosure {
+        width: 650.0,
+        height: 850.0,
+        depth: 250.0,
+        plate_setback: 20.0,
+        door: Some(Door {
+            hinge: Hinge::Right,
+            max_angle: 110.0,
+            inner_depth: 0.0,
+        }),
+        front_clearance: Some(400.0),
+        hinge_side_clearance: None,
+    };
+    d.app
+        .cabinet_ask(Ask::SetEnclosure(e), Some(cab), None, &[]);
+    d.app.cabinet.plate_card = true;
+    d.app.cabinet.routes = true;
+    d.app.cabinet.rails.open = true;
+    d.app.sizing.panel_open = true;
+    d.frame();
+    d.frame();
+    for id in [
+        "cabinet.canvas",
+        "cabinet.unplaced",
+        "cabinet.problems",
+        "cabinet.inspector",
+        "cabinet.door",
+        "cabinet.door.apply",
+        "cabinet.routes_panel",
+        "cabinet.wire_rules",
+        "cabinet.sizing",
+        "cabinet.rails",
+        "cabinet.plate_drawing",
+    ] {
+        let rect = d
+            .app
+            .learn_anchor(id)
+            .unwrap_or_else(|| panic!("`{id}` is not on screen"));
+        assert!(rect.width() > 0.0 && rect.height() > 0.0, "{id}: {rect:?}");
+    }
+}

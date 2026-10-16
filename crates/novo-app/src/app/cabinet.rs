@@ -555,13 +555,14 @@ impl NovoApp {
                     {
                         ask = Some(Ask::TogglePlateCard);
                     }
-                    if cabinet_bar::button(
+                    let size = cabinet_bar::button(
                         ui,
                         icons::ARROWS_OUT,
                         "Size enclosure",
                         self.sizing.panel_open,
-                    )
-                    .clicked()
+                    );
+                    if cabinet_bar::note(&mut anchors, "cabinet.sizing", "Size enclosure", &size)
+                        .clicked()
                     {
                         self.sizing.panel_open = !self.sizing.panel_open;
                     }
@@ -693,10 +694,16 @@ impl NovoApp {
                         if plate_face {
                             super::heat::toggle(ui, &mut self.cabinet.heat);
                         }
-                        if cabinet_bar::button(ui, icons::EXPORT, "Plate drawing (PDF)", false)
-                            .on_hover_text("Plate drawing with drill table")
-                            .clicked()
-                        {
+                        let item =
+                            cabinet_bar::button(ui, icons::EXPORT, "Plate drawing (PDF)", false)
+                                .on_hover_text("Plate drawing with drill table");
+                        cabinet_bar::note(
+                            &mut anchors,
+                            "cabinet.plate_drawing",
+                            "Plate drawing",
+                            &item,
+                        );
+                        if item.clicked() {
                             ask = Some(Ask::ExportPlate);
                             ui.close();
                         }
@@ -704,16 +711,31 @@ impl NovoApp {
                 });
             } else {
                 cabinet_bar::group(ui, "Output", |ui| {
-                    ui.menu_button(format!("{}  Export", icons::EXPORT), |ui| {
-                        if ui
+                    let export = ui.menu_button(format!("{}  Export", icons::EXPORT), |ui| {
+                        let item = ui
                             .button("Plate drawing (PDF)")
-                            .on_hover_text("Plate drawing with drill table")
-                            .clicked()
-                        {
+                            .on_hover_text("Plate drawing with drill table");
+                        cabinet_bar::note(
+                            &mut anchors,
+                            "cabinet.plate_drawing",
+                            "Plate drawing",
+                            &item,
+                        );
+                        if item.clicked() {
                             ask = Some(Ask::ExportPlate);
                             ui.close();
                         }
                     });
+                    // The menu button stands in until the menu is open.
+                    let at = cabinet_bar::Anchor {
+                        id: "cabinet.plate_drawing",
+                        label: "Plate drawing",
+                        rect: export.response.rect,
+                        clicked: false,
+                    };
+                    if !anchors.iter().any(|a| a.id == at.id) {
+                        anchors.push(at);
+                    }
                 });
             }
         });
@@ -748,11 +770,12 @@ impl NovoApp {
                     if problems == 1 { "problem" } else { "problems" }
                 );
                 if problems == 0 {
-                    cabinet_bar::pill(ui, &label, None);
+                    let pill = cabinet_bar::pill(ui, &label, None);
+                    cabinet_bar::note(&mut anchors, "cabinet.problems", "Problems", &pill);
                 } else if let Some(shown) = &shown {
                     // The count opens the list; a row selects its device.
                     let error = novo_theme::Palette::of(ui).error;
-                    ui.menu_button(egui::RichText::new(label).color(error), |ui| {
+                    let list = ui.menu_button(egui::RichText::new(label).color(error), |ui| {
                         for p in &shown.placements {
                             let lines = problem_lines(shown, p.id, &tag_of);
                             if lines.is_empty() {
@@ -767,6 +790,7 @@ impl NovoApp {
                             }
                         }
                     });
+                    cabinet_bar::note(&mut anchors, "cabinet.problems", "Problems", &list.response);
                 }
                 if let Some(j) = judged.as_ref().filter(|j| !j.violations.is_empty()) {
                     let n = j.violations.len();
@@ -815,7 +839,7 @@ impl NovoApp {
                             .collect()
                     })
                     .unwrap_or_default();
-                egui::Panel::left("cabinet_unplaced")
+                let unplaced_panel = egui::Panel::left("cabinet_unplaced")
                     .exact_size(200.0)
                     .resizable(false)
                     .show(ui, |ui| {
@@ -834,6 +858,13 @@ impl NovoApp {
                             ui.weak("Every device is placed");
                         }
                     });
+                cabinet_bar::note_rect(
+                    ui.ctx(),
+                    "cabinet.unplaced",
+                    "Unplaced",
+                    unplaced_panel.response.rect,
+                    false,
+                );
 
                 if self.cabinet.routes
                     && let Some(s) = structure
@@ -967,6 +998,13 @@ impl NovoApp {
                     );
                 }
                 let out = self.cabinet.view.show(ui, self.cabinet.scene.scene());
+                cabinet_bar::note_rect(
+                    ui.ctx(),
+                    "cabinet.canvas",
+                    "Plate",
+                    out.response.rect,
+                    false,
+                );
                 if self.cabinet.routes
                     && let Some(s) = structure
                 {
@@ -1335,6 +1373,7 @@ impl NovoApp {
         if all_placed_note {
             self.message(Level::Info, "Every device of this panel is placed");
         }
+        anchors.extend(cabinet_bar::take_noted(ui.ctx()));
         for a in anchors {
             self.anchor(a.id, a.rect, a.label);
             if a.clicked {
