@@ -17,6 +17,15 @@ pub enum ThermalBc {
         h: f64,
         t_out: f64,
     },
+    /// Heat leaves the air next to the wall as a whole: `u` (W/m2K) is the
+    /// overall coefficient from the air to air at `t_out`, inner film, sheet
+    /// and outer film together (IEC 60890 `k`). It replaces the half cell of
+    /// conduction in `Convective`, so the coarse inner boundary layer is not
+    /// counted on top of a coefficient that already contains it.
+    Overall {
+        u: f64,
+        t_out: f64,
+    },
 }
 
 /// Condition on one of the six domain faces (all walls).
@@ -787,6 +796,7 @@ impl FlowSolver {
                     ThermalBc::Adiabatic => 0.0,
                     ThermalBc::Fixed(tw) => k / half * (t - tw),
                     ThermalBc::Convective { h, t_out } => (t - t_out) / (half / k + 1.0 / h),
+                    ThermalBc::Overall { u, t_out } => u * (t - t_out),
                 };
                 sum += closed * g * m.area(a, ix);
             }
@@ -936,6 +946,11 @@ impl FlowSolver {
                                             // half cell in series with the film
                                             let r = 0.5 * w / kc + 1.0 / h;
                                             let cw = closed / (cc * r * w);
+                                            a_sum += cw;
+                                            a_nb += cw * t_out;
+                                        }
+                                        ThermalBc::Overall { u, t_out } => {
+                                            let cw = closed * u / (cc * w);
                                             a_sum += cw;
                                             a_nb += cw * t_out;
                                         }
