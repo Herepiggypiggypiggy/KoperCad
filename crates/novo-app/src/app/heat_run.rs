@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use novo_cfd::sched::{DemoLadder, Event as SchedEvent, Outcome, Plan, Scheduler};
+use novo_cfd::sched::{Event as SchedEvent, Outcome, Plan, Scheduler};
 use novo_cfd::{CfdSnapshot, Fidelity, Progress, Solver};
 
 /// A published result with what the picture needs to place it on the plate.
@@ -44,15 +44,20 @@ pub(super) struct Runner {
     started: Instant,
 }
 
-/// The solver the app uses. One place to change when the flow core lands.
-/// Until then the demo ladder serves all levels on the stub field and says
-/// so in its notes.
+/// The solver the app uses: the cabinet solver of `novo-cfd` (mesh, solids,
+/// ducts, openings, buoyant flow). Tests run the synthetic demo ladder so
+/// they stay fast.
 pub(super) fn default_solver() -> Arc<dyn Solver> {
     #[cfg(test)]
-    let step = std::time::Duration::ZERO;
+    {
+        Arc::new(novo_cfd::sched::DemoLadder {
+            step: std::time::Duration::ZERO,
+        })
+    }
     #[cfg(not(test))]
-    let step = DemoLadder::default().step;
-    Arc::new(DemoLadder { step })
+    {
+        Arc::new(novo_cfd::CabinetSolver::default())
+    }
 }
 
 impl Runner {

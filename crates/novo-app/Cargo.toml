@@ -48,6 +48,7 @@ serde.workspace = true
 dirs.workspace = true
 
 [dev-dependencies]
+novo-cfd = { workspace = true, features = ["demo"] }
 ron = "0.12"
 tempfile.workspace = true
 lopdf.workspace = true
