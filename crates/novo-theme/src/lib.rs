@@ -16,6 +16,7 @@ pub mod icons;
 mod metrics;
 mod palette;
 mod style;
+pub mod table;
 pub mod tokens;
 pub mod widgets;
 
