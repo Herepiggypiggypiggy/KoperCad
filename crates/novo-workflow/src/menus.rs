@@ -10,7 +10,7 @@ use crate::commands::{COMMANDS, CommandInfo};
 
 /// The menus, left to right. A menu with no commands yet is not drawn.
 pub const MENUS: [&str; 8] = [
-    "File", "Edit", "Draw", "View", "Check", "Reports", "Tools", "Help",
+    "File", "Edit", "Draw", "View", "Check", "Reports", "Simulate", "Help",
 ];
 
 /// A command's place in the menu bar: a menu, and a submenu inside it when
@@ -51,6 +51,12 @@ fn group_default(group: &str) -> Option<MenuPlace> {
 
 /// Commands whose menu differs from their group's.
 const PLACEMENTS: &[(&str, MenuPlace)] = &[
+    ("page.new", under("File", "Pages")),
+    ("page.rename", under("File", "Pages")),
+    ("page.duplicate", under("File", "Pages")),
+    ("page.delete", under("File", "Pages")),
+    ("page.move_up", under("File", "Pages")),
+    ("page.move_down", under("File", "Pages")),
     ("revision.issue", under("File", "Revisions")),
     ("revision.compare", under("File", "Revisions")),
     ("file.import_dxf_background", under("File", "Import")),
@@ -60,6 +66,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.import_dwg", under("File", "Import")),
     ("file.choose_dwg_converter", under("File", "Import")),
     ("file.eplan_export_script", under("File", "Import")),
+    ("parts.import_folder", under("File", "Import")),
+    ("plc.import_tags", under("File", "Import")),
     ("help.walkthrough", at("Help")),
     ("help.show_hints", at("Help")),
     ("help.about", at("Help")),
@@ -97,12 +105,21 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("view.top", under("View", "3D")),
     ("view.cabinet_table", under("View", "Workspace")),
     ("cabinet.rails", under("View", "Workspace")),
+    ("cabinet.rules", under("View", "Workspace")),
+    ("cabinet.plate", under("View", "Workspace")),
+    ("cabinet.cutlist", under("View", "Workspace")),
     ("cabinet.door", under("View", "Workspace")),
     ("view.terminals_drawer", under("View", "Panels")),
     ("view.cables_drawer", under("View", "Panels")),
     ("view.devices_drawer", under("View", "Panels")),
     ("view.pin_outline", under("View", "Panels")),
     ("view.reports", under("View", "Workspace")),
+    // Simulate
+    ("sim.live", at("Simulate")),
+    ("sim.plc_program", at("Simulate")),
+    ("simulate.motor-start", at("Simulate")),
+    ("sim.faults", at("Simulate")),
+    ("view.protection", at("Simulate")),
     // Reports
     ("export.reports", at("Reports")),
     ("export.assembly", at("Reports")),

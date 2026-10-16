@@ -274,4 +274,16 @@ fn inside_size_and_door_has_a_command_a_menu_row_and_opens_the_card() {
         d.app.learn_anchor("cabinet.door.apply").is_some(),
         "the form is drawn"
     );
+    // The inspector is a movable window now; the form's Apply button is
+    // scrolled into it, not left below its edge.
+    // Scrolling to a target is animated: let it finish.
+    for _ in 0..60 {
+        d.frame();
+    }
+    let apply = d.app.learn_anchor("cabinet.door.apply").unwrap();
+    let panel = d.app.learn_anchor("cabinet.inspector").expect("the window");
+    assert!(
+        panel.contains_rect(apply),
+        "Apply {apply:?} inside the inspector {panel:?}"
+    );
 }

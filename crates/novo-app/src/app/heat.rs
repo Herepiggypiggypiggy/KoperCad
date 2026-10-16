@@ -15,7 +15,6 @@ use std::sync::Arc;
 
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Shape, Stroke, Vec2};
 use novo_canvas::Viewport;
-use novo_cfd::Fidelity;
 use novo_heatview::cfd::{self, Window};
 use novo_heatview::contour::{self, Contour};
 use novo_heatview::hotspot::{self, Peak};
@@ -30,7 +29,8 @@ use novo_thermal::Status;
 
 use super::heat_compare::{self, Diff};
 use super::heat_progress;
-use super::heat_run::{self, Event, Runner, Solution};
+use super::heat_run::{Event, Runner, Solution};
+use super::heat_settings::HeatSettings;
 use novo_cfd::Progress;
 use novo_cfd::sched::Outcome;
 
@@ -55,6 +55,8 @@ pub(super) struct Item {
     /// False when no loss figure exists for the device (drawn as "no data",
     /// not as a cool 0 W device).
     pub loss_known: bool,
+    /// True when the loss figure is a planning estimate, not a maker value.
+    pub loss_estimated: bool,
 }
 
 /// What the view draws from: the plate and its devices.
@@ -111,6 +113,8 @@ pub(super) struct HeatState {
     /// The last run's outcome in words: failed, cancelled or the bridge's
     /// complaint.
     notice: Option<String>,
+    /// Quality level, turbulence model and vents of the next run.
+    pub settings: HeatSettings,
 }
 
 /// Where a cached picture came from.
@@ -160,6 +164,7 @@ impl HeatState {
             pending: None,
             runs: 0,
             notice: None,
+            settings: HeatSettings::default(),
         }
     }
 
@@ -257,9 +262,9 @@ impl HeatState {
         self.runs += 1;
         self.pending = Some(meta);
         self.run = Some(Runner::start(
-            heat_run::default_solver(),
+            self.settings.solver(),
             scenario,
-            Fidelity::Fine,
+            self.settings.top,
         ));
         self.progress = None;
         self.history.clear();
@@ -386,6 +391,7 @@ pub(super) fn layout_key(input: &Input) -> u64 {
             i.h.to_bits(),
             i.loss_w.to_bits(),
             i.loss_known,
+            i.loss_estimated,
         )
             .hash(&mut h);
     }
@@ -644,8 +650,26 @@ fn totals(input: &Input) -> (f64, usize) {
     )
 }
 
+/// Tells a first-time user that some loss figures are planning estimates, so
+/// the temperatures follow from them and are not maker-verified. `None` when
+/// every known loss is a maker or typed value.
+fn estimate_note(input: &Input) -> Option<String> {
+    let known = input.items.iter().filter(|i| i.loss_known).count();
+    let estimated = input
+        .items
+        .iter()
+        .filter(|i| i.loss_known && i.loss_estimated)
+        .count();
+    (estimated > 0).then(|| {
+        format!(
+            "{estimated} of {known} loss figures are planning estimates; \
+             check them against maker data."
+        )
+    })
+}
+
 /// Simulate / Cancel, the fidelity badge and the last notice.
-fn simulate_controls(ui: &mut egui::Ui, state: &mut HeatState) {
+pub(super) fn simulate_controls(ui: &mut egui::Ui, state: &mut HeatState) {
     if state.running() {
         if ui
             .button("Cancel")
@@ -702,6 +726,44 @@ fn simulate_controls(ui: &mut egui::Ui, state: &mut HeatState) {
     }
 }
 
+/// The devices of a layout as the Heat view reads them (shared by the
+/// Cabinet and the 3D view, so a result is judged stale by one key).
+pub(super) fn items_of(
+    project: &novo_core::Project,
+    layout: &novo_layout::state::CabinetLayout,
+    tag_of: &dyn Fn(u64) -> String,
+) -> Vec<Item> {
+    use novo_core::{Device, DeviceId};
+    layout
+        .placements
+        .iter()
+        .map(|p| {
+            let f = p.footprint();
+            let loss = project
+                .get::<Device>(DeviceId::from(p.id))
+                .map_or(0.0, |d| {
+                    let s = novo_layout::sizing_model::sizing_device(project, d);
+                    s.power_loss * s.load_factor
+                });
+            Item {
+                id: p.id,
+                tag: tag_of(p.id),
+                x: f.x,
+                y: f.y,
+                w: f.w,
+                h: f.h,
+                loss_w: loss,
+                loss_known: project
+                    .get::<Device>(DeviceId::from(p.id))
+                    .is_some_and(|d| novo_thermal::bridge::device_loss_w(project, d).is_some()),
+                loss_estimated: project
+                    .get::<Device>(DeviceId::from(p.id))
+                    .is_some_and(|d| novo_thermal::bridge::device_loss_estimated(project, d)),
+            }
+        })
+        .collect()
+}
+
 /// Builds the scenario of the enclosure from the project and starts a run.
 /// Says plainly when it cannot.
 pub(super) fn start_run(
@@ -715,7 +777,11 @@ pub(super) fn start_run(
         ..Default::default()
     };
     match novo_thermal::bridge::scenario_from_project(project, enclosure, &options) {
-        Ok(bridge) => {
+        Ok(mut bridge) => {
+            bridge
+                .scenario
+                .vents
+                .extend(state.settings.vents_for(&bridge.scenario.enclosure));
             let plate = bridge.scenario.enclosure.plate;
             let meta = Meta {
                 layout_key: layout_key(input),
@@ -1336,6 +1402,9 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                 let small = |text: &str, color| egui::RichText::new(text).small().color(color);
                 let (total_w, unknown) = totals(input);
                 ui.label(small(&format!("Total loss {total_w:.0} W"), t::TEXT));
+                if let Some(note) = estimate_note(input) {
+                    ui.label(small(&note, t::WARNING));
+                }
                 if unknown > 0 {
                     let (noun, verb) = if unknown == 1 {
                         ("device", "has")
@@ -1402,6 +1471,7 @@ mod tests {
                     h: 200.0,
                     loss_w: 80.0,
                     loss_known: true,
+                    loss_estimated: false,
                 },
                 Item {
                     id: 2,
@@ -1412,6 +1482,7 @@ mod tests {
                     h: 90.0,
                     loss_w: 2.0,
                     loss_known: true,
+                    loss_estimated: false,
                 },
             ],
             solution: None,
@@ -1498,6 +1569,20 @@ mod tests {
         let i = input();
         let c = build(&i);
         assert!(device_temp(&c, &i.items[0]) > device_temp(&c, &i.items[1]));
+    }
+
+    #[test]
+    fn estimated_losses_get_a_note_and_maker_losses_do_not() {
+        let mut i = input();
+        assert_eq!(estimate_note(&i), None);
+        i.items[0].loss_estimated = true;
+        assert_eq!(
+            estimate_note(&i).as_deref(),
+            Some("1 of 2 loss figures are planning estimates; check them against maker data.")
+        );
+        // A device without a loss figure is not counted either way.
+        i.items[0].loss_known = false;
+        assert_eq!(estimate_note(&i), None);
     }
 
     /// A scenario matching `input()`: a 700 x 900 x 300 mm interior, the

@@ -478,13 +478,12 @@ impl NovoApp {
         let mut start: Option<(String, bool)> = None;
         let mut reload = false;
         let mut reset = false;
-        egui::Window::new(title)
+        super::panel::dialog(ctx, title, [560.0, 560.0])
             .id(egui::Id::new("learn_window"))
             .open(&mut open)
-            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .pivot(egui::Align2::CENTER_CENTER)
+            .default_pos(ctx.content_rect().center())
             .collapsible(false)
-            .default_width(520.0)
-            .default_height(520.0)
             .show(ctx, |ui| {
                 self.window_body(ui, &mut start, &mut reload, &mut reset);
             });

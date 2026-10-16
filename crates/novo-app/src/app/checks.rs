@@ -139,6 +139,12 @@ impl NovoApp {
                             go = Some(*i);
                             ui.close();
                         }
+                        if p.kind == novo_checks::ProblemKind::MissingPart
+                            && ui.button("Assign parts…").clicked()
+                        {
+                            self.wb.queued.push("parts.auto_assign");
+                            ui.close();
+                        }
                         if ui.button("Waive with a reason…").clicked() {
                             self.wb.waiving = Some((*i, String::new()));
                             ui.close();

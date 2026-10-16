@@ -9,14 +9,14 @@ KoperCAD is a calm graphite workbench with one copper thread running through it:
 Three tests every screen has to pass (reviewers use them):
 
 1. **Squint test.** Blur the screenshot. You should still see: the drawing, then the one active thing (tool, selection, primary action) in copper, then quiet panels. If three areas compete, remove something.
-2. **Count test.** No toolbar shows more than 7 controls at rest, no menu more than 12 items, no panel more than 3 text styles. The rest lives under "More", in a popover or in the command field.
+2. **Count test.** No toolbar shows more than 7 controls at rest, no menu more than 12 items (a submenu counts as one), no panel more than three text sizes (mono numerals do not count). The rest lives under "More", in a popover or in the command field.
 3. **Overlap test.** Nothing permanent floats over a toolbar, a title block or another panel. Floating things dock to a named slot (section 6). The one allowed transient overlay is the outline flyout (opened from the top bar, closes on Esc or a click elsewhere); it covers the left end of the canvas and toolbar while open.
 
 ## 2. Brand identity
 
 **Name treatment.** `KoperCAD` set in Inter SemiBold: "Koper" in `text.primary`, "CAD" in `accent` (as in `assets/branding/lockup.svg`). Never all one colour in the product; never split across two lines. Second line, when there is room: `BY KOPERVONK` in the `label` style (10.5 pt caps, +1.2 spacing) in `text.secondary`.
 
-**Mark.** Keep the "Nova" mark (four tapered rays on a copper junction dot: the dot that joins wires). It is already drawn in code (`brand::paint_mark`, no image loader needed). Rules: minimum 16 pt in the UI; the copper dot is the only copper in it; on the light theme the rays use `text.primary` and the dot uses the light accent; keep clear space of one ray width; no outlines, shadows or animation except the single start-up fade. Where it appears: top bar (20 pt, left of the first menu, it opens the About card), start screen (64 pt above the wordmark), About, splash/loading, window icon, installer, PDF export footer (optional, off by default, "Made with KoperCAD").
+**Mark.** Below 1100 px the menus fold into the mark, so there it is the menu button; wider, it opens the About card. About is also in Help. Keep the "Nova" mark (four tapered rays on a copper junction dot: the dot that joins wires). It is already drawn in code (`brand::paint_mark`, no image loader needed). Rules: minimum 16 pt in the UI; the copper dot is the only copper in it; on the light theme the rays use `text.primary` and the dot uses the light accent; keep clear space of one ray width; no outlines, shadows or animation except the single start-up fade. Where it appears: top bar (20 pt, left of the first menu, it opens the About card), start screen (64 pt above the wordmark), About, splash/loading, window icon, installer, PDF export footer (optional, off by default, "Made with KoperCAD").
 
 **Voice.** Short, concrete, no exclamation marks, no "Oops". Labels are verbs or nouns the electrician already uses ("Place all", "Wire list"), not product jargon.
 
@@ -31,7 +31,7 @@ Roles and exact values are in design-system.md section 2.1 (dark and light). Sum
 | Surfaces | `#0E0E10` / `#151517` / `#1B1B1E` / `#232327` / `#2D2D32` | `#FCFBFA` / `#F2F1EE` / `#FFFFFF` / `#E9E7E3` / `#DFDCD7` | Step by one surface per level of containment. Drawing area is `sunken`. |
 | Accent copper | `#C88A5E` | `#9A5427` | See "copper means here". |
 | Status | success `#7FB086`, warning `#D6A55C`, error `#E0766C`, info `#8FA8C8` | `#276B36`, `#7F5408`, `#A82F25`, `#285488` | Always with an icon or words. |
-| **Heat (new role set)** | magma-like ramp, cold `#2B0F54` to hot `#FCFDBF` | same ramp, drawn on a light card | Only for temperature. Never reused for warning or error. A hot spot over the limit adds a `warning` outline and a glyph, it does not recolour the ramp. Legend always shows units and the ambient value. Estimate mode (no solver run) says "Estimate" in the legend title and uses a hatched swatch. |
+| **Heat (new role set)** | magma-like ramp, cold `#2B0F54` to hot `#FCFDBF` | same ramp, drawn on a light card | Only for temperature. Never reused for warning or error. A hot spot over the limit adds a glyph on a dark chip with a `text.primary` outline (a `warning` outline would vanish on the pale end of the ramp, `#FCFDBF`); contrast is checked on both themes. It does not recolour the ramp. Legend always shows units and the ambient value. Estimate mode (no solver run) says "Estimate" in the legend title and uses a hatched swatch. |
 | **Net colours (schematic)** | per `CANVAS_DARK` potentials | per `CANVAS_LIGHT` | Wire blue is the drawing's, not the UI's. Cable cores are drawn in the cable's own neutral (`symbol` at 60 percent) with the label in `accent` only when the cable is selected. |
 | **Drawing paper** | sheet visibly lighter than the surround (8 L* steps) | white on warm grey | The sheet is an object on a desk. |
 
@@ -40,17 +40,17 @@ The dark theme is the default and the one screenshots are judged on; the light t
 ## 4. Type, icons, space
 
 - **Type scale** is the spec's: display 20, title 15, body 13, caption 11, label 10.5 caps, mono 12. Decision: drop body to **12.5 in Compact** only; nothing else changes. Numbers in columns are mono and right aligned. At most three styles per panel.
-- **Drawing text** has a floor: tags and values never render below **9 px on screen** at any zoom; at "fit" the sheet is scaled so the sheet width fills the canvas minus 24 pt (audit E1).
+- **Drawing text** has a floor: tags and values never render below **9 px on screen** at any zoom; at "fit" the sheet is scaled so the whole sheet fills the canvas minus 24 pt: the smaller of the width and height fits (audit E1). Where 9 px is impossible at fit (1366x768), secondary text (cross references, pin numbers, notes) is hidden by priority level instead of drawn unreadable.
 - **Icons**: Phosphor, regular at rest, fill when active; 16 pt in buttons, 14 in rows, 20 in panel headers; electrical concepts in `icons::custom` on the same grid. Icon-only buttons always have a tooltip with name and key. Toolbar buttons keep their words: labels are never shortened or turned into icon-only buttons, and whole groups fold into More when the width runs out (as `cabinet-toolbar.md` decided). Icon-only is for the dock's tools, panel header buttons, tab icons and the pin, always with a tooltip.
 - **Space**: the spec's 4 pt grid. Decision: a panel's inner padding is `M` (8), between groups `L` (12), a workspace toolbar is **32 pt high** with 4 pt gaps (the Cabinet bar keeps its approved 56 px with 28 px controls and captions, `cabinet-toolbar.md`), a panel header is 28 pt, a table row is 24 pt (Standard). Four control heights are allowed and nothing else: 20 (Compact), 22 (Standard), 28 (toolbar button with label), 36 (Touch).
 
 ## 5. Density modes
 
-Compact 20 / Standard 22 / Touch 36 as in the spec. Defaults: Standard; first run on a window narrower than 1500 px or shorter than 800 px starts in **Compact** (a one-time suggestion toast: "Compact fits more on this screen. Change in Preferences > Appearance."). Commissioning on a touch device can switch to Touch for the Commissioning workspace only (it already has "Large buttons": replace by the density setting, same code path).
+Compact 20 / Standard 22 / Touch 36 as in the spec. Defaults: Standard; a first run on a window narrower than 1500 px or shorter than 800 px shows a one-time toast with a "Switch to Compact" button; nothing changes silently, and the choice persists. Commissioning on a touch device can switch to Touch for the Commissioning workspace only (it already has "Large buttons": replace by the density setting, same code path).
 
 ## 6. Layout: slots, panels and toolbars
 
-The window has five named slots. Anything that appears on screen occupies one; nothing is positioned by hand.
+The window has five named slots. Anything that appears on screen starts docked in one. Panels from the shared panel helper (#712) may then be dragged, resized and remembered by the person; "Reset panel layout" puts them back in their slots.
 
 ```
 +------------------------------------------------------------------+
@@ -73,8 +73,8 @@ Rules:
 3. **Toolbar**: one row, left to right: primary actions for the workspace, a spacer, view toggles (segmented), then a "More" menu where groups fold when narrow. A mode (Heat) may add a second strip below the row; the main row never grows. Everything else is in the command field. The Cabinet toolbar is specified by `cabinet-toolbar.md` and this page does not change it.
 4. **Dock** (schematic only): bottom centre, tools as icon buttons with one segmented control for wiring mode (Corners | Lines, with icons). Messages never go in the dock; they go in the status bar, or as a toast for results.
 5. **Panels** have a header (icon, title in `title`, trailing icon buttons for pin/close), then sections introduced by a `section_label`. No panel uses `Heading` or bare `label`.
-6. **Floating overlays** (legends, view cube, badges) live in the four corners of the canvas, inset 12 pt, and never over a toolbar. Legends are cards on `raised` with `radius::SURFACE`.
-7. **Dialogs**: 360, 480 or 640 wide only, one primary action, Esc closes.
+6. **Floating overlays** (legends, view cube, badges, stats) live in the four corners of the canvas, inset 12 pt, and never over a toolbar. Within a corner they stack top-down in this order: view cube, legend, stats panel, badges; the corner nearest the person's current work stays empty. Legends are cards on `raised` with `radius::SURFACE`.
+7. **Dialogs**: a default width of 360, 480 or 640 (the panel helper allows any width from 380 up and remembers a resize), one primary action, Esc closes.
 8. **Tables**: the one `widgets::table` (to be built, PR 4): header on `panel` in caption caps, 24 pt rows, hairline rows, right-aligned mono numbers, sticky header, selected row `accent.wash`, column resize, ellipsis (never mid-word clipping).
 
 ## 7. Empty states
@@ -111,14 +111,14 @@ Each PR names where the user sees it, carries before/after screenshots at 1366x7
 | --- | --- | --- | --- | --- |
 | 1 | Docs: audit, direction, design-system amendments (section 10), screenshot script resolution option | S | design lead | `docs/design/`, `scripts/screenshot.sh` |
 | 2 | **Pages flyout toggle moves to the top bar** (fixes G1) and the outline tab row never clips (G2) | S | design lead, with panels thread (#712 touches the same code: coordinate first) | top left, every workspace, window under 1700 px |
-| 3 | **Appearance**: theme (Dark, Light, follow system) and density in Preferences, canvases follow the theme, first-run compact suggestion | M | design lead | Preferences > Appearance |
+| 3 | **Appearance**: theme (Dark, Light (preview) until PR 12 lands, follow system) and density in Preferences, canvases follow the theme, first-run compact suggestion | M | design lead | Preferences > Appearance |
 | 4 | **Start screen and brand**: mark in the top bar, start screen with mark and wordmark, About card, recent list | M | design lead | launch with no project; click the mark |
 | 5 | `widgets::table` (sticky header, alignment, hairlines, ellipsis) + Reports migrated | M | design lead for the widget; Reports owner (R5 lane) for migration | Reports workspace |
 | 6 | Commissioning column on shared widgets (progress bar, grouped list, one header menu) | S | Commissioning owner | Outline > Commissioning |
 | 7 | Implement `cabinet-toolbar.md` as approved (groups, 28 px controls, folding, Heat strip); no amendments from this plan | M | cabinet owner | Cabinet workspace |
-| 8 | View menu split into View and Simulate, no permanently disabled items | S | workspaces/workflow threads | menu bar |
+| 8 | Simulate is a real menu already (#721); remaining: View clean-up (lesson commands out, no permanently disabled items), submenus counted as one item | S | workspaces/workflow threads | menu bar |
 | 9 | 3D Layers popover, Move as a mode, "?" badges to hover | S | 3D view owner | 3D workspace |
-| 10 | Copper discipline pass: layer toggles neutral, cable cores neutral, duct anchors neutral, selected colours only | M | design lead with canvas thread | all canvases |
+| 10 | Copper discipline, split per canvas (10a schematic, 10b cabinet, 10c 3D), each merged quickly, done through tokens not literal colour swaps | S each | design lead with each canvas thread | all canvases |
 | 11 | Schematic legibility: fit-to-width, text floor, title block contrast, dock icons for wiring modes, messages to status bar | M | canvas and dock owners | Schematic |
 | 12 | Light theme sweep: every screen in light at both sizes, fixes | M | design lead | Preferences > Light |
 
