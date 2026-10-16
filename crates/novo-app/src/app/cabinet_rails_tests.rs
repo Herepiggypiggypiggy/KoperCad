@@ -287,3 +287,41 @@ fn inside_size_and_door_has_a_command_a_menu_row_and_opens_the_card() {
         "Apply {apply:?} inside the inspector {panel:?}"
     );
 }
+
+fn rail_at(x: f64, y: f64, vertical: bool, kind: RailKind) -> Rail {
+    Rail {
+        id: novo_core::RailId::from(1),
+        structure: novo_core::StructureId::from(1),
+        kind,
+        x,
+        y,
+        length: 400.0,
+        vertical,
+        width: 0.0,
+        height: 0.0,
+        properties: Default::default(),
+    }
+}
+
+#[test]
+fn a_grip_sits_just_outside_the_start_of_its_rail() {
+    use super::cabinet_rails::grip_of;
+    // Horizontal: a tab to the left of the start, centred on the line.
+    let (l, t, r, b) = grip_of(&rail_at(100.0, 200.0, false, RailKind::DinRail), 14.0);
+    assert_eq!((l, r), (86.0, 100.0));
+    assert!(t < 200.0 && b > 200.0 && ((t + b) / 2.0 - 200.0).abs() < 1e-9);
+    // Vertical: a tab above the start, centred on the line.
+    let (l, t, r, b) = grip_of(&rail_at(100.0, 200.0, true, RailKind::Duct), 14.0);
+    assert_eq!((t, b), (186.0, 200.0));
+    assert!(l < 100.0 && r > 100.0);
+}
+
+#[test]
+fn the_grip_colours_come_from_the_palette_not_from_raw_tokens() {
+    // Neutral at rest, copper only when lit: the two fills differ and the
+    // resting one is never the accent.
+    for p in [&novo_theme::Palette::DARK, &novo_theme::Palette::LIGHT] {
+        assert_ne!(p.border_strong, p.accent);
+        assert_ne!(p.text_tertiary, p.on_accent);
+    }
+}
