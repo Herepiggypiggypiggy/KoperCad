@@ -7,13 +7,15 @@ use std::sync::Arc;
 use eframe::egui;
 use novo_core::{Project, StructureId};
 use novo_layout::model::load;
-use novo_view3d::build::{Options, model::scene};
+use novo_view3d::build::{DOOR_HINGE, model};
+use novo_view3d::door::open_angle;
 use novo_view3d::palette::View3dTheme;
 use novo_view3d::widget::{View3d, ViewOptions};
-use novo_view3d::{Look, MeshLibrary, Scene};
+use novo_view3d::{Layers, Look, MeshLibrary, Scene};
 
 use super::NovoApp;
 use super::heat_3d::{self, Heat3d, Place};
+use super::view3d_controls::{self, Controls};
 
 /// The one view of the app.
 const VIEW_ID: u64 = 1;
@@ -28,6 +30,10 @@ pub(crate) struct View3dMode {
     /// the overlays were built for.
     heat: Heat3d,
     heat_shown: Option<(u64, Heat3d)>,
+    /// The layers the scene was built with.
+    built_layers: Layers,
+    /// The toolbar's layers and door.
+    pub(super) controls: Controls,
 }
 
 impl Default for View3dMode {
@@ -38,6 +44,8 @@ impl Default for View3dMode {
             built: None,
             heat: Heat3d::default(),
             heat_shown: None,
+            built_layers: Layers::default(),
+            controls: Controls::default(),
         }
     }
 }
@@ -55,6 +63,14 @@ fn enclosure(project: &Project, preferred: Option<&novo_core::DeviceTag>) -> Opt
 }
 
 impl NovoApp {
+    /// How far the shown enclosure's door opens, in degrees; `None` without
+    /// a door or a cabinet.
+    pub(super) fn view3d_door_limit(&self) -> Option<f64> {
+        let project = self.backend.document()?.project();
+        let id = enclosure(project, self.cabinet.location.as_ref())?;
+        model::door_limit_deg(project, id)
+    }
+
     /// Whether some enclosure has a plate to draw.
     pub(super) fn view3d_has_cabinet(&self) -> bool {
         self.backend
@@ -76,9 +92,15 @@ impl NovoApp {
         };
         let revision = project.revision();
         let mode = &mut self.view3d;
-        let stale = !matches!(&mode.built, Some((s, r, _)) if *s == id && *r == revision);
-        if stale && let Some(built) = scene(project, id, &Options::default()) {
-            mode.built = Some((id, revision, Arc::new(built)));
+        let layers = mode.controls.layers;
+        let stale = !matches!(&mode.built, Some((s, r, _)) if *s == id && *r == revision)
+            || mode.built_layers != layers;
+        if stale
+            && let Some(built) =
+                model::scene(project, id, &model::options(project, id, layers.wires))
+        {
+            mode.built = Some((id, revision, Arc::new(layers.apply(built))));
+            mode.built_layers = layers;
         }
         let Some((_, _, scene)) = &mode.built else {
             return;
@@ -107,6 +129,17 @@ impl NovoApp {
             });
             mode.view.set_overlays(overlays);
             mode.heat_shown = wanted;
+        }
+        // The toolbar sits in the view's corner; the door goes where it says.
+        let limit = model::door_limit_deg(project, id);
+        let now = ui.input(|i| i.time);
+        let view_rect = ui.available_rect_before_wrap();
+        view3d_controls::toolbar(ui.ctx(), view_rect, &mut mode.controls, limit);
+        mode.controls.clamp_door(limit);
+        let target = mode.controls.door_target(limit);
+        if let Some(angle) = open_angle(scene, DOOR_HINGE, target) {
+            mode.view
+                .set_door(DOOR_HINGE, angle, now, options.reduced_motion);
         }
         mode.view
             .show(ui, scene, &mode.library, &Look::for_theme(theme), options);

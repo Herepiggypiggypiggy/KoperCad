@@ -98,6 +98,9 @@ mod title_revisions;
 mod userkeymap;
 mod variants;
 mod view3d;
+mod view3d_controls;
+#[cfg(test)]
+mod view3d_tests;
 mod wheel;
 mod wire_production;
 mod workbench;
