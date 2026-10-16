@@ -363,6 +363,24 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["import aml", "import automationml"],
     ),
+    verb(
+        cmd(
+            "file.import_eplan",
+            "Import EPLAN project (PXF)",
+            "Project",
+            &[
+                "eplan",
+                "pxf",
+                "epj",
+                "emp",
+                "migrate",
+                "other tool",
+                "page macro",
+            ],
+            Needs::Project,
+        ),
+        &["import eplan", "import pxf"],
+    ),
     cmd(
         "file.remove_background",
         "Remove the DXF background",

@@ -336,6 +336,28 @@ enum Import {
         #[arg(long = "skip", value_name = "SHEET:ROW")]
         skip: Vec<String>,
     },
+    /// Preview an EPLAN project export (`.epj`) or page macro (`.emp`, both
+    /// PXF) as a KoperCAD import: what would be added, what already exists
+    /// and what is not carried, counted. Nothing is written unless
+    /// `--output` names a new project file; the project given is never
+    /// changed.
+    Eplan {
+        /// The PXF file.
+        pxf: PathBuf,
+        /// Add to this project; a new empty project when left out.
+        #[arg(long)]
+        project: Option<PathBuf>,
+        /// Print JSON instead of text.
+        #[arg(long)]
+        json: bool,
+        /// Write the project with the import applied (one undo step) to
+        /// this new `.novo` file. It must not exist yet.
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Language of titles and type texts, e.g. `en_US`.
+        #[arg(long, default_value = "en_US")]
+        lang: String,
+    },
 }
 
 /// Which side wins a conflict.
@@ -615,6 +637,20 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             &skip,
             out,
         ),
+        Cmd::Import(Import::Eplan {
+            pxf,
+            project,
+            json,
+            output,
+            lang,
+        }) => import_eplan(
+            &pxf,
+            project.as_deref(),
+            json,
+            output.as_deref(),
+            &lang,
+            out,
+        ),
         Cmd::Calc {
             file,
             tables,
@@ -641,6 +677,91 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             })
         }
     }
+}
+
+/// `kopercad-cli import eplan`: previews a PXF file as an import, and with
+/// `output` writes the imported project to a new file.
+fn import_eplan(
+    pxf: &Path,
+    project: Option<&Path>,
+    json: bool,
+    output: Option<&Path>,
+    lang: &str,
+    out: &mut dyn Write,
+) -> Result<i32, Failure> {
+    use novo_interop::eplan::pxf::{PxfOptions, plan_pxf, read_pxf};
+
+    if let Some(path) = output
+        && (!novo_py::is_project_path(path) || path.exists())
+    {
+        let why = if path.exists() {
+            "already exists; import never replaces a project file"
+        } else {
+            "is not a .novo project file name"
+        };
+        return Err(Failure::new(
+            exit::WRITE,
+            format!("cannot write {}: it {why}", path.display()),
+        ));
+    }
+    let base = match project {
+        Some(path) => read(path)?,
+        None => Project::new(
+            pxf.file_stem()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "EPLAN import".into()),
+        ),
+    };
+    let file = std::fs::File::open(pxf)
+        .map_err(|e| Failure::new(exit::READ, format!("cannot read {}: {e}", pxf.display())))?;
+    let parsed = read_pxf(std::io::BufReader::new(file))
+        .map_err(|e| Failure::new(exit::READ, format!("cannot import {}: {e}", pxf.display())))?;
+    let plan = plan_pxf(
+        &base,
+        &parsed,
+        &PxfOptions {
+            lang: lang.to_string(),
+        },
+    );
+    let report = plan.report();
+    let mut written = false;
+    if let Some(path) = output {
+        let mut doc = novo_core::Document::new(base);
+        plan.apply(&mut doc)
+            .map_err(|e| Failure::new(exit::USAGE, e.to_string()))?;
+        ProjectFile::create(path, doc.project()).map_err(|e| {
+            Failure::new(exit::WRITE, format!("cannot write {}: {e}", path.display()))
+        })?;
+        written = true;
+    }
+    if json {
+        let moved: Vec<Value> = report
+            .moved
+            .iter()
+            .map(|(what, n)| json!({"what": what, "count": n}))
+            .collect();
+        let not_carried: Vec<Value> = report
+            .lossy
+            .iter()
+            .map(|l| json!({"what": l.what, "count": l.count, "why": l.why}))
+            .collect();
+        let doc = json!({
+            "summary": plan.summary(),
+            "creates": plan.creates(),
+            "existing": plan.existing,
+            "carried": moved,
+            "not_carried": not_carried,
+            "notes": report.notes,
+            "written": written,
+        });
+        print(out, &doc.to_string())?;
+    } else {
+        print(out, &report.text())?;
+        if written {
+            print(out, "Written.")?;
+        }
+    }
+    Ok(exit::OK)
 }
 
 /// `kopercad-cli import sheet`: previews the sheet, and with `output`

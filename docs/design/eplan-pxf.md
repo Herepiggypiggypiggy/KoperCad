@@ -1,7 +1,8 @@
 # EPLAN PXF reader (EPLAN-PXF-READ)
 
-Status: slice 1 built (streaming reader, model, counted report). Applying to a project,
-the preview dialog, File > Import and `kopercad-cli` come in the next slices.
+Status: slices 1 to 3 built (streaming reader, import plan with preview and one-step apply,
+File > Import > EPLAN project (PXF), `kopercad-cli import eplan`). Nets, symbols, texts and
+interruption points follow.
 
 ## 1. What and why
 
@@ -54,11 +55,12 @@ function blocks, symbol definitions. Wires come with the net rebuild by EPLAN's 
 
 1. **Reader and model** (this one): `novo_interop::eplan::pxf::{read_pxf, read_pxf_str}`,
    `PxfFile`, `PxfFile::report()`, interruption pairing. Streams from any `BufRead`.
-2. Import plan: `PxfPlan` previews against the open project (what is added, what exists,
+2. (built) Import plan: `PxfPlan` previews against the open project (what is added, what exists,
    the "not carried" list), `apply` is one undo step through commands; pages, structure,
    devices with tags and part numbers, terminals, cables with cores, texts.
-3. UI and CLI: File > Import > EPLAN project (PXF) with the preview dialog,
-   `kopercad-cli import-eplan project.epj [--dry-run]`.
+3. (built) UI and CLI: File > Import > EPLAN project (PXF) (command field `import eplan`) with
+   the preview dialog; `kopercad-cli import eplan project.epj [--project p.novo] [-o new.novo] [--json]`.
+   Without `-o` nothing is written.
 4. Interruption points to KoperCAD cross references; `.emp` into the macro library.
 5. Nets, with the EPLAN-NETS lane.
 

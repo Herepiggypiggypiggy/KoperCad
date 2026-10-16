@@ -156,6 +156,8 @@ pub(crate) struct Workbench {
     pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
     /// An AutomationML import waiting for the person to confirm.
     pub(super) aml_import: Option<super::interop::AmlImport>,
+    /// An EPLAN (PXF) import waiting for the person to confirm.
+    pub(super) eplan_import: Option<super::eplan_import::EplanImport>,
     /// A DWG being converted in the background.
     pub(super) dwg_job: Option<super::interop::DwgJob>,
 }
@@ -230,6 +232,7 @@ impl Default for Workbench {
             commissioning: None,
             underlay_seen: None,
             aml_import: None,
+            eplan_import: None,
             dwg_job: None,
         }
     }
@@ -321,6 +324,7 @@ const APP_COMMANDS: &[&str] = &[
     "export.step",
     "export.aml",
     "file.import_aml",
+    "file.import_eplan",
     "file.import_dwg",
     "file.choose_dwg_converter",
     "plc.add_card",
@@ -788,6 +792,7 @@ impl NovoApp {
                 self.export_aml();
             }
             "file.import_aml" => self.import_aml(),
+            "file.import_eplan" => self.import_eplan(),
             "file.import_dwg" => self.import_dwg(),
             "file.choose_dwg_converter" => self.choose_dwg_converter(),
             "plc.add_card" => self.plc_add_card(argument),
