@@ -34,7 +34,7 @@ pub(crate) struct View3dMode {
     /// Dragging, turning and deleting devices, rails and ducts in the view.
     pub(super) mv: MoveState,
     /// The landing box drawn last frame, to redraw the overlays when it changes.
-    ghost_shown: Option<([i64; 4], bool)>,
+    ghost_shown: Vec<([i64; 4], bool)>,
     library: Arc<MeshLibrary>,
     /// The enclosure and project revision the scene was built for.
     pub(super) built: Option<(StructureId, u64, Arc<Scene>)>,
@@ -76,7 +76,7 @@ impl Default for View3dMode {
         View3dMode {
             view: View3d::new(VIEW_ID),
             mv: MoveState::default(),
-            ghost_shown: None,
+            ghost_shown: Vec::new(),
             library: Arc::new(MeshLibrary::new()),
             built: None,
             pending: None,
@@ -205,22 +205,31 @@ impl NovoApp {
         }
         let wanted = solution.as_ref().map(|s| (s.id, mode.heat));
         // The landing box of a dragged device, rail or duct.
-        let landing = mode.mv.landing();
-        let ghost_key = landing.map(|l| {
-            let r = l.rect;
-            (
-                [r.x, r.y, r.w, r.h].map(|v| (v * 10.0).round() as i64),
-                l.clash,
-            )
-        });
+        let landings = mode.mv.landings();
+        let ghost_key: Vec<([i64; 4], bool)> = landings
+            .iter()
+            .map(|l| {
+                let r = l.rect;
+                (
+                    [r.x, r.y, r.w, r.h].map(|v| (v * 10.0).round() as i64),
+                    l.clash,
+                )
+            })
+            .collect();
         let ghost_changed = mode.ghost_shown != ghost_key;
         mode.ghost_shown = ghost_key;
-        let ghost = landing.map_or_else(Vec::new, |l| {
-            let top = load(project, id)
-                .and_then(|lay| lay.depths.get(&l.item.raw).copied())
-                .unwrap_or(10.0);
-            view3d_move::ghost(&l, &scene.frame, top)
-        });
+        let stored = load(project, id);
+        let ghost: Vec<_> = landings
+            .iter()
+            .flat_map(|l| {
+                let top = stored
+                    .as_ref()
+                    .filter(|_| l.item.kind == ItemKind::Device)
+                    .and_then(|lay| lay.depths.get(&l.item.raw).copied())
+                    .unwrap_or(10.0);
+                view3d_move::ghost(l, &scene.frame, top)
+            })
+            .collect();
         let mut heat_changed = false;
         let tracing = solution.is_some() && mode.heat.lines && !self.settings.reduce_motion;
         if wanted != mode.heat_shown {
@@ -296,6 +305,7 @@ impl NovoApp {
             &Look::for_theme(theme),
             options,
         );
+        super::cabinet_bar::note_rect(ui.ctx(), "workspace.view3d", "3D canvas", out.rect, false);
         mode.view.state.hover = out.hover;
         let state = &mut mode.view.state;
         if let Some(click) = &out.clicked {
@@ -331,7 +341,7 @@ impl NovoApp {
                     state.selection.insert(d.id);
                 }
             }
-            let (_, edit) = mode.mv.step(&stored, out.item_drag);
+            let (_, edit) = mode.mv.step(&stored, &state.selection, out.item_drag);
             edits.extend(edit);
             if mode.mv.dragging() {
                 ui.ctx().request_repaint();
@@ -391,6 +401,10 @@ impl NovoApp {
             self.cabinet_ask(ask, Some(id), layout, &cands);
         }
         for edit in edits {
+            if let view3d_move::Edit::Group { devices, rails } = edit {
+                self.view3d_move_group(id, devices, rails);
+                continue;
+            }
             let (device, rail) = edit.ask();
             if let Some(device) = device {
                 let doc = self.backend.document().map(|d| d.project());

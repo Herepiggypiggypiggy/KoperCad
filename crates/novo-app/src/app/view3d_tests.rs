@@ -307,3 +307,15 @@ fn the_stats_command_is_in_the_view_menu_and_works_from_the_cabinet() {
     assert_eq!(d.app.workspace(), Workspace::View3d);
     assert!(d.app.view3d.stats.shown);
 }
+
+#[test]
+fn the_3d_view_registers_the_anchor_lessons_point_at() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    d.frame();
+    let rect = d
+        .app
+        .learn_anchor("workspace.view3d")
+        .expect("`workspace.view3d` is not on screen");
+    assert!(rect.width() > 0.0 && rect.height() > 0.0, "{rect:?}");
+}

@@ -12,6 +12,8 @@ pub struct SurfaceStyle {
     pub edge: Rgb,
     /// Opacity of translucent items of this kind (1 = opaque).
     pub alpha: f32,
+    /// Strength of the Blinn highlight, 0 to 1 (3d-look.md section 2).
+    pub specular: f32,
 }
 
 /// A mark is never shown by colour alone: it also draws a glyph.
@@ -89,6 +91,7 @@ fn surface(kind: ItemKind, edge_factor: f32) -> SurfaceStyle {
         color: rgb3(m.color),
         edge: rgb3(edge_color(m.color, edge_factor)),
         alpha,
+        specular: f32::from(m.specular_pct) / 100.0,
     };
     match kind {
         ItemKind::Plate => s(PLATE_GALVANISED, 1.0),
@@ -101,6 +104,7 @@ fn surface(kind: ItemKind, edge_factor: f32) -> SurfaceStyle {
             color: rgb3(wire_rgba(WireColor::Unknown).0),
             edge: rgb3(edge_color(wire_rgba(WireColor::Unknown).0, edge_factor)),
             alpha: 1.0,
+            specular: 0.15,
         },
         _ => s(DEVICE_LIGHT, 1.0),
     }
@@ -279,6 +283,14 @@ mod tests {
         assert_eq!(look.selection.edge, [0xC8, 0x8A, 0x5E]);
         assert_eq!(look.hover.tint_amount, 0.0);
         assert_ne!(look.hover.edge, look.selection.edge);
+    }
+
+    #[test]
+    fn metal_shines_more_than_plastic_and_the_shell_not_at_all_visibly() {
+        let look = Look::dark();
+        assert!(look.surface(ItemKind::Rail).specular > look.surface(ItemKind::Device).specular);
+        assert!(look.surface(ItemKind::Plate).specular > look.surface(ItemKind::Duct).specular);
+        assert!(look.surface(ItemKind::Device).specular > 0.0);
     }
 
     #[test]
