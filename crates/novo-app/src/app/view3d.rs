@@ -141,6 +141,7 @@ impl NovoApp {
         };
         let revision = project.revision();
         let ambient = self.sizing.request().ambient_max;
+        let empty_hint = super::tips::empty_3d_hint(&self.settings, &self.wb.keymap, project, id);
         let mode = &mut self.view3d;
         let layers = mode.controls.layers;
         let stale = !matches!(&mode.built, Some((s, r, _)) if *s == id && *r == revision)
@@ -300,6 +301,15 @@ impl NovoApp {
             ambient,
         );
         view3d_heat::show(ui.ctx(), view_rect, &mut self.cabinet.heat, stale);
+        if let Some(text) = empty_hint {
+            ui.painter().text(
+                view_rect.center_bottom() - egui::vec2(0.0, 40.0),
+                egui::Align2::CENTER_BOTTOM,
+                text,
+                egui::FontId::proportional(14.0),
+                ui.visuals().weak_text_color(),
+            );
+        }
         mode.stats.frame(ui.ctx(), view_rect, &mut mode.view);
         mode.controls.clamp_door(limit);
         let target = mode.controls.door_target(limit);
