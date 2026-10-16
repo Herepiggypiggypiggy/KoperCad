@@ -16,6 +16,7 @@ use novo_layout::model::{
 };
 use novo_layout::plan::Plan;
 use novo_layout::state::CabinetLayout;
+use novo_layout::surfaces::MAIN_PLATE;
 
 use super::cabinet_bar::{self, Foldable};
 use super::cabinet_door::DoorState;
@@ -58,6 +59,12 @@ pub(super) struct CabinetState {
     pub(super) table: bool,
     /// The plate card of the inspector is shown with nothing selected.
     pub(super) plate_card: bool,
+    /// The surface picked in the header (`None` is the mounting plate) and
+    /// the picker asked to open by `cabinet.surface`.
+    pub(super) surface: Option<String>,
+    pub(super) surface_open: bool,
+    /// The id of the picker's popup, as egui's combo box keys it.
+    pub(super) surface_popup: Option<egui::Id>,
     /// Every wire's route is drawn over the plate, with the route table
     /// beside it (Route all).
     pub(super) routes: bool,
@@ -110,6 +117,9 @@ impl CabinetState {
             panel_fields: Default::default(),
             table: false,
             plate_card: false,
+            surface: None,
+            surface_open: false,
+            surface_popup: None,
             routes: false,
             routes_cache: Default::default(),
             rules: cabinet_rules::RulesState::new(),
@@ -410,6 +420,16 @@ impl NovoApp {
                 .map(|s| s.id)
         });
         let layout = structure.and_then(|s| load(project, s));
+        let surfaces = structure.and_then(|s| super::cabinet_surfaces::summarize(project, s));
+        if let Some(sum) = &surfaces
+            && self
+                .cabinet
+                .surface
+                .as_deref()
+                .is_some_and(|n| sum.row(n).is_none())
+        {
+            self.cabinet.surface = None;
+        }
         self.cabinet.rules.ensure_loaded();
         let judged = match (structure, &layout) {
             (Some(s), Some(_)) => Some(cabinet_rules::judge(project, s, &self.cabinet.rules.rules)),
@@ -552,6 +572,38 @@ impl NovoApp {
             });
             if layout.is_none() {
                 return;
+            }
+            if let Some(sum) = surfaces.as_ref().filter(|s| s.rows.len() > 1) {
+                cabinet_bar::group(ui, caption("Surface"), |ui| {
+                    let picked = self.cabinet.surface.clone();
+                    let current = picked.clone().unwrap_or_else(|| MAIN_PLATE.to_owned());
+                    let combo = egui::ComboBox::from_id_salt("cabinet_surface")
+                        .selected_text(current.clone());
+                    let popup = ui.make_persistent_id("cabinet_surface").with("popup");
+                    self.cabinet.surface_popup = Some(popup);
+                    if std::mem::take(&mut self.cabinet.surface_open) {
+                        egui::Popup::open_id(ui.ctx(), popup);
+                    }
+                    let r = combo.show_ui(ui, |ui| {
+                        for row in &sum.rows {
+                            let on = row.name == current;
+                            let line = ui.selectable_label(on, row.label());
+                            if line.clicked() {
+                                self.cabinet.surface =
+                                    (row.name != MAIN_PLATE).then(|| row.name.clone());
+                            }
+                        }
+                    });
+                    let r = r
+                        .response
+                        .on_hover_text("Surface to work on (View > Cabinet > Cabinet surfaces)");
+                    cabinet_bar::note(&mut anchors, "cabinet.surface", "Surface", &r);
+                    if !sum.problems.is_empty() {
+                        let text = format!("{} surface problems", sum.problems.len());
+                        cabinet_bar::pill(ui, &text, Some(novo_theme::widgets::Level::Warning))
+                            .on_hover_text(sum.problems.join("\n"));
+                    }
+                });
             }
             if has_plan {
                 cabinet_bar::group(ui, Some("Preview, nothing stored yet"), |ui| {
@@ -962,6 +1014,34 @@ impl NovoApp {
                     });
                 }
             });
+        }
+        // The picked surface and what is wrong with surface names, in full
+        // and wrapped to the width (not squeezed into the status strip).
+        if let Some(sum) = &surfaces {
+            let note = self.cabinet.surface.as_deref().and_then(|n| sum.note(n));
+            if note.is_some() || !sum.problems.is_empty() {
+                ui.vertical(|ui| {
+                    ui.add_space(2.0);
+                    if let Some(note) = note {
+                        ui.add(egui::Label::new(note).wrap());
+                        ui.add(
+                            egui::Label::new(egui::RichText::new(
+                                "The plate drawing stays until the surface view arrives.",
+                            ))
+                            .wrap(),
+                        );
+                    }
+                    for problem in &sum.problems {
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(problem)
+                                    .color(novo_theme::Palette::of(ui).warning),
+                            )
+                            .wrap(),
+                        );
+                    }
+                });
+            }
         }
         ui.separator();
 

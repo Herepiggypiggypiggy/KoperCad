@@ -765,6 +765,11 @@ pub const DUTCH: &[Aliases] = &[
         &["din-rail", "kabelgoot", "kanaal", "rail"],
     ),
     nl(
+        "cabinet.surface",
+        &["kastvlakken", "kies vlak"],
+        &["vlak", "wand", "dak", "bodem"],
+    ),
+    nl(
         "cabinet.door",
         &["binnenmaat en deur", "deurdraaiing", "scharnierkant"],
         &["deur", "scharnier", "binnenmaat", "diepte"],
