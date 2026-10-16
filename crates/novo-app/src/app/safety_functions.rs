@@ -101,6 +101,12 @@ pub(super) fn section(
     ui.weak(format!(
         "Bound to devices by tag; stored in the project ({FUNCTIONS_KEY}) and listed in Issues when the level is not met. Set {B10D_CYCLES} or {MTTFD_YEARS} on a device or its part to take the number from there."
     ));
+    if novo_checks::safety::unreadable(project) && !state.dirty {
+        ui.colored_label(
+            tokens::ERROR,
+            "The stored safety functions cannot be read. Editing here replaces them.",
+        );
+    }
     ui.horizontal(|ui| {
         for (i, f) in state.list.iter().enumerate() {
             if ui.selectable_label(state.selected == i, &f.name).clicked() {

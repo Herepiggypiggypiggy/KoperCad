@@ -190,6 +190,16 @@ pub fn functions(project: &Project) -> Vec<SafetyFunction> {
     }
 }
 
+/// Whether a value is stored under [`FUNCTIONS_KEY`] that cannot be read
+/// back (hand-edited or from a newer version). [`functions`] then gives none.
+pub fn unreadable(project: &Project) -> bool {
+    match project.info().properties.get(FUNCTIONS_KEY) {
+        Some(Value::Text(t)) => serde_json::from_str::<Vec<SafetyFunction>>(t).is_err(),
+        Some(_) => true,
+        None => false,
+    }
+}
+
 /// The stored form of `list`; `None` (remove the property) when empty.
 pub fn encode(list: &[SafetyFunction]) -> Option<Value> {
     (!list.is_empty()).then(|| Value::Text(serde_json::to_string(list).unwrap_or_default()))
@@ -309,6 +319,17 @@ impl Rating {
 fn rate_block(project: &Project, block: &Block, nop: f64) -> BlockRating {
     let mut binding = Vec::new();
     let mut devices = BTreeSet::new();
+    let sane = nop.is_finite()
+        && nop > 0.0
+        && (0.0..=100.0).contains(&block.dc_percent)
+        && block.ccf <= 100;
+    if !sane {
+        binding.push(format!(
+            "{} block \"{}\" has a duty, DCavg or CCF value out of range, so it is not rated",
+            block.role.label(),
+            block.name
+        ));
+    }
     let mut channel = |parts: &[PartRef]| -> Vec<Component> {
         let mut out = Vec::new();
         for p in parts {
@@ -397,6 +418,13 @@ pub fn rate(project: &Project, f: &SafetyFunction) -> Rating {
 
 /// Raises the safety Problems; silent when the project has no functions.
 pub(crate) fn run(cx: &Context<'_>, out: &mut Vec<Problem>) {
+    if unreadable(cx.project) {
+        out.push(Problem::new(
+            ProblemKind::SafetyBinding,
+            Vec::new(),
+            format!("The stored safety functions ({FUNCTIONS_KEY}) cannot be read and are ignored"),
+        ));
+    }
     for f in functions(cx.project) {
         let rating = rate(cx.project, &f);
         let mut devices: Vec<AnyId> = Vec::new();

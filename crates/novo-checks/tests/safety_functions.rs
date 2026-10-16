@@ -192,3 +192,38 @@ fn a_tag_on_two_devices_says_so() {
         "{messages:?}"
     );
 }
+
+#[test]
+fn out_of_range_duty_is_unrated_not_infinitely_reliable() {
+    let mut doc = project_with_devices();
+    let mut f = SafetyFunction::new("Guard");
+    f.cycle_s = 0.0;
+    bound(&mut f, Role::Sensor, "-S1");
+    store(&mut doc, &[f.clone()]);
+    assert!(rate(doc.project(), &f).total.is_none());
+    assert!(
+        check(doc.project())
+            .iter()
+            .any(|p| p.kind == ProblemKind::SafetyBinding && p.message.contains("out of range"))
+    );
+}
+
+#[test]
+fn unreadable_stored_text_is_reported_and_undo_restores_the_functions() {
+    let mut doc = project_with_devices();
+    let f = SafetyFunction::new("Guard");
+    store(&mut doc, std::slice::from_ref(&f));
+    doc.transact("Break", |tx| {
+        set_info_property(tx, FUNCTIONS_KEY, Some(Value::Text("{not json".into())))
+    })
+    .unwrap();
+    assert!(novo_checks::safety::unreadable(doc.project()));
+    assert!(
+        check(doc.project())
+            .iter()
+            .any(|p| p.message.contains("cannot be read"))
+    );
+    doc.undo().unwrap();
+    assert!(!novo_checks::safety::unreadable(doc.project()));
+    assert_eq!(functions(doc.project()), vec![f]);
+}
