@@ -1021,7 +1021,7 @@ impl NovoApp {
                 .show(ui, |ui| self.reports_list(ui));
         } else if pinned && self.is_open() {
             egui::Panel::left("outline")
-                .exact_size(OUTLINE_WIDTH)
+                .exact_size(self.outline_width())
                 .resizable(false)
                 .show(ui, |ui| self.outline(ui, &mut picked));
         }
@@ -1228,9 +1228,22 @@ impl NovoApp {
     /// Whether the outline takes space beside the canvas: the user's
     /// choice, otherwise only on wide windows.
     fn outline_pinned(&self) -> bool {
+        if self.commissioning_pins_panel() {
+            return true;
+        }
         self.settings
             .outline_pinned
             .unwrap_or(self.window_width >= PIN_OUTLINE_FROM)
+    }
+
+    /// The outline's width: wider in the Commissioning workspace at a tablet
+    /// window, where the touch targets need the room.
+    fn outline_width(&self) -> f32 {
+        if self.commissioning_tablet() {
+            commissioning::TABLET_PANEL_WIDTH
+        } else {
+            OUTLINE_WIDTH
+        }
     }
 
     /// Shows `page` on the canvas.
@@ -1590,7 +1603,7 @@ impl NovoApp {
                 // The frame's margins and stroke come on top of the content.
                 let chrome = frame.total_margin().sum();
                 frame.show(ui, |ui| {
-                    ui.set_width(OUTLINE_WIDTH - chrome.x);
+                    ui.set_width(self.outline_width() - chrome.x);
                     ui.set_height(height - chrome.y);
                     self.outline(ui, picked);
                 });
