@@ -74,6 +74,8 @@ mod workspace;
 mod xref;
 
 #[cfg(test)]
+mod assembly_pack_tests;
+#[cfg(test)]
 mod assembly_tests;
 #[cfg(test)]
 mod cabinet_rules_tests;
@@ -112,7 +114,7 @@ use eframe::egui;
 use crate::actions::Action;
 
 /// Hover text of the bulk-edit exports (the data to edit, not the reports).
-const ASSEMBLY_HINT: &str = "The workshop sheet of every cabinet: prepare, drill, mount, wire, label and check, with a box to tick at each line. Needs a cabinet with a mounting plate.";
+const ASSEMBLY_HINT: &str = "The shop-floor print pack of every cabinet: build order (rails, ducts, devices, wires, labels), then prepare with the cut list, drill table, mount, wire, label and check, then the wire cutting list. Needs a cabinet with a mounting plate.";
 const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel. Export only: bringing the edited file back comes with the import dialog. The generated reports are under Export all reports to Excel.";
 use novo_core::{Aspect, Command, DeviceTag, ModelError, Outcome, PageId, PageKind};
 use pages::PageView;

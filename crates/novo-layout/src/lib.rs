@@ -4,6 +4,7 @@
 //! Millimetres, origin top left, x right, y down. Nothing here mutates a
 //! project; the model storage and commands come later.
 
+pub mod assembly;
 pub mod check;
 pub mod drill;
 pub mod enclosure;
