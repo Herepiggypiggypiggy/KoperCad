@@ -79,7 +79,8 @@ impl SurfaceRules {
 pub struct Split {
     /// Stay on the plate.
     pub plate: Vec<Spec>,
-    /// Sent to another surface, by surface name, in rule order.
+    /// Sent to another surface, by surface name, in the order a device for
+    /// that surface is first met.
     pub others: Vec<(String, Vec<Spec>)>,
     pub problems: Vec<String>,
 }

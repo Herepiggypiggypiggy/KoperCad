@@ -1290,3 +1290,19 @@ fn surface_rules_keep_door_devices_off_the_plate_plan() {
         super::cabinet_rules::plan(&p, cab, &layout, &novo_layout::rules::RuleSet::standard());
     assert_eq!(plan.placements.len(), 1);
 }
+
+#[test]
+fn a_non_text_surface_rules_property_is_a_sentence() {
+    use novo_core::{DeviceTag, Project, Value};
+    let mut p = Project::new("t");
+    let (cab, _) = p
+        .transact("setup", |tx| {
+            let cab = tx.add_structure(DeviceTag::parse("+CAB1").unwrap(), "Cabinet", true)?;
+            tx.set_property(cab, "surface_rules", Some(Value::Int(3)))?;
+            Ok(cab)
+        })
+        .unwrap();
+    let (rules, problems) = novo_layout::rules::model::surface_rules(&p, cab);
+    assert!(rules.rules.is_empty());
+    assert_eq!(problems.len(), 1);
+}

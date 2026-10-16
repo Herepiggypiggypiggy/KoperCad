@@ -1448,16 +1448,18 @@ impl NovoApp {
         }
     }
 
-    /// What Place all leaves off the plate, by name with the reason: devices
-    /// that do not fit, and devices no cabinet takes because their tag has
-    /// no location while the project has several. `None` when all is placed.
     /// Tells what the surface rules did to `Place all`: the devices that
     /// belong on another surface and are not on the plate plan, and rules
-    /// that could not be used.
-    fn surface_rule_messages(&mut self, structure: Option<StructureId>, layout: &CabinetLayout) {
+    /// that could not be used. Returns how many devices were sent to another
+    /// surface.
+    fn surface_rule_messages(
+        &mut self,
+        structure: Option<StructureId>,
+        layout: &CabinetLayout,
+    ) -> usize {
         let (Some(s), Some(project)) = (structure, self.backend.document().map(|d| d.project()))
         else {
-            return;
+            return 0;
         };
         let split = cabinet_rules::surface_split(project, s, layout);
         let tag = |id: u64| {
@@ -1465,6 +1467,7 @@ impl NovoApp {
                 .get::<novo_core::Device>(novo_core::DeviceId::from(id))
                 .map_or_else(|| format!("device {id}"), |d| d.tag.to_string())
         };
+        let sent: usize = split.others.iter().map(|(_, specs)| specs.len()).sum();
         let mut notes: Vec<(Level, String)> = split
             .problems
             .iter()
@@ -1484,8 +1487,12 @@ impl NovoApp {
         for (level, text) in notes {
             self.message(level, text);
         }
+        sent
     }
 
+    /// What Place all leaves off the plate, by name with the reason: devices
+    /// that do not fit, and devices no cabinet takes because their tag has
+    /// no location while the project has several. `None` when all is placed.
     fn left_out_text(
         &self,
         structure: Option<StructureId>,
@@ -1612,7 +1619,7 @@ impl NovoApp {
                         }
                         _ => layout.preview(cands),
                     };
-                    self.surface_rule_messages(structure, &layout);
+                    let sent_elsewhere = self.surface_rule_messages(structure, &layout);
                     let left_out = self.left_out_text(structure, &plan);
                     if plan.placements.is_empty() {
                         match left_out {
@@ -1624,6 +1631,9 @@ impl NovoApp {
                             {
                                 self.message(Level::Info, "Every device is already on the plate");
                             }
+                            // Everything that was left went to another surface;
+                            // the surface message above already said so.
+                            None if sent_elsewhere > 0 => {}
                             None => self.message(Level::Info, "Nothing fits on the plate"),
                         }
                     } else {

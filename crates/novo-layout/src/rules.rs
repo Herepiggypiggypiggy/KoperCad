@@ -1218,7 +1218,14 @@ pub mod model {
             .and_then(|s| s.properties.get(crate::surface_rules::SURFACE_RULES_KEY))
         {
             Some(Value::Text(t)) => crate::surface_rules::SurfaceRules::parse(t),
-            _ => Default::default(),
+            Some(_) => (
+                Default::default(),
+                vec![format!(
+                    "The '{}' property should be text such as 'door: H S P'.",
+                    crate::surface_rules::SURFACE_RULES_KEY
+                )],
+            ),
+            None => Default::default(),
         }
     }
 

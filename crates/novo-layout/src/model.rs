@@ -410,9 +410,6 @@ pub fn device_depth(project: &Project, device: &Device) -> Option<f64> {
     crate::enclosure::device_depth(own, parts)
 }
 
-/// The interior and door stored on an enclosure. `None` until width, height
-/// and depth of the interior are all set. A door exists once a hinge side is
-/// set.
 /// The `surface.<name>` structure properties (extra plates and profiles, or
 /// resized standard surfaces) as `(name, text)` pairs for
 /// [`crate::surfaces::Surfaces::from_enclosure`].
@@ -432,6 +429,9 @@ pub fn extra_surfaces(project: &Project, id: StructureId) -> Vec<(String, String
         .collect()
 }
 
+/// The interior and door stored on an enclosure. `None` until width, height
+/// and depth of the interior are all set. A door exists once a hinge side is
+/// set.
 pub fn enclosure_of(project: &Project, id: StructureId) -> Option<Enclosure> {
     let s = structure(project, id)?;
     let get = |key: &str| s.properties.get(key).and_then(number);
