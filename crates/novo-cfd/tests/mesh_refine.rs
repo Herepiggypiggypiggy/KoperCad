@@ -234,3 +234,23 @@ fn ducts_and_rails_are_resolved_too_and_the_build_is_deterministic() {
         assert!(body.is_resolved(), "{body:?}");
     }
 }
+
+#[test]
+fn a_slim_device_is_kept_and_reported_not_hidden() {
+    // a 6 mm wide relay next to the big device
+    let mut scn = reference();
+    scn.devices
+        .push(device(8, rect(400.0, 450.0, 6.0, 90.0), 60.0));
+    let m = Mesh::build(&scn, &st(6000)).unwrap();
+    let relay = m.bodies.iter().find(|b| b.name == "Device 8").unwrap();
+    assert!(relay.cells_across.iter().all(|c| *c >= 1), "{relay:?}");
+    assert!(m.grid.x_edges_mm.iter().any(|e| (e - 400.0).abs() < 1e-9));
+    assert!(m.grid.x_edges_mm.iter().any(|e| (e - 406.0).abs() < 1e-9));
+    // one cell across is not resolved, and the preview says so
+    assert!(!relay.is_resolved());
+    let un = m.preview().unresolved_bodies.unwrap();
+    assert_eq!(un, vec!["Device 8".to_string()]);
+    // its volume is its box
+    let vol = 6.0 * 90.0 * 60.0 * 1e-9;
+    assert!((m.material_volume_m3[3] - vol).abs() < vol * 1e-9);
+}

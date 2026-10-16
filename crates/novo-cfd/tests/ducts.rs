@@ -167,9 +167,9 @@ fn a_duct_is_open_to_flow_and_resists_across_the_slots_more_than_along() {
         open,
         porous.len()
     );
-    // the bottom layer of a duct stands on the plate; with five layers over
-    // the duct that is a fifth of its cells, hence 0.75 and not 0.8
-    assert!(open as f64 >= 0.75 * porous.len() as f64);
+    // the bottom layer of a duct stands on the plate: with five layers over
+    // the duct that is a fifth of its cells, so the share is exactly 0.8
+    assert!(open as f64 >= 0.8 * porous.len() as f64);
     assert!(porous.iter().all(|f| *f > 0.3), "duct cells must stay open");
 }
 

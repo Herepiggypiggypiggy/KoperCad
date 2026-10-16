@@ -4,7 +4,7 @@ use novo_thermal::Scenario;
 
 use super::regions::Region;
 use super::{MeshError, MeshSettings, THIN_MM, plan_grid_report};
-use crate::result::{Grid3, MaterialInfo};
+use crate::result::{Grid3, MaterialInfo, MaterialKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CellClass {
@@ -51,14 +51,16 @@ pub struct BodyResolution {
     pub material: u16,
     pub name: String,
     pub cells_across: [usize; 3],
-    /// Axes along which the body is a thin sheet (below `THIN_MM`).
+    /// Axes along which the body is a thin plate or rail (below `THIN_MM`),
+    /// which may live in cut cells. Any other thin body (a slim relay) is
+    /// not excused: it needs two cells like the rest.
     pub thin: [bool; 3],
 }
 
 impl BodyResolution {
-    /// At least two cells across every axis that is not a thin sheet: what a
-    /// temperature on the body's surface needs to mean something. A sheet
-    /// (the mounting plate) lives in cut cells unless `resolve_thin` is on.
+    /// At least two cells across every axis, except a thin plate or rail
+    /// axis: what a temperature on the body's surface needs to mean
+    /// something. The plate lives in cut cells unless `resolve_thin` is on.
     pub fn is_resolved(&self) -> bool {
         (0..3).all(|a| self.thin[a] || self.cells_across[a] >= 2)
     }
@@ -282,6 +284,9 @@ fn bodies(grid: &Grid3, regs: &[Region], materials: &[MaterialInfo]) -> Vec<Body
                     })
                     .count()
             };
+            let sheet_kind = materials.iter().any(|m| {
+                m.id == r.material && matches!(m.kind, MaterialKind::Plate | MaterialKind::Rail)
+            });
             BodyResolution {
                 material: r.material,
                 name: materials
@@ -289,7 +294,7 @@ fn bodies(grid: &Grid3, regs: &[Region], materials: &[MaterialInfo]) -> Vec<Body
                     .find(|m| m.id == r.material)
                     .map_or_else(String::new, |m| m.name.clone()),
                 cells_across: [across(0), across(1), across(2)],
-                thin: std::array::from_fn(|a| r.hi[a] - r.lo[a] < THIN_MM),
+                thin: std::array::from_fn(|a| sheet_kind && r.hi[a] - r.lo[a] < THIN_MM),
             }
         })
         .collect()

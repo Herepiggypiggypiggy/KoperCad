@@ -123,25 +123,21 @@ impl MeshSettings {
     }
 }
 
+/// The mounting plate and DIN rails are sheets that may live in cut cells.
+fn is_thin_sheet_kind(scn: &Scenario, material: u16) -> bool {
+    if material == 1 {
+        return true;
+    }
+    let idx = (material as usize).checked_sub(2 + scn.devices.len());
+    idx.and_then(|i| scn.obstacles.get(i))
+        .is_some_and(|o| o.kind == novo_thermal::ObstacleKind::Rail)
+}
+
 /// What the grid builder wants resolved, per axis: solid bodies and
 /// openings (`need` is lowered for thin sheets).
 fn spans(scn: &Scenario, regs: &[Region], need: usize, st: &MeshSettings) -> [Vec<Span>; 3] {
     let mut f: [Vec<Span>; 3] = Default::default();
     let first_obstacle = 2 + scn.devices.len();
-    let mut add = |a: usize, lo: f64, hi: f64, n: usize| {
-        let thin = hi - lo < st.thin_mm;
-        let (n, sheet) = match (thin, st.resolve_thin) {
-            (true, true) => (1, true),
-            (true, false) => (0, false),
-            _ => (n, false),
-        };
-        f[a].push(Span {
-            lo,
-            hi,
-            need: n,
-            sheet,
-        });
-    };
     for r in regs {
         // Devices get the full requirement. Ducts and rails are minor
         // obstacles (porous or low), one cell fewer; the plate's edges are
@@ -151,10 +147,42 @@ fn spans(scn: &Scenario, regs: &[Region], need: usize, st: &MeshSettings) -> [Ve
             m if m as usize >= first_obstacle => need.saturating_sub(1).max(1),
             _ => need,
         };
+        let carve_out = is_thin_sheet_kind(scn, r.material);
         for a in 0..3 {
-            add(a, r.lo[a], r.hi[a], n);
+            let thin = r.hi[a] - r.lo[a] < st.thin_mm;
+            f[a].push(match (thin, carve_out) {
+                // plate and rails: a cut-cell sheet unless asked for
+                (true, true) if !st.resolve_thin => Span {
+                    lo: r.lo[a],
+                    hi: r.hi[a],
+                    need: 0,
+                    sheet: false,
+                },
+                // any other thin body (a slim relay, a 6 mm terminal block)
+                // keeps its faces as planes and at least one cell
+                (true, _) => Span {
+                    lo: r.lo[a],
+                    hi: r.hi[a],
+                    need: 1,
+                    sheet: true,
+                },
+                _ => Span {
+                    lo: r.lo[a],
+                    hi: r.hi[a],
+                    need: n,
+                    sheet: false,
+                },
+            });
         }
     }
+    let mut add = |a: usize, lo: f64, hi: f64, n: usize| {
+        f[a].push(Span {
+            lo,
+            hi,
+            need: n,
+            sheet: false,
+        });
+    };
     let mut openings = |o: &novo_thermal::Opening| {
         for (a, pts) in regions::opening_spans(o).into_iter().enumerate() {
             if let Some((lo, hi)) = pts {
