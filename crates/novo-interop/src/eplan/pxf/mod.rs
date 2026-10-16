@@ -24,6 +24,7 @@ mod model;
 mod plan;
 mod read;
 mod stream;
+mod survey;
 mod text;
 
 use std::io::BufRead;
@@ -37,6 +38,7 @@ pub use model::{
     PxfTag, PxfText, SymbolRef, pair_interruptions, split_part_number,
 };
 pub use plan::{PxfOptions, PxfPlan, plan_pxf};
+pub use survey::{PxfSurvey, survey_pxf};
 pub use text::MlText;
 
 /// The PXF version the reader was written against.

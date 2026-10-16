@@ -929,6 +929,19 @@ fn import_eplan_previews_with_a_counted_not_carried_list_and_writes_nothing() {
 }
 
 #[test]
+fn eplan_survey_prints_names_and_shapes_but_no_values() {
+    let r = novo(&["eplan", "survey", s(&pxf_fixture())]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    assert!(r.out.contains("O17  x4"), "{}", r.out);
+    assert!(r.out.contains("A762"), "{}", r.out);
+    assert!(
+        !r.out.contains("DEMO") && !r.out.contains("Breaker"),
+        "{}",
+        r.out
+    );
+}
+
+#[test]
 fn import_eplan_output_writes_a_new_project_and_never_replaces_one() {
     let dir = tempfile::tempdir().unwrap();
     let pxf = pxf_fixture();
