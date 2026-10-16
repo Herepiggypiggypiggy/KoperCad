@@ -13,11 +13,11 @@
 .wrap{padding:16px;max-width:1500px}h2{font-size:12px;color:var(--muted);font-weight:600;margin:22px 0 6px;letter-spacing:.04em}
 .frame{background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden}
 .bar{display:flex;align-items:stretch;gap:0;padding:6px 10px;border-bottom:1px solid var(--border);background:var(--panel);min-height:56px}
-.grp{display:flex;flex-direction:column;justify-content:space-between;padding:0 12px;border-left:1px solid var(--border)}
+.grp{display:flex;flex-direction:column;justify-content:space-between;padding:0 10px;border-left:1px solid var(--border)}
 .grp:first-child{border-left:0;padding-left:0}
 .cap{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:3px}
 .row{display:flex;gap:4px;align-items:center}
-.btn{height:28px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border-radius:5px;border:1px solid transparent;background:transparent;color:var(--text);font:inherit;cursor:pointer;white-space:nowrap}
+.btn{height:28px;display:inline-flex;align-items:center;gap:6px;padding:0 8px;border-radius:5px;border:1px solid transparent;background:transparent;color:var(--text);font:inherit;cursor:pointer;white-space:nowrap}
 .btn:hover{background:var(--hover)}.btn.on{background:var(--wash);border-color:var(--accent);color:var(--text)}
 .btn.sec{background:var(--control)}.btn .i{width:16px;height:16px;display:inline-block;color:var(--muted)}
 .btn.on .i{color:var(--accent)}
@@ -28,7 +28,7 @@ kbd{font:11px ui-monospace,Consolas,monospace;background:rgba(0,0,0,.18);border-
 .btn:not(.primary) kbd{background:var(--control);color:var(--muted)}
 .seg{display:inline-flex;background:var(--control);border-radius:5px;padding:2px}.seg .btn{height:24px;border-radius:4px}
 .seg .btn.on{background:var(--raised);border-color:var(--border-strong)}
-.sel{height:28px;display:inline-flex;align-items:center;gap:8px;padding:0 10px;background:var(--control);border:1px solid var(--border-strong);border-radius:5px}
+.sel{white-space:nowrap;height:28px;display:inline-flex;align-items:center;gap:8px;padding:0 10px;background:var(--control);border:1px solid var(--border-strong);border-radius:5px}
 .pill{display:inline-flex;gap:6px;align-items:center;height:22px;padding:0 9px;border-radius:11px;font-size:12px;background:var(--control);color:var(--muted)}
 .pill.warn{background:color-mix(in srgb,var(--warn) 16%,var(--panel));color:var(--warn)}
 .pill.err{background:color-mix(in srgb,var(--err) 16%,var(--panel));color:var(--err)}
@@ -43,23 +43,25 @@ svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.6;stroke
 <div class="ctl"><button class="btn sec" onclick="var r=document.documentElement;r.dataset.theme=r.dataset.theme==='light'?'dark':'light'">Dark / light</button></div>
 <div class="wrap">
 <h1 style="font-size:18px;margin:0">Cabinet toolbar: proposal</h1>
-<p class="note">Same tokens as novo-theme. Controls 28 px, text 14 px, icons 16 px. One copper primary at a time. Group names are small caps above their buttons.</p>
+<p class="note">Same tokens as novo-theme. Controls 28 px (shortcuts for Table and Heat are in their tooltips, only Place all shows its key on the bar), text 14 px, icons 16 px. One copper primary at a time. Group names are small caps above their buttons.</p>
 
 <h2>1. Plate face, devices still unplaced (the state in the lesson)</h2>
 <div class="frame"><div class="bar">
  <div class="grp"><div class="cap">Panel</div><div class="row"><span class="sel">=A1 +CAB1 <svg viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg></span></div></div>
  <div class="grp"><div class="cap">Place</div><div class="row">
-  <button class="btn primary"><span class="i"><svg viewBox="0 0 16 16"><path d="M2 3h5v4H2zM9 3h5v4H9zM2 9h5v4H2z"/><path d="M11.5 9v4M9.5 11h4"/></svg></span>Place all <kbd>Shift+P</kbd></button>
+  <button class="btn primary"><span class="i"><svg viewBox="0 0 16 16"><path d="M2 3h5v4H2zM9 3h5v4H9zM2 9h5v4H2z"/><path d="M11.5 9v4M9.5 11h4"/></svg></span>Place all <kbd>Ctrl+Shift+P</kbd></button>
   <button class="btn"><span class="i"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h6"/></svg></span>Rules</button></div></div>
  <div class="grp"><div class="cap">Arrange</div><div class="row">
-  <button class="btn"><span class="i"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1"/></svg></span>Plate</button>
+  <button class="btn"><span class="i"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1"/></svg></span>Plate setup</button>
   <button class="btn"><span class="i"><svg viewBox="0 0 16 16"><path d="M2 14V2h12M5 14V5h9"/></svg></span>Size enclosure</button></div></div>
  <div class="grp"><div class="cap">Route</div><div class="row">
   <button class="btn"><span class="i"><svg viewBox="0 0 16 16"><path d="M2 12h4V4h8"/></svg></span>Route all</button>
-  <button class="btn"><span class="i"><svg viewBox="0 0 16 16"><path d="M2 5h12M2 11h12"/></svg></span>Rails and ducts</button></div></div>
+  <button class="btn"><span class="i"><svg viewBox="0 0 16 16"><path d="M2 5h12M2 11h12"/></svg></span>Rails and ducts</button>
+  <button class="btn"><span class="i"><svg viewBox="0 0 16 16"><path d="M2 5l4-3 8 0M2 5v9h12M5 8h6"/></svg></span>Cut list</button></div></div>
  <div class="grp"><div class="cap">View</div><div class="row">
-  <span class="seg"><button class="btn on">Plate</button><button class="btn">Table <kbd>Ctrl+T</kbd></button></span>
-  <button class="btn"><span class="i"><svg viewBox="0 0 16 16"><path d="M8 2c2 3 4 4 4 7a4 4 0 0 1-8 0c0-3 2-4 4-7z"/></svg></span>Heat <kbd>Shift+H</kbd></button></div></div>
+  <span class="seg"><button class="btn on">Plate</button><button class="btn">Table</button></span>
+  <button class="btn"><span class="i"><svg viewBox="0 0 16 16"><path d="M8 2c2 3 4 4 4 7a4 4 0 0 1-8 0c0-3 2-4 4-7z"/></svg></span>Heat</button>
+  <button class="btn"><span class="i"><svg viewBox="0 0 16 16"><rect x="3" y="2" width="10" height="12" rx="1"/><circle cx="10.5" cy="8" r=".8"/></svg></span>Door</button></div></div>
  <div class="sp"></div>
  <div class="grp"><div class="cap">Output</div><div class="row">
   <button class="btn"><span class="i"><svg viewBox="0 0 16 16"><path d="M4 2h6l3 3v9H4zM10 2v3h3"/></svg></span>Export <svg viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg></button></div></div>
@@ -79,20 +81,20 @@ svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.6;stroke
 <h2>3. Placed, with Heat on: a second strip carries the Heat controls (the main bar does not grow)</h2>
 <div class="frame"><div class="bar">
  <div class="grp"><div class="cap">Panel</div><div class="row"><span class="sel">=A1 +CAB1 ▾</span></div></div>
- <div class="grp"><div class="cap">Place</div><div class="row"><button class="btn sec dis">Place all <kbd>Shift+P</kbd></button><button class="btn">Rules</button></div></div>
- <div class="grp"><div class="cap">Arrange</div><div class="row"><button class="btn">Plate</button><button class="btn">Size enclosure</button></div></div>
- <div class="grp"><div class="cap">Route</div><div class="row"><button class="btn on">Route all</button><button class="btn">Rails and ducts</button></div></div>
- <div class="grp"><div class="cap">View</div><div class="row"><span class="seg"><button class="btn on">Plate</button><button class="btn">Table</button></span><button class="btn on">Heat</button></div></div>
+ <div class="grp"><div class="cap">Place</div><div class="row"><button class="btn sec dis">Place all <kbd>Ctrl+Shift+P</kbd></button><button class="btn">Rules</button></div></div>
+ <div class="grp"><div class="cap">Arrange</div><div class="row"><button class="btn">Plate setup</button><button class="btn">Size enclosure</button></div></div>
+ <div class="grp"><div class="cap">Route</div><div class="row"><button class="btn on">Route all</button><button class="btn">Rails and ducts</button><button class="btn">Cut list</button></div></div>
+ <div class="grp"><div class="cap">View</div><div class="row"><span class="seg"><button class="btn on">Plate</button><button class="btn">Table</button></span><button class="btn on">Heat</button><button class="btn">Door</button></div></div>
  <div class="sp"></div><div class="grp"><div class="cap">Output</div><div class="row"><button class="btn">Export ▾</button></div></div>
 </div>
 <div class="sub"><b style="color:var(--text)">Heat</b> <button class="btn on">Map</button><button class="btn">Contours</button><button class="btn">Airflow</button><button class="btn">Badges</button><span style="width:12px"></span><button class="btn sec">▶ Simulate</button><span class="pill">not validated</span><span class="sp"></span><span class="pill">5 placed</span><span class="pill err">2 problems ▾</span></div>
 <div class="plate">plate canvas</div></div>
 
-<h2>4. Narrow window (under 1100 px): labels shrink to icons with tooltips, secondary groups fold into More</h2>
+<h2>4. Narrow window (under 1100 px): labels never truncate; a group that does not fit folds whole into More</h2>
 <div class="frame" style="max-width:760px"><div class="bar">
  <div class="grp"><div class="cap">Panel</div><div class="row"><span class="sel">=A1 +CAB1 ▾</span></div></div>
- <div class="grp"><div class="cap">Place</div><div class="row"><button class="btn primary">Place all <kbd>Shift+P</kbd></button></div></div>
- <div class="grp"><div class="cap">Tools</div><div class="row"><button class="btn">Route all</button><button class="btn">Plate</button><span class="menu"><button class="btn sec">More ▾</button></span></div></div>
+ <div class="grp"><div class="cap">Place</div><div class="row"><button class="btn primary">Place all <kbd>Ctrl+Shift+P</kbd></button></div></div>
+ <div class="grp"><div class="cap">Route</div><div class="row"><button class="btn">Route all</button><span class="menu"><button class="btn sec">More ▾</button></span></div></div>
  <div class="sp"></div><div class="grp"><div class="cap">View</div><div class="row"><span class="seg"><button class="btn on">Plate</button><button class="btn">Table</button></span></div></div>
-</div><div class="plate" style="height:60px">More holds Arrange, Rails and ducts, Cut list, Rules, Export, Door</div></div>
+</div><div class="plate" style="height:60px">More holds Rules, Arrange (Plate setup, Size enclosure), Rails and ducts, Cut list, Heat, Door, Export</div></div>
 </div></body></html>

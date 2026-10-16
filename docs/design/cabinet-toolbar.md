@@ -22,9 +22,9 @@ each group with a small-caps caption above it (`text_tertiary`):
 | --- | --- | --- |
 | Panel | panel picker; Create cabinet and Set plate when the panel has none | left edge |
 | Place | **Place all** (primary), Rules | |
-| Arrange | Plate (size and fill), Size enclosure | |
+| Arrange | Plate setup (size and fill), Size enclosure | |
 | Route | Route all, Rails and ducts, Cut list | Rails and ducts arrives with #612 |
-| View | Plate / Table segmented switch, Heat toggle, Door | |
+| View | Plate / Table segmented switch (the face), Heat toggle, Door | |
 | Output | Export menu: Plate drawing (PDF), later DXF | right edge |
 
 A status strip below carries the counts as pills (`0 placed`, `5 unplaced`,
@@ -35,7 +35,7 @@ the toolbar, so the bar holds only things you press.
 
 - The only copper (`primary_button`) control on the bar. Icon, label, and the
   shortcut shown as a `kbd` chip. New command `cabinet.place-all`, default key
-  **Shift+P** (Cabinet workspace), searchable in the command field as
+  **Ctrl+Shift+P** (Anywhere in the Cabinet workspace; Shift+P is `view.toggle_marks`, so it is not used), searchable in the command field as
   "place all"; menu: Cabinet > Place all.
 - Label says what it does when it is cheap to know: "Place all" stays the
   name (the lessons and the command use it); the tooltip says "Place the 5
@@ -57,7 +57,8 @@ the toolbar, so the bar holds only things you press.
   Rules and Export fold into a **More** menu; Place all, Route all, the panel
   picker and the Plate/Table switch always stay. Labels never truncate: a
   group that does not fit folds whole.
-- Door and rarely used actions go into More from the start.
+- Door stays in View at wide widths and folds into More with its group. Order of folding, last to first: Output, View's Heat and Door, Route's Rails and ducts and Cut list, Arrange, Rules. Place all, Route all, the panel picker and the Plate/Table switch never fold.
+- One rule: labels are never shortened or turned into icon-only buttons; whole groups fold into More.
 
 ### Design system fit
 
@@ -79,7 +80,7 @@ only promises the bar is not the cause.)
 ## Where the user finds it
 
 Ctrl+2 (Cabinet), then the bar across the top of the plate. Place all is the
-copper button on the left of the bar, or Shift+P, or the command field.
+copper button on the left of the bar, or Ctrl+Shift+P, or the command field.
 
 ## Build plan (small PRs, in this order)
 
@@ -94,5 +95,5 @@ copper button on the left of the bar, or Shift+P, or the command field.
 
 ## Open questions for the reviewers
 
-- Shift+P as the key for Place all: any conflict in the keymap?
+- Ctrl+Shift+P as the key for Place all: any conflict in the keymap?
 - Group captions: keep always, or only above 1400 px?
