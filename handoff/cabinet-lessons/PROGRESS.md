@@ -2,3 +2,4 @@
 2026-10-15 19:45 UTC Generator example builds three cabinet states; wire list shows estimate, free air, routed as expected.
 2026-10-15 20:05 UTC Nine draft lessons and glossary rows written; lint of #479 gives no errors (anchor, signal and command warnings only).
 2026-10-16 UTC Rewrote cabinet-layout, rails-and-ducts and wire-routing to the teaching standard against main e2fa0013 (Dutch, wording, verified UI names and numbers). Place all is rules-based now and its ducts are not joined; wire-routing has its own sample. `how` and solve ops wait for the framework.
+2026-10-16 UTC Second batch: cut-lengths, door, heat, plate drawing, labels (CLI), view-3d, commissioning (Dutch, rewritten); audit findings folded in; waiting for #591 to merge before the PR.

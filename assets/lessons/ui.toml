@@ -89,10 +89,6 @@ text_nl = "Opnieuw doen"
 text = "Updated"
 text_nl = "Bijgewerkt"
 
-[early_access]
-text = "Early access"
-text_nl = "Vroege toegang"
-
 [coming_soon]
 text = "Coming soon"
 text_nl = "Binnenkort"
@@ -136,6 +132,14 @@ text_nl = "Les: {title}"
 [no_match]
 text = "No lesson matches. Try fewer words."
 text_nl = "Geen les gevonden. Probeer minder woorden."
+
+[early_access]
+text = "Early access"
+text_nl = "Vroege toegang"
+
+[show_drafts]
+text = "Show draft lessons"
+text_nl = "Conceptlessen tonen"
 
 [how_title]
 text = "How"

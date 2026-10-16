@@ -131,7 +131,7 @@ impl LearnState {
             hidden: false,
             window: false,
             filter: String::new(),
-            show_drafts: true,
+            show_drafts: false,
             confirm_restart: false,
             coming: None,
             anchors: BTreeMap::new(),
@@ -460,7 +460,7 @@ impl NovoApp {
                 Tool::Place(_) => "place",
                 Tool::Wire(_) => "wire",
                 Tool::Cable(_) => "cable",
-                Tool::Select | Tool::Move(_) => "select",
+                Tool::Select | Tool::Move(_) | Tool::Paste(_) => "select",
             }
             .to_owned();
             facts.selection = view

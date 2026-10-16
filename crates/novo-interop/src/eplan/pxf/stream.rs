@@ -60,12 +60,27 @@ impl<R: BufRead> Tokens<R> {
         Ok(n)
     }
 
-    /// Reads on until `done(buf)` holds or the file ends.
+    /// Reads on until the tag is complete or the file ends. Quotes and
+    /// brackets are counted on the new bytes only, so a hostile tag with
+    /// many `>` inside one quoted value costs linear time.
     fn read_tag(&mut self) -> Result<(), PxfError> {
         self.buf.clear();
+        let (mut scanned, mut quotes, mut open, mut close) = (0usize, 0usize, 0usize, 0usize);
         loop {
             let n = self.read_until(b'>')?;
-            if n == 0 || !self.unfinished() {
+            if n == 0 {
+                break;
+            }
+            for c in &self.buf[scanned..] {
+                match c {
+                    b'"' => quotes += 1,
+                    b'[' => open += 1,
+                    b']' => close += 1,
+                    _ => {}
+                }
+            }
+            scanned = self.buf.len();
+            if !self.unfinished(quotes, open > close) {
                 break;
             }
         }
@@ -75,7 +90,7 @@ impl<R: BufRead> Tokens<R> {
 
     /// Whether the bytes read so far stop inside a comment, CDATA section,
     /// DOCTYPE subset or quoted value, where a `>` does not end the tag.
-    fn unfinished(&self) -> bool {
+    fn unfinished(&self, quotes: usize, brackets_open: bool) -> bool {
         let b = &self.buf;
         if b.last() != Some(&b'>') {
             return false; // end of file: let the caller report it
@@ -87,11 +102,9 @@ impl<R: BufRead> Tokens<R> {
             return !b.ends_with(b"]]>");
         }
         if b.starts_with(b"!") {
-            let open = b.iter().filter(|c| **c == b'[').count();
-            let close = b.iter().filter(|c| **c == b']').count();
-            return open > close;
+            return brackets_open;
         }
-        b.iter().filter(|c| **c == b'"').count() % 2 == 1
+        quotes % 2 == 1
     }
 
     pub(crate) fn next_event(&mut self) -> Result<Option<Event>, PxfError> {
@@ -229,6 +242,19 @@ mod tests {
     fn doctype_with_subset_and_comments_are_skipped() {
         let ev = all("<!DOCTYPE a [<!ENTITY x \"y\">]><!-- a > b --><a/>");
         assert_eq!(ev.len(), 2);
+    }
+
+    #[test]
+    fn many_gt_inside_one_quoted_value_stay_linear() {
+        // 400 000 `>` in one value: quadratic rescanning would take minutes.
+        let doc = format!("<P a=\"{}\"/>", ">".repeat(400_000));
+        let t0 = std::time::Instant::now();
+        let ev = all(&doc);
+        assert!(t0.elapsed().as_secs() < 5);
+        let Event::Start { attrs, .. } = &ev[0] else {
+            panic!()
+        };
+        assert_eq!(attrs[0].1.len(), 400_000);
     }
 
     #[test]

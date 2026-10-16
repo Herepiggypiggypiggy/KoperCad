@@ -64,6 +64,8 @@ pub(super) struct CabinetState {
     pub(super) rules: cabinet_rules::RulesState,
     /// The Heat view over the plate.
     pub(super) heat: super::heat::HeatState,
+    /// The list for adding, moving, resizing and deleting rails and ducts.
+    pub(super) rails: super::cabinet_rails::RailsState,
 }
 
 /// A placed device being dragged across the plate.
@@ -99,6 +101,7 @@ impl CabinetState {
             routes_cache: Default::default(),
             rules: cabinet_rules::RulesState::new(),
             heat: super::heat::HeatState::new(),
+            rails: Default::default(),
         }
     }
 }
@@ -444,6 +447,8 @@ impl NovoApp {
         let has_plan = self.cabinet.preview.is_some();
 
         let mut ask: Option<Ask> = None;
+        let mut delete_rail: Option<u64> = None;
+        let mut move_rail: Option<super::cabinet_rails::RailDrag> = None;
         ui.horizontal(|ui| {
             ui.add_space(8.0);
             let current = location
@@ -543,6 +548,13 @@ impl NovoApp {
                     .clicked()
                 {
                     self.cabinet.rules.cut_open ^= true;
+                }
+                if ui
+                    .selectable_label(self.cabinet.rails.open, "Rails and ducts")
+                    .on_hover_text("Add, move, resize and delete rails and ducts (Ctrl+Shift+R)")
+                    .clicked()
+                {
+                    self.cabinet.rails.open ^= true;
                 }
                 ui.weak(format!("{placed} placed, {unplaced} unplaced"));
                 let label = format!(
@@ -717,6 +729,7 @@ impl NovoApp {
                         ambient: self.sizing.request().ambient_max,
                         items,
                         solution: self.cabinet.heat.solution(),
+                        kept: self.cabinet.heat.kept(),
                     }
                 });
                 if self.cabinet.heat.take_request() {
@@ -767,6 +780,36 @@ impl NovoApp {
                         rect,
                         &self.cabinet.view.viewport,
                         overlay,
+                    );
+                }
+                if let Some(s) = structure {
+                    let rect = out.response.rect;
+                    let zoom = f64::from(self.cabinet.view.viewport.zoom.max(0.01));
+                    super::cabinet_rails::draw_grips(
+                        &ui.painter_at(rect),
+                        rect,
+                        &self.cabinet.view.viewport,
+                        project,
+                        s,
+                        (self.cabinet.rails.hover, self.cabinet.rails.selected),
+                        (14.0 / zoom).max(8.0),
+                    );
+                }
+                if let Some(rail) = self.cabinet.rails.selected {
+                    let rect = out.response.rect;
+                    let moved = self
+                        .cabinet
+                        .rails
+                        .drag
+                        .filter(|d| d.id == rail)
+                        .map(|d| d.at);
+                    super::cabinet_rails::draw_selected(
+                        &ui.painter_at(rect),
+                        rect,
+                        &self.cabinet.view.viewport,
+                        project,
+                        rail,
+                        moved,
                     );
                 }
                 if let Some(input) = &heat_input {
@@ -862,16 +905,107 @@ impl NovoApp {
                             .viewport
                             .screen_to_world(vec2(press.x - rect.min.x, press.y - rect.min.y));
                         let (wx, wy) = (f64::from(world.x), f64::from(world.y));
-                        if let Some(p) = layout.placements.iter().rev().find(|p| {
-                            let f = p.footprint();
-                            wx >= f.x && wx <= f.right() && wy >= f.y && wy <= f.bottom()
-                        }) {
+                        let zoom = f64::from(self.cabinet.view.viewport.zoom.max(0.01));
+                        let on_grip = structure.is_some_and(|s| {
+                            super::cabinet_rails::pick_grip(
+                                project,
+                                s,
+                                wx,
+                                wy,
+                                3.0 / zoom,
+                                (14.0 / zoom).max(8.0),
+                            )
+                            .is_some()
+                        });
+                        if !on_grip
+                            && let Some(p) = layout.placements.iter().rev().find(|p| {
+                                let f = p.footprint();
+                                wx >= f.x && wx <= f.right() && wy >= f.y && wy <= f.bottom()
+                            })
+                        {
                             let f = p.footprint();
                             self.cabinet.drag = Some(Drag {
                                 id: p.id,
                                 grab: vec2(world.x - f.x as f32, world.y - f.y as f32),
                                 at: (f.x, f.y),
                             });
+                        }
+                    }
+                    // A rail or duct is picked by a click on it, away from the
+                    // devices, and dragged to move it.
+                    if let Some(s) = structure {
+                        let rect = out.response.rect;
+                        let to_world = |p: egui::Pos2| {
+                            let w = self
+                                .cabinet
+                                .view
+                                .viewport
+                                .screen_to_world(vec2(p.x - rect.min.x, p.y - rect.min.y));
+                            (f64::from(w.x), f64::from(w.y))
+                        };
+                        let on_device = |(wx, wy): (f64, f64)| {
+                            layout.placements.iter().any(|p| {
+                                let f = p.footprint();
+                                wx >= f.x && wx <= f.right() && wy >= f.y && wy <= f.bottom()
+                            })
+                        };
+                        let zoom = f64::from(self.cabinet.view.viewport.zoom.max(0.01));
+                        let slack = 3.0 / zoom;
+                        let grip = (14.0 / zoom).max(8.0);
+                        // A grip wins over the devices on its rail; the rail
+                        // itself only where no device is.
+                        let pick_at = |w: (f64, f64)| {
+                            super::cabinet_rails::pick_grip(project, s, w.0, w.1, slack, grip)
+                                .or_else(|| {
+                                    if on_device(w) {
+                                        None
+                                    } else {
+                                        super::cabinet_rails::pick(project, s, w.0, w.1, slack)
+                                    }
+                                })
+                        };
+                        self.cabinet.rails.hover = if self.cabinet.drag.is_some() {
+                            None
+                        } else {
+                            out.response.hover_pos().and_then(|p| pick_at(to_world(p)))
+                        };
+                        if self.cabinet.rails.drag.is_some() {
+                            ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+                        } else if self.cabinet.rails.hover.is_some() {
+                            ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+                        }
+                        if out.response.clicked_by(egui::PointerButton::Primary)
+                            && let Some(p) = out.response.interact_pointer_pos()
+                        {
+                            self.cabinet.rails.selected = pick_at(to_world(p));
+                        }
+                        if self.cabinet.drag.is_none()
+                            && out.response.drag_started_by(egui::PointerButton::Primary)
+                            && let Some(press) = press
+                        {
+                            let w = to_world(press);
+                            if let Some(id) = pick_at(w)
+                                && let Some(r) =
+                                    project.get::<novo_core::Rail>(novo_core::RailId::from(id))
+                            {
+                                self.cabinet.rails.selected = Some(id);
+                                self.cabinet.rails.drag = Some(super::cabinet_rails::RailDrag {
+                                    id,
+                                    grab: (w.0 - r.x, w.1 - r.y),
+                                    at: (r.x, r.y),
+                                });
+                            }
+                        }
+                        if let (Some(d), Some(at)) =
+                            (self.cabinet.rails.drag.as_mut(), out.cursor_raw)
+                        {
+                            d.at = layout
+                                .snapped(f64::from(at.x) - d.grab.0, f64::from(at.y) - d.grab.1);
+                        }
+                        if out.response.drag_stopped()
+                            && let Some(d) = self.cabinet.rails.drag.take()
+                        {
+                            move_rail = Some(d);
                         }
                     }
                     if let (Some(d), Some(at)) = (self.cabinet.drag.as_mut(), out.cursor_raw) {
@@ -884,7 +1018,57 @@ impl NovoApp {
                     {
                         ask = Some(Ask::Drop(d.id, d.at.0, d.at.1));
                     }
-                    // Rotate and delete act on the selected devices.
+                    // Arrow keys nudge the selected rail or duct by a grid
+                    // step (1 mm with Shift) when no device is selected and
+                    // no text field has the keys.
+                    if self.cabinet.rails.drag.is_none()
+                        && self.cabinet_selected().is_empty()
+                        && !ui.ctx().egui_wants_keyboard_input()
+                        && let Some(id) = self.cabinet.rails.deletable(project)
+                        && let Some(r) = project.get::<novo_core::Rail>(novo_core::RailId::from(id))
+                    {
+                        // Plain Up and Down are the schematic's strip keys, so
+                        // the app hands them over as commands.
+                        let from_keys = |name: &str| {
+                            f64::from(self.cabinet.keys.iter().filter(|k| *k == name).count() as i32)
+                        };
+                        let (up, down) = (
+                            from_keys("terminal.strip_up"),
+                            from_keys("terminal.strip_down"),
+                        );
+                        let (dx, dy, fine) = ui.input(|i| {
+                            let key = |k| i.key_pressed(k);
+                            (
+                                f64::from(
+                                    i32::from(key(egui::Key::ArrowRight))
+                                        - i32::from(key(egui::Key::ArrowLeft)),
+                                ),
+                                f64::from(
+                                    i32::from(key(egui::Key::ArrowDown))
+                                        - i32::from(key(egui::Key::ArrowUp)),
+                                ) + down
+                                    - up,
+                                i.modifiers.shift
+                                    || i.events.iter().any(|e| {
+                                        matches!(e, egui::Event::Key { pressed: true, modifiers, .. } if modifiers.shift)
+                                    }),
+                            )
+                        });
+                        if dx != 0.0 || dy != 0.0 {
+                            let step = if fine || layout.grid <= 0.0 {
+                                1.0
+                            } else {
+                                layout.grid
+                            };
+                            move_rail = Some(super::cabinet_rails::RailDrag {
+                                id,
+                                grab: (0.0, 0.0),
+                                at: (r.x + dx * step, r.y + dy * step),
+                            });
+                        }
+                    }
+                    // Rotate and delete act on the selected devices, and
+                    // Delete on the selected rail when no device is.
                     let selected = self.cabinet_selected();
                     for key in std::mem::take(&mut self.cabinet.keys) {
                         match key.as_str() {
@@ -893,6 +1077,9 @@ impl NovoApp {
                             }
                             "edit.delete" if !selected.is_empty() => {
                                 ask = Some(Ask::Remove(selected.clone()));
+                            }
+                            "edit.delete" => {
+                                delete_rail = self.cabinet.rails.deletable(project);
                             }
                             _ => {}
                         }
@@ -929,8 +1116,24 @@ impl NovoApp {
             ask = Some(a);
         }
 
+        let mut rail_ask = super::cabinet_rails::show_window(
+            ui.ctx(),
+            &mut self.cabinet.rails,
+            project,
+            structure,
+        );
+
+        if let Some(id) = delete_rail {
+            rail_ask = Some(super::cabinet_rails::RailAsk::Delete(id));
+        }
+        if let Some(d) = move_rail {
+            rail_ask = Some(super::cabinet_rails::RailAsk::MoveTo(d.id, d.at.0, d.at.1));
+        }
         if let Some(ask) = ask {
             self.cabinet_ask(ask, structure, layout, &cands);
+        }
+        if let Some(rail_ask) = rail_ask {
+            self.cabinet_rail_ask(structure, rail_ask);
         }
     }
 
@@ -951,6 +1154,7 @@ impl NovoApp {
             Ask::ToggleTable => self.cabinet.table ^= true,
             Ask::TogglePlateCard => self.cabinet.plate_card ^= true,
             Ask::ExportPlate => {
+                self.learn_command("export.plate");
                 self.export_plate_pdf();
             }
             Ask::ToggleRoutes => self.cabinet.routes ^= true,
@@ -1114,7 +1318,7 @@ impl NovoApp {
     }
 
     /// Runs an edit of the model from the Cabinet canvas as one undo step.
-    fn cabinet_edit(
+    pub(super) fn cabinet_edit(
         &mut self,
         label: &str,
         edit: impl FnOnce(&mut novo_core::Tx<'_>) -> novo_core::Result<()>,

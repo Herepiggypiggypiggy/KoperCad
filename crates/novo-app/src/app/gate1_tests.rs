@@ -55,7 +55,7 @@ impl Drive {
         self.frame_with(Vec::new());
     }
 
-    fn key(&mut self, key: egui::Key, modifiers: egui::Modifiers) {
+    pub(super) fn key(&mut self, key: egui::Key, modifiers: egui::Modifiers) {
         self.frame_with(vec![egui::Event::Key {
             key,
             physical_key: None,

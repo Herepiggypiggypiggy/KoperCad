@@ -1,10 +1,12 @@
 format = 1
 id = "potentials"
 version = 1
-status = "draft"
+status = "early"
 title = "Potentials and feeds"
+title_nl = "Potentialen en voedingen"
 summary = "Give a motor feeder its supply with a row of feeds and an earth."
-track = "basics"
+summary_nl = "Geef een motorgroep zijn voeding met een rij voedingen en een aarde."
+track = "start"
 order = 30
 level = "beginner"
 minutes = 6
@@ -18,58 +20,172 @@ page = "Motor feeder"
 [[step]]
 id = "intro"
 title = "A drawing with no supply"
+title_nl = "Een tekening zonder voeding"
 text = """
-The breaker, the contactor and the motor are wired, but nothing says where the power comes from.
-A {tip:potential} is a named supply such as **L1**. A {tip:feed} puts it on the page.
+The breaker **-Q1**, the contactor **-K1** and the motor **-M1** are wired to each other, but nothing says where the power comes from.
+A {tip:potential} is a named supply such as **L1**. A {tip:feed} puts a potential on the page so wires can connect to it. Once the supply is drawn as feeds, every wire knows its potential, and reports and checks can use it.
 """
-point = { area = { page = "Motor feeder", x = 60, y = 16, w = 50, h = 110 } }
+text_nl = """
+De motorbeveiliging **-Q1**, de contactor **-K1** en de motor **-M1** zijn met elkaar verbonden, maar nergens staat waar de stroom vandaan komt.
+Een {tip:potential} is een benoemde voeding zoals **L1**. Een {tip:feed} zet een potentiaal op de pagina zodat draden eraan kunnen verbinden. Zodra de voeding als feeds getekend is, kent elke draad zijn potentiaal en kunnen rapporten en controles hem gebruiken.
+"""
+point = { area = { page = "Motor feeder", x = 60, y = 16, w = 50, h = 130 } }
 pause = true
 
 [[step]]
 id = "feed-from-wheel"
-title = "Open the feed menu"
+title = "Pick the feed from the wheel"
+title_nl = "Kies de feed uit het wiel"
 text = """
-Hold {key:tool.place}, choose **Points**, then **Feed**. A feed hangs on your pointer.
+Feeds live in the **Points** group of the wheel, next to earth and other connection points.
 """
-point = { ui = "wheel" }
+text_nl = """
+Feeds staan in de groep **Points** van het wiel, naast aarde en andere aansluitpunten.
+"""
+how = [
+  "Hold {key:tool.place} to open the wheel.",
+  "Move toward **Points**, then toward **Feed**. (Or tap {key:tool.place}, type **feed** and press Enter.)",
+  "Release the key. A feed hangs on your pointer.",
+]
+how_nl = [
+  "Houd {key:tool.place} ingedrukt om het wiel te openen.",
+  "Beweeg naar **Points** en dan naar **Feed**. (Of tik op {key:tool.place}, typ **feed** en druk op Enter.)",
+  "Laat de toets los. Een feed hangt aan je aanwijzer.",
+]
+demo = [
+  { hold = "tool.place", secs = 1.5 },
+  { say = "Move onto Points, then onto Feed, and let go of the key over it.", say_nl = "Beweeg naar Points en dan naar Feed, en laat de toets los erboven." },
+]
+point = { ui = "dock.place" }
 expect = { tool = "place" }
+solve = [ { command = "tool.place", arg = "feed" }, { key = "Enter" } ]
 
 [[step]]
 id = "row"
 title = "Drag a row of three feeds"
+title_nl = "Sleep een rij van drie feeds"
 text = """
-Drag across the three top pins of the breaker **-Q1**. The dock shows **Row x3, pitch 8 mm**.
-Release to drop three feeds, named **L1**, **L2** and **L3**.
+A three-phase motor needs three supplies side by side, one per pole. Dragging places a whole row at once, at the spacing of the poles, and names them **L1**, **L2** and **L3** in order.
 """
+text_nl = """
+Een driefasenmotor heeft drie voedingen naast elkaar nodig, één per pool. Slepen plaatst een hele rij in één keer, op de poolafstand, en noemt ze in volgorde **L1**, **L2** en **L3**.
+"""
+how = [
+  "With the feed on your pointer, press and hold the mouse button just above the left top pin of **-Q1**.",
+  "Drag to the right, to just above its right top pin. The dock shows **Row ×3 · pitch 8 mm**.",
+  "Release above the right pole. Three feeds land above the three poles, each wired down to its pole.",
+  "Press {key:edit.escape} to put the feed down.",
+]
+how_nl = [
+  "Houd met de feed aan je aanwijzer de muisknop ingedrukt, net boven de linker bovenste pen van **-Q1**.",
+  "Sleep naar rechts, tot net boven de rechter bovenste pen. Het dock toont **Row ×3 · pitch 8 mm**.",
+  "Laat los boven de rechter pool. Drie feeds landen boven de drie polen, elk met een draad omlaag naar zijn pool.",
+  "Druk op {key:edit.escape} om de feed los te laten.",
+]
+demo = [
+  { drag = { from = { at = { page = "Motor feeder", x = 80, y = 30 } }, to = { at = { page = "Motor feeder", x = 96, y = 30 } } } },
+  { say = "The dock shows Row ×3 · pitch 8 mm. Three feeds land, named L1, L2 and L3.", say_nl = "Het dock toont Row ×3 · pitch 8 mm. Drie feeds landen, met de namen L1, L2 en L3." },
+  { press = "edit.escape" },
+]
 point = { at = { device = "-Q1", pin = "1" } }
-note = [ { at = { device = "-Q1", pin = "5" }, text = "Release here" } ]
+note = [ { at = { device = "-Q1", pin = "5" }, text = "Release above this pole" } ]
 expect = { count = { kind = "feed", page = "Motor feeder", at_least = 3 } }
 solve = [ { feed_row = { names = ["L1", "L2", "L3"], page = "Motor feeder", x = 80, y = 20 } } ]
 
 [[step]]
 id = "earth-feed"
 title = "Add one more feed above the motor earth"
+title_nl = "Voeg nog een feed toe boven de motoraarde"
 text = """
-Place a fourth feed just above the earth pin of the motor **-M1**. It is named **L4** for now.
+The motor casing has to be earthed, and that is a fourth supply. You place it like the others, and name it in the next step.
 """
+text_nl = """
+De motorbehuizing moet geaard worden, en dat is een vierde voeding. Je plaatst hem zoals de andere en geeft hem in de volgende stap zijn naam.
+"""
+how = [
+  "Hold {key:tool.place}, choose **Points**, then **Feed**, and release the key.",
+  "Click just to the right of the motor, above the **PE** pin of **-M1**. The feed is named **L4** because the next free line number is 4.",
+  "Press {key:edit.escape} to put the feed down.",
+]
+how_nl = [
+  "Houd {key:tool.place} ingedrukt, kies **Points** en dan **Feed**, en laat de toets los.",
+  "Klik net rechts van de motor, boven de **PE**-pen van **-M1**. De feed heet **L4** omdat het eerstvolgende vrije lijnnummer 4 is.",
+  "Druk op {key:edit.escape} om de feed los te laten.",
+]
+demo = [
+  { hold = "tool.place", secs = 1.5 },
+  { say = "Choose Points, then Feed.", say_nl = "Kies Points en dan Feed." },
+  { move = { at = { page = "Motor feeder", x = 104, y = 92 } } },
+  { click = true },
+  { say = "The feed is named L4 for now.", say_nl = "De feed heet voorlopig L4." },
+  { press = "edit.escape" },
+]
 point = { at = { device = "-M1", pin = "PE" } }
 expect = { count = { kind = "feed", page = "Motor feeder", at_least = 4 } }
+solve = [ { place = { symbol = "iec/connectivity/potential_feed", page = "Motor feeder", x = 104, y = 92 } } ]
 
 [[step]]
 id = "make-earth"
 title = "Make it the earth"
+title_nl = "Maak er de aarde van"
 text = """
-Right-click the new feed and choose **PE** from the potential chips.
-The symbol changes to the protective earth.
+A feed takes the name and kind of the potential you give it. The **PE** chip turns it into the protective earth, with the earth symbol.
 """
+text_nl = """
+Een feed neemt de naam en soort over van de potentiaal die je hem geeft. De **PE**-chip maakt er de beschermende aarde van, met het aardsymbool.
+"""
+how = [
+  "Right-click the new feed (the one named L4). A menu opens with the potentials as chips.",
+  "Click the **PE** chip. The feed changes to the earth symbol and the name PE.",
+]
+how_nl = [
+  "Klik met de rechtermuisknop op de nieuwe feed (die met de naam L4). Er opent een menu met de potentialen als chips.",
+  "Klik op de chip **PE**. De feed verandert in het aardsymbool met de naam PE.",
+]
+demo = [
+  { move = { at = { feed = "L4" } } },
+  { right_click = true },
+  { say = "Click the PE chip in the menu.", say_nl = "Klik op de chip PE in het menu." },
+]
 point = { at = { feed = "L4" } }
 expect = { potential_kind = { kind = "protective_earth", page = "Motor feeder" } }
 
 [[step]]
 id = "where-it-goes"
 title = "See where a potential goes"
+title_nl = "Zie waar een potentiaal heen gaat"
 text = """
-Select **L1** and use **Show where it goes**. Every pin on that potential lights up.
+On a busy page you want to know what a supply reaches. This lights up every wire and pin carrying it, so you can check the drawing at a glance.
 """
+text_nl = """
+Op een drukke pagina wil je weten wat een voeding bereikt. Dit verlicht elke draad en pen die hem voert, zodat je de tekening in één oogopslag controleert.
+"""
+how = [
+  "Right-click the top-left feed (**L1**).",
+  "Choose **Show where it goes** in the menu. Every wire and pin on the L1 potential lights up.",
+]
+how_nl = [
+  "Klik met de rechtermuisknop op de linker bovenste feed (**L1**).",
+  "Kies **Show where it goes** in het menu. Elke draad en pen op de potentiaal L1 licht op.",
+]
+demo = [
+  { move = { at = { feed = "L1" } } },
+  { right_click = true },
+  { say = "Choose Show where it goes.", say_nl = "Kies Show where it goes." },
+]
 point = { at = { feed = "L1" } }
+pause = true
+
+[[step]]
+id = "done"
+title = "What you have now"
+title_nl = "Wat je nu hebt"
+text = """
+Above the breaker **-Q1** there are three feeds, **L1**, **L2** and **L3**, each wired down to one pole. To the right of the motor a fourth feed, **PE**, is wired to the motor's earth pin and shows the earth symbol.
+Every wire in the drawing now carries a potential, and the next lesson builds on this to draw a whole motor starter.
+"""
+text_nl = """
+Boven de motorbeveiliging **-Q1** staan drie feeds, **L1**, **L2** en **L3**, elk met een draad omlaag naar één pool. Rechts van de motor staat een vierde feed, **PE**, verbonden met de aardpen van de motor en met het aardsymbool.
+Elke draad in de tekening draagt nu een potentiaal, en de volgende les bouwt hierop voort om een complete motorstarter te tekenen.
+"""
 pause = true

@@ -19,10 +19,7 @@ const TOL: f64 = 1.0;
 
 /// Steps whose `solve` the editor cannot carry out today, each with the
 /// reason. A step that starts working must come off this list.
-const KNOWN_BROKEN: &[(&str, &str)] = &[(
-    "blocks-and-macros/select-circuit",
-    "`edit.select_all` (Ctrl+A) is a registered command with no handler",
-)];
+const KNOWN_BROKEN: &[(&str, &str)] = &[];
 
 /// What happened to one step.
 #[derive(Debug, Clone, PartialEq)]

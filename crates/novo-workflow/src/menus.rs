@@ -56,9 +56,12 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.import_dxf_background", under("File", "Import")),
     ("file.remove_background", under("File", "Import")),
     ("file.import_aml", under("File", "Import")),
+    ("file.import_eplan", under("File", "Import")),
     ("file.import_dwg", under("File", "Import")),
     ("file.choose_dwg_converter", under("File", "Import")),
+    ("file.eplan_export_script", under("File", "Import")),
     ("help.walkthrough", at("Help")),
+    ("help.show_hints", at("Help")),
     ("help.about", at("Help")),
     ("view.shortcuts", at("Help")),
     // Edit
@@ -83,7 +86,9 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     // View
     ("view.schematic", under("View", "Workspace")),
     ("view.cabinet", under("View", "Workspace")),
+    ("view.3d", under("View", "Workspace")),
     ("view.cabinet_table", under("View", "Workspace")),
+    ("cabinet.rails", under("View", "Workspace")),
     ("view.terminals_drawer", under("View", "Panels")),
     ("view.cables_drawer", under("View", "Panels")),
     ("view.devices_drawer", under("View", "Panels")),
@@ -98,6 +103,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("report.wires", at("Reports")),
     ("report.terminals", at("Reports")),
     ("report.cables", at("Reports")),
+    ("report.cutlist", at("Reports")),
+    ("report.labels", at("Reports")),
 ];
 
 /// Commands that are a key or a pointer gesture and have no menu row.

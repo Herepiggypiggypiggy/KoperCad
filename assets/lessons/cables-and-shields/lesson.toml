@@ -3,7 +3,7 @@
 format = 1
 id = "cables-and-shields"
 version = 1
-status = "draft"   # GAPs below: no screen control yet for a cable's part, length and shield
+status = "early"   # GAPs below: no screen control yet for a cable's part, length and shield
 title = "Cables and Shields"
 title_nl = "Kabels en schermen"
 summary = "Turn the wires that leave the cabinet into cables, read their cores, and see where a part and a shield go."

@@ -7,6 +7,8 @@ use eframe::egui;
 use novo_core::{AnyId, CableId, Project, natural_cmp};
 use novo_xref::Place;
 
+use super::cable_controls::{CableAction, CableEdit, cable_controls};
+use super::part_picker::{Candidate, cable_candidates};
 use super::terminals::strip_table;
 use super::workbench::{DRAWER_SHARE, Drawer};
 use super::{Level, NovoApp};
@@ -15,6 +17,8 @@ use super::{Level, NovoApp};
 enum DrawerAction {
     Go(Place),
     ShowCable(CableId),
+    /// A change from the cable controls, for this cable.
+    Cable(CableId, CableAction),
     AcceptCables,
     Tab(Drawer),
     Close,
@@ -43,6 +47,12 @@ impl NovoApp {
         let height = (ui.ctx().content_rect().height() * DRAWER_SHARE).max(120.0);
         let selected = self.selection();
         let strip = self.drawer_strip();
+        if tab == Drawer::Cables
+            && self.wb.cable_edit.picker.open
+            && let Some(problem) = self.wb.part_catalog.ensure()
+        {
+            self.message(Level::Error, problem);
+        }
         let Some(project) = self.backend.document().map(|d| d.project()) else {
             return;
         };
@@ -120,7 +130,20 @@ impl NovoApp {
                         }
                     },
                     Drawer::Cables => {
-                        cables_tab(ui, project, self.wb.drawer_cable, proposed, &mut actions);
+                        let candidates = match self.wb.part_catalog.get() {
+                            Some(catalog) if self.wb.cable_edit.picker.open => {
+                                cable_candidates(catalog, &self.wb.cable_edit.picker.query)
+                            }
+                            _ => Vec::new(),
+                        };
+                        cables_tab(
+                            ui,
+                            project,
+                            self.wb.drawer_cable,
+                            proposed,
+                            (&mut self.wb.cable_edit, &candidates),
+                            &mut actions,
+                        );
                     }
                     Drawer::Devices => {
                         let rows = device_rows(project, &selected);
@@ -144,6 +167,7 @@ impl NovoApp {
             match action {
                 DrawerAction::Go(place) => self.jump(place, true),
                 DrawerAction::ShowCable(cable) => self.wb.drawer_cable = Some(cable),
+                DrawerAction::Cable(cable, action) => self.cable_action(cable, action),
                 DrawerAction::AcceptCables => self.accept_cable_proposals(),
                 DrawerAction::Tab(t) => self.wb.drawer = Some(t),
                 DrawerAction::Close => self.wb.drawer = None,
@@ -207,6 +231,7 @@ fn cables_tab(
     project: &Project,
     picked: Option<CableId>,
     proposed: usize,
+    (edit, candidates): (&mut CableEdit, &[Candidate]),
     actions: &mut Vec<DrawerAction>,
 ) {
     let overview = novo_cables::overview(project);
@@ -249,6 +274,9 @@ fn cables_tab(
                     ui.strong(&screen.tag);
                     ui.weak(&screen.type_name);
                 });
+                let mut changes = Vec::new();
+                cable_controls(ui, project, shown, edit, candidates, &mut changes);
+                actions.extend(changes.into_iter().map(|a| DrawerAction::Cable(shown, a)));
                 egui::Grid::new("cable_cores")
                     .striped(true)
                     .num_columns(4)

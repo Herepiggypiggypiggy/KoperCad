@@ -1,7 +1,7 @@
 format = 1
 id = "interruption-points"
 version = 1
-status = "draft"   # GAP: check kinds and anchors are missing, see NOTES.md
+status = "early"   # GAP: check kinds and anchors are missing, see NOTES.md
 title = "Signals across pages"
 title_nl = "Signalen over pagina's"
 summary = "Continue a signal from one page to the next with an interruption point, jump between the two ends, number them, and read the contact references under a coil."
@@ -97,7 +97,7 @@ Druk op {key:tool.place}, typ **ip** en druk op Enter. Klik nog niet.
 """
 point = { ui = "palette.field" }
 expect = { command = "tool.place" }
-solve = [ { command = "tool.place", arg = "ip" } ]
+solve = [ { command = "tool.place", arg = "ip" }, { key = "Enter" } ]
 # verified: same as the first point; `tool.place` with an argument opens the field filled
 #   (workbench.rs:448).
 
