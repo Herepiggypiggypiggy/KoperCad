@@ -12,7 +12,14 @@
 //! Honest limits: wall functions assume attached, near-equilibrium
 //! boundary layers; SST and k-epsilon are steady RANS closures and do not
 //! resolve transition, strong separation or unsteady plumes; convection of
-//! `k` and `omega` is first-order upwind. See `docs/thermal-validation.md`.
+//! `k` and `omega` is first-order upwind. In natural convection the wall
+//! functions (made for forced flow) only work when the wall cells resolve the
+//! boundary layer: with a first cell thicker than the layer both models
+//! under-predict the wall heat flux by about half (measured, see
+//! `tests/turb_plate.rs`). Use resolved wall cells there.
+//! See `docs/thermal-validation.md`.
+//!
+//! [`TurbulentFlow`] couples a model to the flow core through its hooks.
 //!
 //! Where the user finds it: Cabinet view, Heat layer, Simulate, turbulence
 //! model in the solver options (lane CFD-F wires it); `turb_visc_ratio` is
@@ -22,10 +29,12 @@
 // obscure them.
 #![allow(clippy::needless_range_loop)]
 
+mod coupling;
 mod mesh;
 mod transport;
 mod wall;
 
+pub use coupling::{TurbulentFlow, grid_of};
 pub use mesh::{FaceKind, TurbMesh, WallFace};
 pub use wall::{WallCell, friction_velocity, thermal_t_plus, wall_quantities};
 
