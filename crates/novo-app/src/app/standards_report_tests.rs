@@ -44,3 +44,30 @@ fn a_selected_standard_gives_a_pdf_and_a_web_page() {
     assert!(text.contains("UL 508A"));
     assert!(text.contains("does not certify"));
 }
+
+#[test]
+fn the_notice_has_its_own_section_and_no_cell_is_cut() {
+    let (_dir, mut d) = example();
+    assert!(d.app.edit_project("Select standards", |tx| {
+        standards::select(tx, &StandardSet::ALL)
+    }));
+    let project = d.app.backend.document().unwrap().project();
+    let doc = standards::document::build(project, &standards::compliance(project));
+    let report = super::standards_report::report_output(&doc);
+    let notice = report.section("notice").expect("notice section");
+    assert_eq!(notice.columns.len(), 1);
+    assert!(notice.rows.len() >= 2);
+    let planning = report
+        .sections
+        .iter()
+        .flat_map(|s| &s.rows)
+        .any(|r| r.cells[0].to_string() == "planning value");
+    assert!(
+        !planning
+            || report
+                .sections
+                .iter()
+                .flat_map(|s| &s.rows)
+                .all(|r| r.cells[0].to_string() != "planning")
+    );
+}

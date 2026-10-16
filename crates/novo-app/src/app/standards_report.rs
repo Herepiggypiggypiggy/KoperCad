@@ -50,9 +50,9 @@ pub(super) fn wrap(text: &str, width: usize) -> Vec<String> {
 
 /// Characters per line of the four wrapped columns of a requirement table,
 /// for A4 landscape at the report text size.
-const W_REQ: usize = 38;
-const W_EVIDENCE: usize = 66;
-const W_FIX: usize = 48;
+const W_REQ: usize = 42;
+const W_EVIDENCE: usize = 74;
+const W_FIX: usize = 52;
 
 fn evidence_lines(r: &document::Requirement) -> Vec<String> {
     let mut out = Vec::new();
@@ -121,18 +121,32 @@ pub(super) fn report_output(doc: &ComplianceDocument) -> ReportOutput {
             Vec::new(),
         );
     }
-    for line in wrap(doc.notice, 140) {
-        summary.push(vec![Cell::text(line)], Vec::new());
-    }
     sections.push(summary);
+    let mut notice = Section::new(
+        "notice",
+        "What this report is",
+        vec![Column::new("text", "Notice", 1.0)],
+    );
+    for line in wrap(doc.notice, 150) {
+        notice.push(vec![Cell::text(line)], Vec::new());
+    }
+    for s in &doc.sections {
+        let line = format!(
+            "{}: clause pointers refer to {}.",
+            s.set.short(),
+            s.set.edition()
+        );
+        notice.push(vec![Cell::text(line)], Vec::new());
+    }
+    sections.push(notice);
     for s in &doc.sections {
         let mut t = Section::new(
             s.set.id(),
-            &format!("{}: {} ({})", s.set.short(), s.set.title(), s.set.edition()),
+            s.set.short(),
             vec![
-                Column::new("result", "Result", 11.0),
+                Column::new("result", "Result", 14.0),
                 Column::new("clause", "Clause", 7.0),
-                Column::new("requirement", "Requirement", 28.0),
+                Column::new("requirement", "Requirement", 27.0),
                 Column::new("evidence", "Evidence and findings", 48.0),
                 Column::new("fix", "Where to fix", 36.0),
             ],
@@ -142,8 +156,7 @@ pub(super) fn report_output(doc: &ComplianceDocument) -> ReportOutput {
             if r.rests_on_planning_values()
                 && matches!(r.verdict, Verdict::Pass | Verdict::Fail | Verdict::Partial)
             {
-                verdict.push("planning".to_owned());
-                verdict.push("value".to_owned());
+                verdict.push("planning value".to_owned());
             }
             let mut req = wrap(r.title, W_REQ);
             req.extend(wrap(r.requirement, W_REQ));
@@ -184,7 +197,7 @@ pub(super) fn report_output(doc: &ComplianceDocument) -> ReportOutput {
     }
     let mut basis = Section::new(
         "basis",
-        "Basis of the numbers (not checked against the licensed standard)",
+        "Basis of the numbers",
         vec![
             Column::new("kind", "Kind", 10.0),
             Column::new("what", "What", 55.0),
@@ -252,7 +265,7 @@ pub(super) fn report_output(doc: &ComplianceDocument) -> ReportOutput {
     sections.push(signoff);
     ReportOutput {
         report: "standards".into(),
-        title: format!("Standards compliance report: {}", doc.project_name),
+        title: format!("Standards: {}", doc.project_name),
         revision: 0,
         sections,
     }
