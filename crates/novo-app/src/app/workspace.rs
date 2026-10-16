@@ -266,6 +266,14 @@ impl NovoApp {
             if response.clicked() {
                 picked = Some(workspace);
             }
+            let (anchor, name) = match workspace {
+                Workspace::Schematic => ("switcher.schematic", "Schematic chip"),
+                Workspace::Cabinet => ("switcher.cabinet", "Cabinet chip"),
+                Workspace::View3d => ("switcher.view3d", "3D chip"),
+                Workspace::Reports => ("switcher.reports", "Reports chip"),
+                Workspace::Commissioning => ("switcher.commissioning", "Commissioning chip"),
+            };
+            self.anchor(anchor, response.rect, name);
             if let Some(reason) = reason {
                 response.on_disabled_hover_text(reason);
             } else if short {
