@@ -226,6 +226,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
 
     // Cores go to their cable by tag, in core-number order.
     let mut orphan_cores = 0usize;
+    let mut cores_of_existing = 0usize;
     let mut core_numbers: BTreeMap<usize, Vec<String>> = BTreeMap::new();
     for c in &file.cores {
         match cable_at.get(&canonical(&c.cable.full())) {
@@ -236,6 +237,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
                     list.push(n);
                 }
             }
+            None if have_device.contains(&canonical(&c.cable.full())) => cores_of_existing += 1,
             None => orphan_cores += 1,
         }
     }
@@ -300,6 +302,11 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
         orphan_cores,
         "the core names a cable that is not in the file",
     );
+    if cores_of_existing > 0 {
+        report.note(format!(
+            "{cores_of_existing} cable cores belong to cables that already exist and were skipped."
+        ));
+    }
     if repeats > 0 {
         report.note(format!(
             "{repeats} repeated drawings of the same tag became one device each."
