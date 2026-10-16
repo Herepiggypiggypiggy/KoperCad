@@ -14,24 +14,30 @@ use std::path::{Path, PathBuf};
 use novo_checks::Summary;
 
 use super::{Level, NovoApp, projects_dir};
+use crate::settings::PdfChoice;
 
 impl NovoApp {
     /// Exports every page to the project's PDF (see the module notes).
     pub(super) fn export_pdf(&mut self) -> Option<PathBuf> {
+        let path = self.pdf_path()?;
+        self.export_pdf_to(&path)
+    }
+
+    /// Where the PDF of every page goes (see the module notes).
+    pub(super) fn pdf_path(&mut self) -> Option<PathBuf> {
         let name = self.project_name()?;
         // An untitled project's file is a temporary one; it has no name yet.
         let file = self.backend.file().filter(|_| !self.backend.is_untitled());
-        let path = match file {
-            Some(file) => replaceable_path(&file.with_extension("pdf")),
+        match file {
+            Some(file) => Some(replaceable_path(&file.with_extension("pdf"))),
             None => {
                 let Some(dir) = projects_dir() else {
                     self.message(Level::Error, "Could not find the Documents folder");
                     return None;
                 };
-                free_path(&dir, &name)
+                Some(free_path(&dir, &name))
             }
-        };
-        self.export_pdf_to(&path)
+        }
     }
 
     /// Exports only the page on screen, to `<project> page <name>.pdf` next
@@ -75,15 +81,45 @@ impl NovoApp {
         path: &Path,
         pages: novo_pdf::PageSet,
     ) -> Option<PathBuf> {
+        self.export_pdf_choice_to(path, pages, &PdfChoice::default())
+    }
+
+    /// Exports `pages` to `path` the way `choice` says (everything but its
+    /// page selection, which the caller has turned into `pages`).
+    pub fn export_pdf_choice_to(
+        &mut self,
+        path: &Path,
+        pages: novo_pdf::PageSet,
+        choice: &PdfChoice,
+    ) -> Option<PathBuf> {
         let summary = Summary::of(self.problems());
         let replaced = path.exists();
         let options = novo_pdf::PdfOptions {
             pages,
-            notes: self.xref_notes_by_page(),
-            title_revisions: self.all_title_revisions(),
-            changed_pages: self.pages_changed_since_latest(),
-            appendix: self.checks_appendix(),
-            ..Default::default()
+            style: super::pdf_options::style_of(choice),
+            bookmarks: choice.bookmarks,
+            links: choice.links,
+            title: Some(choice.title.trim().to_owned()).filter(|t| !t.is_empty()),
+            notes: if choice.xref_notes {
+                self.xref_notes_by_page()
+            } else {
+                Default::default()
+            },
+            title_revisions: if choice.title_revisions {
+                self.all_title_revisions()
+            } else {
+                Default::default()
+            },
+            changed_pages: if choice.changed_marks {
+                self.pages_changed_since_latest()
+            } else {
+                Default::default()
+            },
+            appendix: if choice.checks_appendix {
+                self.checks_appendix()
+            } else {
+                None
+            },
         };
         let doc = self.backend.document()?;
         let art = self

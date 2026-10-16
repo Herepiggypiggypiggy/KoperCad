@@ -184,6 +184,8 @@ pub(crate) struct Workbench {
     pub(super) background_panel: Option<Option<super::background_panel::Placement>>,
     /// The Bench output window (cut list, ferrules, labels), while open.
     pub(super) bench: Option<super::bench::BenchState>,
+    /// The PDF options dialog (File > Export drawings > Export PDF...), while open.
+    pub(super) pdf_options: Option<super::pdf_options::PdfOptionsState>,
     /// The Report designer window, while open.
     pub(super) designer: Option<super::designer::DesignerState>,
     pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
@@ -293,6 +295,7 @@ impl Default for Workbench {
             changes: None,
             background_panel: None,
             bench: None,
+            pdf_options: None,
             designer: None,
             commissioning: None,
             underlay_seen: None,
@@ -384,6 +387,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "export.pdf_options",
     "export.change_report",
     "export.commissioning",
     "export.standards_report",
@@ -1003,6 +1007,7 @@ impl NovoApp {
             "export.pdf" => {
                 self.export_pdf();
             }
+            "export.pdf_options" => self.open_pdf_options(),
             "export.change_report" => {
                 self.export_change_report();
             }
