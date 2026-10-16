@@ -140,6 +140,9 @@ mod view3d_heat;
 mod view3d_move;
 #[cfg(test)]
 mod view3d_move_tests;
+mod view3d_rail;
+#[cfg(test)]
+mod view3d_rail_tests;
 mod view3d_stats;
 #[cfg(test)]
 mod view3d_tests;
