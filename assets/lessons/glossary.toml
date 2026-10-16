@@ -30,6 +30,12 @@ text = "One conductor inside a cable, named by number or colour."
 [term.proposal]
 text = "A wire KoperCAD suggests between two facing pins. Tab jumps to the next one and Enter accepts it."
 
+[term.problem]
+text = "Something a design check found: an error, a warning or an info. Checks read the drawing and never block saving or exporting."
+
+[term.macro]
+text = "A circuit saved once in your own library, so you can place it on any page of any project."
+
 [term.mounting-plate]
 text = "The metal or insulating plate inside the cabinet that the devices are screwed or clipped to. Sizes are in millimetres from its top left corner."
 text_nl = "De montageplaat in de kast waarop de componenten worden bevestigd. Maten in millimeters vanaf de linkerbovenhoek."

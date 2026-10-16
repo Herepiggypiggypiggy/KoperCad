@@ -1,0 +1,58 @@
+format = 1
+id = "dxf-and-backgrounds"
+version = 1
+# Draft until File > Export DXF and the DXF background (PR #385) are on main.
+status = "draft"
+title = "Hand over DXF and trace a floor plan"
+summary = "Export pages as DXF for the workshop and place a DXF drawing behind a page."
+track = "productivity"
+order = 60
+level = "intermediate"
+minutes = 7
+topics = ["dxf", "export", "import", "background"]
+needs = []
+next = ["time-savers"]
+project = "project.json"
+page = "Main circuit"
+
+[[step]]
+id = "why-dxf"
+title = "Why DXF"
+text = "DXF is the common language of CAD tools. The workshop's cutting machine and the architect's floor plan both speak it."
+
+[[step]]
+id = "open-export"
+title = "Find Export DXF"
+text = "Open the project menu, then **Export DXF**. You can export the page you are on or every page."
+point = { ui = ["menu.project", "menu.project.export_dxf"] }
+expect = { command = "export.dxf" }
+
+[[step]]
+id = "all-pages"
+title = "Export every page"
+text = "Choose all pages. KoperCAD writes one file per page in a folder named after the project, beside the project file. Running it again replaces only files it wrote itself."
+point = { ui = "menu.project.export_dxf" }
+
+[[step]]
+id = "background"
+title = "Put a DXF behind a page"
+text = "On the page, open the project menu, then **DXF background > Import DXF...**. Pick a drawing, such as the floor plan of the machine hall."
+point = { ui = ["menu.project", "menu.project.dxf_background"] }
+expect = { command = "dxf.background_import" }
+
+[[step]]
+id = "trace"
+title = "Draw over it"
+text = "The background is pale and never selectable, so it cannot be moved by accident. Place symbols and wire on top as usual, using it as a guide."
+
+[[step]]
+id = "remove"
+title = "Take it away again"
+text = "**Remove DXF background** in the same menu. It is one undo step, and the page keeps everything you drew."
+point = { ui = "menu.project.dxf_background" }
+expect = { command = "dxf.background_remove" }
+
+[[step]]
+id = "done"
+title = "DXF in, DXF out"
+text = "You can hand pages to the workshop and draw over a plan you were given."

@@ -1,0 +1,83 @@
+format = 1
+id = "spreadsheets"
+version = 1
+# Draft until Export spreadsheet (PR #430) and the import dialog (PR #433) are on main.
+status = "draft"
+title = "Edit two hundred devices in Excel"
+summary = "Export the project to a spreadsheet, change it there, preview the import and apply it as one undo step."
+track = "productivity"
+order = 40
+level = "intermediate"
+minutes = 9
+topics = ["spreadsheet", "excel", "export", "import"]
+needs = ["parts-library"]
+next = ["revisions-and-compare"]
+project = "project.json"
+finished = "finished.json"
+page = "Main circuit"
+
+[[step]]
+id = "see-descriptions"
+title = "See why you would want this"
+text = "Every device here has a one word description: Fuse, Contactor, Button. Fixing seven by hand is fine. Seven hundred is when a spreadsheet pays off."
+point = { ui = "outline.devices" }
+
+[[step]]
+id = "export"
+title = "Export the spreadsheet"
+text = "Press {key:view.command_palette}, type **export spreadsheet** and pick the **.xlsx** entry. One sheet each for devices, terminals, wires and cables."
+point = { ui = "palette.field" }
+expect = { command = "export.sheets" }
+solve = [ { command = "export.sheets" } ]
+
+[[step]]
+id = "edit-outside"
+title = "Change it in Excel"
+text = """
+Open the file in Excel and rewrite a few descriptions on the **Devices** sheet, such as **Pump 1 contactor**.
+Leave the grey columns alone: they only show where a row belongs.
+"""
+
+[[step]]
+id = "ids"
+title = "Why rows are matched by Id"
+text = "Rows are matched by the **Id** column, not the tag, so renaming a tag in the sheet changes the tag instead of making a new device. Rows are never added or deleted by an import."
+
+[[step]]
+id = "import"
+title = "Import the file"
+text = "Run **import spreadsheet** from the command field and pick the saved file. Nothing changes yet: a preview opens first."
+point = { ui = "palette.field" }
+expect = { command = "import.spreadsheet" }
+solve = [ { command = "import.spreadsheet" } ]
+
+[[step]]
+id = "preview"
+title = "Read the preview"
+text = "Each row shows the value now and the value in the sheet. Rows KoperCAD could not use are listed with the row number and the reason, never silently skipped."
+point = { ui = "import.preview" }
+
+[[step]]
+id = "conflict"
+title = "Settle a clash"
+text = "If you changed the same field in the project after exporting, the row is a **conflict** and starts unticked. Choose **Take the sheet** or **Keep the project**."
+point = { ui = "import.conflicts" }
+
+[[step]]
+id = "apply"
+title = "Apply it"
+text = "Press the apply button. The whole import is one undo step."
+point = { ui = "import.apply" }
+expect = { field = { device = "-K1", name = "description", equals = "Pump 1 contactor" } }
+
+[[step]]
+id = "undo"
+title = "Take it back"
+text = "Press {key:edit.undo}. All the descriptions return at once. Press {key:edit.redo} to have them again."
+expect = { command = "edit.undo" }
+solve = [ { command = "edit.undo" } ]
+
+[[step]]
+id = "done"
+title = "Bulk edits without fear"
+text = "Export, edit, preview, apply, undo if needed. Next: revisions."

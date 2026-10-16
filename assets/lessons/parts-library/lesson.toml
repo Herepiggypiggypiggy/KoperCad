@@ -1,0 +1,80 @@
+format = 1
+id = "parts-library"
+version = 1
+status = "draft"
+title = "Find a part and import it in one click"
+summary = "Search the parts library, import a maker's part and assign it to a device."
+track = "productivity"
+order = 30
+level = "beginner"
+minutes = 7
+topics = ["parts", "library", "import"]
+needs = ["design-checks"]
+next = ["spreadsheets"]
+project = "project.json"
+finished = "finished.json"
+page = "Main circuit"
+
+[[step]]
+id = "see-gap"
+title = "See what is missing"
+text = "The contactor **-K1** and the overload relay **-F2** have no part, so they are missing from the bill of materials. The issue pill counts them as infos."
+point = { at = { device = "-K1" } }
+
+[[step]]
+id = "open-parts"
+title = "Open the Parts library"
+text = "Press {key:view.command_palette}, type **parts** and press Enter. The window lists every part you have, with a search field on top."
+point = { ui = "palette.field" }
+expect = { command = "parts.browser" }
+solve = [ { command = "parts.browser" } ]
+
+[[step]]
+id = "search"
+title = "Search by order number"
+text = "Type **3RT2016** in the search field. It matches order numbers, types and descriptions, as you type."
+point = { ui = "parts.search" }
+expect = { clicked = "parts.search" }
+
+[[step]]
+id = "one-click-import"
+title = "Import with one click"
+text = "A part you do not have yet shows an **Import** button. Click it: KoperCAD opens the maker's page, you save the file there, and the file is picked up from your Downloads folder."
+point = { ui = "parts.import" }
+note = [
+  { ui = "parts.import", text = "Some makers need a login; you stay in charge of that page. KoperCAD never stores your login." },
+]
+expect = { clicked = "parts.import" }
+
+[[step]]
+id = "confirm"
+title = "Check and confirm"
+text = "The strip under the list shows what was found. Press **Import it**, or **Not this one**. The part is then marked **In library**."
+point = { ui = "parts.confirm" }
+expect = { clicked = "parts.confirm" }
+
+[[step]]
+id = "select-k1"
+title = "Select the contactor"
+text = "Close the window and select **-K1** on the main circuit."
+point = { at = { device = "-K1" } }
+expect = { selected = "-K1" }
+solve = [ { select = "-K1" } ]
+
+[[step]]
+id = "assign"
+title = "Assign the part"
+text = "In the inspector, pick the part you just imported. The device now carries manufacturer and order number everywhere."
+point = { ui = "inspector.part" }
+expect = { field = { device = "-K1", name = "part", is_set = true } }
+
+[[step]]
+id = "drop-in"
+title = "Or drop a file on the window"
+text = "A file you already downloaded, such as a ZIP from the maker, can be dropped on the Parts window. Select a part first so it knows which one it belongs to."
+point = { ui = "parts.window" }
+
+[[step]]
+id = "done"
+title = "Parts in, bill of materials complete"
+text = "Next time you need a part, search first, import second. Next: spreadsheets, to edit many devices at once."

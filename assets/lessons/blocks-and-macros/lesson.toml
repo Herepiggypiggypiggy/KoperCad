@@ -1,0 +1,81 @@
+format = 1
+id = "blocks-and-macros"
+version = 1
+# Draft until the macro browser (PR #455) and the Save macro command are on main.
+status = "draft"
+title = "Save a circuit once, place it anywhere"
+summary = "Turn a motor starter into a macro, place it on another page and share it as a file."
+track = "productivity"
+order = 20
+level = "intermediate"
+minutes = 8
+topics = ["macro", "block", "library", "share"]
+needs = ["design-checks"]
+next = ["spreadsheets"]
+project = "project.json"
+finished = "finished.json"
+page = "Motor 1"
+
+[[step]]
+id = "select-circuit"
+title = "Select the starter"
+text = "Page **Motor 1** has a breaker, a contactor and an overload relay, wired in a chain. Select all of it with {key:edit.select_all}."
+point = { area = { page = "Motor 1", x = 30, y = 30, w = 40, h = 100 } }
+expect = { selected_count = 3 }
+solve = [ { command = "edit.select_all" } ]
+
+[[step]]
+id = "save-macro"
+title = "Save it as a macro"
+text = "Press {key:macro.save} and name it **dol-starter**. A {tip:macro} keeps the devices, the wires between them and their layout, not their tags."
+point = { ui = "mark.menu.save_macro" }
+expect = { command = "macro.save" }
+solve = [ { command = "macro.save", arg = "dol-starter" } ]
+
+[[step]]
+id = "open-browser"
+title = "Open the macro library"
+text = "Press {key:macro.browser}. Your macros live in a folder in your profile, one file each, so no admin rights and nothing in the cloud."
+point = { ui = "macro.browser" }
+expect = { opened = "macro.browser" }
+solve = [ { command = "macro.browser" } ]
+
+[[step]]
+id = "go-page"
+title = "Go to the empty page"
+text = "Open page **Motor 2** from the outline. That is where the second motor goes."
+point = { ui = "outline.page.motor-2" }
+expect = { page = "Motor 2" }
+solve = [ { page = "Motor 2" } ]
+
+[[step]]
+id = "preview"
+title = "Place it and read the preview"
+text = "Pick **dol-starter** and place it. A ghost follows the pointer and a line says which tags it will take. Click to drop it."
+point = { ui = "macro.place" }
+expect = { count = { kind = "symbol", page = "Motor 2", at_least = 3 } }
+
+[[step]]
+id = "tags"
+title = "See the new tags"
+text = "The three devices took the next free numbers, so the first motor's tags did not repeat. Select the new contactor to see it."
+expect = { count = { kind = "device", at_least = 6 } }
+
+[[step]]
+id = "export"
+title = "Share the file"
+text = "In the library, select **dol-starter** and press **Export...**. The result is one **.kcmacro** file you can mail or keep in a shared folder."
+point = { ui = "macro.export" }
+expect = { command = "macro.export" }
+
+[[step]]
+id = "import"
+title = "Take in a colleague's macro"
+text = "**Import...** reads a **.kcmacro** file into your library. A file that fails its checks is refused whole, with the reason."
+point = { ui = "macro.import" }
+expect = { command = "macro.import" }
+
+[[step]]
+id = "done"
+title = "Your library grows with you"
+text = "Save the circuits you draw twice, place them in seconds. Next: spreadsheets."

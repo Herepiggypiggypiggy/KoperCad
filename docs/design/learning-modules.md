@@ -411,7 +411,7 @@ owns its list.
 | **Schematic basics and motor control** (`basics`) | `tour` (screen tour: dock, outline, inspector, pill, Ctrl+K, `?`), `fast-keys` (the #428 steps as a lesson), `first-schematic` (build the control circuit of the motor starter from `@blank`), `wiring-modes`, `proposals-and-tags`, `duplicate-and-numbering`, `pages-and-functions`, `cross-references`, `potentials`, `motor-starter`, `save-and-share` |
 | **Terminals, PLC and documentation** (`terminals`) | `terminal-strips`, `connection-screens`, `cables-and-shields`, `plc-io`, `generated-pages`, `wire-list-and-bom`, `pdf-export` |
 | **Cabinet layout and panel building** (`cabinet`) | `cabinet-layout`, `enclosure-sizing`, `wire-routing`, `view-3d`, `panel-plate-drawing`, `commissioning` |
-| **Productivity, checks and data** (`productivity`) | `design-checks`, `blocks-and-macros`, `spreadsheets`, `revisions-and-compare`, `live-view`, `import-dxf-and-parts`, `parts-library` |
+| **Productivity, checks and data** (`productivity`) | `design-checks`, `parts-library`, `blocks-and-macros`, `spreadsheets`, `revisions-and-compare`, `dxf-and-backgrounds`, `time-savers` (settings: Auto connections, keymap file, drawing standard). `commissioning` is written by this thread but listed under `cabinet`. `live-view` is left to the simulation owner |
 
 Each lesson starts as `draft` until the control it teaches has an anchor on main, then flips to
 `ready` in its own PR.
