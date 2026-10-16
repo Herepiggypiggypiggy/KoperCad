@@ -30,6 +30,7 @@ mod heat_run_tests;
 mod inspector;
 mod interop;
 mod learn;
+mod learn_demo;
 mod learn_ui;
 mod link;
 mod live;
