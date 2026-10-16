@@ -142,6 +142,10 @@ pub struct FlowSolver {
     conv_scale: Vec<f64>,
     /// Heating per cell, K/s (from the config and the medium).
     q_cell: Vec<f64>,
+    /// Quadratic drag per cell and axis, 1/m (porous cells), if any.
+    drag_cell: Option<[Vec<f64>; 3]>,
+    /// Drag rate `F |u|` on each velocity face, 1/s (lagged one step).
+    drag_rate: [Vec<f64>; 3],
 }
 
 impl FlowSolver {
@@ -190,6 +194,13 @@ impl FlowSolver {
             }
             kf
         });
+        let drag_cell = cfg
+            .medium
+            .as_ref()
+            .filter(|md| md.has_drag())
+            .map(|md| md.drag.clone());
+        let drag_rate =
+            std::array::from_fn(|c| vec![0.0; if drag_cell.is_some() { mesh.len(c) } else { 0 }]);
         let pressure = PressureSolver::with_openness(&mesh, Some(&open.afrac));
         let t_in = cfg
             .openings
@@ -207,6 +218,8 @@ impl FlowSolver {
             k_face,
             conv_scale,
             q_cell,
+            drag_cell,
+            drag_rate,
             vel,
             p: vec![0.0; cells],
             t: vec![t_init; cells],
@@ -295,6 +308,7 @@ impl FlowSolver {
     pub fn step(&mut self, dt: f64) -> StepInfo {
         let old_t = self.t.clone();
         let old_vel = self.vel.clone();
+        self.update_drag_rate();
         self.advance_temperature(dt);
         // In a closed box a uniform temperature offset is a pure pressure
         // gradient, so the Boussinesq term uses the volume mean as reference.
@@ -449,7 +463,7 @@ impl FlowSolver {
                             continue;
                         }
                         let id = m.idx(c, ix);
-                        let (mut a_sum, mut a_nb) = (0.0, 0.0);
+                        let (mut a_sum, mut a_nb) = (self.drag_rate_at(c, id), 0.0);
                         for b in 0..3 {
                             let s = ix[b];
                             if b == c {
@@ -501,6 +515,21 @@ impl FlowSolver {
     // ---- pressure projection -------------------------------------------
 
     fn project(&mut self, dt: f64) -> usize {
+        // Porous drag acts inside the projection: the velocity correction of
+        // a face is dt / (1 + dt d) times the pressure gradient, so a steady
+        // state balances the drag exactly, however large dt d is.
+        let porous = self.drag_cell.is_some();
+        if porous {
+            let m = &self.mesh;
+            let coupling: [Vec<f64>; 3] = std::array::from_fn(|a| {
+                self.open.afrac[a]
+                    .iter()
+                    .zip(&self.drag_rate[a])
+                    .map(|(af, d)| af / (1.0 + dt * d))
+                    .collect()
+            });
+            self.pressure.set_coupling(m, &coupling);
+        }
         self.set_open_faces(dt);
         let m = &self.mesh;
         let af = &self.open.afrac;
@@ -531,14 +560,51 @@ impl FlowSolver {
                         }
                         let lo = with(ix, a, ix[a] - 1);
                         let dist = m.centre[a][ix[a]] - m.centre[a][ix[a] - 1];
+                        let g = if porous {
+                            1.0 / (1.0 + dt * self.drag_rate[a][m.idx(a, ix)])
+                        } else {
+                            1.0
+                        };
                         self.vel[a][m.idx(a, ix)] -=
-                            dt * (self.p[m.cell(ix)] - self.p[m.cell(lo)]) / dist;
+                            g * dt * (self.p[m.cell(ix)] - self.p[m.cell(lo)]) / dist;
                     }
                 }
             }
         }
         self.finish_open_faces(dt);
         iters
+    }
+
+    // ---- porous drag -------------------------------------------------
+
+    fn drag_rate_at(&self, c: usize, id: usize) -> f64 {
+        self.drag_rate[c].get(id).copied().unwrap_or(0.0)
+    }
+
+    /// `F |u|` on every interior face from the cells either side.
+    fn update_drag_rate(&mut self) {
+        let Some(f) = &self.drag_cell else {
+            return;
+        };
+        let m = &self.mesh;
+        for c in 0..3 {
+            let d = m.dims(c);
+            for k in 0..d[2] {
+                for j in 0..d[1] {
+                    for i in 0..d[0] {
+                        let ix = [i, j, k];
+                        let id = m.idx(c, ix);
+                        self.drag_rate[c][id] = if ix[c] == 0 || ix[c] == m.n[c] {
+                            0.0
+                        } else {
+                            let lo = m.cell(with(ix, c, ix[c] - 1));
+                            let hi = m.cell(ix);
+                            0.5 * (f[c][lo] + f[c][hi]) * self.vel[c][id].abs()
+                        };
+                    }
+                }
+            }
+        }
     }
 
     // ---- openings --------------------------------------------------------
