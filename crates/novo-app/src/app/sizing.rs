@@ -112,7 +112,7 @@ impl SizingState {
     }
 
     /// Reads the list file once, when the panel is first shown.
-    fn ensure_loaded(&mut self) {
+    pub(super) fn ensure_loaded(&mut self) {
         if self.loaded {
             return;
         }
@@ -138,7 +138,7 @@ impl SizingState {
         }
     }
 
-    fn request(&self) -> SizingRequest {
+    pub(super) fn request(&self) -> SizingRequest {
         SizingRequest {
             free_space: (self.free_space / 100.0).clamp(0.0, 0.9),
             duct_allowance: (self.duct / 100.0).clamp(0.0, 0.9),

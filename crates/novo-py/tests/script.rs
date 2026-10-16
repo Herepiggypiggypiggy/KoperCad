@@ -350,3 +350,52 @@ fn dol_bom_exports_to_excel() -> Result<(), ScriptError> {
     ));
     p.close()
 }
+
+#[test]
+fn revisions_and_compare_read_the_kept_snapshots() {
+    use novo_core::{Device, Document};
+    use novo_revisions::{IndexRule, issue_revision};
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("revised.novo");
+    let mut doc = Document::default();
+    let (k1, _) = doc
+        .transact("Draw", |tx| {
+            tx.add_page("1")?;
+            tx.add_device(DeviceTag::parse("-K1").unwrap(), "Relay")
+        })
+        .unwrap();
+    let mut session = Session::create(&path, doc.project()).unwrap();
+    let rule = IndexRule::Letters;
+    issue_revision(&mut doc, &mut session, rule, "2026-10-15", "TV", "First").unwrap();
+    let (_, changes) = doc
+        .transact("Edit", |tx| {
+            tx.update::<Device>(k1, |d| d.description = "Pump relay".into())
+        })
+        .unwrap();
+    session.record(&changes);
+    session.save(doc.project()).unwrap();
+    session.close().unwrap();
+
+    let project = ScriptProject::open(&path).unwrap();
+    let revisions = project.revisions();
+    assert_eq!(revisions[0]["index"], "A");
+    assert_eq!(revisions[0]["snapshot"], true);
+
+    let diff = project.compare("A", "now").unwrap();
+    assert_eq!(diff["rows"][0]["label"], "Device -K1");
+    assert_eq!(diff["rows"][0]["group"], "device");
+    assert_eq!(diff["rows"][0]["fields"][0]["old"], "Relay");
+    assert_eq!(diff["rows"][0]["fields"][0]["new"], "Pump relay");
+
+    assert!(matches!(
+        project.compare("Q", "now"),
+        Err(ScriptError::UnknownRevision(_))
+    ));
+    // A project with no file has no kept copies.
+    let unsaved = ScriptProject::new("Scratch");
+    assert!(matches!(
+        unsaved.compare("A", "now"),
+        Err(ScriptError::UnknownRevision(_))
+    ));
+}

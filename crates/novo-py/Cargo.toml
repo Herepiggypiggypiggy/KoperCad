@@ -20,6 +20,7 @@ novo-core.workspace = true
 novo-storage.workspace = true
 novo-symbols.workspace = true
 novo-reports.workspace = true
+novo-revisions.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

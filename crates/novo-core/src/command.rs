@@ -120,6 +120,10 @@ pub enum Command {
         author: String,
         #[serde(default)]
         description: String,
+        /// A longer note on why; kept as the revision's `note` property
+        /// when it is not blank (see [`crate::Revision::note`]).
+        #[serde(default)]
+        note: String,
     },
     /// Freezes a page as issued; see [`Tx::freeze_page`].
     FreezePage {
@@ -687,9 +691,14 @@ impl Tx<'_> {
                 date,
                 author,
                 description,
-            } => self
-                .issue_revision(index, date, author, description)?
-                .into(),
+                note,
+            } => {
+                let revision = self.issue_revision(index, date, author, description)?;
+                if !note.trim().is_empty() {
+                    self.set_property(revision, "note", Some(Value::Text(note)))?;
+                }
+                revision.into()
+            }
             Command::FreezePage { page, revision } => {
                 self.freeze_page(page, revision)?;
                 return Ok(Vec::new());

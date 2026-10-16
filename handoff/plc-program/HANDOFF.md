@@ -1,0 +1,2 @@
+# PLC program interpreter: handoff (2026-10-15)
+PR #546, branch claude/project-thread-y0xgvw. Engine in crates/novo-sim/src/program (ST + ladder), app window in crates/novo-app/src/app/plc_run.rs (Live view > PLC program..., command sim.plc_program). Review fixes: parser nesting and expression-size limits, wrapping arithmetic, edge-contact and `**-1` fixes. Waiting on reviewer READY and CI; after READY do not push. Program is not stored in the project file (needs WS-02).

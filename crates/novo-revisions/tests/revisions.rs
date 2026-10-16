@@ -30,6 +30,7 @@ fn the_next_index() {
         date: "2026-10-15".into(),
         author: "TV".into(),
         description: "First issue".into(),
+        note: String::new(),
     })
     .unwrap();
     assert_eq!(rule.next(doc.project()).as_deref(), Some("B"));
@@ -40,6 +41,7 @@ fn the_next_index() {
             date: "2026-10-16".into(),
             author: "TV".into(),
             description: String::new(),
+            note: String::new(),
         })
         .unwrap();
     }
@@ -136,6 +138,7 @@ fn each_page_shows_the_last_revision_that_changed_it() {
                 date: "2026-10-15".into(),
                 author: "TV".into(),
                 description: String::new(),
+                note: String::new(),
             })
             .unwrap()
             .created;
