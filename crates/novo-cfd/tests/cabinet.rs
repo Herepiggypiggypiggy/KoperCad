@@ -207,6 +207,101 @@ fn preview_is_not_a_cabinet_level_and_nothing_is_called_validated_yet() {
 }
 
 #[test]
+fn the_steady_path_agrees_with_the_march_and_labels_its_preview() {
+    for vent in [false, true] {
+        let scn = scenario(vent);
+        let (steady, seen) = {
+            let mut tu = Tuning::default().with_cells(800);
+            for l in [&mut tu.coarse, &mut tu.medium, &mut tu.fine] {
+                l.report_every = 20;
+                l.full_snapshot_every = Duration::ZERO;
+            }
+            let mut seen = Vec::new();
+            let snap = CabinetSolver::new(tu)
+                .solve(&scn, Fidelity::Coarse, &Control::new(), &mut |s| {
+                    seen.push(s.clone())
+                })
+                .unwrap();
+            (snap, seen)
+        };
+        let mut t = Tuning::default().with_cells(800).marched();
+        for l in [&mut t.coarse, &mut t.medium, &mut t.fine] {
+            l.steady_tol = 1e-2;
+            l.report_every = 20;
+        }
+        let march = CabinetSolver::new(t)
+            .solve(&scn, Fidelity::Coarse, &Control::new(), &mut |_| {})
+            .unwrap();
+        let (a, b) = (&steady.devices[0], &march.devices[0]);
+        println!(
+            "CABINET | steady vs march | vent {vent} | surface {:.2} vs {:.2} | air {:.2} vs {:.2} | iterations {} vs steps {}",
+            a.surface_c,
+            b.surface_c,
+            a.air_c,
+            b.air_c,
+            steady.progress.iteration,
+            march.progress.iteration
+        );
+        let rise = b.surface_c - 25.0;
+        assert!(
+            (a.surface_c - b.surface_c).abs() < 0.05 * rise,
+            "{} vs {}",
+            a.surface_c,
+            b.surface_c
+        );
+        assert!(steady.progress.converged);
+        assert!(steady.progress.iteration < march.progress.iteration);
+        // the first-order preview is announced while it runs
+        assert!(
+            seen.iter()
+                .any(|s| s.notes.iter().any(|n| n.contains("First-order preview")))
+        );
+        assert!(
+            !steady
+                .notes
+                .iter()
+                .any(|n| n.contains("First-order preview"))
+        );
+    }
+}
+
+#[test]
+fn turbulence_is_an_option_that_shows_in_the_snapshot_and_the_statement() {
+    use novo_cfd::turb::TurbModel;
+    let laminar = solve(&scenario(true)).0;
+    assert!(laminar.turb_visc_ratio.iter().all(|v| *v == 0.0));
+    for model in [TurbModel::KOmegaSst, TurbModel::KEpsilon] {
+        let snap = small()
+            .with_turbulence(model)
+            .solve(
+                &scenario(true),
+                Fidelity::Coarse,
+                &Control::new(),
+                &mut |_| {},
+            )
+            .unwrap();
+        let ratio = &snap.turb_visc_ratio;
+        assert!(ratio.iter().all(|v| v.is_finite() && *v >= 0.0));
+        assert!(ratio.iter().cloned().fold(0.0_f32, f32::max) > 0.0);
+        assert!(snap.temperature_c.iter().all(|t| t.is_finite()));
+        assert!(
+            snap.accuracy
+                .limits
+                .iter()
+                .all(|l| !l.contains("Turbulence and radiation are not modelled")),
+            "the statement must not claim the model is laminar"
+        );
+        assert!(snap.accuracy.headline.contains("Turbulence"));
+        // a turbulence model takes the march, not the steady path
+        assert!(
+            !snap.notes.iter().any(|n| n.contains("window")),
+            "{:?}",
+            snap.notes
+        );
+    }
+}
+
+#[test]
 fn a_device_the_grid_cannot_resolve_says_so() {
     let mut t = Tuning::default().with_cells(450);
     t.coarse.steady_tol = 1e-2;

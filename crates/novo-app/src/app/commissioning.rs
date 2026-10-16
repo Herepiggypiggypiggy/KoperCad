@@ -23,6 +23,8 @@ use novo_pdf::{ReportFileFormat, ReportPdfOptions};
 use novo_reports::CsvOptions;
 use novo_xref::Place;
 
+use super::cabinet_bar::note_ctx;
+
 use super::changes::shown_on;
 use super::pdf::{replaceable_path, write_replacing};
 use super::revisions::iso_date;
@@ -50,7 +52,7 @@ pub(crate) struct CommissioningMode {
     /// Who the decisions are recorded for.
     pub(super) who: String,
     tab: Tab,
-    selected: Option<Target>,
+    pub(super) selected: Option<Target>,
     /// The measured value and note for the next decision.
     value: String,
     note: String,
@@ -344,12 +346,17 @@ impl NovoApp {
             mode.large = self.settings.large_buttons;
             ui.horizontal_wrapped(|ui| {
                 ui.weak("By");
-                ui.add(egui::TextEdit::singleline(&mut mode.who).desired_width(80.0));
+                let who = ui.add(egui::TextEdit::singleline(&mut mode.who).desired_width(80.0));
+                note_ctx(ui.ctx(), "commissioning.who", "By field", &who);
                 if ui.checkbox(&mut mode.large, "Large buttons").changed() {
                     self.settings.large_buttons = mode.large;
                 }
                 for (tab, label) in [(Tab::Checks, "Checks"), (Tab::Punch, "Punch list")] {
-                    if ui.selectable_label(mode.tab == tab, label).clicked() {
+                    let chip = ui.selectable_label(mode.tab == tab, label);
+                    if tab == Tab::Punch {
+                        note_ctx(ui.ctx(), "commissioning.punch", "Punch tab", &chip);
+                    }
+                    if chip.clicked() {
                         mode.tab = tab;
                     }
                 }
@@ -372,10 +379,17 @@ impl NovoApp {
                     ("PDF", ReportFileFormat::Pdf),
                     ("CSV", ReportFileFormat::Csv(CsvOptions::default())),
                 ] {
-                    if big_button(ui, mode.large, label)
-                        .on_hover_text("Write the commissioning report next to the project file")
-                        .clicked()
-                    {
+                    let button = big_button(ui, mode.large, label)
+                        .on_hover_text("Write the commissioning report next to the project file");
+                    if label == "PDF" {
+                        note_ctx(
+                            ui.ctx(),
+                            "commissioning.report",
+                            "Report PDF button",
+                            &button,
+                        );
+                    }
+                    if button.clicked() {
                         export = Some(format);
                     }
                 }
@@ -389,6 +403,12 @@ impl NovoApp {
                 mode.dirty = false;
                 let json = mode.store.to_json();
                 self.backend.set_commissioning_json(&json);
+            }
+        }
+        for a in super::cabinet_bar::take_noted(ui.ctx()) {
+            self.anchor(a.id, a.rect, a.label);
+            if a.clicked {
+                self.learn_event(novo_learn::Event::Clicked(a.id.to_owned()));
             }
         }
         if let Some(place) = go {
@@ -529,10 +549,15 @@ fn checks_tab(
         })
         .cloned();
     ui.horizontal(|ui| {
-        if big_button(ui, mode.large, "Next open")
-            .on_hover_text("Select the next wire, terminal or device with an open check")
-            .clicked()
-        {
+        let next_open = big_button(ui, mode.large, "Next open")
+            .on_hover_text("Select the next wire, terminal or device with an open check");
+        note_ctx(
+            ui.ctx(),
+            "commissioning.next_open",
+            "Next open button",
+            &next_open,
+        );
+        if next_open.clicked() {
             match &next {
                 Some(info) => {
                     mode.selected = Some(info.target);
@@ -561,17 +586,25 @@ fn checks_tab(
                     .desired_width(f32::INFINITY),
             );
         });
+        let first_check = info.target.checks().first().copied();
         for &check in info.target.checks() {
+            let first = Some(check) == first_check;
             let state = mode.store.state(info.target, check);
             ui.horizontal_wrapped(|ui| {
                 ui.label(sized(
                     mode.large,
                     format!("{} {}", state_glyph(state), check.label()),
                 ));
-                if big_button(ui, mode.large, "Pass").clicked() {
+                let pass = big_button(ui, mode.large, "Pass");
+                let fail = big_button(ui, mode.large, "Fail");
+                if first {
+                    note_ctx(ui.ctx(), "commissioning.pass", "Pass button", &pass);
+                    note_ctx(ui.ctx(), "commissioning.fail", "Fail button", &fail);
+                }
+                if pass.clicked() {
                     mode.decide(info.target, check, CheckState::Passed);
                 }
-                if big_button(ui, mode.large, "Fail").clicked() {
+                if fail.clicked() {
                     mode.decide(info.target, check, CheckState::Failed);
                 }
                 if big_button(ui, mode.large, "N/A").clicked() {
@@ -732,7 +765,11 @@ fn punch_tab(
                         }
                     };
                     for &(label, state) in moves {
-                        if big_button(ui, mode.large, label).clicked()
+                        let button = big_button(ui, mode.large, label);
+                        if label == "Fixed" || label == "Verified" {
+                            note_ctx(ui.ctx(), "commissioning.resolve", "Resolve button", &button);
+                        }
+                        if button.clicked()
                             && mode
                                 .store
                                 .set_punch_state(item.id, state, &mode.who, &now())

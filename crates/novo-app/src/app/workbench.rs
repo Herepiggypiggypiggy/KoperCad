@@ -349,6 +349,7 @@ const APP_COMMANDS: &[&str] = &[
     "view.3d_shell",
     "view.3d_wires",
     "view.3d_shadows",
+    "view.3d_stats",
     "view.iso",
     "view.front",
     "view.top",
@@ -782,6 +783,10 @@ impl NovoApp {
                     "view.3d_shell" => controls.layers.shell = !controls.layers.shell,
                     _ => controls.layers.wires = !controls.layers.wires,
                 }
+            }
+            "view.3d_stats" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.stats.toggle();
             }
             "view.iso" | "view.front" | "view.top" if self.is_open() => {
                 self.switch_workspace(Workspace::View3d);

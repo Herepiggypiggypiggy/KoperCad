@@ -876,6 +876,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_stats",
+        "Show or hide the 3D frame statistics",
+        "View",
+        &["frame rate", "fps", "performance", "gpu", "speed"],
+        Needs::Project,
+    ),
+    cmd(
         "view.iso",
         "Isometric view",
         "View",

@@ -182,3 +182,55 @@ fn the_drawing_cannot_be_edited_while_the_mode_is_showing() {
     d.frame();
     assert_eq!(count(&d), before + 1);
 }
+
+#[test]
+fn the_switcher_the_pages_list_and_the_commissioning_controls_are_anchors() {
+    let (_dir, mut d) = example();
+    let ctx = d.ctx.clone();
+    if !d.app.outline_pinned() {
+        d.app.run(&ctx, Action::PinOutline);
+    }
+    d.frame();
+    d.frame();
+    let on_screen = |d: &Drive, id: &str| {
+        let rect = d
+            .app
+            .learn_anchor(id)
+            .unwrap_or_else(|| panic!("`{id}` is not on screen"));
+        assert!(rect.width() > 0.0 && rect.height() > 0.0, "{id}: {rect:?}");
+    };
+    for id in [
+        "switcher.schematic",
+        "switcher.cabinet",
+        "switcher.view3d",
+        "switcher.reports",
+        "switcher.commissioning",
+        "outline.pages",
+    ] {
+        on_screen(&d, id);
+    }
+    d.app.run_command(&ctx, "view.commissioning", None);
+    d.frame();
+    d.frame();
+    let target = {
+        let page = d.app.current_page().expect("a page");
+        targets(d.doc().project())
+            .into_iter()
+            .find(|t| t.pages.contains(&page))
+            .expect("a target on the page")
+            .target
+    };
+    d.app.wb.commissioning.as_mut().unwrap().selected = Some(target);
+    d.frame();
+    d.frame();
+    for id in [
+        "commissioning.who",
+        "commissioning.punch",
+        "commissioning.report",
+        "commissioning.next_open",
+        "commissioning.pass",
+        "commissioning.fail",
+    ] {
+        on_screen(&d, id);
+    }
+}
