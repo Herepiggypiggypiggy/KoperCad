@@ -56,3 +56,18 @@ Layout facts: 8 rail holes of 5.5 mm + 4 of 6 mm on the plate, 2 door cut-outs.
 - A lesson's `project` may name a sibling lesson's file (`../wire-routing/project.json`); keep those files in place.
 - Step text stays under 500 characters (lint). `pause = true` is only for steps that also have an `expect`.
 - Depth numbers in enclosure-door-and-depth come from #409's defaults (usable depth 230 mm, 80 mm at depth 100).
+
+## State after the second rewrite batch (2026-10-16, main aa5977ab)
+All ten cabinet lessons now have what/why text, Dutch for every step and stand-alone wording. All stay `draft` or `early` per the lesson plan; none has `how` yet (waiting for the framework field).
+| Lesson | Verified against main | Still missing in the app |
+| --- | --- | --- |
+| cabinet-layout, rails-and-ducts | yes: Place all (rules planner, 5 rails, 5 ducts), Accept, Plate card, Rules, Cut list | anchors, signals cabinet_dropped, cabinet_rotated, cabinet_removed, cabinet_plan_accepted; `command` check cannot see edit.rotate and edit.delete |
+| wire-routing | yes, numbers from the overlay code on `wire-routing/project.json` | anchors; Place all joins none of its ducts (every wire free air) |
+| cut-lengths | yes: wire list basis, Export wire cut | signal wire_cut_exported |
+| enclosure-door-and-depth | yes: Inside and door section of the Plate card | anchors; Plate card only shows with nothing selected |
+| heat-and-sizing | yes: Heat chips, Simulate, Size enclosure with an added enclosure | anchors; legend has no loss totals; a part without loss counts as 0 W silently |
+| panel-plate-drawing | yes: export.plate, 20 + 4 holes, 2 cut-outs | the header button does not raise export.plate |
+| panel-labels | command line only | no Labels page in the Reports workspace; CLI reads .novo, not JSON |
+| view-3d | NOT verifiable | no 3D face, no cabinet.view3d command, no view cube |
+| commissioning | yes: tabs Checks and Punch list, Pass, Fail, N/A, punch items | Fail does not open a punch item (lesson says so); signal punch_added and anchors |
+The six lessons after wire-routing start from `../wire-routing/project.json`.

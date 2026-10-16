@@ -11,7 +11,9 @@
 //! the coil went off. Nothing moves until the caller advances the clock.
 //!
 //! Only devices that draw a coil are driven. A contact of a device without
-//! one (a push button) stays under the hand-set [`PoleState`], as before.
+//! one (a push button) stays under the hand-set [`PoleState`], as before. A
+//! contact a coil does drive ignores any hand-set state: it is closed or open
+//! by its coil alone.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -224,7 +226,7 @@ pub struct Settled {
     pub solution: Solution,
     /// Coils that are energized (fed by two different potentials, or forced).
     pub energized: BTreeSet<SymbolId>,
-    /// Contacts a coil drives; a hand-set state can only add to them.
+    /// Contacts a coil drives; they follow the coil, whatever was set by hand.
     pub driven: BTreeSet<SymbolId>,
     /// A timer is counting: the state will change by itself as the clock
     /// advances, so the caller should keep stepping.

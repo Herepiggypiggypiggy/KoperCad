@@ -628,6 +628,11 @@ fn a_wire_demonstration_marks_where_the_wire_starts_and_ends() {
     d.app.start_lesson("wiring-modes");
     d.frame();
     d.frame();
+    if step(&d) == "intro" {
+        let ctx = d.ctx.clone();
+        d.app.run_command(&ctx, "learn.next", None);
+        d.frame();
+    }
     assert_eq!(step(&d), "pin-drag");
     let canvas = d.app.wb.canvas_area.unwrap().1;
     assert!(d.app.learn_start_demo());

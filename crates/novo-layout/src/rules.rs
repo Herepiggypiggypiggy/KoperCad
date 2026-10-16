@@ -619,6 +619,11 @@ pub struct Explanation {
     /// The plate was too small to keep power and signal rows apart, so the
     /// separation was given up to fit every device.
     pub separation_relaxed: bool,
+    /// The plan has a trunk duct joining the ducts between the rows.
+    pub trunk: bool,
+    /// A trunk was left out because the narrower plate would not hold every
+    /// device; the rows' ducts are then not joined.
+    pub trunk_dropped: bool,
 }
 
 impl Explanation {
@@ -694,7 +699,7 @@ pub fn place_all_explained(
     first_rail_id: u64,
     top: f64,
 ) -> (Plan, Explanation) {
-    let (plan, why) = plan_once(plate, specs, rules, first_rail_id, top);
+    let (plan, why) = plan_with_trunk(plate, specs, rules, first_rail_id, top);
     if plan.unplaced.is_empty() || rules.separation <= 0.0 {
         return (plan, why);
     }
@@ -702,11 +707,47 @@ pub fn place_all_explained(
         separation: 0.0,
         ..rules.clone()
     };
-    let (plan2, mut why2) = plan_once(plate, specs, &relaxed, first_rail_id, top);
+    let (plan2, mut why2) = plan_with_trunk(plate, specs, &relaxed, first_rail_id, top);
     if plan2.unplaced.len() < plan.unplaced.len() {
         why2.separation_relaxed = true;
         (plan2, why2)
     } else {
+        (plan, why)
+    }
+}
+
+/// Plans the rows, and when there are two or more adds a trunk duct that
+/// joins their ducts. Without it the horizontal ducts between rows never
+/// meet, and no wire can leave its own row's duct for another's. The trunk
+/// is a vertical duct at the left edge of the usable plate, so a strip of
+/// the plate is kept free for it and the rows are packed again narrower. A
+/// router that bridged the runs instead would route wires across a gap no
+/// duct covers, which the cabinet cannot build; the trunk is a part on the
+/// cut list. Its cross-section is the rule set's duct size: the planner
+/// knows devices, not wires, so the fill is checked by Route all.
+///
+/// The trunk is class `mixed` (a divided duct): ducts of both classes meet
+/// in it, as they do at the terminals, and it does not trip the separation
+/// check. If the narrower plate loses a device the plan without a trunk is
+/// kept and [`Explanation::trunk_dropped`] says so.
+fn plan_with_trunk(
+    plate: &Plate,
+    specs: &[Spec],
+    rules: &RuleSet,
+    first_rail_id: u64,
+    top: f64,
+) -> (Plan, Explanation) {
+    let (plan, why) = plan_once(plate, specs, rules, first_rail_id, top, false);
+    if plan.rails.len() < 2 {
+        return (plan, why);
+    }
+    let (with, mut why_with) = plan_once(plate, specs, rules, first_rail_id, top, true);
+    if with.unplaced.len() <= plan.unplaced.len() {
+        (with, why_with)
+    } else {
+        let mut why = why;
+        why_with.trunk_dropped = true;
+        why.trunk_dropped = true;
         (plan, why)
     }
 }
@@ -717,8 +758,16 @@ fn plan_once(
     rules: &RuleSet,
     first_rail_id: u64,
     top: f64,
+    trunk: bool,
 ) -> (Plan, Explanation) {
-    let usable = plate.usable();
+    let full = plate.usable();
+    let mut usable = full;
+    // The strip kept free along the left edge for the trunk duct.
+    let strip = rules.duct_width + 2.0 * DUCT_CLEAR_MM;
+    if trunk {
+        usable.x += strip;
+        usable.w -= strip;
+    }
     let mut plan = Plan::default();
     let mut why = Explanation::default();
 
@@ -1010,16 +1059,35 @@ fn plan_once(
             cause: previous.map(|(_, p)| between_with(p, row).1),
         });
         if let Some((py, p)) = previous {
+            // Ducts start on the trunk's centre line so they meet it.
+            let duct_x = if trunk {
+                full.x + strip / 2.0
+            } else {
+                usable.x
+            };
             plan_ducts(
                 &mut plan.ducts,
                 rules,
-                usable.x,
-                usable.w,
+                duct_x,
+                usable.x + usable.w - duct_x,
                 (py + p.height, p.class),
                 (*y, row.class),
             );
         }
         previous = Some((*y, row));
+    }
+    if trunk && let (Some(first), Some(last)) = (placed.first(), placed.last()) {
+        let start = first.0;
+        plan.ducts.push(PlannedDuct {
+            x: full.x + strip / 2.0,
+            y: start,
+            length: last.0 + last.1.height - start,
+            vertical: true,
+            width: rules.duct_width,
+            height: rules.duct_height,
+            class: Class::Mixed,
+        });
+        why.trunk = true;
     }
     (plan, why)
 }

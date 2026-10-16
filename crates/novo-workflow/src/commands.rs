@@ -375,6 +375,24 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["import aml", "import automationml"],
     ),
+    verb(
+        cmd(
+            "file.import_eplan",
+            "Import EPLAN project (PXF)",
+            "Project",
+            &[
+                "eplan",
+                "pxf",
+                "epj",
+                "emp",
+                "migrate",
+                "other tool",
+                "page macro",
+            ],
+            Needs::Project,
+        ),
+        &["import eplan", "import pxf"],
+    ),
     cmd(
         "file.remove_background",
         "Remove the DXF background",
@@ -1034,6 +1052,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd(
+        "help.show_hints",
+        "Show hints again",
+        "View",
+        &["hints", "tips", "reset", "help"],
+        Needs::Nothing,
+    ),
+    cmd(
         "help.walkthrough",
         "Fast keys walk-through",
         "View",
@@ -1101,6 +1126,16 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["route all", "route wires"],
+    ),
+    verb(
+        cmd(
+            "cabinet.rails",
+            "Rails and ducts (Cabinet)",
+            "View",
+            &["rail", "duct", "trunk", "din rail", "add duct", "move duct"],
+            Needs::Project,
+        ),
+        &["add rail", "add duct"],
     ),
     cmd(
         "view.background_place",

@@ -43,6 +43,11 @@ pub const DUTCH: &[Aliases] = &[
         &["rondleiding", "snelle toetsen uitleg"],
     ),
     nl(
+        "help.show_hints",
+        &[],
+        &["hints opnieuw tonen", "tips opnieuw", "hints"],
+    ),
+    nl(
         "help.learn",
         &["leren", "les"],
         &["leren", "training", "cursus", "uitleg"],
@@ -399,6 +404,11 @@ pub const DUTCH: &[Aliases] = &[
         &["automationml", "installatie", "overnemen", "migreren"],
     ),
     nl(
+        "file.import_eplan",
+        &["importeer eplan"],
+        &["eplan", "pxf", "migreren", "overnemen", "paginamacro"],
+    ),
+    nl(
         "file.import_dwg",
         &["importeer dwg"],
         &["autocad", "converter", "achtergrond"],
@@ -474,6 +484,11 @@ pub const DUTCH: &[Aliases] = &[
         &["werkplaats", "boren"],
     ),
     nl("export.sheets_csv", &["exporteer csv"], &["csv"]),
+    nl(
+        "cabinet.rails",
+        &["rails en kanalen", "voeg kanaal toe"],
+        &["din-rail", "kabelgoot", "kanaal", "rail"],
+    ),
     nl(
         "cabinet.routes",
         &["bedraad alles", "routeer alle draden"],

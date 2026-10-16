@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+/// Times a hint is followed before it stops showing.
+pub const HINT_LIMIT: u32 = 3;
 const MAX_RECENT: usize = 10;
 const MAX_RECENT_ACTIONS: usize = 20;
 
@@ -63,6 +65,11 @@ pub struct Settings {
     pub group_prefix: String,
     /// The same for a new cabinet (`A` makes `+A1`). Empty: the default.
     pub cabinet_prefix: String,
+    /// How often each one-time hint was followed, by hint id
+    /// (`app/tips.rs`, docs/design/discoverability.md layer 4). A hint
+    /// stops showing once followed [`HINT_LIMIT`] times; Help > Show hints
+    /// again clears the counters.
+    pub hints_seen: BTreeMap<String, u32>,
 }
 
 /// The walk-through's progress, per user: kept so closing the app mid-way
