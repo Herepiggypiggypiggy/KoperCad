@@ -115,6 +115,10 @@ enum Cmd {
         /// comma.
         #[arg(long, default_value_t = ',')]
         delimiter: char,
+        /// Language of titles and headers (`en`, `nl`); the project's
+        /// report language when left out.
+        #[arg(long, value_name = "CODE")]
+        language: Option<String>,
     },
     /// Run the design checks; exits with 1 when there are errors or
     /// warnings (infos such as missing parts do not count).
@@ -179,6 +183,10 @@ struct ReportArgs {
     /// writes `;` like File > Export wire cut in the app.
     #[arg(long)]
     delimiter: Option<char>,
+    /// Language of titles and headers (`en`, `nl`); the project's report
+    /// language when left out.
+    #[arg(long, value_name = "CODE")]
+    language: Option<String>,
 }
 
 /// Which labels, and in which layout.
@@ -452,7 +460,14 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             file,
             output,
             delimiter,
-        } => commissioning_report(&file, output.as_deref(), delimiter, out),
+            language,
+        } => commissioning_report(
+            &file,
+            output.as_deref(),
+            delimiter,
+            language.as_deref(),
+            out,
+        ),
         Cmd::Export(Export::Eplan { file, output }) => {
             if output.exists() {
                 return Err(Failure::new(
@@ -505,6 +520,7 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
                 file,
                 output: Some(output),
                 delimiter: Some(','),
+                language: None,
             };
             if !matches!(
                 args.output.as_deref().map(ReportFormat::from_path),
@@ -1252,13 +1268,15 @@ fn export_reports(
                 ReportFormat::Csv(_) => ReportFormat::Csv(csv),
                 xlsx => xlsx,
             };
-            let bytes = novo_py::report_bytes(&project, ids, format).map_err(usage)?;
+            let bytes = novo_py::report_bytes_in(&project, ids, format, args.language.as_deref())
+                .map_err(usage)?;
             write_output(file, path, &bytes)?;
         }
         None => {
             // On a terminal or in a pipe a byte order mark is only noise.
             let format = ReportFormat::Csv(CsvOptions { bom: false, ..csv });
-            let bytes = novo_py::report_bytes(&project, ids, format).map_err(usage)?;
+            let bytes = novo_py::report_bytes_in(&project, ids, format, args.language.as_deref())
+                .map_err(usage)?;
             out.write_all(&bytes)
                 .map_err(|e| Failure::new(exit::WRITE, format!("cannot write output: {e}")))?;
         }
@@ -1309,6 +1327,7 @@ fn commissioning_report(
     file: &Path,
     output: Option<&Path>,
     delimiter: char,
+    language: Option<&str>,
     out: &mut dyn Write,
 ) -> Result<i32, Failure> {
     let handle = ProjectFile::read_only(file).map_err(|e| read_failure(file, &e))?;
@@ -1334,12 +1353,20 @@ fn commissioning_report(
         novo_reports::commissioning::default_sign_offs(""),
     );
     let report = novo_reports::commissioning::commissioning_report(&input);
+    let translator = match language {
+        Some(code) => novo_reports::i18n::Translator::new(
+            code,
+            &novo_reports::i18n::ProjectTable::of_project(&project),
+        ),
+        None => novo_reports::i18n::translator_of(&project),
+    };
     let csv = CsvOptions {
         delimiter,
         ..CsvOptions::default()
     };
     let options = novo_pdf::ReportPdfOptions {
         title: format!("{}, commissioning", project.info().name),
+        language: translator.clone(),
         ..Default::default()
     };
     match output {
@@ -1360,6 +1387,7 @@ fn commissioning_report(
         }
         None => {
             let csv = CsvOptions { bom: false, ..csv };
+            let report = novo_reports::i18n::translate_output(&report, &translator);
             out.write_all(novo_reports::to_csv(&report, &csv).as_bytes())
                 .map_err(|e| Failure::new(exit::WRITE, format!("cannot write output: {e}")))?;
         }

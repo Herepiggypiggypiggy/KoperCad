@@ -76,9 +76,38 @@ pub fn report_json(report: &ReportOutput) -> Value {
     })
 }
 
-/// The given reports (every built-in one when `ids` is empty) as a file.
+/// The given reports (every built-in one when `ids` is empty) as a file, in
+/// the project's report language (File > Report languages in the app).
 /// CSV holds exactly one report.
 pub fn report_bytes(project: &Project, ids: &[&str], format: ReportFormat) -> Result<Vec<u8>> {
+    report_bytes_in(project, ids, format, None)
+}
+
+/// Like [`report_bytes`], printing in `language` (`en`, `nl`, a code the
+/// project's own table defines) instead of the project's when given.
+/// Titles and column headers change; ids, keys and cell values never do.
+pub fn report_bytes_in(
+    project: &Project,
+    ids: &[&str],
+    format: ReportFormat,
+    language: Option<&str>,
+) -> Result<Vec<u8>> {
+    let translator = match language {
+        Some(code) => {
+            let table = novo_reports::i18n::ProjectTable::of_project(project);
+            if !novo_reports::i18n::languages(&table)
+                .iter()
+                .any(|l| l.code == code)
+            {
+                return Err(ScriptError::UnknownValue {
+                    what: "report language (en, nl, or a language of the project)",
+                    value: code.to_owned(),
+                });
+            }
+            novo_reports::i18n::Translator::new(code, &table)
+        }
+        None => novo_reports::i18n::translator_of(project),
+    };
     let reports: Vec<ReportOutput> = if ids.is_empty() {
         novo_reports::generate_all(project)
     } else {
@@ -86,6 +115,10 @@ pub fn report_bytes(project: &Project, ids: &[&str], format: ReportFormat) -> Re
             .map(|id| generate(project, id))
             .collect::<Result<_>>()?
     };
+    let reports: Vec<ReportOutput> = reports
+        .iter()
+        .map(|r| novo_reports::i18n::translate_output(r, &translator))
+        .collect();
     match format {
         ReportFormat::Xlsx => {
             let refs: Vec<&ReportOutput> = reports.iter().collect();
