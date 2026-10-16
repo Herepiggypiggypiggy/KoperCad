@@ -1882,6 +1882,7 @@ dependencies = [
  "lopdf",
  "novo-cables",
  "novo-canvas",
+ "novo-cfd",
  "novo-checks",
  "novo-commissioning",
  "novo-core",
@@ -1903,6 +1904,7 @@ dependencies = [
  "novo-terminals",
  "novo-tests",
  "novo-theme",
+ "novo-thermal",
  "novo-workflow",
  "novo-xref",
  "rfd",
@@ -2025,6 +2027,9 @@ dependencies = [
 [[package]]
 name = "novo-heatview"
 version = "0.1.0"
+dependencies = [
+ "novo-cfd",
+]
 
 [[package]]
 name = "novo-interop"

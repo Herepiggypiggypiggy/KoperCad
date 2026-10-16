@@ -2,16 +2,21 @@
 //! spots, airflow and device badges drawn over the plate. Spec:
 //! `docs/design/thermal-visuals.md`.
 //!
-//! Until the solver (`novo-thermal`) is wired in, the field comes from the
-//! synthetic model of `novo-heatview` built from the placed devices and their
-//! `power_loss_w`; the view says so. Drawing is thin: all numbers come from
-//! `novo-heatview`.
+//! Before a run the field comes from the synthetic model of `novo-heatview`
+//! built from the placed devices and their `power_loss_w`; the view says so.
+//! "Simulate" (`heat.simulate`) builds a scenario from the project, runs the
+//! solver on a worker thread and replaces the synthetic field with the
+//! result; the legend names the fidelity. Drawing is thin: all numbers come
+//! from `novo-heatview`.
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Shape, Stroke, Vec2};
 use novo_canvas::Viewport;
+use novo_cfd::{CfdError, Fidelity};
+use novo_heatview::cfd::{self, Window};
 use novo_heatview::contour::{self, Contour};
 use novo_heatview::hotspot::{self, Peak};
 use novo_heatview::range::{self, Range};
@@ -20,6 +25,9 @@ use novo_heatview::synthetic::{SynthDevice, SynthScene};
 use novo_heatview::{Scalar, Vector};
 use novo_theme::heat::{self, Verdict};
 use novo_theme::tokens as t;
+use novo_thermal::Status;
+
+use super::heat_run::{self, Event, Runner, Solution};
 
 /// Opacity of the map over the drawing; the devices stay readable through it.
 const MAP_ALPHA: f32 = 0.62;
@@ -45,6 +53,17 @@ pub(super) struct Input {
     /// Outside air temperature, degrees C (the sizing request's).
     pub ambient: f64,
     pub items: Vec<Item>,
+    /// The latest solver result, if a run has produced one.
+    pub solution: Option<Arc<Solution>>,
+}
+
+/// What a run needs to remember about the moment it started.
+#[derive(Debug, Clone)]
+pub(super) struct Meta {
+    pub layout_key: u64,
+    pub ambient: f64,
+    pub plate: [f64; 4],
+    pub messages: Vec<String>,
 }
 
 pub(super) struct HeatState {
@@ -54,17 +73,38 @@ pub(super) struct HeatState {
     pub airflow: bool,
     pub badges: bool,
     cache: Option<Cache>,
+    /// `heat.simulate` was asked for; the Cabinet view starts the run on its
+    /// next frame, when it has the project.
+    requested: bool,
+    run: Option<Runner>,
+    solution: Option<Arc<Solution>>,
+    pending: Option<Meta>,
+    runs: u64,
+    /// The last run's outcome in words: failed, cancelled or the bridge's
+    /// complaint.
+    notice: Option<String>,
+}
+
+/// Where a cached picture came from.
+enum Source {
+    /// The synthetic model of the part losses.
+    Synthetic,
+    /// A solver result: per device reading, fidelity and the honesty text.
+    Solved(Arc<Solution>),
 }
 
 struct Cache {
     key: u64,
+    ambient: f64,
+    /// Plate size, mm.
+    size: (f64, f64),
+    source: Source,
     smooth: Scalar,
     range: Range,
     contours: Vec<(Contour, bool)>,
     peaks: Vec<(Peak, String)>,
     mean: f32,
     streams: Vec<Streamline>,
-    scene: SynthScene,
 }
 
 impl HeatState {
@@ -76,6 +116,106 @@ impl HeatState {
             airflow: false,
             badges: true,
             cache: None,
+            requested: false,
+            run: None,
+            solution: None,
+            pending: None,
+            runs: 0,
+            notice: None,
+        }
+    }
+
+    /// The result the picture draws from.
+    pub(super) fn solution(&self) -> Option<Arc<Solution>> {
+        self.solution.clone()
+    }
+
+    pub(super) fn running(&self) -> bool {
+        self.run.is_some()
+    }
+
+    /// `heat.simulate`: show the Heat view and start a run on the next frame.
+    pub(super) fn request_run(&mut self) {
+        self.on = true;
+        self.requested = true;
+    }
+
+    /// True once per request; the caller then calls [`HeatState::start`].
+    pub(super) fn take_request(&mut self) -> bool {
+        std::mem::take(&mut self.requested)
+    }
+
+    /// Starts a run unless one is going. The model can change while it
+    /// runs; the result is then marked out of date.
+    pub(super) fn start(
+        &mut self,
+        scenario: novo_thermal::Scenario,
+        meta: Meta,
+        wake: impl Fn() + Send + 'static,
+    ) {
+        if self.run.is_some() {
+            return;
+        }
+        self.notice = None;
+        self.runs += 1;
+        self.pending = Some(meta);
+        self.run = Some(Runner::start(
+            heat_run::default_solver(),
+            scenario,
+            Fidelity::Coarse,
+            wake,
+        ));
+    }
+
+    /// Why a run could not start, shown next to the Simulate button.
+    pub(super) fn fail(&mut self, text: String) {
+        self.notice = Some(text);
+    }
+
+    /// Stops the run and keeps the latest result, labelled not converged.
+    pub(super) fn cancel(&mut self) {
+        if let Some(r) = &self.run {
+            r.cancel();
+        }
+    }
+
+    /// Takes in what the worker has published. Called every frame.
+    pub(super) fn poll(&mut self, ctx: &egui::Context) {
+        let Some(run) = self.run.as_mut() else {
+            return;
+        };
+        let mut done = false;
+        for e in run.poll() {
+            match e {
+                Event::Snapshot(snapshot) => {
+                    if let Some(m) = &self.pending {
+                        self.solution = Some(Arc::new(Solution {
+                            snapshot,
+                            id: self.runs,
+                            layout_key: m.layout_key,
+                            ambient: m.ambient,
+                            plate: m.plate,
+                            messages: m.messages.clone(),
+                        }));
+                    }
+                }
+                Event::Finished(result) => {
+                    done = true;
+                    self.notice = match result {
+                        Ok(()) => None,
+                        Err(CfdError::Cancelled) => {
+                            Some("Stopped: the last result is not converged".into())
+                        }
+                        Err(e) => Some(format!("The simulation failed: {e}")),
+                    };
+                }
+            }
+        }
+        if done {
+            self.run = None;
+            self.pending = None;
+        } else {
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }
     }
 
@@ -84,6 +224,7 @@ impl HeatState {
     pub(super) fn command(&mut self, id: &str) {
         match id {
             "heat.toggle" => self.on = !self.on,
+            "heat.simulate" => self.request_run(),
             "heat.airflow" => {
                 self.airflow = !(self.on && self.airflow);
                 self.on |= self.airflow;
@@ -113,7 +254,8 @@ impl HeatState {
     }
 }
 
-fn key(input: &Input) -> u64 {
+/// Hash of the layout and loads: what a result is valid for.
+pub(super) fn layout_key(input: &Input) -> u64 {
     let mut h = DefaultHasher::new();
     (
         input.plate.0.to_bits(),
@@ -135,7 +277,19 @@ fn key(input: &Input) -> u64 {
     h.finish()
 }
 
+/// Cache key: the layout and which result is drawn.
+fn key(input: &Input) -> u64 {
+    let mut h = DefaultHasher::new();
+    (layout_key(input), input.solution.as_ref().map(|s| s.id)).hash(&mut h);
+    h.finish()
+}
+
 fn build(input: &Input) -> Cache {
+    if let Some(sol) = &input.solution
+        && let Some(cache) = build_solved(input, sol)
+    {
+        return cache;
+    }
     let scene = SynthScene {
         width: input.plate.0,
         height: input.plate.1,
@@ -154,19 +308,51 @@ fn build(input: &Input) -> Cache {
             .collect(),
     };
     let smooth = scene.temperature_field(CELL_MM).filled();
+    let velocity: Vector = scene.velocity_field(CELL_MM);
+    assemble(
+        input,
+        smooth,
+        velocity,
+        input.ambient,
+        &|x, y| scene.solid(x, y),
+        Source::Synthetic,
+    )
+}
+
+/// The picture of a solver result: the slice at the device front plane over
+/// the plate. `None` when the snapshot cannot be sliced.
+fn build_solved(input: &Input, sol: &Arc<Solution>) -> Option<Cache> {
+    let [x, y, w, h] = sol.plate;
+    let window = Window { u0: x, v0: y, w, h };
+    let slice = cfd::as_2d(&sol.snapshot, window, CELL_MM)?;
+    let smooth = slice.temperature.clone();
+    let flow = slice.flow.clone();
+    Some(assemble(
+        input,
+        smooth,
+        flow,
+        sol.ambient,
+        &|px, py| slice.is_solid(px + x, py + y),
+        Source::Solved(sol.clone()),
+    ))
+}
+
+/// Range, contours, hot spots and streamlines of a temperature and flow
+/// field; the same for the synthetic model and a solver result.
+fn assemble(
+    input: &Input,
+    smooth: Scalar,
+    velocity: Vector,
+    ambient: f64,
+    solid: &dyn Fn(f64, f64) -> bool,
+    source: Source,
+) -> Cache {
     let (_, hottest) = smooth.extent().unwrap_or((35.0, 45.0));
-    let range = range::map_range(scene.ambient, f64::from(hottest), None);
-    let levels: Vec<f64> = range::contour_levels(range, 8)
-        .iter()
-        .map(|l| l.0)
-        .collect();
-    let labelled: Vec<bool> = range::contour_levels(range, 8)
-        .iter()
-        .map(|l| l.1)
-        .collect();
+    let range = range::map_range(ambient, f64::from(hottest), None);
+    let levels = range::contour_levels(range, 8);
     let mut contours = Vec::new();
-    for (level, lab) in levels.iter().zip(labelled) {
-        for c in contour::contours_at(&smooth, *level as f32) {
+    for (level, lab) in levels {
+        for c in contour::contours_at(&smooth, level as f32) {
             contours.push((c, lab));
         }
     }
@@ -183,28 +369,27 @@ fn build(input: &Input) -> Cache {
             (p, tag)
         })
         .collect();
-    let velocity: Vector = scene.velocity_field(CELL_MM);
     let mut seeds: Vec<(f64, f64)> = Vec::new();
     let (w, h) = input.plate;
     seeds.extend((0..6).map(|i| (2.0, h - 20.0 - i as f64 * 30.0)));
     seeds.extend((0..8).map(|i| (40.0 + i as f64 * w / 8.0, h - 2.0)));
-    for d in &scene.devices {
+    for d in &input.items {
         if d.loss_w > 20.0 {
             seeds.extend([0.2, 0.5, 0.8].map(|f| (d.x + d.w * f, d.y - 3.0)));
         }
     }
-    let streams = streamline::evenly_spaced(&velocity, &seeds, Spacing::default(), &|x, y| {
-        scene.solid(x, y)
-    });
+    let streams = streamline::evenly_spaced(&velocity, &seeds, Spacing::default(), solid);
     Cache {
         key: key(input),
+        ambient,
+        size: input.plate,
+        source,
         smooth,
         mean,
         range,
         contours,
         peaks,
         streams,
-        scene,
     }
 }
 
@@ -226,6 +411,7 @@ fn rgb(c: [u8; 3], alpha: f32) -> Color32 {
 
 /// The Heat chip and layer chips of the Cabinet header.
 pub(super) fn chips(ui: &mut egui::Ui, state: &mut HeatState) {
+    state.poll(ui.ctx());
     if ui
         .selectable_label(state.on, "Heat")
         .on_hover_text("Show how heat spreads over the plate (Shift+H)")
@@ -251,6 +437,86 @@ pub(super) fn chips(ui: &mut egui::Ui, state: &mut HeatState) {
         } else {
             ui.menu_button("Layers", |ui| layers(ui, state));
         }
+        simulate_controls(ui, state);
+    }
+}
+
+/// Simulate / Cancel, the fidelity badge and the last notice.
+fn simulate_controls(ui: &mut egui::Ui, state: &mut HeatState) {
+    if state.running() {
+        if ui
+            .button("Cancel")
+            .on_hover_text("Stop the simulation and keep the latest result")
+            .clicked()
+        {
+            state.cancel();
+        }
+        let secs = state.run.as_ref().map_or(0.0, Runner::elapsed_s);
+        ui.label(
+            egui::RichText::new(format!(
+                "{} · running {secs:.0} s",
+                state
+                    .run
+                    .as_ref()
+                    .map_or(Fidelity::Coarse, |r| r.fidelity)
+                    .label()
+            ))
+            .small()
+            .color(t::TEXT_MUTED),
+        );
+    } else {
+        if ui
+            .button("Simulate")
+            .on_hover_text("Simulate the heat and airflow of this cabinet (Ctrl+K, heat)")
+            .clicked()
+        {
+            state.request_run();
+        }
+        if let Some(sol) = &state.solution {
+            let p = &sol.snapshot.progress;
+            let verdict = if p.converged {
+                "converged"
+            } else {
+                "not converged"
+            };
+            ui.label(
+                egui::RichText::new(format!("{} · {verdict}", p.fidelity.label()))
+                    .small()
+                    .color(t::TEXT_MUTED),
+            );
+        }
+    }
+    if let Some(n) = &state.notice {
+        ui.label(egui::RichText::new(n).small().color(t::WARNING));
+    }
+}
+
+/// Builds the scenario of the enclosure from the project and starts a run.
+/// Says plainly when it cannot.
+pub(super) fn start_run(
+    state: &mut HeatState,
+    project: &novo_core::Project,
+    enclosure: novo_core::StructureId,
+    input: &Input,
+    ctx: &egui::Context,
+) {
+    let options = novo_thermal::bridge::BridgeOptions {
+        ambient_c: input.ambient,
+        ..Default::default()
+    };
+    match novo_thermal::bridge::scenario_from_project(project, enclosure, &options) {
+        Ok(bridge) => {
+            let plate = bridge.scenario.enclosure.plate;
+            let meta = Meta {
+                layout_key: layout_key(input),
+                ambient: input.ambient,
+                plate: [plate.x, plate.y, plate.w, plate.h],
+                messages: bridge.report.messages(),
+            };
+            let ctx = ctx.clone();
+            state.start(bridge.scenario, meta, move || ctx.request_repaint());
+        }
+        Err(e) => state.fail(format!("Cannot simulate: {e}")),
     }
 }
 
@@ -315,13 +581,14 @@ pub(super) fn paint_over(
         paint_badges(&painter, cache, input, &to_screen, viewport.zoom);
     }
     paint_peaks(&painter, cache, &to_screen);
-    legend(ui.ctx(), rect, cache);
+    let stale = matches!(&cache.source, Source::Solved(sol) if sol.layout_key != layout_key(input));
+    legend(ui.ctx(), rect, cache, stale);
 }
 
 fn paint_map(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64, f64) -> Pos2) {
     // A mesh with a colour per vertex: the GPU blends between them, so the
     // field reads smooth whatever the cell size.
-    let (w, h) = (cache.scene.width, cache.scene.height);
+    let (w, h) = cache.size;
     let (cols, rows) = (
         ((w / 5.0) as usize).clamp(2, 160),
         ((h / 5.0) as usize).clamp(2, 160),
@@ -447,8 +714,28 @@ fn paint_rims(
     }
 }
 
-/// The hottest air cell around the device, degrees C.
+/// What a badge says about one device.
+struct Reading {
+    temp: f64,
+    verdict: Verdict,
+    /// Kelvin left to the tightest limit; negative = over.
+    margin_k: Option<f64>,
+}
+
+/// The solver's reading of a device when there is one.
+fn solved(cache: &Cache, id: u64) -> Option<&novo_thermal::DeviceResult> {
+    match &cache.source {
+        Source::Solved(sol) => sol.snapshot.devices.iter().find(|d| d.id == id),
+        Source::Synthetic => None,
+    }
+}
+
+/// The hottest air cell around the device, degrees C; a solver result gives
+/// the housing surface temperature instead.
 fn device_temp(cache: &Cache, i: &Item) -> f64 {
+    if let Some(d) = solved(cache, i.id) {
+        return d.surface_c;
+    }
     let g = cache.smooth.grid;
     let (c0, r0) = g.cell_at(i.x - CELL_MM, i.y - CELL_MM);
     let (c1, r1) = g.cell_at(i.x + i.w + CELL_MM, i.y + i.h + CELL_MM);
@@ -461,6 +748,27 @@ fn device_temp(cache: &Cache, i: &Item) -> f64 {
     f64::from(best)
 }
 
+fn reading(cache: &Cache, i: &Item) -> Reading {
+    let temp = device_temp(cache, i);
+    match solved(cache, i.id) {
+        Some(d) => Reading {
+            temp,
+            margin_k: d.margin_k,
+            verdict: match d.status {
+                Status::NoLimit => Verdict::Unknown,
+                Status::Ok => Verdict::Ok,
+                Status::Marginal => Verdict::Near,
+                Status::Over => Verdict::Over,
+            },
+        },
+        None => Reading {
+            temp,
+            margin_k: None,
+            verdict: heat::verdict(cache.ambient, temp, None),
+        },
+    }
+}
+
 fn paint_badges(
     painter: &egui::Painter,
     cache: &Cache,
@@ -470,15 +778,20 @@ fn paint_badges(
 ) {
     let font = FontId::monospace(t::FONT_SMALL);
     for i in input.items.iter().filter(|i| i.loss_w > 0.0) {
+        let Reading {
+            temp,
+            verdict,
+            margin_k,
+        } = reading(cache, i);
+        let (text, width) = match margin_k {
+            Some(m) => (format!("{temp:.0} °C · {m:+.0} K"), 128.0),
+            None => (format!("{temp:.0} °C"), 88.0),
+        };
         // Only where the pill fits inside the device.
-        if (i.w as f32) * zoom < 96.0 || (i.h as f32) * zoom < 30.0 {
+        if (i.w as f32) * zoom < width + 8.0 || (i.h as f32) * zoom < 30.0 {
             continue;
         }
-        let temp = device_temp(cache, i);
-        let (verdict, dot) = (
-            heat::verdict(cache.scene.ambient, temp, None),
-            t::TEXT_MUTED,
-        );
+        let dot = t::TEXT_MUTED;
         let dot = match verdict {
             Verdict::Ok => t::SUCCESS,
             Verdict::Near => t::WARNING,
@@ -486,7 +799,7 @@ fn paint_badges(
             Verdict::Unknown => dot,
         };
         let br = to_screen(i.x + i.w, i.y + i.h);
-        let pill = Rect::from_min_size(br - Vec2::new(94.0, 26.0), Vec2::new(88.0, 20.0));
+        let pill = Rect::from_min_size(br - Vec2::new(width + 6.0, 26.0), Vec2::new(width, 20.0));
         painter.rect(
             pill,
             10.0,
@@ -498,7 +811,7 @@ fn paint_badges(
         painter.text(
             pill.left_center() + Vec2::new(20.0, 0.0),
             Align2::LEFT_CENTER,
-            format!("{temp:.0} °C"),
+            text,
             font.clone(),
             t::TEXT,
         );
@@ -547,7 +860,7 @@ fn paint_peaks(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64, f
     }
 }
 
-fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache) {
+fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, stale: bool) {
     egui::Area::new(egui::Id::new("heat_legend"))
         .fixed_pos(rect.right_top() + Vec2::new(-176.0, 12.0))
         .order(egui::Order::Foreground)
@@ -594,16 +907,44 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache) {
                     );
                 }
                 ui.label(
-                    egui::RichText::new(format!("°C · ambient {:.0}", cache.scene.ambient))
+                    egui::RichText::new(format!("°C · ambient {:.0}", cache.ambient))
                         .small()
                         .color(t::TEXT_MUTED),
                 );
                 ui.add_space(4.0);
-                ui.label(
-                    egui::RichText::new("Preview model from the part losses, not a solver result.")
-                        .small()
-                        .color(t::TEXT_MUTED),
-                );
+                let small = |text: &str, color| egui::RichText::new(text).small().color(color);
+                match &cache.source {
+                    Source::Synthetic => {
+                        ui.label(small(
+                            "Preview model from the part losses, not a solver result. \
+                             Press Simulate for a real run.",
+                            t::TEXT_MUTED,
+                        ));
+                    }
+                    Source::Solved(sol) => {
+                        let p = &sol.snapshot.progress;
+                        ui.label(small(p.fidelity.label(), t::TEXT));
+                        if stale {
+                            ui.label(small(
+                                "Out of date: the layout changed since this run.",
+                                t::WARNING,
+                            ));
+                        }
+                        if !p.converged {
+                            ui.label(small("Not converged.", t::WARNING));
+                        }
+                        let a = &sol.snapshot.accuracy;
+                        if !a.headline.is_empty() {
+                            ui.label(small(&a.headline, t::TEXT_MUTED));
+                        }
+                        for n in sol.snapshot.notes.iter().take(2) {
+                            ui.label(small(n, t::TEXT_MUTED));
+                        }
+                        for m in &sol.messages {
+                            ui.label(small(m, t::WARNING));
+                        }
+                    }
+                }
             });
         });
 }
@@ -636,6 +977,7 @@ mod tests {
                     loss_w: 2.0,
                 },
             ],
+            solution: None,
         }
     }
 
@@ -667,7 +1009,7 @@ mod tests {
         let mut b = input();
         b.ambient = 45.0;
         assert_ne!(key(&a), key(&b));
-        assert_eq!(build(&b).scene.ambient, 45.0);
+        assert_eq!(build(&b).ambient, 45.0);
     }
 
     #[test]
@@ -718,5 +1060,119 @@ mod tests {
         let i = input();
         let c = build(&i);
         assert!(device_temp(&c, &i.items[0]) > device_temp(&c, &i.items[1]));
+    }
+
+    /// A scenario matching `input()`: a 700 x 900 x 300 mm interior, the
+    /// plate 600 x 800 at (50, 50).
+    fn scenario() -> novo_thermal::Scenario {
+        use novo_layout::Rect;
+        use novo_layout::sizing::{Installation, Material};
+        use novo_thermal::{Device as D, Enclosure, Params, Scenario};
+        let dev = |id, x, y, w, h, loss_w| D {
+            id,
+            footprint: Rect { x, y, w, h },
+            height_mm: Some(80.0),
+            loss_w,
+            rated_max_ambient_c: None,
+            rated_max_surface_c: Some(70.0),
+            heat_capacity_j_per_k: None,
+        };
+        Scenario {
+            enclosure: Enclosure {
+                width_mm: 704.0,
+                height_mm: 904.0,
+                depth_mm: 304.0,
+                wall_mm: 2.0,
+                material: Material::Steel,
+                installation: Installation::Wall,
+                plate: Rect {
+                    x: 50.0,
+                    y: 50.0,
+                    w: 600.0,
+                    h: 800.0,
+                },
+            },
+            ambient_c: 35.0,
+            devices: vec![
+                dev(1, 150.0, 150.0, 150.0, 200.0, 80.0),
+                dev(2, 400.0, 150.0, 45.0, 90.0, 2.0),
+            ],
+            obstacles: Vec::new(),
+            vents: Vec::new(),
+            fans: Vec::new(),
+            params: Params::default(),
+        }
+    }
+
+    fn meta(i: &Input) -> Meta {
+        Meta {
+            layout_key: layout_key(i),
+            ambient: i.ambient,
+            plate: [50.0, 50.0, 600.0, 800.0],
+            messages: vec!["1 device has no loss data".into()],
+        }
+    }
+
+    fn run_to_end(state: &mut HeatState) {
+        let ctx = egui::Context::default();
+        for _ in 0..600 {
+            state.poll(&ctx);
+            if !state.running() {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        panic!("the run did not finish");
+    }
+
+    #[test]
+    fn a_run_replaces_the_synthetic_field_with_the_result() {
+        let mut state = HeatState::new();
+        let mut i = input();
+        state.start(scenario(), meta(&i), || {});
+        assert!(state.running());
+        run_to_end(&mut state);
+        assert!(state.notice.is_none(), "{:?}", state.notice);
+        i.solution = state.solution();
+        let sol = i.solution.clone().expect("a result");
+        assert!(sol.snapshot.is_consistent());
+        let c = build(&i);
+        assert!(matches!(c.source, Source::Solved(_)));
+        assert!(!c.contours.is_empty());
+        assert_eq!(c.size, (600.0, 800.0));
+        // The badge reads the solver's surface temperature of the device.
+        let want = sol.snapshot.devices.iter().find(|d| d.id == 1).unwrap();
+        assert_eq!(device_temp(&c, &i.items[0]), want.surface_c);
+        assert!(reading(&c, &i.items[0]).margin_k.is_some());
+        // The drive is hotter than the relay in the solved picture too.
+        assert!(device_temp(&c, &i.items[0]) > device_temp(&c, &i.items[1]));
+    }
+
+    #[test]
+    fn a_result_is_out_of_date_when_the_layout_moves() {
+        let mut i = input();
+        let m = meta(&i);
+        i.items[0].x += 20.0;
+        assert_ne!(m.layout_key, layout_key(&i));
+    }
+
+    #[test]
+    fn simulate_command_asks_for_a_run_once() {
+        let mut s = HeatState::new();
+        s.command("heat.simulate");
+        assert!(s.on);
+        assert!(s.take_request());
+        assert!(!s.take_request());
+    }
+
+    #[test]
+    fn a_second_start_is_ignored_while_running() {
+        let mut state = HeatState::new();
+        let i = input();
+        state.start(scenario(), meta(&i), || {});
+        let runs = state.runs;
+        state.start(scenario(), meta(&i), || {});
+        assert_eq!(state.runs, runs);
+        run_to_end(&mut state);
     }
 }

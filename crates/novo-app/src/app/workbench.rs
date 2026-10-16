@@ -582,7 +582,9 @@ impl NovoApp {
                 self.cabinet.table = !showing;
                 self.switch_workspace(Workspace::Cabinet);
             }
-            "heat.toggle" | "heat.airflow" | "heat.contours" if self.is_open() => {
+            "heat.toggle" | "heat.airflow" | "heat.contours" | "heat.simulate"
+                if self.is_open() =>
+            {
                 self.switch_workspace(Workspace::Cabinet);
                 self.cabinet.table = false;
                 self.cabinet.heat.command(id);
