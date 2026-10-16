@@ -279,7 +279,7 @@ const EDITOR_KEYS: &[&str] = &[
 
 /// Commands the app runs besides the shell actions (`Action`) and the
 /// favourites; the command field shows the rest as "Comes later".
-const APP_COMMANDS: &[&str] = &[
+pub(super) const APP_COMMANDS: &[&str] = &[
     "tool.place",
     "tool.repeat",
     "tool.connect",
@@ -844,7 +844,17 @@ impl NovoApp {
             "check.problems" => self.show_issues(false),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),
-            "edit.properties" => {
+            "edit.escape" => {
+                // The same ladder Esc climbs on the drawing: the step in
+                // progress, then the tool, then the selection.
+                if let Some(view) = self.canvas.schematic()
+                    && !view.editor.cancel_step()
+                    && !view.editor.leave_tool()
+                {
+                    view.canvas.selection.clear();
+                }
+            }
+            "edit.properties" | "edit.rename" => {
                 // The inspector shows with the selection; the cursor goes in
                 // its tag.
                 let selection = self.selection();

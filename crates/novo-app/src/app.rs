@@ -1428,6 +1428,7 @@ impl NovoApp {
                 ))
             })
             .inner;
+        self.anchor_response("outline.toggle", &toggle, "Pages button");
         if toggle.clicked() {
             self.outline_open ^= true;
         }
