@@ -725,7 +725,14 @@ pub(super) fn start_run(
             };
             state.start(bridge.scenario, meta);
         }
-        Err(e) => state.fail(format!("Cannot simulate: {e}")),
+        Err(e) => {
+            let hint = if e.to_string().contains("is not set") {
+                ". Set it in the Cabinet: Size enclosure or Plate setup"
+            } else {
+                ""
+            };
+            state.fail(format!("Cannot simulate: {e}{hint}"));
+        }
     }
 }
 
