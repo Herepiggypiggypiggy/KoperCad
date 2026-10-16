@@ -102,3 +102,16 @@ fn project_overrides_are_listed_as_the_engineers_own() {
         vec!["standards.iec60204.max_control_ac_v".to_owned()]
     );
 }
+
+#[test]
+fn colour_rules_carry_a_count_per_colour() {
+    let g = golden();
+    let r = g.result("iec60204.conductor-colour");
+    assert!(
+        r.evidence
+            .iter()
+            .any(|e| e.contains("wires black") || e.contains("wire black")),
+        "{:?}",
+        r.evidence
+    );
+}

@@ -22,7 +22,7 @@ pub(super) fn run(e: &Env<'_>, s: &mut Sink) {
         NFPA_NEUTRAL_COLOUR,
         NFPA_CONDUCTOR_COLOUR,
     );
-    shared::ampacity_rule(e, s, set, NFPA_CONDUCTOR_AMPACITY);
+    shared::ampacity_rule(e, s, set, NFPA_CONDUCTOR_AMPACITY, shared::Tables::Awg);
     // 120 V ac as understood for the edition; overridable. No dc limit is
     // built in: the engineer enters it from their copy.
     shared::control_voltage(e, s, set, NFPA_CONTROL_VOLTAGE, 120.0, None);

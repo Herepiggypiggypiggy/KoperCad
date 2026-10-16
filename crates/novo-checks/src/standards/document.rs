@@ -135,7 +135,7 @@ pub struct ComplianceDocument {
 
 /// What no rule here looks at. Printed so a reader does not assume it was.
 pub const NOT_COVERED: &[&str] = &[
-    "Conductor current-carrying capacity under IEC 60204-1 and the IEC 60364-5-52 tables: those tables feed the cable calculations only, and every value is a planning value (not loaded from a licensed copy).",
+    "The separate design check for wires thinner than their protective device uses its own built-in ampacity table (IEC 60204-1 Table 6, method B2, 40 degrees C), a planning value that is not part of this report's basis table. Cable sizing calculations (kopercad-cli calc) use the IEC 60364-5-52 tables, also planning values unless you load your licensed copy.",
     "Anything not drawn: the physical build, enclosure ingress protection, clearances, creepage, marking on the machine, the technical file, risk assessment, verification tests and measurements.",
     "Selection and rating of parts beyond the properties stored on devices and parts.",
     "Whether a device property stated by the user is true.",
@@ -200,6 +200,9 @@ pub fn fix_hint(rule_id: &str) -> &'static str {
         }
         "iec60204.nameplate" | "nfpa79.nameplate" | "ul508a.nameplate" => {
             "Fill in the machine data in Project settings: rated voltage, phases, frequency and full-load current."
+        }
+        "iec60204.conductor-ampacity" => {
+            "Select the wire (or its cable) and set the installation method (B1, B2 or C) in the Inspector, or set a default for the whole project in Project settings (`machine.installation_method`). Then increase the wire cross-section or lower the protective device rating (`rated_current_a`), as the finding says."
         }
         "nfpa79.conductor-ampacity" | "ul508a.conductor-ampacity" => {
             "Increase the wire cross-section, or reduce the protective device rating (`rated_current_a`), as the finding says."

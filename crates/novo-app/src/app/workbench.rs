@@ -127,6 +127,8 @@ pub(crate) struct Workbench {
     pub(super) dock_size: egui::Vec2,
     /// The inspector's fields while they are edited.
     pub(super) inspector: super::inspector::InspectorState,
+    /// The wire panel's text fields while they are edited.
+    pub(super) wire_panel: super::wire_panel::WirePanel,
     /// Shift+P: false hides the marks on the drawing (counters stay).
     pub(super) marks: bool,
     /// Shift+O: false hides the override diamonds (PE set by hand).
@@ -233,6 +235,7 @@ impl Default for Workbench {
             space_pan: None,
             dock_size: egui::Vec2::ZERO,
             inspector: Default::default(),
+            wire_panel: Default::default(),
             marks: true,
             override_marks: true,
             clip: Default::default(),
