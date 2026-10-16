@@ -686,9 +686,11 @@ fn screen_space_occlusion_darkens_the_corner_between_a_wall_and_the_plate() {
     ] {
         let preset = format!("yaw {yaw_deg} pitch {pitch}");
         let least = 40;
-        let mut camera = Camera::default();
-        camera.yaw = yaw_deg.to_radians();
-        camera.pitch = pitch;
+        let mut camera = Camera {
+            yaw: yaw_deg.to_radians(),
+            pitch,
+            ..Camera::default()
+        };
         camera.fit(&scene.bounds(), SIZE.0 as f32 / SIZE.1 as f32);
         let picture = |ssao| render_ssao(&gpu, &scene, &state, &camera, Mode::Settled, &[], ssao);
         let (flat, occluded) = (picture(false), picture(true));
