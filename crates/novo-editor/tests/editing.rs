@@ -2375,7 +2375,15 @@ fn set_potential_on_selected_feeds_is_one_undo_step() {
     let spec = potential::PotentialSpec::new("N", PotentialKind::Neutral, Some(0.0));
     let (changed, _) = doc
         .transact("Set potential", |tx| {
-            potential::set_feed_potential(tx, &feeds, &spec)
+            potential::set_feed_potential(
+                tx,
+                &feeds,
+                &spec,
+                &potential::FeedSymbols {
+                    line: potential::FEED_SYMBOL.into(),
+                    earth: potential::FEED_PE_SYMBOL.into(),
+                },
+            )
         })
         .unwrap();
     assert_eq!(changed, feeds);
