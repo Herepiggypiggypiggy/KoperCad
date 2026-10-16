@@ -1121,15 +1121,14 @@ fn r_turns_the_part_in_hand_and_a_spare_goes_in_empty_space() {
 }
 
 #[test]
-fn r_on_a_wired_part_is_refused_so_the_lesson_never_asks_for_it() {
+fn r_on_the_wired_push_button_turns_it_and_undo_turns_it_back() {
     let mut r = Replay::open(&placing_parts(true));
     let s1 = symbol_of(r.project(), "-S1", "iec/operators/pushbutton_no");
-    let ok = r.editor.rotate_selection(&mut r.doc, &[AnyId::from(s1)]);
-    let turned = r.project().symbol(s1).unwrap().placement.rotation;
-    assert!(
-        !ok || turned == novo_core::Rotation::R0,
-        "a part with wires on both sides must not be turned in the lesson"
-    );
+    let before = r.project().symbol(s1).unwrap().placement;
+    assert!(r.editor.rotate_selection(&mut r.doc, &[AnyId::from(s1)]));
+    assert_ne!(r.project().symbol(s1).unwrap().placement, before);
+    r.doc.undo().unwrap();
+    assert_eq!(r.project().symbol(s1).unwrap().placement, before);
 }
 
 #[test]
