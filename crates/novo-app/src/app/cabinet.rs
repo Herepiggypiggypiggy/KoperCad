@@ -264,6 +264,15 @@ pub(super) fn problem_lines(
             ));
         }
     }
+    for c in &report.opening_conflicts {
+        if c.device == id {
+            lines.push(format!(
+                "Covers the wiring opening '{}' [{}]",
+                c.opening,
+                novo_layout::openings::RULE_OPENING_KEEPOUT
+            ));
+        }
+    }
     if let Some(door) = layout.door_report() {
         for &(d, over) in &door.too_deep {
             if d == id {
@@ -545,6 +554,8 @@ impl NovoApp {
                     + r.outside.len()
                     + r.too_close.len()
                     + r.rail_overflows.len()
+                    + r.opening_conflicts.len()
+                    + s.opening_problems.len()
                     + r.duct_overlaps.len()
                     + s.door_report().map_or(0, |d| d.problems())
                     + s.swing_report().map_or(0, |d| d.problems());
