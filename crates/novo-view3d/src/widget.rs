@@ -13,6 +13,7 @@ use crate::feel::{self, Inertia, Transition};
 use crate::governor::FrameGovernor;
 use crate::labels::{self, Fade, LabelCandidate};
 use crate::look::{self, Glyph, Look};
+use crate::math::Ray;
 use crate::mesh::MeshLibrary;
 use crate::overlay::Overlay;
 use crate::pick::{self, Hit};
@@ -302,6 +303,8 @@ pub struct Click {
     pub modifiers: Modifiers,
     /// Alt + click: the deepest item (repeated clicks step back up).
     pub deepest: bool,
+    /// The pointer ray through the click, in the world.
+    pub ray: Ray,
 }
 
 impl View3dOutput {
@@ -314,6 +317,7 @@ impl View3dOutput {
             context: None,
             double_clicked: None,
             plate_point: None,
+            hover_ray: None,
             item_drag: None,
             camera_changed: false,
         }
@@ -334,6 +338,8 @@ pub struct View3dOutput {
     pub double_clicked: Option<ItemId>,
     /// The 2D plate point (x, y down, mm) under the pointer.
     pub plate_point: Option<(f64, f64)>,
+    /// The ray through the pointer while it is over the view, in the world.
+    pub hover_ray: Option<Ray>,
     /// A drag that started on a device, rail or duct while
     /// [`View3d::drag_items`] is on: how far the pointer has moved on the
     /// plate since the press, and whether the button is still down.
@@ -914,6 +920,7 @@ impl View3d {
         out.hover = new_hover;
         if let Some(p) = hover_pos.filter(|p| rect.contains(*p)) {
             let ray = self.camera.ray(Self::ndc(rect, p), aspect);
+            out.hover_ray = Some(ray);
             out.plate_point = ray
                 .plane_hit(Vec3::ZERO, Vec3::Z)
                 .map(|t| scene.frame.plate(ray.at(t)));
@@ -939,6 +946,7 @@ impl View3d {
                         id: hit.map(|h| h.id),
                         modifiers,
                         deepest: true,
+                        ray,
                     });
                 } else {
                     self.alt_cycle = None;
@@ -946,6 +954,7 @@ impl View3d {
                         id: self.pick_at(rect, scene, p).map(|h| h.id),
                         modifiers,
                         deepest: false,
+                        ray,
                     });
                 }
             }
@@ -1042,7 +1051,7 @@ impl View3d {
             },
         ));
 
-        self.paint_overlay(ui, rect, scene, look, dt, reduced);
+        self.paint_overlay(ui, rect, scene, &bounds, look, (dt, reduced));
         if let Some(cr) = cube_rect {
             self.paint_cube(&ui.painter_at(rect), cr, cube_hover, look);
         }
@@ -1055,15 +1064,14 @@ impl View3d {
         ui: &egui::Ui,
         rect: Rect,
         scene: &Scene,
+        bounds: &crate::math::Aabb,
         look: &Look,
-        dt: f32,
-        reduced: bool,
+        (dt, reduced): (f32, bool),
     ) {
         let painter = ui.painter_at(rect);
         let ppp = ui.ctx().pixels_per_point();
         let aspect = rect.width() / rect.height().max(1.0);
-        let bounds = scene.bounds();
-        let vp = self.camera.view_proj(aspect, &bounds);
+        let vp = self.camera.view_proj(aspect, bounds);
         let eye = self.camera.eye();
         let mut frustum_ok = Vec::new();
         crate::cull::visible(scene, &self.state, &vp, &mut frustum_ok);
@@ -1093,7 +1101,7 @@ impl View3d {
                 rect.height() * ppp,
             ) / ppp;
             if let (true, Some(label)) = (self.state.display.labels, &item.label)
-                && let Some(p) = self.project_in(rect, &bounds, front)
+                && let Some(p) = self.project_in(rect, bounds, front)
             {
                 let galley =
                     painter.layout_no_wrap(label.to_string(), font.clone(), Color32::PLACEHOLDER);
@@ -1128,7 +1136,7 @@ impl View3d {
                     Glyph::None => continue,
                 };
                 let top = world.transform_point3(Vec3::new(0.0, item.size.y * 0.5, item.size.z));
-                if let Some(p) = self.project_in(rect, &bounds, top) {
+                if let Some(p) = self.project_in(rect, bounds, top) {
                     let c = style
                         .edge
                         .unwrap_or(look.overlay.chip_text[..3].try_into().unwrap());
@@ -1184,19 +1192,26 @@ impl View3d {
         }
         self.label_fades = touched;
         if self.state.display.dimensions {
-            self.paint_dimensions(&painter, rect, scene, look);
+            self.paint_dimensions(&painter, rect, scene, bounds, look);
         }
     }
 
     /// Measuring lines with end ticks and the length on a chip (see
     /// `dimension`). Lines too short on screen to carry their text are left
     /// out; zoom in and they appear.
-    fn paint_dimensions(&self, painter: &egui::Painter, rect: Rect, scene: &Scene, look: &Look) {
+    fn paint_dimensions(
+        &self,
+        painter: &egui::Painter,
+        rect: Rect,
+        scene: &Scene,
+        bounds: &crate::math::Aabb,
+        look: &Look,
+    ) {
         let font = FontId::monospace(11.0);
         for d in dimension::dimensions(scene, &self.state.selection) {
             let (Some(a), Some(b)) = (
-                self.project(rect, scene, d.a),
-                self.project(rect, scene, d.b),
+                self.project_in(rect, bounds, d.a),
+                self.project_in(rect, bounds, d.b),
             ) else {
                 continue;
             };
@@ -1413,7 +1428,12 @@ fn frame_key(
     (camera.projection as u8, size_px, mode as u8).hash(&mut h);
     governed.map(|t| t as u8 + 1).hash(&mut h);
     (&state.selection, state.hover, &state.hidden, &state.related).hash(&mut h);
-    (state.display.edges, state.display.labels).hash(&mut h);
+    (
+        state.display.edges,
+        state.display.labels,
+        state.display.shadows,
+    )
+        .hash(&mut h);
     h.finish()
 }
 
@@ -1616,10 +1636,10 @@ mod cost_tests {
         out.textures_delta.clear();
     }
 
-    /// The scene bounds walk every item, so a frame takes them a few times,
-    /// not once per label: the label pass once cost 50 ms at 1000 devices.
+    /// The scene bounds walk every item, so a frame takes them once, not once
+    /// per label: the label pass once cost 50 ms at 1000 devices.
     #[test]
-    fn a_frame_walks_the_scene_bounds_a_fixed_number_of_times_however_many_labels_show() {
+    fn a_frame_walks_the_scene_bounds_once_however_many_labels_show() {
         install_headless();
         let calls = |devices: usize| {
             let (scene, _) = demo::cabinet(&DemoOptions {
@@ -1637,6 +1657,45 @@ mod cost_tests {
         };
         let (small, large) = (calls(20), calls(600));
         assert_eq!(small, large, "independent of the item count");
-        assert!(large <= 8, "{large} walks of the scene per frame");
+        assert!(large <= 1, "{large} walks of the scene per frame");
+    }
+}
+
+#[cfg(test)]
+mod key_tests {
+    use super::*;
+
+    #[test]
+    fn every_display_switch_changes_the_frame_key() {
+        let scene = Scene::new(crate::scene::PlateFrame {
+            width: 100.0,
+            height: 100.0,
+        });
+        let library = MeshLibrary::new();
+        let camera = Camera::default();
+        let key = |state: &ViewState| {
+            frame_key(
+                &scene,
+                &library,
+                &camera,
+                state,
+                (64, 64),
+                (Mode::Settled, None),
+                0,
+            )
+        };
+        let base = ViewState::default();
+        let mut seen = vec![key(&base)];
+        for flip in [
+            |s: &mut ViewState| s.display.edges = !s.display.edges,
+            |s: &mut ViewState| s.display.labels = !s.display.labels,
+            |s: &mut ViewState| s.display.shadows = !s.display.shadows,
+        ] {
+            let mut s = base.clone();
+            flip(&mut s);
+            let k = key(&s);
+            assert!(!seen.contains(&k), "a switch left the picture key alone");
+            seen.push(k);
+        }
     }
 }
