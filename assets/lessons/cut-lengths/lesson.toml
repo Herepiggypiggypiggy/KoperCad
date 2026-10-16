@@ -24,6 +24,8 @@ project = "../wire-routing/project.json"
 
 [[step]]
 id = "open-wire-list"
+how = ["Press {key:view.schematic}.", "Click the page Wire list in the outline."]
+how_nl = ["Druk op {key:view.schematic}.", "Klik op de pagina Wire list in het overzicht."]
 title = "Open the wire list"
 title_nl = "Open de draadlijst"
 text = """
@@ -85,6 +87,8 @@ een afstand geschat uit het schema plus de lussen. Het is een planningsgetal, al
 
 [[step]]
 id = "back-to-cabinet"
+how = ["Press {key:view.cabinet}."]
+how_nl = ["Druk op {key:view.cabinet}."]
 title = "Back to the cabinet"
 title_nl = "Terug naar de kast"
 text = """
@@ -99,6 +103,8 @@ solve = [ { command = "view.cabinet" } ]
 
 [[step]]
 id = "move-k1"
+how = ["Drag -K1 about 100 mm to the right and let go.", "If a box turns red, press {key:edit.undo} and move less."]
+how_nl = ["Sleep -K1 ongeveer 100 mm naar rechts en laat los.", "Wordt een kader rood, druk dan op {key:edit.undo} en verschuif minder."]
 title = "Move -K1"
 title_nl = "Verplaats -K1"
 text = """
@@ -112,6 +118,8 @@ expect = { signal = "cabinet_dropped" }
 
 [[step]]
 id = "check-again"
+how = ["Press {key:view.schematic}.", "Click the page Wire list in the outline.", "Read Cut length mm for the wires at -K1."]
+how_nl = ["Druk op {key:view.schematic}.", "Klik op de pagina Wire list in het overzicht.", "Lees Cut length mm bij de draden op -K1."]
 title = "Read the wire list again"
 title_nl = "Lees de draadlijst opnieuw"
 text = """
@@ -128,6 +136,8 @@ solve = [ { command = "view.schematic" }, { page = "Wire list" } ]
 
 [[step]]
 id = "export-cut"
+how = ["Click Route all in the Cabinet header.", "Click Export wire cut in the Routes panel.", "A message shows the file name."]
+how_nl = ["Klik op Route all in de kop van de Cabinet.", "Klik op Export wire cut in het paneel Routes.", "Een melding toont de bestandsnaam."]
 title = "Export the wire cut file"
 title_nl = "Exporteer het draadzaagbestand"
 text = """

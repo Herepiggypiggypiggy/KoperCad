@@ -33,6 +33,8 @@ project = "../wire-routing/project.json"
 
 [[step]]
 id = "open-cabinet"
+how = ["Press {key:view.cabinet}."]
+how_nl = ["Druk op {key:view.cabinet}."]
 title = "Open the cabinet"
 title_nl = "Open de kast"
 text = """
@@ -49,6 +51,8 @@ solve = [ { command = "view.cabinet" } ]
 
 [[step]]
 id = "heat-on"
+how = ["Click Heat in the header, or press {key:heat.toggle}.", "Find the chips Map, Contours, Airflow and Badges."]
+how_nl = ["Klik op Heat in de kop of druk op {key:heat.toggle}.", "Zoek de chips Map, Contours, Airflow en Badges."]
 title = "Turn on Heat"
 title_nl = "Zet Heat aan"
 text = """
@@ -120,6 +124,8 @@ Het totaal telt dan alleen de componenten met een waarde. Vul het artikel in om 
 
 [[step]]
 id = "move-t1"
+how = ["Drag -T1 to another free place and let go.", "Watch the hot spot follow.", "Press {key:edit.undo}."]
+how_nl = ["Sleep -T1 naar een andere vrije plek en laat los.", "Zie de hotspot meekomen.", "Druk op {key:edit.undo}."]
 title = "Move the transformer"
 title_nl = "Verplaats de transformator"
 text = """
@@ -137,6 +143,8 @@ expect = { signal = "cabinet_dropped" }
 
 [[step]]
 id = "simulate"
+how = ["Click Simulate in the header.", "Wait until the legend says the run finished."]
+how_nl = ["Klik op Simulate in de kop.", "Wacht tot de legenda zegt dat de run klaar is."]
 title = "Simulate it for real"
 title_nl = "Simuleer het echt"
 text = """
@@ -166,6 +174,8 @@ Zowel het voorbeeld als de simulatie zijn planningshulpmiddelen. Ze tonen waar w
 
 [[step]]
 id = "balance"
+how = ["Click Size enclosure in the header.", "Click Add to add Enclosure 1.", "Read the result under the list."]
+how_nl = ["Klik op Size enclosure in de kop.", "Klik op Add om Enclosure 1 toe te voegen.", "Lees het resultaat onder de lijst."]
 title = "What the heat means for the box"
 title_nl = "Wat de warmte voor de kast betekent"
 text = """

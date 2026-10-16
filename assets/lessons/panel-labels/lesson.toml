@@ -51,6 +51,8 @@ text_nl = """
 
 [[step]]
 id = "save"
+how = ["Press {key:file.save_as}.", "Name it starter and save it in Documents."]
+how_nl = ["Druk op {key:file.save_as}.", "Geef het de naam starter en bewaar het in Documenten."]
 title = "Save the project as a file"
 title_nl = "Bewaar het project als bestand"
 text = """

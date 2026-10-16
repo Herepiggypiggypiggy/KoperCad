@@ -25,6 +25,8 @@ project = "../cabinet-layout/finished.json"
 
 [[step]]
 id = "open-cabinet"
+how = ["Press {key:view.cabinet}."]
+how_nl = ["Druk op {key:view.cabinet}."]
 title = "Open the cabinet"
 title_nl = "Open de kast"
 text = """
@@ -41,6 +43,8 @@ solve = [ { command = "view.cabinet" } ]
 
 [[step]]
 id = "select-device"
+how = ["Click -K1 on the plate.", "Read Mounted on, Position and Place rule in the inspector."]
+how_nl = ["Klik op -K1 op de plaat.", "Lees Mounted on, Position en Place rule in de inspecteur."]
 title = "A device knows its rail"
 title_nl = "Een component kent zijn rail"
 text = """
@@ -59,6 +63,8 @@ solve = [ { select = "-K1" } ]
 
 [[step]]
 id = "rules-window"
+how = ["Click Rules in the header.", "Read one rule per line, then close the window."]
+how_nl = ["Klik op Rules in de kop.", "Lees één regel per rij en sluit het venster."]
 title = "Read the place rules"
 title_nl = "Lees de plaatsingsregels"
 text = """
@@ -78,6 +84,8 @@ expect = { clicked = "cabinet.rules" }
 
 [[step]]
 id = "plate-card"
+how = ["Click an empty spot on the plate to clear the selection.", "Click Plate in the header.", "Read Placed and Plate used in the inspector."]
+how_nl = ["Klik op een lege plek op de plaat om de selectie te wissen.", "Klik op Plate in de kop.", "Lees Placed en Plate used in de inspecteur."]
 title = "How full is the plate?"
 title_nl = "Hoe vol is de plaat?"
 text = """
@@ -93,6 +101,8 @@ expect = { clicked = "cabinet.plate" }
 
 [[step]]
 id = "move-off-rail"
+how = ["Press the mouse button on -K1.", "Drag it a little to the right and let go.", "Mounted on is gone from the inspector."]
+how_nl = ["Druk de muisknop in op -K1.", "Sleep het een stukje naar rechts en laat los.", "Mounted on is weg uit de inspecteur."]
 title = "Drag a device off its rail"
 title_nl = "Sleep een component van zijn rail"
 text = """
@@ -108,6 +118,8 @@ expect = { signal = "cabinet_dropped" }
 
 [[step]]
 id = "undo"
+how = ["Press {key:edit.undo}.", "Mounted on is back."]
+how_nl = ["Druk op {key:edit.undo}.", "Mounted on staat er weer."]
 title = "Put it back"
 title_nl = "Zet het terug"
 text = """
@@ -122,6 +134,8 @@ solve = [ { command = "edit.undo" } ]
 
 [[step]]
 id = "cut-list"
+how = ["Click Cut list in the header.", "Read which pieces come out of which 2000 mm bar."]
+how_nl = ["Klik op Cut list in de kop.", "Lees welke stukken uit welke staaf van 2000 mm komen."]
 title = "How many bars to buy"
 title_nl = "Hoeveel staven je moet kopen"
 text = """

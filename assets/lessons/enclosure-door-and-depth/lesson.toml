@@ -27,6 +27,8 @@ project = "../wire-routing/project.json"
 
 [[step]]
 id = "open-cabinet"
+how = ["Press {key:view.cabinet}."]
+how_nl = ["Druk op {key:view.cabinet}."]
 title = "Open the cabinet"
 title_nl = "Open de kast"
 text = """
@@ -41,6 +43,8 @@ solve = [ { command = "view.cabinet" } ]
 
 [[step]]
 id = "open-panel"
+how = ["Click an empty spot on the plate to clear the selection.", "Click Plate in the header.", "Find the section Inside and door."]
+how_nl = ["Klik op een lege plek op de plaat om de selectie te wissen.", "Klik op Plate in de kop.", "Zoek de sectie Inside and door."]
 title = "Open Inside and door"
 title_nl = "Open Inside and door"
 text = """
@@ -84,6 +88,8 @@ point = { ui = "cabinet.door" }
 
 [[step]]
 id = "apply-defaults"
+how = ["Leave the numbers as they are.", "Click Apply."]
+how_nl = ["Laat de getallen zoals ze zijn.", "Klik op Apply."]
 title = "Apply the starting values"
 title_nl = "Pas de beginwaarden toe"
 text = """
@@ -99,6 +105,8 @@ expect = { clicked = "cabinet.door.apply" }
 
 [[step]]
 id = "shallow"
+how = ["Double-click Inside depth.", "Type 100 and press Enter.", "Click Apply."]
+how_nl = ["Dubbelklik op Inside depth.", "Typ 100 en druk op Enter.", "Klik op Apply."]
 title = "Try a shallow cabinet"
 title_nl = "Probeer een ondiepe kast"
 text = """
@@ -146,6 +154,8 @@ point = { ui = "cabinet.door" }
 
 [[step]]
 id = "undo"
+how = ["Press {key:edit.undo}."]
+how_nl = ["Druk op {key:edit.undo}."]
 title = "Back to the earlier values"
 title_nl = "Terug naar de eerdere waarden"
 text = """

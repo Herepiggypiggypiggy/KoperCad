@@ -28,6 +28,8 @@ project = "../wire-routing/project.json"
 
 [[step]]
 id = "open-cabinet"
+how = ["Press {key:view.cabinet}."]
+how_nl = ["Druk op {key:view.cabinet}."]
 title = "Open the cabinet"
 title_nl = "Open de kast"
 text = """
@@ -42,6 +44,8 @@ solve = [ { command = "view.cabinet" } ]
 
 [[step]]
 id = "select-t1"
+how = ["Click -T1 on the plate."]
+how_nl = ["Klik op -T1 op de plaat."]
 title = "A device that is screwed on"
 title_nl = "Een component dat wordt vastgeschroefd"
 text = """
@@ -56,6 +60,8 @@ solve = [ { select = "-T1" } ]
 
 [[step]]
 id = "select-s0"
+how = ["Click -S0 on the plate."]
+how_nl = ["Klik op -S0 op de plaat."]
 title = "A device that goes through the door"
 title_nl = "Een component dat door de deur gaat"
 text = """
@@ -83,6 +89,8 @@ Je voegt ze niet toe; ze komen uit de rails.
 
 [[step]]
 id = "export"
+how = ["Press {key:view.command_palette}.", "Type plate.", "Run Export plate drawing."]
+how_nl = ["Druk op {key:view.command_palette}.", "Typ plate.", "Voer Export plate drawing uit."]
 title = "Export the plate drawing"
 title_nl = "Exporteer de plaattekening"
 text = """
@@ -127,6 +135,8 @@ Het deurblad heeft **Cut-outs** met maat, X, Y en het component.
 
 [[step]]
 id = "turn-t1"
+how = ["Click -T1 and press {key:edit.rotate}.", "Press {key:view.command_palette}, type plate and run Export plate drawing.", "The message says Replaced."]
+how_nl = ["Klik op -T1 en druk op {key:edit.rotate}.", "Druk op {key:view.command_palette}, typ plate en voer Export plate drawing uit.", "De melding zegt Replaced."]
 title = "Turn the transformer and export again"
 title_nl = "Draai de transformator en exporteer opnieuw"
 text = """

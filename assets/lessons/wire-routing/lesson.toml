@@ -27,6 +27,8 @@ project = "project.json"
 
 [[step]]
 id = "open-cabinet"
+how = ["Press {key:view.cabinet}."]
+how_nl = ["Druk op {key:view.cabinet}."]
 title = "Open the cabinet"
 title_nl = "Open de kast"
 text = """
@@ -43,6 +45,8 @@ solve = [ { command = "view.cabinet" } ]
 
 [[step]]
 id = "routes-on"
+how = ["Click Route all in the header.", "The Routes panel opens on the right and lines appear."]
+how_nl = ["Klik op Route all in de kop.", "Het paneel Routes opent rechts en er verschijnen lijnen."]
 title = "Route all the wires"
 title_nl = "Route alle draden"
 text = """
@@ -104,6 +108,8 @@ point = { ui = "cabinet.canvas" }
 
 [[step]]
 id = "move-device"
+how = ["Drag -F2 a little to the left and let go.", "Watch the lengths of its wires change.", "Press {key:edit.undo}."]
+how_nl = ["Sleep -F2 een stukje naar links en laat los.", "Zie de lengtes van de draden veranderen.", "Druk op {key:edit.undo}."]
 title = "Move a device, the wires follow"
 title_nl = "Verplaats een component, de draden volgen"
 text = """

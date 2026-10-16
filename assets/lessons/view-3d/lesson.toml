@@ -24,6 +24,8 @@ project = "../wire-routing/project.json"
 
 [[step]]
 id = "open-3d"
+how = ["Press {key:view.cabinet}.", "Click 3D in the face switch next to Plate and Table."]
+how_nl = ["Druk op {key:view.cabinet}.", "Klik op 3D in de schakelaar naast Plate en Table."]
 title = "Switch to 3D"
 title_nl = "Schakel naar 3D"
 text = """
@@ -66,6 +68,8 @@ point = { ui = "cabinet.canvas" }
 
 [[step]]
 id = "click-device"
+how = ["Click -K1 in the 3D view.", "Double-click it to fit the camera."]
+how_nl = ["Klik op -K1 in het 3D-beeld.", "Dubbelklik erop om de camera te passen."]
 title = "Click a device"
 title_nl = "Klik op een component"
 text = """
@@ -82,6 +86,8 @@ solve = [ { select = "-K1" } ]
 
 [[step]]
 id = "view-cube"
+how = ["Click Front on the view cube."]
+how_nl = ["Klik op Front op de kijkkubus."]
 title = "Use the view cube"
 title_nl = "Gebruik de kijkkubus"
 text = """
@@ -97,6 +103,8 @@ expect = { clicked = "cabinet.view3d.cube" }
 
 [[step]]
 id = "iso"
+how = ["Click a corner of the view cube.", "Press {key:view.fit}."]
+how_nl = ["Klik op een hoek van de kijkkubus.", "Druk op {key:view.fit}."]
 title = "Show it from a corner"
 title_nl = "Toon het vanuit een hoek"
 text = """
@@ -125,6 +133,8 @@ point = { ui = "cabinet.canvas" }
 
 [[step]]
 id = "back"
+how = ["Click Plate in the face switch."]
+how_nl = ["Klik op Plate in de schakelaar."]
 title = "Back to the plate"
 title_nl = "Terug naar de plaat"
 text = """
