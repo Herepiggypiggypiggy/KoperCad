@@ -1,21 +1,21 @@
-# Cabinet track, lesson 7. Sample: the finished cabinet of rails-and-ducts. Parts in the sample:
-# -T1 mounts with four 6 mm screw holes (`hole_pattern`), -S0 and -S1 are pushbuttons with a round
-# 22 mm door cut-out (`mounting = door_cutout`, `cutout`). Expected drill table: 8 holes of 5.5 mm
-# (rail screws) and 4 of 6 mm on the plate, plus 2 cut-outs.
+# Cabinet track, lesson 7. Sample: wire-routing/project.json. Parts in the sample: -T1 mounts with
+# four 6 mm screw holes (`hole_pattern`), -S0 and -S1 are pushbuttons with a round 22 mm door
+# cut-out (`mounting = door_cutout`, `cutout`).
 #
-# On main: the engine and the PDF/DXF writers (#397).
-# NOT ON MAIN yet (keep status = "draft" until they are):
-#   - the "Export plate drawing" command export.plate and the CLI: #470
-#   - the door sheet at the enclosure's real size: #477 (needs #409)
-#   - a button on the Cabinet canvas (no PR yet; the command works from the palette)
+# Verified on main (59a37de0): the drill table of this sample is 20 holes of 5.5 mm (rail screws,
+# four per 580 mm rail) and 4 of 6 mm on the plate, plus 2 cut-outs on the door. The Cabinet header
+# button "Plate drawing" and the command export.plate write "<project> <+CAB> plate.pdf" next to the
+# project and show "Exported <path>"; sheets are Plate, then Door when something goes through it;
+# each sheet has the tables "Holes by diameter", "Drill holes" and "Cut-outs".
+# Needs from the Cabinet owner: the anchors named below and a signal plate_exported.
 format = 1
 id = "panel-plate-drawing"
-version = 1
+version = 2
 status = "draft"
 title = "The plate drawing and drill table"
 title_nl = "De plaattekening en boortabel"
-summary = "Export a dimensioned plate drawing with a numbered drill table for the workshop."
-summary_nl = "Exporteer een gemaatvoerde plaattekening met een genummerde boortabel voor de werkplaats."
+summary = "Export a dimensioned plate drawing with a numbered drill table for the workshop, and see it follow a turned device."
+summary_nl = "Exporteer een gemaatvoerde plaattekening met een genummerde boortabel voor de werkplaats en zie hoe die een gedraaid component volgt."
 track = "cabinet"
 order = 70
 level = "intermediate"
@@ -28,7 +28,13 @@ project = "../wire-routing/project.json"
 [[step]]
 id = "open-cabinet"
 title = "Open the cabinet"
-text = "Press {key:view.cabinet}. The workshop drills the plate from what is placed here."
+title_nl = "Open de kast"
+text = """
+Press {key:view.cabinet}. The workshop drills the plate from what is placed here, so the drawing you are about to export is only as good as this layout.
+"""
+text_nl = """
+Druk op {key:view.cabinet}. De werkplaats boort de plaat naar wat hier is geplaatst, dus de tekening die je zo exporteert is zo goed als deze indeling.
+"""
 point = { ui = "switcher.cabinet" }
 expect = { command = "view.cabinet" }
 solve = [ { command = "view.cabinet" } ]
@@ -36,8 +42,14 @@ solve = [ { command = "view.cabinet" } ]
 [[step]]
 id = "select-t1"
 title = "A device that is screwed on"
+title_nl = "Een component dat wordt vastgeschroefd"
 text = """
-Click **-T1**, the transformer. Its part says it mounts on the plate with four 6 mm holes, in a pattern measured from the device's top left corner.
+Click **-T1**, the control transformer. Its part says it mounts on the plate with four 6 mm holes, in a pattern measured from the device's top left corner.
+Those four holes will be in the drill table.
+"""
+text_nl = """
+Klik op **-T1**, de stuurtransformator. Zijn artikel zegt dat het met vier gaten van 6 mm op de plaat wordt gemonteerd, in een patroon gemeten vanaf de linkerbovenhoek van het component.
+Die vier gaten komen in de boortabel.
 """
 point = { ui = "cabinet.inspector" }
 expect = { selected = "-T1" }
@@ -46,8 +58,14 @@ solve = [ { select = "-T1" } ]
 [[step]]
 id = "select-s0"
 title = "A device that goes through the door"
+title_nl = "Een component dat door de deur gaat"
 text = """
-Click **-S0**, a pushbutton. Its part says it needs a round 22 mm {tip:cutout} in the **door**, not holes in the plate.
+Click **-S0**, a push button. Its part says it needs a round 22 mm {tip:cutout} in the **door**, not holes in the plate.
+So the plate drawing gets a second sheet for the door.
+"""
+text_nl = """
+Klik op **-S0**, een drukknop. Zijn artikel zegt dat hij een ronde {tip:cutout} van 22 mm in de **deur** nodig heeft, geen gaten in de plaat.
+Daarom krijgt de plaattekening een tweede blad voor de deur.
 """
 point = { ui = "cabinet.inspector" }
 expect = { selected = "-S0" }
@@ -56,60 +74,84 @@ solve = [ { select = "-S0" } ]
 [[step]]
 id = "rail-holes"
 title = "Rails get holes too"
+title_nl = "Rails krijgen ook gaten"
 text = """
-Each DIN rail gets 5.5 mm clearance holes, 10 mm in from each end and at most 200 mm apart. You do not have to add them.
+Each DIN rail gets 5.5 mm clearance holes, 10 mm in from each end and at most 200 mm apart: four holes on each 580 mm rail here, 20 in all.
+You do not add them; they come from the rails.
 """
-point = { ui = "cabinet.canvas" }
-
-[[step]]
-id = "open-palette"
-title = "Find the command"
-text = "Press {key:view.command_palette} and type **plate**."
-point = { ui = "palette.field" }
-expect = { command = "view.command_palette" }
-solve = [ { command = "view.command_palette" } ]
+text_nl = """
+Elke DIN-rail krijgt gaten van 5,5 mm, 10 mm van elk uiteinde en hoogstens 200 mm uit elkaar: hier vier gaten op elke rail van 580 mm, samen 20.
+Je voegt ze niet toe; ze komen uit de rails.
+"""
 
 [[step]]
 id = "export"
 title = "Export the plate drawing"
+title_nl = "Exporteer de plaattekening"
 text = """
-Run **Export plate drawing**. The PDF is written next to the project and the message says where.
-Sheet 1 is the plate, then the door, then the drill table.
+Click **Plate drawing** in the Cabinet header (or press {key:view.command_palette}, type **plate** and run **Export plate drawing**).
+A PDF named like "Motor starter cabinet (lesson) +CAB plate.pdf" is written next to the project, and the message says "Exported" with the full path.
 """
-# NOT ON MAIN: export.plate (#470).
-point = { ui = "palette.field" }
+text_nl = """
+Klik op **Plate drawing** in de kopregel van de Cabinet-weergave (of druk op {key:view.command_palette}, typ **plate** en voer **Export plate drawing** uit).
+Een PDF met een naam als "Motor starter cabinet (lesson) +CAB plate.pdf" wordt naast het project geschreven en de melding zegt "Exported" met het volledige pad.
+"""
+point = { ui = "cabinet.plate_drawing" }
 expect = { command = "export.plate" }
 solve = [ { command = "export.plate" } ]
 
 [[step]]
 id = "read-sheet"
 title = "Read the plate sheet"
+title_nl = "Lees het plaatblad"
 text = """
-The outline of the plate, the rails, each device with its tag, numbered holes and cut-outs, overall size and the X and Y of every feature along the edges.
+Sheet 1 is the plate: its outline, the rails, each device with its tag, numbered holes, the overall size and the position of every feature along the edges.
+Sheet 2 is the door, with the two 22 mm cut-outs for **-S0** and **-S1**. Both sheets use the same scale.
+"""
+text_nl = """
+Blad 1 is de plaat: de omtrek, de rails, elk component met zijn tag, genummerde gaten, de totale maat en de positie van elk onderdeel langs de randen.
+Blad 2 is de deur, met de twee uitsparingen van 22 mm voor **-S0** en **-S1**. Beide bladen hebben dezelfde schaal.
 """
 
 [[step]]
 id = "read-table"
 title = "Read the drill table"
+title_nl = "Lees de boortabel"
 text = """
-The {tip:drill-table} groups holes by diameter, so the drill is changed once per size. Coordinates are in mm from the top left of the plate.
+The plate sheet carries three tables. **Holes by diameter** says 20 holes of 5.5 mm and 4 of 6 mm, so the drill is changed once per size.
+**Drill holes** numbers every hole with diameter, X, Y and where it comes from. Coordinates are in mm from the top left of the plate.
+The door sheet has **Cut-outs** with size, X, Y and the device.
+"""
+text_nl = """
+Het plaatblad heeft drie tabellen. **Holes by diameter** zegt 20 gaten van 5,5 mm en 4 van 6 mm, zodat de boor maar één keer per maat wordt gewisseld.
+**Drill holes** nummert elk gat met diameter, X, Y en de herkomst. Coördinaten zijn in mm vanaf de linkerbovenhoek van de plaat.
+Het deurblad heeft **Cut-outs** met maat, X, Y en het component.
 """
 
 [[step]]
 id = "turn-t1"
 title = "Turn the transformer and export again"
+title_nl = "Draai de transformator en exporteer opnieuw"
 text = """
-Select **-T1** and press {key:edit.rotate}, then run **Export plate drawing** again.
-The hole pattern turns 90 degrees with the device, and the table follows.
+Select **-T1** and press {key:edit.rotate}; its box turns a quarter. Click **Plate drawing** again: the message says "Replaced", because the file from before is overwritten.
+The four holes of **-T1** turned with the device, so their X and Y in **Drill holes** are different now.
 """
-# NOT ON MAIN: export.plate (#470).
+text_nl = """
+Selecteer **-T1** en druk op {key:edit.rotate}; het kader draait een kwartslag. Klik opnieuw op **Plate drawing**: de melding zegt "Replaced", want het eerdere bestand wordt overschreven.
+De vier gaten van **-T1** zijn met het component meegedraaid, dus hun X en Y in **Drill holes** zijn nu anders.
+"""
 point = { ui = "cabinet.canvas" }
-expect = { all = [ { command = "edit.rotate" }, { command = "export.plate" } ] }
+expect = { all = [ { signal = "cabinet_rotated" }, { command = "export.plate" } ] }
 
 [[step]]
 id = "done"
 title = "From layout to workshop"
+title_nl = "Van indeling naar werkplaats"
 text = """
 The drawing comes from the same placements as the cabinet and the wire list, so they cannot disagree.
 Next: labels for the wires and devices.
+"""
+text_nl = """
+De tekening komt uit dezelfde plaatsingen als de kast en de draadlijst, dus ze kunnen elkaar niet tegenspreken.
+Straks: labels voor de draden en componenten.
 """
