@@ -249,6 +249,14 @@ fn solve_steady(
             } else {
                 steady::unconverged_note(&run.run.report())
             });
+            let imbalance = run.run.report().imbalance.abs();
+            if imbalance > 0.02 {
+                done.notes.push(format!(
+                    "Heat balance off by {:.1} %: the result is an estimate to that extent \
+                     (heat in and out of the means over the last window).",
+                    100.0 * imbalance
+                ));
+            }
             if status != RunStatus::Converged && run.run.report().stage == 0 {
                 // stopped inside the first-order stage: say so
                 done.notes.push(PREVIEW_NOTE.into());
