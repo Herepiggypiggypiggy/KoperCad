@@ -513,6 +513,21 @@ fn restore_quality_returns_a_stepped_down_view_to_the_adapters_tier() {
 }
 
 #[test]
+fn the_ambient_occlusion_command_toggles_the_views_occlusion() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.frame();
+    assert!(d.app.view3d.view.state.display.ssao, "on by default");
+    d.app.run_command(&ctx, "view.3d_ssao", None);
+    d.frame();
+    assert!(!d.app.view3d.view.state.display.ssao);
+    d.app.run_command(&ctx, "view.3d_ssao", None);
+    d.frame();
+    assert!(d.app.view3d.view.state.display.ssao);
+}
+
+#[test]
 fn duplicate_in_3d_adds_a_device_with_the_next_tag_on_the_plate_and_undo_takes_it_back() {
     use novo_view3d::scene::{ItemId, ItemKind};
     let dir = tempfile::tempdir().unwrap();

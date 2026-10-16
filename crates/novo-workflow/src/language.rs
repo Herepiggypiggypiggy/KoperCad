@@ -34,7 +34,17 @@ const fn nl(
 pub const DUTCH: &[Aliases] = &[
     // Project
     nl("file.new", &[], &["nieuw project", "nieuw"]),
-    nl("file.open", &[], &["project openen", "openen"]),
+    nl(
+        "file.open",
+        &[],
+        &[
+            "project openen",
+            "openen",
+            "bestand openen",
+            "recent",
+            "onlangs geopend",
+        ],
+    ),
     nl(
         "file.open_read_only",
         &[],
@@ -731,6 +741,11 @@ pub const DUTCH: &[Aliases] = &[
         "view.3d_quality",
         &["3d kwaliteit herstellen"],
         &["kwaliteit", "trage weergave", "herstellen"],
+    ),
+    nl(
+        "view.3d_ssao",
+        &["omgevingsocclusie tonen in 3d"],
+        &["occlusie", "contactschaduw", "hoeken"],
     ),
     nl(
         "view.3d_stats",

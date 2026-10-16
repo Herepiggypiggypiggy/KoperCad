@@ -390,12 +390,19 @@ impl NovoApp {
         }
         mode.view.drag_items = mode.controls.move_items && mode.place.armed.is_none();
         mode.view.state.display.shadows = mode.controls.shadows;
+        // Switching occlusion off and on asks for full quality back, the same
+        // as "Restore quality" (one governor, one restore path).
+        if mode.controls.ssao && !mode.view.state.display.ssao {
+            mode.view.reset_quality();
+        }
+        mode.view.state.display.ssao = mode.controls.ssao;
         mode.view.state.display.dimensions = mode.controls.dimensions;
         mode.view.state.display.missing_marks = mode.controls.missing_data;
         // The toolbar sits in the view's corner; the door goes where it says.
         let limit = model::door_limit_deg(project, id);
         let view_rect = ui.available_rect_before_wrap();
-        mode.controls.reduced = mode.view.stepped_down().is_some();
+        mode.controls.ssao_available = mode.view.occlusion_available();
+        mode.controls.reduced = mode.view.stepped_down().is_some() || mode.view.occlusion_paused();
         view3d_controls::toolbar(ui.ctx(), view_rect, &mut mode.controls, limit);
         if std::mem::take(&mut mode.controls.restore) {
             mode.view.reset_quality();
@@ -845,6 +852,7 @@ fn heat_controls(
                 ui.selectable_value(&mut h.axis, axis, name);
             }
             ui.add(egui::Slider::new(&mut h.slice_at, 0.0..=1.0).show_value(false));
+            slice_position(ui, h, &sol.snapshot);
         }
         ui.checkbox(&mut h.iso, "Shell")
             .on_hover_text("The surface where the air reaches one temperature");
@@ -876,4 +884,37 @@ fn heat_controls(
         jump = heat_spots::menu(ui, &sol.snapshot, tag_of);
     });
     jump
+}
+
+/// The slice plane's position in millimetres along its axis, with a step to
+/// each side (one cell of the result grid).
+fn slice_position(ui: &mut egui::Ui, h: &mut Heat3d, snap: &novo_cfd::CfdSnapshot) {
+    let edges = heat_3d::slice_edges(snap, h.axis);
+    let (lo, hi) = (edges[0], edges[edges.len() - 1]);
+    let mut mm = lo + f64::from(h.slice_at) * (hi - lo);
+    let back = ui
+        .small_button("-")
+        .on_hover_text("To the centre of the previous cell")
+        .clicked();
+    if back {
+        mm = heat_3d::step_cell(edges, mm, -1);
+    }
+    let drag = ui
+        .add(
+            egui::DragValue::new(&mut mm)
+                .range(lo..=hi)
+                .speed(1.0)
+                .suffix(" mm"),
+        )
+        .on_hover_text("Where the plane cuts the enclosure; drag or type");
+    let forward = ui
+        .small_button("+")
+        .on_hover_text("To the centre of the next cell")
+        .clicked();
+    if forward {
+        mm = heat_3d::step_cell(edges, mm, 1);
+    }
+    if back || forward || drag.changed() {
+        h.slice_at = (((mm - lo) / (hi - lo).max(1e-9)) as f32).clamp(0.0, 1.0);
+    }
 }

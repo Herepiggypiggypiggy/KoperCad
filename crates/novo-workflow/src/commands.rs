@@ -1179,6 +1179,10 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Show the wire runs and lengths in 3D",
         "View",
         &["wire runs", "wire lengths", "cut length", "routes", "ducts"],
+        "view.3d_ssao",
+        "Show or hide ambient occlusion in 3D",
+        "View",
+        &["occlusion", "ao", "ssao", "contact shadows", "corners"],
         Needs::Project,
     ),
     cmd(
