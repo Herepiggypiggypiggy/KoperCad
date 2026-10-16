@@ -24,9 +24,11 @@ use super::heat::{self, HeatState};
 use super::heat_3d::{self, Heat3d, Place};
 use super::heat_legend;
 use super::heat_probe::{self, ProbeState};
+use super::heat_spots;
 use super::view3d_controls::{self, Controls};
 use super::view3d_heat;
 use super::view3d_move::{self, MoveState};
+use super::view3d_nudge::{self, Fields, Step};
 use super::view3d_place::{self, PlaceList};
 use super::view3d_rail;
 use super::view3d_stats::{Build, Stats};
@@ -39,6 +41,8 @@ pub(crate) struct View3dMode {
     pub(super) view: View3d,
     /// Dragging, turning and deleting devices, rails and ducts in the view.
     pub(super) mv: MoveState,
+    /// The Position box.
+    pub(super) position: Fields,
     /// The list of unplaced devices and the one picked from it.
     pub(super) place: PlaceList,
     /// The landing box drawn last frame, to redraw the overlays when it changes.
@@ -88,6 +92,7 @@ impl Default for View3dMode {
         View3dMode {
             view: View3d::new(VIEW_ID),
             mv: MoveState::default(),
+            position: Fields::default(),
             place: PlaceList::default(),
             ghost_shown: Vec::new(),
             library: Arc::new(MeshLibrary::new()),
@@ -238,7 +243,28 @@ impl NovoApp {
         }
         let solution = self.cabinet.heat.solution();
         if let Some(sol) = &solution {
-            heat_controls(ui, &mut mode.heat, &mut mode.probe, sol, mode.heat_flow.top);
+            let tag_of = |raw: u64| {
+                project
+                    .get::<Device>(DeviceId::from(raw))
+                    .and_then(|d| d.tag.device_code().map(str::to_owned))
+                    .unwrap_or_else(|| format!("device {raw}"))
+            };
+            if let Some(raw) = heat_controls(
+                ui,
+                &mut mode.heat,
+                &mut mode.probe,
+                sol,
+                mode.heat_flow.top,
+                &tag_of,
+            ) {
+                // Jump to the device: select it and bring it into view.
+                let item = ItemId::new(ItemKind::Device, raw);
+                if scene.get(item).is_some() {
+                    mode.view.state.selection = BTreeSet::from([item]);
+                    mode.view
+                        .fit(scene, ui.input(|i| i.time), options.reduced_motion);
+                }
+            }
         }
         let wanted = solution.as_ref().map(|s| (s.id, mode.heat));
         // The landing box of a dragged device, rail or duct.
@@ -567,6 +593,28 @@ impl NovoApp {
                 ui.ctx().request_repaint();
             }
             let keys = std::mem::take(&mut self.cabinet.keys);
+            // Arrow keys nudge the selection while the pointer is over the
+            // view and no text field has the keys. Plain Up and Down reach
+            // the app as the schematic's strip commands, so those count too.
+            if !ui.ctx().egui_wants_keyboard_input()
+                && ui
+                    .input(|i| i.pointer.hover_pos())
+                    .is_some_and(|p| out.rect.contains(p))
+            {
+                let strip = |name: &str| keys.iter().filter(|k| *k == name).count() as i32;
+                let (dir, step) = ui.input(|i| {
+                    let k = |key| i32::from(i.key_pressed(key));
+                    let dx = k(egui::Key::ArrowRight) - k(egui::Key::ArrowLeft);
+                    let raw = k(egui::Key::ArrowDown) - k(egui::Key::ArrowUp);
+                    let cmd = strip("terminal.strip_down") - strip("terminal.strip_up");
+                    let dy = if cmd != 0 { cmd } else { raw };
+                    (
+                        (dx.signum(), dy.signum()),
+                        Step::from_modifiers(i.modifiers),
+                    )
+                });
+                edits.extend(view3d_nudge::nudge(&stored, &state.selection, dir, step));
+            }
             edits.extend(view3d_move::key_edits(&keys, &state.selection, &stored));
         } else {
             self.cabinet.keys.clear();
@@ -587,6 +635,11 @@ impl NovoApp {
             .collect();
         let mut ask = None;
         if let Some(stored) = load(project, id) {
+            if let [one] = devices.as_slice()
+                && !mode.position.hidden
+            {
+                edits.extend(mode.position.show(ui.ctx(), out.rect, &stored, *one));
+            }
             if state.selection != mode.synced.1 {
                 self.cabinet.view.selection.apply(
                     devices.iter().map(|d| novo_canvas::cabinet::box_item(*d)),
@@ -737,9 +790,11 @@ fn heat_controls(
     probe: &mut ProbeState,
     sol: &super::heat_run::Solution,
     top_speed: f32,
-) {
+    tag_of: &dyn Fn(u64) -> String,
+) -> Option<u64> {
     use novo_heatview::cfd::Axis;
     let range = heat_3d::range(&sol.snapshot, sol.ambient);
+    let mut jump = None;
     ui.horizontal_wrapped(|ui| {
         ui.label("Heat");
         ui.checkbox(&mut h.slice, "Slice").on_hover_text(
@@ -760,6 +815,17 @@ fn heat_controls(
         }
         ui.checkbox(&mut h.lines, "Airflow")
             .on_hover_text("Streamlines from in front of the devices; faster air is brighter");
+        let top = if h.arrows {
+            super::heat_arrows::top_speed(&sol.snapshot, h.axis, h.slice_at)
+        } else {
+            0.0
+        };
+        ui.checkbox(&mut h.arrows, "Arrows").on_hover_text(format!(
+            "Arrows on the slice plane point where the air goes. Length is relative to the fastest air on this plane (now {top:.2} m/s), so two planes cannot be compared by length; air under 2 % of that is not drawn"
+        ));
+        if h.arrows {
+            ui.label(egui::RichText::new(format!("longest {top:.2} m/s")).small());
+        }
         ui.checkbox(&mut h.devices, "Devices").on_hover_text(
             "Colour each device by the air temperature in front of it, on the same scale as the slice",
         );
@@ -767,5 +833,7 @@ fn heat_controls(
             "Click the air to read its temperature and speed there (Esc clears the point)",
         );
         heat_legend::strip(ui, h, range, top_speed);
+        jump = heat_spots::menu(ui, &sol.snapshot, tag_of);
     });
+    jump
 }
