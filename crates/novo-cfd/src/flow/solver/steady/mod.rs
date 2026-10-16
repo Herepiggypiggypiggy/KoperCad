@@ -22,6 +22,7 @@
 mod assemble;
 mod run;
 mod sweep;
+mod transfer;
 
 pub use run::{RunStatus, SteadyLimits, SteadyReport, SteadyRun};
 
@@ -56,8 +57,13 @@ pub struct SteadyConfig {
     /// The energy sweeps stop when a sweep changes `T` by less than this
     /// fraction of the change of the first sweep.
     pub energy_drop: f64,
-    /// Relative tolerance of the pressure correction solve.
+    /// Relative tolerance of the pressure correction solve, at most.
     pub pressure_tol: f64,
+    /// Continuity residual the pressure correction aims for after it (net
+    /// flux of the worst cell over the largest face flux). The solve is
+    /// tightened beyond `pressure_tol` where that takes: a leftover
+    /// divergence is a leak of heat through the cells.
+    pub continuity_tol: f64,
     pub pressure_max_iter: usize,
     /// Share of the new deferred correction (1 = no damping).
     pub defer_relax: f64,
@@ -102,6 +108,7 @@ impl Default for SteadyConfig {
             energy_sweeps: 20,
             energy_drop: 0.1,
             pressure_tol: 0.05,
+            continuity_tol: 1e-4,
             pressure_max_iter: 50,
             defer_relax: 1.0,
             scheme: None,
@@ -349,9 +356,8 @@ impl FlowSolver {
         }
         let continuity = b.iter().fold(0.0_f64, |a, v| a.max(v.abs())) * dt / flux_scale;
         phi.iter_mut().for_each(|v| *v = 0.0);
-        let iters = self
-            .pressure
-            .solve(&b, phi, cfg.pressure_tol, cfg.pressure_max_iter);
+        let tol = (cfg.continuity_tol / continuity.max(1e-30)).clamp(1e-8, cfg.pressure_tol);
+        let iters = self.pressure.solve(&b, phi, tol, cfg.pressure_max_iter);
         let drag = &self.drag_rate;
         let phi_ref: &[f64] = phi;
         for a in 0..3 {

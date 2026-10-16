@@ -29,16 +29,30 @@ pub struct SteadyLimits {
     /// Drift of the rms velocity between the two windows, relative.
     pub tol_flow: f64,
     pub max_iterations: usize,
+    /// A window that does not converge while the iterates wobble by more than
+    /// this (std of the heat out over the heating) doubles, up to
+    /// `max_window_factor` times `window`: a longer mean has less noise.
+    pub grow_wobble: f64,
+    /// Iterations over which the wobble of an iterate is correlated: the
+    /// standard error of a window mean is `std * sqrt(corr_len / window)`.
+    /// The tolerances are widened by two standard errors (three for a
+    /// difference of two windows), so a noisy flow is judged on whether its
+    /// mean still moves, not on the noise.
+    pub corr_len: f64,
+    pub max_window_factor: usize,
 }
 
 impl Default for SteadyLimits {
     fn default() -> Self {
         SteadyLimits {
             window: 100,
-            tol_balance: 0.01,
+            tol_balance: 0.02,
             tol_drift: 0.004,
             tol_flow: 0.005,
             max_iterations: 5000,
+            grow_wobble: 0.005,
+            corr_len: 50.0,
+            max_window_factor: 8,
         }
     }
 }
@@ -84,6 +98,8 @@ pub struct SteadyRun {
     probe_t: Vec<f64>,
     rms: Vec<f64>,
     prev_window_t: Option<(f64, f64)>,
+    window_now: usize,
+    since_eval: usize,
     sums: Option<Sums>,
     report: SteadyReport,
     done: Option<RunStatus>,
@@ -161,6 +177,7 @@ impl SteadyRun {
         probes: Vec<usize>,
     ) -> SteadyRun {
         assert!(!stages.is_empty(), "a steady run needs a stage");
+        let window0 = limits.window.max(2);
         SteadyRun {
             state: SteadyState::new(flow, stages[0].clone()),
             stages,
@@ -174,6 +191,8 @@ impl SteadyRun {
             probe_t: Vec::new(),
             rms: Vec::new(),
             prev_window_t: None,
+            window_now: window0,
+            since_eval: 0,
             sums: None,
             report: SteadyReport {
                 iterations: 0,
@@ -217,11 +236,18 @@ impl SteadyRun {
             });
             self.rms.push(flow.rms_velocity());
             self.sums.get_or_insert_with(|| Sums::new(flow)).add(flow);
-            let w = self.limits.window.max(2);
-            if self.out_w.len().is_multiple_of(w) {
+            self.since_eval += 1;
+            let w = self.window_now;
+            if self.since_eval >= w {
+                self.since_eval = 0;
                 let n = self.out_w.len();
                 let (out_w, probe_t) = (&self.out_w[n - w..], &self.probe_t[n - w..]);
-                let mean_rms = self.rms[n - w..].iter().sum::<f64>() / w as f64;
+                let rms_w = &self.rms[n - w..];
+                let mean_rms = rms_w.iter().sum::<f64>() / w as f64;
+                let std_of = |x: &[f64], mean: f64| {
+                    (x.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / w as f64).sqrt()
+                };
+                let se = (self.limits.corr_len / w as f64).min(1.0).sqrt();
                 let mean_out = out_w.iter().sum::<f64>() / w as f64;
                 let mean_t = probe_t.iter().sum::<f64>() / w as f64;
                 let var = out_w.iter().map(|x| (x - mean_out).powi(2)).sum::<f64>() / w as f64;
@@ -241,10 +267,14 @@ impl SteadyRun {
                             )
                         });
                 self.prev_window_t = Some((mean_t, mean_rms));
-                let ok = self.report.imbalance.abs() < self.limits.tol_balance
+                let se_out = std_of(out_w, mean_out) * se / scale;
+                let se_t = std_of(probe_t, mean_t) * se;
+                let se_rms = std_of(rms_w, mean_rms) * se / mean_rms.max(1e-12);
+                let ok = self.report.imbalance.abs() < self.limits.tol_balance + 2.0 * se_out
                     && self.report.drift_k
                         < self.limits.tol_drift * (mean_t - self.ambient_c).abs().max(1.0)
-                    && self.report.flow_drift < self.limits.tol_flow;
+                            + 3.0 * se_t
+                    && self.report.flow_drift < self.limits.tol_flow + 3.0 * se_rms;
                 let out_of = self.report.iterations >= self.limits.max_iterations;
                 if ok && self.stage + 1 < self.stages.len() {
                     self.stage += 1;
@@ -254,6 +284,7 @@ impl SteadyRun {
                     self.probe_t.clear();
                     self.rms.clear();
                     self.prev_window_t = None;
+                    self.window_now = self.limits.window.max(2);
                     self.sums = None;
                     continue;
                 }
@@ -271,6 +302,11 @@ impl SteadyRun {
                     return status;
                 }
                 self.sums = None;
+                if self.report.wobble > self.limits.grow_wobble
+                    && self.window_now < self.limits.window * self.limits.max_window_factor
+                {
+                    self.window_now *= 2;
+                }
             }
         }
         RunStatus::Running

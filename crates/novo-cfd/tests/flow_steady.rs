@@ -242,6 +242,15 @@ fn heated_cavity_ra_1e5_steady() {
 // ---- a cabinet: steady against the time march --------------------------------
 
 fn cabinet(cells: usize, scheme: Scheme) -> FlowSetup {
+    cabinet_with(cells, scheme, false, false)
+}
+
+fn cabinet_with(cells: usize, scheme: Scheme, vents: bool, fan: bool) -> FlowSetup {
+    let opening = |placement| Opening {
+        placement,
+        width_mm: 200.0,
+        height_mm: 100.0,
+    };
     let scn = Scenario {
         enclosure: Enclosure {
             width_mm: 600.0,
@@ -273,8 +282,35 @@ fn cabinet(cells: usize, scheme: Scheme) -> FlowSetup {
             heat_capacity_j_per_k: None,
         }],
         obstacles: vec![],
-        vents: vec![],
-        fans: vec![],
+        vents: if vents || fan {
+            let mut v = vec![Vent {
+                opening: opening(Placement::Top { x_mm: 300.0 }),
+                free_area_fraction: 0.6,
+            }];
+            if !fan {
+                v.push(Vent {
+                    opening: opening(Placement::Bottom { x_mm: 300.0 }),
+                    free_area_fraction: 0.6,
+                });
+            }
+            v
+        } else {
+            vec![]
+        },
+        fans: if fan {
+            vec![Fan {
+                opening: Opening {
+                    placement: Placement::Bottom { x_mm: 300.0 },
+                    width_mm: 120.0,
+                    height_mm: 120.0,
+                },
+                mode: FanMode::Intake,
+                free_flow_m3h: 100.0,
+                max_pressure_pa: 40.0,
+            }]
+        } else {
+            vec![]
+        },
         params: Params::default(),
     };
     let st = SolidsSettings {
@@ -360,6 +396,97 @@ fn small_cabinet_steady_agrees_with_the_march() {
         (as_ - am).abs() < 0.02 * (am - setup.ambient_c),
         "air {as_} against {am}"
     );
+}
+
+/// Steady against the march on a cabinet with open faces: two vents (the
+/// stack effect) and a fan with a top vent (a forced jet).
+fn open_faces_case(vents: bool, fan: bool) {
+    let setup = cabinet_with(900, Scheme::VanLeer, vents, fan);
+    let dev = device_cells(&setup);
+    let mut march = setup.solver();
+    let m = setup.run_steady(
+        &mut march,
+        1e-3,
+        (2000.0, 200_000),
+        &novo_cfd::Control::default(),
+        |_, _| {},
+        0,
+    );
+    assert!(m.converged, "{m:?}");
+    let mut s = setup.solver();
+    let run = SteadyRun::staged(
+        &s,
+        vec![SteadyConfig::first_order(), SteadyConfig::second_order()],
+        SteadyLimits::default(),
+        setup.ambient_c,
+        dev.clone(),
+    );
+    let rep = run_to_end(&mut s, run);
+    let (dm, ds) = (mean_over(&march, &dev), mean_over(&s, &dev));
+    let rise = dm - setup.ambient_c;
+    let (om, os) = (
+        march.open_heat_out_w(setup.ambient_c),
+        s.open_heat_out_w(setup.ambient_c),
+    );
+    println!(
+        "vents {vents} fan {fan}: march {} steps, device {dm:.2} C, openings {om:.2} W | steady {} iterations, device {ds:.2} C ({:+.2}% of the rise), openings {os:.2} W, imbalance {:+.2}%",
+        m.steps,
+        rep.iterations,
+        100.0 * (ds - dm) / rise,
+        100.0 * rep.imbalance
+    );
+    assert!(rep.converged, "{rep:?}");
+    assert!((ds - dm).abs() < 0.03 * rise, "device {ds} against {dm}");
+    assert!(
+        (os - om).abs() < 0.05 * setup.heat_w,
+        "openings {os} against {om}"
+    );
+    assert!((heat_out(&setup, &s) - setup.heat_w).abs() < 0.03 * setup.heat_w);
+}
+
+#[test]
+fn vented_cabinet_steady_agrees_with_the_march() {
+    open_faces_case(true, false);
+}
+
+#[test]
+fn fan_cooled_cabinet_steady_agrees_with_the_march() {
+    open_faces_case(false, true);
+}
+
+/// A coarse solution on a finer mesh: linear fields come out exactly, and the
+/// fine run starts closer to its answer than a cold one.
+#[test]
+fn a_coarse_solution_starts_the_finer_mesh() {
+    let make = |n: usize| {
+        let mesh = Mesh::uniform([n, n, 2], [1.0, 1.0, 0.1]);
+        let mut cfg = FlowConfig::air();
+        cfg.gravity = [0.0; 3];
+        FlowSolver::new(mesh, cfg, 0.0)
+    };
+    let mut coarse = make(6);
+    for k in 0..2 {
+        for j in 0..6 {
+            for i in 0..6 {
+                let (x, y) = (coarse.mesh.centre[0][i], coarse.mesh.centre[1][j]);
+                let id = coarse.mesh.cell([i, j, k]);
+                coarse.t[id] = 3.0 * x - 2.0 * y + 1.0;
+                coarse.p[id] = x + y;
+            }
+        }
+    }
+    let mut fine = make(15);
+    fine.initialise_from(&coarse);
+    let m = &fine.mesh;
+    // away from the border (constant beyond the coarse centres) a linear field is exact
+    for j in 3..12 {
+        for i in 3..12 {
+            let (x, y) = (m.centre[0][i], m.centre[1][j]);
+            let id = m.cell([i, j, 0]);
+            assert!((fine.t[id] - (3.0 * x - 2.0 * y + 1.0)).abs() < 1e-12);
+            assert!((fine.p[id] - (x + y)).abs() < 1e-12);
+        }
+    }
 }
 
 #[test]
