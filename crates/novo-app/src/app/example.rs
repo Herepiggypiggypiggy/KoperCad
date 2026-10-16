@@ -10,7 +10,7 @@ use novo_core::{
 use novo_layout::enclosure::{Door, Enclosure, Hinge};
 use novo_layout::model::{apply_plan, load, set_enclosure, set_plate};
 use novo_layout::rules::RuleSet;
-use novo_parts::{Catalog, PartKey};
+use novo_parts::{Catalog, DataSource, PartKey};
 
 use super::{Level, NovoApp};
 
@@ -63,11 +63,18 @@ fn give_parts_their_data(tx: &mut Tx<'_>) -> ModelResult<()> {
         let Some(known) = catalog.get(&PartKey::new(&part.manufacturer, &part.order_number)) else {
             continue;
         };
+        let estimated = known.source_of(novo_parts::keys::POWER_LOSS_W) == DataSource::Estimated;
         let known = known.to_model(id);
         tx.update::<Part>(id, |p| {
             p.type_number = known.type_number;
             p.description = known.description;
             p.properties = known.properties;
+            if estimated {
+                p.properties.insert(
+                    novo_thermal::bridge::LOSS_SOURCE_PROPERTY.into(),
+                    Value::Text("estimated".into()),
+                );
+            }
         })?;
     }
     Ok(())
@@ -130,6 +137,11 @@ fn add_cabinet(tx: &mut Tx<'_>) -> ModelResult<StructureId> {
             ] {
                 d.properties.insert(key.into(), Value::Float(value));
             }
+            // 4 x 0.3 W, and the catalog marks that figure as an estimate.
+            d.properties.insert(
+                novo_thermal::bridge::LOSS_SOURCE_PROPERTY.into(),
+                Value::Text("estimated".into()),
+            );
         })?;
     }
     let layout = load(tx.project(), cab).expect("the plate was just set");
