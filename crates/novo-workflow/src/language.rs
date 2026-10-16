@@ -52,6 +52,15 @@ pub const DUTCH: &[Aliases] = &[
         ],
     ),
     nl(
+        "help.keymap_file",
+        &[],
+        &[
+            "toetsenbestand openen",
+            "sneltoetsen aanpassen",
+            "toetsen wijzigen",
+        ],
+    ),
+    nl(
         "help.show_hints",
         &[],
         &["hints opnieuw tonen", "tips opnieuw", "hints"],
@@ -264,6 +273,25 @@ pub const DUTCH: &[Aliases] = &[
         "xref.link",
         &["koppel", "koppelen"],
         &["contact aan spoel koppelen", "kruisverwijzing koppelen"],
+    ),
+    nl(
+        "draw.text",
+        &["tekst"],
+        &["tekst toevoegen", "notitie", "opmerking"],
+    ),
+    nl(
+        "net.select",
+        &[],
+        &["net selecteren", "heel net selecteren", "verbonden draden"],
+    ),
+    nl(
+        "net.trace",
+        &[],
+        &[
+            "waar gaat dit heen",
+            "apparaten aan dit net",
+            "paginas van dit net",
+        ],
     ),
     nl("edit.escape", &[], &["annuleren"]),
     // Navigate
@@ -644,6 +672,16 @@ pub const DUTCH: &[Aliases] = &[
         &["schaduw", "schaduwen"],
     ),
     nl(
+        "view.3d_dimensions",
+        &["maatvoering tonen in 3d"],
+        &["maten", "maatvoering", "afstand", "afstanden"],
+    ),
+    nl(
+        "view.3d_quality",
+        &["3d kwaliteit herstellen"],
+        &["kwaliteit", "trage weergave", "herstellen"],
+    ),
+    nl(
         "view.3d_stats",
         &["3d snelheid tonen"],
         &["framesnelheid", "prestaties", "snelheid"],
@@ -685,6 +723,16 @@ pub const DUTCH: &[Aliases] = &[
         "export.report_pdf",
         &["exporteer rapport"],
         &["rapport pdf", "rapport afdrukken"],
+    ),
+    nl(
+        "export.pdf_options",
+        &["pdf opties", "exporteer pdf opties"],
+        &[
+            "paginabereik",
+            "bladwijzers",
+            "koppelingen",
+            "pagina's kiezen",
+        ],
     ),
     nl(
         "export.pdf_page",
@@ -737,6 +785,11 @@ pub const DUTCH: &[Aliases] = &[
         &["din-rail", "kabelgoot", "kanaal", "rail"],
     ),
     nl(
+        "cabinet.surface",
+        &["kastvlakken", "kies vlak"],
+        &["vlak", "wand", "dak", "bodem"],
+    ),
+    nl(
         "cabinet.door",
         &["binnenmaat en deur", "deurdraaiing", "scharnierkant"],
         &["deur", "scharnier", "binnenmaat", "diepte"],
@@ -768,6 +821,11 @@ pub const DUTCH: &[Aliases] = &[
         "view.bench",
         &["werkbank uitvoer", "open werkbank"],
         &["werkbank", "adereindhulzen", "etiketten", "draadsnijlijst"],
+    ),
+    nl(
+        "report.designer",
+        &["rapportontwerper", "open rapportontwerper"],
+        &["sjabloon", "titelblok", "ontwerper"],
     ),
     nl(
         "export.bench_cut",

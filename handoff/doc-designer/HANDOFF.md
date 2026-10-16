@@ -12,5 +12,11 @@ Not done: the editor UI and the menu/command registration (only `designer::ENTRY
 
 Contacts: reviewer R2 and integration lead A (cse_01FiLvRBKEcNNHbQEGhYyL1S); roster in coordination/threads.md.
 
+## Designer UI (ui-report-designer)
+
+Done: command `report.designer` (Reports menu, palette, Dutch words), window in `crates/novo-app/src/app/designer.rs`: template picker (project, mine, built-in), Duplicate, New table of <report>, name/description, A4/A3 + orientation, frame, title block rows, text elements, table report/heading/sizes/columns (choose, reorder, header, width), problems list, live preview (sample rows or project data), Save to my templates, Save in project (one undo step), Export PDF. Reports workspace: template picker and PDF button (`ReportFormat::Pdf`).
+
+Left: drag-placing elements on the preview, line/rect add, filters and sort keys in the table editor, delete a saved template, section picker, images and barcodes (engine), forms with custom fields.
+
 ## DOC-2 (languages)
 Branch `claude/doc-2-languages` from main 2f8ad05. Engine in `crates/novo-reports/src/i18n/`; keys are the English texts, `{name}` keys are patterns (`Line {n}`), project entries win over `nl.json`, unknown text prints in English. Tests: `cargo test -p novo-reports --test i18n`, `cargo test -p novo-pdf --test language`, `cargo test -p novo-app languages`. App: `app/languages.rs`, command `project.languages` (File menu, palette "Report languages"). Every PDF call site in novo-app sets `language: self.report_translator()`. Not done: see ROADMAP DOC-2 Next.

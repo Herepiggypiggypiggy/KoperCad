@@ -545,6 +545,14 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["cable", "cores", "bundle"],
         Needs::Page,
     ),
+    // Shift+T: a click on the page, then the words of a free note.
+    cmd(
+        "draw.text",
+        "Add text",
+        "Draw",
+        &["note", "annotation", "comment"],
+        Needs::Page,
+    ),
     // Cables that exist: the Cables drawer (Ctrl+4) shows the one they act on.
     verb(
         cmd(
@@ -798,6 +806,22 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Page,
         ),
         &["link"],
+    ),
+    // The whole net of the selected wire, junction or part: select it on this
+    // page, or list the devices and pages it reaches.
+    cmd(
+        "net.select",
+        "Select net",
+        "Edit",
+        &["whole net", "connected wires"],
+        Needs::Selection,
+    ),
+    cmd(
+        "net.trace",
+        "Pages and devices on this net",
+        "Edit",
+        &["where does this go", "net devices", "net pages"],
+        Needs::Selection,
     ),
     cmd("edit.escape", "Cancel", "Edit", &["escape"], Needs::Nothing),
     // Terminals
@@ -1103,6 +1127,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_dimensions",
+        "Show or hide dimensions in 3D",
+        "View",
+        &["dimensions", "measure", "distance", "mm", "sizes"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_quality",
+        "Restore 3D quality",
+        "View",
+        &["quality", "slow", "full quality", "reduced"],
+        Needs::Project,
+    ),
+    cmd(
         "view.3d_stats",
         "Show or hide the 3D frame statistics",
         "View",
@@ -1345,6 +1383,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd(
+        "help.keymap_file",
+        "Open keymap file",
+        "View",
+        &["rebind", "customise keys", "change shortcuts", "keymap.txt"],
+        Needs::Nothing,
+    ),
+    cmd(
         "help.show_hints",
         "Show hints again",
         "View",
@@ -1473,6 +1518,16 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["add rail", "add duct"],
+    ),
+    verb(
+        cmd(
+            "cabinet.surface",
+            "Cabinet surfaces",
+            "View",
+            &["surface", "door", "wall", "roof", "floor", "side plate"],
+            Needs::Project,
+        ),
+        &["pick surface", "show surfaces"],
     ),
     verb(
         cmd(
@@ -1827,6 +1882,23 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.pdf_options",
+            "Export PDF...",
+            "Export",
+            &[
+                "pdf options",
+                "pdf dialog",
+                "page range",
+                "bookmarks",
+                "links",
+                "choose pages",
+            ],
+            Needs::Project,
+        ),
+        &["export pdf options", "pdf options"],
+    ),
+    verb(
+        cmd(
             "export.pdf_page",
             "Export this page as PDF",
             "Export",
@@ -1997,6 +2069,16 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["bench output", "open bench output"],
+    ),
+    verb(
+        cmd(
+            "report.designer",
+            "Report designer...",
+            "Export",
+            &["report template", "template", "title block", "designer"],
+            Needs::Project,
+        ),
+        &["report designer", "design a report", "edit report template"],
     ),
     verb(
         cmd(
