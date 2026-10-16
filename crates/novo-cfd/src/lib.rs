@@ -12,6 +12,7 @@
 pub mod accuracy;
 pub mod flow;
 pub mod mesh;
+pub mod openings;
 pub mod rad;
 pub mod result;
 pub mod sched;
