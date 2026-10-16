@@ -240,26 +240,65 @@ impl CabinetScene {
         for r in &view.rails {
             let a = Vec2::new(r.x, r.y);
             let b = Vec2::new(r.x + r.length, r.y);
-            // 35 mm DIN rail: two edges 35 mm apart, centred on the line.
+            // 35 mm DIN rail (TH35): a faint band between two edges 35 mm
+            // apart, with the 25 mm wide mounting slot down its middle. The
+            // slot reads as "rail" where a plain outline read as a box.
             let (top, bottom) = (Vec2::new(0.0, -17.5), Vec2::new(0.0, 17.5));
             let stroke = Stroke::world(0.4, s.rail);
+            let slot = Vec2::new(0.0, 2.5);
             let item = Item::new(l.rails)
+                .with(Primitive::filled(
+                    Shape::rect(a + top, b + bottom),
+                    s.rail.with_alpha(26),
+                ))
                 .with(Primitive::stroked(Shape::rect(a + top, b + bottom), stroke))
                 .with(Primitive::stroked(
-                    Shape::line(a, b),
-                    Stroke::world(0.2, s.rail),
+                    Shape::rect(a - slot, b + slot),
+                    Stroke::world(0.25, s.rail.with_alpha(150)),
                 ))
                 .unselectable();
             out.push((rail_item(r.id), item));
         }
         for d in &view.ducts {
             let (min, max) = d.corners();
-            let item = Item::new(l.rails)
+            // A wiring duct: a filled strip with the comb of finger slots
+            // along both long sides, so it never reads as a second rail.
+            let mut item = Item::new(l.rails)
+                .with(Primitive::filled(
+                    Shape::rect(min, max),
+                    s.rail.with_alpha(48),
+                ))
                 .with(Primitive::stroked(
                     Shape::rect(min, max),
                     Stroke::world(0.4, s.rail),
                 ))
                 .unselectable();
+            let slats = Stroke::world(0.2, s.rail.with_alpha(160));
+            let inset = (d.width * 0.28).clamp(2.0, 8.0);
+            let pitch = 8.0;
+            let n = ((d.length / pitch) as usize).min(400);
+            for i in 1..n {
+                let t = i as f32 * pitch;
+                let (p0, p1, p2, p3) = if d.vertical {
+                    (
+                        Vec2::new(min.x, min.y + t),
+                        Vec2::new(min.x + inset, min.y + t),
+                        Vec2::new(max.x - inset, min.y + t),
+                        Vec2::new(max.x, min.y + t),
+                    )
+                } else {
+                    (
+                        Vec2::new(min.x + t, min.y),
+                        Vec2::new(min.x + t, min.y + inset),
+                        Vec2::new(min.x + t, max.y - inset),
+                        Vec2::new(min.x + t, max.y),
+                    )
+                };
+                item.primitives
+                    .push(Primitive::stroked(Shape::line(p0, p1), slats));
+                item.primitives
+                    .push(Primitive::stroked(Shape::line(p2, p3), slats));
+            }
             out.push((rail_item(d.id), item));
         }
         for b in &view.boxes {
@@ -588,5 +627,29 @@ mod tests {
             v.ducts[0].corners(),
             (Vec2::new(25.0, 300.0), Vec2::new(55.0, 1200.0))
         );
+    }
+
+    #[test]
+    fn a_rail_has_a_slot_and_a_duct_a_comb_of_slats() {
+        let mut c = CabinetScene::new(CabinetStyle::default());
+        let v = view();
+        c.set(&v);
+        let rail = c.scene().get(rail_item(1)).unwrap();
+        // Fill, outline and the mounting slot.
+        assert_eq!(rail.primitives.len(), 3);
+        let duct = c.scene().get(rail_item(9)).unwrap();
+        // Fill and outline, then two slats per 8 mm of length.
+        let slats = ((v.ducts[0].length / 8.0) as usize).saturating_sub(1) * 2;
+        assert_eq!(duct.primitives.len(), 2 + slats);
+    }
+
+    #[test]
+    fn a_very_long_duct_is_capped_at_four_hundred_slats() {
+        let mut c = CabinetScene::new(CabinetStyle::default());
+        let mut v = view();
+        v.ducts[0].length = 100_000.0;
+        c.set(&v);
+        let duct = c.scene().get(rail_item(9)).unwrap();
+        assert_eq!(duct.primitives.len(), 2 + 399 * 2);
     }
 }
