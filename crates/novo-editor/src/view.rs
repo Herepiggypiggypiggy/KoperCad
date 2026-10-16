@@ -683,6 +683,14 @@ impl SchematicView {
                     .with_label(label),
             );
         }
+        for path in preview.paths.iter().filter(|p| p.len() >= 2) {
+            let pts = path.iter().map(|p| model::vec(*p));
+            items.push(
+                Item::new(layer)
+                    .unselectable()
+                    .with(Primitive::stroked(Shape::polyline(pts, false), ghost)),
+            );
+        }
         if preview.wire.len() >= 2 {
             let pts = preview.wire.iter().map(|p| model::vec(*p));
             items.push(
@@ -1598,6 +1606,8 @@ impl SchematicView {
                             );
                             ui.weak(if feed {
                                 "Enter sets the feed's potential · Esc cancels"
+                            } else if rename.text.trim().is_empty() {
+                                "Empty: Enter joins the device on its left · Esc cancels"
                             } else {
                                 "Enter renames · Esc cancels"
                             });

@@ -158,3 +158,18 @@ the buttons: `Ctrl+K finds every command · ? lists the keys`. Nothing else, so 
 
 Video or animated tours, Dutch text (the language work), telemetry on which hints are used (local-first,
 nothing leaves the machine).
+
+## Addendum (DISC-2): tips, hints and the anchor rule
+
+Added after the page was frozen; the sections above are unchanged.
+
+- `app/tips.rs` holds `tip_text(keymap, label, command)` (`Label · Key`, read from the live keymap) and the
+  hint table `HINTS`. A hint has an id, the command that follows it and its text; running the command
+  counts a use in `Settings::hints_seen`, and after three uses the hint stops. Help > Show hints again
+  (`help.show_hints`) clears the counters. First hint: the empty page ("Press Q to place a symbol · ? for keys").
+- **Anchor rule** (findability checklist, item 6): a control that a lesson may point at is registered every
+  frame with `NovoApp::anchor` or `anchor_response` under an id from `learn::ANCHORS`, and keeps that id when
+  its panel moves. A new icon-only control gets its tooltip from `tip_text` and, if lessons need it, an anchor.
+- **Dead-command audit**: `tips_tests::dead_command_audit` fails for a command with no handler that is not in
+  `COMES_LATER`, and for an id in `COMES_LATER` that now has one. Such commands stay listed and greyed
+  "Comes later" in the `?` sheet, the command field and the menus.

@@ -10,21 +10,28 @@ mod cabinet_bar;
 mod cabinet_door;
 mod cabinet_inspector;
 mod cabinet_panel;
+mod cabinet_rails;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
 mod cabinet_rules;
+mod cable_controls;
 mod change_report;
 mod changes;
 mod checks;
+mod clipboard;
 mod commissioning;
 mod compare;
 mod dock;
 mod drawers;
 mod duplicate;
 mod dxf;
+mod eplan_import;
 mod example;
 mod faults;
 mod heat;
+mod heat_compare;
+#[cfg(test)]
+mod heat_compare_tests;
 mod heat_run;
 #[cfg(test)]
 mod heat_run_tests;
@@ -51,6 +58,7 @@ mod onboarding;
 mod outline;
 mod outline_tree;
 mod pages;
+mod part_picker;
 mod parts;
 mod parts_import;
 mod parts_quality;
@@ -75,9 +83,11 @@ mod standards;
 mod status_bar;
 mod symbol_preview;
 mod terminals;
+mod tips;
 mod title_revisions;
 mod userkeymap;
 mod variants;
+mod view3d;
 mod wheel;
 mod wire_production;
 mod workbench;
@@ -89,6 +99,8 @@ mod assembly_pack_tests;
 #[cfg(test)]
 mod assembly_tests;
 #[cfg(test)]
+mod cabinet_rails_tests;
+#[cfg(test)]
 mod cabinet_routes_tests;
 #[cfg(test)]
 mod cabinet_rules_tests;
@@ -96,6 +108,8 @@ mod cabinet_rules_tests;
 mod cabinet_tests;
 #[cfg(test)]
 mod changes_tests;
+#[cfg(test)]
+mod clipboard_tests;
 #[cfg(test)]
 mod commissioning_tests;
 #[cfg(test)]
@@ -118,6 +132,8 @@ mod protection_tests;
 mod route_all_tests;
 #[cfg(test)]
 mod shortcuts_sheet_tests;
+#[cfg(test)]
+mod tips_tests;
 #[cfg(test)]
 mod variants_tests;
 
@@ -232,6 +248,7 @@ pub struct NovoApp {
     workspace: workspace::Workspace,
     cabinet: cabinet::CabinetState,
     reports_view: reports_view::ReportsView,
+    view3d: view3d::View3dMode,
     /// The "Size the enclosure" panel and the Enclosures list.
     sizing: sizing::SizingState,
     protection: protection::ProtectionState,
@@ -308,6 +325,7 @@ impl NovoApp {
             workspace: workspace::Workspace::Schematic,
             cabinet: cabinet::CabinetState::new(),
             reports_view: Default::default(),
+            view3d: Default::default(),
             sizing: sizing::SizingState::new(),
             protection: protection::ProtectionState::new(),
             outline_open: false,
@@ -808,6 +826,9 @@ impl NovoApp {
         if !self.modal_open() {
             self.outline_keys(&ctx);
         }
+        if !self.modal_open() {
+            self.clipboard_events(&ctx);
+        }
         let mut commands = if self.modal_open() {
             // The place key pressed again over its own wheel swaps it for
             // the part search; every other key waits for the wheel.
@@ -825,7 +846,12 @@ impl NovoApp {
             // file and undo actions.
             let cabinet = self.workspace() == workspace::Workspace::Cabinet;
             for id in &commands {
-                if cabinet && matches!(*id, "edit.rotate" | "edit.delete") {
+                if cabinet
+                    && matches!(
+                        *id,
+                        "edit.rotate" | "edit.delete" | "terminal.strip_up" | "terminal.strip_down"
+                    )
+                {
                     self.cabinet.keys.push((*id).to_owned());
                 }
             }
@@ -833,6 +859,7 @@ impl NovoApp {
                 Action::from_id(id).is_some()
                     || *id == "view.cabinet_table"
                     || *id == "cabinet.place-all"
+                    || *id == "cabinet.rails"
                     || *id == "view.command_field_here"
                     || id.starts_with("heat.")
             });
@@ -866,6 +893,8 @@ impl NovoApp {
             .show(ui, |ui| {
                 if self.is_open() && self.workspace() == workspace::Workspace::Cabinet {
                     self.cabinet_show(ui);
+                } else if self.is_open() && self.workspace() == workspace::Workspace::View3d {
+                    self.view3d_show(ui);
                 } else if reports {
                     self.reports_central(ui);
                 } else if self.is_open() {
@@ -929,6 +958,7 @@ impl NovoApp {
         self.issue_revision_dialog(&ctx);
         self.compare_window(&ctx);
         self.aml_import_dialog(&ctx);
+        self.eplan_import_dialog(&ctx);
         self.eplan_guide_dialog(&ctx);
         self.poll_dwg(&ctx);
         self.protection_window(&ctx);
@@ -972,6 +1002,7 @@ impl NovoApp {
         if let Some(page) = self.canvas.take_page_request() {
             self.show_page(page);
         }
+        self.after_paste_click();
         let asked = self.canvas.take_commands();
         self.wb.queued.extend(asked);
         let cable = self

@@ -90,22 +90,13 @@ fn the_command_opens_and_closes_the_sheet() {
 
 /// A command with a key in the default keymap works, so it must never be
 /// listed or greyed as "Comes later" (command field, `?` sheet, menus).
-/// `KEY_ONLY_GAPS` are keys whose command has no handler yet; remove an id
-/// from it when the command lands.
 #[test]
 fn a_command_with_a_key_is_never_comes_later() {
-    const KEY_ONLY_GAPS: &[&str] = &[
-        "edit.copy",
-        "edit.cut",
-        "edit.paste",
-        "edit.paste_keep_tags",
-        "view.override_marks",
-    ];
     let dead: Vec<_> = Keymap::workflow()
         .bindings()
         .iter()
         .map(|b| b.command)
-        .filter(|c| !super::workbench::app_runs(c) && !KEY_ONLY_GAPS.contains(c))
+        .filter(|c| !super::workbench::app_runs(c))
         .collect();
     assert_eq!(dead, Vec::<&str>::new(), "keys that only toast");
 }

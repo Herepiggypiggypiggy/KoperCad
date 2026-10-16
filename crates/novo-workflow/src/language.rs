@@ -43,6 +43,11 @@ pub const DUTCH: &[Aliases] = &[
         &["rondleiding", "snelle toetsen uitleg"],
     ),
     nl(
+        "help.show_hints",
+        &[],
+        &["hints opnieuw tonen", "tips opnieuw", "hints"],
+    ),
+    nl(
         "help.learn",
         &["leren", "les"],
         &["leren", "training", "cursus", "uitleg"],
@@ -155,6 +160,7 @@ pub const DUTCH: &[Aliases] = &[
     nl("edit.cut", &[], &["knippen"]),
     nl("edit.paste", &[], &["plakken"]),
     nl("edit.paste_keep_tags", &[], &["plakken met originele tags"]),
+    nl("edit.paste_in_place", &[], &["plakken op dezelfde plek"]),
     nl("edit.duplicate", &[], &["dupliceren", "kopie"]),
     nl("macro.save", &["macro opslaan"], &["opslaan als macro"]),
     nl(
@@ -398,6 +404,11 @@ pub const DUTCH: &[Aliases] = &[
         &["automationml", "installatie", "overnemen", "migreren"],
     ),
     nl(
+        "file.import_eplan",
+        &["importeer eplan"],
+        &["eplan", "pxf", "migreren", "overnemen", "paginamacro"],
+    ),
+    nl(
         "file.import_dwg",
         &["importeer dwg"],
         &["autocad", "converter", "achtergrond"],
@@ -444,6 +455,7 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["alle rapporten", "excel exporteren"],
     ),
+    nl("view.3d", &[], &["3d", "driedimensionaal"]),
     nl("view.reports", &[], &["rapporten", "lijsten"]),
     nl("report.toc", &["inhoud", "inhoudsopgave"], &["paginalijst"]),
     nl(
@@ -476,6 +488,11 @@ pub const DUTCH: &[Aliases] = &[
         "cabinet.place-all",
         &["plaats alles", "plaats alle componenten"],
         &["plaat", "indeling", "din-rail"],
+    ),
+    nl(
+        "cabinet.rails",
+        &["rails en kanalen", "voeg kanaal toe"],
+        &["din-rail", "kabelgoot", "kanaal", "rail"],
     ),
     nl(
         "cabinet.routes",

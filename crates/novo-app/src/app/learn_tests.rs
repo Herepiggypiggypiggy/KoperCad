@@ -421,9 +421,9 @@ fn a_ready_lesson_naming_a_missing_anchor_is_coming_soon() {
 fn early_access_lessons_are_listed_by_default() {
     let dir = tempfile::tempdir().unwrap();
     let d = Drive::new(&dir.path().join("untitled"));
-    assert!(d.app.learn.show_drafts);
+    assert!(!d.app.learn.show_drafts);
     assert!(
-        d.app.learn.catalog.visible(true).count() > 0,
+        d.app.learn.catalog.visible(false).count() > 0,
         "the build ships lessons"
     );
 }
@@ -628,6 +628,11 @@ fn a_wire_demonstration_marks_where_the_wire_starts_and_ends() {
     d.app.start_lesson("wiring-modes");
     d.frame();
     d.frame();
+    if step(&d) == "intro" {
+        let ctx = d.ctx.clone();
+        d.app.run_command(&ctx, "learn.next", None);
+        d.frame();
+    }
     assert_eq!(step(&d), "pin-drag");
     let canvas = d.app.wb.canvas_area.unwrap().1;
     assert!(d.app.learn_start_demo());

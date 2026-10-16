@@ -38,7 +38,13 @@ pub(crate) const LESSONS_ENV: &str = "KOPERCAD_LESSONS";
 const TICK_SHOWN: Duration = Duration::from_millis(500);
 
 /// Signals the shell raises for things that do not pass through a command.
-pub(crate) const SIGNALS: &[&str] = &["wheel_opened", "proposal_next", "proposal_accept"];
+pub(crate) const SIGNALS: &[&str] = &[
+    "wheel_opened",
+    "proposal_next",
+    "proposal_accept",
+    "problem_waived",
+    "waiver_restored",
+];
 
 /// Every control a lesson may point at. A control joins this list when its
 /// owner calls `NovoApp::anchor` for it; `docs/design/lesson-anchors.md` is
@@ -119,7 +125,7 @@ impl LearnState {
             hidden: false,
             window: false,
             filter: String::new(),
-            show_drafts: true,
+            show_drafts: false,
             confirm_restart: false,
             coming: None,
             anchors: BTreeMap::new(),
@@ -448,7 +454,7 @@ impl NovoApp {
                 Tool::Place(_) => "place",
                 Tool::Wire(_) => "wire",
                 Tool::Cable(_) => "cable",
-                Tool::Select | Tool::Move(_) => "select",
+                Tool::Select | Tool::Move(_) | Tool::Paste(_) => "select",
             }
             .to_owned();
             facts.selection = view

@@ -44,6 +44,11 @@ fn placements(plan: &Plan, specs: &[Spec]) -> Vec<Placement> {
         .collect()
 }
 
+/// The ducts between the rows, without the trunk that joins them.
+fn row_ducts(plan: &Plan) -> Vec<&PlannedDuct> {
+    plan.ducts.iter().filter(|d| !d.vertical).collect()
+}
+
 fn at(plan: &Plan, id: u64) -> (f64, f64) {
     let p = plan.placements.iter().find(|p| p.id == id).unwrap();
     (p.x, p.y)
@@ -56,7 +61,7 @@ fn a_power_row_over_a_signal_row_gets_two_ducts_kept_apart() {
     let plan = place_all_rules(&plate(), &specs, &rules, 1, 0.0);
     let (_, qy) = at(&plan, 1);
     let (_, ky) = at(&plan, 2);
-    assert_eq!(plan.ducts.len(), 2);
+    assert_eq!(row_ducts(&plan).len(), 2);
     let power = plan.ducts.iter().find(|d| d.class == Class::Power).unwrap();
     let signal = plan
         .ducts
@@ -79,8 +84,8 @@ fn rows_of_one_class_share_a_duct() {
     // A and K are both signal rows on their own rails.
     let specs = vec![spec(1, "A", 100.0, 90.0), spec(2, "K", 45.0, 90.0)];
     let plan = place_all_rules(&plate(), &specs, &RuleSet::standard(), 1, 0.0);
-    assert_eq!(plan.ducts.len(), 1);
-    let d = &plan.ducts[0];
+    assert_eq!(row_ducts(&plan).len(), 1);
+    let d = row_ducts(&plan)[0];
     assert_eq!(d.class, Class::Signal);
     let (_, y1) = at(&plan, 1);
     let (_, y2) = at(&plan, 2);
@@ -98,7 +103,7 @@ fn separation_off_gives_one_duct_and_the_normal_row_gap() {
     let (_, qy) = at(&plan, 1);
     let (_, ky) = at(&plan, 2);
     assert_eq!(ky - (qy + 90.0), rules.row_gap);
-    assert_eq!(plan.ducts.len(), 1);
+    assert_eq!(row_ducts(&plan).len(), 1);
 }
 
 #[test]
@@ -530,4 +535,72 @@ fn a_plan_becomes_a_cut_list_with_rails_trimmed_to_save_bars() {
         let piece = pieces.iter().find(|p| p.id == *id).unwrap();
         assert!(*len >= piece.min - 1e-9 && *len <= piece.max + 1e-9);
     }
+}
+
+#[test]
+fn a_trunk_duct_joins_every_duct_between_rows() {
+    let specs = vec![
+        spec(1, "Q", 18.0, 90.0),
+        spec(2, "K", 45.0, 90.0),
+        spec(3, "A", 100.0, 90.0),
+        spec(4, "X", 60.0, 40.0),
+    ];
+    let rules = RuleSet::standard();
+    let (plan, why) = place_all_explained(&plate(), &specs, &rules, 1, 0.0);
+    assert!(why.trunk && !why.trunk_dropped);
+    let trunks: Vec<&PlannedDuct> = plan.ducts.iter().filter(|d| d.vertical).collect();
+    assert_eq!(trunks.len(), 1);
+    let trunk = trunks[0];
+    assert_eq!(trunk.class, Class::Mixed);
+    assert_eq!(
+        (trunk.width, trunk.height),
+        (rules.duct_width, rules.duct_height)
+    );
+    let tr = duct_rect(trunk);
+    let ducts = row_ducts(&plan);
+    assert!(ducts.len() >= 2);
+    for d in ducts {
+        // Each duct starts on the trunk's centre line and lies within its span.
+        assert_eq!(d.x, trunk.x);
+        assert!(d.y >= trunk.y && d.y <= trunk.y + trunk.length);
+        assert!(duct_rect(d).x <= tr.right());
+    }
+    // The trunk spans every row and stays on the plate.
+    for p in &plan.placements {
+        let s = specs.iter().find(|s| s.id == p.id).unwrap();
+        assert!(p.y >= trunk.y - 1e-9 && p.y + s.size.height <= trunk.y + trunk.length + 1e-9);
+    }
+    assert!(tr.x >= plate().usable().x && tr.bottom() <= plate().usable().y + plate().usable().h);
+    // No device or rail runs into it, and the plan still passes the check.
+    for p in &plan.placements {
+        assert!(p.x >= tr.right(), "device {} starts inside the trunk", p.id);
+    }
+    for r in &plan.rails {
+        assert!(r.x >= tr.right());
+    }
+    assert!(check(&placements(&plan, &specs), &plan.ducts, &specs, &rules).is_empty());
+}
+
+#[test]
+fn one_row_needs_no_trunk() {
+    let specs = vec![spec(1, "K", 45.0, 90.0), spec(2, "K", 45.0, 90.0)];
+    let (plan, why) = place_all_explained(&plate(), &specs, &RuleSet::standard(), 1, 0.0);
+    assert_eq!(plan.rails.len(), 1);
+    assert!(plan.ducts.is_empty() && !why.trunk);
+}
+
+#[test]
+fn the_trunk_is_dropped_when_the_narrower_plate_would_lose_a_device() {
+    // Two rows that fill the width exactly: the strip for a trunk would push
+    // a device off, so the plan without a trunk wins and says so.
+    let plate = Plate {
+        width: 220.0,
+        height: 400.0,
+        margin: 10.0,
+    };
+    let specs = vec![spec(1, "Q", 200.0, 60.0), spec(2, "K", 200.0, 60.0)];
+    let (plan, why) = place_all_explained(&plate, &specs, &RuleSet::standard(), 1, 0.0);
+    assert!(plan.unplaced.is_empty());
+    assert!(why.trunk_dropped && !why.trunk);
+    assert!(plan.ducts.iter().all(|d| !d.vertical));
 }

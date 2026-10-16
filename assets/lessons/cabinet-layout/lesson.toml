@@ -11,7 +11,7 @@
 format = 1
 id = "cabinet-layout"
 version = 2
-status = "draft"
+status = "early"
 title = "Lay out the mounting plate"
 title_nl = "De montageplaat indelen"
 summary = "Drag devices onto the plate, turn one, read an overlap, undo it and let Place all fill the plate by the rules."
@@ -27,6 +27,8 @@ finished = "finished.json"
 
 [[step]]
 id = "open-cabinet"
+how = ["Press {key:view.cabinet}.", "Check that the window now shows the plate of +CAB."]
+how_nl = ["Druk op {key:view.cabinet}.", "Controleer dat het venster nu de plaat van +CAB toont."]
 title = "Open the cabinet"
 title_nl = "Open de kast"
 text = """
@@ -66,6 +68,8 @@ note = [
 
 [[step]]
 id = "drag-first"
+how = ["Press and hold the mouse button on -F1 in the Unplaced list.", "Drag it to the upper left of the plate.", "Let go; the header says 1 placed, 7 unplaced."]
+how_nl = ["Houd de muisknop ingedrukt op -F1 in de lijst Unplaced.", "Sleep het naar linksboven op de plaat.", "Laat los; de kop zegt 1 placed, 7 unplaced."]
 title = "Drag a device onto the plate"
 title_nl = "Sleep een component op de plaat"
 text = """
@@ -83,6 +87,8 @@ expect = { signal = "cabinet_dropped" }
 
 [[step]]
 id = "rotate"
+how = ["Click -F1 on the plate.", "Press {key:edit.rotate}.", "The box is now 90 wide and 54 high."]
+how_nl = ["Klik op -F1 op de plaat.", "Druk op {key:edit.rotate}.", "Het kader is nu 90 breed en 54 hoog."]
 title = "Turn it"
 title_nl = "Draai het"
 text = """
@@ -100,6 +106,8 @@ expect = { signal = "cabinet_rotated" }
 
 [[step]]
 id = "overlap"
+how = ["Drag -K1 from the list onto the box of -F1.", "Let go; both boxes turn red."]
+how_nl = ["Sleep -K1 uit de lijst op het kader van -F1.", "Laat los; beide kaders worden rood."]
 title = "Make a mistake on purpose"
 title_nl = "Maak met opzet een fout"
 text = """
@@ -129,6 +137,8 @@ point = { ui = "cabinet.problems" }
 
 [[step]]
 id = "undo"
+how = ["Press {key:edit.undo}.", "-K1 is back in the Unplaced list and the red is gone."]
+how_nl = ["Druk op {key:edit.undo}.", "-K1 staat weer in de lijst Unplaced en het rood is weg."]
 title = "Take it back"
 title_nl = "Maak het ongedaan"
 text = """
@@ -145,6 +155,8 @@ solve = [ { command = "edit.undo" } ]
 
 [[step]]
 id = "take-off"
+how = ["Click -F1 on the plate.", "Press {key:edit.delete}.", "-F1 is back in the Unplaced list."]
+how_nl = ["Klik op -F1 op de plaat.", "Druk op {key:edit.delete}.", "-F1 staat weer in de lijst Unplaced."]
 title = "Take -F1 off the plate"
 title_nl = "Haal -F1 van de plaat"
 text = """
@@ -160,6 +172,8 @@ expect = { signal = "cabinet_removed" }
 
 [[step]]
 id = "place-all"
+how = ["Click Place all in the header.", "A preview of all eight devices appears; nothing is stored yet."]
+how_nl = ["Klik op Place all in de kop.", "Er verschijnt een voorbeeld van alle acht componenten; er is nog niets opgeslagen."]
 title = "Let Place all do the rest"
 title_nl = "Laat Place all de rest doen"
 text = """
@@ -179,6 +193,8 @@ expect = { clicked = "cabinet.place_all" }
 
 [[step]]
 id = "accept"
+how = ["Press Enter, or click Accept.", "The header reads 8 placed, 0 unplaced."]
+how_nl = ["Druk op Enter of klik op Accept.", "De kop zegt 8 placed, 0 unplaced."]
 title = "Keep it"
 title_nl = "Bewaar het"
 text = """
@@ -196,6 +212,8 @@ expect = { signal = "cabinet_plan_accepted" }
 
 [[step]]
 id = "table"
+how = ["Press {key:view.cabinet_table}, or click Table.", "Press it again to return to the plate."]
+how_nl = ["Druk op {key:view.cabinet_table} of klik op Table.", "Druk er nogmaals op om terug te keren naar de plaat."]
 title = "The same data as a table"
 title_nl = "Dezelfde gegevens als tabel"
 text = """
