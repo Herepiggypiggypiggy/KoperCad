@@ -327,6 +327,7 @@ const APP_COMMANDS: &[&str] = &[
     "export.change_report",
     "export.commissioning",
     "export.standards_report",
+    "export.standards_xlsx",
     "export.plate",
     "export.assembly",
     "export.sheets",
@@ -802,8 +803,22 @@ impl NovoApp {
             "export.reports" => {
                 self.export_all_reports();
             }
-            "sim.live" => self.toggle_live(),
-            "sim.plc_program" => self.open_plc_program(),
+            "sim.live" | "sim.plc_program" => {
+                // The live view and the PLC window draw only over the
+                // schematic: go there first so the command is not silent.
+                if self.workspace() != Workspace::Schematic && self.is_open() {
+                    self.switch_workspace(Workspace::Schematic);
+                    self.message(
+                        Level::Info,
+                        "Simulation runs on the schematic: switched to it",
+                    );
+                }
+                if id == "sim.live" {
+                    self.toggle_live();
+                } else {
+                    self.open_plc_program();
+                }
+            }
             _ if super::reports_view::REPORT_COMMANDS
                 .iter()
                 .any(|(c, _)| *c == id) =>
@@ -853,6 +868,9 @@ impl NovoApp {
             "export.commissioning" => self.export_commissioning_pdf(),
             "export.standards_report" => {
                 self.export_standards_report(StandardsFormat::Pdf);
+            }
+            "export.standards_xlsx" => {
+                self.export_standards_report(StandardsFormat::Excel);
             }
             "export.plate" => {
                 self.export_plate_pdf();
