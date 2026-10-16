@@ -89,6 +89,10 @@ text_nl = "Opnieuw doen"
 text = "Updated"
 text_nl = "Bijgewerkt"
 
+[early_access]
+text = "Early access"
+text_nl = "Vroege toegang"
+
 [coming_soon]
 text = "Coming soon"
 text_nl = "Binnenkort"
