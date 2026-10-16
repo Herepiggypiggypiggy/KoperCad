@@ -127,6 +127,7 @@ pub(super) enum Ask {
     /// Set a wire production rule of the project (`None` back to its default).
     SetWireRule(&'static str, Option<f64>),
     ExportWireProduction,
+    OpenBench,
     ExportWiringDxf(StructureId),
     /// Select a placed device (from the problems list), on the plate.
     Select(u64),
@@ -1474,6 +1475,7 @@ impl NovoApp {
             Ask::ExportWireProduction => {
                 self.export_wire_production();
             }
+            Ask::OpenBench => self.open_bench(),
             Ask::ExportWiringDxf(s) => {
                 self.export_wiring_dxf(s);
             }
