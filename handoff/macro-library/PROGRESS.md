@@ -5,3 +5,4 @@
 2026-10-15 18:38 UTC #405 merged (library, trash, symlink safety, starter set). Next work from main: browser window and Place button wait for Command::AdoptBlockDefinition (WS-02, requested by Macros thread); thumbnails; CLI.
 2026-10-15 19:30 UTC macro browser window (macro.browser, macro.import) with tests; Place button waits on Macros thread
 2026-10-15 22:25 UTC #455 merged with main; Place button now opens macro.place (open_macro_place) since #489 is in
+- 2026-10-16: merged main into #455 (conflicts in app.rs, workbench.rs; kept both sides), fmt/clippy/tests green; sent SHA to reviewer C.
