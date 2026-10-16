@@ -394,16 +394,93 @@ fn parity_odd(p: [usize; 3]) -> bool {
 /// centred, back at z = 0. Triangles keep their winding (a mirroring
 /// permutation is made proper by negating x).
 pub fn to_part_space(pos: &mut [V3], perm: [usize; 3]) {
-    let mirror = parity_odd(perm);
+    let (mirror, shift) = part_space_shift(pos, perm);
     for p in pos.iter_mut() {
         let q = [p[perm[0]], p[perm[1]], p[perm[2]]];
-        *p = [if mirror { -q[0] } else { q[0] }, q[1], q[2]];
+        *p = sub([if mirror { -q[0] } else { q[0] }, q[1], q[2]], shift);
     }
-    let (lo, hi) = bounds(pos);
-    let shift = [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0, lo[2]];
-    for p in pos.iter_mut() {
-        *p = sub(*p, shift);
+}
+
+/// Whether the axis permutation mirrors (and so negates x), and the shift
+/// that centres x and y and puts the back at z = 0.
+fn part_space_shift(pos: &[V3], perm: [usize; 3]) -> (bool, V3) {
+    let mirror = parity_odd(perm);
+    let mut lo = [f64::MAX; 3];
+    let mut hi = [f64::MIN; 3];
+    for p in pos {
+        let q = [p[perm[0]], p[perm[1]], p[perm[2]]];
+        let q = [if mirror { -q[0] } else { q[0] }, q[1], q[2]];
+        for k in 0..3 {
+            lo[k] = lo[k].min(q[k]);
+            hi[k] = hi[k].max(q[k]);
+        }
     }
+    (
+        mirror,
+        [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0, lo[2]],
+    )
+}
+
+/// The rigid map from the maker's model space to part space, kept so that
+/// anything else read from the same file (connection points) lands in the
+/// frame of the render mesh.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PartXf {
+    pub perm: [usize; 3],
+    pub mirror: bool,
+    pub shift: V3,
+    /// Part depth when the model was turned about y to put its mounting
+    /// side at z = 0.
+    pub flip_depth: Option<f64>,
+}
+
+impl PartXf {
+    pub fn apply(&self, p: V3) -> V3 {
+        let d = sub(self.permuted(p), self.shift);
+        match self.flip_depth {
+            Some(depth) => [-d[0], d[1], depth - d[2]],
+            None => d,
+        }
+    }
+
+    /// A direction (no shift).
+    pub fn apply_dir(&self, v: V3) -> V3 {
+        let d = self.permuted(v);
+        match self.flip_depth {
+            Some(_) => [-d[0], d[1], -d[2]],
+            None => d,
+        }
+    }
+
+    fn permuted(&self, p: V3) -> V3 {
+        let q = [p[self.perm[0]], p[self.perm[1]], p[self.perm[2]]];
+        [if self.mirror { -q[0] } else { q[0] }, q[1], q[2]]
+    }
+}
+
+/// The map [`finish`] applies to `soup`, without simplifying anything, the
+/// way the axes were chosen, and the size (width, height, depth) of the part
+/// in its own frame.
+pub fn derive_xf(soup: &Soup, target: Option<[f64; 3]>) -> (PartXf, Orientation, V3) {
+    let (lo, hi) = bounds(&soup.pos);
+    let ext = sub(hi, lo);
+    let eps = (len(ext) * 1e-5).max(1e-4);
+    let (mut pos, tris) = weld(&soup.pos, &soup.tris, eps);
+    let (perm, orientation) = assign_axes(ext, target);
+    let (mirror, shift) = part_space_shift(&pos, perm);
+    to_part_space(&mut pos, perm);
+    let (_, hi) = bounds(&pos);
+    let flip_depth = mounting_side_is_top(&pos, &tris, hi[2]).then_some(hi[2]);
+    (
+        PartXf {
+            perm,
+            mirror,
+            shift,
+            flip_depth,
+        },
+        orientation,
+        [hi[0] * 2.0, hi[1] * 2.0, hi[2]],
+    )
 }
 
 /// True when the +z end is the one with the larger flat face, which is
