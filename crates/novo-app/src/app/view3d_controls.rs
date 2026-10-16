@@ -69,6 +69,8 @@ impl Default for Controls {
 pub(super) struct Changed {
     pub(super) layers: bool,
     pub(super) door: bool,
+    /// What the Views menu asked for.
+    pub(super) views: Option<super::view3d_views::ViewsAction>,
 }
 
 impl Controls {
@@ -109,6 +111,7 @@ pub(super) fn toolbar(
     view: egui::Rect,
     controls: &mut Controls,
     limit: Option<f64>,
+    views: &[crate::settings::CameraBookmark],
     selected: bool,
 ) -> (Changed, Option<&'static str>) {
     let mut changed = Changed::default();
@@ -216,6 +219,7 @@ pub(super) fn toolbar(
                 "Heat",
                 "The Heat panel: simulate how heat and air move in this cabinet",
             );
+            changed.views = super::view3d_views::menu(ui, views);
             command = selection_menu(ui, selected, controls.hidden.len());
             toggle(
                 ui,

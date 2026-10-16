@@ -196,6 +196,47 @@ fn hiding_the_door_layer_closes_it_and_a_door_command_brings_it_back() {
 }
 
 #[test]
+fn the_save_view_command_keeps_the_camera_in_the_settings() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    // Headless there is no first-show fit: fit once, as a shown view would.
+    let scene = scene(&d).clone();
+    d.app.view3d.view.fit(&scene, 0.0, true);
+    d.app.view3d.view.camera.yaw = 0.9;
+    d.app.run_command(&ctx, "view.3d_save_view", None);
+    d.frame();
+    let views = &d.app.settings.camera_views;
+    assert_eq!(views.len(), 1);
+    assert_eq!(views[0].name, "View 1");
+    assert!((views[0].yaw - 0.9).abs() < 1e-6);
+}
+
+#[test]
+fn a_view_saved_before_the_3d_view_was_ever_shown_is_the_fitted_camera() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    // A fresh 3D view: its camera is the unfitted default until it is shown.
+    d.app.view3d.view = novo_view3d::widget::View3d::new(1);
+    let unfitted = d.app.view3d.view.camera;
+    d.app.run_command(&ctx, "view.3d_save_view", None);
+    d.frame();
+    // Not shown and fitted yet (no graphics adapter here): nothing is saved.
+    assert!(d.app.settings.camera_views.is_empty());
+    assert!(d.app.view3d.save_view);
+    let scene = scene(&d).clone();
+    d.app.view3d.view.fit(&scene, 0.0, true);
+    d.frame();
+    let views = &d.app.settings.camera_views;
+    assert_eq!(views.len(), 1);
+    assert_ne!(
+        views[0].distance, unfitted.distance,
+        "the saved camera is the fitted one"
+    );
+}
+
+#[test]
 fn the_hints_command_folds_and_unfolds_the_legend() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());

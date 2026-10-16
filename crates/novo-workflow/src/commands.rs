@@ -1302,6 +1302,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_save_view",
+        "Save the current 3D camera as a view",
+        "View",
+        &["save view", "bookmark", "camera", "remember view"],
+        Needs::Project,
+    ),
+    cmd(
         "view.3d_hints",
         "Show or hide the mouse and key hints in 3D",
         "View",

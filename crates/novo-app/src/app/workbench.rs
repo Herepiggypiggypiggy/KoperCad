@@ -448,6 +448,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_dimensions",
     "view.3d_quality",
     "view.3d_stats",
+    "view.3d_save_view",
     "view.3d_wire_runs",
     "view.3d_hints",
     "view.3d_select_devices",
@@ -982,6 +983,11 @@ impl NovoApp {
                     "view.3d_shell" => controls.layers.shell = !controls.layers.shell,
                     _ => controls.layers.wires = !controls.layers.wires,
                 }
+            }
+            "view.3d_save_view" => {
+                // Saved in the view's next frame, once the camera is fitted.
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.save_view = true;
             }
             "view.3d_align_left"
             | "view.3d_align_hcentre"
