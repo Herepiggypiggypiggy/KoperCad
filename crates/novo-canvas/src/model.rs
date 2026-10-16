@@ -191,6 +191,9 @@ pub struct ModelStyle {
     /// Accent (copper) colour of junction dots: true junctions only, where
     /// three or more conductors meet.
     pub joint_color: Color,
+    /// The wide sheath a cable core lies in, and the cable's tag along it.
+    /// Neutral: copper means "here", not "this is a cable".
+    pub cable_color: Color,
     /// Colour of the small dot where a wire lands on a pin (the wire
     /// colour, not the junction accent).
     pub pin_joint_color: Color,
@@ -226,6 +229,8 @@ pub struct ModelStyle {
     pub sheet_fill: Option<Color>,
     /// Sheet outline, drawing frame and title text.
     pub frame_color: Color,
+    /// Title block text and column numbers (stronger than the frame lines).
+    pub sheet_text_color: Color,
     /// Cross-reference text next to symbols ([`SymbolNote`]).
     pub note_color: Color,
     /// A [`SymbolNote`] flagged as a warning.
@@ -239,6 +244,7 @@ impl Default for ModelStyle {
             wire: Stroke::world(0.35, Color::rgb(30, 70, 200)),
             junction_radius: 0.7,
             joint_color: Color::rgb(176, 104, 56),
+            cable_color: Color::rgb(120, 126, 138),
             pin_joint_color: Color::rgb(30, 70, 200),
             pin_joint_radius: 0.6,
             wire_end_color: Color::rgb(176, 104, 56),
@@ -254,6 +260,7 @@ impl Default for ModelStyle {
             wire_number_height: 2.0,
             sheet_fill: None,
             frame_color: Color::rgb(90, 90, 90),
+            sheet_text_color: Color::rgb(170, 170, 170),
             note_color: Color::rgb(60, 90, 140),
             note_warning_color: Color::rgb(190, 120, 20),
         }
@@ -1231,7 +1238,7 @@ impl PageScene {
                 item.labels.push(
                     Label::new(Vec2::new(cx, cy), (c + 1).to_string(), 3.0)
                         .anchored(Anchor::Center)
-                        .colored(color),
+                        .colored(self.style.sheet_text_color),
                 );
             }
         }
@@ -1363,14 +1370,15 @@ impl PageScene {
             let y = min.y + TITLE_ROW * (r as f32 + 0.5);
             item.labels.push(
                 Label::new(Vec2::new(min.x + 2.0, y), caption, 2.0)
+                    .secondary()
                     .anchored(Anchor::CenterLeft)
-                    .colored(color),
+                    .colored(self.style.sheet_text_color),
             );
             if !value.is_empty() {
                 item.labels.push(
                     Label::new(Vec2::new(min.x + 24.0, y), value, 3.0)
                         .anchored(Anchor::CenterLeft)
-                        .colored(color),
+                        .colored(self.style.sheet_text_color),
                 );
             }
         }
@@ -1424,7 +1432,7 @@ impl PageScene {
                     item.labels.push(
                         Label::new(Vec2::new(min.x + x, y), text, 2.5)
                             .anchored(Anchor::CenterLeft)
-                            .colored(color),
+                            .colored(self.style.sheet_text_color),
                     );
                 }
             }
@@ -1618,7 +1626,9 @@ impl PageScene {
                 ),
             },
         };
-        let label = Label::new(pos, note.lines.join("\n"), h).anchored(anchor);
+        let label = Label::new(pos, note.lines.join("\n"), h)
+            .anchored(anchor)
+            .secondary();
         if note.warning {
             label.colored(self.style.note_warning_color).keeping_color()
         } else {
@@ -1711,7 +1721,7 @@ impl PageScene {
             .get(&id)
             .map_or(self.style.wire, |l| Stroke::screen(l.width, l.color));
         // A wire that is a core of a cable lies in a wide sheath in the
-        // accent colour, with the cable's tag along it, so the cable shows
+        // cable colour, with the cable's tag along it, so the cable shows
         // on the drawing and not only in the Cables drawer.
         let cable = project.cable_of_wire(id).and_then(|c| project.cable(c));
         match cable {
@@ -1722,7 +1732,7 @@ impl PageScene {
         if cable.is_some() {
             let sheath = Stroke::world(
                 (self.style.wire.width * 5.0).max(1.2),
-                self.style.joint_color,
+                self.style.cable_color,
             );
             item = item.with(Primitive::stroked(
                 Shape::polyline(pts.clone(), false),
@@ -1812,7 +1822,8 @@ impl PageScene {
                 Label::new(mid + Vec2::new(0.0, -0.8), n, self.style.wire_number_height)
                     .anchored(Anchor::BottomCenter)
             };
-            item.labels.push(label.colored(self.style.wire.color));
+            item.labels
+                .push(label.secondary().colored(self.style.wire.color));
         }
         if let Some(c) = cable {
             // Under the wire number, along the longest segment.
@@ -1839,7 +1850,8 @@ impl PageScene {
                 )
                 .anchored(Anchor::TopCenter)
             };
-            item.labels.push(label.colored(self.style.joint_color));
+            item.labels
+                .push(label.secondary().colored(self.style.cable_color));
         }
         self.put(id.into(), item);
     }

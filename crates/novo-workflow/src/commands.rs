@@ -144,6 +144,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["practice", "tutorial", "learn"],
         Needs::Nothing,
     ),
+    cmd(
+        "project.languages",
+        "Report languages",
+        "Project",
+        &[
+            "language",
+            "translate",
+            "dutch",
+            "nederlands",
+            "pdf language",
+            "translation",
+        ],
+        Needs::Project,
+    ),
     cmd("file.save", "Save", "Project", &[], Needs::Project),
     cmd(
         "file.save_as",
@@ -292,6 +306,25 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Nothing,
         ),
         &["import parts", "import catalog"],
+    ),
+    verb(
+        cmd(
+            "parts.import_eplan",
+            "Import parts from a CAD parts export",
+            "Project",
+            &[
+                "eplan parts",
+                "parts",
+                "artikel",
+                "xml",
+                "csv",
+                "catalog",
+                "migrate",
+                "other tool",
+            ],
+            Needs::Nothing,
+        ),
+        &["import cad parts"],
     ),
     verb(
         cmd(
@@ -512,6 +545,14 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["cable", "cores", "bundle"],
         Needs::Page,
     ),
+    // Shift+T: a click on the page, then the words of a free note.
+    cmd(
+        "draw.text",
+        "Add text",
+        "Draw",
+        &["note", "annotation", "comment"],
+        Needs::Page,
+    ),
     // Cables that exist: the Cables drawer (Ctrl+4) shows the one they act on.
     verb(
         cmd(
@@ -575,6 +616,20 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Page,
         ),
         &["add card"],
+    ),
+    cmd(
+        "plc.overview",
+        "PLC overview (cards, channels, addresses)",
+        "Draw",
+        &[
+            "plc",
+            "cards",
+            "channels",
+            "addresses",
+            "i/o",
+            "address plan",
+        ],
+        Needs::Project,
     ),
     verb(
         cmd(
@@ -752,6 +807,22 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["link"],
     ),
+    // The whole net of the selected wire, junction or part: select it on this
+    // page, or list the devices and pages it reaches.
+    cmd(
+        "net.select",
+        "Select net",
+        "Edit",
+        &["whole net", "connected wires"],
+        Needs::Selection,
+    ),
+    cmd(
+        "net.trace",
+        "Pages and devices on this net",
+        "Edit",
+        &["where does this go", "net devices", "net pages"],
+        Needs::Selection,
+    ),
     cmd("edit.escape", "Cancel", "Edit", &["escape"], Needs::Nothing),
     // Terminals
     cmd(
@@ -810,6 +881,82 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Edit",
         &["rename strip", "x number", "free strip"],
         Needs::Selection,
+    ),
+    verb(
+        cmd(
+            "terminal.add_spares",
+            "Add spare terminals",
+            "Edit",
+            &["spare", "strip", "extra terminals"],
+            Needs::Project,
+        ),
+        &["spares"],
+    ),
+    cmd(
+        "terminal.rename",
+        "Rename terminals (find and replace)",
+        "Edit",
+        &["strip", "find", "replace", "terminal name"],
+        Needs::Project,
+    ),
+    cmd(
+        "terminal.renumber",
+        "Renumber terminals",
+        "Edit",
+        &["strip", "1 2 3", "close gaps", "terminal number"],
+        Needs::Project,
+    ),
+    cmd(
+        "terminal.join_duplicates",
+        "Join duplicate terminals",
+        "Edit",
+        &["strip", "merge", "same name", "duplicate"],
+        Needs::Project,
+    ),
+    with_arguments(
+        cmd(
+            "terminal.set_kind",
+            "Set terminal kind",
+            "Edit",
+            &[
+                "strip",
+                "pe",
+                "neutral",
+                "fuse",
+                "disconnect",
+                "feed-through",
+            ],
+            Needs::Project,
+        ),
+        &["feed-through", "PE", "N", "fuse", "disconnect"],
+    ),
+    cmd(
+        "terminal.order_up",
+        "Move terminal up in strip",
+        "Edit",
+        &["strip", "reorder", "sort"],
+        Needs::Project,
+    ),
+    cmd(
+        "terminal.order_down",
+        "Move terminal down in strip",
+        "Edit",
+        &["strip", "reorder", "sort"],
+        Needs::Project,
+    ),
+    cmd(
+        "terminal.style",
+        "Terminal strip style",
+        "Edit",
+        &["strip", "symbol", "terminal look", "override"],
+        Needs::Project,
+    ),
+    cmd(
+        "terminal.restore_declined",
+        "Restore declined terminal proposals",
+        "Edit",
+        &["undo decline", "proposal", "terminals", "declined"],
+        Needs::Project,
     ),
     cmd(
         "interruption.renumber",
@@ -977,6 +1124,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Show or hide shadows in 3D",
         "View",
         &["shadows", "light", "soft shadows"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_dimensions",
+        "Show or hide dimensions in 3D",
+        "View",
+        &["dimensions", "measure", "distance", "mm", "sizes"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_quality",
+        "Restore 3D quality",
+        "View",
+        &["quality", "slow", "full quality", "reduced"],
         Needs::Project,
     ),
     cmd(
@@ -1222,10 +1383,24 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd(
+        "help.keymap_file",
+        "Open keymap file",
+        "View",
+        &["rebind", "customise keys", "change shortcuts", "keymap.txt"],
+        Needs::Nothing,
+    ),
+    cmd(
         "help.show_hints",
         "Show hints again",
         "View",
         &["hints", "tips", "reset", "help"],
+        Needs::Nothing,
+    ),
+    cmd(
+        "help.whats_new",
+        "What's new",
+        "View",
+        &["new", "changes", "release", "news", "help"],
         Needs::Nothing,
     ),
     cmd(
@@ -1346,6 +1521,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "cabinet.surface",
+            "Cabinet surfaces",
+            "View",
+            &["surface", "door", "wall", "roof", "floor", "side plate"],
+            Needs::Project,
+        ),
+        &["pick surface", "show surfaces"],
+    ),
+    verb(
+        cmd(
             "cabinet.door",
             "Inside size and door (Cabinet)",
             "View",
@@ -1457,6 +1642,79 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["labels"],
+    ),
+    verb(
+        cmd(
+            "report.wirecut",
+            "Wire cut list",
+            "View",
+            &["wire machine", "cut and strip", "production"],
+            Needs::Project,
+        ),
+        &["wire cut report"],
+    ),
+    verb(
+        cmd(
+            "report.io",
+            "I/O list",
+            "View",
+            &["plc", "inputs", "outputs", "addresses"],
+            Needs::Project,
+        ),
+        &["io list", "i/o list"],
+    ),
+    verb(
+        cmd(
+            "report.cable_schedule",
+            "Cable schedule",
+            "View",
+            &["cable list", "from to", "lengths"],
+            Needs::Project,
+        ),
+        &["cable schedule"],
+    ),
+    verb(
+        cmd(
+            "report.plugs",
+            "Plug list",
+            "View",
+            &["connectors", "plugs", "sockets", "mating"],
+            Needs::Project,
+        ),
+        &["plug list"],
+    ),
+    verb(
+        with_arguments(
+            cmd(
+                "report.add_page",
+                "Add report as drawing page",
+                "View",
+                &[
+                    "generated page",
+                    "cut list page",
+                    "labels page",
+                    "io list page",
+                    "strip diagram page",
+                    "print report",
+                ],
+                Needs::Project,
+            ),
+            &[
+                "toc",
+                "bom",
+                "devices",
+                "wires",
+                "cutlist",
+                "wirecut",
+                "terminals",
+                "cables",
+                "io",
+                "cableschedule",
+                "plugs",
+                "labels",
+            ],
+        ),
+        &["add report page", "add page"],
     ),
     verb(
         cmd(
@@ -1622,6 +1880,43 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["export pdf", "pdf"],
     ),
+    verb(
+        cmd(
+            "export.pdf_options",
+            "Export PDF...",
+            "Export",
+            &[
+                "pdf options",
+                "pdf dialog",
+                "page range",
+                "bookmarks",
+                "links",
+                "choose pages",
+            ],
+            Needs::Project,
+        ),
+        &["export pdf options", "pdf options"],
+    ),
+    verb(
+        cmd(
+            "export.pdf_page",
+            "Export this page as PDF",
+            "Export",
+            &["current page", "one page", "print page"],
+            Needs::Project,
+        ),
+        &["export page", "export this page"],
+    ),
+    verb(
+        cmd(
+            "export.report_pdf",
+            "Export report (PDF)",
+            "Export",
+            &["report pdf", "bom pdf", "wire list pdf", "print report"],
+            Needs::Project,
+        ),
+        &["export report"],
+    ),
     cmd(
         "export.change_report",
         "Export change report",
@@ -1682,6 +1977,16 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export plate"],
+    ),
+    verb(
+        cmd(
+            "export.plate_dxf",
+            "Export plate drawing as DXF",
+            "Export",
+            &["mounting plate", "drill table", "cnc", "cad"],
+            Needs::Project,
+        ),
+        &["export plate dxf"],
     ),
     verb(
         cmd(
@@ -1764,6 +2069,16 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["bench output", "open bench output"],
+    ),
+    verb(
+        cmd(
+            "report.designer",
+            "Report designer...",
+            "Export",
+            &["report template", "template", "title block", "designer"],
+            Needs::Project,
+        ),
+        &["report designer", "design a report", "edit report template"],
     ),
     verb(
         cmd(

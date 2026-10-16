@@ -337,6 +337,7 @@ impl NovoApp {
                 let options = novo_pdf::ReportPdfOptions {
                     title: format!("{name}, standards compliance"),
                     footer_right: "Assists the engineer; not a certificate".to_owned(),
+                    language: self.report_translator(),
                     ..Default::default()
                 };
                 novo_pdf::export_report_pdf(&[&report_output(&doc)], &options)
@@ -352,7 +353,7 @@ impl NovoApp {
         };
         match write_replacing(path, &bytes) {
             Ok(()) => {
-                self.message(Level::Info, format!("Exported {}", path.display()));
+                self.message_file(format!("Exported {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }

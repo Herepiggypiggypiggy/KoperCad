@@ -301,7 +301,15 @@ fn controls_register_where_they_are_and_the_start_panel_offers_learn() {
     d.app.start_lesson("tiny");
     d.frame();
     d.frame();
-    for id in ["dock.select", "dock.place", "dock.connect", "dock.corners"] {
+    for id in [
+        "dock.select",
+        "dock.place",
+        "dock.connect",
+        "dock.corners",
+        "dock.cable",
+        "dock.undo",
+        "dock.redo",
+    ] {
         let rect = d.app.learn_anchor(id).unwrap_or_else(|| panic!("{id}"));
         assert!(rect.width() > 0.0 && rect.height() > 0.0, "{id}");
     }
@@ -609,7 +617,7 @@ fn a_lesson_stays_whole_when_the_live_view_goes_on_and_off() {
     d.app.start_lesson("tiny");
     d.frame();
     d.frame();
-    let card = eframe::egui::Id::new("lesson_card");
+    let card = super::panel::id("lesson_card");
     let height = |d: &Drive| d.ctx.memory(|m| m.area_rect(card)).unwrap().height();
     let before = height(&d);
     assert!(before > 60.0, "the full card has a step text: {before}");

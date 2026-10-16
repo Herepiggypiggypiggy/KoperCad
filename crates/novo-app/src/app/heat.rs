@@ -597,14 +597,17 @@ pub(super) fn toggle(ui: &mut egui::Ui, state: &mut HeatState) -> egui::Response
 /// Heat is on.
 pub(super) fn strip(ui: &mut egui::Ui, state: &mut HeatState) {
     let chip = |ui: &mut egui::Ui, on: &mut bool, label: &str| {
-        if ui.selectable_label(*on, label).clicked() {
+        let r = novo_theme::widgets::filter_toggle(ui, label, *on);
+        if r.clicked() {
             *on = !*on;
         }
+        r.rect
     };
-    chip(ui, &mut state.map, "Map");
-    chip(ui, &mut state.contours, "Contours");
-    chip(ui, &mut state.airflow, "Airflow");
-    chip(ui, &mut state.badges, "Badges");
+    let mut chips = chip(ui, &mut state.map, "Map");
+    chips = chips.union(chip(ui, &mut state.contours, "Contours"));
+    chips = chips.union(chip(ui, &mut state.airflow, "Airflow"));
+    chips = chips.union(chip(ui, &mut state.badges, "Badges"));
+    super::cabinet_bar::note_rect(ui.ctx(), "heat.chips", "Heat chips", chips, false);
     simulate_controls(ui, state);
 }
 
@@ -679,11 +682,15 @@ fn status_label(p: &novo_cfd::Progress, validated: bool) -> String {
     format!("{} · {state}", p.fidelity.label())
 }
 
-/// Total loss of the devices that have a figure, and how many have none.
-fn totals(input: &Input) -> (f64, usize) {
+/// Total loss of the devices that have a figure, the number that have one,
+/// and how many have none. The total is never negative zero (the sum of no
+/// terms is -0.0 in Rust and would print as "-0 W").
+fn totals(input: &Input) -> (f64, usize, usize) {
     let known = input.items.iter().filter(|i| i.loss_known);
+    let (total, n) = known.fold((0.0_f64, 0), |(t, n), i| (t + i.loss_w, n + 1));
     (
-        known.map(|i| i.loss_w).sum(),
+        total + 0.0,
+        n,
         input.items.iter().filter(|i| !i.loss_known).count(),
     )
 }
@@ -747,11 +754,11 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
             }
         }
     } else {
-        if ui
+        let simulate = ui
             .button("Simulate")
-            .on_hover_text("Simulate the heat and airflow of this cabinet (Ctrl+K, heat)")
-            .clicked()
-        {
+            .on_hover_text("Simulate the heat and airflow of this cabinet (Ctrl+K, heat)");
+        super::cabinet_bar::note_ctx(ui.ctx(), "heat.simulate", "Simulate button", &simulate);
+        if simulate.clicked() {
             state.request_run();
         }
         compare_controls(ui, state);
@@ -837,7 +844,14 @@ pub(super) fn start_run(
             };
             state.start(bridge.scenario, meta);
         }
-        Err(e) => state.fail(format!("Cannot simulate: {e}")),
+        Err(e) => {
+            let hint = if e.to_string().contains("is not set") {
+                ". Set it in the Cabinet: Size enclosure or Plate setup"
+            } else {
+                ""
+            };
+            state.fail(format!("Cannot simulate: {e}{hint}"));
+        }
     }
 }
 
@@ -1273,6 +1287,8 @@ fn paint_badges(
     zoom: f32,
 ) {
     let font = FontId::monospace(t::FONT_SMALL);
+    let plate_left = to_screen(0.0, 0.0).x;
+    let mut placed: Vec<Rect> = Vec::new();
     for i in input
         .items
         .iter()
@@ -1287,14 +1303,46 @@ fn paint_badges(
             verdict,
             margin_k,
         } = reading(cache, i);
-        let (text, width) = match margin_k {
-            Some(m) => (format!("{temp:.0} °C · {m:+.0} K"), 128.0),
-            None => (format!("{temp:.0} °C"), 88.0),
+        // The badge names its device ("F1  46 °C") whenever the device is
+        // wide enough; a badge without a name only where it is not.
+        let reading_text = match margin_k {
+            Some(m) => format!("{temp:.0} °C · {m:+.0} K"),
+            None => format!("{temp:.0} °C"),
         };
-        // Only where the pill fits inside the device.
-        if (i.w as f32) * zoom < width + 8.0 || (i.h as f32) * zoom < 30.0 {
-            continue;
-        }
+        let measure = |text: &str| {
+            painter
+                .layout_no_wrap(text.to_owned(), font.clone(), t::TEXT)
+                .size()
+                .x
+                + 30.0
+        };
+        let named = if i.tag.is_empty() {
+            reading_text.clone()
+        } else {
+            format!("{}  {reading_text}", i.tag)
+        };
+        // The named badge may reach left over the free plate, but never over
+        // another badge or past the plate edge; then it is the temperature
+        // alone, and only where that fits inside the device.
+        let br = to_screen(i.x + i.w, i.y + i.h);
+        let rect_for = |width: f32| {
+            Rect::from_min_size(br - Vec2::new(width + 6.0, 26.0), Vec2::new(width, 20.0))
+        };
+        let named_width = measure(&named);
+        let named_rect = rect_for(named_width);
+        let (text, width) = if (i.h as f32) * zoom >= 30.0
+            && named_rect.left() >= plate_left
+            && !placed.iter().any(|q| q.intersects(named_rect.expand(2.0)))
+        {
+            (named, named_width)
+        } else {
+            let w = measure(&reading_text);
+            if (i.w as f32) * zoom < w + 8.0 || (i.h as f32) * zoom < 30.0 {
+                continue;
+            }
+            (reading_text, w)
+        };
+        placed.push(rect_for(width));
         let dot = t::TEXT_MUTED;
         let dot = match verdict {
             Verdict::Ok => t::SUCCESS,
@@ -1302,8 +1350,7 @@ fn paint_badges(
             Verdict::Over => t::ERROR,
             Verdict::Unknown => dot,
         };
-        let br = to_screen(i.x + i.w, i.y + i.h);
-        let pill = Rect::from_min_size(br - Vec2::new(width + 6.0, 26.0), Vec2::new(width, 20.0));
+        let pill = rect_for(width);
         painter.rect(
             pill,
             10.0,
@@ -1398,7 +1445,7 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
         .fixed_pos(rect.right_top() + Vec2::new(-176.0, 12.0))
         .order(egui::Order::Foreground)
         .show(ctx, |ui| {
-            egui::Frame::popup(ui.style()).show(ui, |ui| {
+            let card = egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.set_width(140.0);
                 ui.label(
                     egui::RichText::new("TEMPERATURE")
@@ -1446,8 +1493,10 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                 );
                 ui.add_space(4.0);
                 let small = |text: &str, color| egui::RichText::new(text).small().color(color);
-                let (total_w, unknown) = totals(input);
-                ui.label(small(&format!("Total loss {total_w:.0} W"), t::TEXT));
+                let (total_w, with_data, unknown) = totals(input);
+                if with_data > 0 {
+                    ui.label(small(&format!("Total loss {total_w:.0} W"), t::TEXT));
+                }
                 if let Some(note) = estimate_note(input) {
                     ui.label(small(&note, t::WARNING));
                 }
@@ -1496,6 +1545,13 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                     }
                 }
             });
+            super::cabinet_bar::note_rect(
+                ctx,
+                "heat.legend",
+                "Heat legend",
+                card.response.rect,
+                false,
+            );
         });
 }
 
@@ -1751,8 +1807,16 @@ mod tests {
         let mut i = input();
         i.items[1].loss_known = false;
         i.items[1].loss_w = 0.0;
-        assert_eq!(totals(&i), (80.0, 1));
-        assert_eq!(totals(&input()), (82.0, 0));
+        assert_eq!(totals(&i), (80.0, 1, 1));
+        assert_eq!(totals(&input()), (82.0, 2, 0));
+        // No figure anywhere: a positive zero, never "-0 W".
+        for item in &mut i.items {
+            item.loss_known = false;
+            item.loss_w = 0.0;
+        }
+        let (total, with_data, _) = totals(&i);
+        assert_eq!(with_data, 0);
+        assert_eq!(format!("{total:.0}"), "0");
         // Knowing a loss changes the picture's cache key.
         assert_ne!(layout_key(&i), layout_key(&input()));
     }

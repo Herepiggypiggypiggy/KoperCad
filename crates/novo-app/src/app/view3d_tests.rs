@@ -343,6 +343,10 @@ fn simulate_runs_from_the_3d_view_without_leaving_it() {
     assert!(d.app.cabinet.heat.solution().is_none());
     d.app.run_command(&ctx, "heat.simulate", None);
     assert_eq!(d.app.workspace(), Workspace::View3d, "Simulate stays here");
+    assert!(
+        d.app.view3d.controls.heat_panel,
+        "the panel with progress and stop opens with the run"
+    );
     for _ in 0..400 {
         d.frame();
         if d.app.cabinet.heat.solution().is_some() && !d.app.cabinet.heat.running() {
@@ -353,5 +357,105 @@ fn simulate_runs_from_the_3d_view_without_leaving_it() {
     assert!(
         d.app.cabinet.heat.solution().is_some(),
         "the run published a result to the 3D view"
+    );
+}
+
+#[test]
+fn dimensions_toggle_by_command_and_measure_the_selected_part_from_the_cabinet() {
+    use novo_view3d::ItemKind;
+    use novo_view3d::dimension::{Role, dimensions, format_mm};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.frame();
+    assert!(
+        !d.app.view3d.view.state.display.dimensions,
+        "off by default"
+    );
+    d.app.run_command(&ctx, "view.3d_dimensions", None);
+    d.frame();
+    assert!(d.app.view3d.view.state.display.dimensions);
+
+    let scene = d.app.view3d.built.as_ref().expect("scene built").2.clone();
+    let device = scene
+        .items
+        .iter()
+        .find(|i| i.id.kind == ItemKind::Device)
+        .expect("a device on the plate");
+    let none = dimensions(&scene, &Default::default());
+    assert!(
+        none.iter().all(|m| m.role == Role::Overall) && none.len() >= 2,
+        "overall size only: {none:?}"
+    );
+    let one = dimensions(&scene, &std::iter::once(device.id).collect());
+    let w = format!("W {}", format_mm(device.size.x));
+    let h = format!("H {}", format_mm(device.size.y));
+    assert!(
+        one.iter().any(|m| m.role == Role::Size && m.text == w),
+        "{w}: {one:?}"
+    );
+    assert!(
+        one.iter().any(|m| m.role == Role::Size && m.text == h),
+        "{h}: {one:?}"
+    );
+    assert!(
+        one.iter().any(|m| matches!(m.role, Role::Gap | Role::Edge)),
+        "distances to the plate edge or a neighbour: {one:?}"
+    );
+    assert!(one.iter().all(|m| m.mm.is_finite() && m.mm >= 0.0));
+
+    // Painting the lines for a selected part runs without trouble.
+    d.app.view3d.view.state.selection = std::iter::once(device.id).collect();
+    d.frame();
+    d.frame();
+
+    d.app.run_command(&ctx, "view.3d_dimensions", None);
+    d.frame();
+    assert!(!d.app.view3d.view.state.display.dimensions);
+}
+
+#[test]
+fn restore_quality_returns_a_stepped_down_view_to_the_adapters_tier() {
+    use novo_view3d::render::Tier;
+    use novo_view3d::widget::register_adapter;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    register_adapter("Test GPU", "Vulkan", Tier::Discrete);
+    d.frame();
+    assert_eq!(d.app.view3d.view.stepped_down(), None);
+
+    // Moving frames at 40 ms for four seconds: the governor steps the
+    // quality down. (The window-less test drives the governor itself; the
+    // widget calls it every frame.)
+    for i in 0..110 {
+        let input = egui::RawInput {
+            time: Some(20.0 + i as f64 * 0.04),
+            ..Default::default()
+        };
+        let view = &mut d.app.view3d.view;
+        let mut out = ctx.run_ui(input, |_| {
+            view.govern(&ctx, true);
+        });
+        out.textures_delta.clear();
+    }
+    let down = d.app.view3d.view.stepped_down();
+    assert_eq!(down, Some(Tier::Integrated), "the floor for hardware");
+    frame_at(&mut d, 30.0);
+    assert!(
+        d.app.view3d.controls.reduced,
+        "the toolbar offers to restore"
+    );
+
+    d.app.run_command(&ctx, "view.3d_quality", None);
+    assert_eq!(
+        d.app.view3d.view.stepped_down(),
+        None,
+        "back at the adapter's tier"
+    );
+    frame_at(&mut d, 31.0);
+    assert!(
+        !d.app.view3d.controls.reduced,
+        "nothing to restore any more"
     );
 }
