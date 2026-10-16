@@ -95,15 +95,14 @@ fn one_wire_number_on_two_nets() {
 }
 
 #[test]
-fn two_wire_numbers_on_one_net() {
+fn different_numbers_on_one_net_are_fine() {
+    // The two sides of a device or terminal share a net but are separate
+    // connections with their own numbers.
     let (project, ()) = build(|tx| {
         let page = tx.add_page("1")?;
         two_wires_between(tx, page, ["101", "102"], true)
     });
-    let problems = check(&project);
-    let found = of_kind(&problems, ProblemKind::WireNumber);
-    assert_eq!(found.len(), 1, "{problems:#?}");
-    assert!(found[0].message.contains("101, 102"));
+    assert!(of_kind(&check(&project), ProblemKind::WireNumber).is_empty());
 }
 
 #[test]

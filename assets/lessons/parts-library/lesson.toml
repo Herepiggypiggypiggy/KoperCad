@@ -14,67 +14,142 @@ next = ["spreadsheets"]
 project = "project.json"
 finished = "finished.json"
 page = "Main circuit"
+title_nl = "Zoek een onderdeel en importeer het met één klik"
+summary_nl = "Zoek in de onderdelenbibliotheek en haal het bestand van de fabrikant binnen."
 
 [[step]]
 id = "see-gap"
 title = "See what is missing"
-text = "The contactor **-K1** and the overload relay **-F2** have no part, so they are missing from the bill of materials. The issue pill counts them as infos."
-point = { at = { device = "-K1" } }
+title_nl = "Zie wat er ontbreekt"
+text = """
+The contactor **-K1** and the overload relay **-F2** have no part yet, so the bill of materials cannot list them. The Problems list shows this as a note, not an error.
+"""
+text_nl = """
+De contactor **-K1** en het thermisch relais **-F2** hebben nog geen onderdeel, dus de stuklijst kan ze niet noemen. De lijst met problemen toont dit als een opmerking, niet als een fout.
+"""
+how = [
+  "Open the **Check** menu and click **Problems**, or press {key:view.command_palette}, type **problems** and press Enter.",
+  "In the list, click the **infos** filter.",
+  "Two rows read **has no part**: one for -K1 and one for -F2.",
+]
+how_nl = [
+  "Open het menu **Check** en klik op **Problems**, of druk op {key:view.command_palette}, typ **problems** en druk op Enter.",
+  "Klik in de lijst op het filter **infos**.",
+  "Twee regels zeggen **has no part**: één voor -K1 en één voor -F2.",
+]
+point = { ui = "palette.button" }
+expect = { command = "check.problems" }
+solve = [ { command = "check.problems" } ]
 
 [[step]]
 id = "open-parts"
 title = "Open the Parts library"
-text = "Press {key:view.command_palette}, type **parts** and press Enter. The window lists every part you have, with a search field on top."
-point = { ui = "palette.field" }
+title_nl = "Open de onderdelenbibliotheek"
+text = "Every part you have lives in one searchable window. Opening it is the first step to filling the gaps from the last step."
+text_nl = "Al je onderdelen staan in één venster waarin je kunt zoeken. Dit openen is de eerste stap om de gaten van de vorige stap te vullen."
+how = [
+  "Press {key:view.command_palette} and type **parts**.",
+  "Press Enter. The window **Parts** opens with the search box ready to type in.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette} en typ **parts**.",
+  "Druk op Enter. Het venster **Parts** opent met het zoekveld klaar om in te typen.",
+]
+point = { ui = "palette.button" }
 expect = { command = "parts.browser" }
 solve = [ { command = "parts.browser" } ]
 
 [[step]]
 id = "search"
 title = "Search by order number"
-text = "Type **3RT2016** in the search field. It matches order numbers, types and descriptions, as you type."
-point = { ui = "parts.search" }
-expect = { clicked = "parts.search" }
+title_nl = "Zoek op bestelnummer"
+text = "The order number is printed on the device and on the invoice, so it is the quickest way to find the exact part. The list narrows as you type."
+text_nl = "Het bestelnummer staat op het apparaat en op de factuur, dus zo vind je het juiste onderdeel het snelst. De lijst wordt korter terwijl je typt."
+how = [
+  "Type **3RT2016-1AP01** in the search box at the top.",
+  "One row remains: a Siemens contactor. Click it to see its details on the right.",
+]
+how_nl = [
+  "Typ **3RT2016-1AP01** in het zoekveld bovenaan.",
+  "Er blijft één regel over: een Siemens contactor. Klik erop om rechts de details te zien.",
+]
+demo = [ { type = "3RT2016-1AP01" } ]
 
 [[step]]
 id = "one-click-import"
 title = "Import with one click"
-text = "A part you do not have yet shows an **Import** button. Click it: KoperCAD opens the maker's page, you save the file there, and the file is picked up from your Downloads folder."
-point = { ui = "parts.import" }
-note = [
-  { ui = "parts.import", text = "Some makers need a login; you stay in charge of that page. KoperCAD never stores your login." },
+title_nl = "Importeer met één klik"
+text = """
+A part you do not have yet shows a small **Import** button. This saves you hunting for the manufacturer's file yourself. It needs an internet connection, so you can read this step and do it later.
+"""
+text_nl = """
+Een onderdeel dat je nog niet hebt, toont een kleine knop **Import**. Zo hoef je het bestand van de fabrikant niet zelf te zoeken. Hiervoor heb je internet nodig; je kunt deze stap dus lezen en later doen.
+"""
+how = [
+  "Find a row without a green **In library** label.",
+  "Click its small **Import** button.",
+  "For most makers your web browser opens the part page. Save the file they offer.",
+  "KoperCAD finds the file in your Downloads folder by itself.",
+  "If no page opens, save the file yourself and drop it on the Parts window.",
 ]
-expect = { clicked = "parts.import" }
+how_nl = [
+  "Zoek een regel zonder groen label **In library**.",
+  "Klik op de kleine knop **Import**.",
+  "Bij de meeste fabrikanten opent je webbrowser de pagina van het onderdeel. Bewaar het bestand dat ze aanbieden.",
+  "KoperCAD vindt het bestand zelf in je map Downloads.",
+  "Opent er geen pagina, bewaar het bestand dan zelf en sleep het op het venster Parts.",
+]
 
 [[step]]
 id = "confirm"
-title = "Check and confirm"
-text = "The strip under the list shows what was found. Press **Import it**, or **Not this one**. The part is then marked **In library**."
-point = { ui = "parts.confirm" }
-expect = { clicked = "parts.confirm" }
+title = "Check what was found"
+title_nl = "Controleer wat gevonden is"
+text = "The strip under the list tells you what KoperCAD found in the file, so a wrong download never ends up in your library unnoticed."
+text_nl = "De strook onder de lijst vertelt wat KoperCAD in het bestand vond, zodat een verkeerde download niet ongemerkt in je bibliotheek belandt."
+how = [
+  "Read the strip under the list.",
+  "If it asks **Import it?**, press **Import it**, or **Not this one** if the file is wrong.",
+  "Otherwise the file is taken in by itself and the strip shows **Done**: press it.",
+  "The row now says **In library**.",
+]
+how_nl = [
+  "Lees de strook onder de lijst.",
+  "Vraagt ze **Import it?**, druk dan op **Import it**, of op **Not this one** als het bestand niet klopt.",
+  "Anders wordt het bestand vanzelf binnengehaald en toont de strook **Done**: druk daarop.",
+  "De regel zegt nu **In library**.",
+]
 
 [[step]]
-id = "select-k1"
-title = "Select the contactor"
-text = "Close the window and select **-K1** on the main circuit."
-point = { at = { device = "-K1" } }
-expect = { selected = "-K1" }
-solve = [ { select = "-K1" } ]
-
-[[step]]
-id = "assign"
-title = "Assign the part"
-text = "In the inspector, pick the part you just imported. The device now carries manufacturer and order number everywhere."
-point = { ui = "inspector.part" }
-expect = { field = { device = "-K1", name = "part", is_set = true } }
+id = "not-yet"
+title = "Putting the part on a device"
+title_nl = "Het onderdeel op een apparaat zetten"
+text = """
+In a finished project each device carries its part, so the bill of materials is complete. Choosing a library part for a device from the inspector is not in the program yet; this lesson gets that step as soon as it is.
+"""
+text_nl = """
+In een afgerond project draagt elk apparaat zijn onderdeel, zodat de stuklijst compleet is. Een bibliotheekonderdeel voor een apparaat kiezen in de inspector kan nog niet; deze les krijgt die stap zodra het kan.
+"""
 
 [[step]]
 id = "drop-in"
 title = "Or drop a file on the window"
-text = "A file you already downloaded, such as a ZIP from the maker, can be dropped on the Parts window. Select a part first so it knows which one it belongs to."
-point = { ui = "parts.window" }
+title_nl = "Of sleep een bestand op het venster"
+text = "A file you already downloaded, such as a ZIP from the maker, can be dropped straight on the Parts window. Select the part it belongs to first, so KoperCAD knows where it goes."
+text_nl = "Een bestand dat je al hebt gedownload, zoals een ZIP van de fabrikant, kun je direct op het venster Parts slepen. Selecteer eerst het onderdeel waar het bij hoort, zodat KoperCAD weet waar het heen moet."
+how = [
+  "Click the part in the list that the file belongs to.",
+  "Drag the file from your folder and drop it on the Parts window.",
+  "The strip under the list shows the result.",
+]
+how_nl = [
+  "Klik in de lijst op het onderdeel waar het bestand bij hoort.",
+  "Sleep het bestand uit je map en laat het los op het venster Parts.",
+  "De strook onder de lijst toont het resultaat.",
+]
 
 [[step]]
 id = "done"
-title = "Parts in, bill of materials complete"
-text = "Next time you need a part, search first, import second. Next: spreadsheets, to edit many devices at once."
+title = "Parts in your library"
+title_nl = "Onderdelen in je bibliotheek"
+text = "Next time you need a part, search first and import second. Next: spreadsheets, to change many devices at once."
+text_nl = "Heb je een onderdeel nodig, zoek dan eerst en importeer daarna. Hierna: spreadsheets, om veel apparaten tegelijk te wijzigen."

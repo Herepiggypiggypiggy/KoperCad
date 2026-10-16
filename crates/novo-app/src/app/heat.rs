@@ -76,6 +76,10 @@ pub(super) struct HeatState {
     pub on: bool,
     /// Show the difference map B minus A instead of the temperature.
     pub delta: bool,
+    /// Wipe: A left of the split, B right of it.
+    pub wipe: bool,
+    /// Where the wipe splits the plate, 0 to 1 of its width.
+    pub split: f32,
     pub map: bool,
     pub contours: bool,
     pub airflow: bool,
@@ -124,6 +128,8 @@ impl HeatState {
         HeatState {
             on: false,
             delta: false,
+            wipe: false,
+            split: 0.5,
             kept: None,
             map: true,
             contours: true,
@@ -148,15 +154,26 @@ impl HeatState {
         }
     }
 
+    /// The pair to wipe between, when Wipe is on and there is one.
+    fn wipe_diff<'a>(&self, cache: &'a Cache) -> Option<&'a Diff> {
+        if self.wipe && !self.delta {
+            cache.diff.as_ref()
+        } else {
+            None
+        }
+    }
+
     /// Keeps the shown result as A, to compare the next run against.
     pub(super) fn keep(&mut self) {
         self.kept = self.solution.clone();
         self.delta = false;
+        self.wipe = false;
     }
 
     pub(super) fn clear_kept(&mut self) {
         self.kept = None;
         self.delta = false;
+        self.wipe = false;
     }
 
     /// The result the picture draws from.
@@ -520,6 +537,16 @@ fn compare_controls(ui: &mut egui::Ui, state: &mut HeatState) {
                     .clicked()
             {
                 state.delta = !state.delta;
+                state.wipe = false;
+            }
+            if a != shown
+                && ui
+                    .selectable_label(state.wipe, "Wipe A | B")
+                    .on_hover_text("Drag the split: A on the left, B on the right")
+                    .clicked()
+            {
+                state.wipe = !state.wipe;
+                state.delta = false;
             }
             if ui
                 .button("Clear A")
@@ -657,8 +684,22 @@ pub(super) fn paint_under(
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 0.0, backdrop);
     if let Some(cache) = state.cache.as_ref() {
+        let to_screen = screen_fn(rect, viewport);
         let delta = state.delta_diff(cache);
-        paint_map(&painter, cache, &screen_fn(rect, viewport), delta);
+        paint_map(&painter, cache, &to_screen, delta);
+        if let Some(d) = state.wipe_diff(cache) {
+            // A on the left of the split, drawn on the same ramp as B.
+            let x = to_screen(f64::from(state.split) * cache.size.0, 0.0).x;
+            let clip = painter.clip_rect();
+            let left = Rect::from_min_max(
+                clip.min,
+                Pos2::new(x.clamp(clip.min.x, clip.max.x), clip.max.y),
+            );
+            let a = painter.with_clip_rect(left);
+            a.add(plate_mesh(&d.a_plate, cache.size, &to_screen, &|v| {
+                rgb(heat::ramp(cache.range.t(v)), MAP_ALPHA)
+            }));
+        }
     }
 }
 
@@ -708,6 +749,57 @@ pub(super) fn paint_over(
     } else {
         legend(ui.ctx(), rect, cache, input, stale);
     }
+    if state.wipe_diff(cache).is_some() {
+        let width = cache.size.0;
+        let split = wipe_handle(ui, rect, &to_screen, viewport.zoom, width, state.split);
+        state.split = split;
+    }
+}
+
+/// The draggable split of the wipe: a line with the A and B labels. Returns
+/// the new split, 0 to 1 of the plate width.
+fn wipe_handle(
+    ui: &egui::Ui,
+    rect: Rect,
+    to_screen: &dyn Fn(f64, f64) -> Pos2,
+    zoom: f32,
+    plate_w: f64,
+    split: f32,
+) -> f32 {
+    let x = to_screen(f64::from(split) * plate_w, 0.0).x;
+    let grab = Rect::from_min_max(
+        Pos2::new(x - 6.0, rect.min.y),
+        Pos2::new(x + 6.0, rect.max.y),
+    );
+    let response = ui
+        .interact(grab, egui::Id::new("heat_wipe"), egui::Sense::drag())
+        .on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
+    let mut split = split;
+    if response.dragged() && plate_w > 0.0 && zoom > 0.0 {
+        split = (split + response.drag_delta().x / (zoom * plate_w as f32)).clamp(0.0, 1.0);
+    }
+    let x = to_screen(f64::from(split) * plate_w, 0.0).x;
+    let painter = ui.painter_at(rect);
+    painter.line_segment(
+        [Pos2::new(x, rect.min.y), Pos2::new(x, rect.max.y)],
+        Stroke::new(2.0, t::TEXT),
+    );
+    let font = FontId::proportional(t::FONT_SMALL);
+    painter.text(
+        Pos2::new(x - 8.0, rect.min.y + 12.0),
+        Align2::RIGHT_CENTER,
+        "A",
+        font.clone(),
+        t::TEXT,
+    );
+    painter.text(
+        Pos2::new(x + 8.0, rect.min.y + 12.0),
+        Align2::LEFT_CENTER,
+        "B",
+        font,
+        t::TEXT,
+    );
+    split
 }
 
 fn paint_map(
@@ -716,25 +808,37 @@ fn paint_map(
     to_screen: &dyn Fn(f64, f64) -> Pos2,
     delta: Option<&Diff>,
 ) {
-    // A mesh with a colour per vertex: the GPU blends between them, so the
-    // field reads smooth whatever the cell size.
-    let (w, h) = cache.size;
+    let field = delta.map_or(&cache.smooth, |d| &d.field);
+    let shape = match delta {
+        Some(d) => plate_mesh(field, cache.size, to_screen, &|v| {
+            rgb(heat_compare::colour(v as f32, d.extent), MAP_ALPHA)
+        }),
+        None => plate_mesh(field, cache.size, to_screen, &|v| {
+            rgb(heat::ramp(cache.range.t(v)), MAP_ALPHA)
+        }),
+    };
+    painter.add(shape);
+}
+
+/// A mesh with a colour per vertex over the plate: the GPU blends between
+/// them, so the field reads smooth whatever the cell size.
+fn plate_mesh(
+    field: &Scalar,
+    size: (f64, f64),
+    to_screen: &dyn Fn(f64, f64) -> Pos2,
+    colour: &dyn Fn(f64) -> Color32,
+) -> Shape {
+    let (w, h) = size;
     let (cols, rows) = (
         ((w / 5.0) as usize).clamp(2, 160),
         ((h / 5.0) as usize).clamp(2, 160),
     );
-    let grid = delta
-        .map_or(&cache.smooth, |d| &d.field)
-        .resampled(cols, rows);
+    let grid = field.resampled(cols, rows);
     let mut mesh = egui::Mesh::default();
     for r in 0..rows {
         for c in 0..cols {
             let (x, y) = grid.grid.centre(c, r);
-            let v = f64::from(grid.at(c, r));
-            let color = match delta {
-                Some(d) => rgb(heat_compare::colour(v as f32, d.extent), MAP_ALPHA),
-                None => rgb(heat::ramp(cache.range.t(v)), MAP_ALPHA),
-            };
+            let color = colour(f64::from(grid.at(c, r)));
             // Cell centres stretched to the plate edge so the map fills it.
             let (px, py) = (
                 if c == 0 {
@@ -763,7 +867,7 @@ fn paint_map(
             mesh.add_triangle(i + 1, i + n + 1, i + n);
         }
     }
-    painter.add(Shape::mesh(mesh));
+    Shape::mesh(mesh)
 }
 
 fn paint_contours(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64, f64) -> Pos2) {
@@ -1456,5 +1560,30 @@ mod tests {
             heat_compare::colour(f32::NAN, 5.0),
             heat_compare::colour(0.0, 5.0)
         );
+    }
+
+    #[test]
+    fn wipe_and_delta_exclude_each_other() {
+        let mut state = HeatState::new();
+        let mut i = input();
+        state.start(scenario(), meta(&i), || {});
+        run_to_end(&mut state);
+        state.keep();
+        let mut cooler = scenario();
+        cooler.devices[0].loss_w = 10.0;
+        state.start(cooler, meta(&i), || {});
+        run_to_end(&mut state);
+        i.solution = state.solution();
+        i.kept = state.kept();
+        let c = build(&i);
+        state.wipe = true;
+        assert!(state.wipe_diff(&c).is_some());
+        state.delta = true;
+        assert!(state.wipe_diff(&c).is_none(), "Δ wins when both are set");
+        // A is hotter than B at the drive: the two plates differ.
+        let d = c.diff.as_ref().unwrap();
+        assert!(d.a_plate.extent().unwrap().1 > c.smooth.extent().unwrap().1);
+        state.clear_kept();
+        assert!(!state.wipe && !state.delta);
     }
 }
