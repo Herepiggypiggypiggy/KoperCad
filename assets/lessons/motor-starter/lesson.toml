@@ -44,6 +44,16 @@ The motor breaker protects the motor against overload and short circuit, so it i
 text_nl = """
 De motorbeveiliging beschermt de motor tegen overbelasting en kortsluiting, dus het is het eerste apparaat onder de voeding.
 """
+how = [
+  "Tap {key:tool.place}, type **mpcb** and press Enter. The motor protection breaker hangs on your pointer.",
+  "Click just under the three feeds. It is wired to them and gets the tag **-Q1**.",
+  "Press {key:edit.escape} to put the part down.",
+]
+how_nl = [
+  "Tik op {key:tool.place}, typ **mpcb** en druk op Enter. De motorbeveiliging hangt aan je aanwijzer.",
+  "Klik net onder de drie feeds. Hij wordt met de feeds verbonden en krijgt de tag **-Q1**.",
+  "Druk op {key:edit.escape} om het onderdeel los te laten.",
+]
 demo = [
   { press = "tool.place" },
   { type = "mpcb" },
@@ -68,6 +78,16 @@ The contactor switches the motor on and off. Its three main contacts carry the m
 text_nl = """
 De contactor schakelt de motor in en uit. Zijn drie hoofdcontacten voeren de motorstroom, één per fase.
 """
+how = [
+  "Tap {key:tool.place}, type **main** and press Enter. The three main contacts hang on your pointer.",
+  "Click under the breaker. The three wires between breaker and contacts, and the three wires down to the motor, are drawn for you. The device gets the tag **-K1**.",
+  "Press {key:edit.escape} to put the part down.",
+]
+how_nl = [
+  "Tik op {key:tool.place}, typ **main** en druk op Enter. De drie hoofdcontacten hangen aan je aanwijzer.",
+  "Klik onder de motorbeveiliging. De drie draden tussen beveiliging en contacten, en de drie draden omlaag naar de motor, worden voor je getekend. Het apparaat krijgt de tag **-K1**.",
+  "Druk op {key:edit.escape} om het onderdeel los te laten.",
+]
 demo = [
   { press = "tool.place" },
   { type = "main" },
@@ -92,6 +112,12 @@ The coil of the contactor is drawn on its own page, the way a real drawing separ
 text_nl = """
 De spoel van de contactor staat op een eigen pagina, zoals een echte tekening hoofd- en stuurstroom scheidt.
 """
+how = [
+  "Press {key:nav.next_page} (Page Down). The page **Control circuit** opens, with an L1 feed at the top and an N feed at the bottom.",
+]
+how_nl = [
+  "Druk op {key:nav.next_page} (Page Down). De pagina **Control circuit** opent, met een L1-feed bovenaan en een N-feed onderaan.",
+]
 demo = [
   { press = "nav.next_page" },
   { say = "The Control circuit page opens.", say_nl = "De pagina Control circuit opent." },
@@ -109,6 +135,16 @@ The control circuit has its own small breaker, so a fault in the control wiring 
 text_nl = """
 Het stuurcircuit heeft een eigen kleine automaat, zodat een fout in de stuurbedrading hem laat vallen en niet de motorbeveiliging.
 """
+how = [
+  "Tap {key:tool.place}, type **mcb** and press Enter.",
+  "Click just under **L1**. It is wired to L1 and gets the tag **-F1**.",
+  "Press {key:edit.escape} to put the part down.",
+]
+how_nl = [
+  "Tik op {key:tool.place}, typ **mcb** en druk op Enter.",
+  "Klik net onder **L1**. Hij wordt met L1 verbonden en krijgt de tag **-F1**.",
+  "Druk op {key:edit.escape} om het onderdeel los te laten.",
+]
 demo = [
   { press = "tool.place" },
   { type = "mcb" },
@@ -133,6 +169,16 @@ A stop button must stop the motor even when its wire breaks, so it is **normally
 text_nl = """
 Een stopknop moet de motor ook stoppen als zijn draad breekt, daarom is hij **verbrekend**: het circuit is gesloten totdat je hem indrukt.
 """
+how = [
+  "Tap {key:tool.place}, type **pbnc** and press Enter.",
+  "Click just under the breaker. It is wired to the breaker and gets the tag **-S1**.",
+  "Press {key:edit.escape} to put the part down.",
+]
+how_nl = [
+  "Tik op {key:tool.place}, typ **pbnc** en druk op Enter.",
+  "Klik net onder de automaat. Hij wordt met de automaat verbonden en krijgt de tag **-S1**.",
+  "Druk op {key:edit.escape} om het onderdeel los te laten.",
+]
 demo = [
   { press = "tool.place" },
   { type = "pbnc" },
@@ -157,6 +203,16 @@ The start button is **normally open**: it only closes the circuit while it is pr
 text_nl = """
 De startknop is **sluitend**: hij sluit het circuit alleen zolang hij ingedrukt is.
 """
+how = [
+  "Tap {key:tool.place}, type **pb** and press Enter.",
+  "Click just under the stop button. It is wired to the stop button and gets the tag **-S2**.",
+  "Press {key:edit.escape} to put the part down.",
+]
+how_nl = [
+  "Tik op {key:tool.place}, typ **pb** en druk op Enter.",
+  "Klik net onder de stopknop. Hij wordt met de stopknop verbonden en krijgt de tag **-S2**.",
+  "Druk op {key:edit.escape} om het onderdeel los te laten.",
+]
 demo = [
   { press = "tool.place" },
   { type = "pb" },
@@ -181,6 +237,16 @@ The coil belongs to the contactor you placed on page 1. Naming the device tells 
 text_nl = """
 De spoel hoort bij de contactor die je op pagina 1 plaatste. Door het apparaat te noemen voegt KoperCAD de spoel toe aan **-K1** in plaats van een nieuw apparaat te maken.
 """
+how = [
+  "Tap {key:tool.place}, type **coil K1** and press Enter.",
+  "Click just under the start button, above the N feed. It is wired to the start button and to N, and it is the coil of **-K1**.",
+  "Press {key:edit.escape} to put the part down.",
+]
+how_nl = [
+  "Tik op {key:tool.place}, typ **coil K1** en druk op Enter.",
+  "Klik net onder de startknop, boven de N-feed. Hij wordt met de startknop en met N verbonden en is de spoel van **-K1**.",
+  "Druk op {key:edit.escape} om het onderdeel los te laten.",
+]
 demo = [
   { press = "tool.place" },
   { type = "coil K1" },
@@ -205,6 +271,16 @@ Without help, the coil drops out as soon as you release the start button. A cont
 text_nl = """
 Zonder hulp valt de spoel af zodra je de startknop loslaat. Een contact van dezelfde contactor, parallel aan de startknop, houdt hem aan. Dit heet een {tip:self-hold}.
 """
+how = [
+  "Tap {key:tool.place}, type **no K1** and press Enter.",
+  "Click on the empty page to the right of the start button. The contact is the next contact of **-K1**, numbered 13-14.",
+  "Press {key:edit.escape} to put the part down.",
+]
+how_nl = [
+  "Tik op {key:tool.place}, typ **no K1** en druk op Enter.",
+  "Klik op de lege pagina rechts van de startknop. Het contact is het volgende contact van **-K1**, genummerd 13-14.",
+  "Druk op {key:edit.escape} om het onderdeel los te laten.",
+]
 demo = [
   { press = "tool.place" },
   { type = "no K1" },
@@ -229,6 +305,14 @@ The new contact must be in parallel with the start button, so the coil stays on 
 text_nl = """
 Het nieuwe contact moet parallel aan de startknop staan, zodat de spoel aan blijft nadat je de knop loslaat. Eerst verbind je de bovenkant.
 """
+how = [
+  "Press on the upper pin (13) of the contact you just placed.",
+  "Drag left and let go on the short wire between the stop button and the start button. A dot appears where the two wires meet.",
+]
+how_nl = [
+  "Druk op de bovenste pen (13) van het contact dat je net plaatste.",
+  "Sleep naar links en laat los op de korte draad tussen de stopknop en de startknop. Waar de twee draden samenkomen verschijnt een punt.",
+]
 demo = [
   { drag = { from = { at = { pin = "-K1:13" } }, to = { at = { page = "Control circuit", x = 80, y = 96 } } } },
   { say = "A dot appears where the two wires meet.", say_nl = "Er verschijnt een punt waar de twee draden samenkomen." },
@@ -248,6 +332,14 @@ Now the other side. When the contact closes, it must feed the coil the same way 
 text_nl = """
 Nu de andere kant. Als het contact sluit, moet het de spoel op dezelfde manier voeden als de startknop.
 """
+how = [
+  "Press on the lower pin (14) of the same contact.",
+  "Drag left and let go on the short wire between the start button and the coil. Another dot appears. The contact now bypasses the start button.",
+]
+how_nl = [
+  "Druk op de onderste pen (14) van hetzelfde contact.",
+  "Sleep naar links en laat los op de korte draad tussen de startknop en de spoel. Er verschijnt nog een punt. Het contact overbrugt nu de startknop.",
+]
 demo = [
   { drag = { from = { at = { pin = "-K1:14" } }, to = { at = { page = "Control circuit", x = 80, y = 128 } } } },
   { say = "Another dot appears. The contact now bypasses the start button.", say_nl = "Er verschijnt nog een punt. Het contact overbrugt nu de startknop." },
@@ -269,6 +361,12 @@ text_nl = """
 De starter is compleet: op pagina 1 loopt de voeding via -Q1 en de hoofdcontacten van -K1 naar de motor; op pagina 2 staan de stopknop, de startknop en de spoel van -K1 tussen L1 en N, en het houdcontact staat parallel aan de startknop.
 Met de live-weergave kun je het proberen. De volgende lessen laten zien hoe je die leest.
 """
+how = [
+  "Press {key:sim.live} to switch the live view on and look around. Nothing runs yet, because every switch starts open. Press it again to switch the live view off.",
+]
+how_nl = [
+  "Druk op {key:sim.live} om de live-weergave aan te zetten en rond te kijken. Er draait nog niets, omdat elke schakelaar open begint. Druk nogmaals om de live-weergave uit te zetten.",
+]
 demo = [
   { press = "sim.live" },
   { wait = 1 },

@@ -42,6 +42,16 @@ When two pins face each other, a drag is the quickest wire: no tool, no clicks i
 text_nl = """
 Als twee pennen naar elkaar wijzen, is slepen de snelste draad: geen gereedschap, geen tussenklikken.
 """
+how = [
+  "Point at the lower pin of the left breaker **-F1** and press the mouse button down.",
+  "Drag down to the upper pin of the left push button **-S1** (pin 13).",
+  "Release on the pin. A straight wire joins them.",
+]
+how_nl = [
+  "Wijs de onderste pen van de linker automaat **-F1** aan en houd de muisknop ingedrukt.",
+  "Sleep omlaag naar de bovenste pen van de linker drukknop **-S1** (pen 13).",
+  "Laat los op de pen. Een rechte draad verbindt ze.",
+]
 point = { at = { device = "-F1", pin = "2" } }
 note = [ { at = { device = "-S1", pin = "13" }, text = "Release here" } ]
 expect = { wire = { from = "-F1:2", to = "-S1:13" } }
@@ -57,6 +67,14 @@ Pins that do not face each other need bends. The wire tool lets you click your w
 text_nl = """
 Pennen die niet naar elkaar wijzen hebben knikken nodig. Met het draadgereedschap klik je je weg van pen naar pen. Het dock toont de modus. In **Corners** klik je alleen waar de draad moet afbuigen, en KoperCAD tekent de rechte stukken tussen je klikken.
 """
+how = [
+  "Press {key:tool.connect}. The dock shows the wire tool and the mode chip **Corners**.",
+  "If the chip says **Lines**, press {key:wire.mode} once to go back to Corners.",
+]
+how_nl = [
+  "Druk op {key:tool.connect}. Het dock toont het draadgereedschap en de modus **Corners**.",
+  "Staat er **Lines**, druk dan één keer op {key:wire.mode} om terug te gaan naar Corners.",
+]
 demo = [
   { press = "tool.connect" },
   { say = "In the dock the Corners chip is lit. If Lines is lit instead, click Corners.", say_nl = "In het dock is de chip Corners verlicht. Is Lines verlicht, klik dan op Corners." },
@@ -75,6 +93,16 @@ In Corners you click the pins and, where you want the wire to turn, one point in
 text_nl = """
 In Corners klik je op de pennen en, waar je de draad wilt laten afbuigen, op één punt ertussen. KoperCAD verbindt je klikken met rechte lijnen.
 """
+how = [
+  "With the wire tool active, click the lower pin of the left push button **-S1** (pin 14).",
+  "Click the empty dot directly above the left relay coil.",
+  "Click the upper pin of the left relay coil **-K1** (pin A1). The wire is finished.",
+]
+how_nl = [
+  "Klik met het draadgereedschap actief op de onderste pen van de linker drukknop **-S1** (pen 14).",
+  "Klik op het lege punt direct boven de linker relaisspoel.",
+  "Klik op de bovenste pen van de linker relaisspoel **-K1** (pen A1). De draad is klaar.",
+]
 demo = [
   { move = { at = { pin = "-S1:14" } } },
   { click = true },
@@ -99,6 +127,12 @@ In **Lines** every click becomes a bend exactly where you put it, with no router
 text_nl = """
 In **Lines** wordt elke klik een knik precies waar jij hem zet, zonder router ertussen. Het is de modus voor als een draad langs een precieze plek moet lopen.
 """
+how = [
+  "Press {key:wire.mode}. The mode chip in the dock changes from **Corners** to **Lines**.",
+]
+how_nl = [
+  "Druk op {key:wire.mode}. De modusknop in het dock wisselt van **Corners** naar **Lines**.",
+]
 demo = [
   { press = "wire.mode" },
   { say = "The Lines chip in the dock lights up.", say_nl = "De chip Lines in het dock licht op." },
@@ -117,6 +151,16 @@ You choose every bend. This wire leaves the button, goes down a little, runs rig
 text_nl = """
 Jij kiest elke knik. Deze draad verlaat de knop, gaat een stukje omlaag, loopt naar rechts boven het relais en bereikt het dan.
 """
+how = [
+  "Click the lower pin of the right push button **-S2** (pin 14).",
+  "Click the empty dot directly below the button, then the empty dot directly above the right relay coil. Each click is a bend.",
+  "Click the upper pin of the right relay coil **-K2** (pin A1). The wire is finished.",
+]
+how_nl = [
+  "Klik op de onderste pen van de rechter drukknop **-S2** (pen 14).",
+  "Klik op het lege punt direct onder de knop en dan op het lege punt direct boven de rechter relaisspoel. Elke klik is een knik.",
+  "Klik op de bovenste pen van de rechter relaisspoel **-K2** (pen A1). De draad is klaar.",
+]
 demo = [
   { move = { at = { pin = "-S2:14" } } },
   { click = true },
