@@ -25,7 +25,11 @@ use novo_reports::{
     Labels, Report, ReportOutput, SheetGrid, TapeStock, WireCutJob, ferrule_counts, is_estimate,
     label_items, layout_labels, stock_presets, wire_cut_jobs_with, with_spares,
 };
-use novo_theme::tokens;
+use novo_theme::table::{
+    ROW_HEIGHT, RowState, TableAlign, TableCell, TableColumn, column_widths, table_header,
+    table_row,
+};
+use novo_theme::{Palette, tokens};
 
 use super::pdf::write_replacing;
 use super::sheets::{hash, ours_or_free};
@@ -448,7 +452,7 @@ fn cut_tab(
 ) {
     let Some(cache) = state.cache.as_ref().filter(|_| state.standard.is_valid()) else {
         ui.colored_label(
-            tokens::WARNING,
+            Palette::of(ui).warning,
             "The ferrule standard is not valid: fix it on the Ferrules tab",
         );
         return;
@@ -471,13 +475,16 @@ fn cut_tab(
     ));
     if estimates > 0 {
         ui.colored_label(
-            tokens::WARNING,
+            Palette::of(ui).warning,
             format!(
                 "{estimates} lengths are estimates and print with a ~: the wire is not routed through a duct, or a device has no pin position. Measure those on the plate."
             ),
         );
     } else {
-        ui.colored_label(tokens::SUCCESS, "Every length comes from a routed wire");
+        ui.colored_label(
+            Palette::of(ui).success,
+            "Every length comes from a routed wire",
+        );
     }
     ui.add_space(4.0);
     ui.weak(format!(
@@ -501,6 +508,82 @@ fn cut_tab(
             *act = Some(Act::ExportMachineCsv);
         }
     });
+    ui.add_space(6.0);
+    cut_table(ui, jobs);
+}
+
+/// The wires to cut, in the order of the printed list (size and colour
+/// groups, longest first), so they can be checked before printing.
+fn cut_table(ui: &mut egui::Ui, jobs: &[WireCutJob]) {
+    let col = |header: &str, align| TableColumn {
+        header: header.into(),
+        align,
+    };
+    let columns = [
+        col("Wire", TableAlign::Left),
+        col("mm²", TableAlign::Right),
+        col("Colour", TableAlign::Left),
+        col("From", TableAlign::Left),
+        col("To", TableAlign::Left),
+        col("Cut mm", TableAlign::Right),
+        col("Basis", TableAlign::Left),
+    ];
+    let bar = ui.spacing().scroll.allocated_width() + 4.0;
+    let widths = column_widths(
+        ui.available_width() - bar,
+        &[1.4, 0.8, 1.2, 3.0, 3.0, 1.4, 1.6],
+    );
+    table_header(ui, &columns, &widths, None);
+    egui::ScrollArea::vertical()
+        .id_salt("bench_cut_rows")
+        .auto_shrink([false, false])
+        .min_scrolled_height(260.0)
+        .show_rows(ui, ROW_HEIGHT + 1.0, jobs.len(), |ui, range| {
+            for i in range {
+                let j = &jobs[i];
+                let size = j
+                    .cross_section_mm2
+                    .map_or_else(|| "?".to_owned(), |v| format!("{v}"));
+                let est = is_estimate(&j.basis);
+                let cut = format!("{}{:.0}", if est { "~" } else { "" }, j.cut_mm);
+                let cells = [
+                    TableCell {
+                        text: if j.number.is_empty() { "-" } else { &j.number },
+                        numeric: false,
+                    },
+                    TableCell {
+                        text: &size,
+                        numeric: true,
+                    },
+                    TableCell {
+                        text: if j.colour.is_empty() { "-" } else { &j.colour },
+                        numeric: false,
+                    },
+                    TableCell {
+                        text: &j.end_a.designation,
+                        numeric: false,
+                    },
+                    TableCell {
+                        text: &j.end_b.designation,
+                        numeric: false,
+                    },
+                    TableCell {
+                        text: &cut,
+                        numeric: true,
+                    },
+                    TableCell {
+                        text: &j.basis,
+                        numeric: false,
+                    },
+                ];
+                let state = if est {
+                    RowState::Selected
+                } else {
+                    RowState::Normal
+                };
+                table_row(ui, &columns, &widths, &cells, state, ("bench_cut", i));
+            }
+        });
 }
 
 fn ferrule_tab(
