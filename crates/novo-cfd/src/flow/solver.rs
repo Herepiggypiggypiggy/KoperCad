@@ -1,6 +1,6 @@
 use super::mesh::Mesh;
 use super::par::{for_planes, max_over_planes};
-use super::pressure::PressureSolver;
+use super::pressure::{PressureSolver, Smoother};
 use super::scheme::{Sample, Scheme, face_value};
 use crate::openings::{OpenPatch, OpenSet};
 use crate::solids::Medium;
@@ -15,6 +15,15 @@ pub enum ThermalBc {
     /// `h` is the film coefficient, W/m2K (an outside wall, IEC 60890).
     Convective {
         h: f64,
+        t_out: f64,
+    },
+    /// Heat leaves the air next to the wall as a whole: `u` (W/m2K) is the
+    /// overall coefficient from the air to air at `t_out`, inner film, sheet
+    /// and outer film together (IEC 60890 `k`). It replaces the half cell of
+    /// conduction in `Convective`, so the coarse inner boundary layer is not
+    /// counted on top of a coefficient that already contains it.
+    Overall {
+        u: f64,
         t_out: f64,
     },
 }
@@ -248,6 +257,12 @@ impl FlowSolver {
             mesh,
             cfg,
         }
+    }
+
+    /// Chooses the ordering of the pressure smoother (see [`Smoother`]);
+    /// red-black runs on all threads of the current rayon pool.
+    pub fn set_pressure_smoother(&mut self, smoother: Smoother) {
+        self.pressure.set_smoother(smoother);
     }
 
     pub fn pressure_levels(&self) -> usize {
@@ -787,6 +802,7 @@ impl FlowSolver {
                     ThermalBc::Adiabatic => 0.0,
                     ThermalBc::Fixed(tw) => k / half * (t - tw),
                     ThermalBc::Convective { h, t_out } => (t - t_out) / (half / k + 1.0 / h),
+                    ThermalBc::Overall { u, t_out } => u * (t - t_out),
                 };
                 sum += closed * g * m.area(a, ix);
             }
@@ -936,6 +952,11 @@ impl FlowSolver {
                                             // half cell in series with the film
                                             let r = 0.5 * w / kc + 1.0 / h;
                                             let cw = closed / (cc * r * w);
+                                            a_sum += cw;
+                                            a_nb += cw * t_out;
+                                        }
+                                        ThermalBc::Overall { u, t_out } => {
+                                            let cw = closed * u / (cc * w);
                                             a_sum += cw;
                                             a_nb += cw * t_out;
                                         }

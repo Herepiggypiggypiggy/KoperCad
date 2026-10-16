@@ -20,12 +20,14 @@
 //! No EPLAN content is in this crate: the tests read fixtures written for
 //! them.
 
+mod dialect;
 mod model;
 mod plan;
 mod read;
 mod stream;
 mod survey;
 mod text;
+mod write;
 
 use std::io::BufRead;
 
@@ -33,6 +35,7 @@ use thiserror::Error;
 
 use crate::report::Report;
 
+pub use dialect::{Dialect, EPLAN_2024};
 pub use model::{
     DeviceRole, ObjId, PxfCore, PxfDevice, PxfFile, PxfHeader, PxfInterruption, PxfKind, PxfPage,
     PxfTag, PxfText, SymbolRef, pair_interruptions, split_part_number,
@@ -40,6 +43,7 @@ pub use model::{
 pub use plan::{PxfOptions, PxfPlan, plan_pxf};
 pub use survey::{PxfSurvey, survey_pxf};
 pub use text::MlText;
+pub use write::{PxfExport, PxfWriteOptions, WRITER_MARK, is_kopercad_pxf, write_pxf};
 
 /// The PXF version the reader was written against.
 pub const TESTED_PXF_VERSION: &str = "1.23";

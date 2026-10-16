@@ -848,6 +848,27 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.iso",
+        "Isometric view",
+        "View",
+        &["3d", "corner view", "perspective"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.front",
+        "Front view",
+        "View",
+        &["3d", "door side", "look at the door"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.top",
+        "Top view",
+        "View",
+        &["3d", "from above", "plan"],
+        Needs::Project,
+    ),
+    cmd(
         "view.terminals_drawer",
         "Terminals",
         "View",
@@ -1329,6 +1350,23 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export aml", "export automationml"],
+    ),
+    verb(
+        cmd(
+            "export.eplan",
+            "Export EPLAN project (PXF)",
+            "Export",
+            &[
+                "eplan",
+                "pxf",
+                "epj",
+                "hand back",
+                "exchange",
+                "engineering",
+            ],
+            Needs::Project,
+        ),
+        &["export eplan", "export pxf"],
     ),
     verb(
         cmd(

@@ -70,6 +70,7 @@ pub(crate) fn overlays(
     ambient: f64,
     place: Place,
     settings: &Heat3d,
+    flow: &Flow,
 ) -> Vec<Overlay> {
     if !snap.is_consistent() {
         return Vec::new();
@@ -89,7 +90,7 @@ pub(crate) fn overlays(
         }
     }
     if settings.lines {
-        let l = stream_lines(snap, place);
+        let l = stream_lines(flow);
         if !l.positions.is_empty() {
             out.push(Overlay::Lines(l));
         }
@@ -188,10 +189,29 @@ pub(crate) fn shell_mesh(
     m
 }
 
-/// Streamlines from a lattice of seeds in front of the devices; faster air
-/// is more opaque.
-pub(crate) fn stream_lines(snap: &CfdSnapshot, place: Place) -> OverlayLines {
+/// One traced line in the scene frame with the air speed at each point.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct FlowLine {
+    pub points: Vec<Vec3>,
+    pub speed: Vec<f32>,
+    /// Distance from the start to each point, mm.
+    pub along: Vec<f32>,
+}
+
+/// The streamlines of a result, traced once and drawn as lines and tracers.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub(crate) struct Flow {
+    pub lines: Vec<FlowLine>,
+    /// Fastest air on any line, m/s.
+    pub top: f32,
+}
+
+/// Traces streamlines from a lattice of seeds in front of the devices.
+pub(crate) fn flow(snap: &CfdSnapshot, place: Place) -> Flow {
     const SEEDS: usize = 6;
+    if !snap.is_consistent() {
+        return Flow::default();
+    }
     let (x0, x1) = extent(snap, Axis::X);
     let (y0, y1) = extent(snap, Axis::Y);
     let z = cfd::front_plane_z(snap);
@@ -202,28 +222,114 @@ pub(crate) fn stream_lines(snap: &CfdSnapshot, place: Place) -> OverlayLines {
             seeds.push([x0 + f(i) * (x1 - x0), y0 + f(j) * (y1 - y0), z]);
         }
     }
-    let lines = cfd::streamlines(snap, &seeds, Trace::default());
-    let speed = |p: [f64; 3]| {
-        let v = cfd::velocity_at(snap, p);
-        f64::from(v[0].hypot(v[1]).hypot(v[2]))
-    };
-    let top = lines
-        .iter()
-        .flatten()
-        .map(|p| speed(*p))
-        .fold(0.0_f64, f64::max)
-        .max(1e-9);
+    let mut out = Flow::default();
+    for line in cfd::streamlines(snap, &seeds, Trace::default()) {
+        if line.len() < 2 {
+            continue;
+        }
+        let points: Vec<Vec3> = line.iter().map(|p| place.world(*p)).collect();
+        let speed: Vec<f32> = line
+            .iter()
+            .map(|p| {
+                let v = cfd::velocity_at(snap, *p);
+                v[0].hypot(v[1]).hypot(v[2])
+            })
+            .collect();
+        let mut along = vec![0.0_f32];
+        for w in points.windows(2) {
+            along.push(along[along.len() - 1] + w[0].distance(w[1]));
+        }
+        out.top = out.top.max(speed.iter().copied().fold(0.0, f32::max));
+        out.lines.push(FlowLine {
+            points,
+            speed,
+            along,
+        });
+    }
+    out
+}
+
+/// The streamlines as polylines; faster air is more opaque.
+pub(crate) fn stream_lines(flow: &Flow) -> OverlayLines {
+    let top = flow.top.max(1e-9);
     let mut out = OverlayLines {
         width_px: 1.8,
         order: 2,
         ..Default::default()
     };
-    for line in lines.iter().filter(|l| l.len() >= 2) {
+    for line in &flow.lines {
         out.starts.push(out.positions.len() as u32);
-        for p in line {
-            let a = (60.0 + 195.0 * speed(*p) / top).clamp(60.0, 255.0) as u8;
-            out.positions.push(place.world(*p));
+        for (p, v) in line.points.iter().zip(&line.speed) {
+            let a = (60.0 + 195.0 * v / top).clamp(60.0, 255.0) as u8;
+            out.positions.push(*p);
             out.colors.push([110, 200, 255, a]);
+        }
+    }
+    out
+}
+
+/// Particles per line and the share of a line a tracer's tail covers.
+const TRACERS_PER_LINE: usize = 3;
+const TAIL_SHARE: f32 = 0.12;
+/// Longest tail, mm.
+const TAIL_MAX_MM: f32 = 40.0;
+
+/// Where on a line (0 to 1) a particle is at `time` seconds: faster lines
+/// cycle faster, particles of one line are spread evenly.
+fn tracer_phase(line: &FlowLine, top: f32, time: f64, k: usize) -> f32 {
+    let mean = line.speed.iter().sum::<f32>() / line.speed.len() as f32;
+    let rate = 0.12 + 0.4 * (mean / top.max(1e-9));
+    ((time * f64::from(rate)) as f32 + k as f32 / TRACERS_PER_LINE as f32).rem_euclid(1.0)
+}
+
+/// The point at distance `s` along the line.
+fn at(line: &FlowLine, s: f32) -> Vec3 {
+    let i = line
+        .along
+        .partition_point(|a| *a <= s)
+        .clamp(1, line.points.len() - 1);
+    let (a, b) = (line.along[i - 1], line.along[i]);
+    let t = if b > a {
+        ((s - a) / (b - a)).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    line.points[i - 1].lerp(line.points[i], t)
+}
+
+/// Bright dashes moving downwind along the streamlines at `time` seconds.
+pub(crate) fn tracers(flow: &Flow, time: f64) -> OverlayLines {
+    let mut out = OverlayLines {
+        width_px: 3.6,
+        order: 3,
+        ..Default::default()
+    };
+    for line in &flow.lines {
+        let len = line.along.last().copied().unwrap_or(0.0);
+        if len <= 0.0 {
+            continue;
+        }
+        let tail = (len * TAIL_SHARE).min(TAIL_MAX_MM);
+        for k in 0..TRACERS_PER_LINE {
+            let head = tracer_phase(line, flow.top, time, k) * len;
+            let from = (head - tail).max(0.0);
+            out.starts.push(out.positions.len() as u32);
+            let mut pts = vec![at(line, from)];
+            pts.extend(
+                line.points
+                    .iter()
+                    .zip(&line.along)
+                    .filter(|(_, a)| **a > from && **a < head)
+                    .map(|(p, _)| *p),
+            );
+            pts.push(at(line, head));
+            let n = pts.len();
+            for (i, p) in pts.into_iter().enumerate() {
+                // Fades towards the tail.
+                let a = (255.0 * (i + 1) as f32 / n as f32) as u8;
+                out.positions.push(p);
+                out.colors.push([235, 250, 255, a]);
+            }
         }
     }
     out

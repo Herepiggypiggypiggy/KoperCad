@@ -516,6 +516,7 @@ impl NovoApp {
         let hint = self.learn.say("learn_hint");
         ui.weak(hint);
         ui.add_space(4.0);
+        self.continue_card(ui, start);
         let search = self.learn.say("search");
         ui.add(
             egui::TextEdit::singleline(&mut self.learn.filter)
@@ -554,6 +555,18 @@ impl NovoApp {
                     }
                     ui.add_space(6.0);
                     section_label(ui, track.title(lang));
+                    let sum =
+                        self.learn
+                            .catalog
+                            .track_summary(self.learn.progress(), &track.id, drafts);
+                    ui.small(self.learn.say_with(
+                        "track_progress",
+                        &[
+                            ("done", &sum.done.to_string()),
+                            ("total", &sum.total.to_string()),
+                            ("minutes", &sum.minutes.to_string()),
+                        ],
+                    ));
                     for entry in rows {
                         shown += 1;
                         self.lesson_row(ui, entry, start);
@@ -633,6 +646,7 @@ impl NovoApp {
                 if !meta.is_empty() {
                     ui.small(meta.join(" · "));
                 }
+                self.do_first_line(ui, lesson, start);
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let label = if running {
@@ -646,6 +660,81 @@ impl NovoApp {
                     *start = Some((lesson.id.clone(), running));
                 }
             });
+        });
+    }
+
+    /// The card on top of the window: the lesson under way, else the next
+    /// one the person can do, else a line saying everything is done.
+    fn continue_card(&mut self, ui: &mut egui::Ui, start: &mut Option<(String, bool)>) {
+        let lang = self.learn.lang;
+        let next = self
+            .learn
+            .catalog
+            .next_lesson(self.learn.progress(), self.learn.show_drafts)
+            .cloned();
+        egui::Frame::group(ui.style()).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            let Some(entry) = next else {
+                ui.label(self.learn.say("all_done"));
+                return;
+            };
+            let lesson = &entry.lesson;
+            let running = self.learn.running() == Some(lesson.id.as_str());
+            let under_way = matches!(
+                self.learn.progress().standing(lesson),
+                Standing::InProgress { .. }
+            );
+            let (heading, button) = if running || under_way {
+                ("continue_where", "continue")
+            } else {
+                ("next_lesson", "start")
+            };
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
+                    ui.small(self.learn.say(heading));
+                    ui.label(egui::RichText::new(lesson.title(lang)).strong());
+                    if lesson.minutes > 0 {
+                        ui.weak(
+                            self.learn
+                                .say_with("minutes", &[("n", &lesson.minutes.to_string())]),
+                        );
+                    }
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button(self.learn.say(button)).clicked() {
+                        *start = Some((lesson.id.clone(), running));
+                    }
+                });
+            });
+        });
+        ui.add_space(6.0);
+    }
+
+    /// "Do first: A, B" with the prerequisites not done yet as links.
+    fn do_first_line(
+        &mut self,
+        ui: &mut egui::Ui,
+        lesson: &novo_learn::Lesson,
+        start: &mut Option<(String, bool)>,
+    ) {
+        let lang = self.learn.lang;
+        let unmet: Vec<(String, String)> = self
+            .learn
+            .catalog
+            .unmet_needs(self.learn.progress(), lesson)
+            .into_iter()
+            .map(|e| (e.lesson.id.clone(), e.lesson.title(lang).to_owned()))
+            .collect();
+        if unmet.is_empty() {
+            return;
+        }
+        ui.horizontal_wrapped(|ui| {
+            ui.small(self.learn.say("do_first"));
+            for (id, title) in unmet {
+                if ui.small_button(title).clicked() {
+                    *start = Some((id, false));
+                }
+            }
         });
     }
 

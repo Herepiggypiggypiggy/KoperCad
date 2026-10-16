@@ -78,3 +78,8 @@ For `expect = { signal = "name" }`; raised where a key does not pass through a c
 - `proposal_accept`
 - `problem_waived`
 - `waiver_restored`
+- `cabinet_dropped`
+- `cabinet_rotated`
+- `cabinet_removed`
+- `cabinet_plan_accepted`
+- `wire_cut_exported`

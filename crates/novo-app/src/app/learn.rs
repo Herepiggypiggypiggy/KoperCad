@@ -44,6 +44,11 @@ pub(crate) const SIGNALS: &[&str] = &[
     "proposal_accept",
     "problem_waived",
     "waiver_restored",
+    "cabinet_dropped",
+    "cabinet_rotated",
+    "cabinet_removed",
+    "cabinet_plan_accepted",
+    "wire_cut_exported",
 ];
 
 /// Every control a lesson may point at. A control joins this list when its
