@@ -11,6 +11,8 @@
 # ambient max 45 C: 49 C and "Needs about 34 W of cooling." The list is saved in the user's own
 # enclosure file, so the lesson says so. Heat visuals are in flux (CFD lane): numbers on the map
 # are not quoted here.
+# Since #596 the legend also says "Total loss N W" and counts devices without loss data (drawn
+# dashed, "no data" pill).
 # Needs from the Cabinet owner: the anchors named below.
 format = 1
 id = "heat-and-sizing"
@@ -78,6 +80,18 @@ De heetste plek zit bij de transformator **-T1**, de grootste bron.
 point = { ui = "cabinet.heat" }
 
 [[step]]
+id = "total-loss"
+title = "Total loss"
+title_nl = "Totaal verlies"
+text = """
+Under the colour bar the legend says "Total loss 35 W", the sum of the part losses. When a part has no loss data, the legend also says how many devices lack it.
+"""
+text_nl = """
+Onder de kleurbalk zegt de legenda "Total loss 35 W", de som van de artikelverliezen. Heeft een artikel geen verliesgegevens, dan zegt de legenda ook hoeveel componenten die missen.
+"""
+point = { ui = "cabinet.heat" }
+
+[[step]]
 id = "badges"
 title = "Hot spots and badges"
 title_nl = "Hotspots en badges"
@@ -93,15 +107,15 @@ point = { ui = "cabinet.heat" }
 
 [[step]]
 id = "unknown"
-title = "Check the sources are there"
-title_nl = "Controleer of de bronnen er zijn"
+title = "Unknown is not zero"
+title_nl = "Onbekend is niet nul"
 text = """
-A device whose part has no **power_loss_w** counts as 0 W: the map shows it as cold and gives no warning. So check that every device you expect to be warm has a loss in its part.
-A cabinet with no loss data at all would show a cool map, which is wrong.
+A device whose part has no **power_loss_w** gets a "no data" pill instead of a temperature, is drawn dashed, and the legend counts it: "1 device has no loss data (shown dashed)".
+The total then counts only the devices that have a figure. Fill in the part to clear the warning.
 """
 text_nl = """
-Een component waarvan het artikel geen **power_loss_w** heeft telt als 0 W: de kaart toont het als koud en geeft geen waarschuwing. Controleer dus dat elk component dat warm hoort te zijn een verlies in zijn artikel heeft.
-Een kast zonder enige verliesgegevens zou een koele kaart tonen, wat onjuist is.
+Een component waarvan het artikel geen **power_loss_w** heeft krijgt een "no data"-label in plaats van een temperatuur, wordt gestippeld getekend en de legenda telt het mee: "1 device has no loss data (shown dashed)".
+Het totaal telt dan alleen de componenten met een waarde. Vul het artikel in om de waarschuwing weg te nemen.
 """
 
 [[step]]

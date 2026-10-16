@@ -3,8 +3,8 @@ id = "commissioning"
 version = 1
 # The Commissioning tab is on main (verified against aa5977ab: outline tab Checks and Punch list,
 # buttons Next open, Pass, Fail, N/A, Reset, Pass all N open, Fixed, Verified, Reopen, Won't fix, report
-# PDF and CSV). Failing a check does NOT open a punch item by itself: items are added on the Punch
-# list tab. Stays a draft until the commissioning anchors and signals below are registered.
+# PDF and CSV). Since #604 the workspace opens from the switcher at the top and keeps the schematic
+# on screen read-only; since #600 Fail raises a punch item itself. Stays a draft until the commissioning anchors and signals below are registered.
 status = "draft"
 title = "Commission a panel with a tick list"
 title_nl = "Een kast in bedrijf stellen met een afvinklijst"
@@ -39,11 +39,11 @@ id = "open"
 title = "Open Commissioning"
 title_nl = "Open Inbedrijfstelling"
 text = """
-Press {key:view.commissioning}, or run **Commissioning** from the command field. The outline on the left becomes the commissioning tab with two sub-tabs, **Checks** and **Punch list**,
+Click **Commissioning** in the switcher at the top, or press {key:view.commissioning}. The schematic stays on screen, read-only, and the outline on the left becomes the commissioning tab with two sub-tabs, **Checks** and **Punch list**,
 two progress bars, **Project** and **This page**, and a list of the wires, terminals and devices on the page that have checks.
 """
 text_nl = """
-Druk op {key:view.commissioning} of voer **Commissioning** uit in het opdrachtveld. Het overzicht links wordt het tabblad inbedrijfstelling met twee subtabbladen, **Checks** en **Punch list**,
+Klik bovenin op **Commissioning** in de schakelaar, of druk op {key:view.commissioning}. Het schema blijft zichtbaar, alleen-lezen, en het overzicht links wordt het tabblad inbedrijfstelling met twee subtabbladen, **Checks** en **Punch list**,
 twee voortgangsbalken, **Project** en **This page**, en een lijst van de draden, klemmen en componenten op de pagina die controles hebben.
 """
 point = { ui = "workspace.commissioning" }
@@ -100,11 +100,11 @@ title = "Fail one"
 title_nl = "Keur er een af"
 text = """
 Press **Next open** again, write what you saw in the **Note** field, for example "terminal loose", and press **Fail**.
-The check is marked failed with your note. It does not open a punch item by itself: you do that on the Punch list, in the next step.
+The check is marked failed with your note, and KoperCAD raises a punch item itself: the status line says "Punch item raised:" with the title and the severity.
 """
 text_nl = """
 Druk nogmaals op **Next open**, schrijf in het veld **Note** wat je zag, bijvoorbeeld "klem los", en druk op **Fail**.
-De controle wordt afgekeurd met je notitie. Er wordt niet vanzelf een punt aangemaakt: dat doe je op de Punch list, in de volgende stap.
+De controle wordt afgekeurd met je notitie en KoperCAD maakt zelf een punt aan: de statusregel zegt "Punch item raised:" met de titel en de ernst.
 """
 point = { ui = "commissioning.fail" }
 expect = { clicked = "commissioning.fail" }
@@ -114,15 +114,15 @@ id = "punch"
 title = "Add a punch item"
 title_nl = "Voeg een punt toe"
 text = """
-Click **Punch list**. With the failed item still selected, type "Tighten terminal" in **New punch item**, choose a severity (**Minor**, **Major** or **Blocking**) and click **Add**.
-The item appears as "Major · Open · Tighten terminal · (the item)". The punch list keeps everything that is not right yet; click its row to jump to the item in the drawing.
+Click **Open punch list** (or the **Punch list** tab) to see the item KoperCAD raised. To add one of your own, type "Tighten terminal" in **New punch item**, choose a severity (**Minor**, **Major** or **Blocking**) and click **Add**.
+An item shows as "Major · Open · Tighten terminal · (the item)". The punch list keeps everything that is not right yet; click its row to jump to the item in the drawing.
 """
 text_nl = """
-Klik op **Punch list**. Typ, terwijl het afgekeurde item nog geselecteerd is, "Klem vastdraaien" in **New punch item**, kies een ernst (**Minor**, **Major** of **Blocking**) en klik op **Add**.
-Het punt verschijnt als "Major · Open · Klem vastdraaien · (het item)". De puntenlijst bewaart alles wat nog niet goed is; klik op een rij om naar het item in de tekening te springen.
+Klik op **Open punch list** (of het tabblad **Punch list**) om het punt te zien dat KoperCAD aanmaakte. Voor een eigen punt typ je "Klem vastdraaien" in **New punch item**, kies je een ernst (**Minor**, **Major** of **Blocking**) en klik je op **Add**.
+Een punt staat er als "Major · Open · Klem vastdraaien · (het item)". De puntenlijst bewaart alles wat nog niet goed is; klik op een rij om naar het item in de tekening te springen.
 """
 point = { ui = "commissioning.punch" }
-expect = { signal = "punch_added" }
+expect = { clicked = "commissioning.punch" }
 
 [[step]]
 id = "resolve"
