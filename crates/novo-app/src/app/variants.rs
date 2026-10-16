@@ -132,7 +132,7 @@ impl NovoApp {
     }
 
     /// One undo step; a refusal is shown as a message.
-    fn edit_project(
+    pub(super) fn edit_project(
         &mut self,
         label: &str,
         edit: impl FnOnce(&mut novo_core::Tx<'_>) -> novo_core::Result<()>,

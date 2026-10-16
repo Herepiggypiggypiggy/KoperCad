@@ -446,6 +446,11 @@ pub const DUTCH: &[Aliases] = &[
         &["restpuntenlijst", "oplevering"],
     ),
     nl(
+        "export.standards_report",
+        &["exporteer normenrapport", "normenrapport exporteren"],
+        &["conformiteitsrapport", "normen pdf"],
+    ),
+    nl(
         "export.plate",
         &["exporteer montageplaat", "montageplaat exporteren"],
         &["boortabel", "boren"],
