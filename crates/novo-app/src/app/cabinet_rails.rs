@@ -155,12 +155,27 @@ pub(super) fn draw_grips(
         let (l, t, rt, b) = grip_of(r, size);
         let area = egui::Rect::from_two_pos(to_screen(l, t), to_screen(rt, b));
         let lit = hover == Some(id) || selected == Some(id);
-        let fill = if lit {
-            accent
+        // Copper means "here": a grip is neutral until it is under the
+        // pointer or selected; it is a handle, not a selection.
+        let (fill, dots) = if lit {
+            (accent, novo_theme::tokens::BG_0)
         } else {
-            accent.gamma_multiply(0.45)
+            (
+                novo_theme::tokens::BORDER_STRONG,
+                novo_theme::tokens::TEXT_MUTED,
+            )
         };
         painter.rect_filled(area, 2.0, fill);
+        // Three dots say "grab here".
+        let c = area.center();
+        let step = if r.vertical {
+            egui::vec2(3.5, 0.0)
+        } else {
+            egui::vec2(0.0, 3.5)
+        };
+        for k in [-1.0_f32, 0.0, 1.0] {
+            painter.circle_filled(c + step * k, 1.0, dots);
+        }
         if hover == Some(id) && selected != Some(id) {
             let across = across_of(r);
             let (w, h) = if r.vertical {
