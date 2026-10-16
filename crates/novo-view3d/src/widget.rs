@@ -1212,7 +1212,12 @@ fn frame_key(
     }
     (camera.projection as u8, size_px, mode as u8).hash(&mut h);
     (&state.selection, state.hover, &state.hidden, &state.related).hash(&mut h);
-    (state.display.edges, state.display.labels).hash(&mut h);
+    (
+        state.display.edges,
+        state.display.labels,
+        state.display.shadows,
+    )
+        .hash(&mut h);
     h.finish()
 }
 
@@ -1274,5 +1279,36 @@ mod stats_tests {
         // Only the last window counts: samples 30 to 149.
         assert!(s.cpu_p50_ms > 80.0 && s.cpu_p95_ms > 140.0, "{s:?}");
         *STATS.lock().unwrap() = None;
+    }
+}
+
+#[cfg(test)]
+mod key_tests {
+    use super::*;
+
+    #[test]
+    fn every_display_switch_changes_the_frame_key() {
+        let scene = Scene::new(crate::scene::PlateFrame {
+            width: 100.0,
+            height: 100.0,
+        });
+        let library = MeshLibrary::new();
+        let camera = Camera::default();
+        let key = |state: &ViewState| {
+            frame_key(&scene, &library, &camera, state, (64, 64), Mode::Settled, 0)
+        };
+        let base = ViewState::default();
+        let mut seen = vec![key(&base)];
+        for flip in [
+            |s: &mut ViewState| s.display.edges = !s.display.edges,
+            |s: &mut ViewState| s.display.labels = !s.display.labels,
+            |s: &mut ViewState| s.display.shadows = !s.display.shadows,
+        ] {
+            let mut s = base.clone();
+            flip(&mut s);
+            let k = key(&s);
+            assert!(!seen.contains(&k), "a switch left the picture key alone");
+            seen.push(k);
+        }
     }
 }
