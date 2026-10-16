@@ -455,7 +455,8 @@ impl NovoApp {
                     + r.outside.len()
                     + r.too_close.len()
                     + r.rail_overflows.len()
-                    + s.door_report().map_or(0, |d| d.problems());
+                    + s.door_report().map_or(0, |d| d.problems())
+                    + s.swing_report().map_or(0, |d| d.problems());
                 (l.placements.len(), l.unplaced(&cands).len(), problems)
             }
             _ => (0, cands.len(), 0),
