@@ -240,6 +240,24 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "parts.import_folder",
+            "Import parts from a folder",
+            "Project",
+            &[
+                "bulk",
+                "catalog",
+                "bmecat",
+                "csv",
+                "inbox",
+                "maker",
+                "parts import",
+            ],
+            Needs::Nothing,
+        ),
+        &["import parts", "import catalog"],
+    ),
+    verb(
+        cmd(
             "parts.import_step",
             "Import 3D model (STEP)",
             "Project",
@@ -600,6 +618,30 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Edit",
         &["tag", "edit tag"],
         Needs::Device,
+    ),
+    verb(
+        cmd(
+            "parts.auto_assign",
+            "Assign parts to all devices",
+            "Edit",
+            &["auto assign", "propose", "catalog", "part", "fill"],
+            Needs::Project,
+        ),
+        &["assign parts", "auto assign parts"],
+    ),
+    cmd(
+        "parts.clear",
+        "Remove parts from selected devices",
+        "Edit",
+        &["clear part", "unassign", "article"],
+        Needs::Selection,
+    ),
+    cmd(
+        "parts.remove_unused",
+        "Remove unused parts",
+        "Edit",
+        &["unused", "clean up", "purge", "article"],
+        Needs::Project,
     ),
     with_arguments(
         verb(

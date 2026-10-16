@@ -172,6 +172,10 @@ pub(crate) struct Workbench {
     pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
     /// An AutomationML import waiting for the person to confirm.
     pub(super) aml_import: Option<super::interop::AmlImport>,
+    /// The result of a parts bulk import, until closed.
+    pub(super) parts_bulk: Option<super::parts_bulk::BulkReport>,
+    /// Part proposals waiting for Accept all or Cancel.
+    pub(super) auto_assign: Option<super::parts_bulk::AutoAssignPreview>,
     /// An EPLAN (PXF) import waiting for the person to confirm.
     pub(super) eplan_import: Option<super::eplan_import::EplanImport>,
     /// The "Get the EPLAN export script" guide, open after the files are
@@ -257,6 +261,8 @@ impl Default for Workbench {
             commissioning: None,
             underlay_seen: None,
             aml_import: None,
+            parts_bulk: None,
+            auto_assign: None,
             eplan_import: None,
             eplan_guide: None,
             dwg_job: None,
@@ -391,6 +397,10 @@ const APP_COMMANDS: &[&str] = &[
     "help.show_hints",
     "parts.browser",
     "parts.import_step",
+    "parts.import_folder",
+    "parts.auto_assign",
+    "parts.clear",
+    "parts.remove_unused",
     "project.standard",
     "macro.browser",
     "macro.import",
@@ -936,6 +946,10 @@ impl NovoApp {
             "help.show_hints" => self.show_hints_again(),
             "parts.browser" => self.open_parts_browser(),
             "parts.import_step" => self.import_part_model(),
+            "parts.import_folder" => self.import_parts_folder(),
+            "parts.auto_assign" => self.start_auto_assign(),
+            "parts.clear" => self.clear_selected_parts(),
+            "parts.remove_unused" => self.remove_unused_project_parts(),
             "project.standard" => self.wb.project_settings = true,
             "macro.browser" => self.wb.macros.show(),
             "macro.import" => self.macro_import(),

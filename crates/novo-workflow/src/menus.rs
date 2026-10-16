@@ -60,6 +60,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.import_dwg", under("File", "Import")),
     ("file.choose_dwg_converter", under("File", "Import")),
     ("file.eplan_export_script", under("File", "Import")),
+    ("parts.import_folder", under("File", "Import")),
     ("help.walkthrough", at("Help")),
     ("help.show_hints", at("Help")),
     ("help.about", at("Help")),

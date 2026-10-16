@@ -68,6 +68,7 @@ mod outline_tree;
 mod pages;
 mod part_picker;
 mod parts;
+mod parts_bulk;
 mod parts_import;
 mod parts_quality;
 mod pdf;
@@ -1019,6 +1020,8 @@ impl NovoApp {
         self.background_panel(&ctx);
         self.bench_window(&ctx);
         self.parts_window(&ctx);
+        self.parts_bulk_dialog(&ctx);
+        self.auto_assign_dialog(&ctx);
         self.project_settings_dialog(&ctx);
         self.macro_browser_window(&ctx);
         self.macro_save_dialog(&ctx);
