@@ -62,7 +62,9 @@ impl NovoApp {
             Drawer::Devices => 0,
         };
         let mut actions = Vec::new();
-        egui::Panel::bottom("drawer")
+        // Controls for lessons to point at, registered after the panel.
+        let mut spots: Vec<(String, egui::Rect, bool, String)> = Vec::new();
+        let panel = egui::Panel::bottom("drawer")
             .exact_size(height)
             .resizable(false)
             .show(ui, |ui| {
@@ -72,7 +74,15 @@ impl NovoApp {
                         (Drawer::Cables, "Cables"),
                         (Drawer::Devices, "Devices"),
                     ] {
-                        if ui.selectable_label(tab == t, label).clicked() && tab != t {
+                        let response = ui.selectable_label(tab == t, label);
+                        let name = label.to_lowercase();
+                        spots.push((
+                            format!("drawer.{name}.tab"),
+                            response.rect,
+                            response.clicked(),
+                            label.to_owned(),
+                        ));
+                        if response.clicked() && tab != t {
                             actions.push(DrawerAction::Tab(t));
                         }
                     }
@@ -81,12 +91,18 @@ impl NovoApp {
                             actions.push(DrawerAction::Close);
                         }
                         if proposed > 0 {
-                            if tab == Drawer::Cables
-                                && ui
-                                    .small_button(format!("Accept {proposed} proposed"))
-                                    .clicked()
-                            {
-                                actions.push(DrawerAction::AcceptCables);
+                            if tab == Drawer::Cables {
+                                let response =
+                                    ui.small_button(format!("Accept {proposed} proposed"));
+                                spots.push((
+                                    "drawer.cables.accept".into(),
+                                    response.rect,
+                                    response.clicked(),
+                                    "Accept proposed".into(),
+                                ));
+                                if response.clicked() {
+                                    actions.push(DrawerAction::AcceptCables);
+                                }
                             }
                             if tab == Drawer::Terminals {
                                 ui.weak(format!("{proposed} proposed"));
@@ -137,6 +153,18 @@ impl NovoApp {
                     }
                 }
             });
+        spots.push((
+            format!("drawer.{}", drawer_name(tab)),
+            panel.response.rect,
+            false,
+            "drawer".into(),
+        ));
+        for (id, rect, clicked, label) in spots {
+            self.anchor(&id, rect, &label);
+            if clicked {
+                self.learn_event(novo_learn::Event::Clicked(id));
+            }
+        }
         for action in actions {
             match action {
                 DrawerAction::Go(place) => self.jump(place, true),
@@ -378,6 +406,15 @@ fn devices_tab(ui: &mut egui::Ui, rows: &[DeviceRow], actions: &mut Vec<DrawerAc
                 }
             });
     });
+}
+
+/// The name a drawer goes by in lesson anchors (`drawer.terminals`).
+fn drawer_name(tab: Drawer) -> &'static str {
+    match tab {
+        Drawer::Terminals => "terminals",
+        Drawer::Cables => "cables",
+        Drawer::Devices => "devices",
+    }
 }
 
 #[cfg(test)]

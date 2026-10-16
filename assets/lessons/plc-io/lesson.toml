@@ -230,8 +230,7 @@ demo = [
 # The field check `equals` exists in novo-learn check.rs FieldCheck.
 point = { ui = "palette.button" }
 expect = { field = { device = "=A1+CAB-K2", name = "plc.start.i", equals = 8 } }
-# GAP solve: pressing Enter on the preview; the replay runs the command and the verifier presses Enter. Wanted: arg = "apply".
-solve = [ { command = "plc.renumber_io" } ]
+solve = [ { command = "plc.renumber_io" }, { key = "Enter" } ]
 
 [[step]]
 id = "back-to-drawing"
@@ -313,8 +312,7 @@ note = [
   { at = { page = "Pump control", x = 90, y = 44 }, text = "Dot filled: the input sees 24 V", text_nl = "Stip gevuld: de ingang ziet 24 V" },
 ]
 expect = { pole_closed = "-S1" }
-# GAP solve: no operation for a click on a live badge (wanted: `live_click = "-S1"`); the stand-in selects the button and the verifier clicks the badge.
-solve = [ { select = "-S1" } ]
+solve = [ { live_pole = { device = "-S1" } } ]
 
 [[step]]
 id = "switch-output"
@@ -345,8 +343,7 @@ note = [
   { at = { device = "-H1" }, text = "The lamp lights", text_nl = "De lamp brandt" },
 ]
 expect = { lit = "-H1:X2" }
-# GAP solve: as press-button (a click on a live badge); no check kind names "output forced on", so `lit` on the lamp pin is used.
-solve = [ { select = "-H1" } ]
+solve = [ { live_coil = { device = "=A1+CAB-K2", output = true } } ]
 
 [[step]]
 id = "done"

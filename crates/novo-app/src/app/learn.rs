@@ -61,6 +61,19 @@ pub(crate) const ANCHORS: &[&str] = &[
     "dock.lines",
     "dock.hint",
     "dock.proposals",
+    "palette.field",
+    "issue.pill",
+    "drawer.terminals",
+    "drawer.terminals.tab",
+    "drawer.cables",
+    "drawer.cables.tab",
+    "drawer.cables.accept",
+    "drawer.devices",
+    "drawer.devices.tab",
+    "live.card",
+    "live.pole",
+    "live.coil",
+    "live.output",
     "cabinet.place_all",
     "cabinet.accept",
     "cabinet.rules",
@@ -69,6 +82,17 @@ pub(crate) const ANCHORS: &[&str] = &[
     "cabinet.cutlist",
     "cabinet.table",
     "cabinet.heat",
+    "cabinet.canvas",
+    "cabinet.unplaced",
+    "cabinet.problems",
+    "cabinet.inspector",
+    "cabinet.door",
+    "cabinet.door.apply",
+    "cabinet.routes_panel",
+    "cabinet.wire_rules",
+    "cabinet.sizing",
+    "cabinet.rails",
+    "cabinet.plate_drawing",
 ];
 
 /// What the shell keeps about learning.
@@ -474,6 +498,21 @@ impl NovoApp {
                 .collect();
             facts.zoom = f64::from(view.canvas.viewport.zoom) / self.learn_fit_zoom(view).max(1e-6);
         }
+        // Devices clicked on the cabinet plate count as selected too, so a
+        // plate-only device (no symbol on a page) can be picked in a lesson.
+        let plate: Vec<String> = self
+            .cabinet
+            .view
+            .selection
+            .ids()
+            .iter()
+            .filter_map(|i| novo_canvas::cabinet::box_of(*i))
+            .filter_map(|id| project.get::<novo_core::Device>(novo_core::DeviceId::from(id)))
+            .map(|d| d.tag.to_string())
+            .collect();
+        if !plate.is_empty() {
+            facts.selection = plate;
+        }
         if facts.live {
             let (coils, pins, closed) = self.wb.live.learn_facts(project);
             facts.live_coils = coils;
@@ -848,6 +887,18 @@ impl NovoApp {
             }
         }
         learn.seen = std::mem::take(&mut learn.anchors);
+    }
+
+    /// The person's key for a command; a command with no key reads as its
+    /// name in the command palette, never as a blank.
+    pub(super) fn learn_key_text(&self, command: &str) -> String {
+        self.wb.keymap.shortcut_text(command).unwrap_or_else(|| {
+            let label = COMMANDS
+                .iter()
+                .find(|c| c.id == command)
+                .map_or(command, |c| c.label);
+            self.learn.say_with("no_key", &[("label", label)])
+        })
     }
 
     /// Where a control was last drawn.

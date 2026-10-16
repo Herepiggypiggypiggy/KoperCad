@@ -295,7 +295,11 @@ impl Lv {
                         .collect();
                     self.d.app.make_cable(&wires);
                 }
-                other => panic!("this verifier does not run {other:?}"),
+                other => {
+                    if let Err(why) = self.d.replay_op(other) {
+                        panic!("this verifier cannot run {other:?}: {why}");
+                    }
+                }
             }
             self.frames(2);
         }
@@ -707,8 +711,8 @@ fn wire_numbers_each_instruction_works_in_the_app() {
 
 #[test]
 fn plc_io_solve_scripts_tick_every_step() {
-    // The solve scripts run the commands; the two live clicks and the Enter on the preview are done by the
-    // verifier (GAP: no solve operation for them), so those steps are ticked here by hand.
+    // The solve scripts run the commands, the Enter on the preview and the live clicks (key, live_pole and
+    // live_coil ops), so every step ticks from its own solve.
     let mut lv = Lv::start("plc-io");
     let lesson = lesson(&lv);
     for step in &lesson.steps {
@@ -720,15 +724,6 @@ fn plc_io_solve_scripts_tick_every_step() {
         }
         lv.not_yet(&step.id);
         lv.solve(&step.solve);
-        match step.id.as_str() {
-            "renumber" => {
-                assert!(lv.d.app.wb.renumber.is_some());
-                lv.key(egui::Key::Enter, egui::Modifiers::NONE);
-            }
-            "press-button" => lv.click_badge_pole(),
-            "switch-output" => lv.click_badge_output(),
-            _ => {}
-        }
         lv.ticked(&step.id);
         if step.pause {
             lv.d.app.learn_move(super::learn::Move::Next);
