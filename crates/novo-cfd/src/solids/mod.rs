@@ -29,8 +29,8 @@ mod setup;
 
 pub use props::{SolidProps, props_for};
 pub use setup::{
-    DuctModel, FlowSetup, STEADY_WINDOW_S, SetupError, SolidsSettings, SteadyReport, Walls,
-    wall_conductances,
+    DeviceModel, DeviceReport, DuctModel, FlowSetup, LUMPED_DEVICE_K, PlateModel, STEADY_WINDOW_S,
+    SetupError, SolidsSettings, SteadyReport, Walls, wall_conductances,
 };
 
 use crate::flow::Mesh as FlowMesh;
@@ -52,7 +52,15 @@ pub struct Medium {
     /// Quadratic drag of a porous cell per axis, 1/m: the momentum sink is
     /// `-F |u| u` (zero in open air).
     pub drag: [Vec<f64>; 3],
+    /// Share of each cell that is a device (a heat-making housing), 0 to 1.
+    pub dev_frac: Vec<f64>,
+    /// Device (index in the scenario) that fills most of the cell, or
+    /// [`NO_DEVICE`].
+    pub dev_slot: Vec<u16>,
 }
+
+/// `dev_slot` of a cell without a device.
+pub const NO_DEVICE: u16 = u16::MAX;
 
 impl Medium {
     /// All air.
@@ -63,6 +71,8 @@ impl Medium {
             k_solid: vec![0.0; cells],
             heat_w_m3: vec![0.0; cells],
             drag: std::array::from_fn(|_| vec![0.0; cells]),
+            dev_frac: vec![0.0; cells],
+            dev_slot: vec![NO_DEVICE; cells],
         }
     }
 
