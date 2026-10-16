@@ -476,6 +476,9 @@ pub const DUTCH: &[Aliases] = &[
         &["draden tonen in 3d"],
         &["draden", "bedrading"],
     ),
+    nl("view.iso", &[], &["isometrisch", "hoekzicht"]),
+    nl("view.front", &[], &["vooraanzicht", "deurzijde"]),
+    nl("view.top", &[], &["bovenaanzicht", "van boven"]),
     nl("view.reports", &[], &["rapporten", "lijsten"]),
     nl("report.toc", &["inhoud", "inhoudsopgave"], &["paginalijst"]),
     nl(

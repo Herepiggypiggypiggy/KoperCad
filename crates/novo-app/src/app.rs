@@ -102,6 +102,9 @@ mod view3d_controls;
 #[cfg(test)]
 mod view3d_tests;
 mod wheel;
+mod wire_panel;
+#[cfg(test)]
+mod wire_panel_tests;
 mod wire_production;
 mod workbench;
 mod workspace;
@@ -515,6 +518,9 @@ impl NovoApp {
             Action::Quit => self.leave_then(ctx, Leaving::Quit),
             Action::Undo => self.undo_redo(false),
             Action::Redo => self.undo_redo(true),
+            Action::ZoomToFit if self.workspace() == workspace::Workspace::View3d => {
+                self.view3d.pending = Some(view3d::Pending::Fit);
+            }
             Action::ZoomToFit => self.canvas.zoom_to_fit(),
             Action::ShowSchematic => self.switch_workspace(workspace::Workspace::Schematic),
             Action::ShowCabinet => {

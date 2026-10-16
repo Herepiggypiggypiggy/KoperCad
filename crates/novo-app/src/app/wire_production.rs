@@ -45,7 +45,12 @@ impl NovoApp {
             ..CsvOptions::default()
         };
         let text = wire_cut_csv(&jobs, &options);
-        self.write_production(path, text.as_bytes(), &format!("{} wires", jobs.len()))
+        let written =
+            self.write_production(path, text.as_bytes(), &format!("{} wires", jobs.len()));
+        if written.is_some() {
+            self.learn_signal("wire_cut_exported");
+        }
+        written
     }
 
     /// Writes the whole wire production report as a workbook.

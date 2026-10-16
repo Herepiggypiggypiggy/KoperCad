@@ -77,6 +77,11 @@ rules! {
         "A protective conductor is at least as large as the phase conductors it accompanies, up to 16 mm², then 16 mm², then half the phase size above 35 mm².",
         "Cross-sections on the wires (or cable cores) at a device's phase and PE connections.",
         Some("The size steps (16 mm² and 35 mm²) are the usual ones for copper; confirm them for your edition and conductor material.");
+    IEC_CONDUCTOR_AMPACITY = "iec60204.conductor-ampacity", Iec60204, "12.4",
+        "Conductor current-carrying capacity", Error,
+        "A conductor can carry the current of the device that protects it, and a motor's conductors its full-load current, for the installation method, ambient temperature and grouping.",
+        "Cross-sections on wires, rated currents of protective devices, motor `flc_a`, and the installation method (`installation_method` on the wire or cable, or `machine.installation_method` on the project).",
+        Some("Ampacities are the IEC 60364-5-52 table values for copper, PVC or XLPE, methods B1, B2 and C, entered without the licensed text (see the basis table); ambient defaults to 40 degrees C (`machine.ambient_c`).");
     IEC_PE_COLOUR = "iec60204.pe-colour", Iec60204, "13.2.2",
         "Protective conductor identification", Error,
         "A protective conductor is green-yellow, and green-yellow is used for nothing else.",

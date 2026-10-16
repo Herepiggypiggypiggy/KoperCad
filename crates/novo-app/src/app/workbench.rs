@@ -23,7 +23,10 @@ use novo_workflow::keymap::{FAVOURITE_COMMANDS, Focus, Keymap};
 use novo_workflow::palette::{Mode, Sources, Target};
 use novo_xref::{LiveXref, Navigator, Place, Reference};
 
+use novo_view3d::camera::ViewPreset;
+
 use super::standards_report::StandardsFormat;
+use super::view3d::Pending;
 use super::workspace::Workspace;
 use super::{Level, NovoApp};
 use crate::actions::Action;
@@ -127,6 +130,8 @@ pub(crate) struct Workbench {
     pub(super) dock_size: egui::Vec2,
     /// The inspector's fields while they are edited.
     pub(super) inspector: super::inspector::InspectorState,
+    /// The wire panel's text fields while they are edited.
+    pub(super) wire_panel: super::wire_panel::WirePanel,
     /// Shift+P: false hides the marks on the drawing (counters stay).
     pub(super) marks: bool,
     /// Shift+O: false hides the override diamonds (PE set by hand).
@@ -233,6 +238,7 @@ impl Default for Workbench {
             space_pan: None,
             dock_size: egui::Vec2::ZERO,
             inspector: Default::default(),
+            wire_panel: Default::default(),
             marks: true,
             override_marks: true,
             clip: Default::default(),
@@ -342,6 +348,9 @@ const APP_COMMANDS: &[&str] = &[
     "view.3d_door",
     "view.3d_shell",
     "view.3d_wires",
+    "view.iso",
+    "view.front",
+    "view.top",
     "report.toc",
     "report.bom",
     "report.devices",
@@ -767,6 +776,14 @@ impl NovoApp {
                     "view.3d_shell" => controls.layers.shell = !controls.layers.shell,
                     _ => controls.layers.wires = !controls.layers.wires,
                 }
+            }
+            "view.iso" | "view.front" | "view.top" if self.is_open() => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.pending = Some(match id {
+                    "view.iso" => Pending::Preset(ViewPreset::Iso),
+                    "view.front" => Pending::Preset(ViewPreset::Front),
+                    _ => Pending::Preset(ViewPreset::Top),
+                });
             }
             "export.bom" => {
                 self.export_report("bom", super::reports_view::ReportFormat::Excel);

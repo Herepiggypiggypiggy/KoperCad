@@ -2,16 +2,21 @@
 //! plate, rails, ducts and placements the Cabinet canvas edits. Read only:
 //! the scene is built again from the project whenever it changes.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use eframe::egui;
-use novo_core::{Project, StructureId};
-use novo_layout::model::load;
+use novo_core::{Device, DeviceId, Project, StructureId};
+use novo_layout::model::{candidates, load};
 use novo_view3d::build::{DOOR_HINGE, Options, WireInput, model};
+use novo_view3d::camera::ViewPreset;
 use novo_view3d::door::open_angle;
 use novo_view3d::palette::View3dTheme;
+use novo_view3d::scene::{ItemId, ItemKind};
 use novo_view3d::widget::{View3d, ViewOptions};
 use novo_view3d::{Layers, Look, MeshLibrary, Scene};
+
+use super::cabinet_inspector;
 
 use super::NovoApp;
 use super::heat_3d::{self, Heat3d, Place};
@@ -22,10 +27,16 @@ const VIEW_ID: u64 = 1;
 
 /// The 3D workspace's state: the camera and the scene it shows.
 pub(crate) struct View3dMode {
-    view: View3d,
+    pub(super) view: View3d,
     library: Arc<MeshLibrary>,
     /// The enclosure and project revision the scene was built for.
     pub(super) built: Option<(StructureId, u64, Arc<Scene>)>,
+    /// A standard view or a fit asked for by a command, run on the next frame
+    /// (when the scene is at hand).
+    pub(super) pending: Option<Pending>,
+    /// The Cabinet selection revision and the 3D selection as last synced, to
+    /// tell which side changed.
+    synced: (u64, BTreeSet<ItemId>),
     /// What of the heat result the view shows, and the result and settings
     /// the overlays were built for.
     heat: Heat3d,
@@ -41,12 +52,21 @@ pub(crate) struct View3dMode {
     pub(super) controls: Controls,
 }
 
+/// What a `view.*` command asks of the 3D view.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) enum Pending {
+    Fit,
+    Preset(ViewPreset),
+}
+
 impl Default for View3dMode {
     fn default() -> Self {
         View3dMode {
             view: View3d::new(VIEW_ID),
             library: Arc::new(MeshLibrary::new()),
             built: None,
+            pending: None,
+            synced: (0, BTreeSet::new()),
             heat: Heat3d::default(),
             heat_shown: None,
             heat_base: Vec::new(),
@@ -133,6 +153,28 @@ impl NovoApp {
         let options = ViewOptions {
             reduced_motion: self.settings.reduce_motion,
         };
+        let now = ui.input(|i| i.time);
+        match mode.pending.take() {
+            Some(Pending::Fit) => mode.view.fit(scene, now, options.reduced_motion),
+            Some(Pending::Preset(p)) => mode.view.go_to(p, scene, now, options.reduced_motion),
+            None => {}
+        }
+
+        // The Cabinet's selection reaches the 3D view when it changed there.
+        let cabinet_rev = self.cabinet.view.selection.revision();
+        if cabinet_rev != mode.synced.0 {
+            mode.view.state.selection = self
+                .cabinet
+                .view
+                .selection
+                .ids()
+                .iter()
+                .filter_map(|i| novo_canvas::cabinet::box_of(*i))
+                .map(|d| ItemId::new(ItemKind::Device, d))
+                .collect();
+            mode.synced = (cabinet_rev, mode.view.state.selection.clone());
+        }
+
         let solution = self.cabinet.heat.solution();
         if let Some(sol) = &solution {
             heat_controls(ui, &mut mode.heat, sol);
@@ -174,7 +216,6 @@ impl NovoApp {
         }
         // The toolbar sits in the view's corner; the door goes where it says.
         let limit = model::door_limit_deg(project, id);
-        let now = ui.input(|i| i.time);
         let view_rect = ui.available_rect_before_wrap();
         view3d_controls::toolbar(ui.ctx(), view_rect, &mut mode.controls, limit);
         mode.controls.clamp_door(limit);
@@ -183,8 +224,79 @@ impl NovoApp {
             mode.view
                 .set_door(DOOR_HINGE, angle, now, options.reduced_motion);
         }
-        mode.view
+        let out = mode
+            .view
             .show(ui, scene, &mode.library, &Look::for_theme(theme), options);
+        mode.view.state.hover = out.hover;
+        let state = &mut mode.view.state;
+        if let Some(click) = &out.clicked {
+            let extend = click.modifiers.shift || click.modifiers.command;
+            match click.id {
+                Some(id) if extend => {
+                    if !state.selection.remove(&id) {
+                        state.selection.insert(id);
+                    }
+                }
+                Some(id) => state.selection = BTreeSet::from([id]),
+                None if !extend => state.selection.clear(),
+                None => {}
+            }
+        }
+        if let Some(items) = &out.marquee {
+            if !ui.input(|i| i.modifiers.shift) {
+                state.selection.clear();
+            }
+            state.selection.extend(items.iter().copied());
+        }
+
+        // The devices selected in 3D reach the Cabinet, and show their data.
+        let devices: Vec<u64> = state
+            .selection
+            .iter()
+            .filter(|i| i.kind == ItemKind::Device)
+            .map(|i| i.raw)
+            .collect();
+        let mut ask = None;
+        if let Some(stored) = load(project, id) {
+            if state.selection != mode.synced.1 {
+                self.cabinet.view.selection.apply(
+                    devices.iter().map(|d| novo_canvas::cabinet::box_item(*d)),
+                    novo_canvas::selection::SelectOp::Replace,
+                );
+                mode.synced = (
+                    self.cabinet.view.selection.revision(),
+                    state.selection.clone(),
+                );
+            }
+            if !devices.is_empty() {
+                let tag_of = |d: u64| {
+                    project
+                        .get::<Device>(DeviceId::from(d))
+                        .and_then(|d| d.tag.device_code().map(str::to_owned))
+                        .unwrap_or_default()
+                };
+                let facts =
+                    cabinet_inspector::gather(project, id, &stored, &stored, &devices, &tag_of);
+                ask = cabinet_inspector::overlay(
+                    ui.ctx(),
+                    out.rect,
+                    false,
+                    &facts,
+                    project,
+                    &mut self.cabinet.panel_fields,
+                    cabinet_inspector::DoorView {
+                        state: &mut self.cabinet.door,
+                        layout: &stored,
+                        tag_of: &tag_of,
+                    },
+                );
+            }
+        }
+        if let Some(ask) = ask {
+            let layout = load(project, id);
+            let cands = candidates(project, id);
+            self.cabinet_ask(ask, Some(id), layout, &cands);
+        }
     }
 }
 

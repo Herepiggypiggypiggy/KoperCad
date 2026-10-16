@@ -76,6 +76,14 @@ pub static BASIS: &[BasisItem] = &[
         used_by: &["iec60204.control-voltage"],
     },
     BasisItem {
+        id: "iec.ampacity-tables",
+        kind: BasisKind::Planning,
+        set: StandardSet::Iec60204,
+        what: "Conductor ampacities of copper cables by installation method (B1, B2, C), insulation (PVC, XLPE) and loaded conductors, with the ambient temperature and grouping correction factors, in the layout of IEC 60364-5-52. Methods and combinations without a value are reported as not checkable, never guessed.",
+        checked: "Entered without the licensed text; the cells agree with independent recollection of the usual published values, with no discrepancy seen. Not checked against the standard. Load your licensed copy through the CSV table loader to replace them.",
+        used_by: &["iec60204.conductor-ampacity"],
+    },
+    BasisItem {
         id: "nfpa.ground-steps",
         kind: BasisKind::Planning,
         set: StandardSet::Nfpa79,
