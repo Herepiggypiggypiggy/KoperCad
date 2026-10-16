@@ -263,6 +263,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "macro.export_pack",
+            "Export macro pack",
+            "Project",
+            &["macro", "pack", "export", "kcmacropack", "share", "team"],
+            Needs::Nothing,
+        ),
+        &["export macros", "macro pack"],
+    ),
+    verb(
+        cmd(
             "app.preferences",
             "Preferences",
             "Project",
@@ -604,6 +614,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd("edit.rotate", "Rotate", "Draw", &["turn"], Needs::Selection),
+    cmd(
+        "edit.reset_note",
+        "Reset note position",
+        "Draw",
+        &["note", "cross reference", "contact image", "label"],
+        Needs::Selection,
+    ),
     cmd("edit.mirror", "Mirror", "Draw", &["flip"], Needs::Selection),
     // PLC and I/O (docs/design/plc.md section 4): the command surface only
     // names them; the app shell runs them through novo-plc.
@@ -724,6 +741,23 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Page,
         ),
         &["place macro", "macro"],
+    ),
+    verb(
+        cmd(
+            "macro.edit",
+            "Edit macro parameters",
+            "Edit",
+            &[
+                "macro",
+                "block",
+                "parameter",
+                "default",
+                "author",
+                "library",
+            ],
+            Needs::Nothing,
+        ),
+        &["edit macro"],
     ),
     cmd(
         "edit.select_all",
@@ -1381,6 +1415,20 @@ pub const COMMANDS: &[CommandInfo] = &[
             "overload",
         ],
         Needs::Project,
+    ),
+    cmd(
+        "sim.add_fault",
+        "Add fault to selection",
+        "View",
+        &[
+            "add fault",
+            "open circuit",
+            "short to earth",
+            "stuck contact",
+            "what if",
+            "failure",
+        ],
+        Needs::Selection,
     ),
     cmd(
         "view.override_marks",

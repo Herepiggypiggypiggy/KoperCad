@@ -1441,118 +1441,112 @@ fn paint_peaks(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64, f
 }
 
 fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: bool) {
-    egui::Area::new(egui::Id::new("heat_legend"))
-        .fixed_pos(rect.right_top() + Vec2::new(-176.0, 12.0))
-        .order(egui::Order::Foreground)
-        .show(ctx, |ui| {
-            let card = egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.set_width(140.0);
-                ui.label(
-                    egui::RichText::new("TEMPERATURE")
-                        .small()
-                        .strong()
-                        .color(t::TEXT_MUTED),
+    super::panel::Panel::new(
+        "heat_legend",
+        "Temperature",
+        rect,
+        super::panel::Side::Right,
+        164.0,
+    )
+    .top(12.0)
+    .fixed_open()
+    .fit()
+    .show(ctx, |ui| {
+        let card = ui.scope(|ui| {
+            ui.set_width(140.0);
+            let height = 180.0;
+            let (bar, _) = ui.allocate_exact_size(Vec2::new(14.0, height), egui::Sense::hover());
+            let mut mesh = egui::Mesh::default();
+            let steps = 24;
+            for s in 0..=steps {
+                let f = s as f32 / steps as f32;
+                let y = bar.bottom() - f * height;
+                let c = rgb(heat::ramp(f), 1.0);
+                mesh.colored_vertex(Pos2::new(bar.left(), y), c);
+                mesh.colored_vertex(Pos2::new(bar.right(), y), c);
+            }
+            for s in 0..steps as u32 {
+                let i = s * 2;
+                mesh.add_triangle(i, i + 1, i + 2);
+                mesh.add_triangle(i + 1, i + 3, i + 2);
+            }
+            let p = ui.painter();
+            p.add(Shape::mesh(mesh));
+            for tick in range::ticks(cache.range) {
+                let y = bar.bottom() - cache.range.t(tick) * height;
+                p.line_segment(
+                    [Pos2::new(bar.right(), y), Pos2::new(bar.right() + 5.0, y)],
+                    Stroke::new(1.0, t::TEXT_MUTED),
                 );
-                let height = 180.0;
-                let (bar, _) =
-                    ui.allocate_exact_size(Vec2::new(14.0, height), egui::Sense::hover());
-                let mut mesh = egui::Mesh::default();
-                let steps = 24;
-                for s in 0..=steps {
-                    let f = s as f32 / steps as f32;
-                    let y = bar.bottom() - f * height;
-                    let c = rgb(heat::ramp(f), 1.0);
-                    mesh.colored_vertex(Pos2::new(bar.left(), y), c);
-                    mesh.colored_vertex(Pos2::new(bar.right(), y), c);
-                }
-                for s in 0..steps as u32 {
-                    let i = s * 2;
-                    mesh.add_triangle(i, i + 1, i + 2);
-                    mesh.add_triangle(i + 1, i + 3, i + 2);
-                }
-                let p = ui.painter();
-                p.add(Shape::mesh(mesh));
-                for tick in range::ticks(cache.range) {
-                    let y = bar.bottom() - cache.range.t(tick) * height;
-                    p.line_segment(
-                        [Pos2::new(bar.right(), y), Pos2::new(bar.right() + 5.0, y)],
-                        Stroke::new(1.0, t::TEXT_MUTED),
-                    );
-                    p.text(
-                        Pos2::new(bar.right() + 9.0, y),
-                        Align2::LEFT_CENTER,
-                        format!("{tick:.0}"),
-                        FontId::monospace(t::FONT_SMALL),
-                        t::TEXT_MUTED,
-                    );
-                }
-                ui.label(
-                    egui::RichText::new(format!("°C · ambient {:.0}", cache.ambient))
-                        .small()
-                        .color(t::TEXT_MUTED),
+                p.text(
+                    Pos2::new(bar.right() + 9.0, y),
+                    Align2::LEFT_CENTER,
+                    format!("{tick:.0}"),
+                    FontId::monospace(t::FONT_SMALL),
+                    t::TEXT_MUTED,
                 );
-                ui.add_space(4.0);
-                let small = |text: &str, color| egui::RichText::new(text).small().color(color);
-                let (total_w, with_data, unknown) = totals(input);
-                if with_data > 0 {
-                    ui.label(small(&format!("Total loss {total_w:.0} W"), t::TEXT));
-                }
-                if let Some(note) = estimate_note(input) {
-                    ui.label(small(&note, t::WARNING));
-                }
-                if unknown > 0 {
-                    let (noun, verb) = if unknown == 1 {
-                        ("device", "has")
-                    } else {
-                        ("devices", "have")
-                    };
+            }
+            ui.label(
+                egui::RichText::new(format!("°C · ambient {:.0}", cache.ambient))
+                    .small()
+                    .color(t::TEXT_MUTED),
+            );
+            ui.add_space(4.0);
+            let small = |text: &str, color| egui::RichText::new(text).small().color(color);
+            let (total_w, with_data, unknown) = totals(input);
+            if with_data > 0 {
+                ui.label(small(&format!("Total loss {total_w:.0} W"), t::TEXT));
+            }
+            if let Some(note) = estimate_note(input) {
+                ui.label(small(&note, t::WARNING));
+            }
+            if unknown > 0 {
+                let (noun, verb) = if unknown == 1 {
+                    ("device", "has")
+                } else {
+                    ("devices", "have")
+                };
+                ui.label(small(
+                    &format!("{unknown} {noun} {verb} no loss data (shown dashed)"),
+                    t::WARNING,
+                ));
+            }
+            match &cache.source {
+                Source::Synthetic => {
                     ui.label(small(
-                        &format!("{unknown} {noun} {verb} no loss data (shown dashed)"),
-                        t::WARNING,
+                        "Preview model from the part losses, not a solver result. \
+                             Press Simulate for a real run.",
+                        t::TEXT_MUTED,
                     ));
                 }
-                match &cache.source {
-                    Source::Synthetic => {
+                Source::Solved(sol) => {
+                    let p = &sol.snapshot.progress;
+                    let validated = sol.snapshot.accuracy.validated;
+                    ui.label(small(&status_label(p, validated), t::TEXT));
+                    if stale {
                         ui.label(small(
-                            "Preview model from the part losses, not a solver result. \
-                             Press Simulate for a real run.",
-                            t::TEXT_MUTED,
+                            "Out of date: the layout changed since this run.",
+                            t::WARNING,
                         ));
                     }
-                    Source::Solved(sol) => {
-                        let p = &sol.snapshot.progress;
-                        let validated = sol.snapshot.accuracy.validated;
-                        ui.label(small(&status_label(p, validated), t::TEXT));
-                        if stale {
-                            ui.label(small(
-                                "Out of date: the layout changed since this run.",
-                                t::WARNING,
-                            ));
-                        }
-                        if !p.converged {
-                            ui.label(small("Not converged.", t::WARNING));
-                        }
-                        let a = &sol.snapshot.accuracy;
-                        if !a.headline.is_empty() {
-                            ui.label(small(&a.headline, t::TEXT_MUTED));
-                        }
-                        for n in sol.snapshot.notes.iter().take(2) {
-                            ui.label(small(n, t::TEXT_MUTED));
-                        }
-                        for m in &sol.messages {
-                            ui.label(small(m, t::WARNING));
-                        }
+                    if !p.converged {
+                        ui.label(small("Not converged.", t::WARNING));
+                    }
+                    let a = &sol.snapshot.accuracy;
+                    if !a.headline.is_empty() {
+                        ui.label(small(&a.headline, t::TEXT_MUTED));
+                    }
+                    for n in sol.snapshot.notes.iter().take(2) {
+                        ui.label(small(n, t::TEXT_MUTED));
+                    }
+                    for m in &sol.messages {
+                        ui.label(small(m, t::WARNING));
                     }
                 }
-            });
-            super::cabinet_bar::note_rect(
-                ctx,
-                "heat.legend",
-                "Heat legend",
-                card.response.rect,
-                false,
-            );
+            }
         });
+        super::cabinet_bar::note_rect(ctx, "heat.legend", "Heat legend", card.response.rect, false);
+    });
 }
 
 #[cfg(test)]

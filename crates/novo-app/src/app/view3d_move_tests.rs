@@ -451,6 +451,42 @@ fn a_group_without_devices_raises_no_drop_signal() {
     assert!(!step_done(&mut d, "drag-first"));
 }
 
+#[test]
+fn a_typed_rail_length_reaches_the_3d_scene() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (cab, a, _b) = cabinet_with_two_devices(&mut d);
+    d.app.cabinet_rail_ask(
+        Some(cab),
+        super::cabinet_rails::RailAsk::Add {
+            kind: novo_core::RailKind::Duct,
+            vertical: false,
+        },
+    );
+    open_3d_with_selection(&mut d, a);
+    let before = d.app.view3d.built.as_ref().map(|b| b.2.revision).unwrap();
+    let duct = project(&d)
+        .all::<novo_core::Rail>()
+        .find(|r| r.kind == novo_core::RailKind::Duct)
+        .map(|r| (r.id.raw(), r.x, r.y, r.width, r.height))
+        .unwrap();
+    d.app.cabinet_rail_ask(
+        Some(cab),
+        super::cabinet_rails::RailAsk::Set(super::cabinet_rails::RailEdit {
+            id: duct.0,
+            x: duct.1,
+            y: duct.2,
+            length: 123.0,
+            width: duct.3,
+            height: duct.4,
+        }),
+    );
+    d.frame();
+    d.frame();
+    let after = d.app.view3d.built.as_ref().map(|b| b.2.revision).unwrap();
+    assert!(after > before, "{before} -> {after}");
+}
+
 /// In the 3D view with a device selected, the toolbar, the Inspector, the Heat
 /// panel and the statistics start clear of each other and of the view cube.
 #[test]
@@ -621,4 +657,55 @@ fn a_group_of_a_rail_and_its_device_lands_the_device_once() {
     assert_eq!((after.0, after.1), (on.0 + 40.0, on.1 + 40.0));
     d.app.run(&ctx, Action::Undo);
     assert_eq!(placed(&d, cab, a), on);
+}
+
+/// A selected rail's value card starts clear of the toolbar, the statistics,
+/// the Heat panel and the view cube.
+#[test]
+fn the_rail_card_starts_clear_of_the_other_3d_panels() {
+    for (w, h) in [(1366.0, 768.0), (900.0, 600.0)] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let (cab, a, _) = cabinet_with_two_devices(&mut d);
+        d.app.cabinet_rail_ask(
+            Some(cab),
+            super::cabinet_rails::RailAsk::Add {
+                kind: novo_core::RailKind::Duct,
+                vertical: false,
+            },
+        );
+        open_3d_with_selection(&mut d, a);
+        let duct = project(&d)
+            .all::<novo_core::Rail>()
+            .find(|r| r.kind == novo_core::RailKind::Duct)
+            .map(|r| r.id.raw())
+            .unwrap();
+        d.app.view3d.view.state.selection = BTreeSet::from([ItemId::new(ItemKind::Duct, duct)]);
+        let ctx = d.ctx.clone();
+        d.app.run_command(&ctx, "view.3d_stats", None);
+        d.app.view3d.controls.heat_panel = true;
+        for _ in 0..12 {
+            d.frame_sized(egui::vec2(w, h), Vec::new());
+        }
+        let rect = |id: egui::Id| ctx.memory(|m| m.area_rect(id));
+        let card = rect(super::panel::id("view3d_rail")).expect("rail card");
+        let toolbar = rect(super::panel::id("view3d_toolbar")).expect("toolbar");
+        let heat = rect(egui::Id::new("view3d_heat_panel")).expect("heat panel");
+        let stats = rect(super::panel::id("view3d_stats")).expect("stats");
+        let cube = egui::Rect::from_min_size(
+            egui::pos2(heat.right() + 12.0 - 12.0 - 88.0, heat.top() - 8.0 - 88.0),
+            egui::Vec2::splat(88.0),
+        );
+        for (name, other) in [
+            ("toolbar", toolbar),
+            ("heat", heat),
+            ("stats", stats),
+            ("cube", cube),
+        ] {
+            assert!(
+                !card.intersects(other),
+                "{w} x {h}: rail card {card:?} over {name} {other:?}"
+            );
+        }
+    }
 }
