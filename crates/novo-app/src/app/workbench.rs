@@ -184,6 +184,8 @@ pub(crate) struct Workbench {
     pub(super) background_panel: Option<Option<super::background_panel::Placement>>,
     /// The Bench output window (cut list, ferrules, labels), while open.
     pub(super) bench: Option<super::bench::BenchState>,
+    /// The PDF options dialog (File > Export drawings > Export PDF...), while open.
+    pub(super) pdf_options: Option<super::pdf_options::PdfOptionsState>,
     /// The Report designer window, while open.
     pub(super) designer: Option<super::designer::DesignerState>,
     pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
@@ -293,6 +295,7 @@ impl Default for Workbench {
             changes: None,
             background_panel: None,
             bench: None,
+            pdf_options: None,
             designer: None,
             commissioning: None,
             underlay_seen: None,
@@ -384,6 +387,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "export.pdf_options",
     "export.change_report",
     "export.commissioning",
     "export.standards_report",
@@ -420,6 +424,8 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_shell",
     "view.3d_wires",
     "view.3d_shadows",
+    "view.3d_dimensions",
+    "view.3d_quality",
     "view.3d_stats",
     "view.3d_place",
     "view.iso",
@@ -900,6 +906,14 @@ impl NovoApp {
                 self.switch_workspace(Workspace::View3d);
                 self.view3d.controls.shadows ^= true;
             }
+            "view.3d_quality" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.view.reset_quality();
+            }
+            "view.3d_dimensions" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.controls.dimensions ^= true;
+            }
             "view.3d_door" | "view.3d_shell" | "view.3d_wires" => {
                 self.switch_workspace(Workspace::View3d);
                 let limit = self.view3d_door_limit();
@@ -1008,6 +1022,7 @@ impl NovoApp {
             "export.pdf" => {
                 self.export_pdf();
             }
+            "export.pdf_options" => self.open_pdf_options(),
             "export.change_report" => {
                 self.export_change_report();
             }

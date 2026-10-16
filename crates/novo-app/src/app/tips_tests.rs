@@ -151,6 +151,24 @@ fn the_handler_match_and_the_list_of_working_commands_agree() {
 }
 
 #[test]
+fn the_search_button_gets_its_tip_and_its_lesson_anchor_from_one_call() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    d.frame();
+    assert!(
+        d.app.learn_anchor("palette.button").is_some(),
+        "the top bar's search button is an anchor"
+    );
+    assert_eq!(
+        tip_text(&d.app.wb.keymap, "Search or run", "view.command_palette"),
+        "Search or run · Ctrl+K"
+    );
+}
+
+#[test]
 fn the_3d_hint_shows_on_an_empty_plate_names_the_key_and_stops_when_devices_sit_on_it() {
     use novo_core::{DeviceTag, MountingPlate, Point};
     let dir = tempfile::tempdir().unwrap();
