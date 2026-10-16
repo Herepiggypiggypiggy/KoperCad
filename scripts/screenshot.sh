@@ -27,7 +27,7 @@ done
 disp=:${SCREENSHOT_DISPLAY:-98}
 export DISPLAY=$disp
 export HOME=${SCREENSHOT_HOME:-$(mktemp -d)}   # empty settings: first-run look
-Xvfb "$disp" -screen 0 1440x900x24 >/dev/null 2>&1 & xvfb=$!
+Xvfb "$disp" -screen 0 ${SCREENSHOT_RES:-1440x900}x24 >/dev/null 2>&1 & xvfb=$!
 sleep 1
 openbox >/dev/null 2>&1 & wm=$!
 "$@" >/dev/null 2>&1 & app=$!

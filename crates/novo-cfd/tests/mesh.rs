@@ -116,7 +116,13 @@ fn volumes_are_conserved_and_match_the_geometry() {
 
 #[test]
 fn fractions_are_in_range_and_shares_add_up() {
-    let mesh = Mesh::build(&scenario(), &settings(50_000)).unwrap();
+    // A uniform grid does not line up with the bodies: cut cells.
+    let (regs, mats) = regions(&scenario());
+    let mesh = Mesh::classify(
+        Grid3::uniform([40, 60, 20], [796.0, 1196.0, 296.0]),
+        &regs,
+        mats,
+    );
     assert!(mesh.fluid_fraction.iter().all(|f| (0.0..=1.0).contains(f)));
     assert!(!mesh.mixed.is_empty());
     for c in &mesh.mixed {
@@ -150,11 +156,11 @@ fn grading_is_bounded_and_edges_valid() {
         p.max_grading_ratio
     );
     assert!(p.min_size_mm < p.max_size_mm);
-    // Fine at the wall, coarse in the middle.
+    // Cells are fine at the wall and grow away from it.
     let x = &mesh.grid.x_edges_mm;
     let first = x[1] - x[0];
-    let mid = x[x.len() / 2 + 1] - x[x.len() / 2];
-    assert!(first < mid, "{first} !< {mid}");
+    let widest = x.windows(2).map(|w| w[1] - w[0]).fold(0.0, f64::max);
+    assert!(first < widest, "{first} !< {widest}");
 }
 
 #[test]

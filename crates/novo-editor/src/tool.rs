@@ -779,6 +779,15 @@ impl Editor {
         self.set_tool(Tool::Cable(CableTool::default()));
     }
 
+    /// Makes a cable out of these wires without drawing a line (the
+    /// right-click menu's Make cable): the app takes the request as it takes
+    /// a drawn cable's.
+    pub fn request_cable(&mut self, wires: Vec<WireId>) {
+        if !wires.is_empty() {
+            self.cable_request = Some(wires);
+        }
+    }
+
     /// The wires a finished cable line touched, once: the app makes the
     /// cable out of them.
     pub fn take_cable_request(&mut self) -> Option<Vec<WireId>> {

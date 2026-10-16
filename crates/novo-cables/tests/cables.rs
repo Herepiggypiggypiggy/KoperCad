@@ -403,3 +403,143 @@ fn core_edits_and_checks() {
     assert_eq!(cores[0].1, None);
     assert_eq!(cores[1].1, Some(w[0]));
 }
+
+#[test]
+fn a_cable_is_retyped_renamed_and_deleted_in_one_undo_step_each() {
+    let (mut doc, m) = gate1_without_cable();
+    let proposals = propose_cables(doc.project());
+    let (cables, _) = doc
+        .transact("Accept", |tx| accept_proposals(tx, &proposals, None))
+        .unwrap();
+    let cable = cables[0];
+    let w = m.motor_wires;
+
+    // Retype to a shielded 5-core: the wires land on their usual cores.
+    let depth = doc.undo_depth();
+    let five = CableType::standard(5, true, 1.5).shielded();
+    doc.transact("Retype", |tx| novo_cables::retype_cable(tx, cable, &five))
+        .unwrap();
+    assert_eq!(doc.undo_depth(), depth + 1);
+    let cores = core_names(&doc, cable);
+    assert_eq!(cores.len(), 6, "five conductors and the shield");
+    assert_eq!(cores.iter().filter(|c| c.1.is_some()).count(), 4);
+    assert_eq!(
+        doc.project().cable(cable).unwrap().description,
+        "5G1.5 shielded"
+    );
+    // A type the wires do not fit changes nothing.
+    let before = doc.project().cable(cable).unwrap().clone();
+    assert!(
+        doc.transact("Retype", |tx| {
+            novo_cables::retype_cable(tx, cable, &CableType::numbered(3, false, 1.5))
+        })
+        .is_err()
+    );
+    assert_eq!(doc.project().cable(cable).unwrap(), &before);
+    doc.undo().unwrap();
+    assert_eq!(core_names(&doc, cable).len(), 4);
+    assert_eq!(core_names(&doc, cable)[3], ("GNYE".to_owned(), Some(w[3])));
+
+    // Rename; a tag another cable has is refused.
+    doc.transact("Rename", |tx| {
+        novo_cables::rename_cable(tx, cable, tag("=A1-W7"))
+    })
+    .unwrap();
+    assert_eq!(doc.project().cable(cable).unwrap().tag, tag("=A1-W7"));
+    let (other, _) = doc
+        .transact("Other", |tx| tx.add_cable(tag("=A1-W8"), Vec::new()))
+        .unwrap();
+    assert!(
+        doc.transact("Clash", |tx| novo_cables::rename_cable(
+            tx,
+            other,
+            tag("=A1-W7")
+        ))
+        .is_err()
+    );
+
+    // Delete frees the wires, which are proposed again; undo restores it.
+    doc.transact("Delete", |tx| novo_cables::delete_cable(tx, cable))
+        .unwrap();
+    assert!(doc.project().cable(cable).is_none());
+    assert_eq!(propose_cables(doc.project()).len(), 1);
+    doc.undo().unwrap();
+    assert_eq!(core_names(&doc, cable)[0].1, Some(w[0]));
+}
+
+#[test]
+fn retype_keeps_connected_shields_and_refuses_to_drop_them() {
+    let (mut doc, _m) = gate1_without_cable();
+    let proposals = propose_cables(doc.project());
+    let (cables, _) = doc
+        .transact("Accept", |tx| accept_proposals(tx, &proposals, None))
+        .unwrap();
+    let cable = cables[0];
+    let (sh, _) = doc.transact("Sh", |tx| add_shield(tx, cable)).unwrap();
+    let (sh2, _) = doc.transact("Sh2", |tx| add_shield(tx, cable)).unwrap();
+    doc.transact("Connect", |tx| {
+        connect_shield(tx, cable, sh, Some(ShieldConnection::Pe))?;
+        connect_shield(tx, cable, sh2, Some(ShieldConnection::Pe))
+    })
+    .unwrap();
+
+    // To an unshielded type: refused, nothing changes.
+    let before = doc.project().cable(cable).unwrap().clone();
+    let plain = CableType::standard(4, true, 1.5);
+    assert!(
+        doc.transact("Retype", |tx| novo_cables::retype_cable(tx, cable, &plain))
+            .is_err()
+    );
+    assert_eq!(doc.project().cable(cable).unwrap(), &before);
+
+    // To a shielded type: both shields and their connections stay.
+    let shielded = CableType::standard(4, true, 1.5).shielded();
+    doc.transact("Retype", |tx| {
+        novo_cables::retype_cable(tx, cable, &shielded)
+    })
+    .unwrap();
+    let c = doc.project().cable(cable).unwrap();
+    let shields: Vec<usize> = (0..c.cores.len()).filter(|&i| c.cores[i].shield).collect();
+    assert_eq!(shields.len(), 2);
+    for i in shields {
+        assert_eq!(
+            novo_cables::shield_connection(c, i),
+            Some(ShieldConnection::Pe)
+        );
+    }
+
+    // A shield that is not connected may go with an unshielded type, and no
+    // stale shield property is left.
+    let mut doc2 = doc;
+    doc2.transact("Disconnect", |tx| {
+        let c = tx.project().cable(cable).unwrap();
+        let idx: Vec<usize> = (0..c.cores.len()).filter(|&i| c.cores[i].shield).collect();
+        for i in idx {
+            connect_shield(tx, cable, i, None)?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    doc2.transact("Retype", |tx| novo_cables::retype_cable(tx, cable, &plain))
+        .unwrap();
+    let c = doc2.project().cable(cable).unwrap();
+    assert!(c.cores.iter().all(|x| !x.shield));
+    assert!(c.properties.keys().all(|k| !k.starts_with("cable.shield.")));
+}
+
+#[test]
+fn declined_wires_are_listed_until_restored() {
+    let (mut doc, m) = gate1_without_cable();
+    let proposals = propose_cables(doc.project());
+    assert!(novo_cables::declined_wires(doc.project()).is_empty());
+    doc.transact("Decline", |tx| dismiss_proposal(tx, &proposals[0]))
+        .unwrap();
+    assert_eq!(
+        novo_cables::declined_wires(doc.project()).len(),
+        m.motor_wires.len()
+    );
+    let declined = novo_cables::declined_wires(doc.project());
+    doc.transact("Restore", |tx| restore_proposal(tx, &declined))
+        .unwrap();
+    assert!(novo_cables::declined_wires(doc.project()).is_empty());
+}

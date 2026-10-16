@@ -224,6 +224,10 @@ pub struct FlowSolver {
     /// Factor on each device's film coefficient (true area over grid area).
     film_scale: Vec<f64>,
     film_clock: usize,
+    /// Radiation part of each device's film, W/m2K: it does not warm the air,
+    /// so only the rest of the film is a boundary layer (see
+    /// [`film_conductance`]).
+    film_rad: Vec<f64>,
 }
 
 /// Temperatures and constants of the plate sheet.
@@ -250,6 +254,29 @@ struct FilmFace {
     slot: usize,
     /// The air cell of the face.
     air: usize,
+    /// Distance from the device surface to the centre of the air cell, m.
+    y_air: f64,
+}
+
+/// Conductance per area from a device surface to the centre of an air cell
+/// `y` away, W/m2K, for a surface film `h` that is defined against the air
+/// outside the boundary layer.
+///
+/// A cell centre outside the layer (`y` over the layer depth `2 k / h`, the
+/// quadratic temperature profile of natural convection) sees the film as it
+/// is. A cell centre inside it already sits partly in the layer the film
+/// stands for, so the film acts against a temperature that is further out:
+/// `h / (1 - (1 - y / delta)^2)`, which runs to plain conduction `k / y` as
+/// the mesh resolves the layer. Without it a fine mesh counts the layer twice.
+fn film_conductance(h: f64, h_rad: f64, y: f64, k: f64) -> f64 {
+    let h_c = (h - h_rad).max(1e-3);
+    let delta = 2.0 * k / h_c;
+    let conv = if y >= delta {
+        h_c
+    } else {
+        h_c / (1.0 - (1.0 - y / delta).powi(2))
+    };
+    conv + h_rad
 }
 
 impl FlowSolver {
@@ -299,6 +326,7 @@ impl FlowSolver {
             kf
         });
         let mut k_face = k_face;
+        let cfg_film_len = cfg.device_film_h.len();
         let mut film_faces = Vec::new();
         let mut film_scale = Vec::new();
         if let Some(md) = cfg
@@ -337,6 +365,8 @@ impl FlowSolver {
                                 r_dev: 0.5 * mesh.dx[a][dix[a]] / k_cell[dc],
                                 slot,
                                 air: if dev_is_lo { hi } else { lo },
+                                y_air: 0.5
+                                    * mesh.dx[a][if dev_is_lo { hi_ix[a] } else { hi_ix[a] - 1 }],
                             });
                         }
                     }
@@ -355,8 +385,9 @@ impl FlowSolver {
                 })
                 .collect();
             for f in &film_faces {
-                k_face[f.axis][f.hi] =
-                    f.dist / (f.r_dev + 1.0 / (cfg.device_film_h[f.slot] * film_scale[f.slot]));
+                let h = cfg.device_film_h[f.slot];
+                let g = film_conductance(h, 0.0, f.y_air, cfg.conductivity);
+                k_face[f.axis][f.hi] = f.dist / (f.r_dev + 1.0 / (g * film_scale[f.slot]));
             }
         }
         let sheet = cfg.plate.as_ref().map(|pl| {
@@ -431,6 +462,7 @@ impl FlowSolver {
             film_faces,
             film_scale,
             film_clock: 0,
+            film_rad: vec![0.0; cfg_film_len],
             vel,
             p: vec![0.0; cells],
             t: vec![t_init; cells],
@@ -481,19 +513,33 @@ impl FlowSolver {
                 self.cfg.device_view,
             );
             let old = self.cfg.device_film_h.get(slot).copied().unwrap_or(h);
-            self.set_device_film(slot, 0.5 * old + 0.5 * h);
+            // radiation share of the film (the 2D engine's linearisation)
+            let tf = 0.5 * (t_dev + t_air) + 273.15;
+            let h_rad =
+                4.0 * self.cfg.device_emissivity * 5.670_374e-8 * tf.powi(3) * self.cfg.device_view;
+            self.set_device_film_split(slot, 0.5 * old + 0.5 * h, h_rad);
         }
     }
 
     /// Sets the film coefficient of device `slot`, W/m2K, on every face it
     /// shares with air (see [`FlowConfig::device_film_h`]).
     pub fn set_device_film(&mut self, slot: usize, h: f64) {
+        self.set_device_film_split(slot, h, 0.0);
+    }
+
+    /// As [`FlowSolver::set_device_film`], with `h_rad` of `h` being radiation.
+    pub fn set_device_film_split(&mut self, slot: usize, h: f64, h_rad: f64) {
         if let Some(v) = self.cfg.device_film_h.get_mut(slot) {
             *v = h.max(1e-3);
         }
+        if let Some(v) = self.film_rad.get_mut(slot) {
+            *v = h_rad.clamp(0.0, 0.9 * h.max(1e-3));
+        }
+        let h_rad = self.film_rad.get(slot).copied().unwrap_or(0.0);
         for f in self.film_faces.iter().filter(|f| f.slot == slot) {
-            let h = h.max(1e-3) * self.film_scale[slot];
-            self.k_face[f.axis][f.hi] = f.dist / (f.r_dev + 1.0 / h);
+            let g = film_conductance(h.max(1e-3), h_rad, f.y_air, self.cfg.conductivity)
+                * self.film_scale[slot];
+            self.k_face[f.axis][f.hi] = f.dist / (f.r_dev + 1.0 / g);
         }
     }
 
@@ -1481,4 +1527,29 @@ fn wall_value(
         }
     }
     (count > 0).then(|| sum / count as f64)
+}
+
+#[cfg(test)]
+mod film_tests {
+    use super::film_conductance;
+
+    #[test]
+    fn the_film_runs_from_the_correlation_to_plain_conduction() {
+        let (h, k) = (6.0, 0.026);
+        let delta = 2.0 * k / h;
+        // outside the layer: the film as given, radiation included
+        assert_eq!(film_conductance(h + 3.0, 3.0, 2.0 * delta, k), h + 3.0);
+        // at the edge of the layer the two branches meet
+        let edge = film_conductance(h, 0.0, delta, k);
+        let inside = film_conductance(h, 0.0, delta * 0.999, k);
+        assert!((edge - inside).abs() < 0.01 * h, "{edge} {inside}");
+        // far inside: conduction to the cell centre, k / y
+        let y = delta * 1e-3;
+        let g = film_conductance(h, 0.0, y, k);
+        assert!((g * y / k - 1.0).abs() < 0.01, "{g}");
+        // never below the film
+        for i in 1..100 {
+            assert!(film_conductance(h, 0.0, delta * i as f64 / 50.0, k) >= h - 1e-12);
+        }
+    }
 }

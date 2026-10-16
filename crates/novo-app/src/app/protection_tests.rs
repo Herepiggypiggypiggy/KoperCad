@@ -25,9 +25,9 @@ fn protection_needs_a_project_and_opens_a_window() {
     d.app.run(&ctx, Action::Protection);
     d.frame();
     assert!(d.app.protection.open);
-    // The example has no ratings: the window explains instead of plotting.
+    // The example's catalogue parts carry ratings, so there is something to plot.
     let (_, study) = d.app.protection.study.as_ref().expect("study read");
-    assert!(study.devices.is_empty());
+    assert!(!study.devices.is_empty());
 }
 
 #[test]
@@ -66,10 +66,11 @@ fn protection_reads_the_devices_and_draws_every_tab() {
     d.app.run(&ctx, Action::Protection);
     d.frame();
     let (_, study) = d.app.protection.study.as_ref().expect("study");
-    assert_eq!(study.devices.len(), 2);
-    assert_eq!(d.app.protection.shown.len(), 2);
+    // -F1 and -F2 as set here, and -F3 from its catalogue rating.
+    assert_eq!(study.devices.len(), 3);
+    assert_eq!(d.app.protection.shown.len(), 3);
     let results = d.app.protection.results.as_ref().expect("analysed");
-    assert_eq!(results.chain.pairs.len(), 1);
+    assert_eq!(results.chain.pairs.len(), 2);
     // Fuse holder default 10 kA, relay and breaker defaults 5 kA: below
     // the 10 kA available.
     assert_eq!(results.rating.verdict, Verdict::Insufficient);
