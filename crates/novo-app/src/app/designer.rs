@@ -29,7 +29,6 @@ use novo_reports::designer::{
     store::{self, Origin},
 };
 use novo_reports::{Align, ReportOutput, standard_reports};
-use novo_theme::tokens;
 
 use super::pdf::write_replacing;
 use super::sheets::{hash, ours_or_free};
@@ -540,7 +539,7 @@ fn editor(ui: &mut egui::Ui, st: &mut DesignerState, rendered: &Rendered, act: &
     if st.pending.is_some() {
         ui.horizontal(|ui| {
             ui.colored_label(
-                tokens::WARNING,
+                crate::theme::ui_palette().warning,
                 format!("Discard changes to {}?", st.draft.name),
             );
             if ui.button("Discard").clicked() {
@@ -559,7 +558,10 @@ fn editor(ui: &mut egui::Ui, st: &mut DesignerState, rendered: &Rendered, act: &
         });
     }
     for line in &st.unreadable {
-        ui.colored_label(tokens::WARNING, format!("Unreadable: {line}"));
+        ui.colored_label(
+            crate::theme::ui_palette().warning,
+            format!("Unreadable: {line}"),
+        );
     }
     ui.horizontal(|ui| {
         if ui
@@ -607,7 +609,7 @@ fn editor(ui: &mut egui::Ui, st: &mut DesignerState, rendered: &Rendered, act: &
         ui.weak("None");
     }
     for p in &rendered.problems {
-        ui.colored_label(tokens::WARNING, describe(p));
+        ui.colored_label(crate::theme::ui_palette().warning, describe(p));
     }
     ui.collapsing("Fields you can use in text", |ui| {
         let mut names: Vec<String> = Fields::sample().names().map(str::to_owned).collect();

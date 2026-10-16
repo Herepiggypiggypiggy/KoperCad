@@ -234,7 +234,7 @@ pub(super) fn card(
             height: state.typed(id, Field::Height).unwrap_or(now.height),
         };
         for line in problems(layout, &typed, kind, vertical, tag_of) {
-            ui.colored_label(novo_theme::tokens::ERROR, line);
+            ui.colored_label(crate::theme::ui_palette().error, line);
         }
         if changed {
             ask = Some(RailAsk::Set(edit));
