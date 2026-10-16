@@ -149,3 +149,51 @@ fn the_handler_match_and_the_list_of_working_commands_agree() {
         "in APP_COMMANDS but no arm in run_command (answers \"not in the app yet\"): {listed_but_unhandled:?}"
     );
 }
+
+#[test]
+fn the_3d_hint_shows_on_an_empty_plate_names_the_key_and_stops_when_devices_sit_on_it() {
+    use novo_core::{DeviceTag, MountingPlate, Point};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let doc = d.app.backend.document_mut().unwrap();
+    let h = novo_tests::motor_starter(doc).expect("fixture builds");
+    let mut cab = None;
+    doc.transact("Cabinet", |tx| {
+        let id = tx.add_structure(DeviceTag::parse("+CAB")?, "Cabinet", true)?;
+        tx.set_plate(
+            id,
+            Some(MountingPlate {
+                width: 800.0,
+                height: 600.0,
+                margin: 10.0,
+            }),
+        )?;
+        cab = Some(id);
+        Ok(())
+    })
+    .unwrap();
+    let cab = cab.unwrap();
+    let hint = |d: &Drive| {
+        let project = d.app.backend.document().unwrap().project();
+        super::tips::empty_3d_hint(&d.app.settings, &d.app.wb.keymap, project, cab)
+    };
+    let text = hint(&d).expect("an empty plate gets the hint");
+    assert!(text.contains("Ctrl+Shift+P"), "{text}");
+    d.app.hint_command_run("cabinet.place-all");
+    assert!(hint(&d).is_some(), "one use does not retire it");
+    for _ in 0..HINT_LIMIT {
+        d.app.hint_command_run("cabinet.place-all");
+    }
+    assert!(hint(&d).is_none(), "used enough times, it fades");
+    d.app.show_hints_again();
+    let doc = d.app.backend.document_mut().unwrap();
+    doc.transact("Place", |tx| {
+        tx.place_device(h.f1, cab, Point::new(100.0, 100.0), false, None)?;
+        Ok(())
+    })
+    .unwrap();
+    assert!(hint(&d).is_none(), "a placed device ends it");
+}

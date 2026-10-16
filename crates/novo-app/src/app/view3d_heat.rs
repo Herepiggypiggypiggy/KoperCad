@@ -14,7 +14,7 @@ const MARGIN: f32 = 12.0;
 const WIDTH: f32 = 330.0;
 /// The view cube's size and margin (`novo-view3d::widget`); the panel starts
 /// below it so the cube stays usable.
-const CUBE_SIZE: f32 = 88.0;
+pub(super) const CUBE_SIZE: f32 = 88.0;
 const CUBE_MARGIN: f32 = 12.0;
 const GAP: f32 = 8.0;
 
