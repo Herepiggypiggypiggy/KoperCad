@@ -29,6 +29,11 @@ pub(crate) enum Eplan {
     /// header and the version of the script that wrote it. Exits with 1 when
     /// the script is older or newer than this KoperCAD.
     Check { path: PathBuf },
+    /// List the object kinds, element and attribute names of a PXF file with
+    /// counts and the shape of values (digits as 0, letters as a), never the
+    /// values. Safe to share when the project itself must stay private; it
+    /// lets the reader's field table be checked against a real export.
+    Survey { path: PathBuf },
 }
 
 pub(crate) fn run(cmd: Eplan, out: &mut dyn Write) -> Result<i32, Failure> {
@@ -54,6 +59,17 @@ pub(crate) fn run(cmd: Eplan, out: &mut dyn Write) -> Result<i32, Failure> {
             Ok(exit::OK)
         }
         Eplan::Check { path } => check(&path, out),
+        Eplan::Survey { path } => {
+            let file = std::fs::File::open(&path).map_err(|e| {
+                Failure::new(exit::READ, format!("cannot read {}: {e}", path.display()))
+            })?;
+            let survey = novo_interop::eplan::pxf::survey_pxf(std::io::BufReader::new(file))
+                .map_err(|e| {
+                    Failure::new(exit::READ, format!("cannot survey {}: {e}", path.display()))
+                })?;
+            print(out, survey.text().trim_end())?;
+            Ok(exit::OK)
+        }
     }
 }
 

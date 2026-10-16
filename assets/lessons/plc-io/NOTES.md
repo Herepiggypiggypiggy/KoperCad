@@ -1,26 +1,28 @@
 # plc-io: reviewer notes
 
-Teaches: add a PLC card, send a button (DI) and a lamp (DQ) to it, read the addresses in the I/O list,
-renumber the I/O, then try both in the live view. Status `draft` (anchors, live-view checks and a few UI gaps below).
-Builder and tests: `crates/novo-tests/tests/lessons/plc.rs` (start, finished, I/O list rows, renumber preview).
-Live behaviour was checked once with a scratch novo-sim test on finished.json (not kept, novo-tests has no novo-sim dependency):
-rest = nothing; button closed = 1 input seen, lamp off; output on = lamp on.
+Teaches: add a PLC card, send a button (DI) and a lamp (DQ) to it, read the addresses in the I/O list, close the address gap with Renumber I/O, then try both in the live view. Status stays `draft` (GAPs below).
+Project: 24 V pump circuit, start button -S1, running lamp -H1, an analog card -K1 starting at input byte 4 (so renumbering has two moves). `finished.json` = after the steps. Builder: `crates/novo-tests/tests/lessons/plc.rs`.
+Headless proof: `crates/novo-app/src/app/lesson_verify_cables.rs` (`plc_io_each_instruction_works_in_the_app`: Ctrl+K text, clicks on the symbols, Enter on the preview, Shift+L, real clicks on the pole and output badges at their painted positions; `plc_io_solve_scripts_tick_every_step`).
 
-Verified UI path per step (all `# verified:` comments in lesson.toml carry the same line numbers)
-- add-card: Ctrl+K (keymap.rs:313), command field (command_field.rs:184-197), verb "add card" (commands.rs:303-310), handler plc.rs:34, message plc.rs:64. Needs the layout typed: no chips.
-- select-button / select-lamp: plc.to_plc needs one selected symbol (workbench.rs:252, plc.rs:72-80).
-- button-to-plc / lamp-to-plc: verb "to plc" (commands.rs:313-321), plc.rs:72-148; DI/DQ by symbol function; channel lands 50 mm right.
-- io-list: "page 30" (palette.rs:220/544); the I/O list page is in the start project; live report (reports.rs:160).
-- renumber: verb "renumber io" (commands.rs:414), plc.rs:154-252 (preview "Renumber (Enter)" / "Cancel (Esc)").
-- live-on: Shift+L (keymap.rs:373), live.rs:362, card live.rs:658-690. press-button: pole badge live.rs:515-556, input dot live.rs:600-624.
-- switch-output: square badge on the DQ, tooltip "<tag> · output off · click to switch it on" (live.rs:558-598, 870-875); novo-sim plc.rs puts 24V on the pin.
+| Step | Instruction and verified path (file:line) |
+| --- | --- |
+| add-card | Ctrl+K `add card DI16 DQ8` (`commands.rs:457`) -> `plc.rs:34`; toast "Added card =A1+CAB-K2 (DI16 DQ8)"; nothing drawn (page keeps 4 symbols) |
+| select-button | click the symbol (hit region found by hovering) |
+| button-to-plc, lamp-to-plc | `to plc` (`commands.rs:466`) -> `plc.rs:72-148`; DI at (90,44), DQ at (170,48); toasts "Sent to =A1+CAB-K2: next free DI/DQ channel"; page 4 -> 5 -> 6 symbols |
+| io-list | `page 30`; rows %IX12.0 DI "Pump start button", %QX0.0 DQ "Pump running lamp" |
+| renumber | `renumber io` (`commands.rs:588`) -> `plc.rs:155`, dialog `plc.rs:190` "Renumber (Enter)"/"Cancel (Esc)"; moves (4 -> 0), (12 -> 8); toast "Renumbered I/O: 2 start address(es) moved"; list then reads %IX8.0 |
+| back-to-drawing | `page 1` |
+| live-on | Shift+L `keymap.rs:373`; card with **Reset** and **PLC program…** (the button was called All open before main changed the card) |
+| press-button | pole badge at (48,44), `live.rs:262-290`; click closes the pole; check `pole_closed` (replaces the `clicked` check, no anchor exists) |
+| switch-output | output badge at (170,51), `live.rs:306-336`; check `lit = "-H1:X2"` (false until the output is on) |
 
-The start gap: the cabinet already has analog card -K1 (AI4, slot 1) starting at input byte 4, so `renumber io` has two moves (%I4 to %I0, %I12 to %I8).
-Without such a gap the command only says "I/O addresses are already in order" (plc.rs:170).
+Re-checked on current main (first writer's report): PLC channels still show no address on the drawing (open); `add card` still draws no card symbol (open); the forced output is still switched by clicking the square badge, now taught as the way and with the **PLC program…** button mentioned; cable/live anchors still unregistered.
 
-GAPs (owner)
-1. No address, signal text or channel label drawn at a channel symbol; no card symbol/overview; Devices drawer does not expand cards; no inspector chip; `plc.signal` has no editor (WS-17 with WS-03/WS-10 labels, WS-01 drawer/inspector). The I/O list page is the only place to read them.
-2. `add card` draws nothing, sets no description or part, and offers no argument chips (WS-17/WS-08).
-3. Live-view badges have no anchors and no check kinds; solve has no operation for them or for pressing Enter on the renumber preview (Learning modules, WS-01).
-4. `field` check with `equals` is not in design section 5 (Learning modules).
-Oddities: to_plc wire retraces the symbol's own lead (lamp's lower pin) and, for sideways signals, cuts through the DQ box; the I/O list page appears only on open, so a project that gets its first card in a session never shows it until reopened.
+GAPs still open
+1. No address, signal text or channel label at a channel symbol; no card symbol; Devices drawer does not expand cards; no inspector chip; `plc.signal` has no editor (WS-17 with WS-03/WS-10, WS-01).
+2. `add card` sets no description or part and offers no argument chips.
+3. Solve cannot press Enter on the renumber preview (wanted `arg = "apply"`) nor click a live badge (wanted `live_click`); the replay test presses/clicks them itself, and the two live steps use `select` as stand-in solve. No anchors for the badges.
+4. The I/O list page is added when a project opens; a first card added in a session shows it after reopening.
+Oddity: the `to plc` wire for a lamp retraces 4 mm of the lamp's lead.
+
+The `how`, `how_nl` and `demo` lists are in lesson.toml.

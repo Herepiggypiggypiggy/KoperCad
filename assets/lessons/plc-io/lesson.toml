@@ -1,12 +1,13 @@
 # Lesson: PLC cards and I/O (cards, channels, addresses, live view).
-# Sample project: a 24 V pump circuit with a start button and a running lamp,
-# plus an analog card whose addresses start at byte 4 (project.json);
-# builder and tests: crates/novo-tests/tests/lessons/plc.rs.
-# Reviewer notes with the verified UI path per step and the GAP list: NOTES.md.
+# Sample project: a 24 V pump circuit with a start button and a running lamp, plus an analog card whose addresses
+# start at byte 4 (project.json); builder and tests: crates/novo-tests/tests/lessons/plc.rs.
+# Every step is replayed headless from project.json by crates/novo-app/src/app/lesson_verify_cables.rs (keys,
+# palette text, clicks on the drawing and on live badges through the real app). NOTES.md has the verified path
+# per step and the remaining GAPs.
 
 format = 1
 id = "plc-io"
-version = 1
+version = 2
 status = "early"
 title = "PLC Cards and I/O"
 title_nl = "PLC-kaarten en I/O"
@@ -20,6 +21,7 @@ topics = ["plc", "io", "simulation"]
 needs = []
 next = ["drawing-standard"]
 project = "project.json"
+finished = "finished.json"
 page = "Pump control"
 
 [[step]]
@@ -27,12 +29,10 @@ id = "goal"
 title = "What you will have"
 title_nl = "Wat je straks hebt"
 text = """
-By the end the start button sits on a PLC input and the lamp on a PLC output.
-You read their addresses in the I/O list and switch both in the live view.
+By the end the start button sits on a PLC input and the lamp on a PLC output, and you have read their addresses in the I/O list. The I/O list and the PLC tag export follow the drawing, so nobody types an address twice.
 """
 text_nl = """
-Straks zit de startknop op een PLC-ingang en de lamp op een PLC-uitgang.
-Je leest hun adressen in de I/O-lijst en schakelt beide in de live-weergave.
+Straks zit de startknop op een PLC-ingang en de lamp op een PLC-uitgang, en heb je hun adressen in de I/O-lijst gelezen. De I/O-lijst en de export van PLC-tags volgen de tekening, dus niemand typt een adres twee keer.
 """
 point = { area = { page = "Pump control", x = 20, y = 24, w = 150, h = 56 } }
 note = [
@@ -45,32 +45,32 @@ pause = true
 id = "add-card"
 title = "Add a PLC card"
 title_nl = "Voeg een PLC-kaart toe"
-# verified: Ctrl+K opens the command field (keymap.rs:313; the field is the
-# TextEdit with hint "Search or run: ..." at command_field.rs:184-197).
-# "add card" is the verb of plc.add_card (commands.rs:303-310); the rest of
-# the line is the layout (workbench.rs:544 -> plc.rs:34). Message on success:
-# "Added card =A1+CAB-K2 (DI16 DQ8)" (plc.rs:64). Without a layout the app
-# only says "Add card needs its channels, for example: add card DI16 DQ8"
-# (plc.rs:41). plc.add_card has no default key, so the command field is the
-# way. The new card is named by next_device_tag (naming.rs:57): -K1 is the
-# analog card, so this one is -K2.
-# GAP: the card is only a device. Nothing is drawn (no card symbol, plc.md
-# section 4 "overview") and `add card` gives it no description or part, so the
-# Devices list (Ctrl+5, drawers.rs:313) shows "Not drawn yet" and a blank
-# description. Owner: WS-17 / WS-01.
-# GAP: the command field offers no chips for `add card` (arguments is empty,
-# commands.rs:303), so the layout syntax `DI16 DQ8` has to be taught in text.
 text = """
-Press {key:view.command_palette}, type **add card DI16 DQ8** and press Enter.
-{tip:plc-card} -K2 gets 16 digital inputs and 8 digital outputs.
-It is not drawn; its channels are, as you send signals to it.
+A PLC card has channels: DI are digital inputs (signals into the PLC), DQ digital outputs (signals out of it). Adding one with 16 DI and 8 DQ creates the card -K2 next to the analog card -K1. The card itself is not drawn; its channels are, once you send signals to it.
 """
 text_nl = """
-Druk op {key:view.command_palette}, typ **add card DI16 DQ8** en druk op Enter.
-{tip:plc-card} -K2 krijgt 16 digitale ingangen en 8 digitale uitgangen.
-Ze wordt niet getekend; haar kanalen wel, zodra je signalen ernaartoe stuurt.
+Een PLC-kaart heeft kanalen: DI zijn digitale ingangen (signalen naar de PLC), DQ digitale uitgangen (signalen uit de PLC). Een kaart met 16 DI en 8 DQ maakt de kaart -K2 naast de analoge kaart -K1. De kaart zelf wordt niet getekend; zijn kanalen wel, zodra je er signalen naartoe stuurt.
 """
-point = { ui = "palette.field" }
+how = [
+  "Press {key:view.command_palette}",
+  "Type **add card DI16 DQ8** and press Enter",
+  "The toast reads Added card =A1+CAB-K2",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}",
+  "Typ **add card DI16 DQ8** en druk op Enter",
+  "De melding zegt Added card =A1+CAB-K2",
+]
+demo = [
+  { press = "view.command_palette" },
+  { type = "add card DI16 DQ8" },
+  { key = "Enter" },
+]
+# verified: Ctrl+K keymap.rs:313; verb "add card" (commands.rs:457) -> plc.rs:34 plc_add_card; toast "Added card =A1+CAB-K2 (DI16 DQ8)";
+# the tag comes from next_device_tag (-K1 is the analog card). Test: plc_io_each_instruction_works_in_the_app.
+# GAP: the card is only a device: no card symbol is drawn (plc.md section 4 overview) and the command field offers no
+#      chips for the layout, so `DI16 DQ8` is taught in text. Owner: WS-17 / WS-01.
+point = { ui = "palette.button" }
 expect = { device = { tag = "=A1+CAB-K2" } }
 solve = [ { command = "plc.add_card", arg = "DI16 DQ8" } ]
 
@@ -78,15 +78,20 @@ solve = [ { command = "plc.add_card", arg = "DI16 DQ8" } ]
 id = "select-button"
 title = "Select the start button"
 title_nl = "Selecteer de startknop"
-# verified: a click on a symbol selects it; plc.to_plc needs exactly one
-# selected symbol (workbench.rs:252, plc.rs:72-80) and is greyed in the
-# command field until then (commands.rs:313-321, Needs::Selection).
 text = """
-Click the start button **-S1** to select it.
+Sending a signal to the PLC works on the selected device, so first select the start button: click its symbol -S1 on the drawing.
 """
 text_nl = """
-Klik op de startknop **-S1** om hem te selecteren.
+Een signaal naar de PLC sturen werkt op het geselecteerde onderdeel, dus selecteer eerst de startknop: klik op het symbool -S1 op de tekening.
 """
+how = [
+  "Click the pushbutton symbol -S1 on the drawing; it shows as selected",
+]
+how_nl = [
+  "Klik op het drukknopsymbool -S1 op de tekening; het wordt geselecteerd",
+]
+# verified: a click on a symbol selects it; plc.to_plc is greyed in the command field until one symbol is selected
+# (commands.rs:466 Needs::Selection, plc.rs:72-80).
 point = { at = { device = "-S1" } }
 expect = { selected = "-S1" }
 solve = [ { select = "-S1" } ]
@@ -95,24 +100,30 @@ solve = [ { select = "-S1" } ]
 id = "button-to-plc"
 title = "Send the button to the PLC"
 title_nl = "Stuur de knop naar de PLC"
-# verified: "to plc" is the verb of plc.to_plc (commands.rs:313-321, label
-# "Send signal to PLC", no default key). A contact gets a DI channel
-# (signal_channel_type, novo-plc commands.rs: "contact" -> DigitalInput). The
-# channel lands 50 mm to the right on the same line (plc.rs:16, 129) and is
-# wired to the pin nothing is wired to, counting from the far end (plc.rs:112).
-# One undo step; message "Sent to =A1+CAB-K2: next free DI channel" (plc.rs:144).
-# The card is the first one with a free DI channel in slot order
-# (plc.rs:98): the analog card -K1 has none, so it is -K2.
-# State check: the page holds 4 symbols at the start, 5 after the DI.
 text = """
-Press {key:view.command_palette}, type **to plc** and press Enter.
-A {tip:digital-input} box (DI) appears beside the button, wired to it.
+The command Send signal to PLC gives a contact the next free DI channel of a card, draws it 50 mm to the right and wires it to the button. Here a digital input box (DI) appears at the right of -S1, joined to the button's free pin.
 """
 text_nl = """
-Druk op {key:view.command_palette}, typ **to plc** en druk op Enter.
-Naast de knop verschijnt een {tip:digital-input}-blokje (DI), erop aangesloten.
+De opdracht Send signal to PLC geeft een contact het volgende vrije DI-kanaal van een kaart, tekent het 50 mm naar rechts en verbindt het met de knop. Hier verschijnt rechts van -S1 een digitale-ingangsbox (DI), verbonden met de vrije pin van de knop.
 """
-point = { ui = "palette.field" }
+how = [
+  "Press {key:view.command_palette}",
+  "Type **to plc** and press Enter",
+  "A DI box appears 50 mm right of -S1",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}",
+  "Typ **to plc** en druk op Enter",
+  "Een DI-box verschijnt 50 mm rechts van -S1",
+]
+demo = [
+  { press = "view.command_palette" },
+  { type = "to plc" },
+  { key = "Enter" },
+]
+# verified: verb "to plc" (commands.rs:466) -> plc.rs:72-148; a contact gets a DI, the channel lands 50 mm right (plc.rs:16);
+# toast "Sent to =A1+CAB-K2: next free DI channel"; the page holds 4 symbols before and 5 after; one undo step.
+point = { ui = "palette.button" }
 note = [
   { at = { page = "Pump control", x = 90, y = 44 }, text = "The new DI channel", text_nl = "Het nieuwe DI-kanaal" },
 ]
@@ -120,133 +131,131 @@ expect = { count = { kind = "symbol", page = "Pump control", at_least = 5 } }
 solve = [ { command = "plc.to_plc" } ]
 
 [[step]]
-id = "select-lamp"
-title = "Select the lamp"
-title_nl = "Selecteer de lamp"
-# verified: as select-button. The lamp's function is signal.lamp.green, which
-# signal_channel_type sends to a DQ ("coil" | "signal").
-text = """
-Click the running lamp **-H1** to select it.
-"""
-text_nl = """
-Klik op de looplamp **-H1** om hem te selecteren.
-"""
-point = { at = { device = "-H1" } }
-expect = { selected = "-H1" }
-solve = [ { select = "-H1" } ]
-
-[[step]]
 id = "lamp-to-plc"
 title = "Send the lamp to the PLC"
 title_nl = "Stuur de lamp naar de PLC"
-# verified: as button-to-plc; a lamp, horn or coil gets a DQ channel. The
-# channel is the next free channel of its type, DQ 0 here (the app picks it,
-# the person cannot choose; the inspector chip of plc.md section 4 does not
-# exist).
-# Oddity: the wire from the lamp's lower pin leaves 4 mm back up along the
-# lamp's own lead before it turns right (novo-editor draw_wire), so a short
-# stub of lead sticks out below the bend.
 text = """
-Run **to plc** again with {key:view.command_palette}.
-A {tip:digital-output} box (DQ) appears beside the lamp, wired to it.
+Do the same for the lamp: select the lamp symbol -H1, then run Send signal to PLC. A lamp is an output, so it gets the next free DQ channel: a digital output box (DQ) appears at the right of -H1, wired to the lamp.
 """
 text_nl = """
-Voer met {key:view.command_palette} nogmaals **to plc** uit.
-Naast de lamp verschijnt een {tip:digital-output}-blokje (DQ), erop aangesloten.
+Doe hetzelfde voor de lamp: selecteer het lampsymbool -H1 en voer dan Send signal to PLC uit. Een lamp is een uitgang, dus hij krijgt het volgende vrije DQ-kanaal: rechts van -H1 verschijnt een digitale-uitgangsbox (DQ), verbonden met de lamp.
 """
-point = { ui = "palette.field" }
+how = [
+  "Click the lamp symbol -H1",
+  "Press {key:view.command_palette}, type **to plc** and press Enter",
+  "A DQ box appears 50 mm right of -H1",
+]
+how_nl = [
+  "Klik op het lampsymbool -H1",
+  "Druk op {key:view.command_palette}, typ **to plc** en druk op Enter",
+  "Een DQ-box verschijnt 50 mm rechts van -H1",
+]
+demo = [
+  { move = { at = { device = "-H1" } } },
+  { click = true },
+  { press = "view.command_palette" },
+  { type = "to plc" },
+  { key = "Enter" },
+]
+# verified: as select-button and button-to-plc (the lamp's function is signal.lamp.green, which signal_channel_type sends to a DQ); a lamp, horn or coil gets a DQ; page holds 6 symbols after. The app picks the channel, the person
+# cannot choose it. Oddity: the wire from the lamp's lower pin retraces 4 mm of the lamp's lead before it turns right.
+point = { ui = "palette.button" }
 note = [
   { at = { page = "Pump control", x = 170, y = 48 }, text = "The new DQ channel", text_nl = "Het nieuwe DQ-kanaal" },
 ]
 expect = { count = { kind = "symbol", page = "Pump control", at_least = 6 } }
-solve = [ { command = "plc.to_plc" } ]
+solve = [ { select = "-H1" }, { command = "plc.to_plc" } ]
 
 [[step]]
 id = "io-list"
 title = "Read the addresses in the I/O list"
 title_nl = "Lees de adressen in de I/O-lijst"
-# verified: "page 30" opens the page named 30 (palette.rs:220, page_query
-# 544); the I/O list is page 30 of this project because the analog card gave
-# it rows when the project was opened (add_generated_pages runs only on new
-# and open: app.rs:547-553, reports.rs:109). The generated page follows the
-# drawing live (reports.rs:160 update_sheet). Columns: Address, Type, Card,
-# Ch., Pin, Signal, Terminal, Connected to, Drawn at (novo-reports io.rs:46-56).
-# Rows here, before renumbering: %IX12.0 DI -K2 0 "Pump start button"
-# =A1+CAB-S1:14 =A1+CAB/1.3, and %QX0.0 DQ -K2 0 "Pump running lamp"
-# =A1+CAB-H1:X2 =A1+CAB/1.5; the other channels read "Spare". Test:
-# the_io_list_shows_the_channels_before_and_after_renumbering.
-# GAP: the channel symbols carry no address or signal text on the drawing
-# (plc.md section 4: the "address" anchor and the signal at function_text are
-# not drawn; novo-xref gives non-contact device symbols no label,
-# index.rs:429-455), the Devices drawer does not expand a card into channels
-# (plc.md section 5), and the inspector shows only the card's properties
-# (inspector.rs:535-560, plc.start.i is read-only). The I/O list page is the
-# only place where address, channel name and signal appear. Owner: WS-17 with
-# WS-03 / WS-10 (labels) and WS-01 (drawer, inspector).
-# GAP: the signal text is the connected device's description; there is no UI
-# to type a different one (`plc.signal`).
-# Oddity: if a project has no PLC card when it is opened, no I/O list page is
-# added, and adding the first card later does not add it either; it appears
-# only after the project is reopened (reports.rs:109-140).
 text = """
-Press {key:view.command_palette}, type **page 30** and press Enter.
-Find your two channels among the spares: address, type, signal text and where each is drawn.
+The page I/O list is written from the drawing. Your two channels are among the spare ones: the button on %IX12.0 as a DI of -K2 and the lamp on %QX0.0 as a DQ, each with its signal text and where it is drawn. The addresses are not written next to the channel boxes on the drawing yet; this list is where to read them.
 """
 text_nl = """
-Druk op {key:view.command_palette}, typ **page 30** en druk op Enter.
-Zoek je twee kanalen tussen de reserves: adres, type, signaaltekst en waar elk is getekend.
+De pagina I/O list wordt uit de tekening gemaakt. Je twee kanalen staan tussen de reserves: de knop op %IX12.0 als DI van -K2 en de lamp op %QX0.0 als DQ, elk met signaaltekst en waar het getekend is. De adressen staan nog niet naast de kanaalboxen op de tekening; in deze lijst lees je ze.
 """
-point = { ui = "palette.field" }
+how = [
+  "Press {key:view.command_palette}, type **page 30** and press Enter",
+  "Find the rows Pump start button and Pump running lamp",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **page 30** en druk op Enter",
+  "Zoek de rijen Pump start button en Pump running lamp",
+]
+demo = [
+  { press = "view.command_palette" },
+  { type = "page 30" },
+  { key = "Enter" },
+]
+# verified: "page 30" opens the page named 30 (palette.rs PAGE_WORDS); rows printed by the test (Address, Type, Card, Ch., Pin,
+# Signal, Terminal, Connected to, Drawn at): %IX12.0 DI =A1+CAB-K2 0 "Pump start button" =A1+CAB-S1:14; %QX0.0 DQ ... "Pump running lamp" =A1+CAB-H1:X2.
+# GAP: channel symbols carry no address or signal text on the drawing; the Devices drawer does not expand a card into channels;
+#      the inspector shows only the card's properties; `plc.signal` (typing a different signal text) has no editor.
+# Oddity: the I/O list page is added when a project opens; a project that gets its first card in a session shows it after reopening.
+point = { ui = "palette.button" }
 expect = { page = "I/O list" }
 solve = [ { page = "I/O list" } ]
 
 [[step]]
 id = "renumber"
-title = "Renumber the I/O"
-title_nl = "Nummer de I/O opnieuw"
-# verified: "renumber io" is the verb of plc.renumber_io (commands.rs:414-421,
-# no default key; the longer verb wins over `renumber`, palette.rs:620-627).
-# plc_renumber_io opens the preview only when something moves, else it says
-# "I/O addresses are already in order" (plc.rs:154-176). Here two cards
-# move: "=A1+CAB-K1  %I4 → %I0" and "=A1+CAB-K2  %I12 → %I8" (dialog
-# "Renumber I/O", buttons "Renumber (Enter)" and "Cancel (Esc)",
-# plc.rs:178-232; Esc leaves the project alone). Enter applies it as one undo
-# step, message "Renumbered I/O: 2 start address(es) moved" (plc.rs:236-252).
-# The I/O list behind it is live, so %IX12.0 becomes %IX8.0 and %IW4 %IW0.
-# Test: renumber_shows_a_preview_with_two_moves.
-# GAP: `equals` in a `field` check is not in design section 5 (only `is_set`
-# is shown); needs confirming with the Learning modules thread.
-# GAP: `solve` can run the command but not press Enter on the preview, so the
-# replay would stop at the dialog. Wanted: a solve operation or an argument
-# that applies the preview (for example arg = "apply").
+title = "Close the gap in the addresses"
+title_nl = "Sluit het gat in de adressen"
 text = """
-Press {key:view.command_palette}, type **renumber io** and press Enter.
-The preview lists every address that moves; Enter applies it.
-The list behind it follows: %IX12.0 becomes %IX8.0.
+The analog card starts at byte 4 and -K2 at byte 12, so bytes 0 to 3 and 5 to 11 are wasted. Renumber I/O previews every card start address that moves (-K1 %I4 to %I0, -K2 %I12 to %I8); Enter applies it, Esc cancels. Afterwards the button reads %IX8.0.
 """
 text_nl = """
-Druk op {key:view.command_palette}, typ **renumber io** en druk op Enter.
-De voorvertoning toont elk adres dat verschuift; Enter past het toe.
-De lijst erachter volgt: %IX12.0 wordt %IX8.0.
+De analoge kaart begint op byte 4 en -K2 op byte 12, dus de bytes 0 tot 3 en 5 tot 11 gaan verloren. Renumber I/O toont vooraf elk startadres dat verschuift (-K1 %I4 naar %I0, -K2 %I12 naar %I8); Enter past toe, Esc annuleert. Daarna staat de knop op %IX8.0.
 """
-point = { ui = "palette.field" }
+how = [
+  "Press {key:view.command_palette}, type **renumber io** and press Enter",
+  "Read the preview: -K1 %I4 to %I0, -K2 %I12 to %I8",
+  "Press Enter (or click **Renumber (Enter)**); Esc cancels",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **renumber io** en druk op Enter",
+  "Lees de voorvertoning: -K1 %I4 naar %I0, -K2 %I12 naar %I8",
+  "Druk op Enter (of klik op **Renumber (Enter)**); Esc annuleert",
+]
+demo = [
+  { press = "view.command_palette" },
+  { type = "renumber io" },
+  { key = "Enter" },
+  { say = "Enter applies, Esc cancels", say_nl = "Enter past toe, Esc annuleert" },
+  { key = "Enter" },
+]
+# verified: verb "renumber io" (commands.rs:588) -> plc.rs:155 plc_renumber_io -> dialog "Renumber I/O" with buttons "Renumber (Enter)" and
+# "Cancel (Esc)" (plc.rs:190); Enter applies in one undo step, toast "Renumbered I/O: 2 start address(es) moved".
+# The field check `equals` exists in novo-learn check.rs FieldCheck.
+point = { ui = "palette.button" }
 expect = { field = { device = "=A1+CAB-K2", name = "plc.start.i", equals = 8 } }
+# GAP solve: pressing Enter on the preview; the replay runs the command and the verifier presses Enter. Wanted: arg = "apply".
 solve = [ { command = "plc.renumber_io" } ]
 
 [[step]]
 id = "back-to-drawing"
 title = "Go back to the drawing"
 title_nl = "Ga terug naar de tekening"
-# verified: "page 1" opens page 1, "Pump control" (palette.rs:220).
 text = """
-Press {key:view.command_palette}, type **page 1** and press Enter.
-The live view works on the drawing page.
+The live view works on a drawing page: open page 1, Pump control.
 """
 text_nl = """
-Druk op {key:view.command_palette}, typ **page 1** en druk op Enter.
-De live-weergave werkt op de tekeningpagina.
+De live-weergave werkt op een tekeningpagina: open pagina 1, Pump control.
 """
-point = { ui = "palette.field" }
+how = [
+  "Press {key:view.command_palette}, type **page 1** and press Enter",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **page 1** en druk op Enter",
+]
+demo = [
+  { press = "view.command_palette" },
+  { type = "page 1" },
+  { key = "Enter" },
+]
+# verified: "page 1" opens page 1 (palette.rs page_query).
+point = { ui = "palette.button" }
 expect = { page = "Pump control" }
 solve = [ { page = "Pump control" } ]
 
@@ -254,79 +263,99 @@ solve = [ { page = "Pump control" } ]
 id = "live-on"
 title = "Turn on the live view"
 title_nl = "Zet de live-weergave aan"
-# verified: sim.live is Shift+L on the drawing (keymap.rs:373, commands.rs:666
-# "Show live potentials", Needs::Page); toggle_live (live.rs:362) shows the
-# message "Live potentials: contacts start open. Click a pole badge to close
-# it" and the card "Live potentials" top left with "All open" and a close
-# button (live.rs:658-690, tooltip "Close · Shift+L"). Poles start open, the
-# PLC outputs start off.
 text = """
-Press {key:sim.live} to show live potentials.
-Wires carrying a potential light up; everything starts switched off.
+Live potentials colours every wire by what it carries right now. Everything starts switched off: contacts are open and the PLC outputs are off. A card at the top left of the drawing says so.
 """
 text_nl = """
-Druk op {key:sim.live} voor live potentialen.
-Draden met een potentiaal lichten op; alles begint uitgeschakeld.
+Live potentials kleurt elke draad naar wat hij nu voert. Alles begint uitgeschakeld: contacten zijn open en de PLC-uitgangen staan uit. Linksboven op de tekening zegt een kaart dat.
 """
-point = { ui = "live.card" }
-expect = { command = "sim.live" }
+how = [
+  "Move the pointer over the drawing",
+  "Press {key:sim.live}; a card Live potentials appears at the top left",
+]
+how_nl = [
+  "Beweeg de aanwijzer over de tekening",
+  "Druk op {key:sim.live}; linksboven verschijnt de kaart Live potentials",
+]
+demo = [
+  { press = "sim.live" },
+]
+# verified: keymap.rs:373 Shift+L (Canvas) -> sim.live; toggle_live live.rs:449; card "Live potentials" with "Reset" and "PLC program…" live.rs:875-905.
+expect = { live = true }
 solve = [ { command = "sim.live" } ]
 
 [[step]]
 id = "press-button"
 title = "Press the start button"
 title_nl = "Druk op de startknop"
-# verified: every switched pole gets a round badge halfway between its pins
-# (live.rs:148-170 pole_badges, painted 515-556); hover text "=A1+CAB-S1 · open
-# · click to close, Shift+click for every pole" (live.rs:547). Closing it puts
-# 24V on the DI pin, and the DI shows a dot that fills (live.rs:600-624
-# input_marks; novo-sim plc.rs inputs_seen). The dot has no hover text. The
-# button stays closed until clicked again (a latching switch, not a push).
-# GAP: the badge has no anchor id; the check wanted is "a pole of -S1 is
-# closed in the live view" (live view is app state, not model state).
 text = """
-Click the round badge on **-S1** to close its contact.
-The wire lights up and the dot at the {tip:digital-input} fills.
+In the live view every switch shows a small round badge between its two pins. Click the badge on -S1: the button closes and stays closed until you click again, the wire lights up and the dot on the DI box fills.
 """
 text_nl = """
-Klik op het ronde knopje op **-S1** om het contact te sluiten.
-De draad licht op en de stip bij de {tip:digital-input} wordt gevuld.
+In de live-weergave toont elke schakelaar een klein rond knopje tussen zijn twee pinnen. Klik op het knopje van -S1: de knop sluit en blijft gesloten tot je opnieuw klikt, de draad licht op en de stip op de DI-box wordt gevuld.
 """
-point = { at = { device = "-S1" } }
-note = [
-  { at = { page = "Pump control", x = 90, y = 44 }, text = "Dot filled: the input sees 24V", text_nl = "Stip gevuld: de ingang ziet 24V" },
+how = [
+  "Click the round badge halfway between the two pins of -S1",
+  "The wire lights up and the dot on the DI box fills",
 ]
-expect = { clicked = "live.pole" }
-# GAP: solve has no operation for a click on a live-view badge; the replay
-# can only turn the live view on.
-solve = [ { command = "sim.live" } ]
+how_nl = [
+  "Klik op het ronde knopje halverwege de twee pinnen van -S1",
+  "De draad licht op en de stip op de DI-box wordt gevuld",
+]
+demo = [
+  { move = { at = { page = "Pump control", x = 48, y = 44 } } },
+  { click = true },
+]
+# verified: pole badge at the middle of the pass-through pins (live.rs:262-290; (48,44) here), click flips the pole (live.rs ~900).
+# Test: the click at the badge's world position closes the pole (PoleState) and `pole_closed` holds.
+point = { at = { page = "Pump control", x = 48, y = 44 } }
+note = [
+  { at = { page = "Pump control", x = 90, y = 44 }, text = "Dot filled: the input sees 24 V", text_nl = "Stip gevuld: de ingang ziet 24 V" },
+]
+expect = { pole_closed = "-S1" }
+# GAP solve: no operation for a click on a live badge (wanted: `live_click = "-S1"`); the stand-in selects the button and the verifier clicks the badge.
+solve = [ { select = "-S1" } ]
 
 [[step]]
 id = "switch-output"
 title = "Switch the output on"
 title_nl = "Schakel de uitgang in"
-# verified: a PLC digital output gets a square badge (live.rs:200-232
-# coil_badges, painted 558-598) at its pin; hover text "=A1+CAB-K2 · output off
-# · click to switch it on" (live.rs:587-592). Clicking it adds the symbol to
-# `forced` (live.rs:870-875); novo-sim output_drives puts the first DC-positive
-# potential (24V) on the pin (plc.rs:38-48), so the lamp has 24V on one side and
-# 0V on the other and glows (live_anim). There is no PLC program: the person
-# is the program. "All open" on the card switches everything off again.
-# Test (scratch, not kept): rest (0 inputs, lamp off); button closed (1 input
-# seen, lamp off); output on (lamp on).
-# GAP: no anchor for the badge, and no check for "output forced on".
 text = """
-Click the square badge on the **DQ** box.
-The output puts 24V on its pin and the lamp **-H1** lights.
+There is no PLC program here: you are the program. A PLC output box shows a small square badge above its pin. Click it on the DQ box: the output puts 24 V on the lamp and -H1 lights. Reset on the card switches everything off again.
 """
 text_nl = """
-Klik op het vierkante knopje op het **DQ**-blokje.
-De uitgang zet 24V op zijn pin en de lamp **-H1** brandt.
+Er is hier geen PLC-programma: jij bent het programma. Een PLC-uitgangsbox toont een klein vierkant knopje boven zijn pin. Klik erop bij de DQ-box: de uitgang zet 24 V op de lamp en -H1 brandt. Met Reset op de kaart zet je alles weer uit.
 """
+how = [
+  "Click the square badge just above the pin of the DQ box",
+  "The lamp -H1 lights; **Reset** on the card switches everything off again",
+]
+how_nl = [
+  "Klik op het vierkante knopje net boven de pin van de DQ-box",
+  "De lamp -H1 brandt; **Reset** op de kaart zet alles weer uit",
+]
+demo = [
+  { move = { at = { page = "Pump control", x = 170, y = 51 } } },
+  { click = true },
+]
+# verified: output badge 5 mm above the box's pin (live.rs:311-336; (170,51) here); click toggles `forced`; novo-sim puts 24 V on the pin.
+# The live card also has a button "PLC program…" that runs a ladder or Structured Text program on these channels (live.rs ~790).
 point = { at = { page = "Pump control", x = 170, y = 51 } }
 note = [
   { at = { device = "-H1" }, text = "The lamp lights", text_nl = "De lamp brandt" },
 ]
-expect = { clicked = "live.output" }
-# GAP: as above (no solve operation for a live-view badge).
-solve = [ { command = "sim.live" } ]
+expect = { lit = "-H1:X2" }
+# GAP solve: as press-button (a click on a live badge); no check kind names "output forced on", so `lit` on the lamp pin is used.
+solve = [ { select = "-H1" } ]
+
+[[step]]
+id = "done"
+title = "From signal to address and back"
+title_nl = "Van signaal naar adres en terug"
+text = """
+You added a card, sent a button and a lamp to it, read the addresses and tried both live. Use **Open finished version** to compare: it shows the same drawing with the I/O renumbered. The live card's **PLC program…** button can run a program on these channels instead of you.
+"""
+text_nl = """
+Je hebt een kaart toegevoegd, een knop en een lamp erheen gestuurd, de adressen gelezen en beide live geprobeerd. Gebruik **Open finished version** om te vergelijken: dezelfde tekening met de I/O hernummerd. De knop **PLC program…** op de live-kaart kan een programma op deze kanalen laten draaien in plaats van jou.
+"""
+pause = true

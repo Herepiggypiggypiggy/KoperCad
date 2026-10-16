@@ -4,7 +4,9 @@
 # for -F2 to -X1, 490 for -F1 to -K1, 579 for -K1 to -F2, 250 and 310 between the buttons) and
 # 4 "estimate" at 200 mm for the motor wires, whose device is in the field. The wire cut export
 # is Cabinet > Route all > Export wire cut (wire_production.rs): a semicolon CSV next to the
-# project. There is no Cut list page or report in the app yet, so the lesson does not use one.
+# project. Since #597 the Reports workspace has a Cut list report (command report.cutlist): a
+# summary (1.5 mm2: 4 wires, 0.88 m; size unknown: 15 wires, 9.32 m) and one table per size with
+# Wire mm + Ends mm (20) = Cut mm, e.g. wire 4: 1047 + 20 = 1067.
 format = 1
 id = "cut-lengths"
 version = 2
@@ -86,6 +88,23 @@ een afstand geschat uit het schema plus de lussen. Het is een planningsgetal, al
 """
 
 [[step]]
+id = "cut-list"
+how = ["Run Cut list from the command field, or open Reports in the switcher and click Cut list in the list.", "Read the summary table, then one group table."]
+how_nl = ["Voer Cut list uit in het opdrachtveld, of open Reports in de schakelaar en klik op Cut list in de lijst.", "Lees de samenvatting en daarna een groepstabel."]
+title = "The cut list"
+title_nl = "De zaaglijst"
+text = """
+Run **Cut list** from the command field, or open **Reports** in the switcher at the top and click **Cut list** in the list. The report starts with a summary: per wire size the number of wires and the total metres to order, here 4 wires of 1.5 mm² (0.88 m) and 15 wires whose size is not set yet (9.32 m).
+Below it is one table per size. Wire 4 shows **Wire mm** 1047, **Ends mm** 20 and **Cut mm** 1067: the wire list length plus 10 mm per end for the ferrule.
+"""
+text_nl = """
+Voer **Cut list** uit in het opdrachtveld, of open **Reports** in de schakelaar bovenin en klik op **Cut list** in de lijst. Het rapport begint met een samenvatting: per draaddoorsnede het aantal draden en de totale meters om te bestellen, hier 4 draden van 1,5 mm² (0,88 m) en 15 draden waarvan de doorsnede nog niet is ingesteld (9,32 m).
+Daaronder staat een tabel per doorsnede. Draad 4 toont **Wire mm** 1047, **Ends mm** 20 en **Cut mm** 1067: de lengte uit de draadlijst plus 10 mm per uiteinde voor de adereindhuls.
+"""
+expect = { command = "report.cutlist" }
+solve = [ { command = "report.cutlist" } ]
+
+[[step]]
 id = "back-to-cabinet"
 how = ["Press {key:view.cabinet}."]
 how_nl = ["Druk op {key:view.cabinet}."]
@@ -136,8 +155,8 @@ solve = [ { command = "view.schematic" }, { page = "Wire list" } ]
 
 [[step]]
 id = "export-cut"
-how = ["Click Route all in the Cabinet header.", "Click Export wire cut in the Routes panel.", "A message shows the file name."]
-how_nl = ["Klik op Route all in de kop van de Cabinet.", "Klik op Export wire cut in het paneel Routes.", "Een melding toont de bestandsnaam."]
+how = ["Click Route all in the Route group of the Cabinet bar.", "Click Export wire cut in the Routes panel.", "A message shows the file name."]
+how_nl = ["Klik op Route all in de groep Route van de Cabinet-balk.", "Klik op Export wire cut in het paneel Routes.", "Een melding toont de bestandsnaam."]
 title = "Export the wire cut file"
 title_nl = "Exporteer het draadzaagbestand"
 text = """

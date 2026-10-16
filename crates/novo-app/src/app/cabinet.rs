@@ -455,7 +455,7 @@ impl NovoApp {
         let narrow = ui.available_width() < cabinet_bar::WIDE;
         let place_key = self.command_shortcut_text(ui.ctx(), "cabinet.place-all");
         let plate_face = !self.cabinet.table;
-        let mut place_anchor: Option<(egui::Rect, bool)> = None;
+        let mut anchors: Vec<cabinet_bar::Anchor> = Vec::new();
         let mut all_placed_note = false;
         let mut delete_rail: Option<u64> = None;
         let mut move_rail: Option<super::cabinet_rails::RailDrag> = None;
@@ -496,7 +496,9 @@ impl NovoApp {
             }
             if has_plan {
                 cabinet_bar::group(ui, "Preview, nothing stored yet", |ui| {
-                    if cabinet_bar::primary(ui, icons::CHECK, "Accept", Some("Enter"), true)
+                    let accept =
+                        cabinet_bar::primary(ui, icons::CHECK, "Accept", Some("Enter"), true);
+                    if cabinet_bar::note(&mut anchors, "cabinet.accept", "Accept", &accept)
                         .clicked()
                     {
                         ask = Some(Ask::Accept);
@@ -515,30 +517,40 @@ impl NovoApp {
                     place_key.as_deref(),
                     unplaced > 0 || homeless > 0,
                 );
-                let r = if unplaced > 0 || homeless > 0 {
+                let r = if unplaced > 0 {
                     r.on_hover_text(format!(
                         "Place the {unplaced} unplaced devices by the rules. You review the \
                          preview before anything is stored."
                     ))
+                } else if homeless > 0 {
+                    r.on_hover_text(format!(
+                        "{homeless} devices have no cabinet: Place all names them and says why."
+                    ))
                 } else {
                     r
                 };
-                place_anchor = Some((r.rect, r.clicked()));
+                cabinet_bar::note(&mut anchors, "cabinet.place_all", "Place all", &r);
                 if r.clicked() {
                     ask = Some(Ask::PlaceAll);
                 }
-                if !narrow
-                    && cabinet_bar::button(ui, icons::SLIDERS_HORIZONTAL, "Rules", false)
-                        .on_hover_text("Where Place all puts each kind of device")
-                        .clicked()
-                {
-                    self.cabinet.rules.editor_open ^= true;
+                if !narrow {
+                    let rules = cabinet_bar::button(ui, icons::SLIDERS_HORIZONTAL, "Rules", false)
+                        .on_hover_text("Where Place all puts each kind of device");
+                    if cabinet_bar::note(&mut anchors, "cabinet.rules", "Rules", &rules).clicked() {
+                        self.cabinet.rules.editor_open ^= true;
+                    }
                 }
             });
             if !narrow && plate_face {
                 cabinet_bar::group(ui, "Arrange", |ui| {
-                    if cabinet_bar::button(ui, icons::RULER, "Plate setup", self.cabinet.plate_card)
-                        .on_hover_text("Size, fill and door of the mounting plate")
+                    let plate = cabinet_bar::button(
+                        ui,
+                        icons::RULER,
+                        "Plate setup",
+                        self.cabinet.plate_card,
+                    )
+                    .on_hover_text("Size, fill and door of the mounting plate");
+                    if cabinet_bar::note(&mut anchors, "cabinet.plate", "Plate setup", &plate)
                         .clicked()
                     {
                         ask = Some(Ask::TogglePlateCard);
@@ -557,14 +569,21 @@ impl NovoApp {
             }
             if plate_face || !narrow {
                 cabinet_bar::group(ui, "Route", |ui| {
-                    if plate_face
-                        && cabinet_bar::button(ui, icons::PATH, "Route all", self.cabinet.routes)
-                            .on_hover_text(
-                                "Route every wire through the ducts: lengths, duct fill and problems",
-                            )
+                    if plate_face {
+                        let routes = cabinet_bar::button(
+                            ui,
+                            icons::PATH,
+                            "Route all",
+                            self.cabinet.routes,
+                        )
+                        .on_hover_text(
+                            "Route every wire through the ducts: lengths, duct fill and problems",
+                        );
+                        if cabinet_bar::note(&mut anchors, "cabinet.routes", "Route all", &routes)
                             .clicked()
-                    {
-                        ask = Some(Ask::ToggleRoutes);
+                        {
+                            ask = Some(Ask::ToggleRoutes);
+                        }
                     }
                     if !narrow
                         && cabinet_bar::button(
@@ -573,22 +592,26 @@ impl NovoApp {
                             "Rails and ducts",
                             self.cabinet.rails.open,
                         )
-                        .on_hover_text("Add, move, resize and delete rails and ducts (Ctrl+Shift+R)")
+                        .on_hover_text(
+                            "Add, move, resize and delete rails and ducts (Ctrl+Shift+R)",
+                        )
                         .clicked()
                     {
                         self.cabinet.rails.open ^= true;
                     }
-                    if !narrow
-                        && cabinet_bar::button(
+                    if !narrow {
+                        let cut = cabinet_bar::button(
                             ui,
                             icons::SCISSORS,
                             "Cut list",
                             self.cabinet.rules.cut_open,
                         )
-                        .on_hover_text("Bars of rail and duct to buy and cut")
-                        .clicked()
-                    {
-                        self.cabinet.rules.cut_open ^= true;
+                        .on_hover_text("Bars of rail and duct to buy and cut");
+                        if cabinet_bar::note(&mut anchors, "cabinet.cutlist", "Cut list", &cut)
+                            .clicked()
+                        {
+                            self.cabinet.rules.cut_open ^= true;
+                        }
                     }
                 });
             }
@@ -599,16 +622,17 @@ impl NovoApp {
                     if cabinet_bar::segment(ui, "Plate", plate_face).clicked() && !plate_face {
                         ask = Some(Ask::ToggleTable);
                     }
-                    if cabinet_bar::segment(ui, "Table", !plate_face)
-                        .on_hover_text("Devices as a table (Ctrl+T)")
-                        .clicked()
+                    let table = cabinet_bar::segment(ui, "Table", !plate_face)
+                        .on_hover_text("Devices as a table (Ctrl+T)");
+                    if cabinet_bar::note(&mut anchors, "cabinet.table", "Table", &table).clicked()
                         && plate_face
                     {
                         ask = Some(Ask::ToggleTable);
                     }
                 });
                 if plate_face && !narrow {
-                    super::heat::toggle(ui, &mut self.cabinet.heat);
+                    let heat = super::heat::toggle(ui, &mut self.cabinet.heat);
+                    cabinet_bar::note(&mut anchors, "cabinet.heat", "Heat", &heat);
                 }
             });
             if narrow {
@@ -727,7 +751,8 @@ impl NovoApp {
                     cabinet_bar::pill(ui, &label, None);
                 } else if let Some(shown) = &shown {
                     // The count opens the list; a row selects its device.
-                    ui.menu_button(label, |ui| {
+                    let error = novo_theme::Palette::of(ui).error;
+                    ui.menu_button(egui::RichText::new(label).color(error), |ui| {
                         for p in &shown.placements {
                             let lines = problem_lines(shown, p.id, &tag_of);
                             if lines.is_empty() {
@@ -766,6 +791,14 @@ impl NovoApp {
                 self.cabinet.keys.clear();
                 self.cabinet.drag = None;
                 self.cabinet.ghost = None;
+                // Escape leaves the table for the plate.
+                let leave = !self.wb.field.is_open()
+                    && !self.modal_open()
+                    && !ui.ctx().egui_wants_keyboard_input()
+                    && ui.input(|i| i.key_pressed(egui::Key::Escape));
+                if leave {
+                    ask = Some(Ask::ToggleTable);
+                }
                 let selected = self.cabinet_selected();
                 if let Some(id) = cabinet_table(ui, &shown, &cands, &tag_of, &selected) {
                     // A row is its device: select it and show it on the plate.
@@ -896,13 +929,9 @@ impl NovoApp {
                 });
                 if self.cabinet.heat.take_request() {
                     match (structure, &heat_input) {
-                        (Some(s), Some(input)) => super::heat::start_run(
-                            &mut self.cabinet.heat,
-                            project,
-                            s,
-                            input,
-                            ui.ctx(),
-                        ),
+                        (Some(s), Some(input)) => {
+                            super::heat::start_run(&mut self.cabinet.heat, project, s, input)
+                        }
                         _ => self
                             .cabinet
                             .heat
@@ -1039,7 +1068,8 @@ impl NovoApp {
                     ask = Some(Ask::Accept);
                 } else if has_plan && escape {
                     ask = Some(Ask::Cancel);
-                } else if let (Some(layout), false) = (&layout, has_plan) {
+                } else if let Some(layout) = &layout {
+                    let on_plate = shown;
                     // Dropping a device from the list.
                     if let (Some(id), Some(at)) =
                         (out.response.dnd_release_payload::<u64>(), out.cursor_raw)
@@ -1090,7 +1120,7 @@ impl NovoApp {
                             .is_some()
                         });
                         if !on_grip
-                            && let Some(p) = layout.placements.iter().rev().find(|p| {
+                            && let Some(p) = on_plate.placements.iter().rev().find(|p| {
                                 let f = p.footprint();
                                 wx >= f.x && wx <= f.right() && wy >= f.y && wy <= f.bottom()
                             })
@@ -1310,10 +1340,10 @@ impl NovoApp {
         if all_placed_note {
             self.message(Level::Info, "Every device of this panel is placed");
         }
-        if let Some((rect, clicked)) = place_anchor {
-            self.anchor("cabinet.place-all", rect, "Place all");
-            if clicked {
-                self.learn_event(novo_learn::Event::Clicked("cabinet.place-all".to_owned()));
+        for a in anchors {
+            self.anchor(a.id, a.rect, a.label);
+            if a.clicked {
+                self.learn_event(novo_learn::Event::Clicked(a.id.to_owned()));
             }
         }
         if let Some(ask) = ask {
@@ -1372,6 +1402,14 @@ impl NovoApp {
         layout: Option<CabinetLayout>,
         cands: &[novo_layout::plan::Candidate],
     ) {
+        // Editing the plate while a Place all preview is up takes the
+        // preview first (one undo step), so a drag, turn or take-off never
+        // acts on a layout that is not stored yet.
+        if self.cabinet.preview.is_some()
+            && matches!(ask, Ask::Drop(..) | Ask::Rotate(_) | Ask::Remove(_))
+        {
+            self.cabinet_ask(Ask::Accept, structure, None, cands);
+        }
         match ask {
             Ask::Panel(l) => {
                 self.cabinet.location = Some(l);
