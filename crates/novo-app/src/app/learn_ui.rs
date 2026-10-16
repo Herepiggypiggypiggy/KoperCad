@@ -30,6 +30,8 @@ struct Card {
     header: String,
     step_title: String,
     text: String,
+    /// The author's numbered instructions (`how`), with markup.
+    steps: Vec<String>,
     ticked: bool,
     finished: bool,
     can_next: bool,
@@ -151,6 +153,15 @@ impl NovoApp {
             header,
             step_title: step.map(|s| s.title(lang).to_owned()).unwrap_or_default(),
             text: step.map(|s| s.text(lang).to_owned()).unwrap_or_default(),
+            steps: step
+                .map(|s| {
+                    s.how(lang)
+                        .iter()
+                        .enumerate()
+                        .map(|(i, line)| format!("{}. {line}", i + 1))
+                        .collect()
+                })
+                .unwrap_or_default(),
             ticked: run.phase() == Phase::Ticked,
             finished,
             can_next: run.can_advance(),
@@ -210,7 +221,14 @@ impl NovoApp {
                 title
             });
             self.markup(ui, &card.text);
-            if !card.how.is_empty() {
+            if !card.steps.is_empty() {
+                ui.add_space(4.0);
+                section_label(ui, &card.words.how_title);
+                for line in &card.steps {
+                    self.markup(ui, line);
+                }
+            }
+            if card.steps.is_empty() && !card.how.is_empty() {
                 ui.add_space(4.0);
                 section_label(ui, &card.words.how_title);
                 for (line, active) in &card.how {

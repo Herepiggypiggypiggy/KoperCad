@@ -20,6 +20,8 @@ pub const MAX_STEPS: usize = 40;
 pub const MAX_TEXT_CHARS: usize = 500;
 /// Most notes on one step.
 pub const MAX_NOTES: usize = 3;
+/// Instruction lines on one step's card.
+pub const MAX_HOW: usize = 8;
 
 /// The language of the text to show.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -132,6 +134,13 @@ pub struct Step {
     pub text: String,
     #[serde(default)]
     pub text_nl: Option<String>,
+    /// The instructions, one line each, numbered on the card: the keys and
+    /// clicks and why. Same markup as `text` (`{key:..}`, `{ui:..}`).
+    #[serde(default)]
+    pub how: Vec<String>,
+    /// The Dutch lines; as many as `how`, or none.
+    #[serde(default)]
+    pub how_nl: Vec<String>,
     #[serde(default)]
     pub point: Option<Target>,
     #[serde(default)]
@@ -493,6 +502,21 @@ impl Lesson {
             if let Some(nl) = &step.text_nl {
                 markup::parse_markup(nl).map_err(markup_fail)?;
             }
+            if step.how.len() > MAX_HOW {
+                return Err(invalid(
+                    at(&step.id),
+                    format!("at most {MAX_HOW} `how` lines"),
+                ));
+            }
+            if !step.how_nl.is_empty() && step.how_nl.len() != step.how.len() {
+                return Err(invalid(
+                    at(&step.id),
+                    "`how_nl` needs as many lines as `how`, or none",
+                ));
+            }
+            for line in step.how.iter().chain(&step.how_nl) {
+                markup::parse_markup(line).map_err(markup_fail)?;
+            }
             if let Some(point) = &step.point {
                 point.validate().map_err(|why| invalid(at(&step.id), why))?;
             }
@@ -532,6 +556,15 @@ impl Step {
 
     pub fn text(&self, lang: Lang) -> &str {
         pick(&self.text, self.text_nl.as_deref(), lang)
+    }
+
+    /// The instruction lines in the language, English when there is no
+    /// Dutch twin.
+    pub fn how(&self, lang: Lang) -> &[String] {
+        match lang {
+            Lang::Nl if !self.how_nl.is_empty() => &self.how_nl,
+            _ => &self.how,
+        }
     }
 
     /// Whether the card moves on by itself once the check holds.
@@ -608,6 +641,35 @@ pub fn is_id(id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn how_lines_come_in_both_languages_with_markup() {
+        let text = format!(
+            "{GOOD}\n[[step]]\nid = \"x\"\ntitle = \"X\"\ntext = \"x\"\n\
+             how = [\"Press {{key:tool.place}}\", \"Type a name\"]\n\
+             how_nl = [\"Druk op {{key:tool.place}}\", \"Typ een naam\"]\n"
+        );
+        let lesson = Lesson::parse(&text).unwrap();
+        let step = lesson.steps.last().unwrap();
+        assert_eq!(step.how(Lang::En).len(), 2);
+        assert_eq!(step.how(Lang::Nl)[1], "Typ een naam");
+        // Without a Dutch twin the English lines show.
+        let text = text.replace("how_nl", "x_nl");
+        assert!(Lesson::parse(&text).is_err(), "unknown field is refused");
+    }
+
+    #[test]
+    fn how_nl_must_match_how() {
+        let text = format!(
+            "{GOOD}\n[[step]]\nid = \"x\"\ntitle = \"X\"\ntext = \"x\"\nhow = [\"a\", \"b\"]\nhow_nl = [\"a\"]\n"
+        );
+        let err = Lesson::parse(&text).unwrap_err().to_string();
+        assert!(err.contains("how_nl"), "{err}");
+        let text = format!(
+            "{GOOD}\n[[step]]\nid = \"x\"\ntitle = \"X\"\ntext = \"x\"\nhow = [\"{{key:\"]\n"
+        );
+        assert!(Lesson::parse(&text).is_err(), "bad markup in how");
+    }
 
     #[test]
     fn newer_solve_ops_parse() {

@@ -314,7 +314,12 @@ makes it dirty and Ctrl+S keeps the person's own copy. Nothing is ever written t
 | Panels | A faint **Lesson: Terminal strips** link in an empty state, from the lesson's `topics` (the design-system thread owns the widget) |
 | Shortcut sheet (#434) | Links to Learn |
 
-### 6a. `demo`: the demonstration of a step
+### 6a. `how` and `demo`: the instructions and the demonstration of a step
+
+`how = ["Hold {key:tool.place}", "Press 4"]` (with `how_nl` of the same length) are the author's
+numbered instructions on the card: the keys and clicks, and why. Same markup as `text`; at most 8
+lines. When a step has `how`, the card shows them under **How**; when it has none, the card lists the
+actions of the demonstration instead. `demo` below is what **Show me how** plays.
 
 ```toml
 demo = [

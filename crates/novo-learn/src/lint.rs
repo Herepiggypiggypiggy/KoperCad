@@ -233,6 +233,8 @@ fn lint_lesson(
         }
         let mut texts = vec![step.title.as_str(), step.text.as_str()];
         texts.extend(step.note.iter().map(|n| n.text.as_str()));
+        texts.extend(step.how.iter().map(String::as_str));
+        texts.extend(step.how_nl.iter().map(String::as_str));
         for text in texts {
             let Ok(spans) = markup::parse_markup(text) else {
                 continue;
