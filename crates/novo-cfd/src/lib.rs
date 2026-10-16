@@ -10,6 +10,7 @@
 //! (`cabinet.thermal.simulate`). The app side is lane CFD-F.
 
 pub mod result;
+pub mod sched;
 pub mod solver;
 mod stub;
 
