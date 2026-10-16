@@ -33,6 +33,19 @@ fn shipped_projects_have_no_eplan_style_problems() {
         ProblemKind::UnnamedTerminal,
         ProblemKind::DuplicatePage,
         ProblemKind::DanglingJunction,
+        ProblemKind::UnwiredTerminal,
+        ProblemKind::StrayWireEnd,
+        ProblemKind::ContactType,
+        ProblemKind::ContactPosition,
+        ProblemKind::ContactDrawnTwice,
+        ProblemKind::VoltageClassMix,
+        ProblemKind::ConductorContinuity,
+        ProblemKind::MotorPhases,
+        ProblemKind::CoilSupply,
+        ProblemKind::PlugPinOneSided,
+        ProblemKind::TagRule,
+        ProblemKind::DisplayedTag,
+        ProblemKind::StructureCode,
     ];
     let mut loaded = 0;
     let mut bad = Vec::new();

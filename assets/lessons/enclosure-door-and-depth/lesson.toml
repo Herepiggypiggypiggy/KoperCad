@@ -48,11 +48,11 @@ how_nl = ["Klik op een lege plek op de plaat om de selectie te wissen.", "Klik o
 title = "Open Inside and door"
 title_nl = "Open Inside and door"
 text = """
-Click an empty spot on the plate to clear the selection, then click **Plate**. The inspector shows the plate and, below it, the section **Inside and door**.
+Click an empty spot on the plate to clear the selection, then click **Plate setup**. The inspector shows the plate and, below it, the section **Inside and door**.
 Until the inside size is known nothing about depth can be checked, and the section says so: "Set the inside size to see the top view and the checks."
 """
 text_nl = """
-Klik op een lege plek op de plaat om de selectie te wissen en klik dan op **Plate**. De inspector toont de plaat en daaronder het onderdeel **Inside and door**.
+Klik op een lege plek op de plaat om de selectie te wissen en klik dan op **Plate setup**. De inspector toont de plaat en daaronder het onderdeel **Inside and door**.
 Zolang de binnenmaat niet bekend is, kan er niets over diepte worden gecontroleerd en dat zegt het onderdeel ook: "Set the inside size to see the top view and the checks."
 """
 point = { ui = "cabinet.plate" }

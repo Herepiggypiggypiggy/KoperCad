@@ -11,6 +11,7 @@ use crate::cull;
 use crate::look::{Highlight, Look, Rgb, mix};
 use crate::math::Frustum;
 use crate::mesh::{GeometryKey, MeshData, MeshLibrary, profile_mesh, unit_box};
+use crate::overlay::Overlay;
 use crate::scene::{Item, ItemId, ItemKind, Mark, Profile, Scene, Shape};
 use crate::view_state::ViewState;
 use crate::wire;
@@ -99,6 +100,10 @@ pub struct Frame<'a> {
     /// Size of the area the image is shown in, physical pixels.
     pub size_px: (u32, u32),
     pub quality: Quality,
+    /// Geometry drawn over the cabinet (see `overlay`). Uploaded again only
+    /// when `overlay_revision` differs from the one the target last saw.
+    pub overlays: &'a [Overlay],
+    pub overlay_revision: u64,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -139,7 +144,37 @@ struct Globals {
     params: [f32; 4],
     nudge: [f32; 4],
     view_dir: [f32; 4],
+    viewport: [f32; 4],
 }
+
+/// A vertex of an overlay mesh.
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct OverlayVertex {
+    pos: [f32; 3],
+    color: [u8; 4],
+}
+
+/// One segment of an overlay polyline.
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct RibbonSegment {
+    a: [f32; 3],
+    b: [f32; 3],
+    color_a: [u8; 4],
+    color_b: [u8; 4],
+    width: f32,
+}
+
+const OVERLAY_ATTRS: [wgpu::VertexAttribute; 2] =
+    wgpu::vertex_attr_array![0 => Float32x3, 1 => Unorm8x4];
+const RIBBON_ATTRS: [wgpu::VertexAttribute; 5] = wgpu::vertex_attr_array![
+    0 => Float32x3,
+    1 => Float32x3,
+    2 => Unorm8x4,
+    3 => Unorm8x4,
+    4 => Float32,
+];
 
 const VERTEX_ATTRS: [wgpu::VertexAttribute; 2] =
     wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3];
@@ -213,6 +248,97 @@ struct Pipelines {
     faces: wgpu::RenderPipeline,
     faces_blend: wgpu::RenderPipeline,
     edges: wgpu::RenderPipeline,
+    overlay_faces: wgpu::RenderPipeline,
+    overlay_faces_blend: wgpu::RenderPipeline,
+    overlay_ribbons: wgpu::RenderPipeline,
+}
+
+/// An overlay on the GPU.
+enum GpuOverlay {
+    Mesh {
+        vertices: wgpu::Buffer,
+        indices: wgpu::Buffer,
+        index_count: u32,
+        translucent: bool,
+        order: i32,
+    },
+    Lines {
+        segments: wgpu::Buffer,
+        count: u32,
+        order: i32,
+    },
+}
+
+impl GpuOverlay {
+    fn order(&self) -> i32 {
+        match self {
+            GpuOverlay::Mesh { order, .. } | GpuOverlay::Lines { order, .. } => *order,
+        }
+    }
+
+    fn upload(device: &wgpu::Device, overlay: &Overlay) -> Option<Self> {
+        if !overlay.is_valid() {
+            return None;
+        }
+        let buf = |data: &[u8], usage, label: &str| {
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some(label),
+                contents: data,
+                usage,
+            })
+        };
+        match overlay {
+            Overlay::Mesh(m) if !m.indices.is_empty() => {
+                let vertices: Vec<OverlayVertex> = m
+                    .positions
+                    .iter()
+                    .zip(&m.colors)
+                    .map(|(p, &color)| OverlayVertex {
+                        pos: p.to_array(),
+                        color,
+                    })
+                    .collect();
+                Some(GpuOverlay::Mesh {
+                    vertices: buf(
+                        bytemuck::cast_slice(&vertices),
+                        wgpu::BufferUsages::VERTEX,
+                        "novo_view3d_overlay_vertices",
+                    ),
+                    indices: buf(
+                        bytemuck::cast_slice(&m.indices),
+                        wgpu::BufferUsages::INDEX,
+                        "novo_view3d_overlay_indices",
+                    ),
+                    index_count: m.indices.len() as u32,
+                    translucent: m.translucent,
+                    order: m.order,
+                })
+            }
+            Overlay::Lines(l) => {
+                let segments: Vec<RibbonSegment> = l
+                    .segments()
+                    .into_iter()
+                    .map(|(a, b)| RibbonSegment {
+                        a: l.positions[a as usize].to_array(),
+                        b: l.positions[b as usize].to_array(),
+                        color_a: l.colors[a as usize],
+                        color_b: l.colors[b as usize],
+                        width: l.width_px.max(0.5),
+                    })
+                    .collect();
+                (!segments.is_empty()).then(|| GpuOverlay::Lines {
+                    count: segments.len() as u32,
+                    segments: buf(
+                        bytemuck::cast_slice(&segments),
+                        wgpu::BufferUsages::VERTEX,
+                        "novo_view3d_overlay_segments",
+                    ),
+                    order: l.order,
+                })
+            }
+            Overlay::Mesh(_) => None,
+        }
+    }
 }
 
 /// Shared by every view: pipelines and the mesh cache.
@@ -237,6 +363,8 @@ pub struct ViewTarget {
     globals_bind: wgpu::BindGroup,
     instances: wgpu::Buffer,
     instance_capacity: u64,
+    overlays: Vec<GpuOverlay>,
+    overlay_revision: Option<u64>,
     /// Bumped each time the colour texture is recreated; the blitter rebinds.
     pub(crate) generation: u64,
 }
@@ -269,6 +397,8 @@ impl ViewTarget {
             globals_bind,
             instances: instance_buffer(device, instance_capacity),
             instance_capacity,
+            overlays: Vec::new(),
+            overlay_revision: None,
             generation: 0,
         }
     }
@@ -419,6 +549,16 @@ fn pipelines(
         })
     };
     let buffers = [Some(vertex_layout), Some(instance_layout)];
+    let overlay_layout = [Some(wgpu::VertexBufferLayout {
+        array_stride: size_of::<OverlayVertex>() as u64,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &OVERLAY_ATTRS,
+    })];
+    let ribbon_layout = [Some(wgpu::VertexBufferLayout {
+        array_stride: size_of::<RibbonSegment>() as u64,
+        step_mode: wgpu::VertexStepMode::Instance,
+        attributes: &RIBBON_ATTRS,
+    })];
     Pipelines {
         background: make(
             "novo_view3d_background",
@@ -458,6 +598,36 @@ fn pipelines(
             wgpu::PrimitiveTopology::LineList,
             None,
             depth(false, wgpu::CompareFunction::GreaterEqual),
+            Some(wgpu::BlendState::ALPHA_BLENDING),
+        ),
+        overlay_faces: make(
+            "novo_view3d_overlay_faces",
+            "vs_overlay",
+            "fs_overlay",
+            &overlay_layout,
+            wgpu::PrimitiveTopology::TriangleList,
+            None,
+            depth(true, wgpu::CompareFunction::Greater),
+            None,
+        ),
+        overlay_faces_blend: make(
+            "novo_view3d_overlay_faces_blend",
+            "vs_overlay",
+            "fs_overlay",
+            &overlay_layout,
+            wgpu::PrimitiveTopology::TriangleList,
+            None,
+            depth(false, wgpu::CompareFunction::Greater),
+            Some(wgpu::BlendState::ALPHA_BLENDING),
+        ),
+        overlay_ribbons: make(
+            "novo_view3d_overlay_ribbons",
+            "vs_ribbon",
+            "fs_ribbon",
+            &ribbon_layout,
+            wgpu::PrimitiveTopology::TriangleList,
+            None,
+            depth(false, wgpu::CompareFunction::Greater),
             Some(wgpu::BlendState::ALPHA_BLENDING),
         ),
     }
@@ -653,6 +823,16 @@ impl Renderer {
             self.mesh(device, *key, frame.library);
         }
 
+        if target.overlay_revision != Some(frame.overlay_revision) {
+            target.overlays = frame
+                .overlays
+                .iter()
+                .filter_map(|o| GpuOverlay::upload(device, o))
+                .collect();
+            target.overlays.sort_by_key(GpuOverlay::order);
+            target.overlay_revision = Some(frame.overlay_revision);
+        }
+
         let need = (data.len().max(1) * size_of::<Instance>()) as u64;
         if need > target.instance_capacity {
             target.instance_capacity = need.next_power_of_two();
@@ -692,6 +872,7 @@ impl Renderer {
                 [0.0015, 0.0, 0.0, 0.0]
             },
             view_dir: fwd.extend(0.0).to_array(),
+            viewport: [size.0 as f32, size.1 as f32, 0.0, 0.0],
         };
         queue.write_buffer(&target.globals, 0, bytemuck::bytes_of(&globals));
 
@@ -769,13 +950,63 @@ impl Renderer {
             pass.set_pipeline(&pipes.edges);
             draw_set(&mut pass, opaque_set, true);
         }
+        // Opaque overlays write depth like the scene.
+        let (mut overlay_calls, mut overlay_tris) = (0u32, 0u64);
+        for overlay in &target.overlays {
+            if let GpuOverlay::Mesh {
+                vertices,
+                indices,
+                index_count,
+                translucent: false,
+                ..
+            } = overlay
+            {
+                pass.set_pipeline(&pipes.overlay_faces);
+                pass.set_vertex_buffer(0, vertices.slice(..));
+                pass.set_index_buffer(indices.slice(..), wgpu::IndexFormat::Uint32);
+                pass.draw_indexed(0..*index_count, 0, 0..1);
+                overlay_calls += 1;
+                overlay_tris += u64::from(*index_count / 3);
+            }
+        }
         pass.set_pipeline(&pipes.faces_blend);
         draw_set(&mut pass, blended_set, false);
         if edges_on {
             pass.set_pipeline(&pipes.edges);
             draw_set(&mut pass, blended_set, true);
         }
+        // Translucent overlay meshes and ribbons, low order first.
+        for overlay in &target.overlays {
+            match overlay {
+                GpuOverlay::Mesh {
+                    vertices,
+                    indices,
+                    index_count,
+                    translucent: true,
+                    ..
+                } => {
+                    pass.set_pipeline(&pipes.overlay_faces_blend);
+                    pass.set_vertex_buffer(0, vertices.slice(..));
+                    pass.set_index_buffer(indices.slice(..), wgpu::IndexFormat::Uint32);
+                    pass.draw_indexed(0..*index_count, 0, 0..1);
+                    overlay_calls += 1;
+                    overlay_tris += u64::from(*index_count / 3);
+                }
+                GpuOverlay::Lines {
+                    segments, count, ..
+                } => {
+                    pass.set_pipeline(&pipes.overlay_ribbons);
+                    pass.set_vertex_buffer(0, segments.slice(..));
+                    pass.draw(0..6, 0..*count);
+                    overlay_calls += 1;
+                    overlay_tris += u64::from(*count) * 2;
+                }
+                GpuOverlay::Mesh { .. } => {}
+            }
+        }
         drop(pass);
+        stats.draw_calls += overlay_calls;
+        stats.triangles += overlay_tris;
 
         stats.cpu_ms = started.elapsed().as_secs_f32() * 1000.0;
         stats

@@ -88,3 +88,28 @@ pub(super) fn pill(ui: &mut egui::Ui, text: &str, level: Option<novo_theme::widg
             ui.label(egui::RichText::new(text).size(12.0).color(color));
         });
 }
+
+/// A bar control a lesson may point at; reported to the learning layer once
+/// the frame has released its borrow of the project.
+pub(super) struct Anchor {
+    pub(super) id: &'static str,
+    pub(super) label: &'static str,
+    pub(super) rect: egui::Rect,
+    pub(super) clicked: bool,
+}
+
+/// Remembers `response` as the anchor `id` and hands it back.
+pub(super) fn note(
+    anchors: &mut Vec<Anchor>,
+    id: &'static str,
+    label: &'static str,
+    response: &egui::Response,
+) -> egui::Response {
+    anchors.push(Anchor {
+        id,
+        label,
+        rect: response.rect,
+        clicked: response.clicked(),
+    });
+    response.clone()
+}
