@@ -43,6 +43,15 @@ pub const DUTCH: &[Aliases] = &[
         &["rondleiding", "snelle toetsen uitleg"],
     ),
     nl(
+        "view.reset_panels",
+        &[],
+        &[
+            "vensters herstellen",
+            "indeling herstellen",
+            "panelen resetten",
+        ],
+    ),
+    nl(
         "help.show_hints",
         &[],
         &["hints opnieuw tonen", "tips opnieuw", "hints"],
@@ -82,6 +91,26 @@ pub const DUTCH: &[Aliases] = &[
         "parts.import_step",
         &["importeer 3d-model"],
         &["3d-model", "step", "stp"],
+    ),
+    nl(
+        "parts.import_folder",
+        &["importeer onderdelen", "importeer catalogus"],
+        &["catalogus", "bmecat", "inbox", "map", "fabrikant"],
+    ),
+    nl(
+        "parts.auto_assign",
+        &["wijs onderdelen toe"],
+        &["automatisch", "artikelen toewijzen", "voorstellen"],
+    ),
+    nl(
+        "parts.clear",
+        &["onderdeel verwijderen"],
+        &["artikel wissen", "ontkoppelen"],
+    ),
+    nl(
+        "parts.remove_unused",
+        &["ongebruikte onderdelen"],
+        &["opruimen", "ongebruikt", "artikelen opruimen"],
     ),
     nl("project.standard", &["tekennorm"], &["norm", "standaard"]),
     nl(
@@ -330,7 +359,12 @@ pub const DUTCH: &[Aliases] = &[
     nl(
         "sim.live",
         &[],
-        &["live potentialen tonen", "contacten sluiten", "spanning"],
+        &[
+            "simuleer live potentialen",
+            "live potentialen tonen",
+            "contacten sluiten",
+            "spanning",
+        ],
     ),
     nl(
         "sim.plc_program",
@@ -454,6 +488,11 @@ pub const DUTCH: &[Aliases] = &[
         "export.standards_report",
         &["exporteer normenrapport", "normenrapport exporteren"],
         &["conformiteitsrapport", "normen pdf"],
+    ),
+    nl(
+        "export.standards_xlsx",
+        &["exporteer normenrapport excel", "normenrapport excel"],
+        &["conformiteitsrapport excel", "normen spreadsheet"],
     ),
     nl(
         "export.plate",

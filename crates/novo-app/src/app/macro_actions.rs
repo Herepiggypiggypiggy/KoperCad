@@ -420,9 +420,8 @@ impl NovoApp {
         let can_place = page.is_some();
         let win = &mut self.wb.macro_place;
         let entries = win.entries();
-        let window = egui::Window::new("Place macro")
+        let window = super::panel::dialog(ctx, "Place macro", [420.0, 440.0])
             .open(&mut open)
-            .default_size([420.0, 440.0])
             .show(ctx, |ui| {
                 ui.add(
                     egui::TextEdit::singleline(&mut win.query)

@@ -240,6 +240,24 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "parts.import_folder",
+            "Import parts from a folder",
+            "Project",
+            &[
+                "bulk",
+                "catalog",
+                "bmecat",
+                "csv",
+                "inbox",
+                "maker",
+                "parts import",
+            ],
+            Needs::Nothing,
+        ),
+        &["import parts", "import catalog"],
+    ),
+    verb(
+        cmd(
             "parts.import_step",
             "Import 3D model (STEP)",
             "Project",
@@ -600,6 +618,30 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Edit",
         &["tag", "edit tag"],
         Needs::Device,
+    ),
+    verb(
+        cmd(
+            "parts.auto_assign",
+            "Assign parts to all devices",
+            "Edit",
+            &["auto assign", "propose", "catalog", "part", "fill"],
+            Needs::Project,
+        ),
+        &["assign parts", "auto assign parts"],
+    ),
+    cmd(
+        "parts.clear",
+        "Remove parts from selected devices",
+        "Edit",
+        &["clear part", "unassign", "article"],
+        Needs::Selection,
+    ),
+    cmd(
+        "parts.remove_unused",
+        "Remove unused parts",
+        "Edit",
+        &["unused", "clean up", "purge", "article"],
+        Needs::Project,
     ),
     with_arguments(
         verb(
@@ -1075,14 +1117,14 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     cmd(
         "sim.live",
-        "Show live potentials",
+        "Simulate live potentials",
         "View",
         &["simulate", "contacts", "close", "energized", "try"],
         Needs::Page,
     ),
     cmd(
         "sim.plc_program",
-        "PLC program",
+        "Simulate PLC program",
         "View",
         &[
             "plc",
@@ -1095,7 +1137,7 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     cmd(
         "sim.faults",
-        "Fault scenarios",
+        "Simulate fault scenarios",
         "View",
         &[
             "short circuit",
@@ -1122,6 +1164,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Show hints again",
         "View",
         &["hints", "tips", "reset", "help"],
+        Needs::Nothing,
+    ),
+    cmd(
+        "view.reset_panels",
+        "Reset panel layout",
+        "View",
+        &["panels", "windows", "layout", "reset", "position", "size"],
         Needs::Nothing,
     ),
     cmd(
@@ -1464,6 +1513,23 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export standards", "standards report"],
+    ),
+    verb(
+        cmd(
+            "export.standards_xlsx",
+            "Export standards compliance report (Excel)",
+            "Export",
+            &[
+                "compliance",
+                "spreadsheet",
+                "xlsx",
+                "csv",
+                "iec 60204",
+                "ul 508a",
+            ],
+            Needs::Project,
+        ),
+        &["export standards excel"],
     ),
     verb(
         cmd(

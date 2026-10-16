@@ -334,3 +334,24 @@ fn the_shadows_command_toggles_the_views_shadows() {
     d.frame();
     assert!(d.app.view3d.view.state.display.shadows);
 }
+
+#[test]
+fn simulate_runs_from_the_3d_view_without_leaving_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    assert!(d.app.cabinet.heat.solution().is_none());
+    d.app.run_command(&ctx, "heat.simulate", None);
+    assert_eq!(d.app.workspace(), Workspace::View3d, "Simulate stays here");
+    for _ in 0..400 {
+        d.frame();
+        if d.app.cabinet.heat.solution().is_some() && !d.app.cabinet.heat.running() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(
+        d.app.cabinet.heat.solution().is_some(),
+        "the run published a result to the 3D view"
+    );
+}

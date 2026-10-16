@@ -172,6 +172,10 @@ pub(crate) struct Workbench {
     pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
     /// An AutomationML import waiting for the person to confirm.
     pub(super) aml_import: Option<super::interop::AmlImport>,
+    /// The result of a parts bulk import, until closed.
+    pub(super) parts_bulk: Option<super::parts_bulk::BulkReport>,
+    /// Part proposals waiting for Accept all or Cancel.
+    pub(super) auto_assign: Option<super::parts_bulk::AutoAssignPreview>,
     /// An EPLAN (PXF) import waiting for the person to confirm.
     pub(super) eplan_import: Option<super::eplan_import::EplanImport>,
     /// The "Get the EPLAN export script" guide, open after the files are
@@ -257,6 +261,8 @@ impl Default for Workbench {
             commissioning: None,
             underlay_seen: None,
             aml_import: None,
+            parts_bulk: None,
+            auto_assign: None,
             eplan_import: None,
             eplan_guide: None,
             dwg_job: None,
@@ -279,7 +285,7 @@ const EDITOR_KEYS: &[&str] = &[
 
 /// Commands the app runs besides the shell actions (`Action`) and the
 /// favourites; the command field shows the rest as "Comes later".
-const APP_COMMANDS: &[&str] = &[
+pub(super) const APP_COMMANDS: &[&str] = &[
     "tool.place",
     "tool.repeat",
     "tool.connect",
@@ -327,6 +333,7 @@ const APP_COMMANDS: &[&str] = &[
     "export.change_report",
     "export.commissioning",
     "export.standards_report",
+    "export.standards_xlsx",
     "export.plate",
     "export.assembly",
     "export.sheets",
@@ -390,8 +397,13 @@ const APP_COMMANDS: &[&str] = &[
     "app.preferences",
     "view.shortcuts",
     "help.show_hints",
+    "view.reset_panels",
     "parts.browser",
     "parts.import_step",
+    "parts.import_folder",
+    "parts.auto_assign",
+    "parts.clear",
+    "parts.remove_unused",
     "project.standard",
     "macro.browser",
     "macro.import",
@@ -674,8 +686,11 @@ impl NovoApp {
             "heat.toggle" | "heat.airflow" | "heat.contours" | "heat.simulate"
                 if self.is_open() =>
             {
-                self.switch_workspace(Workspace::Cabinet);
-                self.cabinet.table = false;
+                // Simulate stays in the 3D view when it is the one open.
+                if !(id == "heat.simulate" && self.workspace() == Workspace::View3d) {
+                    self.switch_workspace(Workspace::Cabinet);
+                    self.cabinet.table = false;
+                }
                 self.cabinet.heat.command(id);
             }
             "tool.place" => match argument.filter(|a| !a.trim().is_empty()) {
@@ -803,8 +818,22 @@ impl NovoApp {
             "export.reports" => {
                 self.export_all_reports();
             }
-            "sim.live" => self.toggle_live(),
-            "sim.plc_program" => self.open_plc_program(),
+            "sim.live" | "sim.plc_program" => {
+                // The live view and the PLC window draw only over the
+                // schematic: go there first so the command is not silent.
+                if self.workspace() != Workspace::Schematic && self.is_open() {
+                    self.switch_workspace(Workspace::Schematic);
+                    self.message(
+                        Level::Info,
+                        "Simulation runs on the schematic: switched to it",
+                    );
+                }
+                if id == "sim.live" {
+                    self.toggle_live();
+                } else {
+                    self.open_plc_program();
+                }
+            }
             _ if super::reports_view::REPORT_COMMANDS
                 .iter()
                 .any(|(c, _)| *c == id) =>
@@ -825,7 +854,17 @@ impl NovoApp {
             "check.problems" => self.show_issues(false),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),
-            "edit.properties" => {
+            "edit.escape" => {
+                // The same ladder Esc climbs on the drawing: the step in
+                // progress, then the tool, then the selection.
+                if let Some(view) = self.canvas.schematic()
+                    && !view.editor.cancel_step()
+                    && !view.editor.leave_tool()
+                {
+                    view.canvas.selection.clear();
+                }
+            }
+            "edit.properties" | "edit.rename" => {
                 // The inspector shows with the selection; the cursor goes in
                 // its tag.
                 let selection = self.selection();
@@ -854,6 +893,9 @@ impl NovoApp {
             "export.commissioning" => self.export_commissioning_pdf(),
             "export.standards_report" => {
                 self.export_standards_report(StandardsFormat::Pdf);
+            }
+            "export.standards_xlsx" => {
+                self.export_standards_report(StandardsFormat::Excel);
             }
             "export.plate" => {
                 self.export_plate_pdf();
@@ -936,8 +978,13 @@ impl NovoApp {
             "app.preferences" => self.wb.preferences = true,
             "view.shortcuts" => self.toggle_shortcuts(),
             "help.show_hints" => self.show_hints_again(),
+            "view.reset_panels" => super::panel::reset_layout(ctx),
             "parts.browser" => self.open_parts_browser(),
             "parts.import_step" => self.import_part_model(),
+            "parts.import_folder" => self.import_parts_folder(),
+            "parts.auto_assign" => self.start_auto_assign(),
+            "parts.clear" => self.clear_selected_parts(),
+            "parts.remove_unused" => self.remove_unused_project_parts(),
             "project.standard" => self.wb.project_settings = true,
             "macro.browser" => self.wb.macros.show(),
             "macro.import" => self.macro_import(),

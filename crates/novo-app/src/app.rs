@@ -42,6 +42,7 @@ mod heat_progress_tests;
 mod heat_run;
 #[cfg(test)]
 mod heat_run_tests;
+mod heat_settings;
 mod inspector;
 mod interop;
 mod learn;
@@ -66,8 +67,10 @@ mod onboarding;
 mod outline;
 mod outline_tree;
 mod pages;
+mod panel;
 mod part_picker;
 mod parts;
+mod parts_bulk;
 mod parts_import;
 mod parts_quality;
 mod pdf;
@@ -100,6 +103,7 @@ mod userkeymap;
 mod variants;
 mod view3d;
 mod view3d_controls;
+mod view3d_heat;
 mod view3d_move;
 #[cfg(test)]
 mod view3d_move_tests;
@@ -1020,6 +1024,8 @@ impl NovoApp {
         self.background_panel(&ctx);
         self.bench_window(&ctx);
         self.parts_window(&ctx);
+        self.parts_bulk_dialog(&ctx);
+        self.auto_assign_dialog(&ctx);
         self.project_settings_dialog(&ctx);
         self.macro_browser_window(&ctx);
         self.macro_save_dialog(&ctx);
@@ -1425,6 +1431,7 @@ impl NovoApp {
                 ))
             })
             .inner;
+        self.anchor_response("outline.toggle", &toggle, "Pages button");
         if toggle.clicked() {
             self.outline_open ^= true;
         }
