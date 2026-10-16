@@ -868,6 +868,19 @@ impl Renderer {
         let scene = frame.scene;
         let aspect = size.0 as f32 / size.1 as f32;
         let bounds = scene.bounds();
+        let l = Vec3::from(look.light).normalize_or_zero();
+        // Soft shadows: an orthographic depth map from the key light over the
+        // whole scene, redrawn only when what casts shadows changes. The
+        // casters do not depend on the camera.
+        let shadow_on = frame.quality.shadows && frame.state.display.shadows && l != Vec3::ZERO;
+        let light_vp = if shadow_on {
+            shadow_matrix(&bounds, l)
+        } else {
+            Mat4::IDENTITY
+        };
+        let skey = shadow_key(scene, frame.state, &light_vp);
+        let build_shadow =
+            shadow_on && (target.shadow_size != SHADOW_MAP_SIZE || target.shadow_key != Some(skey));
         let view_proj = frame.camera.view_proj(aspect, &bounds);
         let eye = frame.camera.eye();
         let (_, _, fwd) = frame.camera.basis();
@@ -977,8 +990,60 @@ impl Renderer {
             draws.push((*key, start..start + 1));
         }
 
+        // Shadow casters: every opaque item and wire on a visible layer, at a
+        // coarse level of detail, whatever the camera sees.
+        let mut shadow_draws: Vec<(MeshKey, std::ops::Range<u32>)> = Vec::new();
+        if build_shadow {
+            let mut casters: BTreeMap<MeshKey, Vec<Instance>> = BTreeMap::new();
+            let caster = |rows: [[f32; 4]; 3], scale: [f32; 3]| Instance {
+                rows,
+                scale,
+                color: [0; 4],
+                edge: [0; 4],
+                spec: [0; 4],
+            };
+            for item in &scene.items {
+                if item.translucent || !frame.state.is_visible(item.id.kind) {
+                    continue;
+                }
+                let Some((key, scale)) = self.resolve(item, frame.library, SHADOW_LOD_PX) else {
+                    continue;
+                };
+                let world = scene.world_matrix(item);
+                casters.entry(key).or_default().push(caster(
+                    [
+                        world.row(0).to_array(),
+                        world.row(1).to_array(),
+                        world.row(2).to_array(),
+                    ],
+                    scale.to_array(),
+                ));
+            }
+            if frame.state.is_visible(ItemKind::Wire) {
+                for wire in &scene.wires {
+                    let r = wire.radius.max(0.25);
+                    for seg in wire::segments(wire) {
+                        let m = seg.frame();
+                        casters.entry(MeshKey::Cube).or_default().push(caster(
+                            [
+                                m.row(0).to_array(),
+                                m.row(1).to_array(),
+                                m.row(2).to_array(),
+                            ],
+                            [2.0 * r, 2.0 * r, seg.length()],
+                        ));
+                    }
+                }
+            }
+            for (key, list) in casters {
+                let start = data.len() as u32;
+                data.extend_from_slice(&list);
+                shadow_draws.push((key, start..data.len() as u32));
+            }
+        }
+
         // Make sure every mesh exists before recording (borrow rules).
-        for (key, _) in &draws {
+        for (key, _) in draws.iter().chain(&shadow_draws) {
             self.mesh(device, *key, frame.library);
         }
 
@@ -1008,15 +1073,6 @@ impl Renderer {
                 c[2] as f32 / 255.0,
                 1.0,
             ]
-        };
-        let l = Vec3::from(look.light).normalize_or_zero();
-        // Soft shadows: an orthographic depth map from the key light over the
-        // whole scene, redrawn only when what casts shadows changes.
-        let shadow_on = frame.quality.shadows && frame.state.display.shadows && l != Vec3::ZERO;
-        let light_vp = if shadow_on {
-            shadow_matrix(&bounds, l)
-        } else {
-            Mat4::IDENTITY
         };
         let globals = Globals {
             view_proj: view_proj.to_cols_array_2d(),
@@ -1058,9 +1114,8 @@ impl Renderer {
                 target.globals_bind =
                     globals_bind(device, self, &target.globals, &target.shadow_view);
             }
-            let key = shadow_key(scene, frame.state, visible.len(), &light_vp);
-            if target.shadow_key != Some(key) {
-                target.shadow_key = Some(key);
+            if build_shadow {
+                target.shadow_key = Some(skey);
                 let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("novo_view3d_shadow"),
                     color_attachments: &[],
@@ -1076,7 +1131,7 @@ impl Renderer {
                 });
                 pass.set_pipeline(&self.shadow_pipeline);
                 pass.set_bind_group(0, &target.shadow_bind, &[]);
-                for (key, range) in &draws[..opaque_draws] {
+                for (key, range) in &shadow_draws {
                     let mesh = &self.meshes[key];
                     pass.set_vertex_buffer(0, mesh.vertices.slice(..));
                     pass.set_vertex_buffer(1, target.instances.slice(..));
@@ -1267,6 +1322,8 @@ impl Renderer {
 
 /// Strength of the key light's shadow on the surfaces it falls on, 0 to 1.
 const SHADOW_STRENGTH: f32 = 0.85;
+/// Size on screen the shadow casters are drawn at (picks a coarse mesh).
+const SHADOW_LOD_PX: f32 = 64.0;
 /// Depth bias of the shadow test, in the map's 0..1 depth.
 const SHADOW_BIAS: f32 = 0.0015;
 
@@ -1284,12 +1341,12 @@ fn shadow_matrix(bounds: &crate::math::Aabb, toward_light: Vec3) -> Mat4 {
     Mat4::orthographic_rh(-r, r, -r, r, r * 0.5, r * 3.5) * view
 }
 
-/// What the shadow map depends on: the scene, which layers are on, how many
-/// items are in view and the light.
-fn shadow_key(scene: &Scene, state: &ViewState, visible: usize, light_vp: &Mat4) -> u64 {
+/// What the shadow map depends on: the scene, which layers are on and the
+/// light. Not the camera.
+fn shadow_key(scene: &Scene, state: &ViewState, light_vp: &Mat4) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
-    (scene.revision, scene.pose_revision, visible).hash(&mut h);
+    (scene.revision, scene.pose_revision).hash(&mut h);
     for g in &scene.groups {
         g.angle.to_bits().hash(&mut h);
     }
