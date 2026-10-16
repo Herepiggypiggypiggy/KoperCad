@@ -11,7 +11,7 @@
 format = 1
 id = "cabinet-layout"
 version = 2
-status = "early"
+status = "ready"
 title = "Lay out the mounting plate"
 title_nl = "De montageplaat indelen"
 summary = "Drag devices onto the plate, turn one, read an overlap, undo it and let Place all fill the plate by the rules."

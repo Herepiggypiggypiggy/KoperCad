@@ -10,7 +10,7 @@
 format = 1
 id = "rails-and-ducts"
 version = 2
-status = "early"
+status = "ready"
 title = "Rails and wiring ducts"
 title_nl = "Rails en bedradingskanalen"
 summary = "See how devices sit on DIN rails, why Place all lays ducts beside the rows, and how many bars of rail and duct to buy."

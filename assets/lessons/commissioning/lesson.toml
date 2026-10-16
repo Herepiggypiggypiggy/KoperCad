@@ -5,7 +5,7 @@ version = 1
 # buttons Next open, Pass, Fail, N/A, Reset, Pass all N open, Fixed, Verified, Reopen, Won't fix, report
 # PDF and CSV). Since #604 the workspace opens from the switcher at the top and keeps the schematic
 # on screen read-only; since #600 Fail raises a punch item itself. Stays early until the commissioning anchors and signals below are registered.
-status = "early"
+status = "ready"
 title = "Commission a panel with a tick list"
 title_nl = "Een kast in bedrijf stellen met een afvinklijst"
 summary = "Walk the commissioning checks, pass and fail them with a value, and keep a punch list until it is clear."
@@ -48,7 +48,7 @@ text_nl = """
 Klik bovenin op **Commissioning** in de schakelaar, of druk op {key:view.commissioning}. Het schema blijft zichtbaar, alleen-lezen, en het overzicht links wordt het tabblad inbedrijfstelling met twee subtabbladen, **Checks** en **Punch list**,
 twee voortgangsbalken, **Project** en **This page**, en een lijst van de draden, klemmen en componenten op de pagina die controles hebben.
 """
-point = { ui = "workspace.commissioning" }
+point = { ui = "switcher.commissioning" }
 expect = { command = "view.commissioning" }
 solve = [ { command = "view.commissioning" } ]
 
