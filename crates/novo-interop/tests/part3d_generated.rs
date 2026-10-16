@@ -269,3 +269,15 @@ fn a_duct_is_an_open_channel_whose_fingers_are_cut_down_to_the_floor() {
     let n = (volume(&solid) - volume(&comb)) / (5.0 * 2.0 * 2.0 * 58.0);
     assert!((n - 19.0).abs() < 0.01, "19 slots, got {n}");
 }
+
+#[test]
+fn building_the_same_part_twice_gives_the_same_levels() {
+    let step = cylinder_step(5.0, 20.0);
+    let cancel = AtomicBool::new(false);
+    let first = geometry_from_step(step.as_bytes(), None, Quality::Normal, &cancel, None).unwrap();
+    for run in 0..30 {
+        let again =
+            geometry_from_step(step.as_bytes(), None, Quality::Normal, &cancel, None).unwrap();
+        assert_eq!(first, again, "run {run}");
+    }
+}
