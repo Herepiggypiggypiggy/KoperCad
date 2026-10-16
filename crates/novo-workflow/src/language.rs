@@ -92,6 +92,26 @@ pub const DUTCH: &[Aliases] = &[
         &["importeer 3d-model"],
         &["3d-model", "step", "stp"],
     ),
+    nl(
+        "parts.import_folder",
+        &["importeer onderdelen", "importeer catalogus"],
+        &["catalogus", "bmecat", "inbox", "map", "fabrikant"],
+    ),
+    nl(
+        "parts.auto_assign",
+        &["wijs onderdelen toe"],
+        &["automatisch", "artikelen toewijzen", "voorstellen"],
+    ),
+    nl(
+        "parts.clear",
+        &["onderdeel verwijderen"],
+        &["artikel wissen", "ontkoppelen"],
+    ),
+    nl(
+        "parts.remove_unused",
+        &["ongebruikte onderdelen"],
+        &["opruimen", "ongebruikt", "artikelen opruimen"],
+    ),
     nl("project.standard", &["tekennorm"], &["norm", "standaard"]),
     nl(
         "project.options",

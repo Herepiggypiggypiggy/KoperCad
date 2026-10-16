@@ -17,7 +17,8 @@ use novo_interop::part3d::{Fallback, MeshOrigin, Quality};
 use novo_parts::{
     Catalog, CatalogPart, ConnectionKind, DataSource, FileKind, ImportFlow, Lifecycle,
     LocalLibrary, PartKey, RowAction, Side, SourceRecord, SourceTable, browser_rows,
-    default_downloads_dir, display_value, is_internal_key, property_label, user_catalog_path,
+    default_downloads_dir, default_inbox, default_library_root, display_value, is_internal_key,
+    maker_guide, property_label, user_catalog_path,
 };
 
 use super::parts_import::{Import, Phase, import_path};
@@ -47,6 +48,72 @@ pub(crate) struct PartsWindow {
     geometry: Option<GeometryService>,
     /// The Quality tab (completeness of the catalog).
     quality: super::parts_quality::QualityTab,
+    /// The New part form, while open.
+    new_part: Option<NewPartForm>,
+    /// The maker guide (what to download, where to save), while open.
+    guide: bool,
+}
+
+/// The fields of the New part form.
+#[derive(Default)]
+struct NewPartForm {
+    maker: String,
+    order_number: String,
+    type_number: String,
+    description: String,
+    /// Letter codes, comma separated (`K, Q`).
+    letter_codes: String,
+    width: String,
+    height: String,
+    depth: String,
+    error: Option<String>,
+}
+
+impl NewPartForm {
+    /// The part the form describes, or what is missing.
+    fn build(&self) -> Result<CatalogPart, String> {
+        let (maker, order) = (self.maker.trim(), self.order_number.trim());
+        if maker.is_empty() || order.is_empty() {
+            return Err("Maker and order number are required".into());
+        }
+        let mut part = CatalogPart::new(maker, order);
+        part.type_number = self.type_number.trim().to_owned();
+        part.description = self.description.trim().to_owned();
+        part.letter_codes = self
+            .letter_codes
+            .split([',', ';', ' '])
+            .map(str::trim)
+            .filter(|c| !c.is_empty())
+            .map(str::to_uppercase)
+            .collect();
+        let size = |text: &str, name: &str| -> Result<Option<f64>, String> {
+            let t = text.trim().replace(',', ".");
+            if t.is_empty() {
+                return Ok(None);
+            }
+            match t.parse::<f64>() {
+                Ok(v) if v > 0.0 && v.is_finite() => Ok(Some(v)),
+                _ => Err(format!("{name} must be a positive number in mm")),
+            }
+        };
+        let dims = (
+            size(&self.width, "Width")?,
+            size(&self.height, "Height")?,
+            size(&self.depth, "Depth")?,
+        );
+        match dims {
+            (None, None, None) => {}
+            (Some(width_mm), Some(height_mm), Some(depth_mm)) => {
+                part.dimensions = Some(novo_parts::Dimensions {
+                    width_mm,
+                    height_mm,
+                    depth_mm,
+                });
+            }
+            _ => return Err("Give width, height and depth together, or none".into()),
+        }
+        Ok(part)
+    }
 }
 
 impl PartsWindow {
@@ -69,12 +136,58 @@ impl PartsWindow {
             focus_search: true,
             geometry: None,
             quality: Default::default(),
+            new_part: None,
+            guide: false,
         }
+    }
+
+    /// Swaps in a catalog read again from disk, keeping the selection when
+    /// the part is still there.
+    pub(super) fn set_catalog(&mut self, catalog: Catalog) {
+        self.catalog = catalog;
+        if self
+            .selected
+            .as_ref()
+            .is_some_and(|k| self.catalog.get(k).is_none())
+        {
+            self.selected = None;
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_catalog_path_for_test(&mut self, path: PathBuf) {
+        self.catalog_path = Some(path);
+    }
+
+    /// Saves a hand-made part into the user's catalog and the open list.
+    pub(super) fn add_user_part(&mut self, part: CatalogPart) -> Result<(), String> {
+        let path = self
+            .catalog_path
+            .clone()
+            .ok_or("No profile folder is known, so there is nowhere to save the part")?;
+        const TAKEN: &str = "This maker and order number is already in the catalog (select it in the list to edit it)";
+        if self.catalog.get(&part.key()).is_some() {
+            return Err(TAKEN.into());
+        }
+        let mut user = if path.exists() {
+            Catalog::load(&path).map_err(|e| e.to_string())?
+        } else {
+            Catalog::new()
+        };
+        if user.get(&part.key()).is_some() {
+            return Err(TAKEN.into());
+        }
+        user.upsert(part.clone());
+        user.save(&path).map_err(|e| e.to_string())?;
+        let key = part.key();
+        self.catalog.upsert(part);
+        self.selected = Some(key);
+        Ok(())
     }
 
     /// The part a dropped or picked file belongs to: the one being
     /// imported, else the selected one.
-    fn target(&self) -> Option<CatalogPart> {
+    pub(super) fn target(&self) -> Option<CatalogPart> {
         let key = self
             .import
             .as_ref()
@@ -465,6 +578,13 @@ enum PartsAction {
     Remove(PartKey),
     /// Give the selected devices this part.
     UseForSelection(PartKey),
+    /// Pick catalog files (BMEcat, CSV, ZIP) and import them as a catalog.
+    ImportCatalogFiles,
+    /// Import everything in the default inbox.
+    ImportInbox,
+    OpenInbox,
+    OpenLibrary,
+    NewPart,
     Close,
 }
 
@@ -537,8 +657,23 @@ impl NovoApp {
                 .filter(|p| !p.as_os_str().is_empty())
                 .collect()
         });
-        if let Some(path) = dropped.first() {
-            win.import_file(path, ImportFlow::Manual);
+        let mut catalog_files = Vec::new();
+        let mut no_part_for = None;
+        if win.target().is_some() {
+            if let Some(path) = dropped.first() {
+                win.import_file(path, ImportFlow::Manual);
+            }
+        } else {
+            // No part picked: a catalog file is imported as a catalog.
+            for path in &dropped {
+                let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
+                match name.as_deref().map(FileKind::of_file_name) {
+                    Some(FileKind::Bmecat | FileKind::Csv | FileKind::Zip) => {
+                        catalog_files.push(path.clone());
+                    }
+                    _ => no_part_for = name,
+                }
+            }
         }
         let now = ctx.input(|i| i.time);
         if let Some(found) = win.import.as_mut().and_then(|i| i.poll(now)) {
@@ -560,8 +695,28 @@ impl NovoApp {
         let mut close = !open;
         let mut error = None;
         let mut assign = None;
+        let mut open_dir = None;
         for action in actions {
             match action {
+                PartsAction::ImportCatalogFiles => {
+                    if let Some(files) = rfd::FileDialog::new()
+                        .set_title("Catalog files (BMEcat, CSV, ZIP)")
+                        .add_filter("Catalog files", &["xml", "bmecat", "csv", "zip"])
+                        .pick_files()
+                    {
+                        catalog_files.extend(files);
+                    }
+                }
+                PartsAction::ImportInbox => {
+                    if let Some(inbox) = default_inbox() {
+                        open_dir = Some((inbox, true));
+                    }
+                }
+                PartsAction::OpenInbox => open_dir = default_inbox().map(|d| (d, false)),
+                PartsAction::OpenLibrary => {
+                    open_dir = default_library_root().map(|d| (d, false));
+                }
+                PartsAction::NewPart => win.new_part = Some(NewPartForm::default()),
                 PartsAction::Select(key) => win.selected = Some(key),
                 PartsAction::Import(key) => {
                     win.start_import(&key);
@@ -612,12 +767,118 @@ impl NovoApp {
         if let Some(text) = error {
             self.message(Level::Error, text);
         }
+        if !catalog_files.is_empty() {
+            self.import_catalog_files(&catalog_files);
+        }
+        if let Some(name) = no_part_for {
+            self.message(
+                Level::Info,
+                format!(
+                    "Pick a part first to import {name}, or drop a catalog file (BMEcat, CSV, ZIP)"
+                ),
+            );
+        }
+        match open_dir {
+            Some((dir, true)) => {
+                if let Err(e) = super::parts_bulk::prepare_and_import_inbox(self, &dir) {
+                    self.message(Level::Error, e);
+                }
+            }
+            Some((dir, false)) => {
+                if let Err(e) = super::parts_bulk::open_folder(&dir) {
+                    self.message(Level::Error, e);
+                }
+            }
+            None => {}
+        }
         if let Some(part) = assign {
             self.use_part_for_selection(&part);
         }
         if close {
             self.wb.parts = None;
         }
+    }
+}
+
+/// The maker guide: per maker the page to use, whether it needs a login and
+/// the inbox folder to save into (`novo_parts::maker_guide`).
+fn guide_ui(ui: &mut egui::Ui, win: &mut PartsWindow) {
+    ui.group(|ui| {
+        ui.horizontal(|ui| {
+            ui.strong("Maker guide");
+            ui.weak("KoperCAD never contacts a maker site: you download, it reads.");
+            if ui.small_button("Hide").clicked() {
+                win.guide = false;
+            }
+        });
+        if let Some(dir) = default_inbox() {
+            ui.weak(format!("Inbox: {}", dir.display()));
+        }
+        egui::ScrollArea::vertical()
+            .id_salt("maker_guide")
+            .max_height(160.0)
+            .show(ui, |ui| {
+                for line in maker_guide(&win.makers()) {
+                    ui.label(line);
+                }
+            });
+    });
+}
+
+/// The New part form: a hand-made part goes into the user's catalog.
+fn new_part_ui(ui: &mut egui::Ui, win: &mut PartsWindow) {
+    let Some(form) = win.new_part.as_mut() else {
+        return;
+    };
+    let (mut create, mut cancel) = (false, false);
+    ui.group(|ui| {
+        ui.strong("New part");
+        egui::Grid::new("new_part").num_columns(2).show(ui, |ui| {
+            for (label, text, hint) in [
+                ("Maker", &mut form.maker, "Phoenix Contact"),
+                (
+                    "Order number",
+                    &mut form.order_number,
+                    "required, unique per maker",
+                ),
+                ("Type", &mut form.type_number, ""),
+                ("Description", &mut form.description, ""),
+                (
+                    "Letter codes",
+                    &mut form.letter_codes,
+                    "K, Q (what devices it fits)",
+                ),
+                ("Width (mm)", &mut form.width, ""),
+                ("Height (mm)", &mut form.height, ""),
+                ("Depth (mm)", &mut form.depth, ""),
+            ] {
+                ui.label(label);
+                ui.add(egui::TextEdit::singleline(text).hint_text(hint));
+                ui.end_row();
+            }
+        });
+        if let Some(e) = &form.error {
+            ui.colored_label(novo_theme::tokens::WARNING, e);
+        }
+        ui.horizontal(|ui| {
+            create = ui.button("Save to my catalog").clicked();
+            cancel = ui.button("Cancel").clicked();
+        });
+    });
+    if create {
+        match form.build() {
+            Ok(part) => match win.add_user_part(part) {
+                Ok(()) => win.new_part = None,
+                Err(e) => {
+                    if let Some(f) = win.new_part.as_mut() {
+                        f.error = Some(e);
+                    }
+                }
+            },
+            Err(e) => form.error = Some(e),
+        }
+    } else if cancel {
+        win.new_part = None;
     }
 }
 
@@ -659,6 +920,54 @@ fn parts_ui(
             }
         });
     });
+    ui.horizontal_wrapped(|ui| {
+        for (label, hint, action) in [
+            (
+                "Import catalog files",
+                "Read BMEcat, CSV or ZIP catalog files from a maker or wholesaler into your catalog. You can also drop them on this window.",
+                PartsAction::ImportCatalogFiles,
+            ),
+            (
+                "Import inbox",
+                "Import every file in the inbox folder.",
+                PartsAction::ImportInbox,
+            ),
+            (
+                "Open inbox folder",
+                "The folder to save downloaded catalog files in, one folder per maker.",
+                PartsAction::OpenInbox,
+            ),
+            (
+                "Open library folder",
+                "Where the STEP files and source records of imported parts are kept.",
+                PartsAction::OpenLibrary,
+            ),
+        ] {
+            if ui.small_button(label).on_hover_text(hint).clicked() {
+                actions.push(action);
+            }
+        }
+        if ui
+            .small_button("Maker guide")
+            .on_hover_text("What to download from each maker and where to save it.")
+            .clicked()
+        {
+            win.guide ^= true;
+        }
+        if ui
+            .small_button("New part...")
+            .on_hover_text("Add a part by hand to your own catalog.")
+            .clicked()
+        {
+            actions.push(PartsAction::NewPart);
+        }
+    });
+    if win.guide {
+        guide_ui(ui, win);
+    }
+    if win.new_part.is_some() {
+        new_part_ui(ui, win);
+    }
     ui.separator();
     let rows = win.rows();
     let (up, down, esc) = ui.input(|i| {
