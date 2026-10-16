@@ -436,11 +436,20 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_shell",
     "view.3d_wires",
     "view.3d_shadows",
+    "view.3d_align_left",
+    "view.3d_align_hcentre",
+    "view.3d_align_right",
+    "view.3d_align_top",
+    "view.3d_align_vcentre",
+    "view.3d_align_bottom",
+    "view.3d_spread_h",
+    "view.3d_spread_v",
     "view.3d_ssao",
     "view.3d_dimensions",
     "view.3d_quality",
     "view.3d_stats",
     "view.3d_save_view",
+    "view.3d_wire_runs",
     "view.3d_hints",
     "view.3d_select_devices",
     "view.3d_select_rails",
@@ -979,6 +988,26 @@ impl NovoApp {
                 // Saved in the view's next frame, once the camera is fitted.
                 self.switch_workspace(Workspace::View3d);
                 self.view3d.save_view = true;
+            }
+            "view.3d_align_left"
+            | "view.3d_align_hcentre"
+            | "view.3d_align_right"
+            | "view.3d_align_top"
+            | "view.3d_align_vcentre"
+            | "view.3d_align_bottom"
+            | "view.3d_spread_h"
+            | "view.3d_spread_v" => {
+                self.switch_workspace(Workspace::View3d);
+                if let Some(op) = super::view3d_align::Op::from_command(id) {
+                    self.view3d_arrange(op);
+                }
+            }
+            "view.3d_wire_runs" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.wire_runs ^= true;
+                if self.view3d.wire_runs {
+                    self.view3d.controls.layers.wires = true;
+                }
             }
             "view.3d_hints" => {
                 self.switch_workspace(Workspace::View3d);

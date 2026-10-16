@@ -26,8 +26,8 @@ use novo_reports::{
     label_items, layout_labels, stock_presets, wire_cut_jobs_with, with_spares,
 };
 use novo_theme::table::{
-    ROW_HEIGHT, RowState, TableAlign, TableCell, TableColumn, column_widths, table_header,
-    table_row,
+    ROW_HEIGHT, RowState, TableAlign, TableCell, TableColumn, column_widths_min, header_min_widths,
+    table_header, table_row,
 };
 
 use super::pdf::write_replacing;
@@ -528,9 +528,10 @@ fn cut_table(ui: &mut egui::Ui, jobs: &[WireCutJob]) {
         col("Basis", TableAlign::Left),
     ];
     let bar = ui.spacing().scroll.allocated_width() + 4.0;
-    let widths = column_widths(
+    let widths = column_widths_min(
         ui.available_width() - bar,
         &[1.4, 0.8, 1.2, 3.0, 3.0, 1.4, 1.6],
+        &header_min_widths(ui, &columns),
     );
     table_header(ui, &columns, &widths, None);
     egui::ScrollArea::vertical()

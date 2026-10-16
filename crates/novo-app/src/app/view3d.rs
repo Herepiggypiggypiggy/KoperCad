@@ -25,6 +25,7 @@ use super::heat_3d::{self, Heat3d, Place};
 use super::heat_legend;
 use super::heat_probe::{self, ProbeState};
 use super::heat_spots;
+use super::view3d_align;
 use super::view3d_controls::{self, Controls};
 use super::view3d_heat;
 use super::view3d_hints::Hints;
@@ -34,6 +35,7 @@ use super::view3d_place::{self, PlaceList};
 use super::view3d_rail;
 use super::view3d_stats::{Build, Stats};
 use super::view3d_views::{self, ViewsAction};
+use super::view3d_wires::{self, WireFacts};
 
 /// The one view of the app.
 const VIEW_ID: u64 = 1;
@@ -86,6 +88,10 @@ pub(crate) struct View3dMode {
     built_hidden: BTreeSet<ItemId>,
     /// The routed wires of an enclosure at a project revision.
     wires: Option<(StructureId, u64, Vec<WireInput>)>,
+    /// What each routed wire comes to, for the hover card and the list.
+    pub(super) wire_facts: Option<(StructureId, u64, std::collections::BTreeMap<u64, WireFacts>)>,
+    /// The Wire runs list is open.
+    pub(super) wire_runs: bool,
     /// The toolbar's layers and door.
     pub(super) controls: Controls,
     /// The legend of mouse and keys.
@@ -126,6 +132,8 @@ impl Default for View3dMode {
             built_layers: Layers::default(),
             built_hidden: BTreeSet::new(),
             wires: None,
+            wire_facts: None,
+            wire_runs: false,
             controls: Controls::default(),
             hints: Hints::default(),
             stats: Stats::default(),
@@ -251,7 +259,15 @@ impl NovoApp {
             // Routing is the slow part: it is redone only for a new revision.
             let wires = if layers.wires {
                 if !matches!(&mode.wires, Some((s, r, _)) if *s == id && *r == revision) {
-                    mode.wires = Some((id, revision, model::wires(project, id)));
+                    let routed = novo_routing::model::route_project(project);
+                    let inputs = model::wires_with(project, id, &routed);
+                    let on_plate = inputs.iter().map(|w| w.id).collect();
+                    mode.wire_facts = Some((
+                        id,
+                        revision,
+                        view3d_wires::facts(project, &routed, &on_plate),
+                    ));
+                    mode.wires = Some((id, revision, inputs));
                     routing_ms = Some(started.elapsed().as_secs_f32() * 1000.0);
                 }
                 mode.wires.as_ref().map(|w| w.2.clone()).unwrap_or_default()
@@ -574,6 +590,35 @@ impl NovoApp {
             );
         }
         mode.view.state.hover = out.hover;
+        // Wire runs: a card for the wire under the pointer, and the list.
+        let wire_facts = mode
+            .wire_facts
+            .as_ref()
+            .filter(|(s, r, _)| *s == id && *r == revision)
+            .map(|(_, _, f)| f);
+        if let (Some(facts), Some(h), Some(at)) = (
+            wire_facts,
+            out.hover.filter(|h| h.kind == ItemKind::Wire),
+            ui.input(|i| i.pointer.hover_pos()),
+        ) && let Some(f) = facts.get(&h.raw)
+            && !mode.mv.dragging()
+        {
+            view3d_wires::hover_card(ui.ctx(), at, f);
+        }
+        if mode.wire_runs
+            && let Some(facts) = wire_facts
+        {
+            let asked = view3d_wires::list(ui.ctx(), out.rect, facts, &mode.view.state.selection);
+            if let Some(w) = asked.select {
+                mode.view.state.selection = BTreeSet::from([ItemId::new(ItemKind::Wire, w)]);
+            }
+            if asked.close {
+                mode.wire_runs = false;
+            }
+            if asked.cut_list {
+                self.wb.queued.push("report.cutlist");
+            }
+        }
         // Placing: the pointer moves the landing box, a click drops the
         // device, Escape lets go of it.
         let placing = mode.place.armed.is_some();
@@ -767,6 +812,16 @@ impl NovoApp {
             .map(|i| i.raw)
             .collect();
         let mut ask = None;
+        if devices.len() >= 2
+            && let Some(op) = view3d_align::strip(ui.ctx(), out.rect, devices.len())
+        {
+            self.wb.queued.push(
+                view3d_align::OPS
+                    .iter()
+                    .find(|o| o.3 == op)
+                    .map_or("view.3d_align_left", |o| o.0),
+            );
+        }
         if let Some(stored) = load(project, id) {
             if let [one] = devices.as_slice()
                 && !mode.position.hidden

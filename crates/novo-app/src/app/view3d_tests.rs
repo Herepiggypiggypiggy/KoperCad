@@ -484,6 +484,27 @@ fn simulate_runs_from_the_3d_view_without_leaving_it() {
 }
 
 #[test]
+fn the_wire_runs_command_opens_the_list_turns_the_wires_on_and_reads_their_lengths() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.app.view3d.controls.layers.wires = false;
+    d.app.run_command(&ctx, "view.3d_wire_runs", None);
+    d.frame();
+    d.frame();
+    assert!(d.app.view3d.wire_runs);
+    assert!(d.app.view3d.controls.layers.wires, "the wires layer is on");
+    let facts = d.app.view3d.wire_facts.as_ref().map(|f| &f.2);
+    assert!(facts.is_some(), "the lengths were read with the routes");
+    for f in facts.unwrap().values() {
+        assert!(f.length_mm > 0.0, "a cut length is never zero: {f:?}");
+        assert!(!f.from.is_empty() && !f.to.is_empty());
+    }
+    d.app.run_command(&ctx, "view.3d_wire_runs", None);
+    assert!(!d.app.view3d.wire_runs);
+}
+
+#[test]
 fn the_position_command_hides_and_shows_the_box() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());
