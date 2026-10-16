@@ -80,6 +80,9 @@ mod shortcuts_sheet;
 mod simulate;
 mod sizing;
 mod standards;
+mod standards_report;
+#[cfg(test)]
+mod standards_report_tests;
 mod status_bar;
 mod symbol_preview;
 mod terminals;

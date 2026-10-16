@@ -23,6 +23,7 @@ use novo_workflow::keymap::{FAVOURITE_COMMANDS, Focus, Keymap};
 use novo_workflow::palette::{Mode, Sources, Target};
 use novo_xref::{LiveXref, Navigator, Place, Reference};
 
+use super::standards_report::StandardsFormat;
 use super::workspace::Workspace;
 use super::{Level, NovoApp};
 use crate::actions::Action;
@@ -316,6 +317,7 @@ const APP_COMMANDS: &[&str] = &[
     "export.pdf",
     "export.change_report",
     "export.commissioning",
+    "export.standards_report",
     "export.plate",
     "export.assembly",
     "export.sheets",
@@ -791,6 +793,9 @@ impl NovoApp {
                 self.export_change_report();
             }
             "export.commissioning" => self.export_commissioning_pdf(),
+            "export.standards_report" => {
+                self.export_standards_report(StandardsFormat::Pdf);
+            }
             "export.plate" => {
                 self.export_plate_pdf();
             }
