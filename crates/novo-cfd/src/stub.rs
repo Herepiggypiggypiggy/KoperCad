@@ -133,8 +133,10 @@ impl TransientSolver for StubSolver {
                     monitor_drift_k: 0.0,
                 },
                 vec![format!(
-                    "Stub solver: 2D transient at {:.0} s extruded through the depth.",
-                    snap.t_s
+                    "Stub solver: 2D transient at {:.0} s extruded through the depth (planning values, \
+                     implicit steps of about {:.0} s).",
+                    snap.t_s,
+                    spec.duration_s / steps as f64
                 )],
             );
             publish(&TransientFrame {
@@ -161,7 +163,8 @@ impl TransientSolver for StubSolver {
                         .iter()
                         .map(|s| s.device_c.get(i).copied().unwrap_or(d.surface_c))
                         .collect(),
-                    air_c: vec![d.air_c; r.samples.len()],
+                    // The 2D engine keeps the air field only at the snapshots.
+                    air_c: Vec::new(),
                 })
                 .collect(),
             time_constant_s: r.time_constant_s,

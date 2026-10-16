@@ -25,8 +25,8 @@ pub struct TransientSpec {
     /// A frame is published this often (simulated seconds); the first frame
     /// is at 0 and the last at `duration_s`.
     pub frame_interval_s: f64,
-    /// `(from time s, share of the rated loss 0..1)`; the share before the
-    /// first entry is 1.
+    /// `(from time s, share of the rated loss 0..1)`, sorted by time; the
+    /// share before the first entry is 1.
     pub load_schedule: Vec<(f64, f64)>,
     /// Begin from the steady state at the first load (a load step) instead
     /// of from uniform ambient temperature (a cold start).
@@ -67,6 +67,7 @@ impl TransientSpec {
             && self.duration_s.is_finite()
             && self.frame_interval_s > 0.0
             && self.frame_interval_s.is_finite()
+            && self.load_schedule.windows(2).all(|w| w[0].0 <= w[1].0)
     }
 }
 
@@ -85,7 +86,8 @@ pub struct DeviceSeries {
     pub id: u64,
     /// Mean surface temperature at each frame time, degrees C.
     pub surface_c: Vec<f64>,
-    /// Mean air temperature around the device at each frame time.
+    /// Mean air temperature around the device at each frame time; empty when
+    /// the solver does not provide it (the stub).
     pub air_c: Vec<f64>,
 }
 

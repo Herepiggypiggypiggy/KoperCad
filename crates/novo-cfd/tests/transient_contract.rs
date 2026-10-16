@@ -63,6 +63,11 @@ fn spec_helpers() {
     };
     assert!(!bad.is_valid());
     assert_eq!(bad.frame_count(), 0);
+    let unsorted = TransientSpec {
+        load_schedule: vec![(50.0, 1.0), (10.0, 0.5)],
+        ..s.clone()
+    };
+    assert!(!unsorted.is_valid(), "the schedule must be sorted by time");
     let nan = TransientSpec {
         frame_interval_s: f64::NAN,
         ..s
@@ -100,6 +105,10 @@ fn the_stub_streams_consistent_frames_in_time_order() {
     assert_eq!(sum.times_s.len(), sum.mean_air_c.len());
     assert_eq!(sum.times_s.len(), sum.devices[0].surface_c.len());
     assert_eq!(sum.devices[0].id, 7);
+    assert!(
+        sum.devices[0].air_c.is_empty(),
+        "the stub has no air series"
+    );
     // the device heats up then cools after the load goes off
     let dev = &sum.devices[0].surface_c;
     let peak = dev.iter().cloned().fold(f64::MIN, f64::max);
