@@ -163,6 +163,11 @@ pub(super) fn overlay(
                     ui.set_width(WIDTH);
                     egui::ScrollArea::vertical()
                         .max_height(max_height)
+                        // The door form is below the plate fields: show that
+                        // there is more to scroll to.
+                        .scroll_bar_visibility(
+                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                        )
                         .show(ui, |ui| show(ui, facts, project, fields, door))
                         .inner
                 })

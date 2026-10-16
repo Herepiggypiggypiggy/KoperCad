@@ -1203,6 +1203,24 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["add rail", "add duct"],
     ),
+    verb(
+        cmd(
+            "cabinet.door",
+            "Inside size and door (Cabinet)",
+            "View",
+            &[
+                "door",
+                "door swing",
+                "hinge",
+                "inside size",
+                "enclosure depth",
+                "opens to",
+                "setback",
+            ],
+            Needs::Project,
+        ),
+        &["door swing", "set door", "hinge side"],
+    ),
     cmd(
         "view.background_place",
         "Move and scale the DXF background",

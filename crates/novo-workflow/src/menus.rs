@@ -97,6 +97,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("view.top", under("View", "3D")),
     ("view.cabinet_table", under("View", "Workspace")),
     ("cabinet.rails", under("View", "Workspace")),
+    ("cabinet.door", under("View", "Workspace")),
     ("view.terminals_drawer", under("View", "Panels")),
     ("view.cables_drawer", under("View", "Panels")),
     ("view.devices_drawer", under("View", "Panels")),
