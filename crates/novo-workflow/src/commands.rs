@@ -1134,6 +1134,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_dimensions",
+        "Show or hide dimensions in 3D",
+        "View",
+        &["dimensions", "measure", "distance", "mm", "sizes"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_quality",
+        "Restore 3D quality",
+        "View",
+        &["quality", "slow", "full quality", "reduced"],
+        Needs::Project,
+    ),
+    cmd(
         "view.3d_stats",
         "Show or hide the 3D frame statistics",
         "View",
@@ -1872,6 +1886,23 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export pdf", "pdf"],
+    ),
+    verb(
+        cmd(
+            "export.pdf_options",
+            "Export PDF...",
+            "Export",
+            &[
+                "pdf options",
+                "pdf dialog",
+                "page range",
+                "bookmarks",
+                "links",
+                "choose pages",
+            ],
+            Needs::Project,
+        ),
+        &["export pdf options", "pdf options"],
     ),
     verb(
         cmd(
