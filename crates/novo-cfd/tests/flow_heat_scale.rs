@@ -7,9 +7,7 @@ fn heated_rise(scale: f64) -> f64 {
     let mesh = Mesh::uniform([6, 6, 6], [0.3, 0.3, 0.3]);
     let n = mesh.cells();
     let mut cfg = FlowConfig::air();
-    for f in &mut cfg.faces {
-        *f = FaceBc::WALL;
-    }
+    cfg.faces.fill(FaceBc::WALL);
     cfg.heat_source = Some(vec![0.01; n]);
     let mut s = FlowSolver::new(mesh, cfg, 20.0);
     s.heat_scale = scale;
