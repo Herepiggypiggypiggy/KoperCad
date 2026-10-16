@@ -1,0 +1,28 @@
+format = 1
+id = "nfpa/connectivity/potential_feed_pe"
+name = "Potential feed, protective earth"
+description = "A potential feed whose potential is protective earth: the feed shows the earth symbol. Placed by choosing PE on a feed, not from the library."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "connectivity"
+function = "connectivity.potential"
+keywords = ["pe", "protective earth", "earth", "nfpa", "ansi"]
+aliases = []
+
+connections = [
+  { id = "1", at = [0, 8], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 2], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 8], to = [0, 4] },
+  { kind = "circle", center = [0, 2], r = 3.8 },
+  { kind = "line", from = [-2.5, 3], to = [2.5, 3] },
+  { kind = "line", from = [-1.6, 1.8], to = [1.6, 1.8] },
+  { kind = "line", from = [-0.7, 0.6], to = [0.7, 0.6] },
+]
+
+[behavior]
+kind = "none"

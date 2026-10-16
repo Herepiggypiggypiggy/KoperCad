@@ -548,7 +548,8 @@ impl NovoApp {
             if ui.small_button(self.learn.say("reset_progress")).clicked() {
                 *reset = true;
             }
-            ui.checkbox(&mut self.learn.show_drafts, "Drafts");
+            let early = self.learn.say("early_access");
+            ui.checkbox(&mut self.learn.show_drafts, early);
         });
     }
 
@@ -578,6 +579,9 @@ impl NovoApp {
                     Standing::Completed => meta.push("✓".to_owned()),
                     Standing::Updated => meta.push(self.learn.say("updated")),
                     Standing::NotStarted => {}
+                }
+                if lesson.status == novo_learn::Status::Draft {
+                    meta.push(self.learn.say("early_access"));
                 }
                 if coming {
                     meta.push(self.learn.say("coming_soon"));

@@ -22,6 +22,15 @@ use crate::geometry::{EPS, snap, wire_points};
 /// Library id of the potential feed symbol.
 pub const FEED_SYMBOL: &str = "iec/connectivity/potential_feed";
 
+/// The feed drawn as the protective earth symbol: same pin as
+/// [`FEED_SYMBOL`], so wires stay where they are when a feed becomes PE.
+pub const FEED_PE_SYMBOL: &str = "iec/connectivity/potential_feed_pe";
+
+/// Whether a feed of this potential kind is drawn with the earth symbol.
+pub fn draws_as_earth(kind: PotentialKind) -> bool {
+    matches!(kind, PotentialKind::ProtectiveEarth | PotentialKind::Pen)
+}
+
 /// One potential to give one wire.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PotentialSpec {
@@ -299,6 +308,7 @@ pub fn suggestions(wires: usize) -> Vec<Suggestion> {
 pub fn assign(
     tx: &mut Tx<'_>,
     feed: &Symbol,
+    earth_feed: &Symbol,
     wires: &[WireId],
     specs: &[PotentialSpec],
 ) -> Result<()> {
@@ -355,7 +365,12 @@ pub fn assign(
             potential: Some(potential),
             ..PlaceOptions::new()
         };
-        edit::place(tx, page, feed, placement, &options)?;
+        let art = if draws_as_earth(spec.kind) {
+            earth_feed
+        } else {
+            feed
+        };
+        edit::place(tx, page, art, placement, &options)?;
     }
     Ok(())
 }
@@ -400,20 +415,59 @@ pub fn set_feed_potential(
     tx: &mut Tx<'_>,
     feeds: &[SymbolId],
     spec: &PotentialSpec,
+    symbols: &FeedSymbols,
 ) -> Result<Vec<SymbolId>> {
     let potential = find_or_add_potential(tx, &spec.name, spec.kind, spec.voltage)?;
+    let key = symbols.for_kind(spec.kind);
     let mut changed = Vec::new();
     for &feed in feeds {
-        let is_feed = matches!(
-            tx.project().symbol(feed).map(|s| &s.role),
-            Some(SymbolRole::PotentialFeed { potential: p }) if *p != potential
-        );
-        if is_feed {
-            tx.set_role(feed, SymbolRole::PotentialFeed { potential })?;
-            changed.push(feed);
+        let Some(sym) = tx.project().symbol(feed) else {
+            continue;
+        };
+        let SymbolRole::PotentialFeed { potential: p } = sym.role else {
+            continue;
+        };
+        let wrong_art = sym.symbol.0 != key;
+        if p == potential && !wrong_art {
+            continue;
         }
+        if p != potential {
+            tx.set_role(feed, SymbolRole::PotentialFeed { potential })?;
+        }
+        if wrong_art {
+            tx.set_symbol_key(feed, key.into())?;
+        }
+        changed.push(feed);
     }
     Ok(changed)
+}
+
+/// The two symbols a potential feed is drawn with, in the project's pack.
+#[derive(Debug, Clone)]
+pub struct FeedSymbols {
+    pub line: String,
+    pub earth: String,
+}
+
+impl Default for FeedSymbols {
+    /// The IEC pack.
+    fn default() -> Self {
+        Self {
+            line: FEED_SYMBOL.into(),
+            earth: FEED_PE_SYMBOL.into(),
+        }
+    }
+}
+
+impl FeedSymbols {
+    /// The symbol for a feed of this potential kind.
+    pub fn for_kind(&self, kind: PotentialKind) -> &str {
+        if draws_as_earth(kind) {
+            &self.earth
+        } else {
+            &self.line
+        }
+    }
 }
 
 /// The potential names of a wire's net, for status text.

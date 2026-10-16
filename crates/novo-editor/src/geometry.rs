@@ -246,8 +246,10 @@ pub fn target_at(project: &Project, page: PageId, p: Point, tolerance: f64) -> O
 
 /// `q`, a point inside `wire`, moved along its segment to the nearest grid
 /// line, so a junction made there sits on the grid and the pointer does not
-/// glide along the wire. A point whose snapped position would be a wire end
-/// (or off a slanted segment) stays where it is.
+/// glide along the wire. The grid wins: when the nearest grid line falls
+/// outside the segment's inside (a short stretch, near a corner or an end),
+/// the nearest grid line that does fall inside it is used instead. Only a
+/// slanted segment, or one with no grid line inside it, keeps `q` as it is.
 pub fn snap_along_wire(project: &Project, wire: WireId, q: Point, grid: f64) -> Point {
     let Some(pts) = wire_points(project, wire) else {
         return q;
@@ -255,22 +257,27 @@ pub fn snap_along_wire(project: &Project, wire: WireId, q: Point, grid: f64) -> 
     let Some((seg, _, _)) = locate_on_polyline(&pts, q) else {
         return q;
     };
-    let (a, b) = (pts[seg], pts[seg + 1]);
-    let g = if a.y == b.y {
-        Point::new(snap(q, grid).x, a.y)
-    } else if a.x == b.x {
-        Point::new(a.x, snap(q, grid).y)
-    } else {
+    if grid <= 0.0 {
         return q;
-    };
-    let end = |e: Point| g.approx_eq(e, EPS);
-    match locate_on_polyline(&pts, g) {
-        Some((_, at, d))
-            if d < EPS && at.approx_eq(g, EPS) && !end(pts[0]) && !end(pts[pts.len() - 1]) =>
-        {
-            g
-        }
-        _ => q,
+    }
+    let (a, b) = (pts[seg], pts[seg + 1]);
+    let horizontal = (a.y - b.y).abs() < EPS;
+    if !horizontal && (a.x - b.x).abs() >= EPS {
+        return q;
+    }
+    // Position along the segment axis; ends are excluded from the lines.
+    let axis = |p: Point| if horizontal { p.x } else { p.y };
+    let (lo, hi) = (axis(a).min(axis(b)), axis(a).max(axis(b)));
+    let first = ((lo + EPS) / grid).floor() as i64;
+    let last = ((hi - EPS) / grid).ceil() as i64;
+    let best = (first..=last)
+        .map(|k| k as f64 * grid)
+        .filter(|v| *v > lo + EPS && *v < hi - EPS)
+        .min_by(|u, v| (u - axis(q)).abs().total_cmp(&(v - axis(q)).abs()));
+    match best {
+        Some(v) if horizontal => Point::new(v, a.y),
+        Some(v) => Point::new(a.x, v),
+        None => q,
     }
 }
 
