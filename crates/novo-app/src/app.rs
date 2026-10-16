@@ -17,6 +17,7 @@ mod cabinet_rails;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
 mod cabinet_rules;
+mod cabinet_surfaces;
 mod cable_controls;
 mod cable_cores;
 #[cfg(test)]
@@ -30,6 +31,7 @@ mod checks;
 mod clipboard;
 mod commissioning;
 mod compare;
+mod designer;
 mod device_renumber;
 mod dock;
 mod drawers;
@@ -60,6 +62,9 @@ mod heat_run_tests;
 mod heat_settings;
 mod inspector;
 mod interop;
+mod languages;
+#[cfg(test)]
+mod languages_tests;
 mod learn;
 mod learn_demo;
 mod learn_labels;
@@ -77,6 +82,7 @@ mod macro_browser_tests;
 mod macro_company_tests;
 mod macro_thumb;
 mod menu_bar;
+mod net_trace;
 mod numbering;
 mod onboarding;
 mod outline;
@@ -103,6 +109,7 @@ mod reports;
 mod reports_view;
 mod revisions;
 mod safety;
+mod safety_functions;
 mod sheet_import;
 mod sheets;
 mod shortcuts_sheet;
@@ -153,6 +160,8 @@ mod cabinet_routes_tests;
 #[cfg(test)]
 mod cabinet_rules_tests;
 #[cfg(test)]
+mod cabinet_surfaces_tests;
+#[cfg(test)]
 mod cabinet_tests;
 #[cfg(test)]
 mod changes_tests;
@@ -197,6 +206,8 @@ mod shortcuts_sheet_tests;
 #[cfg(test)]
 mod tips_tests;
 #[cfg(test)]
+mod ui_gaps_tests;
+#[cfg(test)]
 mod variants_tests;
 #[cfg(test)]
 mod whats_new_tests;
@@ -217,7 +228,7 @@ use pages::PageView;
 use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows};
 use crate::canvas::{CanvasView, OpenPage};
 use crate::settings::Settings;
-use crate::{APP_MAKER, APP_NAME, PROJECT_EXTENSION};
+use crate::{APP_NAME, PROJECT_EXTENSION};
 use novo_theme::widgets::primary_button;
 pub(crate) use revisions::index_rule;
 use workbench::Workbench;
@@ -981,6 +992,7 @@ impl NovoApp {
                     || *id == "cabinet.place-all"
                     || *id == "cabinet.rails"
                     || *id == "cabinet.door"
+                    || *id == "cabinet.surface"
                     || *id == "view.command_field_here"
                     || *id == "view.3d"
                     || *id == "view.3d_door"
@@ -1083,6 +1095,7 @@ impl NovoApp {
         self.whats_new_window(&ctx);
         self.background_panel(&ctx);
         self.bench_window(&ctx);
+        self.designer_window(&ctx);
         self.parts_window(&ctx);
         self.parts_bulk_dialog(&ctx);
         self.auto_assign_dialog(&ctx);
@@ -1105,7 +1118,9 @@ impl NovoApp {
         self.calculations_window(&ctx);
         self.electrical_window(&ctx);
         self.safety_window(&ctx);
+        self.languages_window(&ctx);
         self.numbering_window(&ctx);
+        self.net_trace_window(&ctx);
         self.terminal_edit_windows(&ctx);
         self.page_form_dialog(&ctx);
         self.sheet_import_dialog(&ctx);
@@ -1825,13 +1840,16 @@ impl NovoApp {
             return;
         }
         let modal = egui::Modal::new(egui::Id::new("about")).show(ctx, |ui| {
-            ui.set_width(320.0);
-            ui.heading(APP_NAME);
-            ui.label(format!("by {}", APP_MAKER));
-            ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
-            ui.label(format!("Model API v{}", novo_core::MODEL_VERSION));
-            ui.add_space(8.0);
-            ui.button("Close").clicked()
+            ui.set_width(360.0);
+            ui.vertical_centered(|ui| {
+                novo_theme::brand::lockup(ui, 56.0);
+                ui.add_space(novo_theme::space::L);
+                ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
+                ui.weak(format!("Model API v{}", novo_core::MODEL_VERSION));
+                ui.add_space(novo_theme::space::L);
+                ui.button("Close").clicked()
+            })
+            .inner
         });
         if modal.inner || modal.should_close() {
             self.show_about = false;
