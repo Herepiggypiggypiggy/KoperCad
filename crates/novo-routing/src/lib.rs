@@ -8,9 +8,11 @@
 mod graph;
 pub mod model;
 mod plan;
+pub mod project_rules;
 
 pub use graph::Network;
 pub use plan::{DuctFill, Plan, Problem, plan};
+pub use project_rules::WireRules;
 
 /// Point on the plate.
 #[derive(Debug, Clone, Copy, PartialEq)]

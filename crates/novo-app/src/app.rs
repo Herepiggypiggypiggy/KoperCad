@@ -76,6 +76,8 @@ mod xref;
 #[cfg(test)]
 mod assembly_tests;
 #[cfg(test)]
+mod cabinet_routes_tests;
+#[cfg(test)]
 mod cabinet_rules_tests;
 #[cfg(test)]
 mod cabinet_tests;

@@ -4,8 +4,8 @@ use std::collections::BTreeSet;
 
 use novo_core::{AnyId, CabinetPlacement, DeviceId, DeviceKind, SymbolRole, WireId};
 use novo_layout::model::load;
-use novo_routing::model::{Connection, route_connections};
-use novo_routing::{Problem as RoutingProblem, Rules};
+use novo_routing::Problem as RoutingProblem;
+use novo_routing::model::route_connections;
 
 use crate::{Context, Problem, ProblemKind};
 
@@ -50,22 +50,12 @@ pub(crate) fn routing(cx: &Context<'_>, out: &mut Vec<Problem>) {
         return;
     }
     let project = cx.project;
-    let connections: Vec<Connection> = project
-        .wires()
-        .filter_map(|w| {
-            Some(Connection {
-                id: w.id.raw(),
-                from: w.from.as_pin()?,
-                to: w.to.as_pin()?,
-                // Conductor plus insulation: 1.5 mm² comes out at 3 mm.
-                diameter_mm: w
-                    .cross_section_mm2
-                    .filter(|s| *s > 0.0)
-                    .map(|s| 2.0 * (s / std::f64::consts::PI).sqrt() + 1.6),
-            })
-        })
-        .collect();
-    let routed = route_connections(project, &connections, &Rules::default());
+    let connections = novo_routing::model::wire_connections(project);
+    let routed = route_connections(
+        project,
+        &connections,
+        &novo_routing::WireRules::of(project).routing,
+    );
     let wire = |job: u64| project.wires().find(|w| w.id.raw() == job).map(|w| w.id);
     for (_, plan) in &routed.plans {
         for problem in &plan.problems {
