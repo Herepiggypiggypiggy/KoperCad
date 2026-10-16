@@ -17,6 +17,7 @@ enum DockTool {
     Select,
     Place,
     Connect,
+    Text,
 }
 
 /// How close to the dock a gesture has to come to move it aside.
@@ -122,9 +123,8 @@ impl NovoApp {
         let active = match view.editor.tool() {
             Tool::Place(_) => DockTool::Place,
             Tool::Wire(_) => DockTool::Connect,
-            Tool::Select | Tool::Move(_) | Tool::Cable(_) | Tool::Paste(_) | Tool::Text => {
-                DockTool::Select
-            }
+            Tool::Text => DockTool::Text,
+            Tool::Select | Tool::Move(_) | Tool::Cable(_) | Tool::Paste(_) => DockTool::Select,
         };
         let band = view.band_count();
         let hint = view
@@ -196,6 +196,7 @@ impl NovoApp {
             ),
             None => super::tips::tip_text(&self.wb.keymap, "Connect", "tool.connect"),
         };
+        let text_tip = super::tips::tip_text(&self.wb.keymap, "Add text", "draw.text");
         let chosen = self.settings.wiring_mode();
         let mut chip = None;
         let mut picked = None;
@@ -257,10 +258,16 @@ impl NovoApp {
                             }
                             response.surrender_focus();
                         }
-                        ui.add_enabled_ui(false, |ui| {
-                            widgets::tool_button(ui, icons::tool::TEXT, false, "Text")
-                                .on_disabled_hover_text("Text · Comes later");
-                        });
+                        let response = widgets::tool_button(
+                            ui,
+                            icons::tool::TEXT,
+                            active == DockTool::Text,
+                            &text_tip,
+                        );
+                        if response.clicked() {
+                            picked = Some(DockTool::Text);
+                        }
+                        response.surrender_focus();
                         if !hint.is_empty() {
                             ui.separator();
                             if refused {
@@ -313,6 +320,11 @@ impl NovoApp {
             Some(DockTool::Connect) => {
                 if let Some(view) = self.canvas.schematic() {
                     view.editor.begin_wire();
+                }
+            }
+            Some(DockTool::Text) => {
+                if let Some(view) = self.canvas.schematic() {
+                    view.editor.begin_text();
                 }
             }
             None => {}

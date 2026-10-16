@@ -191,6 +191,7 @@ impl NovoApp {
             .id(egui::Id::new("net_trace"))
             .open(&mut open)
             .show(ctx, |ui| {
+                ui.weak("As of opening; select again to refresh");
                 for (i, net) in trace.nets.iter().enumerate() {
                     egui::CollapsingHeader::new(
                         egui::RichText::new(format!(
