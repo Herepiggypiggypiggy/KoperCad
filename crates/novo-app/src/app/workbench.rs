@@ -435,6 +435,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_dimensions",
     "view.3d_quality",
     "view.3d_stats",
+    "view.3d_place",
     "view.iso",
     "view.front",
     "view.top",
@@ -519,6 +520,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "cable.restore_proposals",
     "edit.select_all",
     "view.cabinet_table",
+    "view.fit_sheet",
     "cabinet.place-all",
     "heat.toggle",
     "heat.airflow",
@@ -780,6 +782,13 @@ impl NovoApp {
                 self.cabinet.table = !showing;
                 self.switch_workspace(Workspace::Cabinet);
             }
+            "view.fit_sheet" if self.is_open() => {
+                if self.workspace() == Workspace::View3d {
+                    self.view3d.pending = Some(super::view3d::Pending::Fit);
+                } else {
+                    self.canvas.zoom_to_sheet();
+                }
+            }
             "cabinet.place-all" if self.is_open() => {
                 self.switch_workspace(Workspace::Cabinet);
                 self.cabinet.table = false;
@@ -940,6 +949,10 @@ impl NovoApp {
                     "view.3d_shell" => controls.layers.shell = !controls.layers.shell,
                     _ => controls.layers.wires = !controls.layers.wires,
                 }
+            }
+            "view.3d_place" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.place.toggle();
             }
             "view.3d_stats" => {
                 self.switch_workspace(Workspace::View3d);
