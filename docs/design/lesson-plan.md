@@ -152,6 +152,12 @@ Tadjiro's test of "Placing parts fast": the card said "Hold Q for the wheel" but
      whose instruction the program refuses fails CI. A step without `solve` is listed as unverified and a
      lesson with unverified action steps cannot be promoted to `ready`. Steps that say "press R" must have
      `solve` or `demo` that performs exactly that key.
+   - **Keys come from the program.** A hand-typed key is a bug waiting to happen ("Tap Q, then 5 for the
+     motor protection breaker" while the real way is hold Q, then 4). Commands use `{key:command.id}`; a
+     favourite digit or a wheel group uses a new `{wheel:symbol-id}` that resolves from the live wheel and
+     favourites, and the replay gate drives the wheel the way the text says (hold, then digit) and fails
+     when the symbol that lands is not the one the step names. The lint rejects a bare digit or key name in
+     step text outside these markups.
    - **Wording pass.** Text must stand alone: describe the expected result concretely ("the supply and the
      neutral are joined by two wires"), never "like the finished one". Where a picture helps, the last step
      offers **Compare with the finished result**: the lesson's `finished.json` opens in a second tab, or as
