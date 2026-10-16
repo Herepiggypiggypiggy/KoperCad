@@ -110,7 +110,12 @@ impl NovoApp {
     pub(super) fn export_pdf_with_choice(&mut self, choice: &PdfChoice) -> Option<PathBuf> {
         let (pages, current) = {
             let doc = self.backend.document()?;
-            let pages: Vec<PageId> = doc.project().pages().map(|p| p.id).collect();
+            let pages: Vec<PageId> = doc
+                .project()
+                .pages_in_order()
+                .iter()
+                .map(|p| p.id)
+                .collect();
             (pages, self.current_page)
         };
         let set = match page_set(choice, &pages, current) {
@@ -130,10 +135,11 @@ impl NovoApp {
                         .map(|p| p.name.to_string())?;
                     format!("page {name}")
                 } else {
-                    format!("pages {}", choice.ranges.trim())
+                    format!("pages {}", choice.ranges.trim().replace(' ', ""))
                 };
                 let (dir, stem) = self.export_base()?;
-                let file = format!("{stem} {tail}.pdf").replace(['/', '\\', ':'], "-");
+                let file = format!("{stem} {tail}.pdf")
+                    .replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "-");
                 super::pdf::replaceable_path(&dir.join(file))
             }
         };
@@ -149,7 +155,8 @@ impl NovoApp {
             .document()
             .map(|d| {
                 d.project()
-                    .pages()
+                    .pages_in_order()
+                    .iter()
                     .map(|p| (p.id, p.name.to_string()))
                     .collect()
             })

@@ -99,7 +99,21 @@ fn the_command_opens_the_dialog_and_export_follows_the_choice() {
             .ends_with("pages 1-2.pdf")
     );
     let bytes = std::fs::read(&path).unwrap();
-    assert_eq!(page_count(&bytes), 2);
+    let first_two = dir.path().join("first two.pdf");
+    let pages: Vec<_> = d
+        .doc()
+        .project()
+        .pages_in_order()
+        .iter()
+        .map(|p| p.id)
+        .collect();
+    d.app
+        .export_pdf_choice_to(&first_two, PageSet::Pages(pages[..2].to_vec()), &choice)
+        .unwrap();
+    assert_eq!(
+        page_count(&bytes),
+        page_count(&std::fs::read(&first_two).unwrap())
+    );
     assert!(!bytes.windows(9).any(|w| w == b"/Outlines"), "no bookmarks");
     assert!(bytes.windows(9).any(|w| w == b"Pump skid"));
     assert!(
@@ -150,4 +164,83 @@ fn the_choice_survives_the_settings_file() {
     // An older settings file has no choice: the defaults.
     let old: crate::settings::Settings = ron::from_str("()").unwrap();
     assert_eq!(old.pdf_choice, PdfChoice::default());
+}
+
+#[test]
+fn ranges_count_pages_in_the_order_the_outline_shows() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = saved_example(dir.path());
+    let ctx = d.ctx.clone();
+    // A copy is created last but placed before the page it copies.
+    d.app.run_command(&ctx, "page.duplicate", None);
+    d.frame();
+    let copy = d.app.current_page.unwrap();
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Place first", |tx| {
+            tx.update::<novo_core::Page>(copy, |p| {
+                p.properties
+                    .insert(novo_core::PAGE_ORDER.into(), novo_core::Value::Int(-1));
+            })?;
+            Ok(())
+        })
+        .unwrap();
+    d.frame();
+    let ordered: Vec<_> = d
+        .doc()
+        .project()
+        .pages_in_order()
+        .iter()
+        .map(|p| p.id)
+        .collect();
+    let by_creation: Vec<_> = d.doc().project().pages().map(|p| p.id).collect();
+    let number = ordered.iter().position(|p| *p == copy).unwrap() + 1;
+    assert_ne!(
+        by_creation.iter().position(|p| *p == copy).unwrap() + 1,
+        number,
+        "the order differs from creation order"
+    );
+
+    let choice = PdfChoice {
+        scope: "ranges".into(),
+        ranges: number.to_string(),
+        ..Default::default()
+    };
+    assert_eq!(
+        page_set(&choice, &ordered, None),
+        Ok(PageSet::Pages(vec![copy]))
+    );
+    let path = d.app.export_pdf_with_choice(&choice).expect("exported");
+    let one = dir.path().join("copy only.pdf");
+    d.app
+        .export_pdf_pages_to(&one, PageSet::Pages(vec![copy]))
+        .unwrap();
+    assert_eq!(
+        page_count(&std::fs::read(&path).unwrap()),
+        page_count(&std::fs::read(&one).unwrap())
+    );
+}
+
+#[test]
+fn the_file_name_of_a_selection_is_safe_on_windows() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = saved_example(dir.path());
+    let choice = PdfChoice {
+        scope: "ranges".into(),
+        ranges: "1 - 2 | *".into(),
+        ..Default::default()
+    };
+    // The text is not valid pages, so nothing is written; a valid one with
+    // odd spacing keeps a clean name.
+    assert!(d.app.export_pdf_with_choice(&choice).is_none());
+    let ok = PdfChoice {
+        ranges: "1, 2".into(),
+        ..choice
+    };
+    let path = d.app.export_pdf_with_choice(&ok).unwrap();
+    let name = path.file_name().unwrap().to_string_lossy().into_owned();
+    assert!(!name.contains(['*', '?', '"', '<', '>', '|']), "{name}");
+    assert!(name.ends_with("pages 1,2.pdf"), "{name}");
 }
