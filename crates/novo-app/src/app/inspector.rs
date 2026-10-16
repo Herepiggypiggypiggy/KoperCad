@@ -474,7 +474,7 @@ impl NovoApp {
         else {
             return;
         };
-        if tag != old.0 && !tag.is_empty() {
+        if tag != old.0 {
             let result = self.with_editor(|editor, doc| editor.rename(doc, device, &tag));
             if let Some(Err(reason)) = result {
                 self.message(Level::Warning, reason);
