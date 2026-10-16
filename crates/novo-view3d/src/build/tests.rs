@@ -287,3 +287,14 @@ fn a_vertical_rail_runs_down_the_plate() {
     let b = s.world_bounds(rail);
     assert!((b.size().y - 300.0).abs() < 1e-3);
 }
+
+#[test]
+fn a_device_takes_its_body_colour_from_its_family() {
+    let mut inp = inputs();
+    inp.classes.insert(5, DeviceClass::Switching);
+    let s = from_layout(&layout(), &inp, &Options::default());
+    let dev = s.get(id(ItemKind::Device, 5)).unwrap();
+    assert_eq!(dev.tint, Some(DeviceClass::Switching.tint()));
+    // No class known: the kind's own colour applies.
+    assert_eq!(build().get(id(ItemKind::Device, 5)).unwrap().tint, None);
+}

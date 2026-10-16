@@ -5,7 +5,8 @@ use std::sync::Arc;
 
 use novo_checks::standards::Colour;
 use novo_core::{
-    CabinetPlacement, Device, Project, Rail as ModelRail, RailKind, StructureId, Value, WireId,
+    CabinetPlacement, Device, DeviceKind, Project, Rail as ModelRail, RailKind, StructureId, Value,
+    WireId,
 };
 use novo_layout::enclosure::{Enclosure, Hinge};
 use novo_layout::model::{enclosure_of, load};
@@ -16,6 +17,7 @@ use super::{
     Depth, DoorSpec, DuctShape, HingeSide, Inputs, Options, Shell, WireColour, WireInput, WireKind,
     from_layout,
 };
+use crate::appearance::{DeviceClass, KindHint};
 use crate::scene::Scene;
 
 const DEPTH_KEY: &str = "depth_mm";
@@ -51,6 +53,16 @@ pub fn inputs(project: &Project, id: StructureId) -> Inputs {
             inputs
                 .depths
                 .insert(p.device.raw(), device_depth(project, device));
+            let hint = match device.kind {
+                DeviceKind::General => KindHint::General,
+                DeviceKind::TerminalStrip => KindHint::TerminalStrip,
+                DeviceKind::Connector => KindHint::Connector,
+                DeviceKind::Plc => KindHint::Plc,
+            };
+            inputs.classes.insert(
+                p.device.raw(),
+                DeviceClass::of(hint, device.tag.letter_code()),
+            );
             if let Some(code) = device.tag.device_code() {
                 inputs
                     .labels

@@ -44,6 +44,9 @@ pub(crate) struct View3dMode {
     /// Overlays without the moving tracers, and the lines the tracers follow.
     heat_base: Vec<novo_view3d::Overlay>,
     heat_flow: heat_3d::Flow,
+    /// Scene with devices coloured by temperature, for the key (scene
+    /// revision, result id).
+    heat_scene: Option<((u64, u64), Arc<novo_view3d::Scene>)>,
     /// The layers the scene was built with.
     built_layers: Layers,
     /// The routed wires of an enclosure at a project revision.
@@ -71,6 +74,7 @@ impl Default for View3dMode {
             heat_shown: None,
             heat_base: Vec::new(),
             heat_flow: heat_3d::Flow::default(),
+            heat_scene: None,
             built_layers: Layers::default(),
             wires: None,
             controls: Controls::default(),
@@ -224,9 +228,30 @@ impl NovoApp {
             mode.view
                 .set_door(DOOR_HINGE, angle, now, options.reduced_motion);
         }
-        let out = mode
-            .view
-            .show(ui, scene, &mode.library, &Look::for_theme(theme), options);
+        let shown = match &solution {
+            Some(sol) if mode.heat.devices => {
+                let key = (scene.revision, sol.id);
+                if !matches!(&mode.heat_scene, Some((k, _)) if *k == key) {
+                    let place = Place {
+                        plate_x: sol.plate[0],
+                        plate_y: sol.plate[1],
+                        frame: scene.frame,
+                    };
+                    let tinted =
+                        heat_3d::tint_devices(scene, &sol.snapshot, sol.ambient, place, sol.id);
+                    mode.heat_scene = Some((key, Arc::new(tinted)));
+                }
+                mode.heat_scene.as_ref().map(|(_, s)| s)
+            }
+            _ => None,
+        };
+        let out = mode.view.show(
+            ui,
+            shown.unwrap_or(scene),
+            &mode.library,
+            &Look::for_theme(theme),
+            options,
+        );
         mode.view.state.hover = out.hover;
         let state = &mut mode.view.state;
         if let Some(click) = &out.clicked {
@@ -325,6 +350,9 @@ fn heat_controls(ui: &mut egui::Ui, h: &mut Heat3d, sol: &super::heat_run::Solut
         }
         ui.checkbox(&mut h.lines, "Airflow")
             .on_hover_text("Streamlines from in front of the devices; faster air is brighter");
+        ui.checkbox(&mut h.devices, "Devices").on_hover_text(
+            "Colour each device by the air temperature in front of it, on the same scale as the slice",
+        );
         ui.label(
             egui::RichText::new(format!("{:.0} to {:.0} °C", range.lo, range.hi))
                 .small()

@@ -21,6 +21,8 @@ pub(crate) struct Heat3d {
     /// Temperature of the shell between ambient (0) and the hottest cell (1).
     pub iso_at: f32,
     pub lines: bool,
+    /// Colour the device bodies by the air temperature in front of them.
+    pub devices: bool,
 }
 
 impl Default for Heat3d {
@@ -32,6 +34,7 @@ impl Default for Heat3d {
             iso: false,
             iso_at: 0.6,
             lines: false,
+            devices: false,
         }
     }
 }
@@ -57,6 +60,49 @@ const SLICE_ALPHA: u8 = 190;
 const SHELL_ALPHA: u8 = 110;
 /// Most cells across a slice.
 const SLICE_CELLS: f64 = 120.0;
+
+/// How far in front of a device face the air is sampled, mm.
+const DEVICE_SAMPLE_MM: f32 = 4.0;
+
+/// The scene with every device body coloured by the air temperature at the
+/// middle of its front face, on the same scale as the slice. A device the
+/// solver frame does not contain keeps its own colour. The revision changes
+/// with `salt` (the result id) so the view redraws.
+pub(crate) fn tint_devices(
+    scene: &novo_view3d::Scene,
+    snap: &CfdSnapshot,
+    ambient: f64,
+    place: Place,
+    salt: u64,
+) -> novo_view3d::Scene {
+    let range = range(snap, ambient);
+    let mut out = scene.clone();
+    out.revision = scene
+        .revision
+        .wrapping_add(salt.wrapping_mul(0x9E37_79B9) | 1);
+    if !snap.is_consistent() {
+        return out;
+    }
+    for item in &mut out.items {
+        if item.id.kind != novo_view3d::ItemKind::Device {
+            continue;
+        }
+        let front = glam::Vec3::new(0.0, 0.0, item.size.z + DEVICE_SAMPLE_MM);
+        let w = scene.world_matrix(item).transform_point3(front);
+        // The inverse of `Place::world`.
+        let p = [
+            f64::from(w.x) + place.plate_x,
+            place.plate_y + f64::from(place.frame.height - w.y),
+            f64::from(w.z),
+        ];
+        if !cfd::inside(snap, p) {
+            continue;
+        }
+        let rgb = heat::ramp(range.t(f64::from(cfd::temperature_at(snap, p))));
+        item.tint = Some(rgb);
+    }
+    out
+}
 
 /// Temperature scale of a result: ambient to the hottest cell.
 pub(crate) fn range(snap: &CfdSnapshot, ambient: f64) -> Range {
