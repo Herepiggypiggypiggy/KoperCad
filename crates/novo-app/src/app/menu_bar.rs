@@ -126,33 +126,23 @@ impl NovoApp {
         if items.is_empty() {
             return None;
         }
+        // A long menu (File) scrolls instead of running off a short screen. Only a
+        // menu that would not fit is wrapped, so the others lay out as before.
+        let row = ui.spacing().interact_size.y + ui.spacing().item_spacing.y;
+        let separators = items
+            .iter()
+            .filter(|i| matches!(i, MenuItem::Separator))
+            .count();
+        let wanted = (items.len() - separators) as f32 * row + separators as f32 * 10.0;
+        let room = (ui.ctx().content_rect().height() - 80.0).max(200.0);
+        let scrolls = wanted > room;
         let response = ui.menu_button(menu, |ui| {
-            for item in &items {
-                match item {
-                    MenuItem::Separator => {
-                        ui.separator();
-                    }
-                    MenuItem::Command(info) => {
-                        self.command_row(ui, info);
-                        if info.id == "file.example" {
-                            self.recent_menu(ui);
-                        }
-                    }
-                    MenuItem::Submenu { name, items } => {
-                        // The lesson steps only exist while a lesson runs;
-                        // outside one they would be permanently greyed.
-                        if *name == "Lesson"
-                            && items.iter().all(|i| self.command_unavailable(i).is_some())
-                        {
-                            continue;
-                        }
-                        ui.menu_button(*name, |ui| {
-                            for info in items {
-                                self.command_row(ui, info);
-                            }
-                        });
-                    }
-                }
+            if scrolls {
+                egui::ScrollArea::vertical()
+                    .max_height(room)
+                    .show(ui, |ui| self.menu_rows(ui, &items));
+            } else {
+                self.menu_rows(ui, &items);
             }
         });
         self.anchor(&format!("menu.{menu}"), response.response.rect, menu);
@@ -162,7 +152,39 @@ impl NovoApp {
         Some(response.response.rect)
     }
 
-    /// File › Recent: the projects opened lately, newest first.
+    /// The rows of one menu.
+    fn menu_rows(&mut self, ui: &mut egui::Ui, items: &[MenuItem]) {
+        for item in items {
+            match item {
+                MenuItem::Separator => {
+                    ui.separator();
+                }
+                MenuItem::Command(info) => {
+                    self.command_row(ui, info);
+                }
+                MenuItem::Submenu { name, items } => {
+                    // The lesson steps only exist while a lesson runs;
+                    // outside one they would be permanently greyed.
+                    if *name == "Lesson"
+                        && items.iter().all(|i| self.command_unavailable(i).is_some())
+                    {
+                        continue;
+                    }
+                    ui.menu_button(*name, |ui| {
+                        for info in items {
+                            self.command_row(ui, info);
+                        }
+                        // File > Open > Recent is not a command of its own.
+                        if *name == "Open" {
+                            self.recent_menu(ui);
+                        }
+                    });
+                }
+            }
+        }
+    }
+
+    /// File > Open > Recent: the projects opened lately, newest first.
     fn recent_menu(&mut self, ui: &mut egui::Ui) {
         ui.add_enabled_ui(!self.settings.recent_projects.is_empty(), |ui| {
             ui.menu_button("Recent", |ui| {
@@ -374,25 +396,6 @@ mod width_tests {
                 );
             }
         }
-    }
-
-    #[test]
-    fn commissioning_docks_beside_the_sheet_from_1100_unless_unpinned() {
-        use super::super::workspace::Workspace;
-        let dir = tempfile::tempdir().unwrap();
-        let mut d = Drive::new(&dir.path().join("untitled"));
-        let ctx = d.ctx.clone();
-        d.app.run(&ctx, Action::OpenExample);
-        frame_at(&mut d, 1366.0);
-        assert!(!d.app.outline_pinned(), "the schematic keeps the flyout");
-        d.app.switch_workspace(Workspace::Commissioning);
-        frame_at(&mut d, 1366.0);
-        assert!(d.app.outline_pinned(), "commissioning docks at 1366");
-        frame_at(&mut d, 1000.0);
-        assert!(!d.app.outline_pinned(), "too narrow to dock");
-        d.app.settings.outline_pinned = Some(false);
-        frame_at(&mut d, 1366.0);
-        assert!(!d.app.outline_pinned(), "the user's choice wins");
     }
 
     #[test]

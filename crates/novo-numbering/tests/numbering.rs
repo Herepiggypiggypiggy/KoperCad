@@ -378,3 +378,52 @@ fn the_wire_list_shows_the_numbers() {
         );
     }
 }
+
+/// A contactor, an overload relay whose heaters conduct (permanent bridges)
+/// and a motor, wired in a line: three phases, six wires.
+fn through_overload(tx: &mut Tx<'_>) -> Result<Vec<WireId>> {
+    let page = tx.add_page("1")?;
+    let [k, f, m] = [("-K1", "Contactor"), ("-F2", "Overload"), ("-M1", "Motor")]
+        .map(|(t, n)| tx.add_device(tag(t), n).unwrap());
+    let k1 = block(tx, page, k, 40.0, 20.0)?;
+    let f2 = block(tx, page, f, 40.0, 60.0)?;
+    let m1 = block(tx, page, m, 40.0, 100.0)?;
+    tx.update::<novo_core::SymbolInstance>(f2, |s| s.bridges = vec![vec![0, 1]])?;
+    // Pin 0 of the relay is the heater input, pin 1 its output.
+    Ok(vec![
+        tx.connect(Endpoint::pin(k1, 0), Endpoint::pin(f2, 0))?,
+        tx.connect(Endpoint::pin(f2, 1), Endpoint::pin(m1, 0))?,
+    ])
+}
+
+#[test]
+fn a_wire_into_and_out_of_a_bridged_device_get_different_numbers() {
+    let mut doc = Document::default();
+    let (wires, _) = doc.transact("Draw", through_overload).unwrap();
+    // The netlist conducts through the heater: one electrical node.
+    let net = doc.project().netlist();
+    assert!(
+        net.connected(
+            Endpoint::pin(
+                doc.project()
+                    .wire(wires[0])
+                    .unwrap()
+                    .from
+                    .as_pin()
+                    .unwrap()
+                    .symbol,
+                0
+            ),
+            doc.project().wire(wires[1]).unwrap().to
+        )
+    );
+    let scheme = Scheme::new(SchemeKind::Sequential);
+    run(&mut doc, &scheme, Mode::Fill);
+    let n = numbers(&doc, &wires);
+    assert!(n[0].is_some() && n[1].is_some());
+    assert_ne!(n[0], n[1], "two wires on the bench, two numbers");
+    // Stable on a second run, and no conflict is reported.
+    let again = run(&mut doc, &scheme, Mode::Fill);
+    assert!(again.is_empty());
+    assert!(check(doc.project(), &scheme).is_empty());
+}

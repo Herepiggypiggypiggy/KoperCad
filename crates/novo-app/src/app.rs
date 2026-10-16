@@ -47,12 +47,15 @@ mod heat;
 mod heat_3d;
 #[cfg(test)]
 mod heat_3d_tests;
+mod heat_arrows;
 mod heat_compare;
 #[cfg(test)]
 mod heat_compare_tests;
+mod heat_legend;
 mod heat_live;
 #[cfg(test)]
 mod heat_live_tests;
+mod heat_probe;
 mod heat_progress;
 #[cfg(test)]
 mod heat_progress_tests;
@@ -60,6 +63,7 @@ mod heat_run;
 #[cfg(test)]
 mod heat_run_tests;
 mod heat_settings;
+mod heat_spots;
 mod inspector;
 mod interop;
 mod languages;
@@ -80,12 +84,16 @@ mod macro_browser;
 mod macro_browser_tests;
 #[cfg(test)]
 mod macro_company_tests;
+mod macro_editor;
+#[cfg(test)]
+mod macro_editor_tests;
 mod macro_thumb;
 mod menu_bar;
 mod net_trace;
 mod numbering;
 mod onboarding;
 mod outline;
+mod outline_items;
 mod outline_tree;
 mod pages;
 mod panel;
@@ -95,6 +103,7 @@ mod parts_bulk;
 mod parts_import;
 mod parts_quality;
 mod pdf;
+mod pdf_options;
 mod plate_export;
 mod plc;
 mod plc_card;
@@ -110,6 +119,7 @@ mod reports_view;
 mod revisions;
 mod safety;
 mod safety_functions;
+mod safety_report;
 mod sheet_import;
 mod sheets;
 mod shortcuts_sheet;
@@ -130,10 +140,16 @@ mod userkeymap;
 mod variants;
 mod view3d;
 mod view3d_controls;
+mod view3d_duplicate;
 mod view3d_heat;
 mod view3d_move;
 #[cfg(test)]
 mod view3d_move_tests;
+mod view3d_nudge;
+mod view3d_place;
+mod view3d_rail;
+#[cfg(test)]
+mod view3d_rail_tests;
 mod view3d_stats;
 #[cfg(test)]
 mod view3d_tests;
@@ -176,6 +192,8 @@ mod eplan_ui_tests;
 #[cfg(test)]
 mod example_tests;
 #[cfg(test)]
+mod faults_tests;
+#[cfg(test)]
 mod gate1_tests;
 #[cfg(test)]
 mod greyed_commands_tests;
@@ -198,7 +216,11 @@ mod outline_tests;
 #[cfg(test)]
 mod page_commands_tests;
 #[cfg(test)]
+mod pdf_options_tests;
+#[cfg(test)]
 mod protection_tests;
+#[cfg(test)]
+mod read_only_tests;
 #[cfg(test)]
 mod route_all_tests;
 #[cfg(test)]
@@ -277,12 +299,35 @@ pub struct Message {
     pub text: String,
     /// When it was raised; info toasts fade after [`TOAST_INFO`].
     pub at: Instant,
-    /// Clicked away; warnings and errors stay until then.
+    /// Clicked away, or expired.
     pub dismissed: bool,
+    /// How often the same text was raised while it was still up.
+    pub count: u32,
+    /// A file this message is about (an export): its toast offers to open
+    /// the folder and stays up longer than a plain info message.
+    pub file: Option<PathBuf>,
+}
+
+impl Message {
+    /// How long its toast stays up.
+    fn expiry(&self) -> Option<Duration> {
+        Some(match (self.level, &self.file) {
+            (Level::Info, None) => TOAST_INFO,
+            (Level::Info, Some(_)) => TOAST_FILE,
+            (Level::Warning, _) => TOAST_WARNING,
+            (Level::Error, _) => TOAST_ERROR,
+        })
+    }
 }
 
 /// How long an info toast stays up.
 const TOAST_INFO: Duration = Duration::from_secs(5);
+/// How long the toast for a written file stays up.
+const TOAST_FILE: Duration = Duration::from_secs(12);
+/// How long a warning stays up; it is still in the log afterwards.
+const TOAST_WARNING: Duration = Duration::from_secs(15);
+/// How long an error stays up unless clicked away.
+const TOAST_ERROR: Duration = Duration::from_secs(30);
 /// Most toasts shown at once; older ones wait in [`NovoApp::messages`].
 const MAX_TOASTS: usize = 3;
 /// Height of the top bar.
@@ -291,9 +336,6 @@ const TOP_BAR: f32 = 42.0;
 const OUTLINE_WIDTH: f32 = 248.0;
 /// Windows at least this wide pin the outline unless the user chose.
 const PIN_OUTLINE_FROM: f32 = 1700.0;
-/// Commissioning is a working column beside the sheet, so it docks from
-/// here unless the user chose otherwise; a flyout would hide the drawing.
-const PIN_COMMISSIONING_FROM: f32 = 1100.0;
 
 /// An action that replaces or closes the open project. Nothing asks first:
 /// the backend keeps the work (docs/DESIGN.md: no save prompts).
@@ -301,6 +343,7 @@ const PIN_COMMISSIONING_FROM: f32 = 1100.0;
 enum Leaving {
     New,
     Open,
+    OpenReadOnly,
     OpenPath(PathBuf),
     Example,
     Practice,
@@ -551,8 +594,8 @@ impl NovoApp {
         let open = self.is_open();
         let doc = self.backend.document();
         match action {
-            Action::SaveProject
-            | Action::SaveProjectAs
+            Action::SaveProject => open && !self.backend.is_read_only(),
+            Action::SaveProjectAs
             | Action::CloseProject
             | Action::ZoomToFit
             | Action::SizeEnclosure
@@ -563,8 +606,16 @@ impl NovoApp {
             Action::ShowCabinet => self
                 .workspace_unavailable(workspace::Workspace::Cabinet)
                 .is_none(),
-            Action::Undo => !self.commissioning_locks_edits() && doc.is_some_and(|d| d.can_undo()),
-            Action::Redo => !self.commissioning_locks_edits() && doc.is_some_and(|d| d.can_redo()),
+            Action::Undo => {
+                !self.commissioning_locks_edits()
+                    && !self.backend.is_read_only()
+                    && doc.is_some_and(|d| d.can_undo())
+            }
+            Action::Redo => {
+                !self.commissioning_locks_edits()
+                    && !self.backend.is_read_only()
+                    && doc.is_some_and(|d| d.can_redo())
+            }
             _ => true,
         }
     }
@@ -583,6 +634,7 @@ impl NovoApp {
         match action {
             Action::NewProject => self.leave_then(ctx, Leaving::New),
             Action::OpenProject => self.leave_then(ctx, Leaving::Open),
+            Action::OpenReadOnly => self.leave_then(ctx, Leaving::OpenReadOnly),
             Action::OpenExample => self.leave_then(ctx, Leaving::Example),
             Action::TryFastKeys => self.leave_then(ctx, Leaving::Practice),
             Action::ShowWalkthrough => self.show_walkthrough(),
@@ -640,17 +692,41 @@ impl NovoApp {
     }
 
     fn message(&mut self, level: Level, text: impl Into<String>) {
-        let text = text.into();
+        self.raise(level, text.into(), None);
+    }
+
+    /// Reports a file that was written: the toast names it and offers to
+    /// open its folder.
+    pub(super) fn message_file(&mut self, text: impl Into<String>, file: &Path) {
+        self.raise(Level::Info, text.into(), Some(file.to_owned()));
+    }
+
+    fn raise(&mut self, level: Level, text: String, file: Option<PathBuf>) {
         match level {
             Level::Info => log::info!("{text}"),
             Level::Warning => log::warn!("{text}"),
             Level::Error => log::error!("{text}"),
+        }
+        // The same message again (a failing export tried twice) renews the
+        // one on screen instead of stacking a copy.
+        if let Some(same) = self
+            .messages
+            .iter_mut()
+            .rev()
+            .find(|m| !m.dismissed && m.level == level && m.text == text && m.file == file)
+            .filter(|m| m.expiry().is_none_or(|e| m.at.elapsed() < e))
+        {
+            same.count += 1;
+            same.at = Instant::now();
+            return;
         }
         self.messages.push(Message {
             level,
             text,
             at: Instant::now(),
             dismissed: false,
+            count: 1,
+            file,
         });
         if self.messages.len() > MESSAGE_HISTORY {
             let excess = self.messages.len() - MESSAGE_HISTORY;
@@ -673,6 +749,17 @@ impl NovoApp {
                 }
                 if let Some(path) = dialog.pick_file() {
                     self.open_path(&path);
+                }
+            }
+            Leaving::OpenReadOnly => {
+                let mut dialog = rfd::FileDialog::new()
+                    .set_title("Open project read-only")
+                    .add_filter("KoperCAD project", &[PROJECT_EXTENSION]);
+                if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
+                    dialog = dialog.set_directory(dir);
+                }
+                if let Some(path) = dialog.pick_file() {
+                    self.open_path_as(&path, true);
                 }
             }
             Leaving::OpenPath(path) => self.open_path(&path),
@@ -698,7 +785,18 @@ impl NovoApp {
     }
 
     fn open_path(&mut self, path: &Path) {
-        match self.backend.open(path) {
+        self.open_path_as(path, false);
+    }
+
+    /// Opens `path`; with `read_only` the project can be looked at but not
+    /// changed or written (File > Open read-only).
+    fn open_path_as(&mut self, path: &Path, read_only: bool) {
+        let opened = if read_only {
+            self.backend.open_read_only(path)
+        } else {
+            self.backend.open(path)
+        };
+        match opened {
             Ok(report) => {
                 self.current_page = None;
                 self.document_replaced();
@@ -707,8 +805,11 @@ impl NovoApp {
                     self.project_path = None;
                 } else {
                     self.project_path = Some(path.to_owned());
-                    self.settings.remember_recent(path);
-                    self.message(Level::Info, format!("Opened {}", path.display()));
+                    if !read_only {
+                        self.settings.remember_recent(path);
+                    }
+                    let how = if read_only { " read-only" } else { "" };
+                    self.message(Level::Info, format!("Opened {}{how}", path.display()));
                 }
                 if let Some(aside) = report.set_aside {
                     self.message(
@@ -1002,6 +1103,10 @@ impl NovoApp {
                     || *id == "view.command_field_here"
                     || *id == "view.3d"
                     || *id == "view.3d_door"
+                    || *id == "view.3d_duplicate"
+                    || (*id == "edit.duplicate" && in_3d)
+                    || *id == "view.3d_position"
+                    || *id == "view.3d_place"
                     || *id == "view.3d_stats"
                     || id.starts_with("heat.")
             });
@@ -1027,7 +1132,7 @@ impl NovoApp {
                 .show(ui, |ui| self.reports_list(ui));
         } else if pinned && self.is_open() {
             egui::Panel::left("outline")
-                .exact_size(OUTLINE_WIDTH)
+                .exact_size(self.outline_width())
                 .resizable(false)
                 .show(ui, |ui| self.outline(ui, &mut picked));
         }
@@ -1101,6 +1206,7 @@ impl NovoApp {
         self.whats_new_window(&ctx);
         self.background_panel(&ctx);
         self.bench_window(&ctx);
+        self.pdf_options_window(&ctx);
         self.designer_window(&ctx);
         self.parts_window(&ctx);
         self.parts_bulk_dialog(&ctx);
@@ -1111,6 +1217,7 @@ impl NovoApp {
         self.macro_browser_window(&ctx);
         self.macro_save_dialog(&ctx);
         self.macro_place_window(&ctx);
+        self.macro_editor_window(&ctx);
         self.options_window(&ctx);
         self.generate_window(&ctx);
         self.issue_revision_dialog(&ctx);
@@ -1121,6 +1228,7 @@ impl NovoApp {
         self.poll_dwg(&ctx);
         self.protection_window(&ctx);
         self.faults_window(&ctx);
+        self.add_fault_window(&ctx);
         self.calculations_window(&ctx);
         self.electrical_window(&ctx);
         self.safety_window(&ctx);
@@ -1143,14 +1251,43 @@ impl NovoApp {
         for command in commands {
             self.run_key_command(&ctx, command);
         }
+        self.enforce_read_only();
         self.learn_end_frame();
+    }
+
+    /// A project opened read-only is never changed. Every edit path goes
+    /// through the document, so whatever got through this frame (a canvas
+    /// gesture, an outline rename, a menu command) is undone at once, and
+    /// the user is told once how to get an editable copy. Nothing is
+    /// recorded, so nothing reaches the file.
+    fn enforce_read_only(&mut self) {
+        if !self.backend.is_read_only() {
+            return;
+        }
+        let mut undone = false;
+        for _ in 0..10_000 {
+            if !self.backend.document().is_some_and(|d| d.can_undo()) {
+                break;
+            }
+            self.undo_redo(false);
+            undone = true;
+        }
+        if undone {
+            self.message(
+                Level::Info,
+                "This project is open read-only, so the change was taken back. Use File > Save as to keep an editable copy.",
+            );
+        }
     }
 
     /// Follows up on what the canvas did this frame: its edits reach the
     /// other views, and a page it asked for is opened.
     fn after_canvas(&mut self) {
         let changes = self.canvas.take_changes();
-        if !changes.is_empty() && self.commissioning_locks_edits() {
+
+        if self.backend.is_read_only() {
+            self.enforce_read_only();
+        } else if !changes.is_empty() && self.commissioning_locks_edits() {
             // Commissioning mode checks the drawing against the machine; a
             // stray touch must not move a wire. One undo takes it back.
             self.undo_redo(false);
@@ -1219,7 +1356,14 @@ impl NovoApp {
 
     fn update_title(&mut self, ctx: &egui::Context) {
         let title = match self.project_name() {
-            Some(name) => format!("{name}{} - {APP_NAME}", self.standard_suffix()),
+            Some(name) => {
+                let ro = if self.backend.is_read_only() {
+                    " (read-only)"
+                } else {
+                    ""
+                };
+                format!("{name}{ro}{} - {APP_NAME}", self.standard_suffix())
+            }
             None => APP_NAME.to_owned(),
         };
         if title != self.window_title {
@@ -1234,11 +1378,22 @@ impl NovoApp {
     /// Whether the outline takes space beside the canvas: the user's
     /// choice, otherwise only on wide windows.
     fn outline_pinned(&self) -> bool {
-        self.settings.outline_pinned.unwrap_or(
-            self.window_width >= PIN_OUTLINE_FROM
-                || (self.workspace == workspace::Workspace::Commissioning
-                    && self.window_width >= PIN_COMMISSIONING_FROM),
-        )
+        if self.commissioning_pins_panel() {
+            return true;
+        }
+        self.settings
+            .outline_pinned
+            .unwrap_or(self.window_width >= PIN_OUTLINE_FROM)
+    }
+
+    /// The outline's width: wider in the Commissioning workspace at a tablet
+    /// window, where the touch targets need the room.
+    fn outline_width(&self) -> f32 {
+        if self.commissioning_tablet() {
+            commissioning::TABLET_PANEL_WIDTH
+        } else {
+            OUTLINE_WIDTH
+        }
     }
 
     /// Shows `page` on the canvas.
@@ -1268,6 +1423,8 @@ impl NovoApp {
     fn saved_state(&self) -> &'static str {
         if !self.is_open() {
             ""
+        } else if self.backend.is_read_only() {
+            "Read-only"
         } else if self.project_path.is_none() {
             "Not saved yet"
         } else if self.autosave_failing {
@@ -1335,10 +1492,13 @@ impl NovoApp {
                 if !fit.search.is_empty() && fit.search_width > 0.0 {
                     search = search.shortcut_text(shortcut.clone());
                 }
-                let search = ui
-                    .add(search)
-                    .on_hover_text(format!("Search or run ({shortcut})"));
-                self.anchor_response("palette.button", &search, "Search or run");
+                let search = ui.add(search);
+                let search = self.tip(
+                    search,
+                    "palette.button",
+                    "Search or run",
+                    "view.command_palette",
+                );
                 if search.clicked() {
                     picked.push(Action::CommandPalette);
                 }
@@ -1619,7 +1779,7 @@ impl NovoApp {
                 // The frame's margins and stroke come on top of the content.
                 let chrome = frame.total_margin().sum();
                 frame.show(ui, |ui| {
-                    ui.set_width(OUTLINE_WIDTH - chrome.x);
+                    ui.set_width(self.outline_width() - chrome.x);
                     ui.set_height(height - chrome.y);
                     self.outline(ui, picked);
                 });
@@ -1745,14 +1905,13 @@ impl NovoApp {
                 if m.dismissed {
                     return false;
                 }
-                if m.level != Level::Info {
-                    return true;
-                }
-                // The status bar shows info messages when it is on.
-                if self.status_bar_shown() {
+                // The status bar shows plain info messages when it is on; a
+                // written file always gets its toast, with the folder action.
+                if m.level == Level::Info && m.file.is_none() && self.status_bar_shown() {
                     return false;
                 }
-                let left = TOAST_INFO.saturating_sub(now - m.at);
+                let life = m.expiry().unwrap_or(TOAST_INFO);
+                let left = life.saturating_sub(now - m.at);
                 if !left.is_zero() {
                     fade_in = Some(fade_in.map_or(left, |f| f.min(left)));
                 }
@@ -1768,6 +1927,7 @@ impl NovoApp {
             return;
         }
         let mut dismiss = Vec::new();
+        let mut open = None;
         egui::Area::new(egui::Id::new("toasts"))
             .pivot(egui::Align2::LEFT_BOTTOM)
             .fixed_pos(canvas.left_bottom() + egui::vec2(12.0, -12.0))
@@ -1781,7 +1941,17 @@ impl NovoApp {
                         Level::Error => ui.visuals().error_fg_color,
                     };
                     let frame = egui::Frame::popup(ui.style()).show(ui, |ui| {
-                        ui.add(egui::Label::new(egui::RichText::new(&m.text).color(color)).wrap());
+                        let text = if m.count > 1 {
+                            format!("{} (x{})", m.text, m.count)
+                        } else {
+                            m.text.clone()
+                        };
+                        ui.add(egui::Label::new(egui::RichText::new(text).color(color)).wrap());
+                        if let Some(file) = &m.file
+                            && ui.button("Open folder").clicked()
+                        {
+                            open = file.parent().map(Path::to_owned);
+                        }
                     });
                     let response = frame.response.interact(egui::Sense::click());
                     if response.on_hover_text("Click to dismiss").clicked() {
@@ -1791,6 +1961,11 @@ impl NovoApp {
             });
         for i in dismiss {
             self.messages[i].dismissed = true;
+        }
+        if let Some(dir) = open
+            && let Err(e) = parts_bulk::open_folder(&dir)
+        {
+            self.message(Level::Error, format!("Could not open the folder: {e}"));
         }
     }
 
@@ -2581,6 +2756,39 @@ mod tests {
         let open = ctx.memory(|m| m.areas().visible_layer_ids());
         assert!(open.iter().any(|l| l.id == egui::Id::new("toasts")));
         app.messages[1].dismissed = true;
+        frame(&ctx, &mut app, Default::default());
+        frame(&ctx, &mut app, Default::default());
+        let open = ctx.memory(|m| m.areas().visible_layer_ids());
+        assert!(!open.iter().any(|l| l.id == egui::Id::new("toasts")));
+    }
+
+    #[test]
+    fn the_same_error_renews_one_toast_and_errors_expire() {
+        let mut app = app_with(MemoryBackend::default());
+        for _ in 0..4 {
+            app.message(Level::Error, "Could not find the Documents folder");
+        }
+        assert_eq!(app.messages.len(), 1);
+        assert_eq!(app.messages[0].count, 4);
+        app.messages[0].at -= TOAST_ERROR;
+        app.message(Level::Error, "Could not find the Documents folder");
+        assert_eq!(app.messages.len(), 2, "an expired one is not renewed");
+    }
+
+    #[test]
+    fn an_exported_file_gets_a_toast_with_the_folder_even_with_the_status_bar() {
+        let ctx = themed_ctx();
+        let mut app = app_with(MemoryBackend::default());
+        assert!(app.status_bar_shown());
+        app.message(Level::Info, "Plain info");
+        frame(&ctx, &mut app, Default::default());
+        let open = ctx.memory(|m| m.areas().visible_layer_ids());
+        assert!(!open.iter().any(|l| l.id == egui::Id::new("toasts")));
+        app.message_file("Exported /tmp/x/plan.pdf", Path::new("/tmp/x/plan.pdf"));
+        frame(&ctx, &mut app, Default::default());
+        let open = ctx.memory(|m| m.areas().visible_layer_ids());
+        assert!(open.iter().any(|l| l.id == egui::Id::new("toasts")));
+        app.messages.last_mut().unwrap().at -= TOAST_FILE;
         frame(&ctx, &mut app, Default::default());
         frame(&ctx, &mut app, Default::default());
         let open = ctx.memory(|m| m.areas().visible_layer_ids());

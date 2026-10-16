@@ -130,7 +130,7 @@ impl NovoApp {
             Ok(()) => {
                 self.wb.sheet_exports.insert(path.to_owned(), hash(bytes));
                 let verb = if replaced { "Replaced" } else { "Exported" };
-                self.message(Level::Info, format!("{verb} {what}: {}", path.display()));
+                self.message_file(format!("{verb} {what}: {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
@@ -501,6 +501,43 @@ fn cut_tab(
             *act = Some(Act::ExportMachineCsv);
         }
     });
+    ui.add_space(6.0);
+    cut_preview(ui, jobs);
+}
+
+/// The wires of the cut list as the PDF will order them, so the list can be
+/// read before anything is exported: number, size, cut length, ends.
+fn cut_preview(ui: &mut egui::Ui, jobs: &[novo_reports::WireCutJob]) {
+    ui.strong("Wires to cut");
+    egui::ScrollArea::vertical()
+        .id_salt("bench_cut_preview")
+        .max_height(240.0)
+        .auto_shrink([false, true])
+        .show(ui, |ui| {
+            egui::Grid::new("bench_cut_rows")
+                .num_columns(5)
+                .spacing([10.0, 2.0])
+                .striped(true)
+                .show(ui, |ui| {
+                    for head in ["No", "mm²", "Cut mm", "From", "To"] {
+                        ui.weak(head);
+                    }
+                    ui.end_row();
+                    for j in jobs {
+                        let est = is_estimate(&j.basis);
+                        ui.label(if j.number.is_empty() { "-" } else { &j.number });
+                        ui.label(
+                            j.cross_section_mm2
+                                .map_or("not set".to_owned(), |s| s.to_string()),
+                        );
+                        let cut = format!("{}{:.0}", if est { "~" } else { "" }, j.cut_mm);
+                        ui.label(cut);
+                        ui.label(&j.end_a.designation);
+                        ui.label(&j.end_b.designation);
+                        ui.end_row();
+                    }
+                });
+        });
 }
 
 fn ferrule_tab(
