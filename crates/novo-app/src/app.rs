@@ -81,6 +81,9 @@ mod macro_browser;
 mod macro_browser_tests;
 #[cfg(test)]
 mod macro_company_tests;
+mod macro_editor;
+#[cfg(test)]
+mod macro_editor_tests;
 mod macro_thumb;
 mod menu_bar;
 mod net_trace;
@@ -178,6 +181,8 @@ mod compare_tests;
 mod eplan_ui_tests;
 #[cfg(test)]
 mod example_tests;
+#[cfg(test)]
+mod faults_tests;
 #[cfg(test)]
 mod gate1_tests;
 #[cfg(test)]
@@ -1158,6 +1163,7 @@ impl NovoApp {
         self.macro_browser_window(&ctx);
         self.macro_save_dialog(&ctx);
         self.macro_place_window(&ctx);
+        self.macro_editor_window(&ctx);
         self.options_window(&ctx);
         self.generate_window(&ctx);
         self.issue_revision_dialog(&ctx);
@@ -1168,6 +1174,7 @@ impl NovoApp {
         self.poll_dwg(&ctx);
         self.protection_window(&ctx);
         self.faults_window(&ctx);
+        self.add_fault_window(&ctx);
         self.calculations_window(&ctx);
         self.electrical_window(&ctx);
         self.safety_window(&ctx);
