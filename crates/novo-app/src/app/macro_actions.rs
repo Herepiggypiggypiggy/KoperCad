@@ -420,7 +420,7 @@ impl NovoApp {
         let can_place = page.is_some();
         let win = &mut self.wb.macro_place;
         let entries = win.entries();
-        egui::Window::new("Place macro")
+        let window = egui::Window::new("Place macro")
             .open(&mut open)
             .default_size([420.0, 440.0])
             .show(ctx, |ui| {
@@ -513,6 +513,9 @@ impl NovoApp {
                     place = true;
                 }
             });
+        if let Some(window) = window {
+            self.anchor("macro.place", window.response.rect, "Place macro");
+        }
         if let Some(path) = pick {
             self.wb.macro_place.select(&path);
         }

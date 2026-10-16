@@ -310,7 +310,7 @@ impl NovoApp {
             .document()
             .map(|d| self.wb.macros.updates_for(d.project()))
             .unwrap_or_default();
-        egui::Window::new("Macros")
+        let window = egui::Window::new("Macros")
             .id(egui::Id::new("macro_browser"))
             .open(&mut open)
             .default_width(520.0)
@@ -501,6 +501,9 @@ impl NovoApp {
                     ui.weak(&b.status);
                 }
             });
+        if let Some(window) = window {
+            self.anchor("macros.window", window.response.rect, "Macros");
+        }
         if let Some(dest) = export {
             self.wb.macros.export_selected(&dest);
         }

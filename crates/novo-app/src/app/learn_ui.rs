@@ -320,10 +320,9 @@ impl NovoApp {
                             );
                         }
                         Span::Ui(id) => {
-                            let name =
-                                self.learn.labels.get(id).cloned().unwrap_or_else(|| {
-                                    id.rsplit('.').next().unwrap_or(id).to_owned()
-                                });
+                            let name = super::learn_labels::any_anchor_label(id)
+                                .or_else(|| self.learn.labels.get(id).cloned())
+                                .unwrap_or_else(|| id.rsplit('.').next().unwrap_or(id).to_owned());
                             ui.label(egui::RichText::new(name).strong());
                         }
                         Span::Tip(term) => {
