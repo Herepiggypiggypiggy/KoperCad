@@ -4,8 +4,13 @@
 //! novo-sim. Nothing here touches the model: the states live in the
 //! workbench and the wires are lit in the canvas's own wire layer.
 //!
+<<<<<<< HEAD
 //! Poles start as a plant at rest (break contacts closed, breakers on). A badge sits on every switched pole of
 //! the page: hold a pushbutton to press it, click any other pole to close or open every pole of the device together,
+=======
+//! Poles start open (a plant at rest). A badge sits on every switched pole of
+//! the page: click it to close or open every pole of the device together,
+>>>>>>> origin/main
 //! Shift+click to drive that one pole apart (its badge then gets an amber ring). A wire carrying one potential is lit in that
 //! potential's colour, wires nothing reaches are dimmed, and a net where two
 //! potentials meet is drawn red.
@@ -210,9 +215,13 @@ impl LiveView {
     /// per-pole override this puts the poles back in step.
     pub(super) fn flip_together(&mut self, project: &Project, symbol: SymbolId, group: usize) {
         let closed = self.poles.is_closed(symbol, group);
+<<<<<<< HEAD
         for member in together(project, symbol) {
             self.poles.set_all(project, member, !closed);
         }
+=======
+        self.poles.set_all(project, symbol, !closed);
+>>>>>>> origin/main
     }
 
     /// Puts every pole in the state of a plant at rest.
@@ -334,6 +343,7 @@ pub(super) struct PoleBadge {
 pub(super) fn pole_badges(project: &Project, page: PageId, poles: &PoleState) -> Vec<PoleBadge> {
     let mut badges = Vec::new();
     for symbol in project.symbols().filter(|s| s.page == page) {
+<<<<<<< HEAD
         let (mut closed_poles, mut all_poles) = (0, 0);
         for member in together(project, symbol.id) {
             let n = project.symbol(member).map_or(0, |m| m.pass_through.len());
@@ -341,6 +351,12 @@ pub(super) fn pole_badges(project: &Project, page: PageId, poles: &PoleState) ->
             closed_poles += (0..n).filter(|&g| poles.is_closed(member, g)).count();
         }
         let mixed = closed_poles != 0 && closed_poles != all_poles;
+=======
+        let closed_poles = (0..symbol.pass_through.len())
+            .filter(|&g| poles.is_closed(symbol.id, g))
+            .count();
+        let mixed = closed_poles != 0 && closed_poles != symbol.pass_through.len();
+>>>>>>> origin/main
         for (group, pins) in symbol.pass_through.iter().enumerate() {
             let at: Vec<_> = pins
                 .iter()
@@ -620,11 +636,12 @@ impl NovoApp {
 
         // Wires: lit in their colour, dimmed when nothing reaches them. The
         // canvas draws them in its wire layer, under the symbols and text.
+        let dead_wire = novo_theme::POTENTIALS_DARK.dead;
         let looks = wires
             .iter()
             .map(|wire| {
                 let (color, width) = match &wire.live {
-                    Live::Dead => (tokens::BG_0.gamma_multiply(0.6), 2.5),
+                    Live::Dead => (novo_theme::canvas::to_color32(dead_wire), 2.5),
                     Live::Carries(p) => {
                         let color = colors.get(p).map_or(tokens::ACCENT, |c| c.1);
                         (color.gamma_multiply(0.9), LIT_WIDTH)
@@ -740,12 +757,17 @@ impl NovoApp {
                             if badge.closed { "open" } else { "close" },
                         )
                     };
+<<<<<<< HEAD
                     let shift = ui.input(|i| i.modifiers.shift);
                     let momentary = is_momentary(project, badge.symbol) && !shift;
                     if momentary && response.is_pointer_button_down_on() {
                         pressed = Some((badge.symbol, badge.group));
                     }
                     if response.on_hover_text(tip).clicked() && !momentary {
+=======
+                    if response.on_hover_text(tip).clicked() {
+                        let shift = ui.input(|i| i.modifiers.shift);
+>>>>>>> origin/main
                         clicked = Some((badge.symbol, badge.group, !shift));
                     }
                 });
@@ -958,6 +980,7 @@ impl NovoApp {
         {
             self.wb.live.forced.insert(coil);
         }
+<<<<<<< HEAD
         match pressed {
             Some((symbol, group)) if !driven.contains(&symbol) => {
                 if let Some(doc) = self.backend.document() {
@@ -973,6 +996,8 @@ impl NovoApp {
             }
             _ => {}
         }
+=======
+>>>>>>> origin/main
         if let Some((symbol, group, together)) = clicked
             && !driven.contains(&symbol)
         {
@@ -1110,6 +1135,7 @@ mod tests {
         assert!((0..3).all(|g| !live.poles.is_closed(q, g)));
     }
 
+<<<<<<< HEAD
     #[test]
     fn single_pole_symbols_of_one_device_switch_together_and_a_pushbutton_springs_back() {
         let mut doc = Document::default();
@@ -1177,6 +1203,8 @@ mod tests {
         assert!(!live.poles.is_closed(push, 0));
     }
 
+=======
+>>>>>>> origin/main
     #[test]
     fn the_legend_counts_nets_and_each_pole_gets_a_badge() {
         let mut doc = Document::default();

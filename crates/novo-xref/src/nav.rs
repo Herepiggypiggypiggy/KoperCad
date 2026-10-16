@@ -159,12 +159,15 @@ impl Navigator {
     }
 
     /// Shift+G: every occurrence of the selection's device, in the order
-    /// the list shows them.
+    /// the list shows them: by page (natural order), then reading order on
+    /// the page.
     pub fn all<'i>(&self, index: &'i XrefIndex, current: Place) -> Vec<&'i Reference> {
-        current
+        let mut all = current
             .symbol
             .map(|s| index.all_references(s))
-            .unwrap_or_default()
+            .unwrap_or_default();
+        all.sort_by_key(|r| r.order);
+        all
     }
 
     /// Ends a G cycle (call when the selection changes by other means).

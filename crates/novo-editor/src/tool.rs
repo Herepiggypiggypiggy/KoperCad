@@ -19,7 +19,7 @@ use crate::geometry::{self, EPS, Target, endpoint_direction, route_through, snap
 use crate::lines::{self, elbow, exact_bends, lock_axis};
 use crate::naming::{self, Numbering, parse_tag_input, tag_conflict};
 use crate::overlap::Refusal;
-use crate::potential::{self, FEED_SYMBOL, PotentialMenu, Suggestion};
+use crate::potential::{self, FEED_PE_SYMBOL, FEED_SYMBOL, FeedSymbols, PotentialMenu, Suggestion};
 use crate::row::{self, RowDrag};
 
 /// Placing one symbol, over and over.
@@ -2374,8 +2374,12 @@ impl Editor {
         spec: &potential::PotentialSpec,
     ) -> bool {
         let label = format!("Set potential {}", spec.name);
+        let symbols = FeedSymbols {
+            line: self.catalog.in_pack(FEED_SYMBOL),
+            earth: self.catalog.in_pack(FEED_PE_SYMBOL),
+        };
         self.run(doc, &label, |tx| {
-            potential::set_feed_potential(tx, feeds, spec).map(|_| ())
+            potential::set_feed_potential(tx, feeds, spec, &symbols).map(|_| ())
         })
     }
 
@@ -2418,9 +2422,17 @@ impl Editor {
             self.notice = Some("The symbol library has no potential feed".into());
             return false;
         };
+        let Some(earth) = self
+            .catalog
+            .get(&self.catalog.in_pack(FEED_PE_SYMBOL))
+            .cloned()
+        else {
+            self.notice = Some("The symbol library has no earth feed".into());
+            return false;
+        };
         let label = suggestion.label.clone();
         self.run(doc, &label, |tx| {
-            potential::assign(tx, &feed, wires, &suggestion.specs)
+            potential::assign(tx, &feed, &earth, wires, &suggestion.specs)
         })
     }
 
