@@ -1,0 +1,101 @@
+# Cabinet track, lesson 5. Sample: the finished cabinet of rails-and-ducts (the inside size is
+# not set, so the Inside and door form starts from its defaults).
+#
+# NOT ON MAIN yet (the whole lesson): enclosure inside size, depth and door check, #409.
+# Numbers below follow the form defaults in #409: inside = plate size, depth 250, setback 20,
+# door left, 90 degrees. With depth 100 the usable depth is 80 mm, so -K1, -F2 (90 mm deep) and
+# -T1 (85 mm) are too deep, and -F1 (68) and -F3 (70) still fit. Re-check against the merged code.
+format = 1
+id = "enclosure-door-and-depth"
+version = 1
+status = "draft"
+title = "Will the door close?"
+title_nl = "Sluit de deur nog?"
+summary = "Enter the inside size and door of the cabinet and let KoperCAD check device depth and the room the open door needs."
+summary_nl = "Voer de binnenmaten en de deur van de kast in en laat KoperCAD de diepte van de componenten en de ruimte voor de open deur controleren."
+track = "cabinet"
+order = 50
+level = "intermediate"
+minutes = 7
+topics = ["cabinet", "enclosure", "door"]
+needs = ["cabinet-layout"]
+next = ["heat-and-sizing"]
+project = "../rails-and-ducts/finished.json"
+
+[[step]]
+id = "open-cabinet"
+title = "Open the cabinet"
+text = "Press {key:view.cabinet}. The plate is placed; now we describe the box around it."
+point = { ui = "switcher.cabinet" }
+expect = { command = "view.cabinet" }
+solve = [ { command = "view.cabinet" } ]
+
+[[step]]
+id = "open-panel"
+title = "Open Inside and door"
+text = "Open the **Inside and door** panel on the right. Until the inside size is known nothing about depth can be checked."
+point = { ui = "cabinet.door" }
+expect = { opened = "cabinet.door" }
+
+[[step]]
+id = "read-form"
+title = "What the form asks"
+text = """
+Inside width, height and depth, the setback of the plate from the back wall, and the door: hinge side, how far it opens and what stands out on its inside.
+"""
+point = { ui = "cabinet.door" }
+note = [
+  { ui = "cabinet.door", text = "Inside size of the enclosure, not the outside" },
+]
+
+[[step]]
+id = "apply-defaults"
+title = "Apply the starting values"
+text = """
+Leave the numbers as they are and click **Apply**. The panel below says that every device fits behind the door, and the top view draws the plate, the devices as deep as their parts and the open door.
+"""
+point = { ui = "cabinet.door.apply" }
+expect = { clicked = "cabinet.door.apply" }
+
+[[step]]
+id = "shallow"
+title = "Try a shallow cabinet"
+text = """
+Set the inside depth to **100 mm** and click **Apply**. The {tip:usable-depth} drops to 80 mm.
+The contactor, the overload relay and the transformer are deeper than that.
+"""
+point = { ui = "cabinet.door.apply" }
+expect = { clicked = "cabinet.door.apply" }
+
+[[step]]
+id = "read-depth"
+title = "Read the sentences"
+text = """
+Each too-deep device gets a sentence such as **-K1 is 10 mm too deep: the door cannot close**.
+The header problem count includes them.
+"""
+point = { ui = "cabinet.problems" }
+
+[[step]]
+id = "swing"
+title = "How much room the open door needs"
+text = """
+Tick **Free in front** and enter the space in front of the cabinet, in mm.
+If the open door needs more, the panel says by how much it is short. This is the {tip:door-swing}.
+"""
+point = { ui = "cabinet.door" }
+
+[[step]]
+id = "undo"
+title = "Back to a deeper cabinet"
+text = "{key:edit.undo} takes the inside size back to the previous values. Every Apply is one undo step."
+point = { ui = "cabinet.door" }
+expect = { command = "edit.undo" }
+solve = [ { command = "edit.undo" } ]
+
+[[step]]
+id = "done"
+title = "The box is known now"
+text = """
+With the inside size in the project, the plate drawing and the 3D view can show the door too.
+"""

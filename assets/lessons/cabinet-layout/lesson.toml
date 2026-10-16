@@ -1,0 +1,147 @@
+# Cabinet track, lesson 1. Sample project: a motor starter whose devices belong to the
+# cabinet +CAB, with a 600 x 800 mm plate and nothing placed (project.json). finished.json is
+# the same cabinet after Place all. Both come from
+# `cargo run -p novo-app --example panel_lessons -- assets/lessons`.
+#
+# Everything this lesson teaches is on main (Cabinet canvas #374/#376/#378, table face #403,
+# plate card and inspector #443). It stays a draft until the Cabinet controls register the
+# anchors and signals listed in handoff/cabinet-lessons/HANDOFF.md.
+format = 1
+id = "cabinet-layout"
+version = 1
+status = "draft"
+title = "Lay out the mounting plate"
+title_nl = "De montageplaat indelen"
+summary = "Drag devices onto the plate, turn one, fix an overlap and let Place all fill the rails."
+summary_nl = "Sleep componenten op de plaat, draai er een, los een overlap op en laat Place all de rails vullen."
+track = "cabinet"
+order = 10
+level = "beginner"
+minutes = 8
+topics = ["cabinet", "layout"]
+next = ["rails-and-ducts"]
+project = "project.json"
+finished = "finished.json"
+
+[[step]]
+id = "open-cabinet"
+title = "Open the cabinet"
+text = """
+Press {key:view.cabinet} to leave the schematic and look at the inside of **+CAB**.
+The big rectangle is the {tip:mounting-plate}, 600 x 800 mm.
+"""
+point = { ui = "switcher.cabinet" }
+expect = { command = "view.cabinet" }
+solve = [ { command = "view.cabinet" } ]
+
+[[step]]
+id = "read-the-screen"
+title = "What is where"
+text = """
+Every device of **+CAB** that has no place yet waits in the Unplaced list, with its size.
+The header counts what is placed and what is wrong.
+"""
+point = { ui = "cabinet.unplaced" }
+note = [
+  { ui = "cabinet.unplaced", text = "Devices without a place, with their size from the part" },
+  { ui = "cabinet.place_all", text = "Fills the plate for you; you get a preview first" },
+  { ui = "cabinet.problems", text = "Overlaps, devices off the plate, rails too full" },
+]
+
+[[step]]
+id = "drag-first"
+title = "Drag a device onto the plate"
+text = """
+Drag **-F1** from the list to the upper left of the plate.
+A box shows where it will land; positions snap to a 5 mm grid.
+"""
+point = { ui = "cabinet.unplaced" }
+expect = { signal = "cabinet_dropped" }
+
+[[step]]
+id = "rotate"
+title = "Turn it"
+text = """
+Click **-F1** on the plate to select it, then press {key:edit.rotate}.
+Width and height swap; the inspector shows the new size.
+"""
+point = { ui = "cabinet.canvas" }
+expect = { command = "edit.rotate" }
+
+[[step]]
+id = "overlap"
+title = "Make a mistake on purpose"
+text = """
+Drag **-K1** from the list so that it lands on top of **-F1**.
+The two boxes turn red.
+"""
+point = { ui = "cabinet.canvas" }
+expect = { signal = "cabinet_dropped" }
+
+[[step]]
+id = "read-problem"
+title = "Read what is wrong"
+text = """
+Hover the red box. The tooltip says what is wrong, in words: **-K1 overlaps -F1**.
+The problem count in the header went up too.
+"""
+point = { ui = "cabinet.problems" }
+
+[[step]]
+id = "undo"
+title = "Take it back"
+text = """
+{key:edit.undo} undoes the drop. Every drop, move, turn and remove is one undo step.
+"""
+point = { ui = "cabinet.canvas" }
+expect = { command = "edit.undo" }
+solve = [ { command = "edit.undo" } ]
+
+[[step]]
+id = "take-off"
+title = "Take -F1 off the plate"
+text = """
+With **-F1** selected, press {key:edit.delete}.
+The device leaves the plate and returns to the Unplaced list. It stays in the project.
+"""
+point = { ui = "cabinet.unplaced" }
+expect = { command = "edit.delete" }
+
+[[step]]
+id = "place-all"
+title = "Let Place all do the rest"
+text = """
+Click **Place all**. A preview fills a DIN rail from left to right, sorted by letter code.
+Nothing is stored yet.
+"""
+point = { ui = "cabinet.place_all" }
+expect = { clicked = "cabinet.place_all" }
+
+[[step]]
+id = "accept"
+title = "Keep it"
+text = """
+Press **Enter** (or click **Accept**) to keep the preview. **Esc** drops it.
+The whole plan is one undo step.
+"""
+point = { ui = "cabinet.accept" }
+expect = { signal = "cabinet_plan_accepted" }
+
+[[step]]
+id = "table"
+title = "The same data as a table"
+text = """
+{key:view.cabinet_table} flips the plate to a table: one row per device with size, place and problems.
+Press it again to return to the plate.
+"""
+point = { ui = "cabinet.table" }
+expect = { command = "view.cabinet_table" }
+solve = [ { command = "view.cabinet_table" } ]
+
+[[step]]
+id = "done"
+title = "That is the layout"
+text = """
+You placed by hand, read a problem, undid it and let Place all fill the plate.
+Next: rails and ducts, the lines the wiring will follow.
+"""
