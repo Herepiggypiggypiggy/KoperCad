@@ -2000,7 +2000,7 @@ impl SchematicView {
                             && ui
                                 .button("Add fault...")
                                 .on_hover_text(
-                                    "Open circuit, short to earth or another potential, stuck \
+                                    "Open circuit, short between phases, to neutral or to earth, stuck \
                                      contact: added to the fault list, run in Simulate > Fault \
                                      scenarios",
                                 )

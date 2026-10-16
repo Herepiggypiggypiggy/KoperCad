@@ -6,14 +6,16 @@ use novo_sim::study::{FaultWhat, Study};
 #[test]
 fn a_fault_on_a_known_device_runs_through_the_example_protection() {
     let mut study = Study::example();
-    study.add_fault(
-        "-F2",
-        FaultWhat::Short {
-            kind: FaultKind::PhaseEarth,
-        },
-        0.0,
-        0.1,
-    );
+    study
+        .add_fault(
+            "-F2",
+            FaultWhat::Short {
+                kind: FaultKind::PhaseEarth,
+            },
+            0.0,
+            0.1,
+        )
+        .unwrap();
     let prepared = study.prepared();
     assert!(prepared.warnings.is_empty(), "{:?}", prepared.warnings);
     let index = prepared.study.scenarios.len() - 1;
@@ -31,14 +33,16 @@ fn a_fault_on_a_known_device_runs_through_the_example_protection() {
 #[test]
 fn an_unknown_target_hangs_on_the_busbar_and_says_so() {
     let mut study = Study::empty("Plant");
-    study.add_fault(
-        "L1",
-        FaultWhat::Short {
-            kind: FaultKind::ThreePhase,
-        },
-        0.0,
-        0.1,
-    );
+    study
+        .add_fault(
+            "L1",
+            FaultWhat::Short {
+                kind: FaultKind::ThreePhase,
+            },
+            0.0,
+            0.1,
+        )
+        .unwrap();
     let prepared = study.prepared();
     assert_eq!(prepared.warnings.len(), 1);
     assert!(prepared.warnings[0].contains("not in the study"));
@@ -50,8 +54,12 @@ fn an_unknown_target_hangs_on_the_busbar_and_says_so() {
 #[test]
 fn a_device_fault_needs_a_device_of_the_study() {
     let mut study = Study::example();
-    study.add_fault("-Q1", FaultWhat::DeviceOpens, 0.0, 1.0);
-    study.add_fault("-Q99", FaultWhat::DeviceCloses, 0.0, 1.0);
+    study
+        .add_fault("-Q1", FaultWhat::DeviceOpens, 0.0, 1.0)
+        .unwrap();
+    study
+        .add_fault("-Q99", FaultWhat::DeviceCloses, 0.0, 1.0)
+        .unwrap();
     let prepared = study.prepared();
     assert_eq!(prepared.study.scenarios.len(), study.scenarios.len() + 1);
     assert_eq!(prepared.warnings.len(), 1);
@@ -62,11 +70,13 @@ fn a_device_fault_needs_a_device_of_the_study() {
 #[test]
 fn faults_survive_the_file_and_old_files_still_read() {
     let mut study = Study::example();
-    let id = study.add_fault("-F2", FaultWhat::DeviceOpens, 0.0, 0.1);
+    let id = study
+        .add_fault("-F2", FaultWhat::DeviceOpens, 0.0, 0.1)
+        .unwrap();
     assert_eq!(id, "F1");
     assert_eq!(
         study.add_fault("x", FaultWhat::DeviceCloses, 0.0, 0.1),
-        "F2"
+        Ok("F2".to_owned())
     );
     let back = Study::from_json(&study.to_json()).expect("reads");
     assert_eq!(back, study);
@@ -78,6 +88,17 @@ fn faults_survive_the_file_and_old_files_still_read() {
     assert!(!study.remove_fault("F1"));
     assert_eq!(
         study.add_fault("y", FaultWhat::DeviceCloses, 0.0, 0.1),
-        "F1"
+        Ok("F1".to_owned())
     );
+}
+
+#[test]
+fn a_fault_without_a_place_is_refused() {
+    let mut study = Study::example();
+    assert!(
+        study
+            .add_fault("  ", FaultWhat::DeviceOpens, 0.0, 0.1)
+            .is_err()
+    );
+    assert!(study.faults.is_empty());
 }

@@ -127,3 +127,18 @@ fn without_faults_the_window_still_shows_the_example() {
     assert!(win.is_example());
     assert_eq!(win.fault_count(), 0);
 }
+
+#[test]
+fn an_empty_target_is_refused_and_the_sidecar_is_written_whole() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("plant.faults.json");
+    let what = FaultWhat::DeviceOpens;
+    assert!(super::faults::store_fault(&path, "plant", " ", what.clone(), 0.0, 0.1).is_err());
+    assert!(!path.exists(), "nothing is written for a refused fault");
+    super::faults::store_fault(&path, "plant", "-Q1", what.clone(), 0.0, 0.1).unwrap();
+    super::faults::store_fault(&path, "plant", "-Q2", what, 0.0, 0.1).unwrap();
+    let study = Study::from_json(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(study.faults.len(), 2);
+    let left = std::fs::read_dir(dir.path()).unwrap().count();
+    assert_eq!(left, 1, "no temporary file is left behind");
+}

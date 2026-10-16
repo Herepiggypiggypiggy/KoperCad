@@ -183,14 +183,17 @@ impl Study {
             .expect("an unused id exists")
     }
 
-    /// Adds a fault and returns its id.
+    /// Adds a fault and returns its id; a target without a name is refused.
     pub fn add_fault(
         &mut self,
         target: &str,
         what: FaultWhat,
         fault_ohm: f64,
         at_s: f64,
-    ) -> String {
+    ) -> Result<String, String> {
+        if target.trim().is_empty() {
+            return Err("A fault needs a place: the name of a wire, device or terminal".into());
+        }
         let id = self.next_fault_id();
         self.faults.push(ProjectFault {
             id: id.clone(),
@@ -199,7 +202,7 @@ impl Study {
             fault_ohm,
             at_s,
         });
-        id
+        Ok(id)
     }
 
     /// Removes a fault by id; whether it existed.
@@ -265,8 +268,9 @@ impl Study {
                             });
                             warnings.push(format!(
                                 "{}: {} is not in the study's network; it is assumed to hang on \
-                                 {} through {STUB_R} + j{STUB_X} ohm with no protection. Add it \
-                                 as a node in the study file for real numbers.",
+                                 {} through {STUB_R} + j{STUB_X} ohm with no protection, so the \
+                                 current shown is about the busbar's and too high for a remote \
+                                 point, and no device clears it. Add it as a node in the study file for real numbers.",
                                 f.id, f.target, study.source.busbar
                             ));
                             node

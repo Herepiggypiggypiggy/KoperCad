@@ -271,13 +271,15 @@ fn header(ui: &mut egui::Ui, win: &mut FaultsWindow, note: &mut Option<(Level, S
             .clicked()
             && let Some(path) = &win.path
         {
-            *note = Some(match std::fs::write(path, win.study.to_json()) {
-                Ok(()) => {
-                    win.example = false;
-                    (Level::Info, format!("Saved {}", path.display()))
-                }
-                Err(e) => (Level::Error, format!("Could not save the study: {e}")),
-            });
+            *note = Some(
+                match super::pdf::write_replacing(path, win.study.to_json().as_bytes()) {
+                    Ok(()) => {
+                        win.example = false;
+                        (Level::Info, format!("Saved {}", path.display()))
+                    }
+                    Err(e) => (Level::Error, format!("Could not save the study: {e}")),
+                },
+            );
         }
         let exportable = matches!(win.result, Some(Ok(_))) && win.path.is_some();
         for (label, ext) in [
@@ -342,10 +344,12 @@ fn project_faults(ui: &mut egui::Ui, win: &mut FaultsWindow, note: &mut Option<(
         win.selected = 0;
         win.stale = true;
         if let Some(path) = &win.path {
-            *note = Some(match std::fs::write(path, win.study.to_json()) {
-                Ok(()) => (Level::Info, format!("Removed fault {id}")),
-                Err(e) => (Level::Error, format!("Could not save the study: {e}")),
-            });
+            *note = Some(
+                match super::pdf::write_replacing(path, win.study.to_json().as_bytes()) {
+                    Ok(()) => (Level::Info, format!("Removed fault {id}")),
+                    Err(e) => (Level::Error, format!("Could not save the study: {e}")),
+                },
+            );
         }
     }
 }
@@ -374,7 +378,7 @@ fn export(
         "csv" => result.traces.to_csv(),
         _ => result.timing.to_vcd(),
     };
-    match std::fs::write(&path, text) {
+    match super::pdf::write_replacing(&path, text.as_bytes()) {
         Ok(()) => (Level::Info, format!("Exported {}", path.display())),
         Err(e) => (Level::Error, format!("Could not export: {e}")),
     }
@@ -798,8 +802,8 @@ pub(super) fn store_fault(
     } else {
         Study::empty(name)
     };
-    let id = study.add_fault(target, what, fault_ohm, at_s);
-    std::fs::write(path, study.to_json()).map_err(|e| e.to_string())?;
+    let id = study.add_fault(target, what, fault_ohm, at_s)?;
+    super::pdf::write_replacing(path, study.to_json().as_bytes()).map_err(|e| e.to_string())?;
     Ok(id)
 }
 
@@ -870,7 +874,13 @@ impl NovoApp {
                         .speed(0.01)
                         .suffix(" s after the start"),
                 );
-                if ui.button("Add fault").clicked() {
+                if ui
+                    .add_enabled(
+                        !win.targets[win.target].trim().is_empty(),
+                        egui::Button::new("Add fault"),
+                    )
+                    .clicked()
+                {
                     add = true;
                 }
             });
