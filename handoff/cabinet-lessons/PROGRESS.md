@@ -15,3 +15,6 @@ From audits/cabinet-lessons-vs-ui-2026-10-16.md: cabinet-layout (problem count a
 
 ## 2026-10-16: audit round two
 Anchor fallback sends cabinet.rails and cabinet.plate_drawing to More in a narrow window; rails-and-ducts example has the "rule " prefix; commissioning says Won't fix is on Open items only. Still open: short chips under 1250 px in lesson text, heat anchors and chips wording, wire-routing summary line, balance step Enclosures window.
+
+## 2026-10-16: audit round three
+Heat anchors `heat.chips`, `heat.legend`, `heat.simulate` (fall back to `cabinet.heat`); heat-and-sizing text (chips in the strip, default layers, badges, balance step); wire-routing summary line sits below the folded Wire rules header. Open: short chips (Cab/Rpt/Cmn) in lesson text under 1250 px.
