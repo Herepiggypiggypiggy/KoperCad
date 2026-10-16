@@ -458,6 +458,10 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "wires.check_numbers",
     "wires.set_number",
     "wires.unlock_number",
+    "cable.rename",
+    "cable.delete",
+    "cable.retype",
+    "cable.restore_proposals",
     "edit.select_all",
     "view.cabinet_table",
     "cabinet.place-all",
@@ -813,6 +817,10 @@ impl NovoApp {
             }
             "wires.set_number" => self.set_wire_number(argument),
             "wires.unlock_number" => self.unlock_wire_number(),
+            "cable.rename" => self.rename_cable_command(argument),
+            "cable.delete" => self.delete_cable_command(),
+            "cable.retype" => self.retype_cable_command(argument),
+            "cable.restore_proposals" => self.restore_declined_cables(),
             "view.terminals_drawer" => self.toggle_drawer(Drawer::Terminals),
             "view.cables_drawer" => self.toggle_drawer(Drawer::Cables),
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
@@ -1127,6 +1135,8 @@ impl NovoApp {
                     );
                 }
             }
+            Target::Cable(cable) => self.show_cable(cable),
+            Target::Wire(wire) => self.go_to_wire(wire),
             Target::Symbol(symbol) => self.begin_place(&symbol, None),
             Target::Child { symbol, device } => {
                 let tag = self
