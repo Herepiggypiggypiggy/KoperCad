@@ -237,7 +237,6 @@ pub const DUTCH: &[Aliases] = &[
     nl("nav.forward", &[], &["vooruit"]),
     nl("nav.previous_page", &[], &["vorige pagina"]),
     nl("nav.next_page", &[], &["volgende pagina"]),
-    nl("nav.changes", &["wijzigingen"], &["gewijzigd sinds export"]),
     // View
     nl("view.command_palette", &[], &["opdrachtveld", "zoeken"]),
     nl(

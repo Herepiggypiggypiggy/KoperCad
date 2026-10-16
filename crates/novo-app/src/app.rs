@@ -23,6 +23,7 @@ mod checks;
 mod clipboard;
 mod commissioning;
 mod compare;
+mod device_renumber;
 mod dock;
 mod drawers;
 mod duplicate;
@@ -81,6 +82,7 @@ mod plc_link;
 mod plc_run;
 mod potentials;
 mod preferences;
+mod project_rules;
 mod project_settings;
 mod protection;
 mod reports;
@@ -98,6 +100,7 @@ mod standards_report_tests;
 mod status_bar;
 mod symbol_preview;
 mod terminals;
+mod tidy;
 mod tips;
 mod title_revisions;
 mod userkeymap;
@@ -146,6 +149,8 @@ mod compare_tests;
 mod example_tests;
 #[cfg(test)]
 mod gate1_tests;
+#[cfg(test)]
+mod greyed_commands_tests;
 #[cfg(test)]
 mod learn_replay;
 #[cfg(test)]
@@ -1028,6 +1033,8 @@ impl NovoApp {
         self.parts_bulk_dialog(&ctx);
         self.auto_assign_dialog(&ctx);
         self.project_settings_dialog(&ctx);
+        self.project_rules_dialog(&ctx);
+        self.device_renumber_dialog(&ctx);
         self.macro_browser_window(&ctx);
         self.macro_save_dialog(&ctx);
         self.macro_place_window(&ctx);
