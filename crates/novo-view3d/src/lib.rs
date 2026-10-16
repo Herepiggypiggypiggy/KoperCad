@@ -15,6 +15,7 @@ pub mod door;
 pub mod feel;
 pub mod governor;
 pub mod labels;
+pub mod layers;
 pub mod look;
 pub mod math;
 pub mod mesh;
@@ -32,6 +33,7 @@ pub mod render;
 pub mod widget;
 
 pub use camera::{Camera, Projection, ViewPreset};
+pub use layers::Layers;
 pub use look::Look;
 pub use math::{Aabb, Ray};
 pub use mesh::{GeometryKey, MeshData, MeshLibrary, PartGeometry};

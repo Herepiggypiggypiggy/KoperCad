@@ -2295,6 +2295,7 @@ dependencies = [
  "naga",
  "novo-core",
  "novo-layout",
+ "novo-routing",
  "novo-theme",
  "pollster 1.0.1",
  "wgpu",
