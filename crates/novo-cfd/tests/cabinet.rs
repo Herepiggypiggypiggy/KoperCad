@@ -411,3 +411,11 @@ fn k_epsilon_still_marches() {
         snap.notes
     );
 }
+
+#[test]
+fn a_steady_result_with_a_heat_balance_error_above_two_percent_says_so() {
+    // the note is derived from the same number the progress carries
+    let (s, _) = solve(&scenario(false));
+    let noted = s.notes.iter().any(|n| n.contains("Heat balance off by"));
+    assert_eq!(noted, s.progress.energy_balance_rel > 0.02);
+}
