@@ -1,10 +1,10 @@
 format = 1
 id = "potentials"
 version = 1
-status = "draft"
+status = "early"
 title = "Potentials and feeds"
 summary = "Give a motor feeder its supply with a row of feeds and an earth."
-track = "basics"
+track = "start"
 order = 30
 level = "beginner"
 minutes = 6

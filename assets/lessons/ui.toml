@@ -132,3 +132,11 @@ text_nl = "Les: {title}"
 [no_match]
 text = "No lesson matches. Try fewer words."
 text_nl = "Geen les gevonden. Probeer minder woorden."
+
+[early_access]
+text = "Early access"
+text_nl = "Vroege toegang"
+
+[show_drafts]
+text = "Show draft lessons"
+text_nl = "Conceptlessen tonen"

@@ -7,7 +7,7 @@
 format = 1
 id = "wire-routing"
 version = 1
-status = "draft"
+status = "early"
 title = "Route the wires and watch the ducts"
 title_nl = "Draden routeren en de kanalen in de gaten houden"
 summary = "Turn on the routes, read the fill of each duct, and see a wire go off the road when a duct is removed."

@@ -1,10 +1,10 @@
 format = 1
 id = "wiring-modes"
 version = 1
-status = "draft"
+status = "early"
 title = "Corners and Lines"
 summary = "Draw wires from a pin, and bend them in the two wiring modes."
-track = "basics"
+track = "start"
 order = 20
 level = "beginner"
 minutes = 7

@@ -254,11 +254,11 @@ impl Catalog {
         self.entries.iter().find(|e| e.lesson.id == id)
     }
 
-    /// The lessons to list: drafts only when asked for.
+    /// The lessons to list: ready and early-access ones, drafts only when asked for.
     pub fn visible(&self, show_drafts: bool) -> impl Iterator<Item = &Entry> {
         self.entries
             .iter()
-            .filter(move |e| show_drafts || e.lesson.status == Status::Ready)
+            .filter(move |e| show_drafts || e.lesson.status != Status::Draft)
     }
 
     /// Lessons that carry a topic, for the "Lesson: ..." links in panels.

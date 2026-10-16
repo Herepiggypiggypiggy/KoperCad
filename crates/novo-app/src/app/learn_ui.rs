@@ -548,7 +548,8 @@ impl NovoApp {
             if ui.small_button(self.learn.say("reset_progress")).clicked() {
                 *reset = true;
             }
-            ui.checkbox(&mut self.learn.show_drafts, "Drafts");
+            let drafts_label = self.learn.say("show_drafts");
+            ui.checkbox(&mut self.learn.show_drafts, drafts_label);
         });
     }
 
@@ -581,6 +582,9 @@ impl NovoApp {
                 }
                 if coming {
                     meta.push(self.learn.say("coming_soon"));
+                }
+                if lesson.status == novo_learn::Status::Early {
+                    meta.push(self.learn.say("early_access"));
                 }
                 if !meta.is_empty() {
                     ui.small(meta.join(" · "));

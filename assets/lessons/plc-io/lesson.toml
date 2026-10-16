@@ -7,7 +7,7 @@
 format = 1
 id = "plc-io"
 version = 1
-status = "draft"
+status = "early"
 title = "PLC Cards and I/O"
 title_nl = "PLC-kaarten en I/O"
 summary = "Add a PLC card, send a button and a lamp to it, read the addresses and try both in the live view."

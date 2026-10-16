@@ -9,7 +9,7 @@
 format = 1
 id = "cabinet-layout"
 version = 1
-status = "draft"
+status = "early"
 title = "Lay out the mounting plate"
 title_nl = "De montageplaat indelen"
 summary = "Drag devices onto the plate, turn one, fix an overlap and let Place all fill the rails."

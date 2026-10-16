@@ -1,11 +1,11 @@
 format = 1
 id = "cross-references"
 version = 1
-status = "draft"
+status = "early"
 title = "Cross references"
 summary = "Jump between the coil and its contacts, and add a contact on another page."
-track = "basics"
-order = 50
+track = "circuits"
+order = 20
 level = "intermediate"
 minutes = 8
 topics = ["cross references", "contacts"]

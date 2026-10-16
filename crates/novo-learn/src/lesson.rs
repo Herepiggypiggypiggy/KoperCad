@@ -56,6 +56,10 @@ fn invalid(place: impl Into<String>, why: impl Into<String>) -> LessonError {
 pub enum Status {
     #[default]
     Ready,
+    /// Shown to everyone with an "Early access" badge: the lesson runs, but
+    /// its steps may still be rough or name controls that are not finished.
+    /// Lints as a draft until it is promoted to `ready`.
+    Early,
     /// Hidden unless drafts are shown; may name commands or anchors this
     /// build does not have yet.
     Draft,

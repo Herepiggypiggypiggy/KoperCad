@@ -2,12 +2,12 @@ format = 1
 id = "commissioning"
 version = 1
 # Draft until the Commissioning tab (PR #471) is on main.
-status = "draft"
+status = "early"
 title = "Commission a panel with a tick list"
 summary = "Walk the commissioning checks, pass and fail them and keep a punch list."
 # Listed under `cabinet` in design section 10; owned by the productivity thread.
 track = "cabinet"
-order = 60
+order = 100
 level = "intermediate"
 minutes = 8
 topics = ["commissioning", "punch list", "test"]
