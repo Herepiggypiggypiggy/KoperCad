@@ -13,9 +13,13 @@
 //! came from):
 //!
 //! 1. A connection point that faces another across a free straight run is
-//!    joined to it, over any distance. The run is free when the first point
-//!    met on it faces back and no [`Blocker`] (a symbol body) lies between.
-//!    A point met first that does not face back stops the run.
+//!    joined to it, over any distance. Ports are on one line when the other
+//!    coordinate agrees within 0.2 mm. The run connects when the nearest
+//!    port faces back; any other port met first, facing or not, stops it.
+//!    Symbol bodies, texts and lines do not stop a run (the observed model;
+//!    an optional [`Blocker`] exists for houses that want it). Two
+//!    interruption points never join this way, and ports of one symbol
+//!    ignore each other.
 //! 2. A drawn [`ConnLine`] joins what its two ends touch. Ends that sit on
 //!    one position join each other. A node that lies on a line's interior
 //!    joins that line (a T joint); a plain point on a line's interior does
@@ -119,6 +123,9 @@ pub struct ConnPoint {
     pub node: bool,
     /// Points sharing a value are one conductor (the two sides of a terminal).
     pub conductor: Option<String>,
+    /// The symbol the point belongs to; a run ignores points of its own
+    /// symbol.
+    pub owner: Option<String>,
 }
 
 impl ConnPoint {
@@ -131,6 +138,7 @@ impl ConnPoint {
             facing: vec![facing],
             node: false,
             conductor: None,
+            owner: None,
         }
     }
 
@@ -143,7 +151,13 @@ impl ConnPoint {
             facing: legs.to_vec(),
             node: true,
             conductor: None,
+            owner: None,
         }
+    }
+
+    pub fn with_owner(mut self, owner: &str) -> ConnPoint {
+        self.owner = Some(owner.to_owned());
+        self
     }
 
     pub fn with_conductor(mut self, conductor: &str) -> ConnPoint {
@@ -160,8 +174,10 @@ pub struct ConnLine {
     pub to: Pt,
 }
 
-/// A symbol body: a connection run does not pass through it. It must not
-/// contain the pins that start the run.
+/// An optional obstacle a connection run does not pass through. The crane
+/// repo's observed EPLAN model has none (symbol bodies do not stop a run), so
+/// the reader normally leaves this empty; it is there for houses that treat
+/// a body as a stop. It must not contain the pins that start the run.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Blocker {
     pub page: u32,
@@ -212,6 +228,11 @@ pub enum NetIssue {
     DanglingLineEnd { page: u32, x_um: i64, y_um: i64 },
     /// A pin that faces a direction but ended up alone in its net.
     OpenPin { pin: PinKey },
+    /// A port faces another that does not point back: the run is stopped
+    /// there and joins nothing.
+    BlockedRun { from: PinKey, stopped_by: PinKey },
+    /// A drawn line that is not horizontal or vertical: counted, not used.
+    SkewLine { page: u32 },
     /// Two points with one key; the first is used.
     DuplicateKey { key: PinKey },
     /// An interruption or bridge naming a key that is not a point.
@@ -276,6 +297,10 @@ impl Dsu {
     }
 }
 
+/// Two ports are on one line when the other coordinate agrees within this
+/// (0.2 mm, micrometres).
+const TOL_UM: i64 = 200;
+
 type Cell = (u32, i64, i64);
 
 fn um(v: f64) -> i64 {
@@ -318,6 +343,20 @@ fn crosses(blocker: &Blocker, a: Pt, b: Pt) -> bool {
 
 /// Rebuilds the nets of `graph` by the rules in the module docs.
 pub fn rebuild_nets(graph: &ConnGraph) -> ReconNets {
+    let axis = |l: &ConnLine| {
+        (l.from.x - l.to.x).abs() * 1000.0 <= TOL_UM as f64
+            || (l.from.y - l.to.y).abs() * 1000.0 <= TOL_UM as f64
+    };
+    if !graph.lines.iter().all(axis) {
+        // Skew lines are drawn only: count them and rebuild without them.
+        let mut straight = graph.clone();
+        straight.lines.retain(axis);
+        let mut nets = rebuild_nets(&straight);
+        for l in graph.lines.iter().filter(|l| !axis(l)) {
+            nets.issues.push(NetIssue::SkewLine { page: l.page });
+        }
+        return nets;
+    }
     let mut issues = Vec::new();
     let n = graph.points.len();
     let mut index: HashMap<&PinKey, usize> = HashMap::with_capacity(n);
@@ -380,22 +419,25 @@ pub fn rebuild_nets(graph: &ConnGraph) -> ReconNets {
         }
     }
 
-    // Rules 1 and 3: facing runs. Index points by the line they would meet on.
-    let mut by_row: BTreeMap<(u32, i64), Vec<(i64, usize)>> = BTreeMap::new();
-    let mut by_col: BTreeMap<(u32, i64), Vec<(i64, usize)>> = BTreeMap::new();
+    // Rules 1 and 3: facing runs. Points are binned by the coordinate a run
+    // keeps (rows for horizontal runs, columns for vertical ones); a run
+    // looks into the neighbouring bins for the 0.2 mm line tolerance.
+    let bin = |v: i64| v.div_euclid(TOL_UM);
+    let mut rows: BTreeMap<(u32, i64), Vec<usize>> = BTreeMap::new();
+    let mut cols: BTreeMap<(u32, i64), Vec<usize>> = BTreeMap::new();
     for (i, p) in graph.points.iter().enumerate() {
-        by_row
-            .entry((p.page, um(p.at.y)))
-            .or_default()
-            .push((um(p.at.x), i));
-        by_col
-            .entry((p.page, um(p.at.x)))
-            .or_default()
-            .push((um(p.at.y), i));
+        rows.entry((p.page, bin(um(p.at.y)))).or_default().push(i);
+        cols.entry((p.page, bin(um(p.at.x)))).or_default().push(i);
     }
-    for v in by_row.values_mut().chain(by_col.values_mut()) {
-        v.sort_unstable();
-    }
+    let is_interruption: Vec<bool> = {
+        let mut v = vec![false; n];
+        for it in &graph.interruptions {
+            if let Some(&i) = index.get(&it.point) {
+                v[i] = true;
+            }
+        }
+        v
+    };
     let mut backed = vec![vec![false; 4]; n];
     let slot = |d: Dir| match d {
         Dir::Left => 0,
@@ -405,40 +447,67 @@ pub fn rebuild_nets(graph: &ConnGraph) -> ReconNets {
     };
     for (i, p) in graph.points.iter().enumerate() {
         for &d in &p.facing {
-            let (line, pos, ahead) = match d {
-                Dir::Right | Dir::Left => (
-                    by_row.get(&(p.page, um(p.at.y))),
-                    um(p.at.x),
-                    d == Dir::Right,
-                ),
-                Dir::Up | Dir::Down => {
-                    (by_col.get(&(p.page, um(p.at.x))), um(p.at.y), d == Dir::Up)
-                }
-            };
-            let Some(line) = line else { continue };
-            let split = line.partition_point(|&(c, _)| c <= pos);
-            // The first point strictly ahead.
-            let hit = if ahead {
-                line.get(split)
+            let horizontal = matches!(d, Dir::Left | Dir::Right);
+            let sign = if matches!(d, Dir::Right | Dir::Up) {
+                1
             } else {
-                let behind = line.partition_point(|&(c, _)| c < pos);
-                behind.checked_sub(1).and_then(|k| line.get(k))
+                -1
             };
-            let Some(&(_, j)) = hit else { continue };
-            let q = &graph.points[j];
-            if !q.facing.contains(&d.opposite()) {
-                continue;
+            let (index_of, cross, along) = if horizontal {
+                (&rows, um(p.at.y), um(p.at.x))
+            } else {
+                (&cols, um(p.at.x), um(p.at.y))
+            };
+            // Candidates ahead on the same line, with their distance.
+            let mut ahead: Vec<(i64, usize)> = Vec::new();
+            for b in bin(cross) - 1..=bin(cross) + 1 {
+                for &j in index_of.get(&(p.page, b)).into_iter().flatten() {
+                    let q = &graph.points[j];
+                    let (qc, qa) = if horizontal {
+                        (um(q.at.y), um(q.at.x))
+                    } else {
+                        (um(q.at.x), um(q.at.y))
+                    };
+                    let same_owner = p.owner.is_some() && p.owner == q.owner;
+                    let delta = (qa - along) * sign;
+                    if j != i && !same_owner && (qc - cross).abs() <= TOL_UM && delta > 1 {
+                        ahead.push((delta, j));
+                    }
+                }
             }
-            if graph
-                .blockers
-                .iter()
-                .any(|b| b.page == p.page && crosses(b, p.at, q.at))
+            let Some(nearest) = ahead.iter().map(|&(delta, _)| delta).min() else {
+                continue;
+            };
+            // Every port within the tolerance of the nearest distance is a
+            // candidate; one that faces back connects. Any other port in the
+            // way blocks the run.
+            let mut joined = false;
+            for &(delta, j) in &ahead {
+                let q = &graph.points[j];
+                if delta - nearest > TOL_UM
+                    || !q.facing.contains(&d.opposite())
+                    || (is_interruption[i] && is_interruption[j])
+                    || graph
+                        .blockers
+                        .iter()
+                        .any(|b| b.page == p.page && crosses(b, p.at, q.at))
+                {
+                    continue;
+                }
+                dsu.union(i, j);
+                joined = true;
+                backed[i][slot(d)] = true;
+                backed[j][slot(d.opposite())] = true;
+            }
+            if !joined
+                && let Some(&(_, j)) = ahead.iter().find(|&&(delta, _)| delta == nearest)
+                && !(is_interruption[i] && is_interruption[j])
             {
-                continue;
+                issues.push(NetIssue::BlockedRun {
+                    from: p.key.clone(),
+                    stopped_by: graph.points[j].key.clone(),
+                });
             }
-            dsu.union(i, j);
-            backed[i][slot(d)] = true;
-            backed[j][slot(d.opposite())] = true;
         }
     }
     // A leg is also backed by a drawn line leaving the node that way.
@@ -897,6 +966,79 @@ mod tests {
                 .iter()
                 .any(|i| matches!(i, NetIssue::OpenPin { .. }))
         );
+    }
+
+    #[test]
+    fn runs_tolerate_a_fifth_of_a_millimetre_off_axis() {
+        let near = ConnGraph {
+            points: vec![
+                pin("a", 0.0, 0.0, Dir::Right),
+                pin("b", 80.0, 0.15, Dir::Left),
+            ],
+            ..ConnGraph::default()
+        };
+        assert!(rebuild_nets(&near).connected(&"a".into(), &"b".into()));
+        let far = ConnGraph {
+            points: vec![
+                pin("a", 0.0, 0.0, Dir::Right),
+                pin("b", 80.0, 0.5, Dir::Left),
+            ],
+            ..ConnGraph::default()
+        };
+        assert!(!rebuild_nets(&far).connected(&"a".into(), &"b".into()));
+    }
+
+    #[test]
+    fn two_interruption_points_never_join_by_facing() {
+        let mut g = interruption_graph(&[(0, "=A-X"), (1, "=A-Y")]);
+        g.points[0] = pin("i0", 0.0, 0.0, Dir::Right);
+        g.points[1] = pin("i1", 50.0, 0.0, Dir::Left);
+        assert!(!rebuild_nets(&g).connected(&"i0".into(), &"i1".into()));
+    }
+
+    #[test]
+    fn ports_of_one_symbol_ignore_each_other() {
+        let g = ConnGraph {
+            points: vec![
+                pin("a", 0.0, 0.0, Dir::Right).with_owner("s"),
+                pin("b", 10.0, 0.0, Dir::Left).with_owner("s"),
+            ],
+            ..ConnGraph::default()
+        };
+        assert!(!rebuild_nets(&g).connected(&"a".into(), &"b".into()));
+    }
+
+    #[test]
+    fn skew_lines_are_counted_not_used() {
+        let g = ConnGraph {
+            points: vec![pin("a", 0.0, 0.0, Dir::Up), pin("b", 30.0, 40.0, Dir::Down)],
+            lines: vec![ConnLine {
+                page: 0,
+                from: Pt::new(0.0, 0.0),
+                to: Pt::new(30.0, 40.0),
+            }],
+            ..ConnGraph::default()
+        };
+        let r = rebuild_nets(&g);
+        assert!(!r.connected(&"a".into(), &"b".into()));
+        assert!(r.issues.contains(&NetIssue::SkewLine { page: 0 }));
+    }
+
+    #[test]
+    fn a_run_stopped_by_a_port_that_does_not_face_back_is_reported() {
+        let g = ConnGraph {
+            points: vec![
+                pin("a", 0.0, 0.0, Dir::Right),
+                pin("mid", 40.0, 0.0, Dir::Up),
+                pin("b", 80.0, 0.0, Dir::Left),
+            ],
+            ..ConnGraph::default()
+        };
+        let r = rebuild_nets(&g);
+        assert!(r.issues.contains(&NetIssue::BlockedRun {
+            from: "a".into(),
+            stopped_by: "mid".into()
+        }));
     }
 
     #[test]

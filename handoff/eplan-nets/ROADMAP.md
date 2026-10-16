@@ -4,7 +4,7 @@ Scope: nets of imported EPLAN data rebuilt without EPLAN, and EPLAN-style checks
 
 Done
 - `novo_interop::eplan::nets`: ConnGraph, rebuild_nets, compare, spanning_links, unit tests and `tests/eplan_nets.rs`.
-- Five checks in novo-checks (`connection_rules.rs`, `tests/eplan_style.rs`).
+- Seven checks in novo-checks (`connection_rules.rs`, `tests/eplan_style.rs`).
 
 Next
 - Adapter from EPLAN-PXF-READ's reader to `ConnGraph` (theirs; the interface was sent to cse_01SaP8ogQQJ4nBhYv3qCTcBm).

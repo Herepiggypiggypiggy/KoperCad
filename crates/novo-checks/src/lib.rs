@@ -41,6 +41,8 @@
 //! | [`AmbiguousInterruption`](ProblemKind::AmbiguousInterruption) | warning | A name used by more than two interruption points |
 //! | [`WireNumber`](ProblemKind::WireNumber) | warning | A wire number on two nets, or two numbers on one net |
 //! | [`UntaggedDevice`](ProblemKind::UntaggedDevice) | warning | A device without a product level in its tag |
+//! | [`UnnamedTerminal`](ProblemKind::UnnamedTerminal) | warning | A terminal without a number or name |
+//! | [`SameShortTag`](ProblemKind::SameShortTag) | info | One short tag under two function or location levels |
 //! | [`DuplicatePage`](ProblemKind::DuplicatePage) | warning | Two pages with one name in one structure |
 //! | [`DanglingJunction`](ProblemKind::DanglingJunction) | warning | A junction no wire ends on |
 //! | [`Standard`](ProblemKind::Standard) | per rule | A rule of a selected standard (IEC 60204-1, NFPA 79, UL 508A) is not met; see [`standards`] |
@@ -198,6 +200,10 @@ pub enum ProblemKind {
     WireNumber,
     /// A device without a product level in its tag.
     UntaggedDevice,
+    /// A terminal without a number or name.
+    UnnamedTerminal,
+    /// One short tag under two function or location levels.
+    SameShortTag,
     /// Two pages with one name in the same structure.
     DuplicatePage,
     /// A junction no wire ends on.
@@ -245,7 +251,7 @@ pub enum ProblemKind {
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 42] = [
+    pub const ALL: [ProblemKind; 44] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -286,6 +292,8 @@ impl ProblemKind {
         ProblemKind::AmbiguousInterruption,
         ProblemKind::WireNumber,
         ProblemKind::UntaggedDevice,
+        ProblemKind::UnnamedTerminal,
+        ProblemKind::SameShortTag,
         ProblemKind::DuplicatePage,
         ProblemKind::DanglingJunction,
     ];
@@ -328,12 +336,14 @@ impl ProblemKind {
             | ProblemKind::AmbiguousInterruption
             | ProblemKind::WireNumber
             | ProblemKind::UntaggedDevice
+            | ProblemKind::UnnamedTerminal
             | ProblemKind::DuplicatePage
             | ProblemKind::DanglingJunction
             | ProblemKind::Plc => Severity::Warning,
-            ProblemKind::MissingPart | ProblemKind::UnplacedDevice | ProblemKind::DepthUnknown => {
-                Severity::Info
-            }
+            ProblemKind::MissingPart
+            | ProblemKind::UnplacedDevice
+            | ProblemKind::DepthUnknown
+            | ProblemKind::SameShortTag => Severity::Info,
         }
     }
 
@@ -380,6 +390,8 @@ impl ProblemKind {
             ProblemKind::AmbiguousInterruption => "Interruption name used often",
             ProblemKind::WireNumber => "Wire number",
             ProblemKind::UntaggedDevice => "Device without tag",
+            ProblemKind::UnnamedTerminal => "Unnamed terminal",
+            ProblemKind::SameShortTag => "Same short tag",
             ProblemKind::DuplicatePage => "Duplicate page",
             ProblemKind::DanglingJunction => "Dangling junction",
         }
@@ -428,6 +440,8 @@ impl ProblemKind {
             ProblemKind::AmbiguousInterruption => "check.ambiguous_interruption",
             ProblemKind::WireNumber => "check.wire_number",
             ProblemKind::UntaggedDevice => "check.untagged_device",
+            ProblemKind::UnnamedTerminal => "check.unnamed_terminal",
+            ProblemKind::SameShortTag => "check.same_short_tag",
             ProblemKind::DuplicatePage => "check.duplicate_page",
             ProblemKind::DanglingJunction => "check.dangling_junction",
         }
@@ -556,6 +570,8 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     connection_rules::ambiguous_interruptions(&cx, &mut problems);
     connection_rules::wire_numbers(&cx, netlist, &mut problems);
     connection_rules::untagged_devices(&cx, &mut problems);
+    connection_rules::unnamed_terminals(&cx, &mut problems);
+    connection_rules::same_short_tags(&cx, &mut problems);
     connection_rules::duplicate_pages(&cx, &mut problems);
     connection_rules::dangling_junctions(&cx, &mut problems);
     calc_checks::run(&cx, netlist, &mut problems);

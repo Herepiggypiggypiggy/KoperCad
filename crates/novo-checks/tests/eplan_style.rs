@@ -152,3 +152,31 @@ fn a_junction_with_no_wire() {
     assert_eq!(found.len(), 1, "{problems:#?}");
     assert_eq!(found[0].at, vec![AnyId::from(junction)]);
 }
+
+#[test]
+fn a_terminal_without_a_name() {
+    let (project, terminal) = build(|tx| {
+        let strip = tx.add_terminal_strip(tag("-X1"))?;
+        tx.add_terminal(strip, "1")?;
+        tx.add_terminal(strip, " ")
+    });
+    let problems = check(&project);
+    let found = of_kind(&problems, ProblemKind::UnnamedTerminal);
+    assert_eq!(found.len(), 1, "{problems:#?}");
+    assert_eq!(found[0].at, vec![AnyId::from(terminal)]);
+}
+
+#[test]
+fn one_short_tag_under_two_structures_is_info() {
+    let (project, ()) = build(|tx| {
+        tx.add_device(tag("=A1-K1"), "")?;
+        tx.add_device(tag("=A2-K1"), "")?;
+        tx.add_device(tag("=A1-K2"), "")?;
+        Ok(())
+    });
+    let problems = check(&project);
+    let found = of_kind(&problems, ProblemKind::SameShortTag);
+    assert_eq!(found.len(), 1, "{problems:#?}");
+    assert_eq!(found[0].severity, Severity::Info);
+    assert!(found[0].message.starts_with("-K1 is used under =A1, =A2"));
+}

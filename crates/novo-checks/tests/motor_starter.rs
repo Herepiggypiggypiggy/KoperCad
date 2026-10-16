@@ -226,6 +226,8 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         ProblemKind::AmbiguousInterruption,
         ProblemKind::WireNumber,
         ProblemKind::UntaggedDevice,
+        ProblemKind::UnnamedTerminal,
+        ProblemKind::SameShortTag,
         ProblemKind::DuplicatePage,
         ProblemKind::DanglingJunction,
     ];

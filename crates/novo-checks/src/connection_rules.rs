@@ -152,3 +152,63 @@ pub(crate) fn dangling_junctions(cx: &Context<'_>, out: &mut Vec<Problem>) {
         }
     }
 }
+
+/// A terminal without a name: it cannot be told apart on its strip or in the
+/// terminal plan.
+pub(crate) fn unnamed_terminals(cx: &Context<'_>, out: &mut Vec<Problem>) {
+    for terminal in cx.project.terminals() {
+        if terminal.name.trim().is_empty() {
+            out.push(Problem::new(
+                ProblemKind::UnnamedTerminal,
+                vec![terminal.id.into()],
+                "A terminal has no number or name".to_owned(),
+            ));
+        }
+    }
+}
+
+/// The same short tag under two function or location levels: two different
+/// devices that read alike without their structure.
+pub(crate) fn same_short_tags(cx: &Context<'_>, out: &mut Vec<Problem>) {
+    let mut by_short: BTreeMap<String, Vec<(String, AnyId)>> = BTreeMap::new();
+    for device in cx.project.devices() {
+        if device.tag.product.is_empty() {
+            continue;
+        }
+        let short = format!("-{}", device.tag.product.join("-"));
+        let structure = format!(
+            "{}{}",
+            device
+                .tag
+                .function
+                .iter()
+                .map(|f| format!("={f}"))
+                .collect::<String>(),
+            device
+                .tag
+                .location
+                .iter()
+                .map(|l| format!("+{l}"))
+                .collect::<String>()
+        );
+        by_short
+            .entry(short)
+            .or_default()
+            .push((structure, device.id.into()));
+    }
+    for (short, devices) in by_short {
+        let structures: BTreeSet<&str> = devices.iter().map(|(s, _)| s.as_str()).collect();
+        if structures.len() > 1 {
+            let list: Vec<&str> = structures
+                .iter()
+                .map(|s| if s.is_empty() { "(none)" } else { s })
+                .collect();
+            let message = format!(
+                "{short} is used under {}: separate devices",
+                list.join(", ")
+            );
+            let at = devices.iter().map(|(_, id)| *id).collect();
+            out.push(Problem::new(ProblemKind::SameShortTag, at, message));
+        }
+    }
+}

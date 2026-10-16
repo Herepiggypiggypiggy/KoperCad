@@ -8,7 +8,7 @@ People: PXF reader thread cse_01SaP8ogQQJ4nBhYv3qCTcBm (fills ConnGraph); findin
 
 Decisions
 - nets.rs is pure and neutral: no PXF types, no novo-core types except Endpoint/Netlist in `compare`.
-- Only axis-aligned runs are reconstructed.
+- Net model follows findings section 9 (0.2 mm line tolerance, any other port blocks, bodies do not, skew lines counted). Seven checks added.
 - DanglingJunction flags junctions with no wire only; one-wire junctions are legitimate wire ends.
 - New ProblemKinds are listed in `tests/motor_starter.rs` `needs_more` (own fixtures in `tests/eplan_style.rs`).
 
