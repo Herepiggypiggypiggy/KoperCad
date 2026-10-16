@@ -13,7 +13,6 @@ use novo_view3d::widget::{RenderStats, View3d, percentile, render_stats};
 const WINDOW: usize = 240;
 /// A gap longer than this is the view standing still, not a slow frame.
 const IDLE_GAP_MS: f32 = 250.0;
-/// Margin from the view's corner, in points.
 /// How fast the view turns while measuring: a full turn in 12 seconds.
 const SPIN_RAD_PER_S: f32 = std::f32::consts::TAU / 12.0;
 
