@@ -699,6 +699,7 @@ impl NovoApp {
                     [one] => one.title.clone(),
                     _ => "Reports".to_owned(),
                 },
+                language: self.report_translator(),
                 ..novo_pdf::ReportPdfOptions::default()
             };
             return Some(novo_pdf::export_report_pdf(outputs, &options));

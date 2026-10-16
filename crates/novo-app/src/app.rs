@@ -61,6 +61,9 @@ mod heat_run_tests;
 mod heat_settings;
 mod inspector;
 mod interop;
+mod languages;
+#[cfg(test)]
+mod languages_tests;
 mod learn;
 mod learn_demo;
 mod learn_labels;
@@ -1107,6 +1110,7 @@ impl NovoApp {
         self.calculations_window(&ctx);
         self.electrical_window(&ctx);
         self.safety_window(&ctx);
+        self.languages_window(&ctx);
         self.numbering_window(&ctx);
         self.terminal_edit_windows(&ctx);
         self.page_form_dialog(&ctx);

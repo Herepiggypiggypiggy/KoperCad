@@ -264,13 +264,19 @@ impl NovoApp {
         }
     }
 
-    /// `template` rendered with the project's data and fields.
+    /// `template` rendered with the project's data and fields, in the
+    /// project's report language.
     pub(super) fn render_with_project(&self, template: &Template) -> Rendered {
         let fields = match self.backend.document() {
             Some(doc) => Fields::from_project(doc.project()),
             None => Fields::sample(),
         };
-        render(template, &self.all_report_outputs(), &fields)
+        novo_reports::i18n::render_in(
+            template,
+            &self.all_report_outputs(),
+            &fields,
+            &self.report_translator(),
+        )
     }
 
     /// Every report template the Reports workspace can print through: the
@@ -1245,6 +1251,33 @@ mod tests {
             "clean drafts switch freely"
         );
         assert_ne!(state(&mut d).draft.name, "Wire list");
+    }
+
+    #[test]
+    fn a_dutch_project_prints_dutch_reports() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = app(dir.path());
+        let t = builtin::report_a4("Wire list", "wires");
+        let texts = |d: &Drive, t: &Template| -> Vec<String> {
+            d.app
+                .render_with_project(t)
+                .pages
+                .iter()
+                .flat_map(|p| p.texts.iter().map(|x| x.text.clone()))
+                .collect()
+        };
+        assert!(texts(&d, &t).contains(&"Wire list".to_owned()));
+        d.app.set_report_language("nl");
+        let dutch = texts(&d, &t);
+        assert!(dutch.contains(&"Draadlijst".to_owned()), "{dutch:?}");
+        assert!(!dutch.contains(&"Wire list".to_owned()));
+        // The workspace PDF through a template and the plain one both write.
+        d.app.show_report("wires");
+        let plain = d.app.export_report("wires", ReportFormat::Pdf).unwrap();
+        assert!(is_pdf(&plain));
+        d.app.reports_view.template = Some("Wire list".into());
+        let through = d.app.export_report("wires", ReportFormat::Pdf).unwrap();
+        assert!(is_pdf(&through));
     }
 
     #[test]
