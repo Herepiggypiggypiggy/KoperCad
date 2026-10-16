@@ -723,6 +723,9 @@ impl NovoApp {
                 if !(id == "heat.simulate" && self.workspace() == Workspace::View3d) {
                     self.switch_workspace(Workspace::Cabinet);
                     self.cabinet.table = false;
+                } else {
+                    // The run's progress and stop button live in the panel.
+                    self.view3d.controls.heat_panel = true;
                 }
                 self.cabinet.heat.command(id);
             }
